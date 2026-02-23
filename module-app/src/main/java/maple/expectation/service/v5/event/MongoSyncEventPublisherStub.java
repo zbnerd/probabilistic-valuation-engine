@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @ConditionalOnProperty(
-    prefix = "app.v5",
+    prefix = "v5",
     name = "query-side-enabled",
     havingValue = "false",
     matchIfMissing = true)

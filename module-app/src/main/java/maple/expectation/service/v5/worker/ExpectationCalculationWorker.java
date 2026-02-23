@@ -12,6 +12,7 @@ import maple.expectation.service.v4.EquipmentExpectationServiceV4;
 import maple.expectation.service.v5.event.MongoSyncEventPublisherInterface;
 import maple.expectation.service.v5.queue.ExpectationCalculationTask;
 import maple.expectation.service.v5.queue.PriorityCalculationQueue;
+import maple.expectation.service.v5.queue.QueuePriority;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -73,26 +74,46 @@ public class ExpectationCalculationWorker implements Runnable {
     this.errorCounter = meterRegistry.counter("calculation.worker.errors");
   }
 
-  @Override
-  public void run() {
+  /**
+   * Run the worker loop for the specified priority.
+   *
+   * <p>ADR-038 Fix: Each worker instance polls from its designated priority queue, ensuring
+   * complete isolation between HIGH and LOW priority tasks.
+   *
+   * @param priority The priority queue this worker should poll from
+   */
+  public void runForPriority(QueuePriority priority) {
     // ADR-080 Fix 2: Track active worker count
     ACTIVE_WORKERS.incrementAndGet();
-    log.info("[V5-Worker] Calculation worker started (active: {})", ACTIVE_WORKERS.get());
+    log.info(
+        "[V5-Worker] {} priority calculation worker started (active: {})",
+        priority,
+        ACTIVE_WORKERS.get());
 
     while (!Thread.currentThread().isInterrupted()) {
-      processNextTaskWithRecovery();
+      processNextTaskWithRecovery(priority);
     }
 
-    log.info("[V5-Worker] Calculation worker stopped");
+    log.info("[V5-Worker] {} priority calculation worker stopped", priority);
+  }
+
+  @Override
+  public void run() {
+    // Legacy run method - defaults to LOW priority for backward compatibility
+    runForPriority(QueuePriority.LOW);
   }
 
   /**
    * Process next task with recovery pattern (Section 12 compliant).
    *
    * <p>Uses CheckedLogicExecutor for queue.poll() which throws InterruptedException.
+   *
+   * <p>ADR-038 Fix: Polls from the specified priority queue.
+   *
+   * @param priority The priority queue to poll from
    */
-  private void processNextTaskWithRecovery() {
-    ExpectationCalculationTask task = pollTaskOrNull();
+  private void processNextTaskWithRecovery(QueuePriority priority) {
+    ExpectationCalculationTask task = pollTaskOrNull(priority);
 
     if (task == null) {
       return;
@@ -104,12 +125,24 @@ public class ExpectationCalculationWorker implements Runnable {
     executeCalculationWithFinally(task, context);
   }
 
-  /** Poll task from queue, returning null on interruption (graceful shutdown). */
-  private ExpectationCalculationTask pollTaskOrNull() {
+  /** Process next task with recovery (legacy method for backward compatibility). */
+  private void processNextTaskWithRecovery() {
+    processNextTaskWithRecovery(QueuePriority.LOW);
+  }
+
+  /**
+   * Poll task from queue, returning null on interruption (graceful shutdown).
+   *
+   * <p>ADR-038 Fix: Polls from the specified priority queue.
+   *
+   * @param priority The priority queue to poll from
+   * @return task or null if interrupted
+   */
+  private ExpectationCalculationTask pollTaskOrNull(QueuePriority priority) {
     return executor.executeOrDefault(
         () -> {
           try {
-            return queue.poll();
+            return queue.poll(priority);
           } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.info("[V5-Worker] Worker interrupted, shutting down");
@@ -117,7 +150,12 @@ public class ExpectationCalculationWorker implements Runnable {
           }
         },
         null,
-        TaskContext.of("V5-Worker", "PollTask"));
+        TaskContext.of("V5-Worker", "PollTask", priority.name()));
+  }
+
+  /** Poll task from queue (legacy method for backward compatibility). */
+  private ExpectationCalculationTask pollTaskOrNull() {
+    return pollTaskOrNull(QueuePriority.LOW);
   }
 
   /** Execute calculation with finally pattern ensuring task completion. */

@@ -53,6 +53,16 @@ public class ExpectationCalculationScheduler {
   private final LogicExecutor executor;
 
   /**
+   * Batch size for expectation calculation scheduler.
+   *
+   * <p>P2 Fix: Use @Value injection instead of parsing placeholder string. Previous code:
+   * Integer.parseInt("${scheduler.expectation-calculation.batch-size:100}")
+   */
+  @org.springframework.beans.factory.annotation.Value(
+      "${scheduler.expectation-calculation.batch-size:100}")
+  private int batchSize;
+
+  /**
    * Add LOW priority tasks for all users
    *
    * <p>Configuration:
@@ -75,10 +85,6 @@ public class ExpectationCalculationScheduler {
     executor.executeVoid(
         () -> {
           log.info("[ExpectationCalculation] Starting full user refresh");
-          int batchSize =
-              Integer.parseInt(
-                  "${scheduler.expectation-calculation.batch-size:100}"); // TODO: Load from
-          // @Value configuration
           int processedCount = 0;
           int skippedCount = 0;
 
@@ -106,8 +112,8 @@ public class ExpectationCalculationScheduler {
               page++;
               processedCount += pageSize;
 
-              // Log progress every 1000 users
-              if (processedCount % 1000 == 0) {
+              // Log progress every batch size users
+              if (processedCount % batchSize == 0) {
                 log.info(
                     "[ExpectationCalculation] Processed {} users, skipped {} (queue full)",
                     processedCount,

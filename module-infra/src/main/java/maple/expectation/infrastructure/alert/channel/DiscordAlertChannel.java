@@ -8,6 +8,7 @@ import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -81,12 +82,16 @@ public class DiscordAlertChannel implements AlertChannel {
    *
    * <p>Wrapped by LogicExecutor.executeWithFallback() which handles WebClientRequestException with
    * logging and returns false.
+   *
+   * <p>ADR-039 Fix: Added {@code ContentType.APPLICATION_JSON} to match Discord webhook wire
+   * format.
    */
   private boolean sendToDiscord(AlertMessage message) {
     ResponseEntity<Void> response =
         alertWebClient
             .post()
             .uri(message.getWebhookUrl())
+            .contentType(MediaType.APPLICATION_JSON) // ADR-039 Fix
             .bodyValue(MessageFactory.toDiscordPayload(message))
             .retrieve()
             .toBodilessEntity()

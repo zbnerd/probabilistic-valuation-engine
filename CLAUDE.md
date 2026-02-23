@@ -472,3 +472,117 @@ private List<Dto> processActiveUser(Long id) {
 | verify-circuit-breaker | Circuit Breaker Marker Interface, Logging Level, Resilience4j 준수 검증 |
 | verify-deprecated-api | @deprecated 기능 사용 탐지, 최신 Best Practice API 사용 확인 |
 | verify-global-error | @RestControllerAdvice, ErrorResponse 형식, Exception Chaining 준수 검증 |
+
+---
+
+## 17. Multi-Agent Collaboration Rules (필수)
+
+모든 구현 작업은 **병렬 에이전트**를 통해 수행하며, 상호 협업과 검증을 거쳐야 합니다.
+
+### 에이전트 협업 프로세스
+
+1. **작업 분배**: Task tool을 사용하여 병렬 에이전트에게 작업 분배
+2. **상호 코드리뷰**: 각 에이전트는 작업 완료 후 다른 에이전트의 결과물을 검토
+3. **PASS/FAIL 판정**: 코드리뷰는 반드시 PASS 또는 FAIL 판정 포함
+4. **만장일치 합의**: 모든 에이전트가 PASS해야만 작업 완료 (DONE)
+5. **피드백 라운드**: 최소 2회 이상 상호 피드백 라운드 진행
+
+### 피드백 가이드라인
+
+- **구체적 참조**: 코드 라인 번호, 파일 경로를 명확히 제시
+- **개선 제안**: "여기는 이렇게 개선할 수 있다" 형태의 건설적 피드백
+- **아키텍처 검증**: CLAUDE.md와 ADR 원칙 준수 여부 확인
+- **테스트 검증**: unit 테스트 충분성과 플래키 테스트 방지 확인
+
+### MCP 사용 (필수)
+
+- **Context7 MCP**: 라이브러리/프레임워크 문서 참조 시 반드시 사용
+- **Sequential Thinking MCP**: 복잡한 설계 결정 시 반드시 사용
+
+### FQCN 금지 규칙
+
+```java
+// Bad (FQCN 사용)
+org.springframework.stereotype.Component component = new org.springframework.example.MyComponent();
+
+// Good (import 사용)
+import org.springframework.example.MyComponent;
+MyComponent component = new MyComponent();
+```
+
+---
+
+## 18. Stateless Architecture Principles (필수)
+
+시스템은 **완전한 Stateless**로 설계되어야 합니다.
+
+### 금지되는 패턴
+
+- `HttpSession` 사용 금지
+- `@SessionScope` 사용 금지
+- `@SessionAttributes` 사용 금지
+- `static mutable` 상태 금지
+
+### 상태 저장소
+
+1. **Redis**: 세션, 캐시, 분산 락
+2. **MySQL**: 영구 데이터, 트랜잭션
+3. **MongoDB**: 읽기 전용 뷰, 이벤트
+4. **Kafka**: 이벤트 스트리밍
+
+---
+
+## 19. Implementation Workflow (필수)
+
+1. **사전 조사**: 관련 ADR, v5/v2 호출 흐름 파악
+2. **ADR 작성**: `docs/adr/XXX-feature-name.md`
+3. **구현**: FQCN 금지, SOLID 준수, LogicExecutor 사용
+4. **Unit 테스트**: `./gradlew test`만 실행
+5. **상호 코드리뷰**: 최소 2회, 만장일치 PASS
+6. **아키텍처 검사**: `/verify-*` 스킬 실행
+7. **문서화**: 개선 과정 markdown 기록
+8. **모니터링**: Prometheus/Loki 쿼리, Grafana 대시보드
+
+### Definition of Done
+
+- [ ] ADR 문서 작성
+- [ ] Unit 테스트 통과
+- [ ] 에이전트 상호 코드리뷰 PASS
+- [ ] CLAUDE.md 원칙 준수
+- [ ] 개선 과정 문서화
+- [ ] 모니터링 지표 확인
+
+---
+
+## 20. Flaky Test Prevention (필수)
+
+### 방지 규칙
+
+1. `Thread.sleep()` 금지 → `Awaitility` 사용
+2. 테스트 간 상태 공유 금지
+3. `@DirtiesContext` 남용 금지
+4. 랜덤 포트 사용 필수
+5. 테스트 순서 독립성 유지
+
+---
+
+## 21. Hook Configuration (.claude/settings.json)
+
+Claude Code hooks가 자동으로 다음을 검증:
+
+### SessionStart
+- CLAUDE.md, ADR 파일 목록, 브랜치, 커밋 확인
+
+### UserPromptSubmit
+- "구현", "개발", "코드" 키워드 시 체크리스트 표시
+
+### PreToolUse
+- 통합테스트 차단
+- Java/Kotlin 작성 전 ADR 확인
+
+### PostToolUse
+- FQCN 사용 감지 시 경고
+- Stateless 위반 감지 시 경고
+
+### Stop
+- ADR, unit 테스트, 문서화 최종 검증

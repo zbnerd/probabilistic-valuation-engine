@@ -239,16 +239,50 @@ public class MongoDBSyncWorker implements Runnable {
         TaskContext.of("MongoDBSyncWorker", "ProcessSingleMessage", messageId.toString()));
   }
 
+  /**
+   * ADR-083: Extract payload JSON with backward compatibility.
+   *
+   * <p>Priority order:
+   *
+   * <ol>
+   *   <li>"data" key - New format (V5 CQRS)
+   *   <li>"payload" key - Legacy format (pre-V5)
+   * </ol>
+   *
+   * <p>Logs deprecation warning when using legacy format.
+   *
+   * @param data Redis Stream message data map
+   * @return Payload JSON string, or null if neither format is present
+   */
+  private String extractPayloadJson(Map<String, String> data) {
+    // Try new format first (V5 CQRS)
+    String payloadJson = data.get("data");
+    if (payloadJson != null) {
+      return payloadJson;
+    }
+
+    // Fallback to legacy format (pre-V5)
+    payloadJson = data.get("payload");
+    if (payloadJson != null) {
+      log.warn(
+          "[MongoDBSyncWorker] Legacy message format detected (using 'payload' key). "
+              + "This format is deprecated. Please migrate to 'data' key format.");
+      return payloadJson;
+    }
+
+    return null;
+  }
+
   private void processMessage(StreamMessageId messageId, Map<String, String> data) {
     TaskContext context =
         TaskContext.of("MongoDBSyncWorker", "ProcessMessage", messageId.toString());
 
     executor.executeVoid(
         () -> {
-          // Deserialize IntegrationEvent wrapper
-          String payloadJson = data.get("payload");
+          // ADR-083: Backward compatibility - try both 'data' and 'payload' keys
+          String payloadJson = extractPayloadJson(data);
           if (payloadJson == null) {
-            log.warn("[MongoDBSyncWorker] No payload in message");
+            log.warn("[MongoDBSyncWorker] No payload in message (both formats tried)");
             return;
           }
 

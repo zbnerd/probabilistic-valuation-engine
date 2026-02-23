@@ -93,13 +93,14 @@ public class PresetCalculationExecutorConfig {
         new ThreadPoolExecutor.AbortPolicy() {
           @Override
           public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
-            // rejected 메트릭 기록 (Micrometer ExecutorServiceMetrics가 자동 기록)
-            super.rejectedExecution(r, e);
+            // P2 Fix: Log BEFORE super.rejectedExecution() which throws
             log.warn(
                 "[PresetCalculationExecutor] Task rejected - queue saturated: active={}, poolSize={}, queueSize={}",
                 e.getActiveCount(),
                 e.getPoolSize(),
                 e.getQueue().size());
+            // rejected 메트릭 기록 (Micrometer ExecutorServiceMetrics가 자동 기록)
+            super.rejectedExecution(r, e);
           }
         });
 

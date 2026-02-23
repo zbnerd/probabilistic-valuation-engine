@@ -44,13 +44,33 @@ public class CharacterEquipmentJpaEntity {
    *
    * @param ocid the character OCID (primary key)
    * @param jsonContent the equipment JSON content (GZIP compressed)
-   * @return new CharacterEquipmentJpaEntity instance
+   * @return new CharacterEquipmentJpaEntity instance with current timestamp
    */
   @Builder
   public CharacterEquipmentJpaEntity(String ocid, String jsonContent) {
     this.ocid = ocid;
     this.jsonContent = jsonContent;
-    this.updatedAt = LocalDateTime.now();
+    this.updatedAt = LocalDateTime.now(); // Default: current time
+  }
+
+  /**
+   * Creates a new CharacterEquipmentJpaEntity with explicit timestamp.
+   *
+   * <p>ADR-084: This constructor overload allows preserving the domain entity's updatedAt timestamp
+   * when mapping to JPA, avoiding timestamp loss.
+   *
+   * @param ocid the character OCID (primary key)
+   * @param jsonContent the equipment JSON content (GZIP compressed)
+   * @param updatedAt the update timestamp (preserved from domain entity)
+   * @return new CharacterEquipmentJpaEntity instance
+   */
+  public static CharacterEquipmentJpaEntity of(
+      String ocid, String jsonContent, LocalDateTime updatedAt) {
+    CharacterEquipmentJpaEntity entity = new CharacterEquipmentJpaEntity();
+    entity.ocid = ocid;
+    entity.jsonContent = jsonContent;
+    entity.updatedAt = updatedAt != null ? updatedAt : LocalDateTime.now();
+    return entity;
   }
 
   /**

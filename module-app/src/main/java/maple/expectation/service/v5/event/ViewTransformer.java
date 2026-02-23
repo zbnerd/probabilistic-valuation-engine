@@ -89,8 +89,7 @@ public class ViewTransformer {
         .characterOcid(event.getCharacterOcid())
         .characterClass(event.getCharacterClass())
         .characterLevel(event.getCharacterLevel())
-        .totalExpectedCost(
-            parseSafely(() -> Long.parseLong(removeDecimal(event.getTotalExpectedCost())), 0L))
+        .totalExpectedCost(parseCostToLong(event.getTotalExpectedCost()))
         .maxPresetNo(event.getMaxPresetNo())
         .calculatedAt(parseInstant(event.getCalculatedAt()))
         .lastApiSyncAt(Instant.now())
@@ -202,17 +201,37 @@ public class ViewTransformer {
   }
 
   /**
-   * Remove decimal point from numeric string.
+   * Parse cost string to Long (mesos units).
    *
-   * <p>e.g., "123.45" -> "12345", "100" -> "100"
+   * <p>Handles Korean number format with commas as thousand separators. Decimal points are handled
+   * by BigDecimal parsing.
    *
-   * <p>This handles cases where JSON contains decimal notation for integer values.
+   * <p>ADR-085 P1 Fix: Use BigDecimal instead of string manipulation to correctly handle decimal
+   * values.
+   *
+   * <p>Examples:
+   *
+   * <ul>
+   *   <li>"1,234.56" -> 1234 (decimal truncated)
+   *   <li>"100" -> 100
+   *   <li>"50.25" -> 50
+   *   <li>null/blank -> 0
+   * </ul>
+   *
+   * @param costStr Cost string from BigDecimal serialization
+   * @return Long value in mesos units
    */
-  private String removeDecimal(String numericStr) {
-    if (numericStr == null || numericStr.isBlank()) {
-      return "0";
+  private Long parseCostToLong(String costStr) {
+    if (costStr == null || costStr.isBlank()) {
+      return 0L;
     }
-    return numericStr.replace(".", "");
+    return parseSafely(
+        () -> {
+          String cleaned = costStr.replace(",", ""); // Remove thousand separators
+          BigDecimal decimal = new BigDecimal(cleaned);
+          return decimal.longValue(); // Truncate decimal part
+        },
+        0L);
   }
 
   /**

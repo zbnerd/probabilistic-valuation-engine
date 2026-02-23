@@ -82,8 +82,9 @@ public class ExpectationCacheCoordinator {
       return response;
     }
 
-    Object cachedValue = expectationCache.get(userIgn);
-    if (cachedValue != null) {
+    Cache.ValueWrapper wrapper = expectationCache.get(userIgn);
+    if (wrapper != null) {
+      Object cachedValue = wrapper.get();
       String compressedBase64 = convertCachedValueToBase64(cachedValue, userIgn);
       return decompressCachedResponse(compressedBase64, userIgn);
     }
@@ -130,8 +131,9 @@ public class ExpectationCacheCoordinator {
       return java.util.Base64.getDecoder().decode(compressedBase64);
     }
 
-    Object cachedValue = expectationCache.get(userIgn);
-    if (cachedValue != null) {
+    Cache.ValueWrapper wrapper = expectationCache.get(userIgn);
+    if (wrapper != null) {
+      Object cachedValue = wrapper.get();
       String compressedBase64 = convertCachedValueToBase64(cachedValue, userIgn);
       if (compressedBase64 == null || compressedBase64.isEmpty()) {
         throw new CacheDataNotFoundException(userIgn);

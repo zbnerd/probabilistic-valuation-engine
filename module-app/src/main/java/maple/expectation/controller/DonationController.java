@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.controller.dto.donation.SendCoffeeRequest;
@@ -40,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DonationController {
 
   private final DonationService donationService;
+  private final ExecutorService asyncExecutor; // ADR-039 Fix: Dedicated executor for async work
 
   /**
    * Admin(개발자)에게 커피 보내기
@@ -73,10 +75,13 @@ public class DonationController {
     // (Member 테이블에 fingerprint가 uuid로 저장되어 있어야 함)
     String guestUuid = user.fingerprint();
 
+    // ADR-039 Fix: Use dedicated executor instead of ForkJoinPool.commonPool()
+    // This prevents blocking transactional work from saturating the common pool
     return CompletableFuture.runAsync(
             () ->
                 donationService.sendCoffee(
-                    guestUuid, request.adminFingerprint(), request.amount(), requestId))
+                    guestUuid, request.adminFingerprint(), request.amount(), requestId),
+            asyncExecutor)
         .thenApply(
             unused -> {
               log.info("[Donation] Coffee sent successfully: requestId={}", requestId);

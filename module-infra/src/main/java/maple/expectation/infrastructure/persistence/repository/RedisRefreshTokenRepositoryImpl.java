@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.persistence.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +11,7 @@ import maple.expectation.domain.repository.RedisRefreshTokenRepository;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import org.redisson.api.RBucket;
+import org.redisson.api.RScript;
 import org.redisson.api.RSet;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,6 +42,44 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
   private static final String KEY_PREFIX = "refresh:";
   private static final String FAMILY_KEY_PREFIX = "refresh:family:";
   private static final String SESSION_KEY_PREFIX = "refresh:session:";
+
+  /**
+   * ADR-082: Atomic Lua script for check-and-mark operation.
+   *
+   * <p>Uses Redis cjson library for proper JSON parsing (not pattern matching).
+   *
+   * <p>Returns:
+   *
+   * <ul>
+   *   <li>nil: Token not found
+   *   <li>"ALREADY_USED": Token reuse detected (used=true)
+   *   <li>updated JSON: Token successfully marked as used
+   * </ul>
+   */
+  private static final String ATOMIC_CHECK_AND_MARK_LUA =
+      """
+      local tokenJson = redis.call('GET', KEYS[1])
+      if tokenJson == false then
+          return nil
+      end
+
+      local token = cjson.decode(tokenJson)
+
+      if token.used == true then
+          return 'ALREADY_USED'
+      end
+
+      token.used = true
+      local newJson = cjson.encode(token)
+
+      if ARGV[1] ~= '0' then
+          redis.call('PSETEX', KEYS[1], ARGV[1], newJson)
+      else
+          redis.call('SET', KEYS[1], newJson)
+      end
+
+      return newJson
+      """;
 
   private final RedissonClient redissonClient;
   private final ObjectMapper objectMapper;
@@ -165,44 +205,66 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
   }
 
   /**
-   * Issue #329: Simplified check-and-mark (non-atomic, but stable for tests)
+   * ADR-082: Atomic check-and-mark using Lua script (P0 Fix).
    *
-   * <p>Note: Lua script version had pattern matching issues causing test failures. This simplified
-   * version is used until the atomic Lua script is fixed.
+   * <p>Replaces non-atomic get-then-set with atomic Lua script execution.
+   *
+   * <p>Uses Redis cjson.decode() for proper JSON parsing instead of pattern matching. Previous
+   * attempt used string.match(tokenJson, '"used":(true|false)') which failed because Lua pattern
+   * matching doesn't treat | as alternation.
+   *
+   * <p>Return values from Lua script:
+   *
+   * <ul>
+   *   <li>nil: Token not found → Optional.empty()
+   *   <li>"ALREADY_USED": Token reuse detected → Optional.empty()
+   *   <li>updated JSON: Success → Optional.of(RefreshToken)
+   * </ul>
+   *
+   * @param refreshTokenId Refresh Token ID
+   * @return Marked RefreshToken if successful, empty if not found or already used
    */
   private Optional<RefreshToken> doCheckAndMarkAsUsed(String refreshTokenId) {
     String key = buildTokenKey(refreshTokenId);
     RBucket<String> bucket = redissonClient.getBucket(key);
-    String json = bucket.get();
 
-    if (json == null) {
+    // Read current TTL to preserve it after update
+    long remainingTtl =
+        executor.executeOrDefault(
+            () -> bucket.remainTimeToLive(),
+            0L,
+            TaskContext.of("RefreshToken", "GetTTL", refreshTokenId));
+
+    if (remainingTtl < 0) {
+      // Key doesn't exist (remainTimeToLive returns -2 for non-existent keys)
       log.debug("Token not found in Redis: key={}", key);
       return Optional.empty();
     }
 
-    RefreshToken token = deserializeToken(json);
+    // Execute atomic Lua script
+    RScript script = redissonClient.getScript();
+    String result =
+        script.eval(
+            RScript.Mode.READ_WRITE,
+            ATOMIC_CHECK_AND_MARK_LUA,
+            RScript.ReturnType.VALUE,
+            List.of(key),
+            String.valueOf(remainingTtl > 0 ? remainingTtl : 0));
 
-    // Check if already used (token reuse detection)
-    if (token.used()) {
+    // Handle Lua script return values
+    if (result == null) {
+      log.debug("Token not found in Redis (Lua): key={}", key);
+      return Optional.empty();
+    }
+
+    if ("ALREADY_USED".equals(result)) {
       log.warn("Token reuse detected! Token is already marked as used: key={}", key);
       return Optional.empty();
     }
 
-    // Mark as used and return the marked token
-    RefreshToken markedToken = token.markAsUsed();
-    String newJson = serializeToken(markedToken);
-
-    // Preserve TTL when updating
-    long remainingTtl = bucket.remainTimeToLive();
-    if (remainingTtl > 0) {
-      bucket.set(newJson, remainingTtl, java.util.concurrent.TimeUnit.MILLISECONDS);
-    } else {
-      // Fallback: use default TTL if key has no expiry
-      bucket.set(newJson, Duration.ofSeconds(refreshTokenTtlSeconds));
-    }
-
-    log.debug("Token marked as used: key={}", key);
-    return Optional.of(markedToken);
+    // Success: token was marked as used
+    log.debug("Token marked as used atomically: key={}", key);
+    return Optional.of(deserializeToken(result));
   }
 
   /**

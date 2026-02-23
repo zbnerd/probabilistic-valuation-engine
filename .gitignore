@@ -82,3 +82,6 @@ scaleout-verification-report.md
 # Compressed log files
 **/logs/*.gz
 **/logs/**.log.gz
+
+# Kotlin compiler errors
+.kotlin/errors/

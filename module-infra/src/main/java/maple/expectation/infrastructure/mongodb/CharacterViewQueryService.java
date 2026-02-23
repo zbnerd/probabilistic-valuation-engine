@@ -93,4 +93,23 @@ public class CharacterViewQueryService {
         },
         context);
   }
+
+  /** Delete all documents (for testing) */
+  public void deleteAll() {
+    TaskContext context = TaskContext.of("MongoQuery", "DeleteAll", "all");
+
+    executor.executeVoid(
+        () -> {
+          repository.deleteAll();
+        },
+        context);
+  }
+
+  /** Count all documents for a specific user IGN */
+  public long countByUserIgn(String userIgn) {
+    TaskContext context = TaskContext.of("MongoQuery", "Count", userIgn);
+
+    return executor.executeOrDefault(
+        () -> repository.findByUserIgn(userIgn).map(v -> 1L).orElse(0L), 0L, context);
+  }
 }

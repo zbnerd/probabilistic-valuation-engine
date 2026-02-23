@@ -30,7 +30,7 @@ class CharacterViewQueryServiceTest {
   @DisplayName("MongoDB 조회 성공 시 결과 반환")
   void findByUserIgnReturnsView() throws Exception {
     CharacterValuationView view =
-        CharacterValuationView.builder().userIgn("testUser").totalExpectedCost(100000).build();
+        CharacterValuationView.builder().userIgn("testUser").totalExpectedCost(100000L).build();
 
     when(mockRepository.findByUserIgn("testUser")).thenReturn(Optional.of(view));
     when(mockMeterRegistry.timer(anyString(), any(String[].class))).thenReturn(mockTimer);

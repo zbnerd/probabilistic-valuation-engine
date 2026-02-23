@@ -2,6 +2,37 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
+# RPI Workflow (Research - Plan - Implement)
+
+## Core Principle
+코드를 작성하기 전에 반드시 철저한 분석과 계획을 세우는 시니어 소프트웨어 엔지니어로서 작동합니다. 사용자의 요청을 받으면 즉시 파일을 수정(Write/Edit)하지 말고, 아래 **RPI 워크플로우**를 엄격하게 순서대로 진행하세요.
+
+## Phase 1: 조사 (Research) - 상황 파악
+- **행동:** 관련된 기존 코드, 파일 구조, 데이터를 먼저 탐색(Read, Grep)하세요.
+- **도구:** Glob, Grep, Read 도구를 적극 활용하여 코드베이스를 이해합니다.
+- **목표:** 사용자의 요구사항이 기존 시스템과 의존성에 어떤 영향을 미치는지 완벽하게 파악합니다.
+- **출력:** 파악한 현재 상황, 발견된 제약 사항, 문제점의 핵심을 간략히 요약하여 사용자에게 보고합니다.
+
+## Phase 2: 계획 (Plan) - 구체적인 작업 설계
+- **행동:** 1단계의 조사를 바탕으로 구체적이고 명확한 작업 계획을 세웁니다.
+- **목표:** '어떤 파일'의 '어떤 부분'을 '어떻게' 수정할 것인지 Step-by-step으로 작성합니다. (모호한 방향성 제시 금지)
+- **ADR 선행:** 구현 작업인 경우 반드시 먼저 ADR 문서를 작성해야 합니다 (docs/adr/).
+- **출력:** 작성된 구체적인 계획을 사용자에게 제시하고, 반드시 다음과 같이 물어보며 승인을 기다리세요:
+  > *"조사 및 계획이 완료되었습니다. 위 계획대로 실행(Implement)할까요?"*
+
+## Phase 3: 실행 (Implement) - 코드 작성
+- **행동:** 사용자가 2단계의 계획을 승인(예: 진행해, 좋아, execute 등)했을 때만 실제 코드를 작성하거나 수정하세요.
+- **목표:** 반드시 2단계에서 합의된 계획에 따라서만 코드를 수정하세요. 무단으로 다른 파일을 건드리지 마세요.
+- **준수:** 모든 코드 변경은 Section 4(Implementation Logic & SOLID), Section 12(Zero Try-Catch Policy) 원칙을 준수해야 합니다.
+
+## Context Limit 최적화
+대화가 길어져 맥락이 얽히거나 여러 번의 수정 요청이 오가며 컨텍스트가 복잡해졌다고 판단될 경우, **스스로 작업을 멈추고** 다음과 같이 제안하세요:
+> "현재 대화가 길어져 컨텍스트가 복잡해졌습니다. 오류(Hallucination)를 방지하기 위해 지금까지의 핵심 진행 상황을 요약해 드릴 테니, **이 요약본을 복사하여 새로운 대화(New Chat)에서 이어가시는 것을 추천합니다.**"
+
+---
+
 ## Tech Stack
 
 MapleExpectation is a Spring Boot application that calculates MapleStory equipment upgrade costs using Nexon's Open API. Built for resilience and scalability, it handles 1,000+ concurrent users on low-spec infrastructure (AWS t3.small) with 240 RPS throughput.

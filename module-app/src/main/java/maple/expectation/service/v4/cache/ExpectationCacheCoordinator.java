@@ -86,7 +86,12 @@ public class ExpectationCacheCoordinator {
     if (wrapper != null) {
       Object cachedValue = wrapper.get();
       String compressedBase64 = convertCachedValueToBase64(cachedValue, userIgn);
-      return decompressCachedResponse(compressedBase64, userIgn);
+      if (compressedBase64 == null) {
+        log.warn("[V4] Cached value is null, treating as cache miss: {}", userIgn);
+        // Fall through to cache miss handling below
+      } else {
+        return decompressCachedResponse(compressedBase64, userIgn);
+      }
     }
 
     // Cache miss - calculate and store
@@ -233,6 +238,12 @@ public class ExpectationCacheCoordinator {
       log.debug("[V4] Unwrapped SimpleValueWrapper for: {}", userIgn);
     }
 
+    // Treat null as cache miss
+    if (unwrappedValue == null) {
+      log.warn("[V4] Cache value is null (treat as MISS): {}", userIgn);
+      return null;
+    }
+
     if (unwrappedValue instanceof String base64) {
       log.debug("[V4] Cache HIT (New Base64 format): {}", userIgn);
       return base64;
@@ -253,7 +264,7 @@ public class ExpectationCacheCoordinator {
     log.error(
         "[V4] Unknown cache value type: {} (unwrapped: {}) for userIgn={}",
         cachedValue.getClass(),
-        unwrappedValue != null ? unwrappedValue.getClass() : "null",
+        unwrappedValue.getClass(),
         userIgn);
     throw new EquipmentDataProcessingException(
         String.format("Invalid cache value type: %s", cachedValue.getClass()));

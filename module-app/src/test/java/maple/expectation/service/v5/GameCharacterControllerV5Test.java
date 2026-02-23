@@ -180,7 +180,7 @@ class GameCharacterControllerV5Test {
         .calculatedAt(Instant.now())
         .lastApiSyncAt(Instant.now())
         .version(1L)
-        .totalExpectedCost(200000)
+        .totalExpectedCost(200000L)
         .maxPresetNo(1)
         .fromCache(true)
         .presets(List.of(preset))

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.event.ExpectationCalculationCompletedEvent;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -28,7 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ViewTransformerTest {
 
   private static final String TEST_USER_IGN = "testUser";
-  private static final String TEST_TASK_ID = "task-123";
+  private static final String TEST_TASK_ID = "12345";
   private static final String TEST_OCID = "ocid-123";
 
   @Mock private LogicExecutor executor;
@@ -39,19 +40,6 @@ class ViewTransformerTest {
   @BeforeEach
   void setUp() {
     transformer = new ViewTransformer(executor, objectMapper);
-
-    // Setup default executor behavior
-    when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
-        .thenAnswer(
-            invocation -> {
-              java.util.concurrent.Callable<?> task = invocation.getArgument(0);
-              Object defaultValue = invocation.getArgument(1);
-              try {
-                return task.call();
-              } catch (Exception e) {
-                return defaultValue;
-              }
-            });
   }
 
   @Nested
@@ -68,9 +56,8 @@ class ViewTransformerTest {
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
               invocation -> {
-                java.util.concurrent.Callable<CharacterValuationView> task =
-                    invocation.getArgument(0);
-                return task.call();
+                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
+                return task.get();
               });
 
       // When
@@ -90,9 +77,8 @@ class ViewTransformerTest {
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
               invocation -> {
-                java.util.concurrent.Callable<CharacterValuationView> task =
-                    invocation.getArgument(0);
-                return task.call();
+                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
+                return task.get();
               });
 
       // When
@@ -112,9 +98,8 @@ class ViewTransformerTest {
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
               invocation -> {
-                java.util.concurrent.Callable<CharacterValuationView> task =
-                    invocation.getArgument(0);
-                return task.call();
+                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
+                return task.get();
               });
 
       // When
@@ -134,9 +119,8 @@ class ViewTransformerTest {
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
               invocation -> {
-                java.util.concurrent.Callable<CharacterValuationView> task =
-                    invocation.getArgument(0);
-                return task.call();
+                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
+                return task.get();
               });
 
       // When
@@ -156,10 +140,8 @@ class ViewTransformerTest {
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
               invocation -> {
-                java.util.concurrent.Callable<CharacterValuationView> task =
-                    invocation.getArgument(0);
-                CharacterValuationView defaultView = invocation.getArgument(1);
-                return task.call();
+                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
+                return task.get();
               });
 
       // When
@@ -179,9 +161,8 @@ class ViewTransformerTest {
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
               invocation -> {
-                java.util.concurrent.Callable<CharacterValuationView> task =
-                    invocation.getArgument(0);
-                return task.call();
+                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
+                return task.get();
               });
 
       // When
@@ -207,9 +188,8 @@ class ViewTransformerTest {
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
               invocation -> {
-                java.util.concurrent.Callable<CharacterValuationView> task =
-                    invocation.getArgument(0);
-                return task.call();
+                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
+                return task.get();
               });
 
       // When

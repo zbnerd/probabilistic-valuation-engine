@@ -1,5 +1,6 @@
 package maple.expectation.service.v5;
 
+import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.service.v5.event.MongoSyncEventPublisherInterface;
 import maple.expectation.service.v5.event.MongoSyncEventPublisherStub;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -27,7 +28,7 @@ public class V5TestConfiguration {
    */
   @Bean
   @Primary
-  public MongoSyncEventPublisherInterface mongoSyncEventPublisherStub() {
-    return new MongoSyncEventPublisherStub();
+  public MongoSyncEventPublisherInterface mongoSyncEventPublisherStub(LogicExecutor executor) {
+    return new MongoSyncEventPublisherStub(executor);
   }
 }

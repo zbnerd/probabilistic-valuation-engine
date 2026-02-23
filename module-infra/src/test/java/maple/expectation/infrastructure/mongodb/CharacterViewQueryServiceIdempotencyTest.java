@@ -79,7 +79,7 @@ class CharacterViewQueryServiceIdempotencyTest {
             .id(DETERMINISTIC_ID)
             .messageId("msg-123")
             .userIgn(TEST_IGN)
-            .totalExpectedCost(100000)
+            .totalExpectedCost(100000L)
             .build();
 
     doAnswer(
@@ -104,7 +104,7 @@ class CharacterViewQueryServiceIdempotencyTest {
             .id(DETERMINISTIC_ID)
             .messageId("msg-123")
             .userIgn(TEST_IGN)
-            .totalExpectedCost(100000)
+            .totalExpectedCost(100000L)
             .build();
 
     doAnswer(
@@ -133,14 +133,14 @@ class CharacterViewQueryServiceIdempotencyTest {
             .id(TEST_IGN + ":" + taskId1)
             .messageId("msg-1")
             .userIgn(TEST_IGN)
-            .totalExpectedCost(100000)
+            .totalExpectedCost(100000L)
             .build();
     CharacterValuationView view2 =
         CharacterValuationView.builder()
             .id(TEST_IGN + ":" + taskId2)
             .messageId("msg-2")
             .userIgn(TEST_IGN)
-            .totalExpectedCost(200000)
+            .totalExpectedCost(200000L)
             .build();
 
     doAnswer(
@@ -167,7 +167,7 @@ class CharacterViewQueryServiceIdempotencyTest {
             .messageId("msg-123")
             .userIgn(TEST_IGN)
             .characterOcid("ocid-123")
-            .totalExpectedCost(100000)
+            .totalExpectedCost(100000L)
             .build();
 
     doAnswer(

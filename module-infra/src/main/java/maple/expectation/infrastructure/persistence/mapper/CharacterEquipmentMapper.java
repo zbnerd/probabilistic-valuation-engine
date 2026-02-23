@@ -61,6 +61,9 @@ public final class CharacterEquipmentMapper {
    * <p>Use this method when saving a new entity to database. The JPA entity will have {@code
    * updatedAt} set from the domain entity.
    *
+   * <p>ADR-084: Preserves domain entity's updatedAt timestamp instead of using current time. This
+   * maintains temporal consistency when mapping domain → JPA.
+   *
    * @param domainEntity the domain entity (must not be null)
    * @return JPA entity ready for persistence
    * @throws IllegalArgumentException if domainEntity is null
@@ -70,13 +73,12 @@ public final class CharacterEquipmentMapper {
       throw new IllegalArgumentException("Domain entity cannot be null");
     }
 
-    return CharacterEquipmentJpaEntity.builder()
-        .ocid(domainEntity.characterId() != null ? domainEntity.characterId().value() : null)
-        .jsonContent(
-            domainEntity.equipmentData() != null
-                ? domainEntity.equipmentData().jsonContent()
-                : null)
-        .build();
+    String ocid = domainEntity.characterId() != null ? domainEntity.characterId().value() : null;
+    String jsonContent =
+        domainEntity.equipmentData() != null ? domainEntity.equipmentData().jsonContent() : null;
+
+    // ADR-084: Use factory method to preserve domain timestamp
+    return CharacterEquipmentJpaEntity.of(ocid, jsonContent, domainEntity.updatedAt());
   }
 
   /**

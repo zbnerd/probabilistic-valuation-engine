@@ -21,8 +21,8 @@ spring:
       register-mbeans: true # JMX를 통해 지표 노출 활성화
       connection-timeout: 3000      # 커넥션 획득 타임아웃 3초 (Red Agent P1 Fix)
       leak-detection-threshold: 60000  # 60초 이상 반납 안되면 누수 의심 로그
----
 # Profile-specific: MySQL connection init SQL (NOT for test/chaos)
+# ADR-087 P2 Fix: Removed YAML document separator (---) to unify configuration
 spring:
   config:
     activate:

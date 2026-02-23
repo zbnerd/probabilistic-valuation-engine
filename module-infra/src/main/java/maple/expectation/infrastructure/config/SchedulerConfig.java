@@ -157,6 +157,13 @@ public class SchedulerConfig {
               executor.getQueue().size());
         }
 
+        // P2 Fix: Log before throwing (previous log was after throw, unreachable)
+        log.debug(
+            "[TaskScheduler] Rejecting task - queue full: poolSize={}, activeCount={}, queueSize={}",
+            executor.getPoolSize(),
+            executor.getActiveCount(),
+            executor.getQueue().size());
+
         throw new RejectedExecutionException("TaskScheduler queue full (capacity exceeded)");
       };
 

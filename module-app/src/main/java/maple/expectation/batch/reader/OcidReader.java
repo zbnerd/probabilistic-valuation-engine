@@ -7,6 +7,8 @@ import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity;
 import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepository;
+import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.annotation.BeforeStep;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -60,6 +62,8 @@ public class OcidReader implements ItemReader<String> {
    *
    * <p>Section 15: 람다 3줄 초과 시 Private Method 추출
    *
+   * <p>ADR-084 P0 Fix: Iterator 소진을 먼저 체크하여 마지막 페이지의 OCID 누락 방지
+   *
    * @return next OCID or null if exhausted
    */
   private String readNextOcid() {
@@ -67,11 +71,28 @@ public class OcidReader implements ItemReader<String> {
       fetchNextChunk();
     }
 
-    if (!hasNextPage || (ocidIterator != null && !ocidIterator.hasNext())) {
+    // Iterator 소진을 먼저 체크하여 마지막 페이지의 OCID 반환
+    if (ocidIterator != null && !ocidIterator.hasNext()) {
       return null;
     }
 
     return ocidIterator.next();
+  }
+
+  /**
+   * Step 실행 전 상태 초기화 (Issue #356 P1, ADR-084)
+   *
+   * <p>@Component Singleton이므로 각 Batch Job 실행 전에 상태를 초기화해야 함. 초기화하지 않으면 이전 실행의 currentPage가 남아서 데이터
+   * 누락 발생.
+   *
+   * @param stepExecution 현재 Step 실행 컨텍스트
+   */
+  @BeforeStep
+  void initializeState(StepExecution stepExecution) {
+    this.ocidIterator = null;
+    this.currentPage = 0;
+    this.hasNextPage = true;
+    log.info("[OcidReader] State initialized for job: {}", stepExecution.getJobExecutionId());
   }
 
   /**

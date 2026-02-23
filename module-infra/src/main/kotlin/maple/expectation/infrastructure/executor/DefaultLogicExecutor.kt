@@ -81,10 +81,9 @@ class DefaultLogicExecutor(
         } catch (e: Error) {
             throw e
         } catch (t: Throwable) {
-            // ExceptionTranslator returns RuntimeException, but we need T
-            // This is unsafe but matches the Java usage pattern where translator is used as recovery
-            @Suppress("UNCHECKED_CAST")
-            return recovery.translate(t, context) as T
+            // ADR-037 Fix: ExceptionTranslator returns RuntimeException, throw it instead of returning
+            // The translator's purpose is to translate exceptions for propagation, not to return values
+            throw recovery.translate(t, context)
         }
     }
 
@@ -203,10 +202,9 @@ class DefaultLogicExecutor(
         } catch (e: Error) {
             throw e
         } catch (t: Throwable) {
-            // ExceptionTranslator returns RuntimeException, but we need T
-            // This is unsafe but matches the Java usage pattern where translator is used as fallback
-            @Suppress("UNCHECKED_CAST")
-            return fallback.translate(t, context) as T
+            // ADR-037 Fix: ExceptionTranslator returns RuntimeException, throw it instead of returning
+            // The translator's purpose is to translate exceptions for propagation, not to return values
+            throw fallback.translate(t, context)
         }
     }
 

@@ -181,8 +181,9 @@ public class AlertNotificationService {
                   .toList();
 
           // Determine severity
+          // ADR-039 Fix: Check for "CRIT" instead of "CRITICAL" to match AnomalyDetector output
           String severity =
-              context.anomalies().stream().anyMatch(a -> "CRITICAL".equals(a.severity()))
+              context.anomalies().stream().anyMatch(a -> "CRIT".equals(a.severity()))
                   ? "CRIT"
                   : "WARN";
 

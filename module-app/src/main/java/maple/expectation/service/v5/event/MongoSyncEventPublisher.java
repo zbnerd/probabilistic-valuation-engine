@@ -43,7 +43,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-    prefix = "app.v5",
+    prefix = "v5",
     name = "query-side-enabled",
     havingValue = "true",
     matchIfMissing = false)

@@ -24,13 +24,20 @@ class ResourceLoader {
     /**
      * Load resource from classpath as String.
      *
+     * <p>P2 Fix: Catches IOException and re-wraps as IllegalStateException.
+     * Previous implementation let IOException propagate (not caught by Kotlin).
+     *
      * @param path Resource path (e.g., "lua/script.lua")
      * @return Resource content as UTF-8 string
      * @throws IllegalStateException if resource not found or read error occurs
      */
     fun loadResourceAsString(path: String): String {
-        getResourceAsStream(path).use { inputStream ->
-            return String(inputStream.readAllBytes(), StandardCharsets.UTF_8)
+        return try {
+            getResourceAsStream(path).use { inputStream ->
+                String(inputStream.readAllBytes(), StandardCharsets.UTF_8)
+            }
+        } catch (e: IOException) {
+            throw IllegalStateException("Failed to read resource: $path", e)
         }
     }
 

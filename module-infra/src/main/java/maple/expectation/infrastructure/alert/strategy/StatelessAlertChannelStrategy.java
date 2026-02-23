@@ -33,12 +33,28 @@ public class StatelessAlertChannelStrategy implements AlertChannelStrategy {
 
   @Override
   public AlertChannel getChannel(AlertPriority priority) {
-    return channelProviders.getOrDefault(priority, () -> getDefaultChannel()).get();
+    // ADR-039 Fix: Use Discord as fallback default channel
+    // Since DiscordAlertChannel is always available (via @ConditionalOnProperty),
+    // we use it as the default instead of throwing UnsupportedOperationException
+    return channelProviders.getOrDefault(priority, this::getDefaultChannel).get();
   }
 
+  /**
+   * ADR-039 Fix: Returns Discord channel as default.
+   *
+   * <p>Previously threw {@code UnsupportedOperationException}. Now falls back to Discord channel
+   * which is always configured when {@code alert.stateless.enabled=true}.
+   *
+   * @return Discord alert channel
+   */
   private AlertChannel getDefaultChannel() {
-    // Default: Discord alert channel
-    // Will be injected via constructor when config is ready
-    throw new UnsupportedOperationException("Default channel not implemented yet - use Discord");
+    // Use CRITICAL priority as default (Discord is always configured for high-priority alerts)
+    AlertChannel discordChannel = channelProviders.get(AlertPriority.CRITICAL).get();
+    if (discordChannel != null) {
+      return discordChannel;
+    }
+    // If Discord channel is not available (shouldn't happen), throw with clear message
+    throw new IllegalStateException(
+        "No alert channel configured. Please configure alert.stateless.enabled=true");
   }
 }

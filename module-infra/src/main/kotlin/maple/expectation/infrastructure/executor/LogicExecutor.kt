@@ -112,4 +112,11 @@ interface LogicExecutor : BasicExecutor, SafeExecutor, ResilientExecutor {
     fun executeVoid(task: ThrowingRunnable, taskName: String) {
         executeVoid(task, TaskContext.of("Legacy", taskName))
     }
+
+    /**
+     * Legacy overload for Java-friendly void execution with taskName string
+     */
+    fun executeVoidJava(task: Runnable, taskName: String) {
+        executeVoidJava(task, TaskContext.of("Legacy", taskName))
+    }
 }

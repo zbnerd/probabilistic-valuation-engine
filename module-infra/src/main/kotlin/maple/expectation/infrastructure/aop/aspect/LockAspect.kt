@@ -1,7 +1,5 @@
 package maple.expectation.infrastructure.aop.aspect
 
-import lombok.RequiredArgsConstructor
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.error.exception.InternalSystemException
@@ -15,17 +13,19 @@ import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
+import org.slf4j.LoggerFactory
 
-@Slf4j
 @Aspect
 @Order(0)
 @Component
-@RequiredArgsConstructor
 class LockAspect(
     private val lockStrategy: LockStrategy,
     private val executor: LogicExecutor,
     private val spelParser: CustomSpelParser
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(LockAspect::class.java)
+    }
 
     @Around("@annotation(locked)")
     fun applyLock(joinPoint: ProceedingJoinPoint, locked: Locked): Any? {

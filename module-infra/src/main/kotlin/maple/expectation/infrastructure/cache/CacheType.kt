@@ -10,7 +10,7 @@ import java.time.Duration
  */
 enum class CacheType(
     /** Cache name */
-    val name: String,
+    val cacheName: String,
 
     /** Time-to-live duration */
     val ttl: Duration
@@ -33,5 +33,5 @@ enum class CacheType(
     /** Like count cache (5 min TTL) */
     LIKE_COUNT("likeCount", Duration.ofMinutes(5));
 
-    override fun toString(): String = name
+    override fun toString(): String = cacheName
 }

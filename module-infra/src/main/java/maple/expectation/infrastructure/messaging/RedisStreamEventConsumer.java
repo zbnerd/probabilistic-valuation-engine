@@ -147,7 +147,7 @@ public class RedisStreamEventConsumer implements ApplicationContextAware {
    * @param context Spring application context
    */
   private void discoverHandlers(ApplicationContext context) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           try {
             discoverHandlersInternal(context);
@@ -274,7 +274,7 @@ public class RedisStreamEventConsumer implements ApplicationContextAware {
         streamKey);
 
     while (!Thread.currentThread().isInterrupted()) {
-      executor.executeVoid(
+      executor.executeVoidJava(
           () -> {
             try {
               consumeNextBatch();
@@ -337,7 +337,7 @@ public class RedisStreamEventConsumer implements ApplicationContextAware {
    * @param fields Message fields (JSON payload)
    */
   private void processMessage(StreamMessageId messageId, Map<String, String> fields) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           try {
             processMessageInternal(messageId, fields);
@@ -457,7 +457,7 @@ public class RedisStreamEventConsumer implements ApplicationContextAware {
    * <p>Uses LogicExecutor.executeVoid to handle "group exists" errors gracefully.
    */
   private void createConsumerGroupIfNeeded() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           try {
             stream.createGroup(StreamCreateGroupArgs.name(consumerGroup).makeStream());

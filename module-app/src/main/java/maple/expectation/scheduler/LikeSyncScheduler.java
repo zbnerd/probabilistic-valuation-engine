@@ -87,11 +87,11 @@ public class LikeSyncScheduler {
   @Scheduled(fixedDelay = 3000)
   public void localFlush() {
     // likeCount 버퍼 동기화
-    executor.executeVoid(
+    executor.executeVoidJava(
         likeSyncService::flushLocalToRedis, TaskContext.of("Scheduler", "LocalFlush.Count"));
 
     // likeRelation 버퍼 동기화
-    executor.executeVoid(
+    executor.executeVoidJava(
         likeRelationSyncService::flushLocalToRedis,
         TaskContext.of("Scheduler", "LocalFlush.Relation"));
   }

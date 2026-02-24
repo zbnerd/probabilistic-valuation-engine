@@ -59,6 +59,7 @@ class DonationHistory {
     }
 
     companion object {
+        @JvmStatic
         fun create(
             senderUuid: String?,
             receiverFingerprint: String?,

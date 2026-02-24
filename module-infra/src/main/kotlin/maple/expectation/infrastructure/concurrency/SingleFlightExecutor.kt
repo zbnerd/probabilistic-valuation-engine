@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.concurrency
 
-import lombok.extern.slf4j.Slf4j.Slf4j
+import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
@@ -38,7 +38,6 @@ import java.util.function.Supplier
  * @see DistributedSingleFlightService 분산 환경에서의 Single-Flight (Issue #283 P0-4)
  * @see <a href="https://github.com/issue/158">Issue #158: Single-flight 패턴</a>
  */
-@Slf4j
 class SingleFlightExecutor<T>(
     /** Follower 대기 타임아웃 (초) */
     private val followerTimeoutSeconds: Int,
@@ -49,6 +48,10 @@ class SingleFlightExecutor<T>(
     /** Follower 타임아웃 시 fallback 함수 (key → result) */
     private val timeoutFallback: Function<String, T>?
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(SingleFlightExecutor::class.java)
+    }
+
     /** 진행 중인 계산 맵 */
     private val inFlight: ConcurrentHashMap<String, InFlightEntry<T>> = ConcurrentHashMap()
 

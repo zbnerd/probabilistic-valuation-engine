@@ -115,7 +115,7 @@ public class LuaScriptAtomicFetchStrategy implements AtomicFetchStrategy {
       log.debug("Restore skipped: tempKey is null or blank");
       return;
     }
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> executeRestore(tempKey, sourceKey),
         TaskContext.of("AtomicFetch", "restore", tempKey));
   }
@@ -131,7 +131,7 @@ public class LuaScriptAtomicFetchStrategy implements AtomicFetchStrategy {
       log.debug("Delete skipped: tempKey is null or blank");
       return;
     }
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> redissonClient.getKeys().delete(tempKey),
         TaskContext.of("AtomicFetch", "deleteTempKey", tempKey));
   }

@@ -19,17 +19,17 @@ class FlameScoreCalculator {
 
   /** 직업 가중치 Record 모든 값은 SCALE(10)이 적용된 정수 */
   data class JobWeights(
-      val wStr: Int,
-      val wDex: Int,
-      val wInt: Int,
-      val wLuk: Int,
-      val wHp: Int,
-      val wMp: Int,
-      val wAllstatPct: Int,
-      val wAtt: Int,
-      val wMag: Int,
-      val wDmgPct: Int,
-      val wBossDmgPct: Int
+      @JvmField val wStr: Int,
+      @JvmField val wDex: Int,
+      @JvmField val wInt: Int,
+      @JvmField val wLuk: Int,
+      @JvmField val wHp: Int,
+      @JvmField val wMp: Int,
+      @JvmField val wAllstatPct: Int,
+      @JvmField val wAtt: Int,
+      @JvmField val wMag: Int,
+      @JvmField val wDmgPct: Int,
+      @JvmField val wBossDmgPct: Int
   ) {
     companion object {
       /** 일반 직업 (주스탯=10, 부스탯=1, 올스탯%=100, 공=40, 뎀/보공=140) */

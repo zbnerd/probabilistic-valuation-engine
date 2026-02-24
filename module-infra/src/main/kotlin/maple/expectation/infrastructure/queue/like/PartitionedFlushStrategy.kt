@@ -7,49 +7,27 @@ import maple.expectation.infrastructure.queue.RedisKey
 import org.slf4j.LoggerFactory
 import org.redisson.api.RLock
 import org.redisson.api.RedissonClient
-import java.util.ArrayList
-import java.util.HashMap
-import java.util.List
-import java.util.Map
 import java.util.concurrent.TimeUnit
+import java.util.function.BiConsumer
 
 /**
  * 파티션 기반 분산 Flush 전략 (#271 V5 Stateless Architecture)
  */
-class PartitionedFlushStrategy(
+class PartitionedFlushStrategy @JvmOverloads constructor(
     private val redissonClient: RedissonClient,
     private val bufferStorage: RedisLikeBufferStorage,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    private val syncProcessor: BiConsumer<String, Long>
+    private val syncProcessor: BiConsumer<String, Long>,
+    private val partitionCount: Int = 4,
+    private val lockWaitMs: Long = 100L,
+    private val lockLeaseMs: Long = 30000L,
+    private val batchSize: Int = 1000
 ) {
 
     companion object {
         private val log = LoggerFactory.getLogger(PartitionedFlushStrategy::class.java)
     }
-
-    private val partitionCount: Int
-    private val lockWaitMs: Long
-    private val lockLeaseMs: Long
-    private val batchSize: Int
-
-    constructor(
-        redissonClient: RedissonClient,
-        bufferStorage: RedisLikeBufferStorage,
-        executor: LogicExecutor,
-        meterRegistry: MeterRegistry,
-        syncProcessor: BiConsumer<String, Long>
-    ) : this(
-        redissonClient,
-        bufferStorage,
-        executor,
-        meterRegistry,
-        syncProcessor,
-        4,
-        100L,
-        30000L,
-        1000
-    )
 
     init {
         log.info("[PartitionedFlushStrategy] Initialized with $partitionCount partitions")
@@ -145,7 +123,7 @@ class PartitionedFlushStrategy(
 
         var processedCount = 0
         var totalDelta = 0L
-        val failedEntries = ArrayList<Map.Entry<String, Long>>()
+        val failedEntries = mutableListOf<Pair<String, Long>>()
 
         for ((userIgn, delta) in entries) {
             val success = executor.executeOrDefault(
@@ -161,7 +139,7 @@ class PartitionedFlushStrategy(
                 processedCount++
                 totalDelta += delta
             } else {
-                failedEntries.add(AbstractMap.SimpleEntry(userIgn, delta))
+                failedEntries.add(userIgn to delta)
             }
         }
 
@@ -177,33 +155,28 @@ class PartitionedFlushStrategy(
     }
 
     private fun partitionEntries(entries: Map<String, Long>): Map<Int, Map<String, Long>> {
-        val partitioned = HashMap<Int, Map<String, Long>>()
-
-        for ((userIgn, _) in entries) {
-            val partitionId = getPartitionId(userIgn)
-            partitioned.computeIfAbsent(partitionId) { HashMap() }
-        }
+        val partitioned = mutableMapOf<Int, MutableMap<String, Long>>()
 
         for ((userIgn, delta) in entries) {
             val partitionId = getPartitionId(userIgn)
-            partitioned.getOrPut(partitionId) { HashMap() }[userIgn] = delta
+            partitioned.getOrPut(partitionId) { mutableMapOf() }[userIgn] = delta
         }
 
         return partitioned
     }
 
     private fun getPartitionId(userIgn: String): Int {
-        return Math.abs(userIgn.hashCode() % partitionCount)
+        return kotlin.math.abs(userIgn.hashCode() % partitionCount)
     }
 
     private fun restoreEntries(entries: Map<String, Long>) {
         entries.forEach { (userIgn, delta) -> bufferStorage.increment(userIgn, delta) }
-        meterRegistry.counter("like.flush.restore.entries").increment(entries.size.toLong())
+        meterRegistry.counter("like.flush.restore.entries").increment(entries.size.toDouble())
     }
 
-    private fun restoreEntries(entries: List<Map.Entry<String, Long>>) {
+    private fun restoreEntries(entries: List<Pair<String, Long>>) {
         entries.forEach { (userIgn, delta) -> bufferStorage.increment(userIgn, delta) }
-        meterRegistry.counter("like.flush.restore.entries").increment(entries.size.toLong())
+        meterRegistry.counter("like.flush.restore.entries").increment(entries.size.toDouble())
     }
 
     private fun recordFlushMetrics(
@@ -212,11 +185,11 @@ class PartitionedFlushStrategy(
         delta: Long,
         failed: Int
     ) {
-        meterRegistry.counter("like.flush.partitions.acquired").increment(partitions.toLong())
-        meterRegistry.counter("like.flush.entries.processed").increment(entries.toLong())
-        meterRegistry.counter("like.flush.delta.total").increment(delta)
+        meterRegistry.counter("like.flush.partitions.acquired").increment(partitions.toDouble())
+        meterRegistry.counter("like.flush.entries.processed").increment(entries.toDouble())
+        meterRegistry.counter("like.flush.delta.total").increment(delta.toDouble())
         if (failed > 0) {
-            meterRegistry.counter("like.flush.partitions.failed").increment(failed.toLong())
+            meterRegistry.counter("like.flush.partitions.failed").increment(failed.toDouble())
         }
     }
 

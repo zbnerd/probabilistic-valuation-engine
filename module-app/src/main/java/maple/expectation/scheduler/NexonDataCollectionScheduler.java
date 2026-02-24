@@ -3,10 +3,10 @@ package maple.expectation.scheduler;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import maple.expectation.service.ingestion.NexonDataCollector;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -74,7 +74,7 @@ public class NexonDataCollectionScheduler {
       fixedRateString = "${scheduler.nexon-data-collection.rate:600000}",
       initialDelayString = "${scheduler.nexon-data-collection.initial-delay:30000}")
   public void collectNexonData() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         this::processAllCharacters, TaskContext.of("Scheduler", "NexonDataCollection"));
   }
 
@@ -109,8 +109,8 @@ public class NexonDataCollectionScheduler {
     int failureCount = 0;
 
     for (GameCharacter character : charactersToProcess) {
-      String ocid = character.getOcid();
-      String userIgn = character.getUserIgn();
+      String ocid = character.getCharacterId().value();
+      String userIgn = character.getUserIgn().value();
 
       // Use executeOrCatch to count successes/failures while continuing processing
       Boolean success =

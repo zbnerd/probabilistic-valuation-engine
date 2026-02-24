@@ -70,7 +70,7 @@ public class EquipmentApplicationService {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");
     }
-    return equipmentRepository.findById(characterId);
+    return Optional.ofNullable(equipmentRepository.findById(characterId));
   }
 
   /**
@@ -88,9 +88,8 @@ public class EquipmentApplicationService {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");
     }
-    return equipmentRepository
-        .findById(characterId)
-        .filter(equipment -> equipment.isFresh(FRESH_TTL));
+    CharacterEquipment equipment = equipmentRepository.findById(characterId);
+    return Optional.ofNullable(equipment).filter(e -> e.isFresh(FRESH_TTL));
   }
 
   /**
@@ -113,7 +112,8 @@ public class EquipmentApplicationService {
     EquipmentData equipmentData = EquipmentData.of(jsonData);
 
     // Check if equipment exists
-    Optional<CharacterEquipment> existing = equipmentRepository.findById(characterId);
+    Optional<CharacterEquipment> existing =
+        Optional.ofNullable(equipmentRepository.findById(characterId));
 
     if (existing.isPresent()) {
       // Update existing equipment
@@ -145,8 +145,7 @@ public class EquipmentApplicationService {
     }
 
     CharacterEquipment equipment =
-        equipmentRepository
-            .findById(characterId)
+        Optional.ofNullable(equipmentRepository.findById(characterId))
             .orElseThrow(() -> new IllegalArgumentException("Equipment not found: " + characterId));
 
     EquipmentData newData = EquipmentData.of(jsonData);

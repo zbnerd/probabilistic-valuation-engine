@@ -10,7 +10,6 @@ import maple.expectation.core.domain.model.AlertMessage;
 import maple.expectation.core.domain.model.AlertPriority;
 import maple.expectation.core.domain.model.CharacterId;
 import maple.expectation.core.domain.model.CubeRate;
-import maple.expectation.core.domain.model.CubeType;
 import maple.expectation.core.domain.model.PotentialStat;
 import maple.expectation.core.port.out.AlertPort;
 import maple.expectation.core.port.out.CubeRatePort;
@@ -140,7 +139,7 @@ public class TemporaryAdapterConfig {
 
     return new CubeRatePort() {
       @Override
-      public List<CubeRate> findByCubeType(CubeType type) {
+      public List<CubeRate> findByCubeType(maple.expectation.core.domain.model.CubeType type) {
         return cubeProbabilityRepository.findAll().stream()
             .filter(p -> p.getCubeType().name().equals(type.name()))
             .map(
@@ -190,15 +189,16 @@ public class TemporaryAdapterConfig {
     return new EquipmentDataPort() {
       @Override
       public Optional<EquipmentData> findByCharacterId(CharacterId characterId) {
-        return characterEquipmentRepository
-            .findById(mapToLegacyCharacterId(characterId))
+        return Optional.ofNullable(
+                characterEquipmentRepository.findById(mapToLegacyCharacterId(characterId)))
             .map(CharacterEquipment::equipmentData);
       }
 
       @Override
       public Optional<EquipmentData> findByOcid(String ocid) {
-        return characterEquipmentRepository
-            .findById(maple.expectation.domain.model.character.CharacterId.of(ocid))
+        return Optional.ofNullable(
+                characterEquipmentRepository.findById(
+                    maple.expectation.domain.model.character.CharacterId.of(ocid)))
             .map(CharacterEquipment::equipmentData);
       }
 
@@ -285,7 +285,7 @@ public class TemporaryAdapterConfig {
 
     return new ItemPricePort() {
       @Override
-      public Optional<maple.expectation.core.domain.model.ItemPrice> findByItemId(Long itemId) {
+      public Optional<maple.expectation.core.domain.model.ItemPrice> findByItemId(long itemId) {
         // TODO: Implement actual Nexon API integration
         return Optional.empty();
       }
@@ -308,6 +308,6 @@ public class TemporaryAdapterConfig {
 
   private static maple.expectation.core.domain.model.CubeType mapToCoreCubeType(
       maple.expectation.domain.v2.CubeType legacyType) {
-    return maple.expectation.core.domain.model.CubeType.valueOf(legacyType.name());
+    return legacyType.toCore();
   }
 }

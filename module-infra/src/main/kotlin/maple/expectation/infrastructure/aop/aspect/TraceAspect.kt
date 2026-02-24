@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.aop.aspect
 
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.infrastructure.executor.TaskContext
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
@@ -11,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 import org.springframework.util.StopWatch
+import org.slf4j.LoggerFactory
 
 /**
  * 트레이스 어스펙트 (#271 V5 Stateless Architecture)
@@ -34,13 +34,13 @@ import org.springframework.util.StopWatch
  *
  * <p>순환 참조 방지를 위해 LogicExecutor 의존성을 제거하고 try-catch-finally 패턴 적용
  */
-@Slf4j
 @Aspect
 @Component
 @Order(-1)
 class TraceAspect(@Value("\${app.aop.trace.enabled:false}") private val isTraceEnabled: Boolean) {
 
     companion object {
+        private val log = LoggerFactory.getLogger(TraceAspect::class.java)
         private const val MAX_ARG_LENGTH = 100
         /** V5: MDC 키 (로그에서 확인 가능) */
         private const val MDC_DEPTH_KEY = "traceDepth"

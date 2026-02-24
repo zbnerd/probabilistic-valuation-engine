@@ -112,7 +112,7 @@ public class DeduplicationFilter {
    * @param eventId Event ID to mark
    */
   public void markProcessed(String eventId) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           processedEvents.add(eventId);
           processedEvents.expire(ttlMillis, java.util.concurrent.TimeUnit.MILLISECONDS);

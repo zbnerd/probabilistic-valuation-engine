@@ -5,8 +5,11 @@ import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.SystemException
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.security.NoSuchAlgorithmException
 import java.time.LocalDateTime
 import java.util.HexFormat
+import kotlin.math.min
+import kotlin.math.pow
 
 /**
  * Nexon API용 Transactional Outbox 엔티티 (N19 리팩토링)
@@ -166,7 +169,7 @@ class NexonApiOutbox {
         this.retryCount++
         this.lastError = truncate(error, 500)
         this.status = if (shouldMoveToDlq()) OutboxStatus.DEAD_LETTER else OutboxStatus.FAILED
-        val backoffSeconds = Math.min((2.0.pow(retryCount.toDouble()) * 30).toLong(), 3600) // Max 1시간
+        val backoffSeconds = min(2.0.pow(retryCount.toDouble()).toLong() * 30, 3600) // Max 1시간
         this.nextRetryAt = LocalDateTime.now().plusSeconds(backoffSeconds)
         clearLock()
     }

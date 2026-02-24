@@ -111,7 +111,7 @@ public class KafkaEventPublisher implements EventPublisher {
 
   @Override
   public void publish(String topic, IntegrationEvent<?> event) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           try {
             publishInternal(topic, event);
@@ -194,6 +194,7 @@ public class KafkaEventPublisher implements EventPublisher {
         topic,
         event.getEventId());
 
-    return EventPublisher.super.publishAsync(topic, event);
+    // Use default implementation: run publish() in async context
+    return java.util.concurrent.CompletableFuture.runAsync(() -> publish(topic, event));
   }
 }

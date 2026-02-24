@@ -111,24 +111,24 @@ public class GameCharacterJpaEntity {
     }
 
     GameCharacterJpaEntity entity;
-    if (domain.id() == null) {
+    if (domain.getId() == null) {
       // New entity
-      entity = new GameCharacterJpaEntity(domain.userIgn(), domain.characterId());
+      entity = new GameCharacterJpaEntity(domain.getUserIgn(), domain.getCharacterId());
     } else {
       // Existing entity - preserve ID and version
       entity = new GameCharacterJpaEntity();
-      entity.id = domain.id();
-      entity.userIgn = domain.userIgn().value();
-      entity.ocid = domain.characterId().value();
+      entity.id = domain.getId();
+      entity.userIgn = domain.getUserIgn().value();
+      entity.ocid = domain.getCharacterId().value();
     }
 
     // Copy mutable fields
-    entity.worldName = domain.worldName();
-    entity.characterClass = domain.characterClass();
-    entity.characterImage = domain.characterImage();
-    entity.basicInfoUpdatedAt = domain.basicInfoUpdatedAt();
-    entity.likeCount = domain.likeCount();
-    entity.updatedAt = domain.updatedAt();
+    entity.worldName = domain.getWorldName();
+    entity.characterClass = domain.getCharacterClass();
+    entity.characterImage = domain.getCharacterImage();
+    entity.basicInfoUpdatedAt = domain.getBasicInfoUpdatedAt();
+    entity.likeCount = domain.getLikeCount();
+    entity.updatedAt = domain.getUpdatedAt();
     // Note: equipment is stored separately in character_equipment table
 
     return entity;

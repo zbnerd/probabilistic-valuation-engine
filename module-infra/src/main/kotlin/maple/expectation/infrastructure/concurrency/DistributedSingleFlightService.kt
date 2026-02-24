@@ -1,7 +1,5 @@
 package maple.expectation.infrastructure.concurrency
 
-import lombok.RequiredArgsConstructor
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -9,6 +7,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lock.LockStrategy
 import org.redisson.api.RBucket
 import org.redisson.api.RedissonClient
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.time.Duration
 import java.util.concurrent.ThreadLocalRandom
@@ -33,9 +32,7 @@ import java.util.function.Supplier
  *
  * @see SingleFlightExecutor 인스턴스 레벨 Single-Flight (비동기)
  */
-@Slf4j
 @Component
-@RequiredArgsConstructor
 class DistributedSingleFlightService(
     private val executor: LogicExecutor,
     private val checkedExecutor: CheckedLogicExecutor,
@@ -43,6 +40,7 @@ class DistributedSingleFlightService(
     private val redissonClient: RedissonClient
 ) {
     companion object {
+        private val log = LoggerFactory.getLogger(DistributedSingleFlightService::class.java)
         private val DEFAULT_CACHE_TTL: Duration = Duration.ofSeconds(30)
         private const val CACHE_PREFIX = "{single-flight}:result:"
         private const val MAX_RETRIES = 6
@@ -151,7 +149,7 @@ class DistributedSingleFlightService(
     }
 
     /** Sleep with exponential backoff during cache retry. */
-    private fun <T> sleepWithBackoff(attempt: Int, originalKey: String) {
+    private fun sleepWithBackoff(attempt: Int, originalKey: String) {
         val delayMs = BASE_DELAY_MS * (1L shl attempt) // Exponential backoff: 50ms, 100ms, 200ms, 400ms...
         val jitter = ThreadLocalRandom.current().nextLong(0, delayMs / 4)
         val totalDelay = delayMs + jitter

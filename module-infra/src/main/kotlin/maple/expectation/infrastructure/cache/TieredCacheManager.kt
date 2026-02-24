@@ -1,7 +1,6 @@
 package maple.expectation.infrastructure.cache
 
 import io.micrometer.core.instrument.MeterRegistry
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
 import org.redisson.api.RedissonClient
@@ -11,6 +10,7 @@ import org.springframework.cache.support.AbstractCacheManager
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.function.Consumer
+import org.slf4j.LoggerFactory
 
 /**
  * 2계층 캐시 매니저 (L1: Caffeine, L2: Redis)
@@ -38,7 +38,6 @@ import java.util.function.Consumer
  *   <li><b>Green Agent 피드백 반영</b></li>
  * </ul>
  */
-@Slf4j
 class TieredCacheManager(
     private val l1Manager: CacheManager,
     private val l2Manager: CacheManager,
@@ -47,6 +46,9 @@ class TieredCacheManager(
     val meterRegistry: MeterRegistry, // Issue #148: 메트릭 수집용 (public for access)
     private val lockWaitSeconds: Int // P0-4: 외부 설정
 ) : AbstractCacheManager() {
+    companion object {
+        private val log = LoggerFactory.getLogger(TieredCacheManager::class.java)
+    }
 
     /** P2 FIX: TieredCache 인스턴스 풀 (동일 이름 캐시는 한 번만 생성) */
     private val cachePool: ConcurrentHashMap<String, Cache> = ConcurrentHashMap()
@@ -90,7 +92,9 @@ class TieredCacheManager(
      */
     private fun createTieredCache(name: String): Cache {
         val l1 = l1Manager.getCache(name)
+            ?: throw IllegalArgumentException("L1 cache not found: $name")
         val l2 = l2Manager.getCache(name)
+            ?: throw IllegalArgumentException("L2 cache not found: $name")
 
         log.debug("[TieredCacheManager] Creating TieredCache instance: name={}", name)
 

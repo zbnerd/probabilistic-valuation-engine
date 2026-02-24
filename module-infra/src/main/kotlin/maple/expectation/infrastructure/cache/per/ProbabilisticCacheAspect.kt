@@ -2,12 +2,15 @@ package maple.expectation.infrastructure.cache.per
 
 import com.fasterxml.jackson.databind.JavaType
 import com.fasterxml.jackson.databind.ObjectMapper
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
+import org.aspectj.lang.reflect.MethodSignature
+import org.redisson.api.RedissonClient
+import org.redisson.api.RBucket
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.DefaultParameterNameDiscoverer
 import org.springframework.core.ParameterNameDiscoverer
@@ -62,7 +65,6 @@ import org.springframework.cache.annotation.Cacheable
  *   <li>Green (Performance): 인스턴스별 캐싱으로 JVM 내 최적화</li>
  * </ul>
  */
-@Slf4j
 @Aspect
 @Component
 class ProbabilisticCacheAspect(
@@ -71,6 +73,10 @@ class ProbabilisticCacheAspect(
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(ProbabilisticCacheAspect::class.java)
+    }
+
     private val parser: ExpressionParser = SpelExpressionParser()
     private val paramDiscoverer: ParameterNameDiscoverer = DefaultParameterNameDiscoverer()
 
@@ -84,7 +90,7 @@ class ProbabilisticCacheAspect(
         val method = signature.method
 
         // 1. 캐시 조회
-        val bucket = redissonClient.getBucket<Any>(cacheKey)
+        val bucket: RBucket<String> = redissonClient.getBucket(cacheKey)
         val cachedJson = bucket.get()
 
         // 2. Cache Miss → 동기 실행
@@ -94,7 +100,7 @@ class ProbabilisticCacheAspect(
         }
 
         // 3. PR #238 Fix: JavaType을 사용한 역직렬화 (제네릭 타입 보존)
-        val cached = deserializeWrapperSafely<Any>(cachedJson, cacheKey, method)
+        val cached = deserializeWrapperSafely(cachedJson, cacheKey, method)
         if (cached == null) {
             log.warn("⚠️ [PER] 역직렬화 실패, 재계산: {}", cacheKey)
             return recomputeAndCache(joinPoint, cacheKey, probabilisticCache)
@@ -113,7 +119,7 @@ class ProbabilisticCacheAspect(
         }
 
         // 5. Stale 데이터 즉시 반환 (Non-Blocking)
-        log.debug("🟢 [PER] Cache Hit: {} (stale: {})", cacheKey, cached.isExpired)
+        log.debug("🟢 [PER] Cache Hit: {} (stale: {})", cacheKey, cached.isExpired())
         return cached.value
     }
 
@@ -205,7 +211,7 @@ class ProbabilisticCacheAspect(
             // P2-GREEN-01: JavaType 캐싱 적용
             val wrapperType = wrapperTypeCache.computeIfAbsent(method) { buildWrapperType(it) }
             @Suppress("UNCHECKED_CAST")
-            return objectMapper.readValue(json, wrapperType) as CachedWrapper<Any>
+            objectMapper.readValue(json, wrapperType) as CachedWrapper<Any>
         }, null, context)
     }
 
@@ -235,8 +241,8 @@ class ProbabilisticCacheAspect(
         val paramNames = paramDiscoverer.getParameterNames(method)
 
         if (paramNames != null) {
-            for (i in paramNames.indices) {
-                evalContext.setVariable(paramNames[i], args[i])
+            paramNames.forEachIndexed { index, paramName ->
+                evalContext.setVariable(paramName, args[index])
             }
         }
 

@@ -151,7 +151,7 @@ public class TotalExpectationCacheService {
    * @param response 저장할 응답
    */
   public void saveCache(String cacheKey, TotalExpectationResponse response) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // 1) Serialize + size guard
           int size = serializeAndGetSize(cacheKey, response);

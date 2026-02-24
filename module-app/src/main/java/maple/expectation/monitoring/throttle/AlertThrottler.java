@@ -70,7 +70,7 @@ public class AlertThrottler {
   private RAtomicLong getDailyCounter() {
     RAtomicLong counter = redissonClient.getAtomicLong(buildDailyCountKey());
     // 25시간 TTL 설정 (자정 넘어가도 안전하게 만료)
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> this.setCounterExpiry(counter), TaskContext.of("AlertThrottler", "SetDailyTTL"));
     return counter;
   }
@@ -85,7 +85,7 @@ public class AlertThrottler {
   private RMap<String, Long> getPatternTimesMap() {
     RMap<String, Long> map = redissonClient.getMap(buildPatternTimesKey());
     // TTL: 스로틀링 시간의 10배
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> this.setMapExpiry(map), TaskContext.of("AlertThrottler", "SetPatternMapTTL"));
     return map;
   }

@@ -32,7 +32,7 @@ public class MongoSyncEventPublisherStub implements MongoSyncEventPublisherInter
   @Override
   public void publishCalculationCompleted(String taskId, EquipmentExpectationResponseV4 response) {
     TaskContext context = TaskContext.of("MongoSyncPublisherStub", "Publish", taskId);
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           log.debug(
               "[V5-Stub] Event publishing skipped (Query Side disabled): taskId={}, userIgn={}",

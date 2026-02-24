@@ -2,7 +2,6 @@ package maple.expectation.infrastructure.cache
 
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -10,11 +9,13 @@ import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import org.redisson.api.RLock
 import org.redisson.api.RedissonClient
 import org.springframework.cache.Cache
+import org.springframework.cache.Cache.ValueWrapper
 import java.util.Optional
 import java.util.concurrent.Callable
 import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
 import java.util.function.Supplier
+import org.slf4j.LoggerFactory
 
 /**
  * 2층 구조 캐시 (L1: Caffeine, L2: Redis)
@@ -40,7 +41,6 @@ import java.util.function.Supplier
  *
  * @see <a href="https://github.com/issue/148">Issue #148</a>
  */
-@Slf4j
 class TieredCache(
     private val l1: Cache, // Caffeine (Local)
     private val l2: Cache, // Redis (Distributed)
@@ -51,6 +51,9 @@ class TieredCache(
     private val instanceIdSupplier: Supplier<String>, // P1-6: Lazy Resolution
     private val callbackSupplier: Supplier<Consumer<CacheInvalidationEvent>> // P1-6: Lazy Resolution
 ) : Cache {
+    companion object {
+        private val log = LoggerFactory.getLogger(TieredCache::class.java)
+    }
 
     // P1-7: Counter pre-registration (hot-path 할당 제거)
     private val l1HitCounter: Counter
@@ -233,10 +236,10 @@ class TieredCache(
         )
     }
 
-    override fun <T : Any?> get(key: Any, type: Class<T>): T? {
+    override fun <T : Any?> get(key: Any, type: Class<T>?): T? {
         val wrapper = get(key)
         @Suppress("UNCHECKED_CAST")
-        return wrapper?.let { type.cast(it.get()) as? T }
+        return wrapper?.let { type?.cast(it.get()) as? T }
     }
 
     /**

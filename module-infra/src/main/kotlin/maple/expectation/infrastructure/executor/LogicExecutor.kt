@@ -80,9 +80,14 @@ interface LogicExecutor : BasicExecutor, SafeExecutor, ResilientExecutor {
     ): T
 
     /**
-     * [패턴 1] void 작업 실행
+     * [패턴 1] void 작업 실행 (Kotlin)
      */
     override fun executeVoid(task: ThrowingRunnable, context: TaskContext)
+
+    /**
+     * [패턴 1] void 작업 실행 (Java-friendly)
+     */
+    override fun executeVoidJava(task: Runnable, context: TaskContext)
 
     /**
      * [패턴 1] finally 블록 명시적 지정

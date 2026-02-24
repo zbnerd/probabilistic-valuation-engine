@@ -12,8 +12,8 @@ import org.redisson.api.RScript
 import org.redisson.api.RedissonClient
 import org.redisson.client.codec.LongCodec
 import org.redisson.client.codec.StringCodec
-import java.util.Collections
 import java.util.concurrent.atomic.AtomicReference
+import java.util.Collections
 
 /**
  * Redis 기반 좋아요 카운터 버퍼 (#271 V5 Stateless Architecture)
@@ -81,12 +81,12 @@ class RedisLikeBufferStorage(
 
     private fun registerMetrics() {
         // 버퍼 내 대기 중인 카운터 수
-        Gauge.builder("like.buffer.redis.entries", this) { storage -> storage.getBufferSize() }
+        Gauge.builder("like.buffer.redis.entries", this) { storage -> storage.getBufferSize().toDouble() }
             .description("Redis 버퍼의 미반영 좋아요 엔트리 수")
             .register(meterRegistry)
 
         // 버퍼 내 총 delta 합계
-        Gauge.builder("like.buffer.redis.total_delta", this) { storage -> storage.getTotalDelta() }
+        Gauge.builder("like.buffer.redis.total_delta", this) { storage -> storage.getTotalDelta().toDouble() }
             .description("Redis 버퍼의 미반영 좋아요 총합")
             .register(meterRegistry)
     }
@@ -120,8 +120,11 @@ class RedisLikeBufferStorage(
 
     override fun getAllCounters(): Map<String, Long> {
         return executor.executeOrDefault(
-            { HashMap(getBuffer().readAllMap()) },
-            Collections.emptyMap(),
+            {
+                val rawMap: Map<*, *> = getBuffer().readAllMap()
+                rawMap.entries.associate { it.key.toString() to it.value.toString().toLong() }
+            },
+            emptyMap(),
             TaskContext.of("LikeBuffer", "GetAll")
         )
     }
@@ -129,7 +132,7 @@ class RedisLikeBufferStorage(
     override fun fetchAndClear(limit: Int): Map<String, Long> {
         return executor.executeOrDefault(
             { doFetchAndClear(limit) },
-            Collections.emptyMap(),
+            emptyMap(),
             TaskContext.of("LikeBuffer", "FetchAndClear")
         )
     }
@@ -177,7 +180,7 @@ class RedisLikeBufferStorage(
     }
 
     private fun parseRawResult(rawResult: List<List<String>>): Map<String, Long> {
-        val result = HashMap<String, Long>()
+        val result = mutableMapOf<String, Long>()
         for (entry in rawResult) {
             if (entry.size >= MIN_ENTRY_SIZE) {
                 val field = entry[FIELD_INDEX]
@@ -187,11 +190,11 @@ class RedisLikeBufferStorage(
         }
 
         if (result.isNotEmpty()) {
-            meterRegistry.counter("like.buffer.flush.entries").increment(result.size.toLong())
+            meterRegistry.counter("like.buffer.flush.entries").increment(result.size.toDouble())
             log.info("[LikeBuffer] FetchAndClear: {} entries", result.size)
         }
 
-        return result
+        return result.toMap()
     }
 
     override fun getBufferSize(): Int {

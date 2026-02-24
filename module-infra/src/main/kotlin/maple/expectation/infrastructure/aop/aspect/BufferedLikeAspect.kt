@@ -1,25 +1,25 @@
 package maple.expectation.infrastructure.aop.aspect
 
-import lombok.RequiredArgsConstructor
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.core.port.out.LikeBufferStrategy
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.springframework.stereotype.Component
+import org.slf4j.LoggerFactory
 
 /**
  * 좋아요 버퍼링 AOP (Issue #285: P1-13 구체 의존 제거)
  *
  * <p>LikeBufferStrategy 인터페이스에 의존하여 In-Memory/Redis 모드 모두 지원
  */
-@Slf4j
 @Aspect
 @Component
-@RequiredArgsConstructor
 class BufferedLikeAspect(
     private val likeBufferStrategy: LikeBufferStrategy
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(BufferedLikeAspect::class.java)
+    }
 
     @Around(
         "@annotation(maple.expectation.infrastructure.aop.annotation.BufferedLike) && args(userIgn, ..)"

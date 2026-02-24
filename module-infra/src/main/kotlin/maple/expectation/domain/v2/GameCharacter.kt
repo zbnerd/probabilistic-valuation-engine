@@ -28,15 +28,12 @@ class GameCharacter {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null
-        private set
 
     @Column(nullable = false, unique = true)
     var userIgn: String? = null
-        private set
 
     @Column(nullable = false, unique = true)
     var ocid: String? = null
-        private set
 
     /** 월드명 (Nexon API character/basic에서 조회) */
     @Column(length = 50)
@@ -101,13 +98,10 @@ class GameCharacter {
 
     @Version
     var version: Long? = null
-        private set
 
     var likeCount: Long = 0L
-        private set
 
     var updatedAt: LocalDateTime? = null
-        private set
 
     private constructor()
 

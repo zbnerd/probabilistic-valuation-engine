@@ -4,10 +4,10 @@ import io.micrometer.core.instrument.MeterRegistry
 import java.sql.PreparedStatement
 import java.sql.SQLException
 import java.util.List
+import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.error.exception.LikeSyncCircuitOpenException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.BatchPreparedStatementSetter
 import org.springframework.jdbc.core.JdbcTemplate

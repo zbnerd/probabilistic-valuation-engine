@@ -34,7 +34,7 @@ public class BackfillStrategy implements StreamInitializationStrategy {
 
   @Override
   public boolean initialize(RStream<String, String> stream) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           stream.createGroup(StreamCreateGroupArgs.name(CONSUMER_GROUP).makeStream());
           long streamSize = stream.size();

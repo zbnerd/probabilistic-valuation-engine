@@ -74,7 +74,7 @@ public class BatchScheduler {
   public void runEquipmentRefreshJob() {
     TaskContext context = TaskContext.of("BatchScheduler", "EquipmentRefresh");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           log.info("[BatchScheduler] Starting equipment refresh job with cron: {}", cronExpression);
           launchJob();

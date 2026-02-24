@@ -48,7 +48,7 @@ public class BatchMetricsLogger implements JobExecutionListener {
   public void beforeJob(JobExecution jobExecution) {
     TaskContext context = TaskContext.of("Batch", "MetricsLogger", "beforeJob");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           String jobName = jobExecution.getJobInstance().getJobName();
           Instant startTime = jobExecution.getStartTime().toInstant(ZoneOffset.UTC);
@@ -63,7 +63,7 @@ public class BatchMetricsLogger implements JobExecutionListener {
   public void afterJob(JobExecution jobExecution) {
     TaskContext context = TaskContext.of("Batch", "MetricsLogger", "afterJob");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           String jobName = jobExecution.getJobInstance().getJobName();
           String status = jobExecution.getStatus().name();

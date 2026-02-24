@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.alert.channel
 
+import maple.expectation.infrastructure.alert.factory.MessageFactory
 import maple.expectation.infrastructure.alert.message.AlertMessage
 import maple.expectation.infrastructure.config.AlertFeatureProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -56,7 +57,7 @@ class DiscordAlertChannel(
 
     override fun send(message: AlertMessage): Boolean {
         // Check feature flag before sending
-        if (!alertFeatureProperties.stateless.isEnabled) {
+        if (!alertFeatureProperties.stateless.enabled) {
             log.debug("[DiscordAlertChannel] Alert system disabled via feature flag")
             return false
         }
@@ -78,16 +79,16 @@ class DiscordAlertChannel(
      * format.
      */
     private fun sendToDiscord(message: AlertMessage): Boolean {
-        val response = alertWebClient
+        val response: ResponseEntity<Void>? = alertWebClient
             .post()
             .uri(message.getWebhookUrl())
             .contentType(MediaType.APPLICATION_JSON) // ADR-039 Fix
             .bodyValue(MessageFactory.toDiscordPayload(message))
             .retrieve()
-            .toBodilessEntity<Void>()
+            .toBodilessEntity()
             .block()
 
-        val success = response.statusCode?.is2xxSuccessful == true
+        val success = response?.statusCode?.is2xxSuccessful == true
 
         if (success && log.isInfoEnabled) {
             log.info(
@@ -99,7 +100,7 @@ class DiscordAlertChannel(
             log.warn(
                 "[DiscordAlertChannel] Alert failed with status {}: {}",
                 message.getTitle(),
-                response.statusCode
+                response?.statusCode
             )
         }
 

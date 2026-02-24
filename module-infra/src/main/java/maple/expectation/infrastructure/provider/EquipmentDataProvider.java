@@ -70,7 +70,7 @@ public class EquipmentDataProvider {
   public void streamRaw(String ocid, OutputStream os) {
     TaskContext context = TaskContext.of("EquipmentProvider", "StreamRaw", ocid);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           byte[] compressedData = getRawEquipmentData(ocid).join();
 

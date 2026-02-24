@@ -21,7 +21,7 @@ public class AlertTestController {
     TaskContext context = TaskContext.of("Admin", "TestAlert");
 
     // ✅  테스트용 try-catch조차 허용하지 않는 철저함! 👊🔥
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // 1. 강제로 테스트용 예외 생성 (익명 객체나 즉석 생성 활용)
           RuntimeException testEx = new RuntimeException("배포 후 알림 시스템 점검용 테스트 에러입니다.");

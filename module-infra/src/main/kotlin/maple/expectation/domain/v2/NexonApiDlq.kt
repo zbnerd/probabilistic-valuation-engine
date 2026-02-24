@@ -72,6 +72,7 @@ class NexonApiDlq {
          * @param reason 실패 사유
          * @return NexonApiDlq 엔티티
          */
+        @JvmStatic
         fun from(outbox: NexonApiOutbox, reason: String): NexonApiDlq {
             val dlq = NexonApiDlq()
             dlq.originalOutboxId = outbox.id

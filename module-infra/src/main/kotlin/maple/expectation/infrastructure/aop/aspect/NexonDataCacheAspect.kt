@@ -60,7 +60,7 @@ class NexonDataCacheAspect(
         val latch = redissonClient.getCountDownLatch(latchKey)
 
         return if (latch.trySetCount(1)) {
-            val initialTtl = nexonApiProperties.latchInitialTtlSeconds
+            val initialTtl = nexonApiProperties.latchInitialTtlSeconds.toLong()
             redissonClient.keys.expire(latchKey, initialTtl, TimeUnit.SECONDS)
             executeAsLeader(joinPoint, ocid, returnType, latch)
         } else {
@@ -110,7 +110,7 @@ class NexonDataCacheAspect(
 
         return future.handle { res, ex ->
             executor.executeWithFinally(
-                { processAsyncCallback(res, ex, ocid, skipContextSnap) },
+                { processAsyncCallback(res, ex, ocid, skipContextSnap ?: "") },
                 { finalizeLatch(latch) },
                 TaskContext.of("NexonCache", "AsyncCache", ocid)
             )
@@ -194,7 +194,7 @@ class NexonDataCacheAspect(
         return executor.execute(
             {
                 log.info("[Follower] 대장 완료 대기 중...: $ocid")
-                val timeoutSeconds = nexonApiProperties.cacheFollowerTimeoutSeconds
+                val timeoutSeconds = nexonApiProperties.cacheFollowerTimeoutSeconds.toLong()
                 if (!latch.await(timeoutSeconds, TimeUnit.SECONDS)) {
                     throw InternalSystemException("NexonCache Follower Timeout: $ocid")
                 }
@@ -208,24 +208,24 @@ class NexonDataCacheAspect(
 
     private fun finalizeLatch(latch: RCountDownLatch) {
         latch.countDown()
-        val finalizeTtl = nexonApiProperties.latchFinalizeTtlSeconds
+        val finalizeTtl = nexonApiProperties.latchFinalizeTtlSeconds.toLong()
         redissonClient.keys.expire(latch.name, finalizeTtl, TimeUnit.SECONDS)
         log.debug("[Leader] 래치 정리 완료 ({}초 뒤 만료)", finalizeTtl)
     }
 
     private fun getCachedResult(ocid: String, returnType: Class<*>): Optional<Any> {
-        return cacheService
-            .getValidCache(ocid)
-            .map { res -> wrap(res, returnType) }
-            .or(
-                {
-                    if (cacheService.hasNegativeCache(ocid)) {
-                        Optional.of(wrap(null, returnType))
-                    } else {
-                        Optional.empty()
-                    }
+        val cached = cacheService.getValidCache(ocid)
+        return if (cached != null && cached.isPresent) {
+            cached.map { res -> wrap(res, returnType) }
+        } else {
+            Optional.ofNullable(
+                if (cacheService.hasNegativeCache(ocid)) {
+                    wrap(null, returnType)
+                } else {
+                    null
                 }
             )
+        }
     }
 
     private fun wrap(res: EquipmentResponse?, type: Class<*>): Any {

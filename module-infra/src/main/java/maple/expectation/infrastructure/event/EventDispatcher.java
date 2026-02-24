@@ -102,7 +102,7 @@ public class EventDispatcher {
    * @param component Component containing @EventHandler methods
    */
   public void registerHandlers(Object component) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           try {
             registerHandlersInternal(component);
@@ -207,7 +207,7 @@ public class EventDispatcher {
    * @param event IntegrationEvent to dispatch
    */
   public void dispatch(IntegrationEvent<?> event) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           try {
             dispatchInternal(event);
@@ -249,7 +249,7 @@ public class EventDispatcher {
       // Async: Submit to Virtual Thread executor
       virtualThreadExecutor.execute(
           () ->
-              executor.executeVoid(
+              executor.executeVoidJava(
                   () -> {
                     try {
                       invokeHandler(handler, event);
@@ -264,7 +264,7 @@ public class EventDispatcher {
                   TaskContext.of("EventDispatcher", "InvokeAsync", handler.method().getName())));
     } else {
       // Sync: Execute directly
-      executor.executeVoid(
+      executor.executeVoidJava(
           () -> {
             try {
               invokeHandler(handler, event);

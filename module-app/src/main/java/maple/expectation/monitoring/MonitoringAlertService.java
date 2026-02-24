@@ -60,7 +60,7 @@ public class MonitoringAlertService {
           new MonitoringException(CommonErrorCode.SYSTEM_CAPACITY_EXCEEDED, globalPending);
 
       // [패턴 1] executeVoid: 외부 알림 발송 과정도 실행기로 보호하여 관측성 확보
-      executor.executeVoid(
+      executor.executeVoidJava(
           () -> {
             statelessAlertService.sendCritical(
                 "🚨 GLOBAL BUFFER SATURATION", exception.getMessage(), exception);

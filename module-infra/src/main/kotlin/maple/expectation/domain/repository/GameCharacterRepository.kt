@@ -77,6 +77,16 @@ interface GameCharacterRepository {
     fun findAll(): List<GameCharacter>
 
     /**
+     * Retrieve characters with pagination
+     *
+     * <p>This method is preferred over {@code findAll()} for large datasets to avoid memory issues.
+     *
+     * @param pageable pagination parameters (page, size, sort)
+     * @return Page of characters matching the pagination criteria
+     */
+    fun findAll(pageable: org.springframework.data.domain.Pageable): org.springframework.data.domain.Page<GameCharacter>
+
+    /**
      * Find all active characters (updated within the last 30 days)
      *
      * <p>Active characters are defined by {@code GameCharacter.isActive()} - characters updated
@@ -120,4 +130,17 @@ interface GameCharacterRepository {
      * @throws IllegalArgumentException if ocid is null or blank
      */
     fun existsByOcid(ocid: String): Boolean
+
+    /**
+     * Increment the like count for a character by user IGN
+     *
+     * <p>This method is used for batch updates in the like synchronization process.
+     * It directly updates the like_count in the database without loading the entity.
+     *
+     * @param userIgn the in-game name of the character (must not be null)
+     * @param count the amount to increment (can be positive or negative)
+     * @throws IllegalArgumentException if userIgn is null or blank
+     * @see maple.expectation.infrastructure.queue.like.LikeSyncExecutor
+     */
+    fun incrementLikeCount(userIgn: String, count: Long)
 }

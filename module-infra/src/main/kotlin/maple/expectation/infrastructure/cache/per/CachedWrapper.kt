@@ -106,5 +106,6 @@ data class CachedWrapper<T>(
         return Math.max(0, expiry - System.currentTimeMillis())
     }
 
-    fun getValue(): T? = value
+    /** 캐시된 값 반환 (명시적 접근자) */
+    fun getCachedValue(): T? = value
 }

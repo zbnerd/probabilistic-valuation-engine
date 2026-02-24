@@ -80,7 +80,7 @@ public class ShutdownCoordinator {
    * <p>Phase 오름차순으로 정렬하여 낮은 Phase(먼저 종료할 것)부터 실행
    */
   public void executeShutdown() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           log.warn(
               "[ShutdownCoordinator] =========== 4단계 Shutdown 시작 ({}개 Lifecycle Bean) ===========",

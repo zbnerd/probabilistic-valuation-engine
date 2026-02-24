@@ -3,7 +3,6 @@ package maple.expectation.infrastructure.cache.invalidation.impl
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.infrastructure.cache.TieredCacheManager
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationSubscriber
@@ -17,6 +16,7 @@ import org.redisson.api.listener.MessageListener
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.Cache
 import org.springframework.stereotype.Component
+import org.slf4j.LoggerFactory
 
 /**
  * Redis RTopic 기반 캐시 무효화 이벤트 구독자
@@ -42,7 +42,6 @@ import org.springframework.stereotype.Component
  *
  * <p>모든 캐시 작업은 executeVoid로 예외 처리
  */
-@Slf4j
 @Component
 class RedisCacheInvalidationSubscriber(
     private val redissonClient: RedissonClient,
@@ -51,6 +50,9 @@ class RedisCacheInvalidationSubscriber(
     private val meterRegistry: MeterRegistry,
     @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String
 ) : CacheInvalidationSubscriber {
+    companion object {
+        private val log = LoggerFactory.getLogger(RedisCacheInvalidationSubscriber::class.java)
+    }
 
     @Volatile
     private var listenerId: Int? = null
@@ -119,7 +121,7 @@ class RedisCacheInvalidationSubscriber(
 
         when (event.type) {
             InvalidationType.EVICT -> {
-                l1Cache.evict(event.key)
+                event.key?.let { l1Cache.evict(it) }
                 log.debug(
                     "[CacheInvalidation] L1 evicted: cache={}, key={}, source={}",
                     event.cacheName,

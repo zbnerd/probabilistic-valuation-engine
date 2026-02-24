@@ -54,7 +54,7 @@ public class GuavaLockStrategy extends AbstractLockStrategy {
   private void performSafeUnlock(String key) {
     TaskContext context = TaskContext.of("Lock", "GuavaSafeUnlock", key);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           locks.get(key).unlock();
           log.trace("[Guava Lock] '{}' 해제 완료", key);

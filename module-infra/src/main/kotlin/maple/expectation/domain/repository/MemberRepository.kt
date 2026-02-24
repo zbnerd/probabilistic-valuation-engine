@@ -136,4 +136,16 @@ interface MemberRepository {
      * @throws IllegalArgumentException if uuid is null or initialPoint is negative
      */
     fun findOrCreateGuest(uuid: String, initialPoint: Long): Member
+
+    /**
+     * Atomically increase point balance by UUID
+     *
+     * <p>This method performs an atomic UPDATE to increase the point balance,
+     * preventing lost updates in high-concurrency scenarios (Hot Key protection).
+     *
+     * @param uuid the member's UUID
+     * @param amount the amount to increase (must be positive)
+     * @return the number of rows updated (1 if successful, 0 if member not found)
+     */
+    fun increasePointByUuid(uuid: String, amount: Long): Int
 }

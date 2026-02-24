@@ -106,7 +106,7 @@ class TestLogicExecutorsTest {
     assertThat(result8).isEqualTo("fallback-result");
 
     // Pattern 1: Void execution
-    executor.executeVoid(
+    executor.executeVoidJava(
         (ThrowingRunnable) () -> System.out.println("Void executed"),
         TaskContext.of("Test", "ExecuteVoid"));
   }

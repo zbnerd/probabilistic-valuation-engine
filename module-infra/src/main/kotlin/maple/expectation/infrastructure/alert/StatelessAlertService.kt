@@ -60,18 +60,41 @@ class StatelessAlertService(
     }
 
     /**
-     * Send NORMAL alert - can use throttling
+     * Send WARNING alert - can use throttling
+     *
+     * @param title Alert title
+     * @param message Alert message
+     * @param error Throwable (optional)
+     */
+    override fun sendWarning(title: String, message: String, error: Throwable?) {
+        val channel = channelStrategy.getChannel(AlertPriority.NORMAL)
+        executor.executeVoid(
+            {
+                val sent = channel.send(AlertMessage(title, message, error, discordWebhookUrl))
+                if (!sent && log.isWarnEnabled) {
+                    log.warn("[StatelessAlertService] Failed to send warning alert: {}", title)
+                }
+            },
+            TaskContext.of("AlertService", "Warning", title)
+        )
+    }
+
+    /**
+     * Send INFO alert - can use throttling
      *
      * @param title Alert title
      * @param message Alert message
      */
-    override fun sendNormal(title: String, message: String) {
+    override fun sendInfo(title: String, message: String) {
         val channel = channelStrategy.getChannel(AlertPriority.NORMAL)
         executor.executeVoid(
             {
-                channel.send(AlertMessage(title, message, null, discordWebhookUrl))
+                val sent = channel.send(AlertMessage(title, message, null, discordWebhookUrl))
+                if (!sent && log.isWarnEnabled) {
+                    log.warn("[StatelessAlertService] Failed to send info alert: {}", title)
+                }
             },
-            TaskContext.of("AlertService", "Normal", title)
+            TaskContext.of("AlertService", "Info", title)
         )
     }
 }

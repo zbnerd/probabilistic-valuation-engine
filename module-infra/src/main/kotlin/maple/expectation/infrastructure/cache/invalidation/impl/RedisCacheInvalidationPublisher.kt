@@ -1,7 +1,6 @@
 package maple.expectation.infrastructure.cache.invalidation.impl
 
 import io.micrometer.core.instrument.MeterRegistry
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationPublisher
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -10,6 +9,7 @@ import maple.expectation.infrastructure.queue.RedisKey
 import org.redisson.api.RTopic
 import org.redisson.api.RedissonClient
 import org.springframework.stereotype.Component
+import org.slf4j.LoggerFactory
 
 /**
  * Redis RTopic 기반 캐시 무효화 이벤트 발행자
@@ -26,13 +26,15 @@ import org.springframework.stereotype.Component
  *
  * <p>모든 Redis 작업은 executeOrDefault로 Graceful Degradation
  */
-@Slf4j
 @Component
 class RedisCacheInvalidationPublisher(
     redissonClient: RedissonClient,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry
 ) : CacheInvalidationPublisher {
+    companion object {
+        private val log = LoggerFactory.getLogger(RedisCacheInvalidationPublisher::class.java)
+    }
 
     // P1-3: 생성자에서 캐싱
     private val topic: RTopic = redissonClient.getTopic(RedisKey.CACHE_INVALIDATION_TOPIC.key)

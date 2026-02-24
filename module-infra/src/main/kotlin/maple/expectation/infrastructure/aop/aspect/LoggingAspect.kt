@@ -1,7 +1,5 @@
 package maple.expectation.infrastructure.aop.aspect
 
-import lombok.RequiredArgsConstructor
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.infrastructure.aop.collector.PerformanceStatisticsCollector
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -10,6 +8,7 @@ import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component
+import org.slf4j.LoggerFactory
 
 /**
  * 실행 시간 로깅 Aspect (TaskContext 및 평탄화 적용)
@@ -24,12 +23,14 @@ import org.springframework.stereotype.Component
  */
 @Aspect
 @Component
-@Slf4j
-@RequiredArgsConstructor
 class LoggingAspect(
     private val statsCollector: PerformanceStatisticsCollector,
     private val executor: LogicExecutor
 ) : SmartLifecycle {
+
+    companion object {
+        private val log = LoggerFactory.getLogger(LoggingAspect::class.java)
+    }
 
     @Volatile
     private var running: Boolean = false

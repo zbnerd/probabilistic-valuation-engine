@@ -67,7 +67,7 @@ public class MongoSyncEventPublisher implements MongoSyncEventPublisherInterface
   public void publishCalculationCompleted(String taskId, EquipmentExpectationResponseV4 response) {
     TaskContext context = TaskContext.of("MongoSyncPublisher", "Publish", taskId);
 
-    executor.executeVoid(() -> publishCalculationCompletedInternal(taskId, response), context);
+    executor.executeVoidJava(() -> publishCalculationCompletedInternal(taskId, response), context);
   }
 
   void publishCalculationCompletedInternal(String taskId, EquipmentExpectationResponseV4 response) {
@@ -89,7 +89,11 @@ public class MongoSyncEventPublisher implements MongoSyncEventPublisherInterface
                   .build();
 
           IntegrationEvent<ExpectationCalculationCompletedEvent> event =
-              IntegrationEvent.of(EVENT_TYPE_CALCULATED, payload);
+              new IntegrationEvent<>(
+                  java.util.UUID.randomUUID().toString(),
+                  EVENT_TYPE_CALCULATED,
+                  java.time.Instant.now().toEpochMilli(),
+                  payload);
 
           // Redis Stream XADD command via Redisson
           Map<String, String> eventMap = convertToStreamMap(event);

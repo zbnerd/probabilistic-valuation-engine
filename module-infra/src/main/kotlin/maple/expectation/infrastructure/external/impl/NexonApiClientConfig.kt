@@ -66,7 +66,11 @@ class NexonApiClientConfig(
      */
     @Bean
     fun alertNotificationHelper(): AlertNotificationHelper {
-        return AlertNotificationHelper(statelessAlertService, checkedExecutor, alertTaskExecutor)
+        return AlertNotificationHelper(
+            statelessAlertService,
+            checkedExecutor,
+            alertTaskExecutor
+        )
     }
 
     /**

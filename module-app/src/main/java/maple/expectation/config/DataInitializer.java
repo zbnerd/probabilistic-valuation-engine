@@ -2,10 +2,10 @@ package maple.expectation.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.domain.repository.MemberRepository;
 import maple.expectation.domain.v2.Member;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.persistence.repository.MemberRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -23,13 +23,13 @@ public class DataInitializer implements CommandLineRunner {
   @Override
   public void run(String... args) {
     // [패턴 1] 단순 실행 (체크 예외 노이즈 제거)
-    executor.executeVoid(this::initDeveloper, TaskContext.of("System", "BootInit"));
+    executor.executeVoidJava(this::initDeveloper, TaskContext.of("System", "BootInit"));
   }
 
   /** 개발자 계정 초기화 로직 (평탄화 완료) */
   private void initDeveloper() {
     // 1. 존재 여부 확인 (Pre-condition)
-    if (memberRepository.findByUuid(DEVELOPER_UUID).isPresent()) {
+    if (memberRepository.findByUuid(DEVELOPER_UUID) != null) {
       return;
     }
 
@@ -46,7 +46,7 @@ public class DataInitializer implements CommandLineRunner {
   private Object createAndSaveDeveloper(TaskContext context) {
     log.info("🚀 시스템 초기 데이터 생성: 개발자 계정 ({})", context.getDynamicValue());
 
-    Member developer = Member.createSystemAdmin(DEVELOPER_UUID, 0L);
+    Member developer = Member.Companion.createSystemAdmin(DEVELOPER_UUID, 0L);
     memberRepository.save(developer);
 
     log.info("✅ 개발자 계정 생성 완료");

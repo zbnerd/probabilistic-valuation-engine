@@ -27,7 +27,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class TableBasedCostStrategy implements CostCalculationStrategy {
 
-  private final Map<CubeType, TreeMap<Integer, EnumMap<PotentialGrade, Long>>> costMasterTable;
+  private final Map<
+          CubeType, TreeMap<Integer, EnumMap<maple.expectation.domain.v2.PotentialGrade, Long>>>
+      costMasterTable;
 
   public TableBasedCostStrategy() {
     this.costMasterTable = initializeCostTable();
@@ -36,7 +38,8 @@ public class TableBasedCostStrategy implements CostCalculationStrategy {
   @Override
   public long calculateCost(CubeType type, int level, String grade) {
     // Fail-Fast: 잘못된 입력 즉시 예외 (Silent Failure 방지)
-    PotentialGrade validGrade = PotentialGrade.fromKorean(grade);
+    maple.expectation.domain.v2.PotentialGrade validGrade =
+        maple.expectation.domain.v2.PotentialGrade.valueOf(grade.toUpperCase());
 
     TreeMap<Integer, EnumMap<PotentialGrade, Long>> typeTable = costMasterTable.get(type);
     if (typeTable == null) {
@@ -58,9 +61,10 @@ public class TableBasedCostStrategy implements CostCalculationStrategy {
    *
    * @return 비용 마스터 테이블
    */
-  private Map<CubeType, TreeMap<Integer, EnumMap<PotentialGrade, Long>>> initializeCostTable() {
-    Map<CubeType, TreeMap<Integer, EnumMap<PotentialGrade, Long>>> table =
-        new EnumMap<>(CubeType.class);
+  private Map<CubeType, TreeMap<Integer, EnumMap<maple.expectation.domain.v2.PotentialGrade, Long>>>
+      initializeCostTable() {
+    Map<CubeType, TreeMap<Integer, EnumMap<maple.expectation.domain.v2.PotentialGrade, Long>>>
+        table = new EnumMap<>(CubeType.class);
 
     // 1. 블랙큐브(윗잠재) 비용 테이블
     TreeMap<Integer, EnumMap<PotentialGrade, Long>> blackTable = new TreeMap<>();
@@ -87,13 +91,14 @@ public class TableBasedCostStrategy implements CostCalculationStrategy {
   }
 
   /** EnumMap 생성 헬퍼 - RARE, EPIC, UNIQUE, LEGENDARY 순서로 비용 매핑 */
-  private EnumMap<PotentialGrade, Long> createGradeMap(
+  private EnumMap<maple.expectation.domain.v2.PotentialGrade, Long> createGradeMap(
       long rare, long epic, long unique, long legendary) {
-    EnumMap<PotentialGrade, Long> map = new EnumMap<>(PotentialGrade.class);
-    map.put(PotentialGrade.RARE, rare);
-    map.put(PotentialGrade.EPIC, epic);
-    map.put(PotentialGrade.UNIQUE, unique);
-    map.put(PotentialGrade.LEGENDARY, legendary);
+    EnumMap<maple.expectation.domain.v2.PotentialGrade, Long> map =
+        new EnumMap<>(maple.expectation.domain.v2.PotentialGrade.class);
+    map.put(maple.expectation.domain.v2.PotentialGrade.RARE, rare);
+    map.put(maple.expectation.domain.v2.PotentialGrade.EPIC, epic);
+    map.put(maple.expectation.domain.v2.PotentialGrade.UNIQUE, unique);
+    map.put(maple.expectation.domain.v2.PotentialGrade.LEGENDARY, legendary);
     return map;
   }
 }

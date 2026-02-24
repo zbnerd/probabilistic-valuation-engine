@@ -130,7 +130,7 @@ public class LikeRelationBuffer
       localPendingSet.put(relationKey, Boolean.TRUE);
 
       // Pending Set (DB 동기화용)
-      executor.executeVoid(
+      executor.executeVoidJava(
           () -> getPendingSet().add(relationKey),
           TaskContext.of("LikeRelation", "AddPending", relationKey));
 
@@ -275,5 +275,18 @@ public class LikeRelationBuffer
   public int getPendingSize() {
     return executor.executeOrDefault(
         () -> getPendingSet().size(), 0, TaskContext.of("LikeRelation", "GetPendingSize"));
+  }
+
+  /**
+   * 명시적 좋아요 취소 여부 확인 (In-Memory 모드)
+   *
+   * <p>In-Memory 모드는 명시적 좋아요 취소를 추적하지 않음
+   *
+   * @return 항상 false (명시적 취소 없음)
+   */
+  @Override
+  public Boolean existsInUnliked(String accountId, String targetOcid) {
+    // In-Memory mode doesn't track explicit unlikes
+    return false;
   }
 }

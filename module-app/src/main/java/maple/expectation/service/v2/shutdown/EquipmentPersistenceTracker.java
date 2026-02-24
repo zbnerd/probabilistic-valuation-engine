@@ -65,7 +65,7 @@ public class EquipmentPersistenceTracker implements PersistenceTrackerStrategy {
 
     future.whenComplete(
         (result, throwable) ->
-            executor.executeVoid(
+            executor.executeVoidJava(
                 () -> {
                   pendingOperations.remove(ocid);
                   if (throwable != null) {

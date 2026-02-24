@@ -49,7 +49,7 @@ class InMemoryAlertBuffer : AlertChannel, FallbackSupport {
         var drained = 0
         var message: AlertMessage?
         while (buffer.poll().also { message = it } != null) {
-            val sent = targetChannel.send(message)
+            val sent = targetChannel.send(message!!)
             if (sent) {
                 drained++
             } else if (log.isWarnEnabled) {

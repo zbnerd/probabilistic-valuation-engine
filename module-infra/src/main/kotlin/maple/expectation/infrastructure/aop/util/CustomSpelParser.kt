@@ -1,7 +1,5 @@
 package maple.expectation.infrastructure.aop.util
 
-import lombok.RequiredArgsConstructor
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.aspectj.lang.ProceedingJoinPoint
@@ -11,6 +9,8 @@ import org.springframework.expression.ExpressionParser
 import org.springframework.expression.spel.standard.SpelExpressionParser
 import org.springframework.expression.spel.support.StandardEvaluationContext
 import org.springframework.stereotype.Component
+import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * SpEL 표현식 파싱 유틸리티 (LogicExecutor 평탄화 완료)
@@ -32,12 +32,13 @@ import org.springframework.stereotype.Component
  *   <li>Green (Performance): 인스턴스별 캐싱으로 JVM 내 최적화</li>
  * </ul>
  */
-@Slf4j
 @Component
-@RequiredArgsConstructor
 class CustomSpelParser(
     private val executor: LogicExecutor // ✅ 지능형 실행기 주입
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(CustomSpelParser::class.java)
+    }
     private val parser: ExpressionParser = SpelExpressionParser()
     private val expressionCache: MutableMap<String, Expression> = ConcurrentHashMap()
 
@@ -62,7 +63,7 @@ class CustomSpelParser(
                 val expr = expressionCache.computeIfAbsent(expression) { key -> parser.parseExpression(key) }
 
                 // 2. 캐시된 expr 객체로 바로 평가 (성능 최적화)
-                expr.getValue(evalContext, String::class.java)
+                expr.getValue(evalContext)?.toString() ?: fallback
             },
             fallback,
             context
@@ -76,7 +77,7 @@ class CustomSpelParser(
         return executor.executeOrDefault(
             {
                 val evalContext = createEvaluationContext(joinPoint)
-                parser.parseExpression(expression).getValue(evalContext, resultType)
+                parser.parseExpression(expression).getValue(evalContext, resultType) ?: fallback
             },
             fallback,
             context

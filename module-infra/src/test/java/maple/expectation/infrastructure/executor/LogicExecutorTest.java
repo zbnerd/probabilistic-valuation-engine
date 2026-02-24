@@ -420,7 +420,7 @@ class LogicExecutorTest {
             });
 
     // When
-    executor.executeVoid(() -> executed.set(true), context);
+    executor.executeVoidJava(() -> executed.set(true), context);
 
     // Then
     assertThat(executed).isTrue();
@@ -759,7 +759,7 @@ class LogicExecutorTest {
     doAnswer(invocation -> null).when(pipeline).executeRaw(any(ThrowingSupplier.class), any());
 
     // When - should not throw
-    executor.executeVoid(() -> {}, taskName);
+    executor.executeVoidJava(() -> {}, taskName);
 
     // Then
     verify(pipeline).executeRaw(any(ThrowingSupplier.class), any());

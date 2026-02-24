@@ -2,13 +2,13 @@ package maple.expectation.infrastructure.concurrency
 
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.SystemException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.redisson.api.RBucket
 import org.redisson.api.RedissonClient
+import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Duration
@@ -49,7 +49,6 @@ import java.util.function.Supplier
  * @param T 계산 결과 타입
  * @see SingleFlightExecutor 인-메모리 구현 (테스트용)
  */
-@Slf4j
 class DistributedSingleFlightExecutor<T>(
     /** Follower 대기 타임아웃 (초) */
     private val followerTimeoutSeconds: Int,
@@ -73,6 +72,7 @@ class DistributedSingleFlightExecutor<T>(
     private val resultTtlSeconds: Int = 60
 ) {
     companion object {
+        private val log = LoggerFactory.getLogger(DistributedSingleFlightExecutor::class.java)
         /** Redis 키 접두사 (Hash Tag for Cluster) */
         private const val KEY_PREFIX = "{single-flight}:"
 

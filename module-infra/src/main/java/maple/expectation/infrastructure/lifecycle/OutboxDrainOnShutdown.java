@@ -112,7 +112,7 @@ public class OutboxDrainOnShutdown implements SmartLifecycle {
     TaskContext context = TaskContext.of("OutboxDrain", "Main");
     long startNanos = System.nanoTime();
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           try {
             log.warn("[OutboxDrain] ========== Shutdown 시작 ===========");

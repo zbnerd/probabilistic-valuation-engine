@@ -4,8 +4,11 @@ import jakarta.persistence.*
 import maple.expectation.error.exception.InternalSystemException
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.security.NoSuchAlgorithmException
 import java.time.LocalDateTime
 import java.util.HexFormat
+import kotlin.math.min
+import kotlin.math.pow
 
 /**
  * Transactional Outbox 엔티티 (Issue #80)
@@ -106,6 +109,7 @@ class DonationOutbox {
 
     companion object {
         /** 팩토리 메서드 (Content Hash 자동 생성) */
+        @JvmStatic
         fun create(requestId: String, eventType: String, payload: String): DonationOutbox {
             val outbox = DonationOutbox()
             outbox.requestId = requestId
@@ -189,7 +193,7 @@ class DonationOutbox {
         this.retryCount++
         this.lastError = truncate(error, 500)
         this.status = if (shouldMoveToDlq()) OutboxStatus.DEAD_LETTER else OutboxStatus.FAILED
-        val backoffSeconds = Math.min((2.0.pow(retryCount.toDouble()) * 30).toLong(), maxBackoff.seconds)
+        val backoffSeconds = min(2.0.pow(retryCount.toDouble()).toLong() * 30, maxBackoff.seconds)
         this.nextRetryAt = LocalDateTime.now().plusSeconds(backoffSeconds)
         clearLock()
     }

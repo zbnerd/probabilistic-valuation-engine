@@ -14,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import maple.expectation.error.exception.MapleDataProcessingException;
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import maple.expectation.infrastructure.executor.function.CheckedRunnable;
+import maple.expectation.infrastructure.executor.function.CheckedSupplier;
 import org.redisson.api.RStream;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.StreamMessageId;
@@ -83,35 +85,38 @@ public class CompensationLogService {
     log.info("[CompensationLog] Instance consumer ID: {}", instanceId);
 
     checkedExecutor.executeUncheckedVoid(
-        () -> {
-          RStream<String, String> stream =
-              redissonClient.getStream(properties.getCompensationStream());
+        new CheckedRunnable() {
+          @Override
+          public void run() throws Exception {
+            RStream<String, String> stream =
+                redissonClient.getStream(properties.getCompensationStream());
 
-          // 스트림이 없으면 생성 및 그룹 생성
-          if (!stream.isExists()) {
-            stream.createGroup(
-                StreamCreateGroupArgs.name(properties.getSyncConsumerGroup()).makeStream());
-            log.info(
-                "[CompensationLog] Stream 및 Consumer Group 생성: {}",
-                properties.getSyncConsumerGroup());
-            return;
-          }
-
-          // 스트림이 존재하면 그룹 존재 여부 확인 후 생성 (Redis snapshot restore 대응)
-          try {
-            stream.readGroup(
-                properties.getSyncConsumerGroup(),
-                instanceId,
-                StreamReadGroupArgs.neverDelivered().count(1));
-          } catch (Exception e) {
-            // NOGROUP 에러인 경우 그룹 생성
-            if (e.getMessage() != null && e.getMessage().contains("NOGROUP")) {
-              stream.createGroup(StreamCreateGroupArgs.name(properties.getSyncConsumerGroup()));
+            // 스트림이 없으면 생성 및 그룹 생성
+            if (!stream.isExists()) {
+              stream.createGroup(
+                  StreamCreateGroupArgs.name(properties.getSyncConsumerGroup()).makeStream());
               log.info(
-                  "[CompensationLog] Consumer Group 재생성 (NOGROUP 복구): {}",
+                  "[CompensationLog] Stream 및 Consumer Group 생성: {}",
                   properties.getSyncConsumerGroup());
-            } else {
-              throw e;
+              return;
+            }
+
+            // 스트림이 존재하면 그룹 존재 여부 확인 후 생성 (Redis snapshot restore 대응)
+            try {
+              stream.readGroup(
+                  properties.getSyncConsumerGroup(),
+                  instanceId,
+                  StreamReadGroupArgs.neverDelivered().count(1));
+            } catch (Exception e) {
+              // NOGROUP 에러인 경우 그룹 생성
+              if (e.getMessage() != null && e.getMessage().contains("NOGROUP")) {
+                stream.createGroup(StreamCreateGroupArgs.name(properties.getSyncConsumerGroup()));
+                log.info(
+                    "[CompensationLog] Consumer Group 재생성 (NOGROUP 복구): {}",
+                    properties.getSyncConsumerGroup());
+              } else {
+                throw e;
+              }
             }
           }
         },
@@ -129,29 +134,32 @@ public class CompensationLogService {
    */
   public StreamMessageId writeLog(String type, String key, Object data) {
     return checkedExecutor.executeUnchecked(
-        () -> {
-          String jsonData = serializeDataSafely(data);
+        new CheckedSupplier<StreamMessageId>() {
+          @Override
+          public StreamMessageId get() throws Exception {
+            String jsonData = serializeDataSafely(data);
 
-          RStream<String, String> stream =
-              redissonClient.getStream(properties.getCompensationStream());
+            RStream<String, String> stream =
+                redissonClient.getStream(properties.getCompensationStream());
 
-          // XADD with MAXLEN ~ (P1-N3: trimNonStrict = approximate ~)
-          StreamMessageId messageId =
-              stream.add(
-                  StreamAddArgs.entries(
-                          Map.of(
-                              FIELD_TYPE, type,
-                              FIELD_KEY, key,
-                              FIELD_DATA, jsonData,
-                              FIELD_TIMESTAMP, Instant.now().toString(),
-                              FIELD_RETRY_COUNT, "0"))
-                      .trimNonStrict()
-                      .maxLen(properties.getStreamMaxLen())
-                      .noLimit());
+            // XADD with MAXLEN ~ (P1-N3: trimNonStrict = approximate ~)
+            StreamMessageId messageId =
+                stream.add(
+                    StreamAddArgs.entries(
+                            Map.of(
+                                FIELD_TYPE, type,
+                                FIELD_KEY, key,
+                                FIELD_DATA, jsonData,
+                                FIELD_TIMESTAMP, Instant.now().toString(),
+                                FIELD_RETRY_COUNT, "0"))
+                        .trimNonStrict()
+                        .maxLen(properties.getStreamMaxLen())
+                        .noLimit());
 
-          log.info(
-              "[CompensationLog] 로그 기록 완료: type={}, key={}, messageId={}", type, key, messageId);
-          return messageId;
+            log.info(
+                "[CompensationLog] 로그 기록 완료: type={}, key={}, messageId={}", type, key, messageId);
+            return messageId;
+          }
         },
         TaskContext.of("Compensation", "WriteLog", key),
         e -> new MapleDataProcessingException("Compensation Log 기록 실패: " + key, e));
@@ -174,32 +182,36 @@ public class CompensationLogService {
    */
   public Map<StreamMessageId, Map<String, String>> readLogs(String consumerId, int count) {
     return checkedExecutor.executeUnchecked(
-        () -> {
-          RStream<String, String> stream =
-              redissonClient.getStream(properties.getCompensationStream());
+        new CheckedSupplier<Map<StreamMessageId, Map<String, String>>>() {
+          @Override
+          public Map<StreamMessageId, Map<String, String>> get() throws Exception {
+            RStream<String, String> stream =
+                redissonClient.getStream(properties.getCompensationStream());
 
-          // P1 Fix: Pending 메시지 확인 및 자동 CLAIM (crashed consumer 재시도)
-          // 10분(600,000ms) 이상 delivery된 메시지만 CLAIM (타 consumer가 처리 중인 메시지 방지)
-          var autoClaimResult =
-              stream.autoClaim(
-                  properties.getSyncConsumerGroup(),
-                  instanceId,
-                  600_000, // min idle time: 10 minutes
-                  TimeUnit.MILLISECONDS,
-                  StreamMessageId.MIN, // start from beginning
-                  count);
+            // P1 Fix: Pending 메시지 확인 및 자동 CLAIM (crashed consumer 재시도)
+            // 10분(600,000ms) 이상 delivery된 메시지만 CLAIM (타 consumer가 처리 중인 메시지 방지)
+            var autoClaimResult =
+                stream.autoClaim(
+                    properties.getSyncConsumerGroup(),
+                    instanceId,
+                    600_000, // min idle time: 10 minutes
+                    TimeUnit.MILLISECONDS,
+                    StreamMessageId.MIN, // start from beginning
+                    count);
 
-          Map<StreamMessageId, Map<String, String>> claimedMessages = autoClaimResult.getMessages();
-          if (!claimedMessages.isEmpty()) {
-            log.info("[CompensationLog] Pending 메시지 재처리: {} 건", claimedMessages.size());
-            return claimedMessages;
+            Map<StreamMessageId, Map<String, String>> claimedMessages =
+                autoClaimResult.getMessages();
+            if (!claimedMessages.isEmpty()) {
+              log.info("[CompensationLog] Pending 메시지 재처리: {} 건", claimedMessages.size());
+              return claimedMessages;
+            }
+
+            // Pending 메시지가 없으면 새 메시지 읽기
+            return stream.readGroup(
+                properties.getSyncConsumerGroup(),
+                instanceId,
+                StreamReadGroupArgs.neverDelivered().count(count));
           }
-
-          // Pending 메시지가 없으면 새 메시지 읽기
-          return stream.readGroup(
-              properties.getSyncConsumerGroup(),
-              instanceId,
-              StreamReadGroupArgs.neverDelivered().count(count));
         },
         TaskContext.of("Compensation", "ReadLogs", instanceId),
         e -> new MapleDataProcessingException("Compensation Log 읽기 실패", e));
@@ -216,11 +228,15 @@ public class CompensationLogService {
     }
 
     checkedExecutor.executeUncheckedVoid(
-        () -> {
-          RStream<String, String> stream =
-              redissonClient.getStream(properties.getCompensationStream());
-          stream.ack(properties.getSyncConsumerGroup(), messageIds.toArray(new StreamMessageId[0]));
-          log.debug("[CompensationLog] ACK 완료: {} 건", messageIds.size());
+        new CheckedRunnable() {
+          @Override
+          public void run() throws Exception {
+            RStream<String, String> stream =
+                redissonClient.getStream(properties.getCompensationStream());
+            stream.ack(
+                properties.getSyncConsumerGroup(), messageIds.toArray(new StreamMessageId[0]));
+            log.debug("[CompensationLog] ACK 완료: {} 건", messageIds.size());
+          }
         },
         TaskContext.of("Compensation", "AckLogs", String.valueOf(messageIds.size())),
         e -> new MapleDataProcessingException("Compensation Log ACK 실패", e));
@@ -236,39 +252,44 @@ public class CompensationLogService {
   public void moveToDlq(
       StreamMessageId originalMessageId, Map<String, String> entry, String errorMessage) {
     checkedExecutor.executeUncheckedVoid(
-        () -> {
-          RStream<String, String> dlqStream =
-              redissonClient.getStream(properties.getCompensationDlq());
+        new CheckedRunnable() {
+          @Override
+          public void run() throws Exception {
+            RStream<String, String> dlqStream =
+                redissonClient.getStream(properties.getCompensationDlq());
 
-          // DLQ에 에러 정보 추가하여 기록 (P1-N3: trimNonStrict = approximate ~)
-          dlqStream.add(
-              StreamAddArgs.entries(
-                      Map.of(
-                          FIELD_TYPE,
-                          entry.getOrDefault(FIELD_TYPE, "unknown"),
-                          FIELD_KEY,
-                          entry.getOrDefault(FIELD_KEY, "unknown"),
-                          FIELD_DATA,
-                          entry.getOrDefault(FIELD_DATA, "{}"),
-                          FIELD_TIMESTAMP,
-                          entry.getOrDefault(FIELD_TIMESTAMP, Instant.now().toString()),
-                          FIELD_RETRY_COUNT,
-                          entry.getOrDefault(FIELD_RETRY_COUNT, "0"),
-                          "originalMessageId",
-                          originalMessageId.toString(),
-                          "errorMessage",
-                          errorMessage,
-                          "dlqTimestamp",
-                          Instant.now().toString()))
-                  .trimNonStrict()
-                  .maxLen(properties.getStreamMaxLen())
-                  .noLimit());
+            // DLQ에 에러 정보 추가하여 기록 (P1-N3: trimNonStrict = approximate ~)
+            dlqStream.add(
+                StreamAddArgs.entries(
+                        Map.of(
+                            FIELD_TYPE,
+                            entry.getOrDefault(FIELD_TYPE, "unknown"),
+                            FIELD_KEY,
+                            entry.getOrDefault(FIELD_KEY, "unknown"),
+                            FIELD_DATA,
+                            entry.getOrDefault(FIELD_DATA, "{}"),
+                            FIELD_TIMESTAMP,
+                            entry.getOrDefault(FIELD_TIMESTAMP, Instant.now().toString()),
+                            FIELD_RETRY_COUNT,
+                            entry.getOrDefault(FIELD_RETRY_COUNT, "0"),
+                            "originalMessageId",
+                            originalMessageId.toString(),
+                            "errorMessage",
+                            errorMessage,
+                            "dlqTimestamp",
+                            Instant.now().toString()))
+                    .trimNonStrict()
+                    .maxLen(properties.getStreamMaxLen())
+                    .noLimit());
 
-          // 원본 스트림에서 ACK (재처리 방지)
-          ackLogs(List.of(originalMessageId));
+            // 원본 스트림에서 ACK (재처리 방지)
+            ackLogs(List.of(originalMessageId));
 
-          log.warn(
-              "[CompensationLog] DLQ 이동: messageId={}, error={}", originalMessageId, errorMessage);
+            log.warn(
+                "[CompensationLog] DLQ 이동: messageId={}, error={}",
+                originalMessageId,
+                errorMessage);
+          }
         },
         TaskContext.of("Compensation", "MoveToDlq", originalMessageId.toString()),
         e -> new MapleDataProcessingException("DLQ 이동 실패: " + originalMessageId, e));
@@ -277,10 +298,13 @@ public class CompensationLogService {
   /** Pending 메시지 수 조회 (메트릭용) */
   public long getPendingCount() {
     return checkedExecutor.executeUnchecked(
-        () -> {
-          RStream<String, String> stream =
-              redissonClient.getStream(properties.getCompensationStream());
-          return stream.getPendingInfo(properties.getSyncConsumerGroup()).getTotal();
+        new CheckedSupplier<Long>() {
+          @Override
+          public Long get() throws Exception {
+            RStream<String, String> stream =
+                redissonClient.getStream(properties.getCompensationStream());
+            return stream.getPendingInfo(properties.getSyncConsumerGroup()).getTotal();
+          }
         },
         TaskContext.of("Compensation", "GetPendingCount", properties.getCompensationStream()),
         e -> new MapleDataProcessingException("Pending 메시지 수 조회 실패", e));
@@ -289,10 +313,13 @@ public class CompensationLogService {
   /** DLQ 메시지 수 조회 (메트릭용) */
   public long getDlqCount() {
     return checkedExecutor.executeUnchecked(
-        () -> {
-          RStream<String, String> dlqStream =
-              redissonClient.getStream(properties.getCompensationDlq());
-          return dlqStream.isExists() ? dlqStream.size() : 0;
+        new CheckedSupplier<Long>() {
+          @Override
+          public Long get() throws Exception {
+            RStream<String, String> dlqStream =
+                redissonClient.getStream(properties.getCompensationDlq());
+            return dlqStream.isExists() ? dlqStream.size() : 0;
+          }
         },
         TaskContext.of("Compensation", "GetDlqCount", properties.getCompensationDlq()),
         e -> new MapleDataProcessingException("DLQ 메시지 수 조회 실패", e));
@@ -310,11 +337,14 @@ public class CompensationLogService {
   /** JSON 역직렬화 */
   public <T> T deserializeData(String json, Class<T> type) {
     return checkedExecutor.executeUnchecked(
-        () -> {
-          try {
-            return objectMapper.readValue(json, type);
-          } catch (JsonProcessingException e) {
-            throw new MapleDataProcessingException("JSON 역직렬화 실패: " + type.getSimpleName(), e);
+        new CheckedSupplier<T>() {
+          @Override
+          public T get() throws Exception {
+            try {
+              return objectMapper.readValue(json, type);
+            } catch (JsonProcessingException e) {
+              throw new MapleDataProcessingException("JSON 역직렬화 실패: " + type.getSimpleName(), e);
+            }
           }
         },
         TaskContext.of("Compensation", "DeserializeData", type.getSimpleName()),

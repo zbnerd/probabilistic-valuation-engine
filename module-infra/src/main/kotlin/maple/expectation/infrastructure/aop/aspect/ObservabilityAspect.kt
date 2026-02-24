@@ -2,8 +2,6 @@ package maple.expectation.infrastructure.aop.aspect
 
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
-import lombok.RequiredArgsConstructor
-import lombok.extern.slf4j.Slf4j.Slf4j
 import maple.expectation.error.exception.ObservabilityException
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -12,15 +10,17 @@ import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.springframework.stereotype.Component
+import org.slf4j.LoggerFactory
 
-@Slf4j
 @Aspect
 @Component
-@RequiredArgsConstructor
 class ObservabilityAspect(
     private val meterRegistry: MeterRegistry,
     private val executor: LogicExecutor
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(ObservabilityAspect::class.java)
+    }
 
     @Around("@annotation(observedTransaction)")
     fun trackMetrics(joinPoint: ProceedingJoinPoint, observedTransaction: ObservedTransaction): Any? {

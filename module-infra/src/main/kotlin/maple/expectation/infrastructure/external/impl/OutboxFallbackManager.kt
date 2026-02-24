@@ -83,7 +83,7 @@ class OutboxFallbackManager(
                         // 멱등성 체크 (이미 존재하면 스킵)
                         if (outboxRepository.existsByRequestId(requestId)) {
                             log.warn("[Outbox] 이미 존재하는 requestId로 인해 적재 스킵 (Idempotent): {}", requestId)
-                            return
+                            return@executeUncheckedVoid
                         }
 
                         // Outbox 생성 및 저장
@@ -100,9 +100,12 @@ class OutboxFallbackManager(
                         }
                     },
                     context
-                ) { e ->
-                    log.error("[Outbox] Outbox 적재 실패 (best-effort): requestId=$requestId", e)
-                    null // Void 반환
+                ) { e: Exception ->
+                    // mapper: Exception -> RuntimeException 변환
+                    maple.expectation.error.exception.ExternalServiceException(
+                        "[Outbox] Outbox 적재 실패 (best-effort): requestId=$requestId",
+                        e
+                    )
                 }
             },
             alertTaskExecutor

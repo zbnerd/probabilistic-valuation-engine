@@ -3,13 +3,13 @@ package maple.expectation.infrastructure.persistence.repository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.domain.RefreshToken;
 import maple.expectation.domain.repository.RedisRefreshTokenRepository;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import org.jspecify.annotations.Nullable;
 import org.redisson.api.RBucket;
 import org.redisson.api.RScript;
 import org.redisson.api.RSet;
@@ -103,7 +103,7 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
    * @param token 저장할 Refresh Token
    */
   public void save(RefreshToken token) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           String key = buildTokenKey(token.refreshTokenId());
           String json = serializeToken(token);
@@ -130,29 +130,24 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
         "RefreshToken saved: tokenId={}, familyId={}", token.refreshTokenId(), token.familyId());
   }
 
-  /**
-   * Refresh Token 조회
-   *
-   * @param refreshTokenId Refresh Token ID
-   * @return RefreshToken (Optional)
-   */
-  public Optional<RefreshToken> findById(String refreshTokenId) {
+  @Override
+  public @Nullable RefreshToken findById(String refreshTokenId) {
     return executor.executeOrDefault(
         () -> doFindById(refreshTokenId),
-        Optional.empty(),
+        null,
         TaskContext.of("RefreshToken", "FindById", refreshTokenId));
   }
 
-  private Optional<RefreshToken> doFindById(String refreshTokenId) {
+  private @Nullable RefreshToken doFindById(String refreshTokenId) {
     String key = buildTokenKey(refreshTokenId);
     RBucket<String> bucket = redissonClient.getBucket(key);
     String json = bucket.get();
 
     if (json == null) {
-      return Optional.empty();
+      return null;
     }
 
-    return Optional.of(deserializeToken(json));
+    return deserializeToken(json);
   }
 
   /**
@@ -163,7 +158,7 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
    * @param refreshTokenId Refresh Token ID
    */
   public void markAsUsed(String refreshTokenId) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           String key = buildTokenKey(refreshTokenId);
           RBucket<String> bucket = redissonClient.getBucket(key);
@@ -189,18 +184,19 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
    * <p>Redis Lua script로 원자적으로 수행하여 TOCTOU 취약점 방지:
    *
    * <ul>
-   *   <li>토큰이 존재하지 않으면 Optional.empty() 반환
-   *   <li>이미 used=true이면 Optional.empty() 반환 (재사용 감지)
+   *   <li>토큰이 존재하지 않으면 null 반환
+   *   <li>이미 used=true이면 null 반환 (재사용 감지)
    *   <li>used=false이면 used=true로 변경 후 토큰 반환
    * </ul>
    *
    * @param refreshTokenId Refresh Token ID
-   * @return 마크된 RefreshToken (이미 사용되었거나 존재하지 않으면 Optional.empty())
+   * @return 마크된 RefreshToken (이미 사용되었거나 존재하지 않으면 null)
    */
-  public Optional<RefreshToken> checkAndMarkAsUsed(String refreshTokenId) {
+  @Override
+  public @Nullable RefreshToken checkAndMarkAsUsed(String refreshTokenId) {
     return executor.executeOrDefault(
         () -> doCheckAndMarkAsUsed(refreshTokenId),
-        Optional.empty(),
+        null,
         TaskContext.of("RefreshToken", "CheckAndMark", refreshTokenId));
   }
 
@@ -216,15 +212,15 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
    * <p>Return values from Lua script:
    *
    * <ul>
-   *   <li>nil: Token not found → Optional.empty()
-   *   <li>"ALREADY_USED": Token reuse detected → Optional.empty()
-   *   <li>updated JSON: Success → Optional.of(RefreshToken)
+   *   <li>nil: Token not found → null
+   *   <li>"ALREADY_USED": Token reuse detected → null
+   *   <li>updated JSON: Success → RefreshToken
    * </ul>
    *
    * @param refreshTokenId Refresh Token ID
-   * @return Marked RefreshToken if successful, empty if not found or already used
+   * @return Marked RefreshToken if successful, null if not found or already used
    */
-  private Optional<RefreshToken> doCheckAndMarkAsUsed(String refreshTokenId) {
+  private @Nullable RefreshToken doCheckAndMarkAsUsed(String refreshTokenId) {
     String key = buildTokenKey(refreshTokenId);
     RBucket<String> bucket = redissonClient.getBucket(key);
 
@@ -238,7 +234,7 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
     if (remainingTtl < 0) {
       // Key doesn't exist (remainTimeToLive returns -2 for non-existent keys)
       log.debug("Token not found in Redis: key={}", key);
-      return Optional.empty();
+      return null;
     }
 
     // Execute atomic Lua script
@@ -254,17 +250,17 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
     // Handle Lua script return values
     if (result == null) {
       log.debug("Token not found in Redis (Lua): key={}", key);
-      return Optional.empty();
+      return null;
     }
 
     if ("ALREADY_USED".equals(result)) {
       log.warn("Token reuse detected! Token is already marked as used: key={}", key);
-      return Optional.empty();
+      return null;
     }
 
     // Success: token was marked as used
     log.debug("Token marked as used atomically: key={}", key);
-    return Optional.of(deserializeToken(result));
+    return deserializeToken(result);
   }
 
   /**
@@ -273,7 +269,7 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
    * @param familyId Token Family ID
    */
   public void deleteByFamilyId(String familyId) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           String familyKey = buildFamilyKey(familyId);
           RSet<String> familySet = redissonClient.getSet(familyKey);
@@ -299,7 +295,7 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
    * @param sessionId 세션 ID
    */
   public void deleteBySessionId(String sessionId) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           String sessionKey = buildSessionKey(sessionId);
           RSet<String> sessionSet = redissonClient.getSet(sessionKey);
@@ -335,7 +331,7 @@ public class RedisRefreshTokenRepositoryImpl implements RedisRefreshTokenReposit
    * @param refreshTokenId Refresh Token ID
    */
   public void deleteById(String refreshTokenId) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           String tokenKey = buildTokenKey(refreshTokenId);
           redissonClient.getBucket(tokenKey).delete();

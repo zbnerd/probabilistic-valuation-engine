@@ -123,7 +123,7 @@ public class ShutdownDataPersistenceService {
   public void appendLikeEntry(String userIgn, long count) {
     TaskContext context = TaskContext.of("Persistence", "AppendLike", userIgn);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           ShutdownData existingData = loadCurrentInstanceBackup();
 
@@ -148,7 +148,7 @@ public class ShutdownDataPersistenceService {
     ShutdownData failedData =
         new ShutdownData(LocalDateTime.now(), instanceId, failedLikes, pendingEquipment);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           Path saved = saveShutdownData(failedData);
           if (saved != null) {
@@ -190,7 +190,7 @@ public class ShutdownDataPersistenceService {
   public void savePendingEquipment(List<String> ocids) {
     if (ocids == null || ocids.isEmpty()) return;
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           ShutdownData existingData = loadCurrentInstanceBackup();
 

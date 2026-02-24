@@ -61,6 +61,7 @@ data class IntegrationEvent<T>(
      * @param payload Event payload (domain object)
      * @return New IntegrationEvent instance with generated metadata
      */
+    @JvmStatic
     fun <T> of(type: String, payload: T): IntegrationEvent<T> {
       return IntegrationEvent(
           eventId = UUID.randomUUID().toString(),

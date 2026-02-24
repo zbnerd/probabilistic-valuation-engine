@@ -90,7 +90,7 @@ class RedisEventPublisher(
     override fun publishAsync(topic: String, event: IntegrationEvent<*>): CompletableFuture<Void> {
         // Redis publish is already fast (in-memory), so we use the default async wrapper
         // For Kafka implementation, this would use KafkaTemplate.send() which returns CompletableFuture
-        return EventPublisher.super.publishAsync(topic, event)
+        return CompletableFuture.runAsync { publish(topic, event) }
     }
 
     /**

@@ -83,10 +83,10 @@ public class EquipmentDbWorker {
             ExceptionTranslator.forJson(),
             context);
 
-    CharacterEquipment entity =
-        repository
-            .findById(CharacterId.of(ocid))
-            .orElseGet(() -> CharacterEquipment.createEmpty(CharacterId.of(ocid)));
+    CharacterEquipment entity = repository.findById(CharacterId.of(ocid));
+    if (entity == null) {
+      entity = CharacterEquipment.createEmpty(CharacterId.of(ocid));
+    }
 
     CharacterEquipment updated = entity.withUpdatedData(EquipmentData.of(json));
     repository.save(updated); // 즉시 물리적 저장 보장
@@ -106,22 +106,21 @@ public class EquipmentDbWorker {
   public Optional<String> findValidJson(String ocid) {
     return executor.execute(
         () -> {
-          Optional<CharacterEquipment> result =
-              repository
-                  .findById(CharacterId.of(ocid))
-                  .filter(equipment -> equipment.isFresh(DB_TTL)); // Rich Domain
+          // repository.findById() returns nullable CharacterEquipment?
+          CharacterEquipment equipment = repository.findById(CharacterId.of(ocid));
 
-          if (result.isPresent()) {
+          if (equipment != null && equipment.isFresh(DB_TTL)) {
             log.debug(
                 "[EquipmentDb] DB HIT (TTL valid): ocid={}", StringMaskingUtils.maskOcid(ocid));
+            if (equipment.hasData()) {
+              return Optional.of(equipment.jsonContent());
+            }
           } else {
             log.debug(
                 "[EquipmentDb] DB MISS or TTL expired: ocid={}", StringMaskingUtils.maskOcid(ocid));
           }
 
-          return result
-              .filter(CharacterEquipment::hasData) // Rich Domain
-              .map(CharacterEquipment::jsonContent);
+          return Optional.empty();
         },
         TaskContext.of("EquipmentDb", "FindValid", ocid));
   }
@@ -167,10 +166,10 @@ public class EquipmentDbWorker {
 
   /** 헬퍼: Raw JSON 저장 로직 */
   private void performRawSave(String ocid, String json) {
-    CharacterEquipment entity =
-        repository
-            .findById(CharacterId.of(ocid))
-            .orElseGet(() -> CharacterEquipment.createEmpty(CharacterId.of(ocid)));
+    CharacterEquipment entity = repository.findById(CharacterId.of(ocid));
+    if (entity == null) {
+      entity = CharacterEquipment.createEmpty(CharacterId.of(ocid));
+    }
 
     CharacterEquipment updated = entity.withUpdatedData(json);
     repository.save(updated);

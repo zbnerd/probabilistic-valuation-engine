@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.mongodb;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import maple.expectation.common.function.ThrowingSupplier;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.mongodb.core.MongoTemplate;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("V5: MongoDB Query Service Tests")
@@ -42,7 +44,8 @@ class CharacterViewQueryServiceTest {
             });
 
     CharacterViewQueryService service =
-        new CharacterViewQueryService(mockRepository, null, mockExecutor, mockMeterRegistry);
+        new CharacterViewQueryService(
+            mockRepository, mock(MongoTemplate.class), mockExecutor, mockMeterRegistry);
 
     var result = service.findByUserIgn("testUser");
 
@@ -60,7 +63,8 @@ class CharacterViewQueryServiceTest {
             });
 
     CharacterViewQueryService service =
-        new CharacterViewQueryService(mockRepository, null, mockExecutor, mockMeterRegistry);
+        new CharacterViewQueryService(
+            mockRepository, mock(MongoTemplate.class), mockExecutor, mockMeterRegistry);
 
     var result = service.findByUserIgn("testUser");
 

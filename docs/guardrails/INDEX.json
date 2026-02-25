@@ -51,13 +51,13 @@
       "aiJudgment": true
     },
     "circuit-breaker-missing": {
-      "regex": "@CircuitBreaker\\s*\\(",
       "file": "backend/resilience/circuit-breaker.md",
-      "severity": "critical",
+      "severity": "warning",
       "id": "GR-RESILIENCE-001",
-      "description": "External API calls require Circuit Breaker configuration.",
+      "description": "External API calls require Circuit Breaker with fallback. (AI judgment required for completeness)",
       "keywords": ["CircuitBreaker", "Resilience4j", "fallback", "retry", "external API", "Nexon API", "circuit", "breaker", "timeout", "failure"],
-      "languages": ["java", "kotlin"]
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
     },
     "marker-interface-missing": {
       "file": "backend/resilience/marker-interface.md",
@@ -150,7 +150,7 @@
       "languages": ["java", "kotlin"]
     },
     "static-mutable": {
-      "regex": "static\\s+(?:val|var|final\\s+)?(?:Map|Set|List|Collection|ConcurrentHashMap|mutableMap|mutableSet|mutableListOf)",
+      "regex": "static\\s+(?:val|var|final\\s+)?(?:Map|Set|List|Collection|ConcurrentHashMap)|companion\\s+object\\s*\\{[^}]*(?:mutableMapOf|mutableListOf|mutableSetOf|ConcurrentHashMap|HashMap|ArrayList|HashSet)\\s*\\(",
       "file": "architecture/stateless.md",
       "severity": "critical",
       "id": "GR-ARCH-003-2",
@@ -195,7 +195,7 @@
       "languages": ["java", "kotlin"]
     },
     "tiered-cache-violation": {
-      "regex": "@Cacheable\\s*\\(\\s*(?:cacheNames|value)\\s*=\\s*\"[^\"]+\"|@CacheEvict|@CachePut",
+      "regex": "@Cacheable\\s*\\(|@CacheEvict|@CachePut",
       "file": "architecture/system-design.md",
       "severity": "warning",
       "id": "GR-ARCH-001",
@@ -213,7 +213,7 @@
       "languages": ["java", "kotlin"]
     },
     "fqcn-usage": {
-      "regex": "(?:new\\s+[a-z]+\\.[A-Z][a-zA-Z0-9]*\\(|import\\s+[a-z]+\\.[A-Z])",
+      "regex": "(?:new\\s+|(?:val|var)\\s+\\w+\\s*=\\s*)(?:java|javax|org|kotlin)\\.[a-zA-Z]+\\.[A-Z][a-zA-Z0-9]*(?:<[^>]+>)?\\s*\\(",
       "file": "coding-style/imports.md",
       "severity": "warning",
       "id": "GR-STYLE-001",

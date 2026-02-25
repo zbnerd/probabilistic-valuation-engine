@@ -131,120 +131,57 @@ if [ "$TOOL_NAME" = "Write" ] || [ "$TOOL_NAME" = "Edit" ]; then
     done
 
     # ============================================
-    # Layer 2: AI Context Injection (복잡한 패턴)
+    # Layer 2: AI Context Injection (동적 로딩)
     # ============================================
-    # Regex로 못 잡는 패턴은 관련 가드레일 문서를 컨텍스트에 주입
-    # AI가 코드를 작성할 때 자연스럽게 가드레일을 따르도록 유도
+    # INDEX.json에서 aiJudgment: true 패턴을 동적으로 읽어
+    # keywords 매칭 시 가드레일 문서를 컨텍스트에 주입
 
     CONTEXT_HINTS=""
 
-    # GR-003: AOP self-invocation (this. in @Service)
+    # aiJudgment 패턴 목록 조회
+    AI_PATTERN_KEYS=$(jq -r '.patterns | to_entries[] | select(.value.aiJudgment == true) | .key' "$GUARDRAIL_INDEX" 2>/dev/null)
+
+    for KEY in $AI_PATTERN_KEYS; do
+      # 패턴 정보 조회
+      PATTERN_ID=$(jq -r ".patterns[\"$KEY\"].id" "$GUARDRAIL_INDEX" 2>/dev/null)
+      PATTERN_KEYWORDS=$(jq -r ".patterns[\"$KEY\"].keywords | join(\"|\")" "$GUARDRAIL_INDEX" 2>/dev/null)
+      PATTERN_FILE=$(jq -r ".patterns[\"$KEY\"].file" "$GUARDRAIL_INDEX" 2>/dev/null)
+      PATTERN_DESC=$(jq -r ".patterns[\"$KEY\"].description" "$GUARDRAIL_INDEX" 2>/dev/null)
+
+      # keywords 매칭 확인
+      if [ -n "$PATTERN_KEYWORDS" ] && echo "$CONTENT" | grep -qiE "$PATTERN_KEYWORDS"; then
+        CONTEXT_HINTS="${CONTEXT_HINTS}
+📌 [$PATTERN_ID] AI 판단 필요
+   → $PATTERN_DESC
+   → docs/guardrails/$PATTERN_FILE 참조"
+      fi
+    done
+
+    # 추가: 복합 조건 패턴 (하드코딩 필요한 경우)
+
+    # GR-003: AOP self-invocation (@Service 내부 this. 호출)
     if echo "$CONTENT" | grep -qE '@Service|@Component|@Repository' && echo "$CONTENT" | grep -q 'this\.'; then
       CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-003] AOP self-invocation 감지: this. 키워드가 @Service 내부에서 사용됨
-   → docs/guardrails/backend/spring/aop-facade.md 참조
-   → Facade 패턴으로 리팩토링 권장"
+📌 [GR-003] AOP self-invocation 의심: this. 키워드가 Spring Bean 내부에서 사용됨
+   → Facade 패턴으로 리팩토링 권장 (외부 호출로 변경)"
     fi
 
-    # GR-004: Lambda Hell (3줄 초과 람다)
-    if echo "$CONTENT" | grep -qE 'stream\(\)|\.map\(|\.filter\(|\.forEach\('; then
-      # 람다 내부에 여러 줄이 있는지 간접 확인 (if/return 포함)
-      if echo "$CONTENT" | grep -qE '->\s*\{[^}]*if|->\s*\{[^}]*return'; then
+    # GR-004: Lambda Hell (람다 내부 분기문)
+    if echo "$CONTENT" | grep -qE '->\s*\{[^}]{20,}'; then
+      if echo "$CONTENT" | grep -qE '->\s*\{[^}]*if[^}]*return|->\s*\{[^}]*when'; then
         CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-004] Lambda Hell 의심: 복잡한 람다 블록 감지
-   → docs/guardrails/backend/spring/optional-chaining.md 참조
+📌 [GR-004] Lambda Hell 의심: 복잡한 람다 블록 (분기문 포함)
    → 3줄 초과 람다는 private method로 추출 권장"
       fi
     fi
 
-    # GR-005: Imperative null check (!= null)
-    if echo "$CONTENT" | grep -qE '!=\s*null|==\s*null'; then
-      CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-005] Imperative null check 감지
-   → docs/guardrails/backend/spring/optional-chaining.md 참조
-   → Optional 체이닝 사용 권장: Optional.ofNullable(obj).map(...).orElse(...)"
-    fi
-
     # GR-RESILIENCE-002: Exception extends (Marker Interface 없음)
-    if echo "$CONTENT" | grep -qE 'class\s+\w+Exception\s+extends'; then
-      if ! echo "$CONTENT" | grep -qE 'ClientBaseException|ServerBaseException'; then
+    if echo "$CONTENT" | grep -qE 'class\s+\w+Exception\s*:?\s*extends'; then
+      if ! echo "$CONTENT" | grep -qE 'ClientBaseException|ServerBaseException|BaseException'; then
         CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-RESILIENCE-002] Marker Interface 없는 Exception 정의 감지
-   → docs/guardrails/backend/resilience/marker-interface.md 참조
-   → ClientBaseException 또는 ServerBaseException 상속 권장"
+📌 [GR-RESILIENCE-002] Marker Interface 없는 Exception 정의
+   → CircuitBreakerIgnoreMarker 또는 CircuitBreakerRecordMarker 상속 권장"
       fi
-    fi
-
-    # GR-ARCH-001: @Cacheable (TieredCache 위반)
-    if echo "$CONTENT" | grep -q '@Cacheable'; then
-      CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-ARCH-001] @Cacheable 단일 캐시 감지
-   → docs/guardrails/architecture/system-design.md 참조
-   → TieredCache (L1 Caffeine + L2 Redis) 사용 권장"
-    fi
-
-    # GR-ARCH-002: computeIfAbsent (Single-flight 없음)
-    if echo "$CONTENT" | grep -q 'computeIfAbsent'; then
-      CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-ARCH-002] computeIfAbsent 감지 - Cache Stampede 위험
-   → docs/guardrails/architecture/system-design.md 참조
-   → SingleFlightExecutor 패턴 사용 권장"
-    fi
-
-    # GR-ARCH-003-2: static mutable 상태
-    if echo "$CONTENT" | grep -qE 'static\s+(final\s+)?(Map|List|Set|ConcurrentHashMap)'; then
-      CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-ARCH-003-2] static mutable 상태 감지
-   → docs/guardrails/architecture/stateless.md 참조
-   → Redis 또는 Bean 주입 사용 권장"
-    fi
-
-    # GR-ARCH-007: JPA IDENTITY (batch disable)
-    if echo "$CONTENT" | grep -q 'GenerationType\.IDENTITY'; then
-      CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-ARCH-007] JPA IDENTITY 감지 - Batch Insert 비활성화
-   → docs/guardrails/architecture/adr-decisions.md 참조
-   → 대량 insert 시 JDBC Batch 고려 (ADR-035)"
-    fi
-
-    # GR-ARCH-010: V4에서 V2 직접 호출
-    if echo "$CONTENT" | grep -qE 'private.*v2Service|private.*V2Service'; then
-      CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-ARCH-010] V2 서비스 직접 참조 감지
-   → docs/guardrails/architecture/service-modules.md 참조
-   → V4는 독립적 구현 권장"
-    fi
-
-    # GR-ARCH-015: Synchronous drain
-    if echo "$CONTENT" | grep -q '\.drain\(\)'; then
-      CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-ARCH-015] Synchronous drain 감지
-   → docs/guardrails/architecture/service-modules.md 참조
-   → @Scheduled 비동기 drain 사용 권장"
-    fi
-
-    # GR-STYLE-001: FQCN 사용
-    if echo "$CONTENT" | grep -qE 'java\.\w+\.\w+\s+\w+\s*='; then
-      CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-STYLE-001] FQCN 사용 감지
-   → docs/guardrails/coding-style/imports.md 참조
-   → import 문 사용 권장"
-    fi
-
-    # GR-TEST-005: LocalDateTime.now() 직접 호출
-    if echo "$CONTENT" | grep -qE 'LocalDateTime\.now\(\)|LocalDate\.now\(\)'; then
-      CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-TEST-005] 시간 직접 호출 감지
-   → docs/guardrails/testing/unit-test.md 참조
-   → Clock 주입 사용 권장: Clock clock = Clock.systemDefaultZone()"
-    fi
-
-    # GR-TEST-006: Random ID 직접 생성
-    if echo "$CONTENT" | grep -qE 'UUID\.randomUUID|Math\.random'; then
-      CONTEXT_HINTS="${CONTEXT_HINTS}
-📌 [GR-TEST-006] Random ID 직접 생성 감지
-   → docs/guardrails/testing/unit-test.md 참조
-   → Supplier<UUID> 주입 사용 권장"
     fi
 
     # 컨텍스트 힌트 출력 (AI가 참고하도록)

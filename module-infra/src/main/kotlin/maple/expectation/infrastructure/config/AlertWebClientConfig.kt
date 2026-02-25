@@ -46,7 +46,7 @@ open class AlertWebClientConfig(
 ) {
 
     @Bean("alertWebClient")
-    fun alertWebClient(): WebClient {
+    open fun alertWebClient(): WebClient {
         val httpClient = HttpClient.create()
             .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
             .responseTimeout(Duration.ofSeconds(5))

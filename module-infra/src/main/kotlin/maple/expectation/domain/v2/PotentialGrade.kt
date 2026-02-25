@@ -25,6 +25,7 @@ enum class PotentialGrade(val koreanName: String) {
          * @return 매칭되는 PotentialGrade
          * @throws InvalidPotentialGradeException 유효하지 않은 등급명인 경우
          */
+        @JvmStatic
         fun fromKorean(korean: String?): PotentialGrade {
             if (korean == null) {
                 throw InvalidPotentialGradeException("null")

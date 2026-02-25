@@ -1,0 +1,301 @@
+{
+  "version": "1.2.0",
+  "description": "Guardrail pattern index for Claude Code hooks - Architecture, Backend, Testing",
+  "lastUpdated": "2026-02-25",
+  "patterns": {
+    "try-catch": {
+      "regex": "\\btry\\s*\\{",
+      "file": "backend/spring/logic-executor.md",
+      "severity": "critical",
+      "id": "GR-001",
+      "description": "Direct try-catch usage prohibited. Use LogicExecutor instead.",
+      "keywords": ["try", "catch", "exception", "LogicExecutor", "execute", "executeOrDefault"]
+    },
+    "runtime-exception": {
+      "regex": "throw\\s+new\\s+RuntimeException\\s*\\(",
+      "file": "backend/spring/exception-handling.md",
+      "severity": "critical",
+      "id": "GR-002",
+      "description": "Direct RuntimeException throwing prohibited. Use ClientBaseException/ServerBaseException.",
+      "keywords": ["RuntimeException", "throw", "exception", "ClientBaseException", "ServerBaseException"]
+    },
+    "aop-self-invocation": {
+      "regex": "@Service.*\\{[^}]*this\\.",
+      "file": "backend/spring/aop-facade.md",
+      "severity": "critical",
+      "id": "GR-003",
+      "description": "AOP self-invocation prohibited. Use Facade pattern.",
+      "keywords": ["AOP", "Facade", "self-invocation", "CGLIB", "proxy"]
+    },
+    "lambda-hell": {
+      "regex": "\\{\\s*\\{[^}]{50,}",
+      "file": "backend/spring/optional-chaining.md",
+      "severity": "warning",
+      "id": "GR-004",
+      "description": "Nested lambda exceeding 3 lines prohibited. Extract to private method.",
+      "keywords": ["lambda", "nested", "method reference", "extraction"]
+    },
+    "optional-chaining-violation": {
+      "regex": "if\\s*\\([^=]+\\s*!=\\s*null\\)",
+      "file": "backend/spring/optional-chaining.md",
+      "severity": "warning",
+      "id": "GR-005",
+      "description": "Imperative null check prohibited. Use Optional chaining.",
+      "keywords": ["Optional", "null", "chaining", "Tap pattern"]
+    },
+    "circuit-breaker-missing": {
+      "regex": "@CircuitBreaker\\s*\\(",
+      "file": "backend/resilience/circuit-breaker.md",
+      "severity": "critical",
+      "id": "GR-RESILIENCE-001",
+      "description": "External API calls require Circuit Breaker configuration.",
+      "keywords": ["CircuitBreaker", "Resilience4j", "fallback", "retry"]
+    },
+    "marker-interface-missing": {
+      "regex": "class\\s+\\w+Exception\\s+extends\\s+(?!ClientBaseException|ServerBaseException)",
+      "file": "backend/resilience/marker-interface.md",
+      "severity": "critical",
+      "id": "GR-RESILIENCE-002",
+      "description": "Custom exceptions must extend ClientBaseException or ServerBaseException.",
+      "keywords": ["Marker", "Interface", "CircuitBreakerIgnoreMarker", "CircuitBreakerRecordMarker"]
+    },
+    "deprecated-api": {
+      "regex": "@Deprecated",
+      "file": "backend/spring/exception-handling.md",
+      "severity": "critical",
+      "id": "GR-006",
+      "description": "Deprecated API usage prohibited. Use latest Best Practice API.",
+      "keywords": ["deprecated", "RestClient", "RestTemplate"]
+    },
+    "thread-sleep": {
+      "regex": "Thread\\.sleep\\s*\\(",
+      "file": "testing/unit-test.md",
+      "severity": "critical",
+      "id": "GR-TEST-001",
+      "description": "Thread.sleep() prohibited. Use Awaitility instead.",
+      "keywords": ["Thread.sleep", "Awaitility", "flaky test"]
+    },
+    "awaittermination-missing": {
+      "regex": "executorService\\.shutdown\\(\\)(?!.*awaitTermination)",
+      "file": "testing/concurrency-test.md",
+      "severity": "critical",
+      "id": "GR-TEST-002",
+      "description": "ExecutorService.shutdown() must be followed by awaitTermination().",
+      "keywords": ["ExecutorService", "shutdown", "awaitTermination", "CountDownLatch", "race condition"]
+    },
+    "dirties-context-overuse": {
+      "regex": "@DirtiesContext\\s*\\(\\s*classMode\\s*=\\s*DirtiesContext\\.ClassMode\\.AFTER_EACH_TEST_METHOD",
+      "file": "testing/unit-test.md",
+      "severity": "warning",
+      "id": "GR-TEST-003",
+      "description": "@DirtiesContext on every test causes slow reloads. Use @BeforeEach for isolation.",
+      "keywords": ["@DirtiesContext", "test isolation", "@BeforeEach"]
+    },
+    "testcontainers-missing": {
+      "regex": "@Test.*redisTemplate\\.|@Test.*restTemplate\\.\\.(?!.*@Testcontainers)",
+      "file": "testing/unit-test.md",
+      "severity": "warning",
+      "id": "GR-TEST-004",
+      "description": "External dependency tests should use Testcontainers for isolation.",
+      "keywords": ["Testcontainers", "Docker", "integration test", "isolation"]
+    },
+    "clock-injection-missing": {
+      "regex": "LocalDate\\.now\\(\\)|LocalDateTime\\.now\\(\\)",
+      "file": "testing/unit-test.md",
+      "severity": "warning",
+      "id": "GR-TEST-005",
+      "description": "Time-dependent logic should use Clock injection for testability.",
+      "keywords": ["Clock", "LocalDate.now", "time-based", "determinism"]
+    },
+    "random-id-missing": {
+      "regex": "UUID\\.randomUUID\\(\\)|Math\\.random\\(\\)",
+      "file": "testing/unit-test.md",
+      "severity": "warning",
+      "id": "GR-TEST-006",
+      "description": "Random ID generation should use Supplier injection for testability.",
+      "keywords": ["UUID", "random", "Supplier", "determinism", "testability"]
+    },
+    "transactional-multithread": {
+      "regex": "@Transactional.*executorService\\.|@Transactional.*ExecutorService",
+      "file": "testing/concurrency-test.md",
+      "severity": "critical",
+      "id": "GR-TEST-007",
+      "description": "@Transactional tests with ExecutorService cause race conditions (transaction not committed).",
+      "keywords": ["@Transactional", "ExecutorService", "multithread", "race condition"]
+    },
+    "stateless-violation": {
+      "regex": "HttpSession|@SessionScope|@SessionAttributes",
+      "file": "architecture/stateless.md",
+      "severity": "critical",
+      "id": "GR-ARCH-003",
+      "description": "Stateful components prohibited. Use Redis/MySQL for state.",
+      "keywords": ["HttpSession", "stateless", "Redis", "state management"]
+    },
+    "static-mutable": {
+      "regex": "static\\s+(?:final\\s+)?(?:Map|Set|List|Collection|ConcurrentHashMap)",
+      "file": "architecture/stateless.md",
+      "severity": "critical",
+      "id": "GR-ARCH-003-2",
+      "description": "Static mutable state prohibited. Use Redis for distributed state.",
+      "keywords": ["static", "mutable", "state", "Redis", "distributed"]
+    },
+    "jpa-identity-batch-disable": {
+      "regex": "@GeneratedValue\\s*\\(\\s*strategy\\s*=\\s*GenerationType\\.IDENTITY",
+      "file": "architecture/adr-decisions.md",
+      "severity": "warning",
+      "id": "GR-ARCH-007",
+      "description": "JPA IDENTITY disables batch insert. Consider JDBC Batch for bulk operations (ADR-035).",
+      "keywords": ["JPA", "IDENTITY", "batch", "JDBC", "CQRS"]
+    },
+    "v4-to-v2-direct-call": {
+      "regex": "private\\s+\\w+\\s+v2Service",
+      "file": "architecture/service-modules.md",
+      "severity": "warning",
+      "id": "GR-ARCH-010",
+      "description": "V4 module directly calling V2 prohibited. Use V4 independent implementation.",
+      "keywords": ["V2", "V4", "module", "dependency", "Facade"]
+    },
+    "synchronous-drain": {
+      "regex": "\\.drain\\(\\)",
+      "file": "architecture/service-modules.md",
+      "severity": "warning",
+      "id": "GR-ARCH-015",
+      "description": "Synchronous drain in request thread prohibited. Use @Scheduled async drain.",
+      "keywords": ["Write-Behind", "drain", "buffer", "@Scheduled"]
+    },
+    "fixed-rate-scheduler": {
+      "regex": "@Scheduled\\s*\\(\\s*fixedRate\\s*=",
+      "file": "architecture/adr-decisions.md",
+      "severity": "critical",
+      "id": "GR-ARCH-005",
+      "description": "fixedRate scheduler causes overlap. Use fixedDelay instead.",
+      "keywords": ["@Scheduled", "fixedRate", "fixedDelay", "scheduler"]
+    },
+    "tiered-cache-violation": {
+      "regex": "@Cacheable\\s*\\(\\s*cacheNames\\s*=\\s*\"[^\"]+\"",
+      "file": "architecture/system-design.md",
+      "severity": "warning",
+      "id": "GR-ARCH-001",
+      "description": "Single-layer cache prohibited. Use TieredCache (L1 Caffeine + L2 Redis).",
+      "keywords": ["TieredCache", "Caffeine", "Redis", "L1", "L2"]
+    },
+    "single-flight-missing": {
+      "regex": "computeIfAbsent\\s*\\(",
+      "file": "architecture/system-design.md",
+      "severity": "warning",
+      "id": "GR-ARCH-002",
+      "description": "Duplicate computation risk. Use SingleFlightExecutor pattern.",
+      "keywords": ["Single-flight", "cache", "stampede", "duplicate"]
+    },
+    "fqcn-usage": {
+      "regex": "new\\s+[a-z]+\\.[A-Z][a-zA-Z0-9]*\\(",
+      "file": "coding-style/imports.md",
+      "severity": "warning",
+      "id": "GR-STYLE-001",
+      "description": "FQCN usage discouraged. Use import statement instead.",
+      "keywords": ["FQCN", "import", "package", "class"]
+    }
+  },
+  "allowedPatterns": [
+    "DefaultLogicExecutor",
+    "DefaultCheckedLogicExecutor",
+    "ExecutionPipeline",
+    "TaskDecorator",
+    "TraceAspect",
+    "CompensationCommand",
+    "DonationOutbox",
+    "RedisCompensationCommand"
+  ],
+  "exclusions": {
+    "testPaths": [
+      "src/test/.*\\.java$",
+      "src/test/.*\\.kt$",
+      "chaos-test"
+    ],
+    "patternExemptions": {
+      "try-catch": ["testPaths"],
+      "thread-sleep": ["testPaths"],
+      "runtime-exception": ["testPaths"],
+      "lambda-hell": ["testPaths"],
+      "optional-chaining-violation": ["testPaths"],
+      "awaittermination-missing": ["testPaths"],
+      "dirties-context-overuse": ["testPaths"],
+      "testcontainers-missing": ["testPaths"],
+      "clock-injection-missing": ["testPaths"],
+      "random-id-missing": ["testPaths"],
+      "transactional-multithread": ["testPaths"]
+    }
+  },
+  "categories": {
+    "architecture": {
+      "adr-decisions.md": "ADR Decision Guardrails (Hexagonal, DIP, Rich Domain, Exception, JDBC Batch)",
+      "stateless.md": "Stateless Architecture Principles (No HttpSession, No static mutable)",
+      "service-modules.md": "V2/V4 Service Modules Architecture (Facade, Decorator, Strategy, Outbox)",
+      "system-design.md": "System Design Patterns (TieredCache, Single-flight, Circuit Breaker, GZIP)",
+      "multi-agent.md": "5-Agent Council Protocol (Blue, Green, Yellow, Purple, Red)"
+    },
+    "backend/spring": {
+      "logic-executor.md": "Zero Try-Catch Policy & LogicExecutor Pattern",
+      "exception-handling.md": "Exception Handling Strategy (ClientBaseException/ServerBaseException)",
+      "aop-facade.md": "AOP & Facade Pattern & Spring Security Filter",
+      "optional-chaining.md": "Optional Chaining & Tap Pattern & Lambda Hell Prevention"
+    },
+    "backend/resilience": {
+      "circuit-breaker.md": "Circuit Breaker Pattern (Resilience4j)",
+      "marker-interface.md": "Marker Interface Pattern (CircuitBreakerIgnoreMarker/RecordMarker)",
+      "fallback.md": "Fallback Strategy & Graceful Degradation"
+    },
+    "backend/cache": {
+      "tiered-cache-singleflight.md": "TieredCache & SingleFlight Pattern (L1 Caffeine + L2 Redis)"
+    },
+    "backend/concurrency": {
+      "async-patterns.md": "Async Non-Blocking Pipeline Pattern",
+      "thread-pool.md": "Thread Pool Backpressure Best Practice",
+      "virtual-threads.md": "Virtual Threads Best Practice"
+    },
+    "testing": {
+      "unit-test.md": "Unit Test Best Practices (Awaitility vs Thread.sleep, Clock injection, Testcontainers)",
+      "flaky-test-prevention.md": "Flaky Test Prevention Guide (5 principles, 6 root causes, quarantine)",
+      "concurrency-test.md": "Concurrency Test Best Practices (awaitTermination, CountDownLatch, @Transactional)",
+      "chaos-engineering.md": "Chaos Engineering Testing Strategy (5-Agent, Nightmare N01-N19, load test)",
+      "nightmare-tests.md": "Nightmare Scenarios (N01-N19): Cache Stampede, Deadlock, Timeout, etc.",
+      "INDEX.md": "Testing Guardrails Index"
+    },
+    "infrastructure": {
+      "redis.md": "Redis & Redisson Integration (Lua Script, DLQ)",
+      "scaleout.md": "Scale-out Architecture Guardrails"
+    },
+    "database": {
+      "connection-pool.md": "Database Connection Pool Guardrails (HikariCP, MySQL)"
+    },
+    "coding-style": {
+      "imports.md": "Import Style Guide (FQCN usage)"
+    }
+  },
+  "relatedDocs": {
+    "CLAUDE.md": {
+      "section11": "Exception Handling Strategy",
+      "section12": "Zero Try-Catch Policy & LogicExecutor",
+      "section12-1": "Circuit Breaker & Resilience Rules",
+      "section15": "Anti-Pattern: Lambda & Parenthesis Hell",
+      "section20": "Flaky Test Prevention"
+    },
+    "infrastructure.md": {
+      "section7": "AOP & Facade Pattern",
+      "section17": "TieredCache & Cache Stampede Prevention",
+      "section18": "Spring Security 6.x Filter Best Practice",
+      "section19": "Security Best Practices"
+    },
+    "testing-guide.md": {
+      "section23": "ExecutorService 동시성 테스트 Best Practice",
+      "section24": "Flaky Test 근본 원인 분석 및 해결 가이드",
+      "section25": "경량 테스트 강제 규칙"
+    },
+    "flaky-test-management.md": {
+      "overview": "Flaky Test Management Guide (Identification, Isolation, Resolution)"
+    },
+    "resilience.md": {
+      "overview": "External API Failure Response Strategy (A/B/C Scenarios)"
+    }
+  }
+}

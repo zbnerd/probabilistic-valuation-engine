@@ -108,6 +108,9 @@ dependencies {
 	testImplementation 'org.testcontainers:toxiproxy'
 	testImplementation 'org.mockito:mockito-core:5.14.0'
 	testImplementation 'org.mockito:mockito-junit-jupiter:5.14.0'
+
+	// Jackson Kotlin module for testing Kotlin data classes deserialization
+	testImplementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
 }
 
 // Enable plain jar for inter-module dependencies (chaos-test module needs it)
@@ -128,6 +131,10 @@ bootRun {
 // test-legacy는 빌드에서 제외
 tasks.named('test') {
 	exclude '**/test-legacy/**'
+	// Integration tests run separately via 'integrationTest' task
+	useJUnitPlatform {
+		excludeTags 'integration'
+	}
 }
 
 // Integration Test Task

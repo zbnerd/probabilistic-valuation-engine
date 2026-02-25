@@ -97,7 +97,11 @@ public class GameCharacterControllerV5 {
     // 1. Query Side: Check MongoDB first (LogicExecutor: executeOrDefault)
     Optional<EquipmentExpectationResponseV5> cachedResult =
         executor.executeOrDefault(
-            () -> queryService.findByUserIgn(userIgn).flatMap(CharacterViewMapper::toResponseDto),
+            () -> {
+              maple.expectation.infrastructure.mongodb.CharacterValuationView view =
+                  queryService.findByUserIgn(userIgn);
+              return CharacterViewMapper.toResponseDto(view);
+            },
             Optional.empty(),
             context);
 
@@ -139,7 +143,7 @@ public class GameCharacterControllerV5 {
     TaskContext context = TaskContext.of("V5Query", "InvalidateAndRecalculate", userIgn);
 
     // 1. Invalidate MongoDB cache
-    executor.executeVoid(() -> queryService.deleteByUserIgn(userIgn), context);
+    executor.executeVoidJava(() -> queryService.deleteByUserIgn(userIgn), context);
 
     // 2. Queue with force=true
     return queueCalculationTask(userIgn, true, context);

@@ -144,7 +144,7 @@ public class MongoDBSyncWorker implements Runnable {
     log.info("[MongoDBSyncWorker] Sync worker running");
 
     while (running && !Thread.currentThread().isInterrupted()) {
-      executor.executeVoid(this::processNextBatch, TaskContext.of("MongoDBSyncWorker", "Poll"));
+      executor.executeVoidJava(this::processNextBatch, TaskContext.of("MongoDBSyncWorker", "Poll"));
     }
 
     log.info("[MongoDBSyncWorker] Sync worker stopped");
@@ -153,7 +153,7 @@ public class MongoDBSyncWorker implements Runnable {
   private void initializeStream() {
     TaskContext context = TaskContext.of("MongoDBSyncWorker", "InitStream");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           RStream<String, String> stream =
               redissonClient.getStream(STREAM_KEY, StringCodec.INSTANCE);
@@ -178,7 +178,7 @@ public class MongoDBSyncWorker implements Runnable {
         },
         e -> {
           if (e.getMessage() != null && e.getMessage().contains("NOGROUP")) {
-            executor.executeVoid(
+            executor.executeVoidJava(
                 () -> {
                   stream.createGroup(StreamCreateGroupArgs.name(CONSUMER_GROUP));
                   log.info("[MongoDBSyncWorker] Consumer group created: {}", CONSUMER_GROUP);
@@ -278,7 +278,7 @@ public class MongoDBSyncWorker implements Runnable {
     TaskContext context =
         TaskContext.of("MongoDBSyncWorker", "ProcessMessage", messageId.toString());
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // ADR-083: Backward compatibility - try both 'data' and 'payload' keys
           String payloadJson = extractPayloadJson(data);

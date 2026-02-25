@@ -119,7 +119,7 @@ public class BatchWriter {
   public void processBatch() {
     TaskContext context = TaskContext.of("BatchWriter", "ProcessBatch");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           List<IntegrationEvent<NexonApiCharacterData>> batch =
               new ArrayList<>(batchProperties.aclWriterSize());

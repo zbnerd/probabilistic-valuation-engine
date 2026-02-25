@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.persistence.repository;
 
 import java.util.List;
-import java.util.Optional;
 import maple.expectation.domain.model.like.CharacterLike;
 import maple.expectation.domain.repository.CharacterLikeRepository;
 import maple.expectation.infrastructure.persistence.entity.CharacterLikeJpaEntity;
 import maple.expectation.infrastructure.persistence.jpa.CharacterLikeJpaRepository;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,11 +33,11 @@ public class CharacterLikeRepositoryImpl implements CharacterLikeRepository {
   }
 
   @Override
-  public Optional<CharacterLike> findByTargetOcidAndLikerAccountId(
-      String targetOcid, String likerAccountId) {
+  @Nullable public CharacterLike findByTargetOcidAndLikerAccountId(String targetOcid, String likerAccountId) {
     return jpaRepo
         .findByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
-        .map(CharacterLikeJpaEntity::toDomain);
+        .map(CharacterLikeJpaEntity::toDomain)
+        .orElse(null);
   }
 
   @Override

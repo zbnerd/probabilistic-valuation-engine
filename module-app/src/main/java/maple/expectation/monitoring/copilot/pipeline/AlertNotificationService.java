@@ -151,7 +151,7 @@ public class AlertNotificationService {
       AiSreService.MitigationPlan plan,
       List<SignalDefinition> signalDefinitions,
       long timestamp) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // Prepare annotated signals
           Map<String, SignalDefinition> signalMap =

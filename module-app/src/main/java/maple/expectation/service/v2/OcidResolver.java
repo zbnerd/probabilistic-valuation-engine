@@ -3,11 +3,11 @@ package maple.expectation.service.v2;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
@@ -66,11 +66,17 @@ public class OcidResolver {
 
     // 3. DB 조회 → 있으면 반환, 없으면 → NexonAPI 호출 → DB 저장 → 반환
     // P1-1 Fix: CLAUDE.md Section 4 - Optional Chaining Best Practice
-    return executor
-        .execute(
+    GameCharacter dbResult =
+        executor.execute(
             () -> gameCharacterRepository.findByUserIgn(cleanIgn),
-            TaskContext.of("Ocid", "DbLookup", cleanIgn))
-        .map(gc -> cacheAndReturn(cleanIgn, gc.getOcid()))
+            TaskContext.of("Ocid", "DbLookup", cleanIgn));
+
+    return Optional.ofNullable(dbResult)
+        .map(
+            gc -> {
+              String ocid = gc.getCharacterId() != null ? gc.getCharacterId().value() : null;
+              return ocid != null ? cacheAndReturn(cleanIgn, ocid) : null;
+            })
         .orElseGet(() -> createAndGetOcid(cleanIgn));
   }
 
@@ -85,16 +91,23 @@ public class OcidResolver {
 
     // 2. DB 조회 → 있으면 반환, 없으면 → 생성 후 반환
     // P1-2 Fix: CLAUDE.md Section 4 - Optional Chaining Best Practice (간결화)
-    return executor
-        .execute(
+    GameCharacter dbResult =
+        executor.execute(
             () -> gameCharacterRepository.findByUserIgn(cleanIgn),
-            TaskContext.of("Character", "DbLookup", cleanIgn))
-        .orElseGet(() -> createNewCharacter(cleanIgn));
+            TaskContext.of("Character", "DbLookup", cleanIgn));
+
+    return Optional.ofNullable(dbResult).orElseGet(() -> createNewCharacter(cleanIgn));
   }
 
   /** NexonAPI로 OCID 조회 → DB 저장 → OCID 반환 */
   private String createAndGetOcid(String userIgn) {
-    return createNewCharacter(userIgn).getOcid();
+    GameCharacter character = createNewCharacter(userIgn);
+    String ocid = character.getCharacterId() != null ? character.getCharacterId().value() : null;
+    if (ocid == null) {
+      throw new IllegalStateException(
+          "OCID cannot be null for newly created character: " + userIgn);
+    }
+    return ocid;
   }
 
   /**

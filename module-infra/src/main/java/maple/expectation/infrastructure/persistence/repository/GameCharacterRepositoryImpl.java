@@ -1,12 +1,12 @@
 package maple.expectation.infrastructure.persistence.repository;
 
 import java.util.List;
-import java.util.Optional;
 import maple.expectation.domain.model.character.GameCharacter;
 import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity;
 import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepository;
 import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepositoryCustom;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,18 +38,24 @@ public class GameCharacterRepositoryImpl implements GameCharacterRepository {
   }
 
   @Override
-  public Optional<GameCharacter> findByOcid(String ocid) {
-    return jpaRepo.findByOcid(ocid).map(GameCharacterJpaEntity::toDomain);
+  @Nullable public GameCharacter findByOcid(String ocid) {
+    return jpaRepo.findByOcid(ocid).map(GameCharacterJpaEntity::toDomain).orElse(null);
   }
 
   @Override
-  public Optional<GameCharacter> findByUserIgn(String userIgn) {
-    return jpaRepo.findByUserIgn(userIgn).map(GameCharacterJpaEntity::toDomain);
+  @Nullable public GameCharacter findByUserIgn(String userIgn) {
+    return jpaRepo.findByUserIgn(userIgn).map(GameCharacterJpaEntity::toDomain).orElse(null);
   }
 
   @Override
   public List<GameCharacter> findAll() {
     return jpaRepo.findAll().stream().map(GameCharacterJpaEntity::toDomain).toList();
+  }
+
+  @Override
+  public org.springframework.data.domain.Page<GameCharacter> findAll(
+      org.springframework.data.domain.Pageable pageable) {
+    return jpaRepo.findAll(pageable).map(GameCharacterJpaEntity::toDomain);
   }
 
   @Override
@@ -78,5 +84,10 @@ public class GameCharacterRepositoryImpl implements GameCharacterRepository {
   @Override
   public boolean existsByOcid(String ocid) {
     return jpaRepo.existsByOcid(ocid);
+  }
+
+  @Override
+  public void incrementLikeCount(String userIgn, long count) {
+    jpaRepo.incrementLikeCount(userIgn, count);
   }
 }

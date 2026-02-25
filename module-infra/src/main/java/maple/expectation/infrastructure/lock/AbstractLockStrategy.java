@@ -39,7 +39,7 @@ public abstract class AbstractLockStrategy implements LockStrategy {
     // ✅ TaskContext 정의: Component="Lock", Operation="Unlock"
     TaskContext context = TaskContext.of("Lock", "Unlock", key);
 
-    executor.executeVoid(() -> this.performUnlock(lockKey, context), context);
+    executor.executeVoidJava(() -> this.performUnlock(lockKey, context), context);
   }
 
   /**
@@ -67,7 +67,7 @@ public abstract class AbstractLockStrategy implements LockStrategy {
   /** 락 해제 로직 (평탄화 및 노이즈 제거) */
   private void performUnlock(String lockKey, TaskContext context) {
     // 락 해제 중의 예외는 로직에 지장을 주지 않도록 executeOrDefault 또는 executeVoid로 보호
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           if (shouldUnlock(lockKey)) {
             unlockInternal(lockKey);

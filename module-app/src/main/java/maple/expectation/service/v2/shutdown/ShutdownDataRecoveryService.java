@@ -45,7 +45,7 @@ public class ShutdownDataRecoveryService {
     TaskContext context = TaskContext.of("Recovery", "MainProcess");
 
     //  전체 복구 프로세스를 실행기로 보호 (Issue #77 대응)
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           log.info("🔄 [Shutdown Recovery] 백업 데이터 복구 시작");
 
@@ -68,7 +68,7 @@ public class ShutdownDataRecoveryService {
     TaskContext fileContext =
         TaskContext.of("Recovery", "ProcessFile", backupFile.getFileName().toString());
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           boolean success = processBackupFile(backupFile);
           if (success) {

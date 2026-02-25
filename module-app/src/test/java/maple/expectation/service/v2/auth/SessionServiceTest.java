@@ -130,7 +130,7 @@ class SessionServiceTest {
       Session existingSession =
           Session.create(
               SESSION_ID, FINGERPRINT, "TestUser", "test-account-id", API_KEY, MY_OCIDS, ROLE_USER);
-      given(sessionRepository.findById(SESSION_ID)).willReturn(Optional.of(existingSession));
+      given(sessionRepository.findById(SESSION_ID)).willReturn(existingSession);
 
       // when
       Optional<Session> result = sessionService.getSessionAndRefresh(SESSION_ID);
@@ -145,7 +145,7 @@ class SessionServiceTest {
     @DisplayName("세션 없음 시 TTL 갱신 안함")
     void shouldNotRefreshTtlWhenSessionNotFound() {
       // given
-      given(sessionRepository.findById(SESSION_ID)).willReturn(Optional.empty());
+      given(sessionRepository.findById(SESSION_ID)).willReturn(null);
 
       // when
       Optional<Session> result = sessionService.getSessionAndRefresh(SESSION_ID);
@@ -167,7 +167,7 @@ class SessionServiceTest {
       Session existingSession =
           Session.create(
               SESSION_ID, FINGERPRINT, "TestUser", "test-account-id", API_KEY, MY_OCIDS, ROLE_USER);
-      given(sessionRepository.findById(SESSION_ID)).willReturn(Optional.of(existingSession));
+      given(sessionRepository.findById(SESSION_ID)).willReturn(existingSession);
 
       // when
       Optional<Session> result = sessionService.getSession(SESSION_ID);
@@ -181,7 +181,7 @@ class SessionServiceTest {
     @DisplayName("세션 없음 시 Optional.empty 반환")
     void shouldReturnEmptyWhenNotFound() {
       // given
-      given(sessionRepository.findById(SESSION_ID)).willReturn(Optional.empty());
+      given(sessionRepository.findById(SESSION_ID)).willReturn(null);
 
       // when
       Optional<Session> result = sessionService.getSession(SESSION_ID);

@@ -74,7 +74,17 @@ class MonitoringAlertServiceUnitTest {
               return task.get();
             });
 
-    // executor.executeVoid()가 실제로 람다를 실행하도록 설정 (void 메서드)
+    // executor.executeVoidJava()가 실제로 람다를 실행하도록 설정 (void 메서드)
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              Runnable task = invocation.getArgument(0);
+              task.run();
+              return null;
+            })
+        .when(logicExecutor)
+        .executeVoidJava(any(Runnable.class), any(TaskContext.class));
+
+    // executor.executeVoid()도 설정 (ThrowingRunnable 버전)
     org.mockito.Mockito.doAnswer(
             invocation -> {
               ThrowingRunnable task = invocation.getArgument(0);
@@ -82,7 +92,7 @@ class MonitoringAlertServiceUnitTest {
               return null;
             })
         .when(logicExecutor)
-        .executeVoid(any(), any(TaskContext.class));
+        .executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
 
     monitoringAlertService =
         new MonitoringAlertService(

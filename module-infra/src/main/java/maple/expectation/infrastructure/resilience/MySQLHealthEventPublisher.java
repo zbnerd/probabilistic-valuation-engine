@@ -58,7 +58,7 @@ public class MySQLHealthEventPublisher {
   /** CircuitBreaker 이벤트 리스너 등록 (P0-N1) */
   @PostConstruct
   public void registerCircuitBreakerListener() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           CircuitBreaker likeSyncDbCb = circuitBreakerRegistry.circuitBreaker(LIKE_SYNC_DB_CB);
           likeSyncDbCb.getEventPublisher().onStateTransition(this::handleStateTransition);
@@ -87,7 +87,7 @@ public class MySQLHealthEventPublisher {
    * <p>Debounce를 위해 DOWN 타임스탬프를 Redis에 저장하고, 비동기로 5초 후 실제 DOWN 이벤트를 발행합니다.
    */
   private void handleCircuitBreakerOpen(String fromState, String toState) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           MySQLHealthState currentState = getCurrentState();
 
@@ -110,7 +110,7 @@ public class MySQLHealthEventPublisher {
   /** Debounce 후 DOWN 이벤트 발행 (P0-N4: @Async) */
   @Async
   public void scheduleDownEventAfterDebounce(String fromState, String toState) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // Debounce 대기
           try {
@@ -144,7 +144,7 @@ public class MySQLHealthEventPublisher {
 
   /** CircuitBreaker CLOSED 처리 (MySQL UP 감지) */
   private void handleCircuitBreakerClosed(String fromState, String toState) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           MySQLHealthState currentState = getCurrentState();
 
@@ -177,7 +177,7 @@ public class MySQLHealthEventPublisher {
    * <p>CompensationSyncScheduler에서 동기화 완료 후 호출합니다.
    */
   public void markRecoveryComplete() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           MySQLHealthState currentState = getCurrentState();
           if (currentState != MySQLHealthState.RECOVERING) {

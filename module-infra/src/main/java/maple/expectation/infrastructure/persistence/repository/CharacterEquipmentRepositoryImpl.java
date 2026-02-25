@@ -1,13 +1,13 @@
 package maple.expectation.infrastructure.persistence.repository;
 
 import java.util.List;
-import java.util.Optional;
 import maple.expectation.domain.model.character.CharacterId;
 import maple.expectation.domain.model.equipment.CharacterEquipment;
 import maple.expectation.infrastructure.jdbc.JdbcBatchUpsertRepository;
 import maple.expectation.infrastructure.persistence.CharacterEquipmentJpaRepository;
 import maple.expectation.infrastructure.persistence.entity.CharacterEquipmentJpaEntity;
 import maple.expectation.infrastructure.persistence.mapper.CharacterEquipmentMapper;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +36,14 @@ public class CharacterEquipmentRepositoryImpl
 
   @Override
   @Transactional(readOnly = true)
-  public Optional<CharacterEquipment> findById(CharacterId characterId) {
+  @Nullable public CharacterEquipment findById(CharacterId characterId) {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");
     }
-    return jpaRepo.findById(characterId.value()).map(CharacterEquipmentMapper::toDomain);
+    return jpaRepo
+        .findById(characterId.value())
+        .map(CharacterEquipmentMapper::toDomain)
+        .orElse(null);
   }
 
   @Override
@@ -51,15 +54,14 @@ public class CharacterEquipmentRepositoryImpl
     }
 
     CharacterId id = equipment.characterId();
-    Optional<CharacterEquipmentJpaEntity> existing = jpaRepo.findById(id.value());
+    CharacterEquipmentJpaEntity jpaEntity = jpaRepo.findById(id.value()).orElse(null);
 
-    if (existing.isPresent()) {
-      CharacterEquipmentJpaEntity jpaEntity = existing.get();
+    if (jpaEntity != null) {
       CharacterEquipmentMapper.updateJpaEntity(jpaEntity, equipment);
       jpaRepo.save(jpaEntity);
       return equipment;
     } else {
-      CharacterEquipmentJpaEntity jpaEntity = CharacterEquipmentMapper.toJpaEntity(equipment);
+      jpaEntity = CharacterEquipmentMapper.toJpaEntity(equipment);
       jpaRepo.save(jpaEntity);
       return equipment;
     }

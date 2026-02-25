@@ -5,13 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.domain.Session;
 import maple.expectation.domain.repository.RedisSessionRepository;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import org.jspecify.annotations.Nullable;
 import org.redisson.api.RMap;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,7 +67,7 @@ public class RedisSessionRepositoryImpl implements RedisSessionRepository {
     String key = buildKey(session.sessionId());
     RMap<String, String> map = redissonClient.getMap(key);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           map.put(FIELD_FINGERPRINT, session.fingerprint());
           map.put(FIELD_USER_IGN, session.userIgn());
@@ -90,41 +90,36 @@ public class RedisSessionRepositoryImpl implements RedisSessionRepository {
    * 세션 ID로 세션을 조회합니다.
    *
    * @param sessionId 세션 ID
-   * @return 세션 (Optional)
+   * @return 세션 (null if not found)
    */
-  public Optional<Session> findById(String sessionId) {
+  public @Nullable Session findById(String sessionId) {
     return executor.executeOrDefault(
-        () -> doFindById(sessionId),
-        Optional.empty(),
-        TaskContext.of("Session", "FindById", sessionId));
+        () -> doFindById(sessionId), null, TaskContext.of("Session", "FindById", sessionId));
   }
 
-  private Optional<Session> doFindById(String sessionId) {
+  private @Nullable Session doFindById(String sessionId) {
     String key = buildKey(sessionId);
     RMap<String, String> map = redissonClient.getMap(key);
 
     if (!map.isExists()) {
-      return Optional.empty();
+      return null;
     }
 
     String fingerprint = map.get(FIELD_FINGERPRINT);
     if (fingerprint == null) {
-      return Optional.empty();
+      return null;
     }
 
-    Session session =
-        new Session(
-            sessionId,
-            fingerprint,
-            map.get(FIELD_USER_IGN),
-            map.get(FIELD_ACCOUNT_ID),
-            map.get(FIELD_API_KEY),
-            deserializeOcids(map.get(FIELD_MY_OCIDS)),
-            map.get(FIELD_ROLE),
-            Instant.parse(map.get(FIELD_CREATED_AT)),
-            Instant.parse(map.get(FIELD_LAST_ACCESSED_AT)));
-
-    return Optional.of(session);
+    return new Session(
+        sessionId,
+        fingerprint,
+        map.get(FIELD_USER_IGN),
+        map.get(FIELD_ACCOUNT_ID),
+        map.get(FIELD_API_KEY),
+        deserializeOcids(map.get(FIELD_MY_OCIDS)),
+        map.get(FIELD_ROLE),
+        Instant.parse(map.get(FIELD_CREATED_AT)),
+        Instant.parse(map.get(FIELD_LAST_ACCESSED_AT)));
   }
 
   /**
@@ -157,7 +152,7 @@ public class RedisSessionRepositoryImpl implements RedisSessionRepository {
    * @param sessionId 세션 ID
    */
   public void deleteById(String sessionId) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           String key = buildKey(sessionId);
           redissonClient.getMap(key).delete();

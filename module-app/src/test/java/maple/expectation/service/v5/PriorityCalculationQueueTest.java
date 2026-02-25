@@ -392,6 +392,16 @@ class PriorityCalculationQueueTest {
         return result;
       }
     }
+
+    @Override
+    public void executeVoidJava(Runnable task, TaskContext context) {
+      task.run();
+    }
+
+    @Override
+    public void executeVoidJava(Runnable task, String taskName) {
+      executeVoidJava(task, TaskContext.of("Legacy", taskName));
+    }
   }
 
   /** 테스트용 간단한 CheckedLogicExecutor 구현 */

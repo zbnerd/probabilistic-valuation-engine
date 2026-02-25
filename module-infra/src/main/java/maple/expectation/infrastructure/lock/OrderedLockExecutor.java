@@ -345,7 +345,7 @@ public class OrderedLockExecutor {
   private void unlockSafely(String lockKey) {
     TaskContext context = TaskContext.of("OrderedLock", "Unlock", lockKey);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           lockStrategy.unlock(lockKey);
           log.debug("[OrderedLock] Released lock: {}", lockKey);

@@ -2,9 +2,9 @@ package maple.expectation.scheduler;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import maple.expectation.service.v5.queue.PriorityCalculationQueue;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -82,7 +82,7 @@ public class ExpectationCalculationScheduler {
   public void refreshAllUsers() {
     TaskContext context = TaskContext.of("Scheduler", "ExpectationCalculation.RefreshAll");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           log.info("[ExpectationCalculation] Starting full user refresh");
           int processedCount = 0;
@@ -100,10 +100,18 @@ public class ExpectationCalculationScheduler {
                     () -> {
                       org.springframework.data.domain.PageRequest pageRequest =
                           org.springframework.data.domain.PageRequest.of(currentPage, pageSize);
-                      return gameCharacterRepository.findAll(pageRequest).stream()
-                          .map(character -> addTaskForUser(character.getUserIgn()))
-                          .toList()
-                          .contains(true);
+                      // Use domain repository's paginated findAll method
+                      org.springframework.data.domain.Page<
+                              maple.expectation.domain.model.character.GameCharacter>
+                          characterPage = gameCharacterRepository.findAll(pageRequest);
+
+                      // Add tasks for each character in this page
+                      for (maple.expectation.domain.model.character.GameCharacter character :
+                          characterPage.getContent()) {
+                        addTaskForUser(character.getUserIgn().value());
+                      }
+
+                      return characterPage.hasNext();
                     },
                     false,
                     context);

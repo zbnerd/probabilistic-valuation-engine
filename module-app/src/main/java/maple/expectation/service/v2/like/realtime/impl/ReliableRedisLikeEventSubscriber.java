@@ -80,7 +80,7 @@ public class ReliableRedisLikeEventSubscriber implements LikeEventSubscriber {
   public void subscribe() {
     TaskContext context = TaskContext.of("LikeReliablePubSub", "Subscribe", instanceId);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           topic = redissonClient.getReliableTopic(RedisKey.LIKE_EVENTS_RELIABLE_TOPIC.getKey());
 
@@ -121,7 +121,7 @@ public class ReliableRedisLikeEventSubscriber implements LikeEventSubscriber {
 
     TaskContext context = TaskContext.of("LikeReliablePubSub", "OnEvent", event.userIgn());
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           evictL1Cache(event.userIgn());
           recordEventReceived();
@@ -165,7 +165,7 @@ public class ReliableRedisLikeEventSubscriber implements LikeEventSubscriber {
   public void unsubscribe() {
     TaskContext context = TaskContext.of("LikeReliablePubSub", "Unsubscribe", instanceId);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           if (topic != null && listenerId != null) {
             topic.removeListener(listenerId);

@@ -68,7 +68,7 @@ public class OutboxScheduler {
    */
   @Scheduled(fixedDelay = 15000)
   public void pollAndProcess() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           outboxProcessor.pollAndProcess();
           outboxMetrics.updatePendingCount();
@@ -89,7 +89,7 @@ public class OutboxScheduler {
    */
   @Scheduled(fixedDelay = 60000)
   public void monitorOutboxSize() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           outboxMetrics.updateTotalCount();
           long currentSize = outboxMetrics.getCurrentSize();
@@ -113,7 +113,7 @@ public class OutboxScheduler {
    */
   @Scheduled(fixedDelay = 300000)
   public void recoverStalled() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         outboxProcessor::recoverStalled, TaskContext.of("Scheduler", "Outbox.RecoverStalled"));
   }
 }

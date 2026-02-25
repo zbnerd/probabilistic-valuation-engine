@@ -121,3 +121,22 @@ cors:
     - "http://localhost:3000"
   allow-credentials: true
   max-age: 3600
+
+# AI SRE (LangChain4j) - 테스트 환경 설정
+ai:
+  sre:
+    enabled: false
+
+langchain4j:
+  glm-4:
+    chat-model:
+      base-url: https://api.z.ai/api/paas/v4
+      api-key: dummy-test-api-key
+      model-name: glm-4
+      timeout: 60s
+      log-requests: false
+      log-responses: false
+  open-ai:
+    chat-model:
+      api-key: dummy-test-openai-key
+      model-name: gpt-4o-mini

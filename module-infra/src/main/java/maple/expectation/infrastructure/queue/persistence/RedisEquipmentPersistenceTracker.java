@@ -129,7 +129,7 @@ public class RedisEquipmentPersistenceTracker implements PersistenceTrackerStrat
     // 3. 완료 시 자동 정리
     future.whenComplete(
         (result, throwable) ->
-            executor.executeVoid(
+            executor.executeVoidJava(
                 () -> {
                   // Redis에서 제거
                   removeFromRedisTracking(ocid);
@@ -283,7 +283,7 @@ public class RedisEquipmentPersistenceTracker implements PersistenceTrackerStrat
     shutdownInProgress.set(false);
     localFutures.clear();
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> getTrackingSet().clear(), TaskContext.of("PersistenceTracker", "ResetForTesting"));
 
     log.debug("[PersistenceTracker] 테스트용 리셋 완료");
@@ -292,7 +292,7 @@ public class RedisEquipmentPersistenceTracker implements PersistenceTrackerStrat
   // ==================== Private Helpers ====================
 
   private void addToRedisTracking(String ocid) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           getTrackingSet().add(ocid);
           log.debug("[PersistenceTracker] Redis 추적 등록: {}", ocid);
@@ -301,7 +301,7 @@ public class RedisEquipmentPersistenceTracker implements PersistenceTrackerStrat
   }
 
   private void removeFromRedisTracking(String ocid) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           getTrackingSet().remove(ocid);
           log.debug("[PersistenceTracker] Redis 추적 제거: {}", ocid);

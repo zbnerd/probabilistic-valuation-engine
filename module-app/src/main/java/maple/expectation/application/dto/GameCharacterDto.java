@@ -1,7 +1,9 @@
 package maple.expectation.application.dto;
 
 import java.time.LocalDateTime;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.CharacterId;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.model.character.UserIgn;
 
 /**
  * GameCharacter Data Transfer Object
@@ -101,7 +103,7 @@ public class GameCharacterDto extends BaseDto {
     }
     return new GameCharacterDto(
         entity.getId(),
-        entity.getUserIgn(),
+        entity.getUserIgn().value(),
         entity.getOcid(),
         entity.getWorldName(),
         entity.getCharacterClass(),
@@ -110,7 +112,7 @@ public class GameCharacterDto extends BaseDto {
         entity.getLikeCount(),
         entity.getUpdatedAt(),
         null, // createdAt not tracked in entity
-        entity.getVersion());
+        entity.getVersion() != null ? entity.getVersion() : 0L);
   }
 
   /**
@@ -134,20 +136,30 @@ public class GameCharacterDto extends BaseDto {
   // ==================== Conversion Methods ====================
 
   /**
-   * Convert DTO to domain entity
+   * Convert DTO to domain model
    *
-   * <p>This method creates a new entity with the DTO's data. Note that this creates a new entity
-   * instance - for updates, you should load the existing entity and copy fields.
+   * <p>This method creates a new domain model with the DTO's data using the {@code restore()}
+   * factory method. Note that this creates a new immutable instance - for updates, you should use
+   * the domain's {@code with*} methods.
    *
-   * @return the domain entity
+   * @return the domain model
    */
   public GameCharacter toEntity() {
-    GameCharacter entity = new GameCharacter(this.userIgn, this.ocid);
-    entity.setWorldName(this.worldName);
-    entity.setCharacterClass(this.characterClass);
-    entity.setCharacterImage(this.characterImage);
-    entity.setBasicInfoUpdatedAt(this.basicInfoUpdatedAt);
-    return entity;
+    UserIgn userIgnValue = this.userIgn != null ? UserIgn.of(this.userIgn) : null;
+    CharacterId characterIdValue = this.ocid != null ? CharacterId.of(this.ocid) : null;
+
+    return GameCharacter.restore(
+        this.id,
+        characterIdValue,
+        userIgnValue,
+        null, // equipment not set from DTO
+        this.worldName,
+        this.characterClass,
+        this.characterImage,
+        this.basicInfoUpdatedAt,
+        this.likeCount != null ? this.likeCount : 0L,
+        this.version,
+        this.updatedAt != null ? this.updatedAt : LocalDateTime.now());
   }
 
   // ==================== Getters/Setters ====================

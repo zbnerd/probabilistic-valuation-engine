@@ -220,7 +220,7 @@ public class MySqlNamedLockStrategy implements LockStrategy {
   }
 
   private void releaseLock(JdbcTemplate sessionJdbc, String lockKey, TaskContext context) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           Integer r = sessionJdbc.queryForObject("SELECT RELEASE_LOCK(?)", Integer.class, lockKey);
 

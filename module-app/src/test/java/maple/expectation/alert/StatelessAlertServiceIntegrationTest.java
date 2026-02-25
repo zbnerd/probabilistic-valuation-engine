@@ -200,7 +200,7 @@ class StatelessAlertServiceIntegrationTest extends AppIntegrationTestSupport {
                 400, "Bad Request", null, null, null));
 
     // When: 알림 전송
-    alertService.sendNormal("4xx 테스트", "잘못된 요청");
+    alertService.sendInfo("4xx 테스트", "잘못된 요청");
 
     // Then: 폴백 발생 안 함 (4xx는 클라이언트 오류로 간주)
     if (inMemoryBuffer != null) {
@@ -278,7 +278,7 @@ class StatelessAlertServiceIntegrationTest extends AppIntegrationTestSupport {
     // When: 여러 알림 전송
     int alertCount = 5;
     for (int i = 0; i < alertCount; i++) {
-      alertService.sendNormal("메트릭 테스트 " + i, "메시지");
+      alertService.sendInfo("메트릭 테스트 " + i, "메시지");
     }
 
     // Then: WebClient 호출 횟수 검증
@@ -314,7 +314,7 @@ class StatelessAlertServiceIntegrationTest extends AppIntegrationTestSupport {
               () -> {
                 for (int j = 0; j < alertsPerThread; j++) {
                   try {
-                    alertService.sendNormal("스레드 " + threadId, "메시지 " + j);
+                    alertService.sendInfo("스레드 " + threadId, "메시지 " + j);
                     successCount.incrementAndGet();
                   } catch (Exception e) {
                     // 예외 무시 (폴백으로 처리됨)

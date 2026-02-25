@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.domain.cost.CostFormatter;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.GameCharacter;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
@@ -234,12 +234,11 @@ public class EquipmentExpectationServiceV4 {
    * <p>DB에 캐시된 데이터가 있으면 즉시 반환, 없으면 API 비동기 호출
    */
   private CompletableFuture<byte[]> loadEquipmentDataAsync(GameCharacter character) {
-    if (character.getEquipment() != null && character.getEquipment().getJsonContent() != null) {
-      return CompletableFuture.completedFuture(
-          character.getEquipment().getJsonContent().getBytes());
+    if (character.getEquipment() != null && character.getEquipment().jsonContent() != null) {
+      return CompletableFuture.completedFuture(character.getEquipment().jsonContent().getBytes());
     }
     return equipmentProvider
-        .getRawEquipmentData(character.getOcid())
+        .getRawEquipmentData(character.getCharacterId().value())
         .orTimeout(DATA_LOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
   }
 

@@ -49,7 +49,7 @@ public class LowPriorityQueueWriter implements ItemWriter<String> {
   public void write(Chunk<? extends String> ocids) {
     TaskContext context = TaskContext.of("Batch", "LowPriorityQueueWriter", "write");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           AtomicInteger queuedCount = new AtomicInteger(0);
           AtomicInteger rejectedCount = new AtomicInteger(0);

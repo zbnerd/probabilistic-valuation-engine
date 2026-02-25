@@ -42,15 +42,15 @@ public class FlameScoreResolver {
       int addDmg,
       int addBossDmg,
       JobWeights weights) {
-    return addStr * weights.wStr()
-        + addDex * weights.wDex()
-        + addInt * weights.wInt()
-        + addLuk * weights.wLuk()
-        + addHp * weights.wHp()
-        + addAllStat * weights.wAllstatPct()
-        + addAtt * weights.wAtt()
-        + addMag * weights.wMag()
-        + addDmg * weights.wDmgPct()
-        + addBossDmg * weights.wBossDmgPct();
+    return addStr * weights.wStr
+        + addDex * weights.wDex
+        + addInt * weights.wInt
+        + addLuk * weights.wLuk
+        + addHp * weights.wHp
+        + addAllStat * weights.wAllstatPct
+        + addAtt * weights.wAtt
+        + addMag * weights.wMag
+        + addDmg * weights.wDmgPct
+        + addBossDmg * weights.wBossDmgPct;
   }
 }

@@ -31,7 +31,7 @@ public class NoOpStrategy implements StreamInitializationStrategy {
 
   @Override
   public boolean initialize(RStream<String, String> stream) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           long streamSize = stream.size();
           log.info(

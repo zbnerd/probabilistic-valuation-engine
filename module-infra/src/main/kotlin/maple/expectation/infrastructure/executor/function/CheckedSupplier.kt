@@ -27,5 +27,6 @@ fun interface CheckedSupplier<T> {
      * @return 계산 결과
      * @throws Exception 작업 중 발생한 예외
      */
+    @Throws(Exception::class)
     fun get(): T
 }

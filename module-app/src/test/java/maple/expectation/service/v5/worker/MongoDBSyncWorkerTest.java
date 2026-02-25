@@ -94,8 +94,10 @@ class MongoDBSyncWorkerTest {
     lenient().when(meterRegistry.counter(any(String.class))).thenReturn(processedCounter);
     lenient().when(meterRegistry.counter("mongodb.sync.errors")).thenReturn(errorCounter);
 
-    // Mock executor to actually execute the tasks (for stream initialization)
-    doAnswer(
+    // Mock executor to actually execute the tasks (for stream initialization) - lenient since not
+    // all tests use it
+    lenient()
+        .doAnswer(
             invocation -> {
               ThrowingRunnable task = invocation.getArgument(0);
               task.run();
@@ -103,6 +105,17 @@ class MongoDBSyncWorkerTest {
             })
         .when(executor)
         .executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
+
+    // Mock executeVoidJava for processMessage (uses Runnable instead of ThrowingRunnable)
+    lenient()
+        .doAnswer(
+            invocation -> {
+              Runnable task = invocation.getArgument(0);
+              task.run();
+              return null;
+            })
+        .when(executor)
+        .executeVoidJava(any(Runnable.class), any(TaskContext.class));
 
     // Mock executeOrCatch with Function1 recovery - lenient since not all tests use it
     lenient()
@@ -262,10 +275,21 @@ class MongoDBSyncWorkerTest {
 
     ExpectationCalculationCompletedEvent event = createTestEvent();
     CharacterValuationView view =
-        CharacterValuationView.builder()
-            .id(TEST_IGN + ":" + TEST_TASK_ID)
-            .userIgn(TEST_IGN)
-            .build();
+        new CharacterValuationView(
+            TEST_IGN + ":" + TEST_TASK_ID,
+            TEST_IGN,
+            null, // messageId
+            null, // characterOcid
+            null, // characterClass
+            null, // characterLevel
+            null, // calculatedAt
+            null, // lastApiSyncAt
+            null, // version
+            null, // totalExpectedCost
+            null, // maxPresetNo
+            null, // presets
+            null // fromCache
+            );
 
     when(objectMapper.readValue(payloadJson, ExpectationCalculationCompletedEvent.class))
         .thenReturn(event);
@@ -286,10 +310,21 @@ class MongoDBSyncWorkerTest {
 
     ExpectationCalculationCompletedEvent event = createTestEvent();
     CharacterValuationView view =
-        CharacterValuationView.builder()
-            .id(TEST_IGN + ":" + TEST_TASK_ID)
-            .userIgn(TEST_IGN)
-            .build();
+        new CharacterValuationView(
+            TEST_IGN + ":" + TEST_TASK_ID,
+            TEST_IGN,
+            null, // messageId
+            null, // characterOcid
+            null, // characterClass
+            null, // characterLevel
+            null, // calculatedAt
+            null, // lastApiSyncAt
+            null, // version
+            null, // totalExpectedCost
+            null, // maxPresetNo
+            null, // presets
+            null // fromCache
+            );
 
     when(objectMapper.readValue(payloadJson, ExpectationCalculationCompletedEvent.class))
         .thenReturn(event);
@@ -377,14 +412,20 @@ class MongoDBSyncWorkerTest {
   }
 
   private CharacterValuationView createTestView() {
-    return CharacterValuationView.builder()
-        .id(TEST_IGN + ":" + TEST_TASK_ID)
-        .userIgn(TEST_IGN)
-        .characterOcid("test-ocid")
-        .characterClass("Pathfinder")
-        .characterLevel(275)
-        .totalExpectedCost(1000000L)
-        .maxPresetNo(1)
-        .build();
+    return new CharacterValuationView(
+        TEST_IGN + ":" + TEST_TASK_ID,
+        TEST_IGN,
+        null, // messageId
+        "test-ocid",
+        "Pathfinder",
+        275,
+        null, // calculatedAt
+        null, // lastApiSyncAt
+        null, // version
+        1000000L,
+        1, // maxPresetNo
+        null, // presets
+        null // fromCache
+        );
   }
 }

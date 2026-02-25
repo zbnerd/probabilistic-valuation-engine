@@ -233,7 +233,7 @@ public class TwoBucketRateLimiter {
    * @param userId User identifier
    */
   public void reset(String userId) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           String rateKey = buildRateKey(userId);
           redissonClient.getBucket(rateKey, StringCodec.INSTANCE).delete();

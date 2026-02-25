@@ -18,17 +18,17 @@ import java.time.LocalDateTime
  * </ul>
  */
 data class GameCharacter(
-    @get:JvmName("id") val id: Long?,
-    @get:JvmName("userIgn") val userIgn: UserIgn,
-    @get:JvmName("characterId") val characterId: CharacterId,
-    @get:JvmName("equipment") val equipment: CharacterEquipment?,
-    @get:JvmName("worldName") val worldName: String?,
-    @get:JvmName("characterClass") val characterClass: String?,
-    @get:JvmName("characterImage") val characterImage: String?,
-    @get:JvmName("basicInfoUpdatedAt") val basicInfoUpdatedAt: LocalDateTime?,
-    @get:JvmName("likeCount") val likeCount: Long,
-    @get:JvmName("version") val version: Long?,
-    @get:JvmName("updatedAt") val updatedAt: LocalDateTime
+    @get:JvmName("getId") val id: Long?,
+    @get:JvmName("getUserIgn") val userIgn: UserIgn,
+    @get:JvmName("getCharacterId") val characterId: CharacterId,
+    @get:JvmName("getEquipment") val equipment: CharacterEquipment?,
+    @get:JvmName("getWorldName") val worldName: String?,
+    @get:JvmName("getCharacterClass") val characterClass: String?,
+    @get:JvmName("getCharacterImage") val characterImage: String?,
+    @get:JvmName("getBasicInfoUpdatedAt") val basicInfoUpdatedAt: LocalDateTime?,
+    @get:JvmName("getLikeCount") val likeCount: Long,
+    @get:JvmName("getVersion") val version: Long?,
+    @get:JvmName("getUpdatedAt") val updatedAt: LocalDateTime
 ) {
 
   /** 새 캐릭터 생성 (최소 필드만) */

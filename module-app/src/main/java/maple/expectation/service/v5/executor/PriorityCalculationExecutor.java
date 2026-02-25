@@ -96,7 +96,7 @@ public class PriorityCalculationExecutor {
 
     TaskContext context = TaskContext.of("V5-Executor", "Start");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // Calculate pool sizes (ensure at least 1 worker per pool)
           int highPriorityCount =
@@ -140,7 +140,7 @@ public class PriorityCalculationExecutor {
 
     TaskContext context = TaskContext.of("V5-Executor", "Stop");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           running = false;
           highPriorityPool.shutdown();
@@ -284,7 +284,7 @@ public class PriorityCalculationExecutor {
    * @param expectedCount expected number of active workers
    */
   private void verifyWorkersStarted(int expectedCount) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // ADR-080: Configurable delay to allow workers to enter run loop
           try {

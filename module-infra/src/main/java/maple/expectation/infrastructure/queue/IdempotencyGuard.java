@@ -128,7 +128,7 @@ public class IdempotencyGuard {
   public void markCompleted(String jobType, String msgId) {
     String key = buildKey(jobType, msgId);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           RBucket<String> bucket = redissonClient.getBucket(key);
           bucket.set(STATUS_COMPLETED, ttlHours, TimeUnit.HOURS);
@@ -150,7 +150,7 @@ public class IdempotencyGuard {
   public void release(String jobType, String msgId) {
     String key = buildKey(jobType, msgId);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           boolean deleted = redissonClient.getBucket(key).delete();
 

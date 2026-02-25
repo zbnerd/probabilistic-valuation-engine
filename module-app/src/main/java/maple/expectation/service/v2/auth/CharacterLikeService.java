@@ -4,11 +4,12 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.out.LikeBufferStrategy;
 import maple.expectation.core.port.out.LikeRelationBufferStrategy;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.repository.CharacterLikeRepository;
 import maple.expectation.error.exception.SelfLikeNotAllowedException;
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.persistence.repository.CharacterLikeRepository;
 import maple.expectation.infrastructure.queue.like.AtomicLikeToggleExecutor;
 import maple.expectation.infrastructure.queue.like.AtomicLikeToggleExecutor.ToggleResult;
 import maple.expectation.infrastructure.security.AuthenticatedUser;
@@ -142,8 +143,8 @@ public class CharacterLikeService {
     if (atomicToggle != null) {
       // Redis 모드: Lua Script Atomic Toggle (P0-1/P0-2/P0-3 해결)
       ToggleResult result = executeAtomicToggle(effectiveAccountId, targetOcid, targetUserIgn);
-      liked = result.liked();
-      newDelta = result.newDelta();
+      liked = result.getLiked();
+      newDelta = result.getNewDelta();
     } else {
       // In-Memory 모드: 기존 로직 (단일 인스턴스에서 안전)
       LegacyToggleResult result =
@@ -231,7 +232,10 @@ public class CharacterLikeService {
    */
   private long calculateEffectiveLikeCount(String userIgn, long newDelta) {
     long dbCount =
-        gameCharacterService.getCharacterIfExist(userIgn).map(gc -> gc.getLikeCount()).orElse(0L);
+        gameCharacterService
+            .getCharacterIfExist(userIgn)
+            .map(GameCharacter::getLikeCount)
+            .orElse(0L);
     return Math.max(0, dbCount + newDelta);
   }
 
@@ -247,7 +251,7 @@ public class CharacterLikeService {
     long dbCount =
         gameCharacterService
             .getCharacterIfExist(userIgn.trim())
-            .map(gc -> gc.getLikeCount())
+            .map(GameCharacter::getLikeCount)
             .orElse(0L);
     Long bufferDelta = likeBufferStrategy.get(userIgn.trim());
     long delta = (bufferDelta != null) ? bufferDelta : 0L;

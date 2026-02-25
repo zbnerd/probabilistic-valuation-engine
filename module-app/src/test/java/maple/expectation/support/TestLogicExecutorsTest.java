@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -106,8 +105,8 @@ class TestLogicExecutorsTest {
     assertThat(result8).isEqualTo("fallback-result");
 
     // Pattern 1: Void execution
-    executor.executeVoid(
-        (ThrowingRunnable) () -> System.out.println("Void executed"),
+    executor.executeVoidJava(
+        (Runnable) () -> System.out.println("Void executed"),
         TaskContext.of("Test", "ExecuteVoid"));
   }
 }

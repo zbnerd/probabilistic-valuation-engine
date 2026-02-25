@@ -106,6 +106,11 @@ class DefaultLogicExecutor(
         )
     }
 
+    override fun executeVoidJava(task: Runnable, context: TaskContext) {
+        requireNotNull(task) { "task must not be null" }
+        executeVoid(ThrowingRunnable { task.run() }, context)
+    }
+
     override fun <T> executeWithFinally(
         task: ThrowingSupplier<T>,
         finallyBlock: Runnable,

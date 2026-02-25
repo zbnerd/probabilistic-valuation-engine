@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.persistence.jpa;
 
 import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 /**
@@ -59,4 +60,18 @@ public interface GameCharacterJpaRepository extends JpaRepository<GameCharacterJ
       ORDER BY gc.updatedAt DESC
       """)
   java.util.List<GameCharacterJpaEntity> findActiveCharacters(java.time.LocalDateTime threshold);
+
+  /**
+   * Increment the like count for a character by user IGN.
+   *
+   * <p>This method is used for batch updates in the like synchronization process. It directly
+   * updates the like_count in the database without loading the entity.
+   *
+   * @param userIgn the in-game name of the character
+   * @param count the amount to increment (can be positive or negative)
+   */
+  @Modifying
+  @Query(
+      "UPDATE GameCharacterJpaEntity g SET g.likeCount = g.likeCount + :count WHERE g.userIgn = :userIgn")
+  void incrementLikeCount(String userIgn, long count);
 }

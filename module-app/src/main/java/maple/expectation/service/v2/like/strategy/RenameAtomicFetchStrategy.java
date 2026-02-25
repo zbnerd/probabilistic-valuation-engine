@@ -93,7 +93,7 @@ public class RenameAtomicFetchStrategy implements AtomicFetchStrategy {
       log.debug("Restore skipped: tempKey is null or blank");
       return;
     }
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> executeRestore(tempKey, sourceKey),
         TaskContext.of("AtomicFetch", "restore", tempKey));
   }
@@ -109,7 +109,7 @@ public class RenameAtomicFetchStrategy implements AtomicFetchStrategy {
       log.debug("Delete skipped: tempKey is null or blank");
       return;
     }
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> redisTemplate.delete(tempKey),
         TaskContext.of("AtomicFetch", "deleteTempKey", tempKey));
   }

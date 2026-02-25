@@ -81,7 +81,7 @@ public class NexonApiOutboxScheduler {
    */
   @Scheduled(fixedDelay = 10000)
   public void pollAndProcess() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // 메트릭: 처리 전 Pending 수
           outboxMetrics.updatePendingCount();
@@ -113,7 +113,7 @@ public class NexonApiOutboxScheduler {
    */
   @Scheduled(fixedDelay = 300000)
   public void recoverStalled() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         outboxProcessor::recoverStalled,
         TaskContext.of("Scheduler", "NexonApiOutbox.RecoverStalled"));
   }

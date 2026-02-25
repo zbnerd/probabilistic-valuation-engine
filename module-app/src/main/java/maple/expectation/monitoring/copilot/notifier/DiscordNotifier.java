@@ -100,7 +100,7 @@ public class DiscordNotifier {
         HttpRequest.newBuilder()
             .uri(URI.create(webhookUrl))
             .header("Content-Type", CONTENT_TYPE)
-            .timeout(Duration.ofSeconds(timeoutProperties.webhookTimeoutSeconds()))
+            .timeout(Duration.ofSeconds(timeoutProperties.getWebhookTimeoutSeconds()))
             .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
             .build();
 
@@ -177,7 +177,7 @@ public class DiscordNotifier {
                 return Optional.empty();
               }
             })
-        .orElse(timeoutProperties.retryAfterDefaultMs());
+        .orElse(timeoutProperties.getRetryAfterDefaultMs());
   }
 
   /**

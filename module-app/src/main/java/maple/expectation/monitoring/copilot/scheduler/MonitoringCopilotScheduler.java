@@ -85,7 +85,7 @@ public class MonitoringCopilotScheduler {
   public void monitorAndDetect() {
     TaskContext context = TaskContext.of("MonitoringCopilot", "ScheduledDetection");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           long now = System.currentTimeMillis();
 

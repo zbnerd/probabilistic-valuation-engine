@@ -1,6 +1,7 @@
 package maple.expectation.domain.v2;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -177,27 +178,23 @@ class CharacterEquipmentTest {
     }
 
     @Test
-    @DisplayName("GIVEN: empty jsonContent WHEN: Check hasData() THEN: Returns false")
-    void given_emptyJsonContent_when_checkHasData_shouldReturnFalse() {
-      // GIVEN: Equipment with empty content
-      CharacterEquipment equipment = createEquipmentWithContent("");
-
-      // WHEN & THEN
-      assertThat(equipment.hasData())
-          .as("Empty jsonContent should return false from hasData()")
-          .isFalse();
+    @DisplayName(
+        "GIVEN: empty jsonContent WHEN: Create equipment THEN: Throws IllegalArgumentException")
+    void given_emptyJsonContent_when_createEquipment_shouldThrow() {
+      // GIVEN & WHEN & THEN
+      assertThatIllegalArgumentException()
+          .isThrownBy(() -> createEquipmentWithContent(""))
+          .withMessageContaining("json cannot be null or blank");
     }
 
     @Test
-    @DisplayName("GIVEN: whitespace-only jsonContent WHEN: Check hasData() THEN: Returns false")
-    void given_whitespaceJsonContent_when_checkHasData_shouldReturnFalse() {
-      // GIVEN: Equipment with whitespace content
-      CharacterEquipment equipment = createEquipmentWithContent("   \t\n   ");
-
-      // WHEN & THEN
-      assertThat(equipment.hasData())
-          .as("Whitespace-only jsonContent should return false from hasData() (uses isBlank)")
-          .isFalse();
+    @DisplayName(
+        "GIVEN: whitespace-only jsonContent WHEN: Create equipment THEN: Throws IllegalArgumentException")
+    void given_whitespaceJsonContent_when_createEquipment_shouldThrow() {
+      // GIVEN & WHEN & THEN
+      assertThatIllegalArgumentException()
+          .isThrownBy(() -> createEquipmentWithContent("   \t\n   "))
+          .withMessageContaining("json cannot be null or blank");
     }
 
     @Test

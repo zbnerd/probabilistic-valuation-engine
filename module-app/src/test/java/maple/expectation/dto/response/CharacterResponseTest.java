@@ -24,7 +24,7 @@ class CharacterResponseTest {
       entity.like();
 
       // when
-      CharacterResponse response = CharacterResponse.from(entity);
+      CharacterResponse response = CharacterResponse.fromEntity(entity);
 
       // then
       assertThat(response.getUserIgn()).isEqualTo("TestUser");
@@ -39,7 +39,7 @@ class CharacterResponseTest {
       GameCharacter entity = new GameCharacter("NewUser", "new-ocid");
 
       // when
-      CharacterResponse response = CharacterResponse.from(entity);
+      CharacterResponse response = CharacterResponse.fromEntity(entity);
 
       // then
       assertThat(response.getUserIgn()).isEqualTo("NewUser");

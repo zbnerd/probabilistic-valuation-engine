@@ -2,7 +2,6 @@ package maple.expectation.service.v2.outbox;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.v2.NexonApiDlq;
 import maple.expectation.domain.v2.NexonApiOutbox;
 import maple.expectation.infrastructure.alert.StatelessAlertService;
 import maple.expectation.infrastructure.executor.LogicExecutor;
@@ -93,7 +92,8 @@ public class NexonApiDlqHandler {
 
   /** 1차 안전망: DB DLQ INSERT (String reason) */
   private Void saveToDbDlq(NexonApiOutbox entry, String reason) {
-    NexonApiDlq dlq = NexonApiDlq.from(entry, reason);
+    maple.expectation.domain.v2.NexonApiDlq dlq =
+        maple.expectation.domain.v2.NexonApiDlq.from(entry, reason);
     dlqRepository.save(dlq);
     metrics.incrementDlqMoved();
     log.warn(

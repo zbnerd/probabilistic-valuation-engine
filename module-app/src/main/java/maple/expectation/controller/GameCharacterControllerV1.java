@@ -2,7 +2,7 @@ package maple.expectation.controller;
 
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.GameCharacter;
 import maple.expectation.dto.response.CharacterResponse;
 import maple.expectation.service.v2.facade.GameCharacterFacade;
 import org.springframework.http.ResponseEntity;
@@ -40,7 +40,7 @@ public class GameCharacterControllerV1 {
     return CompletableFuture.supplyAsync(
         () -> {
           GameCharacter character = gameCharacterFacade.findCharacterByUserIgn(userIgn);
-          return ResponseEntity.ok(CharacterResponse.from(character));
+          return ResponseEntity.ok(CharacterResponse.fromDomainModel(character));
         });
   }
 }

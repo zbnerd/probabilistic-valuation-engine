@@ -68,4 +68,9 @@ public class RedisLikeRelationBufferAdapter implements LikeRelationBufferStrateg
   public int getPendingSize() {
     return delegate.getPendingSize();
   }
+
+  @Override
+  public Boolean existsInUnliked(String accountId, String targetOcid) {
+    return delegate.existsInUnliked(accountId, targetOcid);
+  }
 }

@@ -469,7 +469,7 @@ public class EquipmentStreamingParser {
 
   /** ✅ 박멸: close() 시 발생하는 IOException 노이즈 제거 */
   private void closeResources(InputStream is, JsonParser parser) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           try {
             if (parser != null) parser.close();

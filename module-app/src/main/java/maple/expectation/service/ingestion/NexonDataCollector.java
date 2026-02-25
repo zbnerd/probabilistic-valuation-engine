@@ -195,7 +195,7 @@ public class NexonDataCollector {
   private void publishEvent(NexonApiCharacterData data) {
     IntegrationEvent<NexonApiCharacterData> event = IntegrationEvent.of(NEXON_DATA_COLLECTED, data);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           eventPublisher
               .publishAsync("nexon-data", event)

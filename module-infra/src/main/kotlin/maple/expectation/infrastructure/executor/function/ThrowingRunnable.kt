@@ -18,6 +18,14 @@ package maple.expectation.infrastructure.executor.function
  *     Files.deleteIfExists(tempFile)
  * }
  * ```
+ *
+ * ## Java Interop
+ * Java에서는 정적 팩토리 메서드를 사용해야 합니다:
+ * ```java
+ * executor.executeVoid(ThrowingRunnable.of(() -> {
+ *     Files.deleteIfExists(tempFile);
+ * }), context);
+ * ```
  */
 fun interface ThrowingRunnable {
     /**
@@ -26,4 +34,13 @@ fun interface ThrowingRunnable {
      * @throws Throwable 작업 실행 중 발생한 예외
      */
     fun run()
+
+    companion object {
+        /**
+         * Java-friendly factory method to create ThrowingRunnable from lambda.
+         * Kotlin fun interface doesn't work directly with Java lambdas without this.
+         */
+        @JvmStatic
+        fun of(block: ThrowingRunnable): ThrowingRunnable = block
+    }
 }

@@ -112,7 +112,7 @@ public class EquipmentCacheService extends AbstractTieredCacheService<EquipmentR
 
   /** 비동기 에러 관측 (executor 내부 중첩 방지용) */
   private Void observeAsyncError(String ocid, Throwable ex) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           throw new CachePersistenceException(ocid, ex);
         },

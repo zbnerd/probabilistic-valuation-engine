@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
@@ -229,6 +230,27 @@ public class ExecutorConfig {
                 }
               }
             });
+  }
+
+  /**
+   * Async Executor for CompletableFuture operations (ADR-039)
+   *
+   * <p>Dedicated executor for async operations in controllers (e.g., DonationController). Prevents
+   * blocking transactional work from saturating ForkJoinPool.commonPool().
+   *
+   * <h4>Design Rationale:</h4>
+   *
+   * <ul>
+   *   <li><b>Virtual Threads</b>: Efficient for I/O-bound async operations
+   *   <li><b>Unbounded</b>: Virtual threads are lightweight, no queue needed
+   *   <li><b>Graceful Shutdown</b>: Wait for in-flight requests to complete
+   * </ul>
+   *
+   * @return ExecutorService using virtual threads
+   */
+  @Bean(name = "asyncExecutor")
+  public ExecutorService asyncExecutor() {
+    return Executors.newVirtualThreadPerTaskExecutor();
   }
 
   /**

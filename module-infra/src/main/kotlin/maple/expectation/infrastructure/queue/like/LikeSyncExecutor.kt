@@ -30,7 +30,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
  * </ul>
  */
 @Component
-class LikeSyncExecutor(
+open class LikeSyncExecutor(
     private val gameCharacterRepository: GameCharacterRepository,
     private val jdbcTemplate: JdbcTemplate
 ) {

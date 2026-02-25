@@ -131,6 +131,10 @@ bootRun {
 // test-legacy는 빌드에서 제외
 tasks.named('test') {
 	exclude '**/test-legacy/**'
+	// Integration tests run separately via 'integrationTest' task
+	useJUnitPlatform {
+		excludeTags 'integration'
+	}
 }
 
 // Integration Test Task

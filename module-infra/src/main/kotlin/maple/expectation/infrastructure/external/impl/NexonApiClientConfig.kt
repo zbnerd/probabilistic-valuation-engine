@@ -29,7 +29,7 @@ import java.util.concurrent.Executor
  * <p>이 설정 클래스는 {@link ResilientNexonApiClient}가 필요로 하는 의존성을 조립합니다.
  */
 @Configuration
-class NexonApiClientConfig(
+open class NexonApiClientConfig(
     private val outboxRepository: NexonApiOutboxRepository,
     private val checkedExecutor: CheckedLogicExecutor,
     @org.springframework.beans.factory.annotation.Qualifier("alertTaskExecutor") private val alertTaskExecutor: Executor,
@@ -51,7 +51,7 @@ class NexonApiClientConfig(
      * @return OutboxFallbackManager 인스턴스
      */
     @Bean
-    fun outboxFallbackManager(): OutboxFallbackManager {
+    open fun outboxFallbackManager(): OutboxFallbackManager {
         return OutboxFallbackManager(
             outboxRepository, checkedExecutor, transactionTemplate, alertTaskExecutor
         )
@@ -65,7 +65,7 @@ class NexonApiClientConfig(
      * @return AlertNotificationHelper 인스턴스
      */
     @Bean
-    fun alertNotificationHelper(): AlertNotificationHelper {
+    open fun alertNotificationHelper(): AlertNotificationHelper {
         return AlertNotificationHelper(
             statelessAlertService,
             checkedExecutor,
@@ -81,7 +81,7 @@ class NexonApiClientConfig(
      * @return FallbackHandler 인스턴스
      */
     @Bean
-    fun fallbackHandler(
+    open fun fallbackHandler(
         outboxFallbackManager: OutboxFallbackManager,
         alertNotificationHelper: AlertNotificationHelper
     ): FallbackHandler {

@@ -49,13 +49,28 @@ class BatchWriterTest {
         maple.expectation.config.BatchProperties.defaults();
 
     // Use real ObjectMapper for actual JSON deserialization
-    objectMapper = new ObjectMapper();
+    // Register Kotlin module to support Kotlin data classes
+    objectMapper =
+        new ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.module.kotlin.KotlinModule.Builder().build());
 
     batchWriter =
         new BatchWriter(messageQueue, repository, executor, objectMapper, batchProperties);
 
     // Setup LogicExecutor to execute directly (synchronous for testing)
+    // Mock executeVoidJava for Java Runnable lambdas
     doAnswer(
+            invocation -> {
+              Runnable task = invocation.getArgument(0);
+              task.run(); // Execute the lambda
+              return null;
+            })
+        .when(executor)
+        .executeVoidJava(any(Runnable.class), any(TaskContext.class));
+
+    // Mock executeVoid for ThrowingRunnable lambdas
+    lenient()
+        .doAnswer(
             invocation -> {
               maple.expectation.infrastructure.executor.function.ThrowingRunnable task =
                   invocation.getArgument(0);
@@ -63,7 +78,9 @@ class BatchWriterTest {
               return null;
             })
         .when(executor)
-        .executeVoid(any(), any(TaskContext.class));
+        .executeVoid(
+            any(maple.expectation.infrastructure.executor.function.ThrowingRunnable.class),
+            any(TaskContext.class));
 
     // Configure executeOrDefault to execute the supplier and return its result
     // Use lenient() to avoid "unnecessary stubbing" warnings when not all stubbings are used

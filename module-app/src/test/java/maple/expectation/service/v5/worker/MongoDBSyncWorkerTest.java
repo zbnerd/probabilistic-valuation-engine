@@ -106,6 +106,17 @@ class MongoDBSyncWorkerTest {
         .when(executor)
         .executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
 
+    // Mock executeVoidJava for processMessage (uses Runnable instead of ThrowingRunnable)
+    lenient()
+        .doAnswer(
+            invocation -> {
+              Runnable task = invocation.getArgument(0);
+              task.run();
+              return null;
+            })
+        .when(executor)
+        .executeVoidJava(any(Runnable.class), any(TaskContext.class));
+
     // Mock executeOrCatch with Function1 recovery - lenient since not all tests use it
     lenient()
         .doAnswer(

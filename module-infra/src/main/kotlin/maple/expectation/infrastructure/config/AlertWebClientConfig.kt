@@ -41,7 +41,7 @@ import java.util.concurrent.TimeUnit
     havingValue = "true",
     matchIfMissing = true
 )
-class AlertWebClientConfig(
+open class AlertWebClientConfig(
     private val alertFeatureProperties: AlertFeatureProperties
 ) {
 

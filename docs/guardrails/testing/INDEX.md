@@ -15,8 +15,46 @@
 | GR-TEST-001 | [Unit Test Best Practices](unit-test.md) | critical | Thread.sleep, Awaitility, @DirtiesContext, test isolation |
 | GR-TEST-002 | [Flaky Test Prevention](flaky-test-prevention.md) | critical | Flaky Test, @Tag("flaky"), quarantine, determinism |
 | GR-TEST-003 | [Concurrency Test Best Practices](concurrency-test.md) | critical | ExecutorService, awaitTermination, CountDownLatch |
+| GR-TEST-004 | [Testcontainers Singleton Pattern](testcontainers-singleton.md) | critical | Testcontainers, Singleton, @Testcontainers, data isolation |
+| GR-TEST-005 | [Load Test Strategy](load-test-strategy.md) | critical | load test, performance, wrk, Locust, RPS, latency |
 | GR-CHAOS-001 | [Chaos Engineering Strategy](chaos-engineering.md) | critical | Chaos, Nightmare, Test, 장애주입, 성능 |
 | GR-NIGHTMARE-001 | [Nightmare Scenarios (N01-N19)](nightmare-tests.md) | critical | Nightmare, Cache Stampede, Deadlock, Timeout |
+
+## Chaos Test Nightmare Scenarios (N01-N19)
+
+### P0 Critical (N01-N10)
+
+| ID | Title | Severity | Keywords |
+|----|-------|----------|----------|
+| N01 | [SingleFlight Race Condition](chaos/N01-singleflight-race-condition.md) | Critical | Thundering Herd, SingleFlight, Race Condition |
+| N02 | [Deadlock Trap](chaos/N02-deadlock-trap.md) | Critical | Deadlock, Named Lock, Lock Ordering |
+| N03 | [Thread Pool Exhaustion](chaos/N03-thread-pool-exhaustion.md) | Critical | ThreadPool, Async, Virtual Threads |
+| N04 | [Connection Vampire](chaos/N04-connection-vampire.md) | Critical | Connection Pool, Transactional Boundary, HikariCP |
+| N05 | [Celebrity Problem](chaos/N05-celebrity-problem.md) | Critical | Hot Key, Cache Stampede, Redis |
+| N06 | [Timeout Cascade](chaos/N06-timeout-cascade.md) | Critical | Timeout, Zombie Request, Timeout Hierarchy |
+| N07 | [Metadata Lock Freeze](chaos/N07-metadata-lock-freeze.md) | Critical | MDL, MySQL DDL, Metadata Lock |
+| N08 | [Redis Death Thundering Herd](chaos/N08-redis-death-thundering-herd.md) | Critical | Redis Death, Fallback, Connection Pool |
+| N09 | [Circular Lock Deadlock](chaos/N09-circular-lock-deadlock.md) | Critical | Circular Lock, Coffman Conditions, Deadlock |
+| N10 | [CallerRunsPolicy Betrayal](chaos/N10-caller-runs-policy.md) | Critical | CallerRunsPolicy, ThreadPool, Async, Backpressure |
+
+### P1 High (N11-N14)
+
+| ID | Title | Severity | Keywords |
+|----|-------|----------|----------|
+| N11 | [Lock Fallback Avalanche](chaos/N11-lock-fallback-avalanche.md) | High | Lock Fallback, HikariCP, Connection Pool, MySQL Named Lock |
+| N12 | [Async Context Loss](chaos/N12-async-context-loss.md) | High | Async Context Loss, MDC, ThreadLocal, TaskDecorator |
+| N13 | [Zombie Outbox](chaos/N13-zombie-outbox.md) | High | Zombie Outbox, Outbox Pattern, JVM Crash, Stale Recovery |
+| N14 | [Pipeline Exception](chaos/N14-pipeline-exception.md) | High | Pipeline Exception, LogicExecutor, Silent Failure, Exception Swallowing |
+
+### P2 Medium (N15-N19)
+
+| ID | Title | Severity | Keywords |
+|----|-------|----------|----------|
+| N15 | [AOP Order Problem](chaos/N15-aop-order-problem.md) | Medium | AOP Order, @Order, TransactionalEventListener, Transaction Boundary |
+| N16 | [Self-Invocation Mirage](chaos/N16-self-invocation.md) | Medium | Self-Invocation, AOP Proxy, @Cacheable, @Transactional |
+| N17 | [Poison Pill](chaos/N17-poison-pill.md) | Medium | Poison Pill, DLQ, Dead Letter Queue, Head-of-Line Blocking, ContentHash |
+| N18 | [Deep Paging Abyss](chaos/N18-deep-paging.md) | Medium | Deep Paging, OFFSET, Cursor Pagination, Keyset Pagination |
+| N19 | [Outbox Replay Flood](chaos/N19-outbox-replay.md) | Critical | Outbox Replay, Transactional Outbox, External API Outage, Replay Throughput |
 
 ---
 
@@ -39,6 +77,18 @@
 - **CountDownLatch**: 명시적 동기화
 - **낙관적/비관적 락**: Race Condition 방지
 
+### Testcontainers Singleton Pattern
+- **컨테이너 공유, 데이터 격리**: JVM 동안 컨테이너 1회, 테스트마다 데이터 리셋
+- **static final + Startables.deepStart()**: JUnit Extension 사용 안 함
+- **TRUNCATE + FLUSHDB**: 매 테스트마다 상태 초기화
+- **waitingFor() 명시**: 컨테이너 준비 완료 대기
+
+### Load Test Strategy
+- **부하 테스트 기준**: Error Rate < 1%, P99 < 5000ms, RPS 목표 대비 50% 이상
+- **환경 고정**: JVM heap, GC, Redis maxmemory, MySQL buffer pool
+- **Cache Stampede 검증**: DB Query Rate ≤ 1%, Singleflight 1회 실행
+- **TieredCache 계층별 테스트**: L1/L2 분리 무효화 검증
+
 ### Chaos Engineering
 - **부하 테스트 기준**: Error Rate < 1%, P99 < 5000ms
 - **5개 Agent 책임**: Blue, Green, Yellow, Purple, Red
@@ -56,7 +106,7 @@
 | N04 | Connection Vampire | 트랜잭션 내 API 호출 | API 호출 분리 | P0 |
 | N05 | Celebrity Problem | Hot Key 경합 | Singleflight + Sharding | P1 |
 | N06 | Timeout Cascade | 타임아웃 계층 불일치 | 계층 정렬 | P0 |
-| N07-N19 | Additional Scenarios | 다양한 장애 패턴 | 각각의 대응책 | P0-P1 |
+| N07-N19 | Additional Scenarios | 다양한 장애 패턴 | 각각의 대응책 | P0-P2 |
 
 ---
 
@@ -134,7 +184,25 @@ redis-cli SET nightmare:test:key "value" EX 1 && sleep 1
 # L2만: redis-cli DEL 후 Caffeine 유지
 ```
 
+### Testcontainers Singleton 패턴
+```java
+// 공유 컨테이너
+public final class SharedContainers {
+    public static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0");
+    static {
+        Startables.deepStart(Stream.of(MYSQL)).join();  // 직접 시작
+    }
+}
+
+// 데이터 격리
+@BeforeEach
+void resetState() {
+    redisTemplate.getConnectionFactory().getConnection().flushDb();
+    jdbc.execute("TRUNCATE TABLE `table_name`");
+}
+```
+
 ---
 
 *Updated: 2026-02-25*
-*Version: 1.0.0*
+*Version: 1.1.0* (GR-TEST-004, GR-TEST-005 추가)

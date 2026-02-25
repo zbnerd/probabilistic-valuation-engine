@@ -2,15 +2,19 @@
 
 ## 개요
 
-비동기 처리, 스레드 풀 튜닝, Virtual Threads에 관한 가드레일입니다.
+비동기 처리, 스레드 풀 튜닝, Virtual Threads, 분산 락 전략에 관한 가드레일입니다.
 
 ## 파일 목록
 
 | ID | 제목 | 심각도 | 키워드 |
 |----|------|--------|--------|
-| GR-ASYNC-001 | [Async Non-Blocking Pipeline Pattern](async-patterns.md) | critical | Async, Non-Blocking, Pipeline, CompletableFuture |
-| GR-ASYNC-002 | [Thread Pool Backpressure Best Practice](thread-pool.md) | critical | ThreadPool, Backpressure, RPS, Queue Capacity |
-| GR-ASYNC-003 | [Virtual Threads Best Practice](virtual-threads.md) | warning | VirtualThreads, Project Loom |
+| GR-CONC-001 | [Async Non-Blocking Pipeline Pattern](async-patterns.md) | critical | Async, Non-Blocking, Pipeline, CompletableFuture, .join() |
+| GR-CONC-002 | [Thread Pool Backpressure Best Practice](thread-pool.md) | critical | ThreadPool, CallerRunsPolicy, AbortPolicy, Backpressure, RPS |
+| GR-CONC-003 | [Virtual Threads Best Practice](virtual-threads.md) | warning | VirtualThreads, Project Loom, Java 21 |
+| GR-CONC-004 | [Lock Strategy (Redis → MySQL Fallback)](lock-strategy.md) | critical | Redisson, Redis, MySQL, DistributedLock, GET_LOCK, FeatureFlag |
+| GR-CONC-005 | [Race Condition Prevention](race-condition.md) | critical | RaceCondition, AtomicUpdate, HotRow, LuaScript, Counter |
+| GR-CONC-006 | [Deadlock Prevention](deadlock-prevention.md) | critical | Deadlock, LockTimeout, SKIP_LOCKED, LockOrdering, TryLock |
+| GR-CONC-007 | [SKIP LOCKED Pattern](skip-locked.md) | warning | SKIP_LOCKED, ForUpdateSkipLocked, Outbox, BatchProcessing |
 
 ## 주요 가드레일
 

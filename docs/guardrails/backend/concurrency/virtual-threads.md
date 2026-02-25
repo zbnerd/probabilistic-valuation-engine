@@ -3,6 +3,7 @@ id: GR-CONC-003
 category: backend/concurrency
 severity: warning
 keywords: [VirtualThread, Project Loom, Java 21, thread-per-task]
+languages: [java, kotlin]
 ---
 # Virtual Threads Best Practice
 

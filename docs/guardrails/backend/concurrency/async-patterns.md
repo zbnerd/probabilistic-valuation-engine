@@ -3,6 +3,7 @@ id: GR-CONC-001
 category: backend/concurrency
 severity: critical
 keywords: [CompletableFuture, .join(), blocking, async-pipeline]
+languages: [java, kotlin]
 ---
 # Async Non-Blocking Pipeline Pattern
 

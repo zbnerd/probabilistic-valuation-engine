@@ -11,6 +11,9 @@
 | GR-INFRA-001 | [Scale-out Architecture Guardrails](scaleout.md) | critical | ScaleOut, Stateful, Stateless, FeatureFlag, Scheduler, DistributedLock |
 | GR-INFRA-002 | [Redis & Redisson Integration](redis.md) | critical | Redis, Redisson, Lua Script, Hash Tag, DLQ, Distributed Lock |
 | GR-INFRA-003 | [Resilience & Reliability](resilience-reliiability.md) | critical | CircuitBreaker, Outbox, RedisLock, GracefulShutdown, Scheduler, Resilience4j |
+| GR-INFRA-004 | [Rate Limiting in Distributed Environment](rate-limiting-distributed.md) | high | RateLimiting, Bucket4j, Redis, Distributed, FailClosed, DoS |
+| GR-INFRA-005 | [Scheduler Distributed Lock](scheduler-distributed-lock.md) | critical | Scheduler, @Scheduled, DistributedLock, @Locked, LeaderElection, Duplicates |
+| GR-INFRA-006 | [Graceful Shutdown Coordination](graceful-shutdown-coordination.md) | critical | GracefulShutdown, Shutdown, DataLoss, RollingDeploy, SmartLifecycle, RedisFlag |
 
 ## 주요 주제
 

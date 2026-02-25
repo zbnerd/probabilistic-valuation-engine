@@ -3,6 +3,7 @@ id: GR-CONC-002
 category: backend/concurrency
 severity: critical
 keywords: [CallerRunsPolicy, AbortPolicy, RejectedExecutionHandler, backpressure, Thread Pool]
+languages: [java, kotlin]
 ---
 # Thread Pool Backpressure Best Practice
 

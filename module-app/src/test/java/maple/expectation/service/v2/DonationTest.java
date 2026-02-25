@@ -11,9 +11,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.domain.repository.MemberRepository;
 import maple.expectation.domain.v2.Member;
 import maple.expectation.infrastructure.persistence.repository.DonationHistoryRepository;
-import maple.expectation.infrastructure.persistence.repository.MemberRepository;
 import maple.expectation.service.v2.auth.AdminService;
 import maple.expectation.support.EnableTimeLogging;
 import maple.expectation.support.IntegrationTestSupport;
@@ -68,7 +68,7 @@ public class DonationTest extends IntegrationTestSupport {
   }
 
   private Member saveAndTrack(Member member) {
-    Member saved = memberRepository.saveAndFlush(member);
+    Member saved = memberRepository.save(member);
     createdMemberIds.add(saved.getId());
     return saved;
   }
@@ -82,7 +82,13 @@ public class DonationTest extends IntegrationTestSupport {
 
     if (!createdMemberIds.isEmpty()) {
       donationHistoryRepository.deleteAll();
-      memberRepository.deleteAllByIdInBatch(createdMemberIds);
+      // Delete members by UUID since deleteAllByIdInBatch doesn't exist
+      for (Long id : createdMemberIds) {
+        Member member = memberRepository.findById(id);
+        if (member != null && member.getUuid() != null) {
+          memberRepository.deleteByUuid(member.getUuid());
+        }
+      }
       createdMemberIds.clear();
     }
   }
@@ -101,8 +107,8 @@ public class DonationTest extends IntegrationTestSupport {
     donationService.sendCoffee(guest.getUuid(), testAdminFingerprint, 1000L, fixedRequestId);
 
     // 3. Then - 1회만 처리됨
-    Member updatedGuest = memberRepository.findById(guest.getId()).orElseThrow();
-    Member updatedAdmin = memberRepository.findById(admin.getId()).orElseThrow();
+    Member updatedGuest = memberRepository.findById(guest.getId());
+    Member updatedAdmin = memberRepository.findById(admin.getId());
 
     assertThat(updatedGuest.getPoint()).isEqualTo(0L);
     assertThat(updatedAdmin.getPoint()).isEqualTo(1000L);
@@ -146,7 +152,7 @@ public class DonationTest extends IntegrationTestSupport {
     executorService.awaitTermination(5, TimeUnit.SECONDS);
 
     // 3. Then
-    Member updatedGuest = memberRepository.findById(guest.getId()).orElseThrow();
+    Member updatedGuest = memberRepository.findById(guest.getId());
     assertThat(updatedGuest.getPoint()).isEqualTo(0L);
     assertThat(successCount.get()).isEqualTo(1);
     assertThat(failCount.get()).isEqualTo(99);
@@ -191,7 +197,7 @@ public class DonationTest extends IntegrationTestSupport {
     executorService.awaitTermination(5, TimeUnit.SECONDS);
 
     // 3. Then
-    Member updatedAdmin = memberRepository.findById(admin.getId()).orElseThrow();
+    Member updatedAdmin = memberRepository.findById(admin.getId());
     assertThat(successCount.get()).isEqualTo(100);
     assertThat(updatedAdmin.getPoint()).isEqualTo(100 * 1000L);
   }

@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView.CostBreakdownView;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView.ItemExpectationView;
@@ -67,7 +66,7 @@ class GameCharacterControllerV5Test {
   void testMongoDBHit_ReturnsCachedView() {
     // Given: MongoDB has cached view
     CharacterValuationView mockView = createMockView();
-    when(queryService.findByUserIgn(TEST_IGN)).thenReturn(Optional.of(mockView));
+    when(queryService.findByUserIgn(TEST_IGN)).thenReturn(mockView);
     // Default queue mock behavior - offer returns true (not used in HIT case)
     when(queue.offer(any(ExpectationCalculationTask.class))).thenReturn(true);
 
@@ -86,7 +85,7 @@ class GameCharacterControllerV5Test {
   @DisplayName("MongoDB MISS: Queue calculation and return 202")
   void testMongoDBMiss_QueuesCalculation_Returns202() {
     // Given: MongoDB has no cached view
-    when(queryService.findByUserIgn(TEST_IGN)).thenReturn(Optional.empty());
+    when(queryService.findByUserIgn(TEST_IGN)).thenReturn(null);
     when(queue.offer(any(ExpectationCalculationTask.class))).thenReturn(true);
 
     // When: Query expectation
@@ -103,7 +102,7 @@ class GameCharacterControllerV5Test {
   @DisplayName("Queue Full: Return 503 Service Unavailable")
   void testQueueFull_Returns503() {
     // Given: MongoDB miss and queue full
-    when(queryService.findByUserIgn(TEST_IGN)).thenReturn(Optional.empty());
+    when(queryService.findByUserIgn(TEST_IGN)).thenReturn(null);
     when(queue.offer(any(ExpectationCalculationTask.class))).thenReturn(false);
 
     // When: Query expectation
@@ -146,45 +145,46 @@ class GameCharacterControllerV5Test {
 
   private CharacterValuationView createMockView() {
     CostBreakdownView breakdown =
-        CostBreakdownView.builder()
-            .blackCubeCost(100000L)
-            .redCubeCost(50000L)
-            .additionalCubeCost(20000L)
-            .starforceCost(30000L)
-            .flameCost(0L)
-            .build();
+        new CostBreakdownView(
+            100000L, // blackCubeCost
+            50000L, // redCubeCost
+            20000L, // additionalCubeCost
+            30000L, // starforceCost
+            0L // flameCost
+            );
 
     List<ItemExpectationView> items =
         List.of(
-            ItemExpectationView.builder()
-                .itemName("Arcane Umbra Hat")
-                .expectedCost(50000L)
-                .costText("50,000")
-                .build());
+            new ItemExpectationView(
+                "Arcane Umbra Hat", // itemName
+                50000L, // expectedCost
+                "50,000" // costText
+                ));
 
     PresetView preset =
-        PresetView.builder()
-            .presetNo(1)
-            .totalExpectedCost(200000L)
-            .totalCostText("200,000")
-            .costBreakdown(breakdown)
-            .items(items)
-            .build();
+        new PresetView(
+            1, // presetNo
+            200000L, // totalExpectedCost
+            "200,000", // totalCostText
+            breakdown, // costBreakdown
+            items // items
+            );
 
-    return CharacterValuationView.builder()
-        .id("test-id")
-        .userIgn(TEST_IGN)
-        .characterOcid("test-ocid")
-        .characterClass("Pathfinder")
-        .characterLevel(275)
-        .calculatedAt(Instant.now())
-        .lastApiSyncAt(Instant.now())
-        .version(1L)
-        .totalExpectedCost(200000L)
-        .maxPresetNo(1)
-        .fromCache(true)
-        .presets(List.of(preset))
-        .build();
+    return new CharacterValuationView(
+        "test-id", // id
+        TEST_IGN, // userIgn
+        null, // messageId
+        "test-ocid", // characterOcid
+        "Pathfinder", // characterClass
+        275, // characterLevel
+        Instant.now(), // calculatedAt
+        Instant.now(), // lastApiSyncAt
+        1L, // version
+        200000L, // totalExpectedCost
+        1, // maxPresetNo
+        List.of(preset), // presets
+        true // fromCache
+        );
   }
 
   // ==================== Test Helper Classes ====================
@@ -207,10 +207,9 @@ class GameCharacterControllerV5Test {
     }
 
     ResponseEntity<?> getExpectationV5Internal(String userIgn) {
-      var viewOpt = queryService.findByUserIgn(userIgn);
+      var view = queryService.findByUserIgn(userIgn);
 
-      if (viewOpt.isPresent()) {
-        CharacterValuationView view = viewOpt.get();
+      if (view != null) {
         return ResponseEntity.ok(toResponseDto(view));
       }
 

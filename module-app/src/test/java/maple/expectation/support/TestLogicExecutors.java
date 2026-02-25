@@ -105,6 +105,17 @@ public final class TestLogicExecutors {
         .when(mock)
         .executeVoid(ArgumentMatchers.<ThrowingRunnable>any(), ArgumentMatchers.<TaskContext>any());
 
+    // Pattern 1: Java-friendly void execution
+    Mockito.lenient()
+        .doAnswer(
+            invocation -> {
+              Runnable task = invocation.getArgument(0);
+              task.run();
+              return null;
+            })
+        .when(mock)
+        .executeVoidJava(ArgumentMatchers.<Runnable>any(), ArgumentMatchers.<TaskContext>any());
+
     // Pattern 1: Execute with finally block
     Mockito.lenient()
         .when(

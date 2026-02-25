@@ -1,7 +1,9 @@
 package maple.expectation;
 
 import maple.expectation.config.GlobalTestConfig;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.CharacterId;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.model.character.UserIgn;
 import maple.expectation.infrastructure.external.impl.RealNexonApiClient;
 import maple.expectation.service.v2.GameCharacterService;
 import org.assertj.core.api.Assertions;
@@ -26,15 +28,16 @@ class ExpectationApplicationTests {
   @Test
   void 캐릭터ocid생성() {
     // [Given]
-    // 💡 [수정 포인트] 기본 생성자 + Setter 대신, 정의한 2인자 생성자 사용
-    // 이제 객체가 태어날 때부터 'Geek'이라는 이름과 'OCID'를 가진 완벽한 상태가 됩니다.
-    GameCharacter gameCharacter = new GameCharacter("Geek", "0123456789abcdef");
+    // 💡 [수정 포인트] 도메인 모델의 팩토리 메서드 사용
+    // UserIgn과 CharacterId는 값 객체로 감싸져 있음
+    GameCharacter gameCharacter =
+        GameCharacter.create(new UserIgn("Geek"), new CharacterId("0123456789abcdef"));
 
     // [When]
     gameCharacterService.saveCharacter(gameCharacter);
 
     // [Then]
-    Assertions.assertThat(gameCharacter.getUserIgn()).isEqualTo("Geek");
+    Assertions.assertThat(gameCharacter.getUserIgn().value()).isEqualTo("Geek");
     Assertions.assertThat(gameCharacter.getOcid()).isEqualTo("0123456789abcdef");
   }
 }

@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.CharacterId;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.model.character.UserIgn;
 import maple.expectation.dto.response.CharacterResponse;
 import maple.expectation.service.v2.facade.GameCharacterFacade;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +51,8 @@ class GameCharacterControllerV1Test {
     @DisplayName("TC-128-01: 캐릭터 조회 성공 → CharacterResponse DTO 반환")
     void whenCharacterExists_shouldReturnDto() {
       // given
-      GameCharacter character = new GameCharacter("TestUser", "ocid-12345");
+      GameCharacter character =
+          GameCharacter.create(new UserIgn("TestUser"), new CharacterId("ocid-12345"));
       given(gameCharacterFacade.findCharacterByUserIgn("TestUser")).willReturn(character);
 
       // when
@@ -68,7 +71,8 @@ class GameCharacterControllerV1Test {
     @DisplayName("TC-128-03: CharacterResponse는 내부 필드를 포함하지 않음")
     void shouldReturnDtoWithoutInternalFields() {
       // given
-      GameCharacter character = new GameCharacter("TestUser", "ocid-12345");
+      GameCharacter character =
+          GameCharacter.create(new UserIgn("TestUser"), new CharacterId("ocid-12345"));
       given(gameCharacterFacade.findCharacterByUserIgn("TestUser")).willReturn(character);
 
       // when
@@ -89,7 +93,8 @@ class GameCharacterControllerV1Test {
     @DisplayName("초기 likeCount가 0인 캐릭터 조회")
     void whenInitialCharacter_shouldReturnZeroLikeCount() {
       // given
-      GameCharacter character = new GameCharacter("NewUser", "new-ocid");
+      GameCharacter character =
+          GameCharacter.create(new UserIgn("NewUser"), new CharacterId("new-ocid"));
       given(gameCharacterFacade.findCharacterByUserIgn("NewUser")).willReturn(character);
 
       // when

@@ -61,6 +61,7 @@ class DonationDlq {
 
     /** Outbox 엔티티에서 DLQ 엔티티 생성 */
     companion object {
+        @JvmStatic
         fun from(outbox: DonationOutbox, reason: String): DonationDlq {
             val dlq = DonationDlq()
             dlq.originalOutboxId = outbox.id

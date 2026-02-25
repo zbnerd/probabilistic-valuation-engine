@@ -8,10 +8,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.domain.model.character.CharacterId;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.model.character.UserIgn;
 import maple.expectation.domain.model.equipment.CharacterEquipment;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4;
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import maple.expectation.parser.EquipmentStreamingParser;
 import maple.expectation.support.IntegrationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,33 +60,25 @@ class EquipmentExpectationServiceV4SingleflightTest extends IntegrationTestSuppo
     }
 
     // 테스트 데이터 정리: OCID로 기존 데이터 삭제
-    characterRepository.findByUserIgn(TEST_USER_IGN).ifPresent(characterRepository::delete);
+    var existing = characterRepository.findByUserIgn(TEST_USER_IGN);
+    if (existing != null) {
+      characterRepository.deleteByOcid(existing.getOcid());
+    }
 
     // 테스트용 캐릭터 생성
-    characterRepository
-        .findByUserIgn(TEST_USER_IGN)
-        .ifPresentOrElse(
-            existing -> {}, // 이미 존재하면 그대로 사용
-            () -> {
-              // GameCharacter 먼저 저장 (ocid가 PK 역할)
-              GameCharacter character = new GameCharacter(TEST_USER_IGN, TEST_OCID);
-              characterRepository.save(character);
+    var checkExisting = characterRepository.findByUserIgn(TEST_USER_IGN);
+    if (checkExisting == null) {
+      // GameCharacter 생성 (도메인 모델 사용)
+      GameCharacter character =
+          GameCharacter.create(new UserIgn(TEST_USER_IGN), CharacterId.of(TEST_OCID));
 
-              // CharacterEquipment는 ocid로 연결 (동일 ocid 사용)
-              CharacterEquipment domainEquipment =
-                  CharacterEquipment.create(
-                      maple.expectation.domain.model.character.CharacterId.of(TEST_OCID),
-                      maple.expectation.domain.model.equipment.EquipmentData.of(
-                          createMinimalEquipmentJson()));
+      // CharacterEquipment 생성 (도메인 모델 사용)
+      CharacterEquipment equipment = CharacterEquipment.of(TEST_OCID, createMinimalEquipmentJson());
 
-              maple.expectation.infrastructure.persistence.entity.CharacterEquipmentJpaEntity
-                  jpaEntity =
-                      new maple.expectation.infrastructure.persistence.entity
-                          .CharacterEquipmentJpaEntity(TEST_OCID, domainEquipment.jsonContent());
-
-              character.setEquipment(jpaEntity);
-              characterRepository.save(character);
-            });
+      // 장비 정보와 함께 캐릭터 저장
+      character = character.withEquipment(equipment);
+      characterRepository.save(character);
+    }
   }
 
   @Test

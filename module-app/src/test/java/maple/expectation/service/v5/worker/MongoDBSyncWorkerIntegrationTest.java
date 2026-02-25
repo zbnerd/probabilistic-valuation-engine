@@ -142,8 +142,8 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
     queryService.upsert(view);
 
     var saved = queryService.findByUserIgn(TEST_IGN);
-    assertThat(saved).isPresent();
-    assertThat(saved.get().getUserIgn()).isEqualTo(TEST_IGN);
+    assertThat(saved).isNotNull();
+    assertThat(saved.getUserIgn()).isEqualTo(TEST_IGN);
   }
 
   @Test
@@ -157,7 +157,7 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
     queryService.upsert(view);
 
     var saved = queryService.findByUserIgn(TEST_IGN);
-    assertThat(saved).isPresent();
+    assertThat(saved).isNotNull();
 
     var allViews = queryService.countByUserIgn(TEST_IGN);
     assertThat(allViews).isEqualTo(1);
@@ -172,9 +172,9 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
     queryService.upsert(view);
 
     var saved = queryService.findByUserIgn(TEST_IGN);
-    assertThat(saved).isPresent();
-    assertThat(saved.get().getUserIgn()).isEqualTo(TEST_IGN);
-    assertThat(saved.get().getId()).contains(TEST_IGN);
+    assertThat(saved).isNotNull();
+    assertThat(saved.getUserIgn()).isEqualTo(TEST_IGN);
+    assertThat(saved.getId()).contains(TEST_IGN);
   }
 
   @Test
@@ -196,10 +196,10 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
     CharacterValuationView view = viewTransformer.toDocument(event);
 
     queryService.upsert(view);
-    assertThat(queryService.findByUserIgn(TEST_IGN)).isPresent();
+    assertThat(queryService.findByUserIgn(TEST_IGN)).isNotNull();
 
     queryService.deleteByUserIgn(TEST_IGN);
-    assertThat(queryService.findByUserIgn(TEST_IGN)).isEmpty();
+    assertThat(queryService.findByUserIgn(TEST_IGN)).isNull();
   }
 
   private ExpectationCalculationCompletedEvent createTestEvent() {

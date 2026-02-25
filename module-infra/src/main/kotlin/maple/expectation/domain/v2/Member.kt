@@ -47,11 +47,13 @@ class Member {
 
     /** 시스템 관리자용 팩토리 메서드 (고정 UUID) */
     companion object {
+        @JvmStatic
         fun createSystemAdmin(uuid: String, initialPoint: Long): Member {
             return Member(uuid, initialPoint)
         }
 
         /** 게스트용 팩토리 메서드 (랜덤 UUID) */
+        @JvmStatic
         fun createGuest(initialPoint: Long): Member {
             return Member(UUID.randomUUID().toString(), initialPoint)
         }

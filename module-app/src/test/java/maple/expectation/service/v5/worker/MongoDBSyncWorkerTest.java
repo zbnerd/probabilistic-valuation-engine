@@ -94,8 +94,10 @@ class MongoDBSyncWorkerTest {
     lenient().when(meterRegistry.counter(any(String.class))).thenReturn(processedCounter);
     lenient().when(meterRegistry.counter("mongodb.sync.errors")).thenReturn(errorCounter);
 
-    // Mock executor to actually execute the tasks (for stream initialization)
-    doAnswer(
+    // Mock executor to actually execute the tasks (for stream initialization) - lenient since not
+    // all tests use it
+    lenient()
+        .doAnswer(
             invocation -> {
               ThrowingRunnable task = invocation.getArgument(0);
               task.run();

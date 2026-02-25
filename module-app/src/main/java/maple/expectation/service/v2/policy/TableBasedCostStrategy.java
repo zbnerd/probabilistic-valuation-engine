@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import maple.expectation.domain.v2.CubeType;
 import maple.expectation.domain.v2.PotentialGrade;
+import maple.expectation.error.exception.InvalidPotentialGradeException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -38,8 +39,14 @@ public class TableBasedCostStrategy implements CostCalculationStrategy {
   @Override
   public long calculateCost(CubeType type, int level, String grade) {
     // Fail-Fast: 잘못된 입력 즉시 예외 (Silent Failure 방지)
-    maple.expectation.domain.v2.PotentialGrade validGrade =
-        maple.expectation.domain.v2.PotentialGrade.valueOf(grade.toUpperCase());
+    // 한글 등급명 우선 처리, 실패 시 영문 enum name으로 fallback
+    maple.expectation.domain.v2.PotentialGrade validGrade;
+    try {
+      validGrade = maple.expectation.domain.v2.PotentialGrade.fromKorean(grade);
+    } catch (InvalidPotentialGradeException e) {
+      // 영문 enum name으로 fallback
+      validGrade = maple.expectation.domain.v2.PotentialGrade.valueOf(grade.toUpperCase());
+    }
 
     TreeMap<Integer, EnumMap<PotentialGrade, Long>> typeTable = costMasterTable.get(type);
     if (typeTable == null) {

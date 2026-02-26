@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.lock.LockStrategy;
-import maple.expectation.monitoring.collector.MetricCategory;
+import maple.expectation.infrastructure.monitoring.collector.MetricCategory;
 import maple.expectation.monitoring.context.SystemContextProvider;
 import maple.expectation.service.v2.alert.DiscordAlertService;
 import maple.expectation.service.v2.alert.dto.DiscordMessage;

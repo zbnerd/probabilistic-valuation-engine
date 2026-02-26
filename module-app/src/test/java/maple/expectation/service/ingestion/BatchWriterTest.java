@@ -45,8 +45,8 @@ class BatchWriterTest {
 
   @BeforeEach
   void setUp() {
-    maple.expectation.config.BatchProperties batchProperties =
-        maple.expectation.config.BatchProperties.defaults();
+    maple.expectation.infrastructure.config.BatchProperties batchProperties =
+        new maple.expectation.infrastructure.config.BatchProperties();
 
     // Use real ObjectMapper for actual JSON deserialization
     // Register Kotlin module to support Kotlin data classes

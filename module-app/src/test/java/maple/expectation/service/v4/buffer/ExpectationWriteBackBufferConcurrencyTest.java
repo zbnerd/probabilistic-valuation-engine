@@ -12,8 +12,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.config.BufferProperties;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.infrastructure.config.BufferProperties;
 import maple.expectation.support.TestLogicExecutors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,7 +60,7 @@ class ExpectationWriteBackBufferConcurrencyTest {
   @Test
   void atomicBackpressure_ShouldEnforceMaxQueueSizeUnderHighConcurrency() throws Exception {
     // Given: Small buffer size for easier testing
-    int maxQueueSize = properties.maxQueueSize();
+    int maxQueueSize = properties.getMaxQueueSize();
     int threads = 50; // High concurrency
     int offersPerThread = 10;
     int presetsPerOffer = 5;

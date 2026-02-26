@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.persistence.repository
 
+import maple.expectation.core.port.out.BufferStatusQuery
 import maple.expectation.domain.repository.RedisBufferRepository as DomainRedisBufferRepository
 import maple.expectation.infrastructure.redis.script.LuaScripts
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -17,12 +18,17 @@ import org.springframework.stereotype.Repository
  * {buffer:likes}:total_count  - String (전역 대기 카운트)
  * </pre>
  *
+ * <h2>DIP 준수</h2>
+ *
+ * <p>{@link BufferStatusQuery} Port를 구현하여 모니터링 모듈이 Repository를 직접 참조하지 않도록 합니다.
+ *
  * @see LuaScripts.Keys 키 상수 정의
+ * @see BufferStatusQuery 모니터링용 Port 인터페이스
  */
 @Repository
 class RedisBufferRepositoryImpl(
     private val redisTemplate: StringRedisTemplate,
-) : DomainRedisBufferRepository {
+) : DomainRedisBufferRepository, BufferStatusQuery {
 
     /**
      * 전역 카운터 증가 (L1 -> L2 전송 시 호출)

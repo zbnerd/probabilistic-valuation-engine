@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.monitoring
 
-import maple.expectation.domain.repository.RedisBufferRepository
+import maple.expectation.core.port.out.BufferStatusQuery
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.MonitoringException
 import maple.expectation.infrastructure.alert.StatelessAlertService
@@ -12,9 +12,20 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
+/**
+ * 버퍼 포화도 모니터링 서비스
+ *
+ * <p>주기적으로 버퍼 상태를 확인하고 임계값 초과 시 알림을 발송합니다.
+ *
+ * <h2>DIP 준수</h2>
+ *
+ * <p>{@link BufferStatusQuery} Port를 통해 버퍼 상태를 조회하므로 Repository 직접 참조를 방지합니다.
+ *
+ * @see BufferStatusQuery 버퍼 상태 조회 Port
+ */
 @Component
 class MonitoringAlertService(
-    private val redisBufferRepository: RedisBufferRepository,
+    private val bufferStatus: BufferStatusQuery,
     private val statelessAlertService: StatelessAlertService,
     private val lockStrategy: LockStrategy,
     private val executor: LogicExecutor,
@@ -48,7 +59,7 @@ class MonitoringAlertService(
 
   /** 헬퍼 1: 실제 수치 확인 및 알림 로직 (로직 응집도 향상) */
   private fun performBufferCheck() {
-    val globalPending = redisBufferRepository.getTotalPendingCount()
+    val globalPending = bufferStatus.getTotalPendingCount()
 
     if (globalPending > thresholdProperties.bufferSaturationCount) {
       val exception = MonitoringException(CommonErrorCode.SYSTEM_CAPACITY_EXCEEDED, globalPending)

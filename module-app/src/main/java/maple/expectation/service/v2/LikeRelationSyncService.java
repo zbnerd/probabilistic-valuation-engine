@@ -36,7 +36,7 @@ public class LikeRelationSyncService {
   private final LikeRelationBufferStrategy likeRelationBuffer;
   private final CharacterLikeRepository characterLikeRepository;
   private final LogicExecutor executor;
-  private final maple.expectation.config.BatchProperties batchProperties;
+  private final maple.expectation.infrastructure.config.BatchProperties batchProperties;
 
   /**
    * L1 → L2 동기화 (스케줄러 호출)
@@ -81,7 +81,7 @@ public class LikeRelationSyncService {
     // 배치 단위로 원자적 fetch + remove
     Set<String> batch;
     while (!(batch =
-            likeRelationBuffer.fetchAndRemovePending(batchProperties.likeRelationSyncSize()))
+            likeRelationBuffer.fetchAndRemovePending(batchProperties.getLikeRelationSyncSize()))
         .isEmpty()) {
       processBatch(batch, successCount, skipCount, failCount);
     }

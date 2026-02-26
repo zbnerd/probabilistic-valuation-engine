@@ -284,8 +284,6 @@ class SpringIsolationTest {
           .that()
           .resideInAPackage("maple.expectation.common..")
           .or()
-          .resideInAPackage("maple.expectation.error..")
-          .or()
           .resideInAPackage("maple.expectation.shared..")
           .or()
           .resideInAPackage("maple.expectation.util..")
@@ -297,8 +295,11 @@ class SpringIsolationTest {
               """
                             Common module must be Spring-free.
                             Shared utilities should be framework-agnostic.
-                            Investigate: 1 annotation found in ADR-039 analysis.
+
+                            NOTE: maple.expectation.error.. excluded - GlobalExceptionHandler
+                            moved to module-web (ADR-037). Error package now belongs to web layer.
                             """)
+          .allowEmptyShould(true)
           .check(classes);
     }
 

@@ -4,10 +4,10 @@ import dev.langchain4j.model.input.Prompt;
 import dev.langchain4j.model.input.PromptTemplate;
 import java.util.List;
 import java.util.Map;
+import maple.expectation.infrastructure.monitoring.security.PiiMaskingFilter;
 import maple.expectation.monitoring.copilot.model.AnomalyEvent;
 import maple.expectation.monitoring.copilot.model.EvidenceItem;
 import maple.expectation.monitoring.copilot.model.IncidentContext;
-import maple.expectation.monitoring.security.PiiMaskingFilter;
 import org.springframework.stereotype.Component;
 
 /**

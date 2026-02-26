@@ -128,10 +128,10 @@ class AtomicLikeToggleExecutor(
             """
     }
 
-    private val relationsKey: String = RedisKey.LIKE_RELATIONS.getKey()
-    private val pendingKey: String = RedisKey.LIKE_RELATIONS_PENDING.getKey()
-    private val bufferKey: String = RedisKey.LIKE_BUFFER.getKey()
-    private val unlikedKey: String = RedisKey.LIKE_RELATIONS_UNLIKED.getKey()
+    private val relationsKey: String = RedisKey.LIKE_RELATIONS.key
+    private val pendingKey: String = RedisKey.LIKE_RELATIONS_PENDING.key
+    private val bufferKey: String = RedisKey.LIKE_BUFFER.key
+    private val unlikedKey: String = RedisKey.LIKE_RELATIONS_UNLIKED.key
 
     /** Lua Script SHA 캐싱 */
     private val toggleSha = AtomicReference<String>()

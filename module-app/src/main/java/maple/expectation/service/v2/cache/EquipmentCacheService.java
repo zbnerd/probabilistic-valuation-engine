@@ -33,11 +33,12 @@ public class EquipmentCacheService extends AbstractTieredCacheService<EquipmentR
     implements EquipmentCache {
 
   private static final String CACHE_NAME = "equipment";
-  private static final EquipmentResponse NULL_MARKER = new EquipmentResponse();
-
-  static {
-    NULL_MARKER.setCharacterClass("NEGATIVE_MARKER");
-  }
+  // Kotlin data class is immutable - use constructor with characterClass marker
+  // Constructor params: date, characterGender, characterClass, presetNo, itemEquipment,
+  //                    itemEquipmentPreset1-3, dragonEquipment, mechanicEquipment, title
+  private static final EquipmentResponse NULL_MARKER =
+      new EquipmentResponse(
+          null, null, "NEGATIVE_MARKER", null, null, null, null, null, null, null, null);
 
   private final EquipmentDbWorker dbWorker;
 

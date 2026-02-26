@@ -90,10 +90,10 @@ public class EquipmentProcessingExecutorConfig {
             .register(meterRegistry);
 
     ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    ExecutorProperties.PoolConfig config = executorProperties.equipment();
-    executor.setCorePoolSize(config.corePoolSize());
-    executor.setMaxPoolSize(config.maxPoolSize());
-    executor.setQueueCapacity(config.queueCapacity());
+    ExecutorProperties.PoolConfig config = executorProperties.getEquipment();
+    executor.setCorePoolSize(config.getCorePoolSize());
+    executor.setMaxPoolSize(config.getMaxPoolSize());
+    executor.setQueueCapacity(config.getQueueCapacity());
     executor.setThreadNamePrefix("equip-proc-");
 
     // Issue #284 P1-NEW-1: MDC/ThreadLocal 전파

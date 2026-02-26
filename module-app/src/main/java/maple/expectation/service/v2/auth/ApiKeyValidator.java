@@ -51,7 +51,7 @@ public class ApiKeyValidator {
   public boolean verifyCharacterOwnership(
       String userIgn, List<CharacterListResponse.CharacterInfo> characters) {
     boolean ownsCharacter =
-        characters.stream().anyMatch(c -> c.characterName().equalsIgnoreCase(userIgn));
+        characters.stream().anyMatch(c -> c.getCharacterName().equalsIgnoreCase(userIgn));
 
     if (!ownsCharacter) {
       log.warn("Character ownership verification failed: userIgn={}", userIgn);
@@ -87,7 +87,7 @@ public class ApiKeyValidator {
     // 4. 모든 캐릭터 OCID 수집
     Set<String> myOcids =
         characters.stream()
-            .map(CharacterListResponse.CharacterInfo::ocid)
+            .map(CharacterListResponse.CharacterInfo::getOcid)
             .collect(Collectors.toSet());
 
     log.info("API key validation successful: userIgn={}, ocids={}", userIgn, myOcids.size());

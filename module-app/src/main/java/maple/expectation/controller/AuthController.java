@@ -89,7 +89,7 @@ public class AuthController {
   @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
   public ResponseEntity<ApiResponse<Void>> logout(@AuthenticationPrincipal AuthenticatedUser user) {
 
-    authService.logout(user.sessionId());
+    authService.logout(user.getSessionId());
 
     return ResponseEntity.ok(ApiResponse.success(null));
   }
@@ -107,7 +107,7 @@ public class AuthController {
 
     UserInfoResponse response =
         new UserInfoResponse(
-            user.sessionId(), user.fingerprint(), user.role(), user.myOcids().size());
+            user.getSessionId(), user.getFingerprint(), user.getRole(), user.getMyOcids().size());
 
     return ResponseEntity.ok(ApiResponse.success(response));
   }

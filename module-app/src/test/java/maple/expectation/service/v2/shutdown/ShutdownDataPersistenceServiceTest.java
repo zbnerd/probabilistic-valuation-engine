@@ -94,8 +94,8 @@ class ShutdownDataPersistenceServiceTest {
 
     // then
     assertThat(loaded).isPresent();
-    assertThat(loaded.get().instanceId()).isEqualTo("test-server");
-    assertThat(loaded.get().likeBuffer()).hasSize(2);
+    assertThat(loaded.get().getInstanceId()).isEqualTo("test-server");
+    assertThat(loaded.get().getLikeBuffer()).hasSize(2);
   }
 
   @Test
@@ -124,8 +124,8 @@ class ShutdownDataPersistenceServiceTest {
 
     Optional<ShutdownData> loaded = service.readBackupFile(backupFiles.get(0));
     assertThat(loaded).isPresent();
-    assertThat(loaded.get().likeBuffer()).containsEntry("user1", 10L);
-    assertThat(loaded.get().likeBuffer()).containsEntry("user2", 20L);
+    assertThat(loaded.get().getLikeBuffer()).containsEntry("user1", 10L);
+    assertThat(loaded.get().getLikeBuffer()).containsEntry("user2", 20L);
   }
 
   @Test
@@ -140,7 +140,7 @@ class ShutdownDataPersistenceServiceTest {
     Optional<ShutdownData> loaded = service.readBackupFile(backupFiles.get(0));
 
     assertThat(loaded).isPresent();
-    assertThat(loaded.get().likeBuffer()).containsEntry("user1", 15L);
+    assertThat(loaded.get().getLikeBuffer()).containsEntry("user1", 15L);
   }
 
   @Test
@@ -158,7 +158,7 @@ class ShutdownDataPersistenceServiceTest {
 
     Optional<ShutdownData> loaded = service.readBackupFile(backupFiles.get(0));
     assertThat(loaded).isPresent();
-    assertThat(loaded.get().equipmentPending()).hasSize(3);
+    assertThat(loaded.get().getEquipmentPending()).hasSize(3);
   }
 
   @Test
@@ -185,7 +185,7 @@ class ShutdownDataPersistenceServiceTest {
     // 최신 데이터(data2)가 저장되어 있어야 함
     Optional<ShutdownData> loaded = service.readBackupFile(backupFiles.get(0));
     assertThat(loaded).isPresent();
-    assertThat(loaded.get().likeBuffer()).containsEntry("u2", 2L);
+    assertThat(loaded.get().getLikeBuffer()).containsEntry("u2", 2L);
   }
 
   @Test
@@ -220,8 +220,8 @@ class ShutdownDataPersistenceServiceTest {
     // then
     assertThat(loaded).isPresent();
     ShutdownData restored = loaded.get();
-    assertThat(restored.instanceId()).isEqualTo(original.instanceId());
-    assertThat(restored.timestamp()).isEqualToIgnoringNanos(original.timestamp());
+    assertThat(restored.getInstanceId()).isEqualTo(original.getInstanceId());
+    assertThat(restored.getTimestamp()).isEqualToIgnoringNanos(original.getTimestamp());
   }
 
   @Test

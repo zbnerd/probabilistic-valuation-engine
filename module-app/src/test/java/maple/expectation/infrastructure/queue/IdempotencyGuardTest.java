@@ -2,13 +2,13 @@ package maple.expectation.infrastructure.queue;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.support.TestLogicExecutors;
@@ -74,22 +74,22 @@ class IdempotencyGuardTest {
     @Test
     @DisplayName("첫 번째 요청 - true 반환 (SETNX 성공)")
     void tryAcquire_shouldReturnTrueWhenFirstRequest() {
-      // Given
-      when(rBucket.setIfAbsent(anyString(), any(Duration.class))).thenReturn(true);
+      // Given - Kotlin uses trySet(value, ttl, timeUnit) not setIfAbsent
+      when(rBucket.trySet(anyString(), anyLong(), any(TimeUnit.class))).thenReturn(true);
 
       // When
       boolean result = guard.tryAcquire("expectation", "msg-123");
 
       // Then
       assertThat(result).isTrue();
-      verify(rBucket).setIfAbsent("PROCESSING", Duration.ofHours(24));
+      verify(rBucket).trySet(anyString(), anyLong(), any(TimeUnit.class));
     }
 
     @Test
     @DisplayName("중복 요청 - false 반환 (이미 처리 중)")
     void tryAcquire_shouldReturnFalseWhenAlreadyProcessing() {
       // Given
-      when(rBucket.setIfAbsent(anyString(), any(Duration.class))).thenReturn(false);
+      lenient().when(rBucket.trySet(anyString(), anyLong(), any(TimeUnit.class))).thenReturn(false);
       when(rBucket.get()).thenReturn("PROCESSING");
 
       // When
@@ -103,7 +103,7 @@ class IdempotencyGuardTest {
     @DisplayName("완료된 요청 - false 반환 (이미 완료)")
     void tryAcquire_shouldReturnFalseWhenAlreadyCompleted() {
       // Given
-      when(rBucket.setIfAbsent(anyString(), any(Duration.class))).thenReturn(false);
+      lenient().when(rBucket.trySet(anyString(), anyLong(), any(TimeUnit.class))).thenReturn(false);
       when(rBucket.get()).thenReturn("COMPLETED");
 
       // When

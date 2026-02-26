@@ -12,6 +12,7 @@ import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse;
 import maple.expectation.service.v2.worker.EquipmentDbWorker;
 import maple.expectation.support.TestLogicExecutors;
+import maple.expectation.testfixtures.Fixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -312,8 +313,6 @@ class EquipmentCacheServiceTest {
   // ==================== Helper Methods ====================
 
   private EquipmentResponse createEquipmentResponse(String characterClass) {
-    EquipmentResponse response = new EquipmentResponse();
-    response.setCharacterClass(characterClass);
-    return response;
+    return Fixtures.equipmentResponse(null, null, characterClass);
   }
 }

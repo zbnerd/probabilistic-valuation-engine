@@ -1,12 +1,14 @@
 #!/bin/bash
-# PreToolUse Hook - 2-Layer Guardrail System
+# PreToolUse Hook - 2-Layer Guardrail System + Migration Guard
 # Layer 1: Regex 패턴 매칭 (빠른 차단)
 # Layer 2: AI Context Injection (복잡한 패턴은 AI가 판단)
+# Layer 3: Migration Guard (컴파일러 중심 마이그레이션)
 # 문서: https://code.claude.com/docs/en/hooks
 
 CWD="${CLAUDE_WORKING_DIRECTORY:-$(pwd)}"
 GUARDRAIL_INDEX="$CWD/docs/guardrails/INDEX.json"
 GUARDRAIL_DIR="$CWD/docs/guardrails"
+MIGRATION_STATE_FILE="$CWD/.omc/state/migration-session.json"
 INPUT=$(cat)
 
 # JSON 파싱 (jq 사용)
@@ -190,6 +192,78 @@ if [ "$TOOL_NAME" = "Write" ] || [ "$TOOL_NAME" = "Edit" ]; then
       echo "📋 [Layer 2] AI Context - 가드레일 참고 사항:" >&2
       echo "$CONTEXT_HINTS" >&2
       echo "" >&2
+    fi
+
+    # ============================================
+    # Layer 3: Migration Guard (컴파일러 중심)
+    # ============================================
+    # Java → Kotlin 마이그레이션 감지
+    if [ "$TOOL_NAME" = "Write" ]; then
+      # .java 파일 삭제 + .kt 파일 생성 패턴 감지
+      if echo "$FILE_PATH" | grep -qE '\.kt$'; then
+        # 마이그레이션 세션 파일에서 이전에 수정된 파일 추적
+        mkdir -p "$(dirname "$MIGRATION_STATE_FILE")" 2>/dev/null
+
+        # 세션 시작 시간 확인 (5분 이내면 같은 세션)
+        SESSION_START=$(jq -r '.sessionStart // 0' "$MIGRATION_STATE_FILE" 2>/dev/null || echo "0")
+        CURRENT_TIME=$(date +%s)
+        TIME_DIFF=$((CURRENT_TIME - SESSION_START))
+
+        if [ "$TIME_DIFF" -gt 300 ]; then
+          # 새 세션 시작
+          echo "{\"sessionStart\": $CURRENT_TIME, \"files\": [\"$FILE_PATH\"], \"count\": 1}" > "$MIGRATION_STATE_FILE"
+        else
+          # 기존 세션에 파일 추가
+          CURRENT_COUNT=$(jq -r '.count // 0' "$MIGRATION_STATE_FILE" 2>/dev/null || echo "0")
+          NEW_COUNT=$((CURRENT_COUNT + 1))
+
+          # 3개 이상 파일 수정 시 경고
+          if [ "$NEW_COUNT" -ge 3 ]; then
+            echo "" >&2
+            echo "⚠️ [GR-MIGRATION-001] 다중 파일 마이그레이션 감지" >&2
+            echo "   → 이 세션에서 $NEW_COUNT개 파일 수정 중" >&2
+            echo "   → 빌드 플랜 없이 대량 수정은 컴파일 오류 위험" >&2
+            echo "" >&2
+            echo "📋 마이그레이션 체크리스트:" >&2
+            echo "   1. 변경 대상 목록 작성했는가?" >&2
+            echo "   2. 의존성/호출부 분석했는가?" >&2
+            echo "   3. 컴파일 체크 포인트 정의했는가?" >&2
+            echo "   4. 롤백 전략 준비했는가?" >&2
+            echo "" >&2
+            echo "   → 가드레일 문서: docs/guardrails/migration/compiler-centric.md" >&2
+            echo "" >&2
+          fi
+
+          # 파일 목록 업데이트
+          jq ".files += [\"$FILE_PATH\"] | .count = $NEW_COUNT" "$MIGRATION_STATE_FILE" > "${MIGRATION_STATE_FILE}.tmp" 2>/dev/null
+          mv "${MIGRATION_STATE_FILE}.tmp" "$MIGRATION_STATE_FILE" 2>/dev/null
+        fi
+      fi
+    fi
+
+    # Kotlin Interop 체크
+    if echo "$FILE_PATH" | grep -qE '\.kt$'; then
+      # @JvmStatic 필요성 체크 (companion object 내 함수)
+      if echo "$CONTENT" | grep -qE 'companion\s+object' && echo "$CONTENT" | grep -qE 'fun\s+\w+\s*\('; then
+        if ! echo "$CONTENT" | grep -qE '@JvmStatic'; then
+          echo "" >&2
+          echo "📌 [GR-MIGRATION-002] Kotlin Interop 체크" >&2
+          echo "   → companion object 내 함수: Java에서 호출 시 @JvmStatic 필요할 수 있음" >&2
+          echo "   → docs/guardrails/migration/compiler-centric.md 참조" >&2
+          echo "" >&2
+        fi
+      fi
+
+      # !! (non-null assertion) 남용 체크
+      ASSERTION_COUNT=$(echo "$CONTENT" | grep -o '!!' | wc -l)
+      if [ "$ASSERTION_COUNT" -ge 3 ]; then
+        echo "" >&2
+        echo "⚠️ [GR-MIGRATION-003] Non-null assertion 남용 의심" >&2
+        echo "   → !! 사용 횟수: $ASSERTION_COUNT" >&2
+        echo "   → Safe call (?.) 또는 Elvis (?:) 고려" >&2
+        echo "   → docs/guardrails/migration/compiler-centric.md 참조" >&2
+        echo "" >&2
+      fi
     fi
   fi
 fi

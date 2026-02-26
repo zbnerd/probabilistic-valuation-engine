@@ -100,7 +100,7 @@ public class AdminController {
     return CompletableFuture.supplyAsync(
         () -> {
           // 자기 자신은 제거 불가
-          if (fingerprint.equals(currentUser.fingerprint())) {
+          if (fingerprint.equals(currentUser.getFingerprint())) {
             return ResponseEntity.badRequest()
                 .body(
                     ApiResponse.error("SELF_REMOVAL_NOT_ALLOWED", "자기 자신의 Admin 권한은 제거할 수 없습니다."));

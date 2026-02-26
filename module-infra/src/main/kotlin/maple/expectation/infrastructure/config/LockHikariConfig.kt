@@ -1,0 +1,82 @@
+package maple.expectation.infrastructure.config
+
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Profile
+import org.springframework.jdbc.core.JdbcTemplate
+import javax.sql.DataSource
+
+/**
+ * MySQL Named Lock 전용 HikariCP 설정
+ *
+ * <p>[목적] - Redis 장애 시 MySQL Named Lock을 사용할 때 메인 커넥션 풀이 고갈되는 것을 방지 - 락 전용 커넥션 풀을 별도로 운영하여 애플리케이션
+ * 안정성 확보
+ *
+ * <p>[설계 원칙] - Fixed Pool Size: Min과 Max를 동일하게 설정하여 연결 비용(Handshake) 제거 - Size 30: RPS 235 트래픽이
+ * Redis 장애로 넘어왔을 때 병목 없이 처리하기 위한 최소 용량 (Little's Law: 235 req/s * 0.1s latency + buffer ≈ 30
+ * connections) - Fail-fast: 락 획득 타임아웃을 짧게 가져가서 스레드 고갈 방지
+ *
+ * <p>[P0-6 Fix] Circular Dependency Deadlock: MicrometerMetricsTrackerFactory 제거로 Spring Boot 초기화 시
+ * 데드락 방지 - 원인: MeterRegistry → HikariDataSource → MicrometerMetrics → MeterRegistry 순환 참조 - 해결:
+ * Lock Pool은 Micrometer 메트릭 비활성화 (주요 DataSource만 메트릭 수집)
+ */
+@Configuration
+@Profile("!test & !chaos & !container")
+class LockHikariConfig(
+  @Value("\${spring.datasource.url}") private val jdbcUrl: String,
+  @Value("\${spring.datasource.username}") private val username: String,
+  @Value("\${spring.datasource.password}") private val password: String,
+  @Value("\${lock.datasource.pool-size:40}") private val poolSize: Int
+) {
+
+  private val log = LoggerFactory.getLogger(LockHikariConfig::class.java)
+
+  // Issue #284 DoD: Pool Size 외부화 (기본 40, prod에서 150으로 오버라이드)
+  // AI SRE 제안 (INC-29506518): Lock Pool 병목 방지를 위해 최댓값 증가
+
+  @Bean(name = ["lockDataSource"])
+  fun lockDataSource(): DataSource {
+    log.info("[Lock Pool] JDBC URL: {}", jdbcUrl)
+    val config = HikariConfig()
+
+    // 기본 연결 정보
+    config.jdbcUrl = jdbcUrl
+    config.username = username
+    config.password = password
+    config.driverClassName = "com.mysql.cj.jdbc.Driver"
+
+    // [핵심 수정 1] Pool Size 증설 (10 -> 30) 및 고정 (Fixed Pool)
+    // Redis가 죽으면 트래픽이 몰리므로 10개로는 부족함.
+    // MinIdle = MaxPoolSize로 설정하여 불필요한 연결/해제 비용 제거.
+    config.maximumPoolSize = poolSize
+    config.minimumIdle = poolSize
+
+    // [핵심 수정 2] Fail-fast 전략 유지
+    config.connectionTimeout = 5000 // 5초 안에 연결 못 얻으면 에러 (스레드 보호)
+    config.idleTimeout = 300000
+    config.maxLifetime = 600000
+    config.poolName = "MySQLLockPool"
+
+    // 검증 설정 (JDBC4 isValid 사용으로 쿼리 비용 절감)
+    config.validationTimeout = 3000
+
+    // P0-6 Fix: Micrometer 메트릭 비활성화 (순환 참조 데드락 방지)
+    // 주요 HikariPool 메트릭은 기본 DataSource에서 충분히 수집 가능
+
+    log.info(
+      "[Lock Pool] Initialized dedicated MySQL lock connection pool (Fixed Size: {}, Metrics: disabled)",
+      poolSize
+    )
+
+    return HikariDataSource(config)
+  }
+
+  @Bean(name = ["lockJdbcTemplate"])
+  fun lockJdbcTemplate(): JdbcTemplate {
+    return JdbcTemplate(lockDataSource())
+  }
+}

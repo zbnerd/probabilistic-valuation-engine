@@ -22,7 +22,7 @@ open class MemberRepositoryImpl(
 ) : MemberRepository {
 
     override fun findByUuid(uuid: String): Member? {
-        return jpaRepository.findByUuid(uuid).orElse(null)
+        return jpaRepository.findByUuid(uuid)
     }
 
     override fun findById(id: Long?): Member? {

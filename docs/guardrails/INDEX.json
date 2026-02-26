@@ -340,6 +340,60 @@
       "description": "Logging levels must be strictly separated: info (milestones), debug (tracing), error (failures).",
       "keywords": ["logging", "log level", "info", "debug", "error", "SLF4J", "structured logging"],
       "languages": ["java", "kotlin"]
+    },
+    "migration-multi-file": {
+      "file": "migration/compiler-centric.md",
+      "severity": "critical",
+      "id": "GR-MIGRATION-001",
+      "description": "Multi-file migration without build plan prohibited. LLM cannot handle large refactoring safely.",
+      "keywords": ["migration", "refactor", "Java to Kotlin", "convert", "마이그레이션", "리팩토링", "변환"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "kotlin-interop-jvmstatic": {
+      "file": "migration/compiler-centric.md",
+      "severity": "warning",
+      "id": "GR-MIGRATION-002",
+      "description": "Java-called Kotlin API requires @JvmStatic/@JvmOverloads for compatibility.",
+      "keywords": ["@JvmStatic", "@JvmField", "@JvmOverloads", "companion object", "static", "Java interop"],
+      "languages": ["kotlin"],
+      "aiJudgment": true
+    },
+    "kotlin-interop-nullability": {
+      "file": "migration/compiler-centric.md",
+      "severity": "warning",
+      "id": "GR-MIGRATION-003",
+      "description": "Platform types (Java interop) need explicit nullability to prevent NPE.",
+      "keywords": ["null", "nullable", "platform type", "NPE", "!!", "?", "nullability", "Safe call"],
+      "languages": ["kotlin"],
+      "aiJudgment": true
+    },
+    "annotation-processor-migration": {
+      "file": "migration/compiler-centric.md",
+      "severity": "critical",
+      "id": "GR-MIGRATION-004",
+      "description": "Annotation processor modules (Dagger/Hilt/Room/MapStruct/Lombok) require special handling.",
+      "keywords": ["@Entity", "@Dao", "@Module", "@Component", "@Mapper", "@Data", "@Builder", "KAPT", "KSP", "annotation processor"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "error-clustering": {
+      "file": "migration/compiler-centric.md",
+      "severity": "warning",
+      "id": "GR-MIGRATION-005",
+      "description": "Bulk compile errors should be clustered and fixed together, not one-by-one.",
+      "keywords": ["compile error", "bulk fix", "clustering", "컴파일 에러", "대량 수정"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "compile-unit-workflow": {
+      "file": "migration/compiler-centric.md",
+      "severity": "critical",
+      "id": "GR-MIGRATION-006",
+      "description": "File-level compile workflow required. Never modify multiple files without compiling.",
+      "keywords": ["compile", "unit", "workflow", "incremental", "file-by-file", "컴파일 단위"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
     }
   },
   "allowedPatterns": [
@@ -441,6 +495,9 @@
     "coding-style": {
       "imports.md": "Import Style Guide (FQCN usage)"
     },
+    "migration": {
+      "compiler-centric.md": "Compiler-Centric Migration (Build Plan, Kotlin Interop, Error Clustering)"
+    },
     "security": {
       "jwt-security.md": "JWT Security Best Practices",
       "cors-security.md": "CORS Configuration",
@@ -472,7 +529,18 @@
   "aiJudgmentPatterns": {
     "description": "Patterns requiring AI semantic analysis (regex insufficient)",
     "detection": "Match keywords → Inject corresponding guardrail md file → AI analyzes DON'T section → Violation detected if code matches DON'T pattern",
-    "patterns": ["aop-self-invocation", "lambda-hell", "optional-chaining-violation", "marker-interface-missing"]
+    "patterns": [
+      "aop-self-invocation",
+      "lambda-hell",
+      "optional-chaining-violation",
+      "marker-interface-missing",
+      "migration-multi-file",
+      "kotlin-interop-jvmstatic",
+      "kotlin-interop-nullability",
+      "annotation-processor-migration",
+      "error-clustering",
+      "compile-unit-workflow"
+    ]
   },
   "hookIntegration": {
     "preToolUse": {

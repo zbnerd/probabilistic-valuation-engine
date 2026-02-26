@@ -74,7 +74,7 @@ class SchedulerConfigTest {
     // We verify the scheduler is properly initialized
     assertThat(scheduler.getScheduledExecutor()).isNotNull();
     assertThat(scheduler.getThreadNamePrefix()).isEqualTo("scheduler-");
-    assertThat(properties.poolSize()).isEqualTo(3);
+    assertThat(properties.getPoolSize()).isEqualTo(3);
 
     // Cleanup
     scheduler.destroy();
@@ -95,7 +95,7 @@ class SchedulerConfigTest {
     // We verify the scheduler is properly initialized with custom properties
     assertThat(scheduler.getScheduledExecutor()).isNotNull();
     assertThat(scheduler.getThreadNamePrefix()).isEqualTo("scheduler-");
-    assertThat(properties.poolSize()).isEqualTo(5);
+    assertThat(properties.getPoolSize()).isEqualTo(5);
 
     // Cleanup
     scheduler.destroy();

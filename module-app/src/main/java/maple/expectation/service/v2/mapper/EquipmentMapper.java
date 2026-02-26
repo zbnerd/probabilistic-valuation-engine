@@ -42,23 +42,18 @@ public class EquipmentMapper {
 
   public TotalExpectationResponse.ItemExpectation toItemExpectation(
       CubeCalculationInput input, long cost, long count) {
-    return TotalExpectationResponse.ItemExpectation.builder()
-        .part(input.getPart())
-        .itemName(input.getItemName())
-        .potential(String.join(" | ", input.getOptions()))
-        .expectedCost(cost)
-        .expectedCostText(String.format("%,d 메소", cost))
-        .expectedCount(count)
-        .build();
+    return new TotalExpectationResponse.ItemExpectation(
+        input.getPart(),
+        input.getItemName(),
+        String.join(" | ", input.getOptions()),
+        cost,
+        String.format("%,d 메소", cost),
+        count);
   }
 
   public TotalExpectationResponse toTotalResponse(
       String userIgn, long totalCost, List<TotalExpectationResponse.ItemExpectation> items) {
-    return TotalExpectationResponse.builder()
-        .userIgn(userIgn)
-        .totalCost(totalCost)
-        .totalCostText(String.format("%,d 메소", totalCost))
-        .items(items)
-        .build();
+    return new TotalExpectationResponse(
+        userIgn, totalCost, String.format("%,d 메소", totalCost), items);
   }
 }

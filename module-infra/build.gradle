@@ -66,6 +66,11 @@ dependencies {
 	// Resilience4j
 	implementation 'io.github.resilience4j:resilience4j-spring-boot3'
 
+	// OpenTelemetry (migrated from module-app for OpenTelemetryConfig)
+	implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+	implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+	implementation 'io.opentelemetry.contrib:opentelemetry-samplers:1.33.0-alpha'
+
 	// Bucket4j
 	implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
 	implementation 'com.bucket4j:bucket4j_jdk17-redisson:8.14.0'
@@ -76,6 +81,13 @@ dependencies {
 
 	// Guava
 	implementation 'com.google.guava:guava:33.5.0-jre'
+
+	// LangChain4j (for AI monitoring)
+	implementation 'dev.langchain4j:langchain4j-spring-boot-starter:0.29.0'
+	implementation 'dev.langchain4j:langchain4j-open-ai-spring-boot-starter:0.29.0'
+
+	// Spring Batch (for equipment refresh job)
+	implementation 'org.springframework.boot:spring-boot-starter-batch'
 
 	// JWT
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'

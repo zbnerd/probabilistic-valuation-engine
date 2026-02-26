@@ -1,7 +1,5 @@
 package maple.expectation.core.port.out
 
-import java.util.Set
-
 /**
  * Like Relation Buffer Strategy Interface (#271 V5 Stateless Architecture)
  *

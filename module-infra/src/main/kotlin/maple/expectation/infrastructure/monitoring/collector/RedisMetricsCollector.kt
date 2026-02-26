@@ -3,16 +3,27 @@ package maple.expectation.infrastructure.monitoring.collector
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
-import maple.expectation.domain.repository.RedisBufferRepository
+import maple.expectation.core.port.out.BufferStatusQuery
 import maple.expectation.infrastructure.config.MonitoringThresholdProperties
 import org.springframework.stereotype.Component
 import kotlin.math.min
 import kotlin.math.round
 
+/**
+ * Redis 메트릭 수집기
+ *
+ * <p>버퍼 상태와 캐시 성능 메트릭을 수집합니다.
+ *
+ * <h2>DIP 준수</h2>
+ *
+ * <p>{@link BufferStatusQuery} Port를 통해 버퍼 상태를 조회하므로 Repository 직접 참조를 방지합니다.
+ *
+ * @see BufferStatusQuery 버퍼 상태 조회 Port
+ */
 @Component
 class RedisMetricsCollector(
     private val meterRegistry: MeterRegistry,
-    private val redisBufferRepository: RedisBufferRepository,
+    private val bufferStatus: BufferStatusQuery,
     private val thresholdProperties: MonitoringThresholdProperties
 ) : MetricsCollectorStrategy {
 
@@ -29,7 +40,7 @@ class RedisMetricsCollector(
   override fun getOrder(): Int = 5
 
   private fun collectBufferMetrics(metrics: MutableMap<String, Any>) {
-    val pendingCount = redisBufferRepository.getTotalPendingCount()
+    val pendingCount = bufferStatus.getTotalPendingCount()
     metrics["buffer_pending_count"] = pendingCount
 
     val saturation = (pendingCount.toDouble() / thresholdProperties.bufferSaturationDouble) * 100

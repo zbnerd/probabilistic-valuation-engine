@@ -10,8 +10,8 @@ import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.config.BufferProperties;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.infrastructure.config.BufferProperties;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import org.springframework.stereotype.Component;
@@ -185,7 +185,7 @@ public class ExpectationWriteBackBuffer {
     int newCount = pendingCount.addAndGet(required);
 
     // 2. Check if reservation exceeds limit
-    if (newCount > properties.maxQueueSize()) {
+    if (newCount > properties.getMaxQueueSize()) {
       // Rollback: immediately release the reservation
       pendingCount.addAndGet(-required);
       meterRegistry.counter("expectation.buffer.rejected.backpressure").increment();
@@ -193,7 +193,7 @@ public class ExpectationWriteBackBuffer {
           "[ExpectationBuffer] Backpressure triggered: pending={}, required={}, max={}",
           newCount - required,
           required,
-          properties.maxQueueSize());
+          properties.getMaxQueueSize());
       return false;
     }
 
@@ -310,6 +310,6 @@ public class ExpectationWriteBackBuffer {
    * @return Shutdown 대기 타임아웃 Duration
    */
   public Duration getShutdownAwaitTimeout() {
-    return Duration.ofSeconds(properties.shutdownAwaitTimeoutSeconds());
+    return Duration.ofSeconds(properties.getShutdownAwaitTimeoutSeconds());
   }
 }

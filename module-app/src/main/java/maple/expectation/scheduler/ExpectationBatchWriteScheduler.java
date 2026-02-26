@@ -71,7 +71,7 @@ public class ExpectationBatchWriteScheduler {
   private final LockStrategy lockStrategy;
   private final LogicExecutor executor;
   private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
-  private final maple.expectation.config.BatchProperties batchProperties;
+  private final maple.expectation.infrastructure.config.BatchProperties batchProperties;
 
   /** 분산 락 이름 */
   private static final String LOCK_NAME = "expectation-batch-sync-lock";
@@ -126,7 +126,7 @@ public class ExpectationBatchWriteScheduler {
 
   /** 배치 플러시 실행 */
   private void flushBatch() {
-    List<ExpectationWriteTask> batch = buffer.drain(batchProperties.expectationWriteSize());
+    List<ExpectationWriteTask> batch = buffer.drain(batchProperties.getExpectationWriteSize());
 
     if (batch.isEmpty()) {
       return;

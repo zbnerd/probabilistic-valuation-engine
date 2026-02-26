@@ -259,7 +259,7 @@ class DlqAdminServiceTest {
     assertThat(result.getContent().get(0).requestId()).isEqualTo("req-001");
 
     verify(dlqRepository).findFirstPage(any(Pageable.class));
-    verify(dlqRepository, never()).findByCursorGreaterThan(any(), any());
+    verify(dlqRepository, never()).findByCursorGreaterThan(anyLong(), any(Pageable.class));
   }
 
   @Test

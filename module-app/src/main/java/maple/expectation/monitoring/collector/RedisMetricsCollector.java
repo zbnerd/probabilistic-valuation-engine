@@ -66,7 +66,7 @@ public class RedisMetricsCollector implements MetricsCollectorStrategy {
     metrics.put("buffer_pending_count", pendingCount);
 
     // 버퍼 포화도 (임계값 기준 - 설정에서 가져옴)
-    double saturation = (pendingCount / thresholdProperties.bufferSaturationDouble()) * 100;
+    double saturation = (pendingCount / thresholdProperties.getBufferSaturationDouble()) * 100;
     metrics.put("buffer_saturation_percent", Math.min(formatDouble(saturation), 100.0));
 
     // Micrometer 메트릭에서 추가 정보

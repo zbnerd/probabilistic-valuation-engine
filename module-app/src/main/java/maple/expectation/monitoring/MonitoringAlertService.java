@@ -55,7 +55,7 @@ public class MonitoringAlertService {
   private void performBufferCheck() {
     long globalPending = redisBufferRepository.getTotalPendingCount();
 
-    if (globalPending > thresholdProperties.bufferSaturationCount()) {
+    if (globalPending > thresholdProperties.getBufferSaturationCount()) {
       MonitoringException exception =
           new MonitoringException(CommonErrorCode.SYSTEM_CAPACITY_EXCEEDED, globalPending);
 

@@ -67,8 +67,8 @@ class SessionServiceTest {
       // then
       assertThat(session.getSessionId()).isNotBlank();
       assertThat(session.getFingerprint()).isEqualTo(FINGERPRINT);
-      assertThat(session.apiKey()).isEqualTo(API_KEY);
-      assertThat(session.myOcids()).isEqualTo(MY_OCIDS);
+      assertThat(session.getApiKey()).isEqualTo(API_KEY);
+      assertThat(session.getMyOcids()).isEqualTo(MY_OCIDS);
       assertThat(session.getRole()).isEqualTo(ROLE_USER);
 
       verify(sessionRepository)

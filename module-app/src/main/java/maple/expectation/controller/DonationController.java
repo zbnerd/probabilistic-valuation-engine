@@ -73,7 +73,7 @@ public class DonationController {
 
     // 발신자는 인증된 사용자의 fingerprint를 UUID로 사용
     // (Member 테이블에 fingerprint가 uuid로 저장되어 있어야 함)
-    String guestUuid = user.fingerprint();
+    String guestUuid = user.getFingerprint();
 
     // ADR-039 Fix: Use dedicated executor instead of ForkJoinPool.commonPool()
     // This prevents blocking transactional work from saturating the common pool

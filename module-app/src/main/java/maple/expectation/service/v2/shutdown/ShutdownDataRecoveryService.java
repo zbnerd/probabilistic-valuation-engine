@@ -124,9 +124,9 @@ public class ShutdownDataRecoveryService {
     if (!failedEntries.isEmpty()) {
       log.warn(
           "⚠️ [Recovery] 부분 실패: {} 항목 중 {} 실패, 실패 항목만 백업 생성",
-          data.likeBuffer().size(),
+          data.getLikeBuffer().size(),
           failedEntries.size());
-      persistenceService.saveFailedEntriesOnly(failedEntries, data.equipmentPending());
+      persistenceService.saveFailedEntriesOnly(failedEntries, data.getEquipmentPending());
     }
 
     // 원본 파일은 항상 처리 완료로 간주 (재복구 방지)
@@ -150,7 +150,7 @@ public class ShutdownDataRecoveryService {
    */
   private Map<String, Long> recoverLikeBufferAndCollectFailures(
       ShutdownData data, String fileIdentifier) {
-    Map<String, Long> likeBuffer = data.likeBuffer();
+    Map<String, Long> likeBuffer = data.getLikeBuffer();
     if (likeBuffer == null || likeBuffer.isEmpty()) return Map.of();
 
     // P1-9 Fix: forEach는 순차 실행, executeOrCatch도 동기 → HashMap 충분
@@ -208,7 +208,7 @@ public class ShutdownDataRecoveryService {
   }
 
   private void recoverEquipmentPending(ShutdownData data) {
-    List<String> equipmentPending = data.equipmentPending();
+    List<String> equipmentPending = data.getEquipmentPending();
     if (equipmentPending == null || equipmentPending.isEmpty()) return;
 
     log.warn("⚠️ [Shutdown Recovery] Equipment 미완료 항목: {}건", equipmentPending.size());

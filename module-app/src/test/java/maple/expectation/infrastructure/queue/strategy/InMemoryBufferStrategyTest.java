@@ -105,7 +105,7 @@ class InMemoryBufferStrategyTest {
 
       // Then
       assertThat(batch).hasSize(1);
-      assertThat(batch.get(0).msgId()).isEqualTo(msgId);
+      assertThat(batch.get(0).getMsgId()).isEqualTo(msgId);
       assertThat(buffer.getPendingCount()).isZero();
       assertThat(buffer.getInflightCount()).isEqualTo(1);
     }
@@ -222,7 +222,7 @@ class InMemoryBufferStrategyTest {
 
       // Then
       assertThat(dlqMessages).hasSize(1);
-      assertThat(dlqMessages.get(0).msgId()).isEqualTo(msgId);
+      assertThat(dlqMessages.get(0).getMsgId()).isEqualTo(msgId);
       assertThat(buffer.getDlqCount()).isZero();
     }
   }
@@ -302,11 +302,11 @@ class InMemoryBufferStrategyTest {
                     break;
                   }
                   for (QueueMessage<TestMessage> msg : batch) {
-                    boolean added = processedIds.add(msg.msgId());
+                    boolean added = processedIds.add(msg.getMsgId());
                     if (!added) {
                       duplicateCount.incrementAndGet();
                     }
-                    buffer.ack(msg.msgId());
+                    buffer.ack(msg.getMsgId());
                   }
                 }
               } catch (Exception e) {

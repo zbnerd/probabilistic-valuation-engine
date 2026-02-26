@@ -69,7 +69,7 @@ class RedisLikeBufferStorage(
             """
     }
 
-    private val bufferKey: String = RedisKey.LIKE_BUFFER.getKey()
+    private val bufferKey: String = RedisKey.LIKE_BUFFER.key
 
     /** Lua Script SHA 캐싱 */
     private val fetchAndClearSha = AtomicReference<String>()

@@ -109,7 +109,7 @@ class MonitoringAlertServiceUnitTest {
     // given
     given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
     given(redisBufferRepository.getTotalPendingCount()).willReturn(6000L);
-    given(thresholdProperties.bufferSaturationCount()).willReturn(5000L);
+    given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
     // when
     monitoringAlertService.checkBufferSaturation();
@@ -124,7 +124,7 @@ class MonitoringAlertServiceUnitTest {
     // given
     given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
     given(redisBufferRepository.getTotalPendingCount()).willReturn(3000L);
-    given(thresholdProperties.bufferSaturationCount()).willReturn(5000L);
+    given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
     // when
     monitoringAlertService.checkBufferSaturation();
@@ -154,7 +154,7 @@ class MonitoringAlertServiceUnitTest {
     // given
     given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
     given(redisBufferRepository.getTotalPendingCount()).willReturn(5001L);
-    given(thresholdProperties.bufferSaturationCount()).willReturn(5000L);
+    given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
     // when
     monitoringAlertService.checkBufferSaturation();
@@ -169,7 +169,7 @@ class MonitoringAlertServiceUnitTest {
     // given
     given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
     given(redisBufferRepository.getTotalPendingCount()).willReturn(0L);
-    given(thresholdProperties.bufferSaturationCount()).willReturn(5000L);
+    given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
     // when
     monitoringAlertService.checkBufferSaturation();

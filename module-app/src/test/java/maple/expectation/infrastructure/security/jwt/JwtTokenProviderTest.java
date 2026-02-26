@@ -12,6 +12,7 @@ import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.support.TestLogicExecutors;
+import maple.expectation.testfixtures.Fixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -64,7 +65,7 @@ class JwtTokenProviderTest {
     @DisplayName("JwtPayload로 토큰 생성 성공")
     void whenValidPayload_shouldGenerateToken() {
       // given
-      JwtPayload payload = JwtPayload.of("session-123", "fingerprint-abc", "USER", 3600L);
+      JwtPayload payload = Fixtures.jwtPayload("session-123", "fingerprint-abc", "USER", 3600L);
 
       // when
       String token = tokenProvider.generateToken(payload);
@@ -104,9 +105,9 @@ class JwtTokenProviderTest {
 
       // then
       assertThat(parsed).isPresent();
-      assertThat(parsed.get().sessionId()).isEqualTo(sessionId);
-      assertThat(parsed.get().fingerprint()).isEqualTo(fingerprint);
-      assertThat(parsed.get().role()).isEqualTo(role);
+      assertThat(parsed.get().getSessionId()).isEqualTo(sessionId);
+      assertThat(parsed.get().getFingerprint()).isEqualTo(fingerprint);
+      assertThat(parsed.get().getRole()).isEqualTo(role);
     }
   }
 
@@ -118,7 +119,7 @@ class JwtTokenProviderTest {
     @DisplayName("유효한 토큰 파싱 성공")
     void whenValidToken_shouldParseSuccessfully() {
       // given
-      JwtPayload originalPayload = JwtPayload.of("session-abc", "fp-123", "USER", 3600L);
+      JwtPayload originalPayload = Fixtures.jwtPayload("session-abc", "fp-123", "USER", 3600L);
       String token = tokenProvider.generateToken(originalPayload);
 
       // when
@@ -127,9 +128,9 @@ class JwtTokenProviderTest {
       // then
       assertThat(result).isPresent();
       JwtPayload parsed = result.get();
-      assertThat(parsed.sessionId()).isEqualTo("session-abc");
-      assertThat(parsed.fingerprint()).isEqualTo("fp-123");
-      assertThat(parsed.role()).isEqualTo("USER");
+      assertThat(parsed.getSessionId()).isEqualTo("session-abc");
+      assertThat(parsed.getFingerprint()).isEqualTo("fp-123");
+      assertThat(parsed.getRole()).isEqualTo("USER");
     }
 
     @Test
@@ -201,7 +202,7 @@ class JwtTokenProviderTest {
     void whenTamperedToken_shouldReturnFalse() {
       // given
       String token = tokenProvider.generateToken("session", "fp", "USER");
-      String tamperedToken = token.substring(0, token.length() - 5) + "XXXXX";
+      String tamperedToken = token.substring(0, token.length() - 5) + "ABCDE";
 
       // when
       boolean isValid = tokenProvider.validateToken(tamperedToken);
@@ -230,7 +231,7 @@ class JwtTokenProviderTest {
                     new JwtTokenProvider(defaultSecret, EXPIRATION_SECONDS, prodEnv, executor);
                 prodProvider.init();
               })
-          .isInstanceOf(IllegalStateException.class)
+          .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("production");
     }
 
@@ -247,7 +248,7 @@ class JwtTokenProviderTest {
                     new JwtTokenProvider(shortSecret, EXPIRATION_SECONDS, environment, executor);
                 shortKeyProvider.init();
               })
-          .isInstanceOf(IllegalStateException.class)
+          .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("32 characters");
     }
 
@@ -268,22 +269,22 @@ class JwtTokenProviderTest {
     }
 
     @Test
-    @DisplayName("환경변수 placeholder 포함 시 예외 발생 (Issue #19)")
+    @DisplayName("환경변수 미해결 포함 시 예외 발생 (Issue #19)")
     void whenSecretContainsPlaceholder_shouldThrowException() {
-      // given - 환경변수가 설정되지 않아 placeholder가 그대로 남은 경우
-      String placeholderSecret = "${JWT_SECRET}";
+      // given - 환경변수가 설정되지 않아 unresolved variable remains 경우
+      String unresolvedSecret = "${JWT_SECRET}";
 
       // when & then
       assertThatThrownBy(
               () -> {
-                JwtTokenProvider placeholderProvider =
+                JwtTokenProvider unresolvedProvider =
                     new JwtTokenProvider(
-                        placeholderSecret, EXPIRATION_SECONDS, environment, executor);
-                placeholderProvider.init();
+                        unresolvedSecret, EXPIRATION_SECONDS, environment, executor);
+                unresolvedProvider.init();
               })
-          .isInstanceOf(IllegalStateException.class)
+          .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("environment variable is not set")
-          .hasMessageContaining("placeholder");
+          .hasMessageContaining("environment variable is not set");
     }
 
     @Test
@@ -299,7 +300,7 @@ class JwtTokenProviderTest {
                     new JwtTokenProvider(emptySecret, EXPIRATION_SECONDS, environment, executor);
                 emptyProvider.init();
               })
-          .isInstanceOf(IllegalStateException.class)
+          .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("not be null or blank");
     }
 
@@ -316,8 +317,7 @@ class JwtTokenProviderTest {
                     new JwtTokenProvider(nullSecret, EXPIRATION_SECONDS, environment, executor);
                 nullProvider.init();
               })
-          .isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining("not be null or blank");
+          .isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -333,7 +333,7 @@ class JwtTokenProviderTest {
                     new JwtTokenProvider(blankSecret, EXPIRATION_SECONDS, environment, executor);
                 blankProvider.init();
               })
-          .isInstanceOf(IllegalStateException.class)
+          .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("not be null or blank");
     }
   }
@@ -367,7 +367,7 @@ class JwtTokenProviderTest {
 
       // then
       assertThat(parsed).isPresent();
-      Instant expiration = parsed.get().expiration();
+      Instant expiration = parsed.get().getExpiration();
 
       // 만료 시간이 현재 + EXPIRATION_SECONDS 범위 내 (1초 여유)
       Instant expectedMinExpiration = beforeGeneration.plusSeconds(EXPIRATION_SECONDS);

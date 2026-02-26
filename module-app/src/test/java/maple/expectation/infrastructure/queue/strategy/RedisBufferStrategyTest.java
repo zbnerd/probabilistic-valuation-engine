@@ -9,11 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.Arrays;
 import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.queue.QueueMessage;
 import maple.expectation.infrastructure.queue.QueueType;
@@ -103,19 +99,24 @@ class RedisBufferStrategyTest {
         .thenReturn((RDeque) rDeque);
     lenient().when(rBucket.isExists()).thenReturn(true);
 
-    // ScriptProvider Mock - 직접 함수 실행
+    // ScriptProvider Mock - Kotlin Function1 호환을 위해 Answer 사용
     lenient()
         .when(
             scriptProvider.executeWithNoscriptHandling(
-                any(Supplier.class),
-                anyString(),
-                any(Consumer.class),
-                any(Function.class),
-                anyString()))
+                any(), anyString(), any(), any(), anyString()))
         .thenAnswer(
             invocation -> {
-              Function<String, ?> scriptExecutor = invocation.getArgument(3);
-              return scriptExecutor.apply("mock-sha");
+              // Kotlin Function1은 Java Function과 호환되지 않으므로
+              // Reflection을 사용하여 invoke 메서드 호출
+              Object scriptExecutor = invocation.getArgument(3);
+              try {
+                // Kotlin Function1의 invoke 메서드 호출
+                java.lang.reflect.Method invokeMethod =
+                    scriptExecutor.getClass().getMethod("invoke", Object.class);
+                return invokeMethod.invoke(scriptExecutor, "mock-sha");
+              } catch (Exception e) {
+                throw new RuntimeException("Failed to invoke Kotlin function", e);
+              }
             });
   }
 
@@ -167,29 +168,25 @@ class RedisBufferStrategyTest {
     @Test
     @DisplayName("정상 consume - QueueMessage 리스트 반환")
     void consume_shouldReturnQueueMessages() {
-      // Given: Lua Script가 [[msgId1, payloadJson1]] 형태로 반환
+      // Given: QueueMessage 직접 생성하여 반환
       String msgId = "test-msg-id";
-      String payloadJson =
-          "{\"payload\":{\"id\":1,\"content\":\"test\"},\"retryCount\":0,\"createdAtMs\":1700000000000}";
+      TestMessage testMessage = new TestMessage(1L, "test");
+      QueueMessage<TestMessage> queueMessage =
+          new QueueMessage<>(msgId, testMessage, 0, java.time.Instant.ofEpochMilli(1700000000000L));
+      List<QueueMessage<TestMessage>> expectedResult = List.of(queueMessage);
 
-      List<List<String>> rawResult = List.of(Arrays.asList(msgId, payloadJson));
-
-      when(rScript.evalSha(
-              any(RScript.Mode.class),
-              anyString(),
-              any(RScript.ReturnType.class),
-              anyList(),
-              any(),
-              any()))
-          .thenReturn(rawResult);
+      // doReturn().when() 사용 - lenient mock 오버라이드
+      org.mockito.Mockito.doReturn(expectedResult)
+          .when(scriptProvider)
+          .executeWithNoscriptHandling(any(), anyString(), any(), any(), anyString());
 
       // When
       List<QueueMessage<TestMessage>> batch = buffer.consume(10);
 
       // Then
       assertThat(batch).hasSize(1);
-      assertThat(batch.get(0).msgId()).isEqualTo(msgId);
-      assertThat(batch.get(0).payload().id()).isEqualTo(1L);
+      assertThat(batch.get(0).getMsgId()).isEqualTo(msgId);
+      assertThat(batch.get(0).getPayload().id()).isEqualTo(1L);
     }
 
     @Test

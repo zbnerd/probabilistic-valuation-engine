@@ -126,15 +126,15 @@ public class CharacterLikeService {
     String targetOcid = resolveOcid(targetUserIgn);
 
     // 2. Self-Like 검증 (메모리)
-    validateNotSelfLike(user.myOcids(), targetOcid);
+    validateNotSelfLike(user.getMyOcids(), targetOcid);
 
     // 3. 원자적 토글 실행 (Redis Lua Script 또는 In-Memory Fallback)
     boolean liked;
     long newDelta;
 
     // P2 Fix: null accountId fallback (pre-deploy sessions)
-    String accountId = user.accountId();
-    String effectiveAccountId = (accountId != null) ? accountId : user.fingerprint();
+    String accountId = user.getAccountId();
+    String effectiveAccountId = (accountId != null) ? accountId : user.getFingerprint();
 
     if (accountId == null) {
       log.warn("[P2] Pre-deploy session detected: using fingerprint as accountId fallback");

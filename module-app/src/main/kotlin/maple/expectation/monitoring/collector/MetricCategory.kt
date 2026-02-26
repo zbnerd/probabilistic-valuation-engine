@@ -1,4 +1,4 @@
-package maple.expectation.monitoring.collector;
+package maple.expectation.monitoring.collector
 
 /**
  * 메트릭 수집 카테고리 (Issue #251)
@@ -7,7 +7,7 @@ package maple.expectation.monitoring.collector;
  *
  * @see MetricsCollectorStrategy
  */
-public enum MetricCategory {
+enum class MetricCategory(val key: String, val displayName: String) {
 
   /** Golden Signals (4대 핵심 지표) - Latency, Error Rate, Traffic (RPS), Saturation */
   GOLDEN_SIGNALS("golden-signals", "4대 핵심 신호"),
@@ -40,21 +40,5 @@ public enum MetricCategory {
   LOGGING("logging", "로깅"),
 
   /** 인프라 메트릭 - CPU, Memory, Disk */
-  INFRA("infra", "인프라");
-
-  private final String key;
-  private final String displayName;
-
-  MetricCategory(String key, String displayName) {
-    this.key = key;
-    this.displayName = displayName;
-  }
-
-  public String getKey() {
-    return key;
-  }
-
-  public String getDisplayName() {
-    return displayName;
-  }
+  INFRA("infra", "인프라")
 }

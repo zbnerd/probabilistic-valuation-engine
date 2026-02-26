@@ -2,7 +2,7 @@ package maple.expectation.monitoring;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import maple.expectation.monitoring.security.PiiMaskingFilter;
+import maple.expectation.infrastructure.monitoring.security.PiiMaskingFilter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

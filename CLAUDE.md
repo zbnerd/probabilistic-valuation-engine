@@ -503,6 +503,7 @@ private List<Dto> processActiveUser(Long id) {
 | verify-circuit-breaker | Circuit Breaker Marker Interface, Logging Level, Resilience4j 준수 검증 |
 | verify-deprecated-api | @deprecated 기능 사용 탐지, 최신 Best Practice API 사용 확인 |
 | verify-global-error | @RestControllerAdvice, ErrorResponse 형식, Exception Chaining 준수 검증 |
+| verify-guardrails | docs/guardrails의 모든 가드레일 패턴(88개) 검증, INDEX.json 무결성 확인 |
 
 ---
 

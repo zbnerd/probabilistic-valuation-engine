@@ -39,6 +39,7 @@ dependencies {
 	implementation project(':module-core')
 	implementation project(':module-infra')
 	implementation project(':module-common')
+	implementation project(':module-web')
 
 	// Spring Web
 	implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -188,6 +189,11 @@ tasks.register('integrationTest', Test) {
 // Fix duplicate resources issue
 tasks.withType(ProcessResources).configureEach {
 	duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+// Ensure Java compilation depends on Kotlin compilation (Kotlin-Java interop)
+tasks.named('compileJava') {
+	dependsOn tasks.named('compileKotlin')
 }
 
 // Lombok annotation processor for integration tests

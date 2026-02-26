@@ -1,0 +1,27 @@
+// ========================================
+// Module-Web: Presentation Layer Shared Components
+// ADR-037: Web 계층 공통 컴포넌트 (GlobalExceptionHandler 등)
+// Spring Web 의존성을 격리하여 module-common의 순수성 유지
+// ========================================
+
+dependencies {
+	implementation project(':module-common')
+	implementation project(':module-infra')
+
+	// Spring Web (Presentation Layer)
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	// Resilience4j (for CircuitBreaker exception handling)
+	implementation 'io.github.resilience4j:resilience4j-spring-boot3'
+
+	// Lombok
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+}
+
+// Enable plain jar for inter-module dependencies
+tasks.named("jar") {
+	enabled = true
+	archiveClassifier = "plain"
+}

@@ -165,4 +165,14 @@ class TieredCacheManager(
     fun getL1CacheDirect(name: String): Cache? {
         return l1Manager.getCache(name)
     }
+
+    /**
+     * 캐시에서 키 제거 (이벤트 핸들링용)
+     *
+     * @param cacheName 캐시 이름
+     * @param key 제거할 키
+     */
+    fun evict(cacheName: String, key: Any) {
+        getCache(cacheName)?.evict(key)
+    }
 }

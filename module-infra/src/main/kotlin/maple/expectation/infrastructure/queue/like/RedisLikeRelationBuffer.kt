@@ -89,17 +89,16 @@ class RedisLikeRelationBuffer(
         )
     }
 
-    override fun fetchAndRemovePending(limit: Int): java.util.Set<String> {
-        val result = executor.executeOrDefault(
+    override fun fetchAndRemovePending(limit: Int): Set<String> {
+        return executor.executeOrDefault(
             { doFetchAndRemovePending(limit) },
-            Collections.emptySet(),
+            emptySet(),
             TaskContext.of("LikeRelation", "FetchPending")
-        )
-        return if (result is java.util.Set<String>) result else result as java.util.Set<String>
+        ) ?: emptySet()
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun doFetchAndRemovePending(limit: Int): java.util.Set<String> {
+    private fun doFetchAndRemovePending(limit: Int): Set<String> {
         val script = redissonClient.getScript(StringCodec.INSTANCE)
         val sha = fetchPendingSha.get()
 
@@ -114,7 +113,7 @@ class RedisLikeRelationBuffer(
             log.info("[LikeRelation] FetchedPending: {} entries", result.size)
         }
 
-        return result.toSet() as java.util.Set<String>
+        return result.toSet()
     }
 
     @Suppress("UNCHECKED_CAST")

@@ -376,53 +376,53 @@ Virtual Thread로 스레드 풀 튜닝 없이 동시성 처리 최적화.
 
 ---
 
-## 5. Transactional Outbox + 3중 안전망
+## 5. Nexon API Outbox + 3중 안전망
 
-> **Transactional Outbox 패턴과 3중 안전망(DB-File-Discord)** 설계로 외부 API 6시간 장애 상황에서 **210만 건의 데이터 유실 0** 및 자동 재처리 달성
+> **Nexon API Outbox 패턴과 3중 안전망(DB-File-Discord)** 설계로 외부 API 6시간 장애 상황에서 **210만 건의 데이터 유실 0** 및 자동 재처리 달성
 
 ### 아키텍처 다이어그램
 
 ```mermaid
 flowchart LR
-    subgraph Inbound["1. 인바운드"]
+    subgraph Request["1. API 요청"]
         direction TB
-        REQ[API Request] --> SVC[Service]
-        SVC --> TX[TX]
-        TX --> DB[(Outbox<br/>MySQL)]
+        CLIENT[Client] --> API["/api/v5/expectation"]
+        API --> NEXON_CALL[Nexon API 호출]
     end
 
-    subgraph Poller["2. Outbox Poller"]
+    subgraph Outbox["2. Outbox 적재"]
         direction TB
-        DB -->|SKIP LOCKED| POLLER[Poller]
-        POLLER --> NEXON[Nexon API]
+        NEXON_CALL -->|성공| SUCCESS[응답 반환]
+        NEXON_CALL -->|실패| SAVE[Outbox 저장]
+        SAVE --> OUTBOX[(nexon_api_outbox<br/>status=PENDING)]
     end
 
-    subgraph Result["3. 결과 처리"]
+    subgraph Poller["3. Poller 재시도"]
         direction TB
-        NEXON -->|성공| MARK[status=SENT]
-        NEXON -->|실패| FALLBACK[Fallback]
+        OUTBOX -->|SKIP LOCKED| POLLER[Outbox Poller<br/>30s interval]
+        POLLER --> RETRY[Nexon API 재호출]
     end
 
-    subgraph Safety["4. 3중 안전망"]
+    subgraph Result["4. 결과 처리"]
+        direction TB
+        RETRY -->|성공| COMPLETE[status=COMPLETED]
+        RETRY -->|실패 10회| DLQ_MOVE[DLQ 이동]
+    end
+
+    subgraph Safety["5. 3중 안전망"]
         direction LR
-        FALLBACK --> DLQ[DLQ]
-        DLQ -->|실패| FILE[File]
-        FILE -->|실패| DISCORD[Discord]
+        DLQ_MOVE --> DB_DLQ[(DB DLQ)]
+        DB_DLQ -->|DB 장애| FILE[File Backup]
+        FILE -->|파일 장애| DISCORD[Discord Alert]
     end
 
-    subgraph Replay["5. 자동 복구"]
-        direction TB
-        DLQ --> NEXON
-        FILE --> NEXON
-    end
+    Request --> Outbox --> Poller --> Result --> Safety
 
-    Inbound --> Poller --> Result --> Safety
-    Safety -.-> Replay
-
-    style DB fill:#4CAF50,color:white
-    style DLQ fill:#FF9800,color:white
+    style OUTBOX fill:#4CAF50,color:white
+    style DB_DLQ fill:#FF9800,color:white
     style FILE fill:#2196F3,color:white
     style DISCORD fill:#F44336,color:white
+    style SUCCESS fill:#8BC34A,color:white
 ```
 
 ### 문제 (Problem)

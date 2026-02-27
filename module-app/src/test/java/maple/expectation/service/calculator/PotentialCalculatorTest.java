@@ -6,11 +6,11 @@ import static org.mockito.Mockito.when;
 
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.calculator.PotentialCalculator;
 import maple.expectation.core.domain.stat.StatParser;
 import maple.expectation.core.domain.stat.StatType;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse;
-import maple.expectation.service.v2.calculator.PotentialCalculator;
 import maple.expectation.support.TestLogicExecutors;
 import maple.expectation.testfixtures.Fixtures;
 import org.junit.jupiter.api.BeforeEach;

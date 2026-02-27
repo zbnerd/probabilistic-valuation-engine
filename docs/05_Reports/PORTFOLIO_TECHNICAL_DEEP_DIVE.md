@@ -383,34 +383,41 @@ Virtual Thread로 스레드 풀 튜닝 없이 동시성 처리 최적화.
 ### 아키텍처 다이어그램
 
 ```mermaid
-flowchart TB
-    subgraph Inbound["인바운드 요청"]
-        REQ[API Request] --> SVC[Donation Service]
-        SVC --> TX[Transaction]
+flowchart LR
+    subgraph Inbound["1. 인바운드"]
+        direction TB
+        REQ[API Request] --> SVC[Service]
+        SVC --> TX[TX]
+        TX --> DB[(Outbox<br/>MySQL)]
     end
 
-    subgraph Outbox["Outbox Pattern"]
-        TX --> DB[(MySQL<br/>donation_outbox)]
-        DB --> |status=PENDING| POLLER[Outbox Poller]
-        POLLER --> |SELECT SKIP LOCKED| EVENTS[Events]
+    subgraph Poller["2. Outbox Poller"]
+        direction TB
+        DB -->|SKIP LOCKED| POLLER[Poller]
+        POLLER --> NEXON[Nexon API]
     end
 
-    subgraph External["외부 API"]
-        EVENTS --> NEXON[Nexon API]
-        NEXON --> |Success| MARK[status=SENT]
-        NEXON --> |Failure| RETRY[재시도 큐]
+    subgraph Result["3. 결과 처리"]
+        direction TB
+        NEXON -->|성공| MARK[status=SENT]
+        NEXON -->|실패| FALLBACK[Fallback]
     end
 
-    subgraph SafetyNet["3중 안전망"]
-        RETRY --> DLQ[DB DLQ<br/>Layer 1]
-        DLQ --> |실패| FILE[File Backup<br/>Layer 2]
-        FILE --> |실패| DISCORD[Discord Alert<br/>Layer 3]
+    subgraph Safety["4. 3중 안전망"]
+        direction LR
+        FALLBACK --> DLQ[DLQ]
+        DLQ -->|실패| FILE[File]
+        FILE -->|실패| DISCORD[Discord]
     end
 
-    subgraph Recovery["자동 복구"]
-        DLQ --> |Replay Job| NEXON
-        FILE --> |File Replay| NEXON
+    subgraph Replay["5. 자동 복구"]
+        direction TB
+        DLQ --> NEXON
+        FILE --> NEXON
     end
+
+    Inbound --> Poller --> Result --> Safety
+    Safety -.-> Replay
 
     style DB fill:#4CAF50,color:white
     style DLQ fill:#FF9800,color:white

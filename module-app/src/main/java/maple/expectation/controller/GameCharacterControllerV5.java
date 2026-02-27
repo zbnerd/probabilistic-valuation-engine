@@ -15,6 +15,7 @@ import maple.expectation.service.v5.queue.PriorityCalculationQueue;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -81,7 +82,7 @@ public class GameCharacterControllerV5 {
    * @return V5 response DTO or 202 Accepted if calculation queued
    */
   @GetMapping("/{userIgn}/expectation")
-  // @PreAuthorize("hasRole('ADMIN') or hasRole('USER')") // TODO: 인증 구현 후 활성화
+  @PreAuthorize("permitAll()") // Public API: 캐릭터 조회는 비인증 접근 허용
   public CompletableFuture<ResponseEntity<?>> getExpectationV5(
       @PathVariable @NotBlank String userIgn) {
 
@@ -130,7 +131,7 @@ public class GameCharacterControllerV5 {
    * @return 202 Accepted if calculation queued
    */
   @PostMapping("/{userIgn}/expectation/recalculate")
-  // @PreAuthorize("hasRole('ADMIN') or hasRole('USER')") // TODO: 인증 구현 후 활성화
+  @PreAuthorize("permitAll()") // Public API: 재계산 요청 (인증 구현 후 hasRole('USER') 권장)
   public CompletableFuture<ResponseEntity<?>> recalculateExpectationV5(
       @PathVariable String userIgn) {
 

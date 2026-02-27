@@ -136,7 +136,7 @@ data class CubeCalculationInput(
 
         // 3. 옵션 내용 체크: 전부 null이거나 빈 문자열이면 계산 불가
         return options.any { opt ->
-            opt.trim().isNotEmpty() && !"null".equals(opt, ignoreCase = true)
+            opt?.trim()?.isNotEmpty() == true && !"null".equals(opt, ignoreCase = true)
         }
     }
 

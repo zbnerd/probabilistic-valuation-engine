@@ -42,13 +42,19 @@ import org.slf4j.LoggerFactory
  * @see <a href="https://github.com/issue/148">Issue #148</a>
  */
 class TieredCache(
-    private val l1: Cache, // Caffeine (Local)
-    private val l2: Cache, // Redis (Distributed)
+    private val l1: Cache,
+    // Caffeine (Local)
+    private val l2: Cache,
+    // Redis (Distributed)
     private val executor: LogicExecutor,
-    private val redissonClient: RedissonClient, // 분산 락용
-    private val meterRegistry: MeterRegistry, // Issue #148: 메트릭 수집용
-    private val lockWaitSeconds: Int, // P0-4: 외부 설정 (기본 5초)
-    private val instanceIdSupplier: Supplier<String>, // P1-6: Lazy Resolution
+    private val redissonClient: RedissonClient,
+    // 분산 락용
+    private val meterRegistry: MeterRegistry,
+    // Issue #148: 메트릭 수집용
+    private val lockWaitSeconds: Int,
+    // P0-4: 외부 설정 (기본 5초)
+    private val instanceIdSupplier: Supplier<String>,
+    // P1-6: Lazy Resolution
     private val callbackSupplier: Supplier<Consumer<CacheInvalidationEvent>> // P1-6: Lazy Resolution
 ) : Cache {
     companion object {
@@ -340,7 +346,8 @@ class TieredCache(
         // Graceful Degradation: 락 획득 시도도 Redis 장애 허용 (CLAUDE.md 섹션 12 패턴 3)
         val acquired = executor.executeOrDefault(
             { lock.tryLock(lockWaitSeconds.toLong(), TimeUnit.SECONDS) },
-            false, // Redis 장애 시 락 획득 실패로 처리
+            false,
+    // Redis 장애 시 락 획득 실패로 처리
             TaskContext.of("Cache", "AcquireLock", keyStr)
         )
 

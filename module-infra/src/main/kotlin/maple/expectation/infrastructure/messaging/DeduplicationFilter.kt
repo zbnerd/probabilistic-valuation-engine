@@ -69,7 +69,8 @@ class DeduplicationFilter(
     fun isDuplicate(eventId: String): Boolean {
         return executor.executeOrDefault(
             { checkDuplicate(eventId) },
-            false, // Default: assume not duplicate on error (fail-open for resilience)
+            false,
+    // Default: assume not duplicate on error (fail-open for resilience)
             TaskContext.of("DeduplicationFilter", "IsDuplicate", eventId)
         )
     }

@@ -29,7 +29,7 @@ class StatelessAlertChannelStrategy(
     override fun getChannel(priority: AlertPriority): AlertChannel {
         // ADR-039 Fix: Use Discord as fallback default channel
         // Since DiscordAlertChannel is always available (via @ConditionalOnProperty),
-        // we use it as the default instead of throwing UnsupportedOperationException
+    // we use it as the default instead of throwing UnsupportedOperationException
         return channelProviders[priority]?.get() ?: getDefaultChannel()
     }
 

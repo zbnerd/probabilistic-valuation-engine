@@ -95,7 +95,10 @@ data class SparsePmf internal constructor(
    * @return total mass
    * @deprecated Use {@link PmfCalculator#totalMass(SparsePmf, boolean)} instead
    */
-  @Deprecated("Use PmfCalculator.totalMass(SparsePmf, boolean) instead", ReplaceWith("PmfCalculator.totalMass(this, useKahan)"))
+  @Deprecated(
+    "Use PmfCalculator.totalMass(SparsePmf, boolean) instead",
+    ReplaceWith("PmfCalculator.totalMass(this, useKahan)")
+  )
   fun totalMass(useKahan: Boolean): Double = if (useKahan) totalMassKahan() else totalMassSimple()
 
   /** Simple cumulative sum */

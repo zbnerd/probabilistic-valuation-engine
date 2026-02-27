@@ -68,7 +68,7 @@ class ResilientLockStrategy(
                     redisLockStrategy.executeWithLock(originalKey, waitTime, leaseTime, task)
                 }
             },
-            // 예외 분기: Function<Throwable, T> (throws 불가, checked는 fail-fast)
+    // 예외 분기: Function<Throwable, T> (throws 불가, checked는 fail-fast)
             { t ->
                 handleFallback(
                     t,
@@ -292,7 +292,7 @@ class ResilientLockStrategy(
                     redisLockStrategy.executeWithOrderedLocks(keys, totalTimeout, timeUnit, leaseTime, task)
                 }
             },
-            // MySQL fallback: 순서 보장 다중 락 실행
+    // MySQL fallback: 순서 보장 다중 락 실행
             { t ->
                 handleOrderedLockFallback(
                     t,

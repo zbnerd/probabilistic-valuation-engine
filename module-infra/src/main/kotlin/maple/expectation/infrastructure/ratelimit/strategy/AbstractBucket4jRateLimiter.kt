@@ -53,7 +53,8 @@ abstract class AbstractBucket4jRateLimiter(
 
         return executor.executeOrDefault(
             { doTryConsume(fullKey) },
-            ConsumeResult.failOpen(), // Default value
+            ConsumeResult.failOpen(),
+    // Default value
             context
         )
     }

@@ -4,6 +4,9 @@
 // ========================================
 
 plugins {
+	id 'org.jetbrains.kotlin.jvm'
+	id 'org.jetbrains.kotlin.plugin.spring'
+	id 'org.jetbrains.kotlin.plugin.jpa'
 	id 'org.springframework.boot' version '3.5.4'
 }
 
@@ -32,6 +35,9 @@ idea {
 }
 
 dependencies {
+	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
+	implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
+
 	// Lombok for integration tests
 	integrationTestCompileOnly 'org.projectlombok:lombok:1.18.30'
 	integrationTestAnnotationProcessor 'org.projectlombok:lombok:1.18.30'

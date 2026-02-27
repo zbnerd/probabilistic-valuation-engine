@@ -24,32 +24,33 @@
 ### 아키텍처 다이어그램
 
 ```mermaid
-flowchart TB
+flowchart TD
+    subgraph Analysis["EXPLAIN 분석 결과"]
+        direction LR
+        TYPE["type: ALL → ref"]
+        ROWS["rows: 1.2M → 847"]
+        KEY["key: NULL → idx_equipment_search"]
+    end
+
     subgraph Before["Before: Full Table Scan"]
-        Q1[Query: SELECT * FROM equipment] --> SCAN[Full Table Scan<br/>1.2M rows]
-        SCAN --> FILTER[WHERE 조건 필터링]
-        FILTER --> RESULT1[결과 반환<br/>0.98s]
+        direction LR
+        B1["SELECT * FROM equipment"] --> B2["Full Scan<br/>1.2M rows"]
+        B2 --> B3["0.98s"]
     end
 
     subgraph After["After: Composite Index"]
-        Q2[Query: SELECT * FROM equipment] --> IDX[Composite Index<br/>idx_equipment_search]
-        IDX --> SEEK[Index Seek]
-        SEEK --> RESULT2[결과 반환<br/>20ms]
+        direction LR
+        A1["SELECT * FROM equipment"] --> A2["Index Seek<br/>847 rows"]
+        A2 --> A3["20ms"]
     end
 
-    subgraph EXPLAIN["EXPLAIN 분석"]
-        ANALYZE[EXPLAIN SELECT...] --> TYPE[type: ALL → ref]
-        ANALYZE --> ROWS[rows: 1.2M → 847]
-        ANALYZE --> KEY[key: NULL → idx_equipment_search]
-    end
+    Before --> Analysis
+    Analysis --> After
 
-    Before --> EXPLAIN
-    EXPLAIN --> After
-
-    style SCAN fill:#FF5722,color:white
-    style IDX fill:#4CAF50,color:white
-    style RESULT1 fill:#F44336,color:white
-    style RESULT2 fill:#2196F3,color:white
+    style B2 fill:#FF5722,color:white
+    style B3 fill:#F44336,color:white
+    style A2 fill:#4CAF50,color:white
+    style A3 fill:#2196F3,color:white
 ```
 
 ### 문제 (Problem)
@@ -210,30 +211,38 @@ Cache Hit Rate >99% 달성, Chaos Test N01에서 DB Query Ratio 0.3% 유지.
 ### 아키텍처 다이어그램
 
 ```mermaid
-flowchart TB
+flowchart TD
     subgraph Before["Before: 환경 불일치"]
+        direction LR
         LOCAL[로컬: H2 DB] --> TEST1[테스트 통과]
         CI[CI: MySQL 5.7] --> TEST2[테스트 실패]
         TEST2 --> FLAKY[Flaky Tests<br/>47건 발생]
     end
 
     subgraph After["After: Testcontainers 표준화"]
-        TC[Testcontainers<br/>MySQL 8.0 Container] --> LOCAL2[로컬 테스트]
+        direction LR
+        TC[Testcontainers<br/>MySQL 8.0] --> LOCAL2[로컬 테스트]
         TC --> CI2[CI 테스트]
-        LOCAL2 --> PASS[모든 환경 동일 결과]
+        LOCAL2 --> PASS[모든 환경<br/>동일 결과]
         CI2 --> PASS
+    end
+
+    subgraph Result["결과"]
+        direction LR
         PASS --> STABLE[Flaky Tests 0건<br/>CI Pass Rate 99.7%]
     end
 
     subgraph Container["Container Lifecycle"]
+        direction LR
         START[컨테이너 시작] --> REUSE[싱글톤 재사용]
-        REUSE --> TESTS[498개 테스트 실행]
+        REUSE --> TESTS[498개 테스트]
         TESTS --> CLEAN[데이터 정리]
         CLEAN --> REUSE
     end
 
     Before --> After
-    After --> Container
+    After --> Result
+    Result --> Container
 
     style FLAKY fill:#F44336,color:white
     style STABLE fill:#4CAF50,color:white
@@ -485,46 +494,41 @@ class OutboxPoller(
 ### 아키텍처 다이어그램
 
 ```mermaid
-flowchart TB
+flowchart TD
     subgraph Client["클라이언트"]
+        direction LR
         REQ[락 요청]
     end
 
     subgraph Tier0["Tier 0: ResilientLockStrategy"]
-        RLS[ResilientLockStrategy]
-        CB[Circuit Breaker]
-        FH[Fallback Handler]
+        direction LR
+        RLS[ResilientLockStrategy] --> CB[Circuit Breaker]
+        CB --> FH[Fallback Handler]
     end
 
     subgraph Tier1["Tier 1: Redis (Primary)"]
-        RDS[RedisDistributedLockStrategy]
-        RL[Redisson RLock]
-        WD[Watchdog 자동 갱신]
+        direction LR
+        RDS[RedisDistributedLockStrategy] --> RL[Redisson RLock]
+        RL --> WD[Watchdog 자동 갱신]
     end
 
     subgraph Tier2["Tier 2: MySQL (Fallback)"]
-        MLS[MySqlNamedLockStrategy]
-        GL[GET_LOCK / RELEASE_LOCK]
+        direction LR
+        MLS[MySqlNamedLockStrategy] --> GL[GET_LOCK / RELEASE_LOCK]
     end
 
     subgraph AI["AI SRE 자율 루프"]
-        DETECT[장애 감지<br/>MTTD 30s]
-        CLASSIFY[예외 분류]
-        MITIGATE[자동 완화<br/>MTTR 2min]
+        direction LR
+        DETECT[장애 감지<br/>MTTD 30s] --> CLASSIFY[예외 분류]
+        CLASSIFY --> MITIGATE[자동 완화<br/>MTTR 2min]
     end
 
     REQ --> RLS
-    RLS --> CB
     CB -->|정상| RDS
     CB -->|OPEN/실패| FH
-    RDS --> RL
-    RL --> WD
     FH --> MLS
-    MLS --> GL
 
     RLS -.->|메트릭| DETECT
-    DETECT --> CLASSIFY
-    CLASSIFY --> MITIGATE
     MITIGATE -.->|Pool 확장| MLS
 
     style RLS fill:#4CAF50,color:white

@@ -20,7 +20,7 @@ data class CubeCalculationInput(
     var part: String? = null, // 장비 부위 (item_equipment_slot)
     var grade: String? = null, // 잠재능력 등급
     var expectedCost: Long = 0,
-    var options: MutableList<String> = ArrayList(), // 옵션 3줄 리스트 (기존 방식)
+    var options: MutableList<String?> = ArrayList(), // 옵션 3줄 리스트 (기존 방식, null 허용)
     var itemName: String? = null,
 
     // ========== #240 V4 확장 필드 ==========
@@ -202,7 +202,7 @@ class CubeCalculationInputBuilder {
     private var part: String? = null
     private var grade: String? = null
     private var expectedCost: Long = 0
-    private var options: MutableList<String> = ArrayList()
+    private var options: MutableList<String?> = ArrayList()
     private var itemName: String? = null
     private var itemIcon: String? = null
     private var itemEquipmentPart: String? = null
@@ -232,7 +232,7 @@ class CubeCalculationInputBuilder {
     fun part(part: String?) = apply { this.part = part }
     fun grade(grade: String?) = apply { this.grade = grade }
     fun expectedCost(expectedCost: Long) = apply { this.expectedCost = expectedCost }
-    fun options(options: MutableList<String>) = apply { this.options = options }
+    fun options(options: MutableList<String?>) = apply { this.options = options }
     fun itemName(itemName: String?) = apply { this.itemName = itemName }
     fun itemIcon(itemIcon: String?) = apply { this.itemIcon = itemIcon }
     fun itemEquipmentPart(itemEquipmentPart: String?) = apply { this.itemEquipmentPart = itemEquipmentPart }

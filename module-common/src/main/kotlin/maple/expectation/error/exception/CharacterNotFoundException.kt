@@ -1,13 +1,15 @@
 @file:JvmName("CharacterNotFoundException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.base.ClientBaseException
 
-open class CharacterNotFoundException(userIgn: String) : ClientBaseException(
-    CommonErrorCode.CHARACTER_NOT_FOUND,
-    userIgn
-) {
+open class CharacterNotFoundException(userIgn: String) :
+    ClientBaseException(
+        CommonErrorCode.CHARACTER_NOT_FOUND,
+        userIgn,
+    ) {
     /**
      * Create exception with custom message and cause.
      *

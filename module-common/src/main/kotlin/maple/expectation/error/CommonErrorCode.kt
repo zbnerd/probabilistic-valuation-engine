@@ -3,11 +3,8 @@ package maple.expectation.error
 /**
  * Common error codes used across the application
  */
-enum class CommonErrorCode(
-    override val code: String,
-    override val message: String,
-    override val statusCode: Int
-) : ErrorCode {
+enum class CommonErrorCode(override val code: String, override val message: String, override val statusCode: Int) :
+    ErrorCode {
     // === Client Errors (4xx) ===
     INVALID_INPUT_VALUE("C001", "잘못된 입력값입니다: %s", 400),
     CHARACTER_NOT_FOUND("C002", "존재하지 않는 캐릭터입니다 (IGN: %s)", 404),
@@ -68,12 +65,11 @@ enum class CommonErrorCode(
     // === Event Handler Errors ===
     EVENT_HANDLER_ERROR("E001", "이벤트 핸들러가 잘못되었습니다. (%s)", 500),
     EVENT_CONSUMER_ERROR("E002", "이벤트 컨슈머가 잘못되었습니다. (%s)", 500),
-    COMMON_ERROR("U999", "알 수 없는 에러 코드입니다.", 500);
+    COMMON_ERROR("U999", "알 수 없는 에러 코드입니다.", 500),
+    ;
 
     /**
      * Format the error message with the provided arguments
      */
-    fun formatMessage(vararg args: Any): String {
-        return String.format(message, *args)
-    }
+    fun formatMessage(vararg args: Any): String = String.format(message, *args)
 }

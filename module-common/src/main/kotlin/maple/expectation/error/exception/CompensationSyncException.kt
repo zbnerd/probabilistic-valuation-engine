@@ -1,4 +1,5 @@
 @file:JvmName("CompensationSyncException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -17,6 +18,6 @@ open class CompensationSyncException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.COMPENSATION_SYNC_FAILED,
         cause,
-        message
+        message,
     )
 }

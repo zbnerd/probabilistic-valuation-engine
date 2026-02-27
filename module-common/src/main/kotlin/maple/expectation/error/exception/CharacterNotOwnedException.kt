@@ -1,4 +1,5 @@
 @file:JvmName("CharacterNotOwnedException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -11,7 +12,7 @@ class CharacterNotOwnedException : ClientBaseException {
      */
     constructor(identifier: String) : super(
         CommonErrorCode.CHARACTER_NOT_OWNED,
-        identifier
+        identifier,
     )
 
     /**
@@ -23,6 +24,6 @@ class CharacterNotOwnedException : ClientBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.CHARACTER_NOT_OWNED,
         cause,
-        message
+        message,
     )
 }

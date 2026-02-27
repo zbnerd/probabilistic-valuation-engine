@@ -24,5 +24,5 @@ enum class EventPriority {
     HIGH,
 
     /** Low priority - background events that can be deferred */
-    LOW
+    LOW,
 }

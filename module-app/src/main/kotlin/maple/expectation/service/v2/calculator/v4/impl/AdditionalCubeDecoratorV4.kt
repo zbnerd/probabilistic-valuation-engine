@@ -28,16 +28,13 @@ class AdditionalCubeDecoratorV4(
     target: EquipmentExpectationCalculator,
     trialsProvider: CubeTrialsProvider,
     costPolicy: CubeCostPolicy,
-    input: CubeCalculationInput
+    input: CubeCalculationInput,
 ) : AbstractCubeDecoratorV4(target, trialsProvider, costPolicy, input) {
 
     override fun getCubeType(): CubeType = CubeType.ADDITIONAL
 
     override fun getCubePathSuffix(): String = " > 에디셔널큐브(아랫잠)"
 
-    override fun updateCostBreakdown(
-        base: CostBreakdown,
-        cubeCost: BigDecimal,
-        trials: BigDecimal
-    ): CostBreakdown = base.withAdditionalCube(base.additionalCubeCost.add(cubeCost), trials)
+    override fun updateCostBreakdown(base: CostBreakdown, cubeCost: BigDecimal, trials: BigDecimal): CostBreakdown =
+        base.withAdditionalCube(base.additionalCubeCost.add(cubeCost), trials)
 }

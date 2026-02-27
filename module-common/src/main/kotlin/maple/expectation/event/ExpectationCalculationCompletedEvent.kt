@@ -24,14 +24,16 @@ package maple.expectation.event
 data class ExpectationCalculationCompletedEvent(
     var taskId: String? = null,
     var userIgn: String? = null,
-    var messageId: String? = null, // Redis Stream message ID for idempotency
+    // Redis Stream message ID for idempotency
+    var messageId: String? = null,
     var characterOcid: String? = null,
     var characterClass: String? = null,
     var characterLevel: Int? = null,
     var calculatedAt: String? = null,
     var totalExpectedCost: String? = null,
     var maxPresetNo: Int? = null,
-    var payload: String? = null // Serialized EquipmentExpectationResponseV4
+    // Serialized EquipmentExpectationResponseV4
+    var payload: String? = null,
 ) {
     companion object {
         @JvmStatic
@@ -71,8 +73,7 @@ data class ExpectationCalculationCompletedEvent(
             calculatedAt = calculatedAt,
             totalExpectedCost = totalExpectedCost,
             maxPresetNo = maxPresetNo,
-            payload = payload
+            payload = payload,
         )
     }
 }
-

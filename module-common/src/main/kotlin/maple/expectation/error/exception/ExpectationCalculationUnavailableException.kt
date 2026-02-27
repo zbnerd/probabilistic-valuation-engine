@@ -1,4 +1,5 @@
 @file:JvmName("ExpectationCalculationUnavailableException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -17,6 +18,6 @@ open class ExpectationCalculationUnavailableException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.SERVICE_UNAVAILABLE,
         cause,
-        message
+        message,
     )
 }

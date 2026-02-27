@@ -2,10 +2,10 @@ package maple.expectation.service.ingestion
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.infrastructure.config.BatchProperties
 import maple.expectation.core.port.out.MessageQueue
 import maple.expectation.domain.event.IntegrationEvent
 import maple.expectation.domain.nexon.NexonApiCharacterData
+import maple.expectation.infrastructure.config.BatchProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.NexonCharacterRepository
@@ -34,7 +34,7 @@ class BatchWriter(
     private val repository: NexonCharacterRepository,
     private val executor: LogicExecutor,
     private val objectMapper: ObjectMapper,
-    private val batchProperties: BatchProperties
+    private val batchProperties: BatchProperties,
 ) {
 
     companion object {
@@ -77,7 +77,7 @@ class BatchWriter(
 
                 log.info("[BatchWriter] Processed batch: {} records", batch.size)
             },
-            context
+            context,
         )
     }
 
@@ -93,11 +93,11 @@ class BatchWriter(
             {
                 objectMapper.readValue(
                     jsonPayload,
-                    object : TypeReference<IntegrationEvent<NexonApiCharacterData>>() {}
+                    object : TypeReference<IntegrationEvent<NexonApiCharacterData>>() {},
                 )
             },
             null,
-            TaskContext.of("BatchWriter", "DeserializeEvent", truncatedPayload)
+            TaskContext.of("BatchWriter", "DeserializeEvent", truncatedPayload),
         )
     }
 

@@ -12,7 +12,6 @@ import maple.expectation.service.v4.buffer.ExpectationWriteTask
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component
-import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 @Component
@@ -21,7 +20,7 @@ class ExpectationBatchShutdownHandler(
     private val repository: EquipmentExpectationSummaryRepository,
     private val executor: LogicExecutor,
     private val properties: ShutdownProperties,
-    meterRegistry: MeterRegistry
+    meterRegistry: MeterRegistry,
 ) : SmartLifecycle {
 
     companion object {
@@ -58,7 +57,7 @@ class ExpectationBatchShutdownHandler(
             {
                 log.info(
                     "[ExpectationShutdown] Starting 3-phase shutdown... pending={}",
-                    buffer.pendingCount
+                    buffer.pendingCount,
                 )
 
                 buffer.prepareShutdown()
@@ -74,7 +73,7 @@ class ExpectationBatchShutdownHandler(
                         log.info("[ExpectationShutdown] Phase 2 complete - all in-flight offers completed")
                     } else {
                         log.warn(
-                            "[ExpectationShutdown] Phase 2 timeout - some offers may not have completed"
+                            "[ExpectationShutdown] Phase 2 timeout - some offers may not have completed",
                         )
                     }
                 }
@@ -88,7 +87,7 @@ class ExpectationBatchShutdownHandler(
                 this.running = false
                 shutdownDrainTimer.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS)
             },
-            context
+            context,
         )
     }
 
@@ -112,7 +111,7 @@ class ExpectationBatchShutdownHandler(
             log.debug(
                 "[ExpectationShutdown] Flushed batch: {} tasks, total: {}",
                 batchFlushed,
-                totalFlushed
+                totalFlushed,
             )
         }
 
@@ -126,7 +125,7 @@ class ExpectationBatchShutdownHandler(
                 null
             },
             null,
-            TaskContext.of("ExpectationShutdown", "SleepSafely")
+            TaskContext.of("ExpectationShutdown", "SleepSafely"),
         )
     }
 
@@ -144,12 +143,12 @@ class ExpectationBatchShutdownHandler(
                         task.blackCubeCost,
                         task.redCubeCost,
                         task.additionalCubeCost,
-                        task.starforceCost
+                        task.starforceCost,
                     )
                     true
                 },
                 false,
-                TaskContext.of("ExpectationShutdown", "Upsert", task.key())
+                TaskContext.of("ExpectationShutdown", "Upsert", task.key()),
             )
 
             if (success) {
@@ -166,7 +165,7 @@ class ExpectationBatchShutdownHandler(
             log.warn(
                 "[ExpectationShutdown] Batch completed with failures: success={}, failure={}",
                 successCount,
-                failureCount
+                failureCount,
             )
         }
 

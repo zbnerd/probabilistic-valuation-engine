@@ -31,14 +31,12 @@ class ResourceLoader {
      * @return Resource content as UTF-8 string
      * @throws IllegalStateException if resource not found or read error occurs
      */
-    fun loadResourceAsString(path: String): String {
-        return try {
-            getResourceAsStream(path).use { inputStream ->
-                String(inputStream.readAllBytes(), StandardCharsets.UTF_8)
-            }
-        } catch (e: IOException) {
-            throw IllegalStateException("Failed to read resource: $path", e)
+    fun loadResourceAsString(path: String): String = try {
+        getResourceAsStream(path).use { inputStream ->
+            String(inputStream.readAllBytes(), StandardCharsets.UTF_8)
         }
+    } catch (e: IOException) {
+        throw IllegalStateException("Failed to read resource: $path", e)
     }
 
     /**
@@ -50,9 +48,7 @@ class ResourceLoader {
      * @return InputStream (caller must close)
      * @throws IllegalStateException if resource not found
      */
-    fun loadResourceAsStream(path: String): InputStream {
-        return getResourceAsStream(path)
-    }
+    fun loadResourceAsStream(path: String): InputStream = getResourceAsStream(path)
 
     /**
      * Get resource stream from classpath.

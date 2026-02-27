@@ -1,4 +1,5 @@
 @file:JvmName("UnsupportedCalculationEngineException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -11,7 +12,7 @@ class UnsupportedCalculationEngineException : ServerBaseException {
      */
     constructor() : super(
         CommonErrorCode.INVALID_INPUT_VALUE,
-        "Unsupported calculation engine"
+        "Unsupported calculation engine",
     )
 
     /**
@@ -19,7 +20,7 @@ class UnsupportedCalculationEngineException : ServerBaseException {
      */
     constructor(engine: String) : super(
         CommonErrorCode.INVALID_INPUT_VALUE,
-        engine
+        engine,
     )
 
     /**
@@ -31,6 +32,6 @@ class UnsupportedCalculationEngineException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.INVALID_INPUT_VALUE,
         cause,
-        message
+        message,
     )
 }

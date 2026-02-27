@@ -1,7 +1,7 @@
 package maple.expectation.dto.response
 
-import maple.expectation.domain.model.character.GameCharacter as DomainGameCharacter
 import maple.expectation.domain.v2.GameCharacter
+import maple.expectation.domain.model.character.GameCharacter as DomainGameCharacter
 
 /**
  * Character response DTO (Issue #128)
@@ -23,7 +23,7 @@ data class CharacterResponse(
     val likeCount: Long?,
     val worldName: String?,
     val characterClass: String?,
-    val characterImage: String?
+    val characterImage: String?,
 ) {
     companion object {
         /**
@@ -40,7 +40,7 @@ data class CharacterResponse(
             likeCount = entity.likeCount,
             worldName = entity.worldName,
             characterClass = entity.characterClass,
-            characterImage = entity.characterImage
+            characterImage = entity.characterImage,
         )
 
         /**
@@ -57,7 +57,7 @@ data class CharacterResponse(
             likeCount = character.likeCount,
             worldName = character.worldName,
             characterClass = character.characterClass,
-            characterImage = character.characterImage
+            characterImage = character.characterImage,
         )
     }
 }

@@ -16,7 +16,7 @@ data class LoginResponse(
     val role: String?,
     val fingerprint: String?,
     val refreshToken: String? = null,
-    val refreshExpiresIn: Long? = null
+    val refreshExpiresIn: Long? = null,
 ) {
     // Safe accessors for Java tests (handle null from mocks)
     @JvmName("getAccessTokenSafe")
@@ -48,9 +48,14 @@ data class LoginResponse(
             role: String?,
             fingerprint: String?,
             refreshToken: String?,
-            refreshExpiresIn: Long?
+            refreshExpiresIn: Long?,
         ): LoginResponse = LoginResponse(
-            accessToken, expiresIn, role, fingerprint, refreshToken, refreshExpiresIn
+            accessToken,
+            expiresIn,
+            role,
+            fingerprint,
+            refreshToken,
+            refreshExpiresIn,
         )
 
         /**
@@ -58,13 +63,12 @@ data class LoginResponse(
          *
          * @deprecated Use [of] with all parameters instead
          */
-        @Deprecated("Use full constructor with refresh token", ReplaceWith("of(accessToken, expiresIn, role, fingerprint, null, null)"))
+        @Deprecated(
+            "Use full constructor with refresh token",
+            ReplaceWith("of(accessToken, expiresIn, role, fingerprint, null, null)"),
+        )
         @JvmStatic
-        fun of(
-            accessToken: String?,
-            expiresIn: Long?,
-            role: String?,
-            fingerprint: String?
-        ): LoginResponse = LoginResponse(accessToken, expiresIn, role, fingerprint)
+        fun of(accessToken: String?, expiresIn: Long?, role: String?, fingerprint: String?): LoginResponse =
+            LoginResponse(accessToken, expiresIn, role, fingerprint)
     }
 }

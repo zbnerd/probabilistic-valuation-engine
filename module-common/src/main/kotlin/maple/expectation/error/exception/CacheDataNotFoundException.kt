@@ -1,4 +1,5 @@
 @file:JvmName("CacheDataNotFoundException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -8,7 +9,7 @@ open class CacheDataNotFoundException : ServerBaseException {
 
     constructor(cacheKey: String) : super(
         CommonErrorCode.CACHE_DATA_NOT_FOUND,
-        cacheKey
+        cacheKey,
     )
 
     /**
@@ -20,6 +21,6 @@ open class CacheDataNotFoundException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.CACHE_DATA_NOT_FOUND,
         cause,
-        message
+        message,
     )
 }

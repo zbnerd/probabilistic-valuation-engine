@@ -1,4 +1,5 @@
 @file:JvmName("SystemException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.ErrorCode
@@ -15,7 +16,7 @@ open class SystemException : ServerBaseException {
     constructor(errorCode: ErrorCode, cause: Throwable, vararg args: Any?) : super(
         errorCode,
         cause,
-        *args
+        *args,
     )
 
     /**
@@ -27,6 +28,6 @@ open class SystemException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         maple.expectation.error.CommonErrorCode.SYSTEM_ERROR,
         cause,
-        message
+        message,
     )
 }

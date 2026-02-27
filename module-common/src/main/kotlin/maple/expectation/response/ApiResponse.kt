@@ -13,28 +13,18 @@ import com.fasterxml.jackson.annotation.JsonInclude
  * @property error 에러 정보 (실패 시)
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-data class ApiResponse<T>(
-    val success: Boolean,
-    val data: T? = null,
-    val error: ErrorInfo? = null
-) {
+data class ApiResponse<T>(val success: Boolean, val data: T? = null, val error: ErrorInfo? = null) {
     /** 성공 응답 생성 */
     companion object {
         @JvmStatic
-        fun <T> success(data: T): ApiResponse<T> {
-            return ApiResponse(true, data, null)
-        }
+        fun <T> success(data: T): ApiResponse<T> = ApiResponse(true, data, null)
 
         /** 실패 응답 생성 */
         @JvmStatic
-        fun <T> error(code: String, message: String): ApiResponse<T> {
-            return ApiResponse(false, null, ErrorInfo(code, message))
-        }
+        fun <T> error(code: String, message: String): ApiResponse<T> =
+            ApiResponse(false, null, ErrorInfo(code, message))
     }
 
     /** 에러 정보 */
-    data class ErrorInfo(
-        val code: String,
-        val message: String
-    )
+    data class ErrorInfo(val code: String, val message: String)
 }

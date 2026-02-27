@@ -1,11 +1,11 @@
 package maple.expectation.testfixtures
 
+import maple.expectation.domain.nexon.NexonApiCharacterData
+import maple.expectation.dto.CubeCalculationInput
+import maple.expectation.infrastructure.external.dto.v2.CharacterListResponse
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.infrastructure.external.dto.v2.TotalExpectationResponse
-import maple.expectation.infrastructure.external.dto.v2.CharacterListResponse
 import maple.expectation.infrastructure.security.jwt.JwtPayload
-import maple.expectation.dto.CubeCalculationInput
-import maple.expectation.domain.nexon.NexonApiCharacterData
 import java.time.Instant
 
 /**
@@ -56,7 +56,7 @@ object Fixtures {
         starforce: String? = null,
         starforceScrollFlag: String? = null,
         specialRingLevel: String? = null,
-        dateExpire: String? = null
+        dateExpire: String? = null,
     ): EquipmentResponse.ItemEquipment = EquipmentResponse.ItemEquipment(
         itemEquipmentPart = itemEquipmentPart,
         itemEquipmentSlot = itemEquipmentSlot,
@@ -93,7 +93,7 @@ object Fixtures {
         starforce = starforce,
         starforceScrollFlag = starforceScrollFlag,
         specialRingLevel = specialRingLevel,
-        dateExpire = dateExpire
+        dateExpire = dateExpire,
     )
 
     // ==================== EquipmentResponse ====================
@@ -111,7 +111,7 @@ object Fixtures {
         itemEquipmentPreset3: List<EquipmentResponse.ItemEquipment>? = null,
         dragonEquipment: List<EquipmentResponse.ItemEquipment>? = null,
         mechanicEquipment: List<EquipmentResponse.ItemEquipment>? = null,
-        title: EquipmentResponse.Title? = null
+        title: EquipmentResponse.Title? = null,
     ): EquipmentResponse = EquipmentResponse(
         date = date,
         characterGender = characterGender,
@@ -123,22 +123,17 @@ object Fixtures {
         itemEquipmentPreset3 = itemEquipmentPreset3,
         dragonEquipment = dragonEquipment,
         mechanicEquipment = mechanicEquipment,
-        title = title
+        title = title,
     )
 
     // ==================== JwtPayload ====================
 
     @JvmStatic
-    fun jwtPayload(
-        sessionId: String,
-        fingerprint: String,
-        role: String,
-        ttlSeconds: Long
-    ): JwtPayload = JwtPayload.of(
+    fun jwtPayload(sessionId: String, fingerprint: String, role: String, ttlSeconds: Long): JwtPayload = JwtPayload.of(
         sessionId = sessionId,
         fingerprint = fingerprint,
         role = role,
-        ttlSeconds = ttlSeconds
+        ttlSeconds = ttlSeconds,
     )
 
     // ==================== CubeCalculationInput ====================
@@ -150,26 +145,24 @@ object Fixtures {
         level: Int = 0,
         part: String? = null,
         grade: String? = null,
-        options: List<String> = emptyList()
+        options: List<String> = emptyList(),
     ): CubeCalculationInput = CubeCalculationInput(
         itemName = itemName,
         level = level,
         part = part,
         grade = grade,
-        options = options.toMutableList()
+        options = options.toMutableList(),
     )
 
     // ==================== CharacterListResponse.CharacterInfo ====================
 
     @JvmStatic
     @JvmOverloads
-    fun characterInfo(
-        ocid: String? = null,
-        characterName: String? = null
-    ): CharacterListResponse.CharacterInfo = CharacterListResponse.CharacterInfo(
-        ocid = ocid,
-        characterName = characterName
-    )
+    fun characterInfo(ocid: String? = null, characterName: String? = null): CharacterListResponse.CharacterInfo =
+        CharacterListResponse.CharacterInfo(
+            ocid = ocid,
+            characterName = characterName,
+        )
 
     // ==================== TotalExpectationResponse ====================
 
@@ -179,12 +172,12 @@ object Fixtures {
         userIgn: String? = null,
         totalCost: Long = 0,
         totalCostText: String? = null,
-        items: List<TotalExpectationResponse.ItemExpectation>? = null
+        items: List<TotalExpectationResponse.ItemExpectation>? = null,
     ): TotalExpectationResponse = TotalExpectationResponse(
         userIgn = userIgn,
         totalCost = totalCost,
         totalCostText = totalCostText,
-        items = items
+        items = items,
     )
 
     @JvmStatic
@@ -195,14 +188,14 @@ object Fixtures {
         potential: String? = null,
         expectedCost: Long = 0,
         expectedCostText: String? = null,
-        expectedCount: Long = 0
+        expectedCount: Long = 0,
     ): TotalExpectationResponse.ItemExpectation = TotalExpectationResponse.ItemExpectation(
         part = part,
         itemName = itemName,
         potential = potential,
         expectedCost = expectedCost,
         expectedCostText = expectedCostText,
-        expectedCount = expectedCount
+        expectedCount = expectedCount,
     )
 
     // ==================== NexonApiCharacterData ====================
@@ -218,7 +211,7 @@ object Fixtures {
         characterLevel: Int? = null,
         guildName: String? = null,
         characterImageUrl: String? = null,
-        date: Instant? = null
+        date: Instant? = null,
     ): NexonApiCharacterData = NexonApiCharacterData(
         id = id,
         ocid = ocid,
@@ -228,6 +221,6 @@ object Fixtures {
         characterLevel = characterLevel,
         guildName = guildName,
         characterImageUrl = characterImageUrl,
-        date = date
+        date = date,
     )
 }

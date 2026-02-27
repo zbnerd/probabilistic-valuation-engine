@@ -1,4 +1,5 @@
 @file:JvmName("ClientBaseException")
+
 package maple.expectation.error.exception.base
 
 import maple.expectation.error.ErrorCode
@@ -18,7 +19,9 @@ import maple.expectation.error.exception.marker.CircuitBreakerIgnoreMarker
  * @see ErrorCode
  * @see CircuitBreakerIgnoreMarker
  */
-abstract class ClientBaseException : BaseException, CircuitBreakerIgnoreMarker {
+abstract class ClientBaseException :
+    BaseException,
+    CircuitBreakerIgnoreMarker {
 
     /**
      * Create exception with static error message.

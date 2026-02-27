@@ -1,4 +1,5 @@
 @file:JvmName("ExternalApiException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -16,7 +17,7 @@ class ExternalApiException : ServerBaseException {
     constructor(errorCode: ErrorCode, cause: Throwable, vararg args: Any?) : super(
         errorCode,
         cause,
-        *args
+        *args,
     )
 
     /**
@@ -28,6 +29,6 @@ class ExternalApiException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.EXTERNAL_API_ERROR,
         cause,
-        message
+        message,
     )
 }

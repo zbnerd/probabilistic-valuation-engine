@@ -1,4 +1,5 @@
 @file:JvmName("OptionParseException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -11,7 +12,7 @@ open class OptionParseException : ClientBaseException {
      */
     constructor(option: String) : super(
         CommonErrorCode.INVALID_INPUT_VALUE,
-        option
+        option,
     )
 
     /**
@@ -20,6 +21,6 @@ open class OptionParseException : ClientBaseException {
     constructor(option: String, cause: Throwable) : super(
         CommonErrorCode.INVALID_INPUT_VALUE,
         cause,
-        "Parse failed for option: $option"
+        "Parse failed for option: $option",
     )
 }

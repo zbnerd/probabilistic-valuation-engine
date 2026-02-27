@@ -1,13 +1,15 @@
 @file:JvmName("DeveloperNotFoundException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.base.ClientBaseException
 
-open class DeveloperNotFoundException(fingerprint: String) : ClientBaseException(
-    CommonErrorCode.DEVELOPER_NOT_FOUND,
-    fingerprint
-) {
+open class DeveloperNotFoundException(fingerprint: String) :
+    ClientBaseException(
+        CommonErrorCode.DEVELOPER_NOT_FOUND,
+        fingerprint,
+    ) {
     /**
      * Create exception with custom message and cause.
      *

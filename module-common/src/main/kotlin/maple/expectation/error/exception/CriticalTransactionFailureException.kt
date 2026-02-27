@@ -1,4 +1,5 @@
 @file:JvmName("CriticalTransactionFailureException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -11,7 +12,7 @@ class CriticalTransactionFailureException : ServerBaseException {
      */
     constructor(message: String) : super(
         CommonErrorCode.DATABASE_TRANSACTION_FAILURE,
-        message
+        message,
     )
 
     /**
@@ -20,6 +21,6 @@ class CriticalTransactionFailureException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.DATABASE_TRANSACTION_FAILURE,
         cause,
-        message
+        message,
     )
 }

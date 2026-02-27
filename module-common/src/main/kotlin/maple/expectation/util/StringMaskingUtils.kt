@@ -52,8 +52,8 @@ object StringMaskingUtils {
     fun maskFingerprintWithSuffix(fingerprint: String?): String {
         if (fingerprint == null || fingerprint.length < MIN_LENGTH) return FINGERPRINT_MASK
         return fingerprint.substring(0, PREFIX_LENGTH) +
-                FINGERPRINT_MASK +
-                fingerprint.substring(fingerprint.length - PREFIX_LENGTH)
+            FINGERPRINT_MASK +
+            fingerprint.substring(fingerprint.length - PREFIX_LENGTH)
     }
 
     /**

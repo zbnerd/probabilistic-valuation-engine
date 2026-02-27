@@ -1,13 +1,15 @@
 @file:JvmName("InsufficientResourceException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.base.ServerBaseException
 
-open class InsufficientResourceException(resourceType: String) : ServerBaseException(
-    CommonErrorCode.INSUFFICIENT_RESOURCE,
-    resourceType
-) {
+open class InsufficientResourceException(resourceType: String) :
+    ServerBaseException(
+        CommonErrorCode.INSUFFICIENT_RESOURCE,
+        resourceType,
+    ) {
     /**
      * Create exception with custom message and cause.
      *

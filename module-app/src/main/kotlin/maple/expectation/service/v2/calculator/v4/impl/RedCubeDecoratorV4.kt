@@ -28,16 +28,13 @@ class RedCubeDecoratorV4(
     target: EquipmentExpectationCalculator,
     trialsProvider: CubeTrialsProvider,
     costPolicy: CubeCostPolicy,
-    input: CubeCalculationInput
+    input: CubeCalculationInput,
 ) : AbstractCubeDecoratorV4(target, trialsProvider, costPolicy, input) {
 
     override fun getCubeType(): CubeType = CubeType.RED
 
     override fun getCubePathSuffix(): String = " > 레드큐브(윗잠)"
 
-    override fun updateCostBreakdown(
-        base: CostBreakdown,
-        cubeCost: BigDecimal,
-        trials: BigDecimal
-    ): CostBreakdown = base.withRedCube(base.redCubeCost.add(cubeCost), trials)
+    override fun updateCostBreakdown(base: CostBreakdown, cubeCost: BigDecimal, trials: BigDecimal): CostBreakdown =
+        base.withRedCube(base.redCubeCost.add(cubeCost), trials)
 }

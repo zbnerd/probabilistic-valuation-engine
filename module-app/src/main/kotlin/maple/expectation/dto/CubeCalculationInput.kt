@@ -97,7 +97,7 @@ data class CubeCalculationInput(
     var enableTailClamp: Boolean = true,
 
     /** 확률 테이블 버전 (감사/재현성용, 서비스에서 자동 설정됨) */
-    var probabilityTableVersion: String? = null
+    var probabilityTableVersion: String? = null,
 ) {
     /** 놀장 장비 여부 판별 */
     fun isNoljangEquipment(): Boolean = "사용" == starforceScrollFlag
@@ -183,7 +183,7 @@ data class CubeCalculationInput(
         targetStatType = null,
         minTotal = null,
         enableTailClamp = true,
-        probabilityTableVersion = null
+        probabilityTableVersion = null,
     )
 
     companion object {
@@ -256,7 +256,10 @@ class CubeCalculationInputBuilder {
     fun targetStatType(targetStatType: StatType?) = apply { this.targetStatType = targetStatType }
     fun minTotal(minTotal: Int?) = apply { this.minTotal = minTotal }
     fun enableTailClamp(enableTailClamp: Boolean) = apply { this.enableTailClamp = enableTailClamp }
-    fun probabilityTableVersion(probabilityTableVersion: String?) = apply { this.probabilityTableVersion = probabilityTableVersion }
+    fun probabilityTableVersion(probabilityTableVersion: String?) = apply {
+        this.probabilityTableVersion =
+            probabilityTableVersion
+    }
 
     fun build(): CubeCalculationInput = CubeCalculationInput(
         level = level,
@@ -287,6 +290,6 @@ class CubeCalculationInputBuilder {
         targetStatType = targetStatType,
         minTotal = minTotal,
         enableTailClamp = enableTailClamp,
-        probabilityTableVersion = probabilityTableVersion
+        probabilityTableVersion = probabilityTableVersion,
     )
 }

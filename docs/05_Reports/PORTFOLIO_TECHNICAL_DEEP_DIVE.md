@@ -90,6 +90,48 @@ Prometheus 메트릭으로 슬로우 쿼리(>100ms) 0건 유지 모니터링.
 
 ### 데이터플로우 다이어그램
 
+#### Before: Cache Stampede 발생 (개선 전)
+
+```mermaid
+sequenceDiagram
+    participant C1 as Client 1
+    participant C2 as Client 2
+    participant C3 as Client 3
+    participant C4 as Client N...
+    participant L1 as L1 Cache<br/>(Caffeine)
+    participant L2 as L2 Cache<br/>(Redis)
+    participant DB as MySQL
+
+    Note over C1,C4: 캐시 만료 시점 - 모든 요청이 동시에 Cache Miss
+
+    C1->>L1: get("popular:characters")
+    L1-->>C1: miss
+    C2->>L1: get("popular:characters")
+    L1-->>C2: miss
+    C3->>L1: get("popular:characters")
+    L1-->>C3: miss
+    C4->>L1: get("popular:characters")
+    L1-->>C4: miss
+
+    Note over C1,C4: 100개 요청 모두 DB로 직접 유입
+
+    par 동시 DB 호출 (Cache Stampede)
+        C1->>DB: SELECT (1회)
+        C2->>DB: SELECT (2회)
+        C3->>DB: SELECT (3회)
+        C4->>DB: SELECT (N회...)
+    end
+
+    DB-->>C1: 결과 (2,340ms)
+    DB-->>C2: 결과 (2,340ms)
+    DB-->>C3: 결과 (2,340ms)
+    DB-->>C4: 결과 (2,340ms)
+
+    Note over DB: DB 커넥션 풀 고갈<br/>p99: 2,340ms 급증
+```
+
+#### After: SingleFlight 패턴 적용 (개선 후)
+
 ```mermaid
 sequenceDiagram
     participant C1 as Client 1

@@ -2,11 +2,11 @@ package maple.expectation.scheduler;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.OutboxMetricsPort;
+import maple.expectation.core.port.out.OutboxProcessorPort;
 import maple.expectation.infrastructure.config.OutboxProperties;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.service.v2.donation.outbox.OutboxMetrics;
-import maple.expectation.service.v2.donation.outbox.OutboxProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -54,8 +54,8 @@ import org.springframework.stereotype.Component;
     matchIfMissing = true)
 public class OutboxScheduler {
 
-  private final OutboxProcessor outboxProcessor;
-  private final OutboxMetrics outboxMetrics;
+  private final OutboxProcessorPort outboxProcessor;
+  private final OutboxMetricsPort outboxMetrics;
   private final LogicExecutor executor;
   private final OutboxProperties properties;
 

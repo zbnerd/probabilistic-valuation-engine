@@ -41,4 +41,13 @@ interface QueueWriterPort {
      * @return true: 추가 성공, false: 큐 full
      */
     fun addHighPriorityTask(userIgn: String, forceRecalculation: Boolean): Boolean
+
+    /**
+     * 현재 큐 크기 조회
+     *
+     * <p>모니터링 및 로깅 목적으로 현재 큐에 대기 중인 작업 수를 반환합니다.
+     *
+     * @return 큐에 대기 중인 작업 수
+     */
+    fun size(): Int
 }

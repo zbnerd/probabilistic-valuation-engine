@@ -2,10 +2,10 @@ package maple.expectation.scheduler;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.QueueWriterPort;
 import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.service.v5.queue.PriorityCalculationQueue;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -48,7 +48,7 @@ import org.springframework.stereotype.Component;
     matchIfMissing = false)
 public class ExpectationCalculationScheduler {
 
-  private final PriorityCalculationQueue queue;
+  private final QueueWriterPort queueWriter;
   private final GameCharacterRepository gameCharacterRepository;
   private final LogicExecutor executor;
 
@@ -134,7 +134,7 @@ public class ExpectationCalculationScheduler {
               "[ExpectationCalculation] Full refresh completed: processed={}, skipped={}, queueSize={}",
               processedCount,
               skippedCount,
-              queue.size());
+              queueWriter.size());
         },
         context);
   }
@@ -145,6 +145,6 @@ public class ExpectationCalculationScheduler {
    * @return true if task was added, false if rejected (backpressure)
    */
   private boolean addTaskForUser(String userIgn) {
-    return queue.addLowPriorityTask(userIgn);
+    return queueWriter.addLowPriorityTask(userIgn);
   }
 }

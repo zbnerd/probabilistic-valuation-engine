@@ -22,4 +22,9 @@ class QueueWriterAdapter(
     override fun addHighPriorityTask(userIgn: String, forceRecalculation: Boolean): Boolean {
         return delegate.addHighPriorityTask(userIgn, forceRecalculation)
     }
+
+    override fun size(): Int {
+        val (high, low) = delegate.getQueueSize()
+        return high + low
+    }
 }

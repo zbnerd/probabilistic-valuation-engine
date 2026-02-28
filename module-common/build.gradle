@@ -53,3 +53,9 @@ tasks.register('verifyNoSpringDependency') {
 tasks.named('check') {
 	dependsOn 'verifyNoSpringDependency'
 }
+
+// Enable plain jar for inter-module dependencies
+tasks.named("jar") {
+	enabled = true
+	archiveClassifier = "plain"
+}

@@ -3,16 +3,14 @@ package maple.expectation.batch.reader;
 import java.util.Iterator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.domain.model.Page;
+import maple.expectation.core.domain.model.PageRequest;
+import maple.expectation.core.port.out.OcidQueryPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity;
-import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepository;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.annotation.BeforeStep;
 import org.springframework.batch.item.ItemReader;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -32,17 +30,16 @@ import org.springframework.stereotype.Component;
  *   <li>Section 12: LogicExecutor.executeOrDefault (Zero Try-Catch)
  *   <li>Section 15: 람다 3줄 초과 시 Private Method 추출
  *   <li>Stateless: Iterator 사용, 상태 저장 최소화
- *   <li>Method Reference: GameCharacterJpaEntity::getOcid
  * </ul>
  *
- * @see maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepository
+ * @see maple.expectation.core.port.out.OcidQueryPort
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class OcidReader implements ItemReader<String> {
 
-  private final GameCharacterJpaRepository repository;
+  private final OcidQueryPort ocidQuery;
   private final LogicExecutor executor;
 
   // Chunk-based fetch for memory efficiency
@@ -96,19 +93,18 @@ public class OcidReader implements ItemReader<String> {
   }
 
   /**
-   * Fetch next chunk of OCIDs using JPA pagination
+   * Fetch next chunk of OCIDs using OcidQueryPort
    *
    * <p>Section 15: 람다 3줄 초과 시 Private Method 추출
    */
   private void fetchNextChunk() {
-    Pageable pageable = PageRequest.of(currentPage, FETCH_SIZE);
-    Page<GameCharacterJpaEntity> page = repository.findAll(pageable);
+    PageRequest pageRequest = PageRequest.Companion.of(currentPage, FETCH_SIZE);
+    Page<String> page = ocidQuery.findAllOcids(pageRequest);
 
-    hasNextPage = page.hasNext();
+    hasNextPage = page.getHasNext();
     currentPage++;
 
-    // Method Reference: GameCharacterJpaEntity::getOcid
-    ocidIterator = page.getContent().stream().map(GameCharacterJpaEntity::getOcid).iterator();
+    ocidIterator = page.getContent().iterator();
 
     log.debug("[OcidReader] Fetched chunk: page={}, hasMore={}", currentPage, hasNextPage);
   }

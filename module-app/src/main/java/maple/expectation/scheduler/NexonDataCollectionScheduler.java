@@ -3,11 +3,11 @@ package maple.expectation.scheduler;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.NexonDataCollectorPort;
 import maple.expectation.domain.model.character.GameCharacter;
 import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.service.ingestion.NexonDataCollector;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -48,7 +48,7 @@ import org.springframework.stereotype.Component;
     )
 public class NexonDataCollectionScheduler {
 
-  private final NexonDataCollector dataCollector;
+  private final NexonDataCollectorPort dataCollector;
   private final GameCharacterRepository gameCharacterRepository;
   private final LogicExecutor executor;
 
@@ -59,8 +59,8 @@ public class NexonDataCollectionScheduler {
    *
    * <ol>
    *   <li>Fetch all active maple characters from database
-   *   <li>For each character, call NexonDataCollector to fetch from API
-   *   <li>NexonDataCollector automatically publishes to queue
+   *   <li>For each character, call NexonDataCollectorPort to fetch from API
+   *   <li>NexonDataCollectorPort automatically publishes to queue
    *   <li>BatchWriter consumes from queue and writes to DB (separate scheduled job)
    * </ol>
    *

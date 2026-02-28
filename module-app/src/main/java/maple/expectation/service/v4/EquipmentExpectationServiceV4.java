@@ -128,6 +128,12 @@ public class EquipmentExpectationServiceV4 {
     return cacheCoordinator.getOrCalculate(userIgn, force, () -> doCalculateExpectation(userIgn));
   }
 
+  /** CacheWarmupPort 구현 - 캐시 웜업 */
+  @Override
+  public void warmup(String userIgn, boolean force) {
+    calculateExpectation(userIgn, force);
+  }
+
   /** GZIP 압축된 기대값 응답 반환 (동기) */
   public byte[] getGzipExpectation(String userIgn, boolean force) {
     validateInitialized();

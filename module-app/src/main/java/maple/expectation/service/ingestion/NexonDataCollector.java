@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.out.EventPublisher;
+import maple.expectation.core.port.out.NexonDataCollectorPort;
 import maple.expectation.domain.event.IntegrationEvent;
 import maple.expectation.domain.nexon.NexonApiCharacterData;
 import maple.expectation.error.exception.ExternalServiceException;
@@ -60,7 +61,7 @@ import reactor.core.publisher.Mono;
  */
 @Slf4j
 @Service
-public class NexonDataCollector {
+public class NexonDataCollector implements NexonDataCollectorPort {
 
   private final WebClient webClient;
   private final EventPublisher eventPublisher;
@@ -112,10 +113,11 @@ public class NexonDataCollector {
    * @return CompletableFuture that completes when API call and publish complete
    * @see <a href="ADR-036-reactive-scheduler-eager-execution.md">ADR-036</a>
    */
-  public CompletableFuture<NexonApiCharacterData> fetchAndPublish(String ocid) {
+  @Override
+  public CompletableFuture<Void> fetchAndPublish(String ocid) {
     log.debug("[NexonDataCollector] Fetching character data: ocid={}", ocid);
 
-    CompletableFuture<NexonApiCharacterData> future = new CompletableFuture<>();
+    CompletableFuture<Void> future = new CompletableFuture<>();
 
     fetchFromNexonApi(ocid)
         .doOnNext(
@@ -136,7 +138,7 @@ public class NexonDataCollector {
               future.completeExceptionally(ex);
             })
         .subscribe(
-            data -> future.complete(data),
+            data -> future.complete(null),
             error -> {
               // Already handled in doOnError
             });

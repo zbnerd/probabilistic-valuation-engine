@@ -1,7 +1,7 @@
 # ADR-004: Module-Core 도메인 이관
 
 ## 상태
-Proposed (2026-02-28)
+Partially Implemented (2026-02-28)
 
 ## 컨텍스트
 

@@ -10,6 +10,9 @@ plugins {
 }
 
 dependencies {
+	// ADR-005: Hexagonal Architecture - Port 인터페이스만 의존
+	// Controller는 Port 인터페이스만 사용, 런타임에 module-app의 Adapter가 DI됨
+	implementation project(':module-core')
 	implementation project(':module-common')
 	implementation project(':module-infra')
 
@@ -19,6 +22,7 @@ dependencies {
 	// Spring Web (Presentation Layer)
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
 
 	// Resilience4j (for CircuitBreaker exception handling)
 	implementation 'io.github.resilience4j:resilience4j-spring-boot3'

@@ -8,9 +8,12 @@ import maple.expectation.controller.dto.auth.LoginRequest;
 import maple.expectation.controller.dto.auth.LoginResponse;
 import maple.expectation.controller.dto.auth.RefreshRequest;
 import maple.expectation.controller.dto.auth.TokenResponse;
+import maple.expectation.core.port.inbound.AuthCommand;
+import maple.expectation.core.port.inbound.AuthPort;
+import maple.expectation.core.port.inbound.AuthResult;
+import maple.expectation.core.port.inbound.TokenResult;
 import maple.expectation.infrastructure.security.AuthenticatedUser;
 import maple.expectation.response.ApiResponse;
-import maple.expectation.service.v2.auth.AuthService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -39,7 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
 
-  private final AuthService authService;
+  private final AuthPort authPort;
 
   /**
    * 로그인 API
@@ -53,7 +56,16 @@ public class AuthController {
 
     return CompletableFuture.supplyAsync(
         () -> {
-          LoginResponse response = authService.login(request);
+          AuthCommand command = AuthCommand.of(request.apiKey(), request.userIgn());
+          AuthResult result = authPort.login(command);
+          LoginResponse response =
+              LoginResponse.of(
+                  result.getAccessToken(),
+                  result.getExpiresIn(),
+                  result.getRole(),
+                  result.getFingerprint(),
+                  result.getRefreshToken(),
+                  result.getRefreshExpiresIn());
           return ResponseEntity.ok(ApiResponse.success(response));
         });
   }
@@ -75,7 +87,13 @@ public class AuthController {
   public ResponseEntity<ApiResponse<TokenResponse>> refresh(
       @Valid @RequestBody RefreshRequest request) {
 
-    TokenResponse response = authService.refresh(request.refreshToken());
+    TokenResult result = authPort.refresh(request.refreshToken());
+    TokenResponse response =
+        TokenResponse.of(
+            result.getAccessToken(),
+            result.getExpiresIn(),
+            result.getRefreshToken(),
+            result.getRefreshExpiresIn());
 
     return ResponseEntity.ok(ApiResponse.success(response));
   }
@@ -89,7 +107,7 @@ public class AuthController {
   @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
   public ResponseEntity<ApiResponse<Void>> logout(@AuthenticationPrincipal AuthenticatedUser user) {
 
-    authService.logout(user.getSessionId());
+    authPort.logout(user.getSessionId());
 
     return ResponseEntity.ok(ApiResponse.success(null));
   }

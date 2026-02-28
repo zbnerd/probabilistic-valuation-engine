@@ -1,7 +1,7 @@
 # ADR-003: Hexagonal Architecture (Ports & Adapters) 채택
 
 ## 상태
-Proposed (2026-02-28)
+Accepted (2026-02-28)
 
 ## 컨텍스트
 
@@ -48,17 +48,40 @@ infra → app ❌ (금지)
 ```
 module-core/src/main/kotlin/maple/expectation/core/
 ├── domain/          # 도메인 모델
+│   └── model/       # Page, PageRequest (Spring 의존성 제거)
 └── port/
     ├── in/          # Inbound Port (UseCase 인터페이스)
-    └── out/         # Outbound Port (Infra가 구현)
+    └── out/         # Outbound Port (Infra가 구현) - 30개
         ├── AlertPort.kt
+        ├── AlertPublisher.kt
+        ├── AtomicFetchStrategy.kt
+        ├── BackoffStrategy.kt
         ├── BufferStatusQuery.kt
+        ├── CacheWarmupPort.kt              # PR #455
+        ├── CubeRatePort.kt
         ├── EquipmentDataPort.kt
         ├── EventPublisher.kt
+        ├── GameCharacterPort.kt
+        ├── ItemPricePort.kt
         ├── LikeBufferStrategy.kt
+        ├── LikeEventPort.kt
+        ├── LikeRelationBufferStrategy.kt
+        ├── LikeRelationSyncPort.kt         # PR #451
+        ├── LikeSyncPort.kt                 # PR #451
+        ├── MessageQueue.kt
         ├── MessageTopic.kt
-        ├── TokenPort.kt
-        └── ... (기존 17개 Port)
+        ├── NexonApiOutboxMetricsPort.kt    # PR #454
+        ├── NexonApiOutboxProcessorPort.kt  # PR #454
+        ├── NexonDataCollectorPort.kt       # PR #456
+        ├── OcidQueryPort.kt                # PR #449
+        ├── OutboxMetricsPort.kt            # PR #453
+        ├── OutboxProcessorPort.kt          # PR #453
+        ├── PersistenceTrackerStrategy.kt
+        ├── PolicyPort.kt
+        ├── PopularCharacterTrackerPort.kt  # PR #455
+        ├── PotentialStatPort.kt
+        ├── QueueWriterPort.kt              # PR #448
+        └── TokenPort.kt
 
 module-infra/src/main/kotlin/maple/expectation/infra/
 ├── adapter/
@@ -95,14 +118,20 @@ module-app/src/main/java/maple/expectation/
 
 ## 적용 범위
 
-### 우선순위 높음 (즉시 적용)
+### 적용 완료 (PR #448-457)
 
-| 카테고리 | 대상 | 해결 방안 |
-|----------|------|-----------|
-| 배치/스케줄러 | LowPriorityQueueWriter, OcidReader | QueueWriterPort, RepositoryPort |
-| 이벤트 리스너 | LikeSyncEventListener | LikeEventPort |
-| 외부 API | NexonApiClient | EquipmentDataPort (기존) |
-| 모니터링 | MonitoringReportJob | AlertPort (기존) |
+| PR | 대상 | Port 인터페이스 | 상태 |
+|----|------|-----------------|------|
+| #448 | LowPriorityQueueWriter | QueueWriterPort | ✅ 완료 |
+| #449 | OcidReader | OcidQueryPort | ✅ 완료 |
+| #450 | MonitoringReportJob | AlertPort (기존) | ✅ 완료 |
+| #451 | LikeSyncScheduler | LikeSyncPort, LikeRelationSyncPort | ✅ 완료 |
+| #452 | ExpectationCalculationScheduler | QueueWriterPort (재사용) | ✅ 완료 |
+| #453 | OutboxScheduler | OutboxProcessorPort, OutboxMetricsPort | ✅ 완료 |
+| #454 | NexonApiOutboxScheduler | NexonApiOutboxProcessorPort, NexonApiOutboxMetricsPort | ✅ 완료 |
+| #455 | PopularCharacterWarmupScheduler | PopularCharacterTrackerPort, CacheWarmupPort | ✅ 완료 |
+| #456 | NexonDataCollector | NexonDataCollectorPort | ✅ 완료 |
+| #457 | Test 업데이트 | Port 기반 테스트 | ✅ 완료 |
 
 ### 비적용/예외
 
@@ -172,10 +201,11 @@ grep -r "import maple.expectation.service" module-infra/src --include="*.kt" --i
 
 - ADR-002: 4-Module Separation + Kotlin Migration
 - CLAUDE.md: Section 4 (Implementation Logic & SOLID), Section 16 (Proactive Refactoring)
-- 기존 Port 인터페이스: `module-core/src/main/kotlin/maple/expectation/core/port/out/` (17개)
+- Port 인터페이스: `module-core/src/main/kotlin/maple/expectation/core/port/out/` (30개)
 
 ## 이력
 
 | 날짜 | 상태 | 변경 사항 |
 |------|------|-----------|
 | 2026-02-28 | Proposed | 초기 초안 작성 |
+| 2026-02-28 | Accepted | PR #448-457 Hexagonal Architecture 리팩토링 완료, 30개 Port 인터페이스 정의 |

@@ -3,6 +3,7 @@ package maple.expectation.service.v2.flame;
 import lombok.RequiredArgsConstructor;
 import maple.expectation.core.domain.flame.FlameEquipCategory;
 import maple.expectation.core.domain.flame.FlameType;
+import maple.expectation.core.flame.port.FlameTrialsPort;
 import maple.expectation.core.probability.FlameDpCalculator;
 import maple.expectation.core.probability.FlameScoreCalculator;
 import org.springframework.stereotype.Service;
@@ -16,15 +17,15 @@ import org.springframework.stereotype.Service;
  *
  * <h3>설계 근거</h3>
  *
- * <p>DIP 준수를 위해 {@link FlameTrialsProvider} 인터페이스를 구현합니다. V4 PresetCalculationHelper는 구체 클래스가 아닌
- * 인터페이스에 의존합니다.
+ * <p>DIP 준수를 위해 {@link FlameTrialsPort} 인터페이스를 구현합니다. V4 PresetCalculationHelper는 구체 클래스가 아닌 인터페이스에
+ * 의존합니다.
  *
- * @see FlameTrialsProvider 인터페이스
+ * @see FlameTrialsPort 인터페이스
  * @see FlameDpCalculator DP 기반 계산 컴포넌트
  */
 @Service
 @RequiredArgsConstructor
-public class FlameTrialsService implements FlameTrialsProvider {
+public class FlameTrialsService implements FlameTrialsPort {
 
   private final FlameDpCalculator dpCalculator;
   private final FlameScoreCalculator scoreCalculator;

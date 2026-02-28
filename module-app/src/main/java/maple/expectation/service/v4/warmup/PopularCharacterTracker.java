@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.PopularCharacterTrackerPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import org.redisson.api.RScoredSortedSet;
@@ -43,7 +44,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-public class PopularCharacterTracker {
+public class PopularCharacterTracker implements PopularCharacterTrackerPort {
 
   private static final String KEY_PREFIX = "popular:characters:";
   private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -118,6 +119,7 @@ public class PopularCharacterTracker {
    * @param limit 상위 N개
    * @return 전날 인기 캐릭터 목록
    */
+  @Override
   public List<String> getYesterdayTopCharacters(int limit) {
     return getTopCharacters(LocalDate.now().minusDays(1), limit);
   }

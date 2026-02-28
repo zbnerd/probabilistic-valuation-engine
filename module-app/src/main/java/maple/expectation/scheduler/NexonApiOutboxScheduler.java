@@ -2,10 +2,10 @@ package maple.expectation.scheduler;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.NexonApiOutboxMetricsPort;
+import maple.expectation.core.port.out.NexonApiOutboxProcessorPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.service.v2.outbox.NexonApiOutboxMetrics;
-import maple.expectation.service.v2.outbox.NexonApiOutboxProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -42,7 +42,7 @@ import org.springframework.stereotype.Component;
  *   <li>처리 결과 로깅: 성공/실패 건수 기록
  * </ul>
  *
- * @see NexonApiOutboxProcessor
+ * @see NexonApiOutboxProcessorPort
  * @see
  *     maple.expectation.infrastructure.persistence.repository.NexonApiOutboxRepository#findPendingWithLock
  * @see
@@ -60,8 +60,8 @@ import org.springframework.stereotype.Component;
     matchIfMissing = true)
 public class NexonApiOutboxScheduler {
 
-  private final NexonApiOutboxProcessor outboxProcessor;
-  private final NexonApiOutboxMetrics outboxMetrics;
+  private final NexonApiOutboxProcessorPort outboxProcessor;
+  private final NexonApiOutboxMetricsPort outboxMetrics;
   private final LogicExecutor executor;
 
   /**

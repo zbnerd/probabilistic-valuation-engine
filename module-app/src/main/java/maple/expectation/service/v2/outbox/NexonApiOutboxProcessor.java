@@ -3,6 +3,7 @@ package maple.expectation.service.v2.outbox;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.NexonApiOutboxProcessorPort;
 import maple.expectation.domain.v2.NexonApiOutbox;
 import maple.expectation.error.CommonErrorCode;
 import maple.expectation.error.exception.ExternalApiException;
@@ -64,7 +65,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 @Service
 @EnableConfigurationProperties(OutboxProperties.class)
-public class NexonApiOutboxProcessor {
+public class NexonApiOutboxProcessor implements NexonApiOutboxProcessorPort {
 
   private final NexonApiOutboxFetchFacade fetchFacade;
   private final NexonApiOutboxRepository outboxRepository;
@@ -105,6 +106,7 @@ public class NexonApiOutboxProcessor {
    * </ol>
    */
   @ObservedTransaction("scheduler.nexon_api_outbox.poll")
+  @Override
   public void pollAndProcess() {
     TaskContext context =
         TaskContext.of("NexonApiOutbox", "PollAndProcess", properties.getInstanceId());
@@ -295,6 +297,7 @@ public class NexonApiOutboxProcessor {
    */
   @ObservedTransaction("scheduler.nexon_api_outbox.recover_stalled")
   @Transactional
+  @Override
   public void recoverStalled() {
     LocalDateTime staleTime = LocalDateTime.now().minus(properties.getStaleThreshold());
     List<NexonApiOutbox> stalledEntries =

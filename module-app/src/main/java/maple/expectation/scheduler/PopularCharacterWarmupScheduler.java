@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.CacheWarmupPort;
+import maple.expectation.core.port.out.PopularCharacterTrackerPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.lock.LockStrategy;
-import maple.expectation.service.v4.EquipmentExpectationServiceV4;
-import maple.expectation.service.v4.warmup.PopularCharacterTracker;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -62,8 +62,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class PopularCharacterWarmupScheduler {
 
-  private final PopularCharacterTracker popularCharacterTracker;
-  private final EquipmentExpectationServiceV4 expectationService;
+  private final PopularCharacterTrackerPort popularCharacterTracker;
+  private final CacheWarmupPort cacheWarmupPort;
   private final LockStrategy lockStrategy;
   private final LogicExecutor executor;
   private final MeterRegistry meterRegistry;
@@ -203,7 +203,7 @@ public class PopularCharacterWarmupScheduler {
     executor.executeOrCatch(
         () -> {
           // V4 API 호출하여 캐시 채우기 (force=false로 기존 캐시 사용)
-          expectationService.calculateExpectation(userIgn, false);
+          cacheWarmupPort.warmup(userIgn, false);
           successCount.incrementAndGet();
           log.debug("[Warmup] Warmed up: {}", maskIgn(userIgn));
           return null;

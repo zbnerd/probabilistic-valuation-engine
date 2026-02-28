@@ -122,6 +122,32 @@ data class EquipmentExpectationResponseV4(
                 additionalCubeCost = BigDecimal.ZERO,
                 starforceCost = BigDecimal.ZERO
             )
+
+            /**
+             * V4 Calculator CostBreakdown에서 변환
+             * @param breakdown EquipmentExpectationCalculator.CostBreakdown
+             */
+            @JvmStatic
+            fun from(breakdown: Any): CostBreakdownDto {
+                // Reflection to access CostBreakdown record methods
+                val blackCubeCost = breakdown.javaClass.getDeclaredMethod("blackCubeCost").invoke(breakdown) as BigDecimal
+                val redCubeCost = breakdown.javaClass.getDeclaredMethod("redCubeCost").invoke(breakdown) as BigDecimal
+                val additionalCubeCost = breakdown.javaClass.getDeclaredMethod("additionalCubeCost").invoke(breakdown) as BigDecimal
+                val starforceCost = breakdown.javaClass.getDeclaredMethod("starforceCost").invoke(breakdown) as BigDecimal
+                return CostBreakdownDto(
+                    blackCubeCost = blackCubeCost,
+                    redCubeCost = redCubeCost,
+                    additionalCubeCost = additionalCubeCost,
+                    starforceCost = starforceCost
+                )
+            }
         }
+
+        fun add(other: CostBreakdownDto): CostBreakdownDto = copy(
+            blackCubeCost = blackCubeCost.add(other.blackCubeCost),
+            redCubeCost = redCubeCost.add(other.redCubeCost),
+            additionalCubeCost = additionalCubeCost.add(other.additionalCubeCost),
+            starforceCost = starforceCost.add(other.starforceCost)
+        )
     }
 }

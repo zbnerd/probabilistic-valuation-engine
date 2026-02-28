@@ -10,21 +10,10 @@ import lombok.extern.jackson.Jacksonized;
 /**
  * V4 장비 기대값 응답 DTO (#240)
  *
- * <h3>V3 TotalExpectationResponse와의 차이</h3>
- *
- * <ul>
- *   <li>비용 상세 분류: 블랙큐브, 레드큐브, 에디셔널, 스타포스 별도 제공
- *   <li>프리셋별 데이터: 프리셋 1, 2, 3 각각의 기대값
- *   <li>BigDecimal: 정밀 계산 결과 (long → BigDecimal)
- *   <li>메타 정보: 계산 시점, 캐시 여부
- *   <li>비용 텍스트: 조/억/만 단위 포맷
- * </ul>
- *
- * <h3>PR #242: Jackson 역직렬화 지원</h3>
- *
- * <p>{@code @Jacksonized}를 사용하여 {@code @Builder}와 Jackson 역직렬화를 호환시킵니다. PER 캐시에서 Redis JSON을 역직렬화할
- * 때 필수입니다.
+ * @deprecated Kotlin으로 마이그레이션되었습니다. {@code
+ *     maple.expectation.web.dto.v4.EquipmentExpectationResponseV4}를 사용하세요.
  */
+@Deprecated(since = "2026-02-28", forRemoval = true)
 @Getter
 @Builder
 @Jacksonized

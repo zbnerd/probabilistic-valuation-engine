@@ -5,9 +5,9 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import maple.expectation.controller.dto.admin.AddAdminRequest;
+import maple.expectation.core.port.inbound.AdminPort;
 import maple.expectation.infrastructure.security.AuthenticatedUser;
 import maple.expectation.response.ApiResponse;
-import maple.expectation.service.v2.auth.AdminService;
 import maple.expectation.util.StringMaskingUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -48,7 +48,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AdminController {
 
-  private final AdminService adminService;
+  private final AdminPort adminPort;
 
   /** 전체 Admin 목록 조회 */
   @GetMapping("/admins")
@@ -56,7 +56,7 @@ public class AdminController {
   public CompletableFuture<ResponseEntity<ApiResponse<Set<String>>>> getAdmins() {
     return CompletableFuture.supplyAsync(
         () -> {
-          Set<String> admins = adminService.getAllAdmins();
+          Set<String> admins = adminPort.getAllAdmins();
           return ResponseEntity.ok(ApiResponse.success(admins));
         });
   }
@@ -78,7 +78,7 @@ public class AdminController {
 
     return CompletableFuture.supplyAsync(
         () -> {
-          adminService.addAdmin(request.fingerprint());
+          adminPort.addAdmin(request.fingerprint());
 
           return ResponseEntity.ok(
               ApiResponse.success(
@@ -106,7 +106,7 @@ public class AdminController {
                     ApiResponse.error("SELF_REMOVAL_NOT_ALLOWED", "자기 자신의 Admin 권한은 제거할 수 없습니다."));
           }
 
-          boolean removed = adminService.removeAdmin(fingerprint);
+          boolean removed = adminPort.removeAdmin(fingerprint);
 
           if (!removed) {
             return ResponseEntity.badRequest()

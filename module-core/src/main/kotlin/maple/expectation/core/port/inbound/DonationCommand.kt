@@ -13,4 +13,14 @@ data class DonationCommand(
     val adminFingerprint: String,
     val amount: Long,
     val requestId: String
-)
+) {
+    companion object {
+        @JvmStatic
+        fun of(
+            guestUuid: String,
+            adminFingerprint: String,
+            amount: Long,
+            requestId: String
+        ): DonationCommand = DonationCommand(guestUuid, adminFingerprint, amount, requestId)
+    }
+}

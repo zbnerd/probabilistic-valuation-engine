@@ -10,7 +10,7 @@ import maple.expectation.core.port.inbound.AuthPort;
 import maple.expectation.core.port.inbound.AuthResult;
 import maple.expectation.core.port.inbound.TokenResult;
 import maple.expectation.service.v2.auth.AuthService;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 /**
  * AuthPort 구현체 (ADR-005)
@@ -32,7 +32,7 @@ import org.springframework.stereotype.Service;
  * </ul>
  */
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
 public class AuthPortAdapter implements AuthPort {
 

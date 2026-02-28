@@ -3,13 +3,13 @@ package maple.expectation.application.service;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.core.calculator.PotentialCalculator;
 import maple.expectation.core.domain.model.CubeRate;
 import maple.expectation.core.domain.model.CubeType;
 import maple.expectation.core.domain.stat.StatType;
 import maple.expectation.core.port.out.CubeRatePort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import maple.expectation.service.v2.calculator.PotentialCalculator;
 import org.springframework.stereotype.Service;
 
 /**

@@ -5,8 +5,6 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import maple.expectation.core.calculator.v4.EquipmentExpectationCalculator;
-import maple.expectation.core.calculator.v4.EquipmentExpectationCalculatorFactory;
 import maple.expectation.core.domain.flame.FlameEquipCategory;
 import maple.expectation.core.domain.flame.FlameType;
 import maple.expectation.core.probability.FlameScoreCalculator;
@@ -20,6 +18,8 @@ import maple.expectation.dto.v4.EquipmentExpectationResponseV4.FlameExpectationD
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.StarforceExpectationDto;
+import maple.expectation.service.v2.calculator.v4.EquipmentExpectationCalculator;
+import maple.expectation.service.v2.calculator.v4.EquipmentExpectationCalculatorFactory;
 import maple.expectation.service.v2.flame.FlameInputResolver;
 import maple.expectation.service.v2.flame.FlameInputResolver.FlameInput;
 import maple.expectation.service.v2.flame.FlameTrialsProvider;

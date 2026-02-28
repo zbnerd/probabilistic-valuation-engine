@@ -1,4 +1,4 @@
-package maple.expectation.web.dto.auth
+package maple.expectation.web.dto
 
 /**
  * Login response DTO (Issue #279: Refresh Token 추가)

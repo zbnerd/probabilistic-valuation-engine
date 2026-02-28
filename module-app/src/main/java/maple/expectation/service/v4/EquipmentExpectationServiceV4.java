@@ -9,6 +9,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.CacheWarmupPort;
 import maple.expectation.domain.cost.CostFormatter;
 import maple.expectation.domain.model.character.GameCharacter;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4;
@@ -50,7 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Slf4j
 @Service
-public class EquipmentExpectationServiceV4 {
+public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private static final long ASYNC_TIMEOUT_SECONDS = 30L;
   private static final long DATA_LOAD_TIMEOUT_SECONDS = 10L;
@@ -128,7 +129,7 @@ public class EquipmentExpectationServiceV4 {
     return cacheCoordinator.getOrCalculate(userIgn, force, () -> doCalculateExpectation(userIgn));
   }
 
-  /** CacheWarmupPort 구현 - 캐시 웜업 */
+  /** 캐시 웜업 (CacheWarmupPort 구현) */
   @Override
   public void warmup(String userIgn, boolean force) {
     calculateExpectation(userIgn, force);

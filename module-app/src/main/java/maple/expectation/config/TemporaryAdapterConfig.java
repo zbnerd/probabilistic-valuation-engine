@@ -23,6 +23,7 @@ import maple.expectation.domain.model.equipment.EquipmentData;
 import maple.expectation.domain.repository.CharacterEquipmentRepository;
 import maple.expectation.domain.repository.CubeProbabilityRepository;
 import maple.expectation.domain.v2.CubeProbability;
+import maple.expectation.infrastructure.queue.priority.PriorityCalculationQueue;
 import maple.expectation.service.v2.calculator.PotentialCalculator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -67,6 +68,7 @@ public class TemporaryAdapterConfig {
 
   private final CubeProbabilityRepository cubeProbabilityRepository;
   private final CharacterEquipmentRepository characterEquipmentRepository;
+  private final PriorityCalculationQueue priorityCalculationQueue;
 
   /**
    * Core Utility Beans

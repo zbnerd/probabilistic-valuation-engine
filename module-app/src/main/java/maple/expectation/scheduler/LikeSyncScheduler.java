@@ -3,13 +3,13 @@ package maple.expectation.scheduler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.out.LikeBufferStrategy;
+import maple.expectation.core.port.out.LikeRelationSyncPort;
+import maple.expectation.core.port.out.LikeSyncPort;
 import maple.expectation.error.exception.DistributedLockException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.lock.LockStrategy;
 import maple.expectation.infrastructure.queue.like.PartitionedFlushStrategy;
-import maple.expectation.service.v2.LikeRelationSyncService;
-import maple.expectation.service.v2.LikeSyncService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.lang.Nullable;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -21,8 +21,8 @@ import org.springframework.stereotype.Component;
  * <p>두 가지 버퍼 동기화:
  *
  * <ul>
- *   <li>likeCount: LikeSyncService (숫자 카운트)
- *   <li>likeRelation: LikeRelationSyncService (관계 데이터)
+ *   <li>likeCount: LikeSyncPort (숫자 카운트)
+ *   <li>likeRelation: LikeRelationSyncPort (관계 데이터)
  * </ul>
  *
  * <p>동기화 주기:
@@ -36,6 +36,10 @@ import org.springframework.stereotype.Component;
  *
  * <p>Redis 모드에서 PartitionedFlushStrategy를 사용하여 파티션 기반 분산 Flush를 수행합니다. 각 인스턴스가 자신이 담당하는 파티션만
  * Flush하여 중복 Flush를 방지합니다.
+ *
+ * <h3>ADR-003: Hexagonal Architecture</h3>
+ *
+ * <p>Port 인터페이스를 통해 infra(adapter) → app(service) 역참조 제거
  */
 @Slf4j
 @Component
@@ -47,8 +51,8 @@ import org.springframework.stereotype.Component;
     )
 public class LikeSyncScheduler {
 
-  private final LikeSyncService likeSyncService;
-  private final LikeRelationSyncService likeRelationSyncService;
+  private final LikeSyncPort likeSyncPort;
+  private final LikeRelationSyncPort likeRelationSyncPort;
   private final LockStrategy lockStrategy;
   private final LogicExecutor executor;
   private final LikeBufferStrategy likeBufferStrategy;
@@ -88,11 +92,11 @@ public class LikeSyncScheduler {
   public void localFlush() {
     // likeCount 버퍼 동기화
     executor.executeVoidJava(
-        likeSyncService::flushLocalToRedis, TaskContext.of("Scheduler", "LocalFlush.Count"));
+        likeSyncPort::flushLocalToRedis, TaskContext.of("Scheduler", "LocalFlush.Count"));
 
     // likeRelation 버퍼 동기화
     executor.executeVoidJava(
-        likeRelationSyncService::flushLocalToRedis,
+        likeRelationSyncPort::flushLocalToRedis,
         TaskContext.of("Scheduler", "LocalFlush.Relation"));
   }
 
@@ -135,7 +139,7 @@ public class LikeSyncScheduler {
               0,
               30,
               () -> {
-                likeSyncService.syncRedisToDatabase();
+                likeSyncPort.syncRedisToDatabase();
                 return null;
               });
           return null;
@@ -173,7 +177,7 @@ public class LikeSyncScheduler {
               0,
               30,
               () -> {
-                likeRelationSyncService.syncRedisToDatabase();
+                likeRelationSyncPort.syncRedisToDatabase();
                 return null;
               });
           return null;

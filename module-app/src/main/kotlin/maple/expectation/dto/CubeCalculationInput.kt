@@ -16,13 +16,16 @@ import maple.expectation.core.domain.stat.StatType
  * - 장비 세부 분류 (itemEquipmentPart)
  */
 data class CubeCalculationInput(
-    var level: Int = 0, // 장비 레벨 (숫자)
-    var part: String? = null, // 장비 부위 (item_equipment_slot)
-    var grade: String? = null, // 잠재능력 등급
+    var level: Int = 0,
+    // 장비 레벨 (숫자)
+    var part: String? = null,
+    // 장비 부위 (item_equipment_slot)
+    var grade: String? = null,
+    // 잠재능력 등급
     var expectedCost: Long = 0,
-    var options: MutableList<String?> = ArrayList(), // 옵션 3줄 리스트 (기존 방식, null 허용)
+    var options: MutableList<String?> = ArrayList(),
+    // 옵션 3줄 리스트 (기존 방식, null 허용)
     var itemName: String? = null,
-
     // ========== #240 V4 확장 필드 ==========
 
     /** 아이템 아이콘 URL (예: "https://open.api.nexon.com/static/maplestory/...") */
@@ -45,7 +48,6 @@ data class CubeCalculationInput(
 
     /** 특수 스킬 반지 레벨 (리스트레인트링, 컨티뉴어스링 등, 0이면 일반 장비, 1~5이면 특수 스킬 반지) */
     var specialRingLevel: Int = 0,
-
     // ========== 환생의 불꽃 필드 (#303 동적 계산) ==========
 
     /** 추옵 STR */
@@ -83,7 +85,6 @@ data class CubeCalculationInput(
 
     /** 기본 마력 (item_base_option.magic_power) */
     var baseMagicPower: Int = 0,
-
     // ========== DP 모드용 필드 (신규) ==========
 
     /** 목표 스탯 타입 (단위 포함) 예: STR_PERCENT, DEX_PERCENT, ALLSTAT_PERCENT */
@@ -97,7 +98,7 @@ data class CubeCalculationInput(
     var enableTailClamp: Boolean = true,
 
     /** 확률 테이블 버전 (감사/재현성용, 서비스에서 자동 설정됨) */
-    var probabilityTableVersion: String? = null
+    var probabilityTableVersion: String? = null,
 ) {
     /** 놀장 장비 여부 판별 */
     fun isNoljangEquipment(): Boolean = "사용" == starforceScrollFlag
@@ -183,7 +184,7 @@ data class CubeCalculationInput(
         targetStatType = null,
         minTotal = null,
         enableTailClamp = true,
-        probabilityTableVersion = null
+        probabilityTableVersion = null,
     )
 
     companion object {
@@ -256,7 +257,10 @@ class CubeCalculationInputBuilder {
     fun targetStatType(targetStatType: StatType?) = apply { this.targetStatType = targetStatType }
     fun minTotal(minTotal: Int?) = apply { this.minTotal = minTotal }
     fun enableTailClamp(enableTailClamp: Boolean) = apply { this.enableTailClamp = enableTailClamp }
-    fun probabilityTableVersion(probabilityTableVersion: String?) = apply { this.probabilityTableVersion = probabilityTableVersion }
+    fun probabilityTableVersion(probabilityTableVersion: String?) = apply {
+        this.probabilityTableVersion =
+            probabilityTableVersion
+    }
 
     fun build(): CubeCalculationInput = CubeCalculationInput(
         level = level,
@@ -287,6 +291,6 @@ class CubeCalculationInputBuilder {
         targetStatType = targetStatType,
         minTotal = minTotal,
         enableTailClamp = enableTailClamp,
-        probabilityTableVersion = probabilityTableVersion
+        probabilityTableVersion = probabilityTableVersion,
     )
 }

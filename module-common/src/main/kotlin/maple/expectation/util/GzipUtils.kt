@@ -57,9 +57,7 @@ object GzipUtils {
         return String(gzip.readAllBytes(), StandardCharsets.UTF_8)
     }
 
-    private fun isGzipped(data: ByteArray): Boolean {
-        return data.size >= 2 &&
-                data[0] == GZIPInputStream.GZIP_MAGIC.toByte() &&
-                data[1] == (GZIPInputStream.GZIP_MAGIC shr 8).toByte()
-    }
+    private fun isGzipped(data: ByteArray): Boolean = data.size >= 2 &&
+        data[0] == GZIPInputStream.GZIP_MAGIC.toByte() &&
+        data[1] == (GZIPInputStream.GZIP_MAGIC shr 8).toByte()
 }

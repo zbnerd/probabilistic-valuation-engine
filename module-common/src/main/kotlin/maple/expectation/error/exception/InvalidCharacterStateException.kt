@@ -1,4 +1,5 @@
 @file:JvmName("InvalidCharacterStateException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -11,10 +12,11 @@ import maple.expectation.error.exception.base.ClientBaseException
  *
  * @property message 실패 메시지
  */
-open class InvalidCharacterStateException(message: String) : ClientBaseException(
-    CommonErrorCode.INVALID_CHARACTER_STATE,
-    message
-) {
+open class InvalidCharacterStateException(message: String) :
+    ClientBaseException(
+        CommonErrorCode.INVALID_CHARACTER_STATE,
+        message,
+    ) {
 
     /**
      * expected + actual로 예외 생성 (Java 호환성)

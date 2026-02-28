@@ -13,8 +13,10 @@ import java.io.Serializable
  *
  * <pre>
  * {
- *   "value": {...},           // 실제 캐시 데이터
- *   "delta": 150,             // 계산 소요 시간 (ms)
+ *   "value": {...},
+    // 실제 캐시 데이터
+ *   "delta": 150,
+    // 계산 소요 시간 (ms)
  *   "expiry": 1706000000000   // 만료 시각 (Unix ms)
  * }
  * </pre>

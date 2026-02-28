@@ -9,6 +9,8 @@
 // ========================================
 
 plugins {
+	id 'org.jetbrains.kotlin.jvm'
+	id 'org.jetbrains.kotlin.plugin.spring'
 	id 'org.springframework.boot' version '3.5.4'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'jacoco'
@@ -25,6 +27,9 @@ configurations {
 }
 
 dependencies {
+
+	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
+	testImplementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
 
 	compileOnly 'org.projectlombok:lombok:1.18.30'
     annotationProcessor 'org.projectlombok:lombok:1.18.30'

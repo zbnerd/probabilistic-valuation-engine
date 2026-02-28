@@ -27,7 +27,8 @@ package maple.expectation.infrastructure.executor
 data class TaskContext(
     val component: String,
     val operation: String,
-    val dynamicValue: String? = null  // ADR-085: Nullable for Java interop
+    val dynamicValue: String? = null
+    // ADR-085: Nullable for Java interop
 ) {
     // ADR-085: Normalize null to empty string for internal use
     private val normalizedDynamicValue: String = dynamicValue ?: ""

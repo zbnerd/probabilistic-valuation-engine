@@ -12,7 +12,7 @@ data class TokenResponse(
     val accessToken: String?,
     val accessExpiresIn: Long?,
     val refreshToken: String?,
-    val refreshExpiresIn: Long?
+    val refreshExpiresIn: Long?,
 ) {
     // Record-style accessors for production code compatibility
     fun accessToken(): String = accessToken ?: ""
@@ -39,7 +39,7 @@ data class TokenResponse(
             accessToken: String?,
             accessExpiresIn: Long?,
             refreshToken: String?,
-            refreshExpiresIn: Long?
+            refreshExpiresIn: Long?,
         ): TokenResponse = TokenResponse(accessToken, accessExpiresIn, refreshToken, refreshExpiresIn)
     }
 }

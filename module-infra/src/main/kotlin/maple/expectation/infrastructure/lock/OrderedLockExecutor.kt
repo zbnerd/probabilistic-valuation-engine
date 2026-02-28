@@ -151,7 +151,8 @@ class OrderedLockExecutor(
 
         return executor.executeOrDefault(
             { lockStrategy.tryLockImmediately(key, leaseTime) },
-            false, // UnsupportedOperationException 또는 기타 예외 시 false 반환 → 중첩 전략으로 전환
+            false,
+    // UnsupportedOperationException 또는 기타 예외 시 false 반환 → 중첩 전략으로 전환
             context
         )
     }
@@ -240,7 +241,8 @@ class OrderedLockExecutor(
                 unlockSafely("__probe__:strategy__")
                 false // Redisson: 일반 전략 사용
             },
-            true, // UnsupportedOperationException 또는 기타 예외 → MySQL 중첩 전략
+            true,
+    // UnsupportedOperationException 또는 기타 예외 → MySQL 중첩 전략
             context
         )
     }

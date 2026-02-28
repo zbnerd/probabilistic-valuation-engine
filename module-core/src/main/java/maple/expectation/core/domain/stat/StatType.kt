@@ -23,7 +23,8 @@ enum class StatType(
     DEX("DEX", false, true),
     INT("INT", false, true),
     LUK("LUK", false, true),
-    ALL_STAT("올스탯", false, false), // 올스탯은 계산 시 STR, DEX, INT, LUK 모두에 더해져야 함
+    ALL_STAT("올스탯", false, false),
+    // 올스탯은 계산 시 STR, DEX, INT, LUK 모두에 더해져야 함
 
     // 1-1. 퍼센트 스탯 (DP 엔진용 - 단위 포함)
     STR_PERCENT("STR", true, true),
@@ -31,33 +32,31 @@ enum class StatType(
     INT_PERCENT("INT", true, true),
     LUK_PERCENT("LUK", true, true),
     ALLSTAT_PERCENT("올스탯", true, false),
-
     // 2. 공격력/마력
     ATTACK_POWER("공격력", false, false),
     MAGIC_POWER("마력", false, false),
     ATTACK_POWER_PERCENT("공격력", true, false),
     MAGIC_POWER_PERCENT("마력", true, false),
-
     // 3. 특수 옵션
-    BOSS_DAMAGE("보스 몬스터 공격 시 데미지", true, false), // 보공 (항상 %)
-    IGNORE_DEFENSE("몬스터 방어율 무시", true, false), // 방무 (항상 %)
+    BOSS_DAMAGE("보스 몬스터 공격 시 데미지", true, false),
+    // 보공 (항상 %)
+    IGNORE_DEFENSE("몬스터 방어율 무시", true, false),
+    // 방무 (항상 %)
     DAMAGE("데미지", true, false),
     CRITICAL_DAMAGE("크리티컬 데미지", true, false),
-
     // 4. 유틸 옵션
-    COOLDOWN_REDUCTION("재사용 대기시간", false, false), // 쿨감 (초 단위)
+    COOLDOWN_REDUCTION("재사용 대기시간", false, false),
+    // 쿨감 (초 단위)
     ITEM_DROP("아이템 드롭률", true, false),
     MESO_DROP("메소 획득량", true, false),
     HP("HP", false, false),
     HP_PERCENT("HP", true, false),
-
     // 5. 레벨당 스탯 (에디셔널 핵심 옵션) (#240 V4)
     // longest-first 매칭으로 "STR"보다 먼저 감지됨
     LEVEL_STR("캐릭터 기준 9레벨 당 STR", false, true),
     LEVEL_DEX("캐릭터 기준 9레벨 당 DEX", false, true),
     LEVEL_INT("캐릭터 기준 9레벨 당 INT", false, true),
     LEVEL_LUK("캐릭터 기준 9레벨 당 LUK", false, true),
-
     // 6. 기타 (판별 불가)
     UNKNOWN("기타", false, false);
 
@@ -67,11 +66,16 @@ enum class StatType(
      * 복합 옵션 감지용: 서로 다른 카테고리의 옵션이 2개 이상이면 복합 옵션
      */
     enum class OptionCategory {
-        STAT, // STR, DEX, INT, LUK, 올스탯
-        BOSS_IED, // 보공, 방무
-        ATK_MAG, // 공격력, 마력
-        CRIT_DMG, // 크리티컬 데미지
-        COOLDOWN, // 쿨감
+        STAT,
+    // STR, DEX, INT, LUK, 올스탯
+        BOSS_IED,
+    // 보공, 방무
+        ATK_MAG,
+    // 공격력, 마력
+        CRIT_DMG,
+    // 크리티컬 데미지
+        COOLDOWN,
+    // 쿨감
         OTHER // 기타
     }
 

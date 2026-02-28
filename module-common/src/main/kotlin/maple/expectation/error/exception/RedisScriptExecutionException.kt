@@ -1,4 +1,5 @@
 @file:JvmName("RedisScriptExecutionException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -12,13 +13,11 @@ import maple.expectation.error.exception.base.ServerBaseException
  * @property scriptName 스크립트 이름
  * @property cause 원인 예외
  */
-class RedisScriptExecutionException(
-    scriptName: String,
-    cause: Throwable? = null
-) : ServerBaseException(
-    CommonErrorCode.REDIS_SCRIPT_EXECUTION_FAILED,
-    scriptName
-) {
+class RedisScriptExecutionException(scriptName: String, cause: Throwable? = null) :
+    ServerBaseException(
+        CommonErrorCode.REDIS_SCRIPT_EXECUTION_FAILED,
+        scriptName,
+    ) {
 
     init {
         if (cause != null) {

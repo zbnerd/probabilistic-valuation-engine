@@ -1,4 +1,5 @@
 @file:JvmName("CubeDataInitializationException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -11,12 +12,11 @@ import maple.expectation.error.exception.base.ServerBaseException
  *
  * @property message 실패 메시지 (optional)
  */
-open class CubeDataInitializationException(
-    message: String? = null
-) : ServerBaseException(
-    CommonErrorCode.DATA_INITIALIZATION_FAILED,
-    message ?: "큐브 데이터"
-) {
+open class CubeDataInitializationException(message: String? = null) :
+    ServerBaseException(
+        CommonErrorCode.DATA_INITIALIZATION_FAILED,
+        message ?: "큐브 데이터",
+    ) {
     /**
      * Create exception with custom message and cause.
      *

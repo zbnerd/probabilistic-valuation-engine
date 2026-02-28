@@ -20,10 +20,13 @@ enum class FlameOptionType {
     DEF,
     ATT,
     MAG,
-    BOSS_DMG_PCT, // weapon only
-    DMG_PCT, // weapon only
+    BOSS_DMG_PCT,
+    // weapon only
+    DMG_PCT,
+    // weapon only
     ALLSTAT_PCT,
-    SPEED, // armor only
+    SPEED,
+    // armor only
     JUMP; // armor only
 
     /**

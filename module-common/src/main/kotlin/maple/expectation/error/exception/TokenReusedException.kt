@@ -1,4 +1,5 @@
 @file:JvmName("TokenReusedException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -16,7 +17,7 @@ class TokenReusedException : ClientBaseException {
      */
     constructor(tokenId: String) : super(
         CommonErrorCode.TOKEN_USED,
-        tokenId
+        tokenId,
     )
 
     /**
@@ -28,6 +29,6 @@ class TokenReusedException : ClientBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.TOKEN_USED,
         cause,
-        message
+        message,
     )
 }

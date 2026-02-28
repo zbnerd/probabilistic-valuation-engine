@@ -1,4 +1,5 @@
 @file:JvmName("EventProcessingException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -12,19 +13,18 @@ import maple.expectation.error.exception.base.ServerBaseException
  *
  * @property message 실패 메시지
  */
-class EventProcessingException(
-    message: String
-) : ServerBaseException(
-    CommonErrorCode.EVENT_HANDLER_ERROR,
-    message
-) {
+class EventProcessingException(message: String) :
+    ServerBaseException(
+        CommonErrorCode.EVENT_HANDLER_ERROR,
+        message,
+    ) {
 
     /**
      * ErrorCode와 message로 예외 생성 (Java 호환성)
      */
     constructor(
         errorCode: ErrorCode,
-        message: String
+        message: String,
     ) : this(message)
 
     /**
@@ -33,9 +33,9 @@ class EventProcessingException(
     constructor(
         errorCode: ErrorCode,
         cause: Throwable,
-        vararg details: String
+        vararg details: String,
     ) : this(
-        buildMessage(errorCode, cause, details)
+        buildMessage(errorCode, cause, details),
     ) {
         initCause(cause)
     }

@@ -42,8 +42,10 @@ class TieredCacheManager(
     private val l1Manager: CacheManager,
     private val l2Manager: CacheManager,
     private val executor: LogicExecutor,
-    private val redissonClient: RedissonClient, // Issue #148: 분산 락용
-    val meterRegistry: MeterRegistry, // Issue #148: 메트릭 수집용 (public for access)
+    private val redissonClient: RedissonClient,
+    // Issue #148: 분산 락용
+    val meterRegistry: MeterRegistry,
+    // Issue #148: 메트릭 수집용 (public for access)
     private val lockWaitSeconds: Int // P0-4: 외부 설정
 ) : AbstractCacheManager() {
     companion object {

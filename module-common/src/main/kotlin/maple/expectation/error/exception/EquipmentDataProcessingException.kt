@@ -1,4 +1,5 @@
 @file:JvmName("EquipmentDataProcessingException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -19,7 +20,7 @@ class EquipmentDataProcessingException : ServerBaseException {
      */
     constructor(message: String) : super(
         CommonErrorCode.DATA_PROCESSING_ERROR,
-        message
+        message,
     )
 
     /**
@@ -28,6 +29,6 @@ class EquipmentDataProcessingException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.DATA_PROCESSING_ERROR,
         cause,
-        message
+        message,
     )
 }

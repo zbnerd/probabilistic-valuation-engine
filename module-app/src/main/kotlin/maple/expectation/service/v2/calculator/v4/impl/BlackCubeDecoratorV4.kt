@@ -32,16 +32,13 @@ class BlackCubeDecoratorV4(
     target: EquipmentExpectationCalculator,
     trialsProvider: CubeTrialsProvider,
     costPolicy: CubeCostPolicy,
-    input: CubeCalculationInput
+    input: CubeCalculationInput,
 ) : AbstractCubeDecoratorV4(target, trialsProvider, costPolicy, input) {
 
     override fun getCubeType(): CubeType = CubeType.BLACK
 
     override fun getCubePathSuffix(): String = " > 블랙큐브(윗잠)"
 
-    override fun updateCostBreakdown(
-        base: CostBreakdown,
-        cubeCost: BigDecimal,
-        trials: BigDecimal
-    ): CostBreakdown = base.withBlackCube(base.blackCubeCost.add(cubeCost), trials)
+    override fun updateCostBreakdown(base: CostBreakdown, cubeCost: BigDecimal, trials: BigDecimal): CostBreakdown =
+        base.withBlackCube(base.blackCubeCost.add(cubeCost), trials)
 }

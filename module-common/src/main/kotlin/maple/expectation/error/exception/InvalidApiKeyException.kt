@@ -1,4 +1,5 @@
 @file:JvmName("InvalidApiKeyException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -16,7 +17,7 @@ class InvalidApiKeyException : ClientBaseException {
      */
     constructor(message: String) : super(
         CommonErrorCode.INVALID_API_KEY,
-        message
+        message,
     )
 
     /**
@@ -28,6 +29,6 @@ class InvalidApiKeyException : ClientBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.INVALID_API_KEY,
         cause,
-        message
+        message,
     )
 }

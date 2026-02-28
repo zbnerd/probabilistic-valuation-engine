@@ -1,4 +1,5 @@
 @file:JvmName("MonitoringException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -16,7 +17,7 @@ class MonitoringException : ServerBaseException {
      */
     constructor(errorCode: CommonErrorCode, capacity: Long) : super(
         errorCode,
-        "System capacity exceeded. Pending: $capacity"
+        "System capacity exceeded. Pending: $capacity",
     )
 
     /**
@@ -33,6 +34,6 @@ class MonitoringException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.INTERNAL_SERVER_ERROR,
         cause,
-        message
+        message,
     )
 }

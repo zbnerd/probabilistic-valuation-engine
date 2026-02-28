@@ -1,4 +1,5 @@
 @file:JvmName("SelfLikeNotAllowedException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -16,7 +17,7 @@ class SelfLikeNotAllowedException : ClientBaseException {
      */
     constructor(userIgn: String, ocid: String) : super(
         CommonErrorCode.SELF_LIKE_NOT_ALLOWED,
-        "Self-like not allowed for user: $userIgn (OCID: $ocid)"
+        "Self-like not allowed for user: $userIgn (OCID: $ocid)",
     )
 
     /**
@@ -28,6 +29,6 @@ class SelfLikeNotAllowedException : ClientBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.SELF_LIKE_NOT_ALLOWED,
         cause,
-        message
+        message,
     )
 }

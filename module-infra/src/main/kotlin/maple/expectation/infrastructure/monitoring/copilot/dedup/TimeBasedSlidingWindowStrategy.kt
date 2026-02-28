@@ -44,7 +44,8 @@ class TimeBasedSlidingWindowStrategy(
   override fun shouldSkip(event: AnomalyEvent, signal: SignalDefinition, currentTimestamp: Long): Boolean {
     return executor.executeOrDefault(
         { checkDuplicateInWindow(event, signal, currentTimestamp) },
-        false, // Fail open: allow if query fails
+        false,
+    // Fail open: allow if query fails
         TaskContext.of("SignalDedup", "CheckDuplicate", event.signalId))
   }
 

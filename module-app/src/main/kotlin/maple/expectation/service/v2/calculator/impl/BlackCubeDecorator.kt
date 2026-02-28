@@ -26,7 +26,7 @@ class BlackCubeDecorator(
     target: ExpectationCalculator,
     trialsProvider: CubeTrialsProvider,
     costPolicy: CubeCostPolicy,
-    input: CubeCalculationInput
+    input: CubeCalculationInput,
 ) : AbstractCubeDecoratorV2(target, trialsProvider, costPolicy, input) {
 
     override fun getCubeType(): CubeType = CubeType.BLACK

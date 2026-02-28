@@ -50,7 +50,8 @@ class MDCFilter(
                 chain.doFilter(request, response)
                 null
             },
-            { MDC.clear() }, // 요청 종료 시 반드시 비워줌 (메모리 누수 방지)
+            { MDC.clear() },
+    // 요청 종료 시 반드시 비워줌 (메모리 누수 방지)
             context
         )
     }

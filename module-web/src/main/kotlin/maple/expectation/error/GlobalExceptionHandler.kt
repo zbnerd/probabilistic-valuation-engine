@@ -132,11 +132,10 @@ class GlobalExceptionHandler {
      * @param retryAfterSeconds 재시도 권장 시간 (초)
      * @return 503 응답 + Retry-After 헤더
      */
-    private fun buildServiceUnavailableResponse(retryAfterSeconds: Int): ResponseEntity<ErrorResponse> {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+    private fun buildServiceUnavailableResponse(retryAfterSeconds: Int): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
             .header("Retry-After", retryAfterSeconds.toString())
             .body(ErrorResponse.from(CommonErrorCode.SERVICE_UNAVAILABLE))
-    }
 
     // ==================== Cache.ValueRetrievalException 처리 ====================
 
@@ -154,9 +153,7 @@ class GlobalExceptionHandler {
      * </ol>
      */
     @ExceptionHandler(Cache.ValueRetrievalException::class)
-    protected fun handleCacheValueRetrievalException(
-        e: Cache.ValueRetrievalException
-    ): ResponseEntity<ErrorResponse> {
+    protected fun handleCacheValueRetrievalException(e: Cache.ValueRetrievalException): ResponseEntity<ErrorResponse> {
         val cause = e.cause
 
         if (cause is BaseException) {
@@ -225,10 +222,7 @@ class GlobalExceptionHandler {
      * @return 400 Bad Request + C001 에러코드
      */
     @ExceptionHandler(MethodArgumentNotValidException::class)
-    protected fun handleMethodArgumentNotValid(
-        e: MethodArgumentNotValidException
-    ): ResponseEntity<ErrorResponse> {
-
+    protected fun handleMethodArgumentNotValid(e: MethodArgumentNotValidException): ResponseEntity<ErrorResponse> {
         // 검증 실패 필드 정보 수집
         val errorMessage = e.bindingResult.fieldErrors
             .map { fe -> "${fe.field}: ${fe.defaultMessage}" }
@@ -243,7 +237,7 @@ class GlobalExceptionHandler {
                     .code(CommonErrorCode.INVALID_INPUT_VALUE.code)
                     .message(CommonErrorCode.INVALID_INPUT_VALUE.formatMessage(errorMessage))
                     .timestamp(LocalDateTime.now())
-                    .build()
+                    .build(),
             )
     }
 
@@ -263,10 +257,7 @@ class GlobalExceptionHandler {
      * @return 400 Bad Request + C001 에러코드
      */
     @ExceptionHandler(ConstraintViolationException::class)
-    protected fun handleConstraintViolation(
-        e: ConstraintViolationException
-    ): ResponseEntity<ErrorResponse> {
-
+    protected fun handleConstraintViolation(e: ConstraintViolationException): ResponseEntity<ErrorResponse> {
         val errorMessage = e.constraintViolations
             .map { cv -> "${cv.propertyPath}: ${cv.message}" }
             .joinToString(", ")
@@ -280,7 +271,7 @@ class GlobalExceptionHandler {
                     .code(CommonErrorCode.INVALID_INPUT_VALUE.code)
                     .message(CommonErrorCode.INVALID_INPUT_VALUE.formatMessage(errorMessage))
                     .timestamp(LocalDateTime.now())
-                    .build()
+                    .build(),
             )
     }
 
@@ -306,10 +297,7 @@ class GlobalExceptionHandler {
      * @return 400 Bad Request + C001 에러코드
      */
     @ExceptionHandler(HttpMessageNotReadableException::class)
-    protected fun handleHttpMessageNotReadable(
-        e: HttpMessageNotReadableException
-    ): ResponseEntity<ErrorResponse> {
-
+    protected fun handleHttpMessageNotReadable(e: HttpMessageNotReadableException): ResponseEntity<ErrorResponse> {
         var message = "Invalid JSON format"
         val cause = e.cause
 
@@ -318,7 +306,7 @@ class GlobalExceptionHandler {
             message = "JSON exceeds size/depth limits"
             log.warn(
                 "[Security] JSON constraints violation - potential DoS attack: {}",
-                cause.message
+                cause.message,
             )
         } else {
             log.warn("JSON parsing failed: {}", e.message)
@@ -331,7 +319,7 @@ class GlobalExceptionHandler {
                     .code(CommonErrorCode.INVALID_INPUT_VALUE.code)
                     .message(message)
                     .timestamp(LocalDateTime.now())
-                    .build()
+                    .build(),
             )
     }
 

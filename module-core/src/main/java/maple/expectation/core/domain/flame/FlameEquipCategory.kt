@@ -8,11 +8,13 @@ package maple.expectation.core.domain.flame
 enum class FlameEquipCategory(
     @get:JvmName("isBossDrop") val bossDrop: Boolean,
     @get:JvmName("isWeapon") val weapon: Boolean,
-    val fixedLineCount: Int // 4 for boss, -1 for other (1~4 uniform)
+    // 4 for boss, -1 for other (1~4 uniform)
+    val fixedLineCount: Int
 ) {
     BOSS_WEAPON(true, true, 4),
     BOSS_ARMOR(true, false, 4),
-    OTHER_WEAPON(false, true, -1), // -1 = 1~4 uniform
+    OTHER_WEAPON(false, true, -1),
+    // -1 = 1~4 uniform
     OTHER_ARMOR(false, false, -1);
 
     companion object {

@@ -1,4 +1,5 @@
 @file:JvmName("ServerBaseException")
+
 package maple.expectation.error.exception.base
 
 import maple.expectation.error.ErrorCode
@@ -19,7 +20,9 @@ import maple.expectation.error.exception.marker.CircuitBreakerRecordMarker
  * @see ErrorCode
  * @see CircuitBreakerRecordMarker
  */
-abstract class ServerBaseException : BaseException, CircuitBreakerRecordMarker {
+abstract class ServerBaseException :
+    BaseException,
+    CircuitBreakerRecordMarker {
 
     /**
      * Create exception with static error message.
@@ -59,6 +62,6 @@ abstract class ServerBaseException : BaseException, CircuitBreakerRecordMarker {
     constructor(errorCode: ErrorCode, cause: Throwable, vararg args: Any?) : super(
         errorCode,
         cause,
-        *args
+        *args,
     )
 }

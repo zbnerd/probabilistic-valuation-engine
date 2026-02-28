@@ -88,12 +88,13 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
 
             var taskStarted = false
             var taskStartNanos = 0L
-            var elapsedNanos: Long? = null // null = 미확정
+            var elapsedNanos: Long? = null
+    // null = 미확정
 
-            var primary: Throwable? = null // 최종 throw 후보
+            var primary: Throwable? = null
+    // 최종 throw 후보
             var result: T? = null
-
-            // ========== PHASE 1: BEFORE (lifecycle 훅) ==========
+    // ========== PHASE 1: BEFORE (lifecycle 훅) ==========
             try {
                 for (slot in slots) {
                     if (invokeBefore(slot, context, taskName)) {

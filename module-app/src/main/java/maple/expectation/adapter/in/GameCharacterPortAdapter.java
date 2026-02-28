@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.out.GameCharacterPort;
 import maple.expectation.domain.model.character.GameCharacter;
 import maple.expectation.service.v2.GameCharacterService;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 /**
  * GameCharacterPort 구현체 (ADR-005)
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
  * </ul>
  */
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
 public class GameCharacterPortAdapter implements GameCharacterPort {
 

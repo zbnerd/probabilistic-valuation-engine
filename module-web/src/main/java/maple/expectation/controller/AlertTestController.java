@@ -1,9 +1,9 @@
 package maple.expectation.controller;
 
 import lombok.RequiredArgsConstructor;
+import maple.expectation.core.port.inbound.AlertPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.service.v2.alert.DiscordAlertService;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Profile("!prod")
 public class AlertTestController {
 
-  private final DiscordAlertService alertService;
+  private final AlertPort alertPort;
   private final LogicExecutor executor; // ✅ 지능형 실행기 주입
 
   @PostMapping("/api/admin/test/alert")
@@ -26,8 +26,8 @@ public class AlertTestController {
           // 1. 강제로 테스트용 예외 생성 (익명 객체나 즉석 생성 활용)
           RuntimeException testEx = new RuntimeException("배포 후 알림 시스템 점검용 테스트 에러입니다.");
 
-          // 2. 알림 서비스 호출
-          alertService.sendCriticalAlert(
+          // 2. 알림 Port 호출
+          alertPort.sendCriticalAlert(
               "[TEST] 배포 점검 알림", "이 알림은 실제 에러가 아닙니다. 알림 시스템 작동 여부를 확인 중입니다.", testEx);
         },
         context);

@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
+import maple.expectation.core.port.out.OutboxMetricsPort;
 import maple.expectation.domain.v2.DonationOutbox.OutboxStatus;
 import maple.expectation.infrastructure.config.OutboxProperties;
 import maple.expectation.infrastructure.persistence.repository.DonationOutboxRepository;
@@ -30,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 @RequiredArgsConstructor
-public class OutboxMetrics {
+public class OutboxMetrics implements OutboxMetricsPort {
 
   private final MeterRegistry registry;
   private final DonationOutboxRepository repository;
@@ -132,6 +133,7 @@ public class OutboxMetrics {
    * <p>스케줄러에서 주기적으로 호출
    */
   @Transactional(readOnly = true)
+  @Override
   public void updatePendingCount() {
     long count = repository.countByStatusIn(List.of(OutboxStatus.PENDING, OutboxStatus.FAILED));
     pendingCount.set(count);
@@ -144,6 +146,7 @@ public class OutboxMetrics {
    *
    * <p>스케줄러에서 주기적으로 호출 (30초)
    */
+  @Override
   public void updateTotalCount() {
     long count = repository.count();
     totalCount.set(count);
@@ -163,6 +166,7 @@ public class OutboxMetrics {
    *
    * @return 전체 Outbox 항목 수
    */
+  @Override
   public long getCurrentSize() {
     return totalCount.get();
   }

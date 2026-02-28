@@ -10,10 +10,11 @@ import static org.mockito.Mockito.when;
 import java.util.ArrayList;
 import java.util.List;
 import maple.expectation.common.function.ThrowingSupplier;
+import maple.expectation.core.domain.model.Page;
+import maple.expectation.core.domain.model.PageRequest;
+import maple.expectation.core.port.out.OcidQueryPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity;
-import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,10 +23,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.core.StepExecution;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 
 /**
  * OcidReader 단위 테스트
@@ -38,7 +35,7 @@ class OcidReaderTest {
 
   private static final int FETCH_SIZE = 1000;
 
-  @Mock private GameCharacterJpaRepository repository;
+  @Mock private OcidQueryPort ocidQuery;
   @Mock private LogicExecutor executor;
   @Mock private StepExecution stepExecution;
 
@@ -46,7 +43,7 @@ class OcidReaderTest {
 
   @BeforeEach
   void setUp() {
-    reader = new OcidReader(repository, executor);
+    reader = new OcidReader(ocidQuery, executor);
     lenient().when(stepExecution.getJobExecutionId()).thenReturn(1L);
   }
 
@@ -58,11 +55,11 @@ class OcidReaderTest {
     @DisplayName("마지막 페이지 OCID가 모두 반환되어야 함 (2500개: 1000, 1000, 500)")
     void lastPageOcids_ShouldAllBeReturned() {
       // Given: 총 2500개 OCID (3페이지: 1000, 1000, 500)
-      when(repository.findAll(any(PageRequest.class)))
+      when(ocidQuery.findAllOcids(any(PageRequest.class)))
           .thenReturn(createPage(0, 1000, true))
           .thenReturn(createPage(1, 1000, true))
           .thenReturn(createPage(2, 500, false))
-          .thenReturn(new PageImpl<>(List.of())); // Empty page after all data consumed
+          .thenReturn(createEmptyPage()); // Empty page after all data consumed
 
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
@@ -87,20 +84,20 @@ class OcidReaderTest {
       // Then: 2500개 OCID 모두 반환됨 (마지막 500개 포함)
       assertThat(ocids).hasSize(2500);
       // Page 0, 1, 2 fetched + 1 empty page after exhaustion = 4 calls total
-      verify(repository, times(4)).findAll(any(PageRequest.class));
-      verify(repository).findAll(PageRequest.of(0, FETCH_SIZE));
-      verify(repository).findAll(PageRequest.of(1, FETCH_SIZE));
-      verify(repository).findAll(PageRequest.of(2, FETCH_SIZE));
-      verify(repository).findAll(PageRequest.of(3, FETCH_SIZE));
+      verify(ocidQuery, times(4)).findAllOcids(any(PageRequest.class));
+      verify(ocidQuery).findAllOcids(PageRequest.Companion.of(0, FETCH_SIZE));
+      verify(ocidQuery).findAllOcids(PageRequest.Companion.of(1, FETCH_SIZE));
+      verify(ocidQuery).findAllOcids(PageRequest.Companion.of(2, FETCH_SIZE));
+      verify(ocidQuery).findAllOcids(PageRequest.Companion.of(3, FETCH_SIZE));
     }
 
     @Test
     @DisplayName("정확히 한 페이지 분량의 데이터가 있을 때 모두 반환되어야 함")
     void exactOnePage_ShouldReturnAllOcids() {
       // Given: 정확히 1000개 OCID (1페이지)
-      when(repository.findAll(any(PageRequest.class)))
+      when(ocidQuery.findAllOcids(any(PageRequest.class)))
           .thenReturn(createPage(0, 1000, false))
-          .thenReturn(new PageImpl<>(List.of())); // Empty page after all data consumed
+          .thenReturn(createEmptyPage()); // Empty page after all data consumed
 
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
@@ -125,16 +122,16 @@ class OcidReaderTest {
       // Then: 1000개 OCID 모두 반환됨
       assertThat(ocids).hasSize(1000);
       // Page 0 fetched + 1 empty page after exhaustion = 2 calls total
-      verify(repository, times(2)).findAll(any(PageRequest.class));
-      verify(repository).findAll(PageRequest.of(0, FETCH_SIZE));
-      verify(repository).findAll(PageRequest.of(1, FETCH_SIZE));
+      verify(ocidQuery, times(2)).findAllOcids(any(PageRequest.class));
+      verify(ocidQuery).findAllOcids(PageRequest.Companion.of(0, FETCH_SIZE));
+      verify(ocidQuery).findAllOcids(PageRequest.Companion.of(1, FETCH_SIZE));
     }
 
     @Test
     @DisplayName("데이터가 없을 때 null을 반환해야 함")
     void noData_ShouldReturnNull() {
       // Given: 빈 페이지
-      when(repository.findAll(any(PageRequest.class))).thenReturn(new PageImpl<>(List.of()));
+      when(ocidQuery.findAllOcids(any(PageRequest.class))).thenReturn(createEmptyPage());
 
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
@@ -164,9 +161,9 @@ class OcidReaderTest {
     @DisplayName("@BeforeStep에서 상태가 초기화되어야 함")
     void beforeStep_ShouldInitializeState() {
       // Given: 이전 실행으로 상태가 변경됨
-      when(repository.findAll(any(PageRequest.class)))
+      when(ocidQuery.findAllOcids(any(PageRequest.class)))
           .thenReturn(createPage(0, 1000, false))
-          .thenReturn(new PageImpl<>(List.of())); // Empty page after all data consumed
+          .thenReturn(createEmptyPage()); // Empty page after all data consumed
 
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
@@ -190,9 +187,9 @@ class OcidReaderTest {
 
       // When: @BeforeStep 호출 (새로운 mock 설정 필요)
       // 상태 초기화 후 다시 읽을 때 새로운 데이터 반환하도록 mock 재설정
-      when(repository.findAll(any(PageRequest.class)))
+      when(ocidQuery.findAllOcids(any(PageRequest.class)))
           .thenReturn(createPage(0, 1000, false))
-          .thenReturn(new PageImpl<>(List.of())) // 첫 실행의 두 번째 호출
+          .thenReturn(createEmptyPage()) // 첫 실행의 두 번째 호출
           .thenReturn(createPage(0, 100, false)); // 초기화 후 다시 읽을 때
 
       reader.initializeState(stepExecution);
@@ -206,11 +203,11 @@ class OcidReaderTest {
     @DisplayName("초기화 없이 재실행하면 데이터 누락 발생")
     void reexecuteWithoutInitialization_ShouldMissData() {
       // Given: 2500개 OCID (3페이지)
-      when(repository.findAll(any(PageRequest.class)))
+      when(ocidQuery.findAllOcids(any(PageRequest.class)))
           .thenReturn(createPage(0, 1000, true))
           .thenReturn(createPage(1, 1000, true))
           .thenReturn(createPage(2, 500, false))
-          .thenReturn(new PageImpl<>(List.of())); // Empty page after all data consumed
+          .thenReturn(createEmptyPage()); // Empty page after all data consumed
 
       when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
           .thenAnswer(
@@ -247,22 +244,20 @@ class OcidReaderTest {
 
   // ==================== Helper Methods ====================
 
-  private Page<GameCharacterJpaEntity> createPage(int pageNumber, int size, boolean hasNext) {
-    List<GameCharacterJpaEntity> entities = new ArrayList<>();
+  private Page<String> createPage(int pageNumber, int size, boolean hasNext) {
+    List<String> ocids = new ArrayList<>();
     long startOcid = (long) pageNumber * FETCH_SIZE;
 
     for (long i = 0; i < size; i++) {
-      String ocid = "ocid-" + (startOcid + i);
-      GameCharacterJpaEntity entity =
-          new GameCharacterJpaEntity(
-              maple.expectation.domain.model.character.UserIgn.of("testUser"),
-              maple.expectation.domain.model.character.CharacterId.of(ocid));
-      entities.add(entity);
+      ocids.add("ocid-" + (startOcid + i));
     }
 
-    return new PageImpl<>(
-        entities,
-        PageRequest.of(pageNumber, FETCH_SIZE, Sort.unsorted()),
-        hasNext ? (pageNumber + 1) * FETCH_SIZE + 1 : (long) pageNumber * FETCH_SIZE + size);
+    long totalElements =
+        hasNext ? (pageNumber + 1) * FETCH_SIZE + 1 : (long) pageNumber * FETCH_SIZE + size;
+    return new Page<>(ocids, pageNumber, FETCH_SIZE, totalElements, hasNext);
+  }
+
+  private Page<String> createEmptyPage() {
+    return new Page<>(List.of(), 0, 0, 0, false);
   }
 }

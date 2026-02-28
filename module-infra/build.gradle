@@ -169,7 +169,26 @@ tasks.withType(ProcessResources).configureEach {
 	duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
+// Kotlin compilation must run before Java compilation (for mixed Kotlin-Java modules)
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+	kotlinOptions {
+		jvmTarget = "21"
+		freeCompilerArgs += ["-Xjsr305=strict"]
+	}
+}
+
+// Ensure Java compilation depends on Kotlin compilation
+tasks.named('compileJava').configure {
+	dependsOn(tasks.named('compileKotlin'))
+}
+
 // Lombok annotation processor for integration tests
 tasks.named('compileIntegrationTestJava') {
 	options.annotationProcessorPath = configurations.integrationTestAnnotationProcessor
+}
+
+// Enable plain jar for inter-module dependencies
+tasks.named("jar") {
+	enabled = true
+	archiveClassifier = "plain"
 }

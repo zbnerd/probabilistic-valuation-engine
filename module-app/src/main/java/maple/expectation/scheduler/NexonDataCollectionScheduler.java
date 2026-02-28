@@ -3,11 +3,11 @@ package maple.expectation.scheduler;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.NexonDataCollectorPort;
 import maple.expectation.domain.model.character.GameCharacter;
 import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.service.ingestion.NexonDataCollector;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -16,8 +16,8 @@ import org.springframework.stereotype.Component;
  * Scheduled job to collect Nexon API data and publish to queue.
  *
  * <p><strong>ACL Stage 1 Execution:</strong> This scheduler periodically triggers {@link
- * NexonDataCollector} to fetch data from Nexon API and publish to the queue, completing Stage 1 of
- * the 3-stage pipeline.
+ * NexonDataCollectorPort} to fetch data from Nexon API and publish to the queue, completing Stage 1
+ * of the 3-stage pipeline.
  *
  * <p><strong>Schedule Configuration:</strong>
  *
@@ -35,7 +35,7 @@ import org.springframework.stereotype.Component;
  *   <li>Decouples data collection from user-facing APIs
  * </ul>
  *
- * @see NexonDataCollector
+ * @see NexonDataCollectorPort
  * @see maple.expectation.service.ingestion.BatchWriter
  */
 @Slf4j
@@ -48,7 +48,7 @@ import org.springframework.stereotype.Component;
     )
 public class NexonDataCollectionScheduler {
 
-  private final NexonDataCollector dataCollector;
+  private final NexonDataCollectorPort dataCollector;
   private final GameCharacterRepository gameCharacterRepository;
   private final LogicExecutor executor;
 
@@ -59,8 +59,8 @@ public class NexonDataCollectionScheduler {
    *
    * <ol>
    *   <li>Fetch all active maple characters from database
-   *   <li>For each character, call NexonDataCollector to fetch from API
-   *   <li>NexonDataCollector automatically publishes to queue
+   *   <li>For each character, call NexonDataCollectorPort to fetch from API
+   *   <li>NexonDataCollectorPort automatically publishes to queue
    *   <li>BatchWriter consumes from queue and writes to DB (separate scheduled job)
    * </ol>
    *
@@ -68,7 +68,7 @@ public class NexonDataCollectionScheduler {
    * instead of try-catch. Failures are logged but do not prevent subsequent executions. Each
    * character collection is independent (fire-and-forget).
    *
-   * @see NexonDataCollector#fetchAndPublish(String)
+   * @see NexonDataCollectorPort#fetchAndPublish(String)
    */
   @Scheduled(
       fixedRateString = "${scheduler.nexon-data-collection.rate:600000}",

@@ -4,9 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.error.exception.InternalSystemException;
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor;
-import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.executor.function.CheckedRunnable;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
@@ -53,7 +51,6 @@ public class BatchScheduler {
 
   private final JobLauncher jobLauncher;
   private final Job equipmentRefreshJob;
-  private final LogicExecutor executor;
   private final CheckedLogicExecutor checkedExecutor;
 
   // Checked exception to RuntimeException mapper
@@ -74,35 +71,19 @@ public class BatchScheduler {
   public void runEquipmentRefreshJob() {
     TaskContext context = TaskContext.of("BatchScheduler", "EquipmentRefresh");
 
-    executor.executeVoidJava(
-        () -> {
-          log.info("[BatchScheduler] Starting equipment refresh job with cron: {}", cronExpression);
-          launchJob();
-        },
-        context);
+    log.info("[BatchScheduler] Starting equipment refresh job with cron: {}", cronExpression);
+    checkedExecutor.executeUncheckedVoid(this::launchJob, context, BATCH_EXCEPTION_MAPPER);
   }
 
   /** Job 실행 (Method Extraction - Section 15: Lambda Hell 방지) */
-  private void launchJob() {
-    checkedExecutor.executeUncheckedVoid(
-        new CheckedRunnable() {
-          @Override
-          public void run() {
-            try {
-              JobParameters params =
-                  new JobParametersBuilder()
-                      .addLong("timestamp", System.currentTimeMillis())
-                      .toJobParameters();
+  private void launchJob() throws Exception {
+    JobParameters params =
+        new JobParametersBuilder()
+            .addLong("timestamp", System.currentTimeMillis())
+            .toJobParameters();
 
-              log.debug("[BatchScheduler] Launching job with params: {}", params);
-              jobLauncher.run(equipmentRefreshJob, params);
-              log.info("[BatchScheduler] Equipment refresh job launched successfully");
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-          }
-        },
-        TaskContext.of("BatchScheduler", "LaunchJob"),
-        BATCH_EXCEPTION_MAPPER);
+    log.debug("[BatchScheduler] Launching job with params: {}", params);
+    jobLauncher.run(equipmentRefreshJob, params);
+    log.info("[BatchScheduler] Equipment refresh job launched successfully");
   }
 }

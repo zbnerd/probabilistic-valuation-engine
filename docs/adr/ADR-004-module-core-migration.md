@@ -280,12 +280,40 @@ class CoreMigrationVerificationTest {
 - CLAUDE.md: Section 4 (Implementation Logic & SOLID), Section 16 (Proactive Refactoring)
 - docs/plans/2026-02-27-module-separation-design.md: 전체 모듈 분리 계획
 
+## Phase 1: Facade 이관 분석 (2026-02-28)
+
+### 결정: **DEFERRED** (유예)
+
+**분석 결과**: `service/v2/facade/` 패키지 이관을 **유예**하고 ADR-003 Port 기반 리팩토링 선행 권장.
+
+### 차단 요인 (Blockers)
+
+| 차단 요인 | 심각도 | 해결 방안 |
+|----------|--------|----------|
+| GameCharacterService 의존 | P0 | ADR-003 리팩토링 후 CharacterPort 추출 |
+| RedissonClient 직접 사용 | P0 | DistributedLockPort 정의 필요 |
+| Infra 패키지 의존 (LogicExecutor 등) | P1 | Port 추출 또는 module-app 유지 |
+| 순환 의존성 위험 | P0 | 서비스 계층 리팩토링 선행 |
+
+### 권장사항
+
+1. **Facade는 Application Layer 패턴**: `module-app`에 유지하는 것이 Clean Layered Architecture에 부합
+2. **Port 기반 리팩토링 선행**: `GameCharacterService` → `CharacterPort` 변환 후 재검토
+3. **동시성 제어 분리**: `DistributedLockPort` 정의하여 Core의 Infra 의존 제거
+
+### 상세 분석 보고서
+
+- 문서: `docs/adr/facade-migration-analysis.md`
+- 분석일: 2026-02-28
+- 결론: Phase 2 (GameCharacterService 리팩토링) 완료 후 재검토
+
 ## 이력
 
 | 날짜 | 상태 | 변경 사항 |
 |------|------|-----------|
 | 2026-02-28 | Proposed | 초기 초안 작성, Port-Based Architecture 설계 |
 | 2026-02-28 | Approved | 의존성 분리 전략 검증 |
+| 2026-02-28 | Updated | Facade 이관 분석 완료, 유예 결정 (Phase 1) |
 
 ---
 

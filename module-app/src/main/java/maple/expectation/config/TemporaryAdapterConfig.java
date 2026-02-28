@@ -102,9 +102,10 @@ public class TemporaryAdapterConfig {
 
   @Bean
   public PotentialCalculator potentialCalculator(
-      maple.expectation.core.domain.stat.StatParser statParser) {
+      maple.expectation.core.domain.stat.StatParser statParser,
+      maple.expectation.infrastructure.executor.LogicExecutor logicExecutor) {
     log.info("[TemporaryAdapter] Initializing PotentialCalculator bean");
-    return new PotentialCalculator(statParser);
+    return new PotentialCalculator(statParser, logicExecutor);
   }
 
   @Bean

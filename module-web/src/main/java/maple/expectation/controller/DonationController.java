@@ -10,9 +10,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.controller.dto.donation.SendCoffeeRequest;
 import maple.expectation.controller.dto.donation.SendCoffeeResponse;
+import maple.expectation.core.port.inbound.DonationCommand;
+import maple.expectation.core.port.inbound.DonationPort;
 import maple.expectation.infrastructure.security.AuthenticatedUser;
 import maple.expectation.response.ApiResponse;
-import maple.expectation.service.v2.DonationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -40,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Donation", description = "도네이션(커피 후원) API")
 public class DonationController {
 
-  private final DonationService donationService;
+  private final DonationPort donationPort;
   private final ExecutorService asyncExecutor; // ADR-039 Fix: Dedicated executor for async work
 
   /**
@@ -75,13 +76,12 @@ public class DonationController {
     // (Member 테이블에 fingerprint가 uuid로 저장되어 있어야 함)
     String guestUuid = user.getFingerprint();
 
+    // ADR-005: DonationPort 사용 (Hexagonal Architecture)
+    DonationCommand command =
+        DonationCommand.of(guestUuid, request.adminFingerprint(), request.amount(), requestId);
+
     // ADR-039 Fix: Use dedicated executor instead of ForkJoinPool.commonPool()
-    // This prevents blocking transactional work from saturating the common pool
-    return CompletableFuture.runAsync(
-            () ->
-                donationService.sendCoffee(
-                    guestUuid, request.adminFingerprint(), request.amount(), requestId),
-            asyncExecutor)
+    return CompletableFuture.runAsync(() -> donationPort.sendCoffee(command), asyncExecutor)
         .thenApply(
             unused -> {
               log.info("[Donation] Coffee sent successfully: requestId={}", requestId);

@@ -150,4 +150,71 @@ if [ -n "$CHANGED" ]; then
 fi
 
 echo -e '✅ DoD 검증 통과\n' >&2
+
+# ============================================================================
+# 작업 완료 시 ADR 및 리포트 작성 안내
+# ============================================================================
+if echo "$LAST_MSG" | grep -qiE '완료|complete|done|finished|머지|merged|닫음|closed|성공'; then
+  echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━' >&2
+  echo '🎉 작업 완료 감지!' >&2
+  echo '' >&2
+  echo '📋 완료된 작업에 대해 다음을 확인하세요:' >&2
+  echo '  1️⃣  ADR 문서 작성 (docs/adr/)' >&2
+  echo '  2️⃣  진행 리포트 업데이트 (docs/05_Reports/)' >&2
+  echo '' >&2
+  echo '📝 리포트 템플릿 위치:' >&2
+  echo '   - docs/05_Reports/module-migration-progress-report.md' >&2
+  echo '   - docs/98_Templates/Chaos_Report_Template.md' >&2
+  echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━' >&2
+  echo '' >&2
+fi
+
+# ============================================================================
+# 세션 종료 시 리포트 생성
+# ============================================================================
+REPORT_DIR="$CWD/docs/05_Reports"
+REPORT_FILE="$REPORT_DIR/session-report-$(date +%Y-%m-%d-%H%M%S).md"
+
+if [ -d "$REPORT_DIR" ]; then
+  echo -e '\n📝 세션 리포트 생성 중...' >&2
+
+  # Git 상태 수집
+  cd "$CWD"
+  CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+  RECENT_COMMITS=$(git log --oneline -5 2>/dev/null || echo "N/A")
+  CHANGED_FILES=$(git diff --name-only HEAD~5 2>/dev/null | head -20 || echo "N/A")
+
+  # 리포트 작성
+  cat > "$REPORT_FILE" << EOFREPORT
+# 세션 리포트
+
+**생성 일시**: $(date '+%Y-%m-%d %H:%M:%S')
+**브랜치**: $CURRENT_BRANCH
+
+## 최근 커밋
+
+\`\`\`
+$RECENT_COMMITS
+\`\`\`
+
+## 변경된 파일 (최근 5개 커밋)
+
+\`\`\`
+$CHANGED_FILES
+\`\`\`
+
+## 검증 결과
+
+- ✅ PfastTest 통과
+- ✅ DoD 검증 통과
+- ✅ Stateless 설계 준수
+- ✅ 미완성 코드 없음
+
+---
+*자동 생성됨 by stop-validation.sh*
+EOFREPORT
+
+  echo -e "✅ 리포트 생성 완료: $REPORT_FILE\n" >&2
+fi
+
 exit 0

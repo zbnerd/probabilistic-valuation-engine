@@ -16,8 +16,8 @@ import org.springframework.stereotype.Component;
  * Scheduled job to collect Nexon API data and publish to queue.
  *
  * <p><strong>ACL Stage 1 Execution:</strong> This scheduler periodically triggers {@link
- * NexonDataCollector} to fetch data from Nexon API and publish to the queue, completing Stage 1 of
- * the 3-stage pipeline.
+ * NexonDataCollectorPort} to fetch data from Nexon API and publish to the queue, completing Stage 1
+ * of the 3-stage pipeline.
  *
  * <p><strong>Schedule Configuration:</strong>
  *
@@ -35,7 +35,7 @@ import org.springframework.stereotype.Component;
  *   <li>Decouples data collection from user-facing APIs
  * </ul>
  *
- * @see NexonDataCollector
+ * @see NexonDataCollectorPort
  * @see maple.expectation.service.ingestion.BatchWriter
  */
 @Slf4j
@@ -68,7 +68,7 @@ public class NexonDataCollectionScheduler {
    * instead of try-catch. Failures are logged but do not prevent subsequent executions. Each
    * character collection is independent (fire-and-forget).
    *
-   * @see NexonDataCollector#fetchAndPublish(String)
+   * @see NexonDataCollectorPort#fetchAndPublish(String)
    */
   @Scheduled(
       fixedRateString = "${scheduler.nexon-data-collection.rate:600000}",

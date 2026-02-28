@@ -16,6 +16,8 @@ data class EquipmentExpectationResponseV4(
     val maxPresetNo: Int,
     val presets: List<PresetExpectation>
 ) {
+    /** Java 호환성을 위한 메서드 */
+    fun isFromCache(): Boolean = fromCache
     data class PresetExpectation(
         val presetNo: Int,
         val totalExpectedCost: BigDecimal,

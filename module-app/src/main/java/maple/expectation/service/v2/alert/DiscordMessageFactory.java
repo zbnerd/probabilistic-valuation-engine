@@ -7,7 +7,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import maple.expectation.monitoring.ai.AiSreService.AiAnalysisResult;
+import maple.expectation.infrastructure.monitoring.ai.AiSreService.AiAnalysisResult;
 import maple.expectation.service.v2.alert.dto.DiscordMessage;
 import org.springframework.stereotype.Component;
 

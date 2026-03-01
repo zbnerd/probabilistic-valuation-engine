@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.aop.aspect;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -10,10 +11,14 @@ import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.exception.ExternalServiceException;
 import maple.expectation.error.exception.InternalSystemException;
 import maple.expectation.error.exception.base.ServerBaseException;
+import maple.expectation.infrastructure.cache.port.EquipmentCache;
+import maple.expectation.infrastructure.config.NexonApiProperties;
+import maple.expectation.infrastructure.executor.LogicExecutor;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.redisson.api.RedissonClient;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -30,7 +35,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 class NexonDataCacheAspectExceptionTest {
 
   private RuntimeException invokeToRuntimeException(Throwable ex, String ocid) {
-    NexonDataCacheAspect aspect = new NexonDataCacheAspect(null, null, null, null);
+    NexonDataCacheAspect aspect =
+        new NexonDataCacheAspect(
+            mock(EquipmentCache.class),
+            mock(RedissonClient.class),
+            mock(LogicExecutor.class),
+            mock(NexonApiProperties.class));
     return ReflectionTestUtils.invokeMethod(aspect, "toRuntimeException", ex, ocid);
   }
 

@@ -8,11 +8,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import maple.expectation.common.function.ThrowingSupplier;
+import maple.expectation.core.port.out.CacheWarmupPort;
+import maple.expectation.core.port.out.PopularCharacterTrackerPort;
 import maple.expectation.error.exception.DistributedLockException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.lock.LockStrategy;
-import maple.expectation.service.v4.EquipmentExpectationServiceV4;
-import maple.expectation.service.v4.warmup.PopularCharacterTracker;
+import maple.expectation.infrastructure.scheduler.PopularCharacterWarmupScheduler;
 import maple.expectation.support.TestLogicExecutors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,17 +32,26 @@ import org.springframework.test.util.ReflectionTestUtils;
  * <h4>테스트 범위</h4>
  *
  * <ul>
- *   <li>dailyWarmup: 매일 새벅 5시 웜업
+ *   <li>dailyWarmup: 매일 새벽 5시 웜업
  *   <li>initialWarmup: 서버 시작 후 30초 웜업
  *   <li>분산 락 사용
  *   <li>인기 캐릭터 조회 및 캐시 프리로딩
+ * </ul>
+ *
+ * <h4>ADR-003 Hexagonal Architecture</h4>
+ *
+ * <p>스케줄러가 Port 인터페이스에 의존하도록 리팩토링됨:
+ *
+ * <ul>
+ *   <li>PopularCharacterTrackerPort - 인기 캐릭터 조회
+ *   <li>CacheWarmupPort - 캐시 웜업
  * </ul>
  */
 @Tag("unit")
 class PopularCharacterWarmupSchedulerTest {
 
-  private PopularCharacterTracker popularCharacterTracker;
-  private EquipmentExpectationServiceV4 expectationService;
+  private PopularCharacterTrackerPort popularCharacterTracker;
+  private CacheWarmupPort cacheWarmupPort;
   private LockStrategy lockStrategy;
   private LogicExecutor executor;
   private MeterRegistry meterRegistry;
@@ -49,15 +59,15 @@ class PopularCharacterWarmupSchedulerTest {
 
   @BeforeEach
   void setUp() {
-    popularCharacterTracker = mock(PopularCharacterTracker.class);
-    expectationService = mock(EquipmentExpectationServiceV4.class);
+    popularCharacterTracker = mock(PopularCharacterTrackerPort.class);
+    cacheWarmupPort = mock(CacheWarmupPort.class);
     lockStrategy = mock(LockStrategy.class);
     executor = TestLogicExecutors.passThrough();
     meterRegistry = new SimpleMeterRegistry(); // 실제 MeterRegistry 사용
 
     scheduler =
         new PopularCharacterWarmupScheduler(
-            popularCharacterTracker, expectationService, lockStrategy, executor, meterRegistry);
+            popularCharacterTracker, cacheWarmupPort, lockStrategy, executor, meterRegistry);
 
     // Set @Value fields via reflection
     ReflectionTestUtils.setField(scheduler, "topCount", 50);
@@ -164,7 +174,7 @@ class PopularCharacterWarmupSchedulerTest {
     }
 
     @Test
-    @DisplayName("각 캐릭터에 대해 calculateExpectation 호출")
+    @DisplayName("각 캐릭터에 대해 warmup 호출")
     void shouldWarmupEachCharacter() throws Throwable {
       // given
       List<String> topCharacters = List.of("Char1", "Char2", "Char3");
@@ -181,8 +191,8 @@ class PopularCharacterWarmupSchedulerTest {
       // when
       scheduler.dailyWarmup();
 
-      // then - 각 캐릭터에 대해 시도
-      verify(expectationService, times(3)).calculateExpectation(anyString(), eq(false));
+      // then - 각 캐릭터에 대해 웜업 호출
+      verify(cacheWarmupPort, times(3)).warmup(anyString(), eq(false));
     }
 
     @Test
@@ -203,7 +213,7 @@ class PopularCharacterWarmupSchedulerTest {
       scheduler.dailyWarmup();
 
       // then
-      verify(expectationService, never()).calculateExpectation(anyString(), anyBoolean());
+      verify(cacheWarmupPort, never()).warmup(anyString(), anyBoolean());
     }
 
     @Test
@@ -221,18 +231,18 @@ class PopularCharacterWarmupSchedulerTest {
               });
       given(popularCharacterTracker.getYesterdayTopCharacters(50)).willReturn(topCharacters);
 
-      // 첫 번째 호출은 예외, 두 번째는 성공, 세 번째는 예외
-      given(expectationService.calculateExpectation(eq("Fail1"), eq(false)))
-          .willThrow(new RuntimeException("API Error"));
-      given(expectationService.calculateExpectation(eq("Success2"), eq(false))).willReturn(null);
-      given(expectationService.calculateExpectation(eq("Fail3"), eq(false)))
-          .willThrow(new RuntimeException("API Error"));
+      // 첫 번째와 세 번째 호출은 예외
+      doThrow(new RuntimeException("API Error"))
+          .doNothing()
+          .doThrow(new RuntimeException("API Error"))
+          .when(cacheWarmupPort)
+          .warmup(anyString(), anyBoolean());
 
       // when
       scheduler.dailyWarmup();
 
       // then - 모든 캐릭터에 대해 시도
-      verify(expectationService, times(3)).calculateExpectation(anyString(), eq(false));
+      verify(cacheWarmupPort, times(3)).warmup(anyString(), eq(false));
     }
   }
 }

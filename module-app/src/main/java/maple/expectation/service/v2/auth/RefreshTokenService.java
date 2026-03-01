@@ -63,10 +63,10 @@ public class RefreshTokenService {
    */
   public RefreshToken rotateRefreshToken(String refreshTokenId) {
     // 1. 토큰 조회
-    RefreshToken oldToken =
-        refreshTokenRepository
-            .findById(refreshTokenId)
-            .orElseThrow(InvalidRefreshTokenException::new);
+    RefreshToken oldToken = refreshTokenRepository.findById(refreshTokenId);
+    if (oldToken == null) {
+      throw new InvalidRefreshTokenException();
+    }
 
     // 2. 만료 확인
     if (oldToken.isExpired()) {
@@ -76,19 +76,16 @@ public class RefreshTokenService {
 
     // 3. Atomic Check-and-Mark (P1 Fix: TOCTOU 방지)
     // Redis Lua script로 원자적으로 used 확인 및 마크 수행
-    RefreshToken markedToken =
-        refreshTokenRepository
-            .checkAndMarkAsUsed(refreshTokenId)
-            .orElseThrow(
-                () -> {
-                  log.warn(
-                      "Token reuse detected! Possible token theft. " + "familyId={}, tokenId={}",
-                      oldToken.familyId(),
-                      refreshTokenId);
-                  // Family 전체 무효화
-                  invalidateFamily(oldToken.familyId());
-                  return new TokenReusedException();
-                });
+    RefreshToken markedToken = refreshTokenRepository.checkAndMarkAsUsed(refreshTokenId);
+    if (markedToken == null) {
+      log.warn(
+          "Token reuse detected! Possible token theft. " + "familyId={}, tokenId={}",
+          oldToken.familyId(),
+          refreshTokenId);
+      // Family 전체 무효화
+      invalidateFamily(oldToken.familyId());
+      throw new TokenReusedException();
+    }
 
     // 4. 같은 familyId로 새 토큰 발급
     RefreshToken newToken =
@@ -140,9 +137,11 @@ public class RefreshTokenService {
    * @throws InvalidRefreshTokenException 토큰이 존재하지 않는 경우
    */
   public RefreshToken getRefreshToken(String refreshTokenId) {
-    return refreshTokenRepository
-        .findById(refreshTokenId)
-        .orElseThrow(InvalidRefreshTokenException::new);
+    RefreshToken token = refreshTokenRepository.findById(refreshTokenId);
+    if (token == null) {
+      throw new InvalidRefreshTokenException();
+    }
+    return token;
   }
 
   private RefreshToken createRefreshTokenWithFamily(

@@ -1,4 +1,5 @@
 @file:JvmName("LikeSyncCircuitOpenException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -11,12 +12,11 @@ import maple.expectation.error.exception.base.ServerBaseException
  *
  * @property cause 원인 예외 (optional)
  */
-class LikeSyncCircuitOpenException(
-    cause: Throwable? = null
-) : ServerBaseException(
-    CommonErrorCode.LIKE_SYNC_CIRCUIT_OPEN,
-    "좋아요 동기화 서킷이 열렸습니다"
-) {
+class LikeSyncCircuitOpenException(cause: Throwable? = null) :
+    ServerBaseException(
+        CommonErrorCode.LIKE_SYNC_CIRCUIT_OPEN,
+        "좋아요 동기화 서킷이 열렸습니다",
+    ) {
 
     init {
         if (cause != null) {

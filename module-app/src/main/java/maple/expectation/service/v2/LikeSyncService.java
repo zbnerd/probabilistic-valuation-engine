@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.out.LikeBufferStrategy;
+import maple.expectation.core.port.out.LikeSyncPort;
 import maple.expectation.domain.repository.RedisBufferRepository;
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction;
 import maple.expectation.infrastructure.executor.LogicExecutor;
@@ -45,7 +46,7 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-public class LikeSyncService {
+public class LikeSyncService implements LikeSyncPort {
 
   private final LikeBufferStrategy likeBufferStrategy;
   private final LikeSyncExecutor syncExecutor;

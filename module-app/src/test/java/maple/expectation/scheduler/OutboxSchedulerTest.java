@@ -6,7 +6,7 @@ import static org.mockito.Mockito.*;
 import maple.expectation.infrastructure.config.OutboxProperties;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
+import maple.expectation.infrastructure.scheduler.OutboxScheduler;
 import maple.expectation.service.v2.donation.outbox.OutboxMetrics;
 import maple.expectation.service.v2.donation.outbox.OutboxProcessor;
 import maple.expectation.support.TestLogicExecutors;
@@ -70,13 +70,13 @@ class OutboxSchedulerTest {
     }
 
     @Test
-    @DisplayName("LogicExecutor.executeVoid를 통해 실행")
+    @DisplayName("LogicExecutor.executeVoidJava를 통해 실행")
     void shouldExecuteThroughLogicExecutor() {
       // when
       scheduler.pollAndProcess();
 
       // then
-      verify(executor).executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
+      verify(executor).executeVoidJava(any(Runnable.class), any(TaskContext.class));
     }
 
     @Test
@@ -86,7 +86,7 @@ class OutboxSchedulerTest {
       scheduler.pollAndProcess();
 
       // then
-      verify(executor).executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
+      verify(executor).executeVoidJava(any(Runnable.class), any(TaskContext.class));
     }
   }
 
@@ -105,13 +105,13 @@ class OutboxSchedulerTest {
     }
 
     @Test
-    @DisplayName("LogicExecutor.executeVoid를 통해 실행")
+    @DisplayName("LogicExecutor.executeVoidJava를 통해 실행")
     void shouldExecuteThroughLogicExecutor() {
       // when
       scheduler.recoverStalled();
 
       // then
-      verify(executor).executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
+      verify(executor).executeVoidJava(any(Runnable.class), any(TaskContext.class));
     }
 
     @Test
@@ -121,7 +121,7 @@ class OutboxSchedulerTest {
       scheduler.recoverStalled();
 
       // then
-      verify(executor).executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
+      verify(executor).executeVoidJava(any(Runnable.class), any(TaskContext.class));
     }
   }
 
@@ -140,13 +140,13 @@ class OutboxSchedulerTest {
     }
 
     @Test
-    @DisplayName("LogicExecutor.executeVoid를 통해 실행")
+    @DisplayName("LogicExecutor.executeVoidJava를 통해 실행")
     void shouldExecuteThroughLogicExecutor() {
       // when
       scheduler.monitorOutboxSize();
 
       // then
-      verify(executor).executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
+      verify(executor).executeVoidJava(any(Runnable.class), any(TaskContext.class));
     }
 
     @Test
@@ -156,7 +156,7 @@ class OutboxSchedulerTest {
       scheduler.monitorOutboxSize();
 
       // then
-      verify(executor).executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
+      verify(executor).executeVoidJava(any(Runnable.class), any(TaskContext.class));
     }
 
     @Test

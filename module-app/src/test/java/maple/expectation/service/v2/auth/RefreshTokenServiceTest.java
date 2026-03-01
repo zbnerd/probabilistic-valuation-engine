@@ -7,7 +7,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
 import java.time.Instant;
-import java.util.Optional;
 import maple.expectation.domain.RefreshToken;
 import maple.expectation.domain.repository.RedisRefreshTokenRepository;
 import maple.expectation.error.exception.InvalidRefreshTokenException;
@@ -89,9 +88,8 @@ class RefreshTokenServiceTest {
       // given
       RefreshToken oldToken = createValidToken(false);
       RefreshToken markedToken = createValidToken(true); // used=true after marking
-      given(refreshTokenRepository.findById(REFRESH_TOKEN_ID)).willReturn(Optional.of(oldToken));
-      given(refreshTokenRepository.checkAndMarkAsUsed(REFRESH_TOKEN_ID))
-          .willReturn(Optional.of(markedToken));
+      given(refreshTokenRepository.findById(REFRESH_TOKEN_ID)).willReturn(oldToken);
+      given(refreshTokenRepository.checkAndMarkAsUsed(REFRESH_TOKEN_ID)).willReturn(markedToken);
 
       // when
       RefreshToken newToken = refreshTokenService.rotateRefreshToken(REFRESH_TOKEN_ID);
@@ -113,7 +111,7 @@ class RefreshTokenServiceTest {
     @DisplayName("Token Rotation 실패 - 유효하지 않은 토큰")
     void shouldThrowWhenTokenNotFound() {
       // given
-      given(refreshTokenRepository.findById("invalid-token")).willReturn(Optional.empty());
+      given(refreshTokenRepository.findById("invalid-token")).willReturn(null);
 
       // when & then
       assertThatThrownBy(() -> refreshTokenService.rotateRefreshToken("invalid-token"))
@@ -125,8 +123,7 @@ class RefreshTokenServiceTest {
     void shouldThrowWhenTokenExpired() {
       // given
       RefreshToken expiredToken = createExpiredToken();
-      given(refreshTokenRepository.findById(REFRESH_TOKEN_ID))
-          .willReturn(Optional.of(expiredToken));
+      given(refreshTokenRepository.findById(REFRESH_TOKEN_ID)).willReturn(expiredToken);
 
       // when & then
       assertThatThrownBy(() -> refreshTokenService.rotateRefreshToken(REFRESH_TOKEN_ID))
@@ -141,7 +138,7 @@ class RefreshTokenServiceTest {
     void shouldThrowWhenTokenAlreadyUsed() {
       // given
       RefreshToken usedToken = createValidToken(true); // used=true
-      given(refreshTokenRepository.findById(REFRESH_TOKEN_ID)).willReturn(Optional.of(usedToken));
+      given(refreshTokenRepository.findById(REFRESH_TOKEN_ID)).willReturn(usedToken);
 
       // when & then
       assertThatThrownBy(() -> refreshTokenService.rotateRefreshToken(REFRESH_TOKEN_ID))

@@ -21,8 +21,8 @@ spring:
       register-mbeans: true # JMX를 통해 지표 노출 활성화
       connection-timeout: 3000      # 커넥션 획득 타임아웃 3초 (Red Agent P1 Fix)
       leak-detection-threshold: 60000  # 60초 이상 반납 안되면 누수 의심 로그
----
 # Profile-specific: MySQL connection init SQL (NOT for test/chaos)
+# ADR-087 P2 Fix: Removed YAML document separator (---) to unify configuration
 spring:
   config:
     activate:
@@ -45,12 +45,19 @@ spring:
         show_sql: false
         ddl-auto: update  # 자동 테이블 생성 및 업데이트 (개발/테스트 환경)
 
-  # Spring Batch 설정 (Issue #251 Phase 4)
+  # Spring Batch 설정 (Issue #251 Phase 4, Issue #356 Batch Refresh)
   batch:
     jdbc:
-      initialize-schema: embedded  # 개발환경에서만 자동 생성
+      initialize-schema: always  # 배치 메타데이터 테이블 자동 생성
     job:
-      enabled: false  # 스케줄러로만 트리거
+      enabled: true  # 스케줄러 사용 시 true
+
+# Batch Job Schedule Configuration (Issue #356)
+batch:
+  equipment-refresh:
+    cron: "0 0 2 * * *"  # 매일 새벽 2시 실행
+    chunk-size: 100
+    fetch-size: 1000
 
 management:
   endpoints:

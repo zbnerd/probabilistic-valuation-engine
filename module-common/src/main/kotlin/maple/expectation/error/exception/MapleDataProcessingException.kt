@@ -1,4 +1,5 @@
 @file:JvmName("MapleDataProcessingException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -12,13 +13,11 @@ import maple.expectation.error.exception.base.ServerBaseException
  * @property message 실패 메시지
  * @property cause 원인 예외
  */
-class MapleDataProcessingException(
-    message: String,
-    cause: Throwable? = null
-) : ServerBaseException(
-    CommonErrorCode.DATA_PROCESSING_ERROR,
-    message
-) {
+class MapleDataProcessingException(message: String, cause: Throwable? = null) :
+    ServerBaseException(
+        CommonErrorCode.DATA_PROCESSING_ERROR,
+        message,
+    ) {
 
     init {
         if (cause != null) {

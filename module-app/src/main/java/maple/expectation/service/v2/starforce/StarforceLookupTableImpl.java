@@ -90,7 +90,7 @@ public class StarforceLookupTableImpl implements StarforceLookupTable {
   @Override
   public void initialize() {
     if (initialized.compareAndSet(false, true)) {
-      executor.executeVoid(this::precomputeTables, TaskContext.of("Starforce", "Initialize"));
+      executor.executeVoidJava(this::precomputeTables, TaskContext.of("Starforce", "Initialize"));
       log.info(
           "[Starforce] Lookup table initialized (Markov Chain). Cache size: {}",
           expectedCostCache.size());

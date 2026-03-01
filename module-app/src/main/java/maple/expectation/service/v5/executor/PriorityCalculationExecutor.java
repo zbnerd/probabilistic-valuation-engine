@@ -8,6 +8,7 @@ import maple.expectation.infrastructure.executor.CheckedLogicExecutor;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.service.v5.queue.PriorityCalculationQueue;
+import maple.expectation.service.v5.queue.QueuePriority;
 import maple.expectation.service.v5.worker.ExpectationCalculationWorker;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,24 +25,22 @@ import org.springframework.stereotype.Component;
  *   <li>Graceful shutdown with timeout
  * </ul>
  *
- * <h3>P1 FIX: Thread Pool Isolation</h3>
+ * <h3>ADR-038 Fix: Complete Priority Isolation</h3>
  *
- * <p>Implemented separate pools for HIGH and LOW priority tasks to prevent batch jobs from starving
- * user requests:
+ * <p>Implemented separate pools and separate queues for HIGH and LOW priority tasks:
  *
  * <ul>
- *   <li><b>High Priority Pool (Fast Lane)</b>: Dedicated pool for user-initiated requests (50% of
- *       workers)
- *   <li><b>Low Priority Pool (Background)</b>: Shared pool for batch/scheduled updates (50% of
- *       workers)
+ *   <li><b>High Priority Pool (Fast Lane)</b>: Dedicated pool for user-initiated requests
+ *   <li><b>Low Priority Pool (Background)</b>: Dedicated pool for batch/scheduled updates
+ *   <li><b>Separate Queues</b>: Each pool polls from its own bounded queue
  * </ul>
  *
  * <h3>Task Submission Flow</h3>
  *
  * <ol>
  *   <li>Client submits task with priority (HIGH/LOW)
- *   <li>Task added to PriorityCalculationQueue
- *   <li>Workers from appropriate pool poll queue and process
+ *   <li>Task added to appropriate priority queue (HIGH or LOW)
+ *   <li>Workers from appropriate pool poll from their designated queue and process
  *   <li>Results persisted to MySQL
  *   <li>Event published to Redis Stream
  * </ol>
@@ -84,10 +83,10 @@ public class PriorityCalculationExecutor {
   }
 
   /**
-   * Start worker pools with thread isolation
+   * Start worker pools with complete priority isolation.
    *
-   * <p>P1 FIX: Separate pools prevent batch jobs from occupying all worker threads, ensuring user
-   * requests always have dedicated capacity.
+   * <p>ADR-038 Fix: Each pool uses workers that poll from their designated priority queue only.
+   * This ensures HIGH priority workers never process LOW priority tasks, and vice versa.
    */
   public void start() {
     if (running) {
@@ -97,25 +96,26 @@ public class PriorityCalculationExecutor {
 
     TaskContext context = TaskContext.of("V5-Executor", "Start");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // Calculate pool sizes (ensure at least 1 worker per pool)
           int highPriorityCount =
               Math.max(1, (int) Math.ceil(workerPoolSize * highPriorityWorkerRatio / 100.0));
           int lowPriorityCount = Math.max(1, workerPoolSize - highPriorityCount);
 
-          // P1 FIX: Create separate pools for isolation
+          // ADR-038 Fix: Create separate pools for complete isolation
           highPriorityPool = Executors.newFixedThreadPool(highPriorityCount);
           lowPriorityPool = Executors.newFixedThreadPool(lowPriorityCount);
 
-          // Submit workers to HIGH priority pool (Fast Lane)
+          // ADR-038 Fix: Submit priority-aware workers to each pool
+          // HIGH priority workers only poll from HIGH priority queue
           for (int i = 0; i < highPriorityCount; i++) {
-            highPriorityPool.submit(worker);
+            highPriorityPool.submit(() -> worker.runForPriority(QueuePriority.HIGH));
           }
 
-          // Submit workers to LOW priority pool (Background)
+          // LOW priority workers only poll from LOW priority queue
           for (int i = 0; i < lowPriorityCount; i++) {
-            lowPriorityPool.submit(worker);
+            lowPriorityPool.submit(() -> worker.runForPriority(QueuePriority.LOW));
           }
 
           // ADR-080 Fix 1: Verify workers have started (non-blocking)
@@ -140,7 +140,7 @@ public class PriorityCalculationExecutor {
 
     TaskContext context = TaskContext.of("V5-Executor", "Stop");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           running = false;
           highPriorityPool.shutdown();
@@ -254,6 +254,11 @@ public class PriorityCalculationExecutor {
     return queue.getHighPriorityCount();
   }
 
+  /** Get low priority task count */
+  public int getLowPriorityCount() {
+    return queue.getLowPriorityCount();
+  }
+
   /** Check if executor is running */
   public boolean isRunning() {
     return running;
@@ -279,7 +284,7 @@ public class PriorityCalculationExecutor {
    * @param expectedCount expected number of active workers
    */
   private void verifyWorkersStarted(int expectedCount) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // ADR-080: Configurable delay to allow workers to enter run loop
           try {

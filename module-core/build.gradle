@@ -3,8 +3,15 @@
 // ADR-017: Pure Domain Model
 // ========================================
 
+plugins {
+	id 'org.jetbrains.kotlin.jvm'
+}
+
 dependencies {
 	implementation project(':module-common')
+
+	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
+	implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
 
 	// Jackson (JSON serialization for domain)
 	implementation 'com.fasterxml.jackson.core:jackson-annotations:2.17.0'
@@ -20,6 +27,12 @@ test {
 	useJUnitPlatform {
 		includeEngines 'jqwik', 'junit-jupiter'
 	}
+}
+
+// Enable plain jar for inter-module dependencies
+tasks.named("jar") {
+	enabled = true
+	archiveClassifier = "plain"
 }
 
 java {

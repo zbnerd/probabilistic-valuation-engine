@@ -12,7 +12,7 @@ data class TokenPair(
     val accessToken: String,
     val accessTokenExpiresIn: Long,
     val refreshTokenId: String,
-    val refreshTokenExpiresIn: Long
+    val refreshTokenExpiresIn: Long,
 ) {
     // Explicit Record-style accessors for production code compatibility
     fun accessToken(): String = accessToken

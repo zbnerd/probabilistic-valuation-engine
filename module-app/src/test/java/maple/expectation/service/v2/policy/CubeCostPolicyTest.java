@@ -3,8 +3,9 @@ package maple.expectation.service.v2.policy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import maple.expectation.core.port.out.PolicyPort;
 import maple.expectation.domain.v2.CubeType;
-import maple.expectation.error.exception.InvalidPotentialGradeException;
+import maple.expectation.infrastructure.adapter.policy.PolicyAdapter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -20,12 +21,12 @@ import org.junit.jupiter.params.provider.CsvSource;
 class CubeCostPolicyTest {
 
   private CubeCostPolicy cubeCostPolicy;
-  private CostCalculationStrategy costStrategy;
+  private PolicyPort policyPort;
 
   @BeforeEach
   void setUp() {
-    costStrategy = new TableBasedCostStrategy();
-    cubeCostPolicy = new CubeCostPolicy(costStrategy);
+    policyPort = new PolicyAdapter();
+    cubeCostPolicy = new CubeCostPolicy(policyPort);
   }
 
   @Nested
@@ -80,7 +81,7 @@ class CubeCostPolicyTest {
     void getCubeCost_blackCube_invalidGrades_throws(int level, String grade) {
       // When & Then
       assertThatThrownBy(() -> cubeCostPolicy.getCubeCost(CubeType.BLACK, level, grade))
-          .isInstanceOf(InvalidPotentialGradeException.class);
+          .isInstanceOf(IllegalArgumentException.class);
     }
 
     @ParameterizedTest(name = "ADDITIONAL 큐브, 레벨 {0}, 등급 {1} -> 예외 발생")
@@ -94,7 +95,7 @@ class CubeCostPolicyTest {
     void getCubeCost_additionalCube_invalidGrades_throws(int level, String grade) {
       // When & Then
       assertThatThrownBy(() -> cubeCostPolicy.getCubeCost(CubeType.ADDITIONAL, level, grade))
-          .isInstanceOf(InvalidPotentialGradeException.class);
+          .isInstanceOf(IllegalArgumentException.class);
     }
   }
 }

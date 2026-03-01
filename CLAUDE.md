@@ -2,6 +2,37 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
+# RPI Workflow (Research - Plan - Implement)
+
+## Core Principle
+코드를 작성하기 전에 반드시 철저한 분석과 계획을 세우는 시니어 소프트웨어 엔지니어로서 작동합니다. 사용자의 요청을 받으면 즉시 파일을 수정(Write/Edit)하지 말고, 아래 **RPI 워크플로우**를 엄격하게 순서대로 진행하세요.
+
+## Phase 1: 조사 (Research) - 상황 파악
+- **행동:** 관련된 기존 코드, 파일 구조, 데이터를 먼저 탐색(Read, Grep)하세요.
+- **도구:** Glob, Grep, Read 도구를 적극 활용하여 코드베이스를 이해합니다.
+- **목표:** 사용자의 요구사항이 기존 시스템과 의존성에 어떤 영향을 미치는지 완벽하게 파악합니다.
+- **출력:** 파악한 현재 상황, 발견된 제약 사항, 문제점의 핵심을 간략히 요약하여 사용자에게 보고합니다.
+
+## Phase 2: 계획 (Plan) - 구체적인 작업 설계
+- **행동:** 1단계의 조사를 바탕으로 구체적이고 명확한 작업 계획을 세웁니다.
+- **목표:** '어떤 파일'의 '어떤 부분'을 '어떻게' 수정할 것인지 Step-by-step으로 작성합니다. (모호한 방향성 제시 금지)
+- **ADR 선행:** 구현 작업인 경우 반드시 먼저 ADR 문서를 작성해야 합니다 (docs/adr/).
+- **출력:** 작성된 구체적인 계획을 사용자에게 제시하고, 반드시 다음과 같이 물어보며 승인을 기다리세요:
+  > *"조사 및 계획이 완료되었습니다. 위 계획대로 실행(Implement)할까요?"*
+
+## Phase 3: 실행 (Implement) - 코드 작성
+- **행동:** 사용자가 2단계의 계획을 승인(예: 진행해, 좋아, execute 등)했을 때만 실제 코드를 작성하거나 수정하세요.
+- **목표:** 반드시 2단계에서 합의된 계획에 따라서만 코드를 수정하세요. 무단으로 다른 파일을 건드리지 마세요.
+- **준수:** 모든 코드 변경은 Section 4(Implementation Logic & SOLID), Section 12(Zero Try-Catch Policy) 원칙을 준수해야 합니다.
+
+## Context Limit 최적화
+대화가 길어져 맥락이 얽히거나 여러 번의 수정 요청이 오가며 컨텍스트가 복잡해졌다고 판단될 경우, **스스로 작업을 멈추고** 다음과 같이 제안하세요:
+> "현재 대화가 길어져 컨텍스트가 복잡해졌습니다. 오류(Hallucination)를 방지하기 위해 지금까지의 핵심 진행 상황을 요약해 드릴 테니, **이 요약본을 복사하여 새로운 대화(New Chat)에서 이어가시는 것을 추천합니다.**"
+
+---
+
 ## Tech Stack
 
 MapleExpectation is a Spring Boot application that calculates MapleStory equipment upgrade costs using Nexon's Open API. Built for resilience and scalability, it handles 1,000+ concurrent users on low-spec infrastructure (AWS t3.small) with 240 RPS throughput.
@@ -472,3 +503,118 @@ private List<Dto> processActiveUser(Long id) {
 | verify-circuit-breaker | Circuit Breaker Marker Interface, Logging Level, Resilience4j 준수 검증 |
 | verify-deprecated-api | @deprecated 기능 사용 탐지, 최신 Best Practice API 사용 확인 |
 | verify-global-error | @RestControllerAdvice, ErrorResponse 형식, Exception Chaining 준수 검증 |
+| verify-guardrails | docs/guardrails의 모든 가드레일 패턴(88개) 검증, INDEX.json 무결성 확인 |
+
+---
+
+## 17. Multi-Agent Collaboration Rules (필수)
+
+모든 구현 작업은 **병렬 에이전트**를 통해 수행하며, 상호 협업과 검증을 거쳐야 합니다.
+
+### 에이전트 협업 프로세스
+
+1. **작업 분배**: Task tool을 사용하여 병렬 에이전트에게 작업 분배
+2. **상호 코드리뷰**: 각 에이전트는 작업 완료 후 다른 에이전트의 결과물을 검토
+3. **PASS/FAIL 판정**: 코드리뷰는 반드시 PASS 또는 FAIL 판정 포함
+4. **만장일치 합의**: 모든 에이전트가 PASS해야만 작업 완료 (DONE)
+5. **피드백 라운드**: 최소 2회 이상 상호 피드백 라운드 진행
+
+### 피드백 가이드라인
+
+- **구체적 참조**: 코드 라인 번호, 파일 경로를 명확히 제시
+- **개선 제안**: "여기는 이렇게 개선할 수 있다" 형태의 건설적 피드백
+- **아키텍처 검증**: CLAUDE.md와 ADR 원칙 준수 여부 확인
+- **테스트 검증**: unit 테스트 충분성과 플래키 테스트 방지 확인
+
+### MCP 사용 (필수)
+
+- **Context7 MCP**: 라이브러리/프레임워크 문서 참조 시 반드시 사용
+- **Sequential Thinking MCP**: 복잡한 설계 결정 시 반드시 사용
+
+### FQCN 금지 규칙
+
+```java
+// Bad (FQCN 사용)
+org.springframework.stereotype.Component component = new org.springframework.example.MyComponent();
+
+// Good (import 사용)
+import org.springframework.example.MyComponent;
+MyComponent component = new MyComponent();
+```
+
+---
+
+## 18. Stateless Architecture Principles (필수)
+
+시스템은 **완전한 Stateless**로 설계되어야 합니다.
+
+### 금지되는 패턴
+
+- `HttpSession` 사용 금지
+- `@SessionScope` 사용 금지
+- `@SessionAttributes` 사용 금지
+- `static mutable` 상태 금지
+
+### 상태 저장소
+
+1. **Redis**: 세션, 캐시, 분산 락
+2. **MySQL**: 영구 데이터, 트랜잭션
+3. **MongoDB**: 읽기 전용 뷰, 이벤트
+4. **Kafka**: 이벤트 스트리밍
+
+---
+
+## 19. Implementation Workflow (필수)
+
+1. **사전 조사**: 관련 ADR, v5/v2 호출 흐름 파악
+2. **ADR 작성**: `docs/adr/XXX-feature-name.md`
+3. **구현**: FQCN 금지, SOLID 준수, LogicExecutor 사용
+4. **Unit 테스트**: `./gradlew test`만 실행
+5. **상호 코드리뷰**: 최소 2회, 만장일치 PASS
+6. **아키텍처 검사**: `/verify-*` 스킬 실행
+7. **문서화**: 개선 과정 markdown 기록
+8. **모니터링**: Prometheus/Loki 쿼리, Grafana 대시보드
+
+### Definition of Done
+
+- [ ] ADR 문서 작성
+- [ ] Unit 테스트 통과
+- [ ] 에이전트 상호 코드리뷰 PASS
+- [ ] CLAUDE.md 원칙 준수
+- [ ] 개선 과정 문서화
+- [ ] 모니터링 지표 확인
+
+---
+
+## 20. Flaky Test Prevention (필수)
+
+### 방지 규칙
+
+1. `Thread.sleep()` 금지 → `Awaitility` 사용
+2. 테스트 간 상태 공유 금지
+3. `@DirtiesContext` 남용 금지
+4. 랜덤 포트 사용 필수
+5. 테스트 순서 독립성 유지
+
+---
+
+## 21. Hook Configuration (.claude/settings.json)
+
+Claude Code hooks가 자동으로 다음을 검증:
+
+### SessionStart
+- CLAUDE.md, ADR 파일 목록, 브랜치, 커밋 확인
+
+### UserPromptSubmit
+- "구현", "개발", "코드" 키워드 시 체크리스트 표시
+
+### PreToolUse
+- 통합테스트 차단
+- Java/Kotlin 작성 전 ADR 확인
+
+### PostToolUse
+- FQCN 사용 감지 시 경고
+- Stateless 위반 감지 시 경고
+
+### Stop
+- ADR, unit 테스트, 문서화 최종 검증

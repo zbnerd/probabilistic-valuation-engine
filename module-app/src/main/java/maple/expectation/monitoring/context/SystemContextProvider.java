@@ -8,10 +8,11 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.SystemMetricsPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.monitoring.collector.MetricCategory;
-import maple.expectation.monitoring.collector.MetricsCollectorStrategy;
+import maple.expectation.infrastructure.monitoring.collector.MetricCategory;
+import maple.expectation.infrastructure.monitoring.collector.MetricsCollectorStrategy;
 import org.springframework.stereotype.Component;
 
 /**
@@ -41,7 +42,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class SystemContextProvider {
+public class SystemContextProvider implements SystemMetricsPort {
 
   private final List<MetricsCollectorStrategy> collectors;
   private final LogicExecutor executor;

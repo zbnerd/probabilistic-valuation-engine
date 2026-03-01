@@ -1,8 +1,10 @@
 package maple.expectation.service.ingestion;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.out.EventPublisher;
+import maple.expectation.core.port.out.NexonDataCollectorPort;
 import maple.expectation.domain.event.IntegrationEvent;
 import maple.expectation.domain.nexon.NexonApiCharacterData;
 import maple.expectation.error.exception.ExternalServiceException;
@@ -22,7 +24,7 @@ import reactor.core.publisher.Mono;
  *
  * <ul>
  *   <li>Uses WebClient for non-blocking HTTP calls (prevents thread pool exhaustion)
- *   <li>Returns {@link Mono} for fully reactive pipeline (no blocking operations)
+ *   <li>Returns {@link CompletableFuture} for scheduler integration (eager execution)
  *   <li>Parses JSON to {@link NexonApiCharacterData} domain object
  *   <li>Publishes to Queue via {@link EventPublisher} (fire-and-forget)
  * </ul>
@@ -59,7 +61,7 @@ import reactor.core.publisher.Mono;
  */
 @Slf4j
 @Service
-public class NexonDataCollector {
+public class NexonDataCollector implements NexonDataCollectorPort {
 
   private final WebClient webClient;
   private final EventPublisher eventPublisher;
@@ -91,7 +93,7 @@ public class NexonDataCollector {
    *   <li>Parse JSON response to {@link NexonApiCharacterData}
    *   <li>Wrap in {@link IntegrationEvent}
    *   <li>Publish to queue (fire-and-forget via doOnNext)
-   *   <li>Return character data to caller as Mono
+   *   <li>Return character data to caller as CompletableFuture
    * </ol>
    *
    * <p><strong>Reactive Features:</strong>
@@ -100,15 +102,24 @@ public class NexonDataCollector {
    *   <li>Timeout: 5 seconds (prevents hanging requests)
    *   <li>Retry: Up to 2 retries on 5xx errors (resilient to transient failures)
    *   <li>Fire-and-forget publish: Event publishing doesn't block the response
+   *   <li>Eager execution: Subscribes to Mono immediately to ensure execution
    * </ul>
    *
+   * <p><strong>ADR-036 Fix:</strong> Returns {@link CompletableFuture} instead of {@link Mono} to
+   * ensure eager execution when called from {@link NexonDataCollectionScheduler}. The Mono is
+   * subscribed immediately, preventing silent failure where the reactive chain never executes.
+   *
    * @param ocid Character OCID
-   * @return Mono that emits character data when API call completes
+   * @return CompletableFuture that completes when API call and publish complete
+   * @see <a href="ADR-036-reactive-scheduler-eager-execution.md">ADR-036</a>
    */
-  public Mono<NexonApiCharacterData> fetchAndPublish(String ocid) {
+  @Override
+  public CompletableFuture<Void> fetchAndPublish(String ocid) {
     log.debug("[NexonDataCollector] Fetching character data: ocid={}", ocid);
 
-    return fetchFromNexonApi(ocid)
+    CompletableFuture<Void> future = new CompletableFuture<>();
+
+    fetchFromNexonApi(ocid)
         .doOnNext(
             data -> {
               log.info(
@@ -118,12 +129,21 @@ public class NexonDataCollector {
               publishEvent(data);
             })
         .doOnError(
-            ex ->
-                log.error(
-                    "[NexonDataCollector] Failed to fetch character: ocid={}, error={}",
-                    ocid,
-                    ex.getMessage(),
-                    ex));
+            ex -> {
+              log.error(
+                  "[NexonDataCollector] Failed to fetch character: ocid={}, error={}",
+                  ocid,
+                  ex.getMessage(),
+                  ex);
+              future.completeExceptionally(ex);
+            })
+        .subscribe(
+            data -> future.complete(null),
+            error -> {
+              // Already handled in doOnError
+            });
+
+    return future;
   }
 
   /**
@@ -167,13 +187,30 @@ public class NexonDataCollector {
    *
    * <p>Raw try-catch 금지 → LogicExecutor.executeVoid() 사용
    *
+   * <h4>ADR-036 Fix:</h4>
+   *
+   * <p>Publish failures are now logged via {@code exceptionally()} handler. Previously, failures
+   * completed the CompletableFuture exceptionally but were silently ignored.
+   *
    * @param data Character data to publish
    */
   private void publishEvent(NexonApiCharacterData data) {
     IntegrationEvent<NexonApiCharacterData> event = IntegrationEvent.of(NEXON_DATA_COLLECTED, data);
 
-    executor.executeVoid(
-        () -> eventPublisher.publishAsync("nexon-data", event),
+    executor.executeVoidJava(
+        () -> {
+          eventPublisher
+              .publishAsync("nexon-data", event)
+              .exceptionally(
+                  ex -> {
+                    log.error(
+                        "[NexonDataCollector] Failed to publish event: ocid={}, error={}",
+                        data.getOcid(),
+                        ex.getMessage(),
+                        ex);
+                    return null;
+                  });
+        },
         TaskContext.of("NexonDataCollector", "PublishEvent", data.getOcid()));
   }
 

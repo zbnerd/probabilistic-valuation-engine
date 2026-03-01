@@ -1,0 +1,595 @@
+{
+  "version": "2.0.0",
+  "description": "Guardrail pattern index for Claude Code hooks - Kotlin-compatible, multi-language support",
+  "lastUpdated": "2026-02-25",
+  "languages": ["java", "kotlin"],
+  "patterns": {
+    "try-catch": {
+      "regex": "\\btry\\s*\\{",
+      "file": "backend/spring/logic-executor.md",
+      "severity": "critical",
+      "id": "GR-001",
+      "description": "Direct try-catch usage prohibited. Use LogicExecutor instead.",
+      "keywords": ["try", "catch", "exception", "LogicExecutor", "execute", "executeOrDefault", "executeWithRecovery", "executeWithFinally", "executeWithTranslation"],
+      "languages": ["java", "kotlin"],
+      "exemptions": ["DefaultLogicExecutor", "DefaultCheckedLogicExecutor", "ExecutionPipeline", "TaskDecorator", "TraceAspect", "CompensationCommand", "DonationOutbox", "RedisCompensationCommand"]
+    },
+    "runtime-exception": {
+      "regex": "throw\\s+(?:new\\s+)?RuntimeException\\s*\\(",
+      "file": "backend/spring/exception-handling.md",
+      "severity": "critical",
+      "id": "GR-002",
+      "description": "Direct RuntimeException throwing prohibited. Use ClientBaseException/ServerBaseException.",
+      "keywords": ["RuntimeException", "throw", "exception", "ClientBaseException", "ServerBaseException", "exception handling"],
+      "languages": ["java", "kotlin"]
+    },
+    "aop-self-invocation": {
+      "file": "backend/spring/aop-facade.md",
+      "severity": "critical",
+      "id": "GR-003",
+      "description": "AOP self-invocation prohibited. Use Facade pattern. (Regex removed - AI judgment required)",
+      "keywords": ["AOP", "Facade", "self-invocation", "CGLIB", "proxy", "this.", "@Service", "@Component", "internal call", "method call", "Spring AOP"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "lambda-hell": {
+      "file": "backend/spring/optional-chaining.md",
+      "severity": "warning",
+      "id": "GR-004",
+      "description": "Nested lambda exceeding 3 lines prohibited. Extract to private method. (Regex removed - AI judgment required)",
+      "keywords": ["lambda", "nested", "closure", "method reference", "extraction", "refactor", "->", "=>", "{", "}", "brace", "parenthesis"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "optional-chaining-violation": {
+      "file": "backend/spring/optional-chaining.md",
+      "severity": "warning",
+      "id": "GR-005",
+      "description": "Imperative null check prohibited. Use Optional chaining. (Regex removed - AI judgment required)",
+      "keywords": ["Optional", "null", "chaining", "Tap pattern", "if (", "!= null", "== null", "?.let", "?:", "Elvis", "null check", "imperative"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "circuit-breaker-missing": {
+      "file": "backend/resilience/circuit-breaker.md",
+      "severity": "warning",
+      "id": "GR-RESILIENCE-001",
+      "description": "External API calls require Circuit Breaker with fallback. (AI judgment required for completeness)",
+      "keywords": ["CircuitBreaker", "Resilience4j", "fallback", "retry", "external API", "Nexon API", "circuit", "breaker", "timeout", "failure"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "marker-interface-missing": {
+      "file": "backend/resilience/marker-interface.md",
+      "severity": "critical",
+      "id": "GR-RESILIENCE-002",
+      "description": "Custom exceptions must extend ClientBaseException or ServerBaseException. (Regex removed - AI judgment required)",
+      "keywords": ["Marker", "Interface", "CircuitBreakerIgnoreMarker", "CircuitBreakerRecordMarker", "exception", "extends", "inheritance", "Exception", "BaseException"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "deprecated-api": {
+      "regex": "@Deprecated|@deprecated",
+      "file": "backend/spring/exception-handling.md",
+      "severity": "critical",
+      "id": "GR-006",
+      "description": "Deprecated API usage prohibited. Use latest Best Practice API.",
+      "keywords": ["deprecated", "RestClient", "RestTemplate", "WebClient", "legacy", "obsolete"],
+      "languages": ["java", "kotlin"]
+    },
+    "thread-sleep": {
+      "regex": "Thread\\.sleep\\s*\\(",
+      "file": "testing/unit-test.md",
+      "severity": "critical",
+      "id": "GR-TEST-001",
+      "description": "Thread.sleep() prohibited. Use Awaitility instead.",
+      "keywords": ["Thread.sleep", "Awaitility", "flaky test", "await", "wait", "sleep", "deterministic"],
+      "languages": ["java", "kotlin"]
+    },
+    "awaittermination-missing": {
+      "regex": "executorService\\.shutdown\\(\\)(?!.*awaitTermination)",
+      "file": "testing/concurrency-test.md",
+      "severity": "critical",
+      "id": "GR-TEST-002",
+      "description": "ExecutorService.shutdown() must be followed by awaitTermination().",
+      "keywords": ["ExecutorService", "shutdown", "awaitTermination", "CountDownLatch", "race condition", "thread pool", "cleanup"],
+      "languages": ["java", "kotlin"]
+    },
+    "dirties-context-overuse": {
+      "regex": "@DirtiesContext\\s*\\(",
+      "file": "testing/unit-test.md",
+      "severity": "warning",
+      "id": "GR-TEST-003",
+      "description": "@DirtiesContext on every test causes slow reloads. Use @BeforeEach for isolation.",
+      "keywords": ["@DirtiesContext", "test isolation", "@BeforeEach", "context reload", "slow test"],
+      "languages": ["java", "kotlin"]
+    },
+    "testcontainers-missing": {
+      "regex": "@Test.*redisTemplate\\.|@Test.*restTemplate\\.|@Test.*@Redis\\.",
+      "file": "testing/unit-test.md",
+      "severity": "warning",
+      "id": "GR-TEST-004",
+      "description": "External dependency tests should use Testcontainers for isolation.",
+      "keywords": ["Testcontainers", "Docker", "integration test", "isolation", "@Container", "@Testcontainers"],
+      "languages": ["java", "kotlin"]
+    },
+    "clock-injection-missing": {
+      "regex": "LocalDate\\.now\\(\\)|LocalDateTime\\.now\\(\\)|Clock\\.system",
+      "file": "testing/unit-test.md",
+      "severity": "warning",
+      "id": "GR-TEST-005",
+      "description": "Time-dependent logic should use Clock injection for testability.",
+      "keywords": ["Clock", "LocalDate.now", "LocalDateTime.now", "time-based", "determinism", "instant", "ZonedDateTime", "testability"],
+      "languages": ["java", "kotlin"]
+    },
+    "random-id-missing": {
+      "regex": "UUID\\.randomUUID\\(\\)|Math\\.random\\(\\)|Random\\(\\)",
+      "file": "testing/unit-test.md",
+      "severity": "warning",
+      "id": "GR-TEST-006",
+      "description": "Random ID generation should use Supplier injection for testability.",
+      "keywords": ["UUID", "random", "Supplier", "determinism", "testability", "Random", "ThreadLocalRandom"],
+      "languages": ["java", "kotlin"]
+    },
+    "transactional-multithread": {
+      "regex": "@Transactional.*(?:executorService|ExecutorService|parallelStream|CompletableFuture)",
+      "file": "testing/concurrency-test.md",
+      "severity": "critical",
+      "id": "GR-TEST-007",
+      "description": "@Transactional tests with ExecutorService cause race conditions (transaction not committed).",
+      "keywords": ["@Transactional", "ExecutorService", "multithread", "race condition", "parallel", "async", "transaction boundary"],
+      "languages": ["java", "kotlin"]
+    },
+    "stateless-violation": {
+      "regex": "HttpSession|@SessionScope|@SessionAttributes",
+      "file": "architecture/stateless.md",
+      "severity": "critical",
+      "id": "GR-ARCH-003",
+      "description": "Stateful components prohibited. Use Redis/MySQL for state.",
+      "keywords": ["HttpSession", "stateless", "Redis", "state management", "session", "mutable state", "in-memory"],
+      "languages": ["java", "kotlin"]
+    },
+    "static-mutable": {
+      "regex": "static\\s+(?:val|var|final\\s+)?(?:Map|Set|List|Collection|ConcurrentHashMap)|companion\\s+object\\s*\\{[^}]*(?:mutableMapOf|mutableListOf|mutableSetOf|ConcurrentHashMap|HashMap|ArrayList|HashSet)\\s*\\(",
+      "file": "architecture/stateless.md",
+      "severity": "critical",
+      "id": "GR-ARCH-003-2",
+      "description": "Static mutable state prohibited. Use Redis for distributed state.",
+      "keywords": ["static", "mutable", "state", "Redis", "distributed", "companion object", "object", "global state"],
+      "languages": ["java", "kotlin"]
+    },
+    "jpa-identity-batch-disable": {
+      "regex": "@GeneratedValue\\s*\\(\\s*strategy\\s*=\\s*GenerationType\\.IDENTITY",
+      "file": "architecture/adr-decisions.md",
+      "severity": "warning",
+      "id": "GR-ARCH-007",
+      "description": "JPA IDENTITY disables batch insert. Consider JDBC Batch for bulk operations (ADR-035).",
+      "keywords": ["JPA", "IDENTITY", "batch", "JDBC", "CQRS", "@GeneratedValue", "insert", "bulk"],
+      "languages": ["java", "kotlin"]
+    },
+    "v4-to-v2-direct-call": {
+      "regex": "(?:private|val|var)\\s+\\w+\\s+v2Service|v2Service\\.",
+      "file": "architecture/service-modules.md",
+      "severity": "warning",
+      "id": "GR-ARCH-010",
+      "description": "V4 module directly calling V2 prohibited. Use V4 independent implementation.",
+      "keywords": ["V2", "V4", "module", "dependency", "Facade", "service", "architecture"],
+      "languages": ["java", "kotlin"]
+    },
+    "synchronous-drain": {
+      "regex": "\\.drain\\s*\\(",
+      "file": "architecture/service-modules.md",
+      "severity": "warning",
+      "id": "GR-ARCH-015",
+      "description": "Synchronous drain in request thread prohibited. Use @Scheduled async drain.",
+      "keywords": ["Write-Behind", "drain", "buffer", "@Scheduled", "async", "flush", "outbox"],
+      "languages": ["java", "kotlin"]
+    },
+    "fixed-rate-scheduler": {
+      "regex": "@Scheduled\\s*\\(\\s*fixedRate\\s*=",
+      "file": "architecture/adr-decisions.md",
+      "severity": "critical",
+      "id": "GR-ARCH-005",
+      "description": "fixedRate scheduler causes overlap. Use fixedDelay instead.",
+      "keywords": ["@Scheduled", "fixedRate", "fixedDelay", "scheduler", "overlap", "cron"],
+      "languages": ["java", "kotlin"]
+    },
+    "tiered-cache-violation": {
+      "regex": "@Cacheable\\s*\\(|@CacheEvict|@CachePut",
+      "file": "architecture/system-design.md",
+      "severity": "warning",
+      "id": "GR-ARCH-001",
+      "description": "Single-layer cache prohibited. Use TieredCache (L1 Caffeine + L2 Redis).",
+      "keywords": ["TieredCache", "Caffeine", "Redis", "L1", "L2", "multi-layer", "cache", "stampede"],
+      "languages": ["java", "kotlin"]
+    },
+    "single-flight-missing": {
+      "regex": "computeIfAbsent\\s*\\(|getOrDefault\\s*\\(",
+      "file": "architecture/system-design.md",
+      "severity": "warning",
+      "id": "GR-ARCH-002",
+      "description": "Duplicate computation risk. Use SingleFlightExecutor pattern.",
+      "keywords": ["Single-flight", "cache", "stampede", "duplicate", "concurrent", "thundering herd", "computeIfAbsent"],
+      "languages": ["java", "kotlin"]
+    },
+    "fqcn-usage": {
+      "regex": "(?:new\\s+|(?:val|var)\\s+\\w+\\s*=\\s*)(?:java|javax|org|kotlin)\\.[a-zA-Z]+\\.[A-Z][a-zA-Z0-9]*(?:<[^>]+>)?\\s*\\(",
+      "file": "coding-style/imports.md",
+      "severity": "warning",
+      "id": "GR-STYLE-001",
+      "description": "FQCN usage discouraged. Use import statement instead.",
+      "keywords": ["FQCN", "import", "package", "class", "Fully Qualified", "canonical name"],
+      "languages": ["java", "kotlin"]
+    },
+    "tiered-cache-singleflight": {
+      "file": "backend/cache/tiered-cache-singleflight.md",
+      "severity": "critical",
+      "id": "GR-CACHE-001",
+      "description": "TieredCache with SingleFlight to prevent cache stampede.",
+      "keywords": ["TieredCache", "SingleFlight", "Cache-Stampede", "Thundering-Herd", "ADR-003", "L1", "L2", "Caffeine", "Redis"],
+      "languages": ["java", "kotlin"]
+    },
+    "follower-timeout-isolation": {
+      "file": "backend/cache/tiered-cache-singleflight.md",
+      "severity": "critical",
+      "id": "GR-CACHE-002",
+      "description": "SingleFlight follower timeout isolation to prevent cascading failures.",
+      "keywords": ["SingleFlight", "follower", "timeout", "isolation", "CompletableFuture", "orTimeout"],
+      "languages": ["java", "kotlin"]
+    },
+    "cache-configuration": {
+      "file": "backend/cache/tiered-cache-singleflight.md",
+      "severity": "warning",
+      "id": "GR-CACHE-003",
+      "description": "Cache must have TTL and size limits to prevent OOM.",
+      "keywords": ["TTL", "expireAfterWrite", "maximumSize", "OOM", "memory leak", "Caffeine", "bounded"],
+      "languages": ["java", "kotlin"]
+    },
+    "graceful-degradation": {
+      "file": "backend/cache/tiered-cache-singleflight.md",
+      "severity": "critical",
+      "id": "GR-CACHE-004",
+      "description": "Redis failure should fallback gracefully, not cause service failure.",
+      "keywords": ["graceful degradation", "fallback", "Redis failure", "resilience", "circuit breaker"],
+      "languages": ["java", "kotlin"]
+    },
+    "redis-cluster-hash-tag": {
+      "file": "backend/cache/tiered-cache-singleflight.md",
+      "severity": "critical",
+      "id": "GR-CACHE-005",
+      "description": "Redis Cluster Lua scripts must use hash tags to avoid CROSSSLOT errors.",
+      "keywords": ["Redis Cluster", "hash tag", "Lua script", "CROSSSLOT", "{...}", "slot"],
+      "languages": ["java", "kotlin"]
+    },
+    "logic-executor-patterns": {
+      "file": "backend/spring/logic-executor.md",
+      "severity": "critical",
+      "id": "GR-LOGIC-001",
+      "description": "LogicExecutor 6 patterns for consistent exception handling and logging.",
+      "keywords": ["LogicExecutor", "execute", "executeOrDefault", "executeWithRecovery", "executeWithFinally", "executeWithTranslation", "TaskContext", "exception handling"],
+      "languages": ["java", "kotlin"]
+    },
+    "lambda-3line-rule": {
+      "file": "backend/spring/logic-executor.md",
+      "severity": "warning",
+      "id": "GR-LOGIC-002",
+      "description": "Lambda exceeding 3 lines or containing branches must be extracted to private method.",
+      "keywords": ["lambda", "3 lines", "extraction", "method reference", "Rule of Thumb", "refactor"],
+      "languages": ["java", "kotlin"]
+    },
+    "aop-facade-pattern": {
+      "file": "backend/spring/aop-facade.md",
+      "severity": "critical",
+      "id": "GR-AOP-001",
+      "description": "Facade pattern prevents AOP self-invocation issues. Facade orchestrates, Service executes.",
+      "keywords": ["Facade", "AOP", "self-invocation", "CGLIB", "orchestration", "Service", "proxy"],
+      "languages": ["java", "kotlin"]
+    },
+    "filter-bean-registration": {
+      "file": "backend/spring/aop-facade.md",
+      "severity": "critical",
+      "id": "GR-AOP-002",
+      "description": "OncePerRequestFilter must NOT have @Component. Register as @Bean with FilterRegistrationBean.disabled.",
+      "keywords": ["OncePerRequestFilter", "@Component", "@Bean", "FilterRegistrationBean", "CGLIB", "NPE", "Spring Security"],
+      "languages": ["java", "kotlin"]
+    },
+    "securitycontext-thread-safe": {
+      "file": "backend/spring/aop-facade.md",
+      "severity": "critical",
+      "id": "GR-AOP-003",
+      "description": "SecurityContext must be newly created, not reused. Thread-safe pattern required.",
+      "keywords": ["SecurityContext", "SecurityContextHolder", "createEmptyContext", "thread-safe", "concurrency"],
+      "languages": ["java", "kotlin"]
+    },
+    "sensitive-data-masking": {
+      "file": "backend/spring/aop-facade.md",
+      "severity": "critical",
+      "id": "GR-AOP-004",
+      "description": "Sensitive data (API Key, password) must override toString() to mask values.",
+      "keywords": ["toString", "masking", "sensitive data", "API Key", "password", "logging", "security"],
+      "languages": ["java", "kotlin"]
+    },
+    "api-key-jwt-prohibition": {
+      "file": "backend/spring/aop-facade.md",
+      "severity": "critical",
+      "id": "GR-AOP-005",
+      "description": "API Key must NOT be stored in JWT (client-exposed). Use Redis session + HMAC fingerprint.",
+      "keywords": ["API Key", "JWT", "Redis", "HMAC", "fingerprint", "security", "session"],
+      "languages": ["java", "kotlin"]
+    },
+    "spring-security-headers": {
+      "file": "backend/spring/aop-facade.md",
+      "severity": "warning",
+      "id": "GR-AOP-006",
+      "description": "Spring Security 6.x Lambda DSL for security headers (X-Frame-Options, CSP, HSTS).",
+      "keywords": ["Spring Security", "headers", "X-Frame-Options", "CSP", "HSTS", "Lambda DSL", "security"],
+      "languages": ["java", "kotlin"]
+    },
+    "swagger-permitall": {
+      "file": "backend/spring/aop-facade.md",
+      "severity": "warning",
+      "id": "GR-AOP-007",
+      "description": "Swagger UI endpoints must be permitAll in authorizeHttpRequests.",
+      "keywords": ["Swagger", "OpenAPI", "permitAll", "security", "endpoint", "/swagger-ui", "/v3/api-docs"],
+      "languages": ["java", "kotlin"]
+    },
+    "logging-level-separation": {
+      "file": "backend/spring/aop-facade.md",
+      "severity": "warning",
+      "id": "GR-AOP-008",
+      "description": "Logging levels must be strictly separated: info (milestones), debug (tracing), error (failures).",
+      "keywords": ["logging", "log level", "info", "debug", "error", "SLF4J", "structured logging"],
+      "languages": ["java", "kotlin"]
+    },
+    "migration-multi-file": {
+      "file": "migration/compiler-centric.md",
+      "severity": "critical",
+      "id": "GR-MIGRATION-001",
+      "description": "Multi-file migration without build plan prohibited. LLM cannot handle large refactoring safely.",
+      "keywords": ["migration", "refactor", "Java to Kotlin", "convert", "마이그레이션", "리팩토링", "변환"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "kotlin-interop-jvmstatic": {
+      "file": "migration/compiler-centric.md",
+      "severity": "warning",
+      "id": "GR-MIGRATION-002",
+      "description": "Java-called Kotlin API requires @JvmStatic/@JvmOverloads for compatibility.",
+      "keywords": ["@JvmStatic", "@JvmField", "@JvmOverloads", "companion object", "static", "Java interop"],
+      "languages": ["kotlin"],
+      "aiJudgment": true
+    },
+    "kotlin-interop-nullability": {
+      "file": "migration/compiler-centric.md",
+      "severity": "warning",
+      "id": "GR-MIGRATION-003",
+      "description": "Platform types (Java interop) need explicit nullability to prevent NPE.",
+      "keywords": ["null", "nullable", "platform type", "NPE", "!!", "?", "nullability", "Safe call"],
+      "languages": ["kotlin"],
+      "aiJudgment": true
+    },
+    "annotation-processor-migration": {
+      "file": "migration/compiler-centric.md",
+      "severity": "critical",
+      "id": "GR-MIGRATION-004",
+      "description": "Annotation processor modules (Dagger/Hilt/Room/MapStruct/Lombok) require special handling.",
+      "keywords": ["@Entity", "@Dao", "@Module", "@Component", "@Mapper", "@Data", "@Builder", "KAPT", "KSP", "annotation processor"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "error-clustering": {
+      "file": "migration/compiler-centric.md",
+      "severity": "warning",
+      "id": "GR-MIGRATION-005",
+      "description": "Bulk compile errors should be clustered and fixed together, not one-by-one.",
+      "keywords": ["compile error", "bulk fix", "clustering", "컴파일 에러", "대량 수정"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    },
+    "compile-unit-workflow": {
+      "file": "migration/compiler-centric.md",
+      "severity": "critical",
+      "id": "GR-MIGRATION-006",
+      "description": "File-level compile workflow required. Never modify multiple files without compiling.",
+      "keywords": ["compile", "unit", "workflow", "incremental", "file-by-file", "컴파일 단위"],
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
+    }
+  },
+  "allowedPatterns": [
+    "DefaultLogicExecutor",
+    "DefaultCheckedLogicExecutor",
+    "ExecutionPipeline",
+    "TaskDecorator",
+    "TraceAspect",
+    "CompensationCommand",
+    "DonationOutbox",
+    "RedisCompensationCommand"
+  ],
+  "exclusions": {
+    "testPaths": [
+      "src/test/.*\\.(?:java|kt|kts)$",
+      "chaos-test",
+      ".*/test/.*"
+    ],
+    "patternExemptions": {
+      "try-catch": ["testPaths"],
+      "thread-sleep": ["testPaths"],
+      "runtime-exception": ["testPaths"],
+      "lambda-hell": ["testPaths"],
+      "optional-chaining-violation": ["testPaths"],
+      "awaittermination-missing": ["testPaths"],
+      "dirties-context-overuse": ["testPaths"],
+      "testcontainers-missing": ["testPaths"],
+      "clock-injection-missing": ["testPaths"],
+      "random-id-missing": ["testPaths"],
+      "transactional-multithread": ["testPaths"]
+    }
+  },
+  "categories": {
+    "architecture": {
+      "adr-decisions.md": "ADR Decision Guardrails (Hexagonal, DIP, Rich Domain, Exception, JDBC Batch)",
+      "stateless.md": "Stateless Architecture Principles (No HttpSession, No static mutable)",
+      "service-modules.md": "V2/V4 Service Modules Architecture (Facade, Decorator, Strategy, Outbox)",
+      "system-design.md": "System Design Patterns (TieredCache, Single-flight, Circuit Breaker, GZIP)",
+      "multi-agent.md": "5-Agent Council Protocol (Blue, Green, Yellow, Purple, Red)"
+    },
+    "backend/spring": {
+      "logic-executor.md": "Zero Try-Catch Policy & LogicExecutor Pattern",
+      "exception-handling.md": "Exception Handling Strategy (ClientBaseException/ServerBaseException)",
+      "aop-facade.md": "AOP & Facade Pattern & Spring Security Filter",
+      "optional-chaining.md": "Optional Chaining & Tap Pattern & Lambda Hell Prevention",
+      "solid-principles.md": "SOLID Principles (SRP, OCP, LSP, ISP, DIP)"
+    },
+    "backend/resilience": {
+      "circuit-breaker.md": "Circuit Breaker Pattern (Resilience4j)",
+      "marker-interface.md": "Marker Interface Pattern (CircuitBreakerIgnoreMarker/RecordMarker)",
+      "fallback.md": "Fallback Strategy & Graceful Degradation"
+    },
+    "backend/cache": {
+      "tiered-cache-singleflight.md": "TieredCache & SingleFlight Pattern (L1 Caffeine + L2 Redis)",
+      "two-phase-snapshot.md": "Two-Phase Snapshot Pattern (Light Snapshot → Queue + Event → Full Snapshot)",
+      "probabilistic-early-recomputation.md": "Probabilistic Early Recomputation (Time-to-Expire Approximation)"
+    },
+    "backend/concurrency": {
+      "async-patterns.md": "Async Non-Blocking Pipeline Pattern",
+      "thread-pool.md": "Thread Pool Backpressure Best Practice",
+      "virtual-threads.md": "Virtual Threads Best Practice",
+      "lock-strategy.md": "Distributed Lock Strategy (Redis/Redisson)",
+      "race-condition.md": "Race Condition Prevention",
+      "deadlock-prevention.md": "Deadlock Prevention (Skip Locked, Lock Ordering)",
+      "skip-locked.md": "Skip Locked Pattern (FOR UPDATE SKIP LOCKED)"
+    },
+    "backend/performance": {
+      "thread-pool-tuning.md": "Thread Pool Tuning Guide (Core Pool Sizing, Queue Capacity)"
+    },
+    "testing": {
+      "unit-test.md": "Unit Test Best Practices (Awaitility vs Thread.sleep, Clock injection, Testcontainers)",
+      "flaky-test-prevention.md": "Flaky Test Prevention Guide (5 principles, 6 root causes, quarantine)",
+      "concurrency-test.md": "Concurrency Test Best Practices (awaitTermination, CountDownLatch, @Transactional)",
+      "chaos-engineering.md": "Chaos Engineering Testing Strategy (5-Agent, Nightmare N01-N19, load test)",
+      "nightmare-tests.md": "Nightmare Scenarios (N01-N19): Cache Stampede, Deadlock, Timeout, etc.",
+      "load-test-strategy.md": "Load Test Strategy (WRK, k6, Prometheus)",
+      "testcontainers-singleton.md": "Testcontainers Singleton Pattern (Docker Container Reuse)",
+      "INDEX.md": "Testing Guardrails Index",
+      "chaos/N01-singleflight-race-condition.md": "N01: Thundering Herd (Cache Stampede)",
+      "chaos/N02-deadlock-trap.md": "N02: Deadlock Trap",
+      "chaos/N03-thread-pool-exhaustion.md": "N03: Thread Pool Exhaustion",
+      "chaos/N04-connection-vampire.md": "N04: Connection Vampire",
+      "chaos/N05-celebrity-problem.md": "N05: Celebrity Problem (Hot Key)",
+      "chaos/N06-timeout-cascade.md": "N06: Timeout Cascade",
+      "chaos/N07-metadata-lock-freeze.md": "N07: Metadata Lock Freeze",
+      "chaos/N08-redis-death-thundering-herd.md": "N08: Redis Death (Thundering Herd)",
+      "chaos/N09-circular-lock-deadlock.md": "N09: Circular Lock Deadlock"
+    },
+    "infrastructure": {
+      "redis.md": "Redis & Redisson Integration (Lua Script, DLQ)",
+      "scaleout.md": "Scale-out Architecture Guardrails",
+      "resilience-reliiability.md": "Resilience & Reliability Patterns"
+    },
+    "database": {
+      "connection-pool.md": "Database Connection Pool Guardrails (HikariCP, MySQL)",
+      "innodb-buffer-pool.md": "InnoDB Buffer Pool Optimization",
+      "INDEX.md": "Database Guardrails Index"
+    },
+    "coding-style": {
+      "imports.md": "Import Style Guide (FQCN usage)"
+    },
+    "migration": {
+      "compiler-centric.md": "Compiler-Centric Migration (Build Plan, Kotlin Interop, Error Clustering)"
+    },
+    "security": {
+      "jwt-security.md": "JWT Security Best Practices",
+      "cors-security.md": "CORS Configuration",
+      "input-validation.md": "Input Validation Guardrails",
+      "sensitive-data-logging.md": "Sensitive Data Logging Prevention",
+      "secrets-management.md": "Secrets Management (Env, Vault)",
+      "spring-security-filter.md": "Spring Security Filter Chain",
+      "INDEX.md": "Security Guardrails Index"
+    },
+    "architecture/refactor": {
+      "connection-vampire.md": "Connection Vampire Anti-Pattern (@Transactional 내 .join())",
+      "timeout-hierarchy.md": "Timeout Hierarchy 불일치 (Zombie Request 방지)",
+      "mdl-freeze.md": "MDL (Metadata Lock) Freeze 방지",
+      "circular-lock-deadlock.md": "Circular Lock Deadlock 방지 (ThreadLocal Lock Ordering)",
+      "controller-response-duplication.md": "Controller 비동기 응답 패턴 중복",
+      "cube-decorator-duplication.md": "Cube Decorator 계산 로직 중복 (V2 vs V4)",
+      "cache-service-duplication.md": "Cache Service 조회/저장 로직 중복",
+      "timeout-configuration-duplication.md": "Timeout 설정 패턴 중복",
+      "completablefuture-exception-duplication.md": "CompletableFuture 예외 처리 중복",
+      "stateful-threadlocal.md": "ThreadLocal Stateful Component (Memory Leak 방지)",
+      "stateful-inmemory-buffer.md": "In-Memory Stateful Buffer (Scale-out 시 데이터 유실)",
+      "stateful-static-counter.md": "Static AtomicLong Counter (분산 환경 충돌)",
+      "data-masking-duplication.md": "데이터 마스킹 로직 중복",
+      "buffer-pattern-duplication.md": "Tiered Buffer 구조적 중복",
+      "transactional-outbox-pattern.md": "Transactional Outbox Pattern (성공 사례)",
+      "taskcontext-duplication.md": "LogicExecutor TaskContext 패턴 중복"
+    }
+  },
+  "aiJudgmentPatterns": {
+    "description": "Patterns requiring AI semantic analysis (regex insufficient)",
+    "detection": "Match keywords → Inject corresponding guardrail md file → AI analyzes DON'T section → Violation detected if code matches DON'T pattern",
+    "patterns": [
+      "aop-self-invocation",
+      "lambda-hell",
+      "optional-chaining-violation",
+      "marker-interface-missing",
+      "migration-multi-file",
+      "kotlin-interop-jvmstatic",
+      "kotlin-interop-nullability",
+      "annotation-processor-migration",
+      "error-clustering",
+      "compile-unit-workflow"
+    ]
+  },
+  "hookIntegration": {
+    "preToolUse": {
+      "description": "Before code modification, scan file for guardrail violations",
+      "steps": [
+        "1. Extract file imports and keywords",
+        "2. Match against INDEX.json keywords",
+        "3. For AI judgment patterns: Inject corresponding guardrail md DON'T section to context",
+        "4. AI analyzes if incoming code modification violates guardrails"
+      ]
+    },
+    "postToolUse": {
+      "description": "After code modification, validate against guardrails",
+      "steps": [
+        "1. Scan generated code for regex matches (Layer 1: Instant block)",
+        "2. For non-regex patterns: Match keywords → Inject guardrail md → AI judgment (Layer 2)",
+        "3. Compare DO section best practices with generated code",
+        "4. Report violations with file:line references and remediation suggestions"
+      ]
+    }
+  },
+  "relatedDocs": {
+    "CLAUDE.md": {
+      "section11": "Exception Handling Strategy",
+      "section12": "Zero Try-Catch Policy & LogicExecutor",
+      "section12-1": "Circuit Breaker & Resilience Rules",
+      "section15": "Anti-Pattern: Lambda & Parenthesis Hell",
+      "section18": "Stateless Architecture Principles",
+      "section20": "Flaky Test Prevention"
+    },
+    "infrastructure.md": {
+      "section7": "AOP & Facade Pattern",
+      "section8": "Redis & Redisson Integration",
+      "section8-1": "Redis Lua Script & Cluster Hash Tag",
+      "section17": "TieredCache & Cache Stampede Prevention",
+      "section18": "Spring Security 6.x Filter Best Practice",
+      "section19": "Security Best Practices"
+    },
+    "testing-guide.md": {
+      "section23": "ExecutorService 동시성 테스트 Best Practice",
+      "section24": "Flaky Test 근본 원인 분석 및 해결 가이드",
+      "section25": "경량 테스트 강제 규칙"
+    },
+    "async-concurrency.md": {
+      "section21": "Async Non-Blocking Pipeline Pattern",
+      "section22": "Thread Pool Backpressure Best Practice"
+    },
+    "resilience.md": {
+      "overview": "External API Failure Response Strategy (A/B/C Scenarios)"
+    }
+  }
+}

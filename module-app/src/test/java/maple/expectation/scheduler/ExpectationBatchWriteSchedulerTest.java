@@ -11,11 +11,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.error.exception.DistributedLockException;
+import maple.expectation.infrastructure.buffer.ExpectationWriteTask;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.lock.LockStrategy;
 import maple.expectation.infrastructure.persistence.repository.EquipmentExpectationSummaryRepository;
 import maple.expectation.service.v4.buffer.ExpectationWriteBackBuffer;
-import maple.expectation.service.v4.buffer.ExpectationWriteTask;
 import maple.expectation.support.TestLogicExecutors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,8 +60,8 @@ class ExpectationBatchWriteSchedulerTest {
     Counter counter = mock(Counter.class);
     given(meterRegistry.counter(anyString())).willReturn(counter);
 
-    maple.expectation.config.BatchProperties batchProperties =
-        maple.expectation.config.BatchProperties.defaults();
+    maple.expectation.infrastructure.config.BatchProperties batchProperties =
+        new maple.expectation.infrastructure.config.BatchProperties();
 
     scheduler =
         new ExpectationBatchWriteScheduler(

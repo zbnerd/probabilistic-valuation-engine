@@ -123,18 +123,21 @@ public class ShutdownDataPersistenceService {
   public void appendLikeEntry(String userIgn, long count) {
     TaskContext context = TaskContext.of("Persistence", "AppendLike", userIgn);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           ShutdownData existingData = loadCurrentInstanceBackup();
 
           Map<String, Long> mergedBuffer =
               new HashMap<>(
-                  existingData.likeBuffer() != null ? existingData.likeBuffer() : Map.of());
+                  existingData.getLikeBuffer() != null ? existingData.getLikeBuffer() : Map.of());
           mergedBuffer.merge(userIgn, count, Long::sum);
 
           ShutdownData newData =
               new ShutdownData(
-                  LocalDateTime.now(), instanceId, mergedBuffer, existingData.equipmentPending());
+                  LocalDateTime.now(),
+                  instanceId,
+                  mergedBuffer,
+                  existingData.getEquipmentPending());
 
           saveShutdownData(newData);
         },
@@ -148,7 +151,7 @@ public class ShutdownDataPersistenceService {
     ShutdownData failedData =
         new ShutdownData(LocalDateTime.now(), instanceId, failedLikes, pendingEquipment);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           Path saved = saveShutdownData(failedData);
           if (saved != null) {
@@ -190,20 +193,20 @@ public class ShutdownDataPersistenceService {
   public void savePendingEquipment(List<String> ocids) {
     if (ocids == null || ocids.isEmpty()) return;
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           ShutdownData existingData = loadCurrentInstanceBackup();
 
           List<String> mergedEquipment =
               new ArrayList<>(
-                  existingData.equipmentPending() != null
-                      ? existingData.equipmentPending()
+                  existingData.getEquipmentPending() != null
+                      ? existingData.getEquipmentPending()
                       : List.of());
           mergedEquipment.addAll(ocids);
 
           ShutdownData newData =
               new ShutdownData(
-                  LocalDateTime.now(), instanceId, existingData.likeBuffer(), mergedEquipment);
+                  LocalDateTime.now(), instanceId, existingData.getLikeBuffer(), mergedEquipment);
 
           if (saveShutdownData(newData) != null) {
             log.warn("[Persistence] Equipment 목록 업데이트 완료: {}건", ocids.size());

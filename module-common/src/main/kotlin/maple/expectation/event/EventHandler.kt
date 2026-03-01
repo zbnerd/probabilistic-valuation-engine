@@ -65,5 +65,5 @@ annotation class EventHandler(
      *
      * @return true if async execution (Virtual Thread), false if synchronous
      */
-    val async: Boolean = true
+    val async: Boolean = true,
 )

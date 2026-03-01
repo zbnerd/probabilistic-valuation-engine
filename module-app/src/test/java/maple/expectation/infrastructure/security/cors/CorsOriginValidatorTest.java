@@ -173,8 +173,8 @@ class CorsOriginValidatorTest {
 
       // then
       assertThat(result.isValid()).isTrue();
-      assertThat(result.validOrigins()).hasSize(4);
-      assertThat(result.errors()).isEmpty();
+      assertThat(result.getValidOrigins()).hasSize(4);
+      assertThat(result.getErrors()).isEmpty();
     }
 
     @Test
@@ -189,8 +189,8 @@ class CorsOriginValidatorTest {
 
       // then
       assertThat(result.isValid()).isFalse();
-      assertThat(result.errors()).hasSize(1);
-      assertThat(result.errors().get(0)).contains("invalid-origin");
+      assertThat(result.getErrors()).hasSize(1);
+      assertThat(result.getErrors().get(0)).contains("invalid-origin");
     }
 
     @Test
@@ -204,7 +204,7 @@ class CorsOriginValidatorTest {
 
       // then
       assertThat(result.isValid()).isTrue();
-      assertThat(result.validOrigins()).isEmpty();
+      assertThat(result.getValidOrigins()).isEmpty();
     }
   }
 
@@ -225,7 +225,7 @@ class CorsOriginValidatorTest {
       // then
       assertThat(result.isValid()).isTrue();
       assertThat(result.hasWarnings()).isTrue();
-      assertThat(result.warnings().get(0)).contains("localhost").contains("권장하지 않습니다");
+      assertThat(result.getWarnings().get(0)).contains("localhost").contains("권장하지 않습니다");
     }
 
     @Test
@@ -240,7 +240,7 @@ class CorsOriginValidatorTest {
       // then
       assertThat(result.isValid()).isTrue();
       assertThat(result.hasWarnings()).isTrue();
-      assertThat(result.warnings().get(0)).contains("localhost");
+      assertThat(result.getWarnings().get(0)).contains("localhost");
     }
 
     @Test
@@ -255,7 +255,7 @@ class CorsOriginValidatorTest {
       // then
       assertThat(result.isValid()).isTrue();
       assertThat(result.hasWarnings()).isTrue();
-      assertThat(result.warnings().get(0)).contains("사설 IP").contains("권장하지 않습니다");
+      assertThat(result.getWarnings().get(0)).contains("사설 IP").contains("권장하지 않습니다");
     }
 
     @Test
@@ -270,7 +270,7 @@ class CorsOriginValidatorTest {
       // then
       assertThat(result.isValid()).isTrue();
       assertThat(result.hasWarnings()).isTrue();
-      assertThat(result.warnings().get(0)).contains("HTTPS").contains("권장");
+      assertThat(result.getWarnings().get(0)).contains("HTTPS").contains("권장");
     }
 
     @Test

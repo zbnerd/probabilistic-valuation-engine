@@ -1,4 +1,5 @@
 @file:JvmName("BaseException")
+
 package maple.expectation.error.exception.base
 
 import maple.expectation.error.ErrorCode
@@ -59,7 +60,7 @@ abstract class BaseException : RuntimeException {
      */
     constructor(errorCode: ErrorCode, cause: Throwable?, vararg args: Any?) : super(
         String.format(errorCode.message, *args),
-        cause
+        cause,
     ) {
         this.errorCode = errorCode
     }

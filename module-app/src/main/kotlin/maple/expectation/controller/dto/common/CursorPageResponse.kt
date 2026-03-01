@@ -1,7 +1,6 @@
 package maple.expectation.controller.dto.common
 
 import org.springframework.data.domain.Slice
-import java.util.function.Function
 
 /**
  * Cursor-based Pagination response (#233)
@@ -27,12 +26,7 @@ import java.util.function.Function
  * @param size current page size
  * @param T content type
  */
-data class CursorPageResponse<T>(
-    val content: List<T>,
-    val nextCursor: Long?,
-    val hasNext: Boolean,
-    val size: Int
-) {
+data class CursorPageResponse<T>(val content: List<T>, val nextCursor: Long?, val hasNext: Boolean, val size: Int) {
     companion object {
         /**
          * Create CursorPageResponse from Slice
@@ -61,11 +55,7 @@ data class CursorPageResponse<T>(
          * @return Cursor-based response (DTO)
          */
         @JvmStatic
-        fun <E, D> fromWithMapping(
-            slice: Slice<E>,
-            mapper: (E) -> D,
-            idExtractor: (E) -> Long
-        ): CursorPageResponse<D> {
+        fun <E, D> fromWithMapping(slice: Slice<E>, mapper: (E) -> D, idExtractor: (E) -> Long): CursorPageResponse<D> {
             val entities = slice.content
             val content = entities.map(mapper)
             val nextCursor = if (entities.isEmpty()) null else idExtractor(entities.last())

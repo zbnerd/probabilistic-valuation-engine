@@ -82,22 +82,20 @@ public class ViewTransformer {
     // Parse payload JSON to extract full V4 response data
     List<PresetView> presetViews = extractPresetViews(event.getPayload());
 
-    return CharacterValuationView.builder()
-        .id(deterministicId)
-        .userIgn(event.getUserIgn())
-        .messageId(event.getMessageId())
-        .characterOcid(event.getCharacterOcid())
-        .characterClass(event.getCharacterClass())
-        .characterLevel(event.getCharacterLevel())
-        .totalExpectedCost(
-            parseSafely(() -> Long.parseLong(removeDecimal(event.getTotalExpectedCost())), 0L))
-        .maxPresetNo(event.getMaxPresetNo())
-        .calculatedAt(parseInstant(event.getCalculatedAt()))
-        .lastApiSyncAt(Instant.now())
-        .version(parseSafely(() -> Long.parseLong(event.getTaskId()), 0L))
-        .fromCache(false)
-        .presets(presetViews)
-        .build();
+    return new CharacterValuationView(
+        deterministicId,
+        event.getUserIgn(),
+        event.getMessageId(),
+        event.getCharacterOcid(),
+        event.getCharacterClass(),
+        event.getCharacterLevel(),
+        parseInstant(event.getCalculatedAt()),
+        Instant.now(),
+        parseSafely(() -> Long.parseLong(event.getTaskId()), 0L),
+        parseCostToLong(event.getTotalExpectedCost()),
+        event.getMaxPresetNo(),
+        presetViews,
+        false);
   }
 
   /**
@@ -140,13 +138,12 @@ public class ViewTransformer {
    * <p>Extracted method to avoid lambda hell (Section 15).
    */
   private PresetView toPresetView(PresetExpectation preset) {
-    return PresetView.builder()
-        .presetNo(preset.getPresetNo())
-        .totalExpectedCost(toLong(preset.getTotalExpectedCost()))
-        .totalCostText(preset.getTotalCostText())
-        .costBreakdown(toCostBreakdownView(preset.getCostBreakdown()))
-        .items(toItemViews(preset.getItems()))
-        .build();
+    return new PresetView(
+        preset.getPresetNo(),
+        toLong(preset.getTotalExpectedCost()),
+        preset.getTotalCostText(),
+        toCostBreakdownView(preset.getCostBreakdown()),
+        toItemViews(preset.getItems()));
   }
 
   /**
@@ -156,16 +153,16 @@ public class ViewTransformer {
    */
   private CostBreakdownView toCostBreakdownView(CostBreakdownDto breakdown) {
     if (breakdown == null) {
-      return CostBreakdownView.builder().build();
+      return new CostBreakdownView(null, null, null, null, null);
     }
 
-    return CostBreakdownView.builder()
-        .blackCubeCost(toLong(breakdown.getBlackCubeCost()))
-        .redCubeCost(toLong(breakdown.getRedCubeCost()))
-        .additionalCubeCost(toLong(breakdown.getAdditionalCubeCost()))
-        .starforceCost(toLong(breakdown.getStarforceCost()))
-        .flameCost(0L) // V4 doesn't include flame cost in total breakdown
-        .build();
+    return new CostBreakdownView(
+        toLong(breakdown.getBlackCubeCost()),
+        toLong(breakdown.getRedCubeCost()),
+        toLong(breakdown.getAdditionalCubeCost()),
+        toLong(breakdown.getStarforceCost()),
+        0L // V4 doesn't include flame cost in total breakdown
+        );
   }
 
   /**
@@ -181,11 +178,8 @@ public class ViewTransformer {
     return items.stream()
         .map(
             item ->
-                ItemExpectationView.builder()
-                    .itemName(item.getItemName())
-                    .expectedCost(toLong(item.getExpectedCost()))
-                    .costText(item.getExpectedCostText())
-                    .build())
+                new ItemExpectationView(
+                    item.getItemName(), toLong(item.getExpectedCost()), item.getExpectedCostText()))
         .collect(Collectors.toList());
   }
 
@@ -202,17 +196,37 @@ public class ViewTransformer {
   }
 
   /**
-   * Remove decimal point from numeric string.
+   * Parse cost string to Long (mesos units).
    *
-   * <p>e.g., "123.45" -> "12345", "100" -> "100"
+   * <p>Handles Korean number format with commas as thousand separators. Decimal points are handled
+   * by BigDecimal parsing.
    *
-   * <p>This handles cases where JSON contains decimal notation for integer values.
+   * <p>ADR-085 P1 Fix: Use BigDecimal instead of string manipulation to correctly handle decimal
+   * values.
+   *
+   * <p>Examples:
+   *
+   * <ul>
+   *   <li>"1,234.56" -> 1234 (decimal truncated)
+   *   <li>"100" -> 100
+   *   <li>"50.25" -> 50
+   *   <li>null/blank -> 0
+   * </ul>
+   *
+   * @param costStr Cost string from BigDecimal serialization
+   * @return Long value in mesos units
    */
-  private String removeDecimal(String numericStr) {
-    if (numericStr == null || numericStr.isBlank()) {
-      return "0";
+  private Long parseCostToLong(String costStr) {
+    if (costStr == null || costStr.isBlank()) {
+      return 0L;
     }
-    return numericStr.replace(".", "");
+    return parseSafely(
+        () -> {
+          String cleaned = costStr.replace(",", ""); // Remove thousand separators
+          BigDecimal decimal = new BigDecimal(cleaned);
+          return decimal.longValue(); // Truncate decimal part
+        },
+        0L);
   }
 
   /**
@@ -256,21 +270,20 @@ public class ViewTransformer {
    * <p>Used when transformation fails to prevent sync pipeline from blocking.
    */
   private CharacterValuationView createEmptyView(ExpectationCalculationCompletedEvent event) {
-    return CharacterValuationView.builder()
-        .id(buildDeterministicId(event.getUserIgn(), event.getTaskId()))
-        .userIgn(event.getUserIgn())
-        .messageId(event.getMessageId())
-        .characterOcid(event.getCharacterOcid())
-        .characterClass(event.getCharacterClass())
-        .characterLevel(event.getCharacterLevel())
-        .totalExpectedCost(0L)
-        .maxPresetNo(event.getMaxPresetNo())
-        .calculatedAt(Instant.EPOCH)
-        .lastApiSyncAt(Instant.now())
-        .version(0L)
-        .fromCache(false)
-        .presets(List.of())
-        .build();
+    return new CharacterValuationView(
+        buildDeterministicId(event.getUserIgn(), event.getTaskId()),
+        event.getUserIgn(),
+        event.getMessageId(),
+        event.getCharacterOcid(),
+        event.getCharacterClass(),
+        event.getCharacterLevel(),
+        Instant.EPOCH,
+        Instant.now(),
+        0L,
+        0L,
+        event.getMaxPresetNo(),
+        List.of(),
+        false);
   }
 
   /**

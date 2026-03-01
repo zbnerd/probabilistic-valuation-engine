@@ -1,6 +1,7 @@
 package maple.expectation.service.v2.policy;
 
 import lombok.RequiredArgsConstructor;
+import maple.expectation.core.port.out.PolicyPort;
 import maple.expectation.domain.v2.CubeType;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +18,7 @@ import org.springframework.stereotype.Component;
  * <p>OCP (Open-Closed Principle) 준수:
  *
  * <ul>
- *   <li>확장: {@link CostCalculationStrategy} 구현체로 새로운 계산 방식 추가
+ *   <li>확장: {@link PolicyPort} 구현체로 새로운 계산 방식 추가
  *   <li>수정 방지: 전략 교체로 동작 변경 (코드 수정 불필요)
  * </ul>
  *
@@ -26,13 +27,14 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>hard-coded 테이블을 {@link TableBasedCostStrategy}로 분리
  *   <li>전략 패턴 도입으로 동적 전략 교체 가능
+ *   <li>ADR-004: PolicyPort 기반 헥사고날 아키텍처로 이관
  * </ul>
  */
 @Component
 @RequiredArgsConstructor
 public class CubeCostPolicy {
 
-  private final CostCalculationStrategy costStrategy;
+  private final PolicyPort policyPort;
 
   /**
    * 큐브 비용을 조회합니다.
@@ -45,6 +47,17 @@ public class CubeCostPolicy {
    * @throws IllegalStateException 유효하지 않은 CubeType인 경우
    */
   public long getCubeCost(CubeType type, int level, String grade) {
-    return costStrategy.calculateCost(type, level, grade);
+    // Convert v2 CubeType to core CubeType
+    maple.expectation.core.domain.model.CubeType coreType = convertToCoreCubeType(type);
+    return policyPort.getCubeCost(coreType, level, grade);
+  }
+
+  /** Convert v2 CubeType to core CubeType. */
+  private maple.expectation.core.domain.model.CubeType convertToCoreCubeType(CubeType v2Type) {
+    return switch (v2Type) {
+      case BLACK -> maple.expectation.core.domain.model.CubeType.BLACK;
+      case RED -> maple.expectation.core.domain.model.CubeType.RED;
+      case ADDITIONAL -> maple.expectation.core.domain.model.CubeType.ADDITIONAL;
+    };
   }
 }

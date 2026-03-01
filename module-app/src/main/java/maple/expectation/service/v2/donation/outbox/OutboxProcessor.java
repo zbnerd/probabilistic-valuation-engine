@@ -3,6 +3,7 @@ package maple.expectation.service.v2.donation.outbox;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.OutboxProcessorPort;
 import maple.expectation.domain.v2.DonationOutbox;
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction;
 import maple.expectation.infrastructure.config.OutboxProperties;
@@ -48,7 +49,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 @Service
 @EnableConfigurationProperties(OutboxProperties.class)
-public class OutboxProcessor {
+public class OutboxProcessor implements OutboxProcessorPort {
 
   private final OutboxFetchFacade fetchFacade;
   private final DlqHandler dlqHandler;
@@ -86,6 +87,7 @@ public class OutboxProcessor {
    * </ol>
    */
   @ObservedTransaction("scheduler.outbox.poll")
+  @Override
   public void pollAndProcess() {
     TaskContext context = TaskContext.of("Outbox", "PollAndProcess", properties.getInstanceId());
 
@@ -244,6 +246,7 @@ public class OutboxProcessor {
    */
   @ObservedTransaction("scheduler.outbox.recover_stalled")
   @Transactional
+  @Override
   public void recoverStalled() {
     LocalDateTime staleTime = LocalDateTime.now().minus(properties.getStaleThreshold());
     List<DonationOutbox> stalledEntries =

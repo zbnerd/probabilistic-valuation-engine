@@ -1,4 +1,5 @@
 @file:JvmName("InvalidPotentialGradeException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -11,12 +12,11 @@ import maple.expectation.error.exception.base.ClientBaseException
  *
  * @property invalidGrade 유효하지 않은 등급명 (예: "레어", "에픽", "유니크", "레전드리"가 아닌 값)
  */
-open class InvalidPotentialGradeException(
-    invalidGrade: String
-) : ClientBaseException(
-    CommonErrorCode.INVALID_INPUT_VALUE,
-    "잠재능력 등급: $invalidGrade"
-) {
+open class InvalidPotentialGradeException(invalidGrade: String) :
+    ClientBaseException(
+        CommonErrorCode.INVALID_INPUT_VALUE,
+        "잠재능력 등급: $invalidGrade",
+    ) {
     /**
      * Create exception with custom message and cause.
      *

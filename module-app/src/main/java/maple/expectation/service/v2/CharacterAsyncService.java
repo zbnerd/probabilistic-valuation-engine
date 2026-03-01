@@ -2,10 +2,10 @@ package maple.expectation.service.v2;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,12 +40,12 @@ public class CharacterAsyncService {
   @Async
   @Transactional
   public void saveCharacterBasicInfoAsync(GameCharacter character) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // DB 저장
           gameCharacterRepository.save(character);
-          log.info("✅ [Async] 캐릭터 기본 정보 DB 저장 완료: {}", character.getUserIgn());
+          log.info("✅ [Async] 캐릭터 기본 정보 DB 저장 완료: {}", character.getUserIgn().value());
         },
-        TaskContext.of("DB", "SaveBasicInfoAsync", character.getUserIgn()));
+        TaskContext.of("DB", "SaveBasicInfoAsync", character.getUserIgn().value()));
   }
 }

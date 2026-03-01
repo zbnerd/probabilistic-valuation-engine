@@ -4,11 +4,12 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.LikeRelationSyncPort;
+import maple.expectation.domain.repository.CharacterLikeRepository;
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.persistence.entity.CharacterLikeJpaEntity;
-import maple.expectation.infrastructure.persistence.repository.CharacterLikeRepository;
 import maple.expectation.service.v2.cache.LikeRelationBuffer;
 import maple.expectation.service.v2.cache.LikeRelationBufferStrategy;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -31,12 +32,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class LikeRelationSyncService {
+public class LikeRelationSyncService implements LikeRelationSyncPort {
 
   private final LikeRelationBufferStrategy likeRelationBuffer;
   private final CharacterLikeRepository characterLikeRepository;
   private final LogicExecutor executor;
-  private final maple.expectation.config.BatchProperties batchProperties;
+  private final maple.expectation.infrastructure.config.BatchProperties batchProperties;
 
   /**
    * L1 → L2 동기화 (스케줄러 호출)
@@ -65,11 +66,11 @@ public class LikeRelationSyncService {
    */
   @ObservedTransaction("scheduler.like.relation_sync")
   @Transactional(isolation = Isolation.READ_COMMITTED)
-  public SyncResult syncRedisToDatabase() {
+  public void syncRedisToDatabase() {
     int pendingSize = likeRelationBuffer.getPendingSize();
 
     if (pendingSize == 0) {
-      return SyncResult.empty();
+      return;
     }
 
     log.info("📤 [LikeRelationSync] 동기화 시작: 최대 {}건 예상", pendingSize);
@@ -81,15 +82,13 @@ public class LikeRelationSyncService {
     // 배치 단위로 원자적 fetch + remove
     Set<String> batch;
     while (!(batch =
-            likeRelationBuffer.fetchAndRemovePending(batchProperties.likeRelationSyncSize()))
+            likeRelationBuffer.fetchAndRemovePending(batchProperties.getLikeRelationSyncSize()))
         .isEmpty()) {
       processBatch(batch, successCount, skipCount, failCount);
     }
 
     SyncResult result = new SyncResult(successCount.get(), skipCount.get(), failCount.get());
     log.info("📥 [LikeRelationSync] 동기화 완료: {}", result);
-
-    return result;
   }
 
   private void processBatch(
@@ -149,7 +148,7 @@ public class LikeRelationSyncService {
     }
 
     CharacterLikeJpaEntity entity = new CharacterLikeJpaEntity(targetOcid, accountId);
-    characterLikeRepository.save(entity);
+    characterLikeRepository.save(entity.toDomain());
   }
 
   /** 동기화 결과 */

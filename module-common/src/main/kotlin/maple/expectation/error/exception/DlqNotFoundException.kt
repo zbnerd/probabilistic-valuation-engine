@@ -1,4 +1,5 @@
 @file:JvmName("DlqNotFoundException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -11,7 +12,7 @@ class DlqNotFoundException : ClientBaseException {
      */
     constructor(eventId: Long) : super(
         CommonErrorCode.DLQ_NOT_FOUND,
-        "DLQ event not found: $eventId"
+        "DLQ event not found: $eventId",
     )
 
     /**
@@ -19,7 +20,7 @@ class DlqNotFoundException : ClientBaseException {
      */
     constructor(eventId: String) : super(
         CommonErrorCode.DLQ_NOT_FOUND,
-        eventId
+        eventId,
     )
 
     /**
@@ -31,6 +32,6 @@ class DlqNotFoundException : ClientBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.DLQ_NOT_FOUND,
         cause,
-        message
+        message,
     )
 }

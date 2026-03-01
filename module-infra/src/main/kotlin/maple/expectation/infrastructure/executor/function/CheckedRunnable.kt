@@ -26,5 +26,6 @@ fun interface CheckedRunnable {
      *
      * @throws Exception 작업 중 발생한 예외
      */
+    @Throws(Exception::class)
     fun run()
 }

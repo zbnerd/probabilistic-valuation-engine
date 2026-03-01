@@ -11,6 +11,7 @@ import java.util.List;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.external.dto.v2.TotalExpectationResponse;
 import maple.expectation.support.TestLogicExecutors;
+import maple.expectation.testfixtures.Fixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -180,20 +181,12 @@ class TotalExpectationCacheServiceTest {
   // ==================== Helper Methods ====================
 
   private TotalExpectationResponse createTestResponse() {
-    return TotalExpectationResponse.builder()
-        .userIgn("TestUser123")
-        .totalCost(530000000000L)
-        .totalCostText("5,300억")
-        .items(
-            List.of(
-                TotalExpectationResponse.ItemExpectation.builder()
-                    .part("모자")
-                    .itemName("에테르넬 나이트헬름")
-                    .potential("STR 12% | 9% | 9%")
-                    .expectedCost(80000000000L)
-                    .expectedCostText("800억")
-                    .expectedCount(1500L)
-                    .build()))
-        .build();
+    return Fixtures.totalExpectationResponse(
+        "TestUser123",
+        530000000000L,
+        "5,300억",
+        List.of(
+            Fixtures.itemExpectation(
+                "모자", "에테르넬 나이트헬름", "STR 12% | 9% | 9%", 80000000000L, "800억", 1500L)));
   }
 }

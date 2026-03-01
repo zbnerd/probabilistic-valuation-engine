@@ -62,14 +62,14 @@ public class SessionService {
    * @return 세션 (Optional)
    */
   public Optional<Session> getSessionAndRefresh(String sessionId) {
-    Optional<Session> sessionOpt = sessionRepository.findById(sessionId);
+    Session session = sessionRepository.findById(sessionId);
 
-    if (sessionOpt.isPresent()) {
+    if (session != null) {
       sessionRepository.refreshTtl(sessionId);
       log.debug("Session TTL refreshed: sessionId={}", sessionId);
     }
 
-    return sessionOpt;
+    return Optional.ofNullable(session);
   }
 
   /**
@@ -79,7 +79,8 @@ public class SessionService {
    * @return 세션 (Optional)
    */
   public Optional<Session> getSession(String sessionId) {
-    return sessionRepository.findById(sessionId);
+    Session session = sessionRepository.findById(sessionId);
+    return Optional.ofNullable(session);
   }
 
   /**

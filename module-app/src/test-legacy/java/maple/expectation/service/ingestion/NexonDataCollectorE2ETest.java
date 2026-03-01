@@ -136,7 +136,7 @@ class NexonDataCollectorE2ETest extends AbstractContainerBaseTest {
 
     // When - Simulate NexonDataCollector behavior directly
     // (In real scenario, this would be triggered by REST API call)
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           // Wrap in IntegrationEvent
           IntegrationEvent<NexonApiCharacterData> event =

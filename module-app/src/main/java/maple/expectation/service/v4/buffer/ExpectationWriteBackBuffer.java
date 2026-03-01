@@ -10,8 +10,10 @@ import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.config.BufferProperties;
+import maple.expectation.core.port.out.ExpectationBufferPort;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.infrastructure.buffer.ExpectationWriteTask;
+import maple.expectation.infrastructure.config.BufferProperties;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import org.springframework.stereotype.Component;
@@ -46,7 +48,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-public class ExpectationWriteBackBuffer {
+public class ExpectationWriteBackBuffer implements ExpectationBufferPort {
 
   private final ConcurrentLinkedQueue<ExpectationWriteTask> queue = new ConcurrentLinkedQueue<>();
   private final AtomicInteger pendingCount = new AtomicInteger(0);
@@ -185,7 +187,7 @@ public class ExpectationWriteBackBuffer {
     int newCount = pendingCount.addAndGet(required);
 
     // 2. Check if reservation exceeds limit
-    if (newCount > properties.maxQueueSize()) {
+    if (newCount > properties.getMaxQueueSize()) {
       // Rollback: immediately release the reservation
       pendingCount.addAndGet(-required);
       meterRegistry.counter("expectation.buffer.rejected.backpressure").increment();
@@ -193,13 +195,13 @@ public class ExpectationWriteBackBuffer {
           "[ExpectationBuffer] Backpressure triggered: pending={}, required={}, max={}",
           newCount - required,
           required,
-          properties.maxQueueSize());
+          properties.getMaxQueueSize());
       return false;
     }
 
     // 3. Capacity reserved - enqueue items
     for (PresetExpectation preset : presets) {
-      queue.offer(ExpectationWriteTask.from(characterId, preset));
+      queue.offer(createTask(characterId, preset));
     }
     meterRegistry.counter("expectation.buffer.cas.success").increment();
     log.debug(
@@ -208,6 +210,19 @@ public class ExpectationWriteBackBuffer {
         characterId,
         newCount);
     return true;
+  }
+
+  /** PresetExpectation으로부터 ExpectationWriteTask 생성 */
+  private ExpectationWriteTask createTask(Long characterId, PresetExpectation preset) {
+    return new ExpectationWriteTask(
+        characterId,
+        preset.getPresetNo(),
+        preset.getTotalExpectedCost(),
+        preset.getCostBreakdown().getBlackCubeCost(),
+        preset.getCostBreakdown().getRedCubeCost(),
+        preset.getCostBreakdown().getAdditionalCubeCost(),
+        preset.getCostBreakdown().getStarforceCost(),
+        java.time.LocalDateTime.now());
   }
 
   /**
@@ -310,6 +325,6 @@ public class ExpectationWriteBackBuffer {
    * @return Shutdown 대기 타임아웃 Duration
    */
   public Duration getShutdownAwaitTimeout() {
-    return Duration.ofSeconds(properties.shutdownAwaitTimeoutSeconds());
+    return Duration.ofSeconds(properties.getShutdownAwaitTimeoutSeconds());
   }
 }

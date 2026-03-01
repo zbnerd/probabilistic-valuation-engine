@@ -218,7 +218,7 @@ public abstract class AbstractTieredCacheService<T> {
    * @param nullMarker null 대신 사용할 마커 객체
    */
   protected void saveToTieredCache(String key, T value, T nullMarker) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           T valueToStore = (value == null) ? nullMarker : value;
           tieredCache.put(key, valueToStore);
@@ -235,7 +235,7 @@ public abstract class AbstractTieredCacheService<T> {
    * @param nullMarker null 대신 사용할 마커 객체
    */
   protected void saveToL1Only(String key, T value, T nullMarker) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           T valueToStore = (value == null) ? nullMarker : value;
           l1OnlyCache.put(key, valueToStore);
@@ -295,7 +295,7 @@ public abstract class AbstractTieredCacheService<T> {
    * @param key 캐시 키
    */
   public void evictFromTieredCache(String key) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           tieredCache.evict(key);
           logCacheEvict(key);
@@ -309,7 +309,7 @@ public abstract class AbstractTieredCacheService<T> {
    * @param key 캐시 키
    */
   public void evictFromL1OnlyCache(String key) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           l1OnlyCache.evict(key);
           logCacheEvict(key);
@@ -319,7 +319,7 @@ public abstract class AbstractTieredCacheService<T> {
 
   /** Tiered 캐시 전체 무효화 */
   public void clearTieredCache() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           tieredCache.clear();
           log.info("[Cache] CLEAR | cache={} | layer=Tiered", cacheName);
@@ -329,7 +329,7 @@ public abstract class AbstractTieredCacheService<T> {
 
   /** L1-only 캐시 전체 무효화 */
   public void clearL1OnlyCache() {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           l1OnlyCache.clear();
           log.info("[Cache] CLEAR | cache={} | layer=L1-Only", cacheName);

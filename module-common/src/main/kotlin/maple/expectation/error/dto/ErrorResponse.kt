@@ -1,8 +1,8 @@
 package maple.expectation.error.dto
 
-import java.time.LocalDateTime
 import maple.expectation.error.ErrorCode
 import maple.expectation.error.exception.base.BaseException
+import java.time.LocalDateTime
 
 /**
  * Standardized error response format for all API errors.
@@ -24,7 +24,7 @@ data class ErrorResponse(
     val status: Int,
     val code: String,
     val message: String,
-    val timestamp: LocalDateTime = LocalDateTime.now()
+    val timestamp: LocalDateTime = LocalDateTime.now(),
 ) {
 
     companion object {
@@ -39,14 +39,12 @@ data class ErrorResponse(
          * @return ErrorResponse with exception details
          */
         @JvmStatic
-        fun from(e: BaseException): ErrorResponse {
-            return ErrorResponse(
-                status = e.errorCode.statusCode,
-                code = e.errorCode.code,
-                message = e.message ?: "Unknown error",
-                timestamp = LocalDateTime.now()
-            )
-        }
+        fun from(e: BaseException): ErrorResponse = ErrorResponse(
+            status = e.errorCode.statusCode,
+            code = e.errorCode.code,
+            message = e.message ?: "Unknown error",
+            timestamp = LocalDateTime.now(),
+        )
 
         /**
          * Create ErrorResponse from ErrorCode (system exception with static message).
@@ -57,14 +55,12 @@ data class ErrorResponse(
          * @return ErrorResponse with error code details
          */
         @JvmStatic
-        fun from(errorCode: ErrorCode): ErrorResponse {
-            return ErrorResponse(
-                status = errorCode.statusCode,
-                code = errorCode.code,
-                message = errorCode.message,
-                timestamp = LocalDateTime.now()
-            )
-        }
+        fun from(errorCode: ErrorCode): ErrorResponse = ErrorResponse(
+            status = errorCode.statusCode,
+            code = errorCode.code,
+            message = errorCode.message,
+            timestamp = LocalDateTime.now(),
+        )
 
         /**
          * Create ErrorResponse with custom values.
@@ -75,14 +71,12 @@ data class ErrorResponse(
          * @return ErrorResponse with custom values
          */
         @JvmStatic
-        fun from(status: Int, code: String, message: String): ErrorResponse {
-            return ErrorResponse(
-                status = status,
-                code = code,
-                message = message,
-                timestamp = LocalDateTime.now()
-            )
-        }
+        fun from(status: Int, code: String, message: String): ErrorResponse = ErrorResponse(
+            status = status,
+            code = code,
+            message = message,
+            timestamp = LocalDateTime.now(),
+        )
 
         /**
          * Builder pattern for Java compatibility.
@@ -109,7 +103,7 @@ data class ErrorResponse(
             status = status,
             code = code,
             message = message,
-            timestamp = timestamp
+            timestamp = timestamp,
         )
     }
 }

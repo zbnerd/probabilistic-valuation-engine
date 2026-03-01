@@ -27,8 +27,12 @@ package maple.expectation.infrastructure.executor
 data class TaskContext(
     val component: String,
     val operation: String,
-    val dynamicValue: String = ""
+    val dynamicValue: String? = null
+    // ADR-085: Nullable for Java interop
 ) {
+    // ADR-085: Normalize null to empty string for internal use
+    private val normalizedDynamicValue: String = dynamicValue ?: ""
+
     init {
         require(component.isNotBlank()) { "component must not be blank" }
         require(operation.isNotBlank()) { "operation must not be blank" }
@@ -37,7 +41,7 @@ data class TaskContext(
     // Explicit methods for tests that call component(), operation(), dynamicValue()
     fun component(): String = component
     fun operation(): String = operation
-    fun dynamicValue(): String = dynamicValue
+    fun dynamicValue(): String = normalizedDynamicValue
 
     /**
      * TaskName 문자열로 변환
@@ -46,10 +50,10 @@ data class TaskContext(
      *
      * @return "component:operation:dynamicValue" 형식의 문자열
      */
-    fun toTaskName(): String = if (dynamicValue.isEmpty()) {
+    fun toTaskName(): String = if (normalizedDynamicValue.isEmpty()) {
         "$component:$operation"
     } else {
-        "$component:$operation:$dynamicValue"
+        "$component:$operation:$normalizedDynamicValue"
     }
 
     companion object {
@@ -58,13 +62,16 @@ data class TaskContext(
          */
         @JvmStatic
         fun of(component: String, operation: String): TaskContext =
-            TaskContext(component, operation, "")
+            TaskContext(component, operation, null)
 
         /**
          * TaskContext 생성 (동적 값 포함)
+         *
+         * ADR-085: Accepts nullable dynamicValue for Java interop.
+         * Null values are normalized to empty string internally.
          */
         @JvmStatic
-        fun of(component: String, operation: String, dynamicValue: String): TaskContext =
+        fun of(component: String, operation: String, dynamicValue: String?): TaskContext =
             TaskContext(component, operation, dynamicValue)
     }
 }

@@ -1,16 +1,17 @@
 package maple.expectation.service.v2;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.external.NexonApiClient;
 import maple.expectation.infrastructure.external.dto.v2.CharacterBasicResponse;
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
@@ -74,7 +75,7 @@ public class GameCharacterService {
   public Optional<GameCharacter> getCharacterIfExist(String userIgn) {
     String cleanIgn = userIgn.trim();
     return executor.execute(
-        () -> gameCharacterRepository.findByUserIgnWithEquipment(cleanIgn),
+        () -> Optional.ofNullable(gameCharacterRepository.findByUserIgn(cleanIgn)),
         TaskContext.of("DB", "FindWithEquipment", cleanIgn));
   }
 
@@ -96,16 +97,22 @@ public class GameCharacterService {
   @Transactional
   public String saveCharacter(GameCharacter character) {
     return executor.execute(
-        () -> gameCharacterRepository.save(character).getUserIgn(),
-        TaskContext.of("DB", "SaveCharacter", character.getUserIgn()));
+        () -> {
+          GameCharacter saved = gameCharacterRepository.save(character);
+          return saved.getUserIgn().value();
+        },
+        TaskContext.of("DB", "SaveCharacter", character.getUserIgn().value()));
   }
 
   public GameCharacter getCharacterOrThrow(String userIgn) {
     return executor.execute(
-        () ->
-            gameCharacterRepository
-                .findByUserIgnWithEquipment(userIgn)
-                .orElseThrow(() -> new CharacterNotFoundException(userIgn)),
+        () -> {
+          GameCharacter found = gameCharacterRepository.findByUserIgn(userIgn);
+          if (found == null) {
+            throw new CharacterNotFoundException(userIgn);
+          }
+          return found;
+        },
         TaskContext.of("DB", "GetOrThrow", userIgn));
   }
 
@@ -127,11 +134,12 @@ public class GameCharacterService {
    */
   public GameCharacter enrichCharacterBasicInfo(GameCharacter character) {
     // DB에 이미 있고 15분 미경과 시 그대로 반환 (DB 우선)
-    if (!character.needsBasicInfoRefresh()) {
+    if (!needsBasicInfoRefresh(character)) {
       return character;
     }
 
-    TaskContext context = TaskContext.of("Character", "EnrichBasicInfo", character.getUserIgn());
+    TaskContext context =
+        TaskContext.of("Character", "EnrichBasicInfo", character.getUserIgn().value());
 
     return executor.executeOrDefault(
         () -> fetchAndUpdateBasicInfo(character),
@@ -156,7 +164,8 @@ public class GameCharacterService {
                 executor.execute(
                     () -> {
                       log.info(
-                          "🔄 [Enrich] 캐릭터 기본 정보 API 호출: {} (캐시 MISS)", character.getUserIgn());
+                          "🔄 [Enrich] 캐릭터 기본 정보 API 호출: {} (캐시 MISS)",
+                          character.getUserIgn().value());
                       return nexonApiClient
                           .getCharacterBasic(ocid)
                           .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -165,32 +174,54 @@ public class GameCharacterService {
                     TaskContext.of("Cache", "LoadCharacterBasic", ocid)));
 
     // 엔티티 업데이트 (메모리)
-    updateCharacterWithBasicInfo(character, basicInfo);
+    GameCharacter updated = updateCharacterWithBasicInfo(character, basicInfo);
 
     // 비동기 DB 저장 (Background) — 별도 빈(CharacterAsyncService)으로 @Async 활성화
-    characterAsyncService.saveCharacterBasicInfoAsync(character);
+    characterAsyncService.saveCharacterBasicInfoAsync(updated);
 
-    return character;
+    return updated;
   }
 
-  /** 엔티티에 기본 정보 설정 */
-  private void updateCharacterWithBasicInfo(
+  /** 엔티티에 기본 정보 설정 - Kotlin immutable data class용 with* 메서드 사용 */
+  private GameCharacter updateCharacterWithBasicInfo(
       GameCharacter character, CharacterBasicResponse basicInfo) {
-    character.setWorldName(basicInfo.getWorldName());
-    character.setCharacterClass(basicInfo.getCharacterClass());
-    character.setCharacterImage(basicInfo.getCharacterImage());
-    character.setBasicInfoUpdatedAt(java.time.LocalDateTime.now());
+    String worldName = basicInfo.getWorldName();
+    String characterClass = basicInfo.getCharacterClass();
+    String characterImage = basicInfo.getCharacterImage();
+
+    // Kotlin data class의 withBasicInfo 메서드 사용 (불변 패턴)
+    return character.withBasicInfo(worldName, characterClass, characterImage);
   }
 
-  /** 좋아요 버퍼 동기화용 Pessimistic Lock 조회 LikeSyncExecutor에서 호출하여 likeCount 업데이트에 사용 */
+  /** 캐릭터 기본 정보 갱신 필요 여부 확인 (15분 경과 체크) */
+  private boolean needsBasicInfoRefresh(GameCharacter character) {
+    // worldName이 없으면 갱신 필요
+    if (character.getWorldName() == null) {
+      return true;
+    }
+    // 마지막 업데이트 시각이 없거나 15분 이상 경과했으면 갱신 필요
+    LocalDateTime basicInfoUpdatedAt = character.getBasicInfoUpdatedAt();
+    return basicInfoUpdatedAt == null
+        || basicInfoUpdatedAt.isBefore(LocalDateTime.now().minusMinutes(15));
+  }
+
+  /**
+   * 좋아요 버퍼 동기화용 Pessimistic Lock 조회
+   *
+   * <p>Note: 새 레포지토리 인터페이스에는 findByUserIgnWithPessimisticLock이 없으므로 findByUserIgn로 대체하고 트랜잭션에서 낙관적
+   * 락(version) 사용
+   */
   @Transactional
   @ObservedTransaction("service.v2.GameCharacterService.getCharacterForUpdate")
   public GameCharacter getCharacterForUpdate(String userIgn) {
     return executor.execute(
-        () ->
-            gameCharacterRepository
-                .findByUserIgnWithPessimisticLock(userIgn)
-                .orElseThrow(() -> new CharacterNotFoundException(userIgn)),
+        () -> {
+          GameCharacter found = gameCharacterRepository.findByUserIgn(userIgn);
+          if (found == null) {
+            throw new CharacterNotFoundException(userIgn);
+          }
+          return found;
+        },
         TaskContext.of("DB", "GetForUpdate", userIgn));
   }
 }

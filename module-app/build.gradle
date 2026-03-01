@@ -4,6 +4,9 @@
 // ========================================
 
 plugins {
+	id 'org.jetbrains.kotlin.jvm'
+	id 'org.jetbrains.kotlin.plugin.spring'
+	id 'org.jetbrains.kotlin.plugin.jpa'
 	id 'org.springframework.boot' version '3.5.4'
 }
 
@@ -32,6 +35,9 @@ idea {
 }
 
 dependencies {
+	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
+	implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
+
 	// Lombok for integration tests
 	integrationTestCompileOnly 'org.projectlombok:lombok:1.18.30'
 	integrationTestAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
@@ -39,6 +45,7 @@ dependencies {
 	implementation project(':module-core')
 	implementation project(':module-infra')
 	implementation project(':module-common')
+	implementation project(':module-web')
 
 	// Spring Web
 	implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -108,6 +115,9 @@ dependencies {
 	testImplementation 'org.testcontainers:toxiproxy'
 	testImplementation 'org.mockito:mockito-core:5.14.0'
 	testImplementation 'org.mockito:mockito-junit-jupiter:5.14.0'
+
+	// Jackson Kotlin module for testing Kotlin data classes deserialization
+	testImplementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
 }
 
 // Enable plain jar for inter-module dependencies (chaos-test module needs it)
@@ -128,6 +138,10 @@ bootRun {
 // test-legacy는 빌드에서 제외
 tasks.named('test') {
 	exclude '**/test-legacy/**'
+	// Integration tests run separately via 'integrationTest' task
+	useJUnitPlatform {
+		excludeTags 'integration'
+	}
 }
 
 // Integration Test Task
@@ -181,6 +195,11 @@ tasks.register('integrationTest', Test) {
 // Fix duplicate resources issue
 tasks.withType(ProcessResources).configureEach {
 	duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+// Ensure Java compilation depends on Kotlin compilation (Kotlin-Java interop)
+tasks.named('compileJava') {
+	dependsOn tasks.named('compileKotlin')
 }
 
 // Lombok annotation processor for integration tests

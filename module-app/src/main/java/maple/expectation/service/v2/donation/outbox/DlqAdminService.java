@@ -155,7 +155,7 @@ public class DlqAdminService {
   public void discard(Long id) {
     TaskContext context = TaskContext.of("DlqAdmin", "Discard", String.valueOf(id));
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           DonationDlq dlq =
               dlqRepository.findById(id).orElseThrow(() -> new DlqNotFoundException(id));

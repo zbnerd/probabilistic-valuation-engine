@@ -23,18 +23,17 @@ object ThrowingSupplierUtils {
      * @throws RuntimeException Error, RuntimeException, 또는 정책 위반 시 IllegalStateException
      */
     @JvmStatic
-    fun <T> getUnchecked(supplier: ThrowingSupplier<T>): T {
-        return try {
-            supplier.get()
-        } catch (e: Error) {
-            throw e
-        } catch (e: RuntimeException) {
-            throw e
-        } catch (t: Throwable) {
-            // Biz 경계에서 checked Throwable이 올라오는 것은 설계 위반
-            throw IllegalStateException(
-                "Unexpected checked Throwable (policy violation): " + t.javaClass.name, t
-            )
-        }
+    fun <T> getUnchecked(supplier: ThrowingSupplier<T>): T = try {
+        supplier.get()
+    } catch (e: Error) {
+        throw e
+    } catch (e: RuntimeException) {
+        throw e
+    } catch (t: Throwable) {
+        // Biz 경계에서 checked Throwable이 올라오는 것은 설계 위반
+        throw IllegalStateException(
+            "Unexpected checked Throwable (policy violation): " + t.javaClass.name,
+            t,
+        )
     }
 }

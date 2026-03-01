@@ -60,7 +60,7 @@ public class RedisLikeEventSubscriber implements LikeEventSubscriber {
   public void subscribe() {
     TaskContext context = TaskContext.of("LikePubSub", "Subscribe", instanceId);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           topic = redissonClient.getTopic(RedisKey.LIKE_EVENTS_TOPIC.getKey());
 
@@ -95,7 +95,7 @@ public class RedisLikeEventSubscriber implements LikeEventSubscriber {
 
     TaskContext context = TaskContext.of("LikePubSub", "OnEvent", event.userIgn());
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           evictL1Cache(event.userIgn());
           recordEventReceived();
@@ -135,7 +135,7 @@ public class RedisLikeEventSubscriber implements LikeEventSubscriber {
   public void unsubscribe() {
     TaskContext context = TaskContext.of("LikePubSub", "Unsubscribe", instanceId);
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           if (topic != null && listenerId != null) {
             topic.removeListener(listenerId);

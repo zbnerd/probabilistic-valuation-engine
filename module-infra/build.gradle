@@ -3,6 +3,12 @@
 // ADR-017: Infrastructure Layer
 // ========================================
 
+plugins {
+	id 'org.jetbrains.kotlin.jvm'
+	id 'org.jetbrains.kotlin.plugin.spring'
+	id 'org.jetbrains.kotlin.plugin.jpa'
+}
+
 // Integration Test Source Set Configuration
 sourceSets {
 	integrationTest {
@@ -30,6 +36,9 @@ idea {
 dependencies {
 	implementation project(':module-core')
 	implementation project(':module-common')
+
+	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
+	implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
 
 	// Lombok
 	compileOnly 'org.projectlombok:lombok:1.18.30'
@@ -66,6 +75,11 @@ dependencies {
 	// Resilience4j
 	implementation 'io.github.resilience4j:resilience4j-spring-boot3'
 
+	// OpenTelemetry (migrated from module-app for OpenTelemetryConfig)
+	implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+	implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+	implementation 'io.opentelemetry.contrib:opentelemetry-samplers:1.33.0-alpha'
+
 	// Bucket4j
 	implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
 	implementation 'com.bucket4j:bucket4j_jdk17-redisson:8.14.0'
@@ -76,6 +90,13 @@ dependencies {
 
 	// Guava
 	implementation 'com.google.guava:guava:33.5.0-jre'
+
+	// LangChain4j (for AI monitoring)
+	implementation 'dev.langchain4j:langchain4j-spring-boot-starter:0.29.0'
+	implementation 'dev.langchain4j:langchain4j-open-ai-spring-boot-starter:0.29.0'
+
+	// Spring Batch (for equipment refresh job)
+	implementation 'org.springframework.boot:spring-boot-starter-batch'
 
 	// JWT
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
@@ -148,7 +169,26 @@ tasks.withType(ProcessResources).configureEach {
 	duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
+// Kotlin compilation must run before Java compilation (for mixed Kotlin-Java modules)
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+	kotlinOptions {
+		jvmTarget = "21"
+		freeCompilerArgs += ["-Xjsr305=strict"]
+	}
+}
+
+// Ensure Java compilation depends on Kotlin compilation
+tasks.named('compileJava').configure {
+	dependsOn(tasks.named('compileKotlin'))
+}
+
 // Lombok annotation processor for integration tests
 tasks.named('compileIntegrationTestJava') {
 	options.annotationProcessorPath = configurations.integrationTestAnnotationProcessor
+}
+
+// Enable plain jar for inter-module dependencies
+tasks.named("jar") {
+	enabled = true
+	archiveClassifier = "plain"
 }

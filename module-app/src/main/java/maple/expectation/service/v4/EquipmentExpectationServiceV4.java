@@ -9,8 +9,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.CacheWarmupPort;
 import maple.expectation.domain.cost.CostFormatter;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.GameCharacter;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
@@ -50,7 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Slf4j
 @Service
-public class EquipmentExpectationServiceV4 {
+public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private static final long ASYNC_TIMEOUT_SECONDS = 30L;
   private static final long DATA_LOAD_TIMEOUT_SECONDS = 10L;
@@ -126,6 +127,12 @@ public class EquipmentExpectationServiceV4 {
   public EquipmentExpectationResponseV4 calculateExpectation(String userIgn, boolean force) {
     validateInitialized();
     return cacheCoordinator.getOrCalculate(userIgn, force, () -> doCalculateExpectation(userIgn));
+  }
+
+  /** 캐시 웜업 (CacheWarmupPort 구현) */
+  @Override
+  public void warmup(String userIgn, boolean force) {
+    calculateExpectation(userIgn, force);
   }
 
   /** GZIP 압축된 기대값 응답 반환 (동기) */
@@ -234,12 +241,11 @@ public class EquipmentExpectationServiceV4 {
    * <p>DB에 캐시된 데이터가 있으면 즉시 반환, 없으면 API 비동기 호출
    */
   private CompletableFuture<byte[]> loadEquipmentDataAsync(GameCharacter character) {
-    if (character.getEquipment() != null && character.getEquipment().getJsonContent() != null) {
-      return CompletableFuture.completedFuture(
-          character.getEquipment().getJsonContent().getBytes());
+    if (character.getEquipment() != null && character.getEquipment().jsonContent() != null) {
+      return CompletableFuture.completedFuture(character.getEquipment().jsonContent().getBytes());
     }
     return equipmentProvider
-        .getRawEquipmentData(character.getOcid())
+        .getRawEquipmentData(character.getCharacterId().value())
         .orTimeout(DATA_LOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
   }
 

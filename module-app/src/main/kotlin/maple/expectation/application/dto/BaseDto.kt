@@ -40,7 +40,7 @@ import java.time.LocalDateTime
  *
  * @see LocalDateTime
  */
-abstract open class BaseDto {
+abstract class BaseDto {
     /** Timestamp when the record was created (immutable) */
     @JvmField
     var createdAt: LocalDateTime? = null
@@ -68,8 +68,7 @@ abstract open class BaseDto {
      * <p>This sets the {@code updatedAt} field to the current time.
      */
     open fun markAsUpdated() {
-        // This would be implemented as a copy method in data classes
-        // For abstract class, this is just a documentation placeholder
+        updatedAt = LocalDateTime.now()
     }
 
     /**
@@ -78,7 +77,8 @@ abstract open class BaseDto {
      * <p>This sets both {@code createdAt} and {@code updatedAt} to the current time.
      */
     open fun initTimestamps() {
-        // This would be implemented as a copy method in data classes
-        // For abstract class, this is just a documentation placeholder
+        val now = LocalDateTime.now()
+        createdAt = now
+        updatedAt = now
     }
 }

@@ -10,22 +10,10 @@ import lombok.extern.jackson.Jacksonized;
 /**
  * V5 CQRS 장비 기대값 응답 DTO
  *
- * <h3>V4와의 차이</h3>
- *
- * <ul>
- *   <li><b>CQRS Query Side:</b> MongoDB CharacterValuationView에서 조회
- *   <li><b>Cache-First:</b> MongoDB 히트 시 1-10ms 응답
- *   <li><b>Eventual Consistency:</b> calculatedAt 기준 TTL 24시간
- *   <li><b>fromCache:</b> MongoDB 조회 여부 표시
- * </ul>
- *
- * <h3>응답 시나리오</h3>
- *
- * <ol>
- *   <li><b>MongoDB HIT:</b> 200 OK + JSON 응답 (1-10ms)
- *   <li><b>MongoDB MISS:</b> 202 Accepted + 계산 큐 등록
- * </ol>
+ * @deprecated Kotlin으로 마이그레이션되었습니다. {@code
+ *     maple.expectation.web.dto.v5.EquipmentExpectationResponseV5}를 사용하세요.
  */
+@Deprecated(since = "2026-02-28", forRemoval = true)
 @Getter
 @Builder
 @Jacksonized

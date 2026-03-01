@@ -1,4 +1,5 @@
 @file:JvmName("AdminNotFoundException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -8,10 +9,10 @@ open class AdminNotFoundException : ClientBaseException {
 
     constructor(adminId: String) : super(
         CommonErrorCode.ADMIN_NOT_FOUND,
-        adminId
+        adminId,
     )
 
     constructor() : super(
-        CommonErrorCode.ADMIN_NOT_FOUND
+        CommonErrorCode.ADMIN_NOT_FOUND,
     )
 }

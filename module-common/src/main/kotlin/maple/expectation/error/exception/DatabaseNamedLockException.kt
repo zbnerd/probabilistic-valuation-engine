@@ -1,4 +1,5 @@
 @file:JvmName("DatabaseNamedLockException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -18,12 +19,12 @@ open class DatabaseNamedLockException : ServerBaseException {
     constructor(
         operation: String,
         lockKey: String,
-        waitTime: Long?
+        waitTime: Long?,
     ) : super(
         CommonErrorCode.DATABASE_NAMED_LOCK_FAILED,
         operation,
         lockKey,
-        waitTime ?: "N/A"
+        waitTime ?: "N/A",
     )
 
     /**
@@ -35,6 +36,6 @@ open class DatabaseNamedLockException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.DATABASE_NAMED_LOCK_FAILED,
         cause,
-        message
+        message,
     )
 }

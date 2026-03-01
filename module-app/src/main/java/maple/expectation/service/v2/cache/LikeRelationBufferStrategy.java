@@ -35,4 +35,9 @@ package maple.expectation.service.v2.cache;
 public interface LikeRelationBufferStrategy
     extends maple.expectation.core.port.out.LikeRelationBufferStrategy {
   // All methods inherited from CoreLikeRelationBufferStrategy
+  // Java cannot use Kotlin interface default implementations, so we override
+  @Override
+  default Boolean existsInUnliked(String accountId, String targetOcid) {
+    return null;
+  }
 }

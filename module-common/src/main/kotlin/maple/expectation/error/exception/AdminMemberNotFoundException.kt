@@ -1,4 +1,5 @@
 @file:JvmName("AdminMemberNotFoundException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -16,7 +17,7 @@ class AdminMemberNotFoundException : ClientBaseException {
      */
     constructor(adminFingerprint: String) : super(
         CommonErrorCode.ADMIN_MEMBER_NOT_FOUND,
-        adminFingerprint
+        adminFingerprint,
     )
 
     /**
@@ -28,6 +29,6 @@ class AdminMemberNotFoundException : ClientBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.ADMIN_MEMBER_NOT_FOUND,
         cause,
-        message
+        message,
     )
 }

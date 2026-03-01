@@ -1,4 +1,5 @@
 @file:JvmName("MySQLFallbackException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -17,7 +18,7 @@ class MySQLFallbackException : ServerBaseException {
     constructor(ocid: String, cause: Exception) : super(
         CommonErrorCode.MYSQL_FALLBACK_FAILED,
         cause,
-        "MySQL fallback failed for OCID: $ocid"
+        "MySQL fallback failed for OCID: $ocid",
     )
 
     /**
@@ -29,6 +30,6 @@ class MySQLFallbackException : ServerBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.MYSQL_FALLBACK_FAILED,
         cause,
-        message
+        message,
     )
 }

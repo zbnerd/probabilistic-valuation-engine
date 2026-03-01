@@ -1,4 +1,5 @@
 @file:JvmName("InvalidRefreshTokenException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -16,7 +17,7 @@ class InvalidRefreshTokenException : ClientBaseException {
      */
     constructor(token: String) : super(
         CommonErrorCode.INVALID_REFRESH_TOKEN,
-        token
+        token,
     )
 
     /**
@@ -28,6 +29,6 @@ class InvalidRefreshTokenException : ClientBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.INVALID_REFRESH_TOKEN,
         cause,
-        message
+        message,
     )
 }

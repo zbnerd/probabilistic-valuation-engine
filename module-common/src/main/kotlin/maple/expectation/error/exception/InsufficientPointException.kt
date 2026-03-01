@@ -1,4 +1,5 @@
 @file:JvmName("InsufficientPointException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -16,11 +17,11 @@ open class InsufficientPointException : ClientBaseException {
 
     constructor(
         currentPoint: Long,
-        requiredPoint: Long
+        requiredPoint: Long,
     ) : super(
         CommonErrorCode.INSUFFICIENT_POINTS,
         currentPoint,
-        requiredPoint
+        requiredPoint,
     )
 
     /**
@@ -32,6 +33,6 @@ open class InsufficientPointException : ClientBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.INSUFFICIENT_POINTS,
         cause,
-        message
+        message,
     )
 }

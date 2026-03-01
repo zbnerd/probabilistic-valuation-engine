@@ -16,9 +16,15 @@ interface BasicExecutor {
     fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T
 
     /**
-     * Execute void task with exception propagation.
+     * Execute void task with exception propagation (Kotlin).
      */
     fun executeVoid(task: ThrowingRunnable, context: TaskContext)
+
+    /**
+     * Java-friendly overload for void tasks using standard Java Runnable.
+     * Allows Java lambdas to be used directly: executor.executeVoidJava(() -> doWork(), context)
+     */
+    fun executeVoidJava(task: Runnable, context: TaskContext)
 
     /**
      * Execute task with explicit finally block.

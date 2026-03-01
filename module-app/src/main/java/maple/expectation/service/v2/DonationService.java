@@ -108,15 +108,10 @@ public class DonationService {
   }
 
   private void saveHistory(String sender, String receiverFingerprint, Long amount, String reqId) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () ->
             donationHistoryRepository.save(
-                DonationHistory.builder()
-                    .senderUuid(sender)
-                    .receiverFingerprint(receiverFingerprint)
-                    .amount(amount)
-                    .requestId(reqId)
-                    .build()),
+                DonationHistory.create(sender, receiverFingerprint, amount, reqId)),
         TaskContext.of("Donation", "SaveHistory", reqId));
   }
 
@@ -126,7 +121,7 @@ public class DonationService {
    * <p>Issue #80: Transactional Outbox Pattern
    */
   private void saveOutbox(String sender, String receiverFingerprint, Long amount, String reqId) {
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           String payload = createPayload(sender, receiverFingerprint, amount);
           DonationOutbox outbox = DonationOutbox.create(reqId, "DONATION_COMPLETED", payload);

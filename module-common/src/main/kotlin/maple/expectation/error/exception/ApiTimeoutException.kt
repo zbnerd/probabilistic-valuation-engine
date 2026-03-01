@@ -1,4 +1,5 @@
 @file:JvmName("ApiTimeoutException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -12,13 +13,11 @@ import maple.expectation.error.exception.base.ServerBaseException
  * @property url API URL 또는 식별자
  * @property cause 원인 예외 (optional)
  */
-class ApiTimeoutException @JvmOverloads constructor(
-    url: String,
-    cause: Throwable? = null
-) : ServerBaseException(
-    CommonErrorCode.API_TIMEOUT,
-    url
-) {
+class ApiTimeoutException @JvmOverloads constructor(url: String, cause: Throwable? = null) :
+    ServerBaseException(
+        CommonErrorCode.API_TIMEOUT,
+        url,
+    ) {
 
     init {
         if (cause != null) {

@@ -7,7 +7,6 @@ import static org.mockito.Mockito.*;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import java.util.Optional;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -71,16 +70,28 @@ class CharacterViewQueryServiceIdempotencyTest {
             mockRepository, mockMongoTemplate, mockExecutor, mockMeterRegistry);
   }
 
+  private CharacterValuationView createView(
+      String id, String messageId, String userIgn, Long totalExpectedCost) {
+    return new CharacterValuationView(
+        id,
+        userIgn,
+        messageId,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        totalExpectedCost,
+        null,
+        null,
+        null);
+  }
+
   @Test
   @DisplayName("Idempotent upsert: Same document ID updates existing record (no duplicate)")
   void testIdempotentUpsert_SameDocumentId_UpdatesExisting() {
-    CharacterValuationView view =
-        CharacterValuationView.builder()
-            .id(DETERMINISTIC_ID)
-            .messageId("msg-123")
-            .userIgn(TEST_IGN)
-            .totalExpectedCost(100000)
-            .build();
+    CharacterValuationView view = createView(DETERMINISTIC_ID, "msg-123", TEST_IGN, 100000L);
 
     doAnswer(
             inv -> {
@@ -99,13 +110,7 @@ class CharacterViewQueryServiceIdempotencyTest {
   @Test
   @DisplayName("Idempotent upsert: Multiple calls with same ID result in single document")
   void testIdempotentUpsert_MultipleCalls_SingleDocument() {
-    CharacterValuationView view =
-        CharacterValuationView.builder()
-            .id(DETERMINISTIC_ID)
-            .messageId("msg-123")
-            .userIgn(TEST_IGN)
-            .totalExpectedCost(100000)
-            .build();
+    CharacterValuationView view = createView(DETERMINISTIC_ID, "msg-123", TEST_IGN, 100000L);
 
     doAnswer(
             inv -> {
@@ -128,20 +133,8 @@ class CharacterViewQueryServiceIdempotencyTest {
   void testIdempotentUpsert_DifferentTaskIds_DifferentDocuments() {
     String taskId1 = "task-1";
     String taskId2 = "task-2";
-    CharacterValuationView view1 =
-        CharacterValuationView.builder()
-            .id(TEST_IGN + ":" + taskId1)
-            .messageId("msg-1")
-            .userIgn(TEST_IGN)
-            .totalExpectedCost(100000)
-            .build();
-    CharacterValuationView view2 =
-        CharacterValuationView.builder()
-            .id(TEST_IGN + ":" + taskId2)
-            .messageId("msg-2")
-            .userIgn(TEST_IGN)
-            .totalExpectedCost(200000)
-            .build();
+    CharacterValuationView view1 = createView(TEST_IGN + ":" + taskId1, "msg-1", TEST_IGN, 100000L);
+    CharacterValuationView view2 = createView(TEST_IGN + ":" + taskId2, "msg-2", TEST_IGN, 200000L);
 
     doAnswer(
             inv -> {
@@ -161,14 +154,8 @@ class CharacterViewQueryServiceIdempotencyTest {
   @Test
   @DisplayName("Idempotent upsert: Korean IGN (아델) handled correctly")
   void testIdempotentUpsert_KoreanIGN_HandledCorrectly() {
-    CharacterValuationView view =
-        CharacterValuationView.builder()
-            .id(DETERMINISTIC_ID)
-            .messageId("msg-123")
-            .userIgn(TEST_IGN)
-            .characterOcid("ocid-123")
-            .totalExpectedCost(100000)
-            .build();
+    CharacterValuationView view = createView(DETERMINISTIC_ID, "msg-123", TEST_IGN, 100000L);
+    view.setCharacterOcid("ocid-123");
 
     doAnswer(
             inv -> {
@@ -186,32 +173,31 @@ class CharacterViewQueryServiceIdempotencyTest {
   }
 
   @Test
-  @DisplayName("Graceful degradation: MongoDB failure returns empty on findByUserIgn")
-  void testGracefulDegradation_MongoDBFailure_ReturnsEmpty() throws Exception {
+  @DisplayName("Graceful degradation: MongoDB failure returns null on findByUserIgn")
+  void testGracefulDegradation_MongoDBFailure_ReturnsNull() throws Exception {
     when(mockExecutor.executeOrDefault(any(), any(), any()))
         .thenAnswer(
             inv -> {
               return inv.getArgument(1);
             });
 
-    Optional<CharacterValuationView> result = queryService.findByUserIgn(TEST_IGN);
+    CharacterValuationView result = queryService.findByUserIgn(TEST_IGN);
 
-    assertThat(result).isEmpty();
+    assertThat(result).isNull();
     verify(mockRepository, never()).findByUserIgn(any());
   }
 
   @Test
   @DisplayName("Metrics: Cache hit records latency timer")
   void testMetrics_CacheHit_RecordsLatency() throws Exception {
-    CharacterValuationView view =
-        CharacterValuationView.builder().id(DETERMINISTIC_ID).userIgn(TEST_IGN).build();
+    CharacterValuationView view = createView(DETERMINISTIC_ID, null, TEST_IGN, null);
 
-    when(mockRepository.findByUserIgn(TEST_IGN)).thenReturn(Optional.of(view));
+    when(mockRepository.findByUserIgn(TEST_IGN)).thenReturn(view);
     when(mockMeterRegistry.timer(any(String.class), any(String[].class))).thenReturn(mockTimer);
     when(mockExecutor.executeOrDefault(any(), any(), any()))
         .thenAnswer(
             inv -> {
-              ThrowingSupplier<Optional<CharacterValuationView>> supplier = inv.getArgument(0);
+              ThrowingSupplier<CharacterValuationView> supplier = inv.getArgument(0);
               return supplier.get();
             });
 
@@ -224,12 +210,12 @@ class CharacterViewQueryServiceIdempotencyTest {
   @Test
   @DisplayName("Metrics: Cache miss records latency timer")
   void testMetrics_CacheMiss_RecordsLatency() throws Exception {
-    when(mockRepository.findByUserIgn(TEST_IGN)).thenReturn(Optional.empty());
+    when(mockRepository.findByUserIgn(TEST_IGN)).thenReturn(null);
     when(mockMeterRegistry.timer(any(String.class), any(String[].class))).thenReturn(mockTimer);
     when(mockExecutor.executeOrDefault(any(), any(), any()))
         .thenAnswer(
             inv -> {
-              ThrowingSupplier<Optional<CharacterValuationView>> supplier = inv.getArgument(0);
+              ThrowingSupplier<CharacterValuationView> supplier = inv.getArgument(0);
               return supplier.get();
             });
 

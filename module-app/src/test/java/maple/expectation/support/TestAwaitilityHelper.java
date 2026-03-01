@@ -78,7 +78,7 @@ public final class TestAwaitilityHelper {
           () ->
               assertThat(repository.findById(tokenId))
                   .as("Redis key should be present: " + tokenId)
-                  .isPresent());
+                  .isNotNull());
     }
 
     /**
@@ -92,7 +92,7 @@ public final class TestAwaitilityHelper {
           () ->
               assertThat(repository.findById(tokenId))
                   .as("Redis key should be absent: " + tokenId)
-                  .isEmpty());
+                  .isNull());
     }
 
     /**

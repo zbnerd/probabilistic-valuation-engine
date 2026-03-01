@@ -13,3 +13,6 @@ include 'module-app'
 
 // ADR-025: Chaos test module (separate from PR pipeline)
 include 'module-chaos-test'
+
+// ADR-017: Web layer (GlobalExceptionHandler, Filter)
+include 'module-web'

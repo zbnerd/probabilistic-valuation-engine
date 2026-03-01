@@ -7,13 +7,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import maple.expectation.domain.repository.RedisBufferRepository;
+import maple.expectation.core.port.out.BufferStatusQuery;
 import maple.expectation.infrastructure.alert.StatelessAlertService;
 import maple.expectation.infrastructure.config.MonitoringThresholdProperties;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
 import maple.expectation.infrastructure.lock.LockStrategy;
+import maple.expectation.infrastructure.monitoring.MonitoringAlertService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -34,7 +35,7 @@ import org.mockito.quality.Strictness;
 @DisplayName("MonitoringAlertService 단위 테스트")
 class MonitoringAlertServiceUnitTest {
 
-  @Mock private RedisBufferRepository redisBufferRepository;
+  @Mock private BufferStatusQuery bufferStatus;
   @Mock private StatelessAlertService statelessAlertService;
   @Mock private LockStrategy lockStrategy;
   @Mock private MonitoringThresholdProperties thresholdProperties;
@@ -74,7 +75,17 @@ class MonitoringAlertServiceUnitTest {
               return task.get();
             });
 
-    // executor.executeVoid()가 실제로 람다를 실행하도록 설정 (void 메서드)
+    // executor.executeVoidJava()가 실제로 람다를 실행하도록 설정 (void 메서드)
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              Runnable task = invocation.getArgument(0);
+              task.run();
+              return null;
+            })
+        .when(logicExecutor)
+        .executeVoidJava(any(Runnable.class), any(TaskContext.class));
+
+    // executor.executeVoid()도 설정 (ThrowingRunnable 버전)
     org.mockito.Mockito.doAnswer(
             invocation -> {
               ThrowingRunnable task = invocation.getArgument(0);
@@ -82,15 +93,11 @@ class MonitoringAlertServiceUnitTest {
               return null;
             })
         .when(logicExecutor)
-        .executeVoid(any(), any(TaskContext.class));
+        .executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
 
     monitoringAlertService =
         new MonitoringAlertService(
-            redisBufferRepository,
-            statelessAlertService,
-            lockStrategy,
-            logicExecutor,
-            thresholdProperties);
+            bufferStatus, statelessAlertService, lockStrategy, logicExecutor, thresholdProperties);
   }
 
   @Test
@@ -98,8 +105,8 @@ class MonitoringAlertServiceUnitTest {
   void leaderSuccess_OverThreshold_SendAlert() {
     // given
     given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
-    given(redisBufferRepository.getTotalPendingCount()).willReturn(6000L);
-    given(thresholdProperties.bufferSaturationCount()).willReturn(5000L);
+    given(bufferStatus.getTotalPendingCount()).willReturn(6000L);
+    given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
     // when
     monitoringAlertService.checkBufferSaturation();
@@ -113,8 +120,8 @@ class MonitoringAlertServiceUnitTest {
   void leaderSuccess_UnderThreshold_NoAlert() {
     // given
     given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
-    given(redisBufferRepository.getTotalPendingCount()).willReturn(3000L);
-    given(thresholdProperties.bufferSaturationCount()).willReturn(5000L);
+    given(bufferStatus.getTotalPendingCount()).willReturn(3000L);
+    given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
     // when
     monitoringAlertService.checkBufferSaturation();
@@ -134,7 +141,7 @@ class MonitoringAlertServiceUnitTest {
 
     // then
     // Follower는 버퍼 조회 및 알림 발송을 하지 않아야 함
-    verify(redisBufferRepository, never()).getTotalPendingCount();
+    verify(bufferStatus, never()).getTotalPendingCount();
     verify(statelessAlertService, never()).sendCritical(any(), any(), any());
   }
 
@@ -143,8 +150,8 @@ class MonitoringAlertServiceUnitTest {
   void exactlyAtThreshold_SendAlert() {
     // given
     given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
-    given(redisBufferRepository.getTotalPendingCount()).willReturn(5001L);
-    given(thresholdProperties.bufferSaturationCount()).willReturn(5000L);
+    given(bufferStatus.getTotalPendingCount()).willReturn(5001L);
+    given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
     // when
     monitoringAlertService.checkBufferSaturation();
@@ -158,8 +165,8 @@ class MonitoringAlertServiceUnitTest {
   void bufferZero_NoAlert() {
     // given
     given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
-    given(redisBufferRepository.getTotalPendingCount()).willReturn(0L);
-    given(thresholdProperties.bufferSaturationCount()).willReturn(5000L);
+    given(bufferStatus.getTotalPendingCount()).willReturn(0L);
+    given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
     // when
     monitoringAlertService.checkBufferSaturation();
@@ -178,7 +185,7 @@ class MonitoringAlertServiceUnitTest {
     monitoringAlertService.checkBufferSaturation();
 
     // then
-    verify(redisBufferRepository, never()).getTotalPendingCount();
+    verify(bufferStatus, never()).getTotalPendingCount();
     verify(statelessAlertService, never()).sendCritical(any(), any(), any());
   }
 }

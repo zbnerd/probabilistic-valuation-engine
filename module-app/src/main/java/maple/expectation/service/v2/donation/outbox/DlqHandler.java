@@ -62,7 +62,7 @@ public class DlqHandler {
 
   /** 1차 안전망: DB DLQ INSERT (P1-6: 메서드 추출) */
   private Void saveToDbDlq(DonationOutbox entry, String reason) {
-    DonationDlq dlq = DonationDlq.from(entry, reason);
+    DonationDlq dlq = DonationDlq.Companion.from(entry, reason);
     dlqRepository.save(dlq);
     metrics.incrementDlq();
     log.warn("[DLQ] Entry moved to DLQ: {}", entry.getRequestId());

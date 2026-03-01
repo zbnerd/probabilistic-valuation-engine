@@ -5,7 +5,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.v2.GameCharacter;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.error.exception.ApiTimeoutException;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.exception.InternalSystemException;
@@ -13,7 +14,6 @@ import maple.expectation.error.exception.base.BaseException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.external.NexonApiClient;
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import maple.expectation.util.ExceptionUtils;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
@@ -94,7 +94,14 @@ public class CharacterCreationService {
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public GameCharacter saveCharacterWithCaching(String userIgn, String ocid) {
-    GameCharacter saved = gameCharacterRepository.saveAndFlush(new GameCharacter(userIgn, ocid));
+    // Value objects 생성
+    maple.expectation.domain.model.character.UserIgn userIgnVo =
+        maple.expectation.domain.model.character.UserIgn.of(userIgn);
+    maple.expectation.domain.model.character.CharacterId characterId =
+        maple.expectation.domain.model.character.CharacterId.of(ocid);
+
+    GameCharacter newCharacter = GameCharacter.create(userIgnVo, characterId);
+    GameCharacter saved = gameCharacterRepository.save(newCharacter);
 
     // Positive Cache: OCID 캐시
     Optional.ofNullable(cacheManager.getCache("ocidCache")).ifPresent(c -> c.put(userIgn, ocid));

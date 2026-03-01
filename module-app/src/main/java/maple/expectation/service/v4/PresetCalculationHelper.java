@@ -7,6 +7,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import maple.expectation.core.domain.flame.FlameEquipCategory;
 import maple.expectation.core.domain.flame.FlameType;
+import maple.expectation.core.flame.port.FlameTrialsPort;
 import maple.expectation.core.probability.FlameScoreCalculator;
 import maple.expectation.domain.cost.CostFormatter;
 import maple.expectation.domain.equipment.SecondaryWeaponCategory;
@@ -22,7 +23,6 @@ import maple.expectation.service.v2.calculator.v4.EquipmentExpectationCalculator
 import maple.expectation.service.v2.calculator.v4.EquipmentExpectationCalculatorFactory;
 import maple.expectation.service.v2.flame.FlameInputResolver;
 import maple.expectation.service.v2.flame.FlameInputResolver.FlameInput;
-import maple.expectation.service.v2.flame.FlameTrialsProvider;
 import maple.expectation.service.v2.starforce.StarforceLookupTable;
 import maple.expectation.service.v2.starforce.config.NoljangProbabilityTable;
 import org.springframework.stereotype.Component;
@@ -49,7 +49,7 @@ public class PresetCalculationHelper {
 
   private final EquipmentExpectationCalculatorFactory calculatorFactory;
   private final StarforceLookupTable starforceLookupTable;
-  private final FlameTrialsProvider flameTrialsProvider;
+  private final FlameTrialsPort flameTrialsProvider;
   private final FlameInputResolver flameInputResolver;
 
   /**

@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
+import maple.expectation.core.port.out.NexonApiOutboxMetricsPort;
 import maple.expectation.domain.v2.NexonApiOutbox.OutboxStatus;
 import maple.expectation.infrastructure.persistence.repository.NexonApiOutboxRepository;
 import org.springframework.stereotype.Component;
@@ -29,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 @RequiredArgsConstructor
-public class NexonApiOutboxMetrics {
+public class NexonApiOutboxMetrics implements NexonApiOutboxMetricsPort {
 
   private final MeterRegistry registry;
   private final NexonApiOutboxRepository repository;
@@ -128,6 +129,7 @@ public class NexonApiOutboxMetrics {
    * <p>스케줄러에서 주기적으로 호출
    */
   @Transactional(readOnly = true)
+  @Override
   public void updatePendingCount() {
     long count = repository.countByStatusIn(List.of(OutboxStatus.PENDING, OutboxStatus.FAILED));
     pendingCount.set(count);

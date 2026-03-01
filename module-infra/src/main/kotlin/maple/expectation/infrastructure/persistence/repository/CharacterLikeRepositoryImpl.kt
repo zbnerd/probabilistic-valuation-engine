@@ -1,0 +1,73 @@
+package maple.expectation.infrastructure.persistence.repository
+
+import maple.expectation.domain.model.like.CharacterLike
+import maple.expectation.domain.repository.CharacterLikeRepository as DomainCharacterLikeRepository
+import maple.expectation.infrastructure.persistence.entity.CharacterLikeJpaEntity
+import maple.expectation.infrastructure.persistence.jpa.CharacterLikeJpaRepository
+import org.springframework.lang.Nullable
+import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
+
+@Repository
+@Transactional
+open class CharacterLikeRepositoryImpl(
+    private val jpaRepo: CharacterLikeJpaRepository,
+) : DomainCharacterLikeRepository {
+
+    @Nullable
+    override fun findByTargetOcidAndLikerAccountId(
+        targetOcid: String,
+        likerAccountId: String,
+    ): CharacterLike? {
+        return jpaRepo.findByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
+            .map { it.toDomain() }
+            .orElse(null)
+    }
+
+    override fun findByLikerAccountId(likerAccountId: String): List<CharacterLike> {
+        return jpaRepo.findByLikerAccountIdOrderByCreatedAtDesc(likerAccountId).stream()
+            .map { it.toDomain() }
+            .toList()
+    }
+
+    override fun findByTargetOcid(targetOcid: String): List<CharacterLike> {
+        return jpaRepo.findByTargetOcidOrderByCreatedAtDesc(targetOcid).stream()
+            .map { it.toDomain() }
+            .toList()
+    }
+
+    override fun save(like: CharacterLike): CharacterLike {
+        requireNotNull(like) { "Like cannot be null" }
+        val jpaEntity = CharacterLikeJpaEntity.fromDomain(like)
+        val saved = jpaRepo.save(jpaEntity)
+        return saved.toDomain()
+    }
+
+    override fun delete(like: CharacterLike) {
+        requireNotNull(like) { "Like cannot be null" }
+        val jpaEntity = CharacterLikeJpaEntity.fromDomain(like)
+        jpaRepo.delete(jpaEntity)
+    }
+
+    override fun deleteByTargetOcidAndLikerAccountId(
+        targetOcid: String,
+        likerAccountId: String,
+    ) {
+        jpaRepo.deleteByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
+    }
+
+    override fun countByTargetOcid(targetOcid: String): Long {
+        return jpaRepo.countByTargetOcid(targetOcid)
+    }
+
+    override fun countByLikerAccountId(likerAccountId: String): Long {
+        return jpaRepo.countByLikerAccountId(likerAccountId)
+    }
+
+    override fun existsByTargetOcidAndLikerAccountId(
+        targetOcid: String,
+        likerAccountId: String,
+    ): Boolean {
+        return jpaRepo.existsByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
+    }
+}

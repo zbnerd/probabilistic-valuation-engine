@@ -37,7 +37,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class EquipmentApplicationService {
 
   private final CharacterEquipmentRepository equipmentRepository;
-  private static final Duration DEFAULT_TTL = Duration.ofHours(24);
+
+  /**
+   * ADR-084: Align TTL with EquipmentDbWorker.DB_TTL (15 minutes).
+   *
+   * <p>Previously used 24-hour TTL, which caused stale data to be served for too long. The active
+   * cache flow treats DB data as fresh for 15 minutes.
+   *
+   * @see maple.expectation.service.v2.worker.EquipmentDbWorker#DB_TTL
+   */
+  private static final Duration FRESH_TTL = Duration.ofMinutes(15);
 
   /**
    * Creates a new EquipmentApplicationService.
@@ -61,13 +70,15 @@ public class EquipmentApplicationService {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");
     }
-    return equipmentRepository.findById(characterId);
+    return Optional.ofNullable(equipmentRepository.findById(characterId));
   }
 
   /**
    * Finds fresh equipment (updated within TTL).
    *
-   * <p>Returns equipment only if it was updated within the default TTL (24 hours).
+   * <p>Returns equipment only if it was updated within 15 minutes (FRESH_TTL).
+   *
+   * <p>ADR-084: TTL aligned with EquipmentDbWorker.DB_TTL for consistency.
    *
    * @param characterId the character identifier
    * @return Optional containing fresh equipment if found
@@ -77,9 +88,8 @@ public class EquipmentApplicationService {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");
     }
-    return equipmentRepository
-        .findById(characterId)
-        .filter(equipment -> equipment.isFresh(DEFAULT_TTL));
+    CharacterEquipment equipment = equipmentRepository.findById(characterId);
+    return Optional.ofNullable(equipment).filter(e -> e.isFresh(FRESH_TTL));
   }
 
   /**
@@ -102,7 +112,8 @@ public class EquipmentApplicationService {
     EquipmentData equipmentData = EquipmentData.of(jsonData);
 
     // Check if equipment exists
-    Optional<CharacterEquipment> existing = equipmentRepository.findById(characterId);
+    Optional<CharacterEquipment> existing =
+        Optional.ofNullable(equipmentRepository.findById(characterId));
 
     if (existing.isPresent()) {
       // Update existing equipment
@@ -134,8 +145,7 @@ public class EquipmentApplicationService {
     }
 
     CharacterEquipment equipment =
-        equipmentRepository
-            .findById(characterId)
+        Optional.ofNullable(equipmentRepository.findById(characterId))
             .orElseThrow(() -> new IllegalArgumentException("Equipment not found: " + characterId));
 
     EquipmentData newData = EquipmentData.of(jsonData);

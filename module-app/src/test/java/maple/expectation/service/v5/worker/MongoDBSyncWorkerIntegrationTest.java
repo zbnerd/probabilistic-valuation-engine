@@ -20,6 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.redisson.api.RStream;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.StreamMessageId;
+import org.redisson.api.stream.StreamAddArgs;
+import org.redisson.api.stream.StreamCreateGroupArgs;
+import org.redisson.api.stream.StreamReadGroupArgs;
 import org.redisson.client.codec.StringCodec;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -96,7 +99,7 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
   void setUp() {
     RStream<String, String> stream = redissonClient.getStream(STREAM_KEY, StringCodec.INSTANCE);
     stream.delete();
-    repository.deleteAll();
+    queryService.deleteAll();
   }
 
   @Test
@@ -106,7 +109,7 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
     var payloadJson = objectMapper.writeValueAsString(event);
 
     RStream<String, String> stream = redissonClient.getStream(STREAM_KEY, StringCodec.INSTANCE);
-    stream.createGroup(CONSUMER_GROUP);
+    stream.createGroup(StreamCreateGroupArgs.name(CONSUMER_GROUP).makeStream());
 
     Map<String, String> messageData =
         Map.of(
@@ -119,13 +122,11 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
             "data",
             payloadJson);
 
-    StreamMessageId messageId = stream.add(messageData);
+    StreamMessageId messageId = stream.add(StreamAddArgs.entries(messageData));
 
     var messages =
         stream.readGroup(
-            CONSUMER_GROUP,
-            CONSUMER_NAME,
-            org.redisson.api.stream.StreamReadGroupArgs.neverDelivered().count(1));
+            CONSUMER_GROUP, CONSUMER_NAME, StreamReadGroupArgs.neverDelivered().count(1));
 
     assertThat(messages).isNotNull();
     assertThat(messages).hasSize(1);
@@ -141,8 +142,8 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
     queryService.upsert(view);
 
     var saved = queryService.findByUserIgn(TEST_IGN);
-    assertThat(saved).isPresent();
-    assertThat(saved.get().getUserIgn()).isEqualTo(TEST_IGN);
+    assertThat(saved).isNotNull();
+    assertThat(saved.getUserIgn()).isEqualTo(TEST_IGN);
   }
 
   @Test
@@ -156,11 +157,10 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
     queryService.upsert(view);
 
     var saved = queryService.findByUserIgn(TEST_IGN);
-    assertThat(saved).isPresent();
+    assertThat(saved).isNotNull();
 
-    var allViews = repository.findAll();
-    long countForUser = allViews.stream().filter(v -> TEST_IGN.equals(v.getUserIgn())).count();
-    assertThat(countForUser).isEqualTo(1);
+    var allViews = queryService.countByUserIgn(TEST_IGN);
+    assertThat(allViews).isEqualTo(1);
   }
 
   @Test
@@ -172,9 +172,9 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
     queryService.upsert(view);
 
     var saved = queryService.findByUserIgn(TEST_IGN);
-    assertThat(saved).isPresent();
-    assertThat(saved.get().getUserIgn()).isEqualTo(TEST_IGN);
-    assertThat(saved.get().getId()).contains(TEST_IGN);
+    assertThat(saved).isNotNull();
+    assertThat(saved.getUserIgn()).isEqualTo(TEST_IGN);
+    assertThat(saved.getId()).contains(TEST_IGN);
   }
 
   @Test
@@ -184,7 +184,7 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
 
     assertThat(stream.isExists()).isFalse();
 
-    stream.createGroup(CONSUMER_GROUP);
+    stream.createGroup(StreamCreateGroupArgs.name(CONSUMER_GROUP).makeStream());
 
     assertThat(stream.isExists()).isTrue();
   }
@@ -196,10 +196,10 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
     CharacterValuationView view = viewTransformer.toDocument(event);
 
     queryService.upsert(view);
-    assertThat(queryService.findByUserIgn(TEST_IGN)).isPresent();
+    assertThat(queryService.findByUserIgn(TEST_IGN)).isNotNull();
 
     queryService.deleteByUserIgn(TEST_IGN);
-    assertThat(queryService.findByUserIgn(TEST_IGN)).isEmpty();
+    assertThat(queryService.findByUserIgn(TEST_IGN)).isNull();
   }
 
   private ExpectationCalculationCompletedEvent createTestEvent() {

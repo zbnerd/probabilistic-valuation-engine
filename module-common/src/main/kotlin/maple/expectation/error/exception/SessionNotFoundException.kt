@@ -1,4 +1,5 @@
 @file:JvmName("SessionNotFoundException")
+
 package maple.expectation.error.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -16,7 +17,7 @@ class SessionNotFoundException : ClientBaseException {
      */
     constructor(sessionId: String) : super(
         CommonErrorCode.SESSION_NOT_FOUND,
-        sessionId
+        sessionId,
     )
 
     /**
@@ -28,6 +29,6 @@ class SessionNotFoundException : ClientBaseException {
     constructor(message: String, cause: Throwable) : super(
         CommonErrorCode.SESSION_NOT_FOUND,
         cause,
-        message
+        message,
     )
 }

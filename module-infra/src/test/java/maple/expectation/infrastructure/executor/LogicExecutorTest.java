@@ -420,7 +420,7 @@ class LogicExecutorTest {
             });
 
     // When
-    executor.executeVoid(() -> executed.set(true), context);
+    executor.executeVoidJava(() -> executed.set(true), context);
 
     // Then
     assertThat(executed).isTrue();
@@ -623,12 +623,35 @@ class LogicExecutorTest {
   @Test
   @DisplayName("TaskContext should normalize null dynamic value to empty string")
   void testTaskContext_NullDynamicValue() {
-    // Given
+    // Given - 2-parameter version (dynamicValue = null internally)
     TaskContext context = TaskContext.of("Component", "operation");
 
     // Then
     assertThat(context.dynamicValue()).isEmpty();
     assertThat(context.toTaskName()).isEqualTo("Component:operation");
+  }
+
+  @Test
+  @DisplayName(
+      "TaskContext.of() with explicit null dynamicValue should normalize to empty string (ADR-086)")
+  void testTaskContext_OfWithExplicitNullDynamicValue() {
+    // Given - 3-parameter version with explicit null
+    TaskContext context = TaskContext.of("Component", "operation", null);
+
+    // Then
+    assertThat(context.dynamicValue()).isEmpty();
+    assertThat(context.toTaskName()).isEqualTo("Component:operation");
+  }
+
+  @Test
+  @DisplayName("TaskContext.of() with dynamicValue should preserve value")
+  void testTaskContext_OfWithDynamicValue() {
+    // Given
+    TaskContext context = TaskContext.of("Component", "operation", "testValue");
+
+    // Then
+    assertThat(context.dynamicValue()).isEqualTo("testValue");
+    assertThat(context.toTaskName()).isEqualTo("Component:operation:testValue");
   }
 
   // ==================== Performance Tests ====================
@@ -736,7 +759,7 @@ class LogicExecutorTest {
     doAnswer(invocation -> null).when(pipeline).executeRaw(any(ThrowingSupplier.class), any());
 
     // When - should not throw
-    executor.executeVoid(() -> {}, taskName);
+    executor.executeVoidJava(() -> {}, taskName);
 
     // Then
     verify(pipeline).executeRaw(any(ThrowingSupplier.class), any());

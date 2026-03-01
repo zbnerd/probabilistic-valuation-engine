@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.time.Instant;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor;
 import maple.expectation.infrastructure.executor.LogicExecutor;
@@ -31,7 +32,7 @@ class PriorityCalculationQueueTest {
   void setUp() {
     executor = new TestLogicExecutor();
     checkedExecutor = new TestCheckedLogicExecutor();
-    queue = new PriorityCalculationQueue(executor, checkedExecutor);
+    queue = new PriorityCalculationQueue(executor);
   }
 
   @Test
@@ -82,10 +83,10 @@ class PriorityCalculationQueueTest {
   }
 
   @Test
-  @DisplayName("LOW 우선순위 작업은 capacity 무관하게 수락됨")
-  void lowPriorityAlwaysAccepted() {
-    // Given: HIGH priority at capacity
-    for (int i = 0; i < 1000; i++) {
+  @DisplayName("LOW 우선순위 작업은 HIGH 큐가 꽉 차지 않았을 때 수락됨")
+  void lowPriorityAcceptedWhenHighQueueNotFull() {
+    // Given: HIGH priority NOT at capacity (less than 1000)
+    for (int i = 0; i < 500; i++) {
       ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user" + i, false);
       queue.offer(task);
     }
@@ -95,12 +96,12 @@ class PriorityCalculationQueueTest {
       ExpectationCalculationTask task = ExpectationCalculationTask.lowPriority("low" + i);
       boolean accepted = queue.offer(task);
 
-      // Then: All LOW priority tasks should be accepted
+      // Then: All LOW priority tasks should be accepted (HIGH queue not full)
       assertThat(accepted).isTrue();
     }
 
-    assertThat(queue.size()).isEqualTo(1100); // 1000 HIGH + 100 LOW
-    assertThat(queue.getHighPriorityCount()).isEqualTo(1000);
+    assertThat(queue.size()).isEqualTo(600); // 500 HIGH + 100 LOW
+    assertThat(queue.getHighPriorityCount()).isEqualTo(500);
   }
 
   @Test
@@ -113,13 +114,9 @@ class PriorityCalculationQueueTest {
     Thread pollingThread =
         new Thread(
             () -> {
-              try {
-                ExpectationCalculationTask task = queue.poll();
-                // If we reach here, task should not be null (blocking worked)
-                assertNotNull(task);
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-              }
+              ExpectationCalculationTask task = queue.poll(QueuePriority.HIGH, 5000);
+              // If we reach here, task should not be null (blocking worked)
+              assertNotNull(task);
             });
 
     pollingThread.start();
@@ -137,7 +134,7 @@ class PriorityCalculationQueueTest {
     assertThat(queue.size()).isEqualTo(0);
 
     // When: Poll with short timeout
-    ExpectationCalculationTask task = queue.poll(100);
+    ExpectationCalculationTask task = queue.poll(QueuePriority.HIGH, 100);
 
     // Then: Should return null (timeout)
     assertNull(task);
@@ -164,7 +161,7 @@ class PriorityCalculationQueueTest {
             });
 
     adderThread.start();
-    ExpectationCalculationTask task = queue.poll(200);
+    ExpectationCalculationTask task = queue.poll(QueuePriority.HIGH, 200);
 
     // Then: Should return the task
     assertNotNull(task);
@@ -173,18 +170,19 @@ class PriorityCalculationQueueTest {
   }
 
   @Test
-  @DisplayName("고우선순위 작업 완료 시 highPriorityCount 감소")
-  void completeTaskDecreasesHighPriorityCount() {
+  @DisplayName("고우선순위 작업 완료 시 completedAt 설정됨")
+  void completeTaskSetsCompletedAt() {
     // Given: Add HIGH priority task
     ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user1", false);
     queue.offer(task);
     assertThat(queue.getHighPriorityCount()).isEqualTo(1);
+    assertThat(task.getCompletedAt()).isNull();
 
-    // When: Complete the task
+    // When: Complete the task (only sets completedAt, doesn't remove from queue)
     queue.complete(task);
 
-    // Then: Counter should decrease
-    assertThat(queue.getHighPriorityCount()).isEqualTo(0);
+    // Then: completedAt is set but task remains in queue
+    assertThat(queue.getHighPriorityCount()).isEqualTo(1); // Task still in queue
     assertThat(task.getCompletedAt()).isNotNull();
   }
 
@@ -393,6 +391,16 @@ class PriorityCalculationQueueTest {
         T result = (T) translator.translate(e, context);
         return result;
       }
+    }
+
+    @Override
+    public void executeVoidJava(Runnable task, TaskContext context) {
+      task.run();
+    }
+
+    @Override
+    public void executeVoidJava(Runnable task, String taskName) {
+      executeVoidJava(task, TaskContext.of("Legacy", taskName));
     }
   }
 

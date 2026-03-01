@@ -4,9 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
-import maple.expectation.domain.v2.GameCharacter;
-import maple.expectation.dto.response.CharacterResponse;
-import maple.expectation.service.v2.facade.GameCharacterFacade;
+import maple.expectation.controller.v1.GameCharacterControllerV1;
+import maple.expectation.core.port.out.GameCharacterPort;
+import maple.expectation.domain.model.character.CharacterId;
+import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.domain.model.character.UserIgn;
+import maple.expectation.web.dto.response.CharacterResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,23 +25,20 @@ import org.springframework.http.ResponseEntity;
  *
  * <p>순수 단위 테스트로 Controller 메서드만 직접 테스트합니다.
  *
- * <h4>테스트 범위</h4>
+ * <h4>ADR-005 Hexagonal Architecture</h4>
  *
- * <ul>
- *   <li>TC-128-01: 캐릭터 조회 성공 → DTO 응답 검증
- *   <li>TC-128-03: 응답에 내부 필드(id, version, equipment) 미포함 검증
- * </ul>
+ * <p>Controller가 GameCharacterPort 인터페이스에 의존하도록 리팩토링됨
  */
 @Tag("unit")
 class GameCharacterControllerV1Test {
 
-  private GameCharacterFacade gameCharacterFacade;
+  private GameCharacterPort gameCharacterPort;
   private GameCharacterControllerV1 controller;
 
   @BeforeEach
   void setUp() {
-    gameCharacterFacade = mock(GameCharacterFacade.class);
-    controller = new GameCharacterControllerV1(gameCharacterFacade);
+    gameCharacterPort = mock(GameCharacterPort.class);
+    controller = new GameCharacterControllerV1(gameCharacterPort);
   }
 
   @Nested
@@ -49,8 +49,9 @@ class GameCharacterControllerV1Test {
     @DisplayName("TC-128-01: 캐릭터 조회 성공 → CharacterResponse DTO 반환")
     void whenCharacterExists_shouldReturnDto() {
       // given
-      GameCharacter character = new GameCharacter("TestUser", "ocid-12345");
-      given(gameCharacterFacade.findCharacterByUserIgn("TestUser")).willReturn(character);
+      GameCharacter character =
+          GameCharacter.create(new UserIgn("TestUser"), new CharacterId("ocid-12345"));
+      given(gameCharacterPort.getCharacterOrThrow("TestUser")).willReturn(character);
 
       // when
       ResponseEntity<CharacterResponse> response =
@@ -68,14 +69,15 @@ class GameCharacterControllerV1Test {
     @DisplayName("TC-128-03: CharacterResponse는 내부 필드를 포함하지 않음")
     void shouldReturnDtoWithoutInternalFields() {
       // given
-      GameCharacter character = new GameCharacter("TestUser", "ocid-12345");
-      given(gameCharacterFacade.findCharacterByUserIgn("TestUser")).willReturn(character);
+      GameCharacter character =
+          GameCharacter.create(new UserIgn("TestUser"), new CharacterId("ocid-12345"));
+      given(gameCharacterPort.getCharacterOrThrow("TestUser")).willReturn(character);
 
       // when
       ResponseEntity<CharacterResponse> response =
           controller.findCharacterByUserIgn("TestUser").join();
 
-      // then - CharacterResponse Record는 userIgn, ocid, likeCount만 포함
+      // then - CharacterResponse Record는 userIgn, ocid, likeCount 등만 포함
       assertThat(response.getBody()).isNotNull();
       CharacterResponse dto = response.getBody();
 
@@ -89,8 +91,9 @@ class GameCharacterControllerV1Test {
     @DisplayName("초기 likeCount가 0인 캐릭터 조회")
     void whenInitialCharacter_shouldReturnZeroLikeCount() {
       // given
-      GameCharacter character = new GameCharacter("NewUser", "new-ocid");
-      given(gameCharacterFacade.findCharacterByUserIgn("NewUser")).willReturn(character);
+      GameCharacter character =
+          GameCharacter.create(new UserIgn("NewUser"), new CharacterId("new-ocid"));
+      given(gameCharacterPort.getCharacterOrThrow("NewUser")).willReturn(character);
 
       // when
       ResponseEntity<CharacterResponse> response =

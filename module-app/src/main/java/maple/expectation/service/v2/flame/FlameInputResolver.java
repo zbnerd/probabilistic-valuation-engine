@@ -1,11 +1,11 @@
 package maple.expectation.service.v2.flame;
 
 import lombok.RequiredArgsConstructor;
+import maple.expectation.core.flame.component.FlameScoreResolver;
+import maple.expectation.core.flame.config.BossEquipmentRegistry;
+import maple.expectation.core.flame.config.JobStatMapping;
 import maple.expectation.core.probability.FlameScoreCalculator.JobWeights;
 import maple.expectation.dto.CubeCalculationInput;
-import maple.expectation.service.v2.flame.component.FlameScoreResolver;
-import maple.expectation.service.v2.flame.config.BossEquipmentRegistry;
-import maple.expectation.service.v2.flame.config.JobStatMapping;
 import org.springframework.stereotype.Component;
 
 /**
@@ -38,7 +38,7 @@ public class FlameInputResolver {
    */
   public FlameInput resolve(CubeCalculationInput input, String characterClass) {
     boolean isWeapon = WEAPON_SLOT.equals(input.getPart());
-    JobWeights weights = JobStatMapping.resolve(characterClass);
+    JobWeights weights = JobStatMapping.INSTANCE.resolve(characterClass);
 
     int target =
         scoreResolver.calculate(
@@ -70,10 +70,10 @@ public class FlameInputResolver {
   }
 
   private boolean resolveBossDrop(String itemName, boolean isWeapon, String characterClass) {
-    if (BossEquipmentRegistry.isZeroWeapon(characterClass, isWeapon)) {
+    if (BossEquipmentRegistry.INSTANCE.isZeroWeapon(characterClass, isWeapon)) {
       return false;
     }
-    return BossEquipmentRegistry.isBossEquipment(itemName, isWeapon);
+    return BossEquipmentRegistry.INSTANCE.isBossEquipment(itemName, isWeapon);
   }
 
   /** 불꽃 계산에 필요한 해석된 입력 데이터 */

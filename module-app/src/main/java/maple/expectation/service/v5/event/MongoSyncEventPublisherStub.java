@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @ConditionalOnProperty(
-    prefix = "app.v5",
+    prefix = "v5",
     name = "query-side-enabled",
     havingValue = "false",
     matchIfMissing = true)
@@ -32,7 +32,7 @@ public class MongoSyncEventPublisherStub implements MongoSyncEventPublisherInter
   @Override
   public void publishCalculationCompleted(String taskId, EquipmentExpectationResponseV4 response) {
     TaskContext context = TaskContext.of("MongoSyncPublisherStub", "Publish", taskId);
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           log.debug(
               "[V5-Stub] Event publishing skipped (Query Side disabled): taskId={}, userIgn={}",

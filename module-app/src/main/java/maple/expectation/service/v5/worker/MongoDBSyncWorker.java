@@ -21,6 +21,7 @@ import maple.expectation.service.v5.worker.stream.StreamStrategyFactory;
 import org.redisson.api.RStream;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.StreamMessageId;
+import org.redisson.api.stream.StreamCreateGroupArgs;
 import org.redisson.api.stream.StreamReadGroupArgs;
 import org.redisson.client.codec.StringCodec;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -143,7 +144,7 @@ public class MongoDBSyncWorker implements Runnable {
     log.info("[MongoDBSyncWorker] Sync worker running");
 
     while (running && !Thread.currentThread().isInterrupted()) {
-      executor.executeVoid(this::processNextBatch, TaskContext.of("MongoDBSyncWorker", "Poll"));
+      executor.executeVoidJava(this::processNextBatch, TaskContext.of("MongoDBSyncWorker", "Poll"));
     }
 
     log.info("[MongoDBSyncWorker] Sync worker stopped");
@@ -152,7 +153,7 @@ public class MongoDBSyncWorker implements Runnable {
   private void initializeStream() {
     TaskContext context = TaskContext.of("MongoDBSyncWorker", "InitStream");
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
           RStream<String, String> stream =
               redissonClient.getStream(STREAM_KEY, StringCodec.INSTANCE);
@@ -177,7 +178,7 @@ public class MongoDBSyncWorker implements Runnable {
         },
         e -> {
           if (e.getMessage() != null && e.getMessage().contains("NOGROUP")) {
-            executor.executeVoid(
+            executor.executeVoidJava(
                 () -> {
                   stream.createGroup(StreamCreateGroupArgs.name(CONSUMER_GROUP));
                   log.info("[MongoDBSyncWorker] Consumer group created: {}", CONSUMER_GROUP);
@@ -239,16 +240,50 @@ public class MongoDBSyncWorker implements Runnable {
         TaskContext.of("MongoDBSyncWorker", "ProcessSingleMessage", messageId.toString()));
   }
 
+  /**
+   * ADR-083: Extract payload JSON with backward compatibility.
+   *
+   * <p>Priority order:
+   *
+   * <ol>
+   *   <li>"data" key - New format (V5 CQRS)
+   *   <li>"payload" key - Legacy format (pre-V5)
+   * </ol>
+   *
+   * <p>Logs deprecation warning when using legacy format.
+   *
+   * @param data Redis Stream message data map
+   * @return Payload JSON string, or null if neither format is present
+   */
+  private String extractPayloadJson(Map<String, String> data) {
+    // Try new format first (V5 CQRS)
+    String payloadJson = data.get("data");
+    if (payloadJson != null) {
+      return payloadJson;
+    }
+
+    // Fallback to legacy format (pre-V5)
+    payloadJson = data.get("payload");
+    if (payloadJson != null) {
+      log.warn(
+          "[MongoDBSyncWorker] Legacy message format detected (using 'payload' key). "
+              + "This format is deprecated. Please migrate to 'data' key format.");
+      return payloadJson;
+    }
+
+    return null;
+  }
+
   private void processMessage(StreamMessageId messageId, Map<String, String> data) {
     TaskContext context =
         TaskContext.of("MongoDBSyncWorker", "ProcessMessage", messageId.toString());
 
-    executor.executeVoid(
+    executor.executeVoidJava(
         () -> {
-          // Deserialize IntegrationEvent wrapper
-          String payloadJson = data.get("payload");
+          // ADR-083: Backward compatibility - try both 'data' and 'payload' keys
+          String payloadJson = extractPayloadJson(data);
           if (payloadJson == null) {
-            log.warn("[MongoDBSyncWorker] No payload in message");
+            log.warn("[MongoDBSyncWorker] No payload in message (both formats tried)");
             return;
           }
 

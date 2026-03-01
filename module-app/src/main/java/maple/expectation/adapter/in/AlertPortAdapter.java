@@ -3,7 +3,7 @@ package maple.expectation.adapter.in;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.inbound.AlertPort;
-import maple.expectation.service.v2.alert.DiscordAlertService;
+import maple.expectation.infrastructure.notification.discord.DiscordAlertService;
 import org.springframework.stereotype.Component;
 
 /**

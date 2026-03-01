@@ -10,11 +10,11 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Optional;
-import maple.expectation.controller.dto.common.CursorPageRequest;
-import maple.expectation.controller.dto.common.CursorPageResponse;
 import maple.expectation.controller.dto.dlq.DlqDetailResponse;
 import maple.expectation.controller.dto.dlq.DlqEntryResponse;
 import maple.expectation.controller.dto.dlq.DlqReprocessResult;
+import maple.expectation.controller.dto.page.CursorPageRequest;
+import maple.expectation.controller.dto.page.CursorPageResponse;
 import maple.expectation.domain.v2.DonationDlq;
 import maple.expectation.domain.v2.DonationOutbox;
 import maple.expectation.error.exception.DlqNotFoundException;

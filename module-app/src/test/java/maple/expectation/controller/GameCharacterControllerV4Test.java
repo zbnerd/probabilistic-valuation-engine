@@ -8,11 +8,11 @@ import static org.mockito.Mockito.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4;
-import maple.expectation.service.v4.EquipmentExpectationServiceV4;
-import maple.expectation.service.v4.warmup.PopularCharacterTracker;
+import maple.expectation.controller.v4.GameCharacterControllerV4;
+import maple.expectation.core.port.inbound.ExpectationV4Port;
+import maple.expectation.core.port.out.PopularCharacterTrackerPort;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -43,15 +43,15 @@ import org.springframework.http.ResponseEntity;
 @Tag("unit")
 class GameCharacterControllerV4Test {
 
-  private EquipmentExpectationServiceV4 expectationService;
-  private PopularCharacterTracker popularCharacterTracker;
+  private ExpectationV4Port expectationPort;
+  private PopularCharacterTrackerPort trackerPort;
   private GameCharacterControllerV4 controller;
 
   @BeforeEach
   void setUp() {
-    expectationService = mock(EquipmentExpectationServiceV4.class);
-    popularCharacterTracker = mock(PopularCharacterTracker.class);
-    controller = new GameCharacterControllerV4(expectationService, popularCharacterTracker);
+    expectationPort = mock(ExpectationV4Port.class);
+    trackerPort = mock(PopularCharacterTrackerPort.class);
+    controller = new GameCharacterControllerV4(expectationPort, trackerPort);
   }
 
   @Nested
@@ -64,8 +64,7 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "FastUser";
       byte[] cachedGzipData = new byte[] {0x1f, (byte) 0x8b, 0x08, 0x00};
-      given(expectationService.getGzipFromL1CacheDirect(userIgn))
-          .willReturn(Optional.of(cachedGzipData));
+      given(expectationPort.getGzipFromL1CacheDirect(userIgn)).willReturn(cachedGzipData);
 
       // when
       CompletableFuture<ResponseEntity<?>> future =
@@ -76,7 +75,7 @@ class GameCharacterControllerV4Test {
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_ENCODING)).isEqualTo("gzip");
       assertThat(response.getBody()).isEqualTo(cachedGzipData);
-      verify(popularCharacterTracker).recordAccess(userIgn);
+      verify(trackerPort).recordAccess(userIgn);
     }
 
     @Test
@@ -85,8 +84,8 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "FallbackUser";
       byte[] gzipData = new byte[] {0x1f, (byte) 0x8b};
-      given(expectationService.getGzipFromL1CacheDirect(userIgn)).willReturn(Optional.empty());
-      given(expectationService.getGzipExpectationAsync(eq(userIgn), eq(false)))
+      given(expectationPort.getGzipFromL1CacheDirect(userIgn)).willReturn(null);
+      given(expectationPort.getGzipExpectationAsync(eq(userIgn), eq(false)))
           .willReturn(CompletableFuture.completedFuture(gzipData));
 
       // when
@@ -97,7 +96,7 @@ class GameCharacterControllerV4Test {
       // then
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_ENCODING)).isEqualTo("gzip");
-      verify(expectationService).getGzipExpectationAsync(userIgn, false);
+      verify(expectationPort).getGzipExpectationAsync(userIgn, false);
     }
 
     @Test
@@ -106,7 +105,7 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "ForceUser";
       byte[] gzipData = new byte[] {0x1f, (byte) 0x8b};
-      given(expectationService.getGzipExpectationAsync(eq(userIgn), eq(true)))
+      given(expectationPort.getGzipExpectationAsync(eq(userIgn), eq(true)))
           .willReturn(CompletableFuture.completedFuture(gzipData));
 
       // when
@@ -115,8 +114,8 @@ class GameCharacterControllerV4Test {
       future.join();
 
       // then - L1 캐시 조회하지 않음
-      verify(expectationService, never()).getGzipFromL1CacheDirect(anyString());
-      verify(expectationService).getGzipExpectationAsync(userIgn, true);
+      verify(expectationPort, never()).getGzipFromL1CacheDirect(anyString());
+      verify(expectationPort).getGzipExpectationAsync(userIgn, true);
     }
 
     @Test
@@ -125,7 +124,7 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "JsonUser";
       EquipmentExpectationResponseV4 mockResponse = createMockResponse(userIgn);
-      given(expectationService.calculateExpectationAsync(eq(userIgn), eq(false)))
+      given(expectationPort.calculateExpectationAsync(eq(userIgn), eq(false)))
           .willReturn(CompletableFuture.completedFuture(mockResponse));
 
       // when
@@ -143,14 +142,14 @@ class GameCharacterControllerV4Test {
     void shouldRecordAccessToTracker() {
       // given
       String userIgn = "TrackedUser";
-      given(expectationService.calculateExpectationAsync(anyString(), anyBoolean()))
+      given(expectationPort.calculateExpectationAsync(anyString(), anyBoolean()))
           .willReturn(CompletableFuture.completedFuture(createMockResponse(userIgn)));
 
       // when
       controller.getExpectation(userIgn, false, null);
 
       // then
-      verify(popularCharacterTracker, times(1)).recordAccess(userIgn);
+      verify(trackerPort, times(1)).recordAccess(userIgn);
     }
   }
 
@@ -165,7 +164,7 @@ class GameCharacterControllerV4Test {
       String userIgn = "PresetUser";
       Integer presetNo = 1;
       EquipmentExpectationResponseV4 fullResponse = createMockResponseWithPresets(userIgn);
-      given(expectationService.calculateExpectationAsync(userIgn))
+      given(expectationPort.calculateExpectationAsync(userIgn, false))
           .willReturn(CompletableFuture.completedFuture(fullResponse));
 
       // when
@@ -186,7 +185,7 @@ class GameCharacterControllerV4Test {
       String userIgn = "NoPresetUser";
       Integer presetNo = 99; // 존재하지 않는 프리셋
       EquipmentExpectationResponseV4 fullResponse = createMockResponseWithPresets(userIgn);
-      given(expectationService.calculateExpectationAsync(userIgn))
+      given(expectationPort.calculateExpectationAsync(userIgn, false))
           .willReturn(CompletableFuture.completedFuture(fullResponse));
 
       // when
@@ -212,7 +211,7 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "RecalcUser";
       EquipmentExpectationResponseV4 mockResponse = createMockResponse(userIgn);
-      given(expectationService.calculateExpectationAsync(userIgn, true))
+      given(expectationPort.calculateExpectationAsync(userIgn, true))
           .willReturn(CompletableFuture.completedFuture(mockResponse));
 
       // when
@@ -223,7 +222,7 @@ class GameCharacterControllerV4Test {
       // then
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(response.getBody()).isNotNull();
-      verify(expectationService).calculateExpectationAsync(userIgn, true);
+      verify(expectationPort).calculateExpectationAsync(userIgn, true);
     }
   }
 
@@ -237,7 +236,7 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "GzipHeaderUser";
       byte[] gzipData = new byte[] {0x1f, (byte) 0x8b, 0x08, 0x00, 0x01, 0x02};
-      given(expectationService.getGzipFromL1CacheDirect(userIgn)).willReturn(Optional.of(gzipData));
+      given(expectationPort.getGzipFromL1CacheDirect(userIgn)).willReturn(gzipData);
 
       // when
       CompletableFuture<ResponseEntity<?>> future =
@@ -254,40 +253,42 @@ class GameCharacterControllerV4Test {
   // ==================== Helper Methods ====================
 
   private EquipmentExpectationResponseV4 createMockResponse(String userIgn) {
-    return EquipmentExpectationResponseV4.builder()
-        .userIgn(userIgn)
-        .calculatedAt(LocalDateTime.now())
-        .fromCache(false)
-        .totalExpectedCost(BigDecimal.valueOf(10000000))
-        .totalCostBreakdown(EquipmentExpectationResponseV4.CostBreakdownDto.empty())
-        .presets(List.of())
-        .build();
+    return new EquipmentExpectationResponseV4(
+        userIgn,
+        LocalDateTime.now(),
+        false,
+        BigDecimal.valueOf(10000000),
+        "10,000,000 메소",
+        EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
+        0,
+        List.of());
   }
 
   private EquipmentExpectationResponseV4 createMockResponseWithPresets(String userIgn) {
     EquipmentExpectationResponseV4.PresetExpectation preset1 =
-        EquipmentExpectationResponseV4.PresetExpectation.builder()
-            .presetNo(1)
-            .totalExpectedCost(BigDecimal.valueOf(5000000))
-            .costBreakdown(EquipmentExpectationResponseV4.CostBreakdownDto.empty())
-            .items(List.of())
-            .build();
+        new EquipmentExpectationResponseV4.PresetExpectation(
+            1,
+            BigDecimal.valueOf(5000000),
+            "5,000,000 메소",
+            EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
+            List.of());
 
     EquipmentExpectationResponseV4.PresetExpectation preset2 =
-        EquipmentExpectationResponseV4.PresetExpectation.builder()
-            .presetNo(2)
-            .totalExpectedCost(BigDecimal.valueOf(3000000))
-            .costBreakdown(EquipmentExpectationResponseV4.CostBreakdownDto.empty())
-            .items(List.of())
-            .build();
+        new EquipmentExpectationResponseV4.PresetExpectation(
+            2,
+            BigDecimal.valueOf(3000000),
+            "3,000,000 메소",
+            EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
+            List.of());
 
-    return EquipmentExpectationResponseV4.builder()
-        .userIgn(userIgn)
-        .calculatedAt(LocalDateTime.now())
-        .fromCache(false)
-        .totalExpectedCost(BigDecimal.valueOf(8000000))
-        .totalCostBreakdown(EquipmentExpectationResponseV4.CostBreakdownDto.empty())
-        .presets(List.of(preset1, preset2))
-        .build();
+    return new EquipmentExpectationResponseV4(
+        userIgn,
+        LocalDateTime.now(),
+        false,
+        BigDecimal.valueOf(8000000),
+        "8,000,000 메소",
+        EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
+        2,
+        List.of(preset1, preset2));
   }
 }

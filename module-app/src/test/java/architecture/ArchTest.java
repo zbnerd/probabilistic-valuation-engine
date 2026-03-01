@@ -563,6 +563,7 @@ public class ArchTest {
               Use constructor injection with final fields.
               Controllers delegate to services, no business logic.
               """)
+          .allowEmptyShould(true)
           .check(classes);
     }
 

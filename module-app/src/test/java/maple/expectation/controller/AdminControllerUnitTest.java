@@ -11,9 +11,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import maple.expectation.controller.dto.admin.AddAdminRequest;
+import maple.expectation.core.port.inbound.AdminPort;
 import maple.expectation.infrastructure.security.AuthenticatedUser;
 import maple.expectation.response.ApiResponse;
-import maple.expectation.service.v2.auth.AdminService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -42,7 +42,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("AdminController 단위 테스트")
 class AdminControllerUnitTest {
 
-  @Mock private AdminService adminService;
+  @Mock private AdminPort adminPort;
 
   private MockMvc mockMvc;
   private ObjectMapper objectMapper;
@@ -62,7 +62,7 @@ class AdminControllerUnitTest {
 
   @BeforeEach
   void setUp() {
-    adminController = new AdminController(adminService);
+    adminController = new AdminController(adminPort);
     objectMapper = new ObjectMapper();
 
     mockMvc = MockMvcBuilders.standaloneSetup(adminController).build();
@@ -211,7 +211,7 @@ class AdminControllerUnitTest {
     void getAdmins_returns200() {
       // Given
       setupAdminAuthentication();
-      given(adminService.getAllAdmins()).willReturn(Set.of(VALID_FINGERPRINT_64));
+      given(adminPort.getAllAdmins()).willReturn(Set.of(VALID_FINGERPRINT_64));
 
       // When
       var result = adminController.getAdmins().join();
@@ -219,7 +219,7 @@ class AdminControllerUnitTest {
       // Then
       assertThat(result.getBody().getData()).isNotNull();
       assertThat(result.getBody().getSuccess()).isTrue();
-      verify(adminService).getAllAdmins();
+      verify(adminPort).getAllAdmins();
     }
   }
 

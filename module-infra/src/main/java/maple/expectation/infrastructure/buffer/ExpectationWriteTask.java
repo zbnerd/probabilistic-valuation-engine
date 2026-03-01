@@ -1,11 +1,10 @@
-package maple.expectation.service.v4.buffer;
+package maple.expectation.infrastructure.buffer;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 
 /**
- * Expectation Write-Behind 버퍼용 DTO (#266)
+ * Expectation Write-Behind 버퍼용 DTO (#266, ADR-005)
  *
  * <h3>5-Agent Council 합의</h3>
  *
@@ -36,25 +35,6 @@ public record ExpectationWriteTask(
     BigDecimal additionalCubeCost,
     BigDecimal starforceCost,
     LocalDateTime createdAt) {
-
-  /**
-   * PresetExpectation으로부터 Write Task 생성
-   *
-   * @param characterId 캐릭터 ID
-   * @param preset 프리셋 기대값
-   * @return ExpectationWriteTask
-   */
-  public static ExpectationWriteTask from(Long characterId, PresetExpectation preset) {
-    return new ExpectationWriteTask(
-        characterId,
-        preset.getPresetNo(),
-        preset.getTotalExpectedCost(),
-        preset.getCostBreakdown().getBlackCubeCost(),
-        preset.getCostBreakdown().getRedCubeCost(),
-        preset.getCostBreakdown().getAdditionalCubeCost(),
-        preset.getCostBreakdown().getStarforceCost(),
-        LocalDateTime.now());
-  }
 
   /**
    * 버퍼 키 생성 (중복 방지용)

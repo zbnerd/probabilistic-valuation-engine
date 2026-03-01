@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.out.ExpectationBufferPort;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.infrastructure.buffer.ExpectationWriteTask;
 import maple.expectation.infrastructure.config.BufferProperties;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -200,7 +201,7 @@ public class ExpectationWriteBackBuffer implements ExpectationBufferPort {
 
     // 3. Capacity reserved - enqueue items
     for (PresetExpectation preset : presets) {
-      queue.offer(ExpectationWriteTask.from(characterId, preset));
+      queue.offer(createTask(characterId, preset));
     }
     meterRegistry.counter("expectation.buffer.cas.success").increment();
     log.debug(
@@ -209,6 +210,19 @@ public class ExpectationWriteBackBuffer implements ExpectationBufferPort {
         characterId,
         newCount);
     return true;
+  }
+
+  /** PresetExpectation으로부터 ExpectationWriteTask 생성 */
+  private ExpectationWriteTask createTask(Long characterId, PresetExpectation preset) {
+    return new ExpectationWriteTask(
+        characterId,
+        preset.getPresetNo(),
+        preset.getTotalExpectedCost(),
+        preset.getCostBreakdown().getBlackCubeCost(),
+        preset.getCostBreakdown().getRedCubeCost(),
+        preset.getCostBreakdown().getAdditionalCubeCost(),
+        preset.getCostBreakdown().getStarforceCost(),
+        java.time.LocalDateTime.now());
   }
 
   /**

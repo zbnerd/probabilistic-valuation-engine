@@ -14,11 +14,13 @@ data class CursorPageRequest(
         private const val DEFAULT_SIZE = 20
         private const val MAX_SIZE = 100
 
+        @JvmStatic
         fun of(cursor: Long?, size: Int): CursorPageRequest {
             val validSize = if (size <= 0) DEFAULT_SIZE else minOf(size, MAX_SIZE)
             return CursorPageRequest(cursor, validSize)
         }
 
+        @JvmStatic
         fun firstPage(): CursorPageRequest {
             return CursorPageRequest(null, DEFAULT_SIZE)
         }

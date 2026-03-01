@@ -4,14 +4,14 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.LikeRelationBufferStrategy;
 import maple.expectation.core.port.out.LikeRelationSyncPort;
 import maple.expectation.domain.repository.CharacterLikeRepository;
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction;
+import maple.expectation.infrastructure.cache.like.HybridLikeRelationBuffer;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.persistence.entity.CharacterLikeJpaEntity;
-import maple.expectation.service.v2.cache.LikeRelationBuffer;
-import maple.expectation.service.v2.cache.LikeRelationBufferStrategy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -46,8 +46,8 @@ public class LikeRelationSyncService implements LikeRelationSyncPort {
    */
   public void flushLocalToRedis() {
     // Strategy 패턴: In-Memory 구현체만 flushLocalToRedis() 보유
-    if (likeRelationBuffer instanceof LikeRelationBuffer inMemoryBuffer) {
-      inMemoryBuffer.flushLocalToRedis();
+    if (likeRelationBuffer instanceof HybridLikeRelationBuffer hybridBuffer) {
+      hybridBuffer.flushLocalToRedis();
     }
     // Redis 전략은 L1이 없으므로 no-op
   }

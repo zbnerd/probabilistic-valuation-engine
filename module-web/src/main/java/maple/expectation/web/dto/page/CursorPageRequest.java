@@ -1,4 +1,4 @@
-package maple.expectation.web.dto.common;
+package maple.expectation.web.dto.page;
 
 /** Cursor-based Pagination 요청 (#233) */
 public record CursorPageRequest(Long cursor, int size) {

@@ -1,4 +1,4 @@
-package maple.expectation.controller.dto.common;
+package maple.expectation.controller.dto.page;
 
 /**
  * Cursor-based Pagination 요청 (#233)

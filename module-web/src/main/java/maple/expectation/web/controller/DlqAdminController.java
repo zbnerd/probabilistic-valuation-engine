@@ -7,7 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import maple.expectation.core.port.inbound.DlqPort;
 import maple.expectation.response.ApiResponse;
-import maple.expectation.web.dto.common.CursorPageResponse;
+import maple.expectation.web.dto.page.CursorPageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;

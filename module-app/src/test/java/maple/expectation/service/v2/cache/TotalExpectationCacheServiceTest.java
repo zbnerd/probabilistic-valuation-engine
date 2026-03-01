@@ -8,6 +8,7 @@ import static org.mockito.Mockito.*;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+import maple.expectation.infrastructure.cache.expectation.TotalExpectationCacheService;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.external.dto.v2.TotalExpectationResponse;
 import maple.expectation.support.TestLogicExecutors;

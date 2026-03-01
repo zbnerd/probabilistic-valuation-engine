@@ -16,4 +16,11 @@ interface PopularCharacterTrackerPort {
      * @return 전날 인기 캐릭터 목록
      */
     fun getYesterdayTopCharacters(limit: Int): List<String>
+
+    /**
+     * 캐릭터 접근 기록 (Auto Warmup)
+     *
+     * @param userIgn 캐릭터 IGN
+     */
+    fun recordAccess(userIgn: String)
 }

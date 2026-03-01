@@ -1,0 +1,42 @@
+package maple.expectation.core.port.inbound
+
+import java.util.concurrent.CompletableFuture
+
+/**
+ * V4 기대값 계산 Port (ADR-005)
+ *
+ * <p>책임: 장비 기대값 계산 및 GZIP 응답
+ *
+ * <p>구현체:
+ * <ul>
+ *   <li>module-app/adapter/in/ExpectationV4PortAdapter - EquipmentExpectationServiceV4에 위임
+ * </ul>
+ */
+interface ExpectationV4Port {
+
+    /**
+     * 기대값 비동기 계산
+     *
+     * @param userIgn 캐릭터 IGN
+     * @param force 강제 재계산 여부
+     * @return 기대값 응답 (Any = EquipmentExpectationResponseV4)
+     */
+    fun calculateExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<Any>
+
+    /**
+     * GZIP 기대값 비동기 조회
+     *
+     * @param userIgn 캐릭터 IGN
+     * @param force 강제 재계산 여부
+     * @return GZIP 바이트 배열
+     */
+    fun getGzipExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<ByteArray?>
+
+    /**
+     * L1 캐시에서 GZIP 직접 조회 (Fast Path)
+     *
+     * @param userIgn 캐릭터 IGN
+     * @return GZIP 바이트 또는 null
+     */
+    fun getGzipFromL1CacheDirect(userIgn: String): ByteArray?
+}

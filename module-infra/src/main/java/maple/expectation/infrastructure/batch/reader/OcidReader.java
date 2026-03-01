@@ -1,4 +1,4 @@
-package maple.expectation.batch.reader;
+package maple.expectation.infrastructure.batch.reader;
 
 import java.util.Iterator;
 import lombok.RequiredArgsConstructor;

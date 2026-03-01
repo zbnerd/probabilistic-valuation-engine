@@ -1,4 +1,4 @@
-package maple.expectation.batch;
+package maple.expectation.infrastructure.batch;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

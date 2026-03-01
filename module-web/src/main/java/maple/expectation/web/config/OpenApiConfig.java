@@ -1,4 +1,4 @@
-package maple.expectation.config;
+package maple.expectation.web.config;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
@@ -10,6 +10,11 @@ import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import io.swagger.v3.oas.annotations.servers.Server;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * OpenAPI/Swagger Configuration (ADR-005 이관)
+ *
+ * <p>API 문서화 및 인증 스키마 정의
+ */
 @Configuration
 @OpenAPIDefinition(
     info =

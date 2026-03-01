@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse;
-import maple.expectation.service.v2.worker.EquipmentDbWorker;
+import maple.expectation.infrastructure.persistence.worker.EquipmentDbWorker;
 import maple.expectation.support.TestLogicExecutors;
 import maple.expectation.testfixtures.Fixtures;
 import org.junit.jupiter.api.BeforeEach;

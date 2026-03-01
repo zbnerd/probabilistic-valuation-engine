@@ -8,7 +8,7 @@ import maple.expectation.infrastructure.cache.port.EquipmentCache;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse;
-import maple.expectation.service.v2.worker.EquipmentDbWorker;
+import maple.expectation.infrastructure.persistence.worker.EquipmentDbWorker;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;

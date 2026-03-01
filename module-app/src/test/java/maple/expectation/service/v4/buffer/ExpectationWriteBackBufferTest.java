@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.infrastructure.buffer.ExpectationWriteTask;
 import maple.expectation.infrastructure.config.BufferProperties;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.support.TestLogicExecutors;

@@ -13,6 +13,7 @@ import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.core.domain.model.Page;
 import maple.expectation.core.domain.model.PageRequest;
 import maple.expectation.core.port.out.OcidQueryPort;
+import maple.expectation.infrastructure.batch.reader.OcidReader;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import org.junit.jupiter.api.BeforeEach;

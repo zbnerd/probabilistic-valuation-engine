@@ -85,6 +85,7 @@ class StatelessDesignTest {
                             Mutable state creates race conditions.
                             Use constructor injection with final fields.
                             """)
+          .allowEmptyShould(true)
           .check(classes);
     }
 

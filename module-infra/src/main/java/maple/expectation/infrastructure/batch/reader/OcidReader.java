@@ -85,7 +85,7 @@ public class OcidReader implements ItemReader<String> {
    * @param stepExecution 현재 Step 실행 컨텍스트
    */
   @BeforeStep
-  void initializeState(StepExecution stepExecution) {
+  public void initializeState(StepExecution stepExecution) {
     this.ocidIterator = null;
     this.currentPage = 0;
     this.hasNextPage = true;

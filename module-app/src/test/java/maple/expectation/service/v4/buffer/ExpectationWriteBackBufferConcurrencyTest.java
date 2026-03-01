@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.infrastructure.buffer.ExpectationWriteTask;
 import maple.expectation.infrastructure.config.BufferProperties;
 import maple.expectation.support.TestLogicExecutors;
 import org.junit.jupiter.api.AfterEach;

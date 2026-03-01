@@ -1,10 +1,10 @@
-package maple.expectation.controller;
+package maple.expectation.controller.v1;
 
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
+import maple.expectation.core.port.out.GameCharacterPort;
 import maple.expectation.domain.model.character.GameCharacter;
-import maple.expectation.dto.response.CharacterResponse;
-import maple.expectation.service.v2.facade.GameCharacterFacade;
+import maple.expectation.web.dto.response.CharacterResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,33 +13,31 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 캐릭터 API V1 (레거시)
+ * 캐릭터 API V1 (레거시) - ADR-005 이관
  *
  * <p>Note: 좋아요 API는 V2로 이관됨 (인증 필요, Self-Like/중복 방지)
  *
- * <p>Issue #128: Entity 직접 노출 방지, DTO로 응답 크기 최적화
+ * <p>ADR-005 Hexagonal Architecture:
  *
- * @see maple.expectation.controller.GameCharacterControllerV2
+ * <ul>
+ *   <li>GameCharacterPort: 캐릭터 조회
+ * </ul>
  */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/characters")
 public class GameCharacterControllerV1 {
 
-  private final GameCharacterFacade gameCharacterFacade;
+  private final GameCharacterPort gameCharacterPort;
 
-  /**
-   * 캐릭터 정보 조회
-   *
-   * <p>Issue #128: Entity → DTO 변환으로 응답 크기 최적화 (350KB → 4KB)
-   */
+  /** 캐릭터 정보 조회 */
   @GetMapping("/{userIgn}")
   @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
   public CompletableFuture<ResponseEntity<CharacterResponse>> findCharacterByUserIgn(
       @PathVariable String userIgn) {
     return CompletableFuture.supplyAsync(
         () -> {
-          GameCharacter character = gameCharacterFacade.findCharacterByUserIgn(userIgn);
+          GameCharacter character = gameCharacterPort.getCharacterOrThrow(userIgn);
           return ResponseEntity.ok(CharacterResponse.fromDomainModel(character));
         });
   }

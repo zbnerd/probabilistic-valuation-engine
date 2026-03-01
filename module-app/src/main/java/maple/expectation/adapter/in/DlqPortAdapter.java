@@ -2,6 +2,7 @@ package maple.expectation.adapter.in;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.controller.dto.common.CursorPageRequest;
 import maple.expectation.core.port.inbound.DlqPort;
 import maple.expectation.service.v2.donation.outbox.DlqAdminService;
 import org.springframework.stereotype.Component;
@@ -41,5 +42,11 @@ public class DlqPortAdapter implements DlqPort {
   @Override
   public long count() {
     return dlqAdminService.count();
+  }
+
+  @Override
+  public Object findAllByCursor(Long cursor, int size) {
+    CursorPageRequest request = CursorPageRequest.of(cursor, size);
+    return dlqAdminService.findAllByCursor(request);
   }
 }

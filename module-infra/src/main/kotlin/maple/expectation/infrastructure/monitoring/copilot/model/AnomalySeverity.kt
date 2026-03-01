@@ -1,12 +1,10 @@
 package maple.expectation.infrastructure.monitoring.copilot.model
 
-/**
- * Anomaly Severity Levels
- */
+/** Anomaly Severity Levels */
 enum class AnomalySeverity {
-  /** Warning level - exceeds warning threshold */
-  WARNING,
+    /** Warning level - exceeds warning threshold */
+    WARNING,
 
-  /** Critical level - exceeds critical threshold or extreme Z-score */
-  CRITICAL
+    /** Critical level - exceeds critical threshold or extreme Z-score */
+    CRITICAL
 }

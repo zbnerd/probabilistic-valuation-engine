@@ -3,9 +3,9 @@ package maple.expectation.service.v2.alert;
 import java.time.Duration;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.monitoring.ai.AiSreService;
-import maple.expectation.monitoring.ai.AiSreService.AiAnalysisResult;
-import maple.expectation.monitoring.context.SystemContextProvider;
+import maple.expectation.infrastructure.monitoring.ai.AiSreService;
+import maple.expectation.infrastructure.monitoring.ai.AiSreService.AiAnalysisResult;
+import maple.expectation.infrastructure.monitoring.context.SystemContextProvider;
 import maple.expectation.service.v2.alert.dto.DiscordMessage;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -108,8 +108,8 @@ public class DiscordAlertService {
             log.info(
                 "[AiSre] 분석 완료: {} -> {} ({})",
                 e.getClass().getSimpleName(),
-                analysis.severity(),
-                analysis.analysisSource()),
+                analysis.getSeverity(),
+                analysis.getAnalysisSource()),
         () -> log.debug("[AiSre] AI 분석 스킵 또는 실패: {}", e.getClass().getSimpleName()));
   }
 

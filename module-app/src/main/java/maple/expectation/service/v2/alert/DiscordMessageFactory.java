@@ -7,7 +7,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import maple.expectation.monitoring.ai.AiSreService.AiAnalysisResult;
+import maple.expectation.infrastructure.monitoring.ai.AiSreService.AiAnalysisResult;
 import maple.expectation.service.v2.alert.dto.DiscordMessage;
 import org.springframework.stereotype.Component;
 
@@ -88,15 +88,17 @@ public class DiscordMessageFactory {
   private DiscordMessage.Embed createAiAnalysisEmbed(AiAnalysisResult analysis) {
     List<DiscordMessage.Field> fields = new ArrayList<>();
 
-    fields.add(new DiscordMessage.Field("🔍 Root Cause", analysis.rootCause(), false));
+    fields.add(new DiscordMessage.Field("🔍 Root Cause", analysis.getRootCause(), false));
     fields.add(
         new DiscordMessage.Field(
-            "⚡ Severity", severityEmoji(analysis.severity()) + " " + analysis.severity(), true));
-    fields.add(new DiscordMessage.Field("🔗 Affected", analysis.affectedComponents(), true));
+            "⚡ Severity",
+            severityEmoji(analysis.getSeverity()) + " " + analysis.getSeverity(),
+            true));
+    fields.add(new DiscordMessage.Field("🔗 Affected", analysis.getAffectedComponents(), true));
     fields.add(
         new DiscordMessage.Field(
-            "📋 Action Items", formatActionItems(analysis.actionItems()), false));
-    fields.add(new DiscordMessage.Field("📊 Analysis Source", analysis.analysisSource(), true));
+            "📋 Action Items", formatActionItems(analysis.getActionItems()), false));
+    fields.add(new DiscordMessage.Field("📊 Analysis Source", analysis.getAnalysisSource(), true));
 
     // [P0-Purple] 필수 경고 문구
     fields.add(new DiscordMessage.Field("⚠️ Disclaimer", AI_DISCLAIMER, false));
@@ -106,7 +108,7 @@ public class DiscordMessageFactory {
         "자동화된 에러 분석 결과입니다.",
         AI_COLOR,
         fields,
-        new DiscordMessage.Footer("Powered by GPT-4o-mini | " + analysis.analysisSource()),
+        new DiscordMessage.Footer("Powered by GPT-4o-mini | " + analysis.getAnalysisSource()),
         ZonedDateTime.now().format(DateTimeFormatter.ISO_INSTANT));
   }
 

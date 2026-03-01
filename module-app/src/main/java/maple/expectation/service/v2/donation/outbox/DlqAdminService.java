@@ -2,11 +2,6 @@ package maple.expectation.service.v2.donation.outbox;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.controller.dto.dlq.DlqDetailResponse;
-import maple.expectation.controller.dto.dlq.DlqEntryResponse;
-import maple.expectation.controller.dto.dlq.DlqReprocessResult;
-import maple.expectation.controller.dto.page.CursorPageRequest;
-import maple.expectation.controller.dto.page.CursorPageResponse;
 import maple.expectation.domain.v2.DonationDlq;
 import maple.expectation.domain.v2.DonationOutbox;
 import maple.expectation.error.exception.DlqNotFoundException;
@@ -14,6 +9,11 @@ import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.persistence.repository.DonationDlqRepository;
 import maple.expectation.infrastructure.persistence.repository.DonationOutboxRepository;
+import maple.expectation.web.dto.dlq.DlqDetailResponse;
+import maple.expectation.web.dto.dlq.DlqEntryResponse;
+import maple.expectation.web.dto.dlq.DlqReprocessResult;
+import maple.expectation.web.dto.page.CursorPageRequest;
+import maple.expectation.web.dto.page.CursorPageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
@@ -205,16 +205,16 @@ public class DlqAdminService {
         TaskContext.of(
             "DlqAdmin",
             "FindByCursor",
-            request.cursor() != null ? String.valueOf(request.cursor()) : "first");
+            request.getCursor() != null ? String.valueOf(request.getCursor()) : "first");
 
     return executor.execute(
         () -> {
-          PageRequest pageRequest = PageRequest.of(0, request.size());
+          PageRequest pageRequest = PageRequest.of(0, request.getSize());
 
           Slice<DonationDlq> slice =
-              (request.cursor() == null)
+              (request.getCursor() == null)
                   ? dlqRepository.findFirstPage(pageRequest)
-                  : dlqRepository.findByCursorGreaterThan(request.cursor(), pageRequest);
+                  : dlqRepository.findByCursorGreaterThan(request.getCursor(), pageRequest);
 
           return CursorPageResponse.fromWithMapping(
               slice, DlqEntryResponse::from, DonationDlq::getId);

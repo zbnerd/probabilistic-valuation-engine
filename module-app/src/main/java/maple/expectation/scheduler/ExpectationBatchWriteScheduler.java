@@ -138,13 +138,13 @@ public class ExpectationBatchWriteScheduler {
       executor.executeOrCatch(
           () -> {
             repository.upsertExpectationSummary(
-                task.characterId(),
-                task.presetNo(),
-                task.totalExpectedCost(),
-                task.blackCubeCost(),
-                task.redCubeCost(),
-                task.additionalCubeCost(),
-                task.starforceCost());
+                task.getCharacterId(),
+                task.getPresetNo(),
+                task.getTotalExpectedCost(),
+                task.getBlackCubeCost(),
+                task.getRedCubeCost(),
+                task.getAdditionalCubeCost(),
+                task.getStarforceCost());
             return null;
           },
           e -> {

@@ -10,6 +10,7 @@ import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.ExpectationBufferPort;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import maple.expectation.infrastructure.config.BufferProperties;
 import maple.expectation.infrastructure.executor.LogicExecutor;
@@ -46,7 +47,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-public class ExpectationWriteBackBuffer {
+public class ExpectationWriteBackBuffer implements ExpectationBufferPort {
 
   private final ConcurrentLinkedQueue<ExpectationWriteTask> queue = new ConcurrentLinkedQueue<>();
   private final AtomicInteger pendingCount = new AtomicInteger(0);

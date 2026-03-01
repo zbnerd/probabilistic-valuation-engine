@@ -3,12 +3,12 @@ package maple.expectation.scheduler
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import maple.expectation.infrastructure.buffer.ExpectationWriteTask
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.EquipmentExpectationSummaryRepository
 import maple.expectation.infrastructure.shutdown.ShutdownProperties
 import maple.expectation.service.v4.buffer.ExpectationWriteBackBuffer
-import maple.expectation.service.v4.buffer.ExpectationWriteTask
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component

@@ -1,4 +1,4 @@
-package maple.expectation.batch.writer;
+package maple.expectation.infrastructure.batch.writer;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

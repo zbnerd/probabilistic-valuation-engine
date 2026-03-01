@@ -1,4 +1,4 @@
-package maple.expectation.batch;
+package maple.expectation.infrastructure.batch;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -7,11 +7,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.model.AlertMessage;
 import maple.expectation.core.port.out.AlertPort;
+import maple.expectation.core.port.out.SystemMetricsPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.lock.LockStrategy;
 import maple.expectation.infrastructure.monitoring.collector.MetricCategory;
-import maple.expectation.monitoring.context.SystemContextProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -35,7 +35,7 @@ import org.springframework.stereotype.Component;
  *   <li>ADR-003: Hexagonal Architecture - AlertPort (outbound port) 사용
  * </ul>
  *
- * @see SystemContextProvider
+ * @see SystemMetricsPort
  * @see AlertPort
  */
 @Slf4j
@@ -43,7 +43,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MonitoringReportJob {
 
-  private final SystemContextProvider contextProvider;
+  private final SystemMetricsPort systemMetrics;
   private final LockStrategy lockStrategy;
   private final LogicExecutor executor;
 
@@ -102,7 +102,8 @@ public class MonitoringReportJob {
     log.info("[MonitoringReport] {} 리포트 생성 시작", reportType);
 
     // 1. 메트릭 수집
-    Map<MetricCategory, Map<String, Object>> allMetrics = contextProvider.collectAllMetrics();
+    Map<MetricCategory, Map<String, Object>> allMetrics =
+        (Map<MetricCategory, Map<String, Object>>) systemMetrics.collectAllMetrics();
 
     // 2. 리포트 메시지 생성
     AlertMessage report = createReportMessage(reportType, allMetrics);

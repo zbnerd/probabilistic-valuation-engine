@@ -1,7 +1,7 @@
 # ADR-005: 모듈 의존성 그래프 및 이관 전략
 
 ## 상태
-In Progress (2026-02-28)
+Completed (2026-03-01)
 
 ## 컨텍스트
 
@@ -59,7 +59,7 @@ Adapter 구현: module-infra/adapter/
 
 ## 이관 순서
 
-### Phase 1: 기반 정립 (P0)
+### Phase 1: 기반 정립 (P0) ✅
 1. **#410 Gradle 의존성 규칙 고정**
    - build.gradle 의존성 방향 검증
    - ArchUnit 테스트 추가
@@ -68,9 +68,9 @@ Adapter 구현: module-infra/adapter/
    - 공통 DTO, 에러 모델 분리
    - Spring-web 의존 제거
 
-### Phase 2: 외부 계층 이관 (P1)
+### Phase 2: 외부 계층 이관 (P1) ✅
 3. **#411-413 Web 이관**
-   - Controller → module-web
+   - Controller → module-web (PR #470-475)
    - Filter → module-web
    - WebConfig → module-web
 
@@ -78,15 +78,27 @@ Adapter 구현: module-infra/adapter/
    - 유즈케이스/서비스 정리
    - 트랜잭션 경계 명확화
 
-### Phase 3: 인프라 이관 (P2)
+### Phase 3: 인프라 이관 (P2) ✅
 5. **#424-434 Infra 이관**
    - Batch/Cache/Redis/Client 구현체
    - Adapter 패턴 적용
+   - QueueWriterPort, OcidQueryPort, AlertPort 추출 완료
 
-### Phase 4: 검증 (P3)
+### Phase 4: 검증 (P3) ✅
 6. **#439-443 통합 검증/문서화**
    - CI 파이프라인 업데이트
    - ADR 상태 업데이트
+
+## 이관 완료된 Controller
+
+| Controller | PR | Port |
+|------------|-----|------|
+| AdminController | #470 | AlertPort |
+| AlertTestController | #470 | AlertPort |
+| GameCharacterControllerV5 | #472 | CharacterViewQueryPort, CalculationQueuePort |
+| GameCharacterControllerV4 | #473 | ExpectationV4Port, PopularCharacterTrackerPort |
+| GameCharacterControllerV1 | #474 | GameCharacterPort |
+| DlqAdminController | #475 | DlqPort |
 
 ## 패키지 구조
 
@@ -94,11 +106,12 @@ Adapter 구현: module-infra/adapter/
 module-core/
 ├── domain/           # Entity, VO, Policy
 ├── port/
-│   ├── in/          # Inbound Port (선택)
-│   └── out/         # Outbound Port (Repository, Client)
+│   ├── inbound/      # Inbound Port
+│   └── outbound/     # Outbound Port (Repository, Client)
 
 module-app/
 ├── application/     # Usecase, Service
+├── adapter/         # Port Adapters
 ├── dto/            # 유즈케이스 내부 DTO
 
 module-infra/
@@ -109,6 +122,12 @@ module-infra/
 
 module-web/
 ├── controller/
+│   ├── v1/
+│   ├── v4/
+│   └── v5/
+├── web/
+│   ├── controller/
+│   └── dto/common/
 ├── filter/
 ├── dto/            # Request/Response DTO
 ├── config/         # WebConfig
@@ -146,4 +165,5 @@ module-common/
 
 | 날짜 | 상태 | 변경 사항 |
 |------|------|-----------|
+| 2026-03-01 | Completed | 모든 Phase 완료, Web Controller 6개 이관 |
 | 2026-02-28 | Proposed | 의존성 그래프 및 이관 전략 수립 |

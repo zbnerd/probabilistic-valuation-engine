@@ -1,17 +1,17 @@
-package maple.expectation.controller;
+package maple.expectation.controller.v5;
 
 import jakarta.validation.constraints.NotBlank;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.dto.v5.EquipmentExpectationResponseV5;
+import maple.expectation.core.port.inbound.CalculationQueuePort;
+import maple.expectation.core.port.inbound.CharacterViewQueryPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.mongodb.CharacterViewQueryService;
-import maple.expectation.service.v5.mapper.CharacterViewMapper;
-import maple.expectation.service.v5.queue.ExpectationCalculationTask;
-import maple.expectation.service.v5.queue.PriorityCalculationQueue;
+import maple.expectation.infrastructure.mongodb.CharacterValuationView;
+import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5;
+import maple.expectation.web.mapper.CharacterViewMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * V5 CQRS 캐릭터 컨트롤러
+ * V5 CQRS 캐릭터 컨트롤러 (ADR-005 이관)
  *
  * <h3>CQRS Pattern</h3>
  *
@@ -33,20 +33,11 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li><b>Sync:</b> Redis Stream character-sync → MongoDB upsert
  * </ul>
  *
- * <h3>Flowchart Flow</h3>
- *
- * <pre>
- * Client Request → MongoDB Check (Query Side)
- *   → HIT: Return JSON (1-10ms) [200 OK]
- *   → MISS: Queue Calculation (Command Side) → Return 202 Accepted
- * </pre>
- *
- * <h3>SOLID Compliance</h3>
+ * <h3>ADR-005 Hexagonal Architecture</h3>
  *
  * <ul>
- *   <li><b>SRP:</b> Only handles HTTP request/response, delegates to services
- *   <li><b>DIP:</b> Depends on CharacterViewQueryService abstraction
- *   <li><b>LogicExecutor:</b> All operations via executeOrDefault/executeVoid
+ *   <li>CharacterViewQueryPort: MongoDB 조회
+ *   <li>CalculationQueuePort: 큐 작업 추가
  * </ul>
  */
 @Slf4j
@@ -56,52 +47,38 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnProperty(name = "v5.enabled", havingValue = "true", matchIfMissing = false)
 public class GameCharacterControllerV5 {
 
-  private final CharacterViewQueryService queryService;
-  private final PriorityCalculationQueue queue;
+  private final CharacterViewQueryPort queryPort;
+  private final CalculationQueuePort queuePort;
   private final LogicExecutor executor;
 
   /**
    * V5: 캐릭터 기대값 조회 (CQRS - MongoDB Read First)
    *
-   * <h4>Flowchart Flow</h4>
-   *
-   * <pre>
-   * Client Request → MongoDB Check (Query Side)
-   *   → HIT: Return EquipmentExpectationResponseV5 (1-10ms)
-   *   → MISS: Queue Calculation → Return 202 Accepted
-   * </pre>
-   *
-   * <h4>LogicExecutor Usage (Section 12)</h4>
-   *
-   * <ul>
-   *   <li>executeOrDefault: MongoDB lookup with null fallback
-   *   <li>executeVoid: Queue operation (no return value)
-   * </ul>
-   *
    * @param userIgn 캐릭터 IGN
    * @return V5 response DTO or 202 Accepted if calculation queued
    */
   @GetMapping("/{userIgn}/expectation")
-  @PreAuthorize("permitAll()") // Public API: 캐릭터 조회는 비인증 접근 허용
+  @PreAuthorize("permitAll()")
   public CompletableFuture<ResponseEntity<?>> getExpectationV5(
       @PathVariable @NotBlank String userIgn) {
 
     log.debug("[V5] Query expectation for: {}", maskIgn(userIgn));
 
-    // Use CompletableFuture for async response
     return CompletableFuture.supplyAsync(() -> processMongoDBCacheFirstLookup(userIgn));
   }
 
   private ResponseEntity<?> processMongoDBCacheFirstLookup(String userIgn) {
     TaskContext context = TaskContext.of("V5Query", "CacheFirstLookup", userIgn);
 
-    // 1. Query Side: Check MongoDB first (LogicExecutor: executeOrDefault)
+    // 1. Query Side: Check MongoDB first via Port
     Optional<EquipmentExpectationResponseV5> cachedResult =
         executor.executeOrDefault(
             () -> {
-              maple.expectation.infrastructure.mongodb.CharacterValuationView view =
-                  queryService.findByUserIgn(userIgn);
-              return CharacterViewMapper.toResponseDto(view);
+              Object view = queryPort.findByUserIgn(userIgn);
+              if (view instanceof CharacterValuationView valuationView) {
+                return CharacterViewMapper.toResponseDto(valuationView);
+              }
+              return Optional.<EquipmentExpectationResponseV5>empty();
             },
             Optional.empty(),
             context);
@@ -112,26 +89,18 @@ public class GameCharacterControllerV5 {
       return ResponseEntity.ok(cachedResult.get());
     }
 
-    // 3. MISS: Queue to Command Side
+    // 3. MISS: Queue to Command Side via Port
     return queueCalculationTask(userIgn, false, context);
   }
 
   /**
    * V5: 기대값 강제 재계산 (Cache Invalidation)
    *
-   * <h4>Flow</h4>
-   *
-   * <ol>
-   *   <li>Delete MongoDB view (invalidate cache)
-   *   <li>Queue calculation with force=true
-   *   <li>Return 202 Accepted
-   * </ol>
-   *
    * @param userIgn 캐릭터 IGN
    * @return 202 Accepted if calculation queued
    */
   @PostMapping("/{userIgn}/expectation/recalculate")
-  @PreAuthorize("permitAll()") // Public API: 재계산 요청 (인증 구현 후 hasRole('USER') 권장)
+  @PreAuthorize("permitAll()")
   public CompletableFuture<ResponseEntity<?>> recalculateExpectationV5(
       @PathVariable String userIgn) {
 
@@ -143,34 +112,21 @@ public class GameCharacterControllerV5 {
   private ResponseEntity<?> processCacheInvalidation(String userIgn) {
     TaskContext context = TaskContext.of("V5Query", "InvalidateAndRecalculate", userIgn);
 
-    // 1. Invalidate MongoDB cache
-    executor.executeVoidJava(() -> queryService.deleteByUserIgn(userIgn), context);
+    // 1. Invalidate MongoDB cache via Port
+    executor.executeVoidJava(() -> queryPort.deleteByUserIgn(userIgn), context);
 
-    // 2. Queue with force=true
+    // 2. Queue with force=true via Port
     return queueCalculationTask(userIgn, true, context);
   }
 
   // ==================== Private Helper Methods ====================
 
-  /**
-   * Queue calculation task with proper error handling
-   *
-   * <p>LogicExecutor Section 12 compliance: executeOrDefault for boolean return
-   *
-   * @return 202 Accepted if queued, 503 Service Unavailable if queue full
-   */
   private ResponseEntity<?> queueCalculationTask(
       String userIgn, boolean forceRecalculation, TaskContext context) {
 
     boolean queued =
         executor.executeOrDefault(
-            () -> {
-              ExpectationCalculationTask task =
-                  ExpectationCalculationTask.highPriority(userIgn, forceRecalculation);
-              return queue.offer(task);
-            },
-            false,
-            context);
+            () -> queuePort.offerHighPriority(userIgn, forceRecalculation), false, context);
 
     if (queued) {
       log.info("[V5] MongoDB MISS, queued calculation: {}", maskIgn(userIgn));
@@ -182,7 +138,6 @@ public class GameCharacterControllerV5 {
     }
   }
 
-  /** Mask IGN for privacy logging */
   private String maskIgn(String ign) {
     if (ign == null || ign.length() < 2) return "***";
     return ign.charAt(0) + "***" + ign.substring(ign.length() - 1);

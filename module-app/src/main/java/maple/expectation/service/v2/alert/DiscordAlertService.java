@@ -108,8 +108,8 @@ public class DiscordAlertService {
             log.info(
                 "[AiSre] 분석 완료: {} -> {} ({})",
                 e.getClass().getSimpleName(),
-                analysis.severity(),
-                analysis.analysisSource()),
+                analysis.getSeverity(),
+                analysis.getAnalysisSource()),
         () -> log.debug("[AiSre] AI 분석 스킵 또는 실패: {}", e.getClass().getSimpleName()));
   }
 

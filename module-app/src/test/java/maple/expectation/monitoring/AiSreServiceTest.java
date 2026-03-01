@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import java.sql.SQLException;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import maple.expectation.monitoring.ai.AiSreService;
+import maple.expectation.infrastructure.monitoring.ai.AiSreService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -59,8 +59,8 @@ class AiSreServiceTest {
 
     // then
     assertThat(future).isCompletedWithValue(Optional.of(mockResult));
-    assertThat(mockResult.rootCause()).isEqualTo("Database connection timeout");
-    assertThat(mockResult.severity()).isEqualTo("high");
+    assertThat(mockResult.getRootCause()).isEqualTo("Database connection timeout");
+    assertThat(mockResult.getSeverity()).isEqualTo("high");
   }
 
   @Test
@@ -130,8 +130,12 @@ class AiSreServiceTest {
 
     // then
     CompletableFuture.allOf(future1, future2).join();
-    assertThat(future1.get()).isPresent().hasValueSatisfying(r -> r.rootCause().equals("Cause 1"));
-    assertThat(future2.get()).isPresent().hasValueSatisfying(r -> r.rootCause().equals("Cause 2"));
+    assertThat(future1.get())
+        .isPresent()
+        .hasValueSatisfying(r -> r.getRootCause().equals("Cause 1"));
+    assertThat(future2.get())
+        .isPresent()
+        .hasValueSatisfying(r -> r.getRootCause().equals("Cause 2"));
 
     verify(aiSreService).analyzeErrorAsync(exception1);
     verify(aiSreService).analyzeErrorAsync(exception2);

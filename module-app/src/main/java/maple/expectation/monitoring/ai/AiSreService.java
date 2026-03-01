@@ -9,9 +9,9 @@ import java.util.concurrent.Executor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import maple.expectation.infrastructure.monitoring.copilot.model.IncidentContext;
 import maple.expectation.infrastructure.monitoring.security.PiiMaskingFilter;
 import maple.expectation.monitoring.context.SystemContextProvider;
-import maple.expectation.monitoring.copilot.model.IncidentContext;
 import maple.expectation.monitoring.throttle.AlertThrottler;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -334,7 +334,7 @@ public class AiSreService {
    */
   @CircuitBreaker(name = "openAiApi", fallbackMethod = "fallbackIncidentAnalysis")
   public MitigationPlan analyzeIncident(IncidentContext context) {
-    TaskContext taskContext = TaskContext.of("AiSre", "AnalyzeIncident", context.incidentId());
+    TaskContext taskContext = TaskContext.of("AiSre", "AnalyzeIncident", context.getIncidentId());
 
     return executor.executeOrDefault(
         () -> performIncidentAnalysisInternal(context),
@@ -355,7 +355,7 @@ public class AiSreService {
     String response = chatModel.generate(prompt.systemPrompt() + "\n\n" + prompt.userPrompt());
 
     // 4. JSON 파싱 (AiResponseParser 위임)
-    return responseParser.parseMitigationPlanJson(response, context.incidentId());
+    return responseParser.parseMitigationPlanJson(response, context.getIncidentId());
   }
 
   /** Fallback: 기본 완화 계획 (Circuit Breaker Open 또는 LLM 실패 시) */
@@ -363,7 +363,7 @@ public class AiSreService {
   private MitigationPlan fallbackIncidentAnalysis(IncidentContext context, Throwable cause) {
     log.warn(
         "[AiSre] LLM 인시던트 분석 실패, 기본 계획 사용: incidentId={}, cause={}",
-        context.incidentId(),
+        context.getIncidentId(),
         cause.getMessage());
 
     return createDefaultMitigationPlan(context);
@@ -387,7 +387,7 @@ public class AiSreService {
     RollbackPlan rollbackPlan = new RollbackPlan("상태 악화 시 즉시 실행", List.of("이전 커밋으로 롤백", "영향도 재평가"));
 
     return new MitigationPlan(
-        context.incidentId(),
+        context.getIncidentId(),
         "RULE_BASED_FALLBACK",
         defaultHypotheses,
         defaultActions,

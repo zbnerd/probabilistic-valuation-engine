@@ -4,10 +4,11 @@ import dev.langchain4j.model.input.Prompt;
 import dev.langchain4j.model.input.PromptTemplate;
 import java.util.List;
 import java.util.Map;
+import maple.expectation.infrastructure.monitoring.copilot.model.AnomalyEvent;
+import maple.expectation.infrastructure.monitoring.copilot.model.EvidenceItem;
+import maple.expectation.infrastructure.monitoring.copilot.model.IncidentContext;
+import maple.expectation.infrastructure.monitoring.copilot.model.RichEvidence;
 import maple.expectation.infrastructure.monitoring.security.PiiMaskingFilter;
-import maple.expectation.monitoring.copilot.model.AnomalyEvent;
-import maple.expectation.monitoring.copilot.model.EvidenceItem;
-import maple.expectation.monitoring.copilot.model.IncidentContext;
 import org.springframework.stereotype.Component;
 
 /**
@@ -173,13 +174,13 @@ public class AiPromptBuilder {
   public PromptWithSystem buildIncidentAnalysisPrompt(
       IncidentContext context, String systemContext) {
     // 이상 징후 포맷팅
-    String anomaliesText = formatAnomalies(context.anomalies());
+    String anomaliesText = formatAnomalies(context.getAnomalies());
 
     // 증거 항목 포맷팅
-    String evidenceText = formatEvidence(context.evidence());
+    String evidenceText = formatEvidence(context.getEvidence());
 
     // 메타데이터 포맷팅
-    String metadataText = formatMetadata(context.metadata());
+    String metadataText = formatMetadata(context.getMetadata());
 
     // PII 마스킹
     String maskedAnomalies = piiFilter.mask(anomaliesText);
@@ -191,15 +192,15 @@ public class AiPromptBuilder {
         INCIDENT_ANALYSIS_TEMPLATE.apply(
             Map.of(
                 "summary",
-                context.summary(),
+                context.getSummary(),
                 "incidentId",
-                context.incidentId(),
+                context.getIncidentId(),
                 "anomalyCount",
-                context.anomalies().size(),
+                context.getAnomalies().size(),
                 "anomalies",
                 maskedAnomalies,
                 "evidenceCount",
-                context.evidence().size(),
+                context.getEvidence().size(),
                 "evidence",
                 maskedEvidence,
                 "systemContext",
@@ -229,12 +230,12 @@ public class AiPromptBuilder {
                         - 현재값: %.2f (기준: %.2f)
                     """,
               i + 1,
-              anomaly.signalId(),
-              anomaly.severity(),
-              anomaly.reason(),
-              anomaly.detectedAtMillis(),
-              anomaly.currentValue(),
-              anomaly.baselineValue()));
+              anomaly.getSignalId(),
+              anomaly.getSeverity(),
+              anomaly.getReason(),
+              anomaly.getDetectedAtMillis(),
+              anomaly.getCurrentValue(),
+              anomaly.getBaselineValue()));
     }
     return sb.toString();
   }
@@ -255,9 +256,8 @@ public class AiPromptBuilder {
                         [%d] %s (%s)
                             %s
                         """,
-                i + 1, evidenceItem.title(), evidenceItem.type(), evidenceItem.body()));
-      } else if (item
-          instanceof maple.expectation.monitoring.copilot.model.RichEvidence richEvidence) {
+                i + 1, evidenceItem.getTitle(), evidenceItem.getType(), evidenceItem.getBody()));
+      } else if (item instanceof RichEvidence richEvidence) {
         sb.append(
             String.format(
                 """
@@ -266,11 +266,11 @@ public class AiPromptBuilder {
                             Query: %s
                         """,
                 i + 1,
-                richEvidence.signalName(),
-                richEvidence.currentValue(),
-                richEvidence.baselineValue(),
+                richEvidence.getSignalName(),
+                richEvidence.getCurrentValue(),
+                richEvidence.getBaselineValue(),
                 richEvidence.formattedDeviation(),
-                richEvidence.promql()));
+                richEvidence.getPromql()));
       } else {
         sb.append(String.format("[%d] %s\n", i + 1, item.toString()));
       }

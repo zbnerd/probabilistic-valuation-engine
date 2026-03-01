@@ -75,13 +75,19 @@ class TimeBasedSlidingWindowStrategy(
       signal: SignalDefinition,
       currentTimestamp: Long
   ): Boolean {
+    // Skip if no query defined
+    val query = signal.query ?: run {
+      log.debug("[SignalDedup] No query defined for signal: {}", event.signalId)
+      return false
+    }
+
     val detectedAt = java.time.Instant.ofEpochMilli(currentTimestamp)
     val windowStart = java.time.Instant.ofEpochMilli(currentTimestamp - (dedupWindowMinutes * 60 * 1000))
 
     // Query Prometheus for historical data in the window
     val timeSeries: List<PrometheusClient.TimeSeries> =
         prometheusClient.queryRange(
-            signal.query, windowStart, detectedAt, "1m" // 1-minute resolution
+            query, windowStart, detectedAt, "1m" // 1-minute resolution
         )
 
     if (timeSeries.isEmpty()) {

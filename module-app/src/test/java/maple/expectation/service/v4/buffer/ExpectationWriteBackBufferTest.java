@@ -114,7 +114,7 @@ class ExpectationWriteBackBufferTest {
     Set<Long> drainedIds = ConcurrentHashMap.newKeySet();
     while (!buffer.isEmpty()) {
       List<ExpectationWriteTask> batch = buffer.drain(100);
-      batch.forEach(task -> drainedIds.add(task.characterId()));
+      batch.forEach(task -> drainedIds.add(task.getCharacterId()));
     }
 
     // Then: 집합 무결성 검증 (순서 무관)

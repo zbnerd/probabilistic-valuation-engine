@@ -59,8 +59,8 @@ public class AuthService {
    * @return 로그인 응답 (accessToken, expiresIn, role, refreshToken)
    */
   public LoginResponse login(LoginRequest request) {
-    String apiKey = request.apiKey();
-    String userIgn = request.userIgn();
+    String apiKey = request.getApiKey();
+    String userIgn = request.getUserIgn();
 
     // 1. API Key 검증 및 캐릭터 소유권 확인
     ApiKeyValidator.CharacterOwnershipValidationResult validation =

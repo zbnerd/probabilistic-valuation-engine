@@ -37,8 +37,8 @@ class AuthControllerUnitTest {
     LoginRequest request = new LoginRequest("test-api-key", "TestCharacter");
 
     // Then
-    assertThat(request.apiKey()).isEqualTo("test-api-key");
-    assertThat(request.userIgn()).isEqualTo("TestCharacter");
+    assertThat(request.getApiKey()).isEqualTo("test-api-key");
+    assertThat(request.getUserIgn()).isEqualTo("TestCharacter");
   }
 
   @Test

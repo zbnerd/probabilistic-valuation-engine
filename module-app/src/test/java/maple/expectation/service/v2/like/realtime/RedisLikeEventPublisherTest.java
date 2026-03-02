@@ -6,10 +6,10 @@ import static org.mockito.Mockito.*;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import maple.expectation.core.dto.like.LikeEvent;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.queue.RedisKey;
-import maple.expectation.service.v2.like.realtime.dto.LikeEvent;
-import maple.expectation.service.v2.like.realtime.impl.RedisLikeEventPublisher;
+import maple.expectation.infrastructure.queue.like.realtime.RedisLikeEventPublisher;
 import maple.expectation.support.TestLogicExecutors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +21,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.redisson.api.RTopic;
 import org.redisson.api.RedissonClient;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * RedisLikeEventPublisher 단위 테스트
@@ -52,8 +51,8 @@ class RedisLikeEventPublisherTest {
     executor = TestLogicExecutors.passThrough();
     meterRegistry = new SimpleMeterRegistry();
 
-    publisher = new RedisLikeEventPublisher(redissonClient, executor, meterRegistry);
-    ReflectionTestUtils.setField(publisher, "instanceId", "test-instance");
+    publisher =
+        new RedisLikeEventPublisher(redissonClient, executor, meterRegistry, "test-instance");
 
     when(redissonClient.getTopic(RedisKey.LIKE_EVENTS_TOPIC.getKey())).thenReturn(topic);
   }
@@ -87,7 +86,8 @@ class RedisLikeEventPublisherTest {
         .publish(
             argThat(
                 (LikeEvent event) ->
-                    event.eventType() == LikeEvent.EventType.UNLIKE && event.newDelta() == -3L));
+                    event.getEventType() == LikeEvent.EventType.UNLIKE
+                        && event.getNewDelta() == -3L));
   }
 
   @Test
@@ -115,7 +115,7 @@ class RedisLikeEventPublisherTest {
 
     // Then
     verify(topic)
-        .publish(argThat((LikeEvent event) -> "test-instance".equals(event.sourceInstanceId())));
+        .publish(argThat((LikeEvent event) -> "test-instance".equals(event.getSourceInstanceId())));
   }
 
   @Test

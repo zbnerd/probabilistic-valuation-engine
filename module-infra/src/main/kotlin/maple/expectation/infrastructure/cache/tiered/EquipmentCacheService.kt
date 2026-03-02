@@ -58,7 +58,7 @@ class EquipmentCacheService(
     }
 
     /** 캐시 저장 및 비동기 DB persist */
-    override fun saveCache(ocid: String, response: EquipmentResponse) {
+    override fun saveCache(ocid: String, response: EquipmentResponse?) {
         val context = TaskContext.of("EquipmentCache", "Save", ocid)
 
         executor.executeOrCatch(

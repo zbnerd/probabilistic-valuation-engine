@@ -8,6 +8,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import maple.expectation.infrastructure.cache.tiered.EquipmentCacheService;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse;
 import maple.expectation.infrastructure.persistence.worker.EquipmentDbWorker;

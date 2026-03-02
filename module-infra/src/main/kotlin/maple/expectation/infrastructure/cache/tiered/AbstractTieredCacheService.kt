@@ -24,12 +24,10 @@ abstract class AbstractTieredCacheService<T>(
     l1CacheManager: CacheManager,
     protected val executor: LogicExecutor
 ) {
-    protected val tieredCache: Cache = requireNotNull(tieredCacheManager.getCache(cacheName)) {
-        "Tiered cache '$cacheName' must not be null"
-    }
-    protected val l1OnlyCache: Cache = requireNotNull(l1CacheManager.getCache(cacheName)) {
-        "L1-only cache '$cacheName' must not be null"
-    }
+    protected val tieredCache: Cache = tieredCacheManager.getCache(cacheName)
+        ?: throw NullPointerException("Tiered cache '$cacheName' must not be null")
+    protected val l1OnlyCache: Cache = l1CacheManager.getCache(cacheName)
+        ?: throw NullPointerException("L1-only cache '$cacheName' must not be null")
 
     // ==================== Template Methods (Subclasses MUST Implement) ====================
 

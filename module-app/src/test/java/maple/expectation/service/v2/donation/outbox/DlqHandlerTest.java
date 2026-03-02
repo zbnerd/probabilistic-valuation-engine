@@ -7,12 +7,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
+import maple.expectation.core.port.out.ShutdownDataPersistencePort;
 import maple.expectation.domain.v2.DonationDlq;
 import maple.expectation.domain.v2.DonationOutbox;
 import maple.expectation.infrastructure.alert.StatelessAlertService;
+import maple.expectation.infrastructure.donation.dlq.DlqHandler;
+import maple.expectation.infrastructure.donation.outbox.OutboxMetrics;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.persistence.repository.DonationDlqRepository;
-import maple.expectation.service.v2.shutdown.ShutdownDataPersistenceService;
 import maple.expectation.support.TestLogicExecutors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,7 +38,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class DlqHandlerTest {
 
   private DonationDlqRepository dlqRepository;
-  private ShutdownDataPersistenceService fileBackupService;
+  private ShutdownDataPersistencePort fileBackupService;
   private StatelessAlertService statelessAlertService;
   private LogicExecutor executor;
   private OutboxMetrics metrics;
@@ -46,7 +48,7 @@ class DlqHandlerTest {
   @BeforeEach
   void setUp() {
     dlqRepository = mock(DonationDlqRepository.class);
-    fileBackupService = mock(ShutdownDataPersistenceService.class);
+    fileBackupService = mock(ShutdownDataPersistencePort.class);
     statelessAlertService = mock(StatelessAlertService.class);
     executor = TestLogicExecutors.passThrough();
     metrics = mock(OutboxMetrics.class);

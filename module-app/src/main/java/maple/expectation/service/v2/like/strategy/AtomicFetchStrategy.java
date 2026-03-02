@@ -1,6 +1,6 @@
 package maple.expectation.service.v2.like.strategy;
 
-import maple.expectation.service.v2.like.dto.FetchResult;
+import maple.expectation.core.dto.like.FetchResult;
 
 /**
  * 원자적 fetch 전략 인터페이스 (Strategy Pattern)

@@ -3,7 +3,7 @@ package maple.expectation.service.v2.like.event;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
-import maple.expectation.service.v2.like.dto.FetchResult;
+import maple.expectation.core.dto.like.FetchResult;
 
 /**
  * LikeSync 복구 실패 이벤트 (DLQ 패턴)

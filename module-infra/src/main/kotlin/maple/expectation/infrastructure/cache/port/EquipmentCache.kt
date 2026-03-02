@@ -23,7 +23,7 @@ import java.util.Optional
  *   <li>{@code NexonDataCacheAspect} - distributed caching coordination</li>
  * </ul>
  *
- * @see maple.expectation.service.v2.cache.EquipmentCacheService
+ * @see maple.expectation.infrastructure.cache.tiered.EquipmentCacheService
  */
 interface EquipmentCache {
 
@@ -47,7 +47,7 @@ interface EquipmentCache {
      * Save equipment data to cache with async DB persistence
      *
      * @param ocid character OCID
-     * @param response equipment response to cache
+     * @param response equipment response to cache (null to store negative marker)
      */
-    fun saveCache(ocid: String, response: EquipmentResponse)
+    fun saveCache(ocid: String, response: EquipmentResponse?)
 }

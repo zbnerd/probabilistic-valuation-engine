@@ -6,10 +6,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.dto.like.FetchResult;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
-import maple.expectation.service.v2.like.dto.FetchResult;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**

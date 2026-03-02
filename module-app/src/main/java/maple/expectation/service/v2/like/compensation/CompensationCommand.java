@@ -1,6 +1,6 @@
 package maple.expectation.service.v2.like.compensation;
 
-import maple.expectation.service.v2.like.dto.FetchResult;
+import maple.expectation.core.dto.like.FetchResult;
 
 /**
  * 보상 트랜잭션 명령 인터페이스 (Command Pattern)

@@ -1,4 +1,4 @@
-package maple.expectation.controller.dto.donation
+package maple.expectation.web.dto.donation
 
 /**
  * 커피 후원 응답 DTO

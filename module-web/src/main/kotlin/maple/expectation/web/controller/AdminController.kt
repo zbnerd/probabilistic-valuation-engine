@@ -1,7 +1,7 @@
-package maple.expectation.controller
+package maple.expectation.web.controller
 
 import jakarta.validation.Valid
-import maple.expectation.controller.dto.admin.AddAdminRequest
+import maple.expectation.web.dto.admin.AddAdminRequest
 import maple.expectation.core.port.inbound.AdminPort
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import maple.expectation.response.ApiResponse

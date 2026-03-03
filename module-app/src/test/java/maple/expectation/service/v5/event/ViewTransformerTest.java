@@ -2,9 +2,10 @@ package maple.expectation.service.v5.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.kotlin.KotlinModule;
 import java.time.Instant;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.core.event.ExpectationCalculationCompletedEvent;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 
 /**
  * ViewTransformer 단위 테스트
@@ -33,13 +35,24 @@ class ViewTransformerTest {
   private static final String TEST_OCID = "ocid-123";
 
   @Mock private LogicExecutor executor;
-  private ObjectMapper objectMapper = new ObjectMapper();
+  private ObjectMapper objectMapper =
+      new ObjectMapper().registerModule(new KotlinModule.Builder().build());
 
   private ViewTransformer transformer;
 
   @BeforeEach
   void setUp() {
     transformer = new ViewTransformer(executor, objectMapper);
+
+    // Generic mock that executes the task directly for any type
+    Answer<Object> executeAnswer =
+        invocation -> {
+          ThrowingSupplier<?> task = invocation.getArgument(0);
+          return task.get();
+        };
+    lenient()
+        .when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
+        .thenAnswer(executeAnswer);
   }
 
   @Nested
@@ -52,13 +65,6 @@ class ViewTransformerTest {
       // Given
       ExpectationCalculationCompletedEvent event = createEvent();
       event.setTotalExpectedCost("123.45");
-
-      when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
-          .thenAnswer(
-              invocation -> {
-                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
-                return task.get();
-              });
 
       // When
       CharacterValuationView result = transformer.toDocument(event);
@@ -74,13 +80,6 @@ class ViewTransformerTest {
       ExpectationCalculationCompletedEvent event = createEvent();
       event.setTotalExpectedCost("1,234.56");
 
-      when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
-          .thenAnswer(
-              invocation -> {
-                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
-                return task.get();
-              });
-
       // When
       CharacterValuationView result = transformer.toDocument(event);
 
@@ -94,13 +93,6 @@ class ViewTransformerTest {
       // Given
       ExpectationCalculationCompletedEvent event = createEvent();
       event.setTotalExpectedCost("10,000,000.99");
-
-      when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
-          .thenAnswer(
-              invocation -> {
-                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
-                return task.get();
-              });
 
       // When
       CharacterValuationView result = transformer.toDocument(event);
@@ -116,13 +108,6 @@ class ViewTransformerTest {
       ExpectationCalculationCompletedEvent event = createEvent();
       event.setTotalExpectedCost("5000");
 
-      when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
-          .thenAnswer(
-              invocation -> {
-                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
-                return task.get();
-              });
-
       // When
       CharacterValuationView result = transformer.toDocument(event);
 
@@ -137,13 +122,6 @@ class ViewTransformerTest {
       ExpectationCalculationCompletedEvent event = createEvent();
       event.setTotalExpectedCost("");
 
-      when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
-          .thenAnswer(
-              invocation -> {
-                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
-                return task.get();
-              });
-
       // When
       CharacterValuationView result = transformer.toDocument(event);
 
@@ -157,13 +135,6 @@ class ViewTransformerTest {
       // Given
       ExpectationCalculationCompletedEvent event = createEvent();
       event.setTotalExpectedCost(null);
-
-      when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
-          .thenAnswer(
-              invocation -> {
-                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
-                return task.get();
-              });
 
       // When
       CharacterValuationView result = transformer.toDocument(event);
@@ -184,13 +155,6 @@ class ViewTransformerTest {
       ExpectationCalculationCompletedEvent event = createEvent();
       event.setTotalExpectedCost("1,234.56");
       event.setCalculatedAt(Instant.now().toString());
-
-      when(executor.executeOrDefault(any(), any(), any(TaskContext.class)))
-          .thenAnswer(
-              invocation -> {
-                ThrowingSupplier<CharacterValuationView> task = invocation.getArgument(0);
-                return task.get();
-              });
 
       // When
       CharacterValuationView result = transformer.toDocument(event);
@@ -216,7 +180,7 @@ class ViewTransformerTest {
         .characterLevel(250)
         .maxPresetNo(1)
         .calculatedAt(Instant.now().toString())
-        .payload("{}") // Empty JSON for simplicity
+        .payload(null) // Null to skip Kotlin data class deserialization
         .build();
   }
 }

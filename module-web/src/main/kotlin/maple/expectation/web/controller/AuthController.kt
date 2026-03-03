@@ -1,10 +1,10 @@
-package maple.expectation.controller
+package maple.expectation.web.controller
 
 import jakarta.validation.Valid
-import maple.expectation.controller.dto.auth.LoginRequest
-import maple.expectation.controller.dto.auth.LoginResponse
-import maple.expectation.controller.dto.auth.RefreshRequest
-import maple.expectation.controller.dto.auth.TokenResponse
+import maple.expectation.web.dto.LoginRequest
+import maple.expectation.web.dto.LoginResponse
+import maple.expectation.web.dto.RefreshRequest
+import maple.expectation.web.dto.TokenResponse
 import maple.expectation.core.port.inbound.AuthCommand
 import maple.expectation.core.port.inbound.AuthPort
 import maple.expectation.core.port.inbound.AuthResult

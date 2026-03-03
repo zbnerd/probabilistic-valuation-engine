@@ -1,7 +1,7 @@
 package maple.expectation.service.v2.calculator.impl
 
 import maple.expectation.domain.v2.CubeType
-import maple.expectation.dto.CubeCalculationInput
+import maple.expectation.web.dto.CubeCalculationInput
 import maple.expectation.service.v2.CubeTrialsProvider
 import maple.expectation.service.v2.calculator.ExpectationCalculator
 import maple.expectation.service.v2.cube.AbstractCubeDecoratorV2

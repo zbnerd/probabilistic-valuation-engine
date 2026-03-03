@@ -1,9 +1,9 @@
 package maple.expectation.service.v5.event;
 
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 

@@ -1,4 +1,4 @@
-package maple.expectation.controller
+package maple.expectation.web.controller
 
 import maple.expectation.core.port.inbound.AlertPort
 import maple.expectation.infrastructure.executor.LogicExecutor

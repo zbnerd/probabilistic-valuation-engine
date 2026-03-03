@@ -1,4 +1,4 @@
-package maple.expectation.controller.v4
+package maple.expectation.web.controller.v4
 
 import jakarta.validation.constraints.NotBlank
 import maple.expectation.core.port.inbound.ExpectationV4Port

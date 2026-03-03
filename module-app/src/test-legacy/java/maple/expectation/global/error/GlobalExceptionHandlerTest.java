@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeoutException;
-import maple.expectation.controller.dto.admin.AddAdminRequest;
+import maple.expectation.web.controller.dto.admin.AddAdminRequest;
 import maple.expectation.error.exception.ApiTimeoutException;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.GlobalExceptionHandler;

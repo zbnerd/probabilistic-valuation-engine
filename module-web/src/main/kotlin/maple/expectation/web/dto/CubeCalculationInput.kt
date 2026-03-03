@@ -1,4 +1,4 @@
-package maple.expectation.dto
+package maple.expectation.web.dto
 
 import maple.expectation.core.domain.stat.StatType
 

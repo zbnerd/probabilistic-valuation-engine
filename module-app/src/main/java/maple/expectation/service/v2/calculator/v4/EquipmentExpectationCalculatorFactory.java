@@ -1,8 +1,6 @@
 package maple.expectation.service.v2.calculator.v4;
 
 import lombok.RequiredArgsConstructor;
-import maple.expectation.dto.CubeCalculationInput;
-import maple.expectation.dto.v4.EquipmentCalculationInput;
 import maple.expectation.service.v2.CubeTrialsProvider;
 import maple.expectation.service.v2.calculator.v4.impl.AdditionalCubeDecoratorV4;
 import maple.expectation.service.v2.calculator.v4.impl.BaseEquipmentItem;
@@ -10,6 +8,8 @@ import maple.expectation.service.v2.calculator.v4.impl.BlackCubeDecoratorV4;
 import maple.expectation.service.v2.calculator.v4.impl.StarforceDecoratorV4;
 import maple.expectation.service.v2.policy.CubeCostPolicy;
 import maple.expectation.service.v2.starforce.StarforceLookupTable;
+import maple.expectation.web.dto.CubeCalculationInput;
+import maple.expectation.web.dto.v4.EquipmentCalculationInput;
 import org.springframework.stereotype.Component;
 
 /**

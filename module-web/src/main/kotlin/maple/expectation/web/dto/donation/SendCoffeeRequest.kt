@@ -1,4 +1,4 @@
-package maple.expectation.controller.dto.donation
+package maple.expectation.web.dto.donation
 
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull

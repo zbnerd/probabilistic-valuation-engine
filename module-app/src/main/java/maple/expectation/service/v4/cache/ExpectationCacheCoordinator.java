@@ -5,13 +5,13 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.error.exception.CacheDataNotFoundException;
 import maple.expectation.error.exception.EquipmentDataProcessingException;
 import maple.expectation.infrastructure.cache.TieredCacheManager;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.util.GzipUtils;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import org.springframework.cache.Cache;
 import org.springframework.stereotype.Component;
 

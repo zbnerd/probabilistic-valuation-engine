@@ -5,9 +5,9 @@ import java.util.Objects;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import maple.expectation.core.domain.stat.StatParser;
-import maple.expectation.dto.CubeCalculationInput;
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse;
 import maple.expectation.infrastructure.external.dto.v2.TotalExpectationResponse;
+import maple.expectation.web.dto.CubeCalculationInput;
 import org.springframework.stereotype.Component;
 
 /** 장비 데이터 매퍼 (LogicExecutor 환경 대응 및 평탄화 완료) */

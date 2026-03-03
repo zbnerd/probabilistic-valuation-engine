@@ -1,4 +1,4 @@
-package maple.expectation.controller.v1
+package maple.expectation.web.controller.v1
 
 import maple.expectation.core.port.out.GameCharacterPort
 import maple.expectation.domain.model.character.GameCharacter

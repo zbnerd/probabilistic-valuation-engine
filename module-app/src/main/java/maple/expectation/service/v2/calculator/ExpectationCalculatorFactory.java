@@ -1,11 +1,11 @@
 package maple.expectation.service.v2.calculator;
 
 import lombok.RequiredArgsConstructor;
-import maple.expectation.dto.CubeCalculationInput;
 import maple.expectation.service.v2.CubeTrialsProvider;
 import maple.expectation.service.v2.calculator.impl.BaseItem;
 import maple.expectation.service.v2.calculator.impl.BlackCubeDecorator;
 import maple.expectation.service.v2.policy.CubeCostPolicy;
+import maple.expectation.web.dto.CubeCalculationInput;
 import org.springframework.stereotype.Component;
 
 @Component

@@ -2,14 +2,14 @@ package maple.expectation.adapter.in;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.controller.dto.auth.LoginRequest;
-import maple.expectation.controller.dto.auth.LoginResponse;
-import maple.expectation.controller.dto.auth.TokenResponse;
 import maple.expectation.core.port.inbound.AuthCommand;
 import maple.expectation.core.port.inbound.AuthPort;
 import maple.expectation.core.port.inbound.AuthResult;
 import maple.expectation.core.port.inbound.TokenResult;
 import maple.expectation.service.v2.auth.AuthService;
+import maple.expectation.web.dto.LoginRequest;
+import maple.expectation.web.dto.LoginResponse;
+import maple.expectation.web.dto.TokenResponse;
 import org.springframework.stereotype.Component;
 
 /**

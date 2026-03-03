@@ -2,11 +2,11 @@ package maple.expectation.service.v2.cube;
 
 import java.util.Optional;
 import maple.expectation.domain.v2.CubeType;
-import maple.expectation.dto.CubeCalculationInput;
 import maple.expectation.service.v2.CubeTrialsProvider;
 import maple.expectation.service.v2.calculator.EnhanceDecorator;
 import maple.expectation.service.v2.calculator.ExpectationCalculator;
 import maple.expectation.service.v2.policy.CubeCostPolicy;
+import maple.expectation.web.dto.CubeCalculationInput;
 
 /**
  * V2-specific abstract cube decorator using Long type.

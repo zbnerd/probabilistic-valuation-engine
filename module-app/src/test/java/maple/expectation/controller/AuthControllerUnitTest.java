@@ -2,9 +2,10 @@ package maple.expectation.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import maple.expectation.controller.dto.auth.LoginRequest;
-import maple.expectation.controller.dto.auth.LoginResponse;
-import maple.expectation.controller.dto.auth.TokenResponse;
+import maple.expectation.web.controller.AuthController;
+import maple.expectation.web.dto.LoginRequest;
+import maple.expectation.web.dto.LoginResponse;
+import maple.expectation.web.dto.TokenResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;

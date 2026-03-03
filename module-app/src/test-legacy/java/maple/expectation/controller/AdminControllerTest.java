@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import maple.expectation.controller.dto.admin.AddAdminRequest;
+import maple.expectation.web.controller.dto.admin.AddAdminRequest;
 import maple.expectation.global.security.AuthenticatedUser;
 import maple.expectation.service.v2.auth.AdminService;
 import maple.expectation.security.SecurityFilterChainConfig;

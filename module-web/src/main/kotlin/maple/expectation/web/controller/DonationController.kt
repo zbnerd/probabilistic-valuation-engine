@@ -1,10 +1,10 @@
-package maple.expectation.controller
+package maple.expectation.web.controller
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import maple.expectation.controller.dto.donation.SendCoffeeRequest
-import maple.expectation.controller.dto.donation.SendCoffeeResponse
+import maple.expectation.web.dto.donation.SendCoffeeRequest
+import maple.expectation.web.dto.donation.SendCoffeeResponse
 import maple.expectation.core.port.inbound.DonationCommand
 import maple.expectation.core.port.inbound.DonationPort
 import maple.expectation.infrastructure.security.AuthenticatedUser

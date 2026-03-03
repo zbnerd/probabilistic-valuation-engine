@@ -1,6 +1,7 @@
-package maple.expectation.service.v2.donation.listener;
+package maple.expectation.application.service.donation.listener;
 
 import lombok.RequiredArgsConstructor;
+import maple.expectation.application.service.donation.event.DonationFailedEvent;
 import maple.expectation.infrastructure.alert.StatelessAlertService;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;

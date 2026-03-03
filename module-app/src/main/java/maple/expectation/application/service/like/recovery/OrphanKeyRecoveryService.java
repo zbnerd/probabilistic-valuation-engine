@@ -1,12 +1,12 @@
-package maple.expectation.service.v2.like.recovery;
+package maple.expectation.application.service.like.recovery;
 
 import jakarta.annotation.PostConstruct;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.like.LikeAtomicFetchStrategy;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.service.v2.like.strategy.AtomicFetchStrategy;
 import org.redisson.api.RKeys;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,7 +50,7 @@ public class OrphanKeyRecoveryService {
   private static final String SOURCE_KEY = "{buffer:likes}";
 
   private final RedissonClient redissonClient;
-  private final AtomicFetchStrategy atomicFetchStrategy;
+  private final LikeAtomicFetchStrategy atomicFetchStrategy;
   private final LogicExecutor executor;
 
   @Value("${like.sync.recovery.enabled:true}")

@@ -1,4 +1,4 @@
-package maple.expectation.service.v2.donation.outbox;
+package maple.expectation.application.service.donation.outbox;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

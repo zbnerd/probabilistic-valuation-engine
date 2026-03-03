@@ -1,4 +1,4 @@
-package maple.expectation.service.v2.like;
+package maple.expectation.application.service.like;
 
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;

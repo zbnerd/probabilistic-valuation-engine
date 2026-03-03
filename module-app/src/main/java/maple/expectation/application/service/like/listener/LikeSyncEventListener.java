@@ -1,11 +1,11 @@
-package maple.expectation.service.v2.like.listener;
+package maple.expectation.application.service.like.listener;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.infrastructure.alert.StatelessAlertService;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.service.v2.like.event.LikeSyncFailedEvent;
+import maple.expectation.infrastructure.queue.like.event.LikeSyncFailedEvent;
 import maple.expectation.service.v2.shutdown.ShutdownDataPersistenceService;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
@@ -58,7 +58,7 @@ public class LikeSyncEventListener {
   @Async
   @EventListener
   public void handleSyncFailure(LikeSyncFailedEvent event) {
-    TaskContext context = TaskContext.of("LikeSync", "FailureHandler", event.tempKey());
+    TaskContext context = TaskContext.of("LikeSync", "FailureHandler", event.getTempKey());
 
     // Step 1: 파일 백업 (최우선 - 데이터 보존)
     backupToFile(event, context);
@@ -72,11 +72,11 @@ public class LikeSyncEventListener {
     log.error(
         "‼️ [DLQ] LikeSync 복구 실패 - 파일 백업 완료. "
             + "tempKey={}, sourceKey={}, entries={}, totalCount={}, error={}",
-        event.tempKey(),
-        event.sourceKey(),
+        event.getTempKey(),
+        event.getSourceKey(),
         event.size(),
         event.totalCount(),
-        event.errorMessage());
+        event.getErrorMessage());
   }
 
   // ========== Private Methods ==========
@@ -90,14 +90,14 @@ public class LikeSyncEventListener {
     executor.executeOrCatch(
         () -> {
           event
-              .data()
+              .getData()
               .forEach((userIgn, count) -> persistenceService.appendLikeEntry(userIgn, count));
           log.info("💾 [DLQ] 파일 백업 완료: {} entries", event.size());
           return null;
         },
         e -> {
           // 파일 백업마저 실패 → 최악의 상황, 로그에 데이터 직접 기록
-          log.error("🚨 [CRITICAL] 파일 백업 실패! 데이터 직접 로깅: {}", event.data(), e);
+          log.error("🚨 [CRITICAL] 파일 백업 실패! 데이터 직접 로깅: {}", event.getData(), e);
           return null;
         },
         context);
@@ -106,7 +106,7 @@ public class LikeSyncEventListener {
   /** 실패 메트릭 기록 */
   private void recordFailureMetric(LikeSyncFailedEvent event) {
     meterRegistry
-        .counter("like.sync.dlq.triggered", "type", event.tempKey() != null ? "batch" : "single")
+        .counter("like.sync.dlq.triggered", "type", event.getTempKey() != null ? "batch" : "single")
         .increment();
 
     meterRegistry.counter("like.sync.dlq.entries").increment(event.size());
@@ -121,7 +121,7 @@ public class LikeSyncEventListener {
               "🚨 좋아요 동기화 DLQ 발생",
               String.format(
                   "유실 위험 데이터: %d건 (%d개 엔트리)\n" + "임시키: %s\n원본키: %s\n" + "⚠️ 파일 백업 완료 - 수동 복구 필요",
-                  event.totalCount(), event.size(), event.tempKey(), event.sourceKey()),
+                  event.totalCount(), event.size(), event.getTempKey(), event.getSourceKey()),
               event.exception());
           return null;
         },

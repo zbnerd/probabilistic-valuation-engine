@@ -1,4 +1,4 @@
-package maple.expectation.service.v2.donation;
+package maple.expectation.application.service.donation;
 
 /**
  * 결제 전략 인터페이스 (Strategy Pattern)

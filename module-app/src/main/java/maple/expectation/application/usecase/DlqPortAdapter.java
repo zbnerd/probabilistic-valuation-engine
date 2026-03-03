@@ -2,8 +2,8 @@ package maple.expectation.application.usecase;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.donation.outbox.DlqAdminService;
 import maple.expectation.core.port.inbound.DlqPort;
-import maple.expectation.service.v2.donation.outbox.DlqAdminService;
 import maple.expectation.web.dto.page.CursorPageRequest;
 import org.springframework.stereotype.Component;
 

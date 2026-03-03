@@ -12,7 +12,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.Map;
 import maple.expectation.common.function.ThrowingSupplier;
-import maple.expectation.event.ExpectationCalculationCompletedEvent;
+import maple.expectation.core.event.ExpectationCalculationCompletedEvent;
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;

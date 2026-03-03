@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import maple.expectation.common.function.ThrowingSupplier;
-import maple.expectation.event.ExpectationCalculationCompletedEvent;
+import maple.expectation.core.event.ExpectationCalculationCompletedEvent;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView;

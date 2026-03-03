@@ -1,4 +1,4 @@
-package maple.expectation.event
+package maple.expectation.core.event
 
 /**
  * V5 CQRS: Event published when expectation calculation completes

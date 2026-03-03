@@ -1,4 +1,4 @@
-package maple.expectation.service.v2.auth;
+package maple.expectation.application.service.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

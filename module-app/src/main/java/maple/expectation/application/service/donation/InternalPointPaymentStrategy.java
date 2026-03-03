@@ -1,4 +1,4 @@
-package maple.expectation.service.v2.donation;
+package maple.expectation.application.service.donation;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,4 +1,4 @@
-package maple.expectation.service.v2.like.metrics;
+package maple.expectation.application.service.like.metrics;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.TimeUnit;

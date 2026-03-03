@@ -1,3 +1,3 @@
-package maple.expectation.service.v2.donation.listener;
+package maple.expectation.application.service.donation.event;
 
 public record DonationFailedEvent(String requestId, String guestUuid, Throwable exception) {}

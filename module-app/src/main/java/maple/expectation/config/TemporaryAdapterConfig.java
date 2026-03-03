@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.calculator.PotentialCalculator;
 import maple.expectation.core.calculator.CubeRateCalculator;
 import maple.expectation.core.domain.model.AlertMessage;
 import maple.expectation.core.domain.model.AlertPriority;
@@ -24,7 +25,6 @@ import maple.expectation.domain.repository.CharacterEquipmentRepository;
 import maple.expectation.domain.repository.CubeProbabilityRepository;
 import maple.expectation.domain.v2.CubeProbability;
 import maple.expectation.infrastructure.queue.priority.PriorityCalculationQueue;
-import maple.expectation.service.v2.calculator.PotentialCalculator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

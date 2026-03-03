@@ -3,8 +3,8 @@ package maple.expectation.application.usecase;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.auth.AdminService;
 import maple.expectation.core.port.inbound.AdminPort;
-import maple.expectation.service.v2.auth.AdminService;
 import org.springframework.stereotype.Component;
 
 /**

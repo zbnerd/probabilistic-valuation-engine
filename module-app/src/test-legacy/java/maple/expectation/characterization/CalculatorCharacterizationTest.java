@@ -10,7 +10,7 @@ import java.util.Map;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.service.v2.cube.component.ProbabilityConvolver;
+import maple.expectation.application.service.cube.component.ProbabilityConvolver;
 import maple.expectation.domain.model.calculator.DensePmf;
 import maple.expectation.domain.model.calculator.SparsePmf;
 import org.junit.jupiter.api.BeforeEach;

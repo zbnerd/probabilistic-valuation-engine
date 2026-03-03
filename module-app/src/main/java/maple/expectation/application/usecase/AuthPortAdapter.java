@@ -2,11 +2,11 @@ package maple.expectation.application.usecase;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.auth.AuthService;
 import maple.expectation.core.port.inbound.AuthCommand;
 import maple.expectation.core.port.inbound.AuthPort;
 import maple.expectation.core.port.inbound.AuthResult;
 import maple.expectation.core.port.inbound.TokenResult;
-import maple.expectation.service.v2.auth.AuthService;
 import maple.expectation.web.dto.LoginRequest;
 import maple.expectation.web.dto.LoginResponse;
 import maple.expectation.web.dto.TokenResponse;

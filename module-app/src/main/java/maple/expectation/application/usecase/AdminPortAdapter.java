@@ -1,4 +1,4 @@
-package maple.expectation.adapter.in;
+package maple.expectation.application.usecase;
 
 import java.util.Set;
 import lombok.RequiredArgsConstructor;

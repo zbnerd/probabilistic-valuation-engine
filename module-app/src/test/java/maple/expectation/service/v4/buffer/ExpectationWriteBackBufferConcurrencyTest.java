@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.BackoffStrategy;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import maple.expectation.infrastructure.buffer.ExpectationWriteTask;
 import maple.expectation.infrastructure.config.BufferProperties;
@@ -33,7 +34,6 @@ class ExpectationWriteBackBufferConcurrencyTest {
   private MeterRegistry meterRegistry;
   private BufferProperties properties;
   private BackoffStrategy backoffStrategy;
-  private maple.expectation.infrastructure.executor.LogicExecutor executor;
 
   @BeforeEach
   void setUp() {

@@ -20,7 +20,7 @@ import java.time.LocalDateTime
  *
  * <p>DonationDlq 패턴을 따르며 Nexon API 특화 필드 포함
  *
- * @see maple.expectation.service.v2.outbox.NexonApiDlqHandler
+ * @see maple.expectation.infrastructure.nexon.dlq.NexonApiDlqHandler
  * @see NexonApiOutbox
  */
 @Entity

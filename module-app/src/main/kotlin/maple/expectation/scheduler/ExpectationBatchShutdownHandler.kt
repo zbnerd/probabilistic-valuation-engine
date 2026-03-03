@@ -5,10 +5,10 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import maple.expectation.infrastructure.buffer.ExpectationWriteTask
 import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.EquipmentExpectationSummaryRepository
 import maple.expectation.infrastructure.shutdown.ShutdownProperties
-import maple.expectation.service.v4.buffer.ExpectationWriteBackBuffer
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component
@@ -57,13 +57,13 @@ class ExpectationBatchShutdownHandler(
             {
                 log.info(
                     "[ExpectationShutdown] Starting 3-phase shutdown... pending={}",
-                    buffer.pendingCount,
+                    buffer.getPendingCount(),
                 )
 
                 buffer.prepareShutdown()
                 log.info("[ExpectationShutdown] Phase 1 complete - new offers blocked")
 
-                val pendingCount = buffer.pendingCount
+                val pendingCount = buffer.getPendingCount()
                 if (pendingCount == 0) {
                     log.info("[ExpectationShutdown] Phase 2 skipped - no pending offers")
                 } else {

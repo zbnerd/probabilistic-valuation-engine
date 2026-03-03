@@ -4,8 +4,8 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer;
 import maple.expectation.infrastructure.persistence.repository.EquipmentExpectationSummaryRepository;
-import maple.expectation.service.v4.buffer.ExpectationWriteBackBuffer;
 import org.springframework.stereotype.Component;
 
 /**
@@ -36,7 +36,23 @@ public class ExpectationPersistenceService {
    * @param presets 프리셋 결과 목록
    */
   public void saveResults(Long characterId, List<PresetExpectation> presets) {
-    boolean buffered = writeBackBuffer.offer(characterId, presets);
+    // Convert PresetExpectation to ExpectationWriteTask before buffering
+    List<maple.expectation.infrastructure.buffer.ExpectationWriteTask> tasks =
+        presets.stream()
+            .map(
+                preset ->
+                    new maple.expectation.infrastructure.buffer.ExpectationWriteTask(
+                        characterId,
+                        preset.getPresetNo(),
+                        preset.getTotalExpectedCost(),
+                        preset.getCostBreakdown().getBlackCubeCost(),
+                        preset.getCostBreakdown().getRedCubeCost(),
+                        preset.getCostBreakdown().getAdditionalCubeCost(),
+                        preset.getCostBreakdown().getStarforceCost(),
+                        java.time.LocalDateTime.now()))
+            .toList();
+
+    boolean buffered = writeBackBuffer.offer(tasks);
 
     if (buffered) {
       log.debug(

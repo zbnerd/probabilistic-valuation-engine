@@ -11,20 +11,20 @@ import maple.expectation.core.flame.port.FlameTrialsPort;
 import maple.expectation.core.probability.FlameScoreCalculator;
 import maple.expectation.domain.cost.CostFormatter;
 import maple.expectation.domain.equipment.SecondaryWeaponCategory;
-import maple.expectation.dto.CubeCalculationInput;
-import maple.expectation.dto.v4.EquipmentCalculationInput;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4.CubeExpectationDto;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4.FlameExpectationDto;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4.StarforceExpectationDto;
 import maple.expectation.service.v2.calculator.v4.EquipmentExpectationCalculator;
 import maple.expectation.service.v2.calculator.v4.EquipmentExpectationCalculatorFactory;
 import maple.expectation.service.v2.flame.FlameInputResolver;
 import maple.expectation.service.v2.flame.FlameInputResolver.FlameInput;
 import maple.expectation.service.v2.starforce.StarforceLookupTable;
 import maple.expectation.service.v2.starforce.config.NoljangProbabilityTable;
+import maple.expectation.web.dto.CubeCalculationInput;
+import maple.expectation.web.dto.v4.EquipmentCalculationInput;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CubeExpectationDto;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.FlameExpectationDto;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.StarforceExpectationDto;
 import org.springframework.stereotype.Component;
 
 /**
@@ -80,13 +80,8 @@ public class PresetCalculationHelper {
       totalBreakdown = totalBreakdown.add(itemResult.getCostBreakdown());
     }
 
-    return PresetExpectation.builder()
-        .presetNo(presetNo)
-        .totalExpectedCost(totalCost)
-        .totalCostText(CostFormatter.format(totalCost))
-        .costBreakdown(totalBreakdown)
-        .items(itemResults)
-        .build();
+    return new PresetExpectation(
+        presetNo, totalCost, CostFormatter.format(totalCost), totalBreakdown, itemResults);
   }
 
   /** 큐브 입력 → 계산 입력 변환 */

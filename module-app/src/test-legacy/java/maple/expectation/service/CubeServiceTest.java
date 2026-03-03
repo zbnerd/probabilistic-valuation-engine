@@ -6,7 +6,7 @@ import java.util.Arrays;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.domain.v2.CubeType;
-import maple.expectation.dto.CubeCalculationInput;
+import maple.expectation.web.dto.CubeCalculationInput;
 import maple.expectation.service.v2.CubeTrialsProvider;
 import maple.expectation.support.EnableTimeLogging;
 import org.junit.jupiter.api.DisplayName;

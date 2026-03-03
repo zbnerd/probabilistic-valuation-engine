@@ -2,12 +2,12 @@ package maple.expectation.service.v2.auth;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.controller.dto.auth.LoginRequest;
-import maple.expectation.controller.dto.auth.LoginResponse;
-import maple.expectation.controller.dto.auth.TokenResponse;
 import maple.expectation.domain.Session;
 import maple.expectation.infrastructure.security.AccountIdGenerator;
 import maple.expectation.infrastructure.security.FingerprintGenerator;
+import maple.expectation.web.dto.LoginRequest;
+import maple.expectation.web.dto.LoginResponse;
+import maple.expectation.web.dto.TokenResponse;
 import org.springframework.stereotype.Service;
 
 /**

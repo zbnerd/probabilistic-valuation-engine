@@ -13,15 +13,15 @@ import maple.expectation.core.dto.like.FetchResult;
 import maple.expectation.core.port.out.LikeBufferStrategy;
 import maple.expectation.core.port.out.LikeSyncPort;
 import maple.expectation.core.port.out.like.CompensationCommand;
+import maple.expectation.core.port.out.like.LikeAtomicFetchStrategy;
 import maple.expectation.domain.repository.RedisBufferRepository;
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.queue.like.LikeSyncExecutor;
+import maple.expectation.infrastructure.queue.like.compensation.RedisCompensationCommand;
 import maple.expectation.infrastructure.shutdown.dto.FlushResult;
-import maple.expectation.service.v2.like.compensation.RedisCompensationCommand;
 import maple.expectation.service.v2.like.metrics.LikeSyncMetricsRecorder;
-import maple.expectation.service.v2.like.strategy.AtomicFetchStrategy;
 import maple.expectation.service.v2.shutdown.ShutdownDataPersistenceService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -54,7 +54,7 @@ public class LikeSyncService implements LikeSyncPort {
   private final RedisBufferRepository redisBufferRepository;
   private final ShutdownDataPersistenceService shutdownDataPersistenceService;
   private final LogicExecutor executor;
-  private final AtomicFetchStrategy atomicFetchStrategy;
+  private final LikeAtomicFetchStrategy atomicFetchStrategy;
   private final MeterRegistry meterRegistry;
   private final LikeSyncMetricsRecorder metricsRecorder;
   private final ApplicationEventPublisher eventPublisher;
@@ -83,7 +83,7 @@ public class LikeSyncService implements LikeSyncPort {
       RedisBufferRepository redisBufferRepository,
       ShutdownDataPersistenceService shutdownDataPersistenceService,
       LogicExecutor executor,
-      AtomicFetchStrategy atomicFetchStrategy,
+      LikeAtomicFetchStrategy atomicFetchStrategy,
       MeterRegistry meterRegistry,
       LikeSyncMetricsRecorder metricsRecorder,
       ApplicationEventPublisher eventPublisher) {

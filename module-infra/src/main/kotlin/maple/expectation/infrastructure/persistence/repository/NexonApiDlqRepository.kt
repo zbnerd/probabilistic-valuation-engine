@@ -19,7 +19,7 @@ import java.util.Optional
  * <p>DonationDlqRepository 패턴을 따르며 Nexon API 특화
  *
  * @see maple.expectation.domain.v2.NexonApiDlq
- * @see maple.expectation.service.v2.outbox.NexonApiDlqHandler
+ * @see maple.expectation.infrastructure.nexon.dlq.NexonApiDlqHandler
  */
 interface NexonApiDlqRepository : JpaRepository<NexonApiDlq, Long> {
 

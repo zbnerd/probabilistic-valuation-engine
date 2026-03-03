@@ -10,7 +10,6 @@ import maple.expectation.core.domain.model.CubeRate;
 import maple.expectation.domain.repository.CubeProbabilityRepository;
 import maple.expectation.domain.v2.CubeProbability;
 import maple.expectation.domain.v2.CubeType;
-import maple.expectation.dto.CubeCalculationInput;
 import maple.expectation.error.exception.UnsupportedCalculationEngineException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -19,6 +18,7 @@ import maple.expectation.service.v2.CubeTrialsProvider;
 import maple.expectation.service.v2.cube.component.CubeDpCalculator;
 import maple.expectation.service.v2.cube.component.DpModeInferrer;
 import maple.expectation.service.v2.cube.config.CubeEngineFeatureFlag;
+import maple.expectation.web.dto.CubeCalculationInput;
 import org.springframework.stereotype.Service;
 
 /**

@@ -4,11 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
-import maple.expectation.controller.v1.GameCharacterControllerV1;
 import maple.expectation.core.port.out.GameCharacterPort;
 import maple.expectation.domain.model.character.CharacterId;
 import maple.expectation.domain.model.character.GameCharacter;
 import maple.expectation.domain.model.character.UserIgn;
+import maple.expectation.web.controller.v1.GameCharacterControllerV1;
 import maple.expectation.web.dto.response.CharacterResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

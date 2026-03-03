@@ -8,16 +8,16 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.event.ExpectationCalculationCompletedEvent;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView.CostBreakdownView;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView.ItemExpectationView;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView.PresetView;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import org.springframework.stereotype.Service;
 
 /**

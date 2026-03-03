@@ -60,7 +60,7 @@ class TraceAspect(@Value("\${app.aop.trace.enabled:false}") private val isTraceE
             "|| execution(* maple.expectation.repository..*.*(..))" +
             "|| execution(* maple.expectation.error..*.*(..))" +
             "|| execution(* maple.expectation.util..*.*(..))" +
-            "|| execution(* maple.expectation.controller..*.*(..))"
+            "|| execution(* maple.expectation.web.controller..*.*(..))"
     )
     fun autoLog() {
     }

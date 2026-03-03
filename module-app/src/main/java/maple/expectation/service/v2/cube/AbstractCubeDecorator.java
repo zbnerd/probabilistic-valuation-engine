@@ -3,9 +3,9 @@ package maple.expectation.service.v2.cube;
 import java.math.RoundingMode;
 import java.util.Optional;
 import maple.expectation.domain.v2.CubeType;
-import maple.expectation.dto.CubeCalculationInput;
 import maple.expectation.service.v2.CubeTrialsProvider;
 import maple.expectation.service.v2.policy.CubeCostPolicy;
+import maple.expectation.web.dto.CubeCalculationInput;
 
 /**
  * Abstract template for Cube decorators that eliminates duplication between V2 (long) and V4

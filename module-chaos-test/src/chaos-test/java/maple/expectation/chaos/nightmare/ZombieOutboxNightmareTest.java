@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.auth.AdminService;
 import maple.expectation.domain.v2.DonationOutbox;
 import maple.expectation.domain.v2.DonationOutbox.OutboxStatus;
 import maple.expectation.domain.v2.Member;
@@ -19,7 +20,6 @@ import maple.expectation.infrastructure.persistence.repository.DonationHistoryRe
 import maple.expectation.infrastructure.persistence.repository.DonationOutboxRepository;
 import maple.expectation.infrastructure.persistence.repository.MemberRepository;
 import maple.expectation.service.v2.DonationService;
-import maple.expectation.service.v2.auth.AdminService;
 import maple.expectation.service.v2.donation.outbox.OutboxProcessor;
 import maple.expectation.support.IntegrationTestSupport;
 import org.awaitility.Awaitility;

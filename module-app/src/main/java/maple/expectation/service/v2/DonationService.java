@@ -2,6 +2,7 @@ package maple.expectation.service.v2;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.auth.AdminService;
 import maple.expectation.domain.v2.DonationHistory;
 import maple.expectation.domain.v2.DonationOutbox;
 import maple.expectation.error.exception.AdminMemberNotFoundException;
@@ -15,7 +16,6 @@ import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.persistence.repository.DonationHistoryRepository;
 import maple.expectation.infrastructure.persistence.repository.DonationOutboxRepository;
-import maple.expectation.service.v2.auth.AdminService;
 import maple.expectation.service.v2.donation.event.DonationProcessor;
 import maple.expectation.service.v2.donation.listener.DonationFailedEvent;
 import maple.expectation.util.StringMaskingUtils;

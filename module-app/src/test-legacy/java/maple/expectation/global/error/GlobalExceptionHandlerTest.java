@@ -19,7 +19,7 @@ import maple.expectation.error.exception.ApiTimeoutException;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.GlobalExceptionHandler;
 import maple.expectation.global.security.AuthenticatedUser;
-import maple.expectation.service.v2.auth.AdminService;
+import maple.expectation.application.service.auth.AdminService;
 import maple.expectation.service.v2.facade.GameCharacterFacade;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

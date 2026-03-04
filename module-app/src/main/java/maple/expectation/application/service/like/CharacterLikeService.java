@@ -2,6 +2,8 @@ package maple.expectation.application.service.like;
 
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.character.GameCharacterService;
+import maple.expectation.application.service.character.OcidResolver;
 import maple.expectation.core.port.out.LikeBufferStrategy;
 import maple.expectation.core.port.out.LikeEventPublisher;
 import maple.expectation.core.port.out.LikeRelationBufferStrategy;
@@ -14,9 +16,6 @@ import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.queue.like.AtomicLikeToggleExecutor;
 import maple.expectation.infrastructure.queue.like.AtomicLikeToggleExecutor.ToggleResult;
 import maple.expectation.infrastructure.security.AuthenticatedUser;
-import maple.expectation.service.v2.GameCharacterService;
-import maple.expectation.service.v2.LikeProcessor;
-import maple.expectation.service.v2.OcidResolver;
 import maple.expectation.util.StringMaskingUtils;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;

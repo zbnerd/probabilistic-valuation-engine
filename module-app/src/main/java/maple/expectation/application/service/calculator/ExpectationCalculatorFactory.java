@@ -3,8 +3,8 @@ package maple.expectation.application.service.calculator;
 import lombok.RequiredArgsConstructor;
 import maple.expectation.application.service.calculator.impl.BaseItem;
 import maple.expectation.application.service.calculator.impl.BlackCubeDecorator;
-import maple.expectation.service.v2.CubeTrialsProvider;
-import maple.expectation.service.v2.policy.CubeCostPolicy;
+import maple.expectation.application.service.cube.CubeTrialsProvider;
+import maple.expectation.application.service.cube.policy.CubeCostPolicy;
 import maple.expectation.web.dto.CubeCalculationInput;
 import org.springframework.stereotype.Component;
 

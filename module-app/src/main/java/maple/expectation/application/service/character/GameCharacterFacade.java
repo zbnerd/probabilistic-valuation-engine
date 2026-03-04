@@ -14,7 +14,6 @@ import maple.expectation.error.exception.InternalSystemException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.util.AsyncUtils;
-import maple.expectation.service.v2.GameCharacterService;
 import org.springframework.stereotype.Component;
 
 @Slf4j

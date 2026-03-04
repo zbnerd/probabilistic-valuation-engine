@@ -3,9 +3,9 @@ package maple.expectation.application.usecase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.auth.AdminService;
+import maple.expectation.application.service.donation.DonationService;
 import maple.expectation.core.port.inbound.DonationCommand;
 import maple.expectation.core.port.inbound.DonationPort;
-import maple.expectation.service.v2.DonationService;
 import org.springframework.stereotype.Component;
 
 /**

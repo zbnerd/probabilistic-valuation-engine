@@ -3,9 +3,8 @@ package maple.expectation.application.service.cube;
 import java.util.Optional;
 import maple.expectation.application.service.calculator.EnhanceDecorator;
 import maple.expectation.application.service.calculator.ExpectationCalculator;
+import maple.expectation.application.service.cube.policy.CubeCostPolicy;
 import maple.expectation.domain.v2.CubeType;
-import maple.expectation.service.v2.CubeTrialsProvider;
-import maple.expectation.service.v2.policy.CubeCostPolicy;
 import maple.expectation.web.dto.CubeCalculationInput;
 
 /**

@@ -6,7 +6,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 
 import maple.expectation.infrastructure.queue.like.LikeSyncExecutor;
-import maple.expectation.service.v2.LikeSyncService;
+import maple.expectation.application.service.like.LikeSyncService;
 import maple.expectation.service.v2.cache.LikeBufferStorage;
 import maple.expectation.support.IntegrationTestSupport;
 import maple.expectation.support.TestAwaitilityHelper;

@@ -8,7 +8,6 @@ import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
-import maple.expectation.service.v2.GameCharacterService;
 import org.redisson.api.RCountDownLatch;
 import org.springframework.stereotype.Component;
 

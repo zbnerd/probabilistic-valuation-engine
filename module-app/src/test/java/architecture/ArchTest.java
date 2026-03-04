@@ -517,13 +517,16 @@ public class ArchTest {
           .resideInAPackage("..service..")
           .orShould()
           .resideInAPackage("..monitoring..")
+          .orShould()
+          .resideInAPackage("..worker..")
           .because(
               """
               Application services belong in service layer.
               Domain services (pure functions) belong in core.
 
               EXCEPTION: Monitoring services (monitoring.*) allowed (P0 technical debt).
-              NOTE: Future phase - move to module-infra.monitoring or module-observability.
+              EXCEPTION: Async workers (worker.*) allowed for @Async AOP proxy support.
+              NOTE: Future phase - move monitoring services to module-infra.monitoring or module-observability.
               """)
           .allowEmptyShould(true)
           .check(classes);

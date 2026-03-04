@@ -9,6 +9,7 @@ import maple.expectation.application.service.calculator.v4.EquipmentExpectationC
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory;
 import maple.expectation.application.service.flame.FlameInputResolver;
 import maple.expectation.application.service.flame.FlameInputResolver.FlameInput;
+import maple.expectation.application.service.starforce.NoljangProbabilityTable;
 import maple.expectation.core.calculator.port.StarforceLookupPort;
 import maple.expectation.core.domain.flame.FlameEquipCategory;
 import maple.expectation.core.domain.flame.FlameType;
@@ -16,7 +17,6 @@ import maple.expectation.core.flame.port.FlameTrialsPort;
 import maple.expectation.core.probability.FlameScoreCalculator;
 import maple.expectation.domain.cost.CostFormatter;
 import maple.expectation.domain.equipment.SecondaryWeaponCategory;
-import maple.expectation.service.v2.starforce.config.NoljangProbabilityTable;
 import maple.expectation.web.dto.CubeCalculationInput;
 import maple.expectation.web.dto.v4.EquipmentCalculationInput;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;

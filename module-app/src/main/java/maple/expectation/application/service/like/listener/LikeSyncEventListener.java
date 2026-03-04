@@ -2,11 +2,11 @@ package maple.expectation.application.service.like.listener;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.shutdown.ShutdownDataPersistenceService;
 import maple.expectation.infrastructure.alert.StatelessAlertService;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.queue.like.event.LikeSyncFailedEvent;
-import maple.expectation.service.v2.shutdown.ShutdownDataPersistenceService;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;

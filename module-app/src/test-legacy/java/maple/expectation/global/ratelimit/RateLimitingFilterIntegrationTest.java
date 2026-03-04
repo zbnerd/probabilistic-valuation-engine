@@ -11,7 +11,7 @@ import io.github.bucket4j.distributed.proxy.ProxyManager;
 import maple.expectation.global.ratelimit.exception.RateLimitExceededException;
 import maple.expectation.global.ratelimit.strategy.IpBasedRateLimiter;
 import maple.expectation.global.ratelimit.strategy.UserBasedRateLimiter;
-import maple.expectation.service.v2.facade.GameCharacterFacade;
+import maple.expectation.application.service.character.GameCharacterFacade;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;

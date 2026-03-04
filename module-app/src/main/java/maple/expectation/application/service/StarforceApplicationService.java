@@ -3,9 +3,9 @@ package maple.expectation.application.service;
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.calculator.port.StarforceLookupPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.service.v2.starforce.StarforceLookupTable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -26,7 +26,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class StarforceApplicationService {
 
-  private final StarforceLookupTable starforceLookupTable;
+  private final StarforceLookupPort starforceLookupPort;
   private final LogicExecutor executor;
 
   /**
@@ -41,7 +41,7 @@ public class StarforceApplicationService {
    */
   public BigDecimal calculateExpectedCost(int currentStar, int targetStar, int itemLevel) {
     return executor.executeOrDefault(
-        () -> starforceLookupTable.getExpectedCost(currentStar, targetStar, itemLevel),
+        () -> starforceLookupPort.getExpectedCost(currentStar, targetStar, itemLevel),
         BigDecimal.ZERO,
         TaskContext.of(
             "StarforceApplicationService",
@@ -57,7 +57,7 @@ public class StarforceApplicationService {
    */
   public int getMaxStarForLevel(int itemLevel) {
     return executor.executeOrDefault(
-        () -> starforceLookupTable.getMaxStarForLevel(itemLevel),
+        () -> starforceLookupPort.getMaxStarForLevel(itemLevel),
         0,
         TaskContext.of(
             "StarforceApplicationService", "GetMaxStarForLevel", String.valueOf(itemLevel)));
@@ -71,7 +71,7 @@ public class StarforceApplicationService {
    */
   public BigDecimal getSuccessProbability(int currentStar) {
     return executor.executeOrDefault(
-        () -> starforceLookupTable.getSuccessProbability(currentStar),
+        () -> starforceLookupPort.getSuccessProbability(currentStar),
         BigDecimal.ZERO,
         TaskContext.of(
             "StarforceApplicationService", "GetSuccessProbability", String.valueOf(currentStar)));
@@ -85,7 +85,7 @@ public class StarforceApplicationService {
    */
   public BigDecimal getDestroyProbability(int currentStar) {
     return executor.executeOrDefault(
-        () -> starforceLookupTable.getDestroyProbability(currentStar),
+        () -> starforceLookupPort.getDestroyProbability(currentStar),
         BigDecimal.ZERO,
         TaskContext.of(
             "StarforceApplicationService", "GetDestroyProbability", String.valueOf(currentStar)));
@@ -100,7 +100,7 @@ public class StarforceApplicationService {
    */
   public BigDecimal getSingleEnhanceCost(int currentStar, int itemLevel) {
     return executor.executeOrDefault(
-        () -> starforceLookupTable.getSingleEnhanceCost(currentStar, itemLevel),
+        () -> starforceLookupPort.getSingleEnhanceCost(currentStar, itemLevel),
         BigDecimal.ZERO,
         TaskContext.of(
             "StarforceApplicationService", "GetSingleEnhanceCost", currentStar + ":" + itemLevel));
@@ -128,7 +128,7 @@ public class StarforceApplicationService {
       boolean useDestroyPrevention) {
     return executor.executeOrDefault(
         () ->
-            starforceLookupTable.getExpectedCost(
+            starforceLookupPort.getExpectedCost(
                 currentStar,
                 targetStar,
                 itemLevel,
@@ -161,7 +161,7 @@ public class StarforceApplicationService {
       boolean useDestroyPrevention) {
     return executor.executeOrDefault(
         () ->
-            starforceLookupTable.getExpectedDestroyCount(
+            starforceLookupPort.getExpectedDestroyCount(
                 currentStar, targetStar, useStarCatch, useSundayMaple, useDestroyPrevention),
         BigDecimal.ZERO,
         TaskContext.of(
@@ -177,7 +177,7 @@ public class StarforceApplicationService {
    */
   public boolean isInitialized() {
     return executor.executeOrDefault(
-        starforceLookupTable::isInitialized,
+        starforceLookupPort::isInitialized,
         false,
         TaskContext.of("StarforceApplicationService", "IsInitialized"));
   }

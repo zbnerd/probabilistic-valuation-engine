@@ -5,9 +5,9 @@ import maple.expectation.application.service.calculator.v4.impl.AdditionalCubeDe
 import maple.expectation.application.service.calculator.v4.impl.BaseEquipmentItem;
 import maple.expectation.application.service.calculator.v4.impl.BlackCubeDecoratorV4;
 import maple.expectation.application.service.calculator.v4.impl.StarforceDecoratorV4;
+import maple.expectation.core.calculator.port.StarforceLookupPort;
 import maple.expectation.service.v2.CubeTrialsProvider;
 import maple.expectation.service.v2.policy.CubeCostPolicy;
-import maple.expectation.service.v2.starforce.StarforceLookupTable;
 import maple.expectation.web.dto.CubeCalculationInput;
 import maple.expectation.web.dto.v4.EquipmentCalculationInput;
 import org.springframework.stereotype.Component;
@@ -37,7 +37,7 @@ public class EquipmentExpectationCalculatorFactory {
 
   private final CubeTrialsProvider trialsProvider;
   private final CubeCostPolicy costPolicy;
-  private final StarforceLookupTable starforceLookupTable;
+  private final StarforceLookupPort starforceLookupPort;
 
   /**
    * 전체 강화 계산기 생성 (블랙큐브 + 에디셔널 + 스타포스)
@@ -68,7 +68,7 @@ public class EquipmentExpectationCalculatorFactory {
       calculator =
           new StarforceDecoratorV4(
               calculator,
-              starforceLookupTable,
+              starforceLookupPort,
               input.getCurrentStar(),
               input.getTargetStar(),
               input.getItemLevel());
@@ -117,6 +117,6 @@ public class EquipmentExpectationCalculatorFactory {
     EquipmentExpectationCalculator calculator =
         new BaseEquipmentItem(itemName, itemLevel, currentStar);
     return new StarforceDecoratorV4(
-        calculator, starforceLookupTable, currentStar, targetStar, itemLevel);
+        calculator, starforceLookupPort, currentStar, targetStar, itemLevel);
   }
 }

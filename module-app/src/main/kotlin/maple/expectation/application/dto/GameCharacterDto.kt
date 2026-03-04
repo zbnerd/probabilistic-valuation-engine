@@ -1,9 +1,9 @@
 package maple.expectation.application.dto
 
 import java.time.LocalDateTime
-import maple.expectation.domain.model.character.CharacterId
-import maple.expectation.domain.model.character.GameCharacter
-import maple.expectation.domain.model.character.UserIgn
+import maple.expectation.core.domain.model.character.CharacterId
+import maple.expectation.core.domain.model.character.GameCharacter
+import maple.expectation.core.domain.model.character.UserIgn
 
 /**
  * GameCharacter Data Transfer Object

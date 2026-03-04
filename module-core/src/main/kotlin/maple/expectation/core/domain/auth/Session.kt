@@ -1,4 +1,4 @@
-package maple.expectation.domain
+package maple.expectation.core.domain.auth
 
 import java.time.Instant
 

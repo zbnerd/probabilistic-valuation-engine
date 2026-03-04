@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.persistence.entity
 
 import jakarta.persistence.*
-import maple.expectation.domain.model.character.CharacterId
-import maple.expectation.domain.model.character.GameCharacter
-import maple.expectation.domain.model.character.UserIgn
+import maple.expectation.core.domain.model.character.CharacterId
+import maple.expectation.core.domain.model.character.GameCharacter
+import maple.expectation.core.domain.model.character.UserIgn
 import java.time.LocalDateTime
 
 /**

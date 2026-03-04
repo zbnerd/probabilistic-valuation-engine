@@ -1,4 +1,4 @@
-package maple.expectation.domain.cost
+package maple.expectation.core.domain.cost
 
 import java.math.BigDecimal
 import java.math.RoundingMode

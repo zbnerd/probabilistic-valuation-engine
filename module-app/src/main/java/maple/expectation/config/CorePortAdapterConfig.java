@@ -11,6 +11,8 @@ import maple.expectation.core.domain.model.AlertPriority;
 import maple.expectation.core.domain.model.CharacterId;
 import maple.expectation.core.domain.model.CubeRate;
 import maple.expectation.core.domain.model.PotentialStat;
+import maple.expectation.core.domain.model.equipment.CharacterEquipment;
+import maple.expectation.core.domain.model.equipment.EquipmentData;
 import maple.expectation.core.port.out.AlertPort;
 import maple.expectation.core.port.out.CubeRatePort;
 import maple.expectation.core.port.out.EquipmentDataPort;
@@ -19,8 +21,6 @@ import maple.expectation.core.port.out.PotentialStatPort;
 import maple.expectation.core.probability.FlameDpCalculator;
 import maple.expectation.core.probability.FlameScoreCalculator;
 import maple.expectation.core.probability.TailProbabilityCalculator;
-import maple.expectation.domain.model.equipment.CharacterEquipment;
-import maple.expectation.domain.model.equipment.EquipmentData;
 import maple.expectation.domain.repository.CharacterEquipmentRepository;
 import maple.expectation.domain.repository.CubeProbabilityRepository;
 import maple.expectation.domain.v2.CubeProbability;
@@ -192,7 +192,7 @@ public class CorePortAdapterConfig {
       public Optional<EquipmentData> findByOcid(String ocid) {
         return Optional.ofNullable(
                 characterEquipmentRepository.findById(
-                    maple.expectation.domain.model.character.CharacterId.of(ocid)))
+                    maple.expectation.core.domain.model.character.CharacterId.of(ocid)))
             .map(CharacterEquipment::equipmentData);
       }
 
@@ -295,9 +295,9 @@ public class CorePortAdapterConfig {
 
   // ========== Mapping Helper Methods ==========
 
-  private static maple.expectation.domain.model.character.CharacterId mapToLegacyCharacterId(
+  private static maple.expectation.core.domain.model.character.CharacterId mapToLegacyCharacterId(
       CharacterId coreId) {
-    return maple.expectation.domain.model.character.CharacterId.of(coreId.value());
+    return maple.expectation.core.domain.model.character.CharacterId.of(coreId.value());
   }
 
   private static maple.expectation.core.domain.model.CubeType mapToCoreCubeType(

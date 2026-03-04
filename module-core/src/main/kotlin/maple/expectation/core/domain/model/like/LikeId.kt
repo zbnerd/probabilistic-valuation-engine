@@ -1,4 +1,4 @@
-package maple.expectation.domain.model.like
+package maple.expectation.core.domain.model.like
 
 /**
  * 좋아요 ID (Value Object)

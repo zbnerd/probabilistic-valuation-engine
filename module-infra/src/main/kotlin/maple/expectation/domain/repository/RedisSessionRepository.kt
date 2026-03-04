@@ -1,6 +1,6 @@
 package maple.expectation.domain.repository
 
-import maple.expectation.domain.Session
+import maple.expectation.core.domain.auth.Session
 
 /**
  * Redis 기반 세션 저장소 인터페이스

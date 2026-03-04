@@ -2,8 +2,8 @@ package maple.expectation.application.service.auth;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.RefreshToken;
-import maple.expectation.domain.Session;
+import maple.expectation.core.domain.auth.RefreshToken;
+import maple.expectation.core.domain.auth.Session;
 import maple.expectation.error.exception.SessionNotFoundException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;

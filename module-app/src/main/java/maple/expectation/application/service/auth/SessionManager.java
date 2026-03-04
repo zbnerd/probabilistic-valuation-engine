@@ -3,7 +3,7 @@ package maple.expectation.application.service.auth;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.Session;
+import maple.expectation.core.domain.auth.Session;
 import maple.expectation.error.exception.SessionNotFoundException;
 import org.springframework.stereotype.Service;
 

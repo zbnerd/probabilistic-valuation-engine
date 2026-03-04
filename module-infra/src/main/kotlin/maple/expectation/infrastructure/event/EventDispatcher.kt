@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.event
 
-import maple.expectation.domain.event.IntegrationEvent
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.EventProcessingException
 import maple.expectation.event.EventHandler

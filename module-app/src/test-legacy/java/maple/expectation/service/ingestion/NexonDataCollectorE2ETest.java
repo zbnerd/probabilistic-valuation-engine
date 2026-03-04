@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.port.EventPublisher;
 import maple.expectation.application.port.MessageQueue;
-import maple.expectation.domain.event.IntegrationEvent;
+import maple.expectation.core.domain.event.IntegrationEvent;
 import maple.expectation.domain.nexon.NexonApiCharacterData;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;

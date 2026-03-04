@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import maple.expectation.core.port.out.EventPublisher
 import maple.expectation.core.port.out.MessageQueue
-import maple.expectation.domain.event.IntegrationEvent
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.error.exception.QueuePublishException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext

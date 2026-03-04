@@ -1,6 +1,6 @@
-package maple.expectation.domain.model.character
+package maple.expectation.core.domain.model.character
 
-import maple.expectation.domain.model.equipment.CharacterEquipment
+import maple.expectation.core.domain.model.equipment.CharacterEquipment
 import java.time.LocalDateTime
 
 /**

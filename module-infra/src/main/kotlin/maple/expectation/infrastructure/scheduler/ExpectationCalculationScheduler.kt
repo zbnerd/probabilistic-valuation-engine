@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.scheduler
 
 import maple.expectation.core.port.out.QueueWriterPort
-import maple.expectation.domain.model.character.GameCharacter
+import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext

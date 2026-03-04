@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.model.character.GameCharacter;
+import maple.expectation.core.domain.model.character.GameCharacter;
 import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.error.exception.ApiTimeoutException;
 import maple.expectation.error.exception.CharacterNotFoundException;
@@ -95,10 +95,10 @@ public class CharacterCreationService {
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public GameCharacter saveCharacterWithCaching(String userIgn, String ocid) {
     // Value objects 생성
-    maple.expectation.domain.model.character.UserIgn userIgnVo =
-        maple.expectation.domain.model.character.UserIgn.of(userIgn);
-    maple.expectation.domain.model.character.CharacterId characterId =
-        maple.expectation.domain.model.character.CharacterId.of(ocid);
+    maple.expectation.core.domain.model.character.UserIgn userIgnVo =
+        maple.expectation.core.domain.model.character.UserIgn.of(userIgn);
+    maple.expectation.core.domain.model.character.CharacterId characterId =
+        maple.expectation.core.domain.model.character.CharacterId.of(ocid);
 
     GameCharacter newCharacter = GameCharacter.create(userIgnVo, characterId);
     GameCharacter saved = gameCharacterRepository.save(newCharacter);

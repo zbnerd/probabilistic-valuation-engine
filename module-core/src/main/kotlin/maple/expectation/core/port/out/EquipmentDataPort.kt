@@ -2,7 +2,7 @@ package maple.expectation.core.port.out
 
 import java.util.Optional
 import maple.expectation.core.domain.model.CharacterId
-import maple.expectation.domain.model.equipment.EquipmentData
+import maple.expectation.core.domain.model.equipment.EquipmentData
 
 /**
  * Port for retrieving equipment data.

@@ -8,7 +8,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.Optional;
 import java.util.Set;
-import maple.expectation.domain.Session;
+import maple.expectation.core.domain.auth.Session;
 import maple.expectation.domain.repository.RedisSessionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

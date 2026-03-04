@@ -1,6 +1,6 @@
 package maple.expectation.core.port.out
 
-import maple.expectation.domain.event.IntegrationEvent
+import maple.expectation.core.domain.event.IntegrationEvent
 import java.util.concurrent.CompletableFuture
 
 /**

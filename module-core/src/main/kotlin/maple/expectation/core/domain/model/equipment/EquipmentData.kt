@@ -1,4 +1,4 @@
-package maple.expectation.domain.model.equipment
+package maple.expectation.core.domain.model.equipment
 
 /**
  * 장비 데이터 도메인 모델

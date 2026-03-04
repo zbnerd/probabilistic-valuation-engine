@@ -2,9 +2,9 @@ package maple.expectation.application.service;
 
 import java.time.Duration;
 import java.util.Optional;
-import maple.expectation.domain.model.character.CharacterId;
-import maple.expectation.domain.model.equipment.CharacterEquipment;
-import maple.expectation.domain.model.equipment.EquipmentData;
+import maple.expectation.core.domain.model.character.CharacterId;
+import maple.expectation.core.domain.model.equipment.CharacterEquipment;
+import maple.expectation.core.domain.model.equipment.EquipmentData;
 import maple.expectation.domain.repository.CharacterEquipmentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

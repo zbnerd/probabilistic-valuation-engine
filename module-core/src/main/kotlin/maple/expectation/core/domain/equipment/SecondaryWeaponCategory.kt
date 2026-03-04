@@ -1,4 +1,4 @@
-package maple.expectation.domain.equipment
+package maple.expectation.core.domain.equipment
 
 /**
  * 보조무기 분류 Enum (#240 V4)

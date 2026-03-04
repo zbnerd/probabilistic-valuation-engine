@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.jdbc
 
-import maple.expectation.domain.model.equipment.CharacterEquipment
+import maple.expectation.core.domain.model.equipment.CharacterEquipment
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext

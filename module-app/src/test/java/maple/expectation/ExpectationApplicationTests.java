@@ -2,9 +2,9 @@ package maple.expectation;
 
 import maple.expectation.application.service.character.GameCharacterService;
 import maple.expectation.config.GlobalTestConfig;
-import maple.expectation.domain.model.character.CharacterId;
-import maple.expectation.domain.model.character.GameCharacter;
-import maple.expectation.domain.model.character.UserIgn;
+import maple.expectation.core.domain.model.character.CharacterId;
+import maple.expectation.core.domain.model.character.GameCharacter;
+import maple.expectation.core.domain.model.character.UserIgn;
 import maple.expectation.infrastructure.external.impl.RealNexonApiClient;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Tag;

@@ -1,6 +1,6 @@
 package maple.expectation.core.probability
 
-import maple.expectation.domain.model.calculator.DensePmf
+import maple.expectation.core.domain.model.calculator.DensePmf
 
 /**
  * 꼬리 확률 및 기대값 계산 컴포넌트

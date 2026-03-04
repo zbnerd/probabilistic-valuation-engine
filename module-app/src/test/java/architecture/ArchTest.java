@@ -81,7 +81,7 @@ public class ArchTest {
     void coreShouldNotUseSpringAnnotations() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .dependOnClassesThat()
           .resideInAPackage("org.springframework.stereotype..")
@@ -116,7 +116,7 @@ public class ArchTest {
     void coreShouldNotDependOnSpringClasses() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .dependOnClassesThat()
           .resideInAPackage("org.springframework..")
@@ -145,7 +145,7 @@ public class ArchTest {
     void coreShouldNotUseJpaAnnotations() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain.model..")
+          .resideInAPackage("maple.expectation.core.domain.model..")
           .should()
           .dependOnClassesThat()
           .resideInAPackage("jakarta.persistence..")
@@ -175,7 +175,7 @@ public class ArchTest {
     void coreShouldNotDependOnWebFramework() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .or()
           .resideInAPackage("maple.expectation.application..")
           .should()
@@ -325,7 +325,7 @@ public class ArchTest {
           .resideInAPackage("maple.expectation.error..")
           .should()
           .dependOnClassesThat()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .orShould()
           .dependOnClassesThat()
           .resideInAPackage("maple.expectation.application..")
@@ -356,7 +356,7 @@ public class ArchTest {
     void coreShouldNotDependOnApplicationOrInfrastructure() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .dependOnClassesThat()
           .resideInAPackage("..service..")

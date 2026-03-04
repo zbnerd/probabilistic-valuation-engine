@@ -139,7 +139,7 @@ class ModuleDependencyTest {
     void moduleCoreMayOnlyDependOnCommon() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .dependOnClassesThat()
           .resideInAPackage("..service..")
@@ -190,7 +190,7 @@ class ModuleDependencyTest {
           .resideInAPackage("maple.expectation.shared..")
           .should()
           .dependOnClassesThat()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .orShould()
           .dependOnClassesThat()
           .resideInAPackage("maple.expectation.application..")
@@ -577,7 +577,7 @@ class ModuleDependencyTest {
     void noComponentInCore() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .beMetaAnnotatedWith("org.springframework.stereotype.Component")
           .because(
@@ -599,7 +599,7 @@ class ModuleDependencyTest {
     void noServiceInCore() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .beMetaAnnotatedWith("org.springframework.stereotype.Service")
           .because(

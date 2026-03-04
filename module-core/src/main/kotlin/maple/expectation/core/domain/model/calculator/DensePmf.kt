@@ -1,4 +1,4 @@
-package maple.expectation.domain.model.calculator
+package maple.expectation.core.domain.model.calculator
 
 /**
  * 밀집 확률질량함수 (Dense PMF)

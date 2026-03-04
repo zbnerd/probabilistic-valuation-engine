@@ -2,9 +2,9 @@ package maple.expectation.infrastructure.external.impl
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.domain.model.equipment.CharacterEquipment
+import maple.expectation.core.domain.model.equipment.CharacterEquipment
 import maple.expectation.domain.repository.CharacterEquipmentRepository
-import maple.expectation.domain.model.character.CharacterId
+import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.error.exception.CharacterNotFoundException
 import maple.expectation.error.exception.EquipmentDataProcessingException
 import maple.expectation.error.exception.ExternalServiceException

@@ -3,9 +3,9 @@ package maple.expectation.application.usecase;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.character.GameCharacterService;
 import maple.expectation.core.port.out.GameCharacterPort;
 import maple.expectation.domain.model.character.GameCharacter;
-import maple.expectation.service.v2.GameCharacterService;
 import org.springframework.stereotype.Component;
 
 /**

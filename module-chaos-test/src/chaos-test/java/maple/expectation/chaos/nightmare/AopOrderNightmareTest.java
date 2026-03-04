@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.character.GameCharacterService;
+import maple.expectation.application.service.like.LikeProcessor;
+import maple.expectation.application.service.like.LikeRelationSyncService;
+import maple.expectation.application.service.like.LikeSyncService;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
-import maple.expectation.service.v2.GameCharacterService;
-import maple.expectation.service.v2.LikeProcessor;
-import maple.expectation.service.v2.LikeRelationSyncService;
-import maple.expectation.service.v2.LikeSyncService;
 import maple.expectation.service.v2.donation.outbox.OutboxProcessor;
 import maple.expectation.support.AbstractContainerBaseTest;
 import org.junit.jupiter.api.*;

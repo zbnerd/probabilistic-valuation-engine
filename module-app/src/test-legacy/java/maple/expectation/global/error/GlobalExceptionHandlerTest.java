@@ -20,7 +20,7 @@ import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.GlobalExceptionHandler;
 import maple.expectation.global.security.AuthenticatedUser;
 import maple.expectation.application.service.auth.AdminService;
-import maple.expectation.service.v2.facade.GameCharacterFacade;
+import maple.expectation.application.service.character.GameCharacterFacade;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;

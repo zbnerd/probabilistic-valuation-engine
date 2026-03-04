@@ -1,8 +1,8 @@
 package maple.expectation.service.v5;
 
+import maple.expectation.application.service.expectation.event.MongoSyncEventPublisherInterface;
+import maple.expectation.application.service.expectation.event.MongoSyncEventPublisherStub;
 import maple.expectation.infrastructure.executor.LogicExecutor;
-import maple.expectation.service.v5.event.MongoSyncEventPublisherInterface;
-import maple.expectation.service.v5.event.MongoSyncEventPublisherStub;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;

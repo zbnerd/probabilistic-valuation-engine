@@ -1,22 +1,24 @@
 package maple.expectation.infrastructure.lock
 
+import maple.expectation.core.port.out.redis.RedisOperationPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import org.redisson.api.RLock
-import org.redisson.api.RedissonClient
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
-import java.util.concurrent.TimeUnit
+import java.time.Duration
 
 /**
- * Redis 분산 락 전략 (Redisson 기반)
+ * Redis 분산 락 전략 (RedisOperationPort 기반)
  *
  * <p>AbstractLockStrategy를 상속하여 85% 이상의 보일러플레이트 코드를 제거했습니다.
+ *
+ * <h4>ADR-012: DIP 준수</h4>
+ * <p>RedissonClient 대신 RedisOperationPort에 의존하여 DIP 준수.
  */
 @Component
 @Qualifier("redisDistributedLockStrategy")
 class RedisDistributedLockStrategy(
-    private val redissonClient: RedissonClient,
+    private val redisOperationPort: RedisOperationPort,
     executor: LogicExecutor,
     private val lockMetrics: LockMetrics
 ) : AbstractLockStrategy(executor) {
@@ -26,11 +28,10 @@ class RedisDistributedLockStrategy(
      */
     @Throws(Throwable::class)
     override fun tryLock(lockKey: String, waitTime: Long, leaseTime: Long): Boolean {
-        val lock: RLock = redissonClient.getLock(lockKey)
         val startTime = System.currentTimeMillis()
 
         // ✅ Watchdog 모드: leaseTime 생략 → 30초마다 자동 갱신
-        val acquired = lock.tryLock(waitTime, TimeUnit.SECONDS)
+        val acquired = redisOperationPort.tryLockWithWatchdog(lockKey, Duration.ofSeconds(waitTime))
 
         // [Issue #310] 락 대기 시간 기록
         if (acquired) {
@@ -42,16 +43,15 @@ class RedisDistributedLockStrategy(
     }
 
     override fun unlockInternal(lockKey: String) {
-        val lock: RLock = redissonClient.getLock(lockKey)
-        if (lock.isHeldByCurrentThread) {
-            lock.unlock()
+        if (redisOperationPort.isHeldByCurrentThread(lockKey)) {
+            redisOperationPort.unlock(lockKey)
             // [Issue #310] 락 해제 기록
             lockMetrics.recordLockReleased("redis")
         }
     }
 
     override fun shouldUnlock(lockKey: String): Boolean {
-        return redissonClient.getLock(lockKey).isHeldByCurrentThread
+        return redisOperationPort.isHeldByCurrentThread(lockKey)
     }
 
     override fun tryLockImmediately(key: String, leaseTime: Long): Boolean {

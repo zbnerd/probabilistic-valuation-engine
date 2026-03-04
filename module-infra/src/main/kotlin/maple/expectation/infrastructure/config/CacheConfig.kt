@@ -3,11 +3,11 @@ package maple.expectation.infrastructure.config
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Caffeine
 import io.micrometer.core.instrument.MeterRegistry
+import maple.expectation.core.port.out.redis.RedisOperationPort
 import maple.expectation.infrastructure.cache.RestrictedCacheManager
 import maple.expectation.infrastructure.cache.TieredCacheManager
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.external.dto.v2.TotalExpectationResponse
-import org.redisson.api.RedissonClient
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.CacheManager
@@ -53,7 +53,7 @@ class CacheConfig {
   fun cacheManager(
       connectionFactory: RedisConnectionFactory,
       executor: LogicExecutor,
-      redissonClient: RedissonClient,
+      redisOperationPort: RedisOperationPort,
       meterRegistry: MeterRegistry,
       cacheProperties: CacheProperties): CacheManager {
 
@@ -61,7 +61,7 @@ class CacheConfig {
         createL1Manager(cacheProperties),
         createL2Manager(connectionFactory, cacheProperties),
         executor,
-        redissonClient,
+        redisOperationPort,
         meterRegistry,
         cacheProperties.singleflight.lockWaitSeconds)
   }
@@ -76,14 +76,14 @@ class CacheConfig {
   fun tieredCacheManager(
       connectionFactory: RedisConnectionFactory,
       executor: LogicExecutor,
-      redissonClient: RedissonClient,
+      redisOperationPort: RedisOperationPort,
       meterRegistry: MeterRegistry,
       cacheProperties: CacheProperties): TieredCacheManager {
 
     return cacheManager(
         connectionFactory,
         executor,
-        redissonClient,
+        redisOperationPort,
         meterRegistry,
         cacheProperties) as TieredCacheManager
   }

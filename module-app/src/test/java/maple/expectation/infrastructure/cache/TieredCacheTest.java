@@ -8,12 +8,13 @@ import static org.mockito.Mockito.*;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import maple.expectation.common.function.ThrowingSupplier;
+import maple.expectation.core.port.out.redis.RedisOperationPort;
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -25,9 +26,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 import org.springframework.cache.Cache;
 
 /**
@@ -58,7 +58,7 @@ class TieredCacheTest {
   private Cache l1;
   private Cache l2;
   private LogicExecutor executor;
-  private RedissonClient redissonClient;
+  private RedisOperationPort redisOperationPort;
   private MeterRegistry meterRegistry;
   private List<CacheInvalidationEvent> publishedEvents;
   private TieredCache tieredCache;
@@ -68,7 +68,7 @@ class TieredCacheTest {
     l1 = mock(Cache.class);
     l2 = mock(Cache.class);
     executor = TestLogicExecutors.passThrough();
-    redissonClient = mock(RedissonClient.class);
+    redisOperationPort = mock(RedisOperationPort.class);
     meterRegistry = new SimpleMeterRegistry();
     publishedEvents = new ArrayList<>();
 
@@ -81,7 +81,7 @@ class TieredCacheTest {
             l1,
             l2,
             executor,
-            redissonClient,
+            redisOperationPort,
             meterRegistry,
             LOCK_WAIT_SECONDS,
             () -> "test-instance",
@@ -184,7 +184,7 @@ class TieredCacheTest {
               l1,
               l2,
               executor,
-              redissonClient,
+              redisOperationPort,
               meterRegistry,
               LOCK_WAIT_SECONDS,
               () -> "test-instance",
@@ -222,7 +222,7 @@ class TieredCacheTest {
               l1,
               l2,
               executor,
-              redissonClient,
+              redisOperationPort,
               meterRegistry,
               LOCK_WAIT_SECONDS,
               () -> "test-instance",
@@ -363,9 +363,8 @@ class TieredCacheTest {
       // given
       given(l1.get(KEY)).willReturn(null);
       given(l2.get(KEY)).willReturn(null);
-
-      RLock lock = createMockLock(true);
-      given(redissonClient.getLock(anyString())).willReturn(lock);
+      given(redisOperationPort.tryLock(anyString(), any(Duration.class), any(Duration.class)))
+          .willReturn(true);
 
       Callable<String> loader = () -> "loadedValue";
 
@@ -385,8 +384,8 @@ class TieredCacheTest {
       given(l1.get(KEY)).willReturn(null);
       given(l2.get(KEY)).willReturn(null);
 
-      RLock lock = createMockLock(false);
-      given(redissonClient.getLock(anyString())).willReturn(lock);
+      given(redisOperationPort.tryLock(anyString(), any(Duration.class), any(Duration.class)))
+          .willReturn(false);
 
       Callable<String> loader = () -> "fallbackValue";
 
@@ -411,8 +410,8 @@ class TieredCacheTest {
           .willReturn(null) // 첫 조회
           .willReturn(() -> "doubleCheckValue"); // double-check
 
-      RLock lock = createMockLock(true);
-      given(redissonClient.getLock(anyString())).willReturn(lock);
+      given(redisOperationPort.tryLock(anyString(), any(Duration.class), any(Duration.class)))
+          .willReturn(true);
 
       Callable<String> loader = mock(Callable.class);
 
@@ -470,14 +469,17 @@ class TieredCacheTest {
       given(l1.get(KEY)).willReturn(null);
       given(l2.get(KEY)).willReturn(null);
 
-      RLock lock = createMockLock(true);
-      given(redissonClient.getLock(anyString())).willReturn(lock);
+      given(redisOperationPort.tryLock(anyString(), any(Duration.class), any(Duration.class)))
+          .willReturn(true);
 
       // when
       tieredCache.get(KEY, () -> "value");
 
-      // then: lockWaitSeconds=5 확인
-      verify(lock).tryLock(eq((long) LOCK_WAIT_SECONDS), eq(TimeUnit.SECONDS));
+      // then: lockWaitSeconds=5 확인 (Duration의 seconds 값으로 검증)
+      ArgumentCaptor<Duration> waitTimeCaptor = ArgumentCaptor.forClass(Duration.class);
+      verify(redisOperationPort)
+          .tryLock(anyString(), waitTimeCaptor.capture(), any(Duration.class));
+      assertThat(waitTimeCaptor.getValue().getSeconds()).isEqualTo(LOCK_WAIT_SECONDS);
     }
   }
 
@@ -494,7 +496,7 @@ class TieredCacheTest {
               mock(org.springframework.cache.CacheManager.class),
               mock(org.springframework.cache.CacheManager.class),
               executor,
-              redissonClient,
+              redisOperationPort,
               meterRegistry,
               LOCK_WAIT_SECONDS);
 
@@ -594,12 +596,5 @@ class TieredCacheTest {
         .executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
 
     return mockExecutor;
-  }
-
-  private RLock createMockLock(boolean acquireSuccess) throws InterruptedException {
-    RLock lock = mock(RLock.class);
-    given(lock.tryLock(anyLong(), any(TimeUnit.class))).willReturn(acquireSuccess);
-    given(lock.isHeldByCurrentThread()).willReturn(acquireSuccess);
-    return lock;
   }
 }

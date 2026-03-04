@@ -8,6 +8,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.expectation.EquipmentExpectationServiceV4;
 import maple.expectation.domain.model.character.CharacterId;
 import maple.expectation.domain.model.character.GameCharacter;
 import maple.expectation.domain.model.character.UserIgn;

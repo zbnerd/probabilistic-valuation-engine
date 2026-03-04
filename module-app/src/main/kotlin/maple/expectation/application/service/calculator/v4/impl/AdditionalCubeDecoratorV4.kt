@@ -2,11 +2,11 @@ package maple.expectation.application.service.calculator.v4.impl
 
 import maple.expectation.domain.v2.CubeType
 import maple.expectation.web.dto.CubeCalculationInput
-import maple.expectation.service.v2.CubeTrialsProvider
+import maple.expectation.application.service.cube.CubeTrialsProvider
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator.CostBreakdown
 import maple.expectation.application.service.cube.AbstractCubeDecoratorV4
-import maple.expectation.service.v2.policy.CubeCostPolicy
+import maple.expectation.application.service.cube.policy.CubeCostPolicy
 import java.math.BigDecimal
 
 /**

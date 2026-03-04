@@ -6,11 +6,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.calculator.port.StarforceLookupPort;
 import maple.expectation.error.exception.InsufficientResourceException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
-import maple.expectation.service.v2.starforce.StarforceLookupTable;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.Ordered;
@@ -36,7 +36,7 @@ import org.springframework.stereotype.Component;
  *   <li>초기화 실패: 로그 기록 후 Graceful Degradation (fallback to on-the-fly 계산)
  * </ul>
  *
- * @see StarforceLookupTable Starforce 기대값 Lookup Table
+ * @see StarforceLookupPort Starforce 기대값 Lookup Port
  */
 @Slf4j
 @Component
@@ -47,7 +47,7 @@ public class LookupTableInitializer implements ApplicationRunner {
   private static final long REQUIRED_HEAP_BYTES = 2 * 1024 * 1024; // 2MB for lookup tables
   private static final double SAFETY_MARGIN = 1.5;
 
-  private final StarforceLookupTable starforceLookupTable;
+  private final StarforceLookupPort starforceLookupPort;
   private final LogicExecutor executor;
   private final MeterRegistry meterRegistry;
 
@@ -115,11 +115,11 @@ public class LookupTableInitializer implements ApplicationRunner {
         requiredWithMargin / (1024 * 1024));
   }
 
-  /** Lookup Table 초기화 */
+  /** Lookup Port 초기화 */
   private void initializeTables() {
-    log.info("[LookupTableInitializer] Initializing Starforce Lookup Table...");
-    starforceLookupTable.initialize();
-    log.info("[LookupTableInitializer] Starforce Lookup Table initialized successfully");
+    log.info("[LookupTableInitializer] Initializing Starforce Lookup Port...");
+    starforceLookupPort.initialize();
+    log.info("[LookupTableInitializer] Starforce Lookup Port initialized successfully");
   }
 
   /**
@@ -151,6 +151,6 @@ public class LookupTableInitializer implements ApplicationRunner {
    * @return true if all lookup tables are initialized
    */
   public boolean isReady() {
-    return initialized.get() && starforceLookupTable.isInitialized();
+    return initialized.get() && starforceLookupPort.isInitialized();
   }
 }

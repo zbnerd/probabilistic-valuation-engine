@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.cache
 
 import io.micrometer.core.instrument.MeterRegistry
+import maple.expectation.core.port.out.redis.RedisOperationPort
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
-import org.redisson.api.RedissonClient
 import org.springframework.cache.Cache
 import org.springframework.cache.CacheManager
 import org.springframework.cache.support.AbstractCacheManager
@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory
  * <h4>Issue #148: TieredCache에 분산 락 및 메트릭 지원 추가</h4>
  *
  * <ul>
- *   <li>RedissonClient: 분산 락 기반 Single-flight 패턴</li>
+ *   <li>RedisOperationPort: 분산 락 기반 Single-flight 패턴 (ADR-012)</li>
  *   <li>MeterRegistry: 캐시 히트/미스 메트릭 수집</li>
  * </ul>
  *
@@ -42,8 +42,8 @@ class TieredCacheManager(
     private val l1Manager: CacheManager,
     private val l2Manager: CacheManager,
     private val executor: LogicExecutor,
-    private val redissonClient: RedissonClient,
-    // Issue #148: 분산 락용
+    private val redisOperationPort: RedisOperationPort,
+    // Issue #148: 분산 락용 (ADR-012: RedisOperationPort로 추상화)
     val meterRegistry: MeterRegistry,
     // Issue #148: 메트릭 수집용 (public for access)
     private val lockWaitSeconds: Int // P0-4: 외부 설정
@@ -104,7 +104,7 @@ class TieredCacheManager(
             l1 = l1,
             l2 = l2,
             executor = executor,
-            redissonClient = redissonClient,
+            redisOperationPort = redisOperationPort,
             meterRegistry = meterRegistry,
             lockWaitSeconds = lockWaitSeconds,
             instanceIdSupplier = { instanceIdRef.get() },

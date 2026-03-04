@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.time.Instant;
+import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
+import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
+import maple.expectation.application.service.expectation.queue.QueuePriority;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor;
 import maple.expectation.infrastructure.executor.LogicExecutor;
@@ -13,26 +16,23 @@ import maple.expectation.infrastructure.executor.function.CheckedRunnable;
 import maple.expectation.infrastructure.executor.function.CheckedSupplier;
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
-import maple.expectation.service.v5.queue.ExpectationCalculationTask;
-import maple.expectation.service.v5.queue.PriorityCalculationQueue;
-import maple.expectation.service.v5.queue.QueuePriority;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("unit")
 @DisplayName("V5 CQRS: Priority Queue Tests")
-class PriorityCalculationQueueTest {
+class ExpectationCalculationQueueTest {
 
   private LogicExecutor executor;
   private CheckedLogicExecutor checkedExecutor;
-  private PriorityCalculationQueue queue;
+  private ExpectationCalculationQueue queue;
 
   @org.junit.jupiter.api.BeforeEach
   void setUp() {
     executor = new TestLogicExecutor();
     checkedExecutor = new TestCheckedLogicExecutor();
-    queue = new PriorityCalculationQueue(executor);
+    queue = new ExpectationCalculationQueue(executor);
   }
 
   @Test

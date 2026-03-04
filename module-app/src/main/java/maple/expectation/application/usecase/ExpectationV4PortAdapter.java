@@ -3,8 +3,8 @@ package maple.expectation.application.usecase;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.expectation.EquipmentExpectationServiceV4;
 import maple.expectation.core.port.inbound.ExpectationV4Port;
-import maple.expectation.service.v4.EquipmentExpectationServiceV4;
 import org.springframework.stereotype.Component;
 
 /**

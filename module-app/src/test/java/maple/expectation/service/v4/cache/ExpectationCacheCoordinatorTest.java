@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Callable;
 import java.util.zip.GZIPOutputStream;
+import maple.expectation.application.service.expectation.cache.ExpectationCacheCoordinator;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.error.exception.CacheDataNotFoundException;
 import maple.expectation.infrastructure.cache.TieredCacheManager;

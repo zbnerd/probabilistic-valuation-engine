@@ -2,9 +2,9 @@ package maple.expectation.application.usecase;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
+import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
 import maple.expectation.core.port.inbound.CalculationQueuePort;
-import maple.expectation.service.v5.queue.ExpectationCalculationTask;
-import maple.expectation.service.v5.queue.PriorityCalculationQueue;
 import org.springframework.stereotype.Component;
 
 /**
@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CalculationQueuePortAdapter implements CalculationQueuePort {
 
-  private final PriorityCalculationQueue queue;
+  private final ExpectationCalculationQueue queue;
 
   @Override
   public boolean offerHighPriority(String userIgn, boolean forceRecalculation) {

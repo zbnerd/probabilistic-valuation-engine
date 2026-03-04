@@ -2,8 +2,8 @@ package maple.expectation.application.usecase;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.warmup.PopularCharacterTracker;
 import maple.expectation.core.port.out.PopularCharacterTrackerPort;
-import maple.expectation.service.v4.warmup.PopularCharacterTracker;
 import org.springframework.stereotype.Component;
 
 /**

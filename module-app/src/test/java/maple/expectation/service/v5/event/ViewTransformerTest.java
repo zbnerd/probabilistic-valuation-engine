@@ -1,4 +1,4 @@
-package maple.expectation.service.v5.event;
+package maple.expectation.application.service.expectation.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

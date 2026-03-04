@@ -5,7 +5,7 @@ import java.math.RoundingMode;
 import java.util.Optional;
 import maple.expectation.application.service.calculator.v4.EquipmentEnhanceDecorator;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator;
-import maple.expectation.service.v2.starforce.StarforceLookupTable;
+import maple.expectation.core.calculator.port.StarforceLookupPort;
 
 /**
  * V4 스타포스 데코레이터 (#240)
@@ -22,14 +22,14 @@ import maple.expectation.service.v2.starforce.StarforceLookupTable;
  *
  * <p>StarforceLookupTable에서 pre-computed 기대값 조회 (O(1))
  *
- * @see StarforceLookupTable 스타포스 기대값 조회
+ * @see StarforceLookupPort 스타포스 기대값 조회
  * @see EquipmentEnhanceDecorator 추상 데코레이터
  */
 public class StarforceDecoratorV4 extends EquipmentEnhanceDecorator {
 
   private static final int PRECISION_SCALE = 2;
 
-  private final StarforceLookupTable lookupTable;
+  private final StarforceLookupPort lookupPort;
   private final int currentStar;
   private final int targetStar;
   private final int itemLevel;
@@ -39,19 +39,19 @@ public class StarforceDecoratorV4 extends EquipmentEnhanceDecorator {
    * 스타포스 데코레이터 생성
    *
    * @param target 이전 단계 계산기
-   * @param lookupTable 스타포스 기대값 조회 테이블
+   * @param lookupPort 스타포스 기대값 조회 테이블
    * @param currentStar 현재 스타포스 (0~25)
    * @param targetStar 목표 스타포스 (currentStar ~ 25)
    * @param itemLevel 아이템 레벨
    */
   public StarforceDecoratorV4(
       EquipmentExpectationCalculator target,
-      StarforceLookupTable lookupTable,
+      StarforceLookupPort lookupPort,
       int currentStar,
       int targetStar,
       int itemLevel) {
     super(target);
-    this.lookupTable = lookupTable;
+    this.lookupPort = lookupPort;
     this.currentStar = currentStar;
     this.targetStar = targetStar;
     this.itemLevel = itemLevel;
@@ -60,10 +60,10 @@ public class StarforceDecoratorV4 extends EquipmentEnhanceDecorator {
   /** 레벨별 최대 스타로 생성 (레벨에 따라 자동 결정) */
   public StarforceDecoratorV4(
       EquipmentExpectationCalculator target,
-      StarforceLookupTable lookupTable,
+      StarforceLookupPort lookupPort,
       int currentStar,
       int itemLevel) {
-    this(target, lookupTable, currentStar, lookupTable.getMaxStarForLevel(itemLevel), itemLevel);
+    this(target, lookupPort, currentStar, lookupPort.getMaxStarForLevel(itemLevel), itemLevel);
   }
 
   @Override
@@ -88,7 +88,7 @@ public class StarforceDecoratorV4 extends EquipmentEnhanceDecorator {
       } else {
         // Lookup Table에서 기대값 조회
         starforceCost =
-            lookupTable
+            lookupPort
                 .getExpectedCost(currentStar, targetStar, itemLevel)
                 .setScale(PRECISION_SCALE, RoundingMode.HALF_UP);
       }

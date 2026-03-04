@@ -1,4 +1,4 @@
-package maple.expectation.domain.event
+package maple.expectation.core.domain.event
 
 import java.time.Instant
 import java.util.UUID

@@ -8,8 +8,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import java.util.Set;
-import maple.expectation.domain.RefreshToken;
-import maple.expectation.domain.Session;
+import maple.expectation.core.domain.auth.RefreshToken;
+import maple.expectation.core.domain.auth.Session;
 import maple.expectation.error.exception.CharacterNotOwnedException;
 import maple.expectation.error.exception.InvalidApiKeyException;
 import maple.expectation.error.exception.InvalidRefreshTokenException;

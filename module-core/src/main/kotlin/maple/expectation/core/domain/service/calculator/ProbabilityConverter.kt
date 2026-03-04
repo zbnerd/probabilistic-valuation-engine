@@ -1,7 +1,7 @@
-package maple.expectation.domain.service.calculator
+package maple.expectation.core.domain.service.calculator
 
-import maple.expectation.domain.model.calculator.DensePmf
-import maple.expectation.domain.model.calculator.SparsePmf
+import maple.expectation.core.domain.model.calculator.DensePmf
+import maple.expectation.core.domain.model.calculator.SparsePmf
 import maple.expectation.error.exception.ProbabilityInvariantException
 
 /**

@@ -1,4 +1,4 @@
-package maple.expectation.domain.model.calculator
+package maple.expectation.core.domain.model.calculator
 
 /**
  * 주사위 굴림 확률 분포

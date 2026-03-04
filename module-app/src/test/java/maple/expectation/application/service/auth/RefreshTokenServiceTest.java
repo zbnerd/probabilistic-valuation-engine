@@ -7,7 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
 import java.time.Instant;
-import maple.expectation.domain.RefreshToken;
+import maple.expectation.core.domain.auth.RefreshToken;
 import maple.expectation.domain.repository.RedisRefreshTokenRepository;
 import maple.expectation.error.exception.InvalidRefreshTokenException;
 import maple.expectation.error.exception.RefreshTokenExpiredException;

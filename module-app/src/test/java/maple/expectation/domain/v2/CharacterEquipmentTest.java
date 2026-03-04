@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import maple.expectation.domain.model.character.CharacterId;
-import maple.expectation.domain.model.equipment.CharacterEquipment;
-import maple.expectation.domain.model.equipment.EquipmentData;
+import maple.expectation.core.domain.model.character.CharacterId;
+import maple.expectation.core.domain.model.equipment.CharacterEquipment;
+import maple.expectation.core.domain.model.equipment.EquipmentData;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;

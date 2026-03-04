@@ -1,4 +1,4 @@
-package maple.expectation.domain.model.like
+package maple.expectation.core.domain.model.like
 
 import java.time.LocalDateTime
 

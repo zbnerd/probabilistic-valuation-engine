@@ -2,7 +2,7 @@ package maple.expectation.infrastructure.persistence.repository
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.domain.Session
+import maple.expectation.core.domain.auth.Session
 import maple.expectation.domain.repository.RedisSessionRepository as DomainRedisSessionRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext

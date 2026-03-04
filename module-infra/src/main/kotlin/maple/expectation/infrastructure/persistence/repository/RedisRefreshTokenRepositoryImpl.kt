@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.persistence.repository
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.domain.RefreshToken
+import maple.expectation.core.domain.auth.RefreshToken
 import maple.expectation.domain.repository.RedisRefreshTokenRepository as DomainRedisRefreshTokenRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext

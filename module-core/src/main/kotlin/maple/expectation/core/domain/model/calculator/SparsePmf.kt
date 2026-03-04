@@ -1,4 +1,4 @@
-package maple.expectation.domain.model.calculator
+package maple.expectation.core.domain.model.calculator
 
 /**
  * Sparse Probability Mass Function (Sparse PMF)

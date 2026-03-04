@@ -1,6 +1,6 @@
 package maple.expectation.domain.repository
 
-import maple.expectation.domain.RefreshToken
+import maple.expectation.core.domain.auth.RefreshToken
 
 /**
  * Redis 기반 Refresh Token 저장소 인터페이스

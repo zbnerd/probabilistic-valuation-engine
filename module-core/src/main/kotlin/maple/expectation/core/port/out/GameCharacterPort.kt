@@ -1,6 +1,6 @@
 package maple.expectation.core.port.out
 
-import maple.expectation.domain.model.character.GameCharacter
+import maple.expectation.core.domain.model.character.GameCharacter
 import java.util.Optional
 
 /**

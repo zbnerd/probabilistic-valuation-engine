@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.persistence.repository
 
-import maple.expectation.domain.model.character.GameCharacter
+import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.domain.repository.GameCharacterRepository as DomainGameCharacterRepository
 import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity
 import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepository

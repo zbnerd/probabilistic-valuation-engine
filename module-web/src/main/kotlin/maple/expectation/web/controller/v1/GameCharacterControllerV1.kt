@@ -1,7 +1,7 @@
 package maple.expectation.web.controller.v1
 
 import maple.expectation.core.port.out.GameCharacterPort
-import maple.expectation.domain.model.character.GameCharacter
+import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.web.dto.response.CharacterResponse
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize

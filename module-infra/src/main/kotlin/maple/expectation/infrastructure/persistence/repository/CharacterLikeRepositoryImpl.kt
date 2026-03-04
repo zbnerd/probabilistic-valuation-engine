@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.persistence.repository
 
-import maple.expectation.domain.model.like.CharacterLike
+import maple.expectation.core.domain.model.like.CharacterLike
 import maple.expectation.domain.repository.CharacterLikeRepository as DomainCharacterLikeRepository
 import maple.expectation.infrastructure.persistence.entity.CharacterLikeJpaEntity
 import maple.expectation.infrastructure.persistence.jpa.CharacterLikeJpaRepository

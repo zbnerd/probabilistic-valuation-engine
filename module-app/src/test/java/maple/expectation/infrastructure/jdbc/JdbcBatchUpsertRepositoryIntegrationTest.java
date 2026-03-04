@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.stream.IntStream;
-import maple.expectation.domain.model.equipment.CharacterEquipment;
+import maple.expectation.core.domain.model.equipment.CharacterEquipment;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.persistence.CharacterEquipmentJpaRepository;
 import maple.expectation.infrastructure.persistence.entity.CharacterEquipmentJpaEntity;

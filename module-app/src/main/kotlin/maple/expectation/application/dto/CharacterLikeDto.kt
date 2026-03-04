@@ -1,7 +1,7 @@
 package maple.expectation.application.dto
 
 import java.time.LocalDateTime
-import maple.expectation.domain.model.like.CharacterLike
+import maple.expectation.core.domain.model.like.CharacterLike
 
 /**
  * CharacterLike Data Transfer Object

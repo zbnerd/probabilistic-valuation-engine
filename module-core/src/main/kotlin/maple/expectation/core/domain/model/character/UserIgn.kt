@@ -1,4 +1,4 @@
-package maple.expectation.domain.model.character
+package maple.expectation.core.domain.model.character
 
 /**
  * 유저 IGN (Value Object)

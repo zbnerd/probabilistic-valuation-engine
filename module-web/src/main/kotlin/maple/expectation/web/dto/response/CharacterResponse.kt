@@ -1,6 +1,6 @@
 package maple.expectation.web.dto.response
 
-import maple.expectation.domain.model.character.GameCharacter
+import maple.expectation.core.domain.model.character.GameCharacter
 
 /**
  * Character response DTO (Issue #128)

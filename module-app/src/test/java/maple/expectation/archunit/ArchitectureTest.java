@@ -270,7 +270,7 @@ class ArchitectureTest {
         .resideInAnyPackage(
             "..springframework..", "..hibernate..", "..persistence..", "..jackson..", "..lombok..")
         .because("Domain models must be pure business logic without framework dependencies")
-        .check(new ClassFileImporter().importPackages("maple.expectation.domain"));
+        .check(new ClassFileImporter().importPackages("maple.expectation.core.domain"));
   }
 
   /**

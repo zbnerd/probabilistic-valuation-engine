@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.event
 
 import io.micrometer.core.instrument.MeterRegistry
-import maple.expectation.domain.event.IntegrationEvent
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory

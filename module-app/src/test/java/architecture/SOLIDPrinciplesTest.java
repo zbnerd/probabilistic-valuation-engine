@@ -420,7 +420,7 @@ class SOLIDPrinciplesTest {
     void moduleDependencyDirectionShouldBeCorrect() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .dependOnClassesThat()
           .resideInAPackage("..service..")

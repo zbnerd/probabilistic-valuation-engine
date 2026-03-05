@@ -10,6 +10,7 @@ import maple.expectation.core.port.out.MessageQueue;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.persistence.repository.NexonCharacterRepository;
+import maple.expectation.infrastructure.scheduler.BatchWriter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

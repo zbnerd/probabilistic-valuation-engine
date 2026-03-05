@@ -1,4 +1,4 @@
-package maple.expectation.service.ingestion
+package maple.expectation.infrastructure.scheduler
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper

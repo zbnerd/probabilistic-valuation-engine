@@ -5,6 +5,7 @@ import maple.expectation.domain.repository.CharacterEquipmentRepository
 import maple.expectation.domain.v2.NexonApiOutbox
 import maple.expectation.infrastructure.alert.StatelessAlertService
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
+import maple.expectation.infrastructure.executor.classifier.ExceptionClassifier
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.NexonApiOutboxRepository
 import org.slf4j.LoggerFactory
@@ -82,6 +83,7 @@ open class NexonApiClientConfig(
      */
     @Bean
     open fun fallbackHandler(
+        exceptionClassifier: ExceptionClassifier,
         outboxFallbackManager: OutboxFallbackManager,
         alertNotificationHelper: AlertNotificationHelper
     ): FallbackHandler {
@@ -90,7 +92,8 @@ open class NexonApiClientConfig(
             objectMapper,
             checkedExecutor,
             outboxFallbackManager,
-            alertNotificationHelper
+            alertNotificationHelper,
+            exceptionClassifier
         )
     }
 }

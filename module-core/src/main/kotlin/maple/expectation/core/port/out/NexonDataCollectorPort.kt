@@ -18,7 +18,7 @@ import java.util.concurrent.CompletableFuture
  * <h3>구현체</h3>
  *
  * <ul>
- *   <li>module-app/service/ingestion/NexonDataCollector - WebClient 기반 구현
+ *   <li>module-infra/infrastructure/external/impl/NexonDataCollectorImpl - WebClient 기반 구현
  * </ul>
  */
 interface NexonDataCollectorPort {

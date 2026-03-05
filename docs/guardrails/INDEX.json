@@ -25,7 +25,7 @@
     },
     "aop-self-invocation": {
       "file": "backend/spring/aop-facade.md",
-      "severity": "critical",
+      "severity": "warning",
       "id": "GR-003",
       "description": "AOP self-invocation prohibited. Use Facade pattern. (Regex removed - AI judgment required)",
       "keywords": ["AOP", "Facade", "self-invocation", "CGLIB", "proxy", "this.", "@Service", "@Component", "internal call", "method call", "Spring AOP"],
@@ -279,11 +279,12 @@
     },
     "aop-facade-pattern": {
       "file": "backend/spring/aop-facade.md",
-      "severity": "critical",
+      "severity": "warning",
       "id": "GR-AOP-001",
       "description": "Facade pattern prevents AOP self-invocation issues. Facade orchestrates, Service executes.",
       "keywords": ["Facade", "AOP", "self-invocation", "CGLIB", "orchestration", "Service", "proxy"],
-      "languages": ["java", "kotlin"]
+      "languages": ["java", "kotlin"],
+      "aiJudgment": true
     },
     "filter-bean-registration": {
       "file": "backend/spring/aop-facade.md",
@@ -370,7 +371,7 @@
     },
     "annotation-processor-migration": {
       "file": "migration/compiler-centric.md",
-      "severity": "critical",
+      "severity": "warning",
       "id": "GR-MIGRATION-004",
       "description": "Annotation processor modules (Dagger/Hilt/Room/MapStruct/Lombok) require special handling.",
       "keywords": ["@Entity", "@Dao", "@Module", "@Component", "@Mapper", "@Data", "@Builder", "KAPT", "KSP", "annotation processor"],

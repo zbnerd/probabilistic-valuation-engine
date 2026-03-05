@@ -1,4 +1,4 @@
-package maple.expectation.infrastructure.adapter.starforce;
+package maple.expectation.application.service.starforce;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

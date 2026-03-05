@@ -165,6 +165,97 @@ class ModuleDependencyTest {
     }
 
     /**
+     * module-web must NOT depend on module-infra.
+     *
+     * <p><strong>Phase 6 Finding:</strong> module-web currently has 12 imports from module-infra:
+     *
+     * <ul>
+     *   <li>ValidCorsOrigin, MDCFilter (config)
+     *   <li>AuthenticatedUser (security)
+     *   <li>LogicExecutor, TaskContext (executor)
+     *   <li>CharacterValuationView (mongodb view)
+     *   <li>RateLimitExceededException (exception handling)
+     * </ul>
+     *
+     * <p>See ADR-039 for future refactoring plans.
+     */
+    @Test
+    @DisplayName("module-web must NOT depend on module-infra (temporarily disabled)")
+    @Disabled(
+        "Phase 6 - module-web has 12 imports from module-infra. Requires refactoring to remove dependency.")
+    void moduleWebMustNotDependOnInfra() {
+      noClasses()
+          .that()
+          .resideInAPackage("..web..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("..infrastructure..")
+          .because(
+              """
+                            Web layer must not depend on infrastructure layer.
+                            Use port interfaces from module-core instead.
+                            Infrastructure implementations are injected at runtime by module-app.
+                            """)
+          .allowEmptyShould(true)
+          .check(classes);
+    }
+
+    /**
+     * Comprehensive module dependency matrix validation.
+     *
+     * <p>Enforces the complete dependency direction: app → web/infra → core → common
+     */
+    @Test
+    @DisplayName("No forbidden module dependencies (comprehensive matrix)")
+    void noForbiddenModuleDependencies() {
+      // core must not depend on infra, web, app
+      noClasses()
+          .that()
+          .resideInAPackage("..core..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("..infrastructure..")
+          .because("Core must not depend on infrastructure (DIP violation)")
+          .allowEmptyShould(true)
+          .check(classes);
+
+      noClasses()
+          .that()
+          .resideInAPackage("..core..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("..application..")
+          .because("Core must not depend on application layer")
+          .allowEmptyShould(true)
+          .check(classes);
+
+      // common must not depend on any other module
+      noClasses()
+          .that()
+          .resideInAPackage("..common..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("..core..")
+          .because("Common is the foundation and must not depend on higher modules")
+          .allowEmptyShould(true)
+          .check(classes);
+
+      // infra must not depend on app, web
+      noClasses()
+          .that()
+          .resideInAPackage("..infrastructure..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("..application..")
+          .because("Infrastructure must not depend on application layer")
+          .allowEmptyShould(true)
+          .check(classes);
+
+      // Note: web → infra dependency is documented technical debt (12 imports)
+      // See moduleWebMustNotDependOnInfra() test for details
+    }
+
+    /**
      * module-common must not depend on any other module.
      *
      * <p><strong>Correct:</strong> common (foundation)

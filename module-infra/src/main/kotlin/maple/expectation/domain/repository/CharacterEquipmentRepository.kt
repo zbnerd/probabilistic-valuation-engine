@@ -1,7 +1,7 @@
 package maple.expectation.domain.repository
 
-import maple.expectation.domain.model.character.CharacterId
-import maple.expectation.domain.model.equipment.CharacterEquipment
+import maple.expectation.core.domain.model.character.CharacterId
+import maple.expectation.core.domain.model.equipment.CharacterEquipment
 
 /**
  * Repository Port for CharacterEquipment domain entity.

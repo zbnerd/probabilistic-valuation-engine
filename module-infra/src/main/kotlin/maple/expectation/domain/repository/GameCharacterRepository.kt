@@ -1,6 +1,6 @@
 package maple.expectation.domain.repository
 
-import maple.expectation.domain.model.character.GameCharacter
+import maple.expectation.core.domain.model.character.GameCharacter
 
 /**
  * GameCharacter Repository Interface (Port)

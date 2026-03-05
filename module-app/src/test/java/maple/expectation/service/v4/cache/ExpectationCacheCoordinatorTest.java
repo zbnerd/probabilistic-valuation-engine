@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayOutputStream;
@@ -16,13 +17,14 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Callable;
 import java.util.zip.GZIPOutputStream;
+import maple.expectation.application.service.expectation.cache.ExpectationCacheCoordinator;
 import maple.expectation.common.function.ThrowingSupplier;
-import maple.expectation.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.error.exception.CacheDataNotFoundException;
 import maple.expectation.infrastructure.cache.TieredCacheManager;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -53,7 +55,7 @@ class ExpectationCacheCoordinatorTest {
   @BeforeEach
   void setUp() throws Exception {
     meterRegistry = new SimpleMeterRegistry();
-    objectMapper = new ObjectMapper();
+    objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     when(tieredCacheManager.getCache("expectationV4")).thenReturn(expectationCache);
     when(tieredCacheManager.getMeterRegistry()).thenReturn(meterRegistry);
@@ -215,10 +217,13 @@ class ExpectationCacheCoordinatorTest {
   private EquipmentExpectationResponseV4 createMockResponse() {
     return EquipmentExpectationResponseV4.builder()
         .userIgn(TEST_USER_IGN)
+        .calculatedAt(java.time.LocalDateTime.now())
         .fromCache(true)
         .totalExpectedCost(new BigDecimal("100000"))
         .totalCostText("100,000 메소")
+        .totalCostBreakdown(EquipmentExpectationResponseV4.CostBreakdownDto.empty())
         .maxPresetNo(1)
+        .presets(java.util.List.of())
         .build();
   }
 

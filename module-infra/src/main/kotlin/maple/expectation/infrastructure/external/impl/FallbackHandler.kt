@@ -2,15 +2,16 @@ package maple.expectation.infrastructure.external.impl
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.domain.model.equipment.CharacterEquipment
+import maple.expectation.core.domain.model.equipment.CharacterEquipment
 import maple.expectation.domain.repository.CharacterEquipmentRepository
-import maple.expectation.domain.model.character.CharacterId
+import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.error.exception.CharacterNotFoundException
 import maple.expectation.error.exception.EquipmentDataProcessingException
 import maple.expectation.error.exception.ExternalServiceException
-import maple.expectation.error.exception.marker.CircuitBreakerIgnoreMarker
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.executor.classifier.CircuitBreakerClassification
+import maple.expectation.infrastructure.executor.classifier.ExceptionClassifier
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.util.ExceptionUtils
 import org.slf4j.LoggerFactory
@@ -23,7 +24,7 @@ import java.util.concurrent.CompletableFuture
  * <h4>책임</h4>
  *
  * <ul>
- *   <li>CircuitBreakerIgnoreMarker 처리
+ *   <li>ExceptionClassifier를 통한 예외 분류 처리
  *   <li>4xx 클라이언트 에러 분류 (CharacterNotFoundException)
  *   <li>시나리오 A: 만료된 캐시 반환 (Degrade)
  *   <li>시나리오 B: Outbox 적재 + 알림 발송
@@ -34,13 +35,18 @@ import java.util.concurrent.CompletableFuture
  *
  * <p><b>시나리오 A (Degrade)</b>: DB에서 만료된 캐시라도 찾기<br>
  * <b>시나리오 B (Outbox)</b>: 캐시도 없으면 Outbox 적재 후 알림 발송
+ *
+ * <h4>람다 경계 패턴</h4>
+ * <p>ExceptionClassifier는 인프라 계층에서 예외를 분류하며, 도메인 예외는
+ * 인프라 기술에 의존하지 않습니다.
  */
 class FallbackHandler(
     private val equipmentRepository: CharacterEquipmentRepository,
     private val objectMapper: ObjectMapper,
     private val checkedExecutor: CheckedLogicExecutor,
     private val outboxFallbackManager: OutboxFallbackManager,
-    private val alertNotificationHelper: AlertNotificationHelper
+    private val alertNotificationHelper: AlertNotificationHelper,
+    private val exceptionClassifier: ExceptionClassifier
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FallbackHandler::class.java)
@@ -48,12 +54,12 @@ class FallbackHandler(
     }
 
     /**
-     * CircuitBreakerIgnoreMarker 처리 및 ADR 계약 방어
+     * ExceptionClassifier를 통한 예외 분류 처리
      *
      * <p>Resilience4j/CompletableFuture 경로에서 CompletionException/ExecutionException으로 감싸진 예외를 unwrap한
-     * 후 Marker 여부를 판단합니다.
+     * 후 ExceptionClassifier로 분류합니다.
      *
-     * <p>Error는 즉시 전파하고, Marker가 RuntimeException이 아니면 IllegalStateException으로 fail-fast
+     * <p>Error는 즉시 전파하고, IGNORE 분류된 예외는 RuntimeException으로 전파합니다.
      *
      * @param t 원본 예외
      */
@@ -64,10 +70,14 @@ class FallbackHandler(
         // ADR: Error는 어떤 상황에서든 즉시 전파
         if (root is Error) throw root
 
-        // Marker 처리: RuntimeException 캐스팅 방어
-        if (root is CircuitBreakerIgnoreMarker) {
-            if (root is RuntimeException) throw root
-            throw IllegalStateException("CircuitBreakerIgnoreMarker must be RuntimeException", root)
+        // ExceptionClassifier로 분류
+        val classification = exceptionClassifier.classify(root ?: t)
+
+        // IGNORE 분류된 예외는 전파 (비즈니스 예외)
+        val exceptionToThrow = root ?: t
+        if (classification == CircuitBreakerClassification.IGNORE) {
+            if (exceptionToThrow is RuntimeException) throw exceptionToThrow
+            throw IllegalStateException("IGNORE classified exception must be RuntimeException", exceptionToThrow)
         }
     }
 

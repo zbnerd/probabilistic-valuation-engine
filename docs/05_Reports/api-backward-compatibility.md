@@ -150,7 +150,7 @@ curl -X GET "https://api.mapleexpectation.com/api/v4/characters/MapleStory/expec
 - `maple.expectation.service.v4.PresetCalculationHelper`
 - `maple.expectation.service.v4.cache.ExpectationCacheCoordinator`
 - `maple.expectation.service.v4.persistence.ExpectationPersistenceService`
-- `maple.expectation.service.v4.warmup.PopularCharacterTracker`
+- `maple.expectation.application.service.warmup.PopularCharacterTracker`
 
 **V2 Dependencies (Shared):**
 - `maple.expectation.service.v2.facade.GameCharacterFacade`

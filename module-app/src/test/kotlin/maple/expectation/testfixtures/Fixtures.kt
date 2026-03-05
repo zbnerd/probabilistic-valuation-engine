@@ -1,7 +1,7 @@
 package maple.expectation.testfixtures
 
 import maple.expectation.domain.nexon.NexonApiCharacterData
-import maple.expectation.dto.CubeCalculationInput
+import maple.expectation.web.dto.CubeCalculationInput
 import maple.expectation.infrastructure.external.dto.v2.CharacterListResponse
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.infrastructure.external.dto.v2.TotalExpectationResponse

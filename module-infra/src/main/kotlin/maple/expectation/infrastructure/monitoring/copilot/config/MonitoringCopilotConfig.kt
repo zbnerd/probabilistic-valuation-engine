@@ -5,6 +5,7 @@ import maple.expectation.infrastructure.config.DiscordTimeoutProperties
 import maple.expectation.infrastructure.config.TimeoutProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.monitoring.copilot.client.PrometheusClient
+import maple.expectation.infrastructure.monitoring.copilot.dedup.TimeBasedSlidingWindowStrategy
 import maple.expectation.infrastructure.monitoring.copilot.detector.AnomalyDetector
 import maple.expectation.infrastructure.monitoring.copilot.ingestor.GrafanaJsonIngestor
 import maple.expectation.infrastructure.monitoring.copilot.notifier.DiscordNotifier
@@ -77,5 +78,17 @@ class MonitoringCopilotConfig(
         timeoutProperties: DiscordTimeoutProperties
     ): DiscordNotifier {
         return DiscordNotifier(httpClient, objectMapper, executor, timeoutProperties)
+    }
+
+    // Explicit bean definition for TimeBasedSlidingWindowStrategy
+    // Note: This class also has @Component, Spring will use either this bean or component scanning
+    @Bean
+    @ConditionalOnProperty(name = ["monitoring.copilot.enabled"], havingValue = "true")
+    fun timeBasedSlidingWindowStrategy(
+        prometheusClient: PrometheusClient,
+        executor: LogicExecutor,
+        @Value("\${monitoring.copilot.dedup-window-minutes:10}") dedupWindowMinutes: Long
+    ): TimeBasedSlidingWindowStrategy {
+        return TimeBasedSlidingWindowStrategy(prometheusClient, executor, dedupWindowMinutes)
     }
 }

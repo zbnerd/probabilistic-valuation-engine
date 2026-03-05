@@ -3,12 +3,12 @@ package maple.expectation.scheduler;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import maple.expectation.core.port.out.OutboxMetricsPort;
+import maple.expectation.core.port.out.OutboxProcessorPort;
 import maple.expectation.infrastructure.config.OutboxProperties;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.scheduler.OutboxScheduler;
-import maple.expectation.service.v2.donation.outbox.OutboxMetrics;
-import maple.expectation.service.v2.donation.outbox.OutboxProcessor;
 import maple.expectation.support.TestLogicExecutors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,16 +37,16 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class OutboxSchedulerTest {
 
-  private OutboxProcessor outboxProcessor;
-  private OutboxMetrics outboxMetrics;
+  private OutboxProcessorPort outboxProcessor;
+  private OutboxMetricsPort outboxMetrics;
   private LogicExecutor executor;
   private OutboxProperties properties;
   private OutboxScheduler scheduler;
 
   @BeforeEach
   void setUp() {
-    outboxProcessor = mock(OutboxProcessor.class);
-    outboxMetrics = mock(OutboxMetrics.class);
+    outboxProcessor = mock(OutboxProcessorPort.class);
+    outboxMetrics = mock(OutboxMetricsPort.class);
     executor = TestLogicExecutors.passThrough();
     properties = mock(OutboxProperties.class);
     when(properties.getSizeAlertThreshold()).thenReturn(1000);

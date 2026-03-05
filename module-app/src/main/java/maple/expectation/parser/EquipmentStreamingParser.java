@@ -17,10 +17,10 @@ import java.util.zip.GZIPInputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.stat.StatParser;
-import maple.expectation.dto.CubeCalculationInput;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
+import maple.expectation.web.dto.CubeCalculationInput;
 import org.springframework.stereotype.Component;
 
 /** 장비 스트리밍 파서 (Resource-Try까지 박멸한 100% 평탄화 버전) */

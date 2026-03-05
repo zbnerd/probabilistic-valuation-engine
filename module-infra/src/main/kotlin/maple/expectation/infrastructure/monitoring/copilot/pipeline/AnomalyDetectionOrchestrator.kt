@@ -71,9 +71,12 @@ class AnomalyDetectionOrchestrator(
         val start = end.minus(queryRangeSeconds.toLong(), ChronoUnit.SECONDS)
 
         for (signal in signals) {
+            // Skip signals without query
+            val query = signal.query ?: continue
+
             val prometheusSeries: List<PrometheusClient.TimeSeries> =
                 executor.executeOrDefault(
-                    { prometheusClient.queryRange(signal.query, start, end, queryStep) },
+                    { prometheusClient.queryRange(query, start, end, queryStep) },
                     emptyList(),
                     TaskContext.of("AnomalyDetectionOrchestrator", "QueryPrometheus", signal.id))
 

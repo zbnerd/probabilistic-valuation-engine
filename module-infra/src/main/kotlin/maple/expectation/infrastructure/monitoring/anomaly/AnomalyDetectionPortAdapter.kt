@@ -75,7 +75,7 @@ class AnomalyDetectionPortAdapter(
             AnomalyDetectionPort.DetectedAnomaly(
                 signalId = anomaly.signalId,
                 severity = anomaly.severity,
-                reason = anomaly.reason,
+                reason = anomaly.reason ?: "",
                 detectedAtMillis = anomaly.detectedAtMillis,
                 currentValue = anomaly.currentValue,
                 baselineValue = anomaly.baselineValue

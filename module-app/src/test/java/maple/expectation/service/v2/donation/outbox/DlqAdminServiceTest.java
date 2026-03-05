@@ -10,18 +10,20 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Optional;
-import maple.expectation.controller.dto.dlq.DlqDetailResponse;
-import maple.expectation.controller.dto.dlq.DlqEntryResponse;
-import maple.expectation.controller.dto.dlq.DlqReprocessResult;
-import maple.expectation.controller.dto.page.CursorPageRequest;
-import maple.expectation.controller.dto.page.CursorPageResponse;
+import maple.expectation.application.service.donation.outbox.DlqAdminService;
 import maple.expectation.domain.v2.DonationDlq;
 import maple.expectation.domain.v2.DonationOutbox;
 import maple.expectation.error.exception.DlqNotFoundException;
+import maple.expectation.infrastructure.donation.outbox.OutboxMetrics;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.persistence.repository.DonationDlqRepository;
 import maple.expectation.infrastructure.persistence.repository.DonationOutboxRepository;
 import maple.expectation.support.TestLogicExecutors;
+import maple.expectation.web.dto.dlq.DlqDetailResponse;
+import maple.expectation.web.dto.dlq.DlqEntryResponse;
+import maple.expectation.web.dto.dlq.DlqReprocessResult;
+import maple.expectation.web.dto.page.CursorPageRequest;
+import maple.expectation.web.dto.page.CursorPageResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -106,7 +108,7 @@ class DlqAdminServiceTest {
     // Then
     assertThat(result.getTotalElements()).isEqualTo(2);
     assertThat(result.getContent()).hasSize(2);
-    assertThat(result.getContent().get(0).requestId()).isEqualTo("req-001");
+    assertThat(result.getContent().get(0).getRequestId()).isEqualTo("req-001");
   }
 
   // ========== findById Tests ==========
@@ -121,9 +123,9 @@ class DlqAdminServiceTest {
     DlqDetailResponse result = dlqAdminService.findById(1L);
 
     // Then
-    assertThat(result.id()).isEqualTo(1L);
-    assertThat(result.requestId()).isEqualTo("req-001");
-    assertThat(result.payload()).isEqualTo("{\"amount\":1000}");
+    assertThat(result.getId()).isEqualTo(1L);
+    assertThat(result.getRequestId()).isEqualTo("req-001");
+    assertThat(result.getPayload()).isEqualTo("{\"amount\":1000}");
   }
 
   @Test
@@ -160,8 +162,8 @@ class DlqAdminServiceTest {
     DlqReprocessResult result = dlqAdminService.reprocess(1L);
 
     // Then
-    assertThat(result.dlqId()).isEqualTo(1L);
-    assertThat(result.requestId()).isEqualTo("req-001");
+    assertThat(result.getDlqId()).isEqualTo(1L);
+    assertThat(result.getRequestId()).isEqualTo("req-001");
 
     verify(dlqRepository).delete(sampleDlq);
     verify(metrics).incrementDlqReprocessed();
@@ -256,7 +258,7 @@ class DlqAdminServiceTest {
     assertThat(result.getContent()).hasSize(2);
     assertThat(result.getHasNext()).isTrue();
     assertThat(result.getNextCursor()).isEqualTo(2L);
-    assertThat(result.getContent().get(0).requestId()).isEqualTo("req-001");
+    assertThat(result.getContent().get(0).getRequestId()).isEqualTo("req-001");
 
     verify(dlqRepository).findFirstPage(any(Pageable.class));
     verify(dlqRepository, never()).findByCursorGreaterThan(anyLong(), any(Pageable.class));
@@ -281,7 +283,7 @@ class DlqAdminServiceTest {
     assertThat(result.getContent()).hasSize(2);
     assertThat(result.getHasNext()).isTrue();
     assertThat(result.getNextCursor()).isEqualTo(4L);
-    assertThat(result.getContent().get(0).requestId()).isEqualTo("req-003");
+    assertThat(result.getContent().get(0).getRequestId()).isEqualTo("req-003");
 
     verify(dlqRepository, never()).findFirstPage(any());
     verify(dlqRepository).findByCursorGreaterThan(eq(2L), any(Pageable.class));
@@ -305,7 +307,7 @@ class DlqAdminServiceTest {
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getHasNext()).isFalse();
     assertThat(result.getNextCursor()).isEqualTo(5L);
-    assertThat(result.getContent().get(0).requestId()).isEqualTo("req-005");
+    assertThat(result.getContent().get(0).getRequestId()).isEqualTo("req-005");
   }
 
   @Test
@@ -324,7 +326,7 @@ class DlqAdminServiceTest {
     CursorPageResponse<DlqEntryResponse> result = dlqAdminService.findAllByCursor(request);
 
     // Then: size가 100으로 조정되어 요청됨
-    assertThat(request.size()).isEqualTo(100);
+    assertThat(request.getSize()).isEqualTo(100);
     assertThat(result.getContent()).hasSize(1);
   }
 

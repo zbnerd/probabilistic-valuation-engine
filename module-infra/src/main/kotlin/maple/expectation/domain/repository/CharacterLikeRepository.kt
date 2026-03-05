@@ -1,6 +1,6 @@
 package maple.expectation.domain.repository
 
-import maple.expectation.domain.model.like.CharacterLike
+import maple.expectation.core.domain.model.like.CharacterLike
 
 /**
  * CharacterLike Repository Interface (Port)

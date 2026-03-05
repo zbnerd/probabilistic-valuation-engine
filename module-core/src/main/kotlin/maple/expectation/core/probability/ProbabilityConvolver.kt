@@ -1,7 +1,7 @@
 package maple.expectation.core.probability
 
-import maple.expectation.domain.model.calculator.DensePmf
-import maple.expectation.domain.model.calculator.SparsePmf
+import maple.expectation.core.domain.model.calculator.DensePmf
+import maple.expectation.core.domain.model.calculator.SparsePmf
 
 /**
  * DP 합성곱 기반 확률 계산 컴포넌트

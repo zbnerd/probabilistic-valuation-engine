@@ -8,14 +8,14 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
+import maple.expectation.application.service.expectation.event.MongoSyncEventPublisherInterface;
+import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
+import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView.CostBreakdownView;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView.ItemExpectationView;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView.PresetView;
 import maple.expectation.infrastructure.mongodb.CharacterViewQueryService;
-import maple.expectation.service.v5.event.MongoSyncEventPublisherInterface;
-import maple.expectation.service.v5.queue.ExpectationCalculationTask;
-import maple.expectation.service.v5.queue.PriorityCalculationQueue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -47,7 +47,7 @@ import org.springframework.http.ResponseEntity;
 class GameCharacterControllerV5Test {
 
   @Mock private CharacterViewQueryService queryService;
-  @Mock private PriorityCalculationQueue queue;
+  @Mock private ExpectationCalculationQueue queue;
   @Mock private MongoSyncEventPublisherInterface eventPublisher;
 
   @InjectMocks private TestableGameCharacterControllerV5 controller;
@@ -194,12 +194,12 @@ class GameCharacterControllerV5Test {
    */
   static class TestableGameCharacterControllerV5 {
     private final CharacterViewQueryService queryService;
-    private final PriorityCalculationQueue queue;
+    private final ExpectationCalculationQueue queue;
     private final MongoSyncEventPublisherInterface eventPublisher;
 
     TestableGameCharacterControllerV5(
         CharacterViewQueryService queryService,
-        PriorityCalculationQueue queue,
+        ExpectationCalculationQueue queue,
         MongoSyncEventPublisherInterface eventPublisher) {
       this.queryService = queryService;
       this.queue = queue;

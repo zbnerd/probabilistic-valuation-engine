@@ -3,7 +3,7 @@ package maple.expectation.infrastructure.messaging
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
-import maple.expectation.domain.event.IntegrationEvent
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.EventProcessingException
 import maple.expectation.event.EventHandler

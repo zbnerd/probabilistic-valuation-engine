@@ -77,7 +77,7 @@ class SpringIsolationTest {
     void coreShouldNotUseSpringAnnotations() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .beMetaAnnotatedWith("org.springframework..")
           .because(
@@ -103,7 +103,7 @@ class SpringIsolationTest {
     void coreShouldNotDependOnSpringFramework() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .or()
           .resideInAPackage("maple.expectation.application.port..")
           .should()
@@ -132,7 +132,7 @@ class SpringIsolationTest {
     void coreModelsShouldNotUseJpaAnnotations() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain.model..")
+          .resideInAPackage("maple.expectation.core.domain.model..")
           .should()
           .beMetaAnnotatedWith("jakarta.persistence..")
           .orShould()
@@ -161,7 +161,7 @@ class SpringIsolationTest {
     void coreShouldNotDependOnWebFramework() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .or()
           .resideInAPackage("maple.expectation.application.port..")
           .should()
@@ -194,7 +194,7 @@ class SpringIsolationTest {
     void coreShouldNotDependOnSpringData() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .dependOnClassesThat()
           .resideInAPackage("org.springframework.data..")
@@ -218,7 +218,7 @@ class SpringIsolationTest {
     void coreShouldNotDependOnSpringSecurity() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .dependOnClassesThat()
           .resideInAPackage("org.springframework.security..")
@@ -241,7 +241,7 @@ class SpringIsolationTest {
     void coreShouldNotDependOnActuator() {
       noClasses()
           .that()
-          .resideInAPackage("maple.expectation.domain..")
+          .resideInAPackage("maple.expectation.core.domain..")
           .should()
           .dependOnClassesThat()
           .resideInAPackage("org.springframework.boot.actuator..")

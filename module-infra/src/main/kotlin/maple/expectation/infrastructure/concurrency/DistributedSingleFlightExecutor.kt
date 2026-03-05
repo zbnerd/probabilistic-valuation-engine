@@ -2,12 +2,11 @@ package maple.expectation.infrastructure.concurrency
 
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
+import maple.expectation.core.port.out.redis.RedisOperationPort
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.SystemException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import org.redisson.api.RBucket
-import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -59,8 +58,8 @@ class DistributedSingleFlightExecutor<T>(
     /** Follower 타임아웃 시 fallback 함수 (key → result) */
     private val timeoutFallback: Function<String, T>?,
 
-    /** Redisson Client (분산 상태) */
-    private val redissonClient: RedissonClient,
+    /** Redis Operation Port (분산 상태) - ADR-012 DIP 준수 */
+    private val redisOperationPort: RedisOperationPort,
 
     /** LogicExecutor */
     private val logicExecutor: LogicExecutor,
@@ -132,9 +131,8 @@ class DistributedSingleFlightExecutor<T>(
     private fun tryAcquireLeadership(inFlightKey: String): Boolean {
         return logicExecutor.executeOrDefault(
             {
-                val bucket: RBucket<Boolean> = redissonClient.getBucket(inFlightKey)
                 // SET NX (존재하지 않을 때만 설정)
-                val acquired = bucket.trySet(true, leaderLockSeconds.toLong(), TimeUnit.SECONDS)
+                val acquired = redisOperationPort.trySet(inFlightKey, true, Duration.ofSeconds(leaderLockSeconds.toLong()))
                 if (acquired) {
                     log.debug("[DistributedSingleFlight] Leadership acquired: {}", maskKey(inFlightKey))
                 }
@@ -190,40 +188,23 @@ class DistributedSingleFlightExecutor<T>(
     /** 결과를 Redis에 저장 (Leader) */
     private fun saveResultToRedis(resultKey: String, result: T?, error: Throwable?) {
         logicExecutor.executeVoid({
-            try {
-                if (error == null) {
-                    // 성공 결과 저장
-                    redissonClient.getBucket<T>(resultKey)
-                        .set(result, resultTtlSeconds.toLong(), TimeUnit.SECONDS)
-                } else {
-                    // 실패 결과도 저장 (Follower가 동일하게 실패하도록)
-                    redissonClient.getBucket<String>("$resultKey:error")
-                        .set(error.javaClass.name, resultTtlSeconds.toLong(), TimeUnit.SECONDS)
-                }
-                log.debug("[DistributedSingleFlight] Result saved to Redis: {}", maskKey(resultKey))
-            } catch (e: Exception) {
-                log.warn(
-                    "[DistributedSingleFlight] Failed to save result to Redis: {}",
-                    maskKey(resultKey),
-                    e
-                )
+            if (error == null) {
+                // 성공 결과 저장
+                @Suppress("UNCHECKED_CAST")
+                redisOperationPort.set(resultKey, result as Any, Duration.ofSeconds(resultTtlSeconds.toLong()))
+            } else {
+                // 실패 결과도 저장 (Follower가 동일하게 실패하도록)
+                redisOperationPort.set("$resultKey:error", error.javaClass.name, Duration.ofSeconds(resultTtlSeconds.toLong()))
             }
+            log.debug("[DistributedSingleFlight] Result saved to Redis: {}", maskKey(resultKey))
         }, TaskContext.of("DistributedSingleFlight", "SaveResult", maskKey(resultKey)))
     }
 
     /** Leader 종료 시 정리 (in-flight 키 제거) */
     private fun cleanupLeaderEntry(inFlightKey: String) {
         logicExecutor.executeVoid({
-            try {
-                redissonClient.getBucket<Any>(inFlightKey).delete()
-                log.debug("[DistributedSingleFlight] In-flight key removed: {}", maskKey(inFlightKey))
-            } catch (e: Exception) {
-                log.warn(
-                    "[DistributedSingleFlight] Failed to remove in-flight key: {}",
-                    maskKey(inFlightKey),
-                    e
-                )
-            }
+            redisOperationPort.delete(inFlightKey)
+            log.debug("[DistributedSingleFlight] In-flight key removed: {}", maskKey(inFlightKey))
         }, TaskContext.of("DistributedSingleFlight", "CleanupLeader", maskKey(inFlightKey)))
     }
 
@@ -289,8 +270,7 @@ class DistributedSingleFlightExecutor<T>(
         // Redis에서 결과 확인
         logicExecutor.executeVoid({
             // 먼저 에러 확인
-            val errorBucket: RBucket<String> = redissonClient.getBucket("$resultKey:error")
-            val errorClass = errorBucket.get()
+            val errorClass: String? = redisOperationPort.get("$resultKey:error")
             if (errorClass != null) {
                 result.completeExceptionally(
                     SystemException(
@@ -302,8 +282,7 @@ class DistributedSingleFlightExecutor<T>(
             }
 
             // 성공 결과 확인
-            val resultBucket: RBucket<T> = redissonClient.getBucket(resultKey)
-            val value = resultBucket.get()
+            val value: T? = redisOperationPort.get(resultKey)
 
             if (value != null) {
                 // 결과 발견
@@ -314,14 +293,8 @@ class DistributedSingleFlightExecutor<T>(
 
             // 결과 아직 준비 안됨 -> 재시도
             if (remaining > 100) {
-                // 100ms 후 재시도
-                try {
-                    Thread.sleep(100)
-                } catch (e: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    result.completeExceptionally(e)
-                    return@executeVoid
-                }
+                // 100ms 대기 (LockSupport 사용)
+                java.util.concurrent.locks.LockSupport.parkNanos(100_000_000L)
                 pollForResult(resultKey, result, maskedKey, deadline)
             } else {
                 log.debug("[DistributedSingleFlight] Polling exhausted for key: {}", maskedKey)

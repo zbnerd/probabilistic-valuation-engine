@@ -4,12 +4,12 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.error.exception.DistributedLockException;
+import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer;
 import maple.expectation.infrastructure.buffer.ExpectationWriteTask;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.lock.LockStrategy;
 import maple.expectation.infrastructure.persistence.repository.EquipmentExpectationSummaryRepository;
-import maple.expectation.service.v4.buffer.ExpectationWriteBackBuffer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -138,13 +138,13 @@ public class ExpectationBatchWriteScheduler {
       executor.executeOrCatch(
           () -> {
             repository.upsertExpectationSummary(
-                task.characterId(),
-                task.presetNo(),
-                task.totalExpectedCost(),
-                task.blackCubeCost(),
-                task.redCubeCost(),
-                task.additionalCubeCost(),
-                task.starforceCost());
+                task.getCharacterId(),
+                task.getPresetNo(),
+                task.getTotalExpectedCost(),
+                task.getBlackCubeCost(),
+                task.getRedCubeCost(),
+                task.getAdditionalCubeCost(),
+                task.getStarforceCost());
             return null;
           },
           e -> {

@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.persistence.entity
 
 import jakarta.persistence.*
-import maple.expectation.domain.model.like.CharacterLike
+import maple.expectation.core.domain.model.like.CharacterLike
 import org.hibernate.annotations.CreationTimestamp
 import java.time.LocalDateTime
 

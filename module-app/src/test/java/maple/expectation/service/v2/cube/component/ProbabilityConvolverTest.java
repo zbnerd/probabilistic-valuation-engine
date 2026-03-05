@@ -5,10 +5,10 @@ import static org.assertj.core.api.Assertions.within;
 
 import java.util.List;
 import java.util.Map;
+import maple.expectation.core.domain.model.calculator.DensePmf;
+import maple.expectation.core.domain.model.calculator.SparsePmf;
 import maple.expectation.core.probability.ProbabilityConvolver;
 import maple.expectation.core.probability.TailProbabilityCalculator;
-import maple.expectation.domain.model.calculator.DensePmf;
-import maple.expectation.domain.model.calculator.SparsePmf;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

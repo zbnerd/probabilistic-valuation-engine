@@ -19,8 +19,8 @@ import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.error.exception.*;
 import maple.expectation.error.exception.base.ClientBaseException;
 import maple.expectation.error.exception.base.ServerBaseException;
-import maple.expectation.error.exception.marker.CircuitBreakerIgnoreMarker;
-import maple.expectation.error.exception.marker.CircuitBreakerRecordMarker;
+import maple.expectation.infrastructure.executor.classifier.CircuitBreakerClassification;
+import maple.expectation.infrastructure.executor.classifier.DefaultExceptionClassifier;
 import maple.expectation.infrastructure.executor.policy.ExecutionPipeline;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
 import org.junit.jupiter.api.*;
@@ -555,26 +555,28 @@ class LogicExecutorTest {
   // ==================== Exception Handling Validation Tests ====================
 
   @Test
-  @DisplayName("ClientBaseException (4xx) should be ignored by circuit breaker")
+  @DisplayName("ClientBaseException (4xx) should be classified as IGNORE by ExceptionClassifier")
   void testClientBaseException_IgnoredByCircuitBreaker() {
     // Given
     TaskContext context = TaskContext.of("Test", "clientException");
     CharacterNotFoundException clientException = new CharacterNotFoundException("IGN:12345");
+    DefaultExceptionClassifier classifier = new DefaultExceptionClassifier();
 
-    // Verify marker interface
-    assertThat(clientException).isInstanceOf(CircuitBreakerIgnoreMarker.class);
+    // Verify classification via ExceptionClassifier
+    assertThat(classifier.classify(clientException)).isEqualTo(CircuitBreakerClassification.IGNORE);
     assertThat(clientException).isInstanceOf(ClientBaseException.class);
   }
 
   @Test
-  @DisplayName("ServerBaseException (5xx) should be recorded by circuit breaker")
+  @DisplayName("ServerBaseException (5xx) should be classified as RECORD by ExceptionClassifier")
   void testServerBaseException_RecordedByCircuitBreaker() {
     // Given
     TaskContext context = TaskContext.of("Test", "serverException");
     ApiTimeoutException serverException = new ApiTimeoutException("API timeout");
+    DefaultExceptionClassifier classifier = new DefaultExceptionClassifier();
 
-    // Verify marker interface
-    assertThat(serverException).isInstanceOf(CircuitBreakerRecordMarker.class);
+    // Verify classification via ExceptionClassifier
+    assertThat(classifier.classify(serverException)).isEqualTo(CircuitBreakerClassification.RECORD);
     assertThat(serverException).isInstanceOf(ServerBaseException.class);
   }
 

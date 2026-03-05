@@ -3,7 +3,6 @@
 package maple.expectation.error.exception.base
 
 import maple.expectation.error.ErrorCode
-import maple.expectation.error.exception.marker.CircuitBreakerRecordMarker
 
 /**
  * Base class for server-side (5xx) system exceptions.
@@ -11,18 +10,21 @@ import maple.expectation.error.exception.marker.CircuitBreakerRecordMarker
  * <p>Represents infrastructure and system errors (database failures, external API
  * errors, resource exhaustion, etc.). These exceptions:
  * <ul>
- *   <li>Implement CircuitBreakerRecordMarker to trigger circuit breaker</li>
  *   <li>Return 5xx HTTP status codes</li>
  *   <li>Log detailed error information for debugging</li>
  *   <li>Include cause chain for failure analysis</li>
+ *   <li>Are classified by ExceptionClassifier for circuit breaker handling</li>
  * </ul>
  *
+ * <p><b>Note:</b> Circuit breaker classification is now handled by
+ * {@link maple.expectation.infrastructure.executor.classifier.DefaultExceptionClassifier}
+ * instead of marker interfaces, keeping domain exceptions pure.
+ *
  * @see ErrorCode
- * @see CircuitBreakerRecordMarker
+ * @see maple.expectation.infrastructure.executor.classifier.DefaultExceptionClassifier
  */
 abstract class ServerBaseException :
-    BaseException,
-    CircuitBreakerRecordMarker {
+    BaseException {
 
     /**
      * Create exception with static error message.

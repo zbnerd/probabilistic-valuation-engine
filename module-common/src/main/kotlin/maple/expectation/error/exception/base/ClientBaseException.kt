@@ -3,7 +3,6 @@
 package maple.expectation.error.exception.base
 
 import maple.expectation.error.ErrorCode
-import maple.expectation.error.exception.marker.CircuitBreakerIgnoreMarker
 
 /**
  * Base class for client-side (4xx) business exceptions.
@@ -11,17 +10,20 @@ import maple.expectation.error.exception.marker.CircuitBreakerIgnoreMarker
  * <p>Represents errors caused by client requests (invalid input, missing resources,
  * permission violations, etc.). These exceptions:
  * <ul>
- *   <li>Implement CircuitBreakerIgnoreMarker to prevent circuit breaker activation</li>
  *   <li>Return 4xx HTTP status codes</li>
  *   <li>Provide user-friendly error messages</li>
+ *   <li>Are classified by ExceptionClassifier for circuit breaker handling</li>
  * </ul>
  *
+ * <p><b>Note:</b> Circuit breaker classification is now handled by
+ * {@link maple.expectation.infrastructure.executor.classifier.DefaultExceptionClassifier}
+ * instead of marker interfaces, keeping domain exceptions pure.
+ *
  * @see ErrorCode
- * @see CircuitBreakerIgnoreMarker
+ * @see maple.expectation.infrastructure.executor.classifier.DefaultExceptionClassifier
  */
 abstract class ClientBaseException :
-    BaseException,
-    CircuitBreakerIgnoreMarker {
+    BaseException {
 
     /**
      * Create exception with static error message.

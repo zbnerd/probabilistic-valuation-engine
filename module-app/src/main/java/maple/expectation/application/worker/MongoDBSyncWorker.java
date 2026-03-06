@@ -6,7 +6,10 @@ import io.micrometer.core.instrument.Counter;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.expectation.event.ViewTransformer;
 import maple.expectation.application.service.expectation.stream.StreamInitializationStrategy;
@@ -21,6 +24,7 @@ import maple.expectation.infrastructure.mongodb.CharacterViewQueryService;
 import org.redisson.api.RStream;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.StreamMessageId;
+import org.redisson.api.stream.StreamAddArgs;
 import org.redisson.api.stream.StreamCreateGroupArgs;
 import org.redisson.api.stream.StreamReadGroupArgs;
 import org.redisson.client.codec.StringCodec;
@@ -38,16 +42,26 @@ import org.springframework.stereotype.Component;
  *   <li>Delegate transformation to ViewTransformer (SRP)
  *   <li>Upsert to CharacterValuationView collection
  *   <li>Acknowledge processed messages
+ *   <li>PEL Recovery on startup (from crashed consumers)
+ *   <li>Poison Pill handling with DLQ
+ *   <li>XAUTOCLAIM Janitor for orphaned messages
+ * </ul>
+ *
+ * <h3>Reliability Features (Issue #490)</h3>
+ *
+ * <ul>
+ *   <li><b>PEL Recovery:</b> On startup, processes pending messages from previous crashes before
+ *       new messages
+ *   <li><b>Poison Pill DLQ:</b> tracks retry count, moves unprocessable messages to DLQ stream
+ *       after max retries
+ *   <li><b>XAUTOCLAIM Janitor:</b> claims orphaned messages from inactive consumers
  * </ul>
  *
  * <h3>Flow</h3>
  *
  * <ol>
- *   <li>Read from Redis Stream (blocking poll with timeout)
- *   <li>Deserialize event payload
- *   <li>Delegate transformation to ViewTransformer
- *   <li>Upsert to MongoDB
- *   <li>ACK message
+ *   <li>Phase 1: PEL Recovery - process pending messages from crashed consumers
+ *   <li>Phase 2: New message processing - read and process new messages
  * </ol>
  *
  * <h3>Section 12 Compliance (Zero Try-Catch):</h3>
@@ -66,7 +80,10 @@ public class MongoDBSyncWorker implements Runnable {
   private static final String STREAM_KEY = "character-sync";
   private static final String CONSUMER_GROUP = "mongodb-sync-group";
   private static final String CONSUMER_NAME = "mongodb-sync-worker";
+  private static final String DLQ_STREAM_KEY = "character-sync-dlq";
   private static final Duration POLL_TIMEOUT = Duration.ofMillis(2000);
+  private static final int MAX_RETRIES = 3;
+  private static final int BATCH_SIZE = 10;
 
   private final RedissonClient redissonClient;
   private final CharacterViewQueryService queryService;
@@ -76,9 +93,13 @@ public class MongoDBSyncWorker implements Runnable {
   private final ObjectMapper objectMapper;
   private final Counter processedCounter;
   private final Counter errorCounter;
+  private final Counter dlqCounter;
+  private final Counter pelRecoveryCounter;
+  private final Counter janitorClaimCounter;
 
   private Thread workerThread;
   private volatile boolean running = false;
+  private volatile boolean pelRecoveryComplete = false;
 
   public MongoDBSyncWorker(
       RedissonClient redissonClient,
@@ -96,6 +117,9 @@ public class MongoDBSyncWorker implements Runnable {
     this.objectMapper = objectMapper;
     this.processedCounter = meterRegistry.counter("mongodb.sync.processed");
     this.errorCounter = meterRegistry.counter("mongodb.sync.errors");
+    this.dlqCounter = meterRegistry.counter("mongodb.sync.dlq");
+    this.pelRecoveryCounter = meterRegistry.counter("mongodb.sync.pel.recovery");
+    this.janitorClaimCounter = meterRegistry.counter("mongodb.sync.janitor.claimed");
   }
 
   @PostConstruct
@@ -110,7 +134,6 @@ public class MongoDBSyncWorker implements Runnable {
           errorCounter.increment();
         });
     workerThread.start();
-    // ADR-080 Fix 3: Removed misleading log - run() will log when it actually starts
   }
 
   @PreDestroy
@@ -141,14 +164,231 @@ public class MongoDBSyncWorker implements Runnable {
 
   @Override
   public void run() {
-    log.info("[MongoDBSyncWorker] Sync worker running");
+    log.info("[MongoDBSyncWorker] Sync worker running - Phase 1: PEL Recovery");
 
+    // Phase 1: PEL Recovery - process pending messages from previous crashes
+    recoverPendingMessages();
+
+    pelRecoveryComplete = true;
+    log.info("[MongoDBSyncWorker] PEL recovery complete - Phase 2: New message processing");
+
+    // Phase 2: Process new messages
     while (running && !Thread.currentThread().isInterrupted()) {
       executor.executeVoidJava(this::processNextBatch, TaskContext.of("MongoDBSyncWorker", "Poll"));
     }
 
     log.info("[MongoDBSyncWorker] Sync worker stopped");
   }
+
+  // ==================== Phase 1: PEL Recovery ====================
+
+  /**
+   * Phase 1: PEL Recovery - process pending messages from crashed consumers.
+   *
+   * <p>Uses XAUTOCLAIM to claim idle messages and process them before new messages.
+   */
+  private void recoverPendingMessages() {
+    RStream<String, String> stream = redissonClient.getStream(STREAM_KEY, StringCodec.INSTANCE);
+
+    int recoveredCount = 0;
+    int dlqCount = 0;
+
+    // Use autoClaim to get pending messages (idle > 0 means they were delivered but not acked)
+    while (running) {
+      Map<StreamMessageId, Map<String, String>> pending =
+          executor.executeOrDefault(
+              () -> {
+                var result =
+                    stream.autoClaim(
+                        CONSUMER_GROUP,
+                        CONSUMER_NAME,
+                        1000L, // 1 second idle time (immediate claim for recovery)
+                        TimeUnit.MILLISECONDS,
+                        StreamMessageId.MIN,
+                        BATCH_SIZE);
+                return result != null ? result.getMessages() : Map.of();
+              },
+              Map.of(),
+              TaskContext.of("MongoDBSyncWorker", "AutoClaimPEL"));
+
+      if (pending.isEmpty()) {
+        break;
+      }
+
+      for (Map.Entry<StreamMessageId, Map<String, String>> entry : pending.entrySet()) {
+        ProcessingResult result =
+            processSingleMessageWithRetryTracking(stream, entry.getKey(), entry.getValue());
+        if (result == ProcessingResult.RECOVERED) {
+          recoveredCount++;
+        } else if (result == ProcessingResult.DLQ) {
+          dlqCount++;
+        }
+      }
+
+      if (pending.size() < BATCH_SIZE) {
+        break;
+      }
+    }
+
+    if (recoveredCount > 0 || dlqCount > 0) {
+      log.info(
+          "[MongoDBSyncWorker] PEL recovery summary: recovered={}, dlq={}",
+          recoveredCount,
+          dlqCount);
+      pelRecoveryCounter.increment(recoveredCount);
+    }
+  }
+
+  // ==================== Retry Tracking & Poison Pill Handling ====================
+
+  /**
+   * Process a single message with retry tracking and poison pill handling.
+   *
+   * <p>Tracks retry count via message metadata. If max retries exceeded, moves to DLQ.
+   *
+   * @return ProcessingResult indicating the outcome of processing
+   */
+  private ProcessingResult processSingleMessageWithRetryTracking(
+      RStream<String, String> stream, StreamMessageId messageId, Map<String, String> data) {
+    return executor.executeOrDefault(
+        () -> {
+          // Check retry count from message metadata
+          int retryCount = getRetryCount(data);
+
+          if (retryCount >= MAX_RETRIES) {
+            log.warn(
+                "[MongoDBSyncWorker] Poison pill detected: messageId={}, retryCount={}. Moving to DLQ.",
+                messageId,
+                retryCount);
+            return handlePoisonPill(stream, messageId, data);
+          }
+
+          // Process the message normally
+          processMessage(messageId, data);
+          stream.ack(CONSUMER_GROUP, messageId);
+          processedCounter.increment();
+          return ProcessingResult.RECOVERED;
+        },
+        ProcessingResult.FAILED,
+        TaskContext.of("MongoDBSyncWorker", "ProcessWithRetry", messageId.toString()));
+  }
+
+  /** Get retry count from message metadata. */
+  private int getRetryCount(Map<String, String> data) {
+    return executor.executeOrDefault(
+        () -> {
+          String retryCountStr = data.get("retryCount");
+          if (retryCountStr != null) {
+            return Integer.parseInt(retryCountStr);
+          }
+          return 0;
+        },
+        0,
+        TaskContext.of("MongoDBSyncWorker", "GetRetryCount"));
+  }
+
+  /**
+   * Handle poison pill by moving to DLQ stream.
+   *
+   * <p>Steps:
+   *
+   * <ol>
+   *   <li>XADD to DLQ stream with error info
+   *   <li>XACK original message
+   *   <li>Log the DLQ entry
+   * </ol>
+   */
+  private ProcessingResult handlePoisonPill(
+      RStream<String, String> stream, StreamMessageId messageId, Map<String, String> data) {
+    return executor.executeOrDefault(
+        () -> {
+          // Add to DLQ stream
+          RStream<String, String> dlqStream =
+              redissonClient.getStream(DLQ_STREAM_KEY, StringCodec.INSTANCE);
+          Map<String, String> dlqData = new HashMap<>();
+          dlqData.put("original_message_id", messageId.toString());
+          dlqData.put("original_data", data.get("data"));
+          dlqData.put("dlq_reason", "Max retries exceeded");
+          dlqData.put("dlq_timestamp", Instant.now().toString());
+          dlqStream.add(StreamAddArgs.entries(dlqData));
+
+          // ACK original message
+          stream.ack(CONSUMER_GROUP, messageId);
+
+          dlqCounter.increment();
+          log.error(
+              "[MongoDBSyncWorker] Message moved to DLQ: messageId={}, stream={}",
+              messageId,
+              DLQ_STREAM_KEY);
+
+          return ProcessingResult.DLQ;
+        },
+        ProcessingResult.FAILED,
+        TaskContext.of("MongoDBSyncWorker", "HandlePoisonPill", messageId.toString()));
+  }
+
+  // ==================== XAUTOCLAIM Janitor ====================
+
+  /**
+   * Claim orphaned messages using XAUTOCLAIM.
+   *
+   * <p>This method is called periodically by the StreamJanitorScheduler to claim messages from
+   * inactive consumers.
+   *
+   * @param minIdleTime minimum time a consumer must be idle before their messages are claimed
+   * @return number of messages claimed
+   */
+  public int claimOrphanedMessages(Duration minIdleTime) {
+    RStream<String, String> stream = redissonClient.getStream(STREAM_KEY, StringCodec.INSTANCE);
+
+    return executor.executeOrDefault(
+        () -> {
+          // Use XAUTOCLAIM to claim messages from idle consumers
+          var claimResult =
+              stream.autoClaim(
+                  CONSUMER_GROUP,
+                  CONSUMER_NAME,
+                  minIdleTime.toMillis(),
+                  TimeUnit.MILLISECONDS,
+                  StreamMessageId.MIN,
+                  BATCH_SIZE);
+
+          int claimedCount = 0;
+          Map<StreamMessageId, Map<String, String>> claimedMessages = claimResult.getMessages();
+
+          if (claimedMessages.isEmpty()) {
+            return 0;
+          }
+
+          for (Map.Entry<StreamMessageId, Map<String, String>> entry : claimedMessages.entrySet()) {
+            ProcessingResult result =
+                processSingleMessageWithRetryTracking(stream, entry.getKey(), entry.getValue());
+            if (result == ProcessingResult.RECOVERED) {
+              claimedCount++;
+            }
+            janitorClaimCounter.increment();
+          }
+
+          if (claimedCount > 0) {
+            log.info(
+                "[MongoDBSyncWorker] Janitor claimed and processed {} orphaned messages",
+                claimedCount);
+          }
+
+          return claimedCount;
+        },
+        0,
+        TaskContext.of("MongoDBSyncWorker", "ClaimOrphanedMessages", "janitor"));
+  }
+
+  /** Result of processing a single message. */
+  private enum ProcessingResult {
+    RECOVERED, // Successfully processed
+    DLQ, // Moved to DLQ
+    FAILED // Processing failed (should not happen)
+  }
+
+  // ==================== Stream Initialization ====================
 
   private void initializeStream() {
     TaskContext context = TaskContext.of("MongoDBSyncWorker", "InitStream");
@@ -189,6 +429,8 @@ public class MongoDBSyncWorker implements Runnable {
         },
         TaskContext.of("MongoDBSyncWorker", "CheckGroup"));
   }
+
+  // ==================== New Message Processing ====================
 
   private void processNextBatch() {
     executor.executeOrCatch(
@@ -234,11 +476,13 @@ public class MongoDBSyncWorker implements Runnable {
         e -> {
           log.error("[MongoDBSyncWorker] Failed to process message: {}", messageId, e);
           errorCounter.increment();
-          // Message will be retried after TTL (pending messages timeout)
+          // Message will remain in PEL for retry or DLQ handling
           return null;
         },
         TaskContext.of("MongoDBSyncWorker", "ProcessSingleMessage", messageId.toString()));
   }
+
+  // ==================== Message Processing ====================
 
   /**
    * ADR-083: Extract payload JSON with backward compatibility.
@@ -253,7 +497,7 @@ public class MongoDBSyncWorker implements Runnable {
    * <p>Logs deprecation warning when using legacy format.
    *
    * @param data Redis Stream message data map
-   * @return Payload JSON string, or null if neither format is present
+   * @return Payload JSON string. or null if neither format is present
    */
   private String extractPayloadJson(Map<String, String> data) {
     // Try new format first (V5 CQRS)

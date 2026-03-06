@@ -144,10 +144,20 @@ class JwtTokenProvider(
     }
 
     private fun parseTokenInternal(token: String?): Optional<JwtPayload> {
+            // P0-3: Algorithm whitelist validation (prevent algorithm confusion attacks)
+        // JJWT 0.12.x: verifyWith() ensures HMAC for SecretKey, but we add explicit header check
         val jws: Jws<io.jsonwebtoken.Claims> = Jwts.parser()
             .verifyWith(secretKey)
             .build()
             .parseSignedClaims(token)
+
+        // P0-3: Runtime validation for algorithm confusion attacks
+        // Even though verifyWith() validates signature, we explicitly check the algorithm
+        // to prevent attacks like alg:none or algorithm switching
+        val headerAlgorithm = jws.header.algorithm
+        require(headerAlgorithm == Jwts.SIG.HS256.id()) {
+            "JWT algorithm mismatch: expected HS256, got $headerAlgorithm. Possible algorithm confusion attack."
+        }
 
         val claims: io.jsonwebtoken.Claims = jws.payload
 

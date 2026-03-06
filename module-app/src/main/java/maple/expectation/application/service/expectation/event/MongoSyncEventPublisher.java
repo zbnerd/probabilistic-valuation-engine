@@ -20,25 +20,36 @@ import org.springframework.stereotype.Component;
 /**
  * V5 CQRS: Publishes calculation events to Redis Stream
  *
- * <h3>Event Flow</h3>
+ * <h3>⚠️ DEPRECATED - Dual-Write Vulnerability</h3>
  *
- * <ol>
- *   <li>Calculation completes in worker
- *   <li>Event published to character-sync stream via XADD
- *   <li>MongoSyncWorker consumes and upserts to MongoDB
- * </ol>
- *
- * <h3>Redis Stream Pattern (V2 Like Sync Reference)</h3>
- *
- * <p>Uses Redisson RStream API to add entries to the stream. Each event contains:
+ * <p><b>DO NOT USE</b> - This class directly calls XADD, bypassing the EventOutbox pattern. This
+ * creates a dual-write vulnerability where:
  *
  * <ul>
- *   <li>eventId: Unique UUID for tracing
- *   <li>eventType: Event type identifier
- *   <li>timestamp: Event creation time
- *   <li>payload: JSON-serialized ExpectationCalculationCompletedEvent
+ *   <li>MySQL commits → Server crashes before XADD → Event is LOST
+ *   <li>XADD succeeds → MySQL rolls back → Phantom event
  * </ul>
+ *
+ * <h3>Migration Path</h3>
+ *
+ * <p>Use {@link TransactionalEventPublisher} instead:
+ *
+ * <pre>
+ * // BAD (Dual-Write vulnerability)
+ * mongoSyncEventPublisher.publishCalculationCompleted(taskId, response);
+ *
+ * // GOOD (EventOutbox pattern - atomic with DB transaction)
+ * applicationEventPublisher.publishEvent(new CalculationCompletedEvent(...));
+ * // → TransactionalEventPublisher saves to EventOutbox (same transaction)
+ * // → EventOutboxProcessor publishes to Redis Stream (new transaction)
+ * </pre>
+ *
+ * @see TransactionalEventPublisher
+ * @see maple.expectation.infrastructure.event.outbox.EventOutboxProcessor
+ * @deprecated Use {@link TransactionalEventPublisher} via ApplicationEventPublisher instead. Will
+ *     be removed in a future version.
  */
+@Deprecated(since = "2026-03-06", forRemoval = true)
 @Slf4j
 @Component
 @RequiredArgsConstructor

@@ -47,7 +47,6 @@ class GameCharacterControllerV5Test {
 
   @Mock private CharacterViewQueryService queryService;
   @Mock private ExpectationCalculationQueue queue;
-  @Mock private MongoSyncEventPublisherInterface eventPublisher;
 
   @InjectMocks private TestableGameCharacterControllerV5 controller;
 
@@ -194,15 +193,11 @@ class GameCharacterControllerV5Test {
   static class TestableGameCharacterControllerV5 {
     private final CharacterViewQueryService queryService;
     private final ExpectationCalculationQueue queue;
-    private final MongoSyncEventPublisherInterface eventPublisher;
 
     TestableGameCharacterControllerV5(
-        CharacterViewQueryService queryService,
-        ExpectationCalculationQueue queue,
-        MongoSyncEventPublisherInterface eventPublisher) {
+        CharacterViewQueryService queryService, ExpectationCalculationQueue queue) {
       this.queryService = queryService;
       this.queue = queue;
-      this.eventPublisher = eventPublisher;
     }
 
     ResponseEntity<?> getExpectationV5Internal(String userIgn) {

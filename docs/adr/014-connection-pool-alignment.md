@@ -12,15 +12,30 @@ HikariCP connection pool size was misaligned with Tomcat thread pool size, causi
 
 ## Analysis
 
-### Current State (Local)
+### Configuration Summary (All Profiles)
+
+| Profile | Tomcat threads.max | HikariCP maximum-pool-size | Status |
+|---------|-------------------|---------------------------|--------|
+| Local   | 100               | 100                       | ✅ Aligned |
+| Prod    | 25                | 25                        | ✅ Aligned |
+| CI      | 200 (default)     | 200                       | ✅ Aligned (Fixed) |
+
+### State Changes
+
+#### Local (Already Aligned)
 - **Tomcat threads.max**: 100
 - **HikariCP maximum-pool-size**: 100
-- **Status**: ✓ Already aligned
+- **Added**: `register-mbeans: true` for JMX monitoring
 
-### Current State (Prod)
+#### Production (Already Aligned)
 - **Tomcat threads.max**: 25 (t3.small with 2 vCPUs)
 - **HikariCP maximum-pool-size**: 25
-- **Status**: ✓ Already aligned
+- **Added**: `leak-detection-threshold: 60000`, `register-mbeans: true`
+
+#### CI (Fixed)
+- **Tomcat threads.max**: 200 (Spring Boot default)
+- **HikariCP maximum-pool-size**: 10 → **200** (was misaligned)
+- **Added**: `register-mbeans: true`
 
 ### Pool Sizing Formula
 
@@ -43,6 +58,17 @@ For **t3.small (2 vCPUs)**:
 ## Decision
 
 ### Configuration Changes
+
+#### CI Profile (`application-ci.yml`)
+```yaml
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 200  # Match Tomcat default (was 10)
+      minimum-idle: 10
+      leak-detection-threshold: 60000  # Existing
+      register-mbeans: true  # NEW: Enable JMX monitoring
+```
 
 #### Production (`application-prod.yml`)
 ```yaml

@@ -145,9 +145,11 @@ class BatchJobRecoveryScheduler(
       val shouldRecover = shouldRecoverJob(metadata, now, lookbackThreshold)
 
       if (shouldRecover) {
-        restartJob(metadata)
-        recoveryListener.removeFailedJob(jobInstanceId)
-        recoveredCount++
+        val success = restartJob(metadata)
+        if (success) {
+          recoveryListener.removeFailedJob(jobInstanceId)
+          recoveredCount++
+        }
       } else {
         skippedCount++
       }
@@ -198,10 +200,10 @@ class BatchJobRecoveryScheduler(
   }
 
   /** Restart a failed job with new parameters */
-  private fun restartJob(metadata: JobFailureMetadata) {
+  private fun restartJob(metadata: JobFailureMetadata): Boolean {
     val context = TaskContext.of("BatchRecovery", "restartJob", metadata.jobName)
 
-    executor.executeOrCatch(
+    return executor.executeOrDefault(
         {
           // P2-19: Use injected Job directly (simpler than JobRegistry)
           val job = equipmentRefreshJob
@@ -218,12 +220,9 @@ class BatchJobRecoveryScheduler(
           jobLauncher.run(job, params)
           log.info("[BatchRecovery] Successfully restarted job: {}", metadata.jobName)
 
-          null
+          true // Success
         },
-        { e ->
-          logRestartFailure(metadata, e)
-          null
-        },
+        false, // Default on failure
         context
     )
   }

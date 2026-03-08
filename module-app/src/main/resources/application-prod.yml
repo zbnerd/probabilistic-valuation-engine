@@ -1,5 +1,11 @@
 # application-prod.yml
 
+server:
+  tomcat:
+    threads:
+      max: 25  # t3.small (2 vCPUs): 10-12 threads per vCPU for I/O-bound workloads
+    max-http-post-size: 262144  # 256KB (#266 P1-4: JSON DoS 방어)
+
 spring:
   config:
     activate:
@@ -11,8 +17,8 @@ spring:
     password: ${DB_PASSWORD}
 
     hikari:
-      maximum-pool-size: 50
-      minimum-idle: 50
+      maximum-pool-size: 25  # Match Tomcat threads (prevent connection starvation)
+      minimum-idle: 5  # Allow dynamic scaling (save ~50-100MB RAM during low traffic)
 
   jpa:
     open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지
@@ -31,6 +37,13 @@ spring:
     redis:
       host: localhost
       port: 6379
+    # P1-10: MongoDB Eventual Consistency Configuration
+    # In replica set: secondaryPreferred for read scalability, majority for strong consistency
+    mongodb:
+      # Read from secondaries when available (reduces primary load)
+      read-preference: secondaryPreferred
+      # Strong consistency: only read committed data replicated to majority
+      read-concern: majority
 
 # Discord Alert Configuration
 alert:
@@ -52,16 +65,6 @@ app:
   buffer:
     redis:
       enabled: true  # Scale-out 모드 활성화
-
-# P1-10: MongoDB Eventual Consistency Configuration
-# In replica set: secondaryPreferred for read scalability, majority for strong consistency
-spring:
-  data:
-    mongodb:
-      # Read from secondaries when available (reduces primary load)
-      read-preference: secondaryPreferred
-      # Strong consistency: only read committed data replicated to majority
-      read-concern: majority
 
 # Issue #284 DoD: Redis 장애 시 1000 RPS fallback 용량
 # NOTE: Main Pool(50) + Lock Pool(50) = 100 total (RDS max_connections 고려)
@@ -88,6 +91,10 @@ executor:
     core-pool-size: 4     # Compute: I/O-bound × 2 (파싱/계산/외부 호출)
     max-pool-size: 8
     queue-capacity: 200
+  async:
+    core-pool-size: 4     # @Async methods: 1:2 ratio
+    max-pool-size: 8
+    queue-capacity: 100
 
 # Issue #278: Scale-out 환경 실시간 좋아요 동기화 (prod)
 like:

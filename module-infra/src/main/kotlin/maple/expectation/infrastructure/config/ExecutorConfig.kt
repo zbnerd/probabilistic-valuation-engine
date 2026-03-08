@@ -65,11 +65,12 @@ class ExecutorConfig(
     // P2-25: 시작 시점에 1:2 비율 검증
     executorProperties.validateAll()
     log.info(
-      "[ExecutorConfig] P2-25 ThreadPool configuration validated: equipment={}/{}, preset={}/{}, alert={}/{}, expectation={}/{}",
+      "[ExecutorConfig] P2-25 ThreadPool configuration validated: equipment={}/{}, preset={}/{}, alert={}/{}, expectation={}/{}, async={}/{}",
       executorProperties.equipment.corePoolSize, executorProperties.equipment.maxPoolSize,
       executorProperties.preset.corePoolSize, executorProperties.preset.maxPoolSize,
       executorProperties.alert.corePoolSize, executorProperties.alert.maxPoolSize,
-      executorProperties.expectation.corePoolSize, executorProperties.expectation.maxPoolSize
+      executorProperties.expectation.corePoolSize, executorProperties.expectation.maxPoolSize,
+      executorProperties.async.corePoolSize, executorProperties.async.maxPoolSize
     )
   }
 
@@ -273,6 +274,63 @@ class ExecutorConfig(
   @Bean(name = ["asyncExecutor"])
   fun asyncExecutor(): ExecutorService {
     return Executors.newVirtualThreadPerTaskExecutor()
+  }
+
+  /**
+   * Default TaskExecutor for @Async methods (Unit 1: P2 Technical Debt)
+   *
+   * <p>Spring's default SimpleAsyncTaskExecutor creates a new thread for each task without pooling,
+   * which can lead to thread exhaustion under load. This custom executor provides proper pooling.
+   *
+   * <h4>Design Rationale:</h4>
+   *
+   * <ul>
+   *   <li><b>ThreadPoolTaskExecutor</b>: Reusable thread pool with bounded queue
+   *   <li><b>CallerRunsPolicy</b>: Backpressure - caller executes task when queue is full
+   *   <li><b>Context Propagation</b>: MDC and SecurityContext propagated via TaskDecorator
+   *   <li><b>Graceful Shutdown</b>: Wait for in-flight tasks to complete
+   * </ul>
+   *
+   * <h4>P2-25 Standardization</h4>
+   *
+   * <p>Configuration is loaded from {@code executor.async} properties with 1:2 core:max ratio.
+   *
+   * @return ThreadPoolTaskExecutor for @Async methods
+   * @see EnableAsync
+   */
+  @Bean(name = ["taskExecutor"])
+  @ConditionalOnMissingBean(name = ["taskExecutor"])
+  fun taskExecutor(contextPropagatingDecorator: TaskDecorator): Executor {
+    val config = executorProperties.async
+    val executor = ThreadPoolTaskExecutor()
+    executor.corePoolSize = config.corePoolSize
+    executor.maxPoolSize = config.maxPoolSize
+    executor.queueCapacity = config.queueCapacity
+    executor.setThreadNamePrefix("async-")
+    executor.setAllowCoreThreadTimeOut(true)
+    executor.setKeepAliveSeconds(30)
+
+    // 불변식 3: ThreadLocal 전파 (P0-4/B2)
+    executor.setTaskDecorator(contextPropagatingDecorator)
+
+    // CallerRunsPolicy: Backpressure - caller executes task when queue is full
+    executor.setRejectedExecutionHandler(java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy())
+
+    // Graceful Shutdown: 진행 중인 비동기 작업 완료 대기
+    executor.setWaitForTasksToCompleteOnShutdown(true)
+    executor.setAwaitTerminationSeconds(30)
+
+    executor.initialize()
+
+    // Micrometer ExecutorServiceMetrics 등록
+    executorMetricsConfigurator().registerExecutorMetrics(executor, "async")
+
+    log.info(
+      "[ExecutorConfig] taskExecutor initialized: core={}, max={}, queue={}",
+      config.corePoolSize, config.maxPoolSize, config.queueCapacity
+    )
+
+    return executor
   }
 
   /**

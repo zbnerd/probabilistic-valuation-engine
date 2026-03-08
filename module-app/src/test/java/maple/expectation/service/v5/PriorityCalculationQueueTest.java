@@ -153,8 +153,7 @@ class ExpectationCalculationQueueTest {
     Thread adderThread =
         new Thread(
             () -> {
-              // Small delay before adding task - poll(timeout) handles timing
-              // Thread.sleep(50) removed - rely on poll timeout mechanism
+              // Rely on poll(timeout) mechanism for timing
               ExpectationCalculationTask task =
                   ExpectationCalculationTask.highPriority("delayed", false);
               queue.offer(task);

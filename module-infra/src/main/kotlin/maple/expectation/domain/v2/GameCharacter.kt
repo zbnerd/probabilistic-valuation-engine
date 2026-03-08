@@ -15,9 +15,16 @@ import java.time.LocalDateTime
  *
  * <p><b>NOTE:</b> Legacy v2 entity - table name renamed to avoid conflict with clean architecture
  * {@code GameCharacterJpaEntity}
+ *
+ * <p><b>P2 Unit 3:</b> NamedEntityGraph for N+1 query prevention. Equipment association is loaded
+ * eagerly when @EntityGraph is applied to repository methods.
  */
 @Entity
 @Table(name = "game_character_v2")
+@NamedEntityGraph(
+    name = "GameCharacter.withEquipment",
+    attributeNodes = [NamedAttributeNode("equipment")]
+)
 class GameCharacter {
 
     companion object {

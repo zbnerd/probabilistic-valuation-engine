@@ -41,8 +41,8 @@ class EventOutboxFetchFacade(
     fun fetchAndLock(): List<maple.expectation.domain.v2.EventOutbox> {
         val pending = eventOutboxRepository.findPendingWithLock(
             listOf(
-                maple.expectation.domain.v2.EventOutbox.OutboxStatus.PENDING,
-                maple.expectation.domain.v2.EventOutbox.OutboxStatus.FAILED
+                maple.expectation.domain.v2.EventOutbox.EventOutboxStatus.PENDING,
+                maple.expectation.domain.v2.EventOutbox.EventOutboxStatus.FAILED
             ),
             java.time.LocalDateTime.now(),
             PageRequest.of(0, properties.batchSize)

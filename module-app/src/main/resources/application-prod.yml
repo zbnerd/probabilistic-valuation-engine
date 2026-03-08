@@ -15,8 +15,16 @@ spring:
       minimum-idle: 50
 
   jpa:
+    open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지
     hibernate:
       ddl-auto: update
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
 
   # Redis Standalone 설정 (운영 환경)
   data:
@@ -44,6 +52,16 @@ app:
   buffer:
     redis:
       enabled: true  # Scale-out 모드 활성화
+
+# P1-10: MongoDB Eventual Consistency Configuration
+# In replica set: secondaryPreferred for read scalability, majority for strong consistency
+spring:
+  data:
+    mongodb:
+      # Read from secondaries when available (reduces primary load)
+      # read-preference: secondaryPreferred
+      # Strong consistency: only read committed data replicated to majority
+      # read-concern: majority
 
 # Issue #284 DoD: Redis 장애 시 1000 RPS fallback 용량
 # NOTE: Main Pool(50) + Lock Pool(50) = 100 total (RDS max_connections 고려)

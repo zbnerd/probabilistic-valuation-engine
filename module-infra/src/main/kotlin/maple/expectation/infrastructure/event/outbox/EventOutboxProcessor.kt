@@ -1,10 +1,10 @@
 package maple.expectation.infrastructure.event.outbox
 
-import maple.expectation.core.port.out.EventProcessorPort
+import maple.expectation.core.port.out.OutboxProcessorPort
 import maple.expectation.domain.v2.EventOutbox
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction
 import maple.expectation.infrastructure.config.OutboxProperties
-import maple.expectation.infrastructure.event.outbox.metrics.EventOutboxMetrics
+import maple.expectation.infrastructure.metrics.EventOutboxMetrics
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.messaging.RedisStreamPublisher
@@ -45,7 +45,7 @@ class EventOutboxProcessor(
     private val properties: OutboxProperties,
     private val eventOutboxRepository: EventOutboxRepository,
     private val redisStreamPublisher: RedisStreamPublisher
-) : EventProcessorPort {
+) : OutboxProcessorPort {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -164,7 +164,7 @@ class EventOutboxProcessor(
      * 재시도 무의미 -> 즉시 DEAD_LETTER 이동
      */
     private fun handleIntegrityFailure(entry: EventOutbox) {
-        log.error("[EventOutbox] 무결성 검증 실패 -> 즉시 DLQ 이동: {}", entry.eventId)
+        log.error("[EventOutbox] 무결성 검증 실패 -> 즉시 DLQ 이동: {}", entry.id)
         metrics.incrementIntegrityFailure()
 
         entry.markFailed("Integrity verification failed - data tampering detected")
@@ -176,21 +176,22 @@ class EventOutboxProcessor(
 
     /** Redis Stream에 이벤트 발행 */
     private fun publishToRedisStream(entry: EventOutbox) {
-        val context = TaskContext.of("EventOutbox", "Publish", entry.eventId)
+        val eventId = entry.id?.toString() ?: "unknown"
+        val context = TaskContext.of("EventOutbox", "Publish", eventId)
 
         executor.executeOrCatch(
             {
                 redisStreamPublisher.publish(
-                    streamName = entry.targetStream,
-                    eventId = entry.eventId,
-                    eventType = entry.eventType,
-                    payload = entry.payload
+                    streamName = entry.targetStream ?: "default",
+                    eventId = eventId,
+                    eventType = entry.eventType ?: "unknown",
+                    payload = entry.payload ?: "{}"
                 )
-                log.info("[EventOutbox] Redis Stream 발행 완료: eventId={}, stream={}", entry.eventId, entry.targetStream)
+                log.info("[EventOutbox] Redis Stream 발행 완료: eventId={}, stream={}", eventId, entry.targetStream)
                 metrics.incrementPublished()
             },
             { e ->
-                log.error("[EventOutbox] Redis Stream 발행 실패: eventId={}", entry.eventId, e)
+                log.error("[EventOutbox] Redis Stream 발행 실패: eventId={}", eventId, e)
                 throw e // Re-throw for retry logic
             },
             context
@@ -218,8 +219,8 @@ class EventOutboxProcessor(
      * 복구 전 Content Hash 기반 무결성 검증
      */
     @ObservedTransaction("scheduler.event.outbox.recover_stalled")
-    fun recoverStalled() {
-        val staleTime = java.time.LocalDateTime.now().minus(properties.staleThreshold.toMillis())
+    override fun recoverStalled() {
+        val staleTime = java.time.LocalDateTime.now().minus(properties.staleThreshold)
         val stalledEntries = eventOutboxRepository.findStalledProcessing(
             staleTime,
             org.springframework.data.domain.PageRequest.of(0, properties.batchSize)
@@ -238,7 +239,7 @@ class EventOutboxProcessor(
             if (!entry.verifyIntegrity()) {
                 log.error(
                     "[EventOutbox] 무결성 검증 실패 - Zombie 복구 중단, DLQ 이동: eventId={}",
-                    entry.eventId
+                    entry.id
                 )
                 handleIntegrityFailure(entry)
                 integrityFailed++

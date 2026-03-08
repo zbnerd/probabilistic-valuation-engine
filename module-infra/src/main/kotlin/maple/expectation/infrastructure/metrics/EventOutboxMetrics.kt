@@ -34,11 +34,11 @@ class EventOutboxMetrics(private val registry: MeterRegistry) {
 
     init {
         // Gauges (current state)
-        Gauge.builder("event_outbox_pending_count", pendingCount, AtomicLong::get)
+        Gauge.builder("event_outbox_pending_count", pendingCount) { it.get().toDouble() }
             .description("Number of pending events in outbox")
             .register(registry)
 
-        Gauge.builder("event_outbox_processing_count", processingCount, AtomicLong::get)
+        Gauge.builder("event_outbox_processing_count", processingCount) { it.get().toDouble() }
             .description("Number of events currently being processed")
             .register(registry)
 

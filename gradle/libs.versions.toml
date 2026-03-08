@@ -1,0 +1,184 @@
+# ========================================
+# Gradle Version Catalog
+# Centralized dependency version management
+# ========================================
+
+[versions]
+# Core Spring
+spring-boot = "3.5.4"
+spring-dependency-management = "1.1.7"
+
+# Kotlin
+kotlin = "2.1.0"
+kotlin-logging = "3.0.5"
+
+# Java & Lombok
+lombok = "1.18.30"
+
+# Databases
+mysql-connector = "9.1.0"
+h2 = "2.3.232"
+mongodb-driver = "5.3.0"
+
+# Redis & Cache
+redisson = "3.48.0"
+caffeine = "3.1.8"
+
+# Resilience & Circuit Breaker
+resilience4j = "2.2.0"
+
+# Rate Limiting
+bucket4j = "8.14.0"
+
+# Jackson
+jackson = "2.17.0"
+
+# Google Libraries
+guava = "33.5.0-jre"
+
+# JWT
+jjwt = "0.12.6"
+
+# Testing
+junit-jupiter = "5.10.3"
+testcontainers = "1.21.2"
+archunit = "1.3.0"
+awaitility = "4.2.0"
+jqwik = "1.9.3"
+assertj = "3.24.2"
+mockito = "5.14.0"
+
+# OpenTelemetry & Observability
+micrometer = "1.15.3"
+opentelemetry = "1.46.0"
+opentelemetry-samplers = "1.33.0-alpha"
+
+# OpenAPI/Swagger
+springdoc = "2.8.13"
+
+# Logging
+loki-logback = "1.4.2"
+
+# Spring Dotenv
+spring-dotenv = "4.0.0"
+
+# LangChain4j (AI SRE)
+langchain4j = "0.29.0"
+
+# Gradle Plugins
+gradle-test-retry = "1.6.0"
+spotbugs = "6.0.25"
+spotless = "6.25.0"
+foojay-resolver = "0.8.0"
+
+# Jacoco
+jacoco = "0.8.11"
+
+[libraries]
+# Kotlin Standard Library
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+kotlin-logging-jvm = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
+
+# Lombok
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+
+# Spring Boot Starters
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }
+spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-data-mongodb = { module = "org.springframework.boot:spring-boot-starter-data-mongodb" }
+spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+spring-boot-starter-cache = { module = "org.springframework.boot:spring-boot-starter-cache" }
+spring-boot-starter-batch = { module = "org.springframework.boot:spring-boot-starter-batch" }
+spring-boot-starter-aop = { module = "org.springframework.boot:spring-boot-starter-aop" }
+spring-boot-starter-thymeleaf = { module = "org.springframework.boot:spring-boot-starter-thymeleaf" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+
+# Spring Boot Core
+spring-boot = { module = "org.springframework.boot:spring-boot" }
+
+# Databases
+mysql-connector-j = { module = "com.mysql:mysql-connector-j", version.ref = "mysql-connector" }
+h2 = { module = "com.h2database:h2", version.ref = "h2" }
+mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version.ref = "mongodb-driver" }
+
+# Redis & Cache
+redisson-spring-boot-starter = { module = "org.redisson:redisson-spring-boot-starter", version.ref = "redisson" }
+caffeine = { module = "com.github.ben-manes.caffeine:caffeine", version.ref = "caffeine" }
+
+# Resilience4j
+resilience4j-spring-boot3 = { module = "io.github.resilience4j:resilience4j-spring-boot3", version.ref = "resilience4j" }
+
+# Rate Limiting
+bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
+bucket4j-redisson = { module = "com.bucket4j:bucket4j_jdk17-redisson", version.ref = "bucket4j" }
+
+# Jackson
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations", version.ref = "jackson" }
+jackson-dataformat-csv = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-csv", version.ref = "jackson" }
+jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
+
+# Google Libraries
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
+
+# JWT
+jjwt-api = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }
+jjwt-impl = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jjwt" }
+jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
+
+# Testing
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
+testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
+testcontainers-mysql = { module = "org.testcontainers:mysql", version.ref = "testcontainers" }
+testcontainers-mongodb = { module = "org.testcontainers:mongodb", version.ref = "testcontainers" }
+testcontainers-toxiproxy = { module = "org.testcontainers:toxiproxy", version.ref = "testcontainers" }
+archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" }
+jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
+mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
+spring-security-test = { module = "org.springframework.security:spring-security-test" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+# OpenTelemetry & Observability
+micrometer-observation = { module = "io.micrometer:micrometer-observation", version.ref = "micrometer" }
+micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
+micrometer-tracing-bridge-otel = { module = "io.micrometer:micrometer-tracing-bridge-otel", version.ref = "micrometer" }
+opentelemetry-exporter-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp", version.ref = "opentelemetry" }
+opentelemetry-samplers = { module = "io.opentelemetry.contrib:opentelemetry-samplers", version.ref = "opentelemetry-samplers" }
+
+# OpenAPI/Swagger
+springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+
+# Logging
+loki-logback-appender = { module = "com.github.loki4j:loki-logback-appender", version.ref = "loki-logback" }
+
+# Spring Dotenv
+spring-dotenv = { module = "me.paulschwarz:spring-dotenv", version.ref = "spring-dotenv" }
+
+# LangChain4j (AI SRE)
+langchain4j-spring-boot-starter = { module = "dev.langchain4j:langchain4j-spring-boot-starter", version.ref = "langchain4j" }
+langchain4j-open-ai-spring-boot-starter = { module = "dev.langchain4j:langchain4j-open-ai-spring-boot-starter", version.ref = "langchain4j" }
+
+# Spring Data Commons (for Page interface)
+spring-data-commons = { module = "org.springframework.data:spring-data-commons" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+kotlin-jpa = { id = "org.jetbrains.kotlin.plugin.jpa", version.ref = "kotlin" }
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
+test-retry = { id = "org.gradle.test-retry", version.ref = "gradle-test-retry" }
+spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugs" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+foojay-resolver = { id = "org.gradle.toolchains.foojay-resolver-convention", version.ref = "foojay-resolver" }
+jacoco = { id = "jacoco" }

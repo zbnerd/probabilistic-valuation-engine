@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "gradle-build-performance": {
+      "source": "new-silvermoon/awesome-android-agent-skills",
+      "sourceType": "github",
+      "computedHash": "4d9868684c2a41e519604e797df4cd8c6b32aa604dcb0d6b63174ea316a7f19f"
+    },
+    "kotlin-springboot": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "computedHash": "beaa34d307bfcce5dd026e3b03c357f98f471b0de1b9fc6a0b7a64d132b74e95"
+    }
+  }
+}

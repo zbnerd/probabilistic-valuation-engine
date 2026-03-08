@@ -78,8 +78,8 @@ class EventOutboxScheduler(
     fun monitorMetrics() {
         executor.executeVoidJava(
             {
-                val pendingCount = eventOutboxRepository.countByStatus("PENDING")
-                val processingCount = eventOutboxRepository.countByStatus("PROCESSING")
+                val pendingCount = eventOutboxRepository.countByStatus(EventOutboxStatus.PENDING)
+                val processingCount = eventOutboxRepository.countByStatus(EventOutboxStatus.PROCESSING)
 
                 metrics.setPendingCount(pendingCount)
                 metrics.setProcessingCount(processingCount)
@@ -107,9 +107,15 @@ class EventOutboxScheduler(
         executor.executeVoidJava(
             {
                 val stalledThreshold = properties.stalledThreshold
-                val thresholdTime = Instant.now().minus(stalledThreshold)
+                val thresholdTime = LocalDateTime.ofInstant(
+                    Instant.now().minus(stalledThreshold),
+                    ZoneId.systemDefault()
+                )
 
-                val stalledEvents = eventOutboxRepository.findStalledEvents(thresholdTime)
+                val stalledEvents = eventOutboxRepository.findStalledProcessing(
+                    thresholdTime,
+                    PageRequest.of(0, properties.batchSize)
+                )
 
                 if (stalledEvents.isNotEmpty()) {
                     log.warn(
@@ -117,7 +123,17 @@ class EventOutboxScheduler(
                         stalledEvents.size
                     )
 
-                    val recoveredCount = recoverStalledEvents(stalledEvents)
+                    var recoveredCount = 0
+                    stalledEvents.forEach { entry ->
+                        if (!entry.verifyIntegrity()) {
+                            log.error("[EventOutbox] Integrity check failed for event {}", entry.id)
+                            entry.forceDeadLetter()
+                        } else {
+                            entry.resetToRetry()
+                            recoveredCount++
+                        }
+                        eventOutboxRepository.save(entry)
+                    }
 
                     metrics.incrementStalledRecovered(recoveredCount)
                     log.info("[EventOutbox] Recovered {} stalled events", recoveredCount)
@@ -135,9 +151,9 @@ class EventOutboxScheduler(
      * <p>실제 처리 로직은 EventOutboxProcessor에서 수행
      * 여기서는 메트릭만 업데이트
      */
-    private fun processEvents(eventIds: List<Long>) {
-        val completedCount = eventOutboxRepository.countByStatusIn(eventIds, listOf("COMPLETED"))
-        val failedCount = eventOutboxRepository.countByStatusIn(eventIds, listOf("FAILED"))
+    private fun processEvents(events: List<maple.expectation.domain.v2.EventOutbox>) {
+        val completedCount = eventOutboxRepository.countByStatusIn(listOf(EventOutboxStatus.COMPLETED))
+        val failedCount = eventOutboxRepository.countByStatusIn(listOf(EventOutboxStatus.FAILED))
 
         if (completedCount > 0) {
             metrics.incrementCompleted(completedCount.toInt())
@@ -146,20 +162,5 @@ class EventOutboxScheduler(
         if (failedCount > 0) {
             metrics.incrementFailed(failedCount.toInt())
         }
-    }
-
-    /**
-     * Staled 이벤트 복구 (내부 로직)
-     *
-     * <p>PROCESSING -> PENDING으로 상태 변경 후 무결성 검증
-     */
-    private fun recoverStalledEvents(stalledEventIds: List<Long>): Int {
-        val recoveredCount = eventOutboxRepository.resetStalledEvents(stalledEventIds)
-
-        if (recoveredCount > 0) {
-            log.info("[EventOutbox] Reset {} events from PROCESSING to PENDING", recoveredCount)
-        }
-
-        return recoveredCount
     }
 }

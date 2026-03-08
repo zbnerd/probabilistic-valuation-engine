@@ -15,8 +15,16 @@ spring:
       connection-init-sql: "SET SESSION lock_wait_timeout = 10"
 
   jpa:
+    open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지
     hibernate:
       ddl-auto: update
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
 
   # Redis Standalone 설정 (Sentinel 장애 시 폴백)
   data:
@@ -45,6 +53,8 @@ spring:
       webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
 
   # MongoDB Configuration (V5 CQRS)
+  # P1-10: Eventual Consistency Settings
+  # Local: Single node - use primary for consistency
   spring:
     data:
       mongodb:
@@ -52,6 +62,10 @@ spring:
         port: 27017
         database: maple_expectation_v5
         auto-index-creation: true
+        # P1-10: Read Preference - primary for local dev (single node)
+        # read-preference: primary
+        # P1-10: Read Concern - local for low latency (single node)
+        # read-concern: local
         # Connection pool settings for optimal performance
         # connect-timeout: 10000
         # socket-timeout: 30000

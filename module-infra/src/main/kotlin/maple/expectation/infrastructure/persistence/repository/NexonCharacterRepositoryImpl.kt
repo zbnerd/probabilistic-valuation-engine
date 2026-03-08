@@ -21,13 +21,17 @@ import java.sql.SQLException
  * <p><strong>Performance:</strong> JDBC batch updates provide 90% reduction in DB round-trips
  * compared to individual inserts.
  *
+ * <p><strong>P1-11 Multi-DataSource:</strong> Uses explicit `"transactionManager"` qualifier
+ * to prevent ambiguity in multi-datasource environments (MongoDB read replicas).
+ *
  * @see NexonCharacterRepositoryCustom#batchUpsert(List)
+ * @see <a href="../../../../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
  */
 class NexonCharacterRepositoryImpl(
     private val jdbcTemplate: JdbcTemplate,
 ) : NexonCharacterRepositoryCustom {
 
-    @Transactional
+    @Transactional("transactionManager")
     override fun batchUpsert(dataList: List<NexonApiCharacterData>): Int {
         if (dataList.isEmpty()) {
             return 0

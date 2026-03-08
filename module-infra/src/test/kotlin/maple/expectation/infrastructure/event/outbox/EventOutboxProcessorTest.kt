@@ -47,7 +47,7 @@ import kotlin.test.assertTrue
  * <ul>
  *   <li>No Thread.sleep - uses direct assertions
  *   <li>No shared state between tests
- *   * <li>Mocketernal dependencies
+ *   <li>Mocked external dependencies
  *   <li>Deterministic test data
  * </ul>
  */

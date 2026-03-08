@@ -33,7 +33,13 @@ import org.springframework.validation.annotation.Validated
 @ConfigurationProperties(prefix = "expectation.monitoring-threshold")
 data class MonitoringThresholdProperties(
   @DefaultValue("5000") @Min(1000) @Max(50000) val bufferSaturationCount: Long = 5000,
-  @DefaultValue("5000.0") val bufferSaturationDouble: Double = 5000.0
+  @DefaultValue("5000.0") val bufferSaturationDouble: Double = 5000.0,
+  // ADR-088: HikariCP monitoring thresholds
+  @DefaultValue("0.7") val hikariCpWarningThreshold: Double = 0.7,
+  @DefaultValue("0.9") val hikariCpCriticalThreshold: Double = 0.9,
+  @DefaultValue("100") val hikariCpAcquireTimeThresholdMs: Double = 100.0,
+  @DefaultValue("5") val hikariCpPendingThreadsThreshold: Int = 5,
+  @DefaultValue("0.01") val hikariCpTimeoutRateThreshold: Double = 0.01
 ) {
 
   /**
@@ -42,6 +48,14 @@ data class MonitoringThresholdProperties(
    * <p>테스트 또는 기본 설정 시 사용
    */
   companion object {
-    fun defaults() = MonitoringThresholdProperties(5000L, 5000.0)
+    fun defaults() = MonitoringThresholdProperties(
+      bufferSaturationCount = 5000L,
+      bufferSaturationDouble = 5000.0,
+      hikariCpWarningThreshold = 0.7,
+      hikariCpCriticalThreshold = 0.9,
+      hikariCpAcquireTimeThresholdMs = 100.0,
+      hikariCpPendingThreadsThreshold = 5,
+      hikariCpTimeoutRateThreshold = 0.01
+    )
   }
 }

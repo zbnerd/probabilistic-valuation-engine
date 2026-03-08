@@ -4,10 +4,10 @@
 // ========================================
 
 plugins {
-	id 'org.jetbrains.kotlin.jvm'
-	id 'org.jetbrains.kotlin.plugin.spring'
-	id 'org.jetbrains.kotlin.plugin.jpa'
-	id 'org.springframework.boot' version '3.5.4'
+	alias(libs.plugins.kotlin.jvm)
+	alias(libs.plugins.kotlin.spring)
+	alias(libs.plugins.kotlin.jpa)
+	alias(libs.plugins.spring.boot)
 }
 
 // Integration Test Source Set Configuration
@@ -36,11 +36,11 @@ idea {
 
 dependencies {
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
-	implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
+	implementation(libs.kotlin.stdlib)
 
 	// Lombok for integration tests
-	integrationTestCompileOnly 'org.projectlombok:lombok:1.18.30'
-	integrationTestAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+	integrationTestCompileOnly(libs.lombok)
+	integrationTestAnnotationProcessor(libs.lombok)
 
 	implementation project(':module-core')
 	implementation project(':module-infra')
@@ -48,76 +48,76 @@ dependencies {
 	implementation project(':module-web')
 
 	// Spring Web
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.springframework.boot:spring-boot-starter-webflux'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+	implementation(libs.spring.boot.starter.web)
+	implementation(libs.spring.boot.starter.webflux)
+	implementation(libs.spring.boot.starter.validation)
+	implementation(libs.spring.boot.starter.thymeleaf)
 
 	// Spring Security
-	implementation 'org.springframework.boot:spring-boot-starter-security'
-	testImplementation 'org.springframework.security:spring-security-test'
+	implementation(libs.spring.boot.starter.security)
+	testImplementation(libs.spring.security.test)
 
 	// JWT
-	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
-	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+	implementation(libs.jjwt.api)
+	runtimeOnly(libs.jjwt.impl)
+	runtimeOnly(libs.jjwt.jackson)
 
 	// Actuator & Observability
-	implementation 'org.springframework.boot:spring-boot-starter-actuator'
-	implementation 'io.micrometer:micrometer-observation'
-	implementation 'io.micrometer:micrometer-registry-prometheus'
-	implementation 'io.micrometer:micrometer-tracing-bridge-otel'
-	implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
-	implementation 'io.opentelemetry.contrib:opentelemetry-samplers:1.33.0-alpha'
+	implementation(libs.spring.boot.starter.actuator)
+	implementation(libs.micrometer.observation)
+	implementation(libs.micrometer.registry.prometheus)
+	implementation(libs.micrometer.tracing.bridge.otel)
+	implementation(libs.opentelemetry.exporter.otlp)
+	implementation(libs.opentelemetry.samplers)
 
 	// SpringDoc OpenAPI
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13'
+	implementation(libs.springdoc.openapi.starter.webmvc.ui)
 
 	// Loki Appender
-	implementation 'com.github.loki4j:loki-logback-appender:1.4.2'
+	implementation(libs.loki.logback.appender)
 
 	// AI SRE (LangChain4j)
-	implementation 'dev.langchain4j:langchain4j-spring-boot-starter:0.29.0'
-	implementation 'dev.langchain4j:langchain4j-open-ai-spring-boot-starter:0.29.0'
+	implementation(libs.langchain4j.spring.boot.starter)
+	implementation(libs.langchain4j.open.ai.spring.boot.starter)
 
 	// Spring Batch
-	implementation 'org.springframework.boot:spring-boot-starter-batch'
+	implementation(libs.spring.boot.starter.batch)
 
 	// Cache
-	implementation 'org.springframework.boot:spring-boot-starter-cache'
-	implementation 'com.github.ben-manes.caffeine:caffeine'
+	implementation(libs.spring.boot.starter.cache)
+	implementation(libs.caffeine)
 
 	// Spring Data JPA
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	runtimeOnly 'com.mysql:mysql-connector-j'
-	runtimeOnly 'com.h2database:h2'
+	implementation(libs.spring.boot.starter.data.jpa)
+	runtimeOnly(libs.mysql.connector.j)
+	runtimeOnly(libs.h2)
 
 	// Redisson (Redis)
-	implementation 'org.redisson:redisson-spring-boot-starter:3.48.0'
+	implementation(libs.redisson.spring.boot.starter)
 
 	// Resilience4j
-	implementation 'io.github.resilience4j:resilience4j-spring-boot3'
+	implementation(libs.resilience4j.spring.boot3)
 
 	// Guava
-	implementation 'com.google.guava:guava:33.5.0-jre'
+	implementation(libs.guava)
 
 	// Bucket4j
-	implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
-	implementation 'com.bucket4j:bucket4j_jdk17-redisson:8.14.0'
+	implementation(libs.bucket4j.core)
+	implementation(libs.bucket4j.redisson)
 
 	// Jackson CSV
-	implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-csv'
+	implementation(libs.jackson.dataformat.csv)
 
 	// Env
-	implementation 'me.paulschwarz:spring-dotenv:4.0.0'
+	implementation(libs.spring.dotenv)
 
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'org.testcontainers:toxiproxy'
-	testImplementation 'org.mockito:mockito-core:5.14.0'
-	testImplementation 'org.mockito:mockito-junit-jupiter:5.14.0'
+	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.testcontainers.toxiproxy)
+	testImplementation(libs.mockito.core)
+	testImplementation(libs.mockito.junit.jupiter)
 
 	// Jackson Kotlin module for testing Kotlin data classes deserialization
-	testImplementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
+	testImplementation(libs.jackson.module.kotlin)
 }
 
 // Enable plain jar for inter-module dependencies (chaos-test module needs it)
@@ -206,4 +206,11 @@ tasks.named('compileJava') {
 // Note: integrationTestAnnotationProcessor extends testAnnotationProcessor, so Lombok is included
 tasks.named('compileIntegrationTestJava') {
 	options.annotationProcessorPath = configurations.integrationTestAnnotationProcessor
+}
+
+// allOpen configuration for JPA entities (required for proxy generation)
+allOpen {
+	annotation('jakarta.persistence.Entity')
+	annotation('jakarta.persistence.MappedSuperclass')
+	annotation('jakarta.persistence.Embeddable')
 }

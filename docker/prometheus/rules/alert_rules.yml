@@ -94,8 +94,9 @@ groups:
           description: "Circuit breaker {{ $labels.name }} is open for more than 1 minute"
 
       # ============================================
-      # Database Connection Pool Alert
+      # Database Connection Pool Alerts (ADR-088)
       # ============================================
+      # Critical: Pool exhausted (> 90%)
       - alert: DatabaseConnectionPoolExhausted
         expr: hikaricp_connections_active / hikaricp_connections_max * 100 > 90
         for: 2m
@@ -105,6 +106,50 @@ groups:
         annotations:
           summary: "Database connection pool exhausted on {{ $labels.instance }}"
           description: "Connection pool usage is {{ $value }}% for more than 2 minutes"
+
+      # Warning: High utilization (> 70%)
+      - alert: DatabaseConnectionPoolHighUtilization
+        expr: hikaricp_connections_active / hikaricp_connections_max * 100 > 70
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Database connection pool high utilization on {{ $labels.instance }}"
+          description: "Connection pool usage is {{ $value }}% for more than 5 minutes"
+
+      # Critical: Connection timeouts
+      - alert: DatabaseConnectionTimeout
+        expr: rate(hikaricp_connections_timeout_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "Database connection timeout on {{ $labels.instance }}"
+          description: "Connection timeout rate is {{ $value }}/sec for more than 1 minute"
+
+      # Warning: High pending threads (pool exhaustion imminent)
+      - alert: DatabaseConnectionPoolPending
+        expr: hikaricp_connections_pending > 10
+        for: 1m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Database connection pool high pending on {{ $labels.instance }}"
+          description: "{{ $value }} threads waiting for database connection"
+
+      # Warning: High connection acquire time (> 100ms P99)
+      - alert: DatabaseConnectionAcquireSlow
+        expr: histogram_quantile(0.99, rate(hikaricp_connections_acquire_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Database connection acquire slow on {{ $labels.instance }}"
+          description: "P99 connection acquire time is {{ $value }}s for more than 5 minutes"
 
       # ============================================
       # Redis Connection Alert

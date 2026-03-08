@@ -5,8 +5,8 @@
 // ========================================
 
 plugins {
-	id 'org.jetbrains.kotlin.jvm'
-	id 'org.jetbrains.kotlin.plugin.spring'
+	alias(libs.plugins.kotlin.jvm)
+	alias(libs.plugins.kotlin.spring)
 }
 
 dependencies {
@@ -17,28 +17,28 @@ dependencies {
 	implementation project(':module-infra')
 
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
-	implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
+	implementation(libs.kotlin.stdlib)
 
 	// Spring Web (Presentation Layer)
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation(libs.spring.boot.starter.web)
+	implementation(libs.spring.boot.starter.validation)
+	implementation(libs.spring.boot.starter.security)
 
 	// OpenAPI/Swagger
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+	implementation(libs.springdoc.openapi.starter.webmvc.ui)
 
 	// Spring Data (for Page interface)
-	implementation 'org.springframework.data:spring-data-commons'
+	implementation(libs.spring.data.commons)
 
 	// Resilience4j (for CircuitBreaker exception handling)
-	implementation 'io.github.resilience4j:resilience4j-spring-boot3'
+	implementation(libs.resilience4j.spring.boot3)
 
 	// Lombok
-	compileOnly 'org.projectlombok:lombok'
-	annotationProcessor 'org.projectlombok:lombok'
+	compileOnly(libs.lombok)
+	annotationProcessor(libs.lombok)
 
 	// ArchUnit (Architecture Testing)
-	testImplementation 'com.tngtech.archunit:archunit-junit5:1.2.1'
+	testImplementation(libs.archunit.junit5)
 }
 
 // Enable plain jar for inter-module dependencies

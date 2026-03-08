@@ -148,11 +148,12 @@ mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 
-# OpenTelemetry & Observability
-micrometer-observation = { module = "io.micrometer:micrometer-observation", version.ref = "micrometer" }
-micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
-micrometer-tracing-bridge-otel = { module = "io.micrometer:micrometer-tracing-bridge-otel", version.ref = "micrometer" }
-opentelemetry-exporter-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp", version.ref = "opentelemetry" }
+# OpenTelemetry & Observability (managed by Spring Boot BOM)
+micrometer-core = { module = "io.micrometer:micrometer-core" }
+micrometer-observation = { module = "io.micrometer:micrometer-observation" }
+micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
+micrometer-tracing-bridge-otel = { module = "io.micrometer:micrometer-tracing-bridge-otel" }
+opentelemetry-exporter-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp" }
 opentelemetry-samplers = { module = "io.opentelemetry.contrib:opentelemetry-samplers", version.ref = "opentelemetry-samplers" }
 
 # OpenAPI/Swagger
@@ -181,4 +182,4 @@ test-retry = { id = "org.gradle.test-retry", version.ref = "gradle-test-retry" }
 spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugs" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 foojay-resolver = { id = "org.gradle.toolchains.foojay-resolver-convention", version.ref = "foojay-resolver" }
-jacoco = { id = "jacoco" }
+jacoco = { id = "jacoco", version.ref = "jacoco" }

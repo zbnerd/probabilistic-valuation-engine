@@ -10,6 +10,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import maple.expectation.infrastructure.config.ExecutorConfig;
+import maple.expectation.infrastructure.config.ExecutorProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,18 +27,21 @@ class ExecutorConfigTest {
 
   private MeterRegistry meterRegistry;
   private TaskDecorator noOpDecorator;
+  private ExecutorProperties executorProperties;
 
   @BeforeEach
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
     noOpDecorator = runnable -> runnable; // 테스트용 No-Op Decorator
+    // Create default ExecutorProperties for testing
+    executorProperties = new maple.expectation.infrastructure.config.ExecutorProperties();
   }
 
   @Test
   @DisplayName("expectationComputeExecutor 큐 포화 시 RejectedExecutionException 발생")
   void expectationComputeExecutor_QueueFull_ThrowsRejected() throws InterruptedException {
     // Given: Executor 생성
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry);
+    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
     Executor executor = executorConfig.expectationComputeExecutor(noOpDecorator);
     ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor) executor;
 
@@ -79,7 +83,7 @@ class ExecutorConfigTest {
   @DisplayName("alertTaskExecutor 큐 포화 시 TaskRejectedException 발생")
   void alertTaskExecutor_QueueFull_ThrowsRejected() throws InterruptedException {
     // Given: Executor 생성
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry);
+    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
     Executor executor = executorConfig.alertTaskExecutor(noOpDecorator);
     ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor) executor;
 
@@ -121,7 +125,7 @@ class ExecutorConfigTest {
   @DisplayName("expectationComputeExecutor rejected Counter 증가 검증")
   void expectationComputeExecutor_RejectedCounter_Increments() throws InterruptedException {
     // Given: Executor 생성
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry);
+    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
     Executor executor = executorConfig.expectationComputeExecutor(noOpDecorator);
     ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor) executor;
 
@@ -165,7 +169,7 @@ class ExecutorConfigTest {
   @DisplayName("alertTaskExecutor rejected Counter 증가 검증")
   void alertTaskExecutor_RejectedCounter_Increments() throws InterruptedException {
     // Given: Executor 생성
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry);
+    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
     Executor executor = executorConfig.alertTaskExecutor(noOpDecorator);
     ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor) executor;
 
@@ -207,7 +211,7 @@ class ExecutorConfigTest {
   @DisplayName("ExecutorServiceMetrics 등록 검증 (expectation.compute)")
   void expectationComputeExecutor_MetricsRegistered() {
     // Given & When
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry);
+    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
     executorConfig.expectationComputeExecutor(noOpDecorator);
 
     // Then: ExecutorServiceMetrics 메트릭 등록 확인
@@ -222,7 +226,7 @@ class ExecutorConfigTest {
   @DisplayName("ExecutorServiceMetrics 등록 검증 (alert)")
   void alertTaskExecutor_MetricsRegistered() {
     // Given & When
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry);
+    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
     executorConfig.alertTaskExecutor(noOpDecorator);
 
     // Then: ExecutorServiceMetrics 메트릭 등록 확인

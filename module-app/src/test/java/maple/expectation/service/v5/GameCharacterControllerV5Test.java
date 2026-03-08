@@ -56,7 +56,7 @@ class GameCharacterControllerV5Test {
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    controller = new TestableGameCharacterControllerV5(queryService, queue, eventPublisher);
+    controller = new TestableGameCharacterControllerV5(queryService, queue);
   }
 
   @Test

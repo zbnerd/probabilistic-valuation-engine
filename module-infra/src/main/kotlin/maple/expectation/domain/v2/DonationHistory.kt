@@ -19,10 +19,8 @@ class DonationHistory {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null
-        private set
 
     var senderUuid: String? = null
-        private set
 
     /**
      * Admin(개발자)의 fingerprint
@@ -30,19 +28,15 @@ class DonationHistory {
      * <p>보안: fingerprint는 HMAC-SHA256 해시값이므로 저장해도 원본 API Key 노출 없음
      */
     var receiverFingerprint: String? = null
-        private set
 
     var amount: Long? = null
-        private set
 
     @Column(updatable = false)
     var requestId: String? = null
-        private set
 
     @CreatedDate
     @Column(updatable = false)
     var createdAt: LocalDateTime? = null
-        private set
 
     private constructor()
 

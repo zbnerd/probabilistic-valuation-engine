@@ -7,6 +7,7 @@ import maple.expectation.core.port.out.BufferStatusQuery
 import maple.expectation.infrastructure.config.MonitoringThresholdProperties
 import org.springframework.stereotype.Component
 import kotlin.math.min
+import kotlin.math.round
 
 /**
  * Redis 메트릭 수집기

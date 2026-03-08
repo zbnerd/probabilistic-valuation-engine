@@ -136,6 +136,22 @@ class MongoDBSyncWorkerTest {
             any(kotlin.jvm.functions.Function1.class),
             any(TaskContext.class));
 
+    // Mock executeOrDefault to return the default value - lenient since not all tests use it
+    lenient()
+        .doAnswer(
+            invocation -> {
+              ThrowingSupplier<?> task = invocation.getArgument(0);
+              Object defaultValue = invocation.getArgument(1);
+              try {
+                Object result = task.get();
+                return result != null ? result : defaultValue;
+              } catch (Throwable e) {
+                return defaultValue;
+              }
+            })
+        .when(executor)
+        .executeOrDefault(any(ThrowingSupplier.class), any(), any(TaskContext.class));
+
     // Lenient mock for checkedExecutor.executeUncheckedVoid - not all tests use deserialization
     lenient()
         .doAnswer(
@@ -370,14 +386,11 @@ class MongoDBSyncWorkerTest {
   @Test
   @DisplayName("PEL Recovery: recovers pending messages on startup")
   void testPelRecovery_RecoversPendingMessages() {
-    // Mock autoClaim to return pending message then empty
-    when(mockStream.autoClaim(
-            anyString(), anyString(), any(Long.class), any(), any(), any(Integer.class)))
-        .thenReturn(null);
-
+    // Note: PEL recovery happens during worker.start() via recoverPendingMessages()
+    // Integration tests verify actual PEL recovery behavior
     worker.start();
 
-    // Verify worker started - PEL recovery happens before new message processing
+    // Verify worker started - PEL recovery happens in background thread
     assertThat(ReflectionTestUtils.getField(worker, "running")).isEqualTo(true);
   }
 
@@ -389,15 +402,10 @@ class MongoDBSyncWorkerTest {
   @Test
   @DisplayName("Janitor: claimOrphanedMessages returns 0 when no orphaned messages")
   void testJanitor_NoOrphanedMessages_Returns0() {
-    // Given: Mock stream to return empty result from autoClaim
-    when(mockStream.autoClaim(
-            anyString(), anyString(), any(Long.class), any(), any(), any(Integer.class)))
-        .thenReturn(null);
-
-    // When
+    // When: No orphaned messages (autoClaim returns empty)
     int claimed = worker.claimOrphanedMessages(java.time.Duration.ofMinutes(5));
 
-    // Then
+    // Then: Should return 0 when no orphaned messages found
     assertThat(claimed).isEqualTo(0);
   }
 

@@ -5,7 +5,6 @@ import maple.expectation.infrastructure.executor.TaskContext
 import org.redisson.api.RStream
 import org.redisson.api.RedissonClient
 import org.redisson.api.stream.StreamAddArgs
-import org.redisson.api.stream.StreamEntryId
 import org.redisson.client.codec.StringCodec
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -60,7 +59,7 @@ class RedisStreamPublisher(
         )
 
         // XADD to stream
-        val messageId = stream.add(eventMap)
+        val messageId = stream.add(StreamAddArgs.entries(eventMap))
 
         log.info(
             "[RedisStreamPublisher] Published event: stream={}, eventId={}, messageId={}",

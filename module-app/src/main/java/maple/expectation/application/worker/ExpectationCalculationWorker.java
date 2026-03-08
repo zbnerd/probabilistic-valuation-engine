@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.expectation.EquipmentExpectationServiceV4;
-import maple.expectation.application.service.expectation.event.MongoSyncEventPublisherInterface;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
 import maple.expectation.application.service.expectation.queue.QueuePriority;
@@ -55,10 +54,6 @@ public class ExpectationCalculationWorker implements Runnable {
   private final CheckedLogicExecutor checkedExecutor;
   private final Counter processedCounter;
   private final Counter errorCounter;
-
-  // Optional query side component
-  @org.springframework.beans.factory.annotation.Autowired(required = false)
-  private MongoSyncEventPublisherInterface eventPublisher;
 
   public ExpectationCalculationWorker(
       ExpectationCalculationQueue queue,
@@ -176,11 +171,6 @@ public class ExpectationCalculationWorker implements Runnable {
           EquipmentExpectationResponseV4 response =
               expectationService.calculateExpectation(
                   task.getUserIgn(), task.isForceRecalculation());
-
-          // Publish event to query side if enabled
-          if (eventPublisher != null) {
-            eventPublisher.publishCalculationCompleted(task.getTaskId(), response);
-          }
 
           processedCounter.increment();
           log.info(

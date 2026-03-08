@@ -155,7 +155,7 @@ class JwtTokenProvider(
         // Even though verifyWith() validates signature, we explicitly check the algorithm
         // to prevent attacks like alg:none or algorithm switching
         val headerAlgorithm = jws.header.algorithm
-        require(headerAlgorithm == Jwts.SIG.HS256.id()) {
+        check(headerAlgorithm == Jwts.SIG.HS256.id()) {
             "JWT algorithm mismatch: expected HS256, got $headerAlgorithm. Possible algorithm confusion attack."
         }
 

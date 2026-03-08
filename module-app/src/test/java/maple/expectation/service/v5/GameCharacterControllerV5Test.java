@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
-import maple.expectation.application.service.expectation.event.MongoSyncEventPublisherInterface;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView;

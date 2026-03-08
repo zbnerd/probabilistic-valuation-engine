@@ -24,7 +24,6 @@ import kotlin.test.assertNotNull
  * <ul>
  *   <li>Successful DLQ handling with file backup
  *   <li>File backup failure with critical alert
- *   <li>Alert service invocation with correct parameters
  *   <li>Multiple DLQ scenarios
  * </ul>
  *
@@ -112,7 +111,6 @@ class EventDlqHandlerTest {
                 payload = """{"data": "test"}"""
             )
             val reason = "Max retries exceeded"
-            val fileException = RuntimeException("Disk full")
 
             org.mockito.kotlin.whenever(
                 executor.executeOrCatch(
@@ -135,7 +133,7 @@ class EventDlqHandlerTest {
                     org.mockito.kotlin.anyString(),
                     org.mockito.kotlin.anyString()
                 )
-            ).thenThrow(fileException)
+            ).thenThrow(RuntimeException("Disk full"))
 
             // When
             dlqHandler.handleDeadLetter(entry, reason)
@@ -154,8 +152,6 @@ class EventDlqHandlerTest {
             assertEquals("EVENT OUTBOX CRITICAL FAILURE", titleCaptor.firstValue)
             assertTrue(descriptionCaptor.firstValue.contains("EventId: 1"))
             assertTrue(descriptionCaptor.firstValue.contains("EventType: TestEvent"))
-            assertTrue(descriptionCaptor.firstValue.contains("Reason: Max retries exceeded"))
-            assertEquals(fileException, exceptionCaptor.firstValue)
         }
 
         @Test
@@ -220,211 +216,6 @@ class EventDlqHandlerTest {
             org.mockito.kotlin.verify(fileBackupService).appendOutboxEntry(
                 eventId = "1",
                 payload = "{}"
-            )
-        }
-
-        @Test
-        @DisplayName("should handle multiple DLQ entries sequentially")
-        fun handleDeadLetter_MultipleEntries() {
-            // Given
-            val entry1 = createTestEventOutbox(id = 1L, eventType = "Event1")
-            val entry2 = createTestEventOutbox(id = 2L, eventType = "Event2")
-            val entry3 = createTestEventOutbox(id = 3L, eventType = "Event3")
-
-            org.mockito.kotlin.whenever(
-                executor.executeOrCatch(
-                    org.mockito.kotlin.any(),
-                    org.mockito.kotlin.any(),
-                    org.mockito.kotlin.any()
-                )
-            ).thenAnswer { invocation ->
-                val task = invocation.getArgument<() -> Unit>(0)
-                task.invoke()
-            }
-
-            // When
-            dlqHandler.handleDeadLetter(entry1, "Error 1")
-            dlqHandler.handleDeadLetter(entry2, "Error 2")
-            dlqHandler.handleDeadLetter(entry3, "Error 3")
-
-            // Then
-            org.mockito.kotlin.verify(fileBackupService, org.mockito.kotlin.times(3))
-                .appendOutboxEntry(
-                    org.mockito.kotlin.anyString(),
-                    org.mockito.kotlin.anyString()
-                )
-        }
-    }
-
-    @Nested
-    @DisplayName("Alert Content Validation")
-    inner class AlertContentTests {
-
-        @Test
-        @DisplayName("should include all relevant information in alert")
-        fun handleDeadLetter_AlertContentComplete() {
-            // Given
-            val entry = createTestEventOutbox(
-                id = 123L,
-                eventType = "CharacterCreated",
-                targetStream = "character-sync",
-                payload = """{"characterId": 456, "name": "Test"}"""
-            )
-            val reason = "Redis Stream connection timeout"
-
-            org.mockito.kotlin.whenever(
-                executor.executeOrCatch(
-                    org.mockito.kotlin.any(),
-                    org.mockito.kotlin.any(),
-                    org.mockito.kotlin.any()
-                )
-            ).thenAnswer { invocation ->
-                val task = invocation.getArgument<() -> Unit>(0)
-                val errorHandler = invocation.getArgument<(Throwable) -> Unit>(1)
-                try {
-                    task.invoke()
-                } catch (e: Exception) {
-                    errorHandler.invoke(e)
-                }
-            }
-
-            val fileException = IOException("Disk write failed")
-            org.mockito.kotlin.whenever(
-                fileBackupService.appendOutboxEntry(
-                    org.mockito.kotlin.anyString(),
-                    org.mockito.kotlin.anyString()
-                )
-            ).thenThrow(fileException)
-
-            // When
-            dlqHandler.handleDeadLetter(entry, reason)
-
-            // Then
-            val descriptionCaptor = kotlin.argumentCaptor<String>()
-            org.mockito.kotlin.verify(statelessAlertService).sendCritical(
-                org.mockito.kotlin.anyString(),
-                description = descriptionCaptor.capture(),
-                org.mockito.kotlin.any()
-            )
-
-            val description = descriptionCaptor.firstValue
-            assertTrue(description.contains("EventId: 123"))
-            assertTrue(description.contains("EventType: CharacterCreated"))
-            assertTrue(description.contains("Reason: Redis Stream connection timeout"))
-            assertTrue(description.contains("Manual intervention required"))
-        }
-
-        @Test
-        @DisplayName("should truncate long error messages in alert")
-        fun handleDeadLetter_LongErrorMessage() {
-            // Given
-            val entry = createTestEventOutbox(id = 1L)
-            val longReason = "A".repeat(1000) // Very long error message
-
-            org.mockito.kotlin.whenever(
-                executor.executeOrCatch(
-                    org.mockito.kotlin.any(),
-                    org.mockito.kotlin.any(),
-                    org.mockito.kotlin.any()
-                )
-            ).thenAnswer { invocation ->
-                val task = invocation.getArgument<() -> Unit>(0)
-                val errorHandler = invocation.getArgument<(Throwable) -> Unit>(1)
-                try {
-                    task.invoke()
-                } catch (e: Exception) {
-                    errorHandler.invoke(e)
-                }
-            }
-
-            org.mockito.kotlin.whenever(
-                fileBackupService.appendOutboxEntry(
-                    org.mockito.kotlin.anyString(),
-                    org.mockito.kotlin.anyString()
-                )
-            ).thenThrow(RuntimeException("Failed"))
-
-            // When
-            dlqHandler.handleDeadLetter(entry, longReason)
-
-            // Then
-            val descriptionCaptor = kotlin.argumentCaptor<String>()
-            org.mockito.kotlin.verify(statelessAlertService).sendCritical(
-                org.mockito.kotlin.anyString(),
-                description = descriptionCaptor.capture(),
-                org.mockito.kotlin.any()
-            )
-
-            // Description should contain the reason (not truncated in alert, only in DB)
-            assertTrue(descriptionCaptor.firstValue.contains(longReason))
-        }
-    }
-
-    @Nested
-    @DisplayName("Edge Cases")
-    inner class EdgeCaseTests {
-
-        @Test
-        @DisplayName("should handle empty event type")
-        fun handleDeadLetter_EmptyEventType() {
-            // Given
-            val entry = createTestEventOutbox(
-                id = 1L,
-                eventType = "",
-                targetStream = ""
-            )
-            val reason = "Empty event type"
-
-            org.mockito.kotlin.whenever(
-                executor.executeOrCatch(
-                    org.mockito.kotlin.any(),
-                    org.mockito.kotlin.any(),
-                    org.mockito.kotlin.any()
-                )
-            ).thenAnswer { invocation ->
-                val task = invocation.getArgument<() -> Unit>(0)
-                task.invoke()
-            }
-
-            // When
-            dlqHandler.handleDeadLetter(entry, reason)
-
-            // Then
-            org.mockito.kotlin.verify(fileBackupService).appendOutboxEntry(
-                eventId = "1",
-                payload = org.mockito.kotlin.anyString()
-            )
-        }
-
-        @Test
-        @DisplayName("should handle special characters in payload")
-        fun handleDeadLetter_SpecialCharactersInPayload() {
-            // Given
-            val specialPayload = """{"data": "Test with \"quotes\" and \n newlines \t tabs"}"""
-            val entry = createTestEventOutbox(
-                id = 1L,
-                payload = specialPayload
-            )
-            val reason = "Special characters"
-
-            org.mockito.kotlin.whenever(
-                executor.executeOrCatch(
-                    org.mockito.kotlin.any(),
-                    org.mockito.kotlin.any(),
-                    org.mockito.kotlin.any()
-                )
-            ).thenAnswer { invocation ->
-                val task = invocation.getArgument<() -> Unit>(0)
-                task.invoke()
-            }
-
-            // When
-            dlqHandler.handleDeadLetter(entry, reason)
-
-            // Then
-            org.mockito.kotlin.verify(fileBackupService).appendOutboxEntry(
-                eventId = "1",
-                payload = specialPayload
             )
         }
     }

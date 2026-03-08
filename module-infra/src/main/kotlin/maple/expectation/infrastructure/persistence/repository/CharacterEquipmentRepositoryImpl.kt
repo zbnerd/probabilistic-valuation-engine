@@ -26,7 +26,7 @@ open class CharacterEquipmentRepositoryImpl(
     private val jdbcBatchUpsertRepository: JdbcBatchUpsertRepository,
 ) : DomainCharacterEquipmentRepository {
 
-    @Transactional(readOnly = true)
+    @Transactional("transactionManager", readOnly = true)
     @Nullable
     override fun findById(characterId: CharacterId): CharacterEquipment? {
         requireNotNull(characterId) { "CharacterId cannot be null" }
@@ -66,7 +66,7 @@ open class CharacterEquipmentRepositoryImpl(
         jpaRepo.deleteById(characterId.value)
     }
 
-    @Transactional(readOnly = true)
+    @Transactional("transactionManager", readOnly = true)
     override fun existsById(characterId: CharacterId): Boolean {
         requireNotNull(characterId) { "CharacterId cannot be null" }
         return jpaRepo.existsById(characterId.value)

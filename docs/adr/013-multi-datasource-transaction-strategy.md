@@ -1,133 +1,136 @@
 # ADR-013: Multi-DataSource Transaction Strategy
 
-**Status:** Accepted
-**Date:** 2026-03-08
-**Issue:** P1-11, #158
+## Status
+Accepted (2026-03-08)
 
 ## Context
+MapleExpectation currently operates with a single datasource (MySQL/JPA) for transactional operations. However, the roadmap includes:
 
-The application currently uses a single MySQL/JPA datasource for all persistent operations. However, the V5 CQRS architecture introduces MongoDB as a read model store, and future plans include MongoDB read replicas for query scalability.
+1. **V5 CQRS Implementation**: MongoDB for read models (conditionally enabled via `v5.enabled=true`)
+2. **MongoDB Read Replicas**: Planned for scaling read operations
+3. **Multi-Database Transactions**: Need to coordinate transactions across MySQL and MongoDB
 
 ### Current State
-- **Primary DataSource:** MySQL/JPA (`transactionManager`)
-- **All Repositories:** Use `@Transactional` without explicit qualifier
-- **Risk:** Transaction ambiguity when multiple transaction managers exist
+- **Single TransactionManager**: `transactionManager` (MySQL/JPA)
+- **Implicit Transaction Binding**: Most repositories use `@Transactional` without explicit qualifiers
+- **MongoDB**: Conditionally enabled, separate configuration in `MongoDBConfig.kt`
 
-### Future State (MongoDB Read Replicas)
-- **Secondary TransactionManager:** `mongoTransactionManager`
-- **CQRS Pattern:** Write to MySQL, Read from MongoDB
-- **Challenge:** Explicit transaction manager qualification required
+### Problem
+When multiple transaction managers exist in the application context, Spring requires explicit qualifiers to resolve ambiguity:
+
+```kotlin
+// Ambiguous when multiple TransactionManager beans exist
+@Transactional
+fun save(data: Data) { ... }
+
+// Explicit qualifier required
+@Transactional("transactionManager")
+fun save(data: Data) { ... }
+```
+
+Without explicit qualifiers, Spring throws:
+```
+org.springframework.beans.factory.NoUniqueBeanDefinitionException:
+No qualifying bean of type 'PlatformTransactionManager' available:
+expected single matching bean but found 2: transactionManager, mongoTransactionManager
+```
 
 ## Decision
 
-All JPA repository implementations MUST use explicit `@Transactional("transactionManager")` qualifier to prevent ambiguity in multi-datasource environments.
-
-### Implementation Pattern
+### 1. Explicit TransactionManager Qualifiers
+All JPA repositories MUST use explicit `"transactionManager"` qualifier:
 
 ```kotlin
 @Repository
-@Transactional("transactionManager")  // ← Explicit qualifier required
-open class CharacterEquipmentRepositoryImpl(
-    private val jpaRepo: CharacterEquipmentJpaRepository,
-) : DomainCharacterEquipmentRepository {
-
-    @Transactional(readOnly = true)  // Inherits "transactionManager" from class
-    override fun findById(id: CharacterId): CharacterEquipment? {
-        return jpaRepo.findById(id.value).map { it.toDomain() }.orElse(null)
-    }
+@Transactional("transactionManager")
+open class GameCharacterRepositoryImpl(
+    private val jpaRepo: GameCharacterJpaRepository,
+) : DomainGameCharacterRepository {
+    // All methods inherit "transactionManager" qualifier
 }
 ```
 
-### Method-Level Override
+### 2. Class-Level @Transactional Strategy
+Apply `@Transactional("transactionManager")` at the class level:
+- Reduces boilerplate
+- Ensures all methods use the correct transaction manager
+- Allows method-level overrides for specific propagation behaviors
 
-When a specific method needs different transaction behavior:
+### 3. Method-Level Overrides
+For methods requiring specific propagation (e.g., `REQUIRES_NEW`):
 
 ```kotlin
 @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW)
-fun upsertSummary(...) {
-    // Independent transaction
-}
+fun upsertExpectationSummary(...) { ... }
 ```
 
-## Architecture
+### 4. Read-Only Transactions
+Use explicit qualifier with read-only flag:
 
-### Transaction Manager Beans
+```kotlin
+@Transactional("transactionManager", readOnly = true)
+fun findById(id: Long): Entity? { ... }
+```
+
+### 5. Future MongoDB Transaction Manager
+When MongoDB read replicas are added, create a separate transaction manager:
 
 ```kotlin
 @Configuration
-class TransactionConfig {
-
+class MongoDBTransactionConfig {
     @Bean
-    @Primary
-    fun transactionTemplate(transactionManager: PlatformTransactionManager): TransactionTemplate {
-        return TransactionTemplate(transactionManager)  // MySQL/JPA
+    fun mongoTransactionManager(
+        dbFactory: MongoDatabaseFactory
+    ): MongoTransactionManager {
+        return MongoTransactionManager(dbFactory)
     }
-
-    // Future: MongoDB transaction manager
-    // @Bean
-    // fun mongoTransactionTemplate(mongoTransactionManager): TransactionTemplate {
-    //     return TransactionTemplate(mongoTransactionManager)
-    // }
 }
 ```
 
-### Repository Classification
-
-| Repository Type | Transaction Manager | Usage |
-|----------------|---------------------|-------|
-| JPA Repositories | `transactionManager` | MySQL read/write |
-| MongoDB Repositories (Future) | `mongoTransactionManager` | MongoDB read model |
-
-## Migration Path
-
-### Phase 1: Current (Single DataSource)
-- ✅ All JPA repositories use `@Transactional("transactionManager")`
-- ✅ No transaction ambiguity
-- ✅ Ready for MongoDB addition
-
-### Phase 2: MongoDB Read Model (Planned)
-1. Add `mongoTransactionManager` bean
-2. MongoDB repositories use `@Transactional("mongoTransactionManager")`
-3. MySQL repositories continue using `@Transactional("transactionManager")`
-
-### Phase 3: Read Replicas (Future)
-- MongoDB secondaries for read scalability
-- Read concern: `majority` (strong consistency)
-- Write concern: `majority` (durability)
-
-## Benefits
-
-1. **No Ambiguity:** Explicit qualifiers prevent Spring transaction manager confusion
-2. **Migration Ready:** Infrastructure prepared for multi-datasource architecture
-3. **Clear Intent:** Each repository declares its transaction manager explicitly
-4. **Type Safety:** Compilation-time verification of transaction manager usage
+MongoDB repositories will then use:
+```kotlin
+@Transactional("mongoTransactionManager")
+fun saveView(view: CharacterView) { ... }
+```
 
 ## Consequences
 
 ### Positive
-- ✅ Clear transaction boundary definitions
-- ✅ No runtime ambiguity errors
-- ✅ Ready for MongoDB read replicas
-- ✅ Supports CQRS pattern migration
+- **Future-Proof**: Ready for multi-datasource migration without code changes
+- **Explicit Intent**: Clear which datasource each repository uses
+- **No Runtime Errors**: Prevents `NoUniqueBeanDefinitionException`
+- **Backward Compatible**: Works with single datasource configuration
 
 ### Negative
-- ⚠️ Slightly verbose annotation syntax
-- ⚠️ Must remember to add qualifier to new repositories
+- **Verbose Slightly**: More boilerplate than implicit `@Transactional`
+- **Migration Effort**: Required updating all existing repository implementations
 
-### Mitigation
-- Code review checklist: Verify `@Transactional("transactionManager")` on new repositories
-- IDE templates: Pre-configure annotation with qualifier
-- ArchUnit rules: Enforce explicit qualifier usage
+### Neutral
+- **Documentation**: Self-documenting code shows transaction boundaries clearly
 
-## Related ADRs
+## Implementation
 
-- [ADR-004: Module Core Migration](ADR-004-module-core-migration.md)
-- [ADR-019: N+1 Query Optimization](019-n-plus-one-query-optimization.md)
-- [V5 Stateless Architecture](../00_Start_Here/ROADMAP.md#phase-5)
+### Files Modified
+1. `TransactionConfig.kt`: Added multi-datasource documentation
+2. `GameCharacterRepositoryImpl.kt`: Added explicit qualifier
+3. `CharacterEquipmentRepositoryImpl.kt`: Added explicit qualifier
+4. `CharacterLikeRepositoryImpl.kt`: Added explicit qualifier
+5. `NexonCharacterRepositoryImpl.kt`: Added explicit qualifier
+6. `EquipmentExpectationSummaryRepository.kt`: Added explicit qualifier (already present)
+
+### Migration Path
+1. ✅ Add explicit qualifiers to all JPA repositories
+2. ✅ Document current single-datasource architecture
+3. ⏳ Add `mongoTransactionManager` when enabling read replicas
+4. ⏳ Update MongoDB repositories to use `"mongoTransactionManager"`
+
+## Related Issues
+- **P1-11**: TransactionManager Multi-DataSource Support
+- **V5 CQRS**: MongoDB read model implementation
+- **Issue #158**: TransactionTemplate configuration
 
 ## References
-
-- [Issue #158: Expectation API 캐시 타겟 전환](https://github.com/issue/158)
-- [P1-11: TransactionManager Multi-DataSource Support](https://github.com/issue/P1-11)
-- [Spring Data MongoDB: Transaction Management](https://docs.spring.io/spring-data/mongodb/docs/current/reference/html/#transactions)
-- [CQRS Pattern with Spring Boot](https://spring.io/blog/2023/11/08/cqrs-with-spring-boot)
+- [Spring Data MongoDB Reference - Transaction Management](https://docs.spring.io/spring-data/mongodb/docs/current/reference/html/#transactions)
+- [Spring Framework - Multiple Transaction Managers](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/annotations.html#tx-multiple-tx-mgrs-with-attransactional)
+- [TransactionConfig.kt](../../module-infra/src/main/kotlin/maple/expectation/infrastructure/config/TransactionConfig.kt)
+- [MongoDBConfig.kt](../../module-infra/src/main/kotlin/maple/expectation/infrastructure/mongodb/MongoDBConfig.kt)

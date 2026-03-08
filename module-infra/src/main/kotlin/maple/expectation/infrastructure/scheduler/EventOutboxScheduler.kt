@@ -56,7 +56,12 @@ class EventOutboxScheduler(
         executor.executeVoidJava(
             {
                 val batchSize = properties.batchSize
-                val pendingEvents = eventOutboxRepository.findPendingForProcessing(batchSize)
+                val now = LocalDateTime.now()
+                val pendingEvents = eventOutboxRepository.findPendingWithLock(
+                    listOf(EventOutboxStatus.PENDING),
+                    now,
+                    PageRequest.of(0, batchSize)
+                )
 
                 if (pendingEvents.isNotEmpty()) {
                     log.info("[EventOutbox] Processing {} pending events", pendingEvents.size)

@@ -1,34 +1,16 @@
 package maple.expectation.service.v5;
 
-import maple.expectation.application.service.expectation.event.MongoSyncEventPublisherInterface;
-import maple.expectation.application.service.expectation.event.MongoSyncEventPublisherStub;
-import maple.expectation.infrastructure.executor.LogicExecutor;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 
 /**
  * V5 CQRS Test Configuration
  *
  * <p>Provides test-specific beans for V5 integration tests.
  *
- * <ul>
- *   <li>MongoSyncEventPublisherStub: Stub implementation that doesn't require Redis
- *   <li>Mock MongoTemplate: For MongoDB operations without actual MongoDB instance
- * </ul>
+ * <p>NOTE: MongoSyncEventPublisherStub removed as part of P0-1 dual-write vulnerability fix. Event
+ * publishing now uses TransactionalEventPublisher via EventOutbox pattern.
  */
 @TestConfiguration
 public class V5TestConfiguration {
-
-  /**
-   * Stub implementation of MongoSyncEventPublisher for testing.
-   *
-   * <p>This stub doesn't actually publish to Redis Stream, allowing tests to run without Redis
-   * infrastructure.
-   */
-  @Bean
-  @Primary
-  public MongoSyncEventPublisherInterface mongoSyncEventPublisherStub(LogicExecutor executor) {
-    return new MongoSyncEventPublisherStub(executor);
-  }
+  // Test-specific beans can be added here as needed
 }

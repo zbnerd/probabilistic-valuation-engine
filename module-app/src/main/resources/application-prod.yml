@@ -59,9 +59,9 @@ spring:
   data:
     mongodb:
       # Read from secondaries when available (reduces primary load)
-      # read-preference: secondaryPreferred
+      read-preference: secondaryPreferred
       # Strong consistency: only read committed data replicated to majority
-      # read-concern: majority
+      read-concern: majority
 
 # Issue #284 DoD: Redis 장애 시 1000 RPS fallback 용량
 # NOTE: Main Pool(50) + Lock Pool(50) = 100 total (RDS max_connections 고려)
@@ -69,15 +69,24 @@ lock:
   datasource:
     pool-size: 50
 
-# Thread Pool 최적화 (P1-7: t3.small 2vCPU 기준)
+# Thread Pool 최적화 (P2-25: t3.small 2vCPU 기준)
+# 규칙: 모든 executor는 1:2 core:max 비율 준수
 executor:
   equipment:
-    core-pool-size: 16
+    core-pool-size: 16    # I/O-bound: 2vCPU × 8 (API 호출, DB)
     max-pool-size: 32
     queue-capacity: 500
   preset:
-    core-pool-size: 6     # CPU-bound: 2vCPU × 3
+    core-pool-size: 6     # CPU-bound: 2vCPU × 3 (계산 작업)
     max-pool-size: 12
+    queue-capacity: 200
+  alert:
+    core-pool-size: 2     # Background: 최소 설정 (저우선도 알림)
+    max-pool-size: 4
+    queue-capacity: 200
+  expectation:
+    core-pool-size: 4     # Compute: I/O-bound × 2 (파싱/계산/외부 호출)
+    max-pool-size: 8
     queue-capacity: 200
 
 # Issue #278: Scale-out 환경 실시간 좋아요 동기화 (prod)

@@ -5,6 +5,7 @@ import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.web.dto.response.CharacterResponse
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
@@ -18,7 +19,11 @@ import java.util.concurrent.CompletableFuture
  *
  * **ADR-005 Hexagonal Architecture:**
  * - GameCharacterPort: 캐릭터 조회
+ *
+ * **Issue #151: Bean Validation 적용**
+ * - @Validated: 클래스 레벨 검증 활성화 (@PathVariable 검증)
  */
+@Validated
 @RestController
 @RequestMapping("/api/v1/characters")
 class GameCharacterControllerV1(

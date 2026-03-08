@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -25,7 +26,12 @@ import java.util.concurrent.CompletableFuture
  * **ADR-005 Hexagonal Architecture**
  * - ExpectationV4Port: 기대값 계산
  * - PopularCharacterTrackerPort: 인기 캐릭터 추적
+ *
+ * **Issue #151: Bean Validation 적용**
+ * - @Validated: 클래스 레벨 검증 활성화
+ * - @NotBlank: @PathVariable IGN 검증
  */
+@Validated
 @RestController
 @RequestMapping("/api/v4/characters")
 class GameCharacterControllerV4(

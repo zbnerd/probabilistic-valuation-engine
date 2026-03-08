@@ -19,6 +19,12 @@ spring:
     hikari:
       maximum-pool-size: 25  # Match Tomcat threads (prevent connection starvation)
       minimum-idle: 5  # Allow dynamic scaling (save ~50-100MB RAM during low traffic)
+      leak-detection-threshold: 60000  # P2 Unit 7: Log warning if connection held > 60s
+      # P2 Unit 7: JMX monitoring for HikariCP metrics (connections, pending, latency)
+      register-mbeans: true
+      # P2 Unit 7: Pool sizing formula: (CPU cores × 2) + effective_disk_count
+      # t3.small (2 vCPUs): (2 × 2) + 1 = 5 base, scaled to 25 for I/O-bound workload
+      # Formula: threads.max = maximum-pool-size to prevent connection waits
 
   jpa:
     open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지

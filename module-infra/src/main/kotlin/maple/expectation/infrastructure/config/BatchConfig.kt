@@ -31,6 +31,13 @@ import org.springframework.transaction.PlatformTransactionManager
  *   <li>Job injected directly into BatchJobRecoveryScheduler (no JobRegistry)
  * </ul>
  *
+ * <h3>Unit 5: Batch-Realtime Race Condition Fix</h3>
+ *
+ * <ul>
+ *   <li>BatchOptimisticLockListener: Stage and swap pattern for atomic updates
+ *   <li>Prevents batch from overwriting realtime updates
+ * </ul>
+ *
  * <h4>CLAUDE.md 준수사항</h4>
  *
  * <ul>
@@ -42,12 +49,14 @@ import org.springframework.transaction.PlatformTransactionManager
  * @see maple.expectation.infrastructure.batch.reader.OcidReader
  * @see maple.expectation.infrastructure.batch.writer.LowPriorityQueueWriter
  * @see maple.expectation.infrastructure.batch.listener.BatchJobRecoveryListener
+ * @see maple.expectation.infrastructure.batch.listener.BatchOptimisticLockListener
  */
 @Configuration
 class BatchConfig(
     private val jobRepository: JobRepository,
     private val recoveryListener: BatchJobRecoveryListener,
-    private val metricsLogger: BatchMetricsLogger
+    private val metricsLogger: BatchMetricsLogger,
+    private val optimisticLockListener: BatchOptimisticLockListener?
 ) {
 
     companion object {
@@ -67,16 +76,27 @@ class BatchConfig(
      *   <li>Job injected directly into BatchJobRecoveryScheduler (no JobRegistry)
      * </ul>
      *
+     * <h4>Unit 5 Integration</h4>
+     *
+     * <ul>
+     *   <li>BatchOptimisticLockListener: Stage and swap pattern (optional)
+     *   <li>Prevents batch from overwriting realtime updates
+     * </ul>
+     *
      * @param ocidRefreshStep OCID 갱신 스텝
      * @return Job 인스턴스
      */
     @Bean
     fun equipmentRefreshJob(ocidRefreshStep: Step): Job {
-        return JobBuilder("equipmentRefreshJob", jobRepository)
+        val jobBuilder = JobBuilder("equipmentRefreshJob", jobRepository)
             .start(ocidRefreshStep)
             .listener(recoveryListener)
             .listener(metricsLogger)
-            .build()
+
+        // Add optimistic lock listener if available (Unit 5)
+        optimisticLockListener?.let { jobBuilder.listener(it) }
+
+        return jobBuilder.build()
     }
 
     /**

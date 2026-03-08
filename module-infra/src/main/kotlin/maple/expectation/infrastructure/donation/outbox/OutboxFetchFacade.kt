@@ -39,7 +39,7 @@ class OutboxFetchFacade(
      *
      * @return 잠긴 Outbox 항목 목록
      */
-    @Transactional(isolation = Isolation.READ_COMMITTED)
+    @Transactional("transactionManager", isolation = Isolation.READ_COMMITTED)
     fun fetchAndLock(): List<DonationOutbox> {
         val pending = outboxRepository.findPendingWithLock(
             listOf(OutboxStatus.PENDING, OutboxStatus.FAILED),

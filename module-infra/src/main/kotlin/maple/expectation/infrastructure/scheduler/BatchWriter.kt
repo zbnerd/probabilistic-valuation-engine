@@ -47,7 +47,7 @@ class BatchWriter(
      * **Transactional:** Entire batch is atomic (all or nothing).
      */
     @Scheduled(fixedRate = 5000)
-    @Transactional
+    @Transactional("transactionManager")
     fun processBatch() {
         val context = TaskContext.of("BatchWriter", "ProcessBatch")
 

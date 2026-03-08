@@ -37,7 +37,7 @@ class EventOutboxFetchFacade(
      *
      * @return 잠긴 EventOutbox 항목 목록
      */
-    @Transactional(isolation = Isolation.READ_COMMITTED)
+    @Transactional("transactionManager", isolation = Isolation.READ_COMMITTED)
     fun fetchAndLock(): List<maple.expectation.domain.v2.EventOutbox> {
         val pending = eventOutboxRepository.findPendingWithLock(
             listOf(

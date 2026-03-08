@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  */
 @Service
-@Transactional
+@Transactional("transactionManager")
 public class EquipmentApplicationService {
 
   private final CharacterEquipmentRepository equipmentRepository;
@@ -65,7 +65,7 @@ public class EquipmentApplicationService {
    * @param characterId the character identifier
    * @return Optional containing the equipment if found
    */
-  @Transactional(readOnly = true)
+  @Transactional("transactionManager", readOnly = true)
   public Optional<CharacterEquipment> findEquipment(CharacterId characterId) {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");
@@ -83,7 +83,7 @@ public class EquipmentApplicationService {
    * @param characterId the character identifier
    * @return Optional containing fresh equipment if found
    */
-  @Transactional(readOnly = true)
+  @Transactional("transactionManager", readOnly = true)
   public Optional<CharacterEquipment> findFreshEquipment(CharacterId characterId) {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");

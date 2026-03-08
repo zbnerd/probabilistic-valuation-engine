@@ -15,8 +15,16 @@ spring:
       leak-detection-threshold: 60000
 
   jpa:
+    open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지
     hibernate:
       ddl-auto: create-drop  # CI에서는 매번 새로 생성
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
 
   # Redis 단일 모드 (CI 환경용 - Sentinel 미사용)
   data:

@@ -38,7 +38,7 @@ public class CharacterAsyncService {
    * <p>별도 빈으로 분리하여 @Async AOP 프록시 활성화
    */
   @Async
-  @Transactional
+  @Transactional("transactionManager")
   public void saveCharacterBasicInfoAsync(GameCharacter character) {
     executor.executeVoidJava(
         () -> {

@@ -16,8 +16,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *   <li>{@link EnableAsync} - 비동기 메서드 실행 지원
  * </ul>
  *
- * <p><b>비동기 실행 설정:</b> Spring의 기본 {@code ThreadPoolTaskExecutor}를 사용하여 {@code @Async} 메서드를 비동기로
- * 실행합니다.
+ * <p><b>비동기 실행 설정:</b> 커스텀 {@code taskExecutor} Bean을 사용하여 {@code @Async} 메서드를 비동기로 실행합니다. Spring의
+ * 기본 SimpleAsyncTaskExecutor 대신 ThreadPoolTaskExecutor를 사용하여 스레드 풀링을 제공합니다.
  *
  * <p>Equipment 비동기 저장과 같은 I/O 작업을 효율적으로 처리하며, Graceful Shutdown 시 모든 작업이 완료될 때까지 대기합니다.
  *

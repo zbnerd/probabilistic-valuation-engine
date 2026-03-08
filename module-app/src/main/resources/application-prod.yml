@@ -3,8 +3,8 @@
 server:
   tomcat:
     threads:
-      max: 50  # Match HikariCP prod maximum-pool-size
-    max-http-post-size: 2MB
+      max: 25  # t3.small (2 vCPUs): 10-12 threads per vCPU for I/O-bound workloads
+    max-http-post-size: 262144  # 256KB (#266 P1-4: JSON DoS 방어)
 
 spring:
   config:
@@ -17,10 +17,8 @@ spring:
     password: ${DB_PASSWORD}
 
     hikari:
-      maximum-pool-size: 50
-      minimum-idle: 50
-      # P2 Unit 5: Connection leak detection - log warning if connection held > 60s
-      leak-detection-threshold: 60000
+      maximum-pool-size: 25  # Match Tomcat threads (prevent connection starvation)
+      minimum-idle: 5  # Allow dynamic scaling (save ~50-100MB RAM during low traffic)
 
   jpa:
     open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지
@@ -93,6 +91,10 @@ executor:
     core-pool-size: 4     # Compute: I/O-bound × 2 (파싱/계산/외부 호출)
     max-pool-size: 8
     queue-capacity: 200
+  async:
+    core-pool-size: 4     # @Async methods: 1:2 ratio
+    max-pool-size: 8
+    queue-capacity: 100
 
 # Issue #278: Scale-out 환경 실시간 좋아요 동기화 (prod)
 like:

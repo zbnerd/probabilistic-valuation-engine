@@ -226,7 +226,9 @@ nexon:
 
 server:
   shutdown: graceful
-  # Tomcat 스레드 설정 제거 - Virtual Thread 모드에서는 불필요
+  # Tomcat thread pool configured in profile-specific files (local/prod/ci)
+  # Virtual Thread enabled (spring.threads.virtual.enabled=true) but Tomcat threads
+  # still needed for platform thread workers that handle I/O-bound requests
   tomcat:
     max-http-post-size: 262144  # 256KB (#266 P1-4: JSON DoS 방어)
     uri-encoding: UTF-8  # 한글 URL 지원
@@ -525,6 +527,10 @@ executor:
     core-pool-size: 4
     max-pool-size: 8
     queue-capacity: 200
+  async:
+    core-pool-size: 4
+    max-pool-size: 8
+    queue-capacity: 100
 
 # Outbox 설정 (P1-8: 하드코딩 제거 → YAML 외부화)
 outbox:

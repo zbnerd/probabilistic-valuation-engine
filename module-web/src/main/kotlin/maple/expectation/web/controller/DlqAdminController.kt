@@ -15,7 +15,10 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.validation.annotation.Validated
 import java.util.concurrent.CompletableFuture
+import jakarta.validation.constraints.Min
+import jakarta.validation.constraints.Max
 
 /**
  * DLQ 관리 API (Admin 전용) - ADR-005 이관
@@ -27,7 +30,11 @@ import java.util.concurrent.CompletableFuture
  * - DELETE /api/admin/dlq/{id} - DLQ 폐기
  * - GET /api/admin/dlq/count - DLQ 총 건수
  * - GET /api/admin/dlq/v2 - DLQ 목록 조회 (Cursor 방식)
+ *
+ * **Issue #151: Bean Validation 적용**
+ * - @Validated: 클래스 레벨 검증 활성화
  */
+@Validated
 @Tag(name = "DLQ Admin", description = "Dead Letter Queue 관리 API (Admin 전용)")
 @RestController
 @RequestMapping("/api/admin/dlq")

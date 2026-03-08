@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
@@ -29,7 +30,12 @@ import java.util.concurrent.ExecutorService
  *
  * API 목록:
  * - POST /api/v2/donation/coffee - Admin에게 커피 보내기
+ *
+ * **Issue #151: Bean Validation 적용**
+ * - @Validated: 클래스 레벨 검증 활성화
+ * - @Valid: @RequestBody DTO 검증
  */
+@Validated
 @RestController
 @RequestMapping("/api/v2/donation")
 @Tag(name = "Donation", description = "도네이션(커피 후원) API")

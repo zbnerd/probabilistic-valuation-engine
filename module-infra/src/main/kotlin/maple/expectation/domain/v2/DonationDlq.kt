@@ -31,31 +31,24 @@ class DonationDlq {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null
-        private set
 
     @Column(nullable = false)
     var originalOutboxId: Long? = null
-        private set
 
     @Column(nullable = false, length = 50)
     var requestId: String? = null
-        private set
 
     @Column(nullable = false, length = 50)
     var eventType: String? = null
-        private set
 
     @Column(columnDefinition = "TEXT", nullable = false)
     var payload: String? = null
-        private set
 
     @Column(length = 500)
     var failureReason: String? = null
-        private set
 
     @Column(updatable = false)
     var movedAt: LocalDateTime? = null
-        private set
 
     private constructor()
 

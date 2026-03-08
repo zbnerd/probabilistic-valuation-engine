@@ -46,12 +46,32 @@ import java.util.concurrent.TimeUnit
  *   <li>{@link ExecutorMetricsConfigurator}: Micrometer 메트릭 등록
  *   <li>{@link TaskDecoratorFactory}: MDC + Cache Context 전파용 TaskDecorator 생성
  * </ul>
+ *
+ * <h4>P2-25 표준화</h4>
+ *
+ * <p>모든 ThreadPoolTaskExecutor는 {@link ExecutorProperties}를 통해 중앙 집중식 관리됩니다.
+ * corePoolSize:maxPoolSize는 항상 1:2 비율을 유지해야 합니다.
  */
 @Configuration
-@EnableConfigurationProperties(ExecutorLoggingProperties::class)
-class ExecutorConfig(private val meterRegistry: MeterRegistry) {
+@EnableConfigurationProperties(ExecutorLoggingProperties::class, ExecutorProperties::class)
+class ExecutorConfig(
+  private val meterRegistry: MeterRegistry,
+  private val executorProperties: ExecutorProperties
+) {
 
   private val log = LoggerFactory.getLogger(ExecutorConfig::class.java)
+
+  init {
+    // P2-25: 시작 시점에 1:2 비율 검증
+    executorProperties.validateAll()
+    log.info(
+      "[ExecutorConfig] P2-25 ThreadPool configuration validated: equipment={}/{}, preset={}/{}, alert={}/{}, expectation={}/{}",
+      executorProperties.equipment.corePoolSize, executorProperties.equipment.maxPoolSize,
+      executorProperties.preset.corePoolSize, executorProperties.preset.maxPoolSize,
+      executorProperties.alert.corePoolSize, executorProperties.alert.maxPoolSize,
+      executorProperties.expectation.corePoolSize, executorProperties.expectation.maxPoolSize
+    )
+  }
 
   // ==================== LogicExecutor Beans ====================
 
@@ -146,14 +166,19 @@ class ExecutorConfig(private val meterRegistry: MeterRegistry) {
    *   <li><b>RejectedExecution</b>: AbortPolicy + 샘플링 로깅 + rejected 메트릭
    *   <li><b>Shutdown</b>: 대기 없이 즉시 종료 (알림은 flush 불필요)
    * </ul>
+   *
+   * <h4>P2-25 표준화</h4>
+   *
+   * <p>설정은 {@code executor.alert} 속성에서 로드됩니다.
    */
   @Bean(name = ["alertTaskExecutor"])
   @ConditionalOnMissingBean(name = ["alertTaskExecutor"])
   fun alertTaskExecutor(contextPropagatingDecorator: TaskDecorator): Executor {
+    val config = executorProperties.alert
     val executor = ThreadPoolTaskExecutor()
-    executor.corePoolSize = 2
-    executor.maxPoolSize = 4
-    executor.queueCapacity = 200
+    executor.corePoolSize = config.corePoolSize
+    executor.maxPoolSize = config.maxPoolSize
+    executor.queueCapacity = config.queueCapacity
     executor.setThreadNamePrefix("alert-")
     executor.setAllowCoreThreadTimeOut(true)
     executor.setKeepAliveSeconds(30)
@@ -171,6 +196,11 @@ class ExecutorConfig(private val meterRegistry: MeterRegistry) {
 
     // Micrometer ExecutorServiceMetrics 등록
     executorMetricsConfigurator().registerExecutorMetrics(executor, "alert")
+
+    log.info(
+      "[ExecutorConfig] alertTaskExecutor initialized: core={}, max={}, queue={}",
+      config.corePoolSize, config.maxPoolSize, config.queueCapacity
+    )
 
     return executor
   }
@@ -255,13 +285,18 @@ class ExecutorConfig(private val meterRegistry: MeterRegistry) {
    *       TimeoutException으로 정리
    *   <li><b>inFlight 누수 방지</b>: @Scheduled 백그라운드 정리 대신 실제 데드라인 강제
    * </ul>
+   *
+   * <h4>P2-25 표준화</h4>
+   *
+   * <p>설정은 {@code executor.expectation} 속성에서 로드됩니다.
    */
   @Bean(name = ["expectationComputeExecutor"])
   fun expectationComputeExecutor(contextPropagatingDecorator: TaskDecorator): Executor {
+    val config = executorProperties.expectation
     val executor = ThreadPoolTaskExecutor()
-    executor.corePoolSize = 4
-    executor.maxPoolSize = 8
-    executor.queueCapacity = 200
+    executor.corePoolSize = config.corePoolSize
+    executor.maxPoolSize = config.maxPoolSize
+    executor.queueCapacity = config.queueCapacity
     executor.setThreadNamePrefix("expectation-")
     executor.setAllowCoreThreadTimeOut(true)
     executor.setKeepAliveSeconds(30)
@@ -280,6 +315,11 @@ class ExecutorConfig(private val meterRegistry: MeterRegistry) {
 
     // Micrometer ExecutorServiceMetrics 등록
     executorMetricsConfigurator().registerExecutorMetrics(executor, "expectation.compute")
+
+    log.info(
+      "[ExecutorConfig] expectationComputeExecutor initialized: core={}, max={}, queue={}",
+      config.corePoolSize, config.maxPoolSize, config.queueCapacity
+    )
 
     return executor
   }

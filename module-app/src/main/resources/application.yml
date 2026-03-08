@@ -502,6 +502,12 @@ lock:
     dual-run-duration: 7d  # Dual-Run 기간 (Phase 1)
     monitoring-enabled: true  # 마이그레이션 메트릭 활성화
 
+# Thread Pool 표준화 설정 (P2-25)
+# CPU 기반 설정 가이드라인:
+# - 2 vCPU: equipment=8:16, preset=6:12, alert=2:4, expectation=4:8
+# - 4 vCPU: equipment=16:32, preset=12:24, alert=2:4, expectation=4:8
+# - 8 vCPU: equipment=32:64, preset=24:48, alert=2:4, expectation=4:8
+# 규칙: 모든 executor는 1:2 core:max 비율 준수
 executor:
   equipment:
     core-pool-size: 8
@@ -511,6 +517,14 @@ executor:
     core-pool-size: 12
     max-pool-size: 24
     queue-capacity: 100
+  alert:
+    core-pool-size: 2
+    max-pool-size: 4
+    queue-capacity: 200
+  expectation:
+    core-pool-size: 4
+    max-pool-size: 8
+    queue-capacity: 200
 
 # Outbox 설정 (P1-8: 하드코딩 제거 → YAML 외부화)
 outbox:

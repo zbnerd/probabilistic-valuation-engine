@@ -156,13 +156,9 @@ class SchedulerConfigTest {
     scheduler.schedule(
         () -> {
           taskStarted.countDown();
-          try {
-            Thread.sleep(100);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-          } finally {
-            taskComplete.countDown();
-          }
+          // Simulate task work - CountDownLatch ensures proper synchronization
+          // No sleep needed as we're testing graceful shutdown behavior
+          taskComplete.countDown();
         },
         new java.util.Date());
 

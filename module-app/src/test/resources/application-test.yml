@@ -10,8 +10,16 @@ spring:
     password:
 
   jpa:
+    open-in-view: false  # P2-24: Explicitly disable OSIV for tests
     hibernate:
       ddl-auto: create-drop
+      default_batch_fetch_size: 100  # ADR-019: N+1 Query Optimization
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
     show-sql: false
 
   # 🔥 [Issue #77] 테스트 환경: Sentinel 비활성화, 단일 Redis 사용

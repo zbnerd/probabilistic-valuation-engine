@@ -3,7 +3,6 @@ package maple.expectation.application.service.expectation.event;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.core.event.CalculationCompletedEvent;
 import maple.expectation.domain.v2.EventOutbox;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -82,13 +81,12 @@ public class TransactionalEventPublisher {
    * <p>Uses LogicExecutor.executeWithRecovery() for Section 12 compliance.
    */
   private void saveToOutbox(CalculationCompletedEvent event) {
-    executor.executeWithRecovery(
+    executor.executeWithFallback(
         () -> {
           String payload = serializePayload(event.response());
           String eventId = event.eventId();
 
-          EventOutbox outbox =
-              EventOutbox.create(eventId, EVENT_TYPE_CALCULATED, payload, TARGET_STREAM);
+          EventOutbox outbox = EventOutbox.create(TARGET_STREAM, EVENT_TYPE_CALCULATED, payload);
 
           eventOutboxRepository.save(outbox);
 

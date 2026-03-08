@@ -45,11 +45,9 @@ class EventOutbox {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null
-        private set
 
     @Version
     var version: Long? = null
-        private set
 
     /**
      * Target Redis Stream Name
@@ -59,15 +57,12 @@ class EventOutbox {
      */
     @Column(nullable = false, length = 100)
     var targetStream: String? = null
-        private set
 
     @Column(nullable = false, length = 50)
     var eventType: String? = null
-        private set
 
     @Column(columnDefinition = "TEXT", nullable = false)
     var payload: String? = null
-        private set
 
     /**
      * Content Hash (distributed environment safety)
@@ -76,41 +71,31 @@ class EventOutbox {
      */
     @Column(nullable = false, length = 64)
     var contentHash: String? = null
-        private set
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     var status: EventOutboxStatus = EventOutboxStatus.PENDING
-        private set
 
     @Column(length = 100)
     var lockedBy: String? = null
-        private set
 
     var lockedAt: LocalDateTime? = null
-        private set
 
     @Column(nullable = false)
     var retryCount: Int = 0
-        private set
 
     @Column(nullable = false)
     var maxRetries: Int = 3
-        private set
 
     @Column(length = 500)
     var lastError: String? = null
-        private set
 
     var nextRetryAt: LocalDateTime? = null
-        private set
 
     @Column(updatable = false)
     var createdAt: LocalDateTime? = null
-        private set
 
     var updatedAt: LocalDateTime? = null
-        private set
 
     /** Event Outbox Status */
     enum class EventOutboxStatus {

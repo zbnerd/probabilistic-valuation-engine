@@ -4,9 +4,9 @@
 // ========================================
 
 plugins {
-	id 'org.jetbrains.kotlin.jvm'
-	id 'org.jetbrains.kotlin.plugin.spring'
-	id 'org.jetbrains.kotlin.plugin.jpa'
+	alias(libs.plugins.kotlin.jvm)
+	alias(libs.plugins.kotlin.spring)
+	alias(libs.plugins.kotlin.jpa)
 }
 
 // Integration Test Source Set Configuration
@@ -38,82 +38,82 @@ dependencies {
 	implementation project(':module-common')
 
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
-	implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
+	implementation(libs.kotlin.stdlib)
 
 	// Lombok
-	compileOnly 'org.projectlombok:lombok:1.18.30'
-	annotationProcessor 'org.projectlombok:lombok:1.18.30'
-	testCompileOnly 'org.projectlombok:lombok:1.18.30'
-	testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
-	integrationTestCompileOnly 'org.projectlombok:lombok:1.18.30'
-	integrationTestAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+	compileOnly(libs.lombok)
+	annotationProcessor(libs.lombok)
+	testCompileOnly(libs.lombok)
+	testAnnotationProcessor(libs.lombok)
+	integrationTestCompileOnly(libs.lombok)
+	integrationTestAnnotationProcessor(libs.lombok)
 
 	// Spring Data JPA
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	runtimeOnly 'com.mysql:mysql-connector-j'
-	runtimeOnly 'com.h2database:h2'
+	implementation(libs.spring.boot.starter.data.jpa)
+	runtimeOnly(libs.mysql.connector.j)
+	runtimeOnly(libs.h2)
 
 	// MongoDB
-	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
-	implementation 'org.mongodb:mongodb-driver-sync:5.3.0'
+	implementation(libs.spring.boot.starter.data.mongodb)
+	implementation(libs.mongodb.driver.sync)
 
 	// Redis
-	implementation 'org.redisson:redisson-spring-boot-starter:3.48.0'
+	implementation(libs.redisson.spring.boot.starter)
 
 	// Caffeine Cache
-	implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+	implementation(libs.caffeine)
 
 	// Spring Boot (minimal)
-	implementation 'org.springframework.boot:spring-boot'
-	implementation 'org.springframework.boot:spring-boot-starter-aop'
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.springframework.boot:spring-boot-starter-webflux'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation(libs.spring.boot)
+	implementation(libs.spring.boot.starter.aop)
+	implementation(libs.spring.boot.starter.web)
+	implementation(libs.spring.boot.starter.webflux)
+	implementation(libs.spring.boot.starter.validation)
+	implementation(libs.spring.boot.starter.security)
+	implementation(libs.spring.boot.starter.actuator)
 
 	// Resilience4j
-	implementation 'io.github.resilience4j:resilience4j-spring-boot3'
+	implementation(libs.resilience4j.spring.boot3)
 
 	// OpenTelemetry (migrated from module-app for OpenTelemetryConfig)
-	implementation 'io.micrometer:micrometer-tracing-bridge-otel'
-	implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
-	implementation 'io.opentelemetry.contrib:opentelemetry-samplers:1.33.0-alpha'
+	implementation(libs.micrometer.tracing.bridge.otel)
+	implementation(libs.opentelemetry.exporter.otlp)
+	implementation(libs.opentelemetry.samplers)
 
 	// Bucket4j
-	implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
-	implementation 'com.bucket4j:bucket4j_jdk17-redisson:8.14.0'
+	implementation(libs.bucket4j.core)
+	implementation(libs.bucket4j.redisson)
 
 	// Jackson
-	implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
-	implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-csv'
+	implementation(libs.jackson.databind)
+	implementation(libs.jackson.dataformat.csv)
 
 	// Guava
-	implementation 'com.google.guava:guava:33.5.0-jre'
+	implementation(libs.guava)
 
 	// LangChain4j (for AI monitoring)
-	implementation 'dev.langchain4j:langchain4j-spring-boot-starter:0.29.0'
-	implementation 'dev.langchain4j:langchain4j-open-ai-spring-boot-starter:0.29.0'
+	implementation(libs.langchain4j.spring.boot.starter)
+	implementation(libs.langchain4j.open.ai.spring.boot.starter)
 
 	// Spring Batch (for equipment refresh job)
-	implementation 'org.springframework.boot:spring-boot-starter-batch'
+	implementation(libs.spring.boot.starter.batch)
 
 	// JWT
-	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
-	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+	implementation(libs.jjwt.api)
+	runtimeOnly(libs.jjwt.impl)
+	runtimeOnly(libs.jjwt.jackson)
 
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'org.testcontainers:mysql'
-	testImplementation 'org.testcontainers:mongodb'
+	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.testcontainers.mysql)
+	testImplementation(libs.testcontainers.mongodb)
 
 	// Integration Test Dependencies
-	integrationTestImplementation 'org.springframework.boot:spring-boot-starter-test'
-	integrationTestImplementation 'org.testcontainers:testcontainers'
-	integrationTestImplementation 'org.testcontainers:junit-jupiter'
-	integrationTestImplementation 'org.testcontainers:mysql'
-	integrationTestImplementation 'org.testcontainers:mongodb'
-	integrationTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	integrationTestImplementation(libs.spring.boot.starter.test)
+	integrationTestImplementation(libs.testcontainers)
+	integrationTestImplementation(libs.testcontainers.junit.jupiter)
+	integrationTestImplementation(libs.testcontainers.mysql)
+	integrationTestImplementation(libs.testcontainers.mongodb)
+	integrationTestRuntimeOnly(libs.junit.platform.launcher)
 }
 
 // Integration Test Task
@@ -191,4 +191,11 @@ tasks.named('compileIntegrationTestJava') {
 tasks.named("jar") {
 	enabled = true
 	archiveClassifier = "plain"
+}
+
+// allOpen configuration for JPA entities (required for proxy generation)
+allOpen {
+	annotation('jakarta.persistence.Entity')
+	annotation('jakarta.persistence.MappedSuperclass')
+	annotation('jakarta.persistence.Embeddable')
 }

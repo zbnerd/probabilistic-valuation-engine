@@ -7,14 +7,32 @@ import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 
 /**
- * 트랜잭션 설정 (Issue #158)
+ * 트랜잭션 설정 (Issue #158, P1-11)
  *
  * ## TransactionTemplate 정책
  *
  * - **transactionTemplate** (Primary): 범용 읽기/쓰기 템플릿
  * - **readOnlyTransactionTemplate**: Expectation 경로 전용 읽기 전용
  *
+ * ## Multi-DataSource Architecture (P1-11)
+ *
+ * ### Current State (Single DataSource)
+ * - **Primary TransactionManager**: `transactionManager` (MySQL/JPA)
+ * - All JPA repositories use explicit `@Transactional("transactionManager")` qualifier
+ * - Prevents ambiguity when multiple transaction managers exist
+ *
+ * ### Future State (MongoDB Read Replicas)
+ * - **Secondary TransactionManager**: `mongoTransactionManager` (MongoDB)
+ * - MongoDB read replicas will require separate transaction management
+ * - All repositories already qualified to support multi-datasource migration
+ *
+ * ### Migration Path
+ * 1. Add `mongoTransactionManager` bean when enabling read replicas
+ * 2. MongoDB repositories will use `@Transactional("mongoTransactionManager")`
+ * 3. MySQL repositories continue using `@Transactional("transactionManager")`
+ *
  * @see [Issue #158](https://github.com/issue/158): Expectation API 캐시 타겟 전환
+ * @see <a href="../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
  */
 @Configuration
 class TransactionConfig {

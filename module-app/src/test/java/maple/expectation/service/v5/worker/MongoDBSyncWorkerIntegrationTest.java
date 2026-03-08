@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.Map;
 import maple.expectation.ExpectationApplication;
-import maple.expectation.application.service.expectation.event.MongoSyncEventPublisherInterface;
 import maple.expectation.application.service.expectation.event.ViewTransformer;
 import maple.expectation.core.event.ExpectationCalculationCompletedEvent;
 import maple.expectation.infrastructure.mongodb.CharacterValuationRepository;
@@ -88,8 +87,6 @@ class MongoDBSyncWorkerIntegrationTest extends AppIntegrationTestSupport {
   @Autowired private CharacterViewQueryService queryService;
 
   @Autowired private CharacterValuationRepository repository;
-
-  @Autowired private MongoSyncEventPublisherInterface eventPublisher;
 
   @Autowired private ViewTransformer viewTransformer;
 

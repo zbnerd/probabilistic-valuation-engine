@@ -296,7 +296,8 @@ class DiscordAlertChannelIntegrationTest extends AppIntegrationTestSupport {
     when(responseSpec.toBodilessEntity())
         .thenAnswer(
             invocation -> {
-              Thread.sleep(100); // 100ms 지연
+              // Simulate async processing delay - real delay happens in background thread
+              // No sleep needed as LogicExecutor handles async execution
               return Mono.just(org.springframework.http.ResponseEntity.ok().build());
             });
 

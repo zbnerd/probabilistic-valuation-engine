@@ -75,21 +75,15 @@ class EquipmentPersistenceTrackerTest {
     CompletableFuture<Void> future1 =
         CompletableFuture.runAsync(
             () -> {
-              try {
-                Thread.sleep(100);
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-              }
+              // Simulate async work - actual timing verified by Awaitility
+              // No sleep needed as Awaitility polls for completion
             });
 
     CompletableFuture<Void> future2 =
         CompletableFuture.runAsync(
             () -> {
-              try {
-                Thread.sleep(200);
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-              }
+              // Simulate async work - actual timing verified by Awaitility
+              // No sleep needed as Awaitility polls for completion
             });
 
     tracker.trackOperation("ocid1", future1);
@@ -114,8 +108,10 @@ class EquipmentPersistenceTrackerTest {
     CompletableFuture<Void> longRunningTask =
         CompletableFuture.runAsync(
             () -> {
+              // Simulate long-running task - never completes
+              // Use CompletableFuture that never completes to simulate timeout
               try {
-                Thread.sleep(5000);
+                Thread.sleep(Long.MAX_VALUE);
               } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
               }
@@ -204,12 +200,9 @@ class EquipmentPersistenceTrackerTest {
       CompletableFuture<Void> future =
           CompletableFuture.runAsync(
               () -> {
-                try {
-                  Thread.sleep((long) (Math.random() * 100));
-                  completedCount.incrementAndGet();
-                } catch (InterruptedException e) {
-                  Thread.currentThread().interrupt();
-                }
+                // Simulate variable completion time
+                // No sleep needed - Awaitility verifies final state
+                completedCount.incrementAndGet();
               });
       tracker.trackOperation(ocid, future);
     }

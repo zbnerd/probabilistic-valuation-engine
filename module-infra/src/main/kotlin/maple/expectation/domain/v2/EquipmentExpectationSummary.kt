@@ -54,7 +54,6 @@ class EquipmentExpectationSummary {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null
-        private set
 
     /**
      * 연관된 게임 캐릭터 ID
@@ -63,7 +62,6 @@ class EquipmentExpectationSummary {
      */
     @Column(name = "game_character_id", nullable = false)
     var gameCharacterId: Long? = null
-        private set
 
     /**
      * 프리셋 번호 (1, 2, 3)
@@ -72,7 +70,6 @@ class EquipmentExpectationSummary {
      */
     @Column(name = "preset_no", nullable = false)
     var presetNo: Int? = null
-        private set
 
     /**
      * 총 기대 비용 (모든 강화 합산)
@@ -81,37 +78,30 @@ class EquipmentExpectationSummary {
      */
     @Column(name = "total_expected_cost", nullable = false, precision = 20, scale = 2)
     var totalExpectedCost: BigDecimal? = null
-        private set
 
     /** 블랙큐브 기대 비용 (윗잠재) */
     @Column(name = "black_cube_cost", nullable = false, precision = 20, scale = 2)
     var blackCubeCost: BigDecimal? = null
-        private set
 
     /** 레드큐브 기대 비용 (윗잠재 보조) */
     @Column(name = "red_cube_cost", nullable = false, precision = 20, scale = 2)
     var redCubeCost: BigDecimal? = null
-        private set
 
     /** 에디셔널큐브 기대 비용 (아랫잠재) */
     @Column(name = "additional_cube_cost", nullable = false, precision = 20, scale = 2)
     var additionalCubeCost: BigDecimal? = null
-        private set
 
     /** 스타포스 기대 비용 */
     @Column(name = "starforce_cost", nullable = false, precision = 20, scale = 2)
     var starforceCost: BigDecimal? = null
-        private set
 
     /** 계산 시점 */
     @Column(name = "calculated_at", nullable = false)
     var calculatedAt: LocalDateTime? = null
-        private set
 
     /** 낙관적 락 버전 (동시성 제어) */
     @Version
     var version: Long? = null
-        private set
 
     private constructor()
 

@@ -36,63 +36,48 @@ class NexonApiOutbox {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null
-        private set
 
     @Version
     var version: Long? = null
-        private set
 
     @Column(nullable = false, unique = true, length = 100)
     var requestId: String? = null
-        private set
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     var eventType: NexonApiEventType? = null
-        private set
 
     @Column(columnDefinition = "TEXT", nullable = false)
     var payload: String? = null
-        private set
 
     /** Content Hash (무결성 검증) */
     @Column(nullable = false, length = 64)
     var contentHash: String? = null
-        private set
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     var status: OutboxStatus = OutboxStatus.PENDING
-        private set
 
     @Column(length = 100)
     var lockedBy: String? = null
-        private set
 
     var lockedAt: LocalDateTime? = null
-        private set
 
     @Column(nullable = false)
     var retryCount: Int = 0
-        private set
 
     @Column(nullable = false)
     var maxRetries: Int = 3
-        private set
 
     @Column(length = 500)
     var lastError: String? = null
-        private set
 
     var nextRetryAt: LocalDateTime? = null
-        private set
 
     @Column(updatable = false)
     var createdAt: LocalDateTime? = null
-        private set
 
     var updatedAt: LocalDateTime? = null
-        private set
 
     /** Nexon API 이벤트 타입 */
     enum class NexonApiEventType {

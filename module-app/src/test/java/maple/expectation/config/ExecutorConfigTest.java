@@ -33,8 +33,15 @@ class ExecutorConfigTest {
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
     noOpDecorator = runnable -> runnable; // 테스트용 No-Op Decorator
-    // Create default ExecutorProperties for testing
+    // Create ExecutorProperties with pool-specific configurations for testing
     executorProperties = new maple.expectation.infrastructure.config.ExecutorProperties();
+    // Override expectation pool to match documented values (core=4, max=8)
+    executorProperties.getExpectation().setCorePoolSize(4);
+    executorProperties.getExpectation().setMaxPoolSize(8);
+    // Override alert pool to match documented values (core=2, max=4)
+    executorProperties.getAlert().setCorePoolSize(2);
+    executorProperties.getAlert().setMaxPoolSize(4);
+    // Equipment pool uses default (core=8, max=16) - no override needed
   }
 
   @Test

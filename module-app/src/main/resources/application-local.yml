@@ -1,3 +1,9 @@
+server:
+  tomcat:
+    threads:
+      max: 100  # Match HikariCP local maximum-pool-size
+    max-http-post-size: 2MB
+
 spring:
   config:
     activate:
@@ -11,6 +17,8 @@ spring:
     hikari:
       maximum-pool-size: 100
       minimum-idle: 50
+      # P2 Unit 5: Connection leak detection - log warning if connection held > 60s
+      leak-detection-threshold: 60000
       # [P0-N07 Fix] MDL Freeze 방지 - 로컬 환경도 동일 설정
       connection-init-sql: "SET SESSION lock_wait_timeout = 10"
 

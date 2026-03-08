@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.event.outbox
 
-import maple.expectation.core.port.out.OutboxProcessorPort
+import maple.expectation.core.port.out.EventProcessorPort
 import maple.expectation.domain.v2.EventOutbox
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction
 import maple.expectation.infrastructure.config.OutboxProperties
@@ -45,7 +45,7 @@ class EventOutboxProcessor(
     private val properties: OutboxProperties,
     private val eventOutboxRepository: EventOutboxRepository,
     private val redisStreamPublisher: RedisStreamPublisher
-) : OutboxProcessorPort {
+) : EventProcessorPort {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -57,23 +57,21 @@ class EventOutboxProcessor(
      * 2. Phase 2 (항목별 TX): 개별 처리 (실패 시 다른 항목에 영향 없음)
      */
     @ObservedTransaction("scheduler.event.outbox.poll")
-    override fun pollAndProcess() {
+    override fun pollAndProcess(): Int {
         val context = TaskContext.of("EventOutbox", "PollAndProcess", properties.instanceId)
 
-        executor.executeOrCatch(
+        return executor.executeOrDefault(
             {
                 val locked = fetchFacade.fetchAndLock()
                 if (locked.isEmpty()) {
-                    return@executeOrCatch
+                    return@executeOrDefault 0
                 }
 
                 log.info("[EventOutbox] 처리 시작: {}건", locked.size)
                 processBatch(locked)
+                locked.size
             },
-            { e ->
-                log.error("[EventOutbox] 폴링 실패", e)
-                metrics.incrementPollFailure()
-            },
+            0,
             context
         )
     }

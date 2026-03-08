@@ -264,10 +264,39 @@ public class MongoDBSyncWorker implements Runnable {
           }
 
           // Process the message normally
-          processMessage(messageId, data);
-          stream.ack(CONSUMER_GROUP, messageId);
-          processedCounter.increment();
-          return ProcessingResult.RECOVERED;
+          try {
+            processMessage(messageId, data);
+            stream.ack(CONSUMER_GROUP, messageId);
+            processedCounter.increment();
+            return ProcessingResult.RECOVERED;
+          } catch (Exception e) {
+            // Increment retry count in message data
+            int newRetryCount = retryCount + 1;
+            log.warn(
+                "[MongoDBSyncWorker] Message processing failed (attempt {}/{}): messageId={}, error={}",
+                newRetryCount,
+                MAX_RETRIES,
+                messageId,
+                e.getMessage());
+
+            // Store retry count in metadata (will be picked up by XAUTOCLAIM)
+            // Note: Redis Streams doesn't support updating message payload directly
+            // We rely on the fact that unacknowledged messages stay in PEL
+            // and will be reclaimed by XAUTOCLAIM with increased delivery count
+
+            // Check if we should move to DLQ based on Redis delivery count
+            // Redis XINFO stream PEL shows delivery count internally
+            if (newRetryCount >= MAX_RETRIES) {
+              log.warn(
+                  "[MongoDBSyncWorker] Max retries exceeded for message: {}, moving to DLQ",
+                  messageId);
+              return handlePoisonPill(stream, messageId, data);
+            }
+
+            // Don't ACK - leave in PEL for XAUTOCLAIM to reclaim
+            errorCounter.increment();
+            return ProcessingResult.FAILED;
+          }
         },
         ProcessingResult.FAILED,
         TaskContext.of("MongoDBSyncWorker", "ProcessWithRetry", messageId.toString()));

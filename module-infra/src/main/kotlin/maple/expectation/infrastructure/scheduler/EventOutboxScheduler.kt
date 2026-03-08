@@ -157,15 +157,16 @@ class EventOutboxScheduler(
      * 여기서는 메트릭만 업데이트
      */
     private fun processEvents(events: List<maple.expectation.domain.v2.EventOutbox>) {
-        val completedCount = eventOutboxRepository.countByStatusIn(listOf(EventOutboxStatus.COMPLETED))
-        val failedCount = eventOutboxRepository.countByStatusIn(listOf(EventOutboxStatus.FAILED))
+        // Count only from the current batch to avoid accumulating historical data
+        val completedCount = events.count { it.status == EventOutboxStatus.COMPLETED }
+        val failedCount = events.count { it.status == EventOutboxStatus.FAILED }
 
         if (completedCount > 0) {
-            metrics.incrementCompleted(completedCount.toInt())
+            metrics.incrementCompleted(completedCount)
         }
 
         if (failedCount > 0) {
-            metrics.incrementFailed(failedCount.toInt())
+            metrics.incrementFailed(failedCount)
         }
     }
 }

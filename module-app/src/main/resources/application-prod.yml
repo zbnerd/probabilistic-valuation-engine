@@ -31,6 +31,13 @@ spring:
     redis:
       host: localhost
       port: 6379
+    # P1-10: MongoDB Eventual Consistency Configuration
+    # In replica set: secondaryPreferred for read scalability, majority for strong consistency
+    mongodb:
+      # Read from secondaries when available (reduces primary load)
+      read-preference: secondaryPreferred
+      # Strong consistency: only read committed data replicated to majority
+      read-concern: majority
 
 # Discord Alert Configuration
 alert:
@@ -52,16 +59,6 @@ app:
   buffer:
     redis:
       enabled: true  # Scale-out 모드 활성화
-
-# P1-10: MongoDB Eventual Consistency Configuration
-# In replica set: secondaryPreferred for read scalability, majority for strong consistency
-spring:
-  data:
-    mongodb:
-      # Read from secondaries when available (reduces primary load)
-      read-preference: secondaryPreferred
-      # Strong consistency: only read committed data replicated to majority
-      read-concern: majority
 
 # Issue #284 DoD: Redis 장애 시 1000 RPS fallback 용량
 # NOTE: Main Pool(50) + Lock Pool(50) = 100 total (RDS max_connections 고려)

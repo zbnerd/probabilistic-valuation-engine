@@ -205,11 +205,14 @@ class BatchCharacterViewService(
         )
     }
 
-    /** Rename MongoDB collection atomically. */
+    /** Rename MongoDB collection atomically using MongoTemplate. */
     private fun renameCollection(oldName: String, newName: String) {
         executor.executeVoid(
             {
-                mongoTemplate.db.getCollection(oldName).renameCollection(newName)
+                // Execute rename collection command
+                val command = org.bson.Document("renameCollection", oldName)
+                    .append("to", newName)
+                mongoTemplate.db.runCommand(command)
             },
             TaskContext.of("BatchMongo", "RenameCollection", "$oldName->$newName")
         )

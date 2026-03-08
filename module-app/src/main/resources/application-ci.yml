@@ -9,10 +9,12 @@ spring:
     password: ${DB_ROOT_PASSWORD:testpassword}
 
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
+      maximum-pool-size: 200  # P2 Unit 7: Match default Tomcat threads (200)
+      minimum-idle: 10
       # P2 Unit 5: Connection leak detection - log warning if connection held > 60s
       leak-detection-threshold: 60000
+      # P2 Unit 7: JMX monitoring for HikariCP metrics
+      register-mbeans: true
 
   jpa:
     open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지

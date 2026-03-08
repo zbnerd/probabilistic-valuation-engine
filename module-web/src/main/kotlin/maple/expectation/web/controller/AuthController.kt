@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
@@ -31,7 +32,12 @@ import java.util.concurrent.CompletableFuture
  * - POST /auth/refresh - 토큰 갱신 (Issue #279)
  * - DELETE /auth/logout - 로그아웃 (세션 + Refresh Token 삭제)
  * - GET /auth/me - 현재 사용자 정보 조회
+ *
+ * **Issue #151: Bean Validation 적용**
+ * - @Validated: 클래스 레벨 검증 활성화
+ * - @Valid: @RequestBody DTO 검증
  */
+@Validated
 @RestController
 @RequestMapping("/auth")
 class AuthController(

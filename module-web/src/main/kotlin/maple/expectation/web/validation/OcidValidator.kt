@@ -7,8 +7,8 @@ import jakarta.validation.ConstraintValidatorContext
  * 메이플스토리 OCID 검증 validator
  *
  * 검증 규칙:
- * 1. 정확히 64자
- * 2. 16진수만 허용 (a-f, A-F, 0-9)
+ * 1. 정확히 64자여야 함
+ * 2. 16진수 문자열 (0-9, a-f, A-F)
  */
 class OcidValidator : ConstraintValidator<ValidOcid, String> {
 
@@ -40,7 +40,7 @@ class OcidValidator : ConstraintValidator<ValidOcid, String> {
         if (!HEX_PATTERN.matches(trimmed)) {
             context?.disableDefaultConstraintViolation()
             context?.buildConstraintViolationWithTemplate(
-                "OCID는 16진수(a-f, A-F, 0-9)만 허용됩니다"
+                "OCID는 16진수 문자열이어야 합니다 (0-9, a-f, A-F만 허용)"
             )?.addConstraintViolation()
             return false
         }

@@ -1,6 +1,7 @@
 # PostgreSQL Local Configuration
 # Usage: ./gradlew bootRun --args='--spring.profiles.active=pglocal'
 # This profile uses PostgreSQL as the primary database instead of MySQL
+# Issue #547: PostgreSQL Migration
 
 server:
   tomcat:
@@ -38,18 +39,11 @@ spring:
         order_inserts: true
         order_updates: true
 
-  # Redis configuration (unchanged - cache remains on Redis)
+  # Redis Standalone 설정 (Sentinel 장애 시 폴백)
   data:
     redis:
       host: localhost
       port: 6379
-
-    # MongoDB configuration (unchanged - V5 CQRS read side)
-    mongodb:
-      host: localhost
-      port: 27017
-      database: maple_expectation_v5
-      auto-index-creation: true
 
   # Auth configuration
   auth:
@@ -70,16 +64,16 @@ spring:
     discord:
       webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
 
-# DP engine table validation configuration
+# Cube policy for local
 cube:
   table-mass:
     policy: LENIENT
 
-# Rate limiting disabled (for load testing)
+# Rate Limiting 비활성화 (부하 테스트용)
 ratelimit:
   enabled: false
 
-# CORS settings (Issue #172: local development environment)
+# CORS 설정 (Issue #172: 로컬 개발 환경)
 cors:
   allowed-origins:
     - "http://localhost:3000"
@@ -89,7 +83,7 @@ cors:
     - "http://127.0.0.1:3001"
     - "http://127.0.0.1:5173"
 
-# Issue #283 P0-2: In-Memory buffer for local environment
+# App configuration
 app:
   buffer:
     redis:
@@ -106,13 +100,12 @@ app:
     enabled: true
     query-side-enabled: true
 
-# ACL Phase 2: Scheduler Configuration
+# Scheduler Configuration
 scheduler:
   nexon-data-collection:
     enabled: false
     rate: 600000
     initial-delay: 30000
-
   like-sync:
     enabled: false
   expectation-sync:

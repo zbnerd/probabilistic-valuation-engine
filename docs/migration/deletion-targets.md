@@ -1,9 +1,21 @@
 # PostgreSQL Migration: Deletion Targets
 
+> **Last Updated**: 2026-03-09
+> **Branch**: `v2/postgresql-redesign`
+> **Related Issues**: #548, #547, #551
+
 ## Overview
+
 Files scheduled for deletion or migration during the PostgreSQL unification (Issue #548).
 
 **Important**: This is documentation ONLY. Do NOT delete any files until the corresponding migration phase is complete and verified.
+
+---
+
+## Phase 0: Foundation (Current Phase)
+
+### 삭제 불필요
+현재 단계는 Kotlin 변환 기반 구축만 수행하므로 삭제 대상 없음.
 
 ---
 
@@ -114,8 +126,6 @@ MySQL-specific resilience features will be removed:
 
 ---
 
----
-
 ## Phase 2: MongoDB -> PostgreSQL JSONB
 
 ### MongoDB Domain Models (module-infra/src/main/kotlin/maple/expectation/infrastructure/mongodb/)
@@ -169,8 +179,6 @@ V5 CQRS Read Side models using MongoDB:
 - [ ] Line 218: `mongodb_data` volume
 
 **Action**: Remove service after data migration.
-
----
 
 ---
 
@@ -302,6 +310,16 @@ V5 CQRS Read Side models using MongoDB:
 
 ---
 
+## Disabled Files (현재 비활성화된 파일)
+
+```
+module-core/src/test/java/maple/expectation/properties/DeterminismPropertiesTemplate.java.disabled
+module-infra/src/test/kotlin/maple/expectation/infrastructure/event/outbox/EventOutboxIntegrationTest.kt.disabled
+module-infra/src/test/kotlin/maple/expectation/infrastructure/event/outbox/EventOutboxProcessorTest.kt.disabled
+module-infra/src/test/kotlin/maple/expectation/infrastructure/event/outbox/EventDlqHandlerTest.kt.disabled
+module-infra/src/test/kotlin/maple/expectation/infrastructure/messaging/RedisStreamEventConsumerTest.kt.disabled
+```
+
 ---
 
 ## Application Configuration Changes
@@ -359,8 +377,6 @@ postgres:
 
 ---
 
----
-
 ## Dependencies (build.gradle.kts)
 
 ### Dependencies to REMOVE:
@@ -383,8 +399,6 @@ implementation("org.postgresql:postgresql")
 // PGMQ Java Client
 implementation("io.tembo:pgmq-java:0.9.0") // Verify latest version
 ```
-
----
 
 ---
 
@@ -425,14 +439,12 @@ All integration tests using MySQL or MongoDB containers will need updates:
 
 ---
 
----
-
 ## Migration Timeline
 
 | Phase | Duration | Target Date | Status |
 |-------|----------|-------------|--------|
-| **Phase 0** | Foundation | Week 1-2 | Pending |
-| - Docker Compose PostgreSQL + PGMQ setup | | | Blocked by #547 |
+| **Phase 0** | Foundation | Week 1-2 | In Progress |
+| - Docker Compose PostgreSQL + PGMQ setup | | | ✅ Done |
 | - Gradle dependencies update | | | Pending |
 | - Testcontainers PostgreSQL setup | | | Pending |
 | **Phase 1** | MySQL -> PostgreSQL | Week 3-4 | Pending |
@@ -454,8 +466,8 @@ All integration tests using MySQL or MongoDB containers will need updates:
 ## Dependencies
 
 ### Blocked By:
-- #547: Docker Compose PostgreSQL + PGMQ Setup (Phase 0)
-- ADR-001: PostgreSQL Single DB Strategy approval
+- #547: Docker Compose PostgreSQL + PGMQ Setup (Phase 0) - ✅ Done
+- ADR-001: PostgreSQL Single DB Strategy approval - ✅ Done
 
 ### Blocks:
 - None (this is a foundational document for all migration work)
@@ -499,12 +511,12 @@ Before deleting any file, verify:
 ## Related Documents
 
 - [ADR-001: PostgreSQL Single DB Strategy](../adr/001-postgresql-single-db-strategy.md)
-- [ADR-310: Redis Lock Migration](../01_ADR/ADR-310-redis-lock-migration.md)
-- [Issue #547: Docker Compose PostgreSQL + PGMQ](https://github.com/.../issues/547)
-- [Issue #548: PostgreSQL Migration](https://github.com/.../issues/548)
+- [Local DB Connection Guide](./local-db-connection-guide.md)
+- [IntelliJ Kotlin Conversion Guide](./intellij-kotlin-conversion-guide.md)
+- [Issue #547: Docker Compose PostgreSQL + PGMQ](https://github.com/zbnerd/probabilistic-valuation-engine/issues/547)
+- [Issue #548: PostgreSQL Migration](https://github.com/zbnerd/probabilistic-valuation-engine/issues/548)
 
 ---
 
 *Last Updated: 2026-03-09*
-*Document Version: 1.0*
-*Author: Claude Code (Team Unit 1)*
+*Document Version: 1.1*

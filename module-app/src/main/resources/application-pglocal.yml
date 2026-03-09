@@ -15,9 +15,9 @@ spring:
       on-profile: pglocal
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/maple_expectation?serverTimezone=Asia/Seoul
-    username: maple
-    password: ${DB_ROOT_PASSWORD}
+    url: jdbc:postgresql://localhost:5432/maple_expectation?currentSchema=public
+    username: ${DB_USERNAME:-maple}
+    password: ${DB_PASSWORD:-maple123}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -25,11 +25,13 @@ spring:
       minimum-idle: 50
       leak-detection-threshold: 60000
       register-mbeans: true
+      # PostgreSQL-specific connection settings
+      connection-init-sql: "SET statement_timeout = '30s'"
 
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate  # Use validate with PostgreSQL (schema managed by init.sql)
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -39,7 +41,7 @@ spring:
         order_inserts: true
         order_updates: true
 
-  # Redis Standalone 설정 (Sentinel 장애 시 폴백)
+  # Redis for cache, session, and lock (kept for these use cases)
   data:
     redis:
       host: localhost
@@ -64,12 +66,12 @@ spring:
     discord:
       webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
 
-# Cube policy for local
+# Cube policy for local (LENIENT for development)
 cube:
   table-mass:
     policy: LENIENT
 
-# Rate Limiting 비활성화 (부하 테스트용)
+# Rate Limiting disabled for local development
 ratelimit:
   enabled: false
 
@@ -87,9 +89,12 @@ cors:
 app:
   buffer:
     redis:
+      enabled: true  # Keep Redis for cache
+    postgres:
       enabled: true
+      unlogged-buffer-size: 10000
   event-publisher:
-    type: redis
+    type: redis  # Keep Redis for now, migrate to PGMQ later
   aop:
     trace:
       enabled: true
@@ -119,6 +124,20 @@ outbox:
     nexon-api-outbox:
       enabled: false
 
+# PGMQ Configuration (for future migration)
+pgmq:
+  enabled: true
+  queues:
+    v4-buffer:
+      name: v4_buffer_queue
+      retention: 86400  # 24 hours
+    v5-event:
+      name: v5_event_queue
+      retention: 604800  # 7 days
+    donation-outbox:
+      name: donation_outbox_queue
+      retention: 86400
+
 # Z.ai LangChain4j Configuration
 langchain4j:
   glm-4:
@@ -138,6 +157,11 @@ resilience4j:
         waitDurationInOpenState: 30s
         minimumNumberOfCalls: 5
         registerHealthIndicator: true
+      pgmq:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        minimumNumberOfCalls: 5
   retry:
     instances:
       discordWebhook:
@@ -147,6 +171,9 @@ resilience4j:
         retryExceptions:
           - org.springframework.web.reactive.function.client.WebClientRequestException
           - io.netty.channel.ConnectTimeoutException
+      pgmq:
+        maxAttempts: 3
+        waitDuration: 100ms
   timelimiter:
     instances:
       discordWebhook:

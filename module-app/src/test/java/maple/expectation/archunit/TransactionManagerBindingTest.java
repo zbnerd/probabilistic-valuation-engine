@@ -1,6 +1,5 @@
 package maple.expectation.archunit;
 
-import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;
@@ -116,15 +115,27 @@ class TransactionManagerBindingTest {
     }
   }
 
-  private String getTransactionalValue(JavaAnnotation<?> annotation) {
-    // Try to get the "value" attribute from @Transactional
-    try {
-      var value = annotation.get("value").getValue();
-      if (value instanceof String str && !str.isEmpty()) {
-        return str;
-      }
-    } catch (Exception e) {
-      // Value attribute not set or not accessible
+  private String getTransactionalValue(Transactional transactional) {
+    // Check both value() and transactionManager() attributes
+    // @Transactional("value") uses value()
+    // @Transactional(transactionManager = "value") uses transactionManager()
+    String value = transactional.value();
+    if (value != null && !value.isEmpty()) {
+      return value;
+    }
+    String transactionManager = transactional.transactionManager();
+    if (transactionManager != null && !transactionManager.isEmpty()) {
+      return transactionManager;
+    }
+    return null;
+  }
+
+  // Keep old method for backward compatibility with raw annotations
+  private String getTransactionalValue(Object annotation) {
+    // Handle Transactional annotation directly
+    if (annotation instanceof Transactional tx) {
+      String value = tx.value();
+      return (value != null && !value.isEmpty()) ? value : null;
     }
     return null;
   }

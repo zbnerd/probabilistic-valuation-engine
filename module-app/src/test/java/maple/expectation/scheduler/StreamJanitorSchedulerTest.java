@@ -5,9 +5,10 @@ import static org.mockito.Mockito.*;
 
 import maple.expectation.application.scheduler.StreamJanitorScheduler;
 import maple.expectation.application.worker.MongoDBSyncWorker;
+import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.executor.function.ThrowingSupplier;
+import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -67,7 +68,8 @@ class StreamJanitorSchedulerTest {
               }
             })
         .when(executor)
-        .executeOrCatch(any(ThrowingSupplier.class), any(), any(TaskContext.class));
+        .executeOrCatch(
+            any(ThrowingSupplier.class), any(ExceptionTranslator.class), any(TaskContext.class));
 
     scheduler = new StreamJanitorScheduler(mongoDBSyncWorker, executor);
   }

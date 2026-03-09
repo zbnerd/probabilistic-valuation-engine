@@ -111,16 +111,19 @@ class ExpectationCalculationQueueTest {
     assertThat(queue.size()).isEqualTo(0);
 
     // When/Then: Poll in separate thread should block
+    java.util.concurrent.CountDownLatch pollingStarted = new java.util.concurrent.CountDownLatch(1);
     Thread pollingThread =
         new Thread(
             () -> {
+              pollingStarted.countDown(); // Signal that we're now blocking on poll()
               ExpectationCalculationTask task = queue.poll(QueuePriority.HIGH, 5000);
               // If we reach here, task should not be null (blocking worked)
               assertNotNull(task);
             });
 
     pollingThread.start();
-    Thread.sleep(100); // Give thread time to start blocking
+    // Wait for polling thread to start blocking before interrupting
+    pollingStarted.await(5, java.util.concurrent.TimeUnit.SECONDS);
 
     // Clean up: Interrupt the polling thread
     pollingThread.interrupt();
@@ -150,14 +153,10 @@ class ExpectationCalculationQueueTest {
     Thread adderThread =
         new Thread(
             () -> {
-              try {
-                Thread.sleep(50);
-                ExpectationCalculationTask task =
-                    ExpectationCalculationTask.highPriority("delayed", false);
-                queue.offer(task);
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-              }
+              // Rely on poll(timeout) mechanism for timing
+              ExpectationCalculationTask task =
+                  ExpectationCalculationTask.highPriority("delayed", false);
+              queue.offer(task);
             });
 
     adderThread.start();

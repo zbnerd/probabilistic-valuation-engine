@@ -77,6 +77,6 @@ interface CharacterLikeJpaRepository : JpaRepository<CharacterLikeJpaEntity, Lon
    * @param likerAccountId account ID of user
    */
   @Modifying(clearAutomatically = true)
-  @Transactional
+  @Transactional("transactionManager")
   fun deleteByTargetOcidAndLikerAccountId(targetOcid: String?, likerAccountId: String?)
 }

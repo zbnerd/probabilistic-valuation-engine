@@ -46,12 +46,33 @@ import java.util.concurrent.TimeUnit
  *   <li>{@link ExecutorMetricsConfigurator}: Micrometer 메트릭 등록
  *   <li>{@link TaskDecoratorFactory}: MDC + Cache Context 전파용 TaskDecorator 생성
  * </ul>
+ *
+ * <h4>P2-25 표준화</h4>
+ *
+ * <p>모든 ThreadPoolTaskExecutor는 {@link ExecutorProperties}를 통해 중앙 집중식 관리됩니다.
+ * corePoolSize:maxPoolSize는 항상 1:2 비율을 유지해야 합니다.
  */
 @Configuration
-@EnableConfigurationProperties(ExecutorLoggingProperties::class)
-class ExecutorConfig(private val meterRegistry: MeterRegistry) {
+@EnableConfigurationProperties(ExecutorLoggingProperties::class, ExecutorProperties::class)
+class ExecutorConfig(
+  private val meterRegistry: MeterRegistry,
+  private val executorProperties: ExecutorProperties
+) {
 
   private val log = LoggerFactory.getLogger(ExecutorConfig::class.java)
+
+  init {
+    // P2-25: 시작 시점에 1:2 비율 검증
+    executorProperties.validateAll()
+    log.info(
+      "[ExecutorConfig] P2-25 ThreadPool configuration validated: equipment={}/{}, preset={}/{}, alert={}/{}, expectation={}/{}, async={}/{}",
+      executorProperties.equipment.corePoolSize, executorProperties.equipment.maxPoolSize,
+      executorProperties.preset.corePoolSize, executorProperties.preset.maxPoolSize,
+      executorProperties.alert.corePoolSize, executorProperties.alert.maxPoolSize,
+      executorProperties.expectation.corePoolSize, executorProperties.expectation.maxPoolSize,
+      executorProperties.async.corePoolSize, executorProperties.async.maxPoolSize
+    )
+  }
 
   // ==================== LogicExecutor Beans ====================
 
@@ -146,14 +167,19 @@ class ExecutorConfig(private val meterRegistry: MeterRegistry) {
    *   <li><b>RejectedExecution</b>: AbortPolicy + 샘플링 로깅 + rejected 메트릭
    *   <li><b>Shutdown</b>: 대기 없이 즉시 종료 (알림은 flush 불필요)
    * </ul>
+   *
+   * <h4>P2-25 표준화</h4>
+   *
+   * <p>설정은 {@code executor.alert} 속성에서 로드됩니다.
    */
   @Bean(name = ["alertTaskExecutor"])
   @ConditionalOnMissingBean(name = ["alertTaskExecutor"])
   fun alertTaskExecutor(contextPropagatingDecorator: TaskDecorator): Executor {
+    val config = executorProperties.alert
     val executor = ThreadPoolTaskExecutor()
-    executor.corePoolSize = 2
-    executor.maxPoolSize = 4
-    executor.queueCapacity = 200
+    executor.corePoolSize = config.corePoolSize
+    executor.maxPoolSize = config.maxPoolSize
+    executor.queueCapacity = config.queueCapacity
     executor.setThreadNamePrefix("alert-")
     executor.setAllowCoreThreadTimeOut(true)
     executor.setKeepAliveSeconds(30)
@@ -171,6 +197,11 @@ class ExecutorConfig(private val meterRegistry: MeterRegistry) {
 
     // Micrometer ExecutorServiceMetrics 등록
     executorMetricsConfigurator().registerExecutorMetrics(executor, "alert")
+
+    log.info(
+      "[ExecutorConfig] alertTaskExecutor initialized: core={}, max={}, queue={}",
+      config.corePoolSize, config.maxPoolSize, config.queueCapacity
+    )
 
     return executor
   }
@@ -246,6 +277,63 @@ class ExecutorConfig(private val meterRegistry: MeterRegistry) {
   }
 
   /**
+   * Default TaskExecutor for @Async methods (Unit 1: P2 Technical Debt)
+   *
+   * <p>Spring's default SimpleAsyncTaskExecutor creates a new thread for each task without pooling,
+   * which can lead to thread exhaustion under load. This custom executor provides proper pooling.
+   *
+   * <h4>Design Rationale:</h4>
+   *
+   * <ul>
+   *   <li><b>ThreadPoolTaskExecutor</b>: Reusable thread pool with bounded queue
+   *   <li><b>CallerRunsPolicy</b>: Backpressure - caller executes task when queue is full
+   *   <li><b>Context Propagation</b>: MDC and SecurityContext propagated via TaskDecorator
+   *   <li><b>Graceful Shutdown</b>: Wait for in-flight tasks to complete
+   * </ul>
+   *
+   * <h4>P2-25 Standardization</h4>
+   *
+   * <p>Configuration is loaded from {@code executor.async} properties with 1:2 core:max ratio.
+   *
+   * @return ThreadPoolTaskExecutor for @Async methods
+   * @see EnableAsync
+   */
+  @Bean(name = ["taskExecutor"])
+  @ConditionalOnMissingBean(name = ["taskExecutor"])
+  fun taskExecutor(contextPropagatingDecorator: TaskDecorator): Executor {
+    val config = executorProperties.async
+    val executor = ThreadPoolTaskExecutor()
+    executor.corePoolSize = config.corePoolSize
+    executor.maxPoolSize = config.maxPoolSize
+    executor.queueCapacity = config.queueCapacity
+    executor.setThreadNamePrefix("async-")
+    executor.setAllowCoreThreadTimeOut(true)
+    executor.setKeepAliveSeconds(30)
+
+    // 불변식 3: ThreadLocal 전파 (P0-4/B2)
+    executor.setTaskDecorator(contextPropagatingDecorator)
+
+    // CallerRunsPolicy: Backpressure - caller executes task when queue is full
+    executor.setRejectedExecutionHandler(java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy())
+
+    // Graceful Shutdown: 진행 중인 비동기 작업 완료 대기
+    executor.setWaitForTasksToCompleteOnShutdown(true)
+    executor.setAwaitTerminationSeconds(30)
+
+    executor.initialize()
+
+    // Micrometer ExecutorServiceMetrics 등록
+    executorMetricsConfigurator().registerExecutorMetrics(executor, "async")
+
+    log.info(
+      "[ExecutorConfig] taskExecutor initialized: core={}, max={}, queue={}",
+      config.corePoolSize, config.maxPoolSize, config.queueCapacity
+    )
+
+    return executor
+  }
+
+  /**
    * Expectation compute(파싱/계산/외부 호출 포함) 데드라인 강제를 위한 전용 Executor
    *
    * <h4>설계 의도</h4>
@@ -255,13 +343,18 @@ class ExecutorConfig(private val meterRegistry: MeterRegistry) {
    *       TimeoutException으로 정리
    *   <li><b>inFlight 누수 방지</b>: @Scheduled 백그라운드 정리 대신 실제 데드라인 강제
    * </ul>
+   *
+   * <h4>P2-25 표준화</h4>
+   *
+   * <p>설정은 {@code executor.expectation} 속성에서 로드됩니다.
    */
   @Bean(name = ["expectationComputeExecutor"])
   fun expectationComputeExecutor(contextPropagatingDecorator: TaskDecorator): Executor {
+    val config = executorProperties.expectation
     val executor = ThreadPoolTaskExecutor()
-    executor.corePoolSize = 4
-    executor.maxPoolSize = 8
-    executor.queueCapacity = 200
+    executor.corePoolSize = config.corePoolSize
+    executor.maxPoolSize = config.maxPoolSize
+    executor.queueCapacity = config.queueCapacity
     executor.setThreadNamePrefix("expectation-")
     executor.setAllowCoreThreadTimeOut(true)
     executor.setKeepAliveSeconds(30)
@@ -280,6 +373,11 @@ class ExecutorConfig(private val meterRegistry: MeterRegistry) {
 
     // Micrometer ExecutorServiceMetrics 등록
     executorMetricsConfigurator().registerExecutorMetrics(executor, "expectation.compute")
+
+    log.info(
+      "[ExecutorConfig] expectationComputeExecutor initialized: core={}, max={}, queue={}",
+      config.corePoolSize, config.maxPoolSize, config.queueCapacity
+    )
 
     return executor
   }

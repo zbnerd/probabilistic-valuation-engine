@@ -1,0 +1,221 @@
+// ========================================
+// MapleExpectation Multi-Module Root Project
+// ADR-014/ADR-017: Gradle 멀티모듈 구조
+// ========================================
+
+plugins {
+	id 'java'
+	alias(libs.plugins.kotlin.jvm)
+	alias(libs.plugins.kotlin.spring) apply false
+	alias(libs.plugins.kotlin.jpa) apply false
+	alias(libs.plugins.dependency.management)
+	alias(libs.plugins.jacoco)
+	alias(libs.plugins.test.retry)
+	alias(libs.plugins.spotbugs)
+	alias(libs.plugins.spotless)
+	id 'idea'
+}
+
+group = 'maple'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+// All projects: 공통 설정
+allprojects {
+	apply plugin: 'java'
+	apply plugin: 'org.jetbrains.kotlin.jvm'
+	apply plugin: 'io.spring.dependency-management'
+	apply plugin: 'com.diffplug.spotless'
+
+	group = 'maple'
+	version = '0.0.1-SNAPSHOT'
+
+	repositories {
+		mavenCentral()
+	}
+
+	dependencyManagement {
+	    imports {
+	        mavenBom "org.springframework.boot:spring-boot-dependencies:${libs.versions.spring.boot.get()}"
+	        mavenBom "io.github.resilience4j:resilience4j-bom:${libs.versions.resilience4j.get()}"
+	        mavenBom "org.testcontainers:testcontainers-bom:${libs.versions.testcontainers.get()}"
+	    }
+	}
+
+	spotless {
+		java {
+			googleJavaFormat()
+			formatAnnotations()
+			importOrder()
+			removeUnusedImports()
+			trimTrailingWhitespace()
+			endWithNewline()
+		}
+		kotlin {
+			// TODO: ktlint 버전 호환성 해결 후 활성화
+			// 현재 Kotlin 2.1.0 + ktlint 호환성 문제로 임시 비활성화
+		}
+	}
+}
+
+// Subprojects: 모듈별 공통 설정
+subprojects {
+	apply plugin: 'jacoco'
+	apply plugin: 'org.gradle.test-retry'
+
+	java {
+		toolchain {
+			languageVersion = JavaLanguageVersion.of(21)
+		}
+	}
+
+	// Kotlin compilation must run before Java compilation
+	tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+		kotlinOptions {
+			jvmTarget = "21"
+			freeCompilerArgs += ["-Xjsr305=strict"]
+		}
+	}
+
+	// Ensure Java compilation depends on Kotlin compilation
+	tasks.named('compileJava').configure {
+		dependsOn(tasks.named('compileKotlin'))
+	}
+
+	// Show ALL compilation errors at once (not just first 100)
+	tasks.withType(JavaCompile).configureEach {
+		options.compilerArgs += ['-Xmaxerrs', '1000', '-Xmaxwarns', '1000', '-parameters']
+		options.fork = true
+		options.forkOptions.jvmArgs += ['-Xmx2g']
+	}
+
+	// 공통 의존성
+	dependencies {
+		compileOnly 'org.projectlombok:lombok:1.18.30'
+		annotationProcessor 'org.projectlombok:lombok:1.18.30'
+		testCompileOnly 'org.projectlombok:lombok:1.18.30'
+		testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+		testImplementation('org.springframework.boot:spring-boot-starter-test') {
+			exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
+		}
+
+		testImplementation "org.testcontainers:testcontainers"
+		testImplementation "org.testcontainers:junit-jupiter"
+		testImplementation "org.testcontainers:mysql"
+	testImplementation "org.testcontainers:mongodb"
+		testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+		// ArchUnit
+		testImplementation 'com.tngtech.archunit:archunit:1.3.0'
+
+		// Awaitility
+		testImplementation 'org.awaitility:awaitility:4.2.0'
+	}
+
+	// 테스트 설정
+	boolean isCiServer = System.getenv().containsKey("CI")
+
+	test {
+		jvmArgs = [
+			'-Xms512m',
+			'-Xmx2048m',
+			'-XX:+UseG1GC',
+			'-XX:MaxMetaspaceSize=512m'
+		]
+
+		// 테스트 실행 시간 표시 (각 테스트 종료 후 출력)
+		afterTest { desc, result ->
+			def duration = result.endTime - result.startTime
+			def className = desc.className.split('\\.').last()
+			println "[Test] ${className} > ${desc.name} : ${result.resultType} (${duration}ms)"
+		}
+
+		useJUnitPlatform {
+			if (project.hasProperty('fastTest')) {
+				excludeTags 'sentinel', 'slow', 'quarantine', 'chaos', 'nightmare', 'integration', 'flaky'
+			} else if (project.hasProperty('integrationTest')) {
+				includeTags 'integration'
+			} else if (project.hasProperty('chaosTest')) {
+				includeTags 'chaos'
+			} else if (project.hasProperty('nightmareTest')) {
+				includeTags 'nightmare'
+			} else {
+				excludeTags 'sentinel', 'quarantine', 'flaky'
+			}
+		}
+
+		retry {
+			if (isCiServer) {
+				maxRetries = 1
+				maxFailures = 5
+				failOnPassedAfterRetry = false
+			}
+		}
+
+		systemProperty 'flaky.logging.enabled', 'true'
+		systemProperty 'flaky.log.dir', "${buildDir}/flaky"
+
+		maxParallelForks = 1
+		environment "DOCKER_HOST", "unix:///var/run/docker.sock"
+
+		finalizedBy jacocoTestReport
+
+		testLogging {
+			events "passed", "skipped", "failed"
+			exceptionFormat "full"
+		}
+
+		reports {
+			junitXml.required = true
+			html.required = true
+		}
+	}
+
+	jacoco {
+		toolVersion = "0.8.11"
+	}
+
+	jacocoTestReport {
+		dependsOn test
+		reports {
+			xml.required = true
+			html.required = true
+		}
+	}
+}
+
+// SpotBugs (루트 프로젝트에서만)
+spotbugs {
+	ignoreFailures = false
+	showStackTraces = true
+}
+
+spotbugsMain {
+	enabled = false
+}
+
+spotbugsTest {
+	enabled = false
+}
+
+/* VSCode Lombok fix: ensure annotation processing available in all subprojects */
+subprojects {
+    plugins.withId('java') {
+        dependencies {
+            compileOnly 'org.projectlombok:lombok:1.18.30'
+            annotationProcessor 'org.projectlombok:lombok:1.18.30'
+            testCompileOnly 'org.projectlombok:lombok:1.18.30'
+            testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+        }
+    }
+}

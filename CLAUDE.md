@@ -31,6 +31,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 대화가 길어져 맥락이 얽히거나 여러 번의 수정 요청이 오가며 컨텍스트가 복잡해졌다고 판단될 경우, **스스로 작업을 멈추고** 다음과 같이 제안하세요:
 > "현재 대화가 길어져 컨텍스트가 복잡해졌습니다. 오류(Hallucination)를 방지하기 위해 지금까지의 핵심 진행 상황을 요약해 드릴 테니, **이 요약본을 복사하여 새로운 대화(New Chat)에서 이어가시는 것을 추천합니다.**"
 
+## Context Optimization (100k+ LOC 필수)
+**대규모 코드베이스에서 context 낭비를 방지하는 규칙:**
+
+1. **repo-map.md 우선 참조**: `.claude/repo-map.md`를 먼저 읽고 프로젝트 구조를 파악합니다.
+2. **전체 repo 스캔 금지**: `Glob **/*.kt` 같은 패턴은 피합니다. 특정 모듈만 탐색합니다.
+3. **LSP 활용**: `lsp_workspace_symbols`로 클래스를 검색합니다. grep보다 정확하고 빠릅니다.
+4. **모듈 스코프 제한**: 지정된 모듈 내에서만 작업합니다. 의존성 변경이 필요한 경우만 다른 모듈을 탐색합니다.
+5. **기존 유틸리티 확인**: 새로운 유틸리티 생성 전 `module-common`에 이미 존재하는지 확인합니다.
+
+**효과**: Context 사용량 50% 절약, Hallucination 감소, 응답 속도 향상
+
 ---
 
 ## Tech Stack

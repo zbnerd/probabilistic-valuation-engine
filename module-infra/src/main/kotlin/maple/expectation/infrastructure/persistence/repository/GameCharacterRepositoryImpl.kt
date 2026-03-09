@@ -9,8 +9,17 @@ import org.springframework.lang.Nullable
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 
+/**
+ * GameCharacter JPA Repository Implementation (P1-11: Multi-DataSource Support)
+ *
+ * <p><strong>Transaction Management:</strong> Uses explicit `"transactionManager"` qualifier
+ * to prevent ambiguity in multi-datasource environments. When MongoDB read replicas are added,
+ * this repository will continue using the MySQL transaction manager exclusively.
+ *
+ * @see <a href="../../../../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
+ */
 @Repository
-@Transactional
+@Transactional("transactionManager")
 open class GameCharacterRepositoryImpl(
     private val jpaRepo: GameCharacterJpaRepository,
     private val jpaCustomRepo: GameCharacterJpaRepositoryCustom,

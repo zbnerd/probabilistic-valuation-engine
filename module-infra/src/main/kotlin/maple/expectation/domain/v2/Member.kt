@@ -18,7 +18,6 @@ class Member {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null
-        private set
 
     /**
      * 낙관적 락 버전 (Issue #120 Rich Domain 동시성 보호)
@@ -27,14 +26,11 @@ class Member {
      */
     @Version
     var version: Long? = null
-        private set
 
     @Column(nullable = false, unique = true, length = 36)
     var uuid: String? = null
-        private set
 
     var point: Long = 0L
-        private set
 
     // ==================== Factory Methods ====================
 

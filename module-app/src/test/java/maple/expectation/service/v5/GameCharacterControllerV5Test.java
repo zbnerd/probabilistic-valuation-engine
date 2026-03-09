@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
-import maple.expectation.application.service.expectation.event.MongoSyncEventPublisherInterface;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
 import maple.expectation.infrastructure.mongodb.CharacterValuationView;
@@ -48,7 +47,6 @@ class GameCharacterControllerV5Test {
 
   @Mock private CharacterViewQueryService queryService;
   @Mock private ExpectationCalculationQueue queue;
-  @Mock private MongoSyncEventPublisherInterface eventPublisher;
 
   @InjectMocks private TestableGameCharacterControllerV5 controller;
 
@@ -58,7 +56,7 @@ class GameCharacterControllerV5Test {
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    controller = new TestableGameCharacterControllerV5(queryService, queue, eventPublisher);
+    controller = new TestableGameCharacterControllerV5(queryService, queue);
   }
 
   @Test
@@ -195,15 +193,11 @@ class GameCharacterControllerV5Test {
   static class TestableGameCharacterControllerV5 {
     private final CharacterViewQueryService queryService;
     private final ExpectationCalculationQueue queue;
-    private final MongoSyncEventPublisherInterface eventPublisher;
 
     TestableGameCharacterControllerV5(
-        CharacterViewQueryService queryService,
-        ExpectationCalculationQueue queue,
-        MongoSyncEventPublisherInterface eventPublisher) {
+        CharacterViewQueryService queryService, ExpectationCalculationQueue queue) {
       this.queryService = queryService;
       this.queue = queue;
-      this.eventPublisher = eventPublisher;
     }
 
     ResponseEntity<?> getExpectationV5Internal(String userIgn) {

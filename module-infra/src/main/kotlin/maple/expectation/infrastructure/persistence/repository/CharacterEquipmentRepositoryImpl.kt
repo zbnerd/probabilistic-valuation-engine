@@ -10,14 +10,23 @@ import org.springframework.lang.Nullable
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 
+/**
+ * CharacterEquipment JPA Repository Implementation (P1-11: Multi-DataSource Support)
+ *
+ * <p><strong>Transaction Management:</strong> Uses explicit `"transactionManager"` qualifier
+ * to prevent ambiguity in multi-datasource environments. When MongoDB read replicas are added,
+ * this repository will continue using the MySQL transaction manager exclusively.
+ *
+ * @see <a href="../../../../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
+ */
 @Repository
-@Transactional
+@Transactional("transactionManager")
 open class CharacterEquipmentRepositoryImpl(
     private val jpaRepo: CharacterEquipmentJpaRepository,
     private val jdbcBatchUpsertRepository: JdbcBatchUpsertRepository,
 ) : DomainCharacterEquipmentRepository {
 
-    @Transactional(readOnly = true)
+    @Transactional("transactionManager", readOnly = true)
     @Nullable
     override fun findById(characterId: CharacterId): CharacterEquipment? {
         requireNotNull(characterId) { "CharacterId cannot be null" }
@@ -57,7 +66,7 @@ open class CharacterEquipmentRepositoryImpl(
         jpaRepo.deleteById(characterId.value)
     }
 
-    @Transactional(readOnly = true)
+    @Transactional("transactionManager", readOnly = true)
     override fun existsById(characterId: CharacterId): Boolean {
         requireNotNull(characterId) { "CharacterId cannot be null" }
         return jpaRepo.existsById(characterId.value)

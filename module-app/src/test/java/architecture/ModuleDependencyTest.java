@@ -701,5 +701,58 @@ class ModuleDependencyTest {
           .allowEmptyShould(true)
           .check(classes);
     }
+
+    /**
+     * Core module should not depend on JPA/Hibernate.
+     *
+     * <p><strong>P1-7 Issue:</strong> Core module must remain persistence-agnostic.
+     *
+     * <p><strong>Rationale:</strong> Domain models in core module should be persistence-agnostic
+     * pure Java/Kotlin classes. JPA annotations (@Entity, @Table, @Column) and Hibernate
+     * dependencies create coupling to database schema and violate domain-driven design principles.
+     *
+     * <p><strong>Allowed:</strong> Pure domain models (POJOs, records, Kotlin data classes).
+     *
+     * <p><strong>Forbidden:</strong> jakarta.persistence.*, org.hibernate.* dependencies.
+     *
+     * <p><strong>ADR Reference:</strong> ADR-017 (Pure Domain Model), ADR-039 (Current Architecture
+     * Assessment)
+     */
+    @Test
+    @DisplayName("Core module should not depend on JPA/Hibernate")
+    void coreModuleShouldNotDependOnJpa() {
+      noClasses()
+          .that()
+          .resideInAPackage("..core..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("jakarta.persistence..")
+          .because(
+              """
+                            Core module must be persistence-agnostic.
+                            JPA annotations (@Entity, @Table, @Column, @OneToMany, @ManyToOne)
+                            create coupling to database schema and violate domain-driven design.
+                            JPA entities belong in module-infra persistence layer.
+                            Core should define pure domain models (POJOs, records, data classes).
+                            """)
+          .allowEmptyShould(true)
+          .check(classes);
+
+      noClasses()
+          .that()
+          .resideInAPackage("..core..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("org.hibernate..")
+          .because(
+              """
+                            Core module must be persistence-agnostic.
+                            Hibernate is a specific JPA implementation.
+                            Core domain logic should not depend on persistence implementation details.
+                            Hibernate dependencies belong in module-infra persistence layer.
+                            """)
+          .allowEmptyShould(true)
+          .check(classes);
+    }
   }
 }

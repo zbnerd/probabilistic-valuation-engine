@@ -378,7 +378,149 @@ class JwtTokenProviderTest {
     }
   }
 
+  @Nested
+  @DisplayName("Algorithm Confusion Attack Prevention (P0)")
+  class AlgorithmConfusionAttackTest {
+
+    @Test
+    @DisplayName("Token with 'none' algorithm should be rejected (lowercase)")
+    void whenTokenWithNoneAlgorithm_shouldReturnEmpty() {
+      // given - manually create JWT with alg="none"
+      String header = base64UrlEncode("{\"alg\":\"none\",\"typ\":\"JWT\"}");
+      String payload = base64UrlEncode("{\"sub\":\"attacker\",\"fgp\":\"fp\",\"role\":\"USER\"}");
+      String signature = ""; // No signature for "none" algorithm
+      String noneToken = header + "." + payload + "." + signature;
+
+      // when
+      Optional<JwtPayload> result = tokenProvider.parseToken(noneToken);
+
+      // then - should return empty (not throw exception per LogicExecutor pattern)
+      assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Token with 'NONE' algorithm should be rejected (uppercase)")
+    void whenTokenWithUPPERNoneAlgorithm_shouldReturnEmpty() {
+      // given - uppercase NONE
+      String header = base64UrlEncode("{\"alg\":\"NONE\",\"typ\":\"JWT\"}");
+      String payload = base64UrlEncode("{\"sub\":\"attacker\",\"fgp\":\"fp\",\"role\":\"USER\"}");
+      String signature = "";
+      String noneToken = header + "." + payload + "." + signature;
+
+      // when
+      Optional<JwtPayload> result = tokenProvider.parseToken(noneToken);
+
+      // then
+      assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Token with 'nOnE' algorithm should be rejected (mixed case)")
+    void whenTokenWithMixedCaseNoneAlgorithm_shouldReturnEmpty() {
+      // given - mixed case nOnE
+      String header = base64UrlEncode("{\"alg\":\"nOnE\",\"typ\":\"JWT\"}");
+      String payload = base64UrlEncode("{\"sub\":\"attacker\",\"fgp\":\"fp\",\"role\":\"USER\"}");
+      String signature = "";
+      String noneToken = header + "." + payload + "." + signature;
+
+      // when
+      Optional<JwtPayload> result = tokenProvider.parseToken(noneToken);
+
+      // then
+      assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Token with HS512 algorithm should be rejected (not in whitelist)")
+    void whenTokenWithHS512Algorithm_shouldReturnEmpty() {
+      // given - HS512 is stronger but not in our whitelist
+      // We need to create a valid HS512 signed token to test rejection
+      // For this test, we'll create a malformed token with HS512 in header
+      String validToken = tokenProvider.generateToken("session", "fp", "USER");
+      String[] parts = validToken.split("\\.");
+      // Replace header to claim HS512
+      String modifiedHeader = base64UrlEncode("{\"alg\":\"HS512\",\"typ\":\"JWT\"}");
+      String hs512Token = modifiedHeader + "." + parts[1] + "." + parts[2];
+
+      // when
+      Optional<JwtPayload> result = tokenProvider.parseToken(hs512Token);
+
+      // then - should be rejected (algorithm not in whitelist)
+      assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Token with RS256 algorithm should be rejected")
+    void whenTokenWithRS256Algorithm_shouldReturnEmpty() {
+      // given - RS256 is asymmetric, we use symmetric HS256
+      String validToken = tokenProvider.generateToken("session", "fp", "USER");
+      String[] parts = validToken.split("\\.");
+      // Replace header to claim RS256
+      String modifiedHeader = base64UrlEncode("{\"alg\":\"RS256\",\"typ\":\"JWT\"}");
+      String rs256Token = modifiedHeader + "." + parts[1] + "." + parts[2];
+
+      // when
+      Optional<JwtPayload> result = tokenProvider.parseToken(rs256Token);
+
+      // then - should be rejected
+      assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Token with missing algorithm field should be rejected")
+    void whenTokenWithMissingAlgorithm_shouldReturnEmpty() {
+      // given - header without 'alg' field
+      String header = base64UrlEncode("{\"typ\":\"JWT\"}");
+      String payload = base64UrlEncode("{\"sub\":\"attacker\"}");
+      String signature = "";
+      String invalidToken = header + "." + payload + "." + signature;
+
+      // when
+      Optional<JwtPayload> result = tokenProvider.parseToken(invalidToken);
+
+      // then
+      assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Token with invalid format should be rejected")
+    void whenTokenWithInvalidFormat_shouldReturnEmpty() {
+      // given - only 2 parts instead of 3
+      String invalidToken = "header.payload";
+
+      // when
+      Optional<JwtPayload> result = tokenProvider.parseToken(invalidToken);
+
+      // then
+      assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Valid HS256 token should be accepted")
+    void whenTokenWithHS256Algorithm_shouldParseSuccessfully() {
+      // given - normal token generation uses HS256
+      String token = tokenProvider.generateToken("session-123", "fp-123", "USER");
+
+      // when
+      Optional<JwtPayload> result = tokenProvider.parseToken(token);
+
+      // then
+      assertThat(result).isPresent();
+      assertThat(result.get().getSessionId()).isEqualTo("session-123");
+    }
+  }
+
   // ==================== Helper Methods ====================
+
+  /**
+   * Base64URL encode without padding (as per JWT spec) Java's Base64.getUrlEncoder() includes
+   * padding by default
+   */
+  private String base64UrlEncode(String input) {
+    return java.util.Base64.getUrlEncoder()
+        .withoutPadding()
+        .encodeToString(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  }
 
   /** LogicExecutor Mock 생성 executeOrDefault 호출 시 실제 작업을 실행하도록 설정 */
   @SuppressWarnings("unchecked")

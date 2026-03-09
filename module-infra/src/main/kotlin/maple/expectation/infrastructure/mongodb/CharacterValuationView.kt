@@ -51,7 +51,25 @@ data class CharacterValuationView(
 
     var lastApiSyncAt: Instant? = null,
 
-    var version: Long? = null,
+    /**
+     * Event version for causal consistency (Unit 4: Event Ordering & Versioning)
+     *
+     * <p>Ensures events are applied in monotonic order to prevent out-of-order corruption.
+     *
+     * <ul>
+     *   <li>Events with version <= lastAppliedVersion are skipped (already applied)
+     *   <li>Events with version > lastAppliedVersion + 1 are buffered (out-of-order)
+     *   <li>Events with version == lastAppliedVersion + 1 are applied immediately
+     * </ul>
+     */
+    @Indexed var version: Long? = null,
+
+    /**
+     * Last applied event version for ordering validation
+     *
+     * <p>Used by MongoDBSyncWorker to buffer out-of-order events.
+     */
+    var lastAppliedVersion: Long? = null,
 
     @Indexed var totalExpectedCost: Long? = null,
 

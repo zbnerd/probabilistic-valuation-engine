@@ -10,9 +10,13 @@ import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 
 /**
- * 장비 기대값 요약 Repository (#240)
+ * 장비 기대값 요약 Repository (#240, P1-11)
+ *
+ * <p><strong>P1-11 Multi-DataSource:</strong> Uses explicit `"transactionManager"` qualifier
+ * to prevent ambiguity in multi-datasource environments (MongoDB read replicas).
  *
  * @see EquipmentExpectationSummary 연관 엔티티
+ * @see <a href="../../../../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
  */
 interface EquipmentExpectationSummaryRepository : JpaRepository<EquipmentExpectationSummary, Long> {
 
@@ -25,6 +29,11 @@ interface EquipmentExpectationSummaryRepository : JpaRepository<EquipmentExpecta
      *
      * <p>Unique Key: (game_character_id, preset_no)
      *
+     * <h3>P1-11 Transaction Management</h3>
+     *
+     * <p>Uses explicit `"transactionManager"` qualifier with `REQUIRES_NEW` propagation
+     * to ensure independent transaction in multi-datasource environments.
+     *
      * @param gameCharacterId 캐릭터 ID
      * @param presetNo 프리셋 번호
      * @param totalExpectedCost 총 기대 비용
@@ -33,7 +42,7 @@ interface EquipmentExpectationSummaryRepository : JpaRepository<EquipmentExpecta
      * @param additionalCubeCost 에디셔널큐브 비용
      * @param starforceCost 스타포스 비용
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW)
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
         value =

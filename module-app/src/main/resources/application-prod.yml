@@ -1,5 +1,11 @@
 # application-prod.yml
 
+server:
+  tomcat:
+    threads:
+      max: 25  # t3.small (2 vCPUs): 10-12 threads per vCPU for I/O-bound workloads
+    max-http-post-size: 262144  # 256KB (#266 P1-4: JSON DoS 방어)
+
 spring:
   config:
     activate:
@@ -11,18 +17,39 @@ spring:
     password: ${DB_PASSWORD}
 
     hikari:
-      maximum-pool-size: 50
-      minimum-idle: 50
+      maximum-pool-size: 25  # Match Tomcat threads (prevent connection starvation)
+      minimum-idle: 5  # Allow dynamic scaling (save ~50-100MB RAM during low traffic)
+      leak-detection-threshold: 60000  # P2 Unit 7: Log warning if connection held > 60s
+      # P2 Unit 7: JMX monitoring for HikariCP metrics (connections, pending, latency)
+      register-mbeans: true
+      # P2 Unit 7: Pool sizing formula: (CPU cores × 2) + effective_disk_count
+      # t3.small (2 vCPUs): (2 × 2) + 1 = 5 base, scaled to 25 for I/O-bound workload
+      # Formula: threads.max = maximum-pool-size to prevent connection waits
 
   jpa:
+    open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지
     hibernate:
       ddl-auto: update
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
 
   # Redis Standalone 설정 (운영 환경)
   data:
     redis:
       host: localhost
       port: 6379
+    # P1-10: MongoDB Eventual Consistency Configuration
+    # In replica set: secondaryPreferred for read scalability, majority for strong consistency
+    mongodb:
+      # Read from secondaries when available (reduces primary load)
+      read-preference: secondaryPreferred
+      # Strong consistency: only read committed data replicated to majority
+      read-concern: majority
 
 # Discord Alert Configuration
 alert:
@@ -51,16 +78,29 @@ lock:
   datasource:
     pool-size: 50
 
-# Thread Pool 최적화 (P1-7: t3.small 2vCPU 기준)
+# Thread Pool 최적화 (P2-25: t3.small 2vCPU 기준)
+# 규칙: 모든 executor는 1:2 core:max 비율 준수
 executor:
   equipment:
-    core-pool-size: 16
+    core-pool-size: 16    # I/O-bound: 2vCPU × 8 (API 호출, DB)
     max-pool-size: 32
     queue-capacity: 500
   preset:
-    core-pool-size: 6     # CPU-bound: 2vCPU × 3
+    core-pool-size: 6     # CPU-bound: 2vCPU × 3 (계산 작업)
     max-pool-size: 12
     queue-capacity: 200
+  alert:
+    core-pool-size: 2     # Background: 최소 설정 (저우선도 알림)
+    max-pool-size: 4
+    queue-capacity: 200
+  expectation:
+    core-pool-size: 4     # Compute: I/O-bound × 2 (파싱/계산/외부 호출)
+    max-pool-size: 8
+    queue-capacity: 200
+  async:
+    core-pool-size: 4     # @Async methods: 1:2 ratio
+    max-pool-size: 8
+    queue-capacity: 100
 
 # Issue #278: Scale-out 환경 실시간 좋아요 동기화 (prod)
 like:

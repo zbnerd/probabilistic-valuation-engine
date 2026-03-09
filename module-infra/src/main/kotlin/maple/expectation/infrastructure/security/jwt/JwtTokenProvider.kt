@@ -41,6 +41,33 @@ class JwtTokenProvider(
         private const val DEFAULT_SECRET_PREFIX = "dev-secret"
         private const val PLACEHOLDER_PATTERN = "\${"
         private const val MIN_SECRET_LENGTH = 32
+
+        /**
+         * JWT Algorithm Whitelist (P0: Algorithm Confusion Attack Prevention)
+         *
+         * <p>Only HS256 (HMAC-SHA256) is allowed for token signing and verification.
+         * This prevents algorithm confusion attacks where attackers may try to:
+         *
+         * <ul>
+         *   <li>Switch to "none" algorithm (bypass signature verification)
+         *   <li>Switch to weaker algorithms (HS256, HS512)
+         *   <li>Switch to asymmetric algorithms (RS256, ES256) with public key
+         * </ul>
+         *
+         * @see <a href="https://datatracker.ietf.org/doc/html/rfc8725">RFC 8725: JWT Best Practices</a>
+         */
+        private val ALLOWED_ALGORITHMS = setOf("HS256")
+
+        /**
+         * Forbidden algorithm variants (case-insensitive matching required)
+         * These are known attack vectors for algorithm confusion.
+         */
+        private val FORBIDDEN_ALGORITHMS = setOf("none", "nOnE", "NONE", "None")
+
+        /**
+         * Expected algorithm constant for validation messages
+         */
+        private const val EXPECTED_ALGORITHM = "HS256"
     }
 
     @PostConstruct
@@ -144,10 +171,41 @@ class JwtTokenProvider(
     }
 
     private fun parseTokenInternal(token: String?): Optional<JwtPayload> {
+        // P0: Algorithm confusion attack prevention - pre-parse validation
+        // Check token format and extract header before parsing to reject "none" algorithm early
+        require(token != null && token.isNotBlank()) {
+            "JWT token must not be null or blank"
+        }
+
+        // Extract and validate header algorithm BEFORE signature verification
+        // This prevents algorithm confusion attacks where attacker sets alg="none"
+        val headerAlgorithm = extractAlgorithmFromHeader(token)
+
+        // P0: Explicit "none" algorithm rejection (case-insensitive)
+        require(headerAlgorithm.lowercase() !in FORBIDDEN_ALGORITHMS.map { it.lowercase() }) {
+            "JWT algorithm 'none' is forbidden. This is a known algorithm confusion attack vector. " +
+            "Received: '$headerAlgorithm'"
+        }
+
+        // P0: Algorithm whitelist enforcement
+        require(headerAlgorithm in ALLOWED_ALGORITHMS) {
+            "JWT algorithm not in whitelist. Allowed: $ALLOWED_ALGORITHMS, Received: '$headerAlgorithm'. " +
+            "Possible algorithm confusion attack."
+        }
+
+        // JJWT 0.12.x: verifyWith() ensures HMAC signature verification with SecretKey
+        // The explicit algorithm check above provides defense-in-depth
         val jws: Jws<io.jsonwebtoken.Claims> = Jwts.parser()
             .verifyWith(secretKey)
             .build()
             .parseSignedClaims(token)
+
+        // P0: Defense-in-depth - verify parsed algorithm matches expected (should never fail if above checks pass)
+        val parsedAlgorithm = jws.header.algorithm
+        require(parsedAlgorithm == EXPECTED_ALGORITHM) {
+            "JWT algorithm mismatch after parsing: expected $EXPECTED_ALGORITHM, got $parsedAlgorithm. " +
+            "Possible algorithm confusion attack."
+        }
 
         val claims: io.jsonwebtoken.Claims = jws.payload
 
@@ -160,6 +218,36 @@ class JwtTokenProvider(
         )
 
         return Optional.of(payload)
+    }
+
+    /**
+     * Extract algorithm from JWT header without full parsing (P0: Early algorithm validation)
+     *
+     * <p>This method extracts the 'alg' field from the JWT header before signature verification
+     * to enable early rejection of forbidden algorithms like "none".
+     *
+     * @param token JWT token string
+     * @return algorithm string from header
+     * @throws IllegalArgumentException if token format is invalid
+     */
+    private fun extractAlgorithmFromHeader(token: String): String {
+        val parts = token.split(".")
+        require(parts.size == 3) {
+            "Invalid JWT format: expected 3 parts (header.payload.signature), got ${parts.size}"
+        }
+
+        // Decode header (Base64URL) - use JJWT's built-in decoder
+        val headerBytes = io.jsonwebtoken.io.Decoders.BASE64URL.decode(parts[0])
+        val headerJson = String(headerBytes, Charsets.UTF_8)
+
+        // Extract "alg" field using simple JSON parsing
+        // Use regex to avoid heavy JSON library dependency for this simple extraction
+        val algPattern = """"alg"\s*:\s*"([^"]+)"""".toRegex()
+        val match = algPattern.find(headerJson)
+
+        return match?.groupValues?.get(1) ?: throw IllegalArgumentException(
+            "JWT header missing 'alg' field. Header: $headerJson"
+        )
     }
 
     private fun maskToken(token: String?): String {

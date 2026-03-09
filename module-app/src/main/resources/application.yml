@@ -39,6 +39,7 @@ spring:
     open-in-view: false
     properties:
       hibernate:
+        default_batch_fetch_size: 100  # P2-24: N+1 쿼리 방지를 위한 배치 페칭 설정
         jdbc:
           batch_size: 1000
         format_sql: false
@@ -226,7 +227,9 @@ nexon:
 
 server:
   shutdown: graceful
-  # Tomcat 스레드 설정 제거 - Virtual Thread 모드에서는 불필요
+  # Tomcat thread pool configured in profile-specific files (local/prod/ci)
+  # Virtual Thread enabled (spring.threads.virtual.enabled=true) but Tomcat threads
+  # still needed for platform thread workers that handle I/O-bound requests
   tomcat:
     max-http-post-size: 262144  # 256KB (#266 P1-4: JSON DoS 방어)
     uri-encoding: UTF-8  # 한글 URL 지원
@@ -502,6 +505,12 @@ lock:
     dual-run-duration: 7d  # Dual-Run 기간 (Phase 1)
     monitoring-enabled: true  # 마이그레이션 메트릭 활성화
 
+# Thread Pool 표준화 설정 (P2-25)
+# CPU 기반 설정 가이드라인:
+# - 2 vCPU: equipment=8:16, preset=6:12, alert=2:4, expectation=4:8
+# - 4 vCPU: equipment=16:32, preset=12:24, alert=2:4, expectation=4:8
+# - 8 vCPU: equipment=32:64, preset=24:48, alert=2:4, expectation=4:8
+# 규칙: 모든 executor는 1:2 core:max 비율 준수
 executor:
   equipment:
     core-pool-size: 8
@@ -510,6 +519,18 @@ executor:
   preset:
     core-pool-size: 12
     max-pool-size: 24
+    queue-capacity: 100
+  alert:
+    core-pool-size: 2
+    max-pool-size: 4
+    queue-capacity: 200
+  expectation:
+    core-pool-size: 4
+    max-pool-size: 8
+    queue-capacity: 200
+  async:
+    core-pool-size: 4
+    max-pool-size: 8
     queue-capacity: 100
 
 # Outbox 설정 (P1-8: 하드코딩 제거 → YAML 외부화)

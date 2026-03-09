@@ -171,8 +171,7 @@ class ShutdownDataPersistenceServiceTest {
         new ShutdownData(LocalDateTime.now(), "server2", Map.of("u2", 2L), List.of());
 
     // when
-    // CLAUDE.md Section 24: Thread.sleep() 제거 - 동기 저장이므로 지연 불필요
-    // 두 번째 저장이 첫 번째를 원자적으로 교체하는 동작은 시간과 무관
+    // Synchronous save - second save atomically replaces first (time-independent)
     service.saveShutdownData(data1);
     service.saveShutdownData(data2);
 

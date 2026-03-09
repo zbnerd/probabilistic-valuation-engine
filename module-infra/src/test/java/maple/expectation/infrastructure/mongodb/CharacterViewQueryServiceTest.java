@@ -32,7 +32,20 @@ class CharacterViewQueryServiceTest {
   void findByUserIgnReturnsView() throws Exception {
     CharacterValuationView view =
         new CharacterValuationView(
-            null, "testUser", null, null, null, null, null, null, null, 100000L, null, null, null);
+            null,
+            "testUser",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            100000L,
+            null,
+            null,
+            null);
 
     when(mockRepository.findByUserIgn("testUser")).thenReturn(view);
     when(mockMeterRegistry.timer(anyString(), any(String[].class))).thenReturn(mockTimer);

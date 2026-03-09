@@ -482,6 +482,7 @@ class MongoDBSyncWorkerTest {
         .totalExpectedCost("1000000")
         .maxPresetNo(1)
         .payload("{}")
+        .version(1L) // Version for causal consistency
         .build();
   }
 

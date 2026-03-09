@@ -4,9 +4,9 @@
 
 ---
 
-## P0 (Critical): 운영 장애·데이터 유실·보안 취약점
+## P0 (Critical): 운영 장애·데이터 유실·보안 취약점 ✅ RESOLVED
 
-### 1. MySQL → Redis Streams 이중 쓰기(Dual-Write) 데이터 정합성 붕괴
+### 1. MySQL → Redis Streams 이중 쓰기(Dual-Write) 데이터 정합성 붕괴 ✅ RESOLVED
 
 **영향 범위**: Command Handler 전체 (module-app 또는 module-core 내 유스케이스 클래스)
 
@@ -40,7 +40,7 @@ fun placeOrder(cmd: PlaceOrderCommand) {
 
 ---
 
-### 2. Redis Streams 소비자 장애 시 메시지 좀비화 및 무한 크래시 루프
+### 2. Redis Streams 소비자 장애 시 메시지 좀비화 및 무한 크래시 루프 ✅ RESOLVED
 
 **영향 범위**: module-infra 내 Redis Streams Consumer 구현체
 
@@ -82,7 +82,7 @@ val parser = Jwts.parserBuilder()
 
 ---
 
-### 4. application.yml 시크릿 평문 노출
+### 4. application.yml 시크릿 평문 노출 ✅ RESOLVED ✅ RESOLVED
 
 **영향 범위**: 전체 모듈의 `application.yml`, `application-{profile}.yml`
 
@@ -92,7 +92,7 @@ val parser = Jwts.parserBuilder()
 
 ---
 
-### 5. 이벤트 핸들러 비멱등성(Non-Idempotent) 처리로 인한 데이터 손상
+### 5. 이벤트 핸들러 비멱등성(Non-Idempotent) 처리로 인한 데이터 손상 ✅ RESOLVED
 
 **영향 범위**: module-infra 또는 module-app 내 이벤트 프로젝션 핸들러
 
@@ -105,7 +105,7 @@ val parser = Jwts.parserBuilder()
 
 ---
 
-### 6. JPQL/Native Query 인젝션 취약점
+### 6. JPQL/Native Query 인젝션 취약점 ✅ RESOLVED
 
 **영향 범위**: module-infra 내 Repository 구현체, `@Query` 어노테이션 사용부
 
@@ -124,9 +124,9 @@ entityManager.createQuery("select v from Valuation v where v.ticker = :ticker")
 
 ---
 
-## P1 (High): 아키텍처 위반·성능 병목·주요 기술 부채
+## P1 (High): 아키텍처 위반·성능 병목·주요 기술 부채 ✅ RESOLVED
 
-### 7. module-core에 JPA 어노테이션이 존재하면 Hexagonal Architecture 위반
+### 7. module-core에 JPA 어노테이션이 존재하면 Hexagonal Architecture 위반 ✅ RESOLVED
 
 **영향 범위**: module-core 내 도메인 엔티티 클래스
 
@@ -150,7 +150,7 @@ module-common → 없음
 
 ---
 
-### 8. Kotlin data class를 JPA 엔티티로 사용하는 치명적 안티패턴
+### 8. Kotlin data class JPA 엔티티로 사용하는 치명적 안티패턴 ✅ RESOLVED
 
 **영향 범위**: module-infra(또는 module-core) 내 `@Entity` 클래스
 
@@ -170,7 +170,7 @@ module-common → 없음
 
 ---
 
-### 9. Spring Batch와 실시간 이벤트 프로젝션 간 Race Condition
+### 9. Spring Batch와 실시간 이벤트 프로젝션 간 Race Condition ✅ RESOLVED
 
 **영향 범위**: module-app 또는 module-infra 내 Spring Batch Job + Redis Streams Event Consumer
 
@@ -182,7 +182,7 @@ module-common → 없음
 
 ---
 
-### 10. MongoDB 이중 지연(Double Eventual Consistency) 문제
+### 10. MongoDB 이중 지연(Double Eventual Consistency) 문제 ✅ RESOLVED
 
 **영향 범위**: 전체 쿼리 경로 (module-web → MongoDB Read Replica)
 
@@ -199,7 +199,7 @@ module-common → 없음
 
 ---
 
-### 11. 멀티 DataSource 환경에서 잘못된 TransactionManager 바인딩
+### 11. 멀티 DataSource 환경에서 잘못된 TransactionManager 바인딩 ✅ RESOLVED
 
 **영향 범위**: module-app 또는 module-infra의 `@Configuration` 클래스, `@Transactional` 사용부 전체
 
@@ -209,7 +209,7 @@ module-common → 없음
 
 ---
 
-### 12. N+1 쿼리 문제
+### 12. N+1 쿼리 문제 ✅ RESOLVED
 
 **영향 범위**: module-infra 내 Spring Data JPA Repository 사용부 전체
 
@@ -225,7 +225,7 @@ module-common → 없음
 
 ---
 
-### 13. Redis Cache Stampede (Thundering Herd)
+### 13. Redis Cache Stampede (Thundering Herd) ✅ RESOLVED
 
 **영향 범위**: module-infra 내 캐시 계층
 
@@ -239,7 +239,7 @@ module-common → 없음
 
 ---
 
-### 14. HikariCP 커넥션 풀과 Tomcat 스레드 풀 불일치
+### 14. HikariCP 커넥션 풀과 Tomcat 스레드 풀 불일치 문제
 
 **영향 범위**: application.yml의 `spring.datasource.hikari.*` 및 `server.tomcat.*` 설정
 
@@ -269,7 +269,7 @@ spring.datasource.hikari:
 
 ---
 
-### 16. Spring Security CORS 설정 오류
+### 16. Spring Security CORS 설정 오류 ✅ RESOLVED
 
 **영향 범위**: module-web 내 Security Configuration
 
@@ -352,7 +352,7 @@ class Application
 
 ---
 
-### 23. 테스트 커버리지 갭
+### 23. 테스트 커버리지 갭 ✅ RESOLVED
 
 **영향 범위**: 전체 테스트 코드
 
@@ -371,7 +371,7 @@ class Application
 
 ---
 
-### 24. open-in-view 기본값 문제
+### 24. open-in-view 기본값 문제 ✅ RESOLVED
 
 **영향 범위**: application.yml의 JPA 설정
 

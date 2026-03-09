@@ -16,7 +16,7 @@ interface ResilientExecutor {
     fun <T> executeWithTranslation(
         task: ThrowingSupplier<T>,
         customTranslator: ExceptionTranslator,
-        context: TaskContext
+        context: TaskContext,
     ): T
 
     /**
@@ -25,7 +25,7 @@ interface ResilientExecutor {
     fun <T> executeWithFallback(
         task: ThrowingSupplier<T>,
         fallback: (Throwable) -> T,
-        context: TaskContext
+        context: TaskContext,
     ): T
 
     /**
@@ -34,6 +34,6 @@ interface ResilientExecutor {
     fun <T> executeOrCatch(
         task: ThrowingSupplier<T>,
         recovery: (Throwable) -> T,
-        context: TaskContext
+        context: TaskContext,
     ): T
 }

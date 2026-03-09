@@ -27,7 +27,5 @@ class StatParser {
     /**
      * 퍼센트(%) 옵션인지 확인
      */
-    fun isPercent(value: String?): Boolean {
-        return value != null && value.contains("%")
-    }
+    fun isPercent(value: String?): Boolean = value != null && value.contains("%")
 }

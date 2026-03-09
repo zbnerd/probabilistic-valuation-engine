@@ -19,7 +19,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 @ConfigurationProperties(prefix = "scheduler.task-scheduler")
 data class SchedulerProperties(
     @DefaultValue("3") val poolSize: Int,
-    @DefaultValue("60") val awaitTerminationSeconds: Int
+    @DefaultValue("60") val awaitTerminationSeconds: Int,
 ) {
     init {
         require(poolSize > 0) { "scheduler.task-scheduler.pool-size must be positive, got: $poolSize" }

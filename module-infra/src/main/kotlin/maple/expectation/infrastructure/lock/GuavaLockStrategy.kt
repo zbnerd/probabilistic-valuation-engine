@@ -1,12 +1,12 @@
 package maple.expectation.infrastructure.lock
 
 import com.google.common.util.concurrent.Striped
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.Lock
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.Lock
 
 /** Guava Striped Lock 전략 (테스트 환경 전용 - 100% 평탄화 완료) */
 @Component
@@ -30,16 +30,14 @@ class GuavaLockStrategy(executor: LogicExecutor) : AbstractLockStrategy(executor
         return true
     }
 
-    override fun buildLockKey(key: String): String {
-        return key
-    }
+    override fun buildLockKey(key: String): String = key
 
     override fun tryLockImmediately(key: String, leaseTime: Long): Boolean {
         // [패턴 3] executeOrDefault를 사용하여 try-catch 없이 즉시 획득 시도
         return executor.executeOrDefault(
             { locks.get(key).tryLock() },
             false,
-            TaskContext.of("Lock", "GuavaTryImmediate", key)
+            TaskContext.of("Lock", "GuavaTryImmediate", key),
         )
     }
 

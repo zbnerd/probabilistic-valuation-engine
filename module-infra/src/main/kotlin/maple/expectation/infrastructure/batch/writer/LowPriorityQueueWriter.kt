@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component
 class LowPriorityQueueWriter(
     private val queue: QueueWriterPort,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) : ItemWriter<String> {
 
     override fun write(ocids: Chunk<out String>) {
@@ -55,7 +55,7 @@ class LowPriorityQueueWriter(
     private fun processSingleOcid(
         ocid: String,
         queuedCount: AtomicInteger,
-        rejectedCount: AtomicInteger
+        rejectedCount: AtomicInteger,
     ) {
         val accepted = queue.addLowPriorityTask(ocid)
 
@@ -94,7 +94,7 @@ class LowPriorityQueueWriter(
         log.info(
             "[LowPriorityQueueWriter] Write complete - queued: {}, rejected: {}",
             queuedCount,
-            rejectedCount
+            rejectedCount,
         )
     }
 

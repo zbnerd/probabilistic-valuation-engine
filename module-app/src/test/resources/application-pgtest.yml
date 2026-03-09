@@ -1,0 +1,119 @@
+# PostgreSQL Testcontainers Test Profile
+# Used by PostgresContainerBaseTest and related tests
+# Issue #547: PostgreSQL Migration
+
+spring:
+  config:
+    activate:
+      on-profile: pgtest
+
+  datasource:
+    # Testcontainers will override these values via @DynamicPropertySource
+    # Static values here are fallback only
+    url: jdbc:postgresql://localhost:5432/maple_expectation_test
+    username: maple
+    password: test
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5       # 테스트에서는 적게
+      minimum-idle: 2
+      connection-timeout: 5000
+      leak-detection-threshold: 30000
+
+  jpa:
+    open-in-view: false          # 운영과 동일하게
+    hibernate:
+      ddl-auto: create-drop      # 테스트마다 스키마 재생성
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        show_sql: false          # CI에서는 false (로그 폭발 방지)
+        default_batch_fetch_size: 20
+        jdbc:
+          batch_size: 20
+
+  # Disable other services for pure PostgreSQL testing
+  data:
+    mongodb:
+      auto-index-creation: false
+    redis:
+      host: localhost
+      port: 6379
+
+  # Auth configuration (use test secrets)
+  auth:
+    jwt:
+      secret: test-secret-key-for-jwt-token-generation-minimum-256-bits
+      expiration: 900
+    refresh-token:
+      expiration: 604800
+    fingerprint:
+      secret: test-fingerprint-secret-key
+    admin:
+      allowlist: ""
+    session:
+      ttl: 1800
+
+  # Disable Discord alerts in test
+  alert:
+    discord:
+      webhook-url: ""
+
+# Disable schedulers in test
+scheduler:
+  nexon-data-collection:
+    enabled: false
+  like-sync:
+    enabled: false
+  expectation-sync:
+    enabled: false
+  popular-character-warmup:
+    enabled: false
+
+# Disable outbox schedulers
+outbox:
+  scheduler:
+    nexon-api-outbox:
+      enabled: false
+
+# Disable AI features in test
+langchain4j:
+  glm-4:
+    chat-model:
+      enabled: false
+
+# Disable rate limiting in test
+ratelimit:
+  enabled: false
+
+# CORS for test
+cors:
+  allowed-origins:
+    - "http://localhost:3000"
+
+# App configuration for test
+app:
+  buffer:
+    redis:
+      enabled: false  # 테스트에서는 Redis 버퍼 비활성화
+  event-publisher:
+    type: sync        # 테스트에서는 동기 발행
+  aop:
+    trace:
+      enabled: false  # 테스트에서 AOP 비활성화
+  v5:
+    enabled: false    # 테스트에서 V5 비활성화
+
+# Cube policy for test
+cube:
+  table-mass:
+    policy: LENIENT
+
+# Logging for debugging
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
+    org.testcontainers: INFO
+    com.github.dockerjava: WARN

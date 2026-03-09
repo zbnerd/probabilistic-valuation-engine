@@ -1,10 +1,13 @@
 package maple.expectation.infrastructure.persistence.worker
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.core.port.out.PersistenceTrackerStrategy
+import java.time.Duration
+import java.util.Optional
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.equipment.CharacterEquipment
 import maple.expectation.core.domain.model.equipment.EquipmentData
+import maple.expectation.core.port.out.PersistenceTrackerStrategy
 import maple.expectation.domain.repository.CharacterEquipmentRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -16,9 +19,6 @@ import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
-import java.time.Duration
-import java.util.Optional
-import java.util.concurrent.CompletableFuture
 
 /**
  * Equipment DB 계층 전담 Worker (SRP 준수)
@@ -35,7 +35,7 @@ class EquipmentDbWorker(
     private val repository: CharacterEquipmentRepository,
     private val objectMapper: ObjectMapper,
     private val persistenceTracker: PersistenceTrackerStrategy,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     /**
      * 비동기 저장 로직
@@ -62,7 +62,7 @@ class EquipmentDbWorker(
                 future.completeExceptionally(e)
                 future
             },
-            context
+            context,
         )
     }
 
@@ -72,7 +72,7 @@ class EquipmentDbWorker(
         val json = executor.executeWithTranslation(
             { objectMapper.writeValueAsString(response) },
             ExceptionTranslator.forJson(),
-            context
+            context,
         )
 
         var entity = repository.findById(CharacterId.of(ocid))
@@ -111,7 +111,7 @@ class EquipmentDbWorker(
 
                 Optional.empty()
             },
-            TaskContext.of("EquipmentDb", "FindValid", ocid)
+            TaskContext.of("EquipmentDb", "FindValid", ocid),
         )
     }
 
@@ -143,7 +143,7 @@ class EquipmentDbWorker(
                 future.completeExceptionally(e)
                 future
             },
-            context
+            context,
         )
     }
 

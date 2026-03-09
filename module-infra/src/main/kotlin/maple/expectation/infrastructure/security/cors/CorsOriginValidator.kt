@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.security.cors
 
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
 import java.net.URI
 import java.util.regex.Pattern
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Component
 
 /**
  * CORS 오리진 유효성 검사기 (Security Enhancement)
@@ -39,7 +39,7 @@ import java.util.regex.Pattern
  */
 @Component
 class CorsOriginValidator(
-    @Value("\${spring.profiles.active:local}") activeProfile: String
+    @Value("\${spring.profiles.active:local}") activeProfile: String,
 ) {
     /** 유효한 프로토콜 목록 */
     private val validProtocols = setOf("http", "https")
@@ -162,24 +162,16 @@ class CorsOriginValidator(
     }
 
     /** 프로덕션 프로필 여부 확인 */
-    private fun isProductionProfile(): Boolean {
-        return "prod" == activeProfile
-    }
+    private fun isProductionProfile(): Boolean = "prod" == activeProfile
 
     /** 로컬호스트 오리진 여부 확인 */
-    private fun isLocalhost(origin: String): Boolean {
-        return localhostPattern.matcher(origin).find()
-    }
+    private fun isLocalhost(origin: String): Boolean = localhostPattern.matcher(origin).find()
 
     /** 사설 IP 오리진 여부 확인 */
-    private fun isPrivateIp(origin: String): Boolean {
-        return privateIpPattern.matcher(origin).find()
-    }
+    private fun isPrivateIp(origin: String): Boolean = privateIpPattern.matcher(origin).find()
 
     /** HTTP 프로토콜 여부 확인 */
-    private fun isHttp(origin: String): Boolean {
-        return origin.startsWith("http://")
-    }
+    private fun isHttp(origin: String): Boolean = origin.startsWith("http://")
 
     /**
      * 검증 결과 레코드
@@ -191,7 +183,7 @@ class CorsOriginValidator(
     data class ValidationResult(
         val validOrigins: List<String>,
         val warnings: List<String>,
-        val errors: List<String>
+        val errors: List<String>,
     ) {
         fun isValid(): Boolean = errors.isEmpty()
         fun hasWarnings(): Boolean = warnings.isNotEmpty()

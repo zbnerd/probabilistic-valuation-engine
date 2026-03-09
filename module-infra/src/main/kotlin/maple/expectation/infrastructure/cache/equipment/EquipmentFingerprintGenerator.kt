@@ -2,15 +2,15 @@ package maple.expectation.infrastructure.cache.equipment
 
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
-import maple.expectation.infrastructure.executor.CheckedLogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.Base64
+import maple.expectation.infrastructure.executor.CheckedLogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 
 /**
  * Equipment 데이터의 fingerprint 생성기
@@ -26,7 +26,7 @@ import java.util.Base64
 @Component
 class EquipmentFingerprintGenerator(
     private val checkedExecutor: CheckedLogicExecutor,
-    meterRegistry: MeterRegistry
+    meterRegistry: MeterRegistry,
 ) {
     private val fingerprintNullCounter: Counter = Counter.builder("expectation.fingerprint.null.count")
         .description("updatedAt이 null인 fingerprint 생성 횟수")
@@ -79,7 +79,7 @@ class EquipmentFingerprintGenerator(
         val context = TaskContext.of("FingerprintGenerator", "Sha256", input.take(10))
         return checkedExecutor.executeUnchecked(
             { MessageDigest.getInstance("SHA-256").digest(input.toByteArray(StandardCharsets.UTF_8)) },
-            context
+            context,
         ) { e -> IllegalStateException("SHA-256 algorithm not available", e) }
     }
 

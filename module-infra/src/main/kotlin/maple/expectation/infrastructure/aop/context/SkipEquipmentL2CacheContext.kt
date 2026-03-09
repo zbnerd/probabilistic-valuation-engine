@@ -50,9 +50,7 @@ object SkipEquipmentL2CacheContext {
      * @return true면 EquipmentResponse L2 저장을 스킵해야 함
      */
     @JvmStatic
-    fun enabled(): Boolean {
-        return MDC_VALUE_TRUE == MDC.get(MDC_KEY)
-    }
+    fun enabled(): Boolean = MDC_VALUE_TRUE == MDC.get(MDC_KEY)
 
     /**
      * L2 저장 스킵 모드를 활성화하고, try-with-resources로 자동 복원
@@ -104,9 +102,7 @@ object SkipEquipmentL2CacheContext {
      * @return 현재 MDC 값 (null 가능)
      */
     @JvmStatic
-    fun snapshot(): String? {
-        return MDC.get(MDC_KEY)
-    }
+    fun snapshot(): String? = MDC.get(MDC_KEY)
 
     /**
      * MDC 상태를 복원 (async 전파용)

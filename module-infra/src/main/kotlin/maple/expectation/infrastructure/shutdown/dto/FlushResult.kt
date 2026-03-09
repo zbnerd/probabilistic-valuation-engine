@@ -4,11 +4,12 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 
 data class FlushResult(
     val redisSuccessCount: Int,
-    val fileBackupCount: Int
+    val fileBackupCount: Int,
 ) {
     companion object {
         @JvmStatic
         fun empty() = FlushResult(0, 0)
+
         @JvmStatic
         fun success(count: Int) = FlushResult(count, 0)
     }

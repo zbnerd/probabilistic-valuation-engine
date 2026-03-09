@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.monitoring.copilot.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.net.http.HttpClient
 import maple.expectation.infrastructure.config.DiscordTimeoutProperties
 import maple.expectation.infrastructure.config.TimeoutProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -14,60 +15,51 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import java.net.http.HttpClient
 
 @Configuration
 class MonitoringCopilotConfig(
-    private val timeoutProperties: TimeoutProperties
+    private val timeoutProperties: TimeoutProperties,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(MonitoringCopilotConfig::class.java)
     }
 
     @Bean
-    fun httpClient(): HttpClient {
-        return HttpClient.newBuilder()
-            .connectTimeout(timeoutProperties.apiCall)
-            .build()
-    }
+    fun httpClient(): HttpClient = HttpClient.newBuilder()
+        .connectTimeout(timeoutProperties.apiCall)
+        .build()
 
     @Bean
     @ConditionalOnProperty(
         name = ["app.monitoring.enabled"],
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = true,
     )
     fun prometheusClient(
         httpClient: HttpClient,
         objectMapper: ObjectMapper,
         executor: LogicExecutor,
-        @Value("\${app.monitoring.prometheus.base-url:http://localhost:9090}") prometheusUrl: String
-    ): PrometheusClient {
-        return PrometheusClient(httpClient, objectMapper, executor, prometheusUrl)
-    }
+        @Value("\${app.monitoring.prometheus.base-url:http://localhost:9090}") prometheusUrl: String,
+    ): PrometheusClient = PrometheusClient(httpClient, objectMapper, executor, prometheusUrl)
 
     @Bean
     @ConditionalOnProperty(
         name = ["app.monitoring.enabled"],
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = true,
     )
     fun grafanaJsonIngestor(
         objectMapper: ObjectMapper,
-        executor: LogicExecutor
-    ): GrafanaJsonIngestor {
-        return GrafanaJsonIngestor(objectMapper, executor)
-    }
+        executor: LogicExecutor,
+    ): GrafanaJsonIngestor = GrafanaJsonIngestor(objectMapper, executor)
 
     @Bean
     @ConditionalOnProperty(
         name = ["app.monitoring.enabled"],
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = true,
     )
-    fun anomalyDetector(): AnomalyDetector {
-        return AnomalyDetector()
-    }
+    fun anomalyDetector(): AnomalyDetector = AnomalyDetector()
 
     @Bean
     @ConditionalOnProperty(name = ["alert.discord.webhook-url"])
@@ -75,10 +67,8 @@ class MonitoringCopilotConfig(
         httpClient: HttpClient,
         objectMapper: ObjectMapper,
         executor: LogicExecutor,
-        timeoutProperties: DiscordTimeoutProperties
-    ): DiscordNotifier {
-        return DiscordNotifier(httpClient, objectMapper, executor, timeoutProperties)
-    }
+        timeoutProperties: DiscordTimeoutProperties,
+    ): DiscordNotifier = DiscordNotifier(httpClient, objectMapper, executor, timeoutProperties)
 
     // Explicit bean definition for TimeBasedSlidingWindowStrategy
     // Note: This class also has @Component, Spring will use either this bean or component scanning
@@ -87,8 +77,6 @@ class MonitoringCopilotConfig(
     fun timeBasedSlidingWindowStrategy(
         prometheusClient: PrometheusClient,
         executor: LogicExecutor,
-        @Value("\${monitoring.copilot.dedup-window-minutes:10}") dedupWindowMinutes: Long
-    ): TimeBasedSlidingWindowStrategy {
-        return TimeBasedSlidingWindowStrategy(prometheusClient, executor, dedupWindowMinutes)
-    }
+        @Value("\${monitoring.copilot.dedup-window-minutes:10}") dedupWindowMinutes: Long,
+    ): TimeBasedSlidingWindowStrategy = TimeBasedSlidingWindowStrategy(prometheusClient, executor, dedupWindowMinutes)
 }

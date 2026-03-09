@@ -12,5 +12,5 @@ data class Action(
     val action: String,
     val params: Map<String, Any> = emptyMap(),
     val risk: String? = null,
-    val expectedImpact: String? = null
+    val expectedImpact: String? = null,
 )

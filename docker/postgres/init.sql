@@ -1,8 +1,11 @@
 -- PostgreSQL + PGMQ Initialization Script
--- MapleExpectation PostgreSQL Migration
+-- MapleExpectation PostgreSQL Migration (Issue #547)
+--
+-- Docker Image: pgmq/pgmq:latest (PostgreSQL 17 + PGMQ)
+-- Alternative: any PostgreSQL image with PGMQ extension compiled in
 
--- Enable PGMQ Extension
-CREATE EXTENSION IF NOT EXISTS pgmq;
+-- Create PGMQ extension (requires pg_partman and pgcrypto)
+CREATE EXTENSION IF NOT EXISTS pgmq CASCADE;
 
 -- Create PGMQ Queues
 -- V4 Buffer Queue: Equipment expectation write-back buffer
@@ -38,10 +41,11 @@ CREATE TABLE IF NOT EXISTS user_session (
     user_id BIGINT NOT NULL,
     character_name VARCHAR(50),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    INDEX idx_user_session_user_id (user_id),
-    INDEX idx_user_session_expires_at (expires_at)
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_user_session_user_id ON user_session(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_session_expires_at ON user_session(expires_at);
 
 -- Refresh Token Storage (replaces Redis refresh token)
 CREATE TABLE IF NOT EXISTS refresh_token (
@@ -49,10 +53,11 @@ CREATE TABLE IF NOT EXISTS refresh_token (
     user_id BIGINT NOT NULL,
     token_hash VARCHAR(256) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    INDEX idx_refresh_token_user_id (user_id),
-    INDEX idx_refresh_token_expires_at (expires_at)
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_refresh_token_user_id ON refresh_token(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_token_expires_at ON refresh_token(expires_at);
 
 -- Equipment Data (jsonb for flexible schema)
 CREATE TABLE IF NOT EXISTS equipment_data (
@@ -65,13 +70,18 @@ CREATE TABLE IF NOT EXISTS equipment_data (
 -- Create indexes for JSONB queries
 CREATE INDEX IF NOT EXISTS idx_equipment_data_jsonb ON equipment_data USING GIN (equipment_json);
 
--- Grant permissions
+-- Grant permissions on public schema
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO maple;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO maple;
+
+-- Grant permissions on pgmq schema
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgmq TO maple;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pgmq TO maple;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pgmq TO maple;
 
 -- Log initialization
 DO $$
 BEGIN
-    RAISE NOTICE 'PostgreSQL + PGMQ initialization completed';
+    RAISE NOTICE 'PostgreSQL + PGMQ initialized successfully';
     RAISE NOTICE 'Created queues: v4_buffer_queue, v5_event_queue, donation_outbox_queue';
 END $$;

@@ -10,7 +10,6 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.queue.RedisKey
 import org.redisson.api.RedissonClient
-import org.redisson.api.listener.MessageListener
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.Cache
 
@@ -31,7 +30,7 @@ class RedisLikeEventSubscriber(
     private val cacheManager: TieredCacheManager,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String
+    @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String,
 ) : LikeEventSubscriber {
 
     private var listenerId: Int = -1

@@ -13,20 +13,20 @@ import maple.expectation.core.domain.model.AlertPriority
  */
 interface AlertPort {
 
-  /**
-   * Send an alert message.
-   *
-   * @param message the alert message to send
-   * @return true if sent successfully, false otherwise
-   */
-  fun sendAlert(message: AlertMessage): Boolean
+    /**
+     * Send an alert message.
+     *
+     * @param message the alert message to send
+     * @return true if sent successfully, false otherwise
+     */
+    fun sendAlert(message: AlertMessage): Boolean
 
-  /**
-   * Send an alert message with priority.
-   *
-   * @param message the alert message to send
-   * @param priority the priority level (HIGH, MEDIUM, LOW)
-   * @return true if sent successfully, false otherwise
-   */
-  fun sendAlert(message: AlertMessage, priority: AlertPriority): Boolean
+    /**
+     * Send an alert message with priority.
+     *
+     * @param message the alert message to send
+     * @param priority the priority level (HIGH, MEDIUM, LOW)
+     * @return true if sent successfully, false otherwise
+     */
+    fun sendAlert(message: AlertMessage, priority: AlertPriority): Boolean
 }

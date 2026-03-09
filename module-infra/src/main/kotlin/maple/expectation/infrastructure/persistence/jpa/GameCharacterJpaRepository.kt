@@ -1,10 +1,10 @@
 package maple.expectation.infrastructure.persistence.jpa
 
+import java.time.LocalDateTime
 import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
-import java.time.LocalDateTime
 
 /**
  * Spring Data JPA Repository for GameCharacter.
@@ -59,7 +59,7 @@ interface GameCharacterJpaRepository : JpaRepository<GameCharacterJpaEntity, Lon
         SELECT gc FROM GameCharacterJpaEntity gc
         WHERE gc.updatedAt > :threshold
         ORDER BY gc.updatedAt DESC
-        """
+        """,
     )
     fun findActiveCharacters(threshold: LocalDateTime?): List<GameCharacterJpaEntity>
 

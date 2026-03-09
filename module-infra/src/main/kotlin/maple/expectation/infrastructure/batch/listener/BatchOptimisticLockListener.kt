@@ -54,7 +54,7 @@ import org.springframework.stereotype.Component
 @ConditionalOnBean(BatchCharacterViewService::class)
 class BatchOptimisticLockListener(
     private val batchViewService: BatchCharacterViewService,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) : JobExecutionListener {
 
     /**
@@ -98,8 +98,11 @@ class BatchOptimisticLockListener(
                     log.error("[BatchOptimisticLock] Atomic swap failed: {}", jobName)
                 }
             } else {
-                log.warn("[BatchOptimisticLock] Job did not complete successfully (status: {}), skipping swap: {}",
-                    status, jobName)
+                log.warn(
+                    "[BatchOptimisticLock] Job did not complete successfully (status: {}), skipping swap: {}",
+                    status,
+                    jobName,
+                )
             }
         }, context)
     }

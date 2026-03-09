@@ -5,9 +5,9 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
 import jakarta.annotation.PostConstruct
+import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.concurrent.TimeUnit
 
 /**
  * Redis Lock Fallback 메트릭 (Issue #310 Phase 2)
@@ -44,14 +44,14 @@ class LockFallbackMetrics(private val registry: MeterRegistry) {
         // 상세 메트릭 (원인별)
         registry.counter(
             "lock.redis.failure.detail",
-            Tags.of("reason", sanitizeReason(reason), "cb_state", circuitBreakerState)
+            Tags.of("reason", sanitizeReason(reason), "cb_state", circuitBreakerState),
         ).increment()
 
         log.warn(
             "[LockFallback] Redis failure recorded - key={}, reason={}, state={}",
             lockKey,
             reason,
-            circuitBreakerState
+            circuitBreakerState,
         )
     }
 
@@ -68,7 +68,7 @@ class LockFallbackMetrics(private val registry: MeterRegistry) {
         log.warn(
             "[LockFallback] MySQL fallback activated - key={}, state={}",
             lockKey,
-            circuitBreakerState
+            circuitBreakerState,
         )
     }
 

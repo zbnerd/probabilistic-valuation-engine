@@ -3,14 +3,14 @@ package maple.expectation.infrastructure.config
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
+import java.util.Collections
+import java.util.concurrent.Executor
+import java.util.concurrent.ThreadPoolExecutor
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.task.TaskDecorator
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
-import java.util.Collections
-import java.util.concurrent.Executor
-import java.util.concurrent.ThreadPoolExecutor
 
 /**
  * 프리셋 병렬 계산 전용 Executor (#266 P1 Deadlock 방지)
@@ -45,7 +45,7 @@ import java.util.concurrent.ThreadPoolExecutor
 @Configuration
 class PresetCalculationExecutorConfig(
     private val meterRegistry: MeterRegistry,
-    private val executorProperties: ExecutorProperties
+    private val executorProperties: ExecutorProperties,
 ) {
     private val log = LoggerFactory.getLogger(PresetCalculationExecutorConfig::class.java)
 
@@ -88,7 +88,7 @@ class PresetCalculationExecutorConfig(
                     "[PresetCalculationExecutor] Task rejected - queue saturated: active={}, poolSize={}, queueSize={}",
                     e.activeCount,
                     e.poolSize,
-                    e.queue.size
+                    e.queue.size,
                 )
                 // rejected 메트릭 기록 (Micrometer ExecutorServiceMetrics가 자동 기록)
                 super.rejectedExecution(r, e)
@@ -103,7 +103,9 @@ class PresetCalculationExecutorConfig(
 
         // Issue #284: Micrometer ExecutorServiceMetrics 등록 (표준 네이밍)
         ExecutorServiceMetrics(
-            executor.threadPoolExecutor, "preset.calculation", Collections.emptyList()
+            executor.threadPoolExecutor,
+            "preset.calculation",
+            Collections.emptyList(),
         ).bindTo(meterRegistry)
 
         // 레거시 메트릭 호환 (기존 대시보드 유지)
@@ -113,7 +115,7 @@ class PresetCalculationExecutorConfig(
             "[PresetCalculationExecutor] Initialized: core={}, max={}, queue={}",
             config.corePoolSize,
             config.maxPoolSize,
-            config.queueCapacity
+            config.queueCapacity,
         )
 
         return executor
@@ -130,28 +132,28 @@ class PresetCalculationExecutorConfig(
     private fun registerMetrics(executor: ThreadPoolTaskExecutor) {
         Gauge.builder(
             "preset.calculation.queue.size",
-            executor
+            executor,
         ) { e -> e.threadPoolExecutor.queue.size.toDouble() }
             .description("프리셋 계산 대기 큐 크기")
             .register(meterRegistry)
 
         Gauge.builder(
             "preset.calculation.active.count",
-            executor
+            executor,
         ) { obj: ThreadPoolTaskExecutor -> obj.activeCount.toDouble() }
             .description("프리셋 계산 활성 스레드 수")
             .register(meterRegistry)
 
         Gauge.builder(
             "preset.calculation.pool.size",
-            executor
+            executor,
         ) { obj: ThreadPoolTaskExecutor -> obj.poolSize.toDouble() }
             .description("프리셋 계산 현재 풀 크기")
             .register(meterRegistry)
 
         Gauge.builder(
             "preset.calculation.completed.tasks",
-            executor
+            executor,
         ) { e -> e.threadPoolExecutor.completedTaskCount.toDouble() }
             .description("프리셋 계산 완료된 작업 수")
             .register(meterRegistry)

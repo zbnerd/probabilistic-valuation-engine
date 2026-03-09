@@ -8,11 +8,9 @@ package maple.expectation.web.dto.donation
  */
 data class SendCoffeeResponse(
     val requestId: String,
-    val message: String
+    val message: String,
 ) {
     companion object {
-        fun success(requestId: String): SendCoffeeResponse {
-            return SendCoffeeResponse(requestId, "커피 후원이 완료되었습니다.")
-        }
+        fun success(requestId: String): SendCoffeeResponse = SendCoffeeResponse(requestId, "커피 후원이 완료되었습니다.")
     }
 }

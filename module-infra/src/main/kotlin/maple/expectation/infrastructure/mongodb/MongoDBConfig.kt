@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.mongodb
 import com.mongodb.client.MongoClient
 import com.mongodb.client.MongoDatabase
 import jakarta.annotation.PostConstruct
+import java.util.concurrent.TimeUnit
 import lombok.RequiredArgsConstructor
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -12,7 +13,6 @@ import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.Index
 import org.springframework.data.mongodb.core.index.IndexOperations
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories
-import java.util.concurrent.TimeUnit
 
 /**
  * V5 CQRS: MongoDB Configuration
@@ -41,7 +41,7 @@ import java.util.concurrent.TimeUnit
 @EnableMongoRepositories(basePackages = ["maple.expectation.infrastructure.mongodb"])
 class MongoDBConfig(
     private val mongoClient: MongoClient,
-    private val mongoTemplate: MongoTemplate
+    private val mongoTemplate: MongoTemplate,
 ) {
     private val log = LoggerFactory.getLogger(MongoDBConfig::class.java)
 
@@ -74,7 +74,7 @@ class MongoDBConfig(
                 "[MongoDB] TTL index created on {}.{} ({} seconds)",
                 COLLECTION_NAME,
                 CALCULATED_AT_FIELD,
-                TTL_SECONDS
+                TTL_SECONDS,
             )
         } catch (e: Exception) {
             log.error("[MongoDB] Failed to create TTL index", e)
@@ -87,15 +87,13 @@ class MongoDBConfig(
      *
      * @return true if connection is healthy
      */
-    fun isHealthy(): Boolean {
-        return try {
-            val databaseName = mongoTemplate.db.name
-            val database: MongoDatabase = mongoClient.getDatabase(databaseName)
-            database.runCommand(org.bson.BsonDocument("ping", org.bson.BsonInt32(1)))
-            true
-        } catch (e: Exception) {
-            log.error("[MongoDB] Health check failed", e)
-            false
-        }
+    fun isHealthy(): Boolean = try {
+        val databaseName = mongoTemplate.db.name
+        val database: MongoDatabase = mongoClient.getDatabase(databaseName)
+        database.runCommand(org.bson.BsonDocument("ping", org.bson.BsonInt32(1)))
+        true
+    } catch (e: Exception) {
+        log.error("[MongoDB] Health check failed", e)
+        false
     }
 }

@@ -34,7 +34,7 @@ class DlqHandler(
     private val fileBackupService: ShutdownDataPersistencePort,
     private val statelessAlertService: StatelessAlertService,
     private val executor: LogicExecutor,
-    private val metrics: OutboxMetrics
+    private val metrics: OutboxMetrics,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -51,7 +51,7 @@ class DlqHandler(
         executor.executeOrCatch(
             { saveToDbDlq(entry, reason) },
             { dbEx -> handleDbDlqFailure(entry, reason, context) },
-            context
+            context,
         )
     }
 
@@ -70,7 +70,7 @@ class DlqHandler(
         executor.executeOrCatch(
             { saveToFileBackup(entry) },
             { fileEx -> handleCriticalFailure(entry, reason, fileEx) },
-            context
+            context,
         )
     }
 
@@ -103,7 +103,7 @@ class DlqHandler(
         statelessAlertService.sendCritical(title, description, fileEx)
         log.error(
             "[CRITICAL] All safety nets failed for: {} - Manual intervention required!",
-            entry.requestId
+            entry.requestId,
         )
     }
 }

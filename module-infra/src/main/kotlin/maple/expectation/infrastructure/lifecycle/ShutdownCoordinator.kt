@@ -5,14 +5,14 @@ import io.micrometer.core.instrument.MeterRegistry
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import org.springframework.context.SmartLifecycle
+import org.springframework.stereotype.Component
 
 @Component
 class ShutdownCoordinator(
     private val lifecycleBeans: List<SmartLifecycle>,
     private val executor: LogicExecutor,
-    meterRegistry: MeterRegistry?
+    meterRegistry: MeterRegistry?,
 ) {
     private val logger = LoggerFactory.getLogger(ShutdownCoordinator::class.java)
     private val phaseSuccessCounter: Counter? = meterRegistry?.let {
@@ -33,7 +33,7 @@ class ShutdownCoordinator(
             {
                 logger.warn(
                     "[ShutdownCoordinator] =========== 4단계 Shutdown 시작 ({}개 Lifecycle Bean) ===========",
-                    lifecycleBeans.size
+                    lifecycleBeans.size,
                 )
 
                 val sortedBeans = lifecycleBeans
@@ -42,7 +42,7 @@ class ShutdownCoordinator(
 
                 logger.info(
                     "[ShutdownCoordinator] Phase 순서: {}",
-                    sortedBeans.map { "${it.javaClass.simpleName}(${it.phase})" }
+                    sortedBeans.map { "${it.javaClass.simpleName}(${it.phase})" },
                 )
 
                 var phaseIndex = 0
@@ -55,7 +55,7 @@ class ShutdownCoordinator(
                         "[ShutdownCoordinator] Phase [{}/4]: {} 실행 (phase={})",
                         phaseIndex,
                         beanName,
-                        phase
+                        phase,
                     )
 
                     val success = executePhase(bean)
@@ -70,7 +70,7 @@ class ShutdownCoordinator(
 
                 logger.warn("[ShutdownCoordinator] =========== 4단계 Shutdown 완료 ===========")
             },
-            TaskContext.of("ShutdownCoordinator", "Main")
+            TaskContext.of("ShutdownCoordinator", "Main"),
         )
     }
 
@@ -103,7 +103,7 @@ class ShutdownCoordinator(
                 }
             },
             false,
-            TaskContext.of("ShutdownCoordinator", "ExecutePhase", bean.javaClass.simpleName)
+            TaskContext.of("ShutdownCoordinator", "ExecutePhase", bean.javaClass.simpleName),
         )
     }
 }

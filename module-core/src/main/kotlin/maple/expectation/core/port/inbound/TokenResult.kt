@@ -14,7 +14,7 @@ data class TokenResult(
     val accessToken: String,
     val expiresIn: Long,
     val refreshToken: String,
-    val refreshExpiresIn: Long
+    val refreshExpiresIn: Long,
 ) {
     companion object {
         /**
@@ -25,12 +25,12 @@ data class TokenResult(
             accessToken: String,
             expiresIn: Long,
             refreshToken: String,
-            refreshExpiresIn: Long
+            refreshExpiresIn: Long,
         ): TokenResult = TokenResult(
             accessToken = accessToken,
             expiresIn = expiresIn,
             refreshToken = refreshToken,
-            refreshExpiresIn = refreshExpiresIn
+            refreshExpiresIn = refreshExpiresIn,
         )
     }
 }

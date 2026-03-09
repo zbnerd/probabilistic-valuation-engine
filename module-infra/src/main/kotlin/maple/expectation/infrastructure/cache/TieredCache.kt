@@ -2,19 +2,19 @@ package maple.expectation.infrastructure.cache
 
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
-import maple.expectation.core.port.out.redis.RedisOperationPort
-import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
-import org.springframework.cache.Cache
-import org.springframework.cache.Cache.ValueWrapper
 import java.time.Duration
 import java.util.Optional
 import java.util.concurrent.Callable
 import java.util.function.Consumer
 import java.util.function.Supplier
+import maple.expectation.core.port.out.redis.RedisOperationPort
+import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import org.slf4j.LoggerFactory
+import org.springframework.cache.Cache
+import org.springframework.cache.Cache.ValueWrapper
 
 class TieredCache(
     private val l1: Cache,
@@ -24,7 +24,7 @@ class TieredCache(
     private val meterRegistry: MeterRegistry,
     private val lockWaitSeconds: Int,
     private val instanceIdSupplier: Supplier<String>,
-    private val callbackSupplier: Supplier<Consumer<CacheInvalidationEvent>>
+    private val callbackSupplier: Supplier<Consumer<CacheInvalidationEvent>>,
 ) : Cache {
     companion object {
         private val log = LoggerFactory.getLogger(TieredCache::class.java)
@@ -53,24 +53,23 @@ class TieredCache(
         return executor.execute({ getFromCacheLayers(key) }, context)
     }
 
-    private fun getFromCacheLayers(key: Any): ValueWrapper? {
-        return Optional.ofNullable(l1.get(key))
-            .map { w -> tapCacheHit(w, "L1") }
-            .orElseGet { getFromL2WithBackfill(key) }
-    }
+    private fun getFromCacheLayers(key: Any): ValueWrapper? = Optional.ofNullable(l1.get(key))
+        .map { w -> tapCacheHit(w, "L1") }
+        .orElseGet { getFromL2WithBackfill(key) }
 
-    private fun getFromL2WithBackfill(key: Any): ValueWrapper? {
-        return Optional.ofNullable(l2.get(key))
-            .map { w ->
-                l1.put(key, w.get())
-                tapCacheHit(w, "L2")
-            }
-            .orElse(null)
-    }
+    private fun getFromL2WithBackfill(key: Any): ValueWrapper? = Optional.ofNullable(l2.get(key))
+        .map { w ->
+            l1.put(key, w.get())
+            tapCacheHit(w, "L2")
+        }
+        .orElse(null)
 
     override fun put(key: Any, value: Any?) {
         val context = TaskContext.of("Cache", "Put", key.toString())
-        val l2Success = executor.executeOrDefault({ l2.put(key, value); true }, false, context)
+        val l2Success = executor.executeOrDefault({
+            l2.put(key, value)
+            true
+        }, false, context)
         if (l2Success) {
             executor.executeVoid({ l1.put(key, value) }, context)
             publishEvictEvent(key)
@@ -82,7 +81,10 @@ class TieredCache(
 
     override fun evict(key: Any) {
         val context = TaskContext.of("Cache", "Evict", key.toString())
-        val l2Success = executor.executeOrDefault({ l2.evict(key); true }, false, context)
+        val l2Success = executor.executeOrDefault({
+            l2.evict(key)
+            true
+        }, false, context)
         if (!l2Success) {
             log.warn("[TieredCache] L2 evict failed, proceeding with L1: key={}", key)
             l2FailureCounter.increment()
@@ -93,7 +95,10 @@ class TieredCache(
 
     override fun clear() {
         val context = TaskContext.of("Cache", "Clear")
-        val l2Success = executor.executeOrDefault({ l2.clear(); true }, false, context)
+        val l2Success = executor.executeOrDefault({
+            l2.clear()
+            true
+        }, false, context)
         if (!l2Success) {
             log.warn("[TieredCache] L2 clear failed, proceeding with L1")
             l2FailureCounter.increment()
@@ -123,7 +128,7 @@ class TieredCache(
         return executor.executeWithTranslation(
             { doGetWithSingleFlight(key, valueLoader, keyStr) as T },
             ExceptionTranslator.forCache(key, valueLoader),
-            context
+            context,
         )
     }
 
@@ -178,7 +183,10 @@ class TieredCache(
 
     private fun <T> executeAndCache(key: Any, valueLoader: Callable<T>): T {
         val value = valueLoader.call()
-        val l2Success = executor.executeOrDefault({ l2.put(key, value); true }, false, TaskContext.of("Cache", "PutL2", key.toString()))
+        val l2Success = executor.executeOrDefault({
+            l2.put(key, value)
+            true
+        }, false, TaskContext.of("Cache", "PutL2", key.toString()))
         if (l2Success) {
             l1.put(key, value)
         } else {

@@ -22,59 +22,59 @@ import maple.expectation.common.function.ThrowingSupplier
  */
 interface LockStrategy {
 
-  // 1. 기존: 락을 획득하고 작업을 실행 (WaitTime 대기 포함)
-  fun <T> executeWithLock(key: String, waitTime: Long, leaseTime: Long, task: ThrowingSupplier<T>): T
+    // 1. 기존: 락을 획득하고 작업을 실행 (WaitTime 대기 포함)
+    fun <T> executeWithLock(key: String, waitTime: Long, leaseTime: Long, task: ThrowingSupplier<T>): T
 
-  // 2. 기존: 기본 설정값으로 락 실행
-  fun <T> executeWithLock(key: String, task: ThrowingSupplier<T>): T
+    // 2. 기존: 기본 설정값으로 락 실행
+    fun <T> executeWithLock(key: String, task: ThrowingSupplier<T>): T
 
-  // 3. 추가: 즉시 락 획득 시도 (기다리지 않고 성공 여부만 반환)
-  fun tryLockImmediately(key: String, leaseTime: Long): Boolean
+    // 3. 추가: 즉시 락 획득 시도 (기다리지 않고 성공 여부만 반환)
+    fun tryLockImmediately(key: String, leaseTime: Long): Boolean
 
-  // 4. 추가: 락 수동 해제
-  fun unlock(key: String)
+    // 4. 추가: 락 수동 해제
+    fun unlock(key: String)
 
-  /**
-   * [P0-N02] 다중 락 순서 보장 실행
-   *
-   * <p><b>Coffman Condition #4 (Circular Wait) 방지</b>: 락 키들을 알파벳순으로 정렬하여 모든 스레드가 동일한 순서로 락을 획득하도록
-   * 강제합니다.
-   *
-   * <h4>기본 구현: 복합키 방식 (P1-BLUE-02)</h4>
-   *
-   * <p>키들을 정렬 후 단일 복합키로 결합하여 락을 획득합니다. 순차적 개별 락 획득이 필요한 경우 구현체에서 Override하세요.
-   *
-   * <h4>사용 예시</h4>
-   *
-   * <pre>{@code
-   * // 계좌 이체: from → to 순서 보장
-   * lockStrategy.executeWithOrderedLocks(
-   *     List.of("account:" + fromId, "account:" + toId),
-   *     30, TimeUnit.SECONDS, 60,
-   *     () -> transferService.transfer(fromId, toId, amount)
-   * );
-   * }</pre>
-   *
-   * @param keys 락 키 목록 (내부에서 알파벳순 정렬됨)
-   * @param totalTimeout 전체 타임아웃 값
-   * @param timeUnit 타임아웃 단위
-   * @param leaseTime 락 유지 시간 (초)
-   * @param task 실행할 작업
-   * @return 작업 결과
-   * @throws Throwable 락 획득 실패 또는 작업 실행 중 예외
-   */
-  fun <T> executeWithOrderedLocks(
-      keys: List<String>,
-      totalTimeout: Long,
-      timeUnit: TimeUnit,
-      leaseTime: Long,
-      task: ThrowingSupplier<T>
-  ): T {
-    // [P1-BLUE-02] 기본 구현: 알파벳순 정렬 후 복합키로 결합
-    // 진정한 다중 락 지원이 필요하면 구현체에서 Override
-    val compositeKey = keys.stream().sorted().collect(Collectors.joining(":"))
+    /**
+     * [P0-N02] 다중 락 순서 보장 실행
+     *
+     * <p><b>Coffman Condition #4 (Circular Wait) 방지</b>: 락 키들을 알파벳순으로 정렬하여 모든 스레드가 동일한 순서로 락을 획득하도록
+     * 강제합니다.
+     *
+     * <h4>기본 구현: 복합키 방식 (P1-BLUE-02)</h4>
+     *
+     * <p>키들을 정렬 후 단일 복합키로 결합하여 락을 획득합니다. 순차적 개별 락 획득이 필요한 경우 구현체에서 Override하세요.
+     *
+     * <h4>사용 예시</h4>
+     *
+     * <pre>{@code
+     * // 계좌 이체: from → to 순서 보장
+     * lockStrategy.executeWithOrderedLocks(
+     *     List.of("account:" + fromId, "account:" + toId),
+     *     30, TimeUnit.SECONDS, 60,
+     *     () -> transferService.transfer(fromId, toId, amount)
+     * );
+     * }</pre>
+     *
+     * @param keys 락 키 목록 (내부에서 알파벳순 정렬됨)
+     * @param totalTimeout 전체 타임아웃 값
+     * @param timeUnit 타임아웃 단위
+     * @param leaseTime 락 유지 시간 (초)
+     * @param task 실행할 작업
+     * @return 작업 결과
+     * @throws Throwable 락 획득 실패 또는 작업 실행 중 예외
+     */
+    fun <T> executeWithOrderedLocks(
+        keys: List<String>,
+        totalTimeout: Long,
+        timeUnit: TimeUnit,
+        leaseTime: Long,
+        task: ThrowingSupplier<T>,
+    ): T {
+        // [P1-BLUE-02] 기본 구현: 알파벳순 정렬 후 복합키로 결합
+        // 진정한 다중 락 지원이 필요하면 구현체에서 Override
+        val compositeKey = keys.stream().sorted().collect(Collectors.joining(":"))
 
-    val timeoutSeconds = timeUnit.toSeconds(totalTimeout)
-    return executeWithLock(compositeKey, timeoutSeconds, leaseTime, task)
-  }
+        val timeoutSeconds = timeUnit.toSeconds(totalTimeout)
+        return executeWithLock(compositeKey, timeoutSeconds, leaseTime, task)
+    }
 }

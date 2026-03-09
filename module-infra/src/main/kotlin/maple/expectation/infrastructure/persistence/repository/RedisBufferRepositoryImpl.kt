@@ -28,7 +28,8 @@ import org.springframework.stereotype.Repository
 @Repository
 class RedisBufferRepositoryImpl(
     private val redisTemplate: StringRedisTemplate,
-) : DomainRedisBufferRepository, BufferStatusQuery {
+) : DomainRedisBufferRepository,
+    BufferStatusQuery {
 
     /**
      * 전역 카운터 증가 (L1 -> L2 전송 시 호출)

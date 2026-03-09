@@ -39,17 +39,15 @@ object FlameScoreResolver {
         addMag: Int,
         addDmg: Int,
         addBossDmg: Int,
-        weights: JobWeights
-    ): Int {
-        return addStr * weights.wStr +
-            addDex * weights.wDex +
-            addInt * weights.wInt +
-            addLuk * weights.wLuk +
-            addHp * weights.wHp +
-            addAllStat * weights.wAllstatPct +
-            addAtt * weights.wAtt +
-            addMag * weights.wMag +
-            addDmg * weights.wDmgPct +
-            addBossDmg * weights.wBossDmgPct
-    }
+        weights: JobWeights,
+    ): Int = addStr * weights.wStr +
+        addDex * weights.wDex +
+        addInt * weights.wInt +
+        addLuk * weights.wLuk +
+        addHp * weights.wHp +
+        addAllStat * weights.wAllstatPct +
+        addAtt * weights.wAtt +
+        addMag * weights.wMag +
+        addDmg * weights.wDmgPct +
+        addBossDmg * weights.wBossDmgPct
 }

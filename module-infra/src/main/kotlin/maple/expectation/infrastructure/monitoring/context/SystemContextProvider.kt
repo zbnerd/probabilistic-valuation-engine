@@ -1,5 +1,7 @@
 package maple.expectation.infrastructure.monitoring.context
 
+import java.time.Instant
+import java.util.EnumMap
 import maple.expectation.core.port.out.SystemMetricsPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -7,8 +9,6 @@ import maple.expectation.infrastructure.monitoring.collector.MetricCategory
 import maple.expectation.infrastructure.monitoring.collector.MetricsCollectorStrategy
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.time.Instant
-import java.util.EnumMap
 
 /**
  * 시스템 컨텍스트 제공자 (Facade 패턴)
@@ -37,7 +37,7 @@ import java.util.EnumMap
 @Component
 class SystemContextProvider(
     private val collectors: List<MetricsCollectorStrategy>,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) : SystemMetricsPort {
 
     companion object {
@@ -135,14 +135,14 @@ class SystemContextProvider(
     /** 안전하게 메트릭 수집 (실패 시 빈 맵 반환) */
     private fun collectSafely(
         collector: MetricsCollectorStrategy,
-        result: MutableMap<MetricCategory, Map<String, Any>>
+        result: MutableMap<MetricCategory, Map<String, Any>>,
     ) {
         val context = TaskContext.of("Monitoring", "Collect", collector.getCategoryName())
 
         val metrics = executor.executeOrDefault(
             { collector.collect() },
             mapOf("error" to "Collection failed"),
-            context
+            context,
         )
 
         // 해당 카테고리 찾기

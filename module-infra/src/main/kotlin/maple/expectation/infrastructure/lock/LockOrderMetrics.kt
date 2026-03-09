@@ -4,9 +4,9 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
 import jakarta.annotation.PostConstruct
+import java.util.concurrent.atomic.AtomicLong
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Lock Ordering 메트릭 관리 (Issue #228: N09-Circular Lock)
@@ -36,7 +36,7 @@ class LockOrderMetrics(private val registry: MeterRegistry) {
         registry.gauge("lock.held.current", currentHeldLocks) { obj: AtomicLong -> obj.get().toDouble() }
 
         log.info(
-            "[LockOrderMetrics] Initialized - violation/acquisition counters and held gauge registered"
+            "[LockOrderMetrics] Initialized - violation/acquisition counters and held gauge registered",
         )
     }
 
@@ -50,15 +50,17 @@ class LockOrderMetrics(private val registry: MeterRegistry) {
         registry.counter(
             "lock.order.violation.detail",
             Tags.of(
-                "current", sanitizeKey(currentLock),
-                "previous", sanitizeKey(previousLock)
-            )
+                "current",
+                sanitizeKey(currentLock),
+                "previous",
+                sanitizeKey(previousLock),
+            ),
         ).increment()
 
         log.warn(
             "[LockOrder] Violation recorded: '{}' requested after '{}' - potential deadlock risk",
             currentLock,
-            previousLock
+            previousLock,
         )
     }
 

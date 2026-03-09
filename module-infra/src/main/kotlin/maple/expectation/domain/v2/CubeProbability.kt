@@ -25,5 +25,5 @@ data class CubeProbability(
     val level: Int,
 
     @JsonProperty("item_equipment_slot")
-    val part: String
+    val part: String,
 )

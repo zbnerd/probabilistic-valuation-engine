@@ -47,5 +47,5 @@ enum class CircuitBreakerClassification {
      * <p>For exceptions that don't fit clearly into IGNORE or RECORD categories,
      * let the circuit breaker use its default configuration.
      */
-    DEFAULT
+    DEFAULT,
 }

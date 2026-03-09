@@ -13,7 +13,7 @@ enum class CacheType(
     val cacheName: String,
 
     /** Time-to-live duration */
-    val ttl: Duration
+    val ttl: Duration,
 ) {
     /** Equipment data cache (5 min TTL) */
     EQUIPMENT("equipment", Duration.ofMinutes(5)),
@@ -31,7 +31,8 @@ enum class CacheType(
     OCID_NEGATIVE("ocidNegativeCache", Duration.ofMinutes(30)),
 
     /** Like count cache (5 min TTL) */
-    LIKE_COUNT("likeCount", Duration.ofMinutes(5));
+    LIKE_COUNT("likeCount", Duration.ofMinutes(5)),
+    ;
 
     override fun toString(): String = cacheName
 }

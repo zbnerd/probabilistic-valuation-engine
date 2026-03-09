@@ -20,7 +20,7 @@ import java.util.Optional
 data class BaseEquipmentItem(
     private val itemName: String,
     private val itemLevel: Int,
-    private val currentStar: Int
+    private val currentStar: Int,
 ) : EquipmentExpectationCalculatorPort {
 
     override fun calculateCost(): BigDecimal = BigDecimal.ZERO
@@ -29,8 +29,7 @@ data class BaseEquipmentItem(
 
     override fun getTrials(): Optional<BigDecimal> = Optional.of(BigDecimal.ZERO)
 
-    override fun getDetailedCosts(): EquipmentExpectationCalculatorPort.CostBreakdown =
-        EquipmentExpectationCalculatorPort.CostBreakdown.empty()
+    override fun getDetailedCosts(): EquipmentExpectationCalculatorPort.CostBreakdown = EquipmentExpectationCalculatorPort.CostBreakdown.empty()
 
     fun getItemLevel(): Int = itemLevel
 

@@ -13,30 +13,27 @@ class RenameAtomicFetchStrategy(
     private val redisTemplate: StringRedisTemplate,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    private val tempKeyTtlSeconds: Int
+    private val tempKeyTtlSeconds: Int,
 ) : AtomicFetchStrategy {
 
-    override fun fetchAndDelete(key: String): MutableMap<String, String> {
-        return executor.executeOrDefault(
-            {
-                val tempKey = "${key}:temp:${System.nanoTime()}"
+    override fun fetchAndDelete(key: String): MutableMap<String, String> = executor.executeOrDefault(
+        {
+            val tempKey = "$key:temp:${System.nanoTime()}"
 
-                // RENAME (원자적 이동)
-                redisTemplate.renameIfAbsent(key, tempKey)
+            // RENAME (원자적 이동)
+            redisTemplate.renameIfAbsent(key, tempKey)
 
-                // 임시 키에서 모든 필드 조회
-                val entries = redisTemplate.opsForHash<String, String>().entries(tempKey)
+            // 임시 키에서 모든 필드 조회
+            val entries = redisTemplate.opsForHash<String, String>().entries(tempKey)
 
-                // 임시 키 삭제
-                redisTemplate.delete(tempKey)
+            // 임시 키 삭제
+            redisTemplate.delete(tempKey)
 
-                entries.toMutableMap()
-            },
-            mutableMapOf(),
-            TaskContext.of("RenameAtomicFetchStrategy", "FetchAndDelete", key)
-        ) ?: mutableMapOf()
-    }
+            entries.toMutableMap()
+        },
+        mutableMapOf(),
+        TaskContext.of("RenameAtomicFetchStrategy", "FetchAndDelete", key),
+    ) ?: mutableMapOf()
 
-    override fun getStrategyType(): AtomicFetchStrategy.StrategyType =
-        AtomicFetchStrategy.StrategyType.RENAME
+    override fun getStrategyType(): AtomicFetchStrategy.StrategyType = AtomicFetchStrategy.StrategyType.RENAME
 }

@@ -2,9 +2,10 @@ package maple.expectation.infrastructure.external.impl
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.concurrent.CompletableFuture
+import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.equipment.CharacterEquipment
 import maple.expectation.domain.repository.CharacterEquipmentRepository
-import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.error.exception.CharacterNotFoundException
 import maple.expectation.error.exception.EquipmentDataProcessingException
 import maple.expectation.error.exception.ExternalServiceException
@@ -16,7 +17,6 @@ import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.util.ExceptionUtils
 import org.slf4j.LoggerFactory
 import org.springframework.web.reactive.function.client.WebClientResponseException
-import java.util.concurrent.CompletableFuture
 
 /**
  * Fallback Handler - API 호출 실패 시 fallback 로직을 담당하는 전담 클래스
@@ -46,7 +46,7 @@ class FallbackHandler(
     private val checkedExecutor: CheckedLogicExecutor,
     private val outboxFallbackManager: OutboxFallbackManager,
     private val alertNotificationHelper: AlertNotificationHelper,
-    private val exceptionClassifier: ExceptionClassifier
+    private val exceptionClassifier: ExceptionClassifier,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FallbackHandler::class.java)
@@ -121,7 +121,7 @@ class FallbackHandler(
     fun handleItemDataFallback(
         ocid: String,
         eventType: maple.expectation.domain.v2.NexonApiOutbox.NexonApiEventType,
-        t: Throwable
+        t: Throwable,
     ): CompletableFuture<EquipmentResponse> {
         // ★ P0-3: 일관된 root cause 사용 (CompletionException/ExecutionException unwrap)
         val rootCause = ExceptionUtils.unwrapAsyncException(t)
@@ -163,23 +163,23 @@ class FallbackHandler(
      * @param entity CharacterEquipment 엔티티
      * @return EquipmentResponse DTO
      */
-    private fun convertToResponse(entity: CharacterEquipment): EquipmentResponse {
-        return checkedExecutor.executeUnchecked(
-            {
-                try {
-                    objectMapper.readValue(entity.jsonContent(), EquipmentResponse::class.java)
-                } catch (e: JsonProcessingException) {
-                    throw EquipmentDataProcessingException(
-                        "JSON 역직렬화 실패 [ocid=${entity.ocid()}]: ${e.message}", e
-                    )
-                }
-            },
-            TaskContext.of("NexonApi", "DeserializeCache", entity.ocid())
-        ) { e: Exception ->
-            EquipmentDataProcessingException(
-                "JSON 역직렬화 실패 [ocid=${entity.ocid()}]: ${e.message}", e
-            )
-        }
+    private fun convertToResponse(entity: CharacterEquipment): EquipmentResponse = checkedExecutor.executeUnchecked(
+        {
+            try {
+                objectMapper.readValue(entity.jsonContent(), EquipmentResponse::class.java)
+            } catch (e: JsonProcessingException) {
+                throw EquipmentDataProcessingException(
+                    "JSON 역직렬화 실패 [ocid=${entity.ocid()}]: ${e.message}",
+                    e,
+                )
+            }
+        },
+        TaskContext.of("NexonApi", "DeserializeCache", entity.ocid()),
+    ) { e: Exception ->
+        EquipmentDataProcessingException(
+            "JSON 역직렬화 실패 [ocid=${entity.ocid()}]: ${e.message}",
+            e,
+        )
     }
 
     /**
@@ -188,9 +188,7 @@ class FallbackHandler(
      * @param ocid 캐릭터 OCID
      * @return CompletableFuture<CharacterBasicResponse> - CharacterNotFoundException으로 실패
      */
-    fun <T> clientErrorFuture(ocid: String): CompletableFuture<T> {
-        return CompletableFuture.failedFuture(CharacterNotFoundException(ocid))
-    }
+    fun <T> clientErrorFuture(ocid: String): CompletableFuture<T> = CompletableFuture.failedFuture(CharacterNotFoundException(ocid))
 
     /**
      * 5xx/장애용 실패 Future 생성 (Outbox 적재 포함)
@@ -203,7 +201,7 @@ class FallbackHandler(
     fun <T> serverErrorFuture(
         ocid: String,
         eventType: maple.expectation.domain.v2.NexonApiOutbox.NexonApiEventType,
-        t: Throwable
+        t: Throwable,
     ): CompletableFuture<T> {
         // Outbox Fallback: 5xx/장애 시에만 Outbox 적재 (4xx는 비즈니스 예외)
         val requestId = outboxFallbackManager.generateRequestId(eventType.name, ocid)
@@ -218,9 +216,7 @@ class FallbackHandler(
      * @param t 원본 예외
      * @return CompletableFuture<T> - ExternalServiceException으로 실패
      */
-    fun <T> errorFuture(t: Throwable): CompletableFuture<T> {
-        return CompletableFuture.failedFuture(ExternalServiceException(SERVICE_NEXON, t))
-    }
+    fun <T> errorFuture(t: Throwable): CompletableFuture<T> = CompletableFuture.failedFuture(ExternalServiceException(SERVICE_NEXON, t))
 
     /**
      * OutboxFallbackManager 노출 (ResilientNexonApiClient에서 설정 위임용)

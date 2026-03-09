@@ -12,7 +12,10 @@ import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
  *
  * TaskContext controls metric cardinality and provides 6 standard exception handling patterns.
  */
-interface LogicExecutor : BasicExecutor, SafeExecutor, ResilientExecutor {
+interface LogicExecutor :
+    BasicExecutor,
+    SafeExecutor,
+    ResilientExecutor {
 
     // --- Documentation for inherited methods ---
 
@@ -32,7 +35,7 @@ interface LogicExecutor : BasicExecutor, SafeExecutor, ResilientExecutor {
     override fun <T> executeWithTranslation(
         task: ThrowingSupplier<T>,
         customTranslator: ExceptionTranslator,
-        context: TaskContext
+        context: TaskContext,
     ): T
 
     /**
@@ -45,7 +48,7 @@ interface LogicExecutor : BasicExecutor, SafeExecutor, ResilientExecutor {
     override fun <T> executeWithFallback(
         task: ThrowingSupplier<T>,
         fallback: (Throwable) -> T,
-        context: TaskContext
+        context: TaskContext,
     ): T
 
     /**
@@ -54,7 +57,7 @@ interface LogicExecutor : BasicExecutor, SafeExecutor, ResilientExecutor {
     fun <T> executeWithFallback(
         task: ThrowingSupplier<T>,
         fallback: ExceptionTranslator,
-        context: TaskContext
+        context: TaskContext,
     ): T
 
     /**
@@ -67,7 +70,7 @@ interface LogicExecutor : BasicExecutor, SafeExecutor, ResilientExecutor {
     override fun <T> executeOrCatch(
         task: ThrowingSupplier<T>,
         recovery: (Throwable) -> T,
-        context: TaskContext
+        context: TaskContext,
     ): T
 
     /**
@@ -76,7 +79,7 @@ interface LogicExecutor : BasicExecutor, SafeExecutor, ResilientExecutor {
     fun <T> executeOrCatch(
         task: ThrowingSupplier<T>,
         recovery: ExceptionTranslator,
-        context: TaskContext
+        context: TaskContext,
     ): T
 
     /**
@@ -95,7 +98,7 @@ interface LogicExecutor : BasicExecutor, SafeExecutor, ResilientExecutor {
     override fun <T> executeWithFinally(
         task: ThrowingSupplier<T>,
         finallyBlock: Runnable,
-        context: TaskContext
+        context: TaskContext,
     ): T
 
     // --- Backward Compatibility (하위 호환성 유지용 오버로딩) ---
@@ -103,8 +106,7 @@ interface LogicExecutor : BasicExecutor, SafeExecutor, ResilientExecutor {
     /**
      * Legacy overload with taskName string
      */
-    fun <T> execute(task: ThrowingSupplier<T>, taskName: String): T =
-        execute(task, TaskContext.of("Legacy", taskName))
+    fun <T> execute(task: ThrowingSupplier<T>, taskName: String): T = execute(task, TaskContext.of("Legacy", taskName))
 
     /**
      * Legacy overload with taskName string

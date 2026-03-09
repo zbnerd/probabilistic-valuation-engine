@@ -2,13 +2,12 @@ package maple.expectation.infrastructure.config
 
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.RejectedExecutionHandler
-import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 
 /**
  * Rejection Policy Factory - Thread Pool Rejection Policy 생성 전담 클래스
@@ -28,7 +27,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 @Component
 class RejectionPolicyFactory(
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(RejectionPolicyFactory::class.java)
 
@@ -104,7 +103,7 @@ class RejectionPolicyFactory(
                     r.javaClass.name,
                     executor.poolSize,
                     executor.activeCount,
-                    executor.queue.size
+                    executor.queue.size,
                 )
             }
 
@@ -155,7 +154,8 @@ class RejectionPolicyFactory(
             val prev = expectationLastRejectNanos.get()
 
             if (now - prev >= REJECT_LOG_INTERVAL_NANOS &&
-                expectationLastRejectNanos.compareAndSet(prev, now)) {
+                expectationLastRejectNanos.compareAndSet(prev, now)
+            ) {
                 val count = expectationRejectedSinceLastLog.getAndSet(0)
                 log.warn(
                     "[ExpectationExecutor] Task rejected (queue full). " +
@@ -163,7 +163,7 @@ class RejectionPolicyFactory(
                     count,
                     executor.poolSize,
                     executor.activeCount,
-                    executor.queue.size
+                    executor.queue.size,
                 )
             }
 

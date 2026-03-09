@@ -2,11 +2,11 @@ package maple.expectation.infrastructure.ratelimit.strategy
 
 import io.github.bucket4j.distributed.proxy.ProxyManager
 import io.micrometer.core.instrument.MeterRegistry
+import java.time.Duration
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.ratelimit.config.RateLimitProperties
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.time.Duration
 
 /**
  * IP 기반 Rate Limiter (Strategy 구현체)
@@ -32,13 +32,13 @@ import java.time.Duration
     prefix = "ratelimit",
     name = ["enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 class IpBasedRateLimiter(
     proxyManager: ProxyManager<String>,
     properties: RateLimitProperties,
     executor: LogicExecutor,
-    meterRegistry: MeterRegistry
+    meterRegistry: MeterRegistry,
 ) : AbstractBucket4jRateLimiter(proxyManager, properties, executor, meterRegistry) {
 
     companion object {

@@ -40,14 +40,14 @@ import java.time.LocalDateTime
 @Table(
     name = "equipment_expectation_summary",
     indexes = [
-        Index(name = "idx_game_character_preset", columnList = "game_character_id, preset_no")
+        Index(name = "idx_game_character_preset", columnList = "game_character_id, preset_no"),
     ],
     uniqueConstraints = [
         UniqueConstraint(
             name = "uk_character_preset",
-            columnNames = ["game_character_id", "preset_no"]
-        )
-    ]
+            columnNames = ["game_character_id", "preset_no"],
+        ),
+    ],
 )
 class EquipmentExpectationSummary {
 
@@ -112,7 +112,7 @@ class EquipmentExpectationSummary {
         blackCubeCost: BigDecimal?,
         redCubeCost: BigDecimal?,
         additionalCubeCost: BigDecimal?,
-        starforceCost: BigDecimal?
+        starforceCost: BigDecimal?,
     ) {
         this.gameCharacterId = gameCharacterId
         this.presetNo = presetNo ?: 1
@@ -132,18 +132,16 @@ class EquipmentExpectationSummary {
             blackCubeCost: BigDecimal?,
             redCubeCost: BigDecimal?,
             additionalCubeCost: BigDecimal?,
-            starforceCost: BigDecimal?
-        ): EquipmentExpectationSummary {
-            return EquipmentExpectationSummary(
-                gameCharacterId,
-                presetNo,
-                totalExpectedCost,
-                blackCubeCost,
-                redCubeCost,
-                additionalCubeCost,
-                starforceCost
-            )
-        }
+            starforceCost: BigDecimal?,
+        ): EquipmentExpectationSummary = EquipmentExpectationSummary(
+            gameCharacterId,
+            presetNo,
+            totalExpectedCost,
+            blackCubeCost,
+            redCubeCost,
+            additionalCubeCost,
+            starforceCost,
+        )
     }
 
     /** 기대값 업데이트 (기존 레코드 갱신 시 사용) */
@@ -152,7 +150,7 @@ class EquipmentExpectationSummary {
         blackCubeCost: BigDecimal?,
         redCubeCost: BigDecimal?,
         additionalCubeCost: BigDecimal?,
-        starforceCost: BigDecimal?
+        starforceCost: BigDecimal?,
     ) {
         this.totalExpectedCost = totalExpectedCost
         this.blackCubeCost = blackCubeCost

@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class PerformanceStatisticsCollector(
-    private val registry: MeterRegistry // ✅ 스프링 표준 메트릭 저장소
+    private val registry: MeterRegistry, // ✅ 스프링 표준 메트릭 저장소
 ) {
 
     /** ✅ JVM 내부 필드를 삭제하고 Micrometer Timer로 대체 Timer는 내부적으로 count, sum, max를 모두 관리합니다. */
@@ -39,7 +39,7 @@ class PerformanceStatisticsCollector(
             "- 총 호출 수: ${count}회",
             "- 총 소요 시간: ${String.format("%.0f", totalTime)}ms",
             "- 평균 응답 시간: ${String.format("%.2f", average)}ms",
-            "- 최대 Latency: ${String.format("%.0f", maxTime)}ms"
+            "- 최대 Latency: ${String.format("%.0f", maxTime)}ms",
         )
     }
 }

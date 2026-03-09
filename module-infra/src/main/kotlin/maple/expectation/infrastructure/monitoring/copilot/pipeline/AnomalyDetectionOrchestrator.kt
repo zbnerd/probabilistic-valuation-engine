@@ -1,5 +1,7 @@
 package maple.expectation.infrastructure.monitoring.copilot.pipeline
 
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.monitoring.copilot.client.PrometheusClient
@@ -9,15 +11,13 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 @Service
 @ConditionalOnProperty(name = ["monitoring.copilot.enabled"], havingValue = "true")
 class AnomalyDetectionOrchestrator(
     private val prometheusClient: PrometheusClient,
     private val detector: AnomalyDetector,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(AnomalyDetectionOrchestrator::class.java)
@@ -50,8 +50,9 @@ class AnomalyDetectionOrchestrator(
                     enabled = true,
                     windowPoints = 60,
                     threshold = 3.0,
-                    minRequiredPoints = 10
-                ))
+                    minRequiredPoints = 10,
+                ),
+            )
 
             anomaly.ifPresent { event ->
                 allAnomalies.add(event)
@@ -78,7 +79,8 @@ class AnomalyDetectionOrchestrator(
                 executor.executeOrDefault(
                     { prometheusClient.queryRange(query, start, end, queryStep) },
                     emptyList(),
-                    TaskContext.of("AnomalyDetectionOrchestrator", "QueryPrometheus", signal.id))
+                    TaskContext.of("AnomalyDetectionOrchestrator", "QueryPrometheus", signal.id),
+                )
 
             if (prometheusSeries.isNotEmpty()) {
                 val modelSeries = prometheusSeries.map { convertToModelTimeSeries(it) }
@@ -94,7 +96,7 @@ class AnomalyDetectionOrchestrator(
     fun buildIncidentContext(
         anomalies: List<AnomalyEvent>,
         signals: List<SignalDefinition>,
-        metrics: Map<String, List<TimeSeries>>
+        metrics: Map<String, List<TimeSeries>>,
     ): IncidentContext {
         val incidentId = generateIncidentId(anomalies)
         val summary = buildSummary(anomalies)
@@ -142,7 +144,7 @@ class AnomalyDetectionOrchestrator(
     private fun buildEvidence(
         anomalies: List<AnomalyEvent>,
         signals: List<SignalDefinition>,
-        metrics: Map<String, List<TimeSeries>>
+        metrics: Map<String, List<TimeSeries>>,
     ): List<EvidenceItem> {
         val signalMap = signals.associateBy { it.id }
         val evidence = mutableListOf<EvidenceItem>()
@@ -155,7 +157,7 @@ class AnomalyDetectionOrchestrator(
                 |Current: ${anomaly.currentValue} ${signal.unit ?: ""}
                 |Baseline: ${anomaly.baselineValue ?: 0.0} ${signal.unit ?: ""}
                 |Reason: ${anomaly.reason}
-                """.trimMargin()
+            """.trimMargin()
 
             evidence.add(EvidenceItem("PROMQL", signal.panelTitle, body))
         }

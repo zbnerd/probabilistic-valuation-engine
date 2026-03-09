@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController
 @Profile("!prod")
 class AlertTestController(
     private val alertPort: AlertPort,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
 
     @PostMapping("/api/admin/test/alert")
@@ -26,7 +26,7 @@ class AlertTestController(
             alertPort.sendCriticalAlert(
                 "[TEST] 배포 점검 알림",
                 "이 알림은 실제 에러가 아닙니다. 알림 시스템 작동 여부를 확인 중입니다.",
-                testEx
+                testEx,
             )
         }, context)
 

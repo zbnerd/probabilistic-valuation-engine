@@ -60,12 +60,12 @@ class LikeBufferConfig {
     @ConditionalOnProperty(
         name = ["app.buffer.redis.enabled"],
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = true,
     )
     fun redisLikeBufferStrategy(
         redissonClient: RedissonClient,
         executor: LogicExecutor,
-        meterRegistry: MeterRegistry
+        meterRegistry: MeterRegistry,
     ): LikeBufferStrategy {
         log.info("[LikeBufferConfig] Redis Like Buffer ENABLED - Scale-out mode")
         return RedisLikeBufferStorage(redissonClient, executor, meterRegistry)
@@ -87,16 +87,18 @@ class LikeBufferConfig {
     @ConditionalOnProperty(
         name = ["app.buffer.redis.enabled"],
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = true,
     )
     fun redisLikeRelationBufferStrategy(
         redissonClient: RedissonClient,
         executor: LogicExecutor,
-        meterRegistry: MeterRegistry
+        meterRegistry: MeterRegistry,
     ): maple.expectation.core.port.out.LikeRelationBufferStrategy {
         log.info("[LikeBufferConfig] Redis Like Relation Buffer ENABLED - Scale-out mode")
         return maple.expectation.infrastructure.queue.like.RedisLikeRelationBufferAdapter(
-            redissonClient, executor, meterRegistry
+            redissonClient,
+            executor,
+            meterRegistry,
         )
     }
 
@@ -109,25 +111,29 @@ class LikeBufferConfig {
     @ConditionalOnProperty(
         name = ["app.buffer.redis.enabled"],
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = true,
     )
     fun partitionedFlushStrategy(
         redissonClient: RedissonClient,
         bufferStrategy: LikeBufferStrategy,
         executor: LogicExecutor,
         meterRegistry: MeterRegistry,
-        syncExecutor: LikeSyncExecutor
+        syncExecutor: LikeSyncExecutor,
     ): PartitionedFlushStrategy {
         val redisBuffer = bufferStrategy as? RedisLikeBufferStorage
             ?: throw IllegalStateException(
                 "PartitionedFlushStrategy requires RedisLikeBufferStorage but got " +
-                    "${bufferStrategy.javaClass.name}"
+                    "${bufferStrategy.javaClass.name}",
             )
 
         log.info("[LikeBufferConfig] Partitioned Flush Strategy ENABLED")
         // LikeSyncExecutor.executeIncrement(String, Long)를 BiConsumer<String, Long>로 래핑
         return PartitionedFlushStrategy(
-            redissonClient, redisBuffer, executor, meterRegistry, syncExecutor::executeIncrement
+            redissonClient,
+            redisBuffer,
+            executor,
+            meterRegistry,
+            syncExecutor::executeIncrement,
         )
     }
 
@@ -140,12 +146,12 @@ class LikeBufferConfig {
     @ConditionalOnProperty(
         name = ["app.buffer.redis.enabled"],
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = true,
     )
     fun atomicLikeToggleExecutor(
         redissonClient: RedissonClient,
         executor: LogicExecutor,
-        meterRegistry: MeterRegistry
+        meterRegistry: MeterRegistry,
     ): AtomicLikeToggleExecutor {
         log.info("[LikeBufferConfig] Atomic Like Toggle Executor ENABLED")
         return AtomicLikeToggleExecutor(redissonClient, executor, meterRegistry)
@@ -170,16 +176,18 @@ class LikeBufferConfig {
     @ConditionalOnProperty(
         name = ["app.buffer.redis.enabled"],
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = true,
     )
     fun redisPersistenceTrackerStrategy(
         redissonClient: RedissonClient,
         executor: LogicExecutor,
-        meterRegistry: MeterRegistry
+        meterRegistry: MeterRegistry,
     ): maple.expectation.core.port.out.PersistenceTrackerStrategy {
         log.info("[LikeBufferConfig] Redis Persistence Tracker ENABLED - Scale-out mode")
         return maple.expectation.infrastructure.queue.persistence.RedisEquipmentPersistenceTracker(
-            redissonClient, executor, meterRegistry
+            redissonClient,
+            executor,
+            meterRegistry,
         )
     }
 }

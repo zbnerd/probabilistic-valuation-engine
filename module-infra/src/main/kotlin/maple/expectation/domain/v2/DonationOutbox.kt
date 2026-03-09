@@ -1,7 +1,6 @@
 package maple.expectation.domain.v2
 
 import jakarta.persistence.*
-import maple.expectation.error.exception.InternalSystemException
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
@@ -9,6 +8,7 @@ import java.time.LocalDateTime
 import java.util.HexFormat
 import kotlin.math.min
 import kotlin.math.pow
+import maple.expectation.error.exception.InternalSystemException
 
 /**
  * Transactional Outbox 엔티티 (Issue #80)
@@ -27,8 +27,8 @@ import kotlin.math.pow
 @Table(
     indexes = [
         Index(name = "idx_pending_poll", columnList = "status, next_retry_at, id"),
-        Index(name = "idx_locked", columnList = "locked_by, locked_at")
-    ]
+        Index(name = "idx_locked", columnList = "locked_by, locked_at"),
+    ],
 )
 class DonationOutbox {
 
@@ -87,7 +87,7 @@ class DonationOutbox {
         PROCESSING,
         COMPLETED,
         FAILED,
-        DEAD_LETTER
+        DEAD_LETTER,
     }
 
     private constructor()
@@ -127,13 +127,11 @@ class DonationOutbox {
          * <p><b>Note:</b> JPA 엔티티에서는 LogicExecutor 주입이 불가하므로 Section 11 규칙에 따라 직접 예외 변환 허용
          */
         @Suppress("JAVA_S1166") // NoSuchAlgorithmException은 발생 불가 (Java 표준)
-        private fun getSha256Digest(): MessageDigest {
-            return try {
-                MessageDigest.getInstance("SHA-256")
-            } catch (e: NoSuchAlgorithmException) {
-                // SHA-256은 JVM 필수 알고리즘이므로 여기 도달 시 JVM 결함
-                throw InternalSystemException("SHA-256 algorithm not available (JVM defect)", e)
-            }
+        private fun getSha256Digest(): MessageDigest = try {
+            MessageDigest.getInstance("SHA-256")
+        } catch (e: NoSuchAlgorithmException) {
+            // SHA-256은 JVM 필수 알고리즘이므로 여기 도달 시 JVM 결함
+            throw InternalSystemException("SHA-256 algorithm not available (JVM defect)", e)
         }
 
         /**
@@ -141,9 +139,7 @@ class DonationOutbox {
          *
          * <p>기존 String.format("%02x") 루프 대비 할당 감소
          */
-        private fun bytesToHex(bytes: ByteArray): String {
-            return HexFormat.of().formatHex(bytes)
-        }
+        private fun bytesToHex(bytes: ByteArray): String = HexFormat.of().formatHex(bytes)
     }
 
     /** 무결성 검증 */
@@ -184,9 +180,7 @@ class DonationOutbox {
     }
 
     /** DLQ 이동 여부 판단 */
-    fun shouldMoveToDlq(): Boolean {
-        return retryCount >= maxRetries
-    }
+    fun shouldMoveToDlq(): Boolean = retryCount >= maxRetries
 
     /**
      * 즉시 DEAD_LETTER 상태로 강제 변경 (Purple 요구사항)
@@ -215,12 +209,8 @@ class DonationOutbox {
         this.updatedAt = LocalDateTime.now()
     }
 
-    private fun truncate(str: String?, maxLen: Int): String? {
-        return if (str != null && str.length > maxLen) str.substring(0, maxLen) else str
-    }
+    private fun truncate(str: String?, maxLen: Int): String? = if (str != null && str.length > maxLen) str.substring(0, maxLen) else str
 
     /** PII 마스킹 (CLAUDE.md 19 준수) */
-    override fun toString(): String {
-        return "DonationOutbox[id=$id, requestId=$requestId, status=$status, payload=MASKED]"
-    }
+    override fun toString(): String = "DonationOutbox[id=$id, requestId=$requestId, status=$status, payload=MASKED]"
 }

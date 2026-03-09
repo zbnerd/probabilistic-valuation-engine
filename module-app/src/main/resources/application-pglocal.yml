@@ -1,6 +1,7 @@
-# PostgreSQL Local Development Configuration
+# PostgreSQL Local Configuration
 # Usage: ./gradlew bootRun --args='--spring.profiles.active=pglocal'
-# Or: java -jar app.jar --spring.profiles.active=pglocal
+# This profile uses PostgreSQL as the primary database instead of MySQL
+# Issue #547: PostgreSQL Migration
 
 server:
   tomcat:
@@ -33,15 +34,14 @@ spring:
       ddl-auto: validate  # Use validate with PostgreSQL (schema managed by init.sql)
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         default_batch_fetch_size: 100
         jdbc:
           batch_size: 100
         order_inserts: true
         order_updates: true
-        # PostgreSQL dialect
-        dialect: org.hibernate.dialect.PostgreSQLDialect
 
-  # Redis disabled for PostgreSQL-only mode
+  # Redis for cache, session, and lock (kept for these use cases)
   data:
     redis:
       host: localhost
@@ -66,16 +66,16 @@ spring:
     discord:
       webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
 
-# DP 엔진 테이블 검증 설정
+# Cube policy for local (LENIENT for development)
 cube:
   table-mass:
     policy: LENIENT
 
-# Rate Limiting 비활성화 (부하 테스트용)
+# Rate Limiting disabled for local development
 ratelimit:
   enabled: false
 
-# CORS 설정
+# CORS 설정 (Issue #172: 로컬 개발 환경)
 cors:
   allowed-origins:
     - "http://localhost:3000"
@@ -85,16 +85,16 @@ cors:
     - "http://127.0.0.1:3001"
     - "http://127.0.0.1:5173"
 
-# PostgreSQL-specific application settings
+# App configuration
 app:
   buffer:
     redis:
-      enabled: false  # PostgreSQL UNLOGGED tables instead
+      enabled: true  # Keep Redis for cache
     postgres:
       enabled: true
       unlogged-buffer-size: 10000
   event-publisher:
-    type: pgmq  # Use PGMQ instead of Redis
+    type: redis  # Keep Redis for now, migrate to PGMQ later
   aop:
     trace:
       enabled: true
@@ -118,13 +118,13 @@ scheduler:
   popular-character-warmup:
     enabled: false
 
-# Disable outbox schedulers (PGMQ handles this)
+# Disable outbox schedulers
 outbox:
   scheduler:
     nexon-api-outbox:
       enabled: false
 
-# PGMQ Configuration
+# PGMQ Configuration (for future migration)
 pgmq:
   enabled: true
   queues:
@@ -147,7 +147,7 @@ langchain4j:
       model-name: glm-4.7
       timeout: 60s
 
-# Resilience4j Configuration
+# ADR-0345: Resilience4j Configuration
 resilience4j:
   circuitbreaker:
     instances:
@@ -168,6 +168,9 @@ resilience4j:
         maxAttempts: 3
         waitDuration: 500ms
         exponentialBackoffMultiplier: 2.0
+        retryExceptions:
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+          - io.netty.channel.ConnectTimeoutException
       pgmq:
         maxAttempts: 3
         waitDuration: 100ms

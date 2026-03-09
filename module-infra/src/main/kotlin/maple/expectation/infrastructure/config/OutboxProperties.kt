@@ -4,9 +4,9 @@ import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
+import java.time.Duration
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
-import java.time.Duration
 
 /**
  * Outbox 외부 설정 프로퍼티 (P1-2, P1-8)
@@ -29,41 +29,41 @@ import java.time.Duration
 @ConfigurationProperties(prefix = "outbox")
 class OutboxProperties {
 
-  /**
-   * 배치 크기 (SKIP LOCKED 조회 단위)
-   *
-   * <p>기본값: 100건. 너무 크면 트랜잭션 락 시간 증가, 너무 작으면 오버헤드 증가
-   */
-  @Min(1)
-  @Max(1000)
-  var batchSize: Int = 100
+    /**
+     * 배치 크기 (SKIP LOCKED 조회 단위)
+     *
+     * <p>기본값: 100건. 너무 크면 트랜잭션 락 시간 증가, 너무 작으면 오버헤드 증가
+     */
+    @Min(1)
+    @Max(1000)
+    var batchSize: Int = 100
 
-  /**
-   * Stalled 판정 기준 시간
-   *
-   * <p>PROCESSING 상태로 이 시간 이상 유지된 항목을 Zombie로 판정
-   */
-  @NotNull
-  var staleThreshold: Duration = Duration.ofMinutes(5)
+    /**
+     * Stalled 판정 기준 시간
+     *
+     * <p>PROCESSING 상태로 이 시간 이상 유지된 항목을 Zombie로 판정
+     */
+    @NotNull
+    var staleThreshold: Duration = Duration.ofMinutes(5)
 
-  /**
-   * Exponential Backoff 최대 대기 시간 (P1-5 Fix)
-   *
-   * <p>retryCount가 커져도 이 시간을 초과하지 않음
-   */
-  @NotNull
-  var maxBackoff: Duration = Duration.ofHours(1)
+    /**
+     * Exponential Backoff 최대 대기 시간 (P1-5 Fix)
+     *
+     * <p>retryCount가 커져도 이 시간을 초과하지 않음
+     */
+    @NotNull
+    var maxBackoff: Duration = Duration.ofHours(1)
 
-  /** 인스턴스 식별자 (Scale-out 환경에서 어떤 인스턴스가 처리 중인지 식별) */
-  @NotBlank
-  var instanceId: String = "default-instance"
+    /** 인스턴스 식별자 (Scale-out 환경에서 어떤 인스턴스가 처리 중인지 식별) */
+    @NotBlank
+    var instanceId: String = "default-instance"
 
-  /**
-   * Outbox 크기 경고 임계값 (Issue #N19)
-   *
-   * <p>이 값 초과 시 백로그 상태로 판단하고 로그 기록
-   */
-  @Min(100)
-  @Max(100000)
-  var sizeAlertThreshold: Int = 1000
+    /**
+     * Outbox 크기 경고 임계값 (Issue #N19)
+     *
+     * <p>이 값 초과 시 백로그 상태로 판단하고 로그 기록
+     */
+    @Min(100)
+    @Max(100000)
+    var sizeAlertThreshold: Int = 1000
 }

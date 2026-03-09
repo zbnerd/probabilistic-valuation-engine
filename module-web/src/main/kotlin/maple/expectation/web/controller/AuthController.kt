@@ -1,16 +1,17 @@
 package maple.expectation.web.controller
 
 import jakarta.validation.Valid
-import maple.expectation.web.dto.LoginRequest
-import maple.expectation.web.dto.LoginResponse
-import maple.expectation.web.dto.RefreshRequest
-import maple.expectation.web.dto.TokenResponse
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.port.inbound.AuthCommand
 import maple.expectation.core.port.inbound.AuthPort
 import maple.expectation.core.port.inbound.AuthResult
 import maple.expectation.core.port.inbound.TokenResult
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import maple.expectation.response.ApiResponse
+import maple.expectation.web.dto.LoginRequest
+import maple.expectation.web.dto.LoginResponse
+import maple.expectation.web.dto.RefreshRequest
+import maple.expectation.web.dto.TokenResponse
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -22,7 +23,6 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.util.concurrent.CompletableFuture
 
 /**
  * 인증 API 컨트롤러
@@ -41,7 +41,7 @@ import java.util.concurrent.CompletableFuture
 @RestController
 @RequestMapping("/auth")
 class AuthController(
-    private val authPort: AuthPort
+    private val authPort: AuthPort,
 ) {
 
     /**
@@ -52,21 +52,19 @@ class AuthController(
      */
     @PostMapping("/login")
     fun login(
-        @Valid @RequestBody request: LoginRequest
-    ): CompletableFuture<ResponseEntity<ApiResponse<LoginResponse>>> {
-        return CompletableFuture.supplyAsync {
-            val command = AuthCommand.of(request.apiKey, request.userIgn)
-            val result: AuthResult = authPort.login(command)
-            val response = LoginResponse.of(
+        @Valid @RequestBody request: LoginRequest,
+    ): CompletableFuture<ResponseEntity<ApiResponse<LoginResponse>>> = CompletableFuture.supplyAsync {
+        val command = AuthCommand.of(request.apiKey, request.userIgn)
+        val result: AuthResult = authPort.login(command)
+        val response = LoginResponse.of(
             result.accessToken,
             result.expiresIn,
             result.role,
             result.fingerprint,
             result.refreshToken,
-            result.refreshExpiresIn
-            )
-            ResponseEntity.ok(ApiResponse.success(response))
-        }
+            result.refreshExpiresIn,
+        )
+        ResponseEntity.ok(ApiResponse.success(response))
     }
 
     /**
@@ -81,14 +79,14 @@ class AuthController(
      */
     @PostMapping("/refresh")
     fun refresh(
-        @Valid @RequestBody request: RefreshRequest
+        @Valid @RequestBody request: RefreshRequest,
     ): ResponseEntity<ApiResponse<TokenResponse>> {
         val result: TokenResult = authPort.refresh(request.refreshToken)
         val response = TokenResponse.of(
             result.accessToken,
             result.expiresIn,
             result.refreshToken,
-            result.refreshExpiresIn
+            result.refreshExpiresIn,
         )
         return ResponseEntity.ok(ApiResponse.success(response))
     }
@@ -118,7 +116,7 @@ class AuthController(
             user.sessionId,
             user.fingerprint,
             user.role,
-            user.myOcids.size
+            user.myOcids.size,
         )
         return ResponseEntity.ok(ApiResponse.success(response))
     }
@@ -128,7 +126,7 @@ class AuthController(
         val sessionId: String,
         val fingerprint: String,
         val role: String,
-        val characterCount: Int
+        val characterCount: Int,
     )
 
     companion object {

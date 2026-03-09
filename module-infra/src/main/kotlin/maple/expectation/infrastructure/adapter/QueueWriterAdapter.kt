@@ -12,16 +12,12 @@ import org.springframework.stereotype.Component
  */
 @Component
 class QueueWriterAdapter(
-    private val delegate: PriorityCalculationQueue
+    private val delegate: PriorityCalculationQueue,
 ) : QueueWriterPort {
 
-    override fun addLowPriorityTask(userIgn: String): Boolean {
-        return delegate.addLowPriorityTask(userIgn)
-    }
+    override fun addLowPriorityTask(userIgn: String): Boolean = delegate.addLowPriorityTask(userIgn)
 
-    override fun addHighPriorityTask(userIgn: String, forceRecalculation: Boolean): Boolean {
-        return delegate.addHighPriorityTask(userIgn, forceRecalculation)
-    }
+    override fun addHighPriorityTask(userIgn: String, forceRecalculation: Boolean): Boolean = delegate.addHighPriorityTask(userIgn, forceRecalculation)
 
     override fun size(): Int {
         val (high, low) = delegate.getQueueSize()

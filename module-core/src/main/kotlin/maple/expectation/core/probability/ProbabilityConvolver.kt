@@ -31,114 +31,111 @@ import maple.expectation.core.domain.model.calculator.SparsePmf
  */
 class ProbabilityConvolver {
 
-  companion object {
-    private const val MASS_TOLERANCE = 1e-12
-    private const val NEGATIVE_TOLERANCE = -1e-15
-  }
-
-  /**
-   * 슬롯 SparsePmf들을 합성하여 총합 DensePmf 생성
-   *
-   * <p>사후조건:
-   *
-   * <ul>
-   *   <li>질량 보존: Σ=1 ± MASS_TOLERANCE
-   *   <li>NaN/Inf 없음
-   *   <li>enableTailClamp=true면 상태 크기 = target+1
-   * </ul>
-   *
-   * @param slotPmfs 슬롯별 SparsePmf 리스트
-   * @param target 목표 합계
-   * @param enableTailClamp Tail Clamp 활성화 여부
-   * @return 합성된 DensePmf
-   * @throws IllegalArgumentException 불변식 위반 시
-   */
-  fun convolveAll(slotPmfs: List<SparsePmf>, target: Int, enableTailClamp: Boolean): DensePmf {
-    return doConvolveWithClamp(slotPmfs, target, enableTailClamp)
-  }
-
-  private fun doConvolveWithClamp(
-      slotPmfs: List<SparsePmf>,
-      target: Int,
-      enableTailClamp: Boolean
-  ): DensePmf {
-    val maxIndex = if (enableTailClamp) target else calculateMaxSum(slotPmfs)
-    var acc = initializeAccumulator(maxIndex)
-
-    for (slot in slotPmfs) {
-      acc = convolveSlot(acc, slot, maxIndex)
+    companion object {
+        private const val MASS_TOLERANCE = 1e-12
+        private const val NEGATIVE_TOLERANCE = -1e-15
     }
 
-    val result = DensePmf.fromArray(acc)
-    validateInvariants(result)
-    return result
-  }
+    /**
+     * 슬롯 SparsePmf들을 합성하여 총합 DensePmf 생성
+     *
+     * <p>사후조건:
+     *
+     * <ul>
+     *   <li>질량 보존: Σ=1 ± MASS_TOLERANCE
+     *   <li>NaN/Inf 없음
+     *   <li>enableTailClamp=true면 상태 크기 = target+1
+     * </ul>
+     *
+     * @param slotPmfs 슬롯별 SparsePmf 리스트
+     * @param target 목표 합계
+     * @param enableTailClamp Tail Clamp 활성화 여부
+     * @return 합성된 DensePmf
+     * @throws IllegalArgumentException 불변식 위반 시
+     */
+    fun convolveAll(slotPmfs: List<SparsePmf>, target: Int, enableTailClamp: Boolean): DensePmf = doConvolveWithClamp(slotPmfs, target, enableTailClamp)
 
-  private fun initializeAccumulator(maxIndex: Int): DoubleArray {
-    val acc = DoubleArray(maxIndex + 1)
-    acc[0] = 1.0 // 초기 상태: 합=0일 확률 100%
-    return acc
-  }
+    private fun doConvolveWithClamp(
+        slotPmfs: List<SparsePmf>,
+        target: Int,
+        enableTailClamp: Boolean,
+    ): DensePmf {
+        val maxIndex = if (enableTailClamp) target else calculateMaxSum(slotPmfs)
+        var acc = initializeAccumulator(maxIndex)
 
-  private fun convolveSlot(acc: DoubleArray, slot: SparsePmf, maxIndex: Int): DoubleArray {
-    val next = DoubleArray(maxIndex + 1)
+        for (slot in slotPmfs) {
+            acc = convolveSlot(acc, slot, maxIndex)
+        }
 
-    for (i in 0..maxIndex) {
-      if (acc[i] == 0.0) continue
-      accumulateSlotContributions(acc, slot, next, i, maxIndex)
+        val result = DensePmf.fromArray(acc)
+        validateInvariants(result)
+        return result
     }
 
-    return next
-  }
-
-  private fun accumulateSlotContributions(
-      acc: DoubleArray,
-      slot: SparsePmf,
-      next: DoubleArray,
-      currentIndex: Int,
-      maxIndex: Int
-  ) {
-    for (k in 0 until slot.size()) {
-      val value = slot.valueAt(k)
-      val prob = slot.probAt(k)
-
-      // P2 Fix (PR #159 Codex 지적): 음수 contribution 가드
-      // 상위 파서/추출기 버그 시 ArrayIndexOutOfBoundsException 방지
-      if (value < 0) {
-        throw IllegalArgumentException(
-            "음수 contribution 감지: value=$value (slot index=$k)")
-      }
-
-      val targetIndex = minOf(currentIndex + value, maxIndex) // Tail Clamp
-      next[targetIndex] += acc[currentIndex] * prob
+    private fun initializeAccumulator(maxIndex: Int): DoubleArray {
+        val acc = DoubleArray(maxIndex + 1)
+        acc[0] = 1.0 // 초기 상태: 합=0일 확률 100%
+        return acc
     }
-  }
 
-  private fun calculateMaxSum(slotPmfs: List<SparsePmf>): Int {
-    return slotPmfs.sumOf { it.maxValue() }
-  }
+    private fun convolveSlot(acc: DoubleArray, slot: SparsePmf, maxIndex: Int): DoubleArray {
+        val next = DoubleArray(maxIndex + 1)
 
-  /**
-   * DensePmf 불변식 검증
-   *
-   * <p>DoD 1e-12 기준 충족을 위해 Kahan summation 사용
-   *
-   * @param pmf 검증 대상
-   * @throws IllegalArgumentException 불변식 위반 시
-   */
-  private fun validateInvariants(pmf: DensePmf) {
-    val sum = pmf.totalMassKahan()
-    if (Math.abs(sum - 1.0) > MASS_TOLERANCE) {
-      throw IllegalArgumentException("질량 보존 위반: Σp=$sum")
+        for (i in 0..maxIndex) {
+            if (acc[i] == 0.0) continue
+            accumulateSlotContributions(acc, slot, next, i, maxIndex)
+        }
+
+        return next
     }
-    if (pmf.hasNegative(NEGATIVE_TOLERANCE)) {
-      throw IllegalArgumentException("음수 확률 감지")
+
+    private fun accumulateSlotContributions(
+        acc: DoubleArray,
+        slot: SparsePmf,
+        next: DoubleArray,
+        currentIndex: Int,
+        maxIndex: Int,
+    ) {
+        for (k in 0 until slot.size()) {
+            val value = slot.valueAt(k)
+            val prob = slot.probAt(k)
+
+            // P2 Fix (PR #159 Codex 지적): 음수 contribution 가드
+            // 상위 파서/추출기 버그 시 ArrayIndexOutOfBoundsException 방지
+            if (value < 0) {
+                throw IllegalArgumentException(
+                    "음수 contribution 감지: value=$value (slot index=$k)",
+                )
+            }
+
+            val targetIndex = minOf(currentIndex + value, maxIndex) // Tail Clamp
+            next[targetIndex] += acc[currentIndex] * prob
+        }
     }
-    if (pmf.hasNaNOrInf()) {
-      throw IllegalArgumentException("NaN/Inf 감지")
+
+    private fun calculateMaxSum(slotPmfs: List<SparsePmf>): Int = slotPmfs.sumOf { it.maxValue() }
+
+    /**
+     * DensePmf 불변식 검증
+     *
+     * <p>DoD 1e-12 기준 충족을 위해 Kahan summation 사용
+     *
+     * @param pmf 검증 대상
+     * @throws IllegalArgumentException 불변식 위반 시
+     */
+    private fun validateInvariants(pmf: DensePmf) {
+        val sum = pmf.totalMassKahan()
+        if (Math.abs(sum - 1.0) > MASS_TOLERANCE) {
+            throw IllegalArgumentException("질량 보존 위반: Σp=$sum")
+        }
+        if (pmf.hasNegative(NEGATIVE_TOLERANCE)) {
+            throw IllegalArgumentException("음수 확률 감지")
+        }
+        if (pmf.hasNaNOrInf()) {
+            throw IllegalArgumentException("NaN/Inf 감지")
+        }
+        if (pmf.hasValueExceedingOne()) {
+            throw IllegalArgumentException("확률 > 1 감지")
+        }
     }
-    if (pmf.hasValueExceedingOne()) {
-      throw IllegalArgumentException("확률 > 1 감지")
-    }
-  }
 }

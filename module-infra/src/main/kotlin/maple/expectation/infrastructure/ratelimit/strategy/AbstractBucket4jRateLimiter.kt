@@ -2,17 +2,16 @@ package maple.expectation.infrastructure.ratelimit.strategy
 
 import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.BucketConfiguration
-import io.github.bucket4j.ConsumptionProbe
 import io.github.bucket4j.distributed.proxy.ProxyManager
 import io.micrometer.core.instrument.MeterRegistry
+import java.time.Duration
+import java.util.concurrent.TimeUnit
+import java.util.function.Supplier
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.ratelimit.ConsumeResult
 import maple.expectation.infrastructure.ratelimit.RateLimiter
 import maple.expectation.infrastructure.ratelimit.config.RateLimitProperties
-import java.time.Duration
-import java.util.concurrent.TimeUnit
-import java.util.function.Supplier
 
 /**
  * Bucket4j 기반 Rate Limiter 추상 클래스 (Template Method Pattern)
@@ -34,7 +33,7 @@ abstract class AbstractBucket4jRateLimiter(
     protected val proxyManager: ProxyManager<String>,
     protected val properties: RateLimitProperties,
     protected val executor: LogicExecutor,
-    protected val meterRegistry: MeterRegistry
+    protected val meterRegistry: MeterRegistry,
 ) : RateLimiter {
 
     /**
@@ -54,8 +53,8 @@ abstract class AbstractBucket4jRateLimiter(
         return executor.executeOrDefault(
             { doTryConsume(fullKey) },
             ConsumeResult.failOpen(),
-    // Default value
-            context
+            // Default value
+            context,
         )
     }
 
@@ -108,9 +107,7 @@ abstract class AbstractBucket4jRateLimiter(
      * @param key 원본 키
      * @return 전체 키 (예: {ratelimit}:ip:192.168.1.1)
      */
-    protected fun buildFullKey(key: String): String {
-        return "${properties.keyPrefix}:${getKeyPrefix()}:$key"
-    }
+    protected fun buildFullKey(key: String): String = "${properties.keyPrefix}:${getKeyPrefix()}:$key"
 
     /**
      * Redis 장애 시 Fail-Open 처리
@@ -125,7 +122,7 @@ abstract class AbstractBucket4jRateLimiter(
             log.warn(
                 "[RateLimit-FailOpen] Redis failure, allowing request: strategy={}, key={}",
                 getStrategyName(),
-                maskKey(key)
+                maskKey(key),
             )
             meterRegistry.counter("ratelimit.failopen", "strategy", getStrategyName()).increment()
         } else {
@@ -133,7 +130,7 @@ abstract class AbstractBucket4jRateLimiter(
             log.warn(
                 "[RateLimit-FailClose] Redis failure, using default: strategy={}, key={}",
                 getStrategyName(),
-                maskKey(key)
+                maskKey(key),
             )
             meterRegistry.counter("ratelimit.failclose", "strategy", getStrategyName()).increment()
         }
@@ -150,8 +147,10 @@ abstract class AbstractBucket4jRateLimiter(
         val result = if (consumed) "allowed" else "denied"
         meterRegistry.counter(
             "ratelimit.consume",
-            "strategy", getStrategyName(),
-            "result", result
+            "strategy",
+            getStrategyName(),
+            "result",
+            result,
         ).increment()
     }
 

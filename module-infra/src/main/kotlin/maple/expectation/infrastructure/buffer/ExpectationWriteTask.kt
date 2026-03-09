@@ -30,7 +30,7 @@ data class ExpectationWriteTask(
     val redCubeCost: BigDecimal,
     val additionalCubeCost: BigDecimal,
     val starforceCost: BigDecimal,
-    val createdAt: LocalDateTime
+    val createdAt: LocalDateTime,
 ) {
     /**
      * 버퍼 키 생성 (중복 방지용)

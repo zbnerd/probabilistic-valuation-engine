@@ -37,7 +37,7 @@ interface AlertNotificationPort {
         severity: String,
         signals: List<AnnotatedSignal>,
         hypotheses: List<String>,
-        actions: List<String>
+        actions: List<String>,
     ): String
 
     /**
@@ -50,6 +50,6 @@ interface AlertNotificationPort {
     data class AnnotatedSignal(
         val signalName: String,
         val signalUnit: String?,
-        val value: Double
+        val value: Double,
     )
 }

@@ -1,18 +1,17 @@
 package maple.expectation.infrastructure.messaging
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
+import java.util.concurrent.CompletableFuture
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.port.out.EventPublisher
 import maple.expectation.core.port.out.MessageQueue
-import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.error.exception.QueuePublishException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import org.slf4j.LoggerFactory
-import java.util.concurrent.CompletableFuture
 
 /**
  * Redis-based event publisher implementation.
@@ -68,12 +67,12 @@ import java.util.concurrent.CompletableFuture
     prefix = "app.event-publisher",
     name = ["type"],
     havingValue = "redis",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 class RedisEventPublisher(
     @Qualifier("integrationEventQueue") private val messageQueue: MessageQueue<String>,
     private val objectMapper: ObjectMapper,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) : EventPublisher {
 
     companion object {
@@ -83,7 +82,7 @@ class RedisEventPublisher(
     override fun publish(topic: String, event: IntegrationEvent<*>) {
         executor.executeVoid(
             { publishInternal(topic, event) },
-            TaskContext.of("RedisEventPublisher", "Publish", topic)
+            TaskContext.of("RedisEventPublisher", "Publish", topic),
         )
     }
 
@@ -112,10 +111,10 @@ class RedisEventPublisher(
                     "[RedisEventPublisher] Queue full, could not publish to topic {}: eventId={}, eventType={}",
                     topic,
                     event.eventId,
-                    event.eventType
+                    event.eventType,
                 )
                 throw QueuePublishException(
-                    String.format("Redis queue full: topic=%s, eventType=%s", topic, event.eventType)
+                    String.format("Redis queue full: topic=%s, eventType=%s", topic, event.eventType),
                 )
             }
 
@@ -123,7 +122,7 @@ class RedisEventPublisher(
                 "[RedisEventPublisher] Published to queue {}: eventId={}, eventType={}",
                 topic,
                 event.eventId,
-                event.eventType
+                event.eventType,
             )
         } catch (e: com.fasterxml.jackson.core.JsonProcessingException) {
             // Section 11: Convert checked exception to domain exception

@@ -3,6 +3,8 @@ package maple.expectation.infrastructure.monitoring.copilot.pipeline
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.github.benmanes.caffeine.cache.stats.CacheStats
+import java.nio.file.Path
+import java.time.Duration
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.monitoring.copilot.ingestor.GrafanaJsonIngestor
@@ -11,14 +13,12 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
-import java.nio.file.Path
-import java.time.Duration
 
 @Service
 @ConditionalOnProperty(name = ["monitoring.copilot.enabled"], havingValue = "true")
 class SignalDefinitionLoader(
     private val ingestor: GrafanaJsonIngestor,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     companion object {
         private const val CACHE_KEY = "signalCatalog"
@@ -37,9 +37,7 @@ class SignalDefinitionLoader(
             .recordStats()
             .build()
 
-    fun loadSignalDefinitions(): List<SignalDefinition> {
-        return signalCatalogCache.get(CACHE_KEY) { loadSignalDefinitionsFromDisk() }
-    }
+    fun loadSignalDefinitions(): List<SignalDefinition> = signalCatalogCache.get(CACHE_KEY) { loadSignalDefinitionsFromDisk() }
 
     fun forceReload(): List<SignalDefinition> {
         signalCatalogCache.invalidate(CACHE_KEY)
@@ -51,25 +49,20 @@ class SignalDefinitionLoader(
         return cached?.size ?: 0
     }
 
-    fun isCached(): Boolean {
-        return signalCatalogCache.getIfPresent(CACHE_KEY) != null
-    }
+    fun isCached(): Boolean = signalCatalogCache.getIfPresent(CACHE_KEY) != null
 
-    fun getCacheStats(): CacheStats {
-        return signalCatalogCache.stats()
-    }
+    fun getCacheStats(): CacheStats = signalCatalogCache.stats()
 
-    private fun loadSignalDefinitionsFromDisk(): List<SignalDefinition> {
-        return executor.executeOrDefault(
-            {
-                val dashboardPath = Path.of(dashboardDir)
-                val signals = ingestor.ingestDashboards(dashboardPath)
+    private fun loadSignalDefinitionsFromDisk(): List<SignalDefinition> = executor.executeOrDefault(
+        {
+            val dashboardPath = Path.of(dashboardDir)
+            val signals = ingestor.ingestDashboards(dashboardPath)
 
-                log.info("[SignalDefinitionLoader] Signal catalog refreshed: {} signals from {}", signals.size, dashboardPath)
+            log.info("[SignalDefinitionLoader] Signal catalog refreshed: {} signals from {}", signals.size, dashboardPath)
 
-                signals
-            },
-            emptyList(),
-            TaskContext.of("SignalDefinitionLoader", "ReloadCatalog"))
-    }
+            signals
+        },
+        emptyList(),
+        TaskContext.of("SignalDefinitionLoader", "ReloadCatalog"),
+    )
 }

@@ -2,9 +2,9 @@ package maple.expectation.util.converter
 
 import jakarta.persistence.AttributeConverter
 import jakarta.persistence.Converter
+import java.io.IOException
 import maple.expectation.error.exception.CompressionException
 import maple.expectation.util.GzipUtils
-import java.io.IOException
 
 /**
  * JPA AttributeConverter for compressing String values using GZIP.

@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class OutboxFetchFacade(
     private val outboxRepository: DonationOutboxRepository,
-    private val properties: OutboxProperties
+    private val properties: OutboxProperties,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -44,7 +44,7 @@ class OutboxFetchFacade(
         val pending = outboxRepository.findPendingWithLock(
             listOf(OutboxStatus.PENDING, OutboxStatus.FAILED),
             java.time.LocalDateTime.now(),
-            PageRequest.of(0, properties.batchSize)
+            PageRequest.of(0, properties.batchSize),
         )
 
         pending.forEach { entry ->

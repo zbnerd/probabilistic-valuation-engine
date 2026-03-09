@@ -15,5 +15,5 @@ enum class AlertPriority {
     MEDIUM,
 
     /** Low priority - informational messages */
-    LOW
+    LOW,
 }

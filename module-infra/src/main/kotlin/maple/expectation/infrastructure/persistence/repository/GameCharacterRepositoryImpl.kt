@@ -26,26 +26,16 @@ open class GameCharacterRepositoryImpl(
 ) : DomainGameCharacterRepository {
 
     @Nullable
-    override fun findByOcid(ocid: String): GameCharacter? {
-        return jpaRepo.findByOcid(ocid)?.toDomain()
-    }
+    override fun findByOcid(ocid: String): GameCharacter? = jpaRepo.findByOcid(ocid)?.toDomain()
 
     @Nullable
-    override fun findByUserIgn(userIgn: String): GameCharacter? {
-        return jpaRepo.findByUserIgn(userIgn)?.toDomain()
-    }
+    override fun findByUserIgn(userIgn: String): GameCharacter? = jpaRepo.findByUserIgn(userIgn)?.toDomain()
 
-    override fun findAll(): List<GameCharacter> {
-        return jpaRepo.findAll().stream().map { it.toDomain() }.toList()
-    }
+    override fun findAll(): List<GameCharacter> = jpaRepo.findAll().stream().map { it.toDomain() }.toList()
 
-    override fun findAll(pageable: org.springframework.data.domain.Pageable): org.springframework.data.domain.Page<GameCharacter> {
-        return jpaRepo.findAll(pageable).map { it.toDomain() }
-    }
+    override fun findAll(pageable: org.springframework.data.domain.Pageable): org.springframework.data.domain.Page<GameCharacter> = jpaRepo.findAll(pageable).map { it.toDomain() }
 
-    override fun findActiveCharacters(): List<GameCharacter> {
-        return jpaCustomRepo.findActiveCharacters().stream().map { it.toDomain() }.toList()
-    }
+    override fun findActiveCharacters(): List<GameCharacter> = jpaCustomRepo.findActiveCharacters().stream().map { it.toDomain() }.toList()
 
     override fun save(character: GameCharacter): GameCharacter {
         requireNotNull(character) { "Character cannot be null" }
@@ -58,9 +48,7 @@ open class GameCharacterRepositoryImpl(
         jpaRepo.deleteByOcid(ocid)
     }
 
-    override fun existsByOcid(ocid: String): Boolean {
-        return jpaRepo.existsByOcid(ocid)
-    }
+    override fun existsByOcid(ocid: String): Boolean = jpaRepo.existsByOcid(ocid)
 
     override fun incrementLikeCount(userIgn: String, count: Long) {
         jpaRepo.incrementLikeCount(userIgn, count)

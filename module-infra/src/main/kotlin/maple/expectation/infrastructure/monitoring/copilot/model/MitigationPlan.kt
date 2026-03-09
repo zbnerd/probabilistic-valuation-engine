@@ -8,5 +8,5 @@ data class MitigationPlan(
     val actions: List<Action> = emptyList(),
     val questionsToConfirm: List<String> = emptyList(),
     val riskLevel: String? = null,
-    val rollbackPlan: Map<String, Any> = emptyMap()
+    val rollbackPlan: Map<String, Any> = emptyMap(),
 )

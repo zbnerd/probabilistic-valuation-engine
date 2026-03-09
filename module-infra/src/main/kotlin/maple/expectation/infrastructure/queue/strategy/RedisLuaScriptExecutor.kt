@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory
 class RedisLuaScriptExecutor(
     private val redissonClient: RedissonClient,
     private val scriptProvider: BufferLuaScriptProvider,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(RedisLuaScriptExecutor::class.java)
 
@@ -29,128 +29,116 @@ class RedisLuaScriptExecutor(
         private const val MIN_ENTRY_SIZE = 2
     }
 
-    fun executePublish(sha: String, msgId: String, payloadJson: String): String {
-        return executor.executeOrDefault(
-            {
-                val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
-                @Suppress("UNCHECKED_CAST")
-                script.evalSha(
-                    RScript.Mode.READ_WRITE,
-                    sha,
-                    RScript.ReturnType.INTEGER,
-                    listOf(mainQueueKey, payloadKey),
-                    msgId,
-                    payloadJson
-                ) as Long
-                msgId
-            },
-            "",
-            TaskContext.of("RedisBuffer", "Publish", msgId)
-        )
-    }
+    fun executePublish(sha: String, msgId: String, payloadJson: String): String = executor.executeOrDefault(
+        {
+            val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
+            @Suppress("UNCHECKED_CAST")
+            script.evalSha(
+                RScript.Mode.READ_WRITE,
+                sha,
+                RScript.ReturnType.INTEGER,
+                listOf(mainQueueKey, payloadKey),
+                msgId,
+                payloadJson,
+            ) as Long
+            msgId
+        },
+        "",
+        TaskContext.of("RedisBuffer", "Publish", msgId),
+    )
 
     @Suppress("UNCHECKED_CAST")
-    fun executeConsume(sha: String, batchSize: Int): List<List<String>> {
-        return executor.executeOrDefault(
-            {
-                val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
-                val timestamp = System.currentTimeMillis()
+    fun executeConsume(sha: String, batchSize: Int): List<List<String>> = executor.executeOrDefault(
+        {
+            val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
+            val timestamp = System.currentTimeMillis()
 
-                script.evalSha(
-                    RScript.Mode.READ_WRITE,
-                    sha,
-                    RScript.ReturnType.MULTI,
-                    listOf(mainQueueKey, inflightKey, inflightTsKey, payloadKey),
-                    batchSize.toString(),
-                    timestamp.toString()
-                ) as? List<List<String>> ?: emptyList()
-            },
-            emptyList(),
-            TaskContext.of("RedisBuffer", "Consume", batchSize.toString())
-        )
-    }
+            script.evalSha(
+                RScript.Mode.READ_WRITE,
+                sha,
+                RScript.ReturnType.MULTI,
+                listOf(mainQueueKey, inflightKey, inflightTsKey, payloadKey),
+                batchSize.toString(),
+                timestamp.toString(),
+            ) as? List<List<String>> ?: emptyList()
+        },
+        emptyList(),
+        TaskContext.of("RedisBuffer", "Consume", batchSize.toString()),
+    )
 
-    fun executeAck(sha: String, msgId: String): Long {
-        return executor.executeOrDefault(
-            {
-                val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
-                @Suppress("UNCHECKED_CAST")
-                script.evalSha(
-                    RScript.Mode.READ_WRITE,
-                    sha,
-                    RScript.ReturnType.INTEGER,
-                    listOf(inflightKey, inflightTsKey, payloadKey),
-                    msgId
-                ) as Long
-            },
-            0L,
-            TaskContext.of("RedisBuffer", "Ack", msgId)
-        )
-    }
+    fun executeAck(sha: String, msgId: String): Long = executor.executeOrDefault(
+        {
+            val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
+            @Suppress("UNCHECKED_CAST")
+            script.evalSha(
+                RScript.Mode.READ_WRITE,
+                sha,
+                RScript.ReturnType.INTEGER,
+                listOf(inflightKey, inflightTsKey, payloadKey),
+                msgId,
+            ) as Long
+        },
+        0L,
+        TaskContext.of("RedisBuffer", "Ack", msgId),
+    )
 
-    fun executeNackToDlq(sha: String, msgId: String): Long {
-        return executor.executeOrDefault(
-            {
-                val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
-                @Suppress("UNCHECKED_CAST")
-                script.evalSha(
-                    RScript.Mode.READ_WRITE,
-                    sha,
-                    RScript.ReturnType.INTEGER,
-                    listOf(inflightKey, inflightTsKey, dlqKey),
-                    msgId
-                ) as Long
-            },
-            0L,
-            TaskContext.of("RedisBuffer", "NackToDlq", msgId)
-        )
-    }
+    fun executeNackToDlq(sha: String, msgId: String): Long = executor.executeOrDefault(
+        {
+            val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
+            @Suppress("UNCHECKED_CAST")
+            script.evalSha(
+                RScript.Mode.READ_WRITE,
+                sha,
+                RScript.ReturnType.INTEGER,
+                listOf(inflightKey, inflightTsKey, dlqKey),
+                msgId,
+            ) as Long
+        },
+        0L,
+        TaskContext.of("RedisBuffer", "NackToDlq", msgId),
+    )
 
     fun executeNackToRetry(
         sha: String,
         msgId: String,
         nextAttemptAt: Long,
         retryCount: Int,
-        updatedPayloadJson: String
-    ): Long {
-        return executor.executeOrDefault(
-            {
-                val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
-                @Suppress("UNCHECKED_CAST")
-                script.evalSha(
-                    RScript.Mode.READ_WRITE,
-                    sha,
-                    RScript.ReturnType.INTEGER,
-                    listOf(inflightKey, inflightTsKey, retryKey, payloadKey),
-                    msgId,
-                    nextAttemptAt.toString(),
-                    retryCount.toString(),
-                    updatedPayloadJson
-                ) as Long
-            },
-            0L,
-            TaskContext.of("RedisBuffer", "NackToRetry", msgId)
-        )
-    }
+        updatedPayloadJson: String,
+    ): Long = executor.executeOrDefault(
+        {
+            val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
+            @Suppress("UNCHECKED_CAST")
+            script.evalSha(
+                RScript.Mode.READ_WRITE,
+                sha,
+                RScript.ReturnType.INTEGER,
+                listOf(inflightKey, inflightTsKey, retryKey, payloadKey),
+                msgId,
+                nextAttemptAt.toString(),
+                retryCount.toString(),
+                updatedPayloadJson,
+            ) as Long
+        },
+        0L,
+        TaskContext.of("RedisBuffer", "NackToRetry", msgId),
+    )
 
     @Suppress("UNCHECKED_CAST")
-    fun executeGetQueueCounts(sha: String): List<Long> {
-        return executor.executeOrDefault(
-            {
-                val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
-                val counts = script.evalSha(
-                    RScript.Mode.READ_ONLY,
-                    sha,
-                    RScript.ReturnType.MULTI,
-                    listOf(mainQueueKey, inflightKey, retryKey, dlqKey)
-                ) as? List<Long>
+    fun executeGetQueueCounts(sha: String): List<Long> = executor.executeOrDefault(
+        {
+            val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
+            val counts = script.evalSha(
+                RScript.Mode.READ_ONLY,
+                sha,
+                RScript.ReturnType.MULTI,
+                listOf(mainQueueKey, inflightKey, retryKey, dlqKey),
+            ) as? List<Long>
 
-                counts ?: listOf(0L, 0L, 0L, 0L)
-            },
-            listOf(0L, 0L, 0L, 0L),
-            TaskContext.of("RedisBuffer", "GetQueueCounts")
-        )
-    }
+            counts ?: listOf(0L, 0L, 0L, 0L)
+        },
+        listOf(0L, 0L, 0L, 0L),
+        TaskContext.of("RedisBuffer", "GetQueueCounts"),
+    )
 
     fun extractMessageIdsFromConsumeResult(rawResult: List<List<String>>): List<String> {
         val msgIds = mutableListOf<String>()

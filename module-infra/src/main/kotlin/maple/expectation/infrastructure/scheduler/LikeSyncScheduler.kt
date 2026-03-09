@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(
     name = ["scheduler.like-sync.enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 class LikeSyncScheduler(
     private val likeSyncPort: LikeSyncPort,
@@ -36,7 +36,7 @@ class LikeSyncScheduler(
     private val lockStrategy: LockStrategy,
     private val executor: LogicExecutor,
     private val likeBufferStrategy: LikeBufferStrategy,
-    @Nullable private val partitionedFlushStrategy: PartitionedFlushStrategy?
+    @Nullable private val partitionedFlushStrategy: PartitionedFlushStrategy?,
 ) {
     private val log = LoggerFactory.getLogger(LikeSyncScheduler::class.java)
 
@@ -48,13 +48,13 @@ class LikeSyncScheduler(
         // likeCount 버퍼 동기화
         executor.executeVoidJava(
             { likeSyncPort.flushLocalToRedis() },
-            TaskContext.of("Scheduler", "LocalFlush.Count")
+            TaskContext.of("Scheduler", "LocalFlush.Count"),
         )
 
         // likeRelation 버퍼 동기화
         executor.executeVoidJava(
             { likeRelationSyncPort.flushLocalToRedis() },
-            TaskContext.of("Scheduler", "LocalFlush.Relation")
+            TaskContext.of("Scheduler", "LocalFlush.Relation"),
         )
     }
 
@@ -76,7 +76,7 @@ class LikeSyncScheduler(
                     handleSyncFailure(e, "PartitionedFlush")
                     null
                 },
-                context
+                context,
             )
             return
         }
@@ -87,7 +87,7 @@ class LikeSyncScheduler(
                 lockStrategy.executeWithLock(
                     "like-db-sync-lock",
                     0,
-                    30
+                    30,
                 ) {
                     likeSyncPort.syncRedisToDatabase()
                     null
@@ -98,7 +98,7 @@ class LikeSyncScheduler(
                 handleSyncFailure(e, "Count")
                 null
             },
-            context
+            context,
         )
     }
 
@@ -114,7 +114,7 @@ class LikeSyncScheduler(
                 lockStrategy.executeWithLock(
                     "like-relation-sync-lock",
                     0,
-                    30
+                    30,
                 ) {
                     likeRelationSyncPort.syncRedisToDatabase()
                     null
@@ -125,13 +125,11 @@ class LikeSyncScheduler(
                 handleSyncFailure(e, "Relation")
                 null
             },
-            context
+            context,
         )
     }
 
-    private fun isRedisMode(): Boolean {
-        return likeBufferStrategy.getType() == LikeBufferStrategy.StrategyType.REDIS
-    }
+    private fun isRedisMode(): Boolean = likeBufferStrategy.getType() == LikeBufferStrategy.StrategyType.REDIS
 
     private fun handleSyncFailure(t: Throwable, syncType: String) {
         if (t is DistributedLockException) {

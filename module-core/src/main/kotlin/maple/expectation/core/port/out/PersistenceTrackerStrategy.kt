@@ -34,52 +34,53 @@ import java.util.concurrent.CompletableFuture
  */
 interface PersistenceTrackerStrategy {
 
-  /**
-   * Register async persistence operation for tracking
-   *
-   * @param ocid character OCID
-   * @param future async operation Future
-   * @throws IllegalStateException if shutdown in progress
-   */
-  fun trackOperation(ocid: String, future: CompletableFuture<Void>)
+    /**
+     * Register async persistence operation for tracking
+     *
+     * @param ocid character OCID
+     * @param future async operation Future
+     * @throws IllegalStateException if shutdown in progress
+     */
+    fun trackOperation(ocid: String, future: CompletableFuture<Void>)
 
-  /**
-   * Wait for all operations to complete (for shutdown)
-   *
-   * @param timeout max wait time
-   * @return true: all completed, false: timeout or already shutdown
-   */
-  fun awaitAllCompletion(timeout: Duration): Boolean
+    /**
+     * Wait for all operations to complete (for shutdown)
+     *
+     * @param timeout max wait time
+     * @return true: all completed, false: timeout or already shutdown
+     */
+    fun awaitAllCompletion(timeout: Duration): Boolean
 
-  /**
-   * Get pending OCID list
-   *
-   * @return pending OCID list
-   */
-  fun getPendingOcids(): List<String>
+    /**
+     * Get pending OCID list
+     *
+     * @return pending OCID list
+     */
+    fun getPendingOcids(): List<String>
 
-  /**
-   * Get pending operation count
-   *
-   * @return pending operation count
-   */
-  fun getPendingCount(): Int
+    /**
+     * Get pending operation count
+     *
+     * @return pending operation count
+     */
+    fun getPendingCount(): Int
 
-  /** Reset for testing */
-  fun resetForTesting()
+    /** Reset for testing */
+    fun resetForTesting()
 
-  /**
-   * Get current strategy type
-   *
-   * @return strategy type (IN_MEMORY or REDIS)
-   */
-  fun getType(): StrategyType
+    /**
+     * Get current strategy type
+     *
+     * @return strategy type (IN_MEMORY or REDIS)
+     */
+    fun getType(): StrategyType
 
-  /** Persistence tracker strategy type */
-  enum class StrategyType {
-    /** In-Memory ConcurrentHashMap based (single instance) */
-    IN_MEMORY,
-    /** Redis SET based (scale-out enabled) */
-    REDIS
-  }
+    /** Persistence tracker strategy type */
+    enum class StrategyType {
+        /** In-Memory ConcurrentHashMap based (single instance) */
+        IN_MEMORY,
+
+        /** Redis SET based (scale-out enabled) */
+        REDIS,
+    }
 }

@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.mongodb
 
 import io.micrometer.core.instrument.MeterRegistry
+import java.time.Duration
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
@@ -9,7 +10,6 @@ import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
 import org.springframework.stereotype.Service
-import java.time.Duration
 
 /**
  * V5 CQRS Query Side Service - MongoDB Read Operations
@@ -28,7 +28,7 @@ class CharacterViewQueryService(
     private val repository: CharacterValuationRepository,
     private val mongoTemplate: MongoTemplate,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(CharacterViewQueryService::class.java)
 
@@ -52,7 +52,7 @@ class CharacterViewQueryService(
                 }
             },
             null,
-            context
+            context,
         )
     }
 
@@ -103,7 +103,7 @@ class CharacterViewQueryService(
                     handleInsertNew(view)
                 }
             },
-            context
+            context,
         )
     }
 
@@ -138,18 +138,29 @@ class CharacterViewQueryService(
 
             if (result.modifiedCount > 0) {
                 meterRegistry.counter("mongodb.optimistic_lock.updated").increment()
-                log.debug("[OptimisticLock] Updated document: userIgn={}, version={}->{}",
-                    incoming.userIgn, currentVersion, incomingVersion + 1)
+                log.debug(
+                    "[OptimisticLock] Updated document: userIgn={}, version={}->{}",
+                    incoming.userIgn,
+                    currentVersion,
+                    incomingVersion + 1,
+                )
             } else {
                 meterRegistry.counter("mongodb.optimistic_lock.skipped").increment()
-                log.debug("[OptimisticLock] Skipped update (no modification): userIgn={}, version={}",
-                    incoming.userIgn, incomingVersion)
+                log.debug(
+                    "[OptimisticLock] Skipped update (no modification): userIgn={}, version={}",
+                    incoming.userIgn,
+                    incomingVersion,
+                )
             }
         } else {
             // Incoming update is older or same - skip to preserve realtime data
             meterRegistry.counter("mongodb.optimistic_lock.skipped").increment()
-            log.debug("[OptimisticLock] Skipped update (version too old): userIgn={}, incoming={}, current={}",
-                incoming.userIgn, incomingVersion, currentVersion)
+            log.debug(
+                "[OptimisticLock] Skipped update (version too old): userIgn={}, incoming={}, current={}",
+                incoming.userIgn,
+                incomingVersion,
+                currentVersion,
+            )
         }
     }
 
@@ -160,13 +171,16 @@ class CharacterViewQueryService(
         val newView = view.copy(
             version = 1L, // Initial version for new documents
             lastAppliedVersion = view.version ?: 1L, // Set lastAppliedVersion for event ordering
-            id = view.id ?: view.messageId // Use messageId as ID if not set
+            id = view.id ?: view.messageId, // Use messageId as ID if not set
         )
 
         repository.save(newView)
         meterRegistry.counter("mongodb.optimistic_lock.inserted").increment()
-        log.debug("[OptimisticLock] Inserted new document: userIgn={}, version=1, lastAppliedVersion={}",
-            view.userIgn, view.version)
+        log.debug(
+            "[OptimisticLock] Inserted new document: userIgn={}, version=1, lastAppliedVersion={}",
+            view.userIgn,
+            view.version,
+        )
     }
 
     /** Delete by user IGN (for invalidation) */
@@ -177,7 +191,7 @@ class CharacterViewQueryService(
             {
                 repository.deleteByUserIgn(userIgn)
             },
-            context
+            context,
         )
     }
 
@@ -189,7 +203,7 @@ class CharacterViewQueryService(
             {
                 repository.deleteAll()
             },
-            context
+            context,
         )
     }
 
@@ -200,7 +214,7 @@ class CharacterViewQueryService(
         return executor.executeOrDefault(
             { if (repository.findByUserIgn(userIgn) != null) 1L else 0L },
             0L,
-            context
+            context,
         )
     }
 
@@ -229,7 +243,7 @@ class CharacterViewQueryService(
                 view?.lastAppliedVersion ?: 0L
             },
             0L,
-            context
+            context,
         )
     }
 }

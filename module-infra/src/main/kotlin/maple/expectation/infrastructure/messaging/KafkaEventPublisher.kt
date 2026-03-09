@@ -1,25 +1,25 @@
 package maple.expectation.infrastructure.messaging
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.core.port.out.EventPublisher
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.domain.event.IntegrationEvent
+import maple.expectation.core.port.out.EventPublisher
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.util.concurrent.CompletableFuture
 
 @Component
 @ConditionalOnProperty(
     prefix = "app.event-publisher",
     name = ["type"],
     havingValue = "kafka",
-    matchIfMissing = false
+    matchIfMissing = false,
 )
 class KafkaEventPublisher(
     private val objectMapper: ObjectMapper,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) : EventPublisher {
 
     private val logger = LoggerFactory.getLogger(KafkaEventPublisher::class.java)
@@ -33,7 +33,7 @@ class KafkaEventPublisher(
                     logger.error("[KafkaEventPublisher] Publish failed for topic: {}", topic, e)
                 }
             },
-            TaskContext.of("KafkaEventPublisher", "Publish", topic)
+            TaskContext.of("KafkaEventPublisher", "Publish", topic),
         )
     }
 
@@ -46,7 +46,7 @@ class KafkaEventPublisher(
             topic,
             event.eventId,
             event.eventType,
-            jsonPayload
+            jsonPayload,
         )
     }
 
@@ -54,7 +54,7 @@ class KafkaEventPublisher(
         logger.warn(
             "[KafkaEventPublisher] STUB MODE - Async publish not implemented. topic={}, eventId={}",
             topic,
-            event.eventId
+            event.eventId,
         )
 
         return CompletableFuture.runAsync { publish(topic, event) }

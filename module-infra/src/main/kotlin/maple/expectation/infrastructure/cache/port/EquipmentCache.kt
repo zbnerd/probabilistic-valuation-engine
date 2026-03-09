@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.cache.port
 
-import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import java.util.Optional
+import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 
 /**
  * Equipment Cache Port (DIP Interface)

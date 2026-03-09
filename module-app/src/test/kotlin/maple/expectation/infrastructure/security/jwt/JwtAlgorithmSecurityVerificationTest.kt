@@ -2,16 +2,14 @@ package maple.expectation.infrastructure.security.jwt
 
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
-import org.junit.jupiter.api.Test
-import org.springframework.core.env.Environment
-import maple.expectation.infrastructure.executor.LogicExecutor
+import java.nio.charset.StandardCharsets
+import java.util.*
 import maple.expectation.support.TestLogicExecutors
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito
-import java.nio.charset.StandardCharsets
-import java.util.*
-import javax.crypto.SecretKey
+import org.springframework.core.env.Environment
 
 /**
  * Verification test for JWT Algorithm Confusion Attack Prevention (Unit 1)
@@ -20,7 +18,9 @@ import javax.crypto.SecretKey
 class JwtAlgorithmSecurityVerificationTest {
 
     private lateinit var tokenProvider: JwtTokenProvider
-    private val secretKey = Keys.hmacShaKeyFor("test-secret-key-for-jwt-testing-32chars".toByteArray(StandardCharsets.UTF_8))
+    private val secretKey = Keys.hmacShaKeyFor(
+        "test-secret-key-for-jwt-testing-32chars".toByteArray(StandardCharsets.UTF_8),
+    )
 
     @BeforeEach
     fun setUp() {
@@ -31,7 +31,7 @@ class JwtAlgorithmSecurityVerificationTest {
             "test-secret-key-for-jwt-testing-32chars",
             3600L,
             environment,
-            executor
+            executor,
         )
         tokenProvider.init()
     }
@@ -67,9 +67,7 @@ class JwtAlgorithmSecurityVerificationTest {
         println("✓ Valid HS256 token correctly accepted")
     }
 
-    private fun base64UrlEncode(input: String): String {
-        return Base64.getUrlEncoder()
-            .withoutPadding()
-            .encodeToString(input.toByteArray(StandardCharsets.UTF_8))
-    }
+    private fun base64UrlEncode(input: String): String = Base64.getUrlEncoder()
+        .withoutPadding()
+        .encodeToString(input.toByteArray(StandardCharsets.UTF_8))
 }

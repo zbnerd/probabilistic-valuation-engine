@@ -17,13 +17,11 @@ abstract class AbstractLockStrategy(protected val executor: LogicExecutor) : Loc
         return executor.executeWithTranslation(
             { this.performLockAndExecute(lockKey, waitTime, leaseTime, task, context) },
             ExceptionTranslator.forLock(),
-            context
+            context,
         )
     }
 
-    override fun <T> executeWithLock(key: String, task: ThrowingSupplier<T>): T {
-        return executeWithLock(key, 10, 20, task)
-    }
+    override fun <T> executeWithLock(key: String, task: ThrowingSupplier<T>): T = executeWithLock(key, 10, 20, task)
 
     override fun unlock(key: String) {
         val lockKey = buildLockKey(key)
@@ -41,7 +39,7 @@ abstract class AbstractLockStrategy(protected val executor: LogicExecutor) : Loc
         waitTime: Long,
         leaseTime: Long,
         task: ThrowingSupplier<T>,
-        context: TaskContext
+        context: TaskContext,
     ): T {
         // 1. 락 획득 시도
         if (!tryLock(lockKey, waitTime, leaseTime)) {
@@ -67,7 +65,7 @@ abstract class AbstractLockStrategy(protected val executor: LogicExecutor) : Loc
                     onLockReleased(lockKey)
                 }
             },
-            context
+            context,
         )
     }
 
@@ -79,9 +77,7 @@ abstract class AbstractLockStrategy(protected val executor: LogicExecutor) : Loc
 
     protected abstract fun shouldUnlock(lockKey: String): Boolean
 
-    protected open fun buildLockKey(key: String): String {
-        return "lock:$key"
-    }
+    protected open fun buildLockKey(key: String): String = "lock:$key"
 
     protected open fun onLockAcquired(lockKey: String) {
         log.debug("🔓 [Lock] '{}' 획득 성공", lockKey)
@@ -95,9 +91,7 @@ abstract class AbstractLockStrategy(protected val executor: LogicExecutor) : Loc
         log.debug("🔒 [Lock] '{}' 해제 완료", lockKey)
     }
 
-    protected open fun createLockFailureException(lockKey: String): RuntimeException {
-        return DistributedLockException(lockKey)
-    }
+    protected open fun createLockFailureException(lockKey: String): RuntimeException = DistributedLockException(lockKey)
 
     companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(AbstractLockStrategy::class.java)

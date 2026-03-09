@@ -6,5 +6,5 @@ enum class AnomalySeverity {
     WARNING,
 
     /** Critical level - exceeds critical threshold or extreme Z-score */
-    CRITICAL
+    CRITICAL,
 }

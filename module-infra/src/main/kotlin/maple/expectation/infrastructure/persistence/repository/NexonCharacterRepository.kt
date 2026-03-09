@@ -20,4 +20,5 @@ import org.springframework.data.jpa.repository.JpaRepository
  * @see ADR-018 Strategy Pattern for ACL
  */
 interface NexonCharacterRepository :
-    JpaRepository<NexonApiCharacterData, Long>, NexonCharacterRepositoryCustom
+    JpaRepository<NexonApiCharacterData, Long>,
+    NexonCharacterRepositoryCustom

@@ -1,7 +1,6 @@
 package maple.expectation.core.policy
 
 import maple.expectation.core.domain.model.CubeType
-import maple.expectation.core.domain.model.PotentialGrade
 
 /**
  * Cost calculation strategy interface (Strategy Pattern).

@@ -3,9 +3,9 @@ package maple.expectation.infrastructure.event.outbox
 import maple.expectation.core.port.out.ShutdownDataPersistencePort
 import maple.expectation.domain.v2.EventOutbox
 import maple.expectation.infrastructure.alert.StatelessAlertService
-import maple.expectation.infrastructure.metrics.EventOutboxMetrics
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.metrics.EventOutboxMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -25,7 +25,7 @@ class EventDlqHandler(
     private val fileBackupService: ShutdownDataPersistencePort,
     private val statelessAlertService: StatelessAlertService,
     private val executor: LogicExecutor,
-    private val metrics: EventOutboxMetrics
+    private val metrics: EventOutboxMetrics,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -43,7 +43,7 @@ class EventDlqHandler(
         executor.executeOrCatch(
             { saveToFileBackup(entry, reason) },
             { fileEx -> handleFileBackupFailure(entry, reason, fileEx) },
-            context
+            context,
         )
     }
 
@@ -73,7 +73,7 @@ class EventDlqHandler(
         statelessAlertService.sendCritical(title, description, fileEx)
         log.error(
             "[CRITICAL] All safety nets failed for: {} - Manual intervention required!",
-            eventId
+            eventId,
         )
     }
 }

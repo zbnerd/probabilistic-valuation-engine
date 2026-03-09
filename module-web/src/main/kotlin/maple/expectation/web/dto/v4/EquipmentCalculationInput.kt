@@ -18,7 +18,7 @@ data class EquipmentCalculationInput(
     val additionalPotentialGrade: String?,
     val additionalPotentialOptions: List<String>?,
     val currentStar: Int,
-    val targetStar: Int
+    val targetStar: Int,
 ) {
     fun hasPotential(): Boolean = !potentialGrade.isNullOrEmpty()
     fun hasAdditionalPotential(): Boolean = !additionalPotentialGrade.isNullOrEmpty()
@@ -83,7 +83,7 @@ data class EquipmentCalculationInput(
         fun build() = EquipmentCalculationInput(
             itemName, itemPart, itemEquipmentPart, itemIcon, itemLevel, presetNo, isNoljang,
             potentialGrade, potentialOptions, additionalPotentialGrade, additionalPotentialOptions,
-            currentStar, targetStar
+            currentStar, targetStar,
         )
     }
 }

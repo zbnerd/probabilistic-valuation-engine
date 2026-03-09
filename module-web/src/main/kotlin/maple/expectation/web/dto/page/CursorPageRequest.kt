@@ -8,7 +8,7 @@ package maple.expectation.web.dto.page
  */
 data class CursorPageRequest(
     val cursor: Long?,
-    val size: Int
+    val size: Int,
 ) {
     companion object {
         private const val DEFAULT_SIZE = 20
@@ -21,12 +21,8 @@ data class CursorPageRequest(
         }
 
         @JvmStatic
-        fun firstPage(): CursorPageRequest {
-            return CursorPageRequest(null, DEFAULT_SIZE)
-        }
+        fun firstPage(): CursorPageRequest = CursorPageRequest(null, DEFAULT_SIZE)
 
-        fun firstPage(size: Int): CursorPageRequest {
-            return of(null, size)
-        }
+        fun firstPage(size: Int): CursorPageRequest = of(null, size)
     }
 }

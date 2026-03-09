@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Configuration
     BatchProperties::class,
     BufferProperties::class,
     DiscordTimeoutProperties::class,
-    MonitoringThresholdProperties::class
+    MonitoringThresholdProperties::class,
 )
 class BufferConfig {
 

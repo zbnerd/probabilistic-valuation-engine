@@ -3,6 +3,8 @@ package maple.expectation.infrastructure.queue.strategy
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import java.time.Instant
+import java.util.UUID
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.queue.BufferLuaScripts
@@ -12,8 +14,6 @@ import maple.expectation.infrastructure.queue.QueueType
 import maple.expectation.infrastructure.queue.script.BufferLuaScriptProvider
 import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
-import java.time.Instant
-import java.util.UUID
 
 class RedisBufferStrategy<T>(
     private val redissonClient: RedissonClient,
@@ -22,7 +22,7 @@ class RedisBufferStrategy<T>(
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
     private val payloadType: Class<T>,
-    private val maxRetries: Int = DEFAULT_MAX_RETRIES
+    private val maxRetries: Int = DEFAULT_MAX_RETRIES,
 ) : MessageQueueStrategy<T> {
 
     private val log = LoggerFactory.getLogger(RedisBufferStrategy::class.java)
@@ -44,7 +44,7 @@ class RedisBufferStrategy<T>(
         meterRegistry,
         payloadType,
         metricsManager,
-        QueueType.REDIS_LIST
+        QueueType.REDIS_LIST,
     )
 
     @Volatile
@@ -70,7 +70,7 @@ class RedisBufferStrategy<T>(
             BufferLuaScripts.PUBLISH,
             { sha -> scriptProvider.updatePublishSha(sha) },
             { sha -> executePublishScript(sha, msgId, message) },
-            "Publish"
+            "Publish",
         )
 
         sample.stop(meterRegistry.timer("queue.publish.duration", "strategy", getType().name))
@@ -84,18 +84,16 @@ class RedisBufferStrategy<T>(
         return result
     }
 
-    private fun executePublishScript(sha: String, msgId: String, message: T): String? {
-        return executor.executeOrDefault(
-            {
-                val payloadJson = objectMapper.writeValueAsString(
-                    PayloadWrapper(message, 0, Instant.now().toEpochMilli())
-                )
-                luaScriptExecutor.executePublish(sha, msgId, payloadJson)
-            },
-            null,
-            TaskContext.of("RedisBuffer", "Publish", msgId)
-        )
-    }
+    private fun executePublishScript(sha: String, msgId: String, message: T): String? = executor.executeOrDefault(
+        {
+            val payloadJson = objectMapper.writeValueAsString(
+                PayloadWrapper(message, 0, Instant.now().toEpochMilli()),
+            )
+            luaScriptExecutor.executePublish(sha, msgId, payloadJson)
+        },
+        null,
+        TaskContext.of("RedisBuffer", "Publish", msgId),
+    )
 
     override fun consume(batchSize: Int): List<QueueMessage<T>> {
         val sample = Timer.start(meterRegistry)
@@ -105,7 +103,7 @@ class RedisBufferStrategy<T>(
             BufferLuaScripts.CONSUME,
             { sha -> scriptProvider.updateConsumeSha(sha) },
             { sha -> executeConsumeScript(sha, batchSize) },
-            "Consume"
+            "Consume",
         )
 
         sample.stop(meterRegistry.timer("queue.consume.duration", "strategy", getType().name))
@@ -120,16 +118,14 @@ class RedisBufferStrategy<T>(
         return result
     }
 
-    private fun executeConsumeScript(sha: String, batchSize: Int): List<QueueMessage<T>> {
-        return executor.executeOrDefault(
-            {
-                val rawResult = luaScriptExecutor.executeConsume(sha, batchSize)
-                convertToQueueMessages(rawResult)
-            },
-            emptyList(),
-            TaskContext.of("RedisBuffer", "Consume", batchSize.toString())
-        )
-    }
+    private fun executeConsumeScript(sha: String, batchSize: Int): List<QueueMessage<T>> = executor.executeOrDefault(
+        {
+            val rawResult = luaScriptExecutor.executeConsume(sha, batchSize)
+            convertToQueueMessages(rawResult)
+        },
+        emptyList(),
+        TaskContext.of("RedisBuffer", "Consume", batchSize.toString()),
+    )
 
     private fun convertToQueueMessages(rawResult: List<List<String>>): List<QueueMessage<T>> {
         val messages = mutableListOf<QueueMessage<T>>()
@@ -157,7 +153,7 @@ class RedisBufferStrategy<T>(
             BufferLuaScripts.ACK,
             { sha -> scriptProvider.updateAckSha(sha) },
             { sha -> luaScriptExecutor.executeAck(sha, msgId) },
-            "Ack"
+            "Ack",
         )
 
         sample.stop(meterRegistry.timer("queue.ack.duration", "strategy", getType().name))
@@ -181,7 +177,7 @@ class RedisBufferStrategy<T>(
                 BufferLuaScripts.NACK_TO_DLQ,
                 { sha -> scriptProvider.updateNackToDlqSha(sha) },
                 { sha -> luaScriptExecutor.executeNackToDlq(sha, msgId) },
-                "NackToDlq"
+                "NackToDlq",
             )
 
             metricsManager.getCachedInflightCount().decrementAndGet()
@@ -210,10 +206,10 @@ class RedisBufferStrategy<T>(
                         msgId,
                         nextAttemptAt,
                         retryCount + 1,
-                        updatedPayloadJson
+                        updatedPayloadJson,
                     )
                 },
-                "NackToRetry"
+                "NackToRetry",
             )
 
             metricsManager.getCachedInflightCount().decrementAndGet()
@@ -225,26 +221,25 @@ class RedisBufferStrategy<T>(
         sample.stop(meterRegistry.timer("queue.nack.duration", "strategy", getType().name))
     }
 
-    private fun updateRetryCountInPayload(payloadJson: String, retryCount: Int): String {
-        return executor.executeOrDefault(
-            {
-                val wrapperType = objectMapper.typeFactory.constructParametricType(
-                    PayloadWrapper::class.java, payloadType
-                )
-                val wrapper = objectMapper.readValue<PayloadWrapper<T>>(payloadJson, wrapperType)
+    private fun updateRetryCountInPayload(payloadJson: String, retryCount: Int): String = executor.executeOrDefault(
+        {
+            val wrapperType = objectMapper.typeFactory.constructParametricType(
+                PayloadWrapper::class.java,
+                payloadType,
+            )
+            val wrapper = objectMapper.readValue<PayloadWrapper<T>>(payloadJson, wrapperType)
 
-                val updatedWrapper = PayloadWrapper(
-                    wrapper.payload,
-                    retryCount + 1,
-                    wrapper.createdAtMs
-                )
+            val updatedWrapper = PayloadWrapper(
+                wrapper.payload,
+                retryCount + 1,
+                wrapper.createdAtMs,
+            )
 
-                objectMapper.writeValueAsString(updatedWrapper)
-            },
-            payloadJson,
-            TaskContext.of("RedisBuffer", "UpdateRetryCount")
-        )
-    }
+            objectMapper.writeValueAsString(updatedWrapper)
+        },
+        payloadJson,
+        TaskContext.of("RedisBuffer", "UpdateRetryCount"),
+    )
 
     override fun getPendingCount(): Long {
         refreshQueueCounts()
@@ -272,27 +267,25 @@ class RedisBufferStrategy<T>(
             BufferLuaScripts.GET_QUEUE_COUNTS,
             { sha -> scriptProvider.updateGetQueueCountsSha(sha) },
             { executeGetQueueCountsScript(it) },
-            "GetQueueCounts"
+            "GetQueueCounts",
         )
     }
 
-    private fun executeGetQueueCountsScript(sha: String): Boolean {
-        return executor.executeOrDefault(
-            {
-                val counts = luaScriptExecutor.executeGetQueueCounts(sha)
+    private fun executeGetQueueCountsScript(sha: String): Boolean = executor.executeOrDefault(
+        {
+            val counts = luaScriptExecutor.executeGetQueueCounts(sha)
 
-                if (counts != null && counts.size >= 4) {
-                    metricsManager.getCachedPendingCount().set(counts[MSG_ID_INDEX])
-                    metricsManager.getCachedInflightCount().set(counts[PAYLOAD_INDEX])
-                    metricsManager.getCachedRetryCount().set(counts[2])
-                    metricsManager.getCachedDlqCount().set(counts[3])
-                }
-                true
-            },
-            false,
-            TaskContext.of("RedisBuffer", "GetQueueCounts")
-        )
-    }
+            if (counts != null && counts.size >= 4) {
+                metricsManager.getCachedPendingCount().set(counts[MSG_ID_INDEX])
+                metricsManager.getCachedInflightCount().set(counts[PAYLOAD_INDEX])
+                metricsManager.getCachedRetryCount().set(counts[2])
+                metricsManager.getCachedDlqCount().set(counts[3])
+            }
+            true
+        },
+        false,
+        TaskContext.of("RedisBuffer", "GetQueueCounts"),
+    )
 
     override fun getType(): QueueType = QueueType.REDIS_LIST
 
@@ -305,7 +298,7 @@ class RedisBufferStrategy<T>(
                 true
             },
             false,
-            TaskContext.of("RedisBuffer", "HealthCheck")
+            TaskContext.of("RedisBuffer", "HealthCheck"),
         )
     }
 
@@ -316,27 +309,19 @@ class RedisBufferStrategy<T>(
 
     override fun isShuttingDown(): Boolean = shuttingDown
 
-    fun getExpiredInflightMessages(timeoutMs: Long, limit: Int): List<String> {
-        return recoveryHandler.getExpiredInflightMessages(timeoutMs, limit)
-    }
+    fun getExpiredInflightMessages(timeoutMs: Long, limit: Int): List<String> = recoveryHandler.getExpiredInflightMessages(timeoutMs, limit)
 
-    fun redrive(msgId: String): Boolean {
-        return recoveryHandler.redrive(msgId)
-    }
+    fun redrive(msgId: String): Boolean = recoveryHandler.redrive(msgId)
 
-    fun processRetryQueue(limit: Int): List<String> {
-        return recoveryHandler.processRetryQueue(limit)
-    }
+    fun processRetryQueue(limit: Int): List<String> = recoveryHandler.processRetryQueue(limit)
 
-    fun pollDlq(maxCount: Int): List<QueueMessage<T>> {
-        return recoveryHandler.pollDlq(maxCount)
-    }
+    fun pollDlq(maxCount: Int): List<QueueMessage<T>> = recoveryHandler.pollDlq(maxCount)
 
     fun getMaxRetries(): Int = maxRetries
 
     private data class PayloadWrapper<T>(
         val payload: T,
         val retryCount: Int,
-        val createdAtMs: Long
+        val createdAtMs: Long,
     )
 }

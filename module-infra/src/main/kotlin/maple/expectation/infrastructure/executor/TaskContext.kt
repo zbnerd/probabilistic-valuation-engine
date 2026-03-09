@@ -27,7 +27,7 @@ package maple.expectation.infrastructure.executor
 data class TaskContext(
     val component: String,
     val operation: String,
-    val dynamicValue: String? = null
+    val dynamicValue: String? = null,
     // ADR-085: Nullable for Java interop
 ) {
     // ADR-085: Normalize null to empty string for internal use
@@ -61,8 +61,7 @@ data class TaskContext(
          * TaskContext 생성 (동적 값 없음)
          */
         @JvmStatic
-        fun of(component: String, operation: String): TaskContext =
-            TaskContext(component, operation, null)
+        fun of(component: String, operation: String): TaskContext = TaskContext(component, operation, null)
 
         /**
          * TaskContext 생성 (동적 값 포함)
@@ -71,7 +70,6 @@ data class TaskContext(
          * Null values are normalized to empty string internally.
          */
         @JvmStatic
-        fun of(component: String, operation: String, dynamicValue: String?): TaskContext =
-            TaskContext(component, operation, dynamicValue)
+        fun of(component: String, operation: String, dynamicValue: String?): TaskContext = TaskContext(component, operation, dynamicValue)
     }
 }

@@ -26,7 +26,7 @@ data class Session(
     val myOcids: Set<String>,
     val role: String,
     val createdAt: Instant,
-    val lastAccessedAt: Instant
+    val lastAccessedAt: Instant,
 ) {
     // Explicit Record-style accessors for production code compatibility
     fun sessionId(): String = sessionId
@@ -97,7 +97,7 @@ data class Session(
             accountId: String,
             apiKey: String,
             myOcids: Set<String>,
-            role: String
+            role: String,
         ): Session {
             val now = Instant.now()
             return Session(sessionId, fingerprint, userIgn, accountId, apiKey, myOcids, role, now, now)

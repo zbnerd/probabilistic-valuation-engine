@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.cache.tiered
 
+import java.util.Optional
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
 import org.springframework.cache.CacheManager
-import java.util.Optional
 
 /**
  * Abstract Tiered Cache Service Template (Issue #24)
@@ -22,7 +22,7 @@ abstract class AbstractTieredCacheService<T>(
     protected val cacheName: String,
     tieredCacheManager: CacheManager,
     l1CacheManager: CacheManager,
-    protected val executor: LogicExecutor
+    protected val executor: LogicExecutor,
 ) {
     protected val tieredCache: Cache = tieredCacheManager.getCache(cacheName)
         ?: throw NullPointerException("Tiered cache '$cacheName' must not be null")
@@ -76,7 +76,7 @@ abstract class AbstractTieredCacheService<T>(
                 @Suppress("UNCHECKED_CAST")
                 return@execute Optional.empty<T>() as Optional<T>
             },
-            TaskContext.of(cacheName, "GetFromTiered", maskKey(key))
+            TaskContext.of(cacheName, "GetFromTiered", maskKey(key)),
         )
     }
 
@@ -96,7 +96,7 @@ abstract class AbstractTieredCacheService<T>(
                 @Suppress("UNCHECKED_CAST")
                 return@execute Optional.empty<T>() as Optional<T>
             },
-            TaskContext.of(cacheName, "GetFromL1Only", maskKey(key))
+            TaskContext.of(cacheName, "GetFromL1Only", maskKey(key)),
         )
     }
 
@@ -110,7 +110,7 @@ abstract class AbstractTieredCacheService<T>(
                 tieredCache.put(key, valueToStore)
                 logCacheSave("Tiered", key, valueToStore)
             },
-            TaskContext.of(cacheName, "SaveToTiered", maskKey(key))
+            TaskContext.of(cacheName, "SaveToTiered", maskKey(key)),
         )
     }
 
@@ -124,23 +124,19 @@ abstract class AbstractTieredCacheService<T>(
                 l1OnlyCache.put(key, valueToStore)
                 logCacheSave("L1-Only", key, valueToStore)
             },
-            TaskContext.of(cacheName, "SaveToL1Only", maskKey(key))
+            TaskContext.of(cacheName, "SaveToL1Only", maskKey(key)),
         )
     }
 
     /**
      * 캐시 키 생성 (형식: {cacheName}:v1:{keyParts})
      */
-    protected fun buildCacheKey(vararg keyParts: String): String {
-        return "$cacheName:v1:${keyParts.joinToString(":")}"
-    }
+    protected fun buildCacheKey(vararg keyParts: String): String = "$cacheName:v1:${keyParts.joinToString(":")}"
 
     /**
      * 캐시 키 생성 (버전 지정)
      */
-    protected fun buildCacheKey(version: String, vararg keyParts: String): String {
-        return "$cacheName:$version:${keyParts.joinToString(":")}"
-    }
+    protected fun buildCacheKey(version: String, vararg keyParts: String): String = "$cacheName:$version:${keyParts.joinToString(":")}"
 
     // ==================== Logging Helpers ====================
 
@@ -173,7 +169,7 @@ abstract class AbstractTieredCacheService<T>(
                 tieredCache.evict(key)
                 logCacheEvict(key)
             },
-            TaskContext.of(cacheName, "EvictTiered", maskKey(key))
+            TaskContext.of(cacheName, "EvictTiered", maskKey(key)),
         )
     }
 
@@ -184,7 +180,7 @@ abstract class AbstractTieredCacheService<T>(
                 l1OnlyCache.evict(key)
                 logCacheEvict(key)
             },
-            TaskContext.of(cacheName, "EvictL1Only", maskKey(key))
+            TaskContext.of(cacheName, "EvictL1Only", maskKey(key)),
         )
     }
 
@@ -195,7 +191,7 @@ abstract class AbstractTieredCacheService<T>(
                 tieredCache.clear()
                 log.info("[Cache] CLEAR | cache={} | layer=Tiered", cacheName)
             },
-            TaskContext.of(cacheName, "ClearTiered")
+            TaskContext.of(cacheName, "ClearTiered"),
         )
     }
 
@@ -206,7 +202,7 @@ abstract class AbstractTieredCacheService<T>(
                 l1OnlyCache.clear()
                 log.info("[Cache] CLEAR | cache={} | layer=L1-Only", cacheName)
             },
-            TaskContext.of(cacheName, "ClearL1Only")
+            TaskContext.of(cacheName, "ClearL1Only"),
         )
     }
 

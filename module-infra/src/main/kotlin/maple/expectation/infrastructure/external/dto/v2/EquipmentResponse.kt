@@ -40,7 +40,7 @@ data class EquipmentResponse(
     val mechanicEquipment: List<ItemEquipment>? = null,
     // --- 칭호 ---
     @JsonProperty("title")
-    val title: Title? = null
+    val title: Title? = null,
 ) {
 
     // ==========================================
@@ -50,7 +50,7 @@ data class EquipmentResponse(
     data class ItemEquipment(
         @JsonProperty("item_equipment_part")
         val itemEquipmentPart: String? = null,
-    // 장착 부위 (모자, 상의 등)
+        // 장착 부위 (모자, 상의 등)
 
         @JsonProperty("item_equipment_slot")
         val itemEquipmentSlot: String? = null,
@@ -72,35 +72,35 @@ data class EquipmentResponse(
 
         @JsonProperty("item_gender")
         val itemGender: String? = null,
-    // --- 📊 핵심: 옵션 정보들 (전부 ItemOption 클래스 재사용) ---
+        // --- 📊 핵심: 옵션 정보들 (전부 ItemOption 클래스 재사용) ---
         @JsonProperty("item_total_option")
         val totalOption: ItemOption? = null,
-    // 최종 옵션
+        // 최종 옵션
 
         @JsonProperty("item_base_option")
         val baseOption: ItemOption? = null,
-    // 깡통 옵션
+        // 깡통 옵션
 
         @JsonProperty("item_add_option")
         val addOption: ItemOption? = null,
-    // 추옵
+        // 추옵
 
         @JsonProperty("item_etc_option")
         val etcOption: ItemOption? = null,
-    // 작(주문서) 상태
+        // 작(주문서) 상태
 
         @JsonProperty("item_starforce_option")
         val starforceOption: ItemOption? = null,
-    // 스타포스로 오르는 수치
+        // 스타포스로 오르는 수치
 
         @JsonProperty("item_exceptional_option")
         val exceptionalOption: ItemOption? = null,
-    // 익셉셔널 강화 수치
+        // 익셉셔널 강화 수치
 
         // --- ✨ 잠재능력 (윗잠) ---
         @JsonProperty("potential_option_grade")
         val potentialOptionGrade: String? = null,
-    // 등급 (레전드리 등)
+        // 등급 (레전드리 등)
 
         @JsonProperty("potential_option_1")
         val potentialOption1: String? = null,
@@ -110,7 +110,7 @@ data class EquipmentResponse(
 
         @JsonProperty("potential_option_3")
         val potentialOption3: String? = null,
-    // --- ✨ 에디셔널 (아랫잠) ---
+        // --- ✨ 에디셔널 (아랫잠) ---
         @JsonProperty("additional_potential_option_grade")
         val additionalPotentialOptionGrade: String? = null,
 
@@ -122,10 +122,10 @@ data class EquipmentResponse(
 
         @JsonProperty("additional_potential_option_3")
         val additionalPotentialOption3: String? = null,
-    // --- 기타 강화 정보 ---
+        // --- 기타 강화 정보 ---
         @JsonProperty("equipment_level_increase")
         val equipmentLevelIncrease: String? = null,
-    // 착감 등
+        // 착감 등
 
         @JsonProperty("growth_exp")
         val growthExp: String? = null,
@@ -135,22 +135,22 @@ data class EquipmentResponse(
 
         @JsonProperty("scroll_upgrade")
         val scrollUpgrade: String? = null,
-    // 업횟
+        // 업횟
 
         @JsonProperty("cuttable_count")
         val cuttableCount: String? = null,
-    // 가횟
+        // 가횟
 
         @JsonProperty("golden_hammer_flag")
         val goldenHammerFlag: String? = null,
 
         @JsonProperty("scroll_resilience_count")
         val scrollResilienceCount: String? = null,
-    // 복구 가능 횟수
+        // 복구 가능 횟수
 
         @JsonProperty("scroll_upgradeable_count")
         val scrollUpgradeableCount: String? = null,
-    // 황망 등 남은 횟수
+        // 황망 등 남은 횟수
 
         @JsonProperty("soul_name")
         val soulName: String? = null,
@@ -160,18 +160,18 @@ data class EquipmentResponse(
 
         @JsonProperty("starforce")
         val starforce: String? = null,
-    // ★ 스타포스 수치
+        // ★ 스타포스 수치
 
         @JsonProperty("starforce_scroll_flag")
         val starforceScrollFlag: String? = null,
-    // 슈페리얼 등 여부
+        // 슈페리얼 등 여부
 
         @JsonProperty("special_ring_level")
         val specialRingLevel: String? = null,
-    // 시드링 레벨
+        // 시드링 레벨
 
         @JsonProperty("date_expire")
-        val dateExpire: String? = null
+        val dateExpire: String? = null,
     )
 
     // ==========================================
@@ -221,7 +221,7 @@ data class EquipmentResponse(
 
         @JsonProperty("all_stat")
         val allStat: String? = null,
-    // 올스탯 %
+        // 올스탯 %
 
         @JsonProperty("damage") // 데미지 %
         val damage: String? = null,
@@ -239,7 +239,7 @@ data class EquipmentResponse(
         val baseEquipmentLevel: String? = null,
 
         @JsonProperty("exceptional_upgrade") // 익셉셔널에만 존재 (1강 등)
-        val exceptionalUpgrade: String? = null
+        val exceptionalUpgrade: String? = null,
     )
 
     // ==========================================
@@ -260,6 +260,6 @@ data class EquipmentResponse(
         val dateExpire: String? = null,
 
         @JsonProperty("date_option_expire")
-        val dateOptionExpire: String? = null
+        val dateOptionExpire: String? = null,
     )
 }

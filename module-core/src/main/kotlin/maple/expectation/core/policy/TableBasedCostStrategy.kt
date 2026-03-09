@@ -1,10 +1,10 @@
 package maple.expectation.core.policy
 
-import maple.expectation.core.domain.model.CubeType
-import maple.expectation.core.domain.model.PotentialGrade
 import java.util.EnumMap
 import java.util.NavigableMap
 import java.util.TreeMap
+import maple.expectation.core.domain.model.CubeType
+import maple.expectation.core.domain.model.PotentialGrade
 
 /**
  * Table-based cost calculation strategy (default implementation).
@@ -81,7 +81,7 @@ class TableBasedCostStrategy : CostCalculationStrategy {
         rare: Long,
         epic: Long,
         unique: Long,
-        legendary: Long
+        legendary: Long,
     ): EnumMap<PotentialGrade, Long> {
         val map = EnumMap<PotentialGrade, Long>(PotentialGrade::class.java)
         map[PotentialGrade.RARE] = rare

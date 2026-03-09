@@ -20,7 +20,7 @@ import maple.expectation.core.probability.FlameScoreCalculator
  */
 class FlameTrialsService(
     private val dpCalculator: FlameDpCalculator,
-    private val scoreCalculator: FlameScoreCalculator
+    private val scoreCalculator: FlameScoreCalculator,
 ) : FlameTrialsPort {
 
     override fun calculateExpectedTrials(
@@ -30,14 +30,26 @@ class FlameTrialsService(
         weights: FlameScoreCalculator.JobWeights,
         target: Int,
         baseAtt: Int,
-        baseMag: Int
+        baseMag: Int,
     ): Double? {
         // Build option PMFs first using scoreCalculator
         val optionPmfs = scoreCalculator.buildOptionPmfs(
-            category, flameType, level, weights, baseAtt, baseMag
+            category,
+            flameType,
+            level,
+            weights,
+            baseAtt,
+            baseMag,
         )
         return dpCalculator.calculateExpectedTrials(
-            category, flameType, level, weights, target, baseAtt, baseMag, optionPmfs
+            category,
+            flameType,
+            level,
+            weights,
+            target,
+            baseAtt,
+            baseMag,
+            optionPmfs,
         )
     }
 }

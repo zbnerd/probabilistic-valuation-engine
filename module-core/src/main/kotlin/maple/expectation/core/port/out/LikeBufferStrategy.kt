@@ -29,55 +29,55 @@ package maple.expectation.core.port.out
  */
 interface LikeBufferStrategy {
 
-  /**
-   * Atomic like increment
-   *
-   * @param userIgn target user IGN
-   * @param delta increment value (positive: like, negative: unlike)
-   * @return value after increment, null on failure
-   */
-  fun increment(userIgn: String, delta: Long): Long?
+    /**
+     * Atomic like increment
+     *
+     * @param userIgn target user IGN
+     * @param delta increment value (positive: like, negative: unlike)
+     * @return value after increment, null on failure
+     */
+    fun increment(userIgn: String, delta: Long): Long?
 
-  /**
-   * Get current counter value
-   *
-   * @param userIgn target user IGN
-   * @return current delta value, 0 if not exists, null on failure
-   */
-  fun get(userIgn: String): Long?
+    /**
+     * Get current counter value
+     *
+     * @param userIgn target user IGN
+     * @return current delta value, 0 if not exists, null on failure
+     */
+    fun get(userIgn: String): Long?
 
-  /**
-   * Get all counters (for flush)
-   *
-   * @return userIgn → delta map
-   */
-  fun getAllCounters(): Map<String, Long>
+    /**
+     * Get all counters (for flush)
+     *
+     * @return userIgn → delta map
+     */
+    fun getAllCounters(): Map<String, Long>
 
-  /**
-   * Atomic fetch + clear (for flush)
-   *
-   * @param limit max fetch count
-   * @return userIgn → delta map
-   */
-  fun fetchAndClear(limit: Int): Map<String, Long>
+    /**
+     * Atomic fetch + clear (for flush)
+     *
+     * @param limit max fetch count
+     * @return userIgn → delta map
+     */
+    fun fetchAndClear(limit: Int): Map<String, Long>
 
-  /**
-   * Get buffer size
-   *
-   * @return number of entries in buffer
-   */
-  fun getBufferSize(): Int
+    /**
+     * Get buffer size
+     *
+     * @return number of entries in buffer
+     */
+    fun getBufferSize(): Int
 
-  /**
-   * Get strategy type
-   *
-   * @return IN_MEMORY or REDIS
-   */
-  fun getType(): StrategyType
+    /**
+     * Get strategy type
+     *
+     * @return IN_MEMORY or REDIS
+     */
+    fun getType(): StrategyType
 
-  /** Strategy type enum */
-  enum class StrategyType {
-    IN_MEMORY,
-    REDIS
-  }
+    /** Strategy type enum */
+    enum class StrategyType {
+        IN_MEMORY,
+        REDIS,
+    }
 }

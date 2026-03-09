@@ -9,8 +9,8 @@ import maple.expectation.core.port.out.like.LikeAtomicFetchStrategy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.queue.like.event.LikeSyncFailedEvent
-import org.springframework.context.ApplicationEventPublisher
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 
 /**
  * Redis 보상 트랜잭션 명령 구현 (Command Pattern)
@@ -27,7 +27,7 @@ class RedisCompensationCommand(
     private val strategy: LikeAtomicFetchStrategy,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
 ) : CompensationCommand {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -59,7 +59,7 @@ class RedisCompensationCommand(
                     "Compensation triggered: tempKey={} -> sourceKey={}, entries={}",
                     result.tempKey,
                     sourceKey,
-                    result.size()
+                    result.size(),
                 )
                 null
             },
@@ -69,12 +69,12 @@ class RedisCompensationCommand(
                     "Compensation FAILED - Publishing DLQ event: tempKey={}, sourceKey={}, reason={}",
                     result.tempKey,
                     sourceKey,
-                    e.message
+                    e.message,
                 )
                 publishDlqEvent(result, e)
                 null
             },
-            TaskContext.of("Compensation", "restore", result.tempKey)
+            TaskContext.of("Compensation", "restore", result.tempKey),
         )
     }
 
@@ -93,11 +93,11 @@ class RedisCompensationCommand(
                 log.error(
                     "🚨 [CRITICAL] DLQ event publish failed! Data logged for manual recovery: {}",
                     result.data,
-                    e
+                    e,
                 )
                 null
             },
-            TaskContext.of("Compensation", "publishDlqEvent", result.tempKey)
+            TaskContext.of("Compensation", "publishDlqEvent", result.tempKey),
         )
     }
 
@@ -130,11 +130,9 @@ class RedisCompensationCommand(
                 log.warn("TempKey delete failed (will expire by TTL): tempKey={}", result.tempKey)
                 null
             },
-            TaskContext.of("Compensation", "commit", result.tempKey)
+            TaskContext.of("Compensation", "commit", result.tempKey),
         )
     }
 
-    override fun isPending(): Boolean {
-        return savedResult.get() != null && !committed.get()
-    }
+    override fun isPending(): Boolean = savedResult.get() != null && !committed.get()
 }

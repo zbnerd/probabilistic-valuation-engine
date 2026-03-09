@@ -4,15 +4,15 @@ import io.jsonwebtoken.Jws
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import jakarta.annotation.PostConstruct
+import java.nio.charset.StandardCharsets
+import java.util.Date
+import java.util.Optional
+import javax.crypto.SecretKey
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
-import java.nio.charset.StandardCharsets
-import java.util.Date
-import java.util.Optional
-import javax.crypto.SecretKey
 
 /**
  * JWT 토큰 생성 및 검증을 담당하는 Provider
@@ -30,7 +30,7 @@ class JwtTokenProvider(
     @Value("\${auth.jwt.secret}") private val secret: String,
     @Value("\${auth.jwt.expiration}") private val expirationSeconds: Long,
     private val environment: Environment,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private lateinit var secretKey: SecretKey
 
@@ -98,7 +98,7 @@ class JwtTokenProvider(
         // 2. 환경변수 placeholder 감지 (모든 환경에서 fail-fast)
         require(!secret.contains(PLACEHOLDER_PATTERN)) {
             "JWT_SECRET environment variable is not set. " +
-                    "The secret contains an unresolved placeholder: ${maskSecretForLogging(secret)}"
+                "The secret contains an unresolved placeholder: ${maskSecretForLogging(secret)}"
         }
 
         // 3. 프로덕션 환경에서 기본 개발용 secret 사용 거부
@@ -107,7 +107,7 @@ class JwtTokenProvider(
 
         require(!(isProduction && isDefaultSecret)) {
             "JWT_SECRET must be set in production environment. " +
-                    "Default development secret is not allowed in production."
+                "Default development secret is not allowed in production."
         }
 
         // 4. HS256 알고리즘 최소 길이 검증 (모든 환경)
@@ -117,12 +117,10 @@ class JwtTokenProvider(
     }
 
     /** 비밀키 로그 출력 시 노출 방지를 위한 마스킹 */
-    private fun maskSecretForLogging(value: String): String {
-        return if (value.length < 8) {
-            "***"
-        } else {
-            value.substring(0, 4) + "..." + value.substring(value.length - 4)
-        }
+    private fun maskSecretForLogging(value: String): String = if (value.length < 8) {
+        "***"
+    } else {
+        value.substring(0, 4) + "..." + value.substring(value.length - 4)
     }
 
     /**
@@ -131,17 +129,15 @@ class JwtTokenProvider(
      * @param payload 토큰에 담을 페이로드
      * @return 생성된 JWT 토큰 문자열
      */
-    fun generateToken(payload: JwtPayload): String {
-        return Jwts.builder()
-            .issuer(ISSUER)
-            .subject(payload.sessionId)
-            .claim(CLAIM_FINGERPRINT, payload.fingerprint)
-            .claim(CLAIM_ROLE, payload.role)
-            .issuedAt(Date.from(payload.issuedAt))
-            .expiration(Date.from(payload.expiration))
-            .signWith(secretKey, Jwts.SIG.HS256)
-            .compact()
-    }
+    fun generateToken(payload: JwtPayload): String = Jwts.builder()
+        .issuer(ISSUER)
+        .subject(payload.sessionId)
+        .claim(CLAIM_FINGERPRINT, payload.fingerprint)
+        .claim(CLAIM_ROLE, payload.role)
+        .issuedAt(Date.from(payload.issuedAt))
+        .expiration(Date.from(payload.expiration))
+        .signWith(secretKey, Jwts.SIG.HS256)
+        .compact()
 
     /**
      * 세션 ID, fingerprint, role로 토큰을 생성합니다.
@@ -162,13 +158,11 @@ class JwtTokenProvider(
      * @param token JWT 토큰 문자열
      * @return 파싱된 JwtPayload (Optional)
      */
-    fun parseToken(token: String?): Optional<JwtPayload> {
-        return executor.executeOrDefault(
-            { parseTokenInternal(token) },
-            Optional.empty(),
-            TaskContext.of("JWT", "ParseToken", maskToken(token))
-        )
-    }
+    fun parseToken(token: String?): Optional<JwtPayload> = executor.executeOrDefault(
+        { parseTokenInternal(token) },
+        Optional.empty(),
+        TaskContext.of("JWT", "ParseToken", maskToken(token)),
+    )
 
     private fun parseTokenInternal(token: String?): Optional<JwtPayload> {
         // P0: Algorithm confusion attack prevention - pre-parse validation
@@ -184,13 +178,13 @@ class JwtTokenProvider(
         // P0: Explicit "none" algorithm rejection (case-insensitive)
         require(headerAlgorithm.lowercase() !in FORBIDDEN_ALGORITHMS.map { it.lowercase() }) {
             "JWT algorithm 'none' is forbidden. This is a known algorithm confusion attack vector. " +
-            "Received: '$headerAlgorithm'"
+                "Received: '$headerAlgorithm'"
         }
 
         // P0: Algorithm whitelist enforcement
         require(headerAlgorithm in ALLOWED_ALGORITHMS) {
             "JWT algorithm not in whitelist. Allowed: $ALLOWED_ALGORITHMS, Received: '$headerAlgorithm'. " +
-            "Possible algorithm confusion attack."
+                "Possible algorithm confusion attack."
         }
 
         // JJWT 0.12.x: verifyWith() ensures HMAC signature verification with SecretKey
@@ -204,7 +198,7 @@ class JwtTokenProvider(
         val parsedAlgorithm = jws.header.algorithm
         require(parsedAlgorithm == EXPECTED_ALGORITHM) {
             "JWT algorithm mismatch after parsing: expected $EXPECTED_ALGORITHM, got $parsedAlgorithm. " +
-            "Possible algorithm confusion attack."
+                "Possible algorithm confusion attack."
         }
 
         val claims: io.jsonwebtoken.Claims = jws.payload
@@ -214,7 +208,7 @@ class JwtTokenProvider(
             claims[CLAIM_FINGERPRINT, String::class.java],
             claims[CLAIM_ROLE, String::class.java],
             claims.issuedAt.toInstant(),
-            claims.expiration.toInstant()
+            claims.expiration.toInstant(),
         )
 
         return Optional.of(payload)
@@ -246,16 +240,14 @@ class JwtTokenProvider(
         val match = algPattern.find(headerJson)
 
         return match?.groupValues?.get(1) ?: throw IllegalArgumentException(
-            "JWT header missing 'alg' field. Header: $headerJson"
+            "JWT header missing 'alg' field. Header: $headerJson",
         )
     }
 
-    private fun maskToken(token: String?): String {
-        return if (token == null || token.length < 10) {
-            "***"
-        } else {
-            token.substring(0, 6) + "..."
-        }
+    private fun maskToken(token: String?): String = if (token == null || token.length < 10) {
+        "***"
+    } else {
+        token.substring(0, 6) + "..."
     }
 
     /**
@@ -264,16 +256,12 @@ class JwtTokenProvider(
      * @param token JWT 토큰 문자열
      * @return 유효 여부
      */
-    fun validateToken(token: String?): Boolean {
-        return parseToken(token).isPresent
-    }
+    fun validateToken(token: String?): Boolean = parseToken(token).isPresent
 
     /**
      * 토큰의 기본 만료 시간(초)을 반환합니다.
      *
      * @return 만료 시간 (초)
      */
-    fun getExpirationSeconds(): Long {
-        return expirationSeconds
-    }
+    fun getExpirationSeconds(): Long = expirationSeconds
 }

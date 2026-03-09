@@ -14,7 +14,7 @@ package maple.expectation.core.domain.model
 data class PotentialStat(
     val optionName: String,
     val statType: String,
-    val isPercent: Boolean
+    val isPercent: Boolean,
 ) {
     init {
         require(optionName.isNotBlank()) { "optionName cannot be null or blank" }
@@ -26,24 +26,18 @@ data class PotentialStat(
          * Create a potential stat.
          */
         @JvmStatic
-        fun of(optionName: String, statType: String, isPercent: Boolean): PotentialStat {
-            return PotentialStat(optionName, statType, isPercent)
-        }
+        fun of(optionName: String, statType: String, isPercent: Boolean): PotentialStat = PotentialStat(optionName, statType, isPercent)
 
         /**
          * Create a percentage-based potential stat.
          */
         @JvmStatic
-        fun percentStat(optionName: String, statType: String): PotentialStat {
-            return PotentialStat(optionName, statType, true)
-        }
+        fun percentStat(optionName: String, statType: String): PotentialStat = PotentialStat(optionName, statType, true)
 
         /**
          * Create a flat-value potential stat.
          */
         @JvmStatic
-        fun flatStat(optionName: String, statType: String): PotentialStat {
-            return PotentialStat(optionName, statType, false)
-        }
+        fun flatStat(optionName: String, statType: String): PotentialStat = PotentialStat(optionName, statType, false)
     }
 }

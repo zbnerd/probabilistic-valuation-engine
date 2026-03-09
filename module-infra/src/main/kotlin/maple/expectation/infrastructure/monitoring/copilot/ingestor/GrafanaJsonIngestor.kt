@@ -2,17 +2,16 @@ package maple.expectation.infrastructure.monitoring.copilot.ingestor
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.error.exception.InternalSystemException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.security.MessageDigest
+import java.util.HexFormat
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.monitoring.copilot.model.SeverityMapping
 import maple.expectation.infrastructure.monitoring.copilot.model.SignalDefinition
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.nio.file.Files
-import java.nio.file.Path
-import java.security.MessageDigest
-import java.util.HexFormat
 
 /**
  * Grafana Dashboard JSON Ingestor
@@ -20,7 +19,7 @@ import java.util.HexFormat
 @Component
 class GrafanaJsonIngestor(
     private val objectMapper: ObjectMapper,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
 
     private val log = LoggerFactory.getLogger(GrafanaJsonIngestor::class.java)
@@ -41,7 +40,7 @@ class GrafanaJsonIngestor(
         return executor.executeOrDefault(
             { ingestDashboardsInternal(dir) },
             emptyList(),
-            TaskContext.of("GrafanaJsonIngestor", "IngestDashboards", dir.toString())
+            TaskContext.of("GrafanaJsonIngestor", "IngestDashboards", dir.toString()),
         )
     }
 
@@ -62,13 +61,11 @@ class GrafanaJsonIngestor(
         return signals
     }
 
-    private fun parseDashboard(jsonPath: Path): List<SignalDefinition> {
-        return executor.executeOrDefault(
-            { parseDashboardInternal(jsonPath) },
-            emptyList(),
-            TaskContext.of("GrafanaJsonIngestor", "ParseDashboard", jsonPath.fileName.toString())
-        )
-    }
+    private fun parseDashboard(jsonPath: Path): List<SignalDefinition> = executor.executeOrDefault(
+        { parseDashboardInternal(jsonPath) },
+        emptyList(),
+        TaskContext.of("GrafanaJsonIngestor", "ParseDashboard", jsonPath.fileName.toString()),
+    )
 
     private fun parseDashboardInternal(jsonPath: Path): List<SignalDefinition> {
         val jsonContent = Files.readString(jsonPath)
@@ -88,7 +85,7 @@ class GrafanaJsonIngestor(
         panels: JsonNode,
         dashboardUid: String,
         dashboardTitle: String,
-        signals: MutableList<SignalDefinition>
+        signals: MutableList<SignalDefinition>,
     ) {
         if (panels == null || panels.isMissingNode) {
             return
@@ -140,8 +137,8 @@ class GrafanaJsonIngestor(
                         unit = panel.path("fieldConfig").path("defaults").path("unit").asText(""),
                         severityMapping = thresholds,
                         sloTag = inferSloTag(panelTitle, expr),
-                        metadata = metadata
-                    )
+                        metadata = metadata,
+                    ),
                 )
             }
         }
@@ -187,7 +184,7 @@ class GrafanaJsonIngestor(
         return SeverityMapping(
             warnThreshold = warnThreshold ?: 0.0,
             critThreshold = critThreshold ?: 0.0,
-            comparator = ">"
+            comparator = ">",
         )
     }
 
@@ -204,7 +201,8 @@ class GrafanaJsonIngestor(
             lower.contains("pool") ||
             lower.contains("gc") ||
             lower.contains("oom") ||
-            lower.contains("lock")) {
+            lower.contains("lock")
+        ) {
             return HIGH_PRIORITY_SCORE
         }
 

@@ -29,7 +29,7 @@ data class AddAdminRequest(
     @field:NotBlank(message = "fingerprint는 필수입니다")
     @field:Size(min = 64, max = 64, message = "fingerprint는 64자여야 합니다")
     @field:Pattern(regexp = "^[a-fA-F0-9]+$", message = "fingerprint는 16진수만 허용됩니다")
-    val fingerprint: String
+    val fingerprint: String,
 ) {
     /**
      * 마스킹된 fingerprint 반환
@@ -50,7 +50,5 @@ data class AddAdminRequest(
      *
      * <p>Java Record의 기본 toString()은 모든 필드를 노출하므로 오버라이드 필수
      */
-    override fun toString(): String {
-        return "AddAdminRequest[fingerprint=${maskedFingerprint()}]"
-    }
+    override fun toString(): String = "AddAdminRequest[fingerprint=${maskedFingerprint()}]"
 }

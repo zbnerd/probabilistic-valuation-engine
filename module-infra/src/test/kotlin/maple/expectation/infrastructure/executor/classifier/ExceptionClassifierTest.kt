@@ -52,7 +52,7 @@ class ExceptionClassifierTest {
         fun `ClientBaseException should be classified as IGNORE`() {
             // Given
             val exception = object : ClientBaseException(
-                maple.expectation.error.CommonErrorCode.INVALID_INPUT_VALUE
+                maple.expectation.error.CommonErrorCode.INVALID_INPUT_VALUE,
             ) {}
 
             // When
@@ -85,8 +85,9 @@ class ExceptionClassifierTest {
         fun `ServerBaseException should be classified as RECORD`() {
             // Given
             val exception = object : ServerBaseException(
-                maple.expectation.error.CommonErrorCode.INTERNAL_SERVER_ERROR, "test error",
-                RuntimeException("Test error")
+                maple.expectation.error.CommonErrorCode.INTERNAL_SERVER_ERROR,
+                "test error",
+                RuntimeException("Test error"),
             ) {}
 
             // When

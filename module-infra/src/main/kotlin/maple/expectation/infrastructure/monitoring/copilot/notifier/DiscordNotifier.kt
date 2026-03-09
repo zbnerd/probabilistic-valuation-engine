@@ -1,6 +1,11 @@
 package maple.expectation.infrastructure.monitoring.copilot.notifier
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
 import maple.expectation.error.exception.InternalSystemException
 import maple.expectation.infrastructure.config.DiscordTimeoutProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -9,18 +14,13 @@ import maple.expectation.infrastructure.monitoring.copilot.model.SignalDefinitio
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
 
 @Component
 class DiscordNotifier(
     httpClient: HttpClient,
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor,
-    private val timeoutProperties: DiscordTimeoutProperties
+    private val timeoutProperties: DiscordTimeoutProperties,
 ) {
     companion object {
         private const val CONTENT_TYPE = "application/json"
@@ -35,15 +35,18 @@ class DiscordNotifier(
 
     fun send(content: String) {
         executor.executeWithTranslation(
-            { 
+            {
                 sendInternal(content)
                 null
             },
-            { e, ctx -> 
+            { e, ctx ->
                 InternalSystemException(
-                    "Discord webhook send failed [${ctx.toTaskName()}]: ${e.message}", e)
+                    "Discord webhook send failed [${ctx.toTaskName()}]: ${e.message}",
+                    e,
+                )
             },
-            TaskContext.of("DiscordNotifier", "SendWebhook"))
+            TaskContext.of("DiscordNotifier", "SendWebhook"),
+        )
     }
 
     @Throws(Exception::class)
@@ -85,24 +88,20 @@ class DiscordNotifier(
     }
 
     @Throws(Exception::class, InterruptedException::class)
-    private fun sendHttpRequest(request: HttpRequest): HttpResponse<String> {
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-    }
+    private fun sendHttpRequest(request: HttpRequest): HttpResponse<String> = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
-    private fun extractRetryAfter(response: HttpResponse<String>): Long {
-        return response.headers()
-            .firstValue("Retry-After")
-            .flatMap { retryAfter ->
-                try {
-                    val value = Integer.parseInt(retryAfter) * 1000L
-                    java.util.Optional.of(value)
-                } catch (e: NumberFormatException) {
-                    log.debug("[DiscordNotifier] Invalid Retry-After header: {}", retryAfter)
-                    java.util.Optional.empty()
-                }
+    private fun extractRetryAfter(response: HttpResponse<String>): Long = response.headers()
+        .firstValue("Retry-After")
+        .flatMap { retryAfter ->
+            try {
+                val value = Integer.parseInt(retryAfter) * 1000L
+                java.util.Optional.of(value)
+            } catch (e: NumberFormatException) {
+                log.debug("[DiscordNotifier] Invalid Retry-After header: {}", retryAfter)
+                java.util.Optional.empty()
             }
-            .orElse(timeoutProperties.retryAfterDefaultMs)
-    }
+        }
+        .orElse(timeoutProperties.retryAfterDefaultMs)
 
     @Throws(InterruptedException::class)
     private fun sleep(millis: Long) {
@@ -114,7 +113,7 @@ class DiscordNotifier(
         severity: String,
         signals: List<AnnotatedSignal>,
         hypotheses: List<String>,
-        actions: List<String>
+        actions: List<String>,
     ): String {
         val sb = StringBuilder()
 
@@ -125,13 +124,15 @@ class DiscordNotifier(
         val signalCount = java.lang.Math.min(3, signals.size)
         for (i in 0 until signalCount) {
             val signal = signals[i]
-            sb.append(String.format(
-                "%d. **%s**: `%.4f` %s\n",
-                i + 1,
-                signal.signal.panelTitle,
-                signal.value,
-                signal.signal.unit ?: ""
-            ))
+            sb.append(
+                String.format(
+                    "%d. **%s**: `%.4f` %s\n",
+                    i + 1,
+                    signal.signal.panelTitle,
+                    signal.value,
+                    signal.signal.unit ?: "",
+                ),
+            )
         }
         sb.append("\n")
 

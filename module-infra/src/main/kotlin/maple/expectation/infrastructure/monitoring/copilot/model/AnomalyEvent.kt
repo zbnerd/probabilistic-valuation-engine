@@ -9,5 +9,5 @@ data class AnomalyEvent(
     val reason: String? = null,
     val detectedAtMillis: Long = System.currentTimeMillis(),
     val currentValue: Double = 0.0,
-    val baselineValue: Double? = null
+    val baselineValue: Double? = null,
 )

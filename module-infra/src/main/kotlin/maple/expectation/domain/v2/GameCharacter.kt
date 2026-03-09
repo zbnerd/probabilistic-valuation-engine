@@ -2,11 +2,11 @@ package maple.expectation.domain.v2
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
+import java.time.LocalDateTime
 import maple.expectation.error.exception.InvalidCharacterStateException
 import maple.expectation.infrastructure.persistence.entity.CharacterEquipmentJpaEntity
 import org.hibernate.annotations.NotFound
 import org.hibernate.annotations.NotFoundAction
-import java.time.LocalDateTime
 
 /**
  * GameCharacter 엔티티 (Rich Domain Model)
@@ -23,7 +23,7 @@ import java.time.LocalDateTime
 @Table(name = "game_character_v2")
 @NamedEntityGraph(
     name = "GameCharacter.withEquipment",
-    attributeNodes = [NamedAttributeNode("equipment")]
+    attributeNodes = [NamedAttributeNode("equipment")],
 )
 class GameCharacter {
 
@@ -94,7 +94,7 @@ class GameCharacter {
         referencedColumnName = "ocid",
         insertable = false,
         updatable = false,
-        foreignKey = ForeignKey(value = ConstraintMode.NO_CONSTRAINT)
+        foreignKey = ForeignKey(value = ConstraintMode.NO_CONSTRAINT),
     )
     @NotFound(action = NotFoundAction.IGNORE)
     var equipment: CharacterEquipmentJpaEntity? = null
@@ -133,10 +133,8 @@ class GameCharacter {
      *
      * @return 활성 상태면 true
      */
-    fun isActive(): Boolean {
-        return this.updatedAt != null &&
-            this.updatedAt!!.isAfter(LocalDateTime.now().minusDays(ACTIVE_DAYS_THRESHOLD.toLong()))
-    }
+    fun isActive(): Boolean = this.updatedAt != null &&
+        this.updatedAt!!.isAfter(LocalDateTime.now().minusDays(ACTIVE_DAYS_THRESHOLD.toLong()))
 
     /**
      * OCID 유효성 검증
@@ -162,7 +160,7 @@ class GameCharacter {
         // 마지막 업데이트 시각이 없거나 15분 이상 경과했으면 갱신 필요
         return this.basicInfoUpdatedAt == null ||
             this.basicInfoUpdatedAt!!.isBefore(
-                LocalDateTime.now().minusMinutes(BASIC_INFO_REFRESH_MINUTES.toLong())
+                LocalDateTime.now().minusMinutes(BASIC_INFO_REFRESH_MINUTES.toLong()),
             )
     }
 

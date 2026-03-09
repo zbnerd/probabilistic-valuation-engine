@@ -36,7 +36,7 @@ class MonitoringReportJob(
     private val systemMetrics: SystemMetricsPort,
     private val lockStrategy: LockStrategy,
     private val executor: LogicExecutor,
-    @Value("\${ai.sre.enabled:false}") private val aiSreEnabled: Boolean = false
+    @Value("\${ai.sre.enabled:false}") private val aiSreEnabled: Boolean = false,
 ) {
 
     // Alert Port (Optional - hexagonal architecture adapter)
@@ -80,7 +80,7 @@ class MonitoringReportJob(
                 lockStrategy.unlock(REPORT_LOCK_KEY)
                 log.debug("[MonitoringReport] 리더 락 해제: {}", REPORT_LOCK_KEY)
             },
-            context
+            context,
         )
     }
 
@@ -104,7 +104,7 @@ class MonitoringReportJob(
     /** 리포트 AlertMessage 생성 (Hexagonal Architecture용 포맷) */
     private fun createReportMessage(
         reportType: String,
-        metrics: Map<MetricCategory, Map<String, Any>>
+        metrics: Map<MetricCategory, Map<String, Any>>,
     ): AlertMessage {
         val title = if (reportType == "daily") "📊 일간 시스템 리포트" else "📈 시간별 시스템 리포트"
         val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
@@ -164,26 +164,25 @@ class MonitoringReportJob(
         val status = if (openCount > 0) "⚠️ DEGRADED" else "✅ HEALTHY"
         return String.format(
             "- Status: %s\n- Open: %d, Half-Open: %d/%d",
-            status, openCount, halfOpenCount, totalCount
+            status,
+            openCount,
+            halfOpenCount,
+            totalCount,
         )
     }
 
-    private fun formatDatabaseStatus(metrics: Map<String, Any>): String {
-        return String.format(
-            "- Active: %s/%s\n- Saturation: %s%%",
-            metrics.getOrDefault("connections_active", "?"),
-            metrics.getOrDefault("connections_max", "?"),
-            metrics.getOrDefault("saturation_percent", "0")
-        )
-    }
+    private fun formatDatabaseStatus(metrics: Map<String, Any>): String = String.format(
+        "- Active: %s/%s\n- Saturation: %s%%",
+        metrics.getOrDefault("connections_active", "?"),
+        metrics.getOrDefault("connections_max", "?"),
+        metrics.getOrDefault("saturation_percent", "0"),
+    )
 
-    private fun formatRedisStatus(metrics: Map<String, Any>): String {
-        return String.format(
-            "- Pending: %s\n- Saturation: %s%%",
-            metrics.getOrDefault("buffer_pending_count", "0"),
-            metrics.getOrDefault("buffer_saturation_percent", "0")
-        )
-    }
+    private fun formatRedisStatus(metrics: Map<String, Any>): String = String.format(
+        "- Pending: %s\n- Saturation: %s%%",
+        metrics.getOrDefault("buffer_pending_count", "0"),
+        metrics.getOrDefault("buffer_saturation_percent", "0"),
+    )
 
     /** AlertPort로 리포트 전송 */
     private fun sendReport(report: AlertMessage, port: AlertPort) {

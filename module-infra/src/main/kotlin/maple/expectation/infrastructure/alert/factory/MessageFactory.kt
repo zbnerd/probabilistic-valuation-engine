@@ -5,8 +5,8 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.infrastructure.alert.message.AlertMessage
 import org.slf4j.LoggerFactory
-import org.springframework.http.MediaType
 import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
 
 /**
  * Discord Message Factory
@@ -24,14 +24,12 @@ object MessageFactory {
     private val COLOR_INFO = 0x00FF00 // Green
 
     /** Convert AlertMessage to Discord JSON payload */
-    fun toDiscordPayload(message: AlertMessage): String {
-        return try {
-            val payload = buildDiscordPayload(message)
-            objectMapper.writeValueAsString(payload)
-        } catch (e: JsonProcessingException) {
-            log.error("[MessageFactory] Failed to serialize Discord payload: {}", e.message, e)
-            buildFallbackPayload(message)
-        }
+    fun toDiscordPayload(message: AlertMessage): String = try {
+        val payload = buildDiscordPayload(message)
+        objectMapper.writeValueAsString(payload)
+    } catch (e: JsonProcessingException) {
+        log.error("[MessageFactory] Failed to serialize Discord payload: {}", e.message, e)
+        buildFallbackPayload(message)
     }
 
     /** Build Discord payload object from AlertMessage */
@@ -53,7 +51,7 @@ object MessageFactory {
             if (message.getError() != null) COLOR_ERROR else COLOR_INFO,
             emptyList(),
             Footer("MapleExpectation Alert System"),
-            java.time.Instant.now().toString()
+            java.time.Instant.now().toString(),
         )
 
         // Discord API requires either content OR embeds (not both)
@@ -62,21 +60,17 @@ object MessageFactory {
     }
 
     /** Fallback payload for serialization failure */
-    private fun buildFallbackPayload(message: AlertMessage): String {
-        return String.format(
-            "{\"content\":\"**%s**\\n%s\"}",
-            escapeJson(message.getTitle()),
-            escapeJson(message.getMessage())
-        )
-    }
+    private fun buildFallbackPayload(message: AlertMessage): String = String.format(
+        "{\"content\":\"**%s**\\n%s\"}",
+        escapeJson(message.getTitle()),
+        escapeJson(message.getMessage()),
+    )
 
     /** Escape special JSON characters */
-    private fun escapeJson(text: String): String {
-        return text.replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-    }
+    private fun escapeJson(text: String): String = text.replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
 
     /** Create HTTP headers for Discord webhook */
     fun createDiscordHeaders(): HttpHeaders {
@@ -88,7 +82,7 @@ object MessageFactory {
     /** Discord Webhook API payload structure */
     private data class DiscordPayload(
         @JsonProperty("content") val content: String,
-        @JsonProperty("embeds") val embeds: List<Embed>
+        @JsonProperty("embeds") val embeds: List<Embed>,
     )
 
     /** Discord Embed structure */
@@ -98,7 +92,7 @@ object MessageFactory {
         val color: Int,
         val fields: List<Field>,
         val footer: Footer,
-        val timestamp: String
+        val timestamp: String,
     )
 
     /** Discord Field structure */

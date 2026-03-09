@@ -3,6 +3,10 @@ package maple.expectation.infrastructure.messaging
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
+import java.lang.reflect.Method
+import java.time.Duration
+import java.util.ArrayList
+import java.util.concurrent.ConcurrentHashMap
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.EventProcessingException
@@ -18,10 +22,6 @@ import org.redisson.client.codec.StringCodec
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationContext
 import org.springframework.context.ApplicationContextAware
-import java.lang.reflect.Method
-import java.time.Duration
-import java.util.ArrayList
-import java.util.concurrent.ConcurrentHashMap
 
 class RedisStreamEventConsumer(
     redissonClient: RedissonClient,
@@ -32,7 +32,7 @@ class RedisStreamEventConsumer(
     private val streamKey: String,
     private val consumerGroup: String,
     private val consumerName: String,
-    private val readTimeout: Duration
+    private val readTimeout: Duration,
 ) : ApplicationContextAware {
 
     private val logger = LoggerFactory.getLogger(RedisStreamEventConsumer::class.java)
@@ -52,7 +52,7 @@ class RedisStreamEventConsumer(
                     logger.error("[RedisStreamEventConsumer] Handler discovery failed for stream: {}", streamKey, e)
                 }
             },
-            TaskContext.of("RedisStreamEventConsumer", "DiscoverHandlers", streamKey)
+            TaskContext.of("RedisStreamEventConsumer", "DiscoverHandlers", streamKey),
         )
     }
 
@@ -79,7 +79,7 @@ class RedisStreamEventConsumer(
                     "[RedisStreamEventConsumer] Discovered handler: eventType={}, method={}, bean={}",
                     eventType,
                     method.name,
-                    beanName
+                    beanName,
                 )
             }
         }
@@ -87,7 +87,7 @@ class RedisStreamEventConsumer(
         logger.info(
             "[RedisStreamEventConsumer] Handler discovery complete: {} event types, {} handlers",
             handlerCache.size,
-            handlerCache.values.sumOf { it.size }
+            handlerCache.values.sumOf { it.size },
         )
     }
 
@@ -95,7 +95,7 @@ class RedisStreamEventConsumer(
         if (method.parameterCount != 1) {
             throw EventProcessingException(
                 CommonErrorCode.EVENT_HANDLER_ERROR,
-                "Handler method must have single parameter: ${method.declaringClass.simpleName}.${method.name} (params=${method.parameterCount})"
+                "Handler method must have single parameter: ${method.declaringClass.simpleName}.${method.name} (params=${method.parameterCount})",
             )
         }
 
@@ -103,21 +103,19 @@ class RedisStreamEventConsumer(
         if (!expectedType.isAssignableFrom(paramType)) {
             throw EventProcessingException(
                 CommonErrorCode.EVENT_HANDLER_ERROR,
-                "Handler parameter type mismatch: ${method.declaringClass.simpleName}.${method.name} (expected=${expectedType.simpleName}, actual=${paramType.simpleName})"
+                "Handler parameter type mismatch: ${method.declaringClass.simpleName}.${method.name} (expected=${expectedType.simpleName}, actual=${paramType.simpleName})",
             )
         }
     }
 
-    private fun findHandlerForEvent(eventType: String): List<HandlerMethod> {
-        return handlerCache[eventType] ?: emptyList()
-    }
+    private fun findHandlerForEvent(eventType: String): List<HandlerMethod> = handlerCache[eventType] ?: emptyList()
 
     fun startConsuming() {
         logger.info(
             "[RedisStreamEventConsumer] Starting consumer: group={}, name={}, stream={}",
             consumerGroup,
             consumerName,
-            streamKey
+            streamKey,
         )
 
         while (!Thread.currentThread().isInterrupted) {
@@ -129,14 +127,14 @@ class RedisStreamEventConsumer(
                         logger.error("[RedisStreamEventConsumer] Batch consumption failed for stream: {}", streamKey, e)
                     }
                 },
-                TaskContext.of("RedisStreamEventConsumer", "ConsumeBatch", streamKey)
+                TaskContext.of("RedisStreamEventConsumer", "ConsumeBatch", streamKey),
             )
         }
 
         logger.info(
             "[RedisStreamEventConsumer] Consumer stopped: group={}, name={}",
             consumerGroup,
-            consumerName
+            consumerName,
         )
     }
 
@@ -144,7 +142,7 @@ class RedisStreamEventConsumer(
         val messages = stream.readGroup(
             consumerGroup,
             consumerName,
-            StreamReadGroupArgs.neverDelivered().timeout(readTimeout)
+            StreamReadGroupArgs.neverDelivered().timeout(readTimeout),
         )
 
         if (messages.isNullOrEmpty()) {
@@ -165,7 +163,7 @@ class RedisStreamEventConsumer(
                     logger.error("[RedisStreamEventConsumer] Message processing failed for messageId: {}", messageId, e)
                 }
             },
-            TaskContext.of("RedisStreamEventConsumer", "ProcessMessage", messageId.toString())
+            TaskContext.of("RedisStreamEventConsumer", "ProcessMessage", messageId.toString()),
         )
     }
 
@@ -180,14 +178,14 @@ class RedisStreamEventConsumer(
         val typeFactory = objectMapper.typeFactory
         val event: IntegrationEvent<*> = objectMapper.readValue(
             jsonPayload,
-            typeFactory.constructParametricType(IntegrationEvent::class.java, Any::class.java)
+            typeFactory.constructParametricType(IntegrationEvent::class.java, Any::class.java),
         )
 
         if (deduplicationFilter.isDuplicate(event.eventId)) {
             logger.debug(
                 "[RedisStreamEventConsumer] Duplicate event skipped: eventId={}, messageId={}",
                 event.eventId,
-                messageId
+                messageId,
             )
             stream.ack(consumerGroup, messageId)
             return
@@ -210,7 +208,7 @@ class RedisStreamEventConsumer(
                     "[RedisStreamEventConsumer] Dispatched: eventId={}, eventType={}, handlers={}",
                     event.eventId,
                     eventType,
-                    handlers.size
+                    handlers.size,
                 )
             }
 
@@ -218,7 +216,7 @@ class RedisStreamEventConsumer(
         if (ackCount == 0L) {
             logger.warn(
                 "[RedisStreamEventConsumer] XACK failed (message already acknowledged?): messageId={}",
-                messageId
+                messageId,
             )
         }
     }
@@ -232,12 +230,12 @@ class RedisStreamEventConsumer(
                     "[RedisStreamEventConsumer] Handler failed: method={}, eventType={}",
                     handler.method.name,
                     event.eventType,
-                    e
+                    e,
                 )
                 throw EventProcessingException(
                     CommonErrorCode.EVENT_HANDLER_ERROR,
                     e,
-                    "Handler failed for event: ${event.eventType}"
+                    "Handler failed for event: ${event.eventType}",
                 )
             }
         }
@@ -257,42 +255,40 @@ class RedisStreamEventConsumer(
                     logger.info(
                         "[RedisStreamEventConsumer] Created consumer group: stream={}, group={}",
                         streamKey,
-                        consumerGroup
+                        consumerGroup,
                     )
                 } catch (e: Exception) {
                     if (e.message?.contains("BUSYGROUP") == true) {
                         logger.debug(
                             "[RedisStreamEventConsumer] Consumer group already exists: stream={}, group={}",
                             streamKey,
-                            consumerGroup
+                            consumerGroup,
                         )
                     } else {
                         throw EventProcessingException(
                             CommonErrorCode.EVENT_CONSUMER_ERROR,
                             e,
-                            "Failed to create consumer group: $consumerGroup"
+                            "Failed to create consumer group: $consumerGroup",
                         )
                     }
                 }
             },
-            TaskContext.of("RedisStreamEventConsumer", "CreateGroup", consumerGroup)
+            TaskContext.of("RedisStreamEventConsumer", "CreateGroup", consumerGroup),
         )
     }
 
-    fun getPendingCount(): Long {
-        return executor.executeOrDefault(
-            { 0L },
-            0L,
-            TaskContext.of("RedisStreamEventConsumer", "PendingCount")
-        )
-    }
+    fun getPendingCount(): Long = executor.executeOrDefault(
+        { 0L },
+        0L,
+        TaskContext.of("RedisStreamEventConsumer", "PendingCount"),
+    )
 
     fun getHandlerTypeCount(): Int = handlerCache.size
 
     private data class HandlerMethod(
         val bean: Any,
         val method: Method,
-        val async: Boolean
+        val async: Boolean,
     ) {
         init {
             method.isAccessible = true

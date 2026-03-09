@@ -4,14 +4,14 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
+import java.util.Collections
+import java.util.concurrent.Executor
+import java.util.concurrent.ThreadPoolExecutor
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.task.TaskDecorator
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
-import java.util.Collections
-import java.util.concurrent.Executor
-import java.util.concurrent.ThreadPoolExecutor
 
 /**
  * Equipment Processing 전용 Thread Pool (#240, #264)
@@ -51,7 +51,7 @@ import java.util.concurrent.ThreadPoolExecutor
 @EnableConfigurationProperties(ExecutorProperties::class)
 class EquipmentProcessingExecutorConfig(
     private val meterRegistry: MeterRegistry,
-    private val executorProperties: ExecutorProperties
+    private val executorProperties: ExecutorProperties,
 ) {
 
     /**
@@ -107,7 +107,9 @@ class EquipmentProcessingExecutorConfig(
 
         // Issue #284: Micrometer ExecutorServiceMetrics 등록 (표준 네이밍)
         ExecutorServiceMetrics(
-            executor.threadPoolExecutor, "equipment.processing", Collections.emptyList()
+            executor.threadPoolExecutor,
+            "equipment.processing",
+            Collections.emptyList(),
         ).bindTo(meterRegistry)
 
         // 레거시 메트릭 호환 (기존 대시보드 유지)
@@ -130,28 +132,28 @@ class EquipmentProcessingExecutorConfig(
     private fun registerMetrics(executor: ThreadPoolTaskExecutor) {
         Gauge.builder(
             "equipment.executor.queue.size",
-            executor
+            executor,
         ) { e -> e.threadPoolExecutor.queue.size.toDouble() }
             .description("Equipment 처리 대기 큐 크기")
             .register(meterRegistry)
 
         Gauge.builder(
             "equipment.executor.active.count",
-            executor
+            executor,
         ) { e -> e.activeCount.toDouble() }
             .description("Equipment 처리 활성 스레드 수")
             .register(meterRegistry)
 
         Gauge.builder(
             "equipment.executor.pool.size",
-            executor
+            executor,
         ) { e -> e.poolSize.toDouble() }
             .description("Equipment 처리 현재 풀 크기")
             .register(meterRegistry)
 
         Gauge.builder(
             "equipment.executor.completed.tasks",
-            executor
+            executor,
         ) { e -> e.threadPoolExecutor.completedTaskCount.toDouble() }
             .description("Equipment 처리 완료된 작업 수")
             .register(meterRegistry)

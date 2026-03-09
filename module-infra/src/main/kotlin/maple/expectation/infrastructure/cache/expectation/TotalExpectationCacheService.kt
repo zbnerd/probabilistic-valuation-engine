@@ -2,17 +2,16 @@ package maple.expectation.infrastructure.cache.expectation
 
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.Optional
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.dto.v2.TotalExpectationResponse
 import maple.expectation.util.StringMaskingUtils
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.cache.Cache
 import org.springframework.cache.CacheManager
 import org.springframework.data.redis.serializer.RedisSerializer
 import org.springframework.stereotype.Service
-import java.util.Optional
 
 /**
  * TotalExpectationResponse 전용 캐시 서비스 (Issue #158, #24)
@@ -38,7 +37,7 @@ class TotalExpectationCacheService(
     @Qualifier("expectationL2CacheManager") private val l2CacheManager: CacheManager,
     @Qualifier("expectationCacheSerializer") private val redisSerializer: RedisSerializer<Any>,
     private val executor: LogicExecutor,
-    meterRegistry: MeterRegistry
+    meterRegistry: MeterRegistry,
 ) {
     private val oversizeSkipCounter: Counter = Counter.builder("expectation.cache.payload.oversize.skip")
         .description("5KB 초과로 L2 캐시 저장을 스킵한 횟수")
@@ -68,7 +67,7 @@ class TotalExpectationCacheService(
                             "[Cache] L1 HIT | dto=TotalExpectationResponse | userIgn={} | totalCost={} | items={}",
                             l1Result.userIgn,
                             l1Result.totalCost,
-                            l1Result.items?.size ?: 0
+                            l1Result.items?.size ?: 0,
                         )
                         return@execute Optional.of(l1Result)
                     }
@@ -85,7 +84,7 @@ class TotalExpectationCacheService(
                             "[Cache] L2 HIT | dto=TotalExpectationResponse | userIgn={} | totalCost={} | items={}",
                             l2Result.userIgn,
                             l2Result.totalCost,
-                            l2Result.items?.size ?: 0
+                            l2Result.items?.size ?: 0,
                         )
                         // L1 warm-up
                         if (l1 != null) {
@@ -100,11 +99,11 @@ class TotalExpectationCacheService(
 
                 log.info(
                     "[Cache] MISS | dto=TotalExpectationResponse | maskedKey={}",
-                    StringMaskingUtils.maskCacheKey(cacheKey)
+                    StringMaskingUtils.maskCacheKey(cacheKey),
                 )
                 Optional.empty()
             },
-            TaskContext.of("ExpectationCache", "GetValid", StringMaskingUtils.maskCacheKey(cacheKey))
+            TaskContext.of("ExpectationCache", "GetValid", StringMaskingUtils.maskCacheKey(cacheKey)),
         )
     }
 
@@ -144,7 +143,7 @@ class TotalExpectationCacheService(
                 // 3) L1 put (L2 성공 여부와 무관 — 로컬 성능 보장)
                 saveToL1(cacheKey, response)
             },
-            TaskContext.of("ExpectationCache", "Save", StringMaskingUtils.maskCacheKey(cacheKey))
+            TaskContext.of("ExpectationCache", "Save", StringMaskingUtils.maskCacheKey(cacheKey)),
         )
     }
 
@@ -157,7 +156,7 @@ class TotalExpectationCacheService(
                 "[Cache] L1 SAVE | dto=TotalExpectationResponse | userIgn={} | totalCost={} | items={}",
                 response.userIgn,
                 response.totalCost,
-                response.items?.size ?: 0
+                response.items?.size ?: 0,
             )
         } else {
             log.warn("[Cache] L1 unavailable | cache={}", CACHE_NAME)
@@ -165,22 +164,20 @@ class TotalExpectationCacheService(
     }
 
     /** Serialize 후 크기 반환 (P0-2: 실패 시 -1 반환, 예외 전파 없음) */
-    private fun serializeAndGetSize(cacheKey: String, response: TotalExpectationResponse): Int {
-        return executor.executeOrCatch(
-            {
-                val bytes = redisSerializer.serialize(response)
-                bytes?.size ?: 0
-            },
-            { e ->
-                // serialize 실패는 L2 스킵(정책) + 로그
-                log.warn("[Serialize Fail] err={}", e.toString())
-                log.debug("[Serialize Fail] maskedKey={}", StringMaskingUtils.maskCacheKey(cacheKey))
-                serializeFailCounter.increment()
-                -1 // L2 스킵 시그널
-            },
-            TaskContext.of("ExpectationCache", "Serialize", StringMaskingUtils.maskCacheKey(cacheKey))
-        )
-    }
+    private fun serializeAndGetSize(cacheKey: String, response: TotalExpectationResponse): Int = executor.executeOrCatch(
+        {
+            val bytes = redisSerializer.serialize(response)
+            bytes?.size ?: 0
+        },
+        { e ->
+            // serialize 실패는 L2 스킵(정책) + 로그
+            log.warn("[Serialize Fail] err={}", e.toString())
+            log.debug("[Serialize Fail] maskedKey={}", StringMaskingUtils.maskCacheKey(cacheKey))
+            serializeFailCounter.increment()
+            -1 // L2 스킵 시그널
+        },
+        TaskContext.of("ExpectationCache", "Serialize", StringMaskingUtils.maskCacheKey(cacheKey)),
+    )
 
     /** L2 캐시에 저장 (P0-2: 실패해도 API 실패로 전파 금지) */
     private fun saveToL2(cacheKey: String, response: TotalExpectationResponse, size: Int) {
@@ -198,7 +195,7 @@ class TotalExpectationCacheService(
                     response.userIgn,
                     response.totalCost,
                     response.items?.size ?: 0,
-                    size
+                    size,
                 )
                 null
             },
@@ -207,11 +204,11 @@ class TotalExpectationCacheService(
                 log.warn(
                     "[Cache] L2 SAVE FAIL | dto=TotalExpectationResponse | userIgn={} | err={}",
                     response.userIgn,
-                    e.toString()
+                    e.toString(),
                 )
                 null
             },
-            TaskContext.of("ExpectationCache", "SaveL2", StringMaskingUtils.maskCacheKey(cacheKey))
+            TaskContext.of("ExpectationCache", "SaveL2", StringMaskingUtils.maskCacheKey(cacheKey)),
         )
     }
 
@@ -226,9 +223,7 @@ class TotalExpectationCacheService(
      * @param logicVersion 계산 로직 버전
      * @return 캐시 키
      */
-    fun buildCacheKey(ocid: String, fingerprint: String, tableVersionHash: String, logicVersion: Int): String {
-        return "expectation:$KEY_VERSION:$ocid:$fingerprint:$tableVersionHash:lv$logicVersion"
-    }
+    fun buildCacheKey(ocid: String, fingerprint: String, tableVersionHash: String, logicVersion: Int): String = "expectation:$KEY_VERSION:$ocid:$fingerprint:$tableVersionHash:lv$logicVersion"
 
     companion object {
         private val log = LoggerFactory.getLogger(TotalExpectationCacheService::class.java)

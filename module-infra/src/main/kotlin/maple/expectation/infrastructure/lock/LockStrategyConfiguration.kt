@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.lock
 
 import jakarta.annotation.PostConstruct
+import java.util.Optional
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Configuration
-import java.util.Optional
 
 /**
  * Lock Strategy 활성화 상태 로깅
@@ -12,7 +12,7 @@ import java.util.Optional
 class LockStrategyConfiguration(
     private val redisLockStrategy: Optional<RedisDistributedLockStrategy>,
     private val mysqlLockStrategy: Optional<MySqlNamedLockStrategy>,
-    private val resilientLockStrategy: Optional<ResilientLockStrategy>
+    private val resilientLockStrategy: Optional<ResilientLockStrategy>,
 ) {
 
     private val log = LoggerFactory.getLogger(LockStrategyConfiguration::class.java)

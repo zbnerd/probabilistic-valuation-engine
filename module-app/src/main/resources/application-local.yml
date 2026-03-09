@@ -10,9 +10,17 @@ spring:
       on-profile: local
 
   datasource:
+    # MySQL Configuration (Current/Default)
     url: jdbc:mysql://localhost:3306/maple_expectation?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&rewriteBatchedStatements=true
     username: root
     password: ${DB_ROOT_PASSWORD}
+
+    # PostgreSQL Configuration (Alternative - for future migration)
+    # To use PostgreSQL instead of MySQL, use profile: pglocal
+    # url: jdbc:postgresql://localhost:5432/maple_expectation?serverTimezone=Asia/Seoul
+    # username: maple
+    # password: ${DB_ROOT_PASSWORD}
+    # driver-class-name: org.postgresql.Driver
 
     hikari:
       maximum-pool-size: 100
@@ -30,6 +38,10 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
+        # MySQL Dialect (Default)
+        dialect: org.hibernate.dialect.MySQLDialect
+        # PostgreSQL Dialect (Alternative - use pglocal profile)
+        # dialect: org.hibernate.dialect.PostgreSQLDialect
         default_batch_fetch_size: 100
         jdbc:
           batch_size: 100

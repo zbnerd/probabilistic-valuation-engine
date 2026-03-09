@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.config
 
-import maple.expectation.infrastructure.concurrency.SingleFlightExecutor
-import org.springframework.stereotype.Component
 import java.util.concurrent.Executor
 import java.util.function.Function
+import maple.expectation.infrastructure.concurrency.SingleFlightExecutor
+import org.springframework.stereotype.Component
 
 /**
  * Factory for creating SingleFlightExecutor instances.
@@ -29,8 +29,6 @@ class SingleFlightExecutorFactory {
     fun <T> create(
         timeoutSeconds: Long,
         executor: Executor,
-        fallback: Function<String, T>
-    ): SingleFlightExecutor<T> {
-        return SingleFlightExecutor(timeoutSeconds.toInt(), executor, fallback)
-    }
+        fallback: Function<String, T>,
+    ): SingleFlightExecutor<T> = SingleFlightExecutor(timeoutSeconds.toInt(), executor, fallback)
 }

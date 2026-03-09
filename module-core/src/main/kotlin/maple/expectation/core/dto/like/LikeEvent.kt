@@ -21,21 +21,19 @@ data class LikeEvent(
     val newDelta: Long,
     val eventType: EventType,
     val sourceInstanceId: String,
-    val timestamp: Instant
+    val timestamp: Instant,
 ) : Serializable {
 
     companion object {
         @JvmStatic
-        fun like(userIgn: String, newDelta: Long, instanceId: String): LikeEvent =
-            LikeEvent(userIgn, newDelta, EventType.LIKE, instanceId, Instant.now())
+        fun like(userIgn: String, newDelta: Long, instanceId: String): LikeEvent = LikeEvent(userIgn, newDelta, EventType.LIKE, instanceId, Instant.now())
 
         @JvmStatic
-        fun unlike(userIgn: String, newDelta: Long, instanceId: String): LikeEvent =
-            LikeEvent(userIgn, newDelta, EventType.UNLIKE, instanceId, Instant.now())
+        fun unlike(userIgn: String, newDelta: Long, instanceId: String): LikeEvent = LikeEvent(userIgn, newDelta, EventType.UNLIKE, instanceId, Instant.now())
     }
 
     enum class EventType {
         LIKE,
-        UNLIKE
+        UNLIKE,
     }
 }

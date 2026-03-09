@@ -32,79 +32,78 @@ package maple.expectation.core.port.out
  */
 interface LikeRelationBufferStrategy {
 
-  /** Strategy type enum */
-  enum class StrategyType {
-    /** In-Memory + Redis hybrid (legacy) */
-    IN_MEMORY,
-    /** Redis Only (V5 Stateless) */
-    REDIS
-  }
+    /** Strategy type enum */
+    enum class StrategyType {
+        /** In-Memory + Redis hybrid (legacy) */
+        IN_MEMORY,
 
-  /** Get current strategy type */
-  fun getType(): StrategyType
+        /** Redis Only (V5 Stateless) */
+        REDIS,
+    }
 
-  /**
-   * Add like relation
-   *
-   * @param accountId account of user who liked
-   * @param targetOcid target character OCID
-   * @return true: newly added, false: duplicate, null: Redis failure
-   */
-  fun addRelation(accountId: String, targetOcid: String): Boolean?
+    /** Get current strategy type */
+    fun getType(): StrategyType
 
-  /**
-   * Check if like relation exists
-   *
-   * @param accountId account of user who liked
-   * @param targetOcid target character OCID
-   * @return true: exists, false: not exists, null: Redis failure
-   */
-  fun exists(accountId: String, targetOcid: String): Boolean?
+    /**
+     * Add like relation
+     *
+     * @param accountId account of user who liked
+     * @param targetOcid target character OCID
+     * @return true: newly added, false: duplicate, null: Redis failure
+     */
+    fun addRelation(accountId: String, targetOcid: String): Boolean?
 
-  /**
-   * Remove like relation
-   *
-   * @param accountId account of user who liked
-   * @param targetOcid target character OCID
-   * @return true: removed, false: not exists
-   */
-  fun removeRelation(accountId: String, targetOcid: String): Boolean?
+    /**
+     * Check if like relation exists
+     *
+     * @param accountId account of user who liked
+     * @param targetOcid target character OCID
+     * @return true: exists, false: not exists, null: Redis failure
+     */
+    fun exists(accountId: String, targetOcid: String): Boolean?
 
-  /**
-   * Fetch and remove pending relations for DB sync (atomic)
-   *
-   * @param limit max fetch count
-   * @return pending relation set (accountId:targetOcid format)
-   */
-  fun fetchAndRemovePending(limit: Int): Set<String>
+    /**
+     * Remove like relation
+     *
+     * @param accountId account of user who liked
+     * @param targetOcid target character OCID
+     * @return true: removed, false: not exists
+     */
+    fun removeRelation(accountId: String, targetOcid: String): Boolean?
 
-  /** Build relation key Format: {accountId}:{targetOcid} */
-  fun buildRelationKey(accountId: String, targetOcid: String): String
+    /**
+     * Fetch and remove pending relations for DB sync (atomic)
+     *
+     * @param limit max fetch count
+     * @return pending relation set (accountId:targetOcid format)
+     */
+    fun fetchAndRemovePending(limit: Int): Set<String>
 
-  /**
-   * Parse relation key
-   *
-   * @return [accountId, targetOcid]
-   */
-  fun parseRelationKey(relationKey: String): Array<String>
+    /** Build relation key Format: {accountId}:{targetOcid} */
+    fun buildRelationKey(accountId: String, targetOcid: String): String
 
-  /**
-   * Check if relation exists in unliked set (explicit unlike tracking)
-   *
-   * <p>Tracks explicitly unliked relations to distinguish cold start (Redis empty) from actual
-   * unlike.
-   *
-   * @param accountId account of user who liked
-   * @param targetOcid target character OCID
-   * @return true: explicitly unliked, false: no unlike record, null: Redis failure
-   */
-  fun existsInUnliked(accountId: String, targetOcid: String): Boolean? {
-    return null
-  }
+    /**
+     * Parse relation key
+     *
+     * @return [accountId, targetOcid]
+     */
+    fun parseRelationKey(relationKey: String): Array<String>
 
-  /** Get total relation count */
-  fun getRelationsSize(): Int
+    /**
+     * Check if relation exists in unliked set (explicit unlike tracking)
+     *
+     * <p>Tracks explicitly unliked relations to distinguish cold start (Redis empty) from actual
+     * unlike.
+     *
+     * @param accountId account of user who liked
+     * @param targetOcid target character OCID
+     * @return true: explicitly unliked, false: no unlike record, null: Redis failure
+     */
+    fun existsInUnliked(accountId: String, targetOcid: String): Boolean? = null
 
-  /** Get pending relation count */
-  fun getPendingSize(): Int
+    /** Get total relation count */
+    fun getRelationsSize(): Int
+
+    /** Get pending relation count */
+    fun getPendingSize(): Int
 }

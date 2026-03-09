@@ -6,9 +6,9 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-09 |
-| 결정자 | Development Team |
+| 결정자 | MapleExpectation Team |
 | 검토자 | Architecture Review Board |
-| 관련 이슈 | #547, #551 |
+| 관련 이슈 | #547, #548, #551 |
 
 ---
 
@@ -44,22 +44,27 @@ MapleExpectation 프로젝트는 현재 3개의 데이터베이스를 사용:
 
 ## 2. 결정 (Decision)
 
-**MySQL + MongoDB + Redis를 PostgreSQL 단일 DB로 통합한다.**
+**MySQL + MongoDB를 PostgreSQL 단일 DB로 통합한다. (Redis 캐시는 유지)**
 
 ### 핵심 원칙
 
-1. **PostgreSQL로 모든 기능 통합**
+1. **PostgreSQL로 데이터 계층 통합**
    - MySQL → PostgreSQL (jsonb, 고급 인덱싱)
    - MongoDB → PostgreSQL jsonb
-   - Redis → PostgreSQL (PGMQ, Advisory Lock, UNLOGGED TABLE)
 
-2. **단계적 마이그레이션**
+2. **Redis는 캐시 전용으로 유지**
+   - 분산 캐시 (Caffeine L1 + Redis L2)
+   - 분산 락 (Redisson)
+   - 세션 저장소
+   - 캐시 무효화 (Pub/Sub)
+
+3. **메시지 큐는 PGMQ로 마이그레이션**
+   - Redis Streams → PGMQ
+   - Outbox 패턴 → PGMQ 기반
+
+4. **단계적 마이그레이션**
    - Phase 0~9로 나누어 점진적 전환
    - 각 Phase마다 검증 후 진행
-
-3. **필요시 Redis 재도입**
-   - 트래픽이 2,000+ QPS 도달 시 Redis 캐시 재도입 검토
-   - 명확한 스케일아웃 트리거 조건 정의
 
 ---
 
@@ -78,33 +83,31 @@ MapleExpectation 프로젝트는 현재 3개의 데이터베이스를 사용:
 
 **평가:** ❌ 기술 부채 증가, 운영 비용 증가
 
-### B. PostgreSQL + Redis 하이브리드
+### B. PostgreSQL + Redis 하이브리드 (선택됨)
 
 **장점:**
-- 캐시/세션은 Redis 유지
-- DB 복잡도 감소
+- 캐시/세션/락은 Redis 유지
+- DB 복잡도 감소 (3개 → 2개)
+- 검증된 Redis 캐시 성능 유지
 
 **단점:**
 - 여전히 2개 DB 운영
 - Redis 장애 시 영향 범위 큼
 
-**평가:** ⚠️ 부분 개선, 근본적 해결 안 됨
+**평가:** ✅ 점진적 개선, 리스크 최소화
 
-### C. PostgreSQL 단일 DB (선택됨)
+### C. PostgreSQL 완전 단일 DB
 
 **장점:**
-- 운영 단순화
-- 리소스 효율화
-- ACID 트랜잭션 보장
-- jsonb로 비정형 데이터 처리
-- PGMQ로 메시지 큐 대체
-- Advisory Lock로 분산 락 대체
+- 운영 최대 단순화
+- 리소스 최대 효율화
 
 **단점:**
-- 초기 마이그레이션 비용
-- Redis만큼 빠른 캐시 아님 (Caffeine으로 보완)
+- Redis만큼 빠른 캐시 아님
+- 분산 락 성능 저하 가능
+- 세션 관리 복잡도 증가
 
-**평가:** ✅ 장기적 이익 > 단기 비용
+**평가:** ⚠️ 이상적이나 현실적 제약 존재
 
 ---
 
@@ -116,11 +119,17 @@ MapleExpectation 프로젝트는 현재 3개의 데이터베이스를 사용:
 |----------|----------------|----------|
 | MySQL 테이블 | PostgreSQL 테이블 | JPA Entity, jsonb 컬럼 |
 | MongoDB 문서 | PostgreSQL jsonb | `@Column(columnDefinition = "jsonb")` |
-| Redis 캐시 | Caffeine L1 + PostgreSQL | TieredCache 패턴 유지 |
-| Redis 세션 | PostgreSQL 테이블 | 세션 TTL 관리 |
-| Redis 버퍼 | UNLOGGED TABLE | 크래시 시 손실 허용 |
 | Redis Streams | PGMQ Extension | 메시지 큐 |
-| Redisson 락 | Advisory Lock | `pg_advisory_lock()` |
+| Redis Buffer | UNLOGGED TABLE | 크래시 시 손실 허용 |
+
+### Redis 유지 기능
+
+| 기능 | Redis 활용 | 이유 |
+|------|----------|------|
+| 분산 캐시 | TieredCache (Caffeine L1 + Redis L2) | 빠른 응답 시간 |
+| 분산 락 | Redisson | 검증된 성능 |
+| 세션 저장소 | Redis Session | TTL 관리 용이 |
+| 캐시 무효화 | Redis Pub/Sub | 실시간 전파 |
 
 ### PGMQ 큐 설계
 
@@ -138,7 +147,7 @@ SELECT pgmq.create('donation_outbox_queue');
 ### UNLOGGED TABLE 설계
 
 ```sql
--- Equipment Buffer (Redis 대체)
+-- Equipment Buffer (Redis Buffer 대체)
 CREATE UNLOGGED TABLE equipment_expectation_buffer (
     character_name VARCHAR(50) PRIMARY KEY,
     expectation_value BIGINT NOT NULL,
@@ -155,10 +164,10 @@ CREATE UNLOGGED TABLE equipment_expectation_buffer (
 
 | 항목 | 설명 |
 |------|------|
-| **운영 단순화** | 단일 DB 모니터링, 백업, 장애 대응 |
-| **비용 절감** | DB 인스턴스 3개 → 1개 |
+| **운영 단순화** | DB 인스턴스 3개 → 2개 (PostgreSQL + Redis) |
+| **비용 절감** | MySQL, MongoDB 인스턴스 제거 |
 | **일관성 보장** | ACID 트랜잭션으로 데이터 무결성 |
-| **개발 생산성** | 단일 스택 학습, JPA 일관성 |
+| **개발 생산성** | 단일 RDBMS 스택 학습 |
 | **인프라 호환성** | PostgreSQL은 범용 RDBMS |
 
 ### ⚠️ 단점
@@ -166,19 +175,18 @@ CREATE UNLOGGED TABLE equipment_expectation_buffer (
 | 항목 | 완화 방안 |
 |------|----------|
 | **마이그레이션 비용** | 단계적 전환, 충분한 테스트 |
-| **Redis만큼 빠르지 않음** | Caffeine L1 캐시로 보완 |
-| **수평 확장 제약** | 읽기 복제본, 파티셔닝 고려 |
 | **PGMQ 학습 곡선** | Redis Streams와 유사한 API |
+| **Redis 유지 필요** | 캐시/락은 검증된 Redis 사용 |
 
 ---
 
 ## 6. 스케일아웃 트리거 조건
 
-PostgreSQL 단일 DB에서 Redis 재도입을 고려하는 조건:
+PostgreSQL + Redis에서 추가 조치를 고려하는 조건:
 
 | 지표 | 임계값 | 조치 |
 |------|--------|------|
-| QPS | > 2,000 | Redis 캐시 도입 검토 |
+| QPS | > 2,000 | Redis 캐시 확장 |
 | 응답 시간 p99 | > 200ms | 읽기 복제본 추가 |
 | DB CPU | > 80% | 커넥션 풀 튜닝, 쿼리 최적화 |
 | 동시 연결 | > 500 | PgBouncer 도입 |
@@ -190,26 +198,28 @@ PostgreSQL 단일 DB에서 Redis 재도입을 고려하는 조건:
 ### Phase 개요
 
 ```
-Phase 0: Foundation (2 Issues)
-  ├── P0-01: Project Setup + Kotlin Conversion
-  └── P0-02: PostgreSQL + PGMQ Docker Compose
+Phase 0: Foundation (2 Issues) ✅ In Progress
+  ├── P0-01: Project Setup + Kotlin Conversion ✅
+  └── P0-02: PostgreSQL + PGMQ Docker Compose ✅
 
 Phase 1: Core Data Layer (3 Issues)
-  ├── P1-01: ADR-001 PostgreSQL Single DB Strategy
+  ├── P1-01: ADR-001 PostgreSQL Single DB Strategy ✅
   ├── P1-02: Domain Entities (PostgreSQL + jsonb)
   └── P1-03: Repository Layer + Ports
 
-Phase 2-3: Message Queue & Locking
-Phase 4-5: Data Pipeline & API
-Phase 6: Features (Like, Donation, Auth)
-Phase 7-8: Testing & Performance
-Phase 9: Deployment
+Phase 2: Message Queue (2 Issues)
+  ├── P2-01: ADR-002 PGMQ Integration
+  └── P2-02: PGMQ Producers & Consumers
+
+Phase 3-4: Data Pipeline & API
+Phase 5-6: Features & Testing
+Phase 7-8: Performance & Deployment
 ```
 
 ### 롤백 전략
 
 1. **`develop` 브랜치 보존**: 언제든 롤백 가능
-2. **기능 플래그**: PostgreSQL/Redis 전환 가능한 구조
+2. **기능 플래그**: PostgreSQL/MySQL 전환 가능한 구조
 3. **데이터 마이그레이션 없음**: 프로덕션 데이터 이관 없음 (신규 시작)
 
 ---
@@ -230,7 +240,7 @@ Phase 9: Deployment
 - PostgreSQL 커넥션 풀 상태
 - PGMQ 큐 길이/지연 시간
 - UNLOGGED TABLE 크기
-- Advisory Lock 대기 시간
+- Redis 캐시 적중률
 
 ---
 
@@ -241,6 +251,7 @@ Phase 9: Deployment
 - [PostgreSQL Advisory Locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS)
 - [PostgreSQL jsonb](https://www.postgresql.org/docs/current/datatype-json.html)
 - [Design Document](../plans/2026-03-06-postgresql-migration-design.md)
+- [Deletion Targets](../migration/deletion-targets.md)
 
 ---
 
@@ -248,5 +259,5 @@ Phase 9: Deployment
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-09 | ADR 초안 작성 | Development Team |
-| 2026-03-09 | 상태를 "수락됨"으로 변경 | Development Team |
+| 2026-03-09 | ADR 초안 작성 | MapleExpectation Team |
+| 2026-03-09 | 상태를 "수락됨"으로 변경 | MapleExpectation Team |

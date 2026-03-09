@@ -20,7 +20,7 @@ data class RichEvidence(
     val currentValue: Double = 0.0,
     val baselineValue: Double = 0.0,
     val deviationPercent: Double = 0.0,
-    val evaluatedAt: Instant? = null
+    val evaluatedAt: Instant? = null,
 ) {
     /**
      * Format deviation as human-readable string.

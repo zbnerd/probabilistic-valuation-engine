@@ -1,0 +1,177 @@
+# PostgreSQL Local Development Configuration
+# Usage: ./gradlew bootRun --args='--spring.profiles.active=pglocal'
+# Or: java -jar app.jar --spring.profiles.active=pglocal
+
+server:
+  tomcat:
+    threads:
+      max: 100
+    max-http-post-size: 2MB
+
+spring:
+  config:
+    activate:
+      on-profile: pglocal
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/maple_expectation?currentSchema=public
+    username: ${DB_USERNAME:-maple}
+    password: ${DB_PASSWORD:-maple123}
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      maximum-pool-size: 100
+      minimum-idle: 50
+      leak-detection-threshold: 60000
+      register-mbeans: true
+      # PostgreSQL-specific connection settings
+      connection-init-sql: "SET statement_timeout = '30s'"
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate  # Use validate with PostgreSQL (schema managed by init.sql)
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
+        # PostgreSQL dialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Redis disabled for PostgreSQL-only mode
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  # Auth configuration
+  auth:
+    jwt:
+      secret: ${JWT_SECRET}
+      expiration: 900
+    refresh-token:
+      expiration: 604800
+    fingerprint:
+      secret: ${FINGERPRINT_SECRET}
+    admin:
+      allowlist: ${ADMIN_FINGERPRINTS:}
+    session:
+      ttl: 1800
+
+  # Discord Alert Configuration
+  alert:
+    discord:
+      webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
+
+# DP 엔진 테이블 검증 설정
+cube:
+  table-mass:
+    policy: LENIENT
+
+# Rate Limiting 비활성화 (부하 테스트용)
+ratelimit:
+  enabled: false
+
+# CORS 설정
+cors:
+  allowed-origins:
+    - "http://localhost:3000"
+    - "http://localhost:3001"
+    - "http://localhost:5173"
+    - "http://127.0.0.1:3000"
+    - "http://127.0.0.1:3001"
+    - "http://127.0.0.1:5173"
+
+# PostgreSQL-specific application settings
+app:
+  buffer:
+    redis:
+      enabled: false  # PostgreSQL UNLOGGED tables instead
+    postgres:
+      enabled: true
+      unlogged-buffer-size: 10000
+  event-publisher:
+    type: pgmq  # Use PGMQ instead of Redis
+  aop:
+    trace:
+      enabled: true
+  v5:
+    worker-pool-size: 4
+    shutdown-timeout-seconds: 30
+    high-priority-worker-ratio: 0.5
+    enabled: true
+    query-side-enabled: true
+
+# Scheduler Configuration
+scheduler:
+  nexon-data-collection:
+    enabled: false
+    rate: 600000
+    initial-delay: 30000
+  like-sync:
+    enabled: false
+  expectation-sync:
+    enabled: false
+  popular-character-warmup:
+    enabled: false
+
+# Disable outbox schedulers (PGMQ handles this)
+outbox:
+  scheduler:
+    nexon-api-outbox:
+      enabled: false
+
+# PGMQ Configuration
+pgmq:
+  enabled: true
+  queues:
+    v4-buffer:
+      name: v4_buffer_queue
+      retention: 86400  # 24 hours
+    v5-event:
+      name: v5_event_queue
+      retention: 604800  # 7 days
+    donation-outbox:
+      name: donation_outbox_queue
+      retention: 86400
+
+# Z.ai LangChain4j Configuration
+langchain4j:
+  glm-4:
+    chat-model:
+      enabled: false
+      base-url: https://api.z.ai/api/paas/v4
+      model-name: glm-4.7
+      timeout: 60s
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      discordWebhook:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        minimumNumberOfCalls: 5
+        registerHealthIndicator: true
+      pgmq:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        minimumNumberOfCalls: 5
+  retry:
+    instances:
+      discordWebhook:
+        maxAttempts: 3
+        waitDuration: 500ms
+        exponentialBackoffMultiplier: 2.0
+      pgmq:
+        maxAttempts: 3
+        waitDuration: 100ms
+  timelimiter:
+    instances:
+      discordWebhook:
+        timeoutDuration: 5s

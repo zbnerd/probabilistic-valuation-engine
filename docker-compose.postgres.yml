@@ -1,0 +1,57 @@
+# PostgreSQL + PGMQ Docker Compose Configuration
+# Usage: docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
+# Or standalone: docker compose -f docker-compose.postgres.yml up -d
+
+services:
+  postgres:
+    image: pgmq/pgmq:latest
+    container_name: maple-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-maple}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-maple123}
+      POSTGRES_DB: ${DB_SCHEMA_NAME:-maple_expectation}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-maple} -d ${DB_SCHEMA_NAME:-maple_expectation}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - maple-network
+
+  # Redis for backward compatibility (will be removed in Phase 3)
+  redis-local:
+    image: redis:7.0
+    container_name: maple-redis-local
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --save 60 1
+      --loglevel warning
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_local_data:/data
+    networks:
+      - maple-network
+    profiles:
+      - legacy
+
+networks:
+  maple-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+  redis_local_data:

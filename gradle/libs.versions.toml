@@ -141,6 +141,7 @@ testcontainers-mysql = { module = "org.testcontainers:mysql", version.ref = "tes
 testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
 testcontainers-mongodb = { module = "org.testcontainers:mongodb", version.ref = "testcontainers" }
 testcontainers-toxiproxy = { module = "org.testcontainers:toxiproxy", version.ref = "testcontainers" }
+spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
 archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" }

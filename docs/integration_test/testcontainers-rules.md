@@ -2,34 +2,71 @@
 
 > Issue #547: PostgreSQL Migration
 
-## 1. 싱글톤 컨테이너 — companion object + @JvmStatic
+## 아키텍처 개요
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    JVM 프로세스                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  TestcontainersConfiguration (companion object)         │    │
+│  │  ┌─────────────────────────────────────────────────┐    │    │
+│  │  │  PostgreSQL Container (PGMQ)                    │    │    │
+│  │  │  - JVM 레벨 싱글톤                               │    │    │
+│  │  │  - start() 1번만 호출                            │    │    │
+│  │  │  - withReuse(true)                              │    │    │
+│  │  └─────────────────────────────────────────────────┘    │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                              ↓                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Spring Context (@ServiceConnection)                     │    │
+│  │  - datasource.url 자동 주입                              │    │
+│  │  - datasource.username 자동 주입                         │    │
+│  │  - datasource.password 자동 주입                         │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                              ↓                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  IntegrationTestBase                                     │    │
+│  │  - @BeforeEach: DatabaseCleaner.clean()                  │    │
+│  │  - entityManager.clear()                                 │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 1. 싱글톤 컨테이너 설정
 
 ```kotlin
-abstract class PostgresContainerBaseTest {
-    companion object {
-        @JvmStatic
-        val postgres = PostgreSQLContainer<Nothing>("postgres:16-alpine").apply {
-            withDatabaseName("test_db")
-            withUsername("test")
-            withPassword("test")
-            withCommand(
-                "postgres",
-                "-c", "fsync=off",              // 테스트 속도 향상
-                "-c", "synchronous_commit=off",  // 테스트 속도 향상
-                "-c", "full_page_writes=off"     // 테스트 속도 향상
-            )
-            withReuse(true)   // 로컬에서만. CI에서는 무시됨
-            start()           // static 블록에서 1번만 시작
-        }
+// TestcontainersConfiguration.kt
+@TestConfiguration(proxyBeanMethods = false)
+class TestcontainersConfiguration {
 
+    companion object {
+        // JVM 프로세스당 정확히 1번만 시작. Context 재생성과 무관.
         @JvmStatic
-        @DynamicPropertySource
-        fun configure(registry: DynamicPropertyRegistry) {
-            registry.add("spring.datasource.url", postgres::getJdbcUrl)
-            registry.add("spring.datasource.username", postgres::getUsername)
-            registry.add("spring.datasource.password", postgres::getPassword)
-        }
+        private val postgresContainer: PostgreSQLContainer<*> =
+            PostgreSQLContainer<Nothing>(
+                DockerImageName
+                    .parse("jumski/postgres-17-pgmq:latest")
+                    .asCompatibleSubstituteFor("postgres"),
+            ).apply {
+                withDatabaseName("maple_test")
+                withUsername("test")
+                withPassword("test")
+                withCommand(
+                    "postgres",
+                    "-c", "fsync=off",
+                    "-c", "synchronous_commit=off",
+                    "-c", "full_page_writes=off",
+                    "-c", "max_connections=50",
+                )
+                withInitScript("sql/init-pgmq.sql")
+                withReuse(true)
+                start()
+            }
     }
+
+    @Bean
+    @ServiceConnection
+    fun postgresContainer(): PostgreSQLContainer<*> = Companion.postgresContainer
 }
 ```
 
@@ -37,170 +74,239 @@ abstract class PostgresContainerBaseTest {
 
 | 금지 | 이유 |
 |------|------|
-| `@Container` | 수동 `start()`와 혼용 시 컨테이너 중복 생성 |
+| `@Container` | companion object + start()와 혼용 시 중복 생성 |
 | `@Testcontainers` | 같은 이유 |
+| `@DynamicPropertySource` | @ServiceConnection으로 대체 |
 
 ---
 
-## 2. 플래키 테스트 방지 — DatabaseCleaner
+## 2. 자동 등록 — spring.factories
+
+```
+# src/test/resources/META-INF/spring/org.springframework.boot.test.context.TestConfiguration.imports
+maple.expectation.config.TestcontainersConfiguration
+```
+
+이 한 줄이면 `@SpringBootTest` 붙이기만 해도 컨테이너가 자동으로 뜬다.
+`@Import` 어노테이션 쓰지 마라. 까먹으면 테스트가 DB 없이 돌아서 깨진다.
+
+---
+
+## 3. DatabaseCleaner — FK 무시 + JDBC 직접 사용
 
 ```kotlin
 @Component
 @Profile("test")
 class DatabaseCleaner(
-    @PersistenceContext private val em: EntityManager
-) : InitializingBean {
+    private val dataSource: DataSource,
+) {
     private lateinit var tableNames: List<String>
 
-    override fun afterPropertiesSet() {
-        tableNames = em.metamodel.entities
-            .filter { it.javaType.isAnnotationPresent(Table::class.java) }
-            .mapNotNull {
-                it.javaType.getAnnotation(Table::class.java)?.name
-                    ?: it.name.lowercase()
+    @PostConstruct
+    fun init() {
+        dataSource.connection.use { conn ->
+            val rs = conn.metaData.getTables(null, "public", null, arrayOf("TABLE"))
+            val tables = mutableListOf<String>()
+            while (rs.next()) {
+                val name = rs.getString("TABLE_NAME")
+                // PGMQ 내부 테이블, Spring Batch 메타 테이블 제외
+                if (!name.startsWith("pgmq") &&
+                    !name.startsWith("batch_") &&
+                    !name.startsWith("flyway")
+                ) {
+                    tables.add(name)
+                }
             }
-            .filter { !it.startsWith("pgmq") }  // PGMQ 내부 테이블 건드리면 안 됨
+            tableNames = tables
+        }
     }
 
-    @Transactional
     fun clean() {
-        em.flush()
-        em.createNativeQuery("SET session_replication_role = 'replica'").executeUpdate()  // FK 무시
-        tableNames.forEach {
-            em.createNativeQuery("TRUNCATE TABLE $it CASCADE").executeUpdate()
+        dataSource.connection.use { conn ->
+            conn.autoCommit = false
+            conn.createStatement().use { stmt ->
+                stmt.execute("SET session_replication_role = 'replica'")
+                tableNames.forEach { stmt.execute("TRUNCATE TABLE \"$it\" CASCADE") }
+                stmt.execute("SET session_replication_role = 'DEFAULT'")
+            }
+            conn.commit()
         }
-        em.createNativeQuery("SET session_replication_role = 'DEFAULT'").executeUpdate()
     }
 }
 ```
 
-### 핵심 규칙
+### JDBC 직접 사용 이유
 
-- `@BeforeEach`에서 `clean()` 호출
-- `@AfterEach`가 아님
-- **이유:** 테스트 실패 시 `@AfterEach`가 실행 안 될 수 있어서 다음 테스트가 오염됨
+- EntityManager 방식은 영속성 컨텍스트 상태에 영향받아 플래키 발생
+- JDBC는 Hibernate 캐시와 무관하게 확실히 정리
+- 트랜잭션도 직접 관리해서 예외 시에도 깨끗
+
+핵심: **@BeforeEach에서 호출**. @AfterEach가 아님.
+이유: 테스트 실패 시 @AfterEach가 실행 안 될 수 있어서 다음 테스트가 오염됨.
 
 ---
 
-## 3. 테스트 격리 베이스 클래스
+## 4. 통합 테스트 베이스 클래스
 
 ```kotlin
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// Service 레벨 통합 테스트용
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("test")
-abstract class IntegrationTestBase : PostgresContainerBaseTest() {
+abstract class IntegrationTestBase {
 
     @Autowired
     lateinit var databaseCleaner: DatabaseCleaner
 
+    @Autowired
+    lateinit var entityManager: EntityManager
+
     @BeforeEach
-    fun setUp() {
+    fun cleanUp() {
         databaseCleaner.clean()
+        entityManager.clear()  // Hibernate 1차 캐시 비우기
     }
 }
-```
 
-**모든 통합 테스트는 이 클래스를 상속한다.**
-
----
-
-## 4. Awaitility로 비동기 검증 (Thread.sleep 절대 금지)
-
-PGMQ 큐 컨슈밍, 캐시 워밍업 등 비동기 작업 검증 시:
-
-```kotlin
-await()
-    .atMost(Duration.ofSeconds(10))
-    .pollInterval(Duration.ofMillis(200))
-    .untilAsserted {
-        val result = repository.findById(id)
-        assertThat(result).isNotNull
-    }
-```
-
-**`Thread.sleep()` 쓰면 CI 환경에서 100% 플래키 된다.**
-
----
-
-## 5. 테스트 간 순서 의존 금지
-
-| 규칙 | 설명 |
-|------|------|
-| 각 테스트는 독립적 | 실행 순서 상관없이 통과해야 함 |
-| `@Order` 금지 | 순서 의존성 유발 |
-| 테스트 A 결과 → 테스트 B 의존 | 금지 |
-| `@BeforeEach`에서 데이터 세팅 | 각 테스트마다 필요한 데이터 직접 준비 |
-
----
-
-## 6. PGMQ 테스트 주의사항
-
-PGMQ 큐는 테스트 간 공유되므로:
-
-```kotlin
-@BeforeEach
-fun setUp() {
-    // 매 테스트 전 큐 비우기
-    pgmqTemplate.purge("calculation-queue")
-
-    // 또는 큐 이름에 테스트별 유니크 접미사
-    val queueName = "calculation-queue-${UUID.randomUUID()}"
-}
-```
-
----
-
-## 7. CI 환경 설정
-
-### .github/workflows
-
-```yaml
-# withReuse(true)는 CI에서 무시됨 (정상 동작)
-# 컨테이너 병렬 시작으로 CI 속도 향상
-```
-
-### build.gradle.kts
-
-```kotlin
-tasks.test {
-    useJUnitPlatform()
-    // Gradle 병렬 테스트
-    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2)
-        .coerceAtLeast(1)
-}
-```
-
----
-
-## 8. 전체 예제
-
-```kotlin
+// API 통합 테스트용 (HTTP 필요할 때만)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("pgtest")
-class MyIntegrationTest : IntegrationTestBase() {
+@ActiveProfiles("test")
+abstract class ApiIntegrationTestBase {
 
     @Autowired
-    lateinit var myService: MyService
+    lateinit var databaseCleaner: DatabaseCleaner
+
+    @Autowired
+    lateinit var restTemplate: TestRestTemplate
+
+    @BeforeEach
+    fun cleanUp() {
+        databaseCleaner.clean()
+    }
+
+    // @Transactional 여기서 쓰지 마라. RANDOM_PORT에서 안 먹는다.
+}
+```
+
+---
+
+## 5. 실제 테스트 — 이렇게 깔끔해야 함
+
+```kotlin
+class CalculationServiceTest : IntegrationTestBase() {
+
+    @Autowired
+    lateinit var calculationService: CalculationService
+
+    @Autowired
+    lateinit var characterRepository: CharacterRepository
 
     @Test
-    fun `비동기 처리 테스트`() {
-        // Given
-        val request = MyRequest(id = 1L, data = "test")
+    fun `기대값 계산이 정상 동작한다`() {
+        // GIVEN
+        characterRepository.save(CharacterFixtures.create("char-001"))
 
-        // When
-        myService.processAsync(request)
+        // WHEN
+        val result = calculationService.calculate("char-001", "starforce-22")
 
-        // Then - Awaitility로 비동기 검증
+        // THEN
+        assertThat(result.expectedCost).isGreaterThan(BigDecimal.ZERO)
+    }
+
+    @Test
+    fun `PGMQ 비동기 계산이 완료된다`() {
+        // GIVEN
+        characterRepository.save(CharacterFixtures.create("char-002"))
+
+        // WHEN
+        calculationService.enqueueCalculation("char-002", "starforce-22")
+
+        // THEN — Awaitility로 비동기 검증 (Thread.sleep 절대 금지)
         await()
             .atMost(Duration.ofSeconds(10))
-            .pollInterval(Duration.ofMillis(200))
+            .pollInterval(Duration.ofMillis(300))
             .untilAsserted {
-                val result = myRepository.findById(1L)
-                assertThat(result).isPresent
-                assertThat(result.get().status).isEqualTo("COMPLETED")
+                val saved = precomputedRepository.findByCharacterId("char-002")
+                assertThat(saved).isNotNull
+                assertThat(saved!!.expectedCost).isGreaterThan(BigDecimal.ZERO)
             }
     }
 }
 ```
+
+컨테이너 설정 코드가 테스트 클래스에 한 줄도 없다.
+`@SpringBootTest`만 붙이면 PostgreSQL + PGMQ가 자동으로 뜨고 연결된다.
+
+---
+
+## 6. PGMQ 초기화 스크립트
+
+```sql
+-- sql/init-pgmq.sql
+CREATE EXTENSION IF NOT EXISTS pgmq CASCADE;
+
+-- Create application queues
+SELECT pgmq.create('v4_buffer_queue');
+SELECT pgmq.create('v5_event_queue');
+SELECT pgmq.create('donation_outbox_queue');
+```
+
+---
+
+## 7. application-test.yml
+
+```yaml
+spring:
+  profiles:
+    active: test
+
+  # DataSource is auto-configured by TestcontainersConfiguration @ServiceConnection
+  # No manual datasource URL/username/password needed here
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop    # 테스트마다 스키마 재생성
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        show_sql: false          # CI에서는 false (로그 폭발 방지)
+        default_batch_fetch_size: 20
+        jdbc:
+          batch_size: 50
+    open-in-view: false          # 운영과 동일하게
+
+  datasource:
+    hikari:
+      maximum-pool-size: 10      # 테스트에서는 적게
+      minimum-idle: 2
+      connection-timeout: 5000
+      leak-detection-threshold: 30000
+
+logging:
+  level:
+    org.testcontainers: WARN        # 컨테이너 로그 최소화
+    com.github.dockerjava: WARN     # Docker 클라이언트 로그 최소화
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+```
+
+---
+
+## 8. 속도 최적화 체크리스트
+
+이 모든 것이 적용되면:
+- ✅ 컨테이너 시작: 전체 테스트 스위트에서 1번만 (약 3~5초)
+- ✅ Context 로딩: `@MockBean` 안 쓰므로 재생성 없음 (1번만)
+- ✅ DB 정리: TRUNCATE로 테스트당 10~50ms
+- ✅ 비동기 검증: Awaitility로 정확한 타이밍 (불필요한 대기 없음)
+
+### 금지 사항 위반 시 속도 저하
+
+| 위반 | 페널티 |
+|------|--------|
+| `@MockBean` 1개 추가 | Context 재생성 → +30초 |
+| `@DirtiesContext` 1개 | Context 폐기 → +30초 |
+| `Thread.sleep(5000)` | 무조건 5초 낭비 + CI에서 플래키 |
 
 ---
 

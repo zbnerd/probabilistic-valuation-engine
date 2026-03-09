@@ -112,6 +112,8 @@ dependencies {
 	implementation(libs.spring.dotenv)
 
 	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.spring.boot.testcontainers)
+	testImplementation(libs.testcontainers.postgresql)
 	testImplementation(libs.testcontainers.toxiproxy)
 	testImplementation(libs.mockito.core)
 	testImplementation(libs.mockito.junit.jupiter)
@@ -189,6 +191,29 @@ tasks.register('integrationTest', Test) {
 		maxRetries = 1
 		maxFailures = 5
 		failOnPassedAfterRetry = false
+	}
+}
+
+// 통합 테스트 인프라 자체의 성능과 정확성 검증
+tasks.register('testInfraVerification', Test) {
+	group = 'verification'
+	description = '통합 테스트 인프라 자체의 성능과 정확성 검증'
+
+	useJUnitPlatform {
+		includeTags 'infra-verification'
+	}
+
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+
+	// Docker socket for Testcontainers
+	environment "DOCKER_HOST", "unix:///var/run/docker.sock"
+	systemProperty "DOCKER_HOST", "unix:///var/run/docker.sock"
+	systemProperty "testcontainers.reuse.enable", "true"
+
+	testLogging {
+		events "passed", "skipped", "failed"
+		exceptionFormat "full"
 	}
 }
 

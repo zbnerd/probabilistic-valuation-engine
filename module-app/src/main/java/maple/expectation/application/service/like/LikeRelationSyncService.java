@@ -65,7 +65,7 @@ public class LikeRelationSyncService implements LikeRelationSyncPort {
    * </ol>
    */
   @ObservedTransaction("scheduler.like.relation_sync")
-  @Transactional("transactionManager", isolation = Isolation.READ_COMMITTED)
+  @Transactional(transactionManager = "transactionManager", isolation = Isolation.READ_COMMITTED)
   public void syncRedisToDatabase() {
     int pendingSize = likeRelationBuffer.getPendingSize();
 

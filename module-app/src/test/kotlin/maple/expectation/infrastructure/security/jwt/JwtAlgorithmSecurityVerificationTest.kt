@@ -51,10 +51,14 @@ class JwtAlgorithmSecurityVerificationTest {
     @Test
     @DisplayName("Should accept valid HS256 token")
     fun shouldAcceptValidHS256Token() {
+        val now = Date()
+        val expiration = Date(now.time + 3600000) // 1 hour from now
         val validToken = Jwts.builder()
             .subject("test-session")
             .claim("fgp", "test-fingerprint")
             .claim("role", "USER")
+            .issuedAt(now)
+            .expiration(expiration)
             .signWith(secretKey, Jwts.SIG.HS256)
             .compact()
 

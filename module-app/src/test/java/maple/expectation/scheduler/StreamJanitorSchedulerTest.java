@@ -5,9 +5,9 @@ import static org.mockito.Mockito.*;
 
 import maple.expectation.application.scheduler.StreamJanitorScheduler;
 import maple.expectation.application.worker.MongoDBSyncWorker;
+import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.executor.function.ThrowingSupplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -58,16 +58,19 @@ class StreamJanitorSchedulerTest {
               try {
                 return task.get();
               } catch (Throwable e) {
-                // If recovery is provided, use it
+                // If recovery is provided, use it (kotlin Function1)
                 if (invocation.getArguments().length > 2) {
-                  java.util.function.Function<Throwable, ?> recovery = invocation.getArgument(2);
-                  return recovery.apply(e);
+                  kotlin.jvm.functions.Function1<Throwable, ?> recovery = invocation.getArgument(1);
+                  return recovery.invoke(e);
                 }
                 throw new RuntimeException(e);
               }
             })
         .when(executor)
-        .executeOrCatch(any(ThrowingSupplier.class), any(), any(TaskContext.class));
+        .executeOrCatch(
+            any(ThrowingSupplier.class),
+            any(kotlin.jvm.functions.Function1.class),
+            any(TaskContext.class));
 
     scheduler = new StreamJanitorScheduler(mongoDBSyncWorker, executor);
   }

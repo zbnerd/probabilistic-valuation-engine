@@ -65,7 +65,7 @@ public class EquipmentApplicationService {
    * @param characterId the character identifier
    * @return Optional containing the equipment if found
    */
-  @Transactional("transactionManager", readOnly = true)
+  @Transactional(transactionManager = "transactionManager", readOnly = true)
   public Optional<CharacterEquipment> findEquipment(CharacterId characterId) {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");
@@ -83,7 +83,7 @@ public class EquipmentApplicationService {
    * @param characterId the character identifier
    * @return Optional containing fresh equipment if found
    */
-  @Transactional("transactionManager", readOnly = true)
+  @Transactional(transactionManager = "transactionManager", readOnly = true)
   public Optional<CharacterEquipment> findFreshEquipment(CharacterId characterId) {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");
@@ -171,7 +171,7 @@ public class EquipmentApplicationService {
    * @param characterId the character identifier
    * @return true if equipment exists, false otherwise
    */
-  @Transactional(readOnly = true)
+  @Transactional(transactionManager = "transactionManager", readOnly = true)
   public boolean equipmentExists(CharacterId characterId) {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");

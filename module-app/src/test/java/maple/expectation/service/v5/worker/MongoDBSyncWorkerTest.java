@@ -302,6 +302,7 @@ class MongoDBSyncWorkerTest {
             null, // calculatedAt
             null, // lastApiSyncAt
             null, // version
+            null, // lastAppliedVersion
             null, // totalExpectedCost
             null, // maxPresetNo
             null, // presets
@@ -337,6 +338,7 @@ class MongoDBSyncWorkerTest {
             null, // calculatedAt
             null, // lastApiSyncAt
             null, // version
+            null, // lastAppliedVersion
             null, // totalExpectedCost
             null, // maxPresetNo
             null, // presets
@@ -480,6 +482,7 @@ class MongoDBSyncWorkerTest {
         .totalExpectedCost("1000000")
         .maxPresetNo(1)
         .payload("{}")
+        .version(1L) // Version for causal consistency
         .build();
   }
 
@@ -494,6 +497,7 @@ class MongoDBSyncWorkerTest {
         null, // calculatedAt
         null, // lastApiSyncAt
         null, // version
+        null, // lastAppliedVersion
         1000000L,
         1, // maxPresetNo
         null, // presets

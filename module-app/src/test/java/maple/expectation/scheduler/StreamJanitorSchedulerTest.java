@@ -51,15 +51,17 @@ class StreamJanitorSchedulerTest {
 
   @BeforeEach
   void setUp() {
-    // Mock executor to actually execute tasks
-    doAnswer(
+    // Mock executor to actually execute tasks with Kotlin Function1 recovery
+    lenient()
+        .doAnswer(
             invocation -> {
               ThrowingSupplier<?> task = invocation.getArgument(0);
               try {
                 return task.get();
               } catch (Throwable e) {
-                // If recovery is provided, use it (kotlin Function1)
-                if (invocation.getArguments().length > 2) {
+                // If recovery is provided (Kotlin Function1), use it
+                if (invocation.getArguments().length > 1
+                    && invocation.getArgument(1) instanceof kotlin.jvm.functions.Function1) {
                   kotlin.jvm.functions.Function1<Throwable, ?> recovery = invocation.getArgument(1);
                   return recovery.invoke(e);
                 }

@@ -34,7 +34,7 @@ data class ExpectationCalculationCompletedEvent(
     var maxPresetNo: Int? = null,
     // Serialized EquipmentExpectationResponseV4
     var payload: String? = null,
-    // Event version for causal consistency (Unit 4 & Unit 5)
+    // Version for optimistic locking / event ordering
     var version: Long? = null,
 ) {
     companion object {
@@ -56,7 +56,6 @@ data class ExpectationCalculationCompletedEvent(
         private var version: Long? = null
 
         fun taskId(taskId: String?) = apply { this.taskId = taskId }
-        fun version(version: Long?) = apply { this.version = version }
         fun userIgn(userIgn: String?) = apply { this.userIgn = userIgn }
         fun messageId(messageId: String?) = apply { this.messageId = messageId }
         fun characterOcid(characterOcid: String?) = apply { this.characterOcid = characterOcid }
@@ -66,6 +65,7 @@ data class ExpectationCalculationCompletedEvent(
         fun totalExpectedCost(totalExpectedCost: String?) = apply { this.totalExpectedCost = totalExpectedCost }
         fun maxPresetNo(maxPresetNo: Int?) = apply { this.maxPresetNo = maxPresetNo }
         fun payload(payload: String?) = apply { this.payload = payload }
+        fun version(version: Long?) = apply { this.version = version }
 
         fun build(): ExpectationCalculationCompletedEvent = ExpectationCalculationCompletedEvent(
             taskId = taskId,

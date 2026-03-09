@@ -103,7 +103,7 @@ public class DlqAdminService {
    * @return 재처리 결과
    * @throws DlqNotFoundException DLQ 항목이 없을 경우
    */
-  @Transactional("transactionManager")
+  @Transactional(transactionManager = "transactionManager")
   public DlqReprocessResult reprocess(Long id) {
     TaskContext context = TaskContext.of("DlqAdmin", "Reprocess", String.valueOf(id));
 
@@ -152,7 +152,7 @@ public class DlqAdminService {
    * @param id DLQ ID
    * @throws DlqNotFoundException DLQ 항목이 없을 경우
    */
-  @Transactional("transactionManager")
+  @Transactional(transactionManager = "transactionManager")
   public void discard(Long id) {
     TaskContext context = TaskContext.of("DlqAdmin", "Discard", String.valueOf(id));
 

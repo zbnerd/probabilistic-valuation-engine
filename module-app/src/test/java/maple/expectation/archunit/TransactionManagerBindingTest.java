@@ -116,15 +116,26 @@ class TransactionManagerBindingTest {
   }
 
   private String getTransactionalValue(Transactional transactional) {
-    // Get the value attribute from @Transactional annotation
+    // Check both value() and transactionManager() attributes
+    // @Transactional("value") uses value()
+    // @Transactional(transactionManager = "value") uses transactionManager()
     String value = transactional.value();
     if (value != null && !value.isEmpty()) {
       return value;
     }
-    // Also check transactionManager attribute
     String transactionManager = transactional.transactionManager();
     if (transactionManager != null && !transactionManager.isEmpty()) {
       return transactionManager;
+    }
+    return null;
+  }
+
+  // Keep old method for backward compatibility with raw annotations
+  private String getTransactionalValue(Object annotation) {
+    // Handle Transactional annotation directly
+    if (annotation instanceof Transactional tx) {
+      String value = tx.value();
+      return (value != null && !value.isEmpty()) ? value : null;
     }
     return null;
   }

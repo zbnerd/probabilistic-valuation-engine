@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  */
 @Service
-@Transactional("transactionManager")
+@Transactional(transactionManager = "transactionManager")
 public class EquipmentApplicationService {
 
   private final CharacterEquipmentRepository equipmentRepository;

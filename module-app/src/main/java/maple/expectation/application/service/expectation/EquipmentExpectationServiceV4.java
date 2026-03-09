@@ -124,7 +124,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   }
 
   /** 캐릭터 기대값 계산 (동기, force 옵션) */
-  @Transactional("transactionManager")
+  @Transactional(transactionManager = "transactionManager")
   public EquipmentExpectationResponseV4 calculateExpectation(String userIgn, boolean force) {
     validateInitialized();
     return cacheCoordinator.getOrCalculate(userIgn, force, () -> doCalculateExpectation(userIgn));

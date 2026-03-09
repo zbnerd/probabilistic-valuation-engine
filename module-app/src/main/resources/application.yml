@@ -39,6 +39,7 @@ spring:
     open-in-view: false
     properties:
       hibernate:
+        default_batch_fetch_size: 100  # P2-24: N+1 쿼리 방지를 위한 배치 페칭 설정
         jdbc:
           batch_size: 1000
         format_sql: false

@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.expectation.event.ViewTransformer;
@@ -45,6 +46,7 @@ import org.springframework.stereotype.Component;
  *   <li>PEL Recovery on startup (from crashed consumers)
  *   <li>Poison Pill handling with DLQ
  *   <li>XAUTOCLAIM Janitor for orphaned messages
+ *   <li><b>Unit 4: Event ordering with versioning for causal consistency</b>
  * </ul>
  *
  * <h3>Reliability Features (Issue #490)</h3>
@@ -57,11 +59,22 @@ import org.springframework.stereotype.Component;
  *   <li><b>XAUTOCLAIM Janitor:</b> claims orphaned messages from inactive consumers
  * </ul>
  *
+ * <h3>Unit 4: Event Ordering & Versioning (P1 - High)</h3>
+ *
+ * <p>Prevents out-of-order events from corrupting Read Model state.
+ *
+ * <ul>
+ *   <li><b>Version Check:</b> Skips events where version <= lastAppliedVersion (already applied)
+ *   <li><b>Buffering:</b> Buffers events where version > lastAppliedVersion + 1 (out-of-order)
+ *   <li><b>Sequential Apply:</b> Applies buffered events when sequence gap is filled
+ *   <li><b>Metrics:</b> Tracks skipped, buffered, and applied events
+ * </ul>
+ *
  * <h3>Flow</h3>
  *
  * <ol>
  *   <li>Phase 1: PEL Recovery - process pending messages from crashed consumers
- *   <li>Phase 2: New message processing - read and process new messages
+ *   <li>Phase 2: New message processing - read and process new messages with version ordering
  * </ol>
  *
  * <h3>Section 12 Compliance (Zero Try-Catch):</h3>
@@ -96,10 +109,17 @@ public class MongoDBSyncWorker implements Runnable {
   private final Counter dlqCounter;
   private final Counter pelRecoveryCounter;
   private final Counter janitorClaimCounter;
+  private final Counter skippedCounter; // Unit 4: Events skipped (already applied)
+  private final Counter bufferedCounter; // Unit 4: Events buffered (out-of-order)
+  private final Counter appliedCounter; // Unit 4: Events applied from buffer
 
   private Thread workerThread;
   private volatile boolean running = false;
   private volatile boolean pelRecoveryComplete = false;
+
+  // Unit 4: Event buffering for out-of-order events
+  // Key: userIgn, Value: Map of version -> BufferedEvent
+  private final Map<String, Map<Long, BufferedEvent>> eventBuffer = new ConcurrentHashMap<>();
 
   public MongoDBSyncWorker(
       RedissonClient redissonClient,
@@ -120,6 +140,9 @@ public class MongoDBSyncWorker implements Runnable {
     this.dlqCounter = meterRegistry.counter("mongodb.sync.dlq");
     this.pelRecoveryCounter = meterRegistry.counter("mongodb.sync.pel.recovery");
     this.janitorClaimCounter = meterRegistry.counter("mongodb.sync.janitor.claimed");
+    this.skippedCounter = meterRegistry.counter("mongodb.sync.skipped"); // Unit 4
+    this.bufferedCounter = meterRegistry.counter("mongodb.sync.buffered"); // Unit 4
+    this.appliedCounter = meterRegistry.counter("mongodb.sync.buffer.applied"); // Unit 4
   }
 
   @PostConstruct
@@ -565,7 +588,7 @@ public class MongoDBSyncWorker implements Runnable {
         context);
   }
 
-  /** Deserialize event and sync to MongoDB (Section 12 compliant). */
+  /** Deserialize event and sync to MongoDB with version ordering (Unit 4). */
   private void deserializeAndSync(StreamMessageId messageId, String payloadJson) {
     checkedExecutor.executeUncheckedVoid(
         () -> {
@@ -577,18 +600,151 @@ public class MongoDBSyncWorker implements Runnable {
             throw new JsonDeserializationException("Failed to deserialize event", e);
           }
 
+          // Unit 4: Event ordering with versioning
+          String userIgn = event.getUserIgn();
+          if (userIgn == null) {
+            log.warn(
+                "[MongoDBSyncWorker] Skipping event with null userIgn: messageId={}", messageId);
+            return;
+          }
+
+          // Get current version (default to 0 if not set)
+          Long eventVersion = event.getVersion();
+          if (eventVersion == null) {
+            log.debug(
+                "[MongoDBSyncWorker] Event has no version, applying immediately: userIgn={}, messageId={}",
+                userIgn,
+                messageId);
+            eventVersion = System.currentTimeMillis(); // Fallback to timestamp
+          }
+
+          // Get last applied version from MongoDB
+          long lastAppliedVersion = queryService.getLastAppliedVersion(userIgn);
+
+          // Version check logic
+          if (eventVersion <= lastAppliedVersion) {
+            // Already applied - skip
+            log.debug(
+                "[MongoDBSyncWorker] Skipping already applied event: userIgn={}, version={}, lastApplied={}",
+                userIgn,
+                eventVersion,
+                lastAppliedVersion);
+            skippedCounter.increment();
+            return;
+          } else if (eventVersion > lastAppliedVersion + 1) {
+            // Out-of-order - buffer it
+            log.info(
+                "[MongoDBSyncWorker] Buffering out-of-order event: userIgn={}, version={}, lastApplied={}",
+                userIgn,
+                eventVersion,
+                lastAppliedVersion);
+            bufferEvent(event, messageId, payloadJson);
+            bufferedCounter.increment();
+            return;
+          }
+
+          // Version is exactly lastAppliedVersion + 1 - apply immediately
+          log.debug(
+              "[MongoDBSyncWorker] Applying event in order: userIgn={}, version={}",
+              userIgn,
+              eventVersion);
+          applyEvent(event, messageId);
+
+          // Try to apply any buffered events that are now in sequence
+          processBufferedEvents(userIgn, eventVersion);
+        },
+        TaskContext.of("MongoDBSyncWorker", "DeserializeAndSync", messageId.toString()),
+        e -> new InternalSystemException("메시지 역직렬화 실패: " + messageId, e));
+  }
+
+  /** Apply event to MongoDB (Section 12 compliant). */
+  private void applyEvent(ExpectationCalculationCompletedEvent event, StreamMessageId messageId) {
+    checkedExecutor.executeUncheckedVoid(
+        () -> {
           // Delegate transformation to ViewTransformer (SRP)
           CharacterValuationView view = viewTransformer.toDocument(event);
           queryService.upsert(view);
 
           log.debug(
-              "[MongoDBSyncWorker] Synced to MongoDB: userIgn={}, ocid={}",
+              "[MongoDBSyncWorker] Synced to MongoDB: userIgn={}, ocid={}, version={}",
               event.getUserIgn(),
-              event.getCharacterOcid());
+              event.getCharacterOcid(),
+              event.getVersion());
         },
-        TaskContext.of("MongoDBSyncWorker", "DeserializeAndSync", messageId.toString()),
-        e -> new InternalSystemException("메시지 역직렬화 실패: " + messageId, e));
+        TaskContext.of("MongoDBSyncWorker", "ApplyEvent", messageId.toString()),
+        e -> new InternalSystemException("Failed to apply event to MongoDB: " + messageId, e));
   }
+
+  /** Buffer out-of-order event for later processing (Unit 4). */
+  private void bufferEvent(
+      ExpectationCalculationCompletedEvent event, StreamMessageId messageId, String payloadJson) {
+    executor.executeVoidJava(
+        () -> {
+          String userIgn = event.getUserIgn();
+          Long version = event.getVersion();
+
+          eventBuffer
+              .computeIfAbsent(userIgn, k -> new ConcurrentHashMap<>())
+              .put(version, new BufferedEvent(event, messageId, payloadJson));
+
+          log.debug("[MongoDBSyncWorker] Buffered event: userIgn={}, version={}", userIgn, version);
+        },
+        TaskContext.of("MongoDBSyncWorker", "BufferEvent", messageId.toString()));
+  }
+
+  /**
+   * Process buffered events that are now in sequence (Unit 4).
+   *
+   * <p>After applying an event with version N, checks if version N+1 is in buffer. If so, applies
+   * it and repeats for N+2, N+3, etc.
+   */
+  private void processBufferedEvents(String userIgn, long lastAppliedVersion) {
+    executor.executeVoidJava(
+        () -> {
+          Map<Long, BufferedEvent> userBuffer = eventBuffer.get(userIgn);
+          if (userBuffer == null || userBuffer.isEmpty()) {
+            return;
+          }
+
+          long nextVersion = lastAppliedVersion + 1;
+          int appliedCount = 0;
+
+          // Apply all sequential events from buffer
+          while (userBuffer.containsKey(nextVersion)) {
+            BufferedEvent buffered = userBuffer.remove(nextVersion);
+            applyEvent(buffered.event(), buffered.messageId());
+            appliedCount++;
+            nextVersion++;
+
+            log.debug(
+                "[MongoDBSyncWorker] Applied buffered event: userIgn={}, version={}",
+                userIgn,
+                nextVersion - 1);
+          }
+
+          if (appliedCount > 0) {
+            appliedCounter.increment(appliedCount);
+            log.info(
+                "[MongoDBSyncWorker] Applied {} buffered events for userIgn={}",
+                appliedCount,
+                userIgn);
+          }
+
+          // Clean up empty buffer
+          if (userBuffer.isEmpty()) {
+            eventBuffer.remove(userIgn);
+          }
+        },
+        TaskContext.of("MongoDBSyncWorker", "ProcessBuffered", userIgn));
+  }
+
+  /**
+   * Buffered event holder (Unit 4).
+   *
+   * <p>Stores out-of-order events until their sequence is complete.
+   */
+  private record BufferedEvent(
+      ExpectationCalculationCompletedEvent event, StreamMessageId messageId, String payloadJson) {}
 
   /** RuntimeException to signal graceful worker shutdown. */
   private static class WorkerShutdownException extends RuntimeException {

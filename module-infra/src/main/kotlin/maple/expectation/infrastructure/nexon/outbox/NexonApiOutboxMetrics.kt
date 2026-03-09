@@ -125,7 +125,7 @@ class NexonApiOutboxMetrics(
      *
      * <p>스케줄러에서 주기적으로 호출
      */
-    @Transactional(readOnly = true)
+    @Transactional("transactionManager", readOnly = true)
     override fun updatePendingCount() {
         val count = repository.countByStatusIn(listOf(OutboxStatus.PENDING, OutboxStatus.FAILED) as java.util.List<OutboxStatus>)
         pendingCount.set(count)

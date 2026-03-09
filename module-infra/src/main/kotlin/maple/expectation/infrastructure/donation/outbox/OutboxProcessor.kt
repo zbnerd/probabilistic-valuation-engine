@@ -207,7 +207,7 @@ class OutboxProcessor(
      * Purple Agent 요구사항: 복구 전 Content Hash 기반 무결성 검증
      */
     @ObservedTransaction("scheduler.outbox.recover_stalled")
-    @Transactional
+    @Transactional("transactionManager")
     override fun recoverStalled() {
         val staleTime = LocalDateTime.now().minus(properties.staleThreshold)
         val stalledEntries = outboxRepository.findStalledProcessing(

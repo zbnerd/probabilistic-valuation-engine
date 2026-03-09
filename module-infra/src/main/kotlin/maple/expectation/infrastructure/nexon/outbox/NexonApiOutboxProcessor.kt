@@ -167,7 +167,7 @@ class NexonApiOutboxProcessor(
     }
 
     @ObservedTransaction("scheduler.nexon_api_outbox.recover_stalled")
-    @Transactional
+    @Transactional("transactionManager")
     override fun recoverStalled() {
         val staleTime = LocalDateTime.now().minus(properties.staleThreshold)
         val stalledEntries = outboxRepository.findStalledProcessing(

@@ -34,6 +34,8 @@ data class ExpectationCalculationCompletedEvent(
     var maxPresetNo: Int? = null,
     // Serialized EquipmentExpectationResponseV4
     var payload: String? = null,
+    // Version for optimistic locking / event ordering
+    var version: Long? = null,
 ) {
     companion object {
         @JvmStatic
@@ -51,6 +53,7 @@ data class ExpectationCalculationCompletedEvent(
         private var totalExpectedCost: String? = null
         private var maxPresetNo: Int? = null
         private var payload: String? = null
+        private var version: Long? = null
 
         fun taskId(taskId: String?) = apply { this.taskId = taskId }
         fun userIgn(userIgn: String?) = apply { this.userIgn = userIgn }
@@ -62,6 +65,7 @@ data class ExpectationCalculationCompletedEvent(
         fun totalExpectedCost(totalExpectedCost: String?) = apply { this.totalExpectedCost = totalExpectedCost }
         fun maxPresetNo(maxPresetNo: Int?) = apply { this.maxPresetNo = maxPresetNo }
         fun payload(payload: String?) = apply { this.payload = payload }
+        fun version(version: Long?) = apply { this.version = version }
 
         fun build(): ExpectationCalculationCompletedEvent = ExpectationCalculationCompletedEvent(
             taskId = taskId,
@@ -74,6 +78,7 @@ data class ExpectationCalculationCompletedEvent(
             totalExpectedCost = totalExpectedCost,
             maxPresetNo = maxPresetNo,
             payload = payload,
+            version = version,
         )
     }
 }

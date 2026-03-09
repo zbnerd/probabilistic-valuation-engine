@@ -82,6 +82,11 @@ public class ViewTransformer {
     // Parse payload JSON to extract full V4 response data
     List<PresetView> presetViews = extractPresetViews(event.getPayload());
 
+    // Unit 4 & Unit 5: Use event version for causal consistency and optimistic locking
+    // Event version ensures monotonic ordering and prevents out-of-order corruption
+    long eventVersion =
+        event.getVersion() != null ? event.getVersion() : System.currentTimeMillis();
+
     return new CharacterValuationView(
         deterministicId,
         event.getUserIgn(),
@@ -91,7 +96,8 @@ public class ViewTransformer {
         event.getCharacterLevel(),
         parseInstant(event.getCalculatedAt()),
         Instant.now(),
-        parseSafely(() -> Long.parseLong(event.getTaskId()), 0L),
+        eventVersion, // Use event version for causal consistency
+        null, // lastAppliedVersion - will be set by MongoDBSyncWorker
         parseCostToLong(event.getTotalExpectedCost()),
         event.getMaxPresetNo(),
         presetViews,
@@ -279,8 +285,9 @@ public class ViewTransformer {
         event.getCharacterLevel(),
         Instant.EPOCH,
         Instant.now(),
-        0L,
-        0L,
+        0L, // version
+        0L, // lastAppliedVersion
+        0L, // totalExpectedCost
         event.getMaxPresetNo(),
         List.of(),
         false);

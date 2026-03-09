@@ -51,7 +51,7 @@ open class LikeSyncExecutor(
      *   <li>동시 UPDATE 시 데드락 방지
      * </ul>
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
+    @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     fun executeIncrement(userIgn: String, count: Long) {
         gameCharacterRepository.incrementLikeCount(userIgn, count)
     }
@@ -74,7 +74,7 @@ open class LikeSyncExecutor(
      *
      * @param entries 청크 내 엔트리 목록 (userIgn → count)
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
+    @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     @CircuitBreaker(name = "likeSyncDb", fallbackMethod = "batchFallback")
     fun executeIncrementBatch(entries: List<Map.Entry<String, Long>>) {
         if (entries.isEmpty()) return

@@ -92,7 +92,7 @@ public class CharacterCreationService {
    *
    * <p>Connection 점유 시간: ~100ms (28초 → 100ms)
    */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  @Transactional(transactionManager = "transactionManager", propagation = Propagation.REQUIRES_NEW)
   public GameCharacter saveCharacterWithCaching(String userIgn, String ocid) {
     // Value objects 생성
     maple.expectation.core.domain.model.character.UserIgn userIgnVo =

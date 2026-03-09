@@ -46,7 +46,7 @@ class NexonApiOutboxFetchFacade(
      *
      * @return 잠긴 Outbox 항목 목록
      */
-    @Transactional(isolation = Isolation.READ_COMMITTED)
+    @Transactional("transactionManager", isolation = Isolation.READ_COMMITTED)
     fun fetchAndLock(): List<NexonApiOutbox> {
         val statuses = listOf(OutboxStatus.PENDING, OutboxStatus.FAILED).toMutableList() as java.util.List<OutboxStatus>
         val pending = outboxRepository.findPendingWithLock(

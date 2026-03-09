@@ -2,6 +2,7 @@
 
 ## Status
 Accepted (2025-03-08)
+Updated (2026-03-08): Extended configuration to CI and Chaos profiles
 
 ## Context
 MapleExpectation application uses JPA for data persistence. During the PostgreSQL redesign (Phase 7), we identified that the default JPA configuration could lead to N+1 query problems when loading multiple entities with lazy-loaded relationships.
@@ -29,9 +30,22 @@ After analyzing the codebase:
    - Protection against accidental N+1 queries
 
 ## Decision
-Configure Hibernate batch fetching and JDBC batch optimization in both local and production environments.
+Configure Hibernate batch fetching and JDBC batch optimization across all environments (local, prod, CI, chaos).
 
 ### Configuration Changes
+**Base configuration (application.yml):**
+```yaml
+spring:
+  jpa:
+    open-in-view: false  # P2-24: Explicitly disable OSIV
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100  # P2-24: N+1 query prevention
+        jdbc:
+          batch_size: 1000             # Base JDBC batch size
+```
+
+**Profile-specific (local, prod, CI, chaos):**
 ```yaml
 spring:
   jpa:
@@ -44,6 +58,13 @@ spring:
         order_inserts: true            # Order inserts for better batching
         order_updates: true            # Order updates for better batching
 ```
+
+### Files Modified
+- ✅ `application.yml` - Added `default_batch_fetch_size: 100` to base configuration
+- ✅ `application-local.yml` - Already configured
+- ✅ `application-prod.yml` - Already configured
+- ✅ `application-ci.yml` - Added complete batch configuration
+- ✅ `application-chaos.yml` - Added complete batch configuration
 
 ### Why These Settings?
 1. **default_batch_fetch_size: 100**

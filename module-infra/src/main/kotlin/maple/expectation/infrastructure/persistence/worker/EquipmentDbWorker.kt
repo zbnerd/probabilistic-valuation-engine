@@ -42,7 +42,7 @@ class EquipmentDbWorker(
      * try-catch 대신 executeOrCatch를 사용하여 Future의 상태를 결정합니다.
      */
     @Async
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW)
     fun persist(ocid: String, response: EquipmentResponse): CompletableFuture<Void> {
         val future = CompletableFuture<Void>()
         val context = TaskContext.of("EquipmentWorker", "AsyncPersist", ocid)
@@ -94,7 +94,7 @@ class EquipmentDbWorker(
      * @param ocid 캐릭터 OCID
      * @return 유효한 JSON 데이터 (없거나 만료되면 empty)
      */
-    @Transactional(readOnly = true)
+    @Transactional("transactionManager", readOnly = true)
     fun findValidJson(ocid: String): Optional<String> {
         return executor.execute(
             {
@@ -124,7 +124,7 @@ class EquipmentDbWorker(
      * Nexon API 호출 후 DB에 저장하여 다음 요청에서 API 호출 최소화
      */
     @Async
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW)
     fun persistRawJson(ocid: String, json: String): CompletableFuture<Void> {
         val future = CompletableFuture<Void>()
         val context = TaskContext.of("EquipmentDb", "PersistRaw", ocid)

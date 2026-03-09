@@ -106,7 +106,7 @@ class OutboxMetrics(
      * Pending 항목 수 갱신
      * 스케줄러에서 주기적으로 호출
      */
-    @Transactional(readOnly = true)
+    @Transactional("transactionManager", readOnly = true)
     override fun updatePendingCount() {
         val count = repository.countByStatusIn(listOf(OutboxStatus.PENDING, OutboxStatus.FAILED))
         pendingCount.set(count)

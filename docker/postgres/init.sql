@@ -1,8 +1,15 @@
 -- PostgreSQL + PGMQ Initialization Script
 -- PostgreSQL Migration Issue #547
+--
+-- NOTE: PGMQ extension requires a custom PostgreSQL build with PGMQ compiled in.
+-- For production, use: temboio/tembo or pgmq/pgmq:latest
+-- For local development, this init.sql provides a template for manual queue creation.
+--
+-- To manually create PGMQ-like queue tables (simplified version):
+-- In production, these tables will be created by the PGMQ extension.
 
--- Create PGMQ extension (requires pg_partman and pgcrypto)
-CREATE EXTENSION IF NOT EXISTS pgmq;
+-- Create queue tables (manual approach for development)
+-- These mimic PGMQ's queue structure
 
 -- Create queues for async processing (replacing Redis queues)
 -- V4 Buffer Queue

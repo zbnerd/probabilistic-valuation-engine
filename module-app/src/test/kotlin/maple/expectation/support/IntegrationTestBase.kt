@@ -2,10 +2,14 @@ package maple.expectation.support
 
 import jakarta.persistence.EntityManager
 import maple.expectation.config.DatabaseCleaner
+import maple.expectation.config.TestcontainersConfiguration
+import maple.expectation.config.TestcontainersConfiguration.Companion.redisContainer
 import org.junit.jupiter.api.BeforeEach
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 
 /**
  * 통합 테스트 베이스 클래스
@@ -53,6 +57,22 @@ abstract class IntegrationTestBase {
 
     @Autowired
     lateinit var entityManager: EntityManager
+
+    companion object {
+        /**
+         * Redis 동적 프로퍼티 설정
+         *
+         * <p>컨테이너는 TestcontainersConfiguration에서 싱글톤으로 시작됨.
+         * 여기서는 동적 포트만 Spring Environment에 등록.
+         */
+        @JvmStatic
+        @DynamicPropertySource
+        fun redisProperties(registry: DynamicPropertyRegistry) {
+            // 컨테이너가 시작될 때까지 대기 (이미 시작되어 있으면 즉시 반환)
+            registry.add("spring.data.redis.host") { redisContainer.host }
+            registry.add("spring.data.redis.port") { redisContainer.getMappedPort(6379) }
+        }
+    }
 
     /**
      * 각 테스트 전 DB 정리

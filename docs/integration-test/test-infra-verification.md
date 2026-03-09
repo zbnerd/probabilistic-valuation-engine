@@ -5,15 +5,70 @@
 ## 개요
 
 실제 비즈니스 테스트 전에 인프라가 올바르게 설정되었는지 검증하는 메타 테스트 모음입니다.
+모든 메타 테스트는 `@Tag("infra-verification")` 어노테이션을 사용하여 별도 실행이 가능합니다.
+
+## 최근 검증 결과 (2026-03-09)
+
+| 테스트 | 상태 | 설명 |
+|------|------|------|
+| ContainerSingletonTest | ✅ PASS | PostgreSQL + PGMQ 컨테이너 실행 중 |
+| PgmqIsolationTest | ✅ PASS | 큐 메시지 테스트 간 누수 없음 |
+| DatabaseIsolationTest | ✅ PASS | DatabaseCleaner 데이터 완전 삭제 |
+| AdvisoryLockConcurrencyTest | ✅ PASS | Advisory Lock 정상 작동 |
+| ContextCachingTest | ✅ PASS | Spring Context 1회만 생성 |
+| TestInfraPerformanceReport | ✅ PASS | 성능 리포트트 정상 |
 
 ## 실행 방법
 
 ```bash
-# 인프라 검증만 실행
+# 메타 테스트만 실행
 ./gradlew :module-app:testInfraVerification
 
-# 전체 테스트 실행 (인프라 검증 포함)
+# 전체 테스트 실행 (메타 테스트 포함)
 ./gradlew :module-app:test
+```
+
+## 해결된 기술 부채
+
+### 1. Bean 이름 충돌 해결
+
+**문제:** `CalculationProperties` 클래스가 두 모듈에 중복 존재하여 Bean 이름 충돌 발생
+
+**해결:** Kotlin 버전에 명시적 Bean 이름 부여
+```kotlin
+@Component("infraCalculationProperties")  // 명시적 이름
+@ConfigurationProperties(prefix = "calculation")
+data class CalculationProperties(...)
+```
+
+### 2. FlameTrialsService Bean 등록
+
+**문제:** `FlameTrialsPort` 인터페이스 구현체가 Bean으로 등록되지 않음
+
+**해결:** `CorePortAdapterConfig.java`에 Bean 등록 추가
+```java
+@Bean
+public FlameTrialsPort flameTrialsPort(
+    FlameDpCalculator dpCalculator,
+    FlameScoreCalculator scoreCalculator) {
+    return new FlameTrialsService(dpCalculator, scoreCalculator);
+}
+```
+
+### 3. Redis Testcontainers 동적 포트
+
+**문제:** `application-test.yml`에 하드코딩된 Redis 포트로 인해 Testcontainers 동적 포트 미작동
+
+**해결:** `IntegrationTestBase`에 `@DynamicPropertySource` 추가
+```kotlin
+companion object {
+    @JvmStatic
+    @DynamicPropertySource
+    fun redisProperties(registry: DynamicPropertyRegistry) {
+        registry.add("spring.data.redis.host") { redisContainer.host }
+        registry.add("spring.data.redis.port") { redisContainer.getMappedPort(6379) }
+    }
+}
 ```
 
 ## 메타 테스트 목록

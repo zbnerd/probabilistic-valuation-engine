@@ -3,6 +3,7 @@ package maple.expectation.config
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
 import org.springframework.context.annotation.Bean
+import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
 
@@ -27,7 +28,7 @@ import org.testcontainers.utility.DockerImageName
  * // 테스트에서는 아무것도 안 해도 됨
  * &#64;SpringBootTest
  * class MyTest : IntegrationTestBase() {
- *     // PostgreSQL + PGMQ 자동 연결됨
+ *     // PostgreSQL + PGMQ + Redis 자동 연결됨
  * }
  * </pre>
  *
@@ -40,7 +41,7 @@ class TestcontainersConfiguration {
     companion object {
         // JVM 프로세스당 정확히 1번만 시작. Context 재생성과 무관.
         @JvmStatic
-        private val postgresContainer: PostgreSQLContainer<*> =
+        val postgresContainer: PostgreSQLContainer<*> =
             PostgreSQLContainer<Nothing>(
                 DockerImageName
                     .parse("jumski/postgres-17-pgmq:latest")
@@ -61,6 +62,14 @@ class TestcontainersConfiguration {
                     "max_connections=50",
                 )
                 withInitScript("sql/init-pgmq.sql")
+                withReuse(true)
+                start()
+            }
+
+        @JvmStatic
+        val redisContainer: GenericContainer<*> =
+            GenericContainer<Nothing>("redis:7-alpine").apply {
+                withExposedPorts(6379)
                 withReuse(true)
                 start()
             }

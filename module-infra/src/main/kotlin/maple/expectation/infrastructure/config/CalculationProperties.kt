@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component
  *
  * @see maple.expectation.service.v2.EquipmentService
  */
-@Component
+@Component("infraCalculationProperties")
 @ConfigurationProperties(prefix = "calculation")
 data class CalculationProperties(
     /** Calculation logic version (used in cache keys) */

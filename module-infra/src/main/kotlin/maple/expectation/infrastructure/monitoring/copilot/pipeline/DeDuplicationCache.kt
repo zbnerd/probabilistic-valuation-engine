@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.monitoring.copilot.pipeline
 
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 
 @Component
 @ConditionalOnProperty(name = ["monitoring.copilot.enabled"], havingValue = "true")
@@ -31,9 +31,7 @@ class DeDuplicationCache {
         log.debug("[DeDuplicationCache] Tracked incident: {}", incidentId)
     }
 
-    fun cleanOld(now: Int): Int {
-        return cleanOld(now.toLong())
-    }
+    fun cleanOld(now: Int): Int = cleanOld(now.toLong())
 
     fun cleanOld(now: Long): Int {
         val threshold = now - throttleWindowMs
@@ -55,9 +53,7 @@ class DeDuplicationCache {
         return count
     }
 
-    fun size(): Int {
-        return recentIncidents.size
-    }
+    fun size(): Int = recentIncidents.size
 
     fun clear(): Int {
         val size = recentIncidents.size
@@ -66,11 +62,7 @@ class DeDuplicationCache {
         return size
     }
 
-    fun contains(incidentId: String): Boolean {
-        return recentIncidents.containsKey(incidentId)
-    }
+    fun contains(incidentId: String): Boolean = recentIncidents.containsKey(incidentId)
 
-    fun getThrottleWindowMs(): Long {
-        return throttleWindowMs
-    }
+    fun getThrottleWindowMs(): Long = throttleWindowMs
 }

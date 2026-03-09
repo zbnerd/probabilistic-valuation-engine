@@ -1,6 +1,12 @@
 package maple.expectation.domain.v2
 
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.GeneratedValue
+import jakarta.persistence.GenerationType
+import jakarta.persistence.Id
+import jakarta.persistence.Index
+import jakarta.persistence.Table
 import java.time.LocalDateTime
 
 /**
@@ -28,8 +34,8 @@ import java.time.LocalDateTime
     name = "nexon_api_dlq",
     indexes = [
         Index(name = "idx_dlq_moved_at", columnList = "moved_at"),
-        Index(name = "idx_dlq_request_id", columnList = "request_id")
-    ]
+        Index(name = "idx_dlq_request_id", columnList = "request_id"),
+    ],
 )
 class NexonApiDlq {
 
@@ -84,9 +90,7 @@ class NexonApiDlq {
          * @param maxLen 최대 길이
          * @return 자른 문자열
          */
-        private fun truncate(str: String?, maxLen: Int): String? {
-            return if (str != null && str.length > maxLen) str.substring(0, maxLen) else str
-        }
+        private fun truncate(str: String?, maxLen: Int): String? = if (str != null && str.length > maxLen) str.substring(0, maxLen) else str
     }
 
     /**
@@ -94,7 +98,5 @@ class NexonApiDlq {
      *
      * <p>로그 출력 시 payload 내용을 마스킹하여 민감 정보 노출 방지
      */
-    override fun toString(): String {
-        return "NexonApiDlq[id=$id, requestId=$requestId, eventType=$eventType, failureReason=$failureReason, payload=MASKED]"
-    }
+    override fun toString(): String = "NexonApiDlq[id=$id, requestId=$requestId, eventType=$eventType, failureReason=$failureReason, payload=MASKED]"
 }

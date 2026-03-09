@@ -1,15 +1,15 @@
 package maple.expectation.infrastructure.adapter.redis
 
+import java.time.Duration
+import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.out.redis.RedisOperationPort
 import org.redisson.api.RedissonClient
 import org.redisson.client.codec.StringCodec
 import org.springframework.stereotype.Component
-import java.time.Duration
-import java.util.concurrent.TimeUnit
 
 @Component
 class RedissonOperationAdapter(
-    private val redissonClient: RedissonClient
+    private val redissonClient: RedissonClient,
 ) : RedisOperationPort {
 
     // ===== Basic Operations =====
@@ -52,8 +52,7 @@ class RedissonOperationAdapter(
         redissonClient.getMap<String, Any>(key).putAll(map)
     }
 
-    override fun hDelete(key: String, vararg fields: String): Long = 
-        redissonClient.getMap<String, Any>(key).fastRemove(*fields)
+    override fun hDelete(key: String, vararg fields: String): Long = redissonClient.getMap<String, Any>(key).fastRemove(*fields)
 
     // ===== Set Operations =====
 
@@ -65,19 +64,22 @@ class RedissonOperationAdapter(
     override fun sAdd(key: String, vararg values: Any): Long {
         var count = 0L
         val set = redissonClient.getSet<Any>(key)
-        for (v in values) { if (set.add(v)) count++ }
+        for (v in values) {
+            if (set.add(v)) count++
+        }
         return count
     }
 
     override fun sRem(key: String, vararg values: Any): Long {
         var count = 0L
         val set = redissonClient.getSet<Any>(key)
-        for (v in values) { if (set.remove(v)) count++ }
+        for (v in values) {
+            if (set.remove(v)) count++
+        }
         return count
     }
 
-    override fun sIsMember(key: String, value: Any): Boolean = 
-        redissonClient.getSet<Any>(key).contains(value)
+    override fun sIsMember(key: String, value: Any): Boolean = redissonClient.getSet<Any>(key).contains(value)
 
     // ===== List Operations =====
 
@@ -124,31 +126,25 @@ class RedissonOperationAdapter(
         }
     }
 
-    override fun increment(key: String, delta: Long): Long =
-        redissonClient.getAtomicLong(key).addAndGet(delta)
+    override fun increment(key: String, delta: Long): Long = redissonClient.getAtomicLong(key).addAndGet(delta)
 
-    override fun decrement(key: String, delta: Long): Long = 
-        redissonClient.getAtomicLong(key).addAndGet(-delta)
+    override fun decrement(key: String, delta: Long): Long = redissonClient.getAtomicLong(key).addAndGet(-delta)
 
     // ===== Lock Operations =====
 
-    override fun tryLock(key: String, waitTime: Duration, leaseTime: Duration): Boolean =
-        redissonClient.getLock(key).tryLock(waitTime.toMillis(), leaseTime.toMillis(), TimeUnit.MILLISECONDS)
+    override fun tryLock(key: String, waitTime: Duration, leaseTime: Duration): Boolean = redissonClient.getLock(key).tryLock(waitTime.toMillis(), leaseTime.toMillis(), TimeUnit.MILLISECONDS)
 
-    override fun tryLockWithWatchdog(key: String, waitTime: Duration): Boolean =
-        redissonClient.getLock(key).tryLock(waitTime.toMillis(), TimeUnit.MILLISECONDS)
+    override fun tryLockWithWatchdog(key: String, waitTime: Duration): Boolean = redissonClient.getLock(key).tryLock(waitTime.toMillis(), TimeUnit.MILLISECONDS)
 
     override fun unlock(key: String) = redissonClient.getLock(key).unlock()
 
-    override fun isHeldByCurrentThread(key: String): Boolean =
-        redissonClient.getLock(key).isHeldByCurrentThread
+    override fun isHeldByCurrentThread(key: String): Boolean = redissonClient.getLock(key).isHeldByCurrentThread
 
     override fun isLocked(key: String): Boolean = redissonClient.getLock(key).isLocked
 
     // ===== Pub/Sub Operations =====
 
-    override fun publish(topic: String, message: Any): Long = 
-        redissonClient.getTopic(topic).publish(message)
+    override fun publish(topic: String, message: Any): Long = redissonClient.getTopic(topic).publish(message)
 
     override fun subscribe(topic: String, consumer: (message: Any) -> Unit) {
         redissonClient.getTopic(topic).addListener(Any::class.java) { _, msg -> consumer(msg) }
@@ -163,7 +159,7 @@ class RedissonOperationAdapter(
             script,
             org.redisson.api.RScript.ReturnType.VALUE,
             keys,
-            *args.toTypedArray()
+            *args.toTypedArray(),
         ) as T
     }
 
@@ -174,14 +170,13 @@ class RedissonOperationAdapter(
             sha,
             org.redisson.api.RScript.ReturnType.VALUE,
             keys,
-            *args.toTypedArray()
+            *args.toTypedArray(),
         ) as T
     }
 
     // ===== TTL Operations =====
 
-    override fun expire(key: String, ttl: Duration): Boolean = 
-        redissonClient.getBucket<Any>(key).expire(ttl.toMillis(), TimeUnit.MILLISECONDS)
+    override fun expire(key: String, ttl: Duration): Boolean = redissonClient.getBucket<Any>(key).expire(ttl.toMillis(), TimeUnit.MILLISECONDS)
 
     override fun getTtl(key: String): Duration? {
         val remainTime = redissonClient.getBucket<Any>(key).remainTimeToLive()
@@ -202,13 +197,11 @@ class RedissonOperationAdapter(
         for ((key, value) in map) set(key, value)
     }
 
-    override fun multiDelete(keys: Collection<String>): Long = 
-        redissonClient.getKeys().delete(*keys.toTypedArray())
+    override fun multiDelete(keys: Collection<String>): Long = redissonClient.getKeys().delete(*keys.toTypedArray())
 
     // ===== Sorted Set Operations =====
 
-    override fun zAdd(key: String, member: Any, score: Double): Boolean = 
-        redissonClient.getScoredSortedSet<Any>(key).add(score, member)
+    override fun zAdd(key: String, member: Any, score: Double): Boolean = redissonClient.getScoredSortedSet<Any>(key).add(score, member)
 
     override fun <T : Any> zRange(key: String, start: Long, end: Long): List<T> {
         @Suppress("UNCHECKED_CAST")
@@ -220,11 +213,9 @@ class RedissonOperationAdapter(
         return redissonClient.getScoredSortedSet<Any>(key).valueRangeReversed(start.toInt(), end.toInt()).map { it as T }
     }
 
-    override fun zScore(key: String, member: Any): Double? = 
-        redissonClient.getScoredSortedSet<Any>(key).getScore(member)
+    override fun zScore(key: String, member: Any): Double? = redissonClient.getScoredSortedSet<Any>(key).getScore(member)
 
-    override fun zCard(key: String): Long = 
-        redissonClient.getScoredSortedSet<Any>(key).size().toLong()
+    override fun zCard(key: String): Long = redissonClient.getScoredSortedSet<Any>(key).size().toLong()
 
     // ===== BitMap Operations =====
 

@@ -13,8 +13,7 @@ import maple.expectation.error.exception.base.ServerBaseException
  * @property message 실패 메시지 (상세 원인)
  * @property cause 원인 예외 (optional)
  */
-class ExternalServiceException(message: String, cause: Throwable? = null) :
-    ServerBaseException(CommonErrorCode.EXTERNAL_API_ERROR, message) {
+class ExternalServiceException(message: String, cause: Throwable? = null) : ServerBaseException(CommonErrorCode.EXTERNAL_API_ERROR, message) {
 
     init {
         if (cause != null) {

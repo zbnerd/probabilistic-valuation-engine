@@ -46,7 +46,7 @@ object NoljangProbabilityCalculator {
     private val SUCCESS_RATES = doubleArrayOf(
         0.60, 0.55, 0.50, 0.40, 0.30, // 0-4성: 60%, 55%, 50%, 40%, 30%
         0.20, 0.19, 0.18, 0.17, 0.16, // 5-9성: 20%, 19%, 18%, 17%, 16%
-        0.16, 0.14, 0.12, 0.10, 0.10 // 10-14성: 16%, 14%, 12%, 10%, 10%
+        0.16, 0.14, 0.12, 0.10, 0.10, // 10-14성: 16%, 14%, 12%, 10%, 10%
     )
 
     /**
@@ -57,7 +57,7 @@ object NoljangProbabilityCalculator {
     private val COST_DIVISORS = intArrayOf(
         36, 36, 36, 36, 36, // 0-4성 (기본 공식)
         36, 36, 36, 36, 36, // 5-9성 (기본 공식)
-        571, 314, 214, 157, 107 // 10-14성
+        571, 314, 214, 157, 107, // 10-14성
     )
 
     /**
@@ -92,9 +92,7 @@ object NoljangProbabilityCalculator {
      * @param currentStar 현재 스타
      * @return 보호권 사용 가능 여부 (11성 이하만 가능)
      */
-    fun canUseProtection(currentStar: Int): Boolean {
-        return currentStar <= PROTECTION_MAX_STAR
-    }
+    fun canUseProtection(currentStar: Int): Boolean = currentStar <= PROTECTION_MAX_STAR
 
     /**
      * 놀장 단일 강화 비용 (메소)
@@ -149,10 +147,8 @@ object NoljangProbabilityCalculator {
         targetStar: Int,
         itemLevel: Int,
         useStarCatch: Boolean,
-        useDiscount: Boolean
-    ): BigDecimal {
-        return getExpectedCostFromStar(0, targetStar, itemLevel, useStarCatch, useDiscount)
-    }
+        useDiscount: Boolean,
+    ): BigDecimal = getExpectedCostFromStar(0, targetStar, itemLevel, useStarCatch, useDiscount)
 
     /**
      * 놀장 기대 비용 계산 (현재 스타 → 목표 스타)
@@ -168,7 +164,7 @@ object NoljangProbabilityCalculator {
         targetStar: Int,
         itemLevel: Int,
         useStarCatch: Boolean,
-        useDiscount: Boolean
+        useDiscount: Boolean,
     ): BigDecimal {
         var adjustedTarget = targetStar
         if (adjustedTarget > MAX_NOLJANG_STAR) {
@@ -182,7 +178,10 @@ object NoljangProbabilityCalculator {
 
         for (star in currentStar until adjustedTarget) {
             val singleCost = computeExpectedCostForSingleStar(
-                star, itemLevel, useStarCatch, useDiscount
+                star,
+                itemLevel,
+                useStarCatch,
+                useDiscount,
             )
             totalExpected = totalExpected.add(singleCost)
         }
@@ -195,7 +194,7 @@ object NoljangProbabilityCalculator {
         star: Int,
         itemLevel: Int,
         useStarCatch: Boolean,
-        useDiscount: Boolean
+        useDiscount: Boolean,
     ): BigDecimal {
         // 성공 확률
         val successRate = getSuccessRate(star, useStarCatch)
@@ -227,8 +226,6 @@ object NoljangProbabilityCalculator {
     }
 
     /** 100 단위로 반올림 */
-    private fun roundToNearest100(value: BigDecimal): BigDecimal {
-        return value.divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
-            .multiply(BigDecimal.valueOf(100))
-    }
+    private fun roundToNearest100(value: BigDecimal): BigDecimal = value.divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
+        .multiply(BigDecimal.valueOf(100))
 }

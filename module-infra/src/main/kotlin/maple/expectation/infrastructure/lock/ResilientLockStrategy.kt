@@ -2,6 +2,9 @@ package maple.expectation.infrastructure.lock
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
+import java.util.List
+import java.util.Optional
+import java.util.concurrent.TimeUnit
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.common.function.ThrowingSupplierUtils
 import maple.expectation.error.exception.DistributedLockException
@@ -16,9 +19,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Primary
 import org.springframework.lang.Nullable
 import org.springframework.stereotype.Component
-import java.util.List
-import java.util.Optional
-import java.util.concurrent.TimeUnit
 
 /**
  * 회복력 있는 락 전략 (Redis 우선, 실패 시 MySQL로 복구)
@@ -32,7 +32,7 @@ class ResilientLockStrategy(
     @param:Nullable private val mysqlLockStrategy: LockStrategy?,
     circuitBreakerRegistry: CircuitBreakerRegistry,
     logicExecutor: LogicExecutor,
-    private val fallbackMetrics: LockFallbackMetrics
+    private val fallbackMetrics: LockFallbackMetrics,
 ) : AbstractLockStrategy(logicExecutor) {
 
     private val circuitBreaker: CircuitBreaker = circuitBreakerRegistry.circuitBreaker("redisLock")
@@ -40,7 +40,7 @@ class ResilientLockStrategy(
     init {
         if (mysqlLockStrategy == null) {
             log.warn(
-                "⚠️ [ResilientLockStrategy] MySQL Fallback 비활성화: lockJdbcTemplate 빈 없음. Redis-only 모드로 동작합니다."
+                "⚠️ [ResilientLockStrategy] MySQL Fallback 비활성화: lockJdbcTemplate 빈 없음. Redis-only 모드로 동작합니다.",
             )
         }
     }
@@ -56,7 +56,7 @@ class ResilientLockStrategy(
         key: String,
         waitTime: Long,
         leaseTime: Long,
-        task: ThrowingSupplier<T>
+        task: ThrowingSupplier<T>,
     ): T {
         val originalKey = removeLockPrefix(key)
         val context = TaskContext.of("ResilientLock", "ExecuteWithLock", originalKey)
@@ -68,15 +68,15 @@ class ResilientLockStrategy(
                     redisLockStrategy.executeWithLock(originalKey, waitTime, leaseTime, task)
                 }
             },
-    // 예외 분기: Function<Throwable, T> (throws 불가, checked는 fail-fast)
+            // 예외 분기: Function<Throwable, T> (throws 불가, checked는 fail-fast)
             { t ->
                 handleFallback(
                     t,
                     originalKey,
-                    "executeWithLock"
+                    "executeWithLock",
                 ) { mysqlLockStrategy!!.executeWithLock(originalKey, waitTime, leaseTime, task) }
             },
-            context
+            context,
         )
     }
 
@@ -95,7 +95,7 @@ class ResilientLockStrategy(
                 }
             },
             { t -> handleTryLockFallback(t, originalKey, leaseTime) },
-            context
+            context,
         )
     }
 
@@ -120,12 +120,12 @@ class ResilientLockStrategy(
                 key,
                 circuitBreaker.state,
                 cause.javaClass.simpleName,
-                cause.message ?: ""
+                cause.message ?: "",
             )
             // MySQL은 tryLockImmediately 지원 불가 → 락 획득 실패
             throw DistributedLockException(
                 "Tiered Lock 획득 실패: Redis 불가 + MySQL 세션 기반으로 fallback 불가 [key=$key]",
-                cause
+                cause,
             )
         }
 
@@ -135,7 +135,7 @@ class ResilientLockStrategy(
             key,
             cause.javaClass.name,
             cause.message ?: "",
-            cause
+            cause,
         )
         throwAsRuntime(cause)
         @Suppress("UNREACHABLE_CODE")
@@ -147,17 +147,13 @@ class ResilientLockStrategy(
     // ========================================
 
     /** 인프라 예외 여부 판별 */
-    private fun isInfrastructureException(cause: Throwable): Boolean {
-        return cause is DistributedLockException ||
-            cause is io.github.resilience4j.circuitbreaker.CallNotPermittedException ||
-            cause is RedisException ||
-            cause is RedisTimeoutException
-    }
+    private fun isInfrastructureException(cause: Throwable): Boolean = cause is DistributedLockException ||
+        cause is io.github.resilience4j.circuitbreaker.CallNotPermittedException ||
+        cause is RedisException ||
+        cause is RedisTimeoutException
 
     /** lock: prefix 제거 */
-    private fun removeLockPrefix(lockKey: String): String {
-        return if (lockKey.startsWith("lock:")) lockKey.substring(5) else lockKey
-    }
+    private fun removeLockPrefix(lockKey: String): String = if (lockKey.startsWith("lock:")) lockKey.substring(5) else lockKey
 
     /**
      * fallback 분기 (throws / try-catch 없음)
@@ -166,7 +162,7 @@ class ResilientLockStrategy(
         t: Throwable,
         key: String,
         op: String,
-        mysqlFallback: ThrowingSupplier<T>
+        mysqlFallback: ThrowingSupplier<T>,
     ): T {
         val cause = ExceptionUtils.unwrapAsyncException(t)!!
 
@@ -191,11 +187,11 @@ class ResilientLockStrategy(
                     key,
                     circuitBreaker.state,
                     cause.javaClass.simpleName,
-                    cause.message ?: ""
+                    cause.message ?: "",
                 )
                 throw DistributedLockException(
                     "락 획득/실행 실패: Redis 불가 + MySQL Fallback 비활성화 [op=$op, key=$key]",
-                    cause
+                    cause,
                 )
             }
 
@@ -205,7 +201,7 @@ class ResilientLockStrategy(
                 key,
                 circuitBreaker.state,
                 cause.javaClass.simpleName,
-                cause.message ?: ""
+                cause.message ?: "",
             )
             return ThrowingSupplierUtils.getUnchecked(mysqlFallback)
         }
@@ -217,7 +213,7 @@ class ResilientLockStrategy(
             key,
             cause.javaClass.name,
             cause.message ?: "",
-            cause
+            cause,
         )
         throwAsRuntime(cause)
     }
@@ -229,7 +225,7 @@ class ResilientLockStrategy(
             is RuntimeException -> throw t
             else -> throw IllegalStateException(
                 "Unexpected checked Throwable (policy violation): " + t.javaClass.name,
-                t
+                t,
             )
         }
     }
@@ -248,7 +244,7 @@ class ResilientLockStrategy(
                 null
             },
             { unlockMySqlIfAvailable(originalKey) },
-            context
+            context,
         )
     }
 
@@ -256,17 +252,13 @@ class ResilientLockStrategy(
         Optional.ofNullable(mysqlLockStrategy).ifPresent { strategy: LockStrategy -> strategy.unlock(key) }
     }
 
-    override fun tryLockImmediately(key: String, leaseTime: Long): Boolean {
-        return executor.executeOrDefault(
-            { this.tryLock(buildLockKey(key), 0, leaseTime) },
-            false,
-            TaskContext.of("ResilientLock", "TryLockImmediate", key)
-        )
-    }
+    override fun tryLockImmediately(key: String, leaseTime: Long): Boolean = executor.executeOrDefault(
+        { this.tryLock(buildLockKey(key), 0, leaseTime) },
+        false,
+        TaskContext.of("ResilientLock", "TryLockImmediate", key),
+    )
 
-    override fun shouldUnlock(lockKey: String): Boolean {
-        return true
-    }
+    override fun shouldUnlock(lockKey: String): Boolean = true
 
     // ========================================
     // [P0-N02] 다중 락 순서 보장 실행
@@ -280,7 +272,7 @@ class ResilientLockStrategy(
         totalTimeout: Long,
         timeUnit: TimeUnit,
         leaseTime: Long,
-        task: ThrowingSupplier<T>
+        task: ThrowingSupplier<T>,
     ): T {
         val keysStr = java.lang.String.join(",", keys)
         val context = TaskContext.of("ResilientLock", "OrderedExecute", keysStr)
@@ -292,22 +284,22 @@ class ResilientLockStrategy(
                     redisLockStrategy.executeWithOrderedLocks(keys, totalTimeout, timeUnit, leaseTime, task)
                 }
             },
-    // MySQL fallback: 순서 보장 다중 락 실행
+            // MySQL fallback: 순서 보장 다중 락 실행
             { t ->
                 handleOrderedLockFallback(
                     t,
-                    keysStr
+                    keysStr,
                 ) {
                     mysqlLockStrategy!!.executeWithOrderedLocks(
                         keys,
                         totalTimeout,
                         timeUnit,
                         leaseTime,
-                        task
+                        task,
                     )
                 }
             },
-            context
+            context,
         )
     }
 
@@ -315,7 +307,7 @@ class ResilientLockStrategy(
     private fun <T> handleOrderedLockFallback(
         t: Throwable,
         keys: String,
-        mysqlFallback: ThrowingSupplier<T>
+        mysqlFallback: ThrowingSupplier<T>,
     ): T {
         val cause = ExceptionUtils.unwrapAsyncException(t)!!
 
@@ -339,11 +331,11 @@ class ResilientLockStrategy(
                     keys,
                     circuitBreaker.state,
                     cause.javaClass.simpleName,
-                    cause.message ?: ""
+                    cause.message ?: "",
                 )
                 throw DistributedLockException(
                     "다중 락 획득 실패: Redis 불가 + MySQL Fallback 비활성화 [keys=$keys]",
-                    cause
+                    cause,
                 )
             }
 
@@ -352,7 +344,7 @@ class ResilientLockStrategy(
                 keys,
                 circuitBreaker.state,
                 cause.javaClass.simpleName,
-                cause.message ?: ""
+                cause.message ?: "",
             )
             return ThrowingSupplierUtils.getUnchecked(mysqlFallback)
         }
@@ -363,7 +355,7 @@ class ResilientLockStrategy(
             keys,
             cause.javaClass.name,
             cause.message ?: "",
-            cause
+            cause,
         )
         throwAsRuntime(cause)
     }

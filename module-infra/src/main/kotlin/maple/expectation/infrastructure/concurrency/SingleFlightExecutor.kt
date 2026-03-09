@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.concurrency
 
-import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
@@ -8,6 +7,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.function.Function
 import java.util.function.Supplier
+import org.slf4j.LoggerFactory
 
 /**
  * Single-flight 비동기 실행기
@@ -46,7 +46,7 @@ class SingleFlightExecutor<T>(
     private val executor: Executor,
 
     /** Follower 타임아웃 시 fallback 함수 (key → result) */
-    private val timeoutFallback: Function<String, T>?
+    private val timeoutFallback: Function<String, T>?,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(SingleFlightExecutor::class.java)
@@ -95,7 +95,7 @@ class SingleFlightExecutor<T>(
     private fun executeAsLeader(
         key: String,
         entry: InFlightEntry<T>,
-        asyncSupplier: Supplier<CompletableFuture<T>>
+        asyncSupplier: Supplier<CompletableFuture<T>>,
     ): CompletableFuture<T> {
         val promise = entry.promise
 

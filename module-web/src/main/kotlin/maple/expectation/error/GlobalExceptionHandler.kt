@@ -5,6 +5,10 @@ package maple.expectation.error
 import com.fasterxml.jackson.core.exc.StreamConstraintsException
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException
 import jakarta.validation.ConstraintViolationException
+import java.time.LocalDateTime
+import java.util.concurrent.CompletionException
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.TimeoutException
 import maple.expectation.error.dto.ErrorResponse
 import maple.expectation.error.exception.base.BaseException
 import maple.expectation.infrastructure.ratelimit.exception.RateLimitExceededException
@@ -16,10 +20,6 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
-import java.time.LocalDateTime
-import java.util.concurrent.CompletionException
-import java.util.concurrent.RejectedExecutionException
-import java.util.concurrent.TimeoutException
 
 private val log = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
 
@@ -132,10 +132,9 @@ class GlobalExceptionHandler {
      * @param retryAfterSeconds 재시도 권장 시간 (초)
      * @return 503 응답 + Retry-After 헤더
      */
-    private fun buildServiceUnavailableResponse(retryAfterSeconds: Int): ResponseEntity<ErrorResponse> =
-        ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-            .header("Retry-After", retryAfterSeconds.toString())
-            .body(ErrorResponse.from(CommonErrorCode.SERVICE_UNAVAILABLE))
+    private fun buildServiceUnavailableResponse(retryAfterSeconds: Int): ResponseEntity<ErrorResponse> = ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .header("Retry-After", retryAfterSeconds.toString())
+        .body(ErrorResponse.from(CommonErrorCode.SERVICE_UNAVAILABLE))
 
     // ==================== Cache.ValueRetrievalException 처리 ====================
 

@@ -24,5 +24,5 @@ data class SignalDefinition(
     val unit: String? = null,
     val severityMapping: SeverityMapping? = null,
     val sloTag: String? = null,
-    val metadata: Map<String, String> = emptyMap()
+    val metadata: Map<String, String> = emptyMap(),
 )

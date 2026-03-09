@@ -43,14 +43,14 @@ class LoggingPolicy(private val slowMs: Long = 3000L) : ExecutionPolicy {
                 "{} Slow task detected: {} ({}ms)",
                 TaskLogTags.TAG_LOGGING,
                 taskName,
-                elapsedMs
+                elapsedMs,
             )
         } else if (log.isDebugEnabled) {
             log.debug(
                 "{} Task succeeded: {} ({}ms)",
                 TaskLogTags.TAG_LOGGING,
                 taskName,
-                elapsedMs
+                elapsedMs,
             )
         }
     }
@@ -64,7 +64,7 @@ class LoggingPolicy(private val slowMs: Long = 3000L) : ExecutionPolicy {
             TaskLogTags.TAG_LOGGING,
             taskName,
             elapsedMs,
-            error
+            error,
         )
     }
 

@@ -69,7 +69,7 @@ interface StarforceLookupPort {
         useStarCatch: Boolean,
         useSundayMaple: Boolean,
         useDiscount: Boolean,
-        useDestroyPrevention: Boolean
+        useDestroyPrevention: Boolean,
     ): BigDecimal
 
     /**
@@ -86,7 +86,7 @@ interface StarforceLookupPort {
         targetStar: Int,
         useStarCatch: Boolean,
         useSundayMaple: Boolean,
-        useDestroyPrevention: Boolean
+        useDestroyPrevention: Boolean,
     ): BigDecimal
 
     /**

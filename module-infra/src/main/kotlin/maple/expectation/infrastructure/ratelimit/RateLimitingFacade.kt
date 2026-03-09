@@ -31,11 +31,11 @@ import org.springframework.util.AntPathMatcher
     prefix = "ratelimit",
     name = ["enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 class RateLimitingFacade(
     private val rateLimitingService: RateLimitingService,
-    private val properties: RateLimitProperties
+    private val properties: RateLimitProperties,
 ) {
     private val pathMatcher = AntPathMatcher()
 
@@ -97,9 +97,7 @@ class RateLimitingFacade(
      *
      * @return 바이패스 경로 목록
      */
-    fun getBypassPaths(): List<String> {
-        return properties.bypassPaths
-    }
+    fun getBypassPaths(): List<String> = properties.bypassPaths
 
     companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(RateLimitingFacade::class.java)

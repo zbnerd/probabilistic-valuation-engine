@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import java.io.IOException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.ratelimit.ConsumeResult
@@ -14,26 +15,25 @@ import maple.expectation.infrastructure.security.AuthenticatedUser
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.filter.OncePerRequestFilter
-import java.io.IOException
 
 open class RateLimitingFilter(
     private val rateLimitingFacade: RateLimitingFacade,
     private val properties: RateLimitProperties,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) : OncePerRequestFilter() {
 
     @Throws(ServletException::class, IOException::class)
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
-        filterChain: FilterChain
+        filterChain: FilterChain,
     ) {
         val context = buildContext(request)
 
         val result = executor.executeOrDefault(
             { rateLimitingFacade.checkRateLimit(context) },
             ConsumeResult.failOpen(),
-            TaskContext.of("RateLimit", "Filter", maskIp(context.clientIp))
+            TaskContext.of("RateLimit", "Filter", maskIp(context.clientIp)),
         )
 
         if (!result.allowed) {

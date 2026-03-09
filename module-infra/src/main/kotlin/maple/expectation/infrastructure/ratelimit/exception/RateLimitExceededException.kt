@@ -1,4 +1,5 @@
 @file:JvmName("RateLimitExceededException")
+
 package maple.expectation.infrastructure.ratelimit.exception
 
 import maple.expectation.error.CommonErrorCode
@@ -16,7 +17,7 @@ class RateLimitExceededException : ClientBaseException {
      */
     constructor(retryAfterSeconds: Int) : super(
         CommonErrorCode.RATE_LIMIT_EXCEEDED,
-        retryAfterSeconds
+        retryAfterSeconds,
     ) {
         this.retryAfterSeconds = retryAfterSeconds
     }
@@ -28,10 +29,10 @@ class RateLimitExceededException : ClientBaseException {
         userId: String,
         retryAfterSeconds: Int,
         capacity: Int,
-        refillRate: Int
+        refillRate: Int,
     ) : super(
         CommonErrorCode.RATE_LIMIT_EXCEEDED,
-        retryAfterSeconds
+        retryAfterSeconds,
     ) {
         this.retryAfterSeconds = retryAfterSeconds
     }
@@ -44,10 +45,10 @@ class RateLimitExceededException : ClientBaseException {
         retryAfterSeconds: Int,
         capacity: Int?,
         refillRate: Int?,
-        cause: Throwable?
+        cause: Throwable?,
     ) : super(
         CommonErrorCode.RATE_LIMIT_EXCEEDED,
-        retryAfterSeconds
+        retryAfterSeconds,
     ) {
         this.retryAfterSeconds = retryAfterSeconds
         if (cause != null) {

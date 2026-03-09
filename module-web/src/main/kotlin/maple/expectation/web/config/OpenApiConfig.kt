@@ -34,21 +34,21 @@ import org.springframework.context.annotation.Configuration
         """,
         contact = Contact(
             name = "MapleExpectation",
-            url = "https://github.com/geeksqualo/MapleExpectation"
+            url = "https://github.com/geeksqualo/MapleExpectation",
         ),
-        license = License(name = "MIT License", url = "https://opensource.org/licenses/MIT")
+        license = License(name = "MIT License", url = "https://opensource.org/licenses/MIT"),
     ),
     servers = [
         Server(url = "http://localhost:8080", description = "Local Development"),
-        Server(url = "https://api.maple-expectation.com", description = "Production")
+        Server(url = "https://api.maple-expectation.com", description = "Production"),
     ],
-    security = [SecurityRequirement(name = "bearerAuth")]
+    security = [SecurityRequirement(name = "bearerAuth")],
 )
 @SecurityScheme(
     name = "bearerAuth",
     type = SecuritySchemeType.HTTP,
     scheme = "bearer",
     bearerFormat = "JWT",
-    description = "JWT 인증 토큰 (POST /auth/login으로 발급)"
+    description = "JWT 인증 토큰 (POST /auth/login으로 발급)",
 )
 class OpenApiConfig

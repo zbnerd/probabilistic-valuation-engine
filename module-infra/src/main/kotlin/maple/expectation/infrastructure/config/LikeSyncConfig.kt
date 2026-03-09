@@ -35,7 +35,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @Configuration
 class LikeSyncConfig(
     @Value("\${like.sync.strategy:lua}") private val strategyType: String,
-    @Value("\${like.sync.temp-key-ttl-seconds:3600}") private val tempKeyTtlSeconds: Int
+    @Value("\${like.sync.temp-key-ttl-seconds:3600}") private val tempKeyTtlSeconds: Int,
 ) {
 
     companion object {
@@ -55,7 +55,7 @@ class LikeSyncConfig(
         redissonClient: RedissonClient,
         redisTemplate: StringRedisTemplate,
         executor: LogicExecutor,
-        meterRegistry: MeterRegistry
+        meterRegistry: MeterRegistry,
     ): AtomicFetchStrategy = when (strategyType.lowercase()) {
         STRATEGY_RENAME -> {
             log.info("AtomicFetchStrategy initialized: RENAME (fallback), TTL={}s", tempKeyTtlSeconds)

@@ -2,13 +2,13 @@ package maple.expectation.infrastructure.config
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import javax.sql.DataSource
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
 import org.springframework.jdbc.core.JdbcTemplate
-import javax.sql.DataSource
 
 /**
  * MySQL Named Lock 전용 HikariCP 설정
@@ -27,56 +27,54 @@ import javax.sql.DataSource
 @Configuration
 @Profile("!test & !chaos & !container")
 class LockHikariConfig(
-  @Value("\${spring.datasource.url}") private val jdbcUrl: String,
-  @Value("\${spring.datasource.username}") private val username: String,
-  @Value("\${spring.datasource.password}") private val password: String,
-  @Value("\${lock.datasource.pool-size:40}") private val poolSize: Int
+    @Value("\${spring.datasource.url}") private val jdbcUrl: String,
+    @Value("\${spring.datasource.username}") private val username: String,
+    @Value("\${spring.datasource.password}") private val password: String,
+    @Value("\${lock.datasource.pool-size:40}") private val poolSize: Int,
 ) {
 
-  private val log = LoggerFactory.getLogger(LockHikariConfig::class.java)
+    private val log = LoggerFactory.getLogger(LockHikariConfig::class.java)
 
-  // Issue #284 DoD: Pool Size 외부화 (기본 40, prod에서 150으로 오버라이드)
-  // AI SRE 제안 (INC-29506518): Lock Pool 병목 방지를 위해 최댓값 증가
+    // Issue #284 DoD: Pool Size 외부화 (기본 40, prod에서 150으로 오버라이드)
+    // AI SRE 제안 (INC-29506518): Lock Pool 병목 방지를 위해 최댓값 증가
 
-  @Bean(name = ["lockDataSource"])
-  fun lockDataSource(): DataSource {
-    log.info("[Lock Pool] JDBC URL: {}", jdbcUrl)
-    val config = HikariConfig()
+    @Bean(name = ["lockDataSource"])
+    fun lockDataSource(): DataSource {
+        log.info("[Lock Pool] JDBC URL: {}", jdbcUrl)
+        val config = HikariConfig()
 
-    // 기본 연결 정보
-    config.jdbcUrl = jdbcUrl
-    config.username = username
-    config.password = password
-    config.driverClassName = "com.mysql.cj.jdbc.Driver"
+        // 기본 연결 정보
+        config.jdbcUrl = jdbcUrl
+        config.username = username
+        config.password = password
+        config.driverClassName = "com.mysql.cj.jdbc.Driver"
 
-    // [핵심 수정 1] Pool Size 증설 (10 -> 30) 및 고정 (Fixed Pool)
-    // Redis가 죽으면 트래픽이 몰리므로 10개로는 부족함.
-    // MinIdle = MaxPoolSize로 설정하여 불필요한 연결/해제 비용 제거.
-    config.maximumPoolSize = poolSize
-    config.minimumIdle = poolSize
+        // [핵심 수정 1] Pool Size 증설 (10 -> 30) 및 고정 (Fixed Pool)
+        // Redis가 죽으면 트래픽이 몰리므로 10개로는 부족함.
+        // MinIdle = MaxPoolSize로 설정하여 불필요한 연결/해제 비용 제거.
+        config.maximumPoolSize = poolSize
+        config.minimumIdle = poolSize
 
-    // [핵심 수정 2] Fail-fast 전략 유지
-    config.connectionTimeout = 5000 // 5초 안에 연결 못 얻으면 에러 (스레드 보호)
-    config.idleTimeout = 300000
-    config.maxLifetime = 600000
-    config.poolName = "MySQLLockPool"
+        // [핵심 수정 2] Fail-fast 전략 유지
+        config.connectionTimeout = 5000 // 5초 안에 연결 못 얻으면 에러 (스레드 보호)
+        config.idleTimeout = 300000
+        config.maxLifetime = 600000
+        config.poolName = "MySQLLockPool"
 
-    // 검증 설정 (JDBC4 isValid 사용으로 쿼리 비용 절감)
-    config.validationTimeout = 3000
+        // 검증 설정 (JDBC4 isValid 사용으로 쿼리 비용 절감)
+        config.validationTimeout = 3000
 
-    // P0-6 Fix: Micrometer 메트릭 비활성화 (순환 참조 데드락 방지)
-    // 주요 HikariPool 메트릭은 기본 DataSource에서 충분히 수집 가능
+        // P0-6 Fix: Micrometer 메트릭 비활성화 (순환 참조 데드락 방지)
+        // 주요 HikariPool 메트릭은 기본 DataSource에서 충분히 수집 가능
 
-    log.info(
-      "[Lock Pool] Initialized dedicated MySQL lock connection pool (Fixed Size: {}, Metrics: disabled)",
-      poolSize
-    )
+        log.info(
+            "[Lock Pool] Initialized dedicated MySQL lock connection pool (Fixed Size: {}, Metrics: disabled)",
+            poolSize,
+        )
 
-    return HikariDataSource(config)
-  }
+        return HikariDataSource(config)
+    }
 
-  @Bean(name = ["lockJdbcTemplate"])
-  fun lockJdbcTemplate(): JdbcTemplate {
-    return JdbcTemplate(lockDataSource())
-  }
+    @Bean(name = ["lockJdbcTemplate"])
+    fun lockJdbcTemplate(): JdbcTemplate = JdbcTemplate(lockDataSource())
 }

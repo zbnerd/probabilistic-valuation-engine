@@ -11,25 +11,25 @@ package maple.expectation.core.port.out
  */
 interface MessageQueue<T> {
 
-  /**
-   * Offer a message to the queue (non-blocking).
-   *
-   * @param message message to queue
-   * @return true if message was enqueued, false if queue is full
-   */
-  fun offer(message: T): Boolean
+    /**
+     * Offer a message to the queue (non-blocking).
+     *
+     * @param message message to queue
+     * @return true if message was enqueued, false if queue is full
+     */
+    fun offer(message: T): Boolean
 
-  /**
-   * Poll a message from the queue (blocking).
-   *
-   * @return dequeued message, or null if interrupted
-   */
-  fun poll(): T?
+    /**
+     * Poll a message from the queue (blocking).
+     *
+     * @return dequeued message, or null if interrupted
+     */
+    fun poll(): T?
 
-  /**
-   * Get current queue size.
-   *
-   * @return approximate size
-   */
-  fun size(): Int
+    /**
+     * Get current queue size.
+     *
+     * @return approximate size
+     */
+    fun size(): Int
 }

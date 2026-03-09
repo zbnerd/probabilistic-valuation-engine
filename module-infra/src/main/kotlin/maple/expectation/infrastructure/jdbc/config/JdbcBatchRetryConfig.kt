@@ -15,7 +15,7 @@ class JdbcBatchRetryConfig(
     /** Initial backoff duration between retries */
     val initialBackoff: Duration,
     /** Multiplier for exponential backoff (must be >= 1.0) */
-    val backoffMultiplier: Double
+    val backoffMultiplier: Double,
 ) {
     init {
         require(maxRetries >= 0) { "maxRetries must be >= 0: $maxRetries" }
@@ -35,14 +35,10 @@ class JdbcBatchRetryConfig(
     }
 
     /** Creates a new configuration with a different max retry count. */
-    fun withMaxRetries(maxRetries: Int): JdbcBatchRetryConfig {
-        return JdbcBatchRetryConfig(maxRetries, this.initialBackoff, this.backoffMultiplier)
-    }
+    fun withMaxRetries(maxRetries: Int): JdbcBatchRetryConfig = JdbcBatchRetryConfig(maxRetries, this.initialBackoff, this.backoffMultiplier)
 
     /** Creates a new configuration with a different initial backoff. */
-    fun withInitialBackoff(initialBackoff: Duration): JdbcBatchRetryConfig {
-        return JdbcBatchRetryConfig(this.maxRetries, initialBackoff, this.backoffMultiplier)
-    }
+    fun withInitialBackoff(initialBackoff: Duration): JdbcBatchRetryConfig = JdbcBatchRetryConfig(this.maxRetries, initialBackoff, this.backoffMultiplier)
 
     companion object {
         /** Default retry configuration: 3 retries with exponential backoff. */
@@ -50,8 +46,6 @@ class JdbcBatchRetryConfig(
         val DEFAULT = JdbcBatchRetryConfig(3, Duration.ofMillis(100), 2.0)
 
         /** Creates a retry configuration with no retries. */
-        fun noRetry(): JdbcBatchRetryConfig {
-            return JdbcBatchRetryConfig(0, Duration.ZERO, 1.0)
-        }
+        fun noRetry(): JdbcBatchRetryConfig = JdbcBatchRetryConfig(0, Duration.ZERO, 1.0)
     }
 }

@@ -1,8 +1,8 @@
 package maple.expectation.infrastructure.monitoring.copilot.detector
 
+import java.util.Optional
 import maple.expectation.infrastructure.monitoring.copilot.model.*
 import org.slf4j.LoggerFactory
-import java.util.Optional
 
 class AnomalyDetector {
 
@@ -15,9 +15,8 @@ class AnomalyDetector {
         signal: SignalDefinition,
         timeSeriesList: List<TimeSeries>?,
         nowMillis: Long,
-        zScoreConfig: ZScoreConfig?
+        zScoreConfig: ZScoreConfig?,
     ): Optional<AnomalyEvent> {
-
         if (timeSeriesList.isNullOrEmpty()) {
             log.debug("[AnomalyDetector] No time series data for signal: {}", signal.panelTitle)
             return Optional.empty()
@@ -44,9 +43,8 @@ class AnomalyDetector {
     private fun detectThresholdBased(
         signal: SignalDefinition,
         currentValue: Double,
-        detectedAtMillis: Long
+        detectedAtMillis: Long,
     ): Optional<AnomalyEvent> {
-
         val severityMapping = signal.severityMapping
         if (severityMapping == null) {
             return Optional.empty()
@@ -64,8 +62,8 @@ class AnomalyDetector {
                     reason = buildReason(signal, currentValue, critThreshold, comparator, "CRIT"),
                     detectedAtMillis = detectedAtMillis,
                     currentValue = currentValue,
-                    baselineValue = critThreshold
-                )
+                    baselineValue = critThreshold,
+                ),
             )
         }
 
@@ -77,8 +75,8 @@ class AnomalyDetector {
                     reason = buildReason(signal, currentValue, warnThreshold, comparator, "WARN"),
                     detectedAtMillis = detectedAtMillis,
                     currentValue = currentValue,
-                    baselineValue = warnThreshold
-                )
+                    baselineValue = warnThreshold,
+                ),
             )
         }
 
@@ -90,9 +88,8 @@ class AnomalyDetector {
         timeSeriesList: List<TimeSeries>,
         currentValue: Double,
         detectedAtMillis: Long,
-        config: ZScoreConfig
+        config: ZScoreConfig,
     ): Optional<AnomalyEvent> {
-
         config.validate()
 
         val values = extractAllValues(timeSeriesList)
@@ -122,8 +119,8 @@ class AnomalyDetector {
                     reason = buildZScoreReason(signal, currentValue, mean, stdDev, zScore, config),
                     detectedAtMillis = detectedAtMillis,
                     currentValue = currentValue,
-                    baselineValue = mean
-                )
+                    baselineValue = mean,
+                ),
             )
         }
 
@@ -195,13 +192,11 @@ class AnomalyDetector {
         return Math.sqrt(sumSquaredDiff / (values.size - 1))
     }
 
-    private fun determineSeverityFromZScore(zScore: Double): String {
-        return when {
-            zScore >= 4.0 -> "CRIT"
-            zScore >= 3.0 -> "CRIT"
-            zScore >= 2.5 -> "WARN"
-            else -> "WARN"
-        }
+    private fun determineSeverityFromZScore(zScore: Double): String = when {
+        zScore >= 4.0 -> "CRIT"
+        zScore >= 3.0 -> "CRIT"
+        zScore >= 2.5 -> "WARN"
+        else -> "WARN"
     }
 
     private fun buildReason(
@@ -209,17 +204,15 @@ class AnomalyDetector {
         currentValue: Double,
         threshold: Double,
         comparator: String?,
-        severity: String
-    ): String {
-        return "[%s] %s: Current value %.2f %s threshold %.2f (%s)".format(
-            severity,
-            signal.panelTitle,
-            currentValue,
-            comparator ?: ">",
-            threshold,
-            signal.unit ?: ""
-        ).trim()
-    }
+        severity: String,
+    ): String = "[%s] %s: Current value %.2f %s threshold %.2f (%s)".format(
+        severity,
+        signal.panelTitle,
+        currentValue,
+        comparator ?: ">",
+        threshold,
+        signal.unit ?: "",
+    ).trim()
 
     private fun buildZScoreReason(
         signal: SignalDefinition,
@@ -227,9 +220,13 @@ class AnomalyDetector {
         mean: Double,
         stdDev: Double,
         zScore: Double,
-        config: ZScoreConfig
-    ): String {
-        return "[Z-SCORE] %s: Value %.2f deviates %.2fσ from baseline %.2f (σ=%.2f, threshold=%.1f)".format(
-            signal.panelTitle, currentValue, zScore, mean, stdDev, config.threshold)
-    }
+        config: ZScoreConfig,
+    ): String = "[Z-SCORE] %s: Value %.2f deviates %.2fσ from baseline %.2f (σ=%.2f, threshold=%.1f)".format(
+        signal.panelTitle,
+        currentValue,
+        zScore,
+        mean,
+        stdDev,
+        config.threshold,
+    )
 }

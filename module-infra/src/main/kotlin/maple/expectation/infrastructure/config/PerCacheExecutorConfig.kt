@@ -2,11 +2,11 @@ package maple.expectation.infrastructure.config
 
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.Executor
+import java.util.concurrent.ThreadPoolExecutor
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
-import java.util.concurrent.Executor
-import java.util.concurrent.ThreadPoolExecutor
 
 /**
  * PER (Probabilistic Early Recomputation) 전용 Thread Pool (#219)
@@ -25,7 +25,7 @@ import java.util.concurrent.ThreadPoolExecutor
  */
 @Configuration
 class PerCacheExecutorConfig(
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
 
     /**
@@ -75,28 +75,28 @@ class PerCacheExecutorConfig(
     private fun registerMetrics(executor: ThreadPoolTaskExecutor) {
         Gauge.builder(
             "per.cache.executor.queue.size",
-            executor
+            executor,
         ) { e -> e.threadPoolExecutor.queue.size.toDouble() }
             .description("PER 캐시 갱신 대기 큐 크기")
             .register(meterRegistry)
 
         Gauge.builder(
             "per.cache.executor.active.count",
-            executor
+            executor,
         ) { obj: ThreadPoolTaskExecutor -> obj.activeCount.toDouble() }
             .description("PER 캐시 갱신 활성 스레드 수")
             .register(meterRegistry)
 
         Gauge.builder(
             "per.cache.executor.pool.size",
-            executor
+            executor,
         ) { obj: ThreadPoolTaskExecutor -> obj.poolSize.toDouble() }
             .description("PER 캐시 갱신 현재 풀 크기")
             .register(meterRegistry)
 
         Gauge.builder(
             "per.cache.executor.completed.tasks",
-            executor
+            executor,
         ) { e -> e.threadPoolExecutor.completedTaskCount.toDouble() }
             .description("PER 캐시 갱신 완료된 작업 수")
             .register(meterRegistry)

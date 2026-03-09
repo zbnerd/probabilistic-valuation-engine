@@ -3,6 +3,8 @@ package maple.expectation.infrastructure.cache.like
 import com.github.benmanes.caffeine.cache.Caffeine
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.out.LikeRelationBufferStrategy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -10,8 +12,6 @@ import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 /**
  * 좋아요 관계 버퍼 (L1 Caffeine + L2 Redis)
@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
 class HybridLikeRelationBuffer(
     private val redissonClient: RedissonClient,
     private val executor: LogicExecutor,
-    registry: MeterRegistry
+    registry: MeterRegistry,
 ) : LikeRelationBufferStrategy {
 
     companion object {
@@ -71,7 +71,7 @@ class HybridLikeRelationBuffer(
         val isNew = executor.executeOrDefault(
             { getRelationSet().add(relationKey) },
             null,
-            TaskContext.of("LikeRelation", "L2Add", relationKey)
+            TaskContext.of("LikeRelation", "L2Add", relationKey),
         ) ?: return null // Redis 장애
 
         if (isNew) {
@@ -81,7 +81,7 @@ class HybridLikeRelationBuffer(
 
             executor.executeVoid(
                 { getPendingSet().add(relationKey) },
-                TaskContext.of("LikeRelation", "AddPending", relationKey)
+                TaskContext.of("LikeRelation", "AddPending", relationKey),
             )
 
             log.debug("✅ [LikeRelation] 새 관계 추가: {}", relationKey)
@@ -112,7 +112,7 @@ class HybridLikeRelationBuffer(
                 exists
             },
             null,
-            TaskContext.of("LikeRelation", "Exists", relationKey)
+            TaskContext.of("LikeRelation", "Exists", relationKey),
         )
     }
 
@@ -131,7 +131,7 @@ class HybridLikeRelationBuffer(
                 removed
             },
             false,
-            TaskContext.of("LikeRelation", "Remove", relationKey)
+            TaskContext.of("LikeRelation", "Remove", relationKey),
         )
     }
 
@@ -149,35 +149,27 @@ class HybridLikeRelationBuffer(
                 result
             },
             emptySet(),
-            TaskContext.of("LikeRelation", "FetchPending")
+            TaskContext.of("LikeRelation", "FetchPending"),
         )
     }
 
-    override fun buildRelationKey(accountId: String, targetOcid: String): String {
-        return "$accountId:$targetOcid"
-    }
+    override fun buildRelationKey(accountId: String, targetOcid: String): String = "$accountId:$targetOcid"
 
-    override fun parseRelationKey(relationKey: String): Array<String> {
-        return relationKey.split(":", limit = 2).toTypedArray()
-    }
+    override fun parseRelationKey(relationKey: String): Array<String> = relationKey.split(":", limit = 2).toTypedArray()
 
     override fun existsInUnliked(accountId: String, targetOcid: String): Boolean? = false
 
-    override fun getRelationsSize(): Int {
-        return executor.executeOrDefault(
-            { getRelationSet().size },
-            0,
-            TaskContext.of("LikeRelation", "GetSize")
-        )
-    }
+    override fun getRelationsSize(): Int = executor.executeOrDefault(
+        { getRelationSet().size },
+        0,
+        TaskContext.of("LikeRelation", "GetSize"),
+    )
 
-    override fun getPendingSize(): Int {
-        return executor.executeOrDefault(
-            { getPendingSet().size },
-            0,
-            TaskContext.of("LikeRelation", "GetPendingSize")
-        )
-    }
+    override fun getPendingSize(): Int = executor.executeOrDefault(
+        { getPendingSet().size },
+        0,
+        TaskContext.of("LikeRelation", "GetPendingSize"),
+    )
 
     /** L1 Pending → L2 동기화 */
     fun flushLocalToRedis() {
@@ -195,7 +187,7 @@ class HybridLikeRelationBuffer(
                     log.warn("⚠️ [LikeRelation] L1→L2 동기화 실패: {}", relationKey)
                     null
                 },
-                TaskContext.of("LikeRelation", "L1toL2", relationKey)
+                TaskContext.of("LikeRelation", "L1toL2", relationKey),
             )
         }
     }

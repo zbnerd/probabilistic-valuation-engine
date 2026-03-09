@@ -13,7 +13,6 @@ import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.cache.CacheManager
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -43,10 +42,10 @@ import org.springframework.context.annotation.Configuration
 @ConditionalOnProperty(
     name = ["like.realtime.enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 class LikeRealtimeSyncConfig(
-    @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String
+    @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String,
 ) {
 
     private val log = LoggerFactory.getLogger(LikeRealtimeSyncConfig::class.java)
@@ -62,14 +61,14 @@ class LikeRealtimeSyncConfig(
     @ConditionalOnProperty(
         name = ["like.realtime.transport"],
         havingValue = "rtopic",
-        matchIfMissing = true
+        matchIfMissing = true,
     )
     class RTopicConfig(
         private val redissonClient: RedissonClient,
         private val cacheManager: TieredCacheManager,
         private val executor: LogicExecutor,
         private val meterRegistry: MeterRegistry,
-        private val instanceId: String
+        private val instanceId: String,
     ) {
 
         private val log = LoggerFactory.getLogger(RTopicConfig::class.java)
@@ -105,7 +104,7 @@ class LikeRealtimeSyncConfig(
         private val cacheManager: TieredCacheManager,
         private val executor: LogicExecutor,
         private val meterRegistry: MeterRegistry,
-        private val instanceId: String
+        private val instanceId: String,
     ) {
 
         private val log = LoggerFactory.getLogger(ReliableTopicConfig::class.java)

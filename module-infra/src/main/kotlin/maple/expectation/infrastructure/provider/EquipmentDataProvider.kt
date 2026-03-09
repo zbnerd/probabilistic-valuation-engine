@@ -1,6 +1,9 @@
 package maple.expectation.infrastructure.provider
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.io.OutputStream
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.CompletableFuture
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
@@ -9,16 +12,13 @@ import maple.expectation.util.GzipUtils
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.io.OutputStream
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.CompletableFuture
 
 @Component
 class EquipmentDataProvider(
     private val fetchProvider: EquipmentFetchProvider,
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor,
-    @Value("\${app.optimization.use-compression:true}") private val useCompression: Boolean
+    @Value("\${app.optimization.use-compression:true}") private val useCompression: Boolean,
 ) {
     private val logger = LoggerFactory.getLogger(EquipmentDataProvider::class.java)
 
@@ -34,14 +34,12 @@ class EquipmentDataProvider(
     }
 
     /** ✅ [V2] Response DTO 획득 */
-    fun getEquipmentResponse(ocid: String): CompletableFuture<EquipmentResponse?> {
-        return CompletableFuture.completedFuture(
-            executor.execute(
-                { fetchProvider.fetchWithCache(ocid) },
-                TaskContext.of("EquipmentProvider", "GetResponse", ocid)
-            )
-        )
-    }
+    fun getEquipmentResponse(ocid: String): CompletableFuture<EquipmentResponse?> = CompletableFuture.completedFuture(
+        executor.execute(
+            { fetchProvider.fetchWithCache(ocid) },
+            TaskContext.of("EquipmentProvider", "GetResponse", ocid),
+        ),
+    )
 
     /**
      * Zero-Copy 스트리밍 (Issue #63)
@@ -70,29 +68,27 @@ class EquipmentDataProvider(
                         null
                     },
                     ExceptionTranslator.forFileIO(),
-                    context
+                    context,
                 )
             },
-            context
+            context,
         )
     }
 
     /** ✅ 직렬화 및 압축 로직 평탄화 JSON 처리 및 기술적 예외 레이어 분리 */
-    private fun serializeResponse(response: EquipmentResponse, context: TaskContext): ByteArray {
-        return executor.executeWithTranslation(
-            {
-                // 1. JSON 직렬화
-                val jsonString = objectMapper.writeValueAsString(response)
+    private fun serializeResponse(response: EquipmentResponse, context: TaskContext): ByteArray = executor.executeWithTranslation(
+        {
+            // 1. JSON 직렬화
+            val jsonString = objectMapper.writeValueAsString(response)
 
-                // 2. 조건부 GZIP 압축
-                if (useCompression) {
-                    GzipUtils.compress(jsonString)
-                } else {
-                    jsonString.toByteArray(StandardCharsets.UTF_8)
-                }
-            },
-            ExceptionTranslator.forJson(),
-            context
-        )
-    }
+            // 2. 조건부 GZIP 압축
+            if (useCompression) {
+                GzipUtils.compress(jsonString)
+            } else {
+                jsonString.toByteArray(StandardCharsets.UTF_8)
+            }
+        },
+        ExceptionTranslator.forJson(),
+        context,
+    )
 }

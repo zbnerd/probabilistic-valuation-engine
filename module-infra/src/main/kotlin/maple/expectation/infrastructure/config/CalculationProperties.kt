@@ -19,5 +19,5 @@ data class CalculationProperties(
     @DefaultValue("3") val logicVersion: Int = 3,
 
     /** Probability table version (update when cube_tables change) */
-    @DefaultValue("2024.01.15") val tableVersion: String = "2024.01.15"
+    @DefaultValue("2024.01.15") val tableVersion: String = "2024.01.15",
 )

@@ -9,14 +9,14 @@ import maple.expectation.infrastructure.executor.TaskContext
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
-import org.springframework.stereotype.Component
 import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 
 @Aspect
 @Component
 class ObservabilityAspect(
     private val meterRegistry: MeterRegistry,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(ObservabilityAspect::class.java)
@@ -31,7 +31,7 @@ class ObservabilityAspect(
         return executor.executeOrCatch(
             { executeAndRecordSuccess(joinPoint, metricName, sample) },
             { ex -> recordFailureAndThrow(metricName, joinPoint, sample, ex) },
-            TaskContext.of("Observability", "Track", metricName)
+            TaskContext.of("Observability", "Track", metricName),
         )
     }
 
@@ -53,7 +53,7 @@ class ObservabilityAspect(
         sample.stop(
             Timer.builder(metricName)
                 .tag("result", "success")
-                .register(meterRegistry)
+                .register(meterRegistry),
         )
 
         return result
@@ -73,21 +73,21 @@ class ObservabilityAspect(
         metricName: String,
         joinPoint: ProceedingJoinPoint,
         sample: Timer.Sample,
-        e: Throwable
+        e: Throwable,
     ): Nothing {
         // 로그에는 상세 정보 유지 (디버깅용)
         log.error(
             "[Metric-Failure] ID: {}, Method: {}, Error: {}",
             metricName,
             joinPoint.signature.name,
-            e.message
+            e.message,
         )
 
         // Issue #138: exception 태그 제거 (고카디널리티 방지)
         sample.stop(
             Timer.builder(metricName)
                 .tag("result", "failure")
-                .register(meterRegistry)
+                .register(meterRegistry),
         )
 
         // Issue #138: failure 카운터도 exception 태그 제거

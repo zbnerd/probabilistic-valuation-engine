@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.persistence.repository
 
+import java.math.BigDecimal
 import maple.expectation.domain.v2.EquipmentExpectationSummary
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
@@ -7,7 +8,6 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
-import java.math.BigDecimal
 
 /**
  * 장비 기대값 요약 Repository (#240, P1-11)
@@ -46,7 +46,7 @@ interface EquipmentExpectationSummaryRepository : JpaRepository<EquipmentExpecta
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
         value =
-            """
+        """
             INSERT INTO equipment_expectation_summary
                 (game_character_id, preset_no, total_expected_cost, black_cube_cost,
                  red_cube_cost, additional_cube_cost, starforce_cost, calculated_at, version)

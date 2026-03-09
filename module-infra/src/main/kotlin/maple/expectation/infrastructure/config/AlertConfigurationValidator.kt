@@ -31,31 +31,31 @@ import org.springframework.stereotype.Component
  */
 @Component
 @ConditionalOnProperty(
-  name = ["alert.stateless.enabled"],
-  havingValue = "true",
-  matchIfMissing = true
+    name = ["alert.stateless.enabled"],
+    havingValue = "true",
+    matchIfMissing = true,
 )
 class AlertConfigurationValidator(
-  @Value("\${alert.discord.webhook-url:}") private val discordWebhookUrl: String,
-  @Value("\${alert.stateless.enabled:true}") private val alertEnabled: Boolean
+    @Value("\${alert.discord.webhook-url:}") private val discordWebhookUrl: String,
+    @Value("\${alert.stateless.enabled:true}") private val alertEnabled: Boolean,
 ) : ApplicationListener<ContextStartedEvent> {
 
-  private val log = LoggerFactory.getLogger(AlertConfigurationValidator::class.java)
+    private val log = LoggerFactory.getLogger(AlertConfigurationValidator::class.java)
 
-  /**
-   * Validate alert configuration when application context is fully initialized.
-   *
-   * <p>Called by Spring after all @Value injections are complete.
-   */
-  override fun onApplicationEvent(event: ContextStartedEvent) {
-    if (!alertEnabled) {
-      log.info("[AlertConfig] Alert system is disabled via configuration")
-      return
-    }
+    /**
+     * Validate alert configuration when application context is fully initialized.
+     *
+     * <p>Called by Spring after all @Value injections are complete.
+     */
+    override fun onApplicationEvent(event: ContextStartedEvent) {
+        if (!alertEnabled) {
+            log.info("[AlertConfig] Alert system is disabled via configuration")
+            return
+        }
 
-    if (discordWebhookUrl.isBlank()) {
-      log.error(
-        """
+        if (discordWebhookUrl.isBlank()) {
+            log.error(
+                """
         ========================================================================
         [AlertConfig] CRITICAL: Discord webhook URL is not configured!
 
@@ -67,11 +67,11 @@ class AlertConfigurationValidator(
 
         Reference: docs/04_Reports/discord-webhook-root-cause-analysis.md
         ========================================================================
-        """.trimIndent()
-      )
-    } else {
-      val maskedUrl = discordWebhookUrl.take(30) + "..."
-      log.info("[AlertConfig] Discord webhook configured: {}", maskedUrl)
+                """.trimIndent(),
+            )
+        } else {
+            val maskedUrl = discordWebhookUrl.take(30) + "..."
+            log.info("[AlertConfig] Discord webhook configured: {}", maskedUrl)
+        }
     }
-  }
 }

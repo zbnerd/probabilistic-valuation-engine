@@ -16,7 +16,7 @@ class RedissonConfig(
     @Value("\${spring.data.redis.sentinel.nodes:}") private val sentinelNodes: String,
     @Value("\${spring.data.redis.host:localhost}") private val host: String,
     @Value("\${spring.data.redis.port:6379}") private val port: Int,
-    @Value("\${redis.nat-mapping:}") private val natMapping: String
+    @Value("\${redis.nat-mapping:}") private val natMapping: String,
 ) {
 
     companion object {
@@ -36,9 +36,7 @@ class RedissonConfig(
         return Redisson.create(config)
     }
 
-    private fun isSentinelMode(): Boolean {
-        return masterName.isNotEmpty() && sentinelNodes.isNotEmpty()
-    }
+    private fun isSentinelMode(): Boolean = masterName.isNotEmpty() && sentinelNodes.isNotEmpty()
 
     private fun configureSentinel(config: Config) {
         val nodes = sentinelNodes.split(",")
@@ -62,18 +60,16 @@ class RedissonConfig(
             .setNatMapper(createNatMapper(natMap))
     }
 
-    private fun createNatMapper(natMap: Map<String, String>): NatMapper {
-        return NatMapper { uri ->
-            val currentHost = uri.host
-            val currentPort = uri.port
-            val key = "$currentHost:$currentPort"
+    private fun createNatMapper(natMap: Map<String, String>): NatMapper = NatMapper { uri ->
+        val currentHost = uri.host
+        val currentPort = uri.port
+        val key = "$currentHost:$currentPort"
 
-            when {
-                natMap.containsKey(key) -> mapToLocalhost(uri, natMap[key]!!)
-                currentHost == "redis-master" -> resolveFromMapOrFallback(uri, natMap, "redis-master:6379")
-                currentHost.startsWith("172.") -> RedisURI(uri.scheme, "127.0.0.1", currentPort)
-                else -> uri
-            }
+        when {
+            natMap.containsKey(key) -> mapToLocalhost(uri, natMap[key]!!)
+            currentHost == "redis-master" -> resolveFromMapOrFallback(uri, natMap, "redis-master:6379")
+            currentHost.startsWith("172.") -> RedisURI(uri.scheme, "127.0.0.1", currentPort)
+            else -> uri
         }
     }
 

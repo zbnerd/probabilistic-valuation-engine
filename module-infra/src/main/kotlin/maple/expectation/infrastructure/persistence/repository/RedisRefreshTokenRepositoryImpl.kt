@@ -1,19 +1,15 @@
 package maple.expectation.infrastructure.persistence.repository
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.time.Duration
 import maple.expectation.core.domain.auth.RefreshToken
 import maple.expectation.domain.repository.RedisRefreshTokenRepository as DomainRedisRefreshTokenRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import org.jspecify.annotations.Nullable
-import org.redisson.api.RBucket
 import org.redisson.api.RScript
-import org.redisson.api.RSet
 import org.redisson.api.RedissonClient
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Repository
-import java.time.Duration
-import java.util.List
 
 @Repository
 open class RedisRefreshTokenRepositoryImpl(
@@ -71,13 +67,11 @@ open class RedisRefreshTokenRepositoryImpl(
         )
     }
 
-    override fun findById(refreshTokenId: String): RefreshToken? {
-        return executor.executeOrDefault(
-            { doFindById(refreshTokenId) },
-            null,
-            TaskContext.of("RefreshToken", "FindById", refreshTokenId),
-        )
-    }
+    override fun findById(refreshTokenId: String): RefreshToken? = executor.executeOrDefault(
+        { doFindById(refreshTokenId) },
+        null,
+        TaskContext.of("RefreshToken", "FindById", refreshTokenId),
+    )
 
     private fun doFindById(refreshTokenId: String): RefreshToken? {
         val key = buildTokenKey(refreshTokenId)
@@ -106,13 +100,11 @@ open class RedisRefreshTokenRepositoryImpl(
         )
     }
 
-    override fun checkAndMarkAsUsed(refreshTokenId: String): RefreshToken? {
-        return executor.executeOrDefault(
-            { doCheckAndMarkAsUsed(refreshTokenId) },
-            null,
-            TaskContext.of("RefreshToken", "CheckAndMark", refreshTokenId),
-        )
-    }
+    override fun checkAndMarkAsUsed(refreshTokenId: String): RefreshToken? = executor.executeOrDefault(
+        { doCheckAndMarkAsUsed(refreshTokenId) },
+        null,
+        TaskContext.of("RefreshToken", "CheckAndMark", refreshTokenId),
+    )
 
     private fun doCheckAndMarkAsUsed(refreshTokenId: String): RefreshToken? {
         val key = buildTokenKey(refreshTokenId)
@@ -204,17 +196,13 @@ open class RedisRefreshTokenRepositoryImpl(
 
     private fun buildSessionKey(sessionId: String): String = SESSION_KEY_PREFIX + sessionId
 
-    private fun serializeToken(token: RefreshToken): String {
-        return executor.execute(
-            { objectMapper.writeValueAsString(token) },
-            TaskContext.of("RefreshToken", "Serialize", token.refreshTokenId()),
-        )
-    }
+    private fun serializeToken(token: RefreshToken): String = executor.execute(
+        { objectMapper.writeValueAsString(token) },
+        TaskContext.of("RefreshToken", "Serialize", token.refreshTokenId()),
+    )
 
-    private fun deserializeToken(json: String): RefreshToken {
-        return executor.execute(
-            { objectMapper.readValue(json, RefreshToken::class.java) },
-            TaskContext.of("RefreshToken", "Deserialize", json.take(30)),
-        )
-    }
+    private fun deserializeToken(json: String): RefreshToken = executor.execute(
+        { objectMapper.readValue(json, RefreshToken::class.java) },
+        TaskContext.of("RefreshToken", "Deserialize", json.take(30)),
+    )
 }

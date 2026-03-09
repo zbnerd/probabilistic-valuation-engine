@@ -34,7 +34,7 @@ data class BatchProperties(
     @DefaultValue("100") @Min(10) @Max(10000) val likeRelationSyncSize: Int = 100,
     @DefaultValue("100") @Min(10) @Max(10000) val expectationWriteSize: Int = 100,
     @DefaultValue("1000") @Min(100) @Max(10000) val aclWriterSize: Int = 1000,
-    @DefaultValue("100") @Min(10) @Max(10000) val mysqlFallbackSyncSize: Int = 100
+    @DefaultValue("100") @Min(10) @Max(10000) val mysqlFallbackSyncSize: Int = 100,
 ) {
     companion object {
         /**

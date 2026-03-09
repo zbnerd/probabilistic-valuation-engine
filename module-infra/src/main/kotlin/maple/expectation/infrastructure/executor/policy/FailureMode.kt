@@ -34,5 +34,5 @@ enum class FailureMode {
      *
      * {@link Error}는 모드와 무관하게 최우선으로 전파된다.
      */
-    PROPAGATE
+    PROPAGATE,
 }

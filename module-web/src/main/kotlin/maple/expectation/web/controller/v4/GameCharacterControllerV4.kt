@@ -1,6 +1,8 @@
 package maple.expectation.web.controller.v4
 
 import jakarta.validation.constraints.NotBlank
+import java.math.BigDecimal
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4
@@ -17,8 +19,6 @@ import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
-import java.math.BigDecimal
-import java.util.concurrent.CompletableFuture
 
 /**
  * V4 캐릭터 컨트롤러 (ADR-005 이관)
@@ -36,7 +36,7 @@ import java.util.concurrent.CompletableFuture
 @RequestMapping("/api/v4/characters")
 class GameCharacterControllerV4(
     private val expectationPort: ExpectationV4Port,
-    private val trackerPort: PopularCharacterTrackerPort
+    private val trackerPort: PopularCharacterTrackerPort,
 ) {
 
     @GetMapping("/{userIgn}/expectation")
@@ -44,13 +44,13 @@ class GameCharacterControllerV4(
     fun getExpectation(
         @PathVariable @NotBlank userIgn: String,
         @RequestParam(defaultValue = "false") force: Boolean,
-        @RequestHeader(value = HttpHeaders.ACCEPT_ENCODING, required = false) acceptEncoding: String?
+        @RequestHeader(value = HttpHeaders.ACCEPT_ENCODING, required = false) acceptEncoding: String?,
     ): CompletableFuture<ResponseEntity<*>> {
         log.debug(
             "[V4] Expectation for: {} (force={}, gzip={})",
             maskIgn(userIgn),
             force,
-            acceptsGzip(acceptEncoding)
+            acceptsGzip(acceptEncoding),
         )
 
         // Auto Warmup
@@ -78,28 +78,22 @@ class GameCharacterControllerV4(
         }
     }
 
-    private fun buildGzipResponse(gzipBytes: ByteArray): ResponseEntity<ByteArray> {
-        return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_ENCODING, "gzip")
-            .contentType(MediaType.APPLICATION_JSON)
-            .contentLength(gzipBytes.size.toLong())
-            .body(gzipBytes)
-    }
+    private fun buildGzipResponse(gzipBytes: ByteArray): ResponseEntity<ByteArray> = ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_ENCODING, "gzip")
+        .contentType(MediaType.APPLICATION_JSON)
+        .contentLength(gzipBytes.size.toLong())
+        .body(gzipBytes)
 
     @Suppress("UNCHECKED_CAST")
-    private fun buildJsonResponse(response: Any): ResponseEntity<EquipmentExpectationResponseV4> {
-        return ResponseEntity.ok(response as EquipmentExpectationResponseV4)
-    }
+    private fun buildJsonResponse(response: Any): ResponseEntity<EquipmentExpectationResponseV4> = ResponseEntity.ok(response as EquipmentExpectationResponseV4)
 
-    private fun acceptsGzip(acceptEncoding: String?): Boolean {
-        return acceptEncoding != null && acceptEncoding.lowercase().contains("gzip")
-    }
+    private fun acceptsGzip(acceptEncoding: String?): Boolean = acceptEncoding != null && acceptEncoding.lowercase().contains("gzip")
 
     @GetMapping("/{userIgn}/expectation/preset/{presetNo}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
     fun getExpectationByPreset(
         @PathVariable userIgn: String,
-        @PathVariable presetNo: Int
+        @PathVariable presetNo: Int,
     ): CompletableFuture<ResponseEntity<EquipmentExpectationResponseV4>> {
         log.info("[V4] Expectation for {} preset {}", maskIgn(userIgn), presetNo)
 
@@ -112,7 +106,7 @@ class GameCharacterControllerV4(
     @PostMapping("/{userIgn}/expectation/recalculate")
     @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
     fun recalculateExpectation(
-        @PathVariable userIgn: String
+        @PathVariable userIgn: String,
     ): CompletableFuture<ResponseEntity<EquipmentExpectationResponseV4>> {
         log.info("[V4] Force recalculating expectation for: {}", maskIgn(userIgn))
 
@@ -124,7 +118,7 @@ class GameCharacterControllerV4(
 
     private fun filterByPreset(
         response: EquipmentExpectationResponseV4,
-        presetNo: Int
+        presetNo: Int,
     ): EquipmentExpectationResponseV4 {
         val filteredPresets = response.presets.filter { it.presetNo == presetNo }
 
@@ -136,7 +130,7 @@ class GameCharacterControllerV4(
             if (filteredPresets.isEmpty()) "0" else filteredPresets[0].totalCostText,
             if (filteredPresets.isEmpty()) EquipmentExpectationResponseV4.CostBreakdownDto.empty() else filteredPresets[0].costBreakdown,
             response.maxPresetNo,
-            filteredPresets
+            filteredPresets,
         )
     }
 

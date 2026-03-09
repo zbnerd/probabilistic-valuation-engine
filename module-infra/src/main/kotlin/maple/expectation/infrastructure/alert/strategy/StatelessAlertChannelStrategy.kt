@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.alert.strategy
 
+import java.util.function.Supplier
 import maple.expectation.infrastructure.alert.AlertPriority
 import maple.expectation.infrastructure.alert.channel.AlertChannel
 import org.springframework.stereotype.Component
-import java.util.function.Supplier
 
 /**
  * Stateless Alert Channel Strategy
@@ -17,7 +17,7 @@ import java.util.function.Supplier
  */
 @Component
 class StatelessAlertChannelStrategy(
-    private val channelProviders: Map<AlertPriority, Supplier<AlertChannel>>
+    private val channelProviders: Map<AlertPriority, Supplier<AlertChannel>>,
 ) : AlertChannelStrategy {
 
     /**
@@ -29,7 +29,7 @@ class StatelessAlertChannelStrategy(
     override fun getChannel(priority: AlertPriority): AlertChannel {
         // ADR-039 Fix: Use Discord as fallback default channel
         // Since DiscordAlertChannel is always available (via @ConditionalOnProperty),
-    // we use it as the default instead of throwing UnsupportedOperationException
+        // we use it as the default instead of throwing UnsupportedOperationException
         return channelProviders[priority]?.get() ?: getDefaultChannel()
     }
 
@@ -49,7 +49,7 @@ class StatelessAlertChannelStrategy(
         }
         // If Discord channel is not available (shouldn't happen), throw with clear message
         throw IllegalStateException(
-            "No alert channel configured. Please configure alert.stateless.enabled=true"
+            "No alert channel configured. Please configure alert.stateless.enabled=true",
         )
     }
 

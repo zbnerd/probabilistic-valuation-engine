@@ -18,15 +18,15 @@ package maple.expectation.infrastructure.monitoring.copilot.model
 data class ZScoreConfig(
     /** Enable Z-score detection */
     val enabled: Boolean = false,
-    
+
     /** Number of data points to use for calculating mean/stdDev */
     val windowPoints: Int = 30,
-    
+
     /** Z-score threshold for triggering anomaly */
     val threshold: Double = 3.0,
-    
+
     /** Minimum required points for Z-score calculation */
-    val minRequiredPoints: Int = 10
+    val minRequiredPoints: Int = 10,
 ) {
     /** Validate configuration */
     fun validate() {

@@ -8,8 +8,8 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.queue.RedisKey
 import org.redisson.api.RTopic
 import org.redisson.api.RedissonClient
-import org.springframework.stereotype.Component
 import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 
 /**
  * Redis RTopic 기반 캐시 무효화 이벤트 발행자
@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory
 class RedisCacheInvalidationPublisher(
     redissonClient: RedissonClient,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) : CacheInvalidationPublisher {
     companion object {
         private val log = LoggerFactory.getLogger(RedisCacheInvalidationPublisher::class.java)
@@ -50,7 +50,7 @@ class RedisCacheInvalidationPublisher(
         val clientsReceived = executor.executeOrDefault(
             { topic.publish(event) },
             0L,
-            context
+            context,
         )
 
         recordPublishResult(clientsReceived, event)
@@ -65,14 +65,14 @@ class RedisCacheInvalidationPublisher(
                 event.cacheName,
                 event.type,
                 event.key,
-                clientsReceived
+                clientsReceived,
             )
         } else {
             meterRegistry.counter("cache.invalidation.publish", "status", "failure").increment()
             log.warn(
                 "[CacheInvalidation] Publish failed or no subscribers: cache={}, type={}",
                 event.cacheName,
-                event.type
+                event.type,
             )
         }
     }

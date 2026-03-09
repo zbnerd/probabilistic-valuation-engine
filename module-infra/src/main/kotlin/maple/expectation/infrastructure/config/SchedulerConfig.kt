@@ -3,6 +3,11 @@ package maple.expectation.infrastructure.config
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
+import java.util.Collections
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.RejectedExecutionHandler
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import maple.expectation.infrastructure.shutdown.ShutdownProperties
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -11,11 +16,6 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler
-import java.util.Collections
-import java.util.concurrent.RejectedExecutionException
-import java.util.concurrent.RejectedExecutionHandler
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Spring Scheduler Thread Pool Configuration
@@ -127,7 +127,8 @@ class SchedulerConfig {
             val prev = lastRejectLogNanos.get()
 
             if (now - prev >= REJECT_LOG_INTERVAL_NANOS &&
-                lastRejectLogNanos.compareAndSet(prev, now)) {
+                lastRejectLogNanos.compareAndSet(prev, now)
+            ) {
                 val count = rejectedSinceLastLog.getAndSet(0)
                 log.warn(
                     "[TaskScheduler] Task rejected (queue full). " +
@@ -135,7 +136,7 @@ class SchedulerConfig {
                     count,
                     executor.poolSize,
                     executor.activeCount,
-                    executor.queue.size
+                    executor.queue.size,
                 )
             }
 
@@ -144,7 +145,7 @@ class SchedulerConfig {
                 "[TaskScheduler] Rejecting task - queue full: poolSize={}, activeCount={}, queueSize={}",
                 executor.poolSize,
                 executor.activeCount,
-                executor.queue.size
+                executor.queue.size,
             )
 
             throw RejectedExecutionException("TaskScheduler queue full (capacity exceeded)")
@@ -174,7 +175,7 @@ class SchedulerConfig {
     @ConditionalOnMissingBean(name = ["taskScheduler"])
     fun taskScheduler(
         properties: SchedulerProperties,
-        meterRegistry: MeterRegistry
+        meterRegistry: MeterRegistry,
     ): ThreadPoolTaskScheduler {
         // Context7 Best Practice: rejected Counter 등록 (ExecutorServiceMetrics 미제공)
         val schedulerRejectedCounter = Counter.builder("scheduler.rejected")
@@ -188,17 +189,21 @@ class SchedulerConfig {
         scheduler.setAwaitTerminationSeconds(properties.awaitTerminationSeconds)
 
         // RejectedExecution 정책: AbortPolicy + 메트릭 기록
-        scheduler.setRejectedExecutionHandler(RejectedExecutionHandler { r, e ->
-            schedulerRejectedCounter.increment()
-            SCHEDULER_ABORT_POLICY.rejectedExecution(r, e)
-        })
+        scheduler.setRejectedExecutionHandler(
+            RejectedExecutionHandler { r, e ->
+                schedulerRejectedCounter.increment()
+                SCHEDULER_ABORT_POLICY.rejectedExecution(r, e)
+            },
+        )
 
         scheduler.initialize()
 
         // Context7 Best Practice: Micrometer ExecutorServiceMetrics 등록
         // 제공 메트릭: executor.completed, executor.active, executor.queued, executor.pool.size
         ExecutorServiceMetrics(
-            scheduler.scheduledExecutor, "task.scheduler", Collections.emptyList()
+            scheduler.scheduledExecutor,
+            "task.scheduler",
+            Collections.emptyList(),
         ).bindTo(meterRegistry)
 
         log.info("[TaskScheduler] Initialized with poolSize={}", properties.poolSize)

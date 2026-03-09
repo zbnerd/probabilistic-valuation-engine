@@ -1,5 +1,10 @@
 package maple.expectation.infrastructure.event
 
+import java.lang.reflect.Method
+import java.util.ArrayList
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.EventProcessingException
@@ -9,16 +14,11 @@ import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.lang.reflect.Method
-import java.util.ArrayList
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executor
-import java.util.concurrent.Executors
 
 @Component
 class EventDispatcher(
     private val executor: LogicExecutor,
-    @Value("\${app.event.dispatcher.async:true}") private val enableAsync: Boolean
+    @Value("\${app.event.dispatcher.async:true}") private val enableAsync: Boolean,
 ) {
     private val logger = LoggerFactory.getLogger(EventDispatcher::class.java)
     private val virtualThreadExecutor: Executor = if (enableAsync) Executors.newVirtualThreadPerTaskExecutor() else Executor { it.run() }
@@ -28,7 +28,7 @@ class EventDispatcher(
         logger.info(
             "[EventDispatcher] Initialized: async={}, executorType={}",
             enableAsync,
-            if (enableAsync) "VirtualThreads" else "Synchronous"
+            if (enableAsync) "VirtualThreads" else "Synchronous",
         )
     }
 
@@ -41,11 +41,11 @@ class EventDispatcher(
                     logger.error(
                         "[EventDispatcher] Handler registration failed for component: {}",
                         component.javaClass.simpleName,
-                        e
+                        e,
                     )
                 }
             },
-            TaskContext.of("EventDispatcher", "RegisterHandlers", component.javaClass.simpleName)
+            TaskContext.of("EventDispatcher", "RegisterHandlers", component.javaClass.simpleName),
         )
     }
 
@@ -72,7 +72,7 @@ class EventDispatcher(
                 "[EventDispatcher] Registered handler: type={}, method={}, async={}",
                 eventType.simpleName,
                 method.name,
-                async
+                async,
             )
         }
 
@@ -80,7 +80,7 @@ class EventDispatcher(
             logger.info(
                 "[EventDispatcher] Registered {} handlers from component: {}",
                 registered,
-                componentClass.simpleName
+                componentClass.simpleName,
             )
         }
     }
@@ -89,7 +89,7 @@ class EventDispatcher(
         if (method.parameterCount != 1) {
             throw EventProcessingException(
                 CommonErrorCode.EVENT_HANDLER_ERROR,
-                "Handler method must have single parameter: ${method.declaringClass.simpleName}.${method.name} (params=${method.parameterCount})"
+                "Handler method must have single parameter: ${method.declaringClass.simpleName}.${method.name} (params=${method.parameterCount})",
             )
         }
 
@@ -97,7 +97,7 @@ class EventDispatcher(
         if (!expectedType.isAssignableFrom(paramType)) {
             throw EventProcessingException(
                 CommonErrorCode.EVENT_HANDLER_ERROR,
-                "Handler parameter type mismatch: ${method.declaringClass.simpleName}.${method.name} (expected=${expectedType.simpleName}, actual=${paramType.simpleName})"
+                "Handler parameter type mismatch: ${method.declaringClass.simpleName}.${method.name} (expected=${expectedType.simpleName}, actual=${paramType.simpleName})",
             )
         }
     }
@@ -111,7 +111,7 @@ class EventDispatcher(
                     logger.error("[EventDispatcher] Dispatch failed for event: {}", event.eventType, e)
                 }
             },
-            TaskContext.of("EventDispatcher", "Dispatch", event.eventType)
+            TaskContext.of("EventDispatcher", "Dispatch", event.eventType),
         )
     }
 
@@ -141,11 +141,11 @@ class EventDispatcher(
                                 "[EventDispatcher] Async handler failed: method={}, eventType={}",
                                 handler.method.name,
                                 event.payload!!.javaClass.simpleName,
-                                e
+                                e,
                             )
                         }
                     },
-                    TaskContext.of("EventDispatcher", "InvokeAsync", handler.method.name)
+                    TaskContext.of("EventDispatcher", "InvokeAsync", handler.method.name),
                 )
             }
         } else {
@@ -158,11 +158,11 @@ class EventDispatcher(
                             "[EventDispatcher] Sync handler failed: method={}, eventType={}",
                             handler.method.name,
                             event.payload!!.javaClass.simpleName,
-                            e
+                            e,
                         )
                     }
                 },
-                TaskContext.of("EventDispatcher", "InvokeSync", handler.method.name)
+                TaskContext.of("EventDispatcher", "InvokeSync", handler.method.name),
             )
         }
     }
@@ -178,13 +178,13 @@ class EventDispatcher(
                 handler.method.name,
                 event.eventType,
                 event.eventId,
-                e
+                e,
             )
             throw EventProcessingException(
                 CommonErrorCode.EVENT_HANDLER_ERROR,
                 e,
                 event.eventId,
-                event.eventType
+                event.eventType,
             )
         }
     }
@@ -194,7 +194,7 @@ class EventDispatcher(
     private data class HandlerMethod(
         val component: Any,
         val method: Method,
-        val async: Boolean
+        val async: Boolean,
     ) {
         init {
             method.isAccessible = true

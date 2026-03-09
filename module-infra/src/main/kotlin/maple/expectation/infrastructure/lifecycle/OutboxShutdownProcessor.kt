@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.lifecycle
 
+import java.util.concurrent.atomic.AtomicInteger
 import maple.expectation.domain.v2.DonationOutbox
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -7,13 +8,12 @@ import maple.expectation.infrastructure.persistence.repository.DonationOutboxRep
 import maple.expectation.infrastructure.shutdown.ShutdownProperties
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.concurrent.atomic.AtomicInteger
 
 @Component
 class OutboxShutdownProcessor(
     private val outboxRepository: DonationOutboxRepository,
     private val executor: LogicExecutor,
-    private val properties: ShutdownProperties
+    private val properties: ShutdownProperties,
 ) {
     private val logger = LoggerFactory.getLogger(OutboxShutdownProcessor::class.java)
 
@@ -27,7 +27,7 @@ class OutboxShutdownProcessor(
             val success = executor.executeOrDefault(
                 { processEntry(entry) },
                 false,
-                TaskContext.of("OutboxShutdown", "ProcessEntry", entry.requestId)
+                TaskContext.of("OutboxShutdown", "ProcessEntry", entry.requestId),
             )
 
             if (success) {

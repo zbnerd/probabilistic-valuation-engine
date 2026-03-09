@@ -1,16 +1,16 @@
 package maple.expectation.infrastructure.aop.util
 
+import java.util.concurrent.ConcurrentHashMap
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.reflect.MethodSignature
+import org.slf4j.LoggerFactory
 import org.springframework.expression.Expression
 import org.springframework.expression.ExpressionParser
 import org.springframework.expression.spel.standard.SpelExpressionParser
 import org.springframework.expression.spel.support.StandardEvaluationContext
 import org.springframework.stereotype.Component
-import org.slf4j.LoggerFactory
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * SpEL 표현식 파싱 유틸리티 (LogicExecutor 평탄화 완료)
@@ -34,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @Component
 class CustomSpelParser(
-    private val executor: LogicExecutor // ✅ 지능형 실행기 주입
+    private val executor: LogicExecutor, // ✅ 지능형 실행기 주입
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(CustomSpelParser::class.java)
@@ -43,15 +43,13 @@ class CustomSpelParser(
     private val expressionCache: MutableMap<String, Expression> = ConcurrentHashMap()
 
     /** SpEL 표현식을 파싱하여 String으로 반환 */
-    fun parse(joinPoint: ProceedingJoinPoint, expression: String): String {
-        return parseWithFallback(joinPoint, expression, joinPoint.signature.toShortString())
-    }
+    fun parse(joinPoint: ProceedingJoinPoint, expression: String): String = parseWithFallback(joinPoint, expression, joinPoint.signature.toShortString())
 
     /** ✅ parseWithFallback 평탄화 try-catch 대신 executeOrDefault를 사용하여 파싱 실패 시 안전하게 fallback 반환 */
     fun parseWithFallback(
         joinPoint: ProceedingJoinPoint,
         expression: String,
-        fallback: String
+        fallback: String,
     ): String {
         val context = TaskContext.of("SpelParser", "ParseString", expression)
 
@@ -66,7 +64,7 @@ class CustomSpelParser(
                 expr.getValue(evalContext)?.toString() ?: fallback
             },
             fallback,
-            context
+            context,
         )
     }
 
@@ -80,7 +78,7 @@ class CustomSpelParser(
                 parser.parseExpression(expression).getValue(evalContext, resultType) ?: fallback
             },
             fallback,
-            context
+            context,
         )
     }
 

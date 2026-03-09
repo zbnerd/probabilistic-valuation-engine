@@ -13,7 +13,7 @@ package maple.expectation.core.calculator.domain
  * @see ExpectationCalculatorPort 대상 인터페이스
  */
 abstract class EnhanceDecorator(
-    protected val target: ExpectationCalculatorPort
+    protected val target: ExpectationCalculatorPort,
 ) : ExpectationCalculatorPort {
 
     override fun calculateCost(): Long = target.calculateCost()

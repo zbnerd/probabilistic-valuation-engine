@@ -21,8 +21,7 @@ data class ApiResponse<T>(val success: Boolean, val data: T? = null, val error: 
 
         /** 실패 응답 생성 */
         @JvmStatic
-        fun <T> error(code: String, message: String): ApiResponse<T> =
-            ApiResponse(false, null, ErrorInfo(code, message))
+        fun <T> error(code: String, message: String): ApiResponse<T> = ApiResponse(false, null, ErrorInfo(code, message))
     }
 
     /** 에러 정보 */

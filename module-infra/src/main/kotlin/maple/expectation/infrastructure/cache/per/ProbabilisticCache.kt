@@ -66,5 +66,5 @@ annotation class ProbabilisticCache(
      *   <li>2.0: 공격적 (TTL 중반부터 갱신 확률 증가)</li>
      * </ul>
      */
-    val beta: Double = 1.0
+    val beta: Double = 1.0,
 )

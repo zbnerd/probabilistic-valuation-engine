@@ -1,16 +1,15 @@
 package maple.expectation.infrastructure.aop.aspect
 
-import maple.expectation.infrastructure.executor.TaskContext
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.aspectj.lang.annotation.Pointcut
+import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 import org.springframework.util.StopWatch
-import org.slf4j.LoggerFactory
 
 /**
  * 트레이스 어스펙트 (#271 V5 Stateless Architecture)
@@ -42,6 +41,7 @@ class TraceAspect(@Value("\${app.aop.trace.enabled:false}") private val isTraceE
     companion object {
         private val log = LoggerFactory.getLogger(TraceAspect::class.java)
         private const val MAX_ARG_LENGTH = 100
+
         /** V5: MDC 키 (로그에서 확인 가능) */
         private const val MDC_DEPTH_KEY = "traceDepth"
     }
@@ -60,13 +60,13 @@ class TraceAspect(@Value("\${app.aop.trace.enabled:false}") private val isTraceE
             "|| execution(* maple.expectation.repository..*.*(..))" +
             "|| execution(* maple.expectation.error..*.*(..))" +
             "|| execution(* maple.expectation.util..*.*(..))" +
-            "|| execution(* maple.expectation.web.controller..*.*(..))"
+            "|| execution(* maple.expectation.web.controller..*.*(..))",
     )
     fun autoLog() {
     }
 
     @Pointcut(
-        "@annotation(maple.expectation.aop.annotation.TraceLog) || @within(maple.expectation.aop.annotation.TraceLog)"
+        "@annotation(maple.expectation.aop.annotation.TraceLog) || @within(maple.expectation.aop.annotation.TraceLog)",
     )
     fun manualLog() {
     }
@@ -88,7 +88,7 @@ class TraceAspect(@Value("\${app.aop.trace.enabled:false}") private val isTraceE
             // API Key 노출 방지 (String 파라미터로 전달되어 마스킹 불가)
             "&& !execution(* *.toString())" +
             "&& !execution(* *.hashCode())" +
-            "&& !execution(* *.equals(..))"
+            "&& !execution(* *.equals(..))",
     )
     fun excludeNoise() {
     }
@@ -142,7 +142,7 @@ class TraceAspect(@Value("\${app.aop.trace.enabled:false}") private val isTraceE
                 state.indent,
                 state.className,
                 state.methodName,
-                tookMs
+                tookMs,
             )
         }
 
@@ -160,7 +160,7 @@ class TraceAspect(@Value("\${app.aop.trace.enabled:false}") private val isTraceE
             state.indent,
             state.className,
             state.methodName,
-            e.javaClass.simpleName
+            e.javaClass.simpleName,
         )
     }
 
@@ -216,7 +216,7 @@ class TraceAspect(@Value("\${app.aop.trace.enabled:false}") private val isTraceE
         val indent: String,
         val className: String,
         val methodName: String,
-        val sw: StopWatch
+        val sw: StopWatch,
     ) {
         var isSuccess = false // 기본 실패 가정
 

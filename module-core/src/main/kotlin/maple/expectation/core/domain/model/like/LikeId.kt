@@ -7,7 +7,7 @@ package maple.expectation.core.domain.model.like
  */
 data class LikeId(val value: Long) {
 
-  init {
-    require(value >= 0) { "LikeId value cannot be negative" }
-  }
+    init {
+        require(value >= 0) { "LikeId value cannot be negative" }
+    }
 }

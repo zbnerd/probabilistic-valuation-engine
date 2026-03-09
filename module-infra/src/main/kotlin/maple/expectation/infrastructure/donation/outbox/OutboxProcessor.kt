@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.donation.outbox
 
+import java.time.LocalDateTime
 import maple.expectation.core.port.out.OutboxProcessorPort
 import maple.expectation.domain.v2.DonationOutbox
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction
@@ -14,7 +15,6 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
-import java.time.LocalDateTime
 
 /**
  * Outbox 처리 서비스 (Issue #80)
@@ -46,7 +46,7 @@ class OutboxProcessor(
     private val executor: LogicExecutor,
     private val transactionTemplate: TransactionTemplate,
     private val properties: OutboxProperties,
-    private val outboxRepository: DonationOutboxRepository
+    private val outboxRepository: DonationOutboxRepository,
 ) : OutboxProcessorPort {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -76,7 +76,7 @@ class OutboxProcessor(
                 log.error("[Outbox] 폴링 실패", e)
                 metrics.incrementPollFailure()
             },
-            context
+            context,
         )
     }
 
@@ -121,7 +121,7 @@ class OutboxProcessor(
                 recoverFailedEntry(entryId, e.message)
                 false
             },
-            context
+            context,
         )
     }
 
@@ -156,7 +156,7 @@ class OutboxProcessor(
                 }
             },
             null,
-            context
+            context,
         )
     }
 
@@ -212,7 +212,7 @@ class OutboxProcessor(
         val staleTime = LocalDateTime.now().minus(properties.staleThreshold)
         val stalledEntries = outboxRepository.findStalledProcessing(
             staleTime,
-            PageRequest.of(0, properties.batchSize)
+            PageRequest.of(0, properties.batchSize),
         )
 
         if (stalledEntries.isEmpty()) {
@@ -228,7 +228,7 @@ class OutboxProcessor(
             if (!entry.verifyIntegrity()) {
                 log.error(
                     "[Outbox] 무결성 검증 실패 - Zombie 복구 중단, DLQ 이동: requestId={}",
-                    entry.requestId
+                    entry.requestId,
                 )
                 handleIntegrityFailure(entry)
                 integrityFailed++
@@ -243,7 +243,8 @@ class OutboxProcessor(
         if (recovered > 0) {
             log.warn(
                 "[Outbox] Stalled 상태 복구 완료: 성공={}, 무결성실패={}",
-                recovered, integrityFailed
+                recovered,
+                integrityFailed,
             )
             metrics.incrementStalledRecovered(recovered)
         }

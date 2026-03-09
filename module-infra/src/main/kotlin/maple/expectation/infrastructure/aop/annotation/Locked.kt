@@ -19,5 +19,5 @@ annotation class Locked(
     val leaseTime: Long = 20,
 
     /** waitTime 및 leaseTime의 시간 단위 (기본값: SECONDS) */
-    val timeUnit: TimeUnit = TimeUnit.SECONDS
+    val timeUnit: TimeUnit = TimeUnit.SECONDS,
 )

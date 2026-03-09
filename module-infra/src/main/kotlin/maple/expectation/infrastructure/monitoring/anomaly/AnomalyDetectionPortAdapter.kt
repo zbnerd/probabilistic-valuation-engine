@@ -1,14 +1,14 @@
 package maple.expectation.infrastructure.monitoring.anomaly
 
+import java.util.Optional
 import maple.expectation.core.port.out.AnomalyDetectionPort
 import maple.expectation.infrastructure.monitoring.copilot.detector.AnomalyDetector
+import maple.expectation.infrastructure.monitoring.copilot.model.MetricPoint
 import maple.expectation.infrastructure.monitoring.copilot.model.SeverityMapping
 import maple.expectation.infrastructure.monitoring.copilot.model.SignalDefinition
 import maple.expectation.infrastructure.monitoring.copilot.model.TimeSeries
-import maple.expectation.infrastructure.monitoring.copilot.model.MetricPoint
 import maple.expectation.infrastructure.monitoring.copilot.model.ZScoreConfig
 import org.springframework.stereotype.Component
-import java.util.Optional
 
 /**
  * AnomalyDetectionPort 구현체 (ADR-005)
@@ -19,14 +19,14 @@ import java.util.Optional
  */
 @Component
 class AnomalyDetectionPortAdapter(
-    private val anomalyDetector: AnomalyDetector
+    private val anomalyDetector: AnomalyDetector,
 ) : AnomalyDetectionPort {
 
     override fun detect(
         signal: AnomalyDetectionPort.DetectionSignal,
         timeSeriesList: List<AnomalyDetectionPort.DetectionTimeSeries>,
         nowMillis: Long,
-        config: AnomalyDetectionPort.ZScoreDetectionConfig
+        config: AnomalyDetectionPort.ZScoreDetectionConfig,
     ): Optional<AnomalyDetectionPort.DetectedAnomaly> {
         // Port 모델을 내부 모델로 변환
         val internalSignal = SignalDefinition(
@@ -41,11 +41,11 @@ class AnomalyDetectionPortAdapter(
                 SeverityMapping(
                     warnThreshold = sm.warnThreshold ?: 0.0,
                     critThreshold = sm.critThreshold ?: 0.0,
-                    comparator = sm.comparator ?: ">"
+                    comparator = sm.comparator ?: ">",
                 )
             } ?: SeverityMapping(warnThreshold = 0.0, critThreshold = 0.0, comparator = ">"),
             sloTag = "",
-            metadata = emptyMap()
+            metadata = emptyMap(),
         )
 
         val internalTimeSeries = timeSeriesList.map { ts ->
@@ -54,9 +54,9 @@ class AnomalyDetectionPortAdapter(
                 points = ts.points.map { mp ->
                     MetricPoint(
                         epochMillis = mp.timestampMillis,
-                        value = mp.value
+                        value = mp.value,
                     )
-                }
+                },
             )
         }
 
@@ -64,7 +64,7 @@ class AnomalyDetectionPortAdapter(
             enabled = config.enabled,
             windowPoints = config.windowPoints,
             threshold = config.threshold,
-            minRequiredPoints = config.minRequiredPoints
+            minRequiredPoints = config.minRequiredPoints,
         )
 
         // 탐지 수행
@@ -78,7 +78,7 @@ class AnomalyDetectionPortAdapter(
                 reason = anomaly.reason ?: "",
                 detectedAtMillis = anomaly.detectedAtMillis,
                 currentValue = anomaly.currentValue,
-                baselineValue = anomaly.baselineValue
+                baselineValue = anomaly.baselineValue,
             )
         }
     }

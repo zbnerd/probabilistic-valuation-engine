@@ -14,9 +14,9 @@ import java.io.Serializable
  * <pre>
  * {
  *   "value": {...},
-    // 실제 캐시 데이터
+ // 실제 캐시 데이터
  *   "delta": 150,
-    // 계산 소요 시간 (ms)
+ // 계산 소요 시간 (ms)
  *   "expiry": 1706000000000   // 만료 시각 (Unix ms)
  * }
  * </pre>
@@ -43,7 +43,7 @@ data class CachedWrapper<T>(
     var delta: Long,
 
     /** 만료 시각 (Unix timestamp, 밀리초) */
-    var expiry: Long
+    var expiry: Long,
 ) : Serializable {
 
     companion object {
@@ -99,14 +99,10 @@ data class CachedWrapper<T>(
     }
 
     /** 캐시 만료 여부 (PER 미적용) */
-    fun isExpired(): Boolean {
-        return System.currentTimeMillis() >= expiry
-    }
+    fun isExpired(): Boolean = System.currentTimeMillis() >= expiry
 
     /** 남은 TTL (밀리초) */
-    fun remainingTtl(): Long {
-        return Math.max(0, expiry - System.currentTimeMillis())
-    }
+    fun remainingTtl(): Long = Math.max(0, expiry - System.currentTimeMillis())
 
     /** 캐시된 값 반환 (명시적 접근자) */
     fun getCachedValue(): T? = value

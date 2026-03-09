@@ -19,32 +19,32 @@ package maple.expectation.infrastructure.monitoring.collector
  */
 interface MetricsCollectorStrategy {
 
-  /**
-   * 카테고리 이름 반환
-   *
-   * @return 카테고리 키 (예: "golden-signals", "jvm", "database")
-   */
-  fun getCategoryName(): String
+    /**
+     * 카테고리 이름 반환
+     *
+     * @return 카테고리 키 (예: "golden-signals", "jvm", "database")
+     */
+    fun getCategoryName(): String
 
-  /**
-   * 해당 카테고리의 메트릭 수집
-   *
-   * @return 수집된 메트릭 맵 (key: 메트릭명, value: 값)
-   */
-  fun collect(): Map<String, Any>
+    /**
+     * 해당 카테고리의 메트릭 수집
+     *
+     * @return 수집된 메트릭 맵 (key: 메트릭명, value: 값)
+     */
+    fun collect(): Map<String, Any>
 
-  /**
-   * 해당 카테고리 지원 여부 확인
-   *
-   * @param category 확인할 카테고리
-   * @return 지원 여부
-   */
-  fun supports(category: MetricCategory): Boolean
+    /**
+     * 해당 카테고리 지원 여부 확인
+     *
+     * @param category 확인할 카테고리
+     * @return 지원 여부
+     */
+    fun supports(category: MetricCategory): Boolean
 
-  /**
-   * 수집 우선순위 반환 (낮을수록 먼저 수집)
-   *
-   * @return 우선순위 (기본값: 100)
-   */
-  fun getOrder(): Int = 100
+    /**
+     * 수집 우선순위 반환 (낮을수록 먼저 수집)
+     *
+     * @return 우선순위 (기본값: 100)
+     */
+    fun getOrder(): Int = 100
 }

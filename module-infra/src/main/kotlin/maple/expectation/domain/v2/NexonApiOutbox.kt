@@ -1,8 +1,6 @@
 package maple.expectation.domain.v2
 
 import jakarta.persistence.*
-import maple.expectation.error.CommonErrorCode
-import maple.expectation.error.exception.SystemException
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
@@ -10,6 +8,8 @@ import java.time.LocalDateTime
 import java.util.HexFormat
 import kotlin.math.min
 import kotlin.math.pow
+import maple.expectation.error.CommonErrorCode
+import maple.expectation.error.exception.SystemException
 
 /**
  * Nexon API용 Transactional Outbox 엔티티 (N19 리팩토링)
@@ -28,8 +28,8 @@ import kotlin.math.pow
 @Table(
     indexes = [
         Index(name = "idx_pending_poll", columnList = "status, next_retry_at, id"),
-        Index(name = "idx_locked", columnList = "locked_by, locked_at")
-    ]
+        Index(name = "idx_locked", columnList = "locked_by, locked_at"),
+    ],
 )
 class NexonApiOutbox {
 
@@ -84,7 +84,7 @@ class NexonApiOutbox {
         GET_OCID,
         GET_CHARACTER_BASIC,
         GET_ITEM_DATA,
-        GET_CUBES
+        GET_CUBES,
     }
 
     /** Outbox 상태 */
@@ -93,7 +93,7 @@ class NexonApiOutbox {
         PROCESSING,
         COMPLETED,
         FAILED,
-        DEAD_LETTER
+        DEAD_LETTER,
     }
 
     private constructor()
@@ -103,7 +103,7 @@ class NexonApiOutbox {
         fun create(
             requestId: String,
             eventType: NexonApiEventType,
-            payload: String
+            payload: String,
         ): NexonApiOutbox {
             val outbox = NexonApiOutbox()
             outbox.requestId = requestId
@@ -120,18 +120,16 @@ class NexonApiOutbox {
         private fun computeContentHash(
             requestId: String,
             eventType: NexonApiEventType,
-            payload: String
-        ): String {
-            return try {
-                val digest = MessageDigest.getInstance("SHA-256")
-                val hash = digest.digest(
-                    ("$requestId|$eventType|$payload").toByteArray(StandardCharsets.UTF_8)
-                )
-                HexFormat.of().formatHex(hash)
-            } catch (e: NoSuchAlgorithmException) {
-                // SHA-256은 JVM 필수 알고리즘이므로 여기 도달 시 JVM 결함
-                throw SystemException(CommonErrorCode.INTERNAL_SERVER_ERROR, "SHA-256 not available", e)
-            }
+            payload: String,
+        ): String = try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val hash = digest.digest(
+                ("$requestId|$eventType|$payload").toByteArray(StandardCharsets.UTF_8),
+            )
+            HexFormat.of().formatHex(hash)
+        } catch (e: NoSuchAlgorithmException) {
+            // SHA-256은 JVM 필수 알고리즘이므로 여기 도달 시 JVM 결함
+            throw SystemException(CommonErrorCode.INTERNAL_SERVER_ERROR, "SHA-256 not available", e)
         }
     }
 
@@ -160,9 +158,7 @@ class NexonApiOutbox {
     }
 
     /** DLQ 이동 여부 판단 */
-    fun shouldMoveToDlq(): Boolean {
-        return retryCount >= maxRetries
-    }
+    fun shouldMoveToDlq(): Boolean = retryCount >= maxRetries
 
     /** 강제 DLQ 이동 (무결성 실패 등) */
     fun forceDeadLetter() {
@@ -189,12 +185,8 @@ class NexonApiOutbox {
         this.updatedAt = LocalDateTime.now()
     }
 
-    private fun truncate(str: String?, maxLen: Int): String? {
-        return if (str != null && str.length > maxLen) str.substring(0, maxLen) else str
-    }
+    private fun truncate(str: String?, maxLen: Int): String? = if (str != null && str.length > maxLen) str.substring(0, maxLen) else str
 
     /** PII 마스킹 */
-    override fun toString(): String {
-        return "NexonApiOutbox[id=$id, requestId=$requestId, status=$status, eventType=$eventType, payload=MASKED]"
-    }
+    override fun toString(): String = "NexonApiOutbox[id=$id, requestId=$requestId, status=$status, eventType=$eventType, payload=MASKED]"
 }

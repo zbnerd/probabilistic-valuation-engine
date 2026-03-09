@@ -27,23 +27,17 @@ open class CharacterLikeRepositoryImpl(
     override fun findByTargetOcidAndLikerAccountId(
         targetOcid: String,
         likerAccountId: String,
-    ): CharacterLike? {
-        return jpaRepo.findByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
-            .map { it.toDomain() }
-            .orElse(null)
-    }
+    ): CharacterLike? = jpaRepo.findByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
+        .map { it.toDomain() }
+        .orElse(null)
 
-    override fun findByLikerAccountId(likerAccountId: String): List<CharacterLike> {
-        return jpaRepo.findByLikerAccountIdOrderByCreatedAtDesc(likerAccountId).stream()
-            .map { it.toDomain() }
-            .toList()
-    }
+    override fun findByLikerAccountId(likerAccountId: String): List<CharacterLike> = jpaRepo.findByLikerAccountIdOrderByCreatedAtDesc(likerAccountId).stream()
+        .map { it.toDomain() }
+        .toList()
 
-    override fun findByTargetOcid(targetOcid: String): List<CharacterLike> {
-        return jpaRepo.findByTargetOcidOrderByCreatedAtDesc(targetOcid).stream()
-            .map { it.toDomain() }
-            .toList()
-    }
+    override fun findByTargetOcid(targetOcid: String): List<CharacterLike> = jpaRepo.findByTargetOcidOrderByCreatedAtDesc(targetOcid).stream()
+        .map { it.toDomain() }
+        .toList()
 
     override fun save(like: CharacterLike): CharacterLike {
         requireNotNull(like) { "Like cannot be null" }
@@ -65,18 +59,12 @@ open class CharacterLikeRepositoryImpl(
         jpaRepo.deleteByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
     }
 
-    override fun countByTargetOcid(targetOcid: String): Long {
-        return jpaRepo.countByTargetOcid(targetOcid)
-    }
+    override fun countByTargetOcid(targetOcid: String): Long = jpaRepo.countByTargetOcid(targetOcid)
 
-    override fun countByLikerAccountId(likerAccountId: String): Long {
-        return jpaRepo.countByLikerAccountId(likerAccountId)
-    }
+    override fun countByLikerAccountId(likerAccountId: String): Long = jpaRepo.countByLikerAccountId(likerAccountId)
 
     override fun existsByTargetOcidAndLikerAccountId(
         targetOcid: String,
         likerAccountId: String,
-    ): Boolean {
-        return jpaRepo.existsByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
-    }
+    ): Boolean = jpaRepo.existsByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
 }

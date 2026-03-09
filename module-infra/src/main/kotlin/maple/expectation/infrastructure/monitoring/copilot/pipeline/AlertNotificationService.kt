@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service
 class AlertNotificationService(
     private val discordNotifier: DiscordNotifier,
     private val executor: LogicExecutor,
-    private val deDuplicationCache: DeDuplicationCache
+    private val deDuplicationCache: DeDuplicationCache,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(AlertNotificationService::class.java)
@@ -23,7 +23,7 @@ class AlertNotificationService(
     fun sendAlert(
         context: IncidentContext,
         aiSreService: java.util.Optional<AiSreService>,
-        signalDefinitions: List<SignalDefinition>
+        signalDefinitions: List<SignalDefinition>,
     ) {
         val now = System.currentTimeMillis()
 
@@ -44,7 +44,7 @@ class AlertNotificationService(
     fun sendAlertWithPlan(
         context: IncidentContext,
         plan: AiSreService.MitigationPlan,
-        signalDefinitions: List<SignalDefinition>
+        signalDefinitions: List<SignalDefinition>,
     ) {
         val now = System.currentTimeMillis()
 
@@ -61,7 +61,7 @@ class AlertNotificationService(
     fun forceSendAlert(
         context: IncidentContext,
         plan: AiSreService.MitigationPlan,
-        signalDefinitions: List<SignalDefinition>
+        signalDefinitions: List<SignalDefinition>,
     ) {
         val now = System.currentTimeMillis()
         log.info("[AlertNotificationService] Force sending alert: {}", context.incidentId)
@@ -72,7 +72,7 @@ class AlertNotificationService(
         context: IncidentContext,
         plan: AiSreService.MitigationPlan,
         signalDefinitions: List<SignalDefinition>,
-        timestamp: Long
+        timestamp: Long,
     ) {
         executor.executeVoidJava(
             {
@@ -81,7 +81,7 @@ class AlertNotificationService(
                 val annotatedSignals = context.anomalies.take(3).map { anomaly ->
                     DiscordNotifier.AnnotatedSignal(
                         signalMap[anomaly.signalId]!!,
-                        anomaly.currentValue
+                        anomaly.currentValue,
                     )
                 }
 
@@ -96,7 +96,12 @@ class AlertNotificationService(
                 val severity = if (context.anomalies.stream().anyMatch { "CRIT" == it.severity }) "CRIT" else "WARN"
 
                 val message = discordNotifier.formatIncidentMessage(
-                    context.incidentId, severity, annotatedSignals, hypotheses, actions)
+                    context.incidentId,
+                    severity,
+                    annotatedSignals,
+                    hypotheses,
+                    actions,
+                )
 
                 discordNotifier.send(message)
 
@@ -104,12 +109,11 @@ class AlertNotificationService(
 
                 log.info("[AlertNotificationService] Alert sent: {}", context.incidentId)
             },
-            TaskContext.of("AlertNotificationService", "SendDiscord", context.incidentId))
+            TaskContext.of("AlertNotificationService", "SendDiscord", context.incidentId),
+        )
     }
 
-    fun getCacheSize(): Int {
-        return deDuplicationCache.size()
-    }
+    fun getCacheSize(): Int = deDuplicationCache.size()
 
     fun clearCache() {
         deDuplicationCache.clear()
@@ -122,17 +126,20 @@ class AlertNotificationService(
             AiSreService.Hypothesis(
                 "AI SRE service not available - manual analysis required",
                 "LOW",
-                listOf("AI analysis disabled", "Manual investigation needed"))
+                listOf("AI analysis disabled", "Manual investigation needed"),
+            ),
         )
 
         val defaultActions = listOf(
             AiSreService.Action(1, "Review system logs", "LOW", "Identify root cause"),
             AiSreService.Action(2, "Check metrics dashboard", "LOW", "Verify anomaly details"),
-            AiSreService.Action(3, "Escalate to on-call engineer", "LOW", "Human intervention required"))
+            AiSreService.Action(3, "Escalate to on-call engineer", "LOW", "Human intervention required"),
+        )
 
         val rollbackPlan = AiSreService.RollbackPlan(
             "If symptoms worsen",
-            listOf("Revert recent changes", "Scale up resources"))
+            listOf("Revert recent changes", "Scale up resources"),
+        )
 
         return AiSreService.MitigationPlan(
             context.incidentId,
@@ -141,7 +148,7 @@ class AlertNotificationService(
             defaultActions,
             emptyList(),
             rollbackPlan,
-            "AI SRE service not available. Please enable ai.sre.enabled=true for AI-powered analysis."
+            "AI SRE service not available. Please enable ai.sre.enabled=true for AI-powered analysis.",
         )
     }
 }

@@ -1,13 +1,13 @@
 package maple.expectation.infrastructure.alert.channel
 
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import maple.expectation.infrastructure.alert.message.AlertMessage
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 
 /**
  * Local File Alert Channel (Tertiary Fallback)
@@ -39,19 +39,18 @@ import java.nio.file.StandardOpenOption
 @Component
 class LocalFileAlertChannel(
     private val logFilePath: Path,
-    private val executor: LogicExecutor
-) : AlertChannel, FallbackSupport {
+    private val executor: LogicExecutor,
+) : AlertChannel,
+    FallbackSupport {
 
     private val log = LoggerFactory.getLogger(LocalFileAlertChannel::class.java)
     private var fallback: AlertChannel? = null
 
-    override fun send(message: AlertMessage): Boolean {
-        return executor.executeOrDefault(
-            { writeToFile(message) },
-            false,
-            TaskContext.of("LocalFileAlertChannel", "Send", message.getTitle())
-        )
-    }
+    override fun send(message: AlertMessage): Boolean = executor.executeOrDefault(
+        { writeToFile(message) },
+        false,
+        TaskContext.of("LocalFileAlertChannel", "Send", message.getTitle()),
+    )
 
     /**
      * Write alert to file with checked exceptions.
@@ -70,7 +69,7 @@ class LocalFileAlertChannel(
             "[%s] %s\n```\n%s",
             message.getTitle(),
             message.getFormattedMessage(),
-            "LocalFile"
+            "LocalFile",
         )
 
         Files.writeString(
@@ -78,7 +77,7 @@ class LocalFileAlertChannel(
             logEntry,
             StandardOpenOption.CREATE,
             StandardOpenOption.WRITE,
-            StandardOpenOption.APPEND
+            StandardOpenOption.APPEND,
         )
 
         if (log.isInfoEnabled) {
@@ -93,7 +92,7 @@ class LocalFileAlertChannel(
         this.fallback = fallback
         log.info(
             "[LocalFileAlertChannel] Fallback channel set to {}",
-            if (fallback != null) fallback.getChannelName() else "none"
+            if (fallback != null) fallback.getChannelName() else "none",
         )
     }
 }

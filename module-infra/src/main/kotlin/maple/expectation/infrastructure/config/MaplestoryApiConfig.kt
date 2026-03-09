@@ -10,7 +10,6 @@ import org.springframework.http.client.reactive.ReactorClientHttpConnector
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.util.DefaultUriBuilderFactory
 import reactor.netty.http.client.HttpClient
-import java.time.Duration
 
 /**
  * Nexon Open API WebClient 설정
@@ -24,7 +23,7 @@ import java.time.Duration
 @Configuration
 @EnableConfigurationProperties(NexonApiProperties::class)
 class MaplestoryApiConfig(
-    private val properties: NexonApiProperties
+    private val properties: NexonApiProperties,
 ) {
 
     @Bean("mapleWebClient")
@@ -37,7 +36,7 @@ class MaplestoryApiConfig(
         val httpClient = HttpClient.create()
             .option(
                 ChannelOption.CONNECT_TIMEOUT_MILLIS,
-                properties.connectTimeout.toMillis().toInt()
+                properties.connectTimeout.toMillis().toInt(),
             )
             .responseTimeout(properties.responseTimeout)
             .compress(true)

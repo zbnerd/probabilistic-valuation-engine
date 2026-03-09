@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.scheduler
 
-import maple.expectation.core.port.out.QueueWriterPort
 import maple.expectation.core.domain.model.character.GameCharacter
+import maple.expectation.core.port.out.QueueWriterPort
 import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -20,12 +20,12 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(
     name = ["scheduler.expectation-calculation.enabled"],
     havingValue = "true",
-    matchIfMissing = false
+    matchIfMissing = false,
 )
 class ExpectationCalculationScheduler(
     private val queueWriter: QueueWriterPort,
     private val gameCharacterRepository: GameCharacterRepository,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(ExpectationCalculationScheduler::class.java)
 
@@ -61,7 +61,7 @@ class ExpectationCalculationScheduler(
                             characterPage.hasNext()
                         },
                         false,
-                        context
+                        context,
                     )
 
                     if (hasMore) {
@@ -72,7 +72,7 @@ class ExpectationCalculationScheduler(
                             log.info(
                                 "[ExpectationCalculation] Processed {} users, skipped {} (queue full)",
                                 processedCount,
-                                skippedCount
+                                skippedCount,
                             )
                         }
                     }
@@ -82,14 +82,12 @@ class ExpectationCalculationScheduler(
                     "[ExpectationCalculation] Full refresh completed: processed={}, skipped={}, queueSize={}",
                     processedCount,
                     skippedCount,
-                    queueWriter.size()
+                    queueWriter.size(),
                 )
             },
-            context
+            context,
         )
     }
 
-    private fun addTaskForUser(userIgn: String): Boolean {
-        return queueWriter.addLowPriorityTask(userIgn)
-    }
+    private fun addTaskForUser(userIgn: String): Boolean = queueWriter.addLowPriorityTask(userIgn)
 }

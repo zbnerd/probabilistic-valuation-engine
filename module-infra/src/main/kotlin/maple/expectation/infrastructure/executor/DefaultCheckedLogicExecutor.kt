@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory
  * to ensure proper bean name for @Qualifier("checkedLogicExecutor") injection.
  */
 class DefaultCheckedLogicExecutor(
-    private val pipeline: ExecutionPipeline
+    private val pipeline: ExecutionPipeline,
 ) : CheckedLogicExecutor {
 
     private val log = LoggerFactory.getLogger(DefaultCheckedLogicExecutor::class.java)
@@ -53,7 +53,7 @@ class DefaultCheckedLogicExecutor(
         } catch (t: Throwable) {
             throw IllegalStateException(
                 "Unexpected Throwable (not Error/Exception): ${t.javaClass.name}",
-                t
+                t,
             )
         }
     }
@@ -65,7 +65,7 @@ class DefaultCheckedLogicExecutor(
     override fun <T> executeUnchecked(
         task: CheckedSupplier<T>,
         context: TaskContext,
-        mapper: java.util.function.Function<Exception, RuntimeException>
+        mapper: java.util.function.Function<Exception, RuntimeException>,
     ): T {
         requireNotNull(task) { "task must not be null" }
         requireNotNull(context) { "context must not be null" }
@@ -89,7 +89,7 @@ class DefaultCheckedLogicExecutor(
             if (t !is Exception) {
                 throw IllegalStateException(
                     "Task threw non-Exception Throwable: ${t.javaClass.name}",
-                    t
+                    t,
                 )
             }
 
@@ -113,7 +113,7 @@ class DefaultCheckedLogicExecutor(
         task: CheckedSupplier<T>,
         finalizer: CheckedRunnable,
         context: TaskContext,
-        mapper: java.util.function.Function<Exception, RuntimeException>
+        mapper: java.util.function.Function<Exception, RuntimeException>,
     ): T {
         requireNotNull(task) { "task must not be null" }
         requireNotNull(finalizer) { "finalizer must not be null" }
@@ -128,7 +128,7 @@ class DefaultCheckedLogicExecutor(
             @Suppress("UNCHECKED_CAST")
             result = pipeline.executeRaw(
                 ThrowingSupplier { task.get() },
-                context
+                context,
             )
         } catch (t: Throwable) {
             primary = t
@@ -179,7 +179,7 @@ class DefaultCheckedLogicExecutor(
         // Throwable (비-Exception) → 계약 위반
         throw IllegalStateException(
             "Task threw non-Exception Throwable: ${primary.javaClass.name}",
-            primary
+            primary,
         )
     }
 
@@ -198,23 +198,21 @@ class DefaultCheckedLogicExecutor(
      */
     private fun applyMapper(
         mapper: java.util.function.Function<Exception, RuntimeException>,
-        ex: Exception
-    ): RuntimeException {
-        return try {
-            val mapped = mapper.apply(ex) ?: throw IllegalStateException(
-                "Exception mapper returned null for: ${ex.javaClass.name}"
-            )
-            mapped
-        } catch (e: Error) {
-            throw e
-        } catch (re: RuntimeException) {
-            throw re
-        } catch (mt: Throwable) {
-            throw IllegalStateException(
-                "Exception mapper violated contract (threw non-RuntimeException): ${mt.javaClass.name}",
-                mt
-            )
-        }
+        ex: Exception,
+    ): RuntimeException = try {
+        val mapped = mapper.apply(ex) ?: throw IllegalStateException(
+            "Exception mapper returned null for: ${ex.javaClass.name}",
+        )
+        mapped
+    } catch (e: Error) {
+        throw e
+    } catch (re: RuntimeException) {
+        throw re
+    } catch (mt: Throwable) {
+        throw IllegalStateException(
+            "Exception mapper violated contract (threw non-RuntimeException): ${mt.javaClass.name}",
+            mt,
+        )
     }
 
     /**

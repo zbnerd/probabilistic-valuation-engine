@@ -22,7 +22,7 @@ data class CubeRate(
     val slot: Int,
     val grade: String,
     val level: Int,
-    val part: String
+    val part: String,
 ) {
     init {
         require(rate in 0.0..1.0) { "rate must be between 0.0 and 1.0, got: $rate" }
@@ -38,8 +38,6 @@ data class CubeRate(
          * Create a cube rate with minimal required fields.
          */
         @JvmStatic
-        fun of(cubeType: CubeType, optionName: String, rate: Double): CubeRate {
-            return CubeRate(cubeType, optionName, rate, 1, "EPIC", 200, "모자")
-        }
+        fun of(cubeType: CubeType, optionName: String, rate: Double): CubeRate = CubeRate(cubeType, optionName, rate, 1, "EPIC", 200, "모자")
     }
 }

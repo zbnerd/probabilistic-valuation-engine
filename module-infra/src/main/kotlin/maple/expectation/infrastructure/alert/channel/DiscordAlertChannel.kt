@@ -45,12 +45,12 @@ import org.springframework.web.reactive.function.client.WebClientRequestExceptio
 @ConditionalOnProperty(
     name = ["alert.stateless.enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 class DiscordAlertChannel(
     @Qualifier("alertWebClient") private val alertWebClient: WebClient,
     private val executor: LogicExecutor,
-    private val alertFeatureProperties: AlertFeatureProperties
+    private val alertFeatureProperties: AlertFeatureProperties,
 ) : AlertChannel {
 
     private val log = LoggerFactory.getLogger(DiscordAlertChannel::class.java)
@@ -65,7 +65,7 @@ class DiscordAlertChannel(
         return executor.executeWithFallback(
             { sendToDiscord(message) },
             { e -> handleWebClientException(message, e) },
-            TaskContext.of("AlertChannel", "Discord", message.getTitle())
+            TaskContext.of("AlertChannel", "Discord", message.getTitle()),
         )
     }
 
@@ -94,13 +94,13 @@ class DiscordAlertChannel(
             log.info(
                 "[DiscordAlertChannel] Alert sent successfully to {}: {}",
                 message.getTitle(),
-                response.statusCode
+                response.statusCode,
             )
         } else if (!success && log.isWarnEnabled) {
             log.warn(
                 "[DiscordAlertChannel] Alert failed with status {}: {}",
                 message.getTitle(),
-                response?.statusCode
+                response?.statusCode,
             )
         }
 

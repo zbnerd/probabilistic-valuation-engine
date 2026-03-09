@@ -1,7 +1,5 @@
 package maple.expectation.core.port.out
 
-import java.util.Map
-
 /**
  * 원자적 Fetch 전략 인터페이스 (LikeSync)
  *
@@ -41,6 +39,6 @@ interface AtomicFetchStrategy {
 
     enum class StrategyType {
         LUA_SCRIPT,
-        RENAME
+        RENAME,
     }
 }

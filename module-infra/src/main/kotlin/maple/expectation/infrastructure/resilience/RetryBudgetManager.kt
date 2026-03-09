@@ -2,16 +2,16 @@ package maple.expectation.infrastructure.resilience
 
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.LongAdder
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 
 @Component
 class RetryBudgetManager(
     private val properties: RetryBudgetProperties,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
     private val logger = LoggerFactory.getLogger(RetryBudgetManager::class.java)
 
@@ -41,7 +41,7 @@ class RetryBudgetManager(
                 serviceName,
                 currentCount,
                 maxRetries,
-                getWindowElapsedSeconds()
+                getWindowElapsedSeconds(),
             )
             return false
         }
@@ -53,7 +53,7 @@ class RetryBudgetManager(
             "[RetryBudget] 예산 허용. serviceName={}, count={}/{}",
             serviceName,
             currentCount + 1,
-            maxRetries
+            maxRetries,
         )
         return true
     }
@@ -95,7 +95,7 @@ class RetryBudgetManager(
             logger.debug(
                 "[RetryBudget] 윈도우 경과로 리셋. elapsed={}s, limit={}s",
                 currentEpoch - startEpoch,
-                windowSize
+                windowSize,
             )
         }
     }

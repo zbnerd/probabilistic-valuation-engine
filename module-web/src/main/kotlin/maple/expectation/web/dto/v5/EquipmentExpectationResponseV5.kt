@@ -14,14 +14,14 @@ data class EquipmentExpectationResponseV5(
     val totalCostText: String,
     val totalCostBreakdown: CostBreakdownDto,
     val maxPresetNo: Int,
-    val presets: List<PresetExpectation>
+    val presets: List<PresetExpectation>,
 ) {
     data class PresetExpectation(
         val presetNo: Int,
         val totalExpectedCost: BigDecimal,
         val totalCostText: String,
         val costBreakdown: CostBreakdownDto,
-        val items: List<ItemExpectationV5>
+        val items: List<ItemExpectationV5>,
     )
 
     data class ItemExpectationV5(
@@ -42,7 +42,7 @@ data class EquipmentExpectationResponseV5(
         val blackCubeExpectation: CubeExpectationDto,
         val additionalCubeExpectation: CubeExpectationDto,
         val starforceExpectation: StarforceExpectationDto,
-        val flameExpectation: FlameExpectationDto
+        val flameExpectation: FlameExpectationDto,
     )
 
     data class CubeExpectationDto(
@@ -51,7 +51,7 @@ data class EquipmentExpectationResponseV5(
         val expectedTrials: BigDecimal,
         val currentGrade: String,
         val targetGrade: String,
-        val potential: String
+        val potential: String,
     ) {
         companion object {
             @JvmStatic
@@ -61,7 +61,7 @@ data class EquipmentExpectationResponseV5(
                 expectedTrials = BigDecimal.ZERO,
                 currentGrade = "",
                 targetGrade = "",
-                potential = ""
+                potential = "",
             )
         }
     }
@@ -75,7 +75,7 @@ data class EquipmentExpectationResponseV5(
         val expectedDestroyCountWithout: BigDecimal,
         val costWithDestroyPrevention: BigDecimal,
         val costWithDestroyPreventionText: String,
-        val expectedDestroyCountWith: BigDecimal
+        val expectedDestroyCountWith: BigDecimal,
     ) {
         companion object {
             @JvmStatic
@@ -88,7 +88,7 @@ data class EquipmentExpectationResponseV5(
                 expectedDestroyCountWithout = BigDecimal.ZERO,
                 costWithDestroyPrevention = BigDecimal.ZERO,
                 costWithDestroyPreventionText = "0",
-                expectedDestroyCountWith = BigDecimal.ZERO
+                expectedDestroyCountWith = BigDecimal.ZERO,
             )
         }
     }
@@ -96,14 +96,14 @@ data class EquipmentExpectationResponseV5(
     data class FlameExpectationDto(
         val powerfulFlameTrials: BigDecimal,
         val eternalFlameTrials: BigDecimal,
-        val abyssFlameTrials: BigDecimal
+        val abyssFlameTrials: BigDecimal,
     ) {
         companion object {
             @JvmStatic
             fun empty() = FlameExpectationDto(
                 powerfulFlameTrials = BigDecimal.ZERO,
                 eternalFlameTrials = BigDecimal.ZERO,
-                abyssFlameTrials = BigDecimal.ZERO
+                abyssFlameTrials = BigDecimal.ZERO,
             )
         }
     }
@@ -113,7 +113,7 @@ data class EquipmentExpectationResponseV5(
         val redCubeCost: BigDecimal,
         val additionalCubeCost: BigDecimal,
         val starforceCost: BigDecimal,
-        val flameCost: BigDecimal
+        val flameCost: BigDecimal,
     ) {
         companion object {
             @JvmStatic
@@ -122,7 +122,7 @@ data class EquipmentExpectationResponseV5(
                 redCubeCost = BigDecimal.ZERO,
                 additionalCubeCost = BigDecimal.ZERO,
                 starforceCost = BigDecimal.ZERO,
-                flameCost = BigDecimal.ZERO
+                flameCost = BigDecimal.ZERO,
             )
         }
     }

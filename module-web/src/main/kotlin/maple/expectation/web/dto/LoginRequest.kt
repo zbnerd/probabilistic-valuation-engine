@@ -20,7 +20,7 @@ data class LoginRequest(
     val apiKey: String,
 
     @field:NotBlank(message = "캐릭터 닉네임은 필수입니다.")
-    val userIgn: String
+    val userIgn: String,
 ) {
     // Java Record 호환 메서드 (기존 Java 코드와의 호환성 유지)
     /** @return API Key (Java record-style accessor) */
@@ -34,9 +34,7 @@ data class LoginRequest(
      *
      * <p>TraceAspect 등에서 자동 로깅 시 API Key 노출 방지
      */
-    override fun toString(): String {
-        return "LoginRequest[apiKey=${maskApiKey(apiKey)}, userIgn=$userIgn]"
-    }
+    override fun toString(): String = "LoginRequest[apiKey=${maskApiKey(apiKey)}, userIgn=$userIgn]"
 
     /** API Key 마스킹 (앞 4자리 + **** + 뒤 4자리) */
     private fun maskApiKey(key: String): String {

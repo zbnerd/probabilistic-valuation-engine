@@ -1,8 +1,8 @@
 package maple.expectation.domain.v2
 
 import jakarta.persistence.*
-import maple.expectation.error.exception.InsufficientPointException
 import java.util.UUID
+import maple.expectation.error.exception.InsufficientPointException
 
 /**
  * Member 엔티티 (Rich Domain Model)
@@ -44,15 +44,11 @@ class Member {
     /** 시스템 관리자용 팩토리 메서드 (고정 UUID) */
     companion object {
         @JvmStatic
-        fun createSystemAdmin(uuid: String, initialPoint: Long): Member {
-            return Member(uuid, initialPoint)
-        }
+        fun createSystemAdmin(uuid: String, initialPoint: Long): Member = Member(uuid, initialPoint)
 
         /** 게스트용 팩토리 메서드 (랜덤 UUID) */
         @JvmStatic
-        fun createGuest(initialPoint: Long): Member {
-            return Member(UUID.randomUUID().toString(), initialPoint)
-        }
+        fun createGuest(initialPoint: Long): Member = Member(UUID.randomUUID().toString(), initialPoint)
     }
 
     // ==================== Business Logic (Issue #120) ====================
@@ -63,9 +59,7 @@ class Member {
      * @param amount 확인할 금액
      * @return 잔액이 충분하면 true
      */
-    fun hasEnoughPoint(amount: Long): Boolean {
-        return this.point >= amount
-    }
+    fun hasEnoughPoint(amount: Long): Boolean = this.point >= amount
 
     /**
      * 포인트 차감 (Rich Domain Model)
@@ -93,11 +87,9 @@ class Member {
         }
     }
 
-    private fun maskUuid(): String {
-        return if (this.uuid == null || this.uuid!!.length < 8) {
-            "****"
-        } else {
-            this.uuid!!.substring(0, 4) + "****"
-        }
+    private fun maskUuid(): String = if (this.uuid == null || this.uuid!!.length < 8) {
+        "****"
+    } else {
+        this.uuid!!.substring(0, 4) + "****"
     }
 }

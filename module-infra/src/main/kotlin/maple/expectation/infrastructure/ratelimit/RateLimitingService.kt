@@ -11,12 +11,12 @@ import org.springframework.stereotype.Service
     prefix = "ratelimit",
     name = ["enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 class RateLimitingService(
     private val ipRateLimiter: IpBasedRateLimiter,
     private val userRateLimiter: UserBasedRateLimiter,
-    private val properties: RateLimitProperties
+    private val properties: RateLimitProperties,
 ) {
     fun checkRateLimit(context: RateLimitContext): ConsumeResult {
         if (context.isAuthenticated() && userRateLimiter.isEnabled()) {

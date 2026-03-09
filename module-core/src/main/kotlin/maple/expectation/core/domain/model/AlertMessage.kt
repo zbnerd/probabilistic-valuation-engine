@@ -14,7 +14,7 @@ package maple.expectation.core.domain.model
 data class AlertMessage(
     val title: String,
     val message: String,
-    val error: Throwable? = null
+    val error: Throwable? = null,
 ) {
     init {
         require(title.isNotBlank()) { "title cannot be null or blank" }
@@ -26,12 +26,10 @@ data class AlertMessage(
      *
      * @return the formatted message
      */
-    fun getFormattedMessage(): String {
-        return if (error != null) {
-            String.format("**%s**\n```\n%s", message, error.toString())
-        } else {
-            String.format("**%s**", message)
-        }
+    fun getFormattedMessage(): String = if (error != null) {
+        String.format("**%s**\n```\n%s", message, error.toString())
+    } else {
+        String.format("**%s**", message)
     }
 
     companion object {
@@ -39,16 +37,12 @@ data class AlertMessage(
          * Create an alert message without error.
          */
         @JvmStatic
-        fun of(title: String, message: String): AlertMessage {
-            return AlertMessage(title, message, null)
-        }
+        fun of(title: String, message: String): AlertMessage = AlertMessage(title, message, null)
 
         /**
          * Create an alert message with error.
          */
         @JvmStatic
-        fun withError(title: String, message: String, error: Throwable): AlertMessage {
-            return AlertMessage(title, message, error)
-        }
+        fun withError(title: String, message: String, error: Throwable): AlertMessage = AlertMessage(title, message, error)
     }
 }

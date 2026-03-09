@@ -18,37 +18,33 @@ data class LikeSyncFailedEvent(
     val sourceKey: String,
     val data: Map<String, Long>,
     val failedAt: Instant,
-    val errorMessage: String
+    val errorMessage: String,
 ) {
     companion object {
         fun fromFetchResult(
             result: FetchResult,
             sourceKey: String,
-            cause: Throwable?
-        ): LikeSyncFailedEvent {
-            return LikeSyncFailedEvent(
-                result.tempKey,
-                sourceKey,
-                result.data,
-                Instant.now(),
-                cause?.message ?: "Unknown error"
-            )
-        }
+            cause: Throwable?,
+        ): LikeSyncFailedEvent = LikeSyncFailedEvent(
+            result.tempKey,
+            sourceKey,
+            result.data,
+            Instant.now(),
+            cause?.message ?: "Unknown error",
+        )
 
         fun forSingleEntry(
             userIgn: String,
             count: Long,
             sourceKey: String,
-            cause: Throwable?
-        ): LikeSyncFailedEvent {
-            return LikeSyncFailedEvent(
-                null,
-                sourceKey,
-                mapOf(userIgn to count),
-                Instant.now(),
-                cause?.message ?: "Unknown error"
-            )
-        }
+            cause: Throwable?,
+        ): LikeSyncFailedEvent = LikeSyncFailedEvent(
+            null,
+            sourceKey,
+            mapOf(userIgn to count),
+            Instant.now(),
+            cause?.message ?: "Unknown error",
+        )
     }
 
     fun totalCount(): Long = data.values.sum()

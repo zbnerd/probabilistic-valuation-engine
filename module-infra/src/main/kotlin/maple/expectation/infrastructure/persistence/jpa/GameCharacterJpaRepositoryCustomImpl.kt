@@ -1,14 +1,14 @@
 package maple.expectation.infrastructure.persistence.jpa
 
 import jakarta.persistence.EntityManager
+import java.time.LocalDateTime
 import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity
 import org.springframework.stereotype.Component
-import java.time.LocalDateTime
 
 /** Implementation of custom JPA repository methods for GameCharacter. */
 @Component
 open class GameCharacterJpaRepositoryCustomImpl(
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
 ) : GameCharacterJpaRepositoryCustom {
 
     override fun findActiveCharacters(): List<GameCharacterJpaEntity> {
@@ -20,7 +20,7 @@ open class GameCharacterJpaRepositoryCustomImpl(
                 WHERE gc.updatedAt > :threshold
                 ORDER BY gc.updatedAt DESC
                 """,
-                GameCharacterJpaEntity::class.java
+                GameCharacterJpaEntity::class.java,
             )
             .setParameter("threshold", threshold)
             .resultList

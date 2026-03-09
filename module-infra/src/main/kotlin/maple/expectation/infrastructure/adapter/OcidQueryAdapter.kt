@@ -18,19 +18,19 @@ import org.springframework.stereotype.Component
  */
 @Component
 class OcidQueryAdapter(
-    private val repository: GameCharacterJpaRepository
+    private val repository: GameCharacterJpaRepository,
 ) : OcidQueryPort {
 
     override fun findAllOcids(pageRequest: PageRequest): Page<String> {
         val springPageable = SpringPageRequest.of(pageRequest.page, pageRequest.size)
         val springPage = repository.findAll(springPageable)
-        
+
         return Page(
             content = springPage.content.mapNotNull { it.ocid },
             pageNumber = springPage.number,
             pageSize = springPage.size,
             totalElements = springPage.totalElements,
-            hasNext = springPage.hasNext()
+            hasNext = springPage.hasNext(),
         )
     }
 }

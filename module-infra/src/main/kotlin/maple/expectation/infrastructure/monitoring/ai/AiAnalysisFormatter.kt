@@ -5,8 +5,7 @@ import org.springframework.stereotype.Component
 @Component
 class AiAnalysisFormatter {
 
-    fun formatAsMarkdown(result: AiSreService.AiAnalysisResult): String {
-        return """
+    fun formatAsMarkdown(result: AiSreService.AiAnalysisResult): String = """
             ## AI SRE 분석 결과
 
             **근본 원인**: ${result.rootCause}
@@ -21,8 +20,7 @@ class AiAnalysisFormatter {
             ---
             *분석 출처: ${result.analysisSource}*
             *${result.disclaimer}*
-            """.trimIndent()
-    }
+    """.trimIndent()
 
     fun formatAsMarkdown(plan: AiSreService.MitigationPlan): String {
         val sb = StringBuilder()
@@ -62,8 +60,7 @@ class AiAnalysisFormatter {
         return sb.toString()
     }
 
-    fun formatForDiscord(result: AiSreService.AiAnalysisResult): String {
-        return """
+    fun formatForDiscord(result: AiSreService.AiAnalysisResult): String = """
             **🤖 AI SRE 분석**
 
             **🔍 근본 원인**: ${result.rootCause}
@@ -75,8 +72,7 @@ class AiAnalysisFormatter {
 
             ---
             *출처: ${result.analysisSource} | ${result.disclaimer}*
-            """.trimIndent()
-    }
+    """.trimIndent()
 
     fun formatForDiscord(plan: AiSreService.MitigationPlan): String {
         val sb = StringBuilder()

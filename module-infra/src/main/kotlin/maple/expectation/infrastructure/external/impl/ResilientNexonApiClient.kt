@@ -20,7 +20,6 @@ import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClientResponseException
 
-
 /**
  * Resilient Nexon API Client - 외부 API 호출에 회복 탄력성 패턴을 적용하는 퍼사드
  *
@@ -56,7 +55,7 @@ class ResilientNexonApiClient(
     private val delegate: NexonApiClient,
     private val fallbackHandler: FallbackHandler,
     private val retryBudgetManager: RetryBudgetManager,
-    private val outboxFallbackManager: OutboxFallbackManager
+    private val outboxFallbackManager: OutboxFallbackManager,
 ) : NexonApiClient {
 
     private val logger = org.slf4j.LoggerFactory.getLogger(ResilientNexonApiClient::class.java)
@@ -84,7 +83,7 @@ class ResilientNexonApiClient(
         if (!retryBudgetManager.tryAcquire(NEXON_API)) {
             logger.warn("[RetryBudget] OCID 조회 예산 소진으로 즉시 실패. name={}", name)
             return CompletableFuture.failedFuture(
-                ExternalServiceException("Retry budget exceeded for OCID lookup", null)
+                ExternalServiceException("Retry budget exceeded for OCID lookup", null),
             )
         }
         return delegate.getOcidByCharacterName(name)
@@ -107,7 +106,7 @@ class ResilientNexonApiClient(
         if (!retryBudgetManager.tryAcquire(NEXON_API)) {
             logger.warn("[RetryBudget] Character Basic 조회 예산 소진으로 즉시 실패. ocid={}", ocid)
             return CompletableFuture.failedFuture(
-                ExternalServiceException("Retry budget exceeded for Character Basic lookup", null)
+                ExternalServiceException("Retry budget exceeded for Character Basic lookup", null),
             )
         }
         return delegate.getCharacterBasic(ocid)
@@ -130,7 +129,7 @@ class ResilientNexonApiClient(
         if (!retryBudgetManager.tryAcquire(NEXON_API)) {
             logger.warn("[RetryBudget] Item Data 조회 예산 소진으로 즉시 실패. ocid={}", ocid)
             return CompletableFuture.failedFuture(
-                ExternalServiceException("Retry budget exceeded for Item Data lookup", null)
+                ExternalServiceException("Retry budget exceeded for Item Data lookup", null),
             )
         }
         return delegate.getItemDataByOcid(ocid)
@@ -153,7 +152,7 @@ class ResilientNexonApiClient(
         if (!retryBudgetManager.tryAcquire(NEXON_API)) {
             logger.warn("[RetryBudget] Cube History 조회 예산 소진으로 즉시 실패. ocid={}", ocid)
             return CompletableFuture.failedFuture(
-                ExternalServiceException("Retry budget exceeded for Cube History lookup", null)
+                ExternalServiceException("Retry budget exceeded for Cube History lookup", null),
             )
         }
         return delegate.getCubeHistory(ocid)
@@ -175,7 +174,7 @@ class ResilientNexonApiClient(
         outboxFallbackManager.saveToOutbox(
             requestId,
             NexonApiOutbox.NexonApiEventType.GET_OCID,
-            name
+            name,
         )
 
         return fallbackHandler.errorFuture(t)
@@ -190,7 +189,7 @@ class ResilientNexonApiClient(
      */
     fun getCharacterBasicFallback(
         ocid: String,
-        t: Throwable
+        t: Throwable,
     ): CompletableFuture<CharacterBasicResponse> {
         fallbackHandler.handleIgnoreMarker(t)
 
@@ -199,7 +198,7 @@ class ResilientNexonApiClient(
             logger.warn(
                 "[Resilience] Character basic 조회 4xx - 캐릭터 미존재 처리. ocid={}, status={}",
                 ocid,
-                root.statusCode
+                root.statusCode,
             )
             return fallbackHandler.clientErrorFuture(ocid)
         }
@@ -208,7 +207,7 @@ class ResilientNexonApiClient(
         return fallbackHandler.serverErrorFuture(
             ocid,
             NexonApiOutbox.NexonApiEventType.GET_CHARACTER_BASIC,
-            t
+            t,
         )
     }
 
@@ -224,13 +223,11 @@ class ResilientNexonApiClient(
      *   <li><b>시나리오 B</b>: 캐시도 없음 → Outbox 적재 + 알림 발송 → 실패 반환
      * </ul>
      */
-    fun getItemDataFallback(ocid: String, t: Throwable): CompletableFuture<EquipmentResponse> {
-        return fallbackHandler.handleItemDataFallback(
-            ocid,
-            NexonApiOutbox.NexonApiEventType.GET_ITEM_DATA,
-            t
-        )
-    }
+    fun getItemDataFallback(ocid: String, t: Throwable): CompletableFuture<EquipmentResponse> = fallbackHandler.handleItemDataFallback(
+        ocid,
+        NexonApiOutbox.NexonApiEventType.GET_ITEM_DATA,
+        t,
+    )
 
     /**
      * 큐브 사용 내역 조회 fallback (비동기)
@@ -247,7 +244,7 @@ class ResilientNexonApiClient(
             logger.warn(
                 "[Resilience] Cube History 조회 4xx - 캐릭터 미존재 처리. ocid={}, status={}",
                 ocid,
-                root.statusCode
+                root.statusCode,
             )
             return fallbackHandler.clientErrorFuture(ocid)
         }
@@ -256,7 +253,7 @@ class ResilientNexonApiClient(
         return fallbackHandler.serverErrorFuture(
             ocid,
             NexonApiOutbox.NexonApiEventType.GET_CUBES,
-            t
+            t,
         )
     }
 
@@ -276,7 +273,5 @@ class ResilientNexonApiClient(
      *
      * @return 활성화 여부
      */
-    fun isOutboxFallbackEnabled(): Boolean {
-        return outboxFallbackManager.isEnabled
-    }
+    fun isOutboxFallbackEnabled(): Boolean = outboxFallbackManager.isEnabled
 }

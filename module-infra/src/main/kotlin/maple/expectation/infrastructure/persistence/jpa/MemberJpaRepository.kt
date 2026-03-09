@@ -41,7 +41,7 @@ interface MemberJpaRepository : JpaRepository<Member, Long> {
         """
         UPDATE Member m SET m.point = m.point - :amount
         WHERE m.uuid = :uuid AND m.point >= :amount
-        """
+        """,
     )
     fun decreasePoint(@Param("uuid") uuid: String?, @Param("amount") amount: Long?): Int
 

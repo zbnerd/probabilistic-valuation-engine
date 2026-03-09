@@ -11,5 +11,5 @@ package maple.expectation.infrastructure.alert
 enum class AlertPriority {
     CRITICAL,
     NORMAL,
-    BACKGROUND
+    BACKGROUND,
 }

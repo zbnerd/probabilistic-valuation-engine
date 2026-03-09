@@ -26,5 +26,5 @@ import jakarta.validation.Payload
 annotation class ValidCorsOrigin(
     val message: String = "유효하지 않은 CORS 오리진이 포함되어 있습니다.",
     val groups: Array<kotlin.reflect.KClass<*>> = [],
-    val payload: Array<kotlin.reflect.KClass<out Payload>> = []
+    val payload: Array<kotlin.reflect.KClass<out Payload>> = [],
 )

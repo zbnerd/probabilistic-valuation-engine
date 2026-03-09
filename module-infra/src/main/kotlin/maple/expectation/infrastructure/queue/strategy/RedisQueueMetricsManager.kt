@@ -18,48 +18,48 @@ import maple.expectation.infrastructure.queue.QueueType
  */
 class RedisQueueMetricsManager(private val meterRegistry: MeterRegistry) {
 
-  /** 카운터 캐시 (성능 최적화) */
-  private val cachedPendingCount = AtomicLong(0)
-  private val cachedInflightCount = AtomicLong(0)
-  private val cachedRetryCount = AtomicLong(0)
-  private val cachedDlqCount = AtomicLong(0)
+    /** 카운터 캐시 (성능 최적화) */
+    private val cachedPendingCount = AtomicLong(0)
+    private val cachedInflightCount = AtomicLong(0)
+    private val cachedRetryCount = AtomicLong(0)
+    private val cachedDlqCount = AtomicLong(0)
 
-  /**
-   * 메트릭 등록
-   *
-   * @param strategyType 큐 전략 타입 (메트릭 태그용)
-   */
-  fun registerMetrics(strategyType: QueueType) {
-    val strategyTag = strategyType.name
+    /**
+     * 메트릭 등록
+     *
+     * @param strategyType 큐 전략 타입 (메트릭 태그용)
+     */
+    fun registerMetrics(strategyType: QueueType) {
+        val strategyTag = strategyType.name
 
-    Gauge.builder("queue.pending", cachedPendingCount) { it.get().toDouble() }
-        .tag("strategy", strategyTag)
-        .description("대기 중인 메시지 수")
-        .register(meterRegistry)
+        Gauge.builder("queue.pending", cachedPendingCount) { it.get().toDouble() }
+            .tag("strategy", strategyTag)
+            .description("대기 중인 메시지 수")
+            .register(meterRegistry)
 
-    Gauge.builder("queue.inflight", cachedInflightCount) { it.get().toDouble() }
-        .tag("strategy", strategyTag)
-        .description("처리 중인 메시지 수")
-        .register(meterRegistry)
+        Gauge.builder("queue.inflight", cachedInflightCount) { it.get().toDouble() }
+            .tag("strategy", strategyTag)
+            .description("처리 중인 메시지 수")
+            .register(meterRegistry)
 
-    Gauge.builder("queue.retry", cachedRetryCount) { it.get().toDouble() }
-        .tag("strategy", strategyTag)
-        .description("재시도 대기 중인 메시지 수")
-        .register(meterRegistry)
+        Gauge.builder("queue.retry", cachedRetryCount) { it.get().toDouble() }
+            .tag("strategy", strategyTag)
+            .description("재시도 대기 중인 메시지 수")
+            .register(meterRegistry)
 
-    Gauge.builder("queue.dlq", cachedDlqCount) { it.get().toDouble() }
-        .tag("strategy", strategyTag)
-        .description("DLQ 메시지 수")
-        .register(meterRegistry)
-  }
+        Gauge.builder("queue.dlq", cachedDlqCount) { it.get().toDouble() }
+            .tag("strategy", strategyTag)
+            .description("DLQ 메시지 수")
+            .register(meterRegistry)
+    }
 
-  // ==================== Counter Accessors ====================
+    // ==================== Counter Accessors ====================
 
-  fun getCachedPendingCount(): AtomicLong = cachedPendingCount
+    fun getCachedPendingCount(): AtomicLong = cachedPendingCount
 
-  fun getCachedInflightCount(): AtomicLong = cachedInflightCount
+    fun getCachedInflightCount(): AtomicLong = cachedInflightCount
 
-  fun getCachedRetryCount(): AtomicLong = cachedRetryCount
+    fun getCachedRetryCount(): AtomicLong = cachedRetryCount
 
-  fun getCachedDlqCount(): AtomicLong = cachedDlqCount
+    fun getCachedDlqCount(): AtomicLong = cachedDlqCount
 }

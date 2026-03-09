@@ -20,13 +20,13 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(
     name = ["scheduler.buffer-recovery.enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 class BufferRecoveryScheduler(
     private val redisBufferStrategy: RedisBufferStrategy<*>,
     private val lockStrategy: LockStrategy,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(BufferRecoveryScheduler::class.java)
 
@@ -43,14 +43,14 @@ class BufferRecoveryScheduler(
                 lockStrategy.executeWithLock(
                     "scheduler:buffer-recovery:retry",
                     0,
-                    30
+                    30,
                 ) {
                     doProcessRetryQueue()
                     null
                 }
             },
             null,
-            TaskContext.of("Scheduler", "Buffer.ProcessRetry")
+            TaskContext.of("Scheduler", "Buffer.ProcessRetry"),
         )
     }
 
@@ -70,14 +70,14 @@ class BufferRecoveryScheduler(
                 lockStrategy.executeWithLock(
                     "scheduler:buffer-recovery:redrive",
                     0,
-                    60
+                    60,
                 ) {
                     doRedriveExpiredInflight()
                     null
                 }
             },
             null,
-            TaskContext.of("Scheduler", "Buffer.Redrive")
+            TaskContext.of("Scheduler", "Buffer.Redrive"),
         )
     }
 
@@ -105,7 +105,7 @@ class BufferRecoveryScheduler(
             log.warn(
                 "[BufferRecovery] Redriven {} expired INFLIGHT messages (skipped: {})",
                 redriveCount,
-                skipCount
+                skipCount,
             )
         }
     }

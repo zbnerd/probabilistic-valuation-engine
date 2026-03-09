@@ -12,7 +12,7 @@ import org.springframework.cache.CacheManager
  */
 class RestrictedCacheManager(
     private val delegate: CacheManager,
-    private val allowedCacheNames: Set<String>
+    private val allowedCacheNames: Set<String>,
 ) : CacheManager {
 
     override fun getCache(name: String): Cache? {
@@ -23,7 +23,5 @@ class RestrictedCacheManager(
     }
 
     /** 의도적으로 축소 반환: delegate가 반환하는 이름과 불일치해도 정상. L2에는 expectationResult만 허용하므로, 이 값만 반환한다. */
-    override fun getCacheNames(): Collection<String> {
-        return allowedCacheNames
-    }
+    override fun getCacheNames(): Collection<String> = allowedCacheNames
 }

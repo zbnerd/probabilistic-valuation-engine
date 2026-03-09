@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.security
 
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.Base64
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import org.springframework.stereotype.Component
 
 /**
  * 넥슨 계정 식별자 생성기
@@ -17,7 +17,7 @@ import java.util.Base64
  */
 @Component
 class AccountIdGenerator(
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     /**
      * myOcids로부터 계정 식별자를 생성합니다.
@@ -34,7 +34,7 @@ class AccountIdGenerator(
                 val hash = digest.digest(canonical.toByteArray(StandardCharsets.UTF_8))
                 Base64.getUrlEncoder().withoutPadding().encodeToString(hash)
             },
-            TaskContext.of("AccountId", "Generate")
+            TaskContext.of("AccountId", "Generate"),
         )
     }
 }

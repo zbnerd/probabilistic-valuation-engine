@@ -2,8 +2,8 @@ package maple.expectation.infrastructure.scheduler
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.core.port.out.MessageQueue
 import maple.expectation.core.domain.event.IntegrationEvent
+import maple.expectation.core.port.out.MessageQueue
 import maple.expectation.domain.nexon.NexonApiCharacterData
 import maple.expectation.infrastructure.config.BatchProperties
 import maple.expectation.infrastructure.executor.LogicExecutor

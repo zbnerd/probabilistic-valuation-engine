@@ -19,7 +19,5 @@ import org.springframework.context.annotation.Configuration
 class ResilienceConfig {
 
     @Bean
-    fun likeSyncRetry(retryRegistry: RetryRegistry): Retry {
-        return retryRegistry.retry("likeSyncRetry")
-    }
+    fun likeSyncRetry(retryRegistry: RetryRegistry): Retry = retryRegistry.retry("likeSyncRetry")
 }

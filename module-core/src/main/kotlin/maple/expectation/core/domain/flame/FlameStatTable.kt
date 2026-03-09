@@ -77,9 +77,7 @@ object FlameStatTable {
      * @return 보스 데미지% 수치
      */
     @JvmStatic
-    fun weaponBossDmgPct(stage: Int): Int {
-        return stage * 2
-    }
+    fun weaponBossDmgPct(stage: Int): Int = stage * 2
 
     /**
      * 무기 추가옵션 수치 조회 (ATT/MAG, BOSS_DMG_PCT 제외)
@@ -93,9 +91,7 @@ object FlameStatTable {
      * @return 수치 (null = 해당 단계/옵션 미존재)
      */
     @JvmStatic
-    fun getWeaponValue(option: FlameOptionType, level: Int, stage: Int): Int? {
-        return getArmorValue(option, level, stage)
-    }
+    fun getWeaponValue(option: FlameOptionType, level: Int, stage: Int): Int? = getArmorValue(option, level, stage)
 
     // ------------------------------------------------------------------
     // Level bucket mapping
@@ -126,13 +122,9 @@ object FlameStatTable {
         return arrayOf(*values)
     }
 
-    private fun linearStages(base: Int): Array<Int?> {
-        return stages(base, base * 2, base * 3, base * 4, base * 5, base * 6, base * 7)
-    }
+    private fun linearStages(base: Int): Array<Int?> = stages(base, base * 2, base * 3, base * 4, base * 5, base * 6, base * 7)
 
-    private fun newOptionMap(): EnumMap<FlameOptionType, Array<Int?>> {
-        return EnumMap(FlameOptionType::class.java)
-    }
+    private fun newOptionMap(): EnumMap<FlameOptionType, Array<Int?>> = EnumMap(FlameOptionType::class.java)
 
     private fun putSingleStats(map: MutableMap<FlameOptionType, Array<Int?>>, values: Array<Int?>) {
         map[FlameOptionType.STR] = values

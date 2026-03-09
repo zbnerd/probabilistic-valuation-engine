@@ -1,5 +1,7 @@
 package maple.expectation.infrastructure.notification.discord
 
+import java.time.Duration
+import java.util.Optional
 import maple.expectation.infrastructure.monitoring.ai.AiSreService
 import maple.expectation.infrastructure.monitoring.ai.AiSreService.AiAnalysisResult
 import maple.expectation.infrastructure.monitoring.context.SystemContextProvider
@@ -10,9 +12,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClient
-import reactor.core.publisher.Mono
-import java.time.Duration
-import java.util.Optional
 
 /**
  * Discord 알림 서비스 (Issue #251 확장)
@@ -29,7 +28,7 @@ class DiscordAlertService(
     private val aiSreService: Optional<AiSreService>,
     private val contextProvider: Optional<SystemContextProvider>,
     @Value("\${alert.discord.webhook-url:}") private val webhookUrl: String,
-    @Value("\${ai.sre.enabled:false}") private val aiSreEnabled: Boolean
+    @Value("\${ai.sre.enabled:false}") private val aiSreEnabled: Boolean,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(DiscordAlertService::class.java)
@@ -59,22 +58,20 @@ class DiscordAlertService(
     }
 
     /** AI 분석 수행 (타임아웃 처리 포함) */
-    private fun getAiAnalysis(e: Throwable): AiAnalysisResult? {
-        return aiSreService.flatMap { it.analyzeError(e) }.orElse(null)
-    }
+    private fun getAiAnalysis(e: Throwable): AiAnalysisResult? = aiSreService.flatMap { it.analyzeError(e) }.orElse(null)
 
     /** 시스템 컨텍스트 요약 수집 */
-    private fun getSystemSummary(): String {
-        return contextProvider.map { it.buildSummary() }.orElse("")
-    }
+    private fun getSystemSummary(): String = contextProvider.map { it.buildSummary() }.orElse("")
 
     /** AI 분석 결과 로깅 */
     private fun logAiAnalysisResult(e: Throwable, aiAnalysis: AiAnalysisResult?) {
         if (aiAnalysis != null) {
-            log.info("[AiSre] 분석 완료: {} -> {} ({})",
+            log.info(
+                "[AiSre] 분석 완료: {} -> {} ({})",
                 e.javaClass.simpleName,
                 aiAnalysis.severity,
-                aiAnalysis.analysisSource)
+                aiAnalysis.analysisSource,
+            )
         } else {
             log.debug("[AiSre] AI 분석 스킵 또는 실패: {}", e.javaClass.simpleName)
         }
@@ -92,7 +89,7 @@ class DiscordAlertService(
             .timeout(ALERT_TIMEOUT)
             .subscribe(
                 { log.info("[Discord] Alert sent successfully to {}", maskedUrl) },
-                { error -> log.error("[Discord] Failed to send alert: {}", error.message) }
+                { error -> log.error("[Discord] Failed to send alert: {}", error.message) },
             )
     }
 }

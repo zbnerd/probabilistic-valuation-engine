@@ -26,5 +26,5 @@ enum class ExecutionOutcome {
      *
      * 파이프라인의 실패 경로에서 사용됩니다.
      */
-    FAILURE
+    FAILURE,
 }

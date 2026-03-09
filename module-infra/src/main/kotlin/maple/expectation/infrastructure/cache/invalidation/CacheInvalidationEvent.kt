@@ -32,7 +32,7 @@ data class CacheInvalidationEvent(
     val key: String?,
     val sourceInstanceId: String,
     val type: InvalidationType,
-    val timestamp: Long
+    val timestamp: Long,
 ) : Serializable {
 
     companion object {
@@ -47,15 +47,13 @@ data class CacheInvalidationEvent(
          * @return EVICT 타입 이벤트
          */
         @JvmStatic
-        fun evict(cacheName: String, key: String, instanceId: String): CacheInvalidationEvent {
-            return CacheInvalidationEvent(
-                cacheName = cacheName,
-                key = key,
-                sourceInstanceId = instanceId,
-                type = InvalidationType.EVICT,
-                timestamp = System.currentTimeMillis()
-            )
-        }
+        fun evict(cacheName: String, key: String, instanceId: String): CacheInvalidationEvent = CacheInvalidationEvent(
+            cacheName = cacheName,
+            key = key,
+            sourceInstanceId = instanceId,
+            type = InvalidationType.EVICT,
+            timestamp = System.currentTimeMillis(),
+        )
 
         /**
          * 캐시 전체 무효화 이벤트 생성
@@ -65,15 +63,13 @@ data class CacheInvalidationEvent(
          * @return CLEAR_ALL 타입 이벤트
          */
         @JvmStatic
-        fun clearAll(cacheName: String, instanceId: String): CacheInvalidationEvent {
-            return CacheInvalidationEvent(
-                cacheName = cacheName,
-                key = null,
-                sourceInstanceId = instanceId,
-                type = InvalidationType.CLEAR_ALL,
-                timestamp = System.currentTimeMillis()
-            )
-        }
+        fun clearAll(cacheName: String, instanceId: String): CacheInvalidationEvent = CacheInvalidationEvent(
+            cacheName = cacheName,
+            key = null,
+            sourceInstanceId = instanceId,
+            type = InvalidationType.CLEAR_ALL,
+            timestamp = System.currentTimeMillis(),
+        )
     }
 
     private fun writeReplace(): Any = CacheInvalidationEvent(
@@ -81,6 +77,6 @@ data class CacheInvalidationEvent(
         key = key,
         sourceInstanceId = sourceInstanceId,
         type = type,
-        timestamp = timestamp
+        timestamp = timestamp,
     )
 }

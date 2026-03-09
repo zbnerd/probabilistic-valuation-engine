@@ -76,14 +76,13 @@ class CubeProbabilityRepositoryImpl : CubeProbabilityRepository {
         level: Int,
         part: String,
         grade: String,
-        slot: Int
+        slot: Int,
     ): List<CubeProbability> {
         val key = generateKey(type, level, part, grade, slot)
         return probabilityCache[key] ?: emptyList()
     }
 
-    override fun findAll(): List<CubeProbability> =
-        probabilityCache.values.flatten()
+    override fun findAll(): List<CubeProbability> = probabilityCache.values.flatten()
 
     override fun findProbabilitiesByVersion(
         type: CubeType,
@@ -91,7 +90,7 @@ class CubeProbabilityRepositoryImpl : CubeProbabilityRepository {
         part: String,
         grade: String,
         slot: Int,
-        tableVersion: String
+        tableVersion: String,
     ): List<CubeProbability> {
         // 현재 구현: 버전 무시 (CSV는 시작 시 로딩되어 고정)
         // 향후: tableVersion과 currentVersion 비교 후 불일치 시 예외
@@ -112,8 +111,6 @@ class CubeProbabilityRepositoryImpl : CubeProbabilityRepository {
         level: Int,
         part: String,
         grade: String,
-        slot: Int
-    ): String {
-        return "${type.name}_${level}_${part}_${grade}_${slot}"
-    }
+        slot: Int,
+    ): String = "${type.name}_${level}_${part}_${grade}_$slot"
 }

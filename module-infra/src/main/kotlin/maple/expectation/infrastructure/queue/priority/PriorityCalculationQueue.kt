@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component
 @Component
 class PriorityCalculationQueue(
     private val redissonClient: RedissonClient,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
     companion object {
         private const val HIGH_PRIORITY_QUEUE = "priority:calc:high"
@@ -79,7 +79,5 @@ class PriorityCalculationQueue(
     /**
      * Get current queue sizes
      */
-    fun getQueueSize(): Pair<Int, Int> {
-        return Pair(highPriorityQueue.size, lowPriorityQueue.size)
-    }
+    fun getQueueSize(): Pair<Int, Int> = Pair(highPriorityQueue.size, lowPriorityQueue.size)
 }

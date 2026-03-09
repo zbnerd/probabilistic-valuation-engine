@@ -16,7 +16,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
 data class CubeHistoryResponse(
     /** 큐브 사용 결과 리스트 */
     @JsonProperty("cube_history")
-    val cubeHistory: List<CubeHistory>? = null
+    val cubeHistory: List<CubeHistory>? = null,
 ) {
 
     /**
@@ -36,7 +36,7 @@ data class CubeHistoryResponse(
 
         /** 큐브 사용 후 잠재능력 옵션 배열 (3개 옵션) */
         @JsonProperty("after_potential_option")
-        val afterPotentialOption: List<PotentialOption>? = null
+        val afterPotentialOption: List<PotentialOption>? = null,
     )
 
     /**
@@ -48,6 +48,6 @@ data class CubeHistoryResponse(
     data class PotentialOption(
         /** 옵션 값 (예: "STR : +2%", "DEX : +2%") */
         @JsonProperty("value")
-        val value: String? = null
+        val value: String? = null,
     )
 }

@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.executor
 
+import java.util.concurrent.atomic.AtomicBoolean
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import maple.expectation.infrastructure.executor.policy.ExecutionPipeline
@@ -7,7 +8,6 @@ import maple.expectation.infrastructure.executor.policy.FinallyPolicy
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * ExecutionPipeline 기반 LogicExecutor 구현체
@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 @Component
 class DefaultLogicExecutor(
     private val pipeline: ExecutionPipeline,
-    private val translator: ExceptionTranslator
+    private val translator: ExceptionTranslator,
 ) : LogicExecutor {
 
     private val log = LoggerFactory.getLogger(DefaultLogicExecutor::class.java)
@@ -48,7 +48,7 @@ class DefaultLogicExecutor(
     override fun <T> executeOrCatch(
         task: ThrowingSupplier<T>,
         recovery: (Throwable) -> T,
-        context: TaskContext
+        context: TaskContext,
     ): T {
         requireNotNull(task) { "task must not be null" }
         requireNotNull(recovery) { "recovery must not be null" }
@@ -69,7 +69,7 @@ class DefaultLogicExecutor(
     override fun <T> executeOrCatch(
         task: ThrowingSupplier<T>,
         recovery: ExceptionTranslator,
-        context: TaskContext
+        context: TaskContext,
     ): T {
         requireNotNull(task) { "task must not be null" }
         requireNotNull(recovery) { "recovery must not be null" }
@@ -90,10 +90,8 @@ class DefaultLogicExecutor(
     override fun <T> executeOrDefault(
         task: ThrowingSupplier<T>,
         defaultValue: T,
-        context: TaskContext
-    ): T {
-        return executeOrCatch(task, { defaultValue }, context)
-    }
+        context: TaskContext,
+    ): T = executeOrCatch(task, { defaultValue }, context)
 
     override fun executeVoid(task: ThrowingRunnable, context: TaskContext) {
         requireNotNull(task) { "task must not be null" }
@@ -102,7 +100,7 @@ class DefaultLogicExecutor(
                 task.run()
                 null
             },
-            context = context
+            context = context,
         )
     }
 
@@ -114,7 +112,7 @@ class DefaultLogicExecutor(
     override fun <T> executeWithFinally(
         task: ThrowingSupplier<T>,
         finallyBlock: Runnable,
-        context: TaskContext
+        context: TaskContext,
     ): T {
         requireNotNull(task) { "task must not be null" }
         requireNotNull(finallyBlock) { "finallyBlock must not be null" }
@@ -137,7 +135,7 @@ class DefaultLogicExecutor(
         if (withFinally == pipeline) {
             log.warn(
                 "[DefaultLogicExecutor] ExecutionPipeline.withAdditionalPolicies returned same instance. " +
-                    "If pipeline is mutable, FinallyPolicy may accumulate across calls."
+                    "If pipeline is mutable, FinallyPolicy may accumulate across calls.",
             )
         }
 
@@ -158,7 +156,7 @@ class DefaultLogicExecutor(
     override fun <T> executeWithTranslation(
         task: ThrowingSupplier<T>,
         customTranslator: ExceptionTranslator,
-        context: TaskContext
+        context: TaskContext,
     ): T {
         requireNotNull(task) { "task must not be null" }
         requireNotNull(customTranslator) { "customTranslator must not be null" }
@@ -178,7 +176,7 @@ class DefaultLogicExecutor(
     override fun <T> executeWithFallback(
         task: ThrowingSupplier<T>,
         fallback: (Throwable) -> T,
-        context: TaskContext
+        context: TaskContext,
     ): T {
         requireNotNull(task) { "task must not be null" }
         requireNotNull(fallback) { "fallback must not be null" }
@@ -196,7 +194,7 @@ class DefaultLogicExecutor(
     override fun <T> executeWithFallback(
         task: ThrowingSupplier<T>,
         fallback: ExceptionTranslator,
-        context: TaskContext
+        context: TaskContext,
     ): T {
         requireNotNull(task) { "task must not be null" }
         requireNotNull(fallback) { "fallback must not be null" }
@@ -224,17 +222,15 @@ class DefaultLogicExecutor(
     private fun translateSafe(
         customTranslator: ExceptionTranslator,
         t: Throwable,
-        context: TaskContext
-    ): Throwable {
-        return try {
-            customTranslator.translate(t, context)
-        } catch (ex: RuntimeException) {
-            ex
-        } catch (e: Error) {
-            e
-        } catch (unexpected: Throwable) {
-            IllegalStateException(UNEXPECTED_TRANSLATOR_FAILURE, unexpected)
-        }
+        context: TaskContext,
+    ): Throwable = try {
+        customTranslator.translate(t, context)
+    } catch (ex: RuntimeException) {
+        ex
+    } catch (e: Error) {
+        e
+    } catch (unexpected: Throwable) {
+        IllegalStateException(UNEXPECTED_TRANSLATOR_FAILURE, unexpected)
     }
 
     /**
@@ -244,16 +240,14 @@ class DefaultLogicExecutor(
      * - translator가 Error로 실패: Error를 primary로 삼는다.
      * - 계약 위반(Throwable): IllegalStateException으로 래핑하여 primary로 삼는다.
      */
-    private fun translatePrimary(t: Throwable, context: TaskContext): Throwable {
-        return try {
-            translator.translate(t, context)
-        } catch (ex: RuntimeException) {
-            ex
-        } catch (e: Error) {
-            e
-        } catch (unexpected: Throwable) {
-            IllegalStateException(UNEXPECTED_TRANSLATOR_FAILURE, unexpected)
-        }
+    private fun translatePrimary(t: Throwable, context: TaskContext): Throwable = try {
+        translator.translate(t, context)
+    } catch (ex: RuntimeException) {
+        ex
+    } catch (e: Error) {
+        e
+    } catch (unexpected: Throwable) {
+        IllegalStateException(UNEXPECTED_TRANSLATOR_FAILURE, unexpected)
     }
 
     /**
@@ -263,16 +257,14 @@ class DefaultLogicExecutor(
      * - translator가 Error로 실패하면: Error는 복구 대상이 아니므로 전파한다.
      * - 계약 위반(Throwable): IllegalStateException으로 감싸 recovery에 전달한다.
      */
-    private fun translateForRecovery(t: Throwable, context: TaskContext): Throwable {
-        return try {
-            translator.translate(t, context)
-        } catch (ex: RuntimeException) {
-            ex
-        } catch (e: Error) {
-            throw e
-        } catch (unexpected: Throwable) {
-            IllegalStateException(UNEXPECTED_TRANSLATOR_FAILURE, unexpected)
-        }
+    private fun translateForRecovery(t: Throwable, context: TaskContext): Throwable = try {
+        translator.translate(t, context)
+    } catch (ex: RuntimeException) {
+        ex
+    } catch (e: Error) {
+        throw e
+    } catch (unexpected: Throwable) {
+        IllegalStateException(UNEXPECTED_TRANSLATOR_FAILURE, unexpected)
     }
 
     /**

@@ -97,6 +97,7 @@ public class ViewTransformer {
         parseInstant(event.getCalculatedAt()),
         Instant.now(),
         eventVersion, // Use event version for causal consistency
+        null, // lastAppliedVersion - will be set by MongoDBSyncWorker
         parseCostToLong(event.getTotalExpectedCost()),
         event.getMaxPresetNo(),
         presetViews,
@@ -284,8 +285,9 @@ public class ViewTransformer {
         event.getCharacterLevel(),
         Instant.EPOCH,
         Instant.now(),
-        0L,
-        0L,
+        0L, // version
+        0L, // lastAppliedVersion
+        0L, // totalExpectedCost
         event.getMaxPresetNo(),
         List.of(),
         false);

@@ -53,7 +53,7 @@ public class InternalPointPaymentStrategy implements PaymentStrategy {
    * @param amount 이체 금액
    */
   @Override
-  @Transactional("transactionManager")
+  @Transactional(transactionManager = "transactionManager")
   public void processPayment(String senderUuid, String receiverFingerprint, Long amount) {
     log.debug(
         "[Payment] Processing internal point transfer: sender={}, amount={}",

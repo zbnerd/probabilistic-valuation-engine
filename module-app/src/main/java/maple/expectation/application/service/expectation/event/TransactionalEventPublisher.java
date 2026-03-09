@@ -68,7 +68,7 @@ public class TransactionalEventPublisher {
    *
    * @param event Calculation completed event
    */
-  @Transactional("transactionManager")
+  @Transactional(transactionManager = "transactionManager")
   public void publishCalculationCompleted(CalculationCompletedEvent event) {
     TaskContext context = TaskContext.of("TransactionalPublisher", "Publish", event.taskId());
 

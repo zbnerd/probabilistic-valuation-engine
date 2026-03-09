@@ -12,7 +12,7 @@ object JobStatMapping {
     /** STR 주스탯 + DEX 부스탯 */
     private val STR_DEX_JOBS = setOf(
         "히어로", "팔라딘", "다크나이트", "소울마스터", "미하일", "블래스터", "데몬슬레이어", "아란", "아델", "카이저", "제로", "바이퍼",
-        "캐논슈터", "스트라이커", "아크", "은월", "제트"
+        "캐논슈터", "스트라이커", "아크", "은월", "제트",
     )
 
     /** DEX 주스탯 + STR 부스탯 */
@@ -30,7 +30,7 @@ object JobStatMapping {
         "일리움",
         "라라",
         "이벤져",
-        "리엔"
+        "리엔",
     )
 
     /** LUK 주스탯 + DEX 부스탯 */
@@ -42,7 +42,7 @@ object JobStatMapping {
     /** 직업명 → JobWeights 캐시 (불변 Map) */
     private val SPECIAL_JOBS = mapOf(
         "제논" to JobWeights.xenon(),
-        "데몬어벤져" to JobWeights.demonAvenger()
+        "데몬어벤져" to JobWeights.demonAvenger(),
     )
 
     /**

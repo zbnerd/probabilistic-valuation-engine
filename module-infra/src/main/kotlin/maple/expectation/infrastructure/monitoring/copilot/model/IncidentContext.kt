@@ -8,5 +8,5 @@ data class IncidentContext(
     val summary: String? = null,
     val anomalies: List<AnomalyEvent> = emptyList(),
     val evidence: List<Any> = emptyList(), // Supports both EvidenceItem and RichEvidence
-    val metadata: Map<String, Any> = emptyMap()
+    val metadata: Map<String, Any> = emptyMap(),
 )

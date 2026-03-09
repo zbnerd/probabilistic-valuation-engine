@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component
 @Component
 class BatchMetricsLogger(
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) : JobExecutionListener {
 
     override fun beforeJob(jobExecution: JobExecution) {
@@ -63,9 +63,7 @@ class BatchMetricsLogger(
     }
 
     /** Calculate job execution duration. */
-    private fun calculateDuration(startTime: Instant, endTime: Instant): Duration {
-        return Duration.between(startTime, endTime)
-    }
+    private fun calculateDuration(startTime: Instant, endTime: Instant): Duration = Duration.between(startTime, endTime)
 
     /** Record job execution time using Micrometer Timer. */
     private fun recordJobTimer(jobName: String, status: String, duration: Duration) {
@@ -96,19 +94,19 @@ class BatchMetricsLogger(
         jobName: String,
         status: String,
         duration: Duration,
-        jobExecution: JobExecution
+        jobExecution: JobExecution,
     ) {
         log.info(
             "[BatchMetricsLogger] Job completed: {} with status {} in {}ms",
             jobName,
             status,
-            duration.toMillis()
+            duration.toMillis(),
         )
 
         if (jobExecution.status.isUnsuccessful) {
             log.error(
                 "[BatchMetricsLogger] Job failed with exceptions: {}",
-                jobExecution.failureExceptions
+                jobExecution.failureExceptions,
             )
         }
     }

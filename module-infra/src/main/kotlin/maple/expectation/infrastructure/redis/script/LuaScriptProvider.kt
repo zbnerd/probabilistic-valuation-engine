@@ -1,21 +1,19 @@
 package maple.expectation.infrastructure.redis.script
 
+import jakarta.annotation.PostConstruct
+import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.error.exception.RedisScriptExecutionException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import org.redisson.api.RScript
 import org.redisson.api.RedissonClient
 import org.redisson.client.codec.StringCodec
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.concurrent.atomic.AtomicReference
-import java.util.function.Function
-import jakarta.annotation.PostConstruct
 
 @Component
 class LuaScriptProvider(
     private val redissonClient: RedissonClient,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val logger = LoggerFactory.getLogger(LuaScriptProvider::class.java)
 
@@ -46,12 +44,12 @@ class LuaScriptProvider(
                     "✅ [LuaScriptProvider] SHA 캐싱 완료 - Transfer: {}, DeleteDecr: {}, Compensation: {}",
                     transferSha,
                     deleteAndDecrementSha,
-                    compensationSha
+                    compensationSha,
                 )
                 true
             },
             false,
-            TaskContext.of("LuaScript", "LoadAll")
+            TaskContext.of("LuaScript", "LoadAll"),
         )
 
         if (!loaded) {
@@ -73,21 +71,19 @@ class LuaScriptProvider(
         scriptSource: String,
         shaUpdater: (String) -> Unit,
         scriptExecutor: (String) -> T,
-        scriptName: String
-    ): T {
-        return executor.executeWithFallback(
-            { scriptExecutor(shaGetter()) },
-            { e -> handleNoscriptAndRetry(e, scriptSource, shaUpdater, scriptExecutor, scriptName) },
-            TaskContext.of("LuaScript", "Execute", scriptName)
-        )
-    }
+        scriptName: String,
+    ): T = executor.executeWithFallback(
+        { scriptExecutor(shaGetter()) },
+        { e -> handleNoscriptAndRetry(e, scriptSource, shaUpdater, scriptExecutor, scriptName) },
+        TaskContext.of("LuaScript", "Execute", scriptName),
+    )
 
     private fun <T> handleNoscriptAndRetry(
         e: Throwable,
         scriptSource: String,
         shaUpdater: (String) -> Unit,
         scriptExecutor: (String) -> T,
-        scriptName: String
+        scriptName: String,
     ): T {
         if (!isNoscriptError(e)) {
             throw RedisScriptExecutionException(scriptName, e)

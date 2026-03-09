@@ -63,7 +63,7 @@ enum class MySQLHealthState {
         }
         override fun onCircuitBreakerClosed(): MySQLHealthState = RECOVERING // 이미 복구 중, 상태 유지
         override fun onRecoveryComplete(): MySQLHealthState = HEALTHY
-    };
+    }, ;
 
     /**
      * CircuitBreaker OPEN 이벤트 처리

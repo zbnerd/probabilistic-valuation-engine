@@ -21,57 +21,58 @@ package maple.expectation.core.domain.equipment
  */
 enum class SecondaryWeaponCategory(val potentialPart: String) {
 
-  /**
-   * 일반 보조무기 (방패, 책, 부적 등)
-   *
-   * <p>보조무기 잠재 확률 테이블 사용
-   */
-  STANDARD_SECONDARY("보조무기"),
-
-  /**
-   * 포스실드/소울링 (데몬어벤저, 제논 등)
-   *
-   * <p>포스실드 잠재 확률 테이블 사용
-   */
-  FORCE_SHIELD("포스실드");
-
-  companion object {
     /**
-     * 보조무기 세부 분류에 따른 카테고리 결정
+     * 일반 보조무기 (방패, 책, 부적 등)
      *
-     * @param itemEquipmentPart item_equipment_part 값 (e.g., "포스실드", "소울링", "블레이드")
-     * @return 적절한 보조무기 카테고리
+     * <p>보조무기 잠재 확률 테이블 사용
      */
-    @JvmStatic
-    fun classify(itemEquipmentPart: String?): SecondaryWeaponCategory {
-      if (itemEquipmentPart == null) {
-        return STANDARD_SECONDARY
-      }
-
-      val part = itemEquipmentPart.trim()
-      if (part.contains("포스실드") || part.contains("소울링")) {
-        return FORCE_SHIELD
-      }
-
-      return STANDARD_SECONDARY
-    }
+    STANDARD_SECONDARY("보조무기"),
 
     /**
-     * 잠재능력 계산 시 사용할 부위명 반환
+     * 포스실드/소울링 (데몬어벤저, 제논 등)
      *
-     * @param itemEquipmentSlot 장비 슬롯 (e.g., "보조무기", "무기")
-     * @param itemEquipmentPart 장비 세부 분류 (e.g., "포스실드", "블레이드")
-     * @return 잠재능력 확률 테이블 조회용 부위명
+     * <p>포스실드 잠재 확률 테이블 사용
      */
-    @JvmStatic
-    fun resolvePotentialPart(itemEquipmentSlot: String?, itemEquipmentPart: String?): String {
-      // 보조무기가 아닌 경우 그대로 반환
-      if (itemEquipmentSlot != "보조무기") {
-        return itemEquipmentSlot ?: ""
-      }
+    FORCE_SHIELD("포스실드"),
+    ;
 
-      // 보조무기인 경우 세부 분류에 따라 결정
-      return classify(itemEquipmentPart).potentialPart
+    companion object {
+        /**
+         * 보조무기 세부 분류에 따른 카테고리 결정
+         *
+         * @param itemEquipmentPart item_equipment_part 값 (e.g., "포스실드", "소울링", "블레이드")
+         * @return 적절한 보조무기 카테고리
+         */
+        @JvmStatic
+        fun classify(itemEquipmentPart: String?): SecondaryWeaponCategory {
+            if (itemEquipmentPart == null) {
+                return STANDARD_SECONDARY
+            }
+
+            val part = itemEquipmentPart.trim()
+            if (part.contains("포스실드") || part.contains("소울링")) {
+                return FORCE_SHIELD
+            }
+
+            return STANDARD_SECONDARY
+        }
+
+        /**
+         * 잠재능력 계산 시 사용할 부위명 반환
+         *
+         * @param itemEquipmentSlot 장비 슬롯 (e.g., "보조무기", "무기")
+         * @param itemEquipmentPart 장비 세부 분류 (e.g., "포스실드", "블레이드")
+         * @return 잠재능력 확률 테이블 조회용 부위명
+         */
+        @JvmStatic
+        fun resolvePotentialPart(itemEquipmentSlot: String?, itemEquipmentPart: String?): String {
+            // 보조무기가 아닌 경우 그대로 반환
+            if (itemEquipmentSlot != "보조무기") {
+                return itemEquipmentSlot ?: ""
+            }
+
+            // 보조무기인 경우 세부 분류에 따라 결정
+            return classify(itemEquipmentPart).potentialPart
+        }
     }
-  }
 }

@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.nexon.outbox
 
+import java.time.LocalDateTime
 import maple.expectation.domain.v2.NexonApiOutbox
 import maple.expectation.domain.v2.NexonApiOutbox.OutboxStatus
 import maple.expectation.infrastructure.config.OutboxProperties
@@ -9,7 +10,6 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
-import java.time.LocalDateTime
 
 /**
  * Nexon API Outbox 조회 Facade (내부 호출 AOP 문제 해결용)
@@ -30,7 +30,7 @@ import java.time.LocalDateTime
 @Service
 class NexonApiOutboxFetchFacade(
     private val outboxRepository: NexonApiOutboxRepository,
-    private val properties: OutboxProperties
+    private val properties: OutboxProperties,
 ) {
 
     private val log = LoggerFactory.getLogger(NexonApiOutboxFetchFacade::class.java)
@@ -52,7 +52,7 @@ class NexonApiOutboxFetchFacade(
         val pending = outboxRepository.findPendingWithLock(
             statuses,
             LocalDateTime.now(),
-            PageRequest.of(0, properties.batchSize)
+            PageRequest.of(0, properties.batchSize),
         )
 
         for (entry in pending) {

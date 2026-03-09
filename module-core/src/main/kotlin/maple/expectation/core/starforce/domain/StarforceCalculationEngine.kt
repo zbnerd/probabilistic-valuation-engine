@@ -27,11 +27,9 @@ object StarforceCalculationEngine {
      * @param itemLevel 아이템 레벨
      * @return 최대 스타포스 수
      */
-    fun getMaxStarForLevel(itemLevel: Int): Int {
-        return StarforceConstants.LEVEL_STAR_LIMITS
-            .firstOrNull { itemLevel <= it.first }
-            ?.second ?: StarforceConstants.MAX_STAR
-    }
+    fun getMaxStarForLevel(itemLevel: Int): Int = StarforceConstants.LEVEL_STAR_LIMITS
+        .firstOrNull { itemLevel <= it.first }
+        ?.second ?: StarforceConstants.MAX_STAR
 
     /**
      * 단일 강화 비용 (반올림 전)
@@ -65,7 +63,7 @@ object StarforceCalculationEngine {
         useStarCatch: Boolean,
         useSundayMaple: Boolean,
         useDiscount: Boolean,
-        useDestroyPrevention: Boolean
+        useDestroyPrevention: Boolean,
     ): DoubleArray {
         var p = StarforceConstants.BASE_SUCCESS_RATES[star]
         var d = StarforceConstants.BASE_DESTROY_RATES[star]
@@ -138,26 +136,31 @@ object StarforceCalculationEngine {
         useStarCatch: Boolean,
         useSundayMaple: Boolean,
         useDiscount: Boolean,
-        useDestroyPrevention: Boolean
+        useDestroyPrevention: Boolean,
     ): BigDecimal {
-        val T = targetStar
+        val t = targetStar
 
         // a[s], b[s] 배열: E[s] = a[s]*E[12] + b[s]
-        val a = DoubleArray(T + 1)
-        val b = DoubleArray(T + 1)
-        // E[T] = 0 → a[T] = 0, b[T] = 0 (이미 초기화됨)
+        val a = DoubleArray(t + 1)
+        val b = DoubleArray(t + 1)
+        // E[t] = 0 → a[t] = 0, b[t] = 0 (이미 초기화됨)
 
-        // T-1부터 0까지 역순으로 계산
-        for (s in (T - 1) downTo 0) {
+        // t-1부터 0까지 역순으로 계산
+        for (s in (t - 1) downTo 0) {
             val params = getStageParams(
-                s, itemLevel, useStarCatch, useSundayMaple, useDiscount, useDestroyPrevention
+                s,
+                itemLevel,
+                useStarCatch,
+                useSundayMaple,
+                useDiscount,
+                useDestroyPrevention,
             )
             val p = params[0] // 성공확률
             val d = params[2] // 파괴확률
             val c = params[3] // 비용
 
-            val aNext = if (s + 1 >= T) 0.0 else a[s + 1]
-            val bNext = if (s + 1 >= T) 0.0 else b[s + 1]
+            val aNext = if (s + 1 >= t) 0.0 else a[s + 1]
+            val bNext = if (s + 1 >= t) 0.0 else b[s + 1]
 
             val denom = p + d
             if (denom < 1e-12) {
@@ -173,7 +176,7 @@ object StarforceCalculationEngine {
         }
 
         // E[12] 해결
-        val E12 = if (T <= StarforceConstants.DESTROY_RESET_STAR) {
+        val e12 = if (t <= StarforceConstants.DESTROY_RESET_STAR) {
             0.0
         } else {
             // E[12] = a[12]*E[12] + b[12]
@@ -189,7 +192,7 @@ object StarforceCalculationEngine {
         }
 
         // E[currentStar] = a[currentStar]*E[12] + b[currentStar]
-        val result = a[currentStar] * E12 + b[currentStar]
+        val result = a[currentStar] * e12 + b[currentStar]
 
         return BigDecimal.valueOf(result).setScale(0, RoundingMode.HALF_UP)
     }
@@ -208,22 +211,27 @@ object StarforceCalculationEngine {
         targetStar: Int,
         useStarCatch: Boolean,
         useSundayMaple: Boolean,
-        useDestroyPrevention: Boolean
+        useDestroyPrevention: Boolean,
     ): BigDecimal {
-        val T = targetStar
+        val t = targetStar
 
-        val a = DoubleArray(T + 1)
-        val b = DoubleArray(T + 1)
+        val a = DoubleArray(t + 1)
+        val b = DoubleArray(t + 1)
 
-        for (s in (T - 1) downTo 0) {
+        for (s in (t - 1) downTo 0) {
             val params = getStageParams(
-                s, 200, useStarCatch, useSundayMaple, false, useDestroyPrevention
+                s,
+                200,
+                useStarCatch,
+                useSundayMaple,
+                false,
+                useDestroyPrevention,
             )
             val p = params[0]
             val d = params[2]
 
-            val aNext = if (s + 1 >= T) 0.0 else a[s + 1]
-            val bNext = if (s + 1 >= T) 0.0 else b[s + 1]
+            val aNext = if (s + 1 >= t) 0.0 else a[s + 1]
+            val bNext = if (s + 1 >= t) 0.0 else b[s + 1]
 
             val denom = p + d
             if (denom < 1e-12) {
@@ -240,26 +248,24 @@ object StarforceCalculationEngine {
         }
 
         // B[12] 해결
-        val B12 = if (T <= StarforceConstants.DESTROY_RESET_STAR) {
+        val b12 = if (t <= StarforceConstants.DESTROY_RESET_STAR) {
             0.0
         } else {
             val a12 = a[StarforceConstants.DESTROY_RESET_STAR]
-            val b12 = b[StarforceConstants.DESTROY_RESET_STAR]
+            val b12Inner = b[StarforceConstants.DESTROY_RESET_STAR]
             if (Math.abs(1 - a12) < 1e-12) {
                 Double.MAX_VALUE
             } else {
-                b12 / (1 - a12)
+                b12Inner / (1 - a12)
             }
         }
 
-        val result = a[currentStar] * B12 + b[currentStar]
+        val result = a[currentStar] * b12 + b[currentStar]
         return BigDecimal.valueOf(result).setScale(2, RoundingMode.HALF_UP)
     }
 
     /** 10 단위로 반올림 (메이플스토리 스타포스 비용 표시 기준) */
-    fun roundToNearest10(value: Double): Double {
-        return Math.floor((value + 5) / 10.0) * 10
-    }
+    fun roundToNearest10(value: Double): Double = Math.floor((value + 5) / 10.0) * 10
 
     /** 스타 범위 검증 */
     fun validateStarRange(currentStar: Int, targetStar: Int, maxStar: Int) {
@@ -275,10 +281,14 @@ object StarforceCalculationEngine {
         starCatch: Boolean,
         sunday: Boolean,
         discount: Boolean,
-        destroyPrev: Boolean
-    ): String {
-        return "%d-%d-%d-%b-%b-%b-%b".format(
-            currentStar, targetStar, level, starCatch, sunday, discount, destroyPrev
-        )
-    }
+        destroyPrev: Boolean,
+    ): String = "%d-%d-%d-%b-%b-%b-%b".format(
+        currentStar,
+        targetStar,
+        level,
+        starCatch,
+        sunday,
+        discount,
+        destroyPrev,
+    )
 }

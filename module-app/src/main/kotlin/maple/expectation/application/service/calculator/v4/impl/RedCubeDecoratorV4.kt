@@ -1,13 +1,13 @@
 package maple.expectation.application.service.calculator.v4.impl
 
-import maple.expectation.domain.v2.CubeType
-import maple.expectation.web.dto.CubeCalculationInput
-import maple.expectation.application.service.cube.CubeTrialsProvider
+import java.math.BigDecimal
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator.CostBreakdown
 import maple.expectation.application.service.cube.AbstractCubeDecoratorV4
+import maple.expectation.application.service.cube.CubeTrialsProvider
 import maple.expectation.application.service.cube.policy.CubeCostPolicy
-import java.math.BigDecimal
+import maple.expectation.domain.v2.CubeType
+import maple.expectation.web.dto.CubeCalculationInput
 
 /**
  * V4 레드큐브 데코레이터 (리팩토링: AbstractCubeDecoratorV4 사용)
@@ -35,6 +35,5 @@ class RedCubeDecoratorV4(
 
     override fun getCubePathSuffix(): String = " > 레드큐브(윗잠)"
 
-    override fun updateCostBreakdown(base: CostBreakdown, cubeCost: BigDecimal, trials: BigDecimal): CostBreakdown =
-        base.withRedCube(base.redCubeCost.add(cubeCost), trials)
+    override fun updateCostBreakdown(base: CostBreakdown, cubeCost: BigDecimal, trials: BigDecimal): CostBreakdown = base.withRedCube(base.redCubeCost.add(cubeCost), trials)
 }

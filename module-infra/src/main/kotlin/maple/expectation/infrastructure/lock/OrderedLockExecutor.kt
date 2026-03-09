@@ -1,14 +1,14 @@
 package maple.expectation.infrastructure.lock
 
+import java.util.ArrayList
+import java.util.List
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.stereotype.Component
-import java.util.ArrayList
-import java.util.List
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 순서 보장 다중 락 실행기 (Issue #221: N02-Lock Ordering Deadlock)
@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference
 @Component
 class OrderedLockExecutor(
     private val lockStrategy: LockStrategy,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
 
     /**
@@ -27,13 +27,13 @@ class OrderedLockExecutor(
         totalTimeout: Long,
         timeUnit: TimeUnit,
         leaseTime: Long,
-        task: ThrowingSupplier<T>
+        task: ThrowingSupplier<T>,
     ): T {
         val context = TaskContext.of("OrderedLock", "Execute", java.lang.String.join(",", keys))
 
         return executor.execute(
             { executeWithOrderedLocksInternal(keys, totalTimeout, timeUnit, leaseTime, task) },
-            context
+            context,
         )
     }
 
@@ -46,7 +46,7 @@ class OrderedLockExecutor(
         totalTimeout: Long,
         timeUnit: TimeUnit,
         leaseTime: Long,
-        task: ThrowingSupplier<T>
+        task: ThrowingSupplier<T>,
     ): T {
         // 1. 정렬하여 Circular Wait 조건 제거
         val sortedKeys: java.util.List<String> = keys.sorted() as java.util.List<String>
@@ -61,7 +61,7 @@ class OrderedLockExecutor(
                 0,
                 timeUnit.toMillis(totalTimeout),
                 leaseTime,
-                task
+                task,
             )
         }
 
@@ -76,7 +76,7 @@ class OrderedLockExecutor(
         totalTimeout: Long,
         timeUnit: TimeUnit,
         leaseTime: Long,
-        task: ThrowingSupplier<T>
+        task: ThrowingSupplier<T>,
     ): T {
         // [P0-RED-01] deadline 계산 (나노초 정밀도)
         val deadlineNanos = System.nanoTime() + timeUnit.toNanos(totalTimeout)
@@ -90,7 +90,7 @@ class OrderedLockExecutor(
         return executor.executeWithFinally(
             { acquireLocksAndExecute(sortedKeys, deadlineNanos, leaseTime, task, acquiredLocks) },
             { releaseLocksInReverseOrder(acquiredLocks) },
-            context
+            context,
         )
     }
 
@@ -101,7 +101,7 @@ class OrderedLockExecutor(
         deadlineNanos: Long,
         leaseTime: Long,
         task: ThrowingSupplier<T>,
-        acquiredLocks: java.util.List<String>
+        acquiredLocks: java.util.List<String>,
     ): T {
         for (i in sortedKeys.indices) {
             val currentKey = sortedKeys[i]
@@ -110,7 +110,7 @@ class OrderedLockExecutor(
             val remainingNanos = deadlineNanos - System.nanoTime()
             if (remainingNanos <= 0) {
                 throw DistributedLockException(
-                    String.format("전체 락 타임아웃 초과: %d/%d 락 획득 중 [key=%s]", i, sortedKeys.size, currentKey)
+                    String.format("전체 락 타임아웃 초과: %d/%d 락 획득 중 [key=%s]", i, sortedKeys.size, currentKey),
                 )
             }
 
@@ -123,14 +123,14 @@ class OrderedLockExecutor(
                 i + 1,
                 sortedKeys.size,
                 currentKey,
-                TimeUnit.NANOSECONDS.toMillis(remainingNanos)
+                TimeUnit.NANOSECONDS.toMillis(remainingNanos),
             )
 
             // 락 획득 시도
             val acquired = tryAcquireLock(currentKey, waitTimeSec, leaseTime)
             if (!acquired) {
                 throw DistributedLockException(
-                    String.format("락 획득 실패: %s (waited %ds)", currentKey, waitTimeSec)
+                    String.format("락 획득 실패: %s (waited %ds)", currentKey, waitTimeSec),
                 )
             }
 
@@ -152,8 +152,8 @@ class OrderedLockExecutor(
         return executor.executeOrDefault(
             { lockStrategy.tryLockImmediately(key, leaseTime) },
             false,
-    // UnsupportedOperationException 또는 기타 예외 시 false 반환 → 중첩 전략으로 전환
-            context
+            // UnsupportedOperationException 또는 기타 예외 시 false 반환 → 중첩 전략으로 전환
+            context,
         )
     }
 
@@ -166,12 +166,12 @@ class OrderedLockExecutor(
         currentIndex: Int,
         remainingTimeoutMs: Long,
         leaseTime: Long,
-        task: ThrowingSupplier<T>
+        task: ThrowingSupplier<T>,
     ): T {
         // P1-YELLOW-01: 스택 깊이 제한
         if (currentIndex >= MAX_NESTED_DEPTH) {
             throw DistributedLockException(
-                String.format("중첩 락 깊이 초과: 최대 %d개까지 지원 (요청: %d개)", MAX_NESTED_DEPTH, sortedKeys.size)
+                String.format("중첩 락 깊이 초과: 최대 %d개까지 지원 (요청: %d개)", MAX_NESTED_DEPTH, sortedKeys.size),
             )
         }
 
@@ -189,21 +189,21 @@ class OrderedLockExecutor(
             currentIndex + 1,
             sortedKeys.size,
             currentKey,
-            remainingTimeoutMs
+            remainingTimeoutMs,
         )
 
         // 중첩 콜백: 현재 락 안에서 다음 락 획득
         return lockStrategy.executeWithLock(
             currentKey,
             waitTimeSec,
-            leaseTime
+            leaseTime,
         ) {
             executeWithNestedLocks(
                 sortedKeys,
                 currentIndex + 1,
                 remainingTimeoutMs - TimeUnit.SECONDS.toMillis(waitTimeSec),
                 leaseTime,
-                task
+                task,
             )
         }
     }
@@ -242,8 +242,8 @@ class OrderedLockExecutor(
                 false // Redisson: 일반 전략 사용
             },
             true,
-    // UnsupportedOperationException 또는 기타 예외 → MySQL 중첩 전략
-            context
+            // UnsupportedOperationException 또는 기타 예외 → MySQL 중첩 전략
+            context,
         )
     }
 
@@ -268,7 +268,7 @@ class OrderedLockExecutor(
                 lockStrategy.unlock(lockKey)
                 log.debug("[OrderedLock] Released lock: {}", lockKey)
             },
-            context
+            context,
         )
     }
 
@@ -277,10 +277,8 @@ class OrderedLockExecutor(
         keys: List<String>,
         totalTimeoutSeconds: Long,
         leaseTime: Long,
-        task: ThrowingSupplier<T>
-    ): T {
-        return executeWithOrderedLocks(keys, totalTimeoutSeconds, TimeUnit.SECONDS, leaseTime, task)
-    }
+        task: ThrowingSupplier<T>,
+    ): T = executeWithOrderedLocks(keys, totalTimeoutSeconds, TimeUnit.SECONDS, leaseTime, task)
 
     companion object {
         private const val MAX_NESTED_DEPTH = 10 // P1-YELLOW-01: 스택 깊이 제한

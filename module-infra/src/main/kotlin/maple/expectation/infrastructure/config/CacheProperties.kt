@@ -37,7 +37,7 @@ data class CacheProperties(
 
     /** Singleflight (분산 락) 설정 */
     @field:NotNull @field:Valid
-    var singleflight: Singleflight = Singleflight()
+    var singleflight: Singleflight = Singleflight(),
 ) {
     /**
      * 캐시별 L1/L2 스펙
@@ -60,7 +60,7 @@ data class CacheProperties(
         var l2TtlMinutes: Int = 15,
 
         @field:NotNull
-        var l2Serializer: String = "json"
+        var l2Serializer: String = "json",
     )
 
     /**
@@ -74,6 +74,6 @@ data class CacheProperties(
      */
     data class Singleflight(
         @Min(1) @Max(60)
-        var lockWaitSeconds: Int = 5
+        var lockWaitSeconds: Int = 5,
     )
 }

@@ -27,7 +27,7 @@ interface AnomalyDetectionPort {
         signal: DetectionSignal,
         timeSeriesList: List<DetectionTimeSeries>,
         nowMillis: Long,
-        config: ZScoreDetectionConfig
+        config: ZScoreDetectionConfig,
     ): Optional<DetectedAnomaly>
 
     /**
@@ -44,7 +44,7 @@ interface AnomalyDetectionPort {
         val panelTitle: String,
         val query: String,
         val unit: String?,
-        val severityMapping: SeverityMapping?
+        val severityMapping: SeverityMapping?,
     )
 
     /**
@@ -57,7 +57,7 @@ interface AnomalyDetectionPort {
     data class SeverityMapping(
         val warnThreshold: Double?,
         val critThreshold: Double?,
-        val comparator: String?
+        val comparator: String?,
     )
 
     /**
@@ -68,7 +68,7 @@ interface AnomalyDetectionPort {
      */
     data class DetectionTimeSeries(
         val label: String,
-        val points: List<DetectionMetricPoint>
+        val points: List<DetectionMetricPoint>,
     )
 
     /**
@@ -79,7 +79,7 @@ interface AnomalyDetectionPort {
      */
     data class DetectionMetricPoint(
         val timestampMillis: Long,
-        val value: Double
+        val value: Double,
     )
 
     /**
@@ -94,7 +94,7 @@ interface AnomalyDetectionPort {
         val enabled: Boolean = true,
         val windowPoints: Int = 60,
         val threshold: Double = 3.0,
-        val minRequiredPoints: Int = 10
+        val minRequiredPoints: Int = 10,
     )
 
     /**
@@ -113,6 +113,6 @@ interface AnomalyDetectionPort {
         val reason: String,
         val detectedAtMillis: Long,
         val currentValue: Double,
-        val baselineValue: Double?
+        val baselineValue: Double?,
     )
 }

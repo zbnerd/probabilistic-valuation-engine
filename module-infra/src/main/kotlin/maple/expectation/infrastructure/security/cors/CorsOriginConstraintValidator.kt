@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component
  */
 @Component
 class CorsOriginConstraintValidator(
-    private val validator: CorsOriginValidator
+    private val validator: CorsOriginValidator,
 ) : ConstraintValidator<ValidCorsOrigin, List<String>> {
 
     override fun isValid(value: List<String>?, context: ConstraintValidatorContext): Boolean {

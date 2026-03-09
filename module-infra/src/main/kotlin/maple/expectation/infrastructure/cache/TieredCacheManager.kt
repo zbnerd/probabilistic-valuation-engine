@@ -1,16 +1,16 @@
 package maple.expectation.infrastructure.cache
 
 import io.micrometer.core.instrument.MeterRegistry
-import maple.expectation.core.port.out.redis.RedisOperationPort
-import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
-import maple.expectation.infrastructure.executor.LogicExecutor
-import org.springframework.cache.Cache
-import org.springframework.cache.CacheManager
-import org.springframework.cache.support.AbstractCacheManager
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.function.Consumer
+import maple.expectation.core.port.out.redis.RedisOperationPort
+import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
+import maple.expectation.infrastructure.executor.LogicExecutor
 import org.slf4j.LoggerFactory
+import org.springframework.cache.Cache
+import org.springframework.cache.CacheManager
+import org.springframework.cache.support.AbstractCacheManager
 
 /**
  * 2계층 캐시 매니저 (L1: Caffeine, L2: Redis)
@@ -46,7 +46,7 @@ class TieredCacheManager(
     // Issue #148: 분산 락용 (ADR-012: RedisOperationPort로 추상화)
     val meterRegistry: MeterRegistry,
     // Issue #148: 메트릭 수집용 (public for access)
-    private val lockWaitSeconds: Int // P0-4: 외부 설정
+    private val lockWaitSeconds: Int, // P0-4: 외부 설정
 ) : AbstractCacheManager() {
     companion object {
         private val log = LoggerFactory.getLogger(TieredCacheManager::class.java)
@@ -66,9 +66,7 @@ class TieredCacheManager(
     private val callbackRef: AtomicReference<Consumer<CacheInvalidationEvent>> =
         AtomicReference(Consumer {})
 
-    override fun loadCaches(): Collection<out Cache> {
-        return emptyList()
-    }
+    override fun loadCaches(): Collection<out Cache> = emptyList()
 
     /**
      * 캐시 인스턴스 조회 (인스턴스 풀링 적용)
@@ -80,9 +78,7 @@ class TieredCacheManager(
      * @param name 캐시 이름
      * @return TieredCache 인스턴스 (재사용)
      */
-    override fun getCache(name: String): Cache? {
-        return cachePool.computeIfAbsent(name) { createTieredCache(it) }
-    }
+    override fun getCache(name: String): Cache? = cachePool.computeIfAbsent(name) { createTieredCache(it) }
 
     /**
      * TieredCache 인스턴스 생성 (최초 1회만 호출됨)
@@ -108,7 +104,7 @@ class TieredCacheManager(
             meterRegistry = meterRegistry,
             lockWaitSeconds = lockWaitSeconds,
             instanceIdSupplier = { instanceIdRef.get() },
-            callbackSupplier = { callbackRef.get() }
+            callbackSupplier = { callbackRef.get() },
         )
     }
 
@@ -130,7 +126,7 @@ class TieredCacheManager(
             log.warn(
                 "[TieredCacheManager] instanceId already initialized: current={}, attempted={}",
                 instanceIdRef.get(),
-                instanceId
+                instanceId,
             )
         }
         return success
@@ -164,9 +160,7 @@ class TieredCacheManager(
      * @param name 캐시 이름
      * @return L1 캐시 인스턴스 (Caffeine) - null 가능 (캐시 미등록 시)
      */
-    fun getL1CacheDirect(name: String): Cache? {
-        return l1Manager.getCache(name)
-    }
+    fun getL1CacheDirect(name: String): Cache? = l1Manager.getCache(name)
 
     /**
      * 캐시에서 키 제거 (이벤트 핸들링용)

@@ -33,60 +33,59 @@ package maple.expectation.infrastructure.queue
  */
 enum class QueueType(val configValue: String) {
 
-  /**
-   * V4: ConcurrentLinkedQueue (In-Memory)
-   *
-   * <ul>
-   *   <li>장점: 0.1ms 지연, 비용 없음
-   *   <li>단점: Scale-out 불가, 장애 시 데이터 유실
-   *   <li>적합: 단일 노드, 트래픽 < 1,000 RPS
-   * </ul>
-   */
-  IN_MEMORY("in-memory"),
-
-  /**
-   * V5: Redis List (RPUSH/LPOP + INFLIGHT 패턴)
-   *
-   * <ul>
-   *   <li>장점: Scale-out 가능, At-Least-Once 보장
-   *   <li>단점: 네트워크 RTT 추가 (1-2ms)
-   *   <li>적합: 다중 노드, 트래픽 800+ RPS
-   * </ul>
-   */
-  REDIS_LIST("redis"),
-
-  /**
-   * V6: Kafka Topic (Future)
-   *
-   * <ul>
-   *   <li>장점: 무제한 확장, Exactly-Once 가능
-   *   <li>단점: 운영 복잡도 높음, 비용 높음
-   *   <li>적합: 대규모 이벤트, 트래픽 10,000+ RPS
-   * </ul>
-   */
-  KAFKA("kafka"),
-
-  /**
-   * AWS SQS (Option)
-   *
-   * <ul>
-   *   <li>장점: 서버리스, 관리 오버헤드 최소
-   *   <li>단점: 지연 10-20ms
-   *   <li>적합: 서버리스 아키텍처
-   * </ul>
-   */
-  SQS("sqs");
-
-  companion object {
     /**
-     * 설정값으로 QueueType 조회
+     * V4: ConcurrentLinkedQueue (In-Memory)
      *
-     * @param configValue 설정값
-     * @return QueueType (찾지 못하면 IN_MEMORY 기본값)
+     * <ul>
+     *   <li>장점: 0.1ms 지연, 비용 없음
+     *   <li>단점: Scale-out 불가, 장애 시 데이터 유실
+     *   <li>적합: 단일 노드, 트래픽 < 1,000 RPS
+     * </ul>
      */
-    fun fromConfigValue(configValue: String?): QueueType {
-      return entries.firstOrNull { it.configValue.equals(configValue, ignoreCase = true) }
-          ?: IN_MEMORY
+    IN_MEMORY("in-memory"),
+
+    /**
+     * V5: Redis List (RPUSH/LPOP + INFLIGHT 패턴)
+     *
+     * <ul>
+     *   <li>장점: Scale-out 가능, At-Least-Once 보장
+     *   <li>단점: 네트워크 RTT 추가 (1-2ms)
+     *   <li>적합: 다중 노드, 트래픽 800+ RPS
+     * </ul>
+     */
+    REDIS_LIST("redis"),
+
+    /**
+     * V6: Kafka Topic (Future)
+     *
+     * <ul>
+     *   <li>장점: 무제한 확장, Exactly-Once 가능
+     *   <li>단점: 운영 복잡도 높음, 비용 높음
+     *   <li>적합: 대규모 이벤트, 트래픽 10,000+ RPS
+     * </ul>
+     */
+    KAFKA("kafka"),
+
+    /**
+     * AWS SQS (Option)
+     *
+     * <ul>
+     *   <li>장점: 서버리스, 관리 오버헤드 최소
+     *   <li>단점: 지연 10-20ms
+     *   <li>적합: 서버리스 아키텍처
+     * </ul>
+     */
+    SQS("sqs"),
+    ;
+
+    companion object {
+        /**
+         * 설정값으로 QueueType 조회
+         *
+         * @param configValue 설정값
+         * @return QueueType (찾지 못하면 IN_MEMORY 기본값)
+         */
+        fun fromConfigValue(configValue: String?): QueueType = entries.firstOrNull { it.configValue.equals(configValue, ignoreCase = true) }
+            ?: IN_MEMORY
     }
-  }
 }

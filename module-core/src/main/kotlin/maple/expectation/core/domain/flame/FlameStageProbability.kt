@@ -25,11 +25,9 @@ object FlameStageProbability {
      * @return map of stage to probability
      */
     @JvmStatic
-    fun getStageProbs(bossDrop: Boolean, flameType: FlameType): Map<Int, Double> {
-        return when (flameType) {
-            FlameType.POWERFUL -> if (bossDrop) BOSS_POWERFUL else OTHER_POWERFUL
-            FlameType.ETERNAL -> if (bossDrop) BOSS_ETERNAL else OTHER_ETERNAL
-            FlameType.ABYSS -> if (bossDrop) BOSS_ABYSS else OTHER_ABYSS
-        }
+    fun getStageProbs(bossDrop: Boolean, flameType: FlameType): Map<Int, Double> = when (flameType) {
+        FlameType.POWERFUL -> if (bossDrop) BOSS_POWERFUL else OTHER_POWERFUL
+        FlameType.ETERNAL -> if (bossDrop) BOSS_ETERNAL else OTHER_ETERNAL
+        FlameType.ABYSS -> if (bossDrop) BOSS_ABYSS else OTHER_ABYSS
     }
 }

@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.monitoring.alert
 
 import maple.expectation.core.port.out.AlertNotificationPort
-import maple.expectation.infrastructure.monitoring.copilot.notifier.DiscordNotifier
-import maple.expectation.infrastructure.monitoring.copilot.model.SignalDefinition
 import maple.expectation.infrastructure.monitoring.copilot.model.SeverityMapping
+import maple.expectation.infrastructure.monitoring.copilot.model.SignalDefinition
+import maple.expectation.infrastructure.monitoring.copilot.notifier.DiscordNotifier
 import org.springframework.stereotype.Component
 
 /**
@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component
  */
 @Component
 class AlertNotificationPortAdapter(
-    private val discordNotifier: DiscordNotifier
+    private val discordNotifier: DiscordNotifier,
 ) : AlertNotificationPort {
 
     override fun send(content: String) {
@@ -25,12 +25,12 @@ class AlertNotificationPortAdapter(
         severity: String,
         signals: List<AlertNotificationPort.AnnotatedSignal>,
         hypotheses: List<String>,
-        actions: List<String>
+        actions: List<String>,
     ): String {
         val annotatedSignals = signals.map { signal ->
             DiscordNotifier.AnnotatedSignal(
                 signal = createSignalDefinition(signal),
-                value = signal.value
+                value = signal.value,
             )
         }
 
@@ -39,26 +39,24 @@ class AlertNotificationPortAdapter(
             severity,
             annotatedSignals,
             hypotheses,
-            actions
+            actions,
         )
     }
 
-    private fun createSignalDefinition(signal: AlertNotificationPort.AnnotatedSignal): SignalDefinition {
-        return SignalDefinition(
-            id = signal.signalName.hashCode().toString(),
-            dashboardUid = "",
-            panelTitle = signal.signalName,
-            datasourceType = "Prometheus",
-            query = "",
-            legend = "",
-            unit = signal.signalUnit ?: "",
-            severityMapping = SeverityMapping(
-                warnThreshold = 0.0,
-                critThreshold = 0.0,
-                comparator = ">"
-            ),
-            sloTag = "",
-            metadata = emptyMap()
-        )
-    }
+    private fun createSignalDefinition(signal: AlertNotificationPort.AnnotatedSignal): SignalDefinition = SignalDefinition(
+        id = signal.signalName.hashCode().toString(),
+        dashboardUid = "",
+        panelTitle = signal.signalName,
+        datasourceType = "Prometheus",
+        query = "",
+        legend = "",
+        unit = signal.signalUnit ?: "",
+        severityMapping = SeverityMapping(
+            warnThreshold = 0.0,
+            critThreshold = 0.0,
+            comparator = ">",
+        ),
+        sloTag = "",
+        metadata = emptyMap(),
+    )
 }

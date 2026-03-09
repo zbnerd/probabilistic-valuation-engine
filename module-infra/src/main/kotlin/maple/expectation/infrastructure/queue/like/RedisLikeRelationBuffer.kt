@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.queue.like
 
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.core.port.out.LikeRelationBufferStrategy
 import maple.expectation.core.port.out.LikeRelationBufferStrategy.StrategyType
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -12,8 +13,6 @@ import org.redisson.api.RSet
 import org.redisson.api.RedissonClient
 import org.redisson.client.codec.StringCodec
 import org.slf4j.LoggerFactory
-import java.util.Collections
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Redis 기반 좋아요 관계 버퍼 (#271 V5 Stateless Architecture)
@@ -21,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference
 class RedisLikeRelationBuffer(
     private val redissonClient: RedissonClient,
     private val executor: LogicExecutor,
-    meterRegistry: MeterRegistry
+    meterRegistry: MeterRegistry,
 ) : LikeRelationBufferStrategy {
 
     private val meterRegistry: MeterRegistry
@@ -75,7 +74,7 @@ class RedisLikeRelationBuffer(
                 isNew
             },
             null,
-            TaskContext.of("LikeRelation", "Add", relationKey)
+            TaskContext.of("LikeRelation", "Add", relationKey),
         )
     }
 
@@ -85,17 +84,15 @@ class RedisLikeRelationBuffer(
         return executor.executeOrDefault(
             { relationSetProp.contains(relationKey) },
             null,
-            TaskContext.of("LikeRelation", "Exists", relationKey)
+            TaskContext.of("LikeRelation", "Exists", relationKey),
         )
     }
 
-    override fun fetchAndRemovePending(limit: Int): Set<String> {
-        return executor.executeOrDefault(
-            { doFetchAndRemovePending(limit) },
-            emptySet(),
-            TaskContext.of("LikeRelation", "FetchPending")
-        ) ?: emptySet()
-    }
+    override fun fetchAndRemovePending(limit: Int): Set<String> = executor.executeOrDefault(
+        { doFetchAndRemovePending(limit) },
+        emptySet(),
+        TaskContext.of("LikeRelation", "FetchPending"),
+    ) ?: emptySet()
 
     @Suppress("UNCHECKED_CAST")
     private fun doFetchAndRemovePending(limit: Int): Set<String> {
@@ -105,7 +102,7 @@ class RedisLikeRelationBuffer(
         val result = executor.executeOrCatch(
             { evalPendingWithCachedSha(script, sha, limit) },
             { e -> evalPendingWithReloadedSha(script, limit) },
-            TaskContext.of("LikeRelation", "EvalScript")
+            TaskContext.of("LikeRelation", "EvalScript"),
         ) as List<String>
 
         if (result.isNotEmpty()) {
@@ -126,7 +123,7 @@ class RedisLikeRelationBuffer(
             sha,
             RScript.ReturnType.MULTI,
             listOf(pendingKey),
-            limit.toString()
+            limit.toString(),
         )
     }
 
@@ -139,7 +136,7 @@ class RedisLikeRelationBuffer(
             sha,
             RScript.ReturnType.MULTI,
             listOf(pendingKey),
-            limit.toString()
+            limit.toString(),
         )
     }
 
@@ -157,7 +154,7 @@ class RedisLikeRelationBuffer(
                 removed
             },
             null,
-            TaskContext.of("LikeRelation", "Remove", relationKey)
+            TaskContext.of("LikeRelation", "Remove", relationKey),
         )
     }
 
@@ -167,7 +164,7 @@ class RedisLikeRelationBuffer(
         return executor.executeOrDefault(
             { unlikedSetProp.contains(relationKey) },
             null,
-            TaskContext.of("LikeRelation", "ExistsUnliked", relationKey)
+            TaskContext.of("LikeRelation", "ExistsUnliked", relationKey),
         )
     }
 
@@ -177,27 +174,21 @@ class RedisLikeRelationBuffer(
 
     fun getUnlikedSet(): RSet<String> = redissonClient.getSet(unlikedKey)
 
-    override fun getRelationsSize(): Int =
-        executor.executeOrDefault(
-            { relationSetProp.size },
-            0,
-            TaskContext.of("LikeRelation", "Size")
-        )
+    override fun getRelationsSize(): Int = executor.executeOrDefault(
+        { relationSetProp.size },
+        0,
+        TaskContext.of("LikeRelation", "Size"),
+    )
 
-    override fun getPendingSize(): Int =
-        executor.executeOrDefault(
-            { pendingSetProp.size },
-            0,
-            TaskContext.of("LikeRelation", "PendingSize")
-        )
+    override fun getPendingSize(): Int = executor.executeOrDefault(
+        { pendingSetProp.size },
+        0,
+        TaskContext.of("LikeRelation", "PendingSize"),
+    )
 
-    override fun buildRelationKey(accountId: String, targetOcid: String): String {
-        return "$accountId:$targetOcid"
-    }
+    override fun buildRelationKey(accountId: String, targetOcid: String): String = "$accountId:$targetOcid"
 
-    override fun parseRelationKey(relationKey: String): Array<String> {
-        return relationKey.split(":".toRegex(), 2).toTypedArray()
-    }
+    override fun parseRelationKey(relationKey: String): Array<String> = relationKey.split(":".toRegex(), 2).toTypedArray()
 
     fun getRelationsKey(): String = relationsKey
 

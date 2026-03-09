@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.nexon.outbox
 
+import java.time.LocalDateTime
 import maple.expectation.core.port.out.NexonApiOutboxProcessorPort
 import maple.expectation.domain.v2.NexonApiOutbox
 import maple.expectation.error.CommonErrorCode
@@ -15,7 +16,6 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
-import java.time.LocalDateTime
 
 /**
  * Nexon API Outbox 처리 서비스 (N19: Outbox Replay Pattern)
@@ -54,7 +54,7 @@ class NexonApiOutboxProcessor(
                 metrics.incrementPollFailure()
                 null
             },
-            context
+            context,
         )
     }
 
@@ -64,8 +64,11 @@ class NexonApiOutboxProcessor(
 
         for (entry in locked) {
             val result = processEntryInTransaction(entry.id!!)
-            if (result) success++
-            else failed++
+            if (result) {
+                success++
+            } else {
+                failed++
+            }
         }
 
         log.info("[NexonApiOutbox] 처리 완료: 성공={}, 실패={}", success, failed)
@@ -89,7 +92,7 @@ class NexonApiOutboxProcessor(
                 recoverFailedEntry(entryId, e.message ?: "Unknown error")
                 false
             },
-            context
+            context,
         )
     }
 
@@ -105,7 +108,7 @@ class NexonApiOutboxProcessor(
             throw ExternalApiException(
                 CommonErrorCode.EXTERNAL_API_ERROR,
                 "Nexon API call failed: %s",
-                entry.requestId
+                entry.requestId,
             )
         }
 
@@ -115,9 +118,7 @@ class NexonApiOutboxProcessor(
         return true
     }
 
-    private fun verifyIntegrity(entry: NexonApiOutbox): Boolean {
-        return entry.verifyIntegrity()
-    }
+    private fun verifyIntegrity(entry: NexonApiOutbox): Boolean = entry.verifyIntegrity()
 
     private fun recoverFailedEntry(entryId: Long, errorMessage: String) {
         val context = TaskContext.of("NexonApiOutbox", "RecoverFailed", entryId.toString())
@@ -133,7 +134,7 @@ class NexonApiOutboxProcessor(
                 null
             },
             null,
-            context
+            context,
         )
     }
 
@@ -158,7 +159,7 @@ class NexonApiOutboxProcessor(
             log.warn(
                 "[NexonApiOutbox] DLQ 이동: requestId={}, retryCount={}",
                 entry.requestId,
-                entry.retryCount
+                entry.retryCount,
             )
             metrics.incrementDlq()
 
@@ -172,7 +173,7 @@ class NexonApiOutboxProcessor(
         val staleTime = LocalDateTime.now().minus(properties.staleThreshold)
         val stalledEntries = outboxRepository.findStalledProcessing(
             staleTime,
-            PageRequest.of(0, properties.batchSize)
+            PageRequest.of(0, properties.batchSize),
         )
 
         if (stalledEntries.isEmpty()) {
@@ -188,7 +189,7 @@ class NexonApiOutboxProcessor(
             if (!verifyIntegrity(entry)) {
                 log.error(
                     "[NexonApiOutbox] 무결성 검증 실패 - Zombie 복구 중단, DLQ 이동: requestId={}",
-                    entry.requestId
+                    entry.requestId,
                 )
                 handleIntegrityFailure(entry)
                 integrityFailed++

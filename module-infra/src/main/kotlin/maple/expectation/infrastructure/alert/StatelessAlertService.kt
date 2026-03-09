@@ -1,7 +1,6 @@
 package maple.expectation.infrastructure.alert
 
 import maple.expectation.core.port.out.AlertPublisher
-import maple.expectation.infrastructure.alert.channel.AlertChannel
 import maple.expectation.infrastructure.alert.message.AlertMessage
 import maple.expectation.infrastructure.alert.strategy.AlertChannelStrategy
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -34,7 +33,7 @@ class StatelessAlertService(
     private val channelStrategy: AlertChannelStrategy,
     private val executor: LogicExecutor,
     @Value("\${alert.discord.webhook-url:}")
-    private val discordWebhookUrl: String
+    private val discordWebhookUrl: String,
 ) : AlertPublisher {
 
     private val log = LoggerFactory.getLogger(StatelessAlertService::class.java)
@@ -55,7 +54,7 @@ class StatelessAlertService(
                     log.warn("[StatelessAlertService] Failed to send critical alert: {}", title)
                 }
             },
-            TaskContext.of("AlertService", "Critical", title)
+            TaskContext.of("AlertService", "Critical", title),
         )
     }
 
@@ -75,7 +74,7 @@ class StatelessAlertService(
                     log.warn("[StatelessAlertService] Failed to send warning alert: {}", title)
                 }
             },
-            TaskContext.of("AlertService", "Warning", title)
+            TaskContext.of("AlertService", "Warning", title),
         )
     }
 
@@ -94,7 +93,7 @@ class StatelessAlertService(
                     log.warn("[StatelessAlertService] Failed to send info alert: {}", title)
                 }
             },
-            TaskContext.of("AlertService", "Info", title)
+            TaskContext.of("AlertService", "Info", title),
         )
     }
 }

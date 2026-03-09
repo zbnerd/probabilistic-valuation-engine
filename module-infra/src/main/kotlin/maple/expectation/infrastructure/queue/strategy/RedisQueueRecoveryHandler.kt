@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.queue.strategy
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
+import java.time.Instant
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.queue.BufferLuaScripts
@@ -15,7 +16,6 @@ import org.redisson.api.RScript
 import org.redisson.api.RedissonClient
 import org.redisson.client.codec.StringCodec
 import org.slf4j.LoggerFactory
-import java.time.Instant
 
 class RedisQueueRecoveryHandler<T>(
     private val redissonClient: RedissonClient,
@@ -25,7 +25,7 @@ class RedisQueueRecoveryHandler<T>(
     private val meterRegistry: MeterRegistry,
     private val payloadType: Class<T>,
     private val metricsManager: RedisQueueMetricsManager,
-    private val queueType: QueueType
+    private val queueType: QueueType,
 ) {
     private val log = LoggerFactory.getLogger(RedisQueueRecoveryHandler::class.java)
 
@@ -48,28 +48,26 @@ class RedisQueueRecoveryHandler<T>(
             BufferLuaScripts.GET_EXPIRED_INFLIGHT,
             { sha -> scriptProvider.updateGetExpiredInflightSha(sha) },
             { sha -> executeGetExpiredInflightScript(sha, maxTimestamp, limit) },
-            "GetExpiredInflight"
+            "GetExpiredInflight",
         )
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun executeGetExpiredInflightScript(sha: String, maxTimestamp: Long, limit: Int): List<String> {
-        return executor.executeOrDefault(
-            {
-                val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
-                script.evalSha(
-                    RScript.Mode.READ_ONLY,
-                    sha,
-                    RScript.ReturnType.MULTI,
-                    listOf(inflightTsKey),
-                    maxTimestamp.toString(),
-                    limit.toString()
-                ) as? List<String> ?: emptyList()
-            },
-            emptyList(),
-            TaskContext.of("RedisBuffer", "GetExpiredInflight")
-        )
-    }
+    private fun executeGetExpiredInflightScript(sha: String, maxTimestamp: Long, limit: Int): List<String> = executor.executeOrDefault(
+        {
+            val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
+            script.evalSha(
+                RScript.Mode.READ_ONLY,
+                sha,
+                RScript.ReturnType.MULTI,
+                listOf(inflightTsKey),
+                maxTimestamp.toString(),
+                limit.toString(),
+            ) as? List<String> ?: emptyList()
+        },
+        emptyList(),
+        TaskContext.of("RedisBuffer", "GetExpiredInflight"),
+    )
 
     fun redrive(msgId: String): Boolean {
         val result = scriptProvider.executeWithNoscriptHandling(
@@ -77,7 +75,7 @@ class RedisQueueRecoveryHandler<T>(
             BufferLuaScripts.REDRIVE,
             { sha -> scriptProvider.updateRedriveSha(sha) },
             { sha -> executeRedriveScript(sha, msgId) },
-            "Redrive"
+            "Redrive",
         )
 
         if (result != null && result > 0) {
@@ -93,23 +91,21 @@ class RedisQueueRecoveryHandler<T>(
         }
     }
 
-    private fun executeRedriveScript(sha: String, msgId: String): Long {
-        return executor.executeOrDefault(
-            {
-                val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
-                @Suppress("UNCHECKED_CAST")
-                script.evalSha(
-                    RScript.Mode.READ_WRITE,
-                    sha,
-                    RScript.ReturnType.INTEGER,
-                    listOf(inflightKey, inflightTsKey, mainQueueKey),
-                    msgId
-                ) as Long
-            },
-            0L,
-            TaskContext.of("RedisBuffer", "Redrive", msgId)
-        )
-    }
+    private fun executeRedriveScript(sha: String, msgId: String): Long = executor.executeOrDefault(
+        {
+            val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
+            @Suppress("UNCHECKED_CAST")
+            script.evalSha(
+                RScript.Mode.READ_WRITE,
+                sha,
+                RScript.ReturnType.INTEGER,
+                listOf(inflightKey, inflightTsKey, mainQueueKey),
+                msgId,
+            ) as Long
+        },
+        0L,
+        TaskContext.of("RedisBuffer", "Redrive", msgId),
+    )
 
     fun processRetryQueue(limit: Int): List<String> {
         val now = System.currentTimeMillis()
@@ -120,7 +116,7 @@ class RedisQueueRecoveryHandler<T>(
             BufferLuaScripts.PROCESS_RETRY_QUEUE,
             { sha -> scriptProvider.updateProcessRetryQueueSha(sha) },
             { sha -> executeProcessRetryQueueScript(sha, now, limit) },
-            "ProcessRetryQueue"
+            "ProcessRetryQueue",
         ) as? List<String> ?: emptyList()
 
         if (processed.isNotEmpty()) {
@@ -134,23 +130,21 @@ class RedisQueueRecoveryHandler<T>(
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun executeProcessRetryQueueScript(sha: String, now: Long, limit: Int): List<String> {
-        return executor.executeOrDefault(
-            {
-                val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
-                script.evalSha(
-                    RScript.Mode.READ_WRITE,
-                    sha,
-                    RScript.ReturnType.MULTI,
-                    listOf(retryKey, mainQueueKey),
-                    now.toString(),
-                    limit.toString()
-                ) as? List<String> ?: emptyList()
-            },
-            emptyList(),
-            TaskContext.of("RedisBuffer", "ProcessRetryQueue")
-        )
-    }
+    private fun executeProcessRetryQueueScript(sha: String, now: Long, limit: Int): List<String> = executor.executeOrDefault(
+        {
+            val script: RScript = redissonClient.getScript(StringCodec.INSTANCE)
+            script.evalSha(
+                RScript.Mode.READ_WRITE,
+                sha,
+                RScript.ReturnType.MULTI,
+                listOf(retryKey, mainQueueKey),
+                now.toString(),
+                limit.toString(),
+            ) as? List<String> ?: emptyList()
+        },
+        emptyList(),
+        TaskContext.of("RedisBuffer", "ProcessRetryQueue"),
+    )
 
     fun pollDlq(maxCount: Int): List<QueueMessage<T>> {
         val messages = mutableListOf<QueueMessage<T>>()
@@ -170,20 +164,18 @@ class RedisQueueRecoveryHandler<T>(
                 messages
             },
             messages,
-            TaskContext.of("RedisBuffer", "PollDlq")
+            TaskContext.of("RedisBuffer", "PollDlq"),
         )
     }
 
-    fun getPayload(msgId: String): String? {
-        return executor.executeOrDefault(
-            {
-                val map: RMap<String, String> = redissonClient.getMap(payloadKey, StringCodec.INSTANCE)
-                map.get(msgId)
-            },
-            null,
-            TaskContext.of("RedisBuffer", "GetPayload", msgId)
-        )
-    }
+    fun getPayload(msgId: String): String? = executor.executeOrDefault(
+        {
+            val map: RMap<String, String> = redissonClient.getMap(payloadKey, StringCodec.INSTANCE)
+            map.get(msgId)
+        },
+        null,
+        TaskContext.of("RedisBuffer", "GetPayload", msgId),
+    )
 
     fun deserializePayload(msgId: String, payloadJson: String?): QueueMessage<T>? {
         if (payloadJson == null) return null
@@ -191,7 +183,8 @@ class RedisQueueRecoveryHandler<T>(
         return executor.executeOrDefault(
             {
                 val wrapperType = objectMapper.typeFactory.constructParametricType(
-                    PayloadWrapper::class.java, payloadType
+                    PayloadWrapper::class.java,
+                    payloadType,
                 )
                 val wrapper = objectMapper.readValue<PayloadWrapper<T>>(payloadJson, wrapperType)
 
@@ -199,21 +192,19 @@ class RedisQueueRecoveryHandler<T>(
                     msgId,
                     wrapper.payload,
                     wrapper.retryCount,
-                    Instant.ofEpochMilli(wrapper.createdAtMs)
+                    Instant.ofEpochMilli(wrapper.createdAtMs),
                 )
             },
             null,
-            TaskContext.of("RedisBuffer", "Deserialize", msgId)
+            TaskContext.of("RedisBuffer", "Deserialize", msgId),
         )
     }
 
-    fun calculateBackoffDelay(retryCount: Int): Long {
-        return BASE_RETRY_DELAY_MS * (1L shl retryCount)
-    }
+    fun calculateBackoffDelay(retryCount: Int): Long = BASE_RETRY_DELAY_MS * (1L shl retryCount)
 
     private data class PayloadWrapper<T>(
         val payload: T,
         val retryCount: Int,
-        val createdAtMs: Long
+        val createdAtMs: Long,
     )
 }

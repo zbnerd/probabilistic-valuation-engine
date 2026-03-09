@@ -59,7 +59,7 @@ import org.springframework.stereotype.Component
 class UpdateRequestCoalescer(
     private val redissonClient: RedissonClient,
     private val executor: LogicExecutor,
-    private val resourceLoader: ResourceLoader
+    private val resourceLoader: ResourceLoader,
 ) {
     private val logger = LoggerFactory.getLogger(UpdateRequestCoalescer::class.java)
 
@@ -73,7 +73,7 @@ class UpdateRequestCoalescer(
     data class CoalesceResult(
         val status: String,
         val batchCount: Int,
-        val shouldFlush: Boolean
+        val shouldFlush: Boolean,
     ) {
         fun isDuplicate() = "DUPLICATE" == status
         fun isQueued() = "QUEUED" == status
@@ -99,23 +99,21 @@ class UpdateRequestCoalescer(
         eventId: String,
         eventData: String,
         maxBatchSize: Int,
-        ttlSeconds: Int
-    ): CoalesceResult {
-        return executor.executeWithTranslation(
-            {
-                coalesceInternal(
-                    userId,
-                    eventType,
-                    eventId,
-                    eventData,
-                    maxBatchSize,
-                    ttlSeconds
-                )
-            },
-            ExceptionTranslator.forRedisScript(),
-            TaskContext.of("UpdateRequestCoalescer", "Coalesce", userId)
-        )
-    }
+        ttlSeconds: Int,
+    ): CoalesceResult = executor.executeWithTranslation(
+        {
+            coalesceInternal(
+                userId,
+                eventType,
+                eventId,
+                eventData,
+                maxBatchSize,
+                ttlSeconds,
+            )
+        },
+        ExceptionTranslator.forRedisScript(),
+        TaskContext.of("UpdateRequestCoalescer", "Coalesce", userId),
+    )
 
     /**
      * Internal coalesce implementation with checked exceptions.
@@ -128,7 +126,7 @@ class UpdateRequestCoalescer(
         eventId: String,
         eventData: String,
         maxBatchSize: Int,
-        ttlSeconds: Int
+        ttlSeconds: Int,
     ): CoalesceResult {
         // Load Lua Script
         val luaScript = resourceLoader.loadResourceAsString(LUA_COALESCE_ADD)
@@ -150,7 +148,7 @@ class UpdateRequestCoalescer(
             eventId,
             eventData,
             maxBatchSize.toString(),
-            ttlSeconds.toString()
+            ttlSeconds.toString(),
         ) as List<Any>
 
         // Parse result: {status, batchCount, shouldFlush}
@@ -160,7 +158,11 @@ class UpdateRequestCoalescer(
 
         logger.debug(
             "[UpdateRequestCoalescer] Coalesce result: userId={}, eventId={}, status={}, batchCount={}, shouldFlush={}",
-            userId, eventId, status, batchCount, shouldFlush
+            userId,
+            eventId,
+            status,
+            batchCount,
+            shouldFlush,
         )
 
         return CoalesceResult(status, batchCount, shouldFlush)
@@ -175,13 +177,11 @@ class UpdateRequestCoalescer(
      * @param eventType Event type to query
      * @return Current batch count (0 if no data)
      */
-    fun getBatchCount(userId: String, eventType: String): Int {
-        return executor.executeOrDefault(
-            { getBatchCountInternal(userId, eventType) },
-            0,
-            TaskContext.of("UpdateRequestCoalescer", "GetBatchCount", userId)
-        )
-    }
+    fun getBatchCount(userId: String, eventType: String): Int = executor.executeOrDefault(
+        { getBatchCountInternal(userId, eventType) },
+        0,
+        TaskContext.of("UpdateRequestCoalescer", "GetBatchCount", userId),
+    )
 
     private fun getBatchCountInternal(userId: String, eventType: String): Int {
         val counterKey = buildCounterKey(userId)
@@ -198,12 +198,10 @@ class UpdateRequestCoalescer(
      * @param userId User identifier
      * @return List of event data (may be empty)
      */
-    fun flushBatch(userId: String): List<String> {
-        return executor.execute(
-            { flushBatchInternal(userId) },
-            TaskContext.of("UpdateRequestCoalescer", "FlushBatch", userId)
-        )
-    }
+    fun flushBatch(userId: String): List<String> = executor.execute(
+        { flushBatchInternal(userId) },
+        TaskContext.of("UpdateRequestCoalescer", "FlushBatch", userId),
+    )
 
     private fun flushBatchInternal(userId: String): List<String> {
         val coalesceKey = buildCoalesceKey(userId)
@@ -221,7 +219,7 @@ class UpdateRequestCoalescer(
         logger.debug(
             "[UpdateRequestCoalescer] Flushed batch: userId={}, eventCount={}",
             userId,
-            events.size
+            events.size,
         )
 
         return events

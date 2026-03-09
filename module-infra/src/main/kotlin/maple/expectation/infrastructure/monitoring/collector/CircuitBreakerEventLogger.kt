@@ -22,42 +22,44 @@ import org.springframework.stereotype.Component
  */
 @Component
 class CircuitBreakerEventLogger(
-    private val circuitBreakerRegistry: CircuitBreakerRegistry
+    private val circuitBreakerRegistry: CircuitBreakerRegistry,
 ) {
 
-  private val log = LoggerFactory.getLogger(CircuitBreakerEventLogger::class.java)
+    private val log = LoggerFactory.getLogger(CircuitBreakerEventLogger::class.java)
 
-  @PostConstruct
-  fun registerEventListeners() {
-    circuitBreakerRegistry.getAllCircuitBreakers()
-        .forEach { registerStateTransitionListener(it) }
+    @PostConstruct
+    fun registerEventListeners() {
+        circuitBreakerRegistry.getAllCircuitBreakers()
+            .forEach { registerStateTransitionListener(it) }
 
-    circuitBreakerRegistry.eventPublisher.onEntryAdded { event ->
-      registerStateTransitionListener(event.addedEntry)
+        circuitBreakerRegistry.eventPublisher.onEntryAdded { event ->
+            registerStateTransitionListener(event.addedEntry)
+        }
     }
-  }
 
-  private fun registerStateTransitionListener(cb: CircuitBreaker) {
-    cb.eventPublisher
-        .onStateTransition { event ->
-          log.warn(
-              "[CircuitBreaker:{}] State transition: {} → {}",
-              event.circuitBreakerName,
-              event.stateTransition.fromState,
-              event.stateTransition.toState
-          )
-        }
-        .onSlowCallRateExceeded { event ->
-          log.warn(
-              "[CircuitBreaker:{}] Slow call rate exceeded: {}%",
-              event.circuitBreakerName, event.slowCallRate
-          )
-        }
-        .onFailureRateExceeded { event ->
-          log.warn(
-              "[CircuitBreaker:{}] Failure rate exceeded: {}%",
-              event.circuitBreakerName, event.failureRate
-          )
-        }
-  }
+    private fun registerStateTransitionListener(cb: CircuitBreaker) {
+        cb.eventPublisher
+            .onStateTransition { event ->
+                log.warn(
+                    "[CircuitBreaker:{}] State transition: {} → {}",
+                    event.circuitBreakerName,
+                    event.stateTransition.fromState,
+                    event.stateTransition.toState,
+                )
+            }
+            .onSlowCallRateExceeded { event ->
+                log.warn(
+                    "[CircuitBreaker:{}] Slow call rate exceeded: {}%",
+                    event.circuitBreakerName,
+                    event.slowCallRate,
+                )
+            }
+            .onFailureRateExceeded { event ->
+                log.warn(
+                    "[CircuitBreaker:{}] Failure rate exceeded: {}%",
+                    event.circuitBreakerName,
+                    event.failureRate,
+                )
+            }
+    }
 }

@@ -24,5 +24,5 @@ import kotlin.reflect.KClass
 annotation class ValidIgn(
     val message: String = "캐릭터 닉네임 형식이 올바르지 않습니다 (1-12자, 한글/영문/숫자만 허용)",
     val groups: Array<KClass<*>> = [],
-    val payload: Array<KClass<out Payload>> = []
+    val payload: Array<KClass<out Payload>> = [],
 )

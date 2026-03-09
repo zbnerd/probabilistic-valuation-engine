@@ -164,6 +164,29 @@ services:
       timeout: 5s
       retries: 5
 
+  # PostgreSQL + PGMQ (Replacing MySQL + MongoDB + Redis Queue)
+  postgres:
+    image: postgres:16
+    container_name: maple-postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: maple
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
+      POSTGRES_DB: maple_expectation
+      TZ: ${TZ}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - maple-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maple -d maple_expectation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Grafana for visualization
   grafana:
     image: grafana/grafana:latest
@@ -196,3 +219,4 @@ volumes:
   mongodb_config:
   prometheus_data:
   grafana_data:
+  postgres_data:

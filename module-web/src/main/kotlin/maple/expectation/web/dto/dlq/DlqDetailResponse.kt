@@ -1,7 +1,7 @@
 package maple.expectation.web.dto.dlq
 
-import maple.expectation.domain.v2.DonationDlq
 import java.time.LocalDateTime
+import maple.expectation.domain.v2.DonationDlq
 
 /**
  * DLQ 상세 조회 응답 DTO
@@ -23,19 +23,18 @@ data class DlqDetailResponse(
     val eventType: String,
     val payload: String?,
     val failureReason: String?,
-    val movedAt: LocalDateTime
+    val movedAt: LocalDateTime,
 ) {
     companion object {
         @JvmStatic
-        fun from(dlq: DonationDlq): DlqDetailResponse =
-            DlqDetailResponse(
-                id = dlq.id ?: 0L,
-                originalOutboxId = dlq.originalOutboxId ?: 0L,
-                requestId = dlq.requestId ?: "",
-                eventType = dlq.eventType ?: "",
-                payload = dlq.payload,
-                failureReason = dlq.failureReason,
-                movedAt = dlq.movedAt ?: LocalDateTime.now()
-            )
+        fun from(dlq: DonationDlq): DlqDetailResponse = DlqDetailResponse(
+            id = dlq.id ?: 0L,
+            originalOutboxId = dlq.originalOutboxId ?: 0L,
+            requestId = dlq.requestId ?: "",
+            eventType = dlq.eventType ?: "",
+            payload = dlq.payload,
+            failureReason = dlq.failureReason,
+            movedAt = dlq.movedAt ?: LocalDateTime.now(),
+        )
     }
 }

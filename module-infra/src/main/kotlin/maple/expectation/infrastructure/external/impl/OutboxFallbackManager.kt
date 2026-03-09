@@ -1,14 +1,14 @@
 package maple.expectation.infrastructure.external.impl
 
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 import maple.expectation.domain.v2.NexonApiOutbox
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.NexonApiOutboxRepository
 import org.slf4j.LoggerFactory
 import org.springframework.transaction.support.TransactionTemplate
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
 
 /**
  * Outbox Fallback Manager - 실패한 API 호출을 Outbox에 적재하는 전담 클래스
@@ -31,7 +31,7 @@ class OutboxFallbackManager(
     private val outboxRepository: NexonApiOutboxRepository,
     private val checkedExecutor: CheckedLogicExecutor,
     private val transactionTemplate: TransactionTemplate,
-    private val alertTaskExecutor: Executor
+    private val alertTaskExecutor: Executor,
 ) {
 
     companion object {
@@ -66,7 +66,7 @@ class OutboxFallbackManager(
     fun saveToOutbox(
         requestId: String,
         eventType: NexonApiOutbox.NexonApiEventType,
-        payload: String
+        payload: String,
     ) {
         if (!isEnabled) {
             log.debug("[Outbox] Fallback 비활성화로 인해 Outbox 적재 스킵. requestId={}", requestId)
@@ -95,20 +95,20 @@ class OutboxFallbackManager(
                                 "[Outbox] 실패한 API 호출을 Outbox에 적재: requestId={}, eventType={}, payload={}",
                                 requestId,
                                 eventType,
-                                maskPayload(payload)
+                                maskPayload(payload),
                             )
                         }
                     },
-                    context
+                    context,
                 ) { e: Exception ->
                     // mapper: Exception -> RuntimeException 변환
                     maple.expectation.error.exception.ExternalServiceException(
                         "[Outbox] Outbox 적재 실패 (best-effort): requestId=$requestId",
-                        e
+                        e,
                     )
                 }
             },
-            alertTaskExecutor
+            alertTaskExecutor,
         ).exceptionally { ex ->
             log.error("[Outbox] Outbox 적재 비동기 실행 실패 (best-effort): requestId=$requestId", ex)
             null

@@ -1,8 +1,8 @@
 package maple.expectation.error.dto
 
+import java.time.LocalDateTime
 import maple.expectation.error.ErrorCode
 import maple.expectation.error.exception.base.BaseException
-import java.time.LocalDateTime
 
 /**
  * Standardized error response format for all API errors.

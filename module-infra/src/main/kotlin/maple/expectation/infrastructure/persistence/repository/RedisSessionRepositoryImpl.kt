@@ -2,17 +2,15 @@ package maple.expectation.infrastructure.persistence.repository
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.time.Duration
+import java.time.Instant
 import maple.expectation.core.domain.auth.Session
 import maple.expectation.domain.repository.RedisSessionRepository as DomainRedisSessionRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import org.jspecify.annotations.Nullable
-import org.redisson.api.RMap
 import org.redisson.api.RedissonClient
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Repository
-import java.time.Duration
-import java.time.Instant
 
 @Repository
 open class RedisSessionRepositoryImpl(
@@ -54,13 +52,11 @@ open class RedisSessionRepositoryImpl(
         )
     }
 
-    override fun findById(sessionId: String): Session? {
-        return executor.executeOrDefault(
-            { doFindById(sessionId) },
-            null,
-            TaskContext.of("Session", "FindById", sessionId),
-        )
-    }
+    override fun findById(sessionId: String): Session? = executor.executeOrDefault(
+        { doFindById(sessionId) },
+        null,
+        TaskContext.of("Session", "FindById", sessionId),
+    )
 
     private fun doFindById(sessionId: String): Session? {
         val key = buildKey(sessionId)
@@ -85,24 +81,22 @@ open class RedisSessionRepositoryImpl(
         )
     }
 
-    override fun refreshTtl(sessionId: String): Boolean {
-        return executor.executeOrDefault(
-            {
-                val key = buildKey(sessionId)
-                val map = redissonClient.getMap<String, String>(key)
+    override fun refreshTtl(sessionId: String): Boolean = executor.executeOrDefault(
+        {
+            val key = buildKey(sessionId)
+            val map = redissonClient.getMap<String, String>(key)
 
-                if (!map.isExists) {
-                    false
-                } else {
-                    map[FIELD_LAST_ACCESSED_AT] = Instant.now().toString()
-                    map.expire(Duration.ofSeconds(sessionTtlSeconds))
-                    true
-                }
-            },
-            false,
-            TaskContext.of("Session", "RefreshTtl", sessionId),
-        )
-    }
+            if (!map.isExists) {
+                false
+            } else {
+                map[FIELD_LAST_ACCESSED_AT] = Instant.now().toString()
+                map.expire(Duration.ofSeconds(sessionTtlSeconds))
+                true
+            }
+        },
+        false,
+        TaskContext.of("Session", "RefreshTtl", sessionId),
+    )
 
     override fun deleteById(sessionId: String) {
         executor.executeVoidJava(
@@ -114,16 +108,14 @@ open class RedisSessionRepositoryImpl(
         )
     }
 
-    override fun existsById(sessionId: String): Boolean {
-        return executor.executeOrDefault(
-            {
-                val key = buildKey(sessionId)
-                redissonClient.getMap<String, String>(key).isExists
-            },
-            false,
-            TaskContext.of("Session", "Exists", sessionId),
-        )
-    }
+    override fun existsById(sessionId: String): Boolean = executor.executeOrDefault(
+        {
+            val key = buildKey(sessionId)
+            redissonClient.getMap<String, String>(key).isExists
+        },
+        false,
+        TaskContext.of("Session", "Exists", sessionId),
+    )
 
     private fun buildKey(sessionId: String): String = SESSION_KEY_PREFIX + sessionId
 

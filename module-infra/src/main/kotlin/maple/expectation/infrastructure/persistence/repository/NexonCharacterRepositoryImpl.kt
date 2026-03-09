@@ -1,11 +1,10 @@
 package maple.expectation.infrastructure.persistence.repository
 
+import java.sql.PreparedStatement
 import maple.expectation.domain.nexon.NexonApiCharacterData
 import org.springframework.jdbc.core.BatchPreparedStatementSetter
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.transaction.annotation.Transactional
-import java.sql.PreparedStatement
-import java.sql.SQLException
 
 /**
  * Custom implementation fragment for NexonCharacterRepository batch operations.

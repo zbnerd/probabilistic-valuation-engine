@@ -2,20 +2,19 @@ package maple.expectation.infrastructure.queue.strategy
 
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
-import maple.expectation.infrastructure.queue.MessageQueueStrategy
-import maple.expectation.infrastructure.queue.QueueMessage
-import maple.expectation.infrastructure.queue.QueueType
-import org.slf4j.LoggerFactory
-import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
+import maple.expectation.infrastructure.queue.MessageQueueStrategy
+import maple.expectation.infrastructure.queue.QueueMessage
+import maple.expectation.infrastructure.queue.QueueType
+import org.slf4j.LoggerFactory
 
 class InMemoryBufferStrategy<T>(
     private val meterRegistry: MeterRegistry,
     private val maxRetries: Int = DEFAULT_MAX_RETRIES,
-    private val maxQueueSize: Int = DEFAULT_MAX_QUEUE_SIZE
+    private val maxQueueSize: Int = DEFAULT_MAX_QUEUE_SIZE,
 ) : MessageQueueStrategy<T> {
 
     private val log = LoggerFactory.getLogger(InMemoryBufferStrategy::class.java)

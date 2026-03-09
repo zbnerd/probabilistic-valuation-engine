@@ -9,7 +9,8 @@ enum class PotentialGrade(val koreanName: String) {
     RARE("레어"),
     EPIC("에픽"),
     UNIQUE("유니크"),
-    LEGENDARY("레전드리");
+    LEGENDARY("레전드리"),
+    ;
 
     companion object {
         private val KOREAN_MAP = entries.associateBy { it.koreanName }

@@ -1,20 +1,16 @@
 package maple.expectation.infrastructure.external.impl
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.concurrent.Executor
 import maple.expectation.domain.repository.CharacterEquipmentRepository
-import maple.expectation.domain.v2.NexonApiOutbox
 import maple.expectation.infrastructure.alert.StatelessAlertService
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.classifier.ExceptionClassifier
-import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.NexonApiOutboxRepository
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.transaction.support.TransactionTemplate
-import java.util.UUID
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
 
 /**
  * Nexon API Client Configuration - ResilientNexonApiClient 관련 Bean 설정
@@ -37,7 +33,7 @@ open class NexonApiClientConfig(
     private val transactionTemplate: TransactionTemplate,
     private val statelessAlertService: StatelessAlertService,
     private val equipmentRepository: CharacterEquipmentRepository,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
 ) {
 
     companion object {
@@ -52,11 +48,12 @@ open class NexonApiClientConfig(
      * @return OutboxFallbackManager 인스턴스
      */
     @Bean
-    open fun outboxFallbackManager(): OutboxFallbackManager {
-        return OutboxFallbackManager(
-            outboxRepository, checkedExecutor, transactionTemplate, alertTaskExecutor
-        )
-    }
+    open fun outboxFallbackManager(): OutboxFallbackManager = OutboxFallbackManager(
+        outboxRepository,
+        checkedExecutor,
+        transactionTemplate,
+        alertTaskExecutor,
+    )
 
     /**
      * Alert Notification Helper Bean
@@ -66,13 +63,11 @@ open class NexonApiClientConfig(
      * @return AlertNotificationHelper 인스턴스
      */
     @Bean
-    open fun alertNotificationHelper(): AlertNotificationHelper {
-        return AlertNotificationHelper(
-            statelessAlertService,
-            checkedExecutor,
-            alertTaskExecutor
-        )
-    }
+    open fun alertNotificationHelper(): AlertNotificationHelper = AlertNotificationHelper(
+        statelessAlertService,
+        checkedExecutor,
+        alertTaskExecutor,
+    )
 
     /**
      * Fallback Handler Bean
@@ -85,15 +80,13 @@ open class NexonApiClientConfig(
     open fun fallbackHandler(
         exceptionClassifier: ExceptionClassifier,
         outboxFallbackManager: OutboxFallbackManager,
-        alertNotificationHelper: AlertNotificationHelper
-    ): FallbackHandler {
-        return FallbackHandler(
-            equipmentRepository,
-            objectMapper,
-            checkedExecutor,
-            outboxFallbackManager,
-            alertNotificationHelper,
-            exceptionClassifier
-        )
-    }
+        alertNotificationHelper: AlertNotificationHelper,
+    ): FallbackHandler = FallbackHandler(
+        equipmentRepository,
+        objectMapper,
+        checkedExecutor,
+        outboxFallbackManager,
+        alertNotificationHelper,
+        exceptionClassifier,
+    )
 }

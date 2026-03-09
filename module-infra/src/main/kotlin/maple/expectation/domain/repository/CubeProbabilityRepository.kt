@@ -31,7 +31,7 @@ interface CubeProbabilityRepository {
         level: Int,
         part: String,
         grade: String,
-        slot: Int
+        slot: Int,
     ): List<CubeProbability>
 
     /**
@@ -58,7 +58,7 @@ interface CubeProbabilityRepository {
         part: String,
         grade: String,
         slot: Int,
-        tableVersion: String
+        tableVersion: String,
     ): List<CubeProbability>
 
     /**

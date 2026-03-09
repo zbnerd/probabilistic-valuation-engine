@@ -4,12 +4,12 @@ import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import java.io.IOException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.lang.NonNull
 import org.springframework.web.filter.OncePerRequestFilter
-import java.io.IOException
 
 /**
  * Prometheus 엔드포인트 보안 필터 (Issue #20, #34)
@@ -35,7 +35,7 @@ open class PrometheusSecurityFilter(
     private val logicExecutor: LogicExecutor,
     @Value("\${prometheus.security.trusted-proxies:127.0.0.1,::1,localhost}") trustedProxies: String,
     @Value("\${prometheus.security.internal-networks:172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}") internalNetworks: String,
-    @Value("\${prometheus.security.enabled:true}") private val enabled: Boolean
+    @Value("\${prometheus.security.enabled:true}") private val enabled: Boolean,
 ) : OncePerRequestFilter() {
 
     private val trustedProxies: List<String>
@@ -47,7 +47,7 @@ open class PrometheusSecurityFilter(
 
         println(
             "[Prometheus-Security] Filter initialized - enabled: $enabled, " +
-                    "trustedProxies: ${this.trustedProxies}, internalNetworks: ${this.internalNetworks}"
+                "trustedProxies: ${this.trustedProxies}, internalNetworks: ${this.internalNetworks}",
         )
     }
 
@@ -55,7 +55,7 @@ open class PrometheusSecurityFilter(
     override fun doFilterInternal(
         @NonNull request: HttpServletRequest,
         @NonNull response: HttpServletResponse,
-        @NonNull filterChain: FilterChain
+        @NonNull filterChain: FilterChain,
     ) {
         if (!enabled) {
             filterChain.doFilter(request, response)
@@ -74,18 +74,18 @@ open class PrometheusSecurityFilter(
         val isAllowed = logicExecutor.executeOrDefault(
             { validateClientIp(request) },
             false,
-            TaskContext.of("PrometheusSecurityFilter", "validateClientIp", request.remoteAddr)
+            TaskContext.of("PrometheusSecurityFilter", "validateClientIp", request.remoteAddr),
         )
 
         if (!isAllowed) {
             println(
                 "[Prometheus-Security] Access denied - remoteAddr: ${request.remoteAddr}, " +
-                        "xForwardedFor: ${request.getHeader("X-Forwarded-For")}, path: $path"
+                    "xForwardedFor: ${request.getHeader("X-Forwarded-For")}, path: $path",
             )
             response.status = HttpServletResponse.SC_FORBIDDEN
             response.contentType = "application/json;charset=UTF-8"
             response.writer.write(
-                "{\"code\":\"FORBIDDEN\",\"message\":\"Prometheus metrics access denied. Contact administrator.\"}"
+                "{\"code\":\"FORBIDDEN\",\"message\":\"Prometheus metrics access denied. Contact administrator.\"}",
             )
             return
         }
@@ -173,14 +173,12 @@ open class PrometheusSecurityFilter(
      * @param ip IP 주소
      * @return localhost 여부
      */
-    private fun isLocalhost(ip: String): Boolean {
-        return "127.0.0.1" == ip ||
-                "::1" == ip ||
-                "localhost".equals(ip, ignoreCase = true) ||
-                ip.startsWith("127.") ||
-                "0:0:0:0:0:0:0:1" == ip ||
-                "::ffff:127.0.0.1" == ip
-    }
+    private fun isLocalhost(ip: String): Boolean = "127.0.0.1" == ip ||
+        "::1" == ip ||
+        "localhost".equals(ip, ignoreCase = true) ||
+        ip.startsWith("127.") ||
+        "0:0:0:0:0:0:0:1" == ip ||
+        "::ffff:127.0.0.1" == ip
 
     /**
      * 내부 네트워크 확인 (CIDR)
@@ -229,7 +227,5 @@ open class PrometheusSecurityFilter(
         }
     }
 
-    override fun shouldNotFilter(@NonNull request: HttpServletRequest): Boolean {
-        return !enabled
-    }
+    override fun shouldNotFilter(@NonNull request: HttpServletRequest): Boolean = !enabled
 }

@@ -1,0 +1,56 @@
+# PostgreSQL Testcontainers Test Profile
+# Used by PostgresContainerBaseTest and related tests
+
+spring:
+  config:
+    activate:
+      on-profile: pgtest
+
+  datasource:
+    # Testcontainers will override these values dynamically
+    url: jdbc:tc:postgresql:16:///maple_expectation_test?TC_DAEMON=true
+    username: maple
+    password: test
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Disable other services for pure PostgreSQL testing
+  data:
+    mongodb:
+      auto-index-creation: false
+    redis:
+      host: localhost
+      port: 6379
+
+# Disable schedulers in test
+scheduler:
+  nexon-data-collection:
+    enabled: false
+  like-sync:
+    enabled: false
+  expectation-sync:
+    enabled: false
+  popular-character-warmup:
+    enabled: false
+
+outbox:
+  scheduler:
+    nexon-api-outbox:
+      enabled: false
+
+# Disable AI features in test
+langchain4j:
+  glm-4:
+    chat-model:
+      enabled: false
+
+# Disable rate limiting in test
+ratelimit:
+  enabled: false

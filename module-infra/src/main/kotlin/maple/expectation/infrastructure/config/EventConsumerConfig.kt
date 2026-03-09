@@ -1,16 +1,16 @@
 package maple.expectation.infrastructure.config
 
 import io.micrometer.core.instrument.MeterRegistry
-import org.slf4j.LoggerFactory
-import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.bind.Name
-import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+import org.slf4j.LoggerFactory
+import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.bind.Name
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 
 /**
  * Event Consumer Configuration - Priority-based thread pool separation.
@@ -50,7 +50,7 @@ class EventConsumerConfig {
      */
     @ConfigurationProperties(prefix = "event.consumer.high")
     data class HighPriorityConsumerProperties(
-        @Name("max-concurrent") val maxConcurrent: Int
+        @Name("max-concurrent") val maxConcurrent: Int,
     ) {
         init {
             if (maxConcurrent <= 0) {
@@ -71,7 +71,7 @@ class EventConsumerConfig {
      */
     @ConfigurationProperties(prefix = "event.consumer.low")
     data class LowPriorityConsumerProperties(
-        @Name("max-concurrent") val maxConcurrent: Int
+        @Name("max-concurrent") val maxConcurrent: Int,
     ) {
         init {
             if (maxConcurrent <= 0) {
@@ -100,7 +100,7 @@ class EventConsumerConfig {
     @Bean(name = ["highPriorityEventExecutor"])
     fun highPriorityEventExecutor(
         meterRegistry: MeterRegistry,
-        props: HighPriorityConsumerProperties
+        props: HighPriorityConsumerProperties,
     ): Executor {
         val semaphore = Semaphore(props.maxConcurrent)
         val virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor()
@@ -113,7 +113,7 @@ class EventConsumerConfig {
                     meterRegistry.counter("event.consumer.high.rejected").increment()
                     log.warn(
                         "[HighPriorityExecutor] Semaphore timeout - concurrent limit reached (limit={})",
-                        props.maxConcurrent
+                        props.maxConcurrent,
                     )
                     throw RejectedExecutionException("High priority event semaphore timeout")
                 }
@@ -144,7 +144,7 @@ class EventConsumerConfig {
     @Bean(name = ["lowPriorityEventExecutor"])
     fun lowPriorityEventExecutor(
         meterRegistry: MeterRegistry,
-        props: LowPriorityConsumerProperties
+        props: LowPriorityConsumerProperties,
     ): Executor {
         val semaphore = Semaphore(props.maxConcurrent)
         val virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor()
@@ -157,7 +157,7 @@ class EventConsumerConfig {
                     meterRegistry.counter("event.consumer.low.rejected").increment()
                     log.warn(
                         "[LowPriorityExecutor] Semaphore timeout - concurrent limit reached (limit={})",
-                        props.maxConcurrent
+                        props.maxConcurrent,
                     )
                     throw RejectedExecutionException("Low priority event semaphore timeout")
                 }
@@ -179,9 +179,7 @@ class EventConsumerConfig {
      * @return Properties with defaults applied
      */
     @Bean
-    fun highPriorityConsumerProperties(): HighPriorityConsumerProperties {
-        return HighPriorityConsumerProperties.defaults()
-    }
+    fun highPriorityConsumerProperties(): HighPriorityConsumerProperties = HighPriorityConsumerProperties.defaults()
 
     /**
      * Low-priority consumer properties bean.
@@ -189,7 +187,5 @@ class EventConsumerConfig {
      * @return Properties with defaults applied
      */
     @Bean
-    fun lowPriorityConsumerProperties(): LowPriorityConsumerProperties {
-        return LowPriorityConsumerProperties.defaults()
-    }
+    fun lowPriorityConsumerProperties(): LowPriorityConsumerProperties = LowPriorityConsumerProperties.defaults()
 }

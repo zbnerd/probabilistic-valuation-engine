@@ -22,7 +22,7 @@ package maple.expectation.infrastructure.ratelimit
 data class ConsumeResult(
     val allowed: Boolean,
     val remainingTokens: Long,
-    val retryAfterSeconds: Long
+    val retryAfterSeconds: Long,
 ) {
     companion object {
         /**
@@ -31,9 +31,7 @@ data class ConsumeResult(
          * @param remainingTokens 남은 토큰 수
          * @return 허용 결과
          */
-        fun allowed(remainingTokens: Long): ConsumeResult {
-            return ConsumeResult(true, remainingTokens, 0L)
-        }
+        fun allowed(remainingTokens: Long): ConsumeResult = ConsumeResult(true, remainingTokens, 0L)
 
         /**
          * 요청 거부 결과 생성
@@ -42,9 +40,7 @@ data class ConsumeResult(
          * @param retryAfterSeconds 재시도까지 대기 시간 (초)
          * @return 거부 결과
          */
-        fun denied(remainingTokens: Long, retryAfterSeconds: Long): ConsumeResult {
-            return ConsumeResult(false, remainingTokens, retryAfterSeconds)
-        }
+        fun denied(remainingTokens: Long, retryAfterSeconds: Long): ConsumeResult = ConsumeResult(false, remainingTokens, retryAfterSeconds)
 
         /**
          * Redis 장애 시 Fail-Open 허용 결과 생성
@@ -53,8 +49,6 @@ data class ConsumeResult(
          *
          * @return 허용 결과 (남은 토큰 -1로 장애 상황 표시)
          */
-        fun failOpen(): ConsumeResult {
-            return ConsumeResult(true, -1L, 0L)
-        }
+        fun failOpen(): ConsumeResult = ConsumeResult(true, -1L, 0L)
     }
 }

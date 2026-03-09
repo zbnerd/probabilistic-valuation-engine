@@ -26,7 +26,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
  */
 data class DiscordMessage(
     @JsonProperty("embeds")
-    val embeds: List<Embed>
+    val embeds: List<Embed>,
 ) {
     data class Embed(
         @JsonProperty("title")
@@ -40,7 +40,7 @@ data class DiscordMessage(
         @JsonProperty("footer")
         val footer: Footer,
         @JsonProperty("timestamp")
-        val timestamp: String
+        val timestamp: String,
     )
 
     data class Field(
@@ -49,11 +49,11 @@ data class DiscordMessage(
         @JsonProperty("value")
         val value: String,
         @JsonProperty("inline")
-        val inline: Boolean
+        val inline: Boolean,
     )
 
     data class Footer(
         @JsonProperty("text")
-        val text: String
+        val text: String,
     )
 }

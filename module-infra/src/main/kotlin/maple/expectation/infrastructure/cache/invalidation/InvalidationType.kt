@@ -19,5 +19,5 @@ enum class InvalidationType {
     EVICT,
 
     /** 캐시 전체 무효화 */
-    CLEAR_ALL
+    CLEAR_ALL,
 }

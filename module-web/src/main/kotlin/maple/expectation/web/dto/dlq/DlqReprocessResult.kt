@@ -12,16 +12,15 @@ data class DlqReprocessResult(
     val dlqId: Long,
     val newOutboxId: Long?,
     val requestId: String,
-    val message: String
+    val message: String,
 ) {
     companion object {
         @JvmStatic
-        fun success(dlqId: Long, newOutboxId: Long?, requestId: String): DlqReprocessResult =
-            DlqReprocessResult(
-                dlqId = dlqId,
-                newOutboxId = newOutboxId,
-                requestId = requestId,
-                message = "Successfully requeued to Outbox for reprocessing"
-            )
+        fun success(dlqId: Long, newOutboxId: Long?, requestId: String): DlqReprocessResult = DlqReprocessResult(
+            dlqId = dlqId,
+            newOutboxId = newOutboxId,
+            requestId = requestId,
+            message = "Successfully requeued to Outbox for reprocessing",
+        )
     }
 }

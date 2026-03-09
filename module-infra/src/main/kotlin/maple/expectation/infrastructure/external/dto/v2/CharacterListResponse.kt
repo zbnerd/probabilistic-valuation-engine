@@ -22,7 +22,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
  */
 data class CharacterListResponse(
     @JsonProperty("account_list")
-    val accountList: List<AccountInfo>? = null
+    val accountList: List<AccountInfo>? = null,
 ) {
 
     /** 모든 계정의 캐릭터 목록을 평탄화하여 반환 */
@@ -41,7 +41,7 @@ data class CharacterListResponse(
         val accountId: String? = null,
 
         @JsonProperty("character_list")
-        val characterList: List<CharacterInfo>? = null
+        val characterList: List<CharacterInfo>? = null,
     )
 
     /** 개별 캐릭터 정보 */
@@ -59,6 +59,6 @@ data class CharacterListResponse(
         val characterClass: String? = null,
 
         @JsonProperty("character_level")
-        val characterLevel: Int = 0
+        val characterLevel: Int = 0,
     )
 }

@@ -10,7 +10,7 @@ package maple.expectation.core.port.inbound
  */
 data class AuthCommand(
     val apiKey: String,
-    val userIgn: String
+    val userIgn: String,
 ) {
     init {
         require(apiKey.isNotBlank()) { "API Key는 필수입니다." }

@@ -1,10 +1,10 @@
 package maple.expectation.web.mapper
 
+import java.math.BigDecimal
+import java.util.Optional
 import maple.expectation.infrastructure.mongodb.CharacterValuationView
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5.*
-import java.math.BigDecimal
-import java.util.Optional
 
 /**
  * V5 CQRS: MongoDB View → V5 Response DTO Mapper
@@ -26,14 +26,12 @@ object CharacterViewMapper {
                 totalCostText = formatCostText(totalCost),
                 totalCostBreakdown = CostBreakdownDto.empty(),
                 maxPresetNo = view.maxPresetNo ?: 1,
-                presets = toPresetDtos(view.presets)
-            )
+                presets = toPresetDtos(view.presets),
+            ),
         )
     }
 
-    private fun toPresetDtos(presets: List<CharacterValuationView.PresetView>?): List<PresetExpectation> {
-        return presets?.mapNotNull { toPresetDto(it) } ?: emptyList()
-    }
+    private fun toPresetDtos(presets: List<CharacterValuationView.PresetView>?): List<PresetExpectation> = presets?.mapNotNull { toPresetDto(it) } ?: emptyList()
 
     private fun toPresetDto(preset: CharacterValuationView.PresetView?): PresetExpectation? {
         if (preset == null) return null
@@ -43,13 +41,11 @@ object CharacterViewMapper {
             totalExpectedCost = preset.totalExpectedCost?.toBigDecimal() ?: BigDecimal.ZERO,
             totalCostText = preset.totalCostText ?: "",
             costBreakdown = toCostBreakdownDto(preset.costBreakdown),
-            items = toItemDtos(preset.items)
+            items = toItemDtos(preset.items),
         )
     }
 
-    private fun toItemDtos(items: List<CharacterValuationView.ItemExpectationView>?): List<ItemExpectationV5> {
-        return items?.mapNotNull { toItemDto(it) } ?: emptyList()
-    }
+    private fun toItemDtos(items: List<CharacterValuationView.ItemExpectationView>?): List<ItemExpectationV5> = items?.mapNotNull { toItemDto(it) } ?: emptyList()
 
     private fun toItemDto(item: CharacterValuationView.ItemExpectationView?): ItemExpectationV5? {
         if (item == null) return null
@@ -72,7 +68,7 @@ object CharacterViewMapper {
             blackCubeExpectation = CubeExpectationDto.empty(),
             additionalCubeExpectation = CubeExpectationDto.empty(),
             starforceExpectation = StarforceExpectationDto.empty(),
-            flameExpectation = FlameExpectationDto.empty()
+            flameExpectation = FlameExpectationDto.empty(),
         )
     }
 
@@ -84,7 +80,7 @@ object CharacterViewMapper {
             redCubeCost = breakdown.redCubeCost?.toBigDecimal() ?: BigDecimal.ZERO,
             additionalCubeCost = breakdown.additionalCubeCost?.toBigDecimal() ?: BigDecimal.ZERO,
             starforceCost = breakdown.starforceCost?.toBigDecimal() ?: BigDecimal.ZERO,
-            flameCost = breakdown.flameCost?.toBigDecimal() ?: BigDecimal.ZERO
+            flameCost = breakdown.flameCost?.toBigDecimal() ?: BigDecimal.ZERO,
         )
     }
 

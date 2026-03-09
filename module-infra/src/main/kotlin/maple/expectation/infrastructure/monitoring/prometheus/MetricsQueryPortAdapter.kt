@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.monitoring.prometheus
 
+import java.time.Instant
 import maple.expectation.core.port.out.MetricsQueryPort
 import maple.expectation.infrastructure.monitoring.copilot.client.PrometheusClient
 import org.springframework.stereotype.Component
-import java.time.Instant
 
 /**
  * MetricsQueryPort 구현체 (ADR-005)
@@ -14,14 +14,14 @@ import java.time.Instant
  */
 @Component
 class MetricsQueryPortAdapter(
-    private val prometheusClient: PrometheusClient
+    private val prometheusClient: PrometheusClient,
 ) : MetricsQueryPort {
 
     override fun queryRange(
         promql: String,
         start: Instant,
         end: Instant,
-        step: String
+        step: String,
     ): List<MetricsQueryPort.MetricTimeSeries> {
         val prometheusSeries = prometheusClient.queryRange(promql, start, end, step)
 
@@ -31,9 +31,9 @@ class MetricsQueryPortAdapter(
                 values = series.values.map { vp ->
                     MetricsQueryPort.MetricValuePoint(
                         timestamp = vp.timestamp,
-                        value = vp.value
+                        value = vp.value,
                     )
-                }
+                },
             )
         }
     }

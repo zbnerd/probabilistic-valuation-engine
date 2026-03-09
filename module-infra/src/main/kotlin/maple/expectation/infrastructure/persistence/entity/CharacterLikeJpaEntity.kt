@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.persistence.entity
 
 import jakarta.persistence.*
+import java.time.LocalDateTime
 import maple.expectation.core.domain.model.like.CharacterLike
 import org.hibernate.annotations.CreationTimestamp
-import java.time.LocalDateTime
 
 @Entity
 @Table(
@@ -11,13 +11,13 @@ import java.time.LocalDateTime
     uniqueConstraints = [
         UniqueConstraint(
             name = "uk_target_liker",
-            columnNames = ["target_ocid", "liker_account_id"]
-        )
+            columnNames = ["target_ocid", "liker_account_id"],
+        ),
     ],
     indexes = [
         Index(name = "idx_target_ocid", columnList = "target_ocid"),
-        Index(name = "idx_liker_account_id", columnList = "liker_account_id")
-    ]
+        Index(name = "idx_liker_account_id", columnList = "liker_account_id"),
+    ],
 )
 open class CharacterLikeJpaEntity {
 
@@ -43,14 +43,12 @@ open class CharacterLikeJpaEntity {
         this.createdAt = LocalDateTime.now()
     }
 
-    open fun toDomain(): CharacterLike {
-        return CharacterLike.restore(
-            id ?: 0L,
-            targetOcid ?: "",
-            likerAccountId ?: "",
-            createdAt ?: LocalDateTime.now()
-        )
-    }
+    open fun toDomain(): CharacterLike = CharacterLike.restore(
+        id ?: 0L,
+        targetOcid ?: "",
+        likerAccountId ?: "",
+        createdAt ?: LocalDateTime.now(),
+    )
 
     companion object {
         fun fromDomain(domain: CharacterLike?): CharacterLikeJpaEntity {

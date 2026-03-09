@@ -15,7 +15,7 @@ data class FetchResult(
     @get:JvmName("tempKey")
     val tempKey: String?,
     @get:JvmName("data")
-    val data: Map<String, Long> = emptyMap()
+    val data: Map<String, Long> = emptyMap(),
 ) {
     companion object {
         /** 빈 결과 생성 (Empty Object Pattern) */

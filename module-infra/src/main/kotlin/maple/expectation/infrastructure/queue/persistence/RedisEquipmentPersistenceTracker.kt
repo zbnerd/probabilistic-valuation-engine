@@ -2,6 +2,11 @@ package maple.expectation.infrastructure.queue.persistence
 
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
+import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import maple.expectation.core.port.out.PersistenceTrackerStrategy
 import maple.expectation.core.port.out.PersistenceTrackerStrategy.StrategyType
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -10,11 +15,6 @@ import maple.expectation.infrastructure.queue.RedisKey
 import org.redisson.api.RSet
 import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
-import java.time.Duration
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Redis 기반 Equipment 비동기 저장 작업 추적기 (#271 V5 Stateless Architecture)
@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class RedisEquipmentPersistenceTracker(
     private val redissonClient: RedissonClient,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) : PersistenceTrackerStrategy {
 
     private val trackingKey: String
@@ -44,7 +44,7 @@ class RedisEquipmentPersistenceTracker(
             tracker.executor.executeOrDefault(
                 { tracker.trackingSet.size.toDouble() },
                 0.0,
-                TaskContext.of("PersistenceTracker", "GetGlobalCountMetric")
+                TaskContext.of("PersistenceTracker", "GetGlobalCountMetric"),
             )
         }
             .description("전역 pending 작업 수 (모든 인스턴스)")
@@ -76,7 +76,7 @@ class RedisEquipmentPersistenceTracker(
                     meterRegistry.counter("persistence.tracker.completed").increment()
                     log.debug("[PersistenceTracker] 비동기 저장 완료: {}", ocid)
                 },
-                TaskContext.of("PersistenceTracker", "CompleteOperation", ocid)
+                TaskContext.of("PersistenceTracker", "CompleteOperation", ocid),
             )
         }
 
@@ -116,7 +116,7 @@ class RedisEquipmentPersistenceTracker(
                 }
                 false
             },
-            context
+            context,
         )
     }
 
@@ -128,25 +128,21 @@ class RedisEquipmentPersistenceTracker(
 
     private val trackingSet: RSet<String> get() = redissonClient.getSet(trackingKey)
 
-    fun getGlobalPendingOcids(): List<String> {
-        return executor.executeOrDefault(
-            {
-                val tracking = trackingSet
-                val members = tracking.readAll()
-                members.toList()
-            },
-            emptyList(),
-            TaskContext.of("PersistenceTracker", "GetGlobalPending")
-        )
-    }
+    fun getGlobalPendingOcids(): List<String> = executor.executeOrDefault(
+        {
+            val tracking = trackingSet
+            val members = tracking.readAll()
+            members.toList()
+        },
+        emptyList(),
+        TaskContext.of("PersistenceTracker", "GetGlobalPending"),
+    )
 
-    fun isGloballyPending(ocid: String): Boolean {
-        return executor.executeOrDefault(
-            { trackingSet.contains(ocid) },
-            false,
-            TaskContext.of("PersistenceTracker", "IsPending", ocid)
-        )
-    }
+    fun isGloballyPending(ocid: String): Boolean = executor.executeOrDefault(
+        { trackingSet.contains(ocid) },
+        false,
+        TaskContext.of("PersistenceTracker", "IsPending", ocid),
+    )
 
     override fun resetForTesting() {
         shutdownInProgress.set(false)
@@ -154,7 +150,7 @@ class RedisEquipmentPersistenceTracker(
 
         executor.executeVoid(
             { trackingSet.clear() },
-            TaskContext.of("PersistenceTracker", "ResetForTesting")
+            TaskContext.of("PersistenceTracker", "ResetForTesting"),
         )
 
         log.debug("[PersistenceTracker] 테스트용 리셋 완료")
@@ -166,7 +162,7 @@ class RedisEquipmentPersistenceTracker(
                 trackingSet.add(ocid)
                 log.debug("[PersistenceTracker] Redis 추적 등록: {}", ocid)
             },
-            TaskContext.of("PersistenceTracker", "AddToRedis", ocid)
+            TaskContext.of("PersistenceTracker", "AddToRedis", ocid),
         )
     }
 
@@ -176,7 +172,7 @@ class RedisEquipmentPersistenceTracker(
                 trackingSet.remove(ocid)
                 log.debug("[PersistenceTracker] Redis 추적 제거: {}", ocid)
             },
-            TaskContext.of("PersistenceTracker", "RemoveFromRedis", ocid)
+            TaskContext.of("PersistenceTracker", "RemoveFromRedis", ocid),
         )
     }
 

@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.donation.outbox
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.annotation.PostConstruct
+import java.util.concurrent.atomic.AtomicLong
 import maple.expectation.core.port.out.OutboxMetricsPort
 import maple.expectation.domain.v2.DonationOutbox.OutboxStatus
 import maple.expectation.infrastructure.config.OutboxProperties
@@ -10,7 +11,6 @@ import maple.expectation.infrastructure.persistence.repository.DonationOutboxRep
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Outbox 메트릭 관리 (Issue #80)
@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicLong
 class OutboxMetrics(
     private val registry: MeterRegistry,
     private val repository: DonationOutboxRepository,
-    private val properties: OutboxProperties
+    private val properties: OutboxProperties,
 ) : OutboxMetricsPort {
 
     private val log = LoggerFactory.getLogger(javaClass)

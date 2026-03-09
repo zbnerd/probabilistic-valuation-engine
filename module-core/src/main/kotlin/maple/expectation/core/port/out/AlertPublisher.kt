@@ -22,36 +22,36 @@ package maple.expectation.core.port.out
  */
 interface AlertPublisher {
 
-  /**
-   * Send a critical alert
-   *
-   * <p>Critical alerts should bypass all stateful dependencies (Redis/DB) and be delivered
-   * immediately.
-   *
-   * @param title Alert title
-   * @param message Alert message
-   * @param error Throwable that caused the alert (may be null)
-   */
-  fun sendCritical(title: String, message: String, error: Throwable?)
+    /**
+     * Send a critical alert
+     *
+     * <p>Critical alerts should bypass all stateful dependencies (Redis/DB) and be delivered
+     * immediately.
+     *
+     * @param title Alert title
+     * @param message Alert message
+     * @param error Throwable that caused the alert (may be null)
+     */
+    fun sendCritical(title: String, message: String, error: Throwable?)
 
-  /**
-   * Send a warning alert
-   *
-   * @param title Alert title
-   * @param message Alert message
-   * @param error Throwable that caused the alert (may be null)
-   */
-  fun sendWarning(title: String, message: String, error: Throwable?) {
-    sendCritical(title, message, error)
-  }
+    /**
+     * Send a warning alert
+     *
+     * @param title Alert title
+     * @param message Alert message
+     * @param error Throwable that caused the alert (may be null)
+     */
+    fun sendWarning(title: String, message: String, error: Throwable?) {
+        sendCritical(title, message, error)
+    }
 
-  /**
-   * Send an info alert
-   *
-   * @param title Alert title
-   * @param message Alert message
-   */
-  fun sendInfo(title: String, message: String) {
-    sendCritical(title, message, null)
-  }
+    /**
+     * Send an info alert
+     *
+     * @param title Alert title
+     * @param message Alert message
+     */
+    fun sendInfo(title: String, message: String) {
+        sendCritical(title, message, null)
+    }
 }

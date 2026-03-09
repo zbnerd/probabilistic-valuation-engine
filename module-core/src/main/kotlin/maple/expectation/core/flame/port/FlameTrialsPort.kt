@@ -32,6 +32,6 @@ interface FlameTrialsPort {
         weights: FlameScoreCalculator.JobWeights,
         target: Int,
         baseAtt: Int,
-        baseMag: Int
+        baseMag: Int,
     ): Double?
 }

@@ -1,10 +1,10 @@
 package maple.expectation.infrastructure.persistence.entity
 
 import jakarta.persistence.*
+import java.time.LocalDateTime
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.core.domain.model.character.UserIgn
-import java.time.LocalDateTime
 
 /**
  * JPA Entity for Game Character persistence.
@@ -87,7 +87,7 @@ open class GameCharacterJpaEntity {
             basicInfoUpdatedAt,
             likeCount,
             version,
-            updatedAt ?: LocalDateTime.now()
+            updatedAt ?: LocalDateTime.now(),
         )
     }
 

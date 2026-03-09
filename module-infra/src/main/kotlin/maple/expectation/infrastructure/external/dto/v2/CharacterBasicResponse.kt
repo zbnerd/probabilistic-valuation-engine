@@ -26,5 +26,5 @@ data class CharacterBasicResponse(
     val characterImage: String? = null,
 
     @JsonProperty("character_guild_name")
-    val guildName: String? = null
+    val guildName: String? = null,
 )

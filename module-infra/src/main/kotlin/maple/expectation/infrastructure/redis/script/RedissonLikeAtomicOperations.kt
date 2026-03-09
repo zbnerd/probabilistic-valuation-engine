@@ -9,14 +9,13 @@ import org.redisson.api.RedissonClient
 import org.redisson.client.codec.StringCodec
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.Arrays
 
 @Component
 class RedissonLikeAtomicOperations(
     private val redissonClient: RedissonClient,
     private val scriptProvider: LuaScriptProvider,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) : LikeAtomicOperations {
 
     private val logger = LoggerFactory.getLogger(RedissonLikeAtomicOperations::class.java)
@@ -32,11 +31,11 @@ class RedissonLikeAtomicOperations(
                     LuaScripts.ATOMIC_TRANSFER,
                     { scriptProvider.updateTransferSha(it) },
                     { sha -> executeTransferScript(sha, userIgn, count) },
-                    "Transfer"
+                    "Transfer",
                 )
             },
             { stopTimer(sample, "transfer") },
-            TaskContext.of("AtomicOps", "TransferTimed", userIgn)
+            TaskContext.of("AtomicOps", "TransferTimed", userIgn),
         )
     }
 
@@ -52,11 +51,11 @@ class RedissonLikeAtomicOperations(
                     LuaScripts.ATOMIC_DELETE_AND_DECREMENT,
                     { scriptProvider.updateDeleteAndDecrementSha(it) },
                     { sha -> executeDeleteAndDecrementScript(sha, tempKey, userIgn, count) },
-                    "DeleteAndDecrement"
+                    "DeleteAndDecrement",
                 )
             },
             { stopTimer(sample, "deleteAndDecrement") },
-            TaskContext.of("AtomicOps", "DeleteAndDecrementTimed", userIgn)
+            TaskContext.of("AtomicOps", "DeleteAndDecrementTimed", userIgn),
         )
     }
 
@@ -68,7 +67,7 @@ class RedissonLikeAtomicOperations(
         return executor.executeWithFinally(
             { executeCompensationWithMetrics(tempKey, userIgn, count) },
             { stopTimer(sample, "compensation") },
-            TaskContext.of("AtomicOps", "CompensationTimed", userIgn)
+            TaskContext.of("AtomicOps", "CompensationTimed", userIgn),
         )
     }
 
@@ -78,7 +77,7 @@ class RedissonLikeAtomicOperations(
             LuaScripts.ATOMIC_COMPENSATION,
             { scriptProvider.updateCompensationSha(it) },
             { sha -> executeCompensationScript(sha, tempKey, userIgn, count) },
-            "Compensation"
+            "Compensation",
         )
 
         if (result) {
@@ -89,62 +88,56 @@ class RedissonLikeAtomicOperations(
         return result
     }
 
-    private fun executeTransferScript(sha: String, userIgn: String, count: Long): Boolean {
-        return executor.executeOrDefault(
-            {
-                val script = redissonClient.getScript(StringCodec.INSTANCE)
-                val result = script.evalSha<Any>(
-                    RScript.Mode.READ_WRITE,
-                    sha,
-                    RScript.ReturnType.INTEGER,
-                    listOf(LuaScripts.Keys.HASH, LuaScripts.Keys.TOTAL_COUNT),
-                    userIgn,
-                    count.toString()
-                )
-                result != null && result == 1L
-            },
-            false,
-            TaskContext.of("AtomicOps", "Transfer", userIgn)
-        )
-    }
+    private fun executeTransferScript(sha: String, userIgn: String, count: Long): Boolean = executor.executeOrDefault(
+        {
+            val script = redissonClient.getScript(StringCodec.INSTANCE)
+            val result = script.evalSha<Any>(
+                RScript.Mode.READ_WRITE,
+                sha,
+                RScript.ReturnType.INTEGER,
+                listOf(LuaScripts.Keys.HASH, LuaScripts.Keys.TOTAL_COUNT),
+                userIgn,
+                count.toString(),
+            )
+            result != null && result == 1L
+        },
+        false,
+        TaskContext.of("AtomicOps", "Transfer", userIgn),
+    )
 
-    private fun executeDeleteAndDecrementScript(sha: String, tempKey: String, userIgn: String, count: Long): Long {
-        return executor.executeOrDefault(
-            {
-                val script = redissonClient.getScript(StringCodec.INSTANCE)
-                val result = script.evalSha<Any>(
-                    RScript.Mode.READ_WRITE,
-                    sha,
-                    RScript.ReturnType.INTEGER,
-                    listOf(tempKey, LuaScripts.Keys.TOTAL_COUNT),
-                    userIgn,
-                    count.toString()
-                )
-                (result as? Long) ?: 0L
-            },
-            0L,
-            TaskContext.of("AtomicOps", "DeleteAndDecrement", userIgn)
-        )
-    }
+    private fun executeDeleteAndDecrementScript(sha: String, tempKey: String, userIgn: String, count: Long): Long = executor.executeOrDefault(
+        {
+            val script = redissonClient.getScript(StringCodec.INSTANCE)
+            val result = script.evalSha<Any>(
+                RScript.Mode.READ_WRITE,
+                sha,
+                RScript.ReturnType.INTEGER,
+                listOf(tempKey, LuaScripts.Keys.TOTAL_COUNT),
+                userIgn,
+                count.toString(),
+            )
+            (result as? Long) ?: 0L
+        },
+        0L,
+        TaskContext.of("AtomicOps", "DeleteAndDecrement", userIgn),
+    )
 
-    private fun executeCompensationScript(sha: String, tempKey: String, userIgn: String, count: Long): Boolean {
-        return executor.executeOrDefault(
-            {
-                val script = redissonClient.getScript(StringCodec.INSTANCE)
-                val result = script.evalSha<Any>(
-                    RScript.Mode.READ_WRITE,
-                    sha,
-                    RScript.ReturnType.INTEGER,
-                    listOf(LuaScripts.Keys.HASH, tempKey),
-                    userIgn,
-                    count.toString()
-                )
-                result != null && result == 1L
-            },
-            false,
-            TaskContext.of("AtomicOps", "Compensation", userIgn)
-        )
-    }
+    private fun executeCompensationScript(sha: String, tempKey: String, userIgn: String, count: Long): Boolean = executor.executeOrDefault(
+        {
+            val script = redissonClient.getScript(StringCodec.INSTANCE)
+            val result = script.evalSha<Any>(
+                RScript.Mode.READ_WRITE,
+                sha,
+                RScript.ReturnType.INTEGER,
+                listOf(LuaScripts.Keys.HASH, tempKey),
+                userIgn,
+                count.toString(),
+            )
+            result != null && result == 1L
+        },
+        false,
+        TaskContext.of("AtomicOps", "Compensation", userIgn),
+    )
 
     private fun stopTimer(sample: Timer.Sample, scriptName: String) {
         sample.stop(meterRegistry.timer("like.sync.lua.duration", "script", scriptName))

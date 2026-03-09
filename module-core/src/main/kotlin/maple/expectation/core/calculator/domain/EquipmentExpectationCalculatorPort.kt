@@ -61,35 +61,27 @@ interface EquipmentExpectationCalculatorPort {
         val starforceCost: BigDecimal = BigDecimal.ZERO,
         val blackCubeTrials: BigDecimal = BigDecimal.ZERO,
         val redCubeTrials: BigDecimal = BigDecimal.ZERO,
-        val additionalCubeTrials: BigDecimal = BigDecimal.ZERO
+        val additionalCubeTrials: BigDecimal = BigDecimal.ZERO,
     ) {
         companion object {
             @JvmStatic
             fun empty() = CostBreakdown()
         }
 
-        fun total() =
-            blackCubeCost.add(redCubeCost).add(additionalCubeCost).add(starforceCost)
+        fun total() = blackCubeCost.add(redCubeCost).add(additionalCubeCost).add(starforceCost)
 
-        fun withBlackCube(cost: BigDecimal) =
-            copy(blackCubeCost = cost)
+        fun withBlackCube(cost: BigDecimal) = copy(blackCubeCost = cost)
 
-        fun withBlackCube(cost: BigDecimal, trials: BigDecimal) =
-            copy(blackCubeCost = cost, blackCubeTrials = trials)
+        fun withBlackCube(cost: BigDecimal, trials: BigDecimal) = copy(blackCubeCost = cost, blackCubeTrials = trials)
 
-        fun withRedCube(cost: BigDecimal) =
-            copy(redCubeCost = cost)
+        fun withRedCube(cost: BigDecimal) = copy(redCubeCost = cost)
 
-        fun withRedCube(cost: BigDecimal, trials: BigDecimal) =
-            copy(redCubeCost = cost, redCubeTrials = trials)
+        fun withRedCube(cost: BigDecimal, trials: BigDecimal) = copy(redCubeCost = cost, redCubeTrials = trials)
 
-        fun withAdditionalCube(cost: BigDecimal) =
-            copy(additionalCubeCost = cost)
+        fun withAdditionalCube(cost: BigDecimal) = copy(additionalCubeCost = cost)
 
-        fun withAdditionalCube(cost: BigDecimal, trials: BigDecimal) =
-            copy(additionalCubeCost = cost, additionalCubeTrials = trials)
+        fun withAdditionalCube(cost: BigDecimal, trials: BigDecimal) = copy(additionalCubeCost = cost, additionalCubeTrials = trials)
 
-        fun withStarforce(cost: BigDecimal) =
-            copy(starforceCost = cost)
+        fun withStarforce(cost: BigDecimal) = copy(starforceCost = cost)
     }
 }

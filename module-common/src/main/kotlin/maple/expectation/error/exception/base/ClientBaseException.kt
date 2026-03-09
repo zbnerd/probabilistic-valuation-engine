@@ -22,8 +22,7 @@ import maple.expectation.error.ErrorCode
  * @see ErrorCode
  * @see maple.expectation.infrastructure.executor.classifier.DefaultExceptionClassifier
  */
-abstract class ClientBaseException :
-    BaseException {
+abstract class ClientBaseException : BaseException {
 
     /**
      * Create exception with static error message.

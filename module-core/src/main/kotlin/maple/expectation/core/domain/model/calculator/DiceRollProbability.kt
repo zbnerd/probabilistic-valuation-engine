@@ -14,17 +14,17 @@ package maple.expectation.core.domain.model.calculator
  */
 data class DiceRollProbability(val successValue: Int, val successProbability: Double) {
 
-  init {
-    require(successValue >= 0) { "successValue must be non-negative" }
-    require(successProbability in 0.0..1.0) {
-      "successProbability must be between 0 and 1: $successProbability"
+    init {
+        require(successValue >= 0) { "successValue must be non-negative" }
+        require(successProbability in 0.0..1.0) {
+            "successProbability must be between 0 and 1: $successProbability"
+        }
     }
-  }
 
-  /** 성공 확률로 SparsePmf 생성 */
-  fun toSparsePmf(): SparsePmf {
-    val values = intArrayOf(successValue, 0)
-    val probs = doubleArrayOf(successProbability, 1.0 - successProbability)
-    return SparsePmf(values, probs)
-  }
+    /** 성공 확률로 SparsePmf 생성 */
+    fun toSparsePmf(): SparsePmf {
+        val values = intArrayOf(successValue, 0)
+        val probs = doubleArrayOf(successProbability, 1.0 - successProbability)
+        return SparsePmf(values, probs)
+    }
 }

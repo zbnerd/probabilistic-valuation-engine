@@ -7,13 +7,13 @@ package maple.expectation.core.domain.model.character
  */
 data class CharacterId(@get:JvmName("value") val value: String) {
 
-  init {
-    requireNotNull(value) { "CharacterId value cannot be null" }
-    require(value.isNotBlank()) { "CharacterId value cannot be blank" }
-  }
+    init {
+        requireNotNull(value) { "CharacterId value cannot be null" }
+        require(value.isNotBlank()) { "CharacterId value cannot be blank" }
+    }
 
-  companion object {
-    @JvmStatic
-    fun of(value: String): CharacterId = CharacterId(value)
-  }
+    companion object {
+        @JvmStatic
+        fun of(value: String): CharacterId = CharacterId(value)
+    }
 }

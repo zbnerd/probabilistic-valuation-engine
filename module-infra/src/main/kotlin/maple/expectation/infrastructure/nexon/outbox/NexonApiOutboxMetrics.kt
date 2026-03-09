@@ -3,12 +3,12 @@ package maple.expectation.infrastructure.nexon.outbox
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.annotation.PostConstruct
+import java.util.concurrent.atomic.AtomicLong
 import maple.expectation.core.port.out.NexonApiOutboxMetricsPort
 import maple.expectation.domain.v2.NexonApiOutbox.OutboxStatus
 import maple.expectation.infrastructure.persistence.repository.NexonApiOutboxRepository
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Nexon API Outbox 메트릭 관리 (N19)

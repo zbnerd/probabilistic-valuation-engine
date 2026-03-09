@@ -18,11 +18,9 @@ data class MySQLDownEvent(
     val timestamp: Instant,
     val circuitBreakerName: String,
     val fromState: String,
-    val toState: String
+    val toState: String,
 ) {
     companion object {
-        fun of(cbName: String, fromState: String, toState: String): MySQLDownEvent {
-            return MySQLDownEvent(Instant.now(), cbName, fromState, toState)
-        }
+        fun of(cbName: String, fromState: String, toState: String): MySQLDownEvent = MySQLDownEvent(Instant.now(), cbName, fromState, toState)
     }
 }

@@ -11,7 +11,6 @@ import org.redisson.client.codec.StringCodec
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.util.concurrent.TimeUnit
 
 /**
  * Two-bucket rate limiter combining Token Bucket and Leaky Bucket algorithms.
@@ -69,7 +68,7 @@ class TwoBucketRateLimiter(
     private val resourceLoader: ResourceLoader,
     @Value("\${app.messaging.rate-limit.capacity:500}") private val capacity: Int,
     @Value("\${app.messaging.rate-limit.refill-rate:500}") private val refillRate: Int,
-    @Value("\${app.messaging.rate-limit.ttl-seconds:3600}") private val ttlSeconds: Int
+    @Value("\${app.messaging.rate-limit.ttl-seconds:3600}") private val ttlSeconds: Int,
 ) {
     private val logger = LoggerFactory.getLogger(TwoBucketRateLimiter::class.java)
 
@@ -83,7 +82,7 @@ class TwoBucketRateLimiter(
     data class RateLimitResult(
         val allowed: Boolean,
         val remainingTokens: Int,
-        val retryAfterSeconds: Int
+        val retryAfterSeconds: Int,
     ) {
         companion object {
             fun allowed(remainingTokens: Int) = RateLimitResult(true, remainingTokens, 0)
@@ -101,13 +100,11 @@ class TwoBucketRateLimiter(
      * @return RateLimitResult with decision and metadata
      * @throws RateLimitExceededException if rate limit exceeded
      */
-    fun checkLimit(userId: String, requests: Int): RateLimitResult {
-        return executor.executeWithTranslation(
-            { checkLimitInternal(userId, requests) },
-            { cause, _ -> translateRateLimitException(cause) },
-            TaskContext.of("TwoBucketRateLimiter", "CheckLimit", userId)
-        )
-    }
+    fun checkLimit(userId: String, requests: Int): RateLimitResult = executor.executeWithTranslation(
+        { checkLimitInternal(userId, requests) },
+        { cause, _ -> translateRateLimitException(cause) },
+        TaskContext.of("TwoBucketRateLimiter", "CheckLimit", userId),
+    )
 
     /**
      * Internal rate limit check with checked exceptions.
@@ -137,7 +134,7 @@ class TwoBucketRateLimiter(
             capacity.toString(),
             refillRate.toString(),
             currentTime.toString(),
-            ttlSeconds.toString()
+            ttlSeconds.toString(),
         ) as List<Any>
 
         // Parse result: {status, remainingTokens, retryAfterSeconds}
@@ -149,13 +146,19 @@ class TwoBucketRateLimiter(
 
         logger.debug(
             "[TwoBucketRateLimiter] Rate limit check: userId={}, allowed={}, remainingTokens={}, retryAfter={}",
-            userId, allowed, remainingTokens, retryAfterSeconds
+            userId,
+            allowed,
+            remainingTokens,
+            retryAfterSeconds,
         )
 
         if (!allowed) {
             logger.warn(
                 "[TwoBucketRateLimiter] Rate limit exceeded: userId={}, retryAfter={}s, capacity={}, refillRate={}",
-                userId, retryAfterSeconds, capacity, refillRate
+                userId,
+                retryAfterSeconds,
+                capacity,
+                refillRate,
             )
         }
 
@@ -190,13 +193,11 @@ class TwoBucketRateLimiter(
      * @param userId User identifier
      * @return Current token count (0 if no data)
      */
-    fun getCurrentTokens(userId: String): Int {
-        return executor.executeOrDefault(
-            { getCurrentTokensInternal(userId) },
-            capacity,
-            TaskContext.of("TwoBucketRateLimiter", "GetCurrentTokens", userId)
-        )
-    }
+    fun getCurrentTokens(userId: String): Int = executor.executeOrDefault(
+        { getCurrentTokensInternal(userId) },
+        capacity,
+        TaskContext.of("TwoBucketRateLimiter", "GetCurrentTokens", userId),
+    )
 
     private fun getCurrentTokensInternal(userId: String): Int {
         val rateKey = buildRateKey(userId)
@@ -220,7 +221,7 @@ class TwoBucketRateLimiter(
                 bucket.delete()
                 logger.info("[TwoBucketRateLimiter] Reset rate limit: userId={}", userId)
             },
-            TaskContext.of("TwoBucketRateLimiter", "Reset", userId)
+            TaskContext.of("TwoBucketRateLimiter", "Reset", userId),
         )
     }
 

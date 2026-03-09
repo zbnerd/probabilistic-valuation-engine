@@ -1,7 +1,7 @@
 package maple.expectation.core.port.out
 
-import maple.expectation.core.domain.model.character.GameCharacter
 import java.util.Optional
+import maple.expectation.core.domain.model.character.GameCharacter
 
 /**
  * 게임 캐릭터 포트 (ADR-005)

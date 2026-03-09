@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.persistence.entity
 
-import org.hibernate.annotations.Index
 import jakarta.persistence.*
-import maple.expectation.util.converter.GzipStringConverter
 import java.time.LocalDateTime
+import maple.expectation.util.converter.GzipStringConverter
+import org.hibernate.annotations.Index
 
 /**
  * JPA Entity for Character Equipment persistence.
@@ -64,7 +64,7 @@ open class CharacterEquipmentJpaEntity {
         fun of(
             ocid: String?,
             jsonContent: String?,
-            updatedAt: LocalDateTime?
+            updatedAt: LocalDateTime?,
         ): CharacterEquipmentJpaEntity {
             val entity = CharacterEquipmentJpaEntity()
             entity.ocid = ocid

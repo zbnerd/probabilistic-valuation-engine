@@ -3,12 +3,15 @@ package maple.expectation.web.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import maple.expectation.web.dto.donation.SendCoffeeRequest
-import maple.expectation.web.dto.donation.SendCoffeeResponse
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
 import maple.expectation.core.port.inbound.DonationCommand
 import maple.expectation.core.port.inbound.DonationPort
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import maple.expectation.response.ApiResponse
+import maple.expectation.web.dto.donation.SendCoffeeRequest
+import maple.expectation.web.dto.donation.SendCoffeeResponse
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -19,9 +22,6 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.util.UUID
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
 
 /**
  * 도네이션(커피 후원) API 컨트롤러
@@ -41,7 +41,7 @@ import java.util.concurrent.ExecutorService
 @Tag(name = "Donation", description = "도네이션(커피 후원) API")
 class DonationController(
     private val donationPort: DonationPort,
-    private val asyncExecutor: ExecutorService
+    private val asyncExecutor: ExecutorService,
 ) {
 
     /**
@@ -63,7 +63,7 @@ class DonationController(
     fun sendCoffee(
         @AuthenticationPrincipal user: AuthenticatedUser,
         @Valid @RequestBody request: SendCoffeeRequest,
-        @RequestHeader(value = "Idempotency-Key", required = false) idempotencyKey: String?
+        @RequestHeader(value = "Idempotency-Key", required = false) idempotencyKey: String?,
     ): CompletableFuture<ResponseEntity<ApiResponse<SendCoffeeResponse>>> {
         // PR #189: 멱등성 키 우선 사용 (없으면 서버에서 생성)
         val requestId = if (!idempotencyKey.isNullOrBlank()) {
@@ -80,7 +80,7 @@ class DonationController(
             guestUuid,
             request.adminFingerprint,
             request.amount,
-            requestId
+            requestId,
         )
 
         // ADR-039 Fix: Use dedicated executor instead of ForkJoinPool.commonPool()

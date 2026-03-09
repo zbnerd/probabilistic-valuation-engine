@@ -1,14 +1,14 @@
 package maple.expectation.infrastructure.security
 
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.Base64
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Component
 
 /**
  * HMAC-SHA256 기반 API Key Fingerprint 생성기
@@ -25,7 +25,7 @@ import javax.crypto.spec.SecretKeySpec
 @Component
 class FingerprintGenerator(
     @Value("\${auth.fingerprint.secret}") serverSecret: String,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val serverSecretBytes: ByteArray
     private val hmacAlgorithm = "HmacSHA256"
@@ -66,7 +66,7 @@ class FingerprintGenerator(
         // Timing Attack 방지: 상수 시간 비교
         return MessageDigest.isEqual(
             computed.toByteArray(StandardCharsets.UTF_8),
-            fingerprint.toByteArray(StandardCharsets.UTF_8)
+            fingerprint.toByteArray(StandardCharsets.UTF_8),
         )
     }
 
@@ -85,7 +85,7 @@ class FingerprintGenerator(
                 mac.init(SecretKeySpec(serverSecretBytes, hmacAlgorithm))
                 mac.doFinal(apiKey.toByteArray(StandardCharsets.UTF_8))
             },
-            context
+            context,
         )
     }
 }

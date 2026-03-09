@@ -47,9 +47,7 @@ class TransactionConfig {
      */
     @Bean
     @Primary
-    fun transactionTemplate(transactionManager: PlatformTransactionManager): TransactionTemplate {
-        return TransactionTemplate(transactionManager)
-    }
+    fun transactionTemplate(transactionManager: PlatformTransactionManager): TransactionTemplate = TransactionTemplate(transactionManager)
 
     /**
      * Expectation 경로 전용 읽기 전용 TransactionTemplate

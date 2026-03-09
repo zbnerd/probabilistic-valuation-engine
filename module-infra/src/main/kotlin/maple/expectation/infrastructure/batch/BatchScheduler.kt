@@ -37,7 +37,7 @@ class BatchScheduler(
     private val jobLauncher: JobLauncher,
     private val equipmentRefreshJob: Job,
     private val checkedExecutor: CheckedLogicExecutor,
-    @Value("\${batch.equipment-refresh.cron:0 0 2 * * *}") private val cronExpression: String = "0 0 2 * * *"
+    @Value("\${batch.equipment-refresh.cron:0 0 2 * * *}") private val cronExpression: String = "0 0 2 * * *",
 ) {
 
     /**

@@ -18,11 +18,9 @@ data class MySQLUpEvent(
     val timestamp: Instant,
     val circuitBreakerName: String,
     val fromState: String,
-    val toState: String
+    val toState: String,
 ) {
     companion object {
-        fun of(cbName: String, fromState: String, toState: String): MySQLUpEvent {
-            return MySQLUpEvent(Instant.now(), cbName, fromState, toState)
-        }
+        fun of(cbName: String, fromState: String, toState: String): MySQLUpEvent = MySQLUpEvent(Instant.now(), cbName, fromState, toState)
     }
 }

@@ -19,7 +19,7 @@ class OcidValidator : ConstraintValidator<ValidOcid, String> {
 
     override fun isValid(
         value: String?,
-        context: ConstraintValidatorContext?
+        context: ConstraintValidatorContext?,
     ): Boolean {
         if (value.isNullOrBlank()) {
             return true // @NotBlank로 처리
@@ -31,7 +31,7 @@ class OcidValidator : ConstraintValidator<ValidOcid, String> {
         if (trimmed.length != OCID_LENGTH) {
             context?.disableDefaultConstraintViolation()
             context?.buildConstraintViolationWithTemplate(
-                "OCID는 $OCID_LENGTH 자여야 합니다 (현재: ${trimmed.length}자)"
+                "OCID는 $OCID_LENGTH 자여야 합니다 (현재: ${trimmed.length}자)",
             )?.addConstraintViolation()
             return false
         }
@@ -40,7 +40,7 @@ class OcidValidator : ConstraintValidator<ValidOcid, String> {
         if (!HEX_PATTERN.matches(trimmed)) {
             context?.disableDefaultConstraintViolation()
             context?.buildConstraintViolationWithTemplate(
-                "OCID는 16진수 문자열이어야 합니다 (0-9, a-f, A-F만 허용)"
+                "OCID는 16진수 문자열이어야 합니다 (0-9, a-f, A-F만 허용)",
             )?.addConstraintViolation()
             return false
         }

@@ -1,23 +1,23 @@
 package maple.expectation.infrastructure.event
 
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.util.concurrent.Executor
-import java.util.concurrent.Executors
-import java.util.concurrent.RejectedExecutionException
-import java.util.concurrent.Semaphore
-import java.util.concurrent.TimeUnit
 
 @Component
 class HighPriorityEventConsumer(
     private val logicExecutor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    @Value("\${event.consumer.high.max-concurrent:50}") private val maxConcurrent: Int
+    @Value("\${event.consumer.high.max-concurrent:50}") private val maxConcurrent: Int,
 ) {
     private val logger = LoggerFactory.getLogger(HighPriorityEventConsumer::class.java)
     private val executor: Executor = Executors.newVirtualThreadPerTaskExecutor()
@@ -31,7 +31,7 @@ class HighPriorityEventConsumer(
                 meterRegistry.counter("event.consumer.high.rejected").increment()
                 logger.warn(
                     "[HighPriorityConsumer] Semaphore timeout - concurrent limit reached (limit={})",
-                    maxConcurrent
+                    maxConcurrent,
                 )
                 throw RejectedExecutionException("High priority event semaphore timeout")
             }
@@ -49,7 +49,7 @@ class HighPriorityEventConsumer(
                                 .record(durationMs, TimeUnit.MILLISECONDS)
                         }
                     },
-                    TaskContext.of("HighPriorityEvent", event.eventType, event.eventId)
+                    TaskContext.of("HighPriorityEvent", event.eventType, event.eventId),
                 )
             }
         } catch (e: InterruptedException) {

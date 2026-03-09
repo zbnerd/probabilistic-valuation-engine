@@ -25,12 +25,12 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(
     name = ["scheduler.nexon-api-outbox.enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 class NexonApiOutboxScheduler(
     private val outboxProcessor: NexonApiOutboxProcessorPort,
     private val outboxMetrics: NexonApiOutboxMetricsPort,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(NexonApiOutboxScheduler::class.java)
 
@@ -50,7 +50,7 @@ class NexonApiOutboxScheduler(
                 // 메트릭: 처리 후 Pending 수
                 outboxMetrics.updatePendingCount()
             },
-            TaskContext.of("Scheduler", "NexonApiOutbox.Poll")
+            TaskContext.of("Scheduler", "NexonApiOutbox.Poll"),
         )
     }
 
@@ -61,7 +61,7 @@ class NexonApiOutboxScheduler(
     fun recoverStalled() {
         executor.executeVoidJava(
             { outboxProcessor.recoverStalled() },
-            TaskContext.of("Scheduler", "NexonApiOutbox.RecoverStalled")
+            TaskContext.of("Scheduler", "NexonApiOutbox.RecoverStalled"),
         )
     }
 }

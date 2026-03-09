@@ -5,7 +5,6 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import maple.expectation.util.InterruptUtils
 import org.slf4j.LoggerFactory
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * ExecutionPolicy를 순차 실행하는 파이프라인.
@@ -62,20 +61,23 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
         if (depth > MAX_NESTING_DEPTH) {
             // 누수 방지 복구
             val prev = depth - 1
-            if (prev <= 0) nestingDepth.remove()
-            else nestingDepth.set(prev)
+            if (prev <= 0) {
+                nestingDepth.remove()
+            } else {
+                nestingDepth.set(prev)
+            }
 
             log.error(
                 "[Pipeline:REENTRANCY] nesting depth exceeded. depth={}, limit={}, contextType={}, contextHash={}",
                 depth,
                 MAX_NESTING_DEPTH,
                 context::class.simpleName,
-                System.identityHashCode(context)
+                System.identityHashCode(context),
             )
 
             throw IllegalStateException(
                 "ExecutionPipeline nesting depth exceeded ($MAX_NESTING_DEPTH). " +
-                    "Possible recursion loop."
+                    "Possible recursion loop.",
             )
         }
 
@@ -89,12 +91,12 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
             var taskStarted = false
             var taskStartNanos = 0L
             var elapsedNanos: Long? = null
-    // null = 미확정
+            // null = 미확정
 
             var primary: Throwable? = null
-    // 최종 throw 후보
+            // 최종 throw 후보
             var result: T? = null
-    // ========== PHASE 1: BEFORE (lifecycle 훅) ==========
+            // ========== PHASE 1: BEFORE (lifecycle 훅) ==========
             try {
                 for (slot in slots) {
                     if (invokeBefore(slot, context, taskName)) {
@@ -137,7 +139,7 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
                                 "[Pipeline:CRITICAL] Error in onFailure hook. policy={}, taskName={}",
                                 policyName(slot.policy),
                                 taskName,
-                                err
+                                err,
                             )
                             primary = promoteError(primary, err)
                             break // onFailure Error 시 즉시 중단 (PRD 4.5 확장)
@@ -158,7 +160,7 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
                             "[Pipeline:CRITICAL] Error in onSuccess hook. policy={}, taskName={}",
                             policyName(slot.policy),
                             taskName,
-                            err
+                            err,
                         )
                         primary = promoteError(primary, err)
                         break // Error 발생 시 onFailure 스킵, 즉시 after로 (PRD 4.5)
@@ -184,7 +186,7 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
                         "[Pipeline:CRITICAL] Error in after hook. policy={}, taskName={}",
                         policyName(slot.policy),
                         taskName,
-                        err
+                        err,
                     )
                     primary = promoteError(primary, err)
                     // Error여도 after unwind 계속 수행 (PRD 4.3)
@@ -210,8 +212,11 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
         } finally {
             // depth 복구 (반드시 실행)
             val cur = nestingDepth.get() - 1
-            if (cur <= 0) nestingDepth.remove()
-            else nestingDepth.set(cur)
+            if (cur <= 0) {
+                nestingDepth.remove()
+            } else {
+                nestingDepth.set(cur)
+            }
         }
     }
 
@@ -225,7 +230,7 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
                 task.run()
                 Unit
             },
-            context
+            context,
         )
     }
 
@@ -252,26 +257,24 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
     // Private Helpers
     // ========================================
 
-    private fun invokeBefore(slot: Slot, context: TaskContext, taskName: String): Boolean {
-        return try {
-            slot.policy.before(context)
-            true
-        } catch (e: Error) {
-            throw e
-        } catch (t: Throwable) {
-            InterruptUtils.restoreInterruptIfNeeded(t)
-            log.warn(
-                "[Policy:BEFORE] failed. policy={}, taskName={}",
-                policyName(slot.policy),
-                taskName,
-                t
-            )
+    private fun invokeBefore(slot: Slot, context: TaskContext, taskName: String): Boolean = try {
+        slot.policy.before(context)
+        true
+    } catch (e: Error) {
+        throw e
+    } catch (t: Throwable) {
+        InterruptUtils.restoreInterruptIfNeeded(t)
+        log.warn(
+            "[Policy:BEFORE] failed. policy={}, taskName={}",
+            policyName(slot.policy),
+            taskName,
+            t,
+        )
 
-            if (slot.mode == FailureMode.PROPAGATE) {
-                throw t
-            }
-            false
+        if (slot.mode == FailureMode.PROPAGATE) {
+            throw t
         }
+        false
     }
 
     private fun <T> invokeOnSuccess(
@@ -279,7 +282,7 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
         result: T,
         elapsedNanos: Long,
         context: TaskContext,
-        taskName: String
+        taskName: String,
     ) {
         try {
             slot.policy.onSuccess(result, elapsedNanos, context)
@@ -291,7 +294,7 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
                 "[Policy:ON_SUCCESS] failed. policy={}, taskName={}",
                 policyName(slot.policy),
                 taskName,
-                t
+                t,
             )
             // non-Error는 always swallow
         }
@@ -302,7 +305,7 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
         cause: Throwable?,
         elapsedNanos: Long,
         context: TaskContext,
-        taskName: String
+        taskName: String,
     ) {
         if (cause == null) return
 
@@ -316,7 +319,7 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
                 "[Policy:ON_FAILURE] failed. policy={}, taskName={}",
                 policyName(slot.policy),
                 taskName,
-                t
+                t,
             )
             // 관측 훅 실패는 원인 추적 위해 cause에 suppressed로 보존
             addSuppressedSafely(cause, t)
@@ -328,7 +331,7 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
         outcome: ExecutionOutcome,
         elapsedNanos: Long,
         context: TaskContext,
-        taskName: String
+        taskName: String,
     ) {
         try {
             slot.policy.after(outcome, elapsedNanos, context)
@@ -340,7 +343,7 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
                 "[Policy:AFTER] failed. policy={}, taskName={}",
                 policyName(slot.policy),
                 taskName,
-                t
+                t,
             )
 
             if (slot.mode == FailureMode.PROPAGATE) {
@@ -350,17 +353,15 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
         }
     }
 
-    private fun promoteError(currentPrimary: Throwable?, newError: Error): Throwable {
-        return if (currentPrimary == null) {
-            newError
+    private fun promoteError(currentPrimary: Throwable?, newError: Error): Throwable = if (currentPrimary == null) {
+        newError
+    } else {
+        if (currentPrimary is Error) {
+            addSuppressedSafely(currentPrimary, newError)
+            currentPrimary // 최초 Error 유지
         } else {
-            if (currentPrimary is Error) {
-                addSuppressedSafely(currentPrimary, newError)
-                currentPrimary // 최초 Error 유지
-            } else {
-                addSuppressedSafely(newError, currentPrimary)
-                newError
-            }
+            addSuppressedSafely(newError, currentPrimary)
+            newError
         }
     }
 
@@ -375,14 +376,12 @@ class ExecutionPipeline(policies: List<ExecutionPolicy>) {
                 "addSuppressed failed. primary={}, suppressed={}",
                 primary.javaClass.name,
                 suppressed.javaClass.name,
-                e
+                e,
             )
         }
     }
 
-    private fun policyName(policy: ExecutionPolicy?): String {
-        return policy?.javaClass?.simpleName ?: "null"
-    }
+    private fun policyName(policy: ExecutionPolicy?): String = policy?.javaClass?.simpleName ?: "null"
 
     private fun safeToTaskName(context: TaskContext?): String {
         if (context == null) return "unknown"

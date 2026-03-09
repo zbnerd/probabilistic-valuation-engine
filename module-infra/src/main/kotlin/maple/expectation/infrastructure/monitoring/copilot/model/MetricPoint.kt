@@ -10,18 +10,17 @@ import java.time.Instant
  */
 data class MetricPoint(
     val epochMillis: Long,
-    val value: Double
+    val value: Double,
 ) {
     /**
      * Get timestamp as Instant
      */
     fun toInstant(): Instant = Instant.ofEpochMilli(epochMillis)
-    
+
     companion object {
         /**
          * Create MetricPoint from Instant
          */
-        fun fromInstant(timestamp: Instant, value: Double): MetricPoint =
-            MetricPoint(timestamp.toEpochMilli(), value)
+        fun fromInstant(timestamp: Instant, value: Double): MetricPoint = MetricPoint(timestamp.toEpochMilli(), value)
     }
 }

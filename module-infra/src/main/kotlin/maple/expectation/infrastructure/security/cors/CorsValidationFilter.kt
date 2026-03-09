@@ -4,12 +4,12 @@ import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import java.io.IOException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.web.filter.OncePerRequestFilter
-import java.io.IOException
 
 /**
  * CORS 오리진 런타임 검증 필터
@@ -42,14 +42,14 @@ import java.io.IOException
 open class CorsValidationFilter(
     private val validator: CorsOriginValidator,
     private val executor: LogicExecutor,
-    private val allowedOrigins: List<String>
+    private val allowedOrigins: List<String>,
 ) : OncePerRequestFilter() {
 
     @Throws(ServletException::class, IOException::class)
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
-        filterChain: FilterChain
+        filterChain: FilterChain,
     ) {
         // OPTIONS 요청은 Spring Security CORS 처리에 위임 (preflight)
         if (HttpMethod.OPTIONS.matches(request.method)) {
@@ -70,7 +70,7 @@ open class CorsValidationFilter(
         val isValid = executor.executeOrDefault(
             { validator.isValidRuntimeOrigin(originHeader, allowedOrigins) },
             false,
-            TaskContext.of("CorsValidation", "ValidateOrigin", "***")
+            TaskContext.of("CorsValidation", "ValidateOrigin", "***"),
         )
 
         if (!isValid) {
@@ -141,11 +141,9 @@ open class CorsValidationFilter(
         }
     }
 
-    private fun maskDomain(domain: String): String {
-        return if (domain.length <= 4) {
-            "***"
-        } else {
-            domain.substring(0, 2) + "***" + domain.substring(domain.length - 2)
-        }
+    private fun maskDomain(domain: String): String = if (domain.length <= 4) {
+        "***"
+    } else {
+        domain.substring(0, 2) + "***" + domain.substring(domain.length - 2)
     }
 }

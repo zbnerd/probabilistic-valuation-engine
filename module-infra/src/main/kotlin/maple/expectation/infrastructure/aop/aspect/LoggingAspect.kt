@@ -6,9 +6,9 @@ import maple.expectation.infrastructure.executor.TaskContext
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
+import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component
-import org.slf4j.LoggerFactory
 
 /**
  * 실행 시간 로깅 Aspect (TaskContext 및 평탄화 적용)
@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory
 @Component
 class LoggingAspect(
     private val statsCollector: PerformanceStatisticsCollector,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) : SmartLifecycle {
 
     companion object {
@@ -46,7 +46,7 @@ class LoggingAspect(
         if (!running) {
             return executor.execute(
                 { joinPoint.proceed() },
-                TaskContext.of("Logging", "ShutdownBypass")
+                TaskContext.of("Logging", "ShutdownBypass"),
             )
         }
 
@@ -59,7 +59,7 @@ class LoggingAspect(
         return executor.executeWithFinally(
             { joinPoint.proceed() },
             { recordExecutionTime(methodName, start) },
-            context
+            context,
         )
     }
 
@@ -69,9 +69,7 @@ class LoggingAspect(
         statsCollector.addTime(methodName, executionTime)
     }
 
-    fun getStatistics(testName: String): Array<String> {
-        return statsCollector.calculateStatistics(testName)
-    }
+    fun getStatistics(testName: String): Array<String> = statsCollector.calculateStatistics(testName)
 
     fun resetStatistics() {
         log.warn("🔄 Micrometer 통계는 수동으로 리셋되지 않습니다. Prometheus 대시보드를 확인하세요.")
@@ -104,20 +102,14 @@ class LoggingAspect(
         log.info("========================================================")
     }
 
-    override fun isRunning(): Boolean {
-        return running
-    }
+    override fun isRunning(): Boolean = running
 
     /**
      * 다른 Shutdown 컴포넌트보다 나중에 종료 (낮은 phase)
      *
      * <p>GracefulShutdownCoordinator (MAX-1000) 이후 실행
      */
-    override fun getPhase(): Int {
-        return Int.MAX_VALUE - 2000
-    }
+    override fun getPhase(): Int = Int.MAX_VALUE - 2000
 
-    override fun isAutoStartup(): Boolean {
-        return true
-    }
+    override fun isAutoStartup(): Boolean = true
 }

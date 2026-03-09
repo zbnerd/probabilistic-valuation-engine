@@ -3,8 +3,7 @@ package maple.expectation.error
 /**
  * Common error codes used across the application
  */
-enum class CommonErrorCode(override val code: String, override val message: String, override val statusCode: Int) :
-    ErrorCode {
+enum class CommonErrorCode(override val code: String, override val message: String, override val statusCode: Int) : ErrorCode {
     // === Client Errors (4xx) ===
     INVALID_INPUT_VALUE("C001", "잘못된 입력값입니다: %s", 400),
     CHARACTER_NOT_FOUND("C002", "존재하지 않는 캐릭터입니다 (IGN: %s)", 404),

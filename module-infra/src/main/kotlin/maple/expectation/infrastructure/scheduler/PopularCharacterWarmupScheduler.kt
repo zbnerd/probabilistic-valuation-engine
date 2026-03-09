@@ -3,6 +3,8 @@ package maple.expectation.infrastructure.scheduler
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import jakarta.annotation.PostConstruct
+import java.time.LocalDateTime
+import java.util.concurrent.atomic.AtomicInteger
 import maple.expectation.core.port.out.CacheWarmupPort
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
 import maple.expectation.error.exception.DistributedLockException
@@ -14,8 +16,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
-import java.time.LocalDateTime
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 인기 캐릭터 자동 웜업 스케줄러 (ADR-005 이관)
@@ -24,14 +24,14 @@ import java.util.concurrent.atomic.AtomicInteger
 @ConditionalOnProperty(
     name = ["scheduler.warmup.enabled"],
     havingValue = "true",
-    matchIfMissing = false
+    matchIfMissing = false,
 )
 class PopularCharacterWarmupScheduler(
     private val popularCharacterTracker: PopularCharacterTrackerPort,
     private val cacheWarmupPort: CacheWarmupPort,
     private val lockStrategy: LockStrategy,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(PopularCharacterWarmupScheduler::class.java)
 
@@ -68,7 +68,7 @@ class PopularCharacterWarmupScheduler(
                 lockStrategy.executeWithLock(
                     "popular-warmup-lock",
                     0,
-                    300
+                    300,
                 ) {
                     doWarmup(warmupType)
                     null
@@ -85,7 +85,7 @@ class PopularCharacterWarmupScheduler(
                 }
                 null
             },
-            context
+            context,
         )
     }
 
@@ -95,7 +95,7 @@ class PopularCharacterWarmupScheduler(
             "[Warmup] {} started at {} - warming up top {} characters",
             warmupType,
             LocalDateTime.now(),
-            topCount
+            topCount,
         )
 
         val topCharacters = popularCharacterTracker.getYesterdayTopCharacters(topCount)
@@ -126,7 +126,7 @@ class PopularCharacterWarmupScheduler(
             warmupType,
             successCount.get(),
             failCount.get(),
-            topCharacters.size
+            topCharacters.size,
         )
     }
 
@@ -143,7 +143,7 @@ class PopularCharacterWarmupScheduler(
                 log.warn("[Warmup] Failed to warm up {}: {}", maskIgn(userIgn), e.message)
                 null
             },
-            TaskContext.of("Warmup", "Character", userIgn)
+            TaskContext.of("Warmup", "Character", userIgn),
         )
     }
 
@@ -154,7 +154,7 @@ class PopularCharacterWarmupScheduler(
                 null
             },
             null,
-            TaskContext.of("Warmup", "Delay")
+            TaskContext.of("Warmup", "Delay"),
         )
     }
 

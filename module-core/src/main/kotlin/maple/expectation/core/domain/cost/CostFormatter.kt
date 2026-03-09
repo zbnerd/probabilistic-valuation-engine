@@ -29,106 +29,104 @@ import java.math.RoundingMode
  */
 object CostFormatter {
 
-  private val JO = BigDecimal("1000000000000") // 조 (10^12)
-  private val EOK = BigDecimal("100000000") // 억 (10^8)
-  private val MAN = BigDecimal("10000") // 만 (10^4)
+    private val JO = BigDecimal("1000000000000") // 조 (10^12)
+    private val EOK = BigDecimal("100000000") // 억 (10^8)
+    private val MAN = BigDecimal("10000") // 만 (10^4)
 
-  /**
-   * BigDecimal 금액을 한국식 표기로 포맷
-   *
-   * @param cost 금액 (메소)
-   * @return 포맷된 문자열 (e.g., "12조 3456억 7890만")
-   */
-  @JvmStatic
-  fun format(cost: BigDecimal?): String {
-    if (cost == null || cost.compareTo(BigDecimal.ZERO) <= 0) {
-      return "0"
+    /**
+     * BigDecimal 금액을 한국식 표기로 포맷
+     *
+     * @param cost 금액 (메소)
+     * @return 포맷된 문자열 (e.g., "12조 3456억 7890만")
+     */
+    @JvmStatic
+    fun format(cost: BigDecimal?): String {
+        if (cost == null || cost.compareTo(BigDecimal.ZERO) <= 0) {
+            return "0"
+        }
+
+        val sb = StringBuilder()
+        var remaining = cost.setScale(0, RoundingMode.HALF_UP)
+
+        // 조 단위
+        if (remaining.compareTo(JO) >= 0) {
+            val jo = remaining.divide(JO, 0, RoundingMode.DOWN)
+            sb.append(jo.toPlainString()).append("조 ")
+            remaining = remaining.remainder(JO)
+        }
+
+        // 억 단위
+        if (remaining.compareTo(EOK) >= 0) {
+            val eok = remaining.divide(EOK, 0, RoundingMode.DOWN)
+            sb.append(eok.toPlainString()).append("억 ")
+            remaining = remaining.remainder(EOK)
+        }
+
+        // 만 단위
+        if (remaining.compareTo(MAN) >= 0) {
+            val man = remaining.divide(MAN, 0, RoundingMode.DOWN)
+            sb.append(man.toPlainString()).append("만")
+        }
+
+        val result = sb.toString().trim()
+        return result.ifEmpty { "0" }
     }
 
-    val sb = StringBuilder()
-    var remaining = cost.setScale(0, RoundingMode.HALF_UP)
+    /**
+     * long 금액을 한국식 표기로 포맷
+     *
+     * @param cost 금액 (메소)
+     * @return 포맷된 문자열
+     */
+    @JvmStatic
+    fun format(cost: Long): String = format(BigDecimal.valueOf(cost))
 
-    // 조 단위
-    if (remaining.compareTo(JO) >= 0) {
-      val jo = remaining.divide(JO, 0, RoundingMode.DOWN)
-      sb.append(jo.toPlainString()).append("조 ")
-      remaining = remaining.remainder(JO)
+    /**
+     * 간략화된 표기 (가장 큰 단위만)
+     *
+     * <p>예: 12345678900000 → "12조"
+     *
+     * @param cost 금액 (메소)
+     * @return 간략화된 문자열
+     */
+    @JvmStatic
+    fun formatCompact(cost: BigDecimal?): String {
+        if (cost == null || cost.compareTo(BigDecimal.ZERO) <= 0) {
+            return "0"
+        }
+
+        var scaledCost = cost.setScale(0, RoundingMode.HALF_UP)
+
+        if (scaledCost.compareTo(JO) >= 0) {
+            val jo = scaledCost.divide(JO, 1, RoundingMode.HALF_UP)
+            return jo.stripTrailingZeros().toPlainString() + "조"
+        }
+
+        if (scaledCost.compareTo(EOK) >= 0) {
+            val eok = scaledCost.divide(EOK, 1, RoundingMode.HALF_UP)
+            return eok.stripTrailingZeros().toPlainString() + "억"
+        }
+
+        if (scaledCost.compareTo(MAN) >= 0) {
+            val man = scaledCost.divide(MAN, 1, RoundingMode.HALF_UP)
+            return man.stripTrailingZeros().toPlainString() + "만"
+        }
+
+        return scaledCost.toPlainString()
     }
 
-    // 억 단위
-    if (remaining.compareTo(EOK) >= 0) {
-      val eok = remaining.divide(EOK, 0, RoundingMode.DOWN)
-      sb.append(eok.toPlainString()).append("억 ")
-      remaining = remaining.remainder(EOK)
+    /**
+     * 정확한 숫자 표기 (천 단위 콤마)
+     *
+     * @param cost 금액 (메소)
+     * @return 콤마 포맷 문자열 (e.g., "12,345,678,900,000")
+     */
+    @JvmStatic
+    fun formatWithComma(cost: BigDecimal?): String {
+        if (cost == null) {
+            return "0"
+        }
+
+        return String.format("%,d", cost.setScale(0, RoundingMode.HALF_UP).toLong())
     }
-
-    // 만 단위
-    if (remaining.compareTo(MAN) >= 0) {
-      val man = remaining.divide(MAN, 0, RoundingMode.DOWN)
-      sb.append(man.toPlainString()).append("만")
-    }
-
-    val result = sb.toString().trim()
-    return result.ifEmpty { "0" }
-  }
-
-  /**
-   * long 금액을 한국식 표기로 포맷
-   *
-   * @param cost 금액 (메소)
-   * @return 포맷된 문자열
-   */
-  @JvmStatic
-  fun format(cost: Long): String {
-    return format(BigDecimal.valueOf(cost))
-  }
-
-  /**
-   * 간략화된 표기 (가장 큰 단위만)
-   *
-   * <p>예: 12345678900000 → "12조"
-   *
-   * @param cost 금액 (메소)
-   * @return 간략화된 문자열
-   */
-  @JvmStatic
-  fun formatCompact(cost: BigDecimal?): String {
-    if (cost == null || cost.compareTo(BigDecimal.ZERO) <= 0) {
-      return "0"
-    }
-
-    var scaledCost = cost.setScale(0, RoundingMode.HALF_UP)
-
-    if (scaledCost.compareTo(JO) >= 0) {
-      val jo = scaledCost.divide(JO, 1, RoundingMode.HALF_UP)
-      return jo.stripTrailingZeros().toPlainString() + "조"
-    }
-
-    if (scaledCost.compareTo(EOK) >= 0) {
-      val eok = scaledCost.divide(EOK, 1, RoundingMode.HALF_UP)
-      return eok.stripTrailingZeros().toPlainString() + "억"
-    }
-
-    if (scaledCost.compareTo(MAN) >= 0) {
-      val man = scaledCost.divide(MAN, 1, RoundingMode.HALF_UP)
-      return man.stripTrailingZeros().toPlainString() + "만"
-    }
-
-    return scaledCost.toPlainString()
-  }
-
-  /**
-   * 정확한 숫자 표기 (천 단위 콤마)
-   *
-   * @param cost 금액 (메소)
-   * @return 콤마 포맷 문자열 (e.g., "12,345,678,900,000")
-   */
-  @JvmStatic
-  fun formatWithComma(cost: BigDecimal?): String {
-    if (cost == null) {
-      return "0"
-    }
-
-    return String.format("%,d", cost.setScale(0, RoundingMode.HALF_UP).toLong())
-  }
 }

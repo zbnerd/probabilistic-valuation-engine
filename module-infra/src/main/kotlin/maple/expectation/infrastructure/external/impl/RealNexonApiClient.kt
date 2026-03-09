@@ -8,6 +8,7 @@ import maple.expectation.infrastructure.external.dto.v2.CharacterBasicResponse
 import maple.expectation.infrastructure.external.dto.v2.CharacterOcidResponse
 import maple.expectation.infrastructure.external.dto.v2.CubeHistoryResponse
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Profile
@@ -15,8 +16,6 @@ import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.WebClientResponseException
 import reactor.core.publisher.Mono
-import org.slf4j.LoggerFactory
-
 
 /**
  * 실제 Nexon API 클라이언트 구현체
@@ -28,7 +27,7 @@ import org.slf4j.LoggerFactory
 class RealNexonApiClient(
     @Qualifier("mapleWebClient")
     private val mapleWebClient: WebClient,
-    private val timeoutProperties: TimeoutProperties
+    private val timeoutProperties: TimeoutProperties,
 ) : NexonApiClient {
 
     private val logger = LoggerFactory.getLogger(RealNexonApiClient::class.java)
@@ -57,14 +56,14 @@ class RealNexonApiClient(
             .retrieve()
             .bodyToMono(CharacterOcidResponse::class.java)
             .onErrorResume(
-                WebClientResponseException::class.java
+                WebClientResponseException::class.java,
             ) { ex ->
                 if (ex.statusCode.is4xxClientError) {
                     // Issue #196: 상태 코드 + 실제 에러 메시지 로깅 (디버깅 가시성)
                     logger.warn(
                         "[NexonApi] OCID lookup failed. Status: {}, Body: {}",
                         ex.statusCode,
-                        ex.responseBodyAsString
+                        ex.responseBodyAsString,
                     )
                     return@onErrorResume Mono.error(CharacterNotFoundException(characterName))
                 }

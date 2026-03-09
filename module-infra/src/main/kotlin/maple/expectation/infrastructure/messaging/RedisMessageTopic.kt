@@ -1,9 +1,8 @@
 package maple.expectation.infrastructure.messaging
 
-import maple.expectation.core.port.out.MessageTopic
-import org.redisson.api.RTopic
-import org.redisson.api.RedissonClient
 import java.util.function.BiConsumer
+import maple.expectation.core.port.out.MessageTopic
+import org.redisson.api.RedissonClient
 
 /**
  * Redis-backed message topic implementation.
@@ -17,7 +16,7 @@ import java.util.function.BiConsumer
  */
 class RedisMessageTopic<T>(
     private val redissonClient: RedissonClient,
-    private val topicName: String
+    private val topicName: String,
 ) : MessageTopic<T> {
 
     override fun addListener(messageType: Class<T>, listener: BiConsumer<String, T>): Int {

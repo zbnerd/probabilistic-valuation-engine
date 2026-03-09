@@ -1,9 +1,12 @@
 package maple.expectation.infrastructure.resilience
 
-import io.github.resilience4j.circuitbreaker.CircuitBreaker
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
 import io.github.resilience4j.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent
 import io.micrometer.core.instrument.MeterRegistry
+import jakarta.annotation.PostConstruct
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.event.MySQLDownEvent
 import maple.expectation.infrastructure.event.MySQLUpEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -14,10 +17,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-import jakarta.annotation.PostConstruct
 
 @Service
 class MySQLHealthEventPublisher(
@@ -26,7 +25,7 @@ class MySQLHealthEventPublisher(
     private val redissonClient: RedissonClient,
     private val properties: MySQLFallbackProperties,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
     private val logger = LoggerFactory.getLogger(MySQLHealthEventPublisher::class.java)
 
@@ -43,7 +42,7 @@ class MySQLHealthEventPublisher(
                 likeSyncDbCb.eventPublisher.onStateTransition { handleStateTransition(it) }
                 logger.info("[MySQLHealth] CircuitBreaker 리스너 등록 완료: $LIKE_SYNC_DB_CB")
             },
-            TaskContext.of("Resilience", "RegisterCBListener", LIKE_SYNC_DB_CB)
+            TaskContext.of("Resilience", "RegisterCBListener", LIKE_SYNC_DB_CB),
         )
     }
 
@@ -74,7 +73,7 @@ class MySQLHealthEventPublisher(
                 saveDownTimestamp()
                 scheduleDownEventAfterDebounce(fromState, toState)
             },
-            TaskContext.of("Resilience", "HandleCBOpen", LIKE_SYNC_DB_CB)
+            TaskContext.of("Resilience", "HandleCBOpen", LIKE_SYNC_DB_CB),
         )
     }
 
@@ -106,7 +105,7 @@ class MySQLHealthEventPublisher(
                 incrementStateTransition()
                 sendDiscordAlert("MySQL DOWN", fromState, toState)
             },
-            TaskContext.of("Resilience", "PublishDownEvent", LIKE_SYNC_DB_CB)
+            TaskContext.of("Resilience", "PublishDownEvent", LIKE_SYNC_DB_CB),
         )
     }
 
@@ -132,7 +131,7 @@ class MySQLHealthEventPublisher(
                 incrementStateTransition()
                 sendDiscordAlert("MySQL RECOVERING", fromState, toState)
             },
-            TaskContext.of("Resilience", "PublishUpEvent", LIKE_SYNC_DB_CB)
+            TaskContext.of("Resilience", "PublishUpEvent", LIKE_SYNC_DB_CB),
         )
     }
 
@@ -150,21 +149,19 @@ class MySQLHealthEventPublisher(
                 logger.info("[MySQLHealth] 복구 완료: RECOVERING -> HEALTHY")
                 incrementStateTransition()
             },
-            TaskContext.of("Resilience", "MarkRecoveryComplete", LIKE_SYNC_DB_CB)
+            TaskContext.of("Resilience", "MarkRecoveryComplete", LIKE_SYNC_DB_CB),
         )
     }
 
-    fun getCurrentState(): MySQLHealthState {
-        return executor.executeOrDefault(
-            {
-                val bucket: RBucket<String> = redissonClient.getBucket(properties.stateKey)
-                val stateStr = bucket.get()
-                stateStr?.let { MySQLHealthState.valueOf(it) } ?: MySQLHealthState.HEALTHY
-            },
-            MySQLHealthState.HEALTHY,
-            TaskContext.of("Resilience", "GetState", properties.stateKey)
-        )
-    }
+    fun getCurrentState(): MySQLHealthState = executor.executeOrDefault(
+        {
+            val bucket: RBucket<String> = redissonClient.getBucket(properties.stateKey)
+            val stateStr = bucket.get()
+            stateStr?.let { MySQLHealthState.valueOf(it) } ?: MySQLHealthState.HEALTHY
+        },
+        MySQLHealthState.HEALTHY,
+        TaskContext.of("Resilience", "GetState", properties.stateKey),
+    )
 
     private fun updateState(state: MySQLHealthState) {
         val bucket: RBucket<String> = redissonClient.getBucket(properties.stateKey)

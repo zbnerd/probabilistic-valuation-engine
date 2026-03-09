@@ -1,15 +1,15 @@
 package maple.expectation.infrastructure.cache.like
 
 import com.github.benmanes.caffeine.cache.Caffeine
-import org.slf4j.LoggerFactory
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import maple.expectation.core.port.out.LikeBufferStrategy
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * In-Memory 좋아요 카운터 버퍼 (Caffeine 기반)
@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicLong
 @Component
 class InMemoryLikeBufferStorage(
     registry: MeterRegistry,
-    @Value("\${like.buffer.local.max-size:10000}") maxSize: Int
+    @Value("\${like.buffer.local.max-size:10000}") maxSize: Int,
 ) : LikeBufferStrategy {
 
     private val likeCache = Caffeine.newBuilder()
@@ -40,21 +40,15 @@ class InMemoryLikeBufferStorage(
         Gauge.builder("like.buffer.local_pending", this) { storage ->
             storage.likeCache.asMap().values.sumOf { it.get().toDouble() }
         }
-        .description("현재 인스턴스의 미반영 좋아요 총합")
-        .register(registry)
+            .description("현재 인스턴스의 미반영 좋아요 총합")
+            .register(registry)
     }
 
-    override fun increment(userIgn: String, delta: Long): Long {
-        return getCounter(userIgn).addAndGet(delta)
-    }
+    override fun increment(userIgn: String, delta: Long): Long = getCounter(userIgn).addAndGet(delta)
 
-    override fun get(userIgn: String): Long {
-        return likeCache.getIfPresent(userIgn)?.get() ?: 0L
-    }
+    override fun get(userIgn: String): Long = likeCache.getIfPresent(userIgn)?.get() ?: 0L
 
-    override fun getAllCounters(): Map<String, Long> {
-        return likeCache.asMap().mapValues { it.value.get().toLong() }
-    }
+    override fun getAllCounters(): Map<String, Long> = likeCache.asMap().mapValues { it.value.get().toLong() }
 
     override fun fetchAndClear(limit: Int): Map<String, Long> {
         val result = mutableMapOf<String, Long>()
@@ -79,8 +73,7 @@ class InMemoryLikeBufferStorage(
     /**
      * 카운터 조회 (없으면 생성)
      */
-    fun getCounter(userIgn: String): AtomicLong =
-        likeCache.get(userIgn) { AtomicLong(0) }
+    fun getCounter(userIgn: String): AtomicLong = likeCache.get(userIgn) { AtomicLong(0) }
 
     /**
      * 내부 캐시 접근 (테스트 초기화용)

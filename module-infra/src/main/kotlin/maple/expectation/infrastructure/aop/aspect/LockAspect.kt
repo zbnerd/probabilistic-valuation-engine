@@ -11,9 +11,9 @@ import maple.expectation.infrastructure.lock.LockStrategy
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
+import org.slf4j.LoggerFactory
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
-import org.slf4j.LoggerFactory
 
 @Aspect
 @Order(0)
@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory
 class LockAspect(
     private val lockStrategy: LockStrategy,
     private val executor: LogicExecutor,
-    private val spelParser: CustomSpelParser
+    private val spelParser: CustomSpelParser,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(LockAspect::class.java)
@@ -37,7 +37,7 @@ class LockAspect(
         return executor.executeOrCatch(
             { executeLockProtectedTask(joinPoint, key, waitSeconds, leaseSeconds) },
             { e -> handleLockFailure(joinPoint, key, e) },
-            TaskContext.of("Lock", "Apply", key)
+            TaskContext.of("Lock", "Apply", key),
         )
     }
 
@@ -45,21 +45,17 @@ class LockAspect(
         joinPoint: ProceedingJoinPoint,
         key: String,
         waitSeconds: Long,
-        leaseSeconds: Long
-    ): Any {
-        return lockStrategy.executeWithLock(
-            key,
-            waitSeconds,
-            leaseSeconds,
-            createLockedTask(joinPoint, key)
-        )
-    }
+        leaseSeconds: Long,
+    ): Any = lockStrategy.executeWithLock(
+        key,
+        waitSeconds,
+        leaseSeconds,
+        createLockedTask(joinPoint, key),
+    )
 
-    private fun createLockedTask(joinPoint: ProceedingJoinPoint, key: String): ThrowingSupplier<Any> {
-        return ThrowingSupplier {
-            log.debug("🔑 [Locked Aspect] 락 획득 성공: {}", key)
-            joinPoint.proceed()
-        }
+    private fun createLockedTask(joinPoint: ProceedingJoinPoint, key: String): ThrowingSupplier<Any> = ThrowingSupplier {
+        log.debug("🔑 [Locked Aspect] 락 획득 성공: {}", key)
+        joinPoint.proceed()
     }
 
     private fun handleLockFailure(joinPoint: ProceedingJoinPoint, key: String, e: Throwable): Any? {
@@ -74,11 +70,9 @@ class LockAspect(
         // ✅ TaskContext 적용: Component="Lock", Operation="Fallback"
         return executor.execute(
             { joinPoint.proceed() },
-            TaskContext.of("Lock", "Fallback", key)
+            TaskContext.of("Lock", "Fallback", key),
         )
     }
 
-    private fun getDynamicKey(joinPoint: ProceedingJoinPoint, keyExpression: String): String {
-        return spelParser.parse(joinPoint, keyExpression)
-    }
+    private fun getDynamicKey(joinPoint: ProceedingJoinPoint, keyExpression: String): String = spelParser.parse(joinPoint, keyExpression)
 }

@@ -2,6 +2,11 @@ package maple.expectation.infrastructure.buffer
 
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
+import java.time.Duration
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.Phaser
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import maple.expectation.core.port.out.BackoffStrategy
 import maple.expectation.core.port.out.ExpectationBufferPort
 import maple.expectation.infrastructure.config.BufferProperties
@@ -9,11 +14,6 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.time.Duration
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.Phaser
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Expectation Write-Behind 메모리 버퍼 (#266 ADR 정합성 리팩토링)
@@ -23,16 +23,14 @@ class ExpectationWriteBackBuffer(
     private val properties: BufferProperties,
     private val meterRegistry: MeterRegistry,
     private val backoffStrategy: BackoffStrategy,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) : ExpectationBufferPort {
 
     private val queue: ConcurrentLinkedQueue<ExpectationWriteTask> = ConcurrentLinkedQueue()
     private val pendingCount: AtomicInteger = AtomicInteger(0)
 
     private val shutdownPhaser: Phaser = object : Phaser() {
-        override fun onAdvance(phase: Int, registeredParties: Int): Boolean {
-            return registeredParties == 0
-        }
+        override fun onAdvance(phase: Int, registeredParties: Int): Boolean = registeredParties == 0
     }
 
     @Volatile
@@ -64,7 +62,7 @@ class ExpectationWriteBackBuffer(
         return executor.executeWithFinally(
             { offerInternal(tasks) },
             { shutdownPhaser.arriveAndDeregister() },
-            TaskContext.of("Buffer", "Offer", "tasks=${tasks.size}")
+            TaskContext.of("Buffer", "Offer", "tasks=${tasks.size}"),
         )
     }
 
@@ -79,7 +77,7 @@ class ExpectationWriteBackBuffer(
                 "[ExpectationBuffer] Backpressure triggered: pending={}, required={}, max={}",
                 newCount - required,
                 required,
-                properties.maxQueueSize
+                properties.maxQueueSize,
             )
             return false
         }
@@ -91,7 +89,7 @@ class ExpectationWriteBackBuffer(
         log.debug(
             "[ExpectationBuffer] Buffered {} tasks, pending={}",
             tasks.size,
-            newCount
+            newCount,
         )
         return true
     }
@@ -138,7 +136,7 @@ class ExpectationWriteBackBuffer(
                 true
             },
             false,
-            TaskContext.of("Buffer", "AwaitPendingOffers", "timeout=${timeout.seconds}s")
+            TaskContext.of("Buffer", "AwaitPendingOffers", "timeout=${timeout.seconds}s"),
         )
     }
 

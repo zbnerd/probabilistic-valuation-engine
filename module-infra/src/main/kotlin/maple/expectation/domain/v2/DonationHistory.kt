@@ -1,8 +1,8 @@
 package maple.expectation.domain.v2
 
 import jakarta.persistence.*
-import org.springframework.data.annotation.CreatedDate
 import java.time.LocalDateTime
+import org.springframework.data.annotation.CreatedDate
 
 /**
  * 기부 내역 엔티티
@@ -12,7 +12,7 @@ import java.time.LocalDateTime
 @Entity
 @Table(
     name = "donation_history",
-    uniqueConstraints = [UniqueConstraint(name = "uk_request_id", columnNames = ["request_id"])]
+    uniqueConstraints = [UniqueConstraint(name = "uk_request_id", columnNames = ["request_id"])],
 )
 class DonationHistory {
 
@@ -44,7 +44,7 @@ class DonationHistory {
         senderUuid: String?,
         receiverFingerprint: String?,
         amount: Long?,
-        requestId: String?
+        requestId: String?,
     ) {
         this.senderUuid = senderUuid
         this.receiverFingerprint = receiverFingerprint
@@ -58,9 +58,7 @@ class DonationHistory {
             senderUuid: String?,
             receiverFingerprint: String?,
             amount: Long?,
-            requestId: String?
-        ): DonationHistory {
-            return DonationHistory(senderUuid, receiverFingerprint, amount, requestId)
-        }
+            requestId: String?,
+        ): DonationHistory = DonationHistory(senderUuid, receiverFingerprint, amount, requestId)
     }
 }

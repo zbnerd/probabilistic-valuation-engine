@@ -2,28 +2,26 @@ package maple.expectation.infrastructure.cache.per
 
 import com.fasterxml.jackson.databind.JavaType
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.lang.reflect.Method
+import java.time.Duration
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executor
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.aspectj.lang.reflect.MethodSignature
-import org.redisson.api.RedissonClient
 import org.redisson.api.RBucket
+import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.DefaultParameterNameDiscoverer
 import org.springframework.core.ParameterNameDiscoverer
-import org.springframework.expression.EvaluationContext
 import org.springframework.expression.ExpressionParser
 import org.springframework.expression.spel.standard.SpelExpressionParser
 import org.springframework.expression.spel.support.StandardEvaluationContext
 import org.springframework.stereotype.Component
-import java.lang.reflect.Method
-import java.time.Duration
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executor
-import org.springframework.cache.annotation.Cacheable
 
 /**
  * PER (Probabilistic Early Recomputation) AOP Aspect (#219)
@@ -71,7 +69,7 @@ class ProbabilisticCacheAspect(
     private val redissonClient: RedissonClient,
     @Qualifier("perCacheExecutor") private val perCacheExecutor: Executor,
     private val objectMapper: ObjectMapper,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(ProbabilisticCacheAspect::class.java)
@@ -111,7 +109,7 @@ class ProbabilisticCacheAspect(
             log.info(
                 "🎲 [PER] 조기 갱신 당첨! 백그라운드 갱신 시작 (Key: {}, TTL 남음: {}ms)",
                 cacheKey,
-                cached.remainingTtl()
+                cached.remainingTtl(),
             )
 
             // 비동기 갱신 (Fire & Forget) - LogicExecutor 패턴 적용
@@ -128,7 +126,7 @@ class ProbabilisticCacheAspect(
     private fun recomputeAndCache(
         joinPoint: ProceedingJoinPoint,
         cacheKey: String,
-        annotation: ProbabilisticCache
+        annotation: ProbabilisticCache,
     ): Any? {
         val start = System.currentTimeMillis()
         val result = joinPoint.proceed()
@@ -146,7 +144,7 @@ class ProbabilisticCacheAspect(
                 "💾 [PER] 캐시 저장: key={}, delta={}ms, ttl={}s",
                 cacheKey,
                 delta,
-                annotation.ttlSeconds
+                annotation.ttlSeconds,
             )
         }
 
@@ -184,7 +182,7 @@ class ProbabilisticCacheAspect(
         return executor.executeOrDefault(
             { objectMapper.writeValueAsString(wrapper) },
             null,
-            context
+            context,
         )
     }
 

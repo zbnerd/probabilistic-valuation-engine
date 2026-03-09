@@ -2,6 +2,9 @@ package maple.expectation.infrastructure.monitoring.ai
 
 import dev.langchain4j.model.chat.ChatLanguageModel
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
+import java.util.Optional
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.monitoring.context.SystemContextProvider
@@ -13,9 +16,6 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
-import java.util.Optional
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
 
 @Service
 @ConditionalOnProperty(name = ["ai.sre.enabled"], havingValue = "true")
@@ -28,15 +28,13 @@ class AiSreService(
     @Qualifier("aiTaskExecutor") private val aiTaskExecutor: Executor,
     private val promptBuilder: AiPromptBuilder,
     private val responseParser: AiResponseParser,
-    @Value("\${ai.sre.enabled:false}") private val aiEnabled: Boolean
+    @Value("\${ai.sre.enabled:false}") private val aiEnabled: Boolean,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(AiSreService::class.java)
     }
 
-    fun analyzeErrorAsync(exception: Throwable): CompletableFuture<Optional<AiAnalysisResult>> {
-        return CompletableFuture.supplyAsync({ analyzeError(exception) }, aiTaskExecutor)
-    }
+    fun analyzeErrorAsync(exception: Throwable): CompletableFuture<Optional<AiAnalysisResult>> = CompletableFuture.supplyAsync({ analyzeError(exception) }, aiTaskExecutor)
 
     @CircuitBreaker(name = "openAiApi", fallbackMethod = "fallbackAnalysis")
     fun analyzeError(exception: Throwable): Optional<AiAnalysisResult> {
@@ -51,7 +49,8 @@ class AiSreService(
         return executor.executeOrDefault(
             { performAnalysisInternal(exception) },
             Optional.empty(),
-            context)
+            context,
+        )
     }
 
     private fun performAnalysisInternal(exception: Throwable): Optional<AiAnalysisResult> {
@@ -85,19 +84,18 @@ class AiSreService(
                 .actionItems(suggestActions(errorType))
                 .analysisSource("RULE_BASED")
                 .disclaimer("규칙 기반 분석 결과입니다. 수동 검증을 권장합니다.")
-                .build())
+                .build(),
+        )
     }
 
-    private fun createThrottledResult(exception: Throwable): AiAnalysisResult {
-        return AiAnalysisResult.builder()
-            .rootCause("동일 에러 패턴 반복 발생")
-            .severity("INFO")
-            .affectedComponents(exception.javaClass.simpleName)
-            .actionItems("이전 분석 결과 참조")
-            .analysisSource("THROTTLED")
-            .disclaimer("스로틀링으로 인해 새로운 AI 분석이 생략되었습니다.")
-            .build()
-    }
+    private fun createThrottledResult(exception: Throwable): AiAnalysisResult = AiAnalysisResult.builder()
+        .rootCause("동일 에러 패턴 반복 발생")
+        .severity("INFO")
+        .affectedComponents(exception.javaClass.simpleName)
+        .actionItems("이전 분석 결과 참조")
+        .analysisSource("THROTTLED")
+        .disclaimer("스로틀링으로 인해 새로운 AI 분석이 생략되었습니다.")
+        .build()
 
     private fun analyzeByKeyword(errorType: String, message: String): String {
         val combined = ("$errorType $message").lowercase()
@@ -125,23 +123,19 @@ class AiSreService(
         }
     }
 
-    private fun inferAffectedComponents(errorType: String): String {
-        return when {
-            errorType.contains("Redis") -> "Redis, TieredCache, LockStrategy"
-            errorType.contains("Hikari") || errorType.contains("DataSource") -> "MySQL, Repository Layer"
-            errorType.contains("Nexon") || errorType.contains("External") -> "NexonApiClient, ExternalService"
-            errorType.contains("CircuitBreaker") -> "Resilience4j, Service Layer"
-            else -> "Unknown"
-        }
+    private fun inferAffectedComponents(errorType: String): String = when {
+        errorType.contains("Redis") -> "Redis, TieredCache, LockStrategy"
+        errorType.contains("Hikari") || errorType.contains("DataSource") -> "MySQL, Repository Layer"
+        errorType.contains("Nexon") || errorType.contains("External") -> "NexonApiClient, ExternalService"
+        errorType.contains("CircuitBreaker") -> "Resilience4j, Service Layer"
+        else -> "Unknown"
     }
 
-    private fun suggestActions(errorType: String): String {
-        return when {
-            errorType.contains("Timeout") -> "1. 대상 서비스 상태 확인\n2. 네트워크 지연 점검\n3. 타임아웃 값 검토"
-            errorType.contains("Connection") -> "1. 연결 대상 서비스 확인\n2. 방화벽/보안그룹 점검\n3. DNS 확인"
-            errorType.contains("Circuit") -> "1. 서킷브레이커 상태 확인\n2. 장애 원인 파악\n3. 수동 리셋 고려"
-            else -> "1. 로그 상세 확인\n2. 메트릭 모니터링\n3. 개발팀 에스컬레이션"
-        }
+    private fun suggestActions(errorType: String): String = when {
+        errorType.contains("Timeout") -> "1. 대상 서비스 상태 확인\n2. 네트워크 지연 점검\n3. 타임아웃 값 검토"
+        errorType.contains("Connection") -> "1. 연결 대상 서비스 확인\n2. 방화벽/보안그룹 점검\n3. DNS 확인"
+        errorType.contains("Circuit") -> "1. 서킷브레이커 상태 확인\n2. 장애 원인 파악\n3. 수동 리셋 고려"
+        else -> "1. 로그 상세 확인\n2. 메트릭 모니터링\n3. 개발팀 에스컬레이션"
     }
 
     private fun getTopStackTrace(exception: Throwable, count: Int): String {
@@ -162,7 +156,8 @@ class AiSreService(
         return executor.executeOrDefault(
             { performIncidentAnalysisInternal(context) },
             createDefaultMitigationPlan(context),
-            taskContext)
+            taskContext,
+        )
     }
 
     private fun performIncidentAnalysisInternal(context: IncidentContext): MitigationPlan {
@@ -184,17 +179,17 @@ class AiSreService(
 
     private fun createDefaultMitigationPlan(context: IncidentContext): MitigationPlan {
         val defaultHypotheses = listOf(
-            Hypothesis("자동 분석 불가 - 수동 점검 필요", "LOW", listOf("LLM 분석 실패", "시스템 로그 수동 확인 필요"))
+            Hypothesis("자동 분석 불가 - 수동 점검 필요", "LOW", listOf("LLM 분석 실패", "시스템 로그 수동 확인 필요")),
         )
 
         val defaultActions = listOf(
             Action(1, "시스템 로그 확인", "LOW", "현재 상태 파악"),
             Action(2, "메트릭 모니터링", "LOW", "주요 지표 추적"),
-            Action(3, "개발팀 에스컬레이션", "LOW", "수동 분석 의뢰")
+            Action(3, "개발팀 에스컬레이션", "LOW", "수동 분석 의뢰"),
         )
 
         val defaultQuestions = listOf(
-            ClarifyingQuestion("인시던트 발생 시점에 배포가 있었나요?", "배포 관련 문제 확인")
+            ClarifyingQuestion("인시던트 발생 시점에 배포가 있었나요?", "배포 관련 문제 확인"),
         )
 
         val rollbackPlan = RollbackPlan("상태 악화 시 즉시 실행", listOf("이전 커밋으로 롤백", "영향도 재평가"))
@@ -206,7 +201,7 @@ class AiSreService(
             defaultActions,
             defaultQuestions,
             rollbackPlan,
-            "AI 분석 실패로 인한 기본 계획입니다. 수동 검증이 필수입니다."
+            "AI 분석 실패로 인한 기본 계획입니다. 수동 검증이 필수입니다.",
         )
     }
 
@@ -216,7 +211,7 @@ class AiSreService(
         val affectedComponents: String,
         val actionItems: String,
         val analysisSource: String,
-        val disclaimer: String
+        val disclaimer: String,
     ) {
         companion object {
             @JvmStatic
@@ -262,16 +257,14 @@ class AiSreService(
             return this
         }
 
-        fun build(): AiAnalysisResult {
-            return AiAnalysisResult(
-                rootCause ?: "",
-                severity ?: "",
-                affectedComponents ?: "",
-                actionItems ?: "",
-                analysisSource ?: "",
-                disclaimer ?: ""
-            )
-        }
+        fun build(): AiAnalysisResult = AiAnalysisResult(
+            rootCause ?: "",
+            severity ?: "",
+            affectedComponents ?: "",
+            actionItems ?: "",
+            analysisSource ?: "",
+            disclaimer ?: "",
+        )
     }
 
     data class MitigationPlan(
@@ -281,29 +274,29 @@ class AiSreService(
         val actions: List<Action>,
         val questions: List<ClarifyingQuestion>,
         val rollbackPlan: RollbackPlan,
-        val disclaimer: String
+        val disclaimer: String,
     )
 
     data class Hypothesis(
         val cause: String,
         val confidence: String,
-        val evidence: List<String>
+        val evidence: List<String>,
     )
 
     data class Action(
         val step: Int,
         val action: String,
         val risk: String,
-        val expectedOutcome: String
+        val expectedOutcome: String,
     )
 
     data class ClarifyingQuestion(
         val question: String,
-        val why: String
+        val why: String,
     )
 
     data class RollbackPlan(
         val trigger: String,
-        val steps: List<String>
+        val steps: List<String>,
     )
 }

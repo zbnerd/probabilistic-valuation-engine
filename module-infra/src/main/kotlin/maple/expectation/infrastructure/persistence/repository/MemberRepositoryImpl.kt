@@ -18,41 +18,31 @@ import org.springframework.stereotype.Repository
  */
 @Repository
 open class MemberRepositoryImpl(
-    private val jpaRepository: MemberJpaRepository
+    private val jpaRepository: MemberJpaRepository,
 ) : MemberRepository {
 
-    override fun findByUuid(uuid: String): Member? {
-        return jpaRepository.findByUuid(uuid)
-    }
+    override fun findByUuid(uuid: String): Member? = jpaRepository.findByUuid(uuid)
 
     override fun findById(id: Long?): Member? {
         if (id == null) return null
         return jpaRepository.findById(id).orElse(null)
     }
 
-    override fun save(member: Member): Member {
-        return jpaRepository.save(member)
-    }
+    override fun save(member: Member): Member = jpaRepository.save(member)
 
     override fun deleteByUuid(uuid: String) {
         jpaRepository.deleteByUuid(uuid)
     }
 
-    override fun existsByUuid(uuid: String): Boolean {
-        return jpaRepository.existsByUuid(uuid)
+    override fun existsByUuid(uuid: String): Boolean = jpaRepository.existsByUuid(uuid)
+
+    override fun findOrCreateGuest(uuid: String, initialPoint: Long): Member = findByUuid(uuid) ?: run {
+        // Use reflection to access private constructor (uuid, initialPoint)
+        val constructor = Member::class.java.getDeclaredConstructor(String::class.java, Long::class.java)
+        constructor.isAccessible = true
+        val guest = constructor.newInstance(uuid, initialPoint)
+        save(guest)
     }
 
-    override fun findOrCreateGuest(uuid: String, initialPoint: Long): Member {
-        return findByUuid(uuid) ?: run {
-            // Use reflection to access private constructor (uuid, initialPoint)
-            val constructor = Member::class.java.getDeclaredConstructor(String::class.java, Long::class.java)
-            constructor.isAccessible = true
-            val guest = constructor.newInstance(uuid, initialPoint)
-            save(guest)
-        }
-    }
-
-    override fun increasePointByUuid(uuid: String, amount: Long): Int {
-        return jpaRepository.increasePointByUuid(uuid, amount)
-    }
+    override fun increasePointByUuid(uuid: String, amount: Long): Int = jpaRepository.increasePointByUuid(uuid, amount)
 }

@@ -1,7 +1,6 @@
 package maple.expectation.core.domain.stat
 
 import java.util.ArrayList
-import java.util.Comparator
 
 /**
  * 스탯 타입 Enum
@@ -16,7 +15,7 @@ enum class StatType(
     @get:JvmName("isPercent") val percent: Boolean = false,
 
     /** 개별 스탯 여부 (STR, DEX, INT, LUK) ALLSTAT은 개별 스탯이 아님 (복합) */
-    @get:JvmName("isIndividualStat") val individualStat: Boolean = false
+    @get:JvmName("isIndividualStat") val individualStat: Boolean = false,
 ) {
     // 1. 핵심 스탯 (기존 - 하위호환)
     STR("STR", false, true),
@@ -32,33 +31,42 @@ enum class StatType(
     INT_PERCENT("INT", true, true),
     LUK_PERCENT("LUK", true, true),
     ALLSTAT_PERCENT("올스탯", true, false),
+
     // 2. 공격력/마력
     ATTACK_POWER("공격력", false, false),
     MAGIC_POWER("마력", false, false),
     ATTACK_POWER_PERCENT("공격력", true, false),
     MAGIC_POWER_PERCENT("마력", true, false),
+
     // 3. 특수 옵션
     BOSS_DAMAGE("보스 몬스터 공격 시 데미지", true, false),
+
     // 보공 (항상 %)
     IGNORE_DEFENSE("몬스터 방어율 무시", true, false),
+
     // 방무 (항상 %)
     DAMAGE("데미지", true, false),
     CRITICAL_DAMAGE("크리티컬 데미지", true, false),
+
     // 4. 유틸 옵션
     COOLDOWN_REDUCTION("재사용 대기시간", false, false),
+
     // 쿨감 (초 단위)
     ITEM_DROP("아이템 드롭률", true, false),
     MESO_DROP("메소 획득량", true, false),
     HP("HP", false, false),
     HP_PERCENT("HP", true, false),
+
     // 5. 레벨당 스탯 (에디셔널 핵심 옵션) (#240 V4)
     // longest-first 매칭으로 "STR"보다 먼저 감지됨
     LEVEL_STR("캐릭터 기준 9레벨 당 STR", false, true),
     LEVEL_DEX("캐릭터 기준 9레벨 당 DEX", false, true),
     LEVEL_INT("캐릭터 기준 9레벨 당 INT", false, true),
     LEVEL_LUK("캐릭터 기준 9레벨 당 LUK", false, true),
+
     // 6. 기타 (판별 불가)
-    UNKNOWN("기타", false, false);
+    UNKNOWN("기타", false, false),
+    ;
 
     /**
      * 옵션 카테고리 Enum (#240 V4)
@@ -67,32 +75,36 @@ enum class StatType(
      */
     enum class OptionCategory {
         STAT,
-    // STR, DEX, INT, LUK, 올스탯
+
+        // STR, DEX, INT, LUK, 올스탯
         BOSS_IED,
-    // 보공, 방무
+
+        // 보공, 방무
         ATK_MAG,
-    // 공격력, 마력
+
+        // 공격력, 마력
         CRIT_DMG,
-    // 크리티컬 데미지
+
+        // 크리티컬 데미지
         COOLDOWN,
-    // 쿨감
-        OTHER // 기타
+
+        // 쿨감
+        OTHER, // 기타
     }
 
     /**
      * 해당 StatType의 옵션 카테고리 반환
      */
-    fun getCategory(): OptionCategory {
-        return when (this) {
-            STR, DEX, INT, LUK, ALL_STAT,
-            STR_PERCENT, DEX_PERCENT, INT_PERCENT, LUK_PERCENT, ALLSTAT_PERCENT,
-            LEVEL_STR, LEVEL_DEX, LEVEL_INT, LEVEL_LUK -> OptionCategory.STAT // #240 V4: 레벨당 스탯 추가
-            BOSS_DAMAGE, IGNORE_DEFENSE -> OptionCategory.BOSS_IED
-            ATTACK_POWER, MAGIC_POWER, ATTACK_POWER_PERCENT, MAGIC_POWER_PERCENT -> OptionCategory.ATK_MAG
-            CRITICAL_DAMAGE -> OptionCategory.CRIT_DMG
-            COOLDOWN_REDUCTION -> OptionCategory.COOLDOWN
-            else -> OptionCategory.OTHER
-        }
+    fun getCategory(): OptionCategory = when (this) {
+        STR, DEX, INT, LUK, ALL_STAT,
+        STR_PERCENT, DEX_PERCENT, INT_PERCENT, LUK_PERCENT, ALLSTAT_PERCENT,
+        LEVEL_STR, LEVEL_DEX, LEVEL_INT, LEVEL_LUK,
+        -> OptionCategory.STAT // #240 V4: 레벨당 스탯 추가
+        BOSS_DAMAGE, IGNORE_DEFENSE -> OptionCategory.BOSS_IED
+        ATTACK_POWER, MAGIC_POWER, ATTACK_POWER_PERCENT, MAGIC_POWER_PERCENT -> OptionCategory.ATK_MAG
+        CRITICAL_DAMAGE -> OptionCategory.CRIT_DMG
+        COOLDOWN_REDUCTION -> OptionCategory.COOLDOWN
+        else -> OptionCategory.OTHER
     }
 
     /**
@@ -101,9 +113,7 @@ enum class StatType(
      * OTHER 카테고리는 복합 옵션 판정에서 제외
      */
     @JvmName("isValidCategory")
-    fun isValidCategory(): Boolean {
-        return getCategory() != OptionCategory.OTHER
-    }
+    fun isValidCategory(): Boolean = getCategory() != OptionCategory.OTHER
 
     companion object {
         /**
@@ -117,8 +127,10 @@ enum class StatType(
                 return UNKNOWN
             }
 
-            if (option.contains("피격 시") || // 피격 시 10% 확률로 데미지 무시 등
-                option.contains("오토스틸")) { // 공격 시 x% 확률로 오토스틸
+            if (option.contains("피격 시") ||
+                // 피격 시 10% 확률로 데미지 무시 등
+                option.contains("오토스틸")
+            ) { // 공격 시 x% 확률로 오토스틸
                 return UNKNOWN
             }
 
@@ -277,12 +289,10 @@ enum class StatType(
         /**
          * 레벨당 스탯 타입 여부 (#240 V4)
          */
-        private fun isLevelBasedStat(type: StatType): Boolean {
-            return type == LEVEL_STR ||
-                    type == LEVEL_DEX ||
-                    type == LEVEL_INT ||
-                    type == LEVEL_LUK
-        }
+        private fun isLevelBasedStat(type: StatType): Boolean = type == LEVEL_STR ||
+            type == LEVEL_DEX ||
+            type == LEVEL_INT ||
+            type == LEVEL_LUK
 
         /**
          * Primary stat 계열 키워드 포함 여부 (Drift 감지용)
@@ -300,11 +310,11 @@ enum class StatType(
             // 주 스탯 키워드 패턴 (대소문자 무관)
             val upper = option.uppercase()
             return upper.contains("STR") ||
-                    upper.contains("DEX") ||
-                    upper.contains("INT") ||
-                    upper.contains("LUK") ||
-                    option.contains("올스탯") ||
-                    option.contains("올 스탯")
+                upper.contains("DEX") ||
+                upper.contains("INT") ||
+                upper.contains("LUK") ||
+                option.contains("올스탯") ||
+                option.contains("올 스탯")
         }
     }
 }

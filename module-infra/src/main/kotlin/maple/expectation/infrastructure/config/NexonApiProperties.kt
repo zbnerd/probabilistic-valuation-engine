@@ -3,9 +3,9 @@ package maple.expectation.infrastructure.config
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotNull
+import java.time.Duration
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
-import java.time.Duration
 
 /**
  * Nexon API 클라이언트 타임아웃 설정 프로퍼티

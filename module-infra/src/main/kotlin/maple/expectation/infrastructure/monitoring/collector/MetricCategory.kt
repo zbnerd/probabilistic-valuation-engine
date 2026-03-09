@@ -9,36 +9,36 @@ package maple.expectation.infrastructure.monitoring.collector
  */
 enum class MetricCategory(val key: String, val displayName: String) {
 
-  /** Golden Signals (4대 핵심 지표) - Latency, Error Rate, Traffic (RPS), Saturation */
-  GOLDEN_SIGNALS("golden-signals", "4대 핵심 신호"),
+    /** Golden Signals (4대 핵심 지표) - Latency, Error Rate, Traffic (RPS), Saturation */
+    GOLDEN_SIGNALS("golden-signals", "4대 핵심 신호"),
 
-  /** JVM 메트릭 - Heap, GC, Thread Count */
-  JVM("jvm", "JVM 상태"),
+    /** JVM 메트릭 - Heap, GC, Thread Count */
+    JVM("jvm", "JVM 상태"),
 
-  /** 데이터베이스 메트릭 - Connection Pool, Query Latency */
-  DATABASE("database", "데이터베이스"),
+    /** 데이터베이스 메트릭 - Connection Pool, Query Latency */
+    DATABASE("database", "데이터베이스"),
 
-  /** Redis 메트릭 - Connection, Memory, Hit Rate */
-  REDIS("redis", "Redis 캐시"),
+    /** Redis 메트릭 - Connection, Memory, Hit Rate */
+    REDIS("redis", "Redis 캐시"),
 
-  /** 외부 API 메트릭 - Nexon API Latency, Error Count */
-  EXTERNAL_API("external-api", "외부 API"),
+    /** 외부 API 메트릭 - Nexon API Latency, Error Count */
+    EXTERNAL_API("external-api", "외부 API"),
 
-  /** Circuit Breaker 메트릭 - State, Failure Rate */
-  CIRCUIT_BREAKER("circuit-breaker", "서킷브레이커"),
+    /** Circuit Breaker 메트릭 - State, Failure Rate */
+    CIRCUIT_BREAKER("circuit-breaker", "서킷브레이커"),
 
-  /** 보안 메트릭 - Auth Failure, Rate Limit */
-  SECURITY("security", "보안"),
+    /** 보안 메트릭 - Auth Failure, Rate Limit */
+    SECURITY("security", "보안"),
 
-  /** 비즈니스 메트릭 - Active Users, Calculations */
-  BUSINESS("business", "비즈니스"),
+    /** 비즈니스 메트릭 - Active Users, Calculations */
+    BUSINESS("business", "비즈니스"),
 
-  /** Batch 메트릭 - Job Status, Duration */
-  BATCH("batch", "배치 작업"),
+    /** Batch 메트릭 - Job Status, Duration */
+    BATCH("batch", "배치 작업"),
 
-  /** 로깅 메트릭 - Error Count, Warning Count */
-  LOGGING("logging", "로깅"),
+    /** 로깅 메트릭 - Error Count, Warning Count */
+    LOGGING("logging", "로깅"),
 
-  /** 인프라 메트릭 - CPU, Memory, Disk */
-  INFRA("infra", "인프라")
+    /** 인프라 메트릭 - CPU, Memory, Disk */
+    INFRA("infra", "인프라"),
 }

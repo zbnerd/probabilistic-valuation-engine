@@ -2,6 +2,8 @@ package maple.expectation.infrastructure.resilience
 
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
+import java.time.Duration
+import java.util.ArrayList
 import maple.expectation.infrastructure.event.MySQLDownEvent
 import maple.expectation.infrastructure.event.MySQLUpEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -18,8 +20,6 @@ import org.springframework.data.redis.core.ScanOptions
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
-import java.time.Duration
-import java.util.ArrayList
 
 @Service
 class DynamicTTLManager(
@@ -28,14 +28,14 @@ class DynamicTTLManager(
     private val properties: MySQLFallbackProperties,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    private val lockStrategy: LockStrategy
+    private val lockStrategy: LockStrategy,
 ) {
     private val logger = LoggerFactory.getLogger(DynamicTTLManager::class.java)
 
     companion object {
         private val CACHE_TTL_CONFIG: Map<String, Duration> = mapOf(
             "equipment" to Duration.ofMinutes(10),
-            "ocidCache" to Duration.ofMinutes(60)
+            "ocidCache" to Duration.ofMinutes(60),
         )
     }
 
@@ -58,11 +58,11 @@ class DynamicTTLManager(
                     {
                         extendAllCacheTTL()
                         null
-                    }
+                    },
                 )
             },
             null,
-            context
+            context,
         )
     }
 
@@ -81,11 +81,11 @@ class DynamicTTLManager(
                     {
                         restoreAllCacheTTL()
                         null
-                    }
+                    },
                 )
             },
             null,
-            context
+            context,
         )
     }
 
@@ -98,7 +98,7 @@ class DynamicTTLManager(
             meterRegistry.gauge(
                 "mysql.ttl.scan.keys",
                 Tags.of("action", "persist", "pattern", extractCacheName(pattern)),
-                keys.size.toDouble()
+                keys.size.toDouble(),
             )
 
             if (keys.isEmpty()) {
@@ -123,7 +123,7 @@ class DynamicTTLManager(
             meterRegistry.gauge(
                 "mysql.ttl.scan.keys",
                 Tags.of("action", "restore", "pattern", cacheName),
-                keys.size.toDouble()
+                keys.size.toDouble(),
             )
 
             if (keys.isEmpty()) {
@@ -156,7 +156,7 @@ class DynamicTTLManager(
                     }
                 }
                 null
-            }
+            },
         )
 
         return keys

@@ -18,16 +18,14 @@ data class JwtPayload(
     val fingerprint: String,
     val role: String,
     val issuedAt: Instant,
-    val expiration: Instant
+    val expiration: Instant,
 ) {
     /**
      * 토큰이 만료되었는지 확인합니다.
      *
      * @return 만료 여부
      */
-    fun isExpired(): Boolean {
-        return Instant.now().isAfter(expiration)
-    }
+    fun isExpired(): Boolean = Instant.now().isAfter(expiration)
 
     companion object {
         /**

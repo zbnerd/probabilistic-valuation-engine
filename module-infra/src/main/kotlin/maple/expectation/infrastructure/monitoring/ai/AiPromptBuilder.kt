@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.monitoring.ai
 
-import dev.langchain4j.model.input.Prompt
 import dev.langchain4j.model.input.PromptTemplate
 import maple.expectation.infrastructure.monitoring.copilot.model.AnomalyEvent
 import maple.expectation.infrastructure.monitoring.copilot.model.EvidenceItem
@@ -10,7 +9,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class AiPromptBuilder(
-    private val piiFilter: PiiMaskingFilter
+    private val piiFilter: PiiMaskingFilter,
 ) {
     companion object {
         private const val SYSTEM_PROMPT = """
@@ -32,7 +31,8 @@ class AiPromptBuilder(
             Be concise. Response in Korean.
             """
 
-        private val ANALYSIS_TEMPLATE = PromptTemplate.from("""
+        private val ANALYSIS_TEMPLATE = PromptTemplate.from(
+            """
             Error Information:
             - Type: {{errorType}}
             - Message: {{errorMessage}}
@@ -43,7 +43,8 @@ class AiPromptBuilder(
             {{systemContext}}
 
             Analyze this error and provide actionable insights.
-            """)
+            """,
+        )
 
         private const val INCIDENT_ANALYSIS_SYSTEM_PROMPT = """
             You are an SRE incident commander for MapleExpectation system.
@@ -90,7 +91,8 @@ class AiPromptBuilder(
             Be specific and actionable. Response in Korean.
             """
 
-        private val INCIDENT_ANALYSIS_TEMPLATE = PromptTemplate.from("""
+        private val INCIDENT_ANALYSIS_TEMPLATE = PromptTemplate.from(
+            """
             Incident Summary: {{summary}}
             Incident ID: {{incidentId}}
 
@@ -107,30 +109,33 @@ class AiPromptBuilder(
             {{metadata}}
 
             Analyze this incident and provide a structured mitigation plan in JSON format.
-            """)
+            """,
+        )
     }
 
     fun buildAnalysisPrompt(
         exception: Throwable,
         maskedStackTrace: String,
-        systemContext: String
+        systemContext: String,
     ): PromptWithSystem {
         val maskedMessage = piiFilter.maskExceptionMessage(exception)
         val maskedContext = piiFilter.mask(systemContext)
 
-        val prompt = ANALYSIS_TEMPLATE.apply(mapOf(
-            "errorType" to exception.javaClass.simpleName,
-            "errorMessage" to maskedMessage,
-            "stackTrace" to maskedStackTrace,
-            "systemContext" to maskedContext
-        ))
+        val prompt = ANALYSIS_TEMPLATE.apply(
+            mapOf(
+                "errorType" to exception.javaClass.simpleName,
+                "errorMessage" to maskedMessage,
+                "stackTrace" to maskedStackTrace,
+                "systemContext" to maskedContext,
+            ),
+        )
 
         return PromptWithSystem(SYSTEM_PROMPT, prompt.text())
     }
 
     fun buildIncidentAnalysisPrompt(
         context: IncidentContext,
-        systemContext: String
+        systemContext: String,
     ): PromptWithSystem {
         val anomaliesText = formatAnomalies(context.anomalies)
         val evidenceText = formatEvidence(context.evidence)
@@ -141,16 +146,18 @@ class AiPromptBuilder(
         val maskedContext = piiFilter.mask(systemContext)
         val maskedMetadata = piiFilter.mask(metadataText)
 
-        val prompt = INCIDENT_ANALYSIS_TEMPLATE.apply(mapOf(
-            "summary" to context.summary,
-            "incidentId" to context.incidentId,
-            "anomalyCount" to context.anomalies.size,
-            "anomalies" to maskedAnomalies,
-            "evidenceCount" to context.evidence.size,
-            "evidence" to maskedEvidence,
-            "systemContext" to maskedContext,
-            "metadata" to maskedMetadata
-        ))
+        val prompt = INCIDENT_ANALYSIS_TEMPLATE.apply(
+            mapOf(
+                "summary" to context.summary,
+                "incidentId" to context.incidentId,
+                "anomalyCount" to context.anomalies.size,
+                "anomalies" to maskedAnomalies,
+                "evidenceCount" to context.evidence.size,
+                "evidence" to maskedEvidence,
+                "systemContext" to maskedContext,
+                "metadata" to maskedMetadata,
+            ),
+        )
 
         return PromptWithSystem(INCIDENT_ANALYSIS_SYSTEM_PROMPT, prompt.text())
     }
@@ -162,13 +169,15 @@ class AiPromptBuilder(
 
         val sb = StringBuilder()
         for ((index, anomaly) in anomalies.withIndex()) {
-            sb.append("""
+            sb.append(
+                """
                 |[${index + 1}] ${anomaly.signalId}
                 |    - 심각도: ${anomaly.severity}
                 |    - 사유: ${anomaly.reason}
                 |    - 감지 시각: ${anomaly.detectedAtMillis}
                 |    - 현재값: ${anomaly.currentValue} (기준: ${anomaly.baselineValue})
-                """.trimMargin())
+                """.trimMargin(),
+            )
         }
         return sb.toString()
     }
@@ -182,17 +191,21 @@ class AiPromptBuilder(
         for ((index, item) in evidence.withIndex()) {
             when (item) {
                 is EvidenceItem -> {
-                    sb.append("""
+                    sb.append(
+                        """
                         |[${index + 1}] ${item.title} (${item.type})
                         |    ${item.body}
-                        """.trimMargin())
+                        """.trimMargin(),
+                    )
                 }
                 is maple.expectation.infrastructure.monitoring.copilot.model.RichEvidence -> {
-                    sb.append("""
+                    sb.append(
+                        """
                         |[${index + 1}] ${item.signalName} (PromQL Evidence)
                         |    Current: ${item.currentValue}, Baseline: ${item.baselineValue}, Deviation: ${item.formattedDeviation()}
                         |    Query: ${item.promql}
-                        """.trimMargin())
+                        """.trimMargin(),
+                    )
                 }
                 else -> {
                     sb.append("[${index + 1}] $item\n")

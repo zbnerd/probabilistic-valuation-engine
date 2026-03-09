@@ -166,7 +166,7 @@ services:
 
   # PostgreSQL + PGMQ (Replacing MySQL + MongoDB + Redis Queue)
   postgres:
-    image: postgres:16
+    image: jumski/postgres-17-pgmq:latest
     container_name: maple-postgres
     restart: always
     ports:

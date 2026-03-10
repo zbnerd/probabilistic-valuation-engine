@@ -38,10 +38,6 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
-        # MySQL Dialect (Default)
-        dialect: org.hibernate.dialect.MySQLDialect
-        # PostgreSQL Dialect (Alternative - use pglocal profile)
-        # dialect: org.hibernate.dialect.PostgreSQLDialect
         default_batch_fetch_size: 100
         jdbc:
           batch_size: 100

@@ -5,9 +5,9 @@ import static org.mockito.Mockito.*;
 
 import maple.expectation.application.scheduler.StreamJanitorScheduler;
 import maple.expectation.application.worker.MongoDBSyncWorker;
-import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import maple.expectation.infrastructure.executor.function.ThrowingSupplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -51,28 +51,23 @@ class StreamJanitorSchedulerTest {
 
   @BeforeEach
   void setUp() {
-    // Mock executor to actually execute tasks with Kotlin Function1 recovery
-    lenient()
-        .doAnswer(
+    // Mock executor to actually execute tasks
+    doAnswer(
             invocation -> {
               ThrowingSupplier<?> task = invocation.getArgument(0);
               try {
                 return task.get();
               } catch (Throwable e) {
-                // If recovery is provided (Kotlin Function1), use it
-                if (invocation.getArguments().length > 1
-                    && invocation.getArgument(1) instanceof kotlin.jvm.functions.Function1) {
-                  kotlin.jvm.functions.Function1<Throwable, ?> recovery = invocation.getArgument(1);
-                  return recovery.invoke(e);
+                // If recovery is provided, use it
+                if (invocation.getArguments().length > 2) {
+                  java.util.function.Function<Throwable, ?> recovery = invocation.getArgument(2);
+                  return recovery.apply(e);
                 }
                 throw new RuntimeException(e);
               }
             })
         .when(executor)
-        .executeOrCatch(
-            any(ThrowingSupplier.class),
-            any(kotlin.jvm.functions.Function1.class),
-            any(TaskContext.class));
+        .executeOrCatch(any(ThrowingSupplier.class), any(), any(TaskContext.class));
 
     scheduler = new StreamJanitorScheduler(mongoDBSyncWorker, executor);
   }

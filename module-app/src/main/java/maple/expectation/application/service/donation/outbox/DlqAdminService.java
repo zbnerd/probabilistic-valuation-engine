@@ -61,7 +61,7 @@ public class DlqAdminService {
    * @param size 페이지 크기
    * @return DLQ 항목 페이지
    */
-  @Transactional(transactionManager = "transactionManager", readOnly = true)
+  @Transactional("transactionManager", readOnly = true)
   public Page<DlqEntryResponse> findAll(int page, int size) {
     TaskContext context = TaskContext.of("DlqAdmin", "FindAll", String.valueOf(page));
 
@@ -81,7 +81,7 @@ public class DlqAdminService {
    * @return DLQ 상세 정보
    * @throws DlqNotFoundException DLQ 항목이 없을 경우
    */
-  @Transactional(transactionManager = "transactionManager", readOnly = true)
+  @Transactional("transactionManager", readOnly = true)
   public DlqDetailResponse findById(Long id) {
     TaskContext context = TaskContext.of("DlqAdmin", "FindById", String.valueOf(id));
 
@@ -103,7 +103,7 @@ public class DlqAdminService {
    * @return 재처리 결과
    * @throws DlqNotFoundException DLQ 항목이 없을 경우
    */
-  @Transactional(transactionManager = "transactionManager")
+  @Transactional("transactionManager")
   public DlqReprocessResult reprocess(Long id) {
     TaskContext context = TaskContext.of("DlqAdmin", "Reprocess", String.valueOf(id));
 
@@ -152,7 +152,7 @@ public class DlqAdminService {
    * @param id DLQ ID
    * @throws DlqNotFoundException DLQ 항목이 없을 경우
    */
-  @Transactional(transactionManager = "transactionManager")
+  @Transactional("transactionManager")
   public void discard(Long id) {
     TaskContext context = TaskContext.of("DlqAdmin", "Discard", String.valueOf(id));
 
@@ -178,7 +178,7 @@ public class DlqAdminService {
    *
    * @return DLQ 총 건수
    */
-  @Transactional(transactionManager = "transactionManager", readOnly = true)
+  @Transactional("transactionManager", readOnly = true)
   public long count() {
     return dlqRepository.countAll();
   }
@@ -200,7 +200,7 @@ public class DlqAdminService {
    * @param request Cursor 페이지 요청
    * @return Cursor 기반 페이지 응답
    */
-  @Transactional(transactionManager = "transactionManager", readOnly = true)
+  @Transactional("transactionManager", readOnly = true)
   public CursorPageResponse<DlqEntryResponse> findAllByCursor(CursorPageRequest request) {
     TaskContext context =
         TaskContext.of(

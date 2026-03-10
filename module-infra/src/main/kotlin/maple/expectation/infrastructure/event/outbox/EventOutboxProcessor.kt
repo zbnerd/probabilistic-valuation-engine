@@ -4,10 +4,10 @@ import maple.expectation.core.port.out.EventProcessorPort
 import maple.expectation.domain.v2.EventOutbox
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction
 import maple.expectation.infrastructure.config.OutboxProperties
+import maple.expectation.infrastructure.metrics.EventOutboxMetrics
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.messaging.RedisStreamPublisher
-import maple.expectation.infrastructure.metrics.EventOutboxMetrics
 import maple.expectation.infrastructure.persistence.repository.EventOutboxRepository
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -44,7 +44,7 @@ class EventOutboxProcessor(
     private val transactionTemplate: TransactionTemplate,
     private val properties: OutboxProperties,
     private val eventOutboxRepository: EventOutboxRepository,
-    private val redisStreamPublisher: RedisStreamPublisher,
+    private val redisStreamPublisher: RedisStreamPublisher
 ) : EventProcessorPort {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -72,7 +72,7 @@ class EventOutboxProcessor(
                 locked.size
             },
             0,
-            context,
+            context
         )
     }
 
@@ -117,7 +117,7 @@ class EventOutboxProcessor(
                 recoverFailedEntry(entryId, e.message)
                 false
             },
-            context,
+            context
         )
     }
 
@@ -152,7 +152,7 @@ class EventOutboxProcessor(
                 }
             },
             null,
-            context,
+            context
         )
     }
 
@@ -183,7 +183,7 @@ class EventOutboxProcessor(
                     streamName = entry.targetStream ?: "default",
                     eventId = eventId,
                     eventType = entry.eventType ?: "unknown",
-                    payload = entry.payload ?: "{}",
+                    payload = entry.payload ?: "{}"
                 )
                 log.info("[EventOutbox] Redis Stream 발행 완료: eventId={}, stream={}", eventId, entry.targetStream)
                 metrics.incrementPublished()
@@ -192,7 +192,7 @@ class EventOutboxProcessor(
                 log.error("[EventOutbox] Redis Stream 발행 실패: eventId={}", eventId, e)
                 throw e // Re-throw for retry logic
             },
-            context,
+            context
         )
     }
 
@@ -221,7 +221,7 @@ class EventOutboxProcessor(
         val staleTime = java.time.LocalDateTime.now().minus(properties.staleThreshold)
         val stalledEntries = eventOutboxRepository.findStalledProcessing(
             staleTime,
-            org.springframework.data.domain.PageRequest.of(0, properties.batchSize),
+            org.springframework.data.domain.PageRequest.of(0, properties.batchSize)
         )
 
         if (stalledEntries.isEmpty()) {
@@ -237,7 +237,7 @@ class EventOutboxProcessor(
             if (!entry.verifyIntegrity()) {
                 log.error(
                     "[EventOutbox] 무결성 검증 실패 - Zombie 복구 중단, DLQ 이동: eventId={}",
-                    entry.id,
+                    entry.id
                 )
                 handleIntegrityFailure(entry)
                 integrityFailed++
@@ -252,8 +252,7 @@ class EventOutboxProcessor(
         if (recovered > 0) {
             log.warn(
                 "[EventOutbox] Stalled 상태 복구 완료: 성공={}, 무결성실패={}",
-                recovered,
-                integrityFailed,
+                recovered, integrityFailed
             )
             metrics.incrementStalledRecovered(recovered)
         }

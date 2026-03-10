@@ -69,7 +69,9 @@ object EventVersion {
      * @return true if version is supported, false if it's from the future
      */
     @JvmStatic
-    fun isSupported(version: Int): Boolean = version in 1..CURRENT
+    fun isSupported(version: Int): Boolean {
+        return version in 1..CURRENT
+    }
 
     /**
      * Check if upcasting is needed
@@ -78,5 +80,7 @@ object EventVersion {
      * @return true if version is older than current
      */
     @JvmStatic
-    fun needsUpcasting(version: Int): Boolean = version < CURRENT
+    fun needsUpcasting(version: Int): Boolean {
+        return version < CURRENT
+    }
 }

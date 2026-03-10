@@ -95,7 +95,7 @@ public class GameCharacterService {
     return enrichCharacterBasicInfo(created);
   }
 
-  @Transactional(transactionManager = "transactionManager")
+  @Transactional("transactionManager")
   public String saveCharacter(GameCharacter character) {
     return executor.execute(
         () -> {
@@ -212,7 +212,7 @@ public class GameCharacterService {
    * <p>Note: 새 레포지토리 인터페이스에는 findByUserIgnWithPessimisticLock이 없으므로 findByUserIgn로 대체하고 트랜잭션에서 낙관적
    * 락(version) 사용
    */
-  @Transactional(transactionManager = "transactionManager")
+  @Transactional("transactionManager")
   @ObservedTransaction("service.v2.GameCharacterService.getCharacterForUpdate")
   public GameCharacter getCharacterForUpdate(String userIgn) {
     return executor.execute(

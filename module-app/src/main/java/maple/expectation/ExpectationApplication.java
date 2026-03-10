@@ -3,7 +3,6 @@ package maple.expectation;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -36,7 +35,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @EnableAsync
 @EnableScheduling
-@ConfigurationPropertiesScan(basePackages = {"maple.expectation"})
 @SpringBootApplication(
     scanBasePackages = {"maple.expectation"}) // Explicit component scanning for faster startup
 @EntityScan(basePackages = {"maple.expectation.*"}) // Explicit JPA entity scanning

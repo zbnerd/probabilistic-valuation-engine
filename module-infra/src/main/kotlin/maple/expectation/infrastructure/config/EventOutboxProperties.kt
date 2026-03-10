@@ -4,9 +4,9 @@ import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
-import java.time.Duration
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
+import java.time.Duration
 
 /**
  * Event Outbox Pattern 설정 프로퍼티
@@ -61,7 +61,7 @@ data class EventOutboxProperties(
 
     /** 인스턴스 식별자 (Scale-out 환경에서 식별용) */
     @NotBlank
-    var instanceId: String = "default-instance",
+    var instanceId: String = "default-instance"
 ) {
     companion object {
         /**

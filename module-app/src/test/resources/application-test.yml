@@ -10,10 +10,9 @@ spring:
     open-in-view: false  # P2-24: Explicitly disable OSIV for tests
     hibernate:
       ddl-auto: create-drop
+      default_batch_fetch_size: 100  # ADR-019: N+1 Query Optimization
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        default_batch_fetch_size: 100  # ADR-019: N+1 Query Optimization
         jdbc:
           batch_size: 100
         order_inserts: true

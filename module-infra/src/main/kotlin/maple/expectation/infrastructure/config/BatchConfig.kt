@@ -10,6 +10,7 @@ import org.springframework.batch.core.repository.JobRepository
 import org.springframework.batch.core.step.builder.StepBuilder
 import org.springframework.batch.item.ItemReader
 import org.springframework.batch.item.ItemWriter
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.transaction.PlatformTransactionManager
@@ -57,7 +58,7 @@ class BatchConfig(
     private val jobRepository: JobRepository,
     private val recoveryListener: BatchJobRecoveryListener,
     private val metricsLogger: BatchMetricsLogger,
-    private val optimisticLockListener: BatchOptimisticLockListener?,
+    private val optimisticLockListener: BatchOptimisticLockListener?
 ) {
 
     companion object {
@@ -116,7 +117,7 @@ class BatchConfig(
     fun ocidRefreshStep(
         ocidReader: ItemReader<String>,
         queueWriter: ItemWriter<String>,
-        transactionManager: PlatformTransactionManager,
+        transactionManager: PlatformTransactionManager
     ): Step = StepBuilder("ocidRefreshStep", jobRepository)
         .chunk<String, String>(CHUNK_SIZE, transactionManager)
         .reader(ocidReader)

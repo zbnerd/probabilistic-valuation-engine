@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component
 @Component
 class RedisStreamPublisher(
     private val redissonClient: RedissonClient,
-    private val executor: LogicExecutor,
+    private val executor: LogicExecutor
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -37,7 +37,7 @@ class RedisStreamPublisher(
         return executor.executeOrDefault(
             { publishInternal(streamName, eventId, eventType, payload) },
             null,
-            context,
+            context
         )
     }
 
@@ -46,7 +46,7 @@ class RedisStreamPublisher(
         streamName: String,
         eventId: String,
         eventType: String,
-        payload: String,
+        payload: String
     ): String {
         val stream: RStream<String, String> = redissonClient.getStream(streamName, StringCodec.INSTANCE)
 
@@ -55,7 +55,7 @@ class RedisStreamPublisher(
             "eventId" to eventId,
             "eventType" to eventType,
             "payload" to payload,
-            "timestamp" to java.time.Instant.now().toEpochMilli().toString(),
+            "timestamp" to java.time.Instant.now().toEpochMilli().toString()
         )
 
         // XADD to stream
@@ -63,9 +63,7 @@ class RedisStreamPublisher(
 
         log.info(
             "[RedisStreamPublisher] Published event: stream={}, eventId={}, messageId={}",
-            streamName,
-            eventId,
-            messageId,
+            streamName, eventId, messageId
         )
 
         return messageId.toString()
@@ -86,7 +84,7 @@ class RedisStreamPublisher(
                 stream.size()
             },
             0L,
-            context,
+            context
         )
     }
 }

@@ -22,5 +22,5 @@ import kotlin.reflect.KClass
 annotation class ValidOcid(
     val message: String = "OCID 형식이 올바르지 않습니다 (64자리 16진수)",
     val groups: Array<KClass<*>> = [],
-    val payload: Array<KClass<out Payload>> = [],
+    val payload: Array<KClass<out Payload>> = []
 )

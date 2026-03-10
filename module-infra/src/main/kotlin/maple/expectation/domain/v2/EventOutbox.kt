@@ -1,6 +1,7 @@
 package maple.expectation.domain.v2
 
 import jakarta.persistence.*
+import maple.expectation.error.exception.InternalSystemException
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
@@ -8,7 +9,6 @@ import java.time.LocalDateTime
 import java.util.HexFormat
 import kotlin.math.min
 import kotlin.math.pow
-import maple.expectation.error.exception.InternalSystemException
 
 /**
  * Generic Event Outbox Entity for Multi-Stream Support (Issue #490)
@@ -37,8 +37,8 @@ import maple.expectation.error.exception.InternalSystemException
     indexes = [
         Index(name = "idx_event_pending_poll", columnList = "status, next_retry_at, id"),
         Index(name = "idx_event_locked", columnList = "locked_by, locked_at"),
-        Index(name = "idx_event_target_stream", columnList = "target_stream, status"),
-    ],
+        Index(name = "idx_event_target_stream", columnList = "target_stream, status")
+    ]
 )
 class EventOutbox {
 
@@ -103,7 +103,7 @@ class EventOutbox {
         PROCESSING,
         COMPLETED,
         FAILED,
-        DEAD_LETTER,
+        DEAD_LETTER
     }
 
     private constructor()
@@ -151,11 +151,13 @@ class EventOutbox {
          * transformation is allowed per Section 11 rules
          */
         @Suppress("JAVA_S1166") // NoSuchAlgorithmException cannot occur (Java standard)
-        private fun getSha256Digest(): MessageDigest = try {
-            MessageDigest.getInstance("SHA-256")
-        } catch (e: NoSuchAlgorithmException) {
-            // SHA-256 is a required JVM algorithm, reaching here means JVM defect
-            throw InternalSystemException("SHA-256 algorithm not available (JVM defect)", e)
+        private fun getSha256Digest(): MessageDigest {
+            return try {
+                MessageDigest.getInstance("SHA-256")
+            } catch (e: NoSuchAlgorithmException) {
+                // SHA-256 is a required JVM algorithm, reaching here means JVM defect
+                throw InternalSystemException("SHA-256 algorithm not available (JVM defect)", e)
+            }
         }
 
         /**
@@ -163,7 +165,9 @@ class EventOutbox {
          *
          * <p>Reduces allocations compared to legacy String.format("%02x") loop
          */
-        private fun bytesToHex(bytes: ByteArray): String = HexFormat.of().formatHex(bytes)
+        private fun bytesToHex(bytes: ByteArray): String {
+            return HexFormat.of().formatHex(bytes)
+        }
     }
 
     /** Integrity verification */
@@ -204,7 +208,9 @@ class EventOutbox {
     }
 
     /** DLQ move decision */
-    fun shouldMoveToDlq(): Boolean = retryCount >= maxRetries
+    fun shouldMoveToDlq(): Boolean {
+        return retryCount >= maxRetries
+    }
 
     /**
      * Force DEAD_LETTER status (Purple requirement)
@@ -233,8 +239,12 @@ class EventOutbox {
         this.updatedAt = LocalDateTime.now()
     }
 
-    private fun truncate(str: String?, maxLen: Int): String? = if (str != null && str.length > maxLen) str.substring(0, maxLen) else str
+    private fun truncate(str: String?, maxLen: Int): String? {
+        return if (str != null && str.length > maxLen) str.substring(0, maxLen) else str
+    }
 
     /** PII Masking (CLAUDE.md 19 compliance) */
-    override fun toString(): String = "EventOutbox[id=$id, targetStream=$targetStream, eventType=$eventType, status=$status, payload=MASKED]"
+    override fun toString(): String {
+        return "EventOutbox[id=$id, targetStream=$targetStream, eventType=$eventType, status=$status, payload=MASKED]"
+    }
 }

@@ -1,8 +1,5 @@
 package maple.expectation.infrastructure.scheduler
 
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
 import maple.expectation.domain.v2.EventOutbox.EventOutboxStatus
 import maple.expectation.infrastructure.config.EventOutboxProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -14,6 +11,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.data.domain.PageRequest
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * Event Outbox Pattern 폴링 스케줄러
@@ -35,13 +35,13 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(
     name = ["scheduler.event-outbox.enabled"],
     havingValue = "true",
-    matchIfMissing = true,
+    matchIfMissing = true
 )
 class EventOutboxScheduler(
     private val eventOutboxRepository: EventOutboxRepository,
     private val metrics: EventOutboxMetrics,
     private val executor: LogicExecutor,
-    private val properties: EventOutboxProperties,
+    private val properties: EventOutboxProperties
 ) {
     private val log = LoggerFactory.getLogger(EventOutboxScheduler::class.java)
 
@@ -60,7 +60,7 @@ class EventOutboxScheduler(
                 val pendingEvents = eventOutboxRepository.findPendingWithLock(
                     listOf(EventOutboxStatus.PENDING),
                     now,
-                    PageRequest.of(0, batchSize),
+                    PageRequest.of(0, batchSize)
                 )
 
                 if (pendingEvents.isNotEmpty()) {
@@ -70,7 +70,7 @@ class EventOutboxScheduler(
                     }
                 }
             },
-            TaskContext.of("Scheduler", "EventOutbox.Poll"),
+            TaskContext.of("Scheduler", "EventOutbox.Poll")
         )
     }
 
@@ -93,11 +93,11 @@ class EventOutboxScheduler(
                     log.debug(
                         "[EventOutbox] Metrics updated - Pending: {}, Processing: {}",
                         pendingCount,
-                        processingCount,
+                        processingCount
                     )
                 }
             },
-            TaskContext.of("Scheduler", "EventOutbox.MonitorMetrics"),
+            TaskContext.of("Scheduler", "EventOutbox.MonitorMetrics")
         )
     }
 
@@ -114,18 +114,18 @@ class EventOutboxScheduler(
                 val stalledThreshold = properties.stalledThreshold
                 val thresholdTime = LocalDateTime.ofInstant(
                     Instant.now().minus(stalledThreshold),
-                    ZoneId.systemDefault(),
+                    ZoneId.systemDefault()
                 )
 
                 val stalledEvents = eventOutboxRepository.findStalledProcessing(
                     thresholdTime,
-                    PageRequest.of(0, properties.batchSize),
+                    PageRequest.of(0, properties.batchSize)
                 )
 
                 if (stalledEvents.isNotEmpty()) {
                     log.warn(
                         "[EventOutbox] Found {} stalled events, recovering...",
-                        stalledEvents.size,
+                        stalledEvents.size
                     )
 
                     var recoveredCount = 0
@@ -144,7 +144,7 @@ class EventOutboxScheduler(
                     log.info("[EventOutbox] Recovered {} stalled events", recoveredCount)
                 }
             },
-            TaskContext.of("Scheduler", "EventOutbox.RecoverStalled"),
+            TaskContext.of("Scheduler", "EventOutbox.RecoverStalled")
         )
     }
 

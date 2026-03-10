@@ -21,7 +21,7 @@ class IgnValidator : ConstraintValidator<ValidIgn, String> {
 
     override fun isValid(
         value: String?,
-        context: ConstraintValidatorContext?,
+        context: ConstraintValidatorContext?
     ): Boolean {
         if (value.isNullOrBlank()) {
             return true // @NotBlank로 처리
@@ -33,7 +33,7 @@ class IgnValidator : ConstraintValidator<ValidIgn, String> {
         if (trimmed.length < MIN_LENGTH || trimmed.length > MAX_LENGTH) {
             context?.disableDefaultConstraintViolation()
             context?.buildConstraintViolationWithTemplate(
-                "캐릭터 닉네임은 $MIN_LENGTH-$MAX_LENGTH 자여야 합니다 (현재: ${trimmed.length}자)",
+                "캐릭터 닉네임은 $MIN_LENGTH-$MAX_LENGTH 자여야 합니다 (현재: ${trimmed.length}자)"
             )?.addConstraintViolation()
             return false
         }
@@ -42,7 +42,7 @@ class IgnValidator : ConstraintValidator<ValidIgn, String> {
         if (!VALID_PATTERN.matches(trimmed)) {
             context?.disableDefaultConstraintViolation()
             context?.buildConstraintViolationWithTemplate(
-                "캐릭터 닉네임은 한글, 영문, 숫자만 허용됩니다 (공백/특수문자 불가)",
+                "캐릭터 닉네임은 한글, 영문, 숫자만 허용됩니다 (공백/특수문자 불가)"
             )?.addConstraintViolation()
             return false
         }

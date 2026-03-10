@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class EventOutboxFetchFacade(
     private val eventOutboxRepository: EventOutboxRepository,
-    private val properties: OutboxProperties,
+    private val properties: OutboxProperties
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -42,10 +42,10 @@ class EventOutboxFetchFacade(
         val pending = eventOutboxRepository.findPendingWithLock(
             listOf(
                 maple.expectation.domain.v2.EventOutbox.EventOutboxStatus.PENDING,
-                maple.expectation.domain.v2.EventOutbox.EventOutboxStatus.FAILED,
+                maple.expectation.domain.v2.EventOutbox.EventOutboxStatus.FAILED
             ),
             java.time.LocalDateTime.now(),
-            PageRequest.of(0, properties.batchSize),
+            PageRequest.of(0, properties.batchSize)
         )
 
         pending.forEach { entry ->

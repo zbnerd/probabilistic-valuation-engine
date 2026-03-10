@@ -1,7 +1,6 @@
 package maple.expectation.infrastructure.mongodb
 
 import io.micrometer.core.instrument.MeterRegistry
-import java.time.Instant
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
@@ -9,6 +8,7 @@ import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.stereotype.Service
+import java.time.Instant
 
 /**
  * Batch Character View Service - Stage and Swap Pattern (Unit 5: Batch-Realtime Race Condition Fix)
@@ -50,7 +50,7 @@ import org.springframework.stereotype.Service
 class BatchCharacterViewService(
     private val mongoTemplate: MongoTemplate,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry,
+    private val meterRegistry: MeterRegistry
 ) {
     private val log = LoggerFactory.getLogger(BatchCharacterViewService::class.java)
 
@@ -83,12 +83,8 @@ class BatchCharacterViewService(
                     if (productionVersion > BATCH_VERSION_BASE) {
                         // Production has realtime update with higher version - skip batch update
                         meterRegistry.counter("mongodb.batch.skipped_realtime_wins").increment()
-                        log.debug(
-                            "[BatchStaging] Skipped batch update (realtime wins): userIgn={}, prodVersion={}, batchVersion={}",
-                            view.userIgn,
-                            productionVersion,
-                            BATCH_VERSION_BASE,
-                        )
+                        log.debug("[BatchStaging] Skipped batch update (realtime wins): userIgn={}, prodVersion={}, batchVersion={}",
+                            view.userIgn, productionVersion, BATCH_VERSION_BASE)
                         return@executeOrDefault false
                     }
                 }
@@ -99,7 +95,7 @@ class BatchCharacterViewService(
                 return@executeOrDefault true
             },
             false,
-            context,
+            context
         )
     }
 
@@ -145,7 +141,7 @@ class BatchCharacterViewService(
                 true
             },
             false,
-            context,
+            context
         )
     }
 
@@ -162,21 +158,23 @@ class BatchCharacterViewService(
                 mongoTemplate.dropCollection(STAGING_COLLECTION)
                 log.debug("[BatchStaging] Cleared staging collection")
             },
-            context,
+            context
         )
     }
 
     // ========== Private Helper Methods ==========
 
     /** Find document in production collection by user IGN. */
-    private fun findInProduction(userIgn: String?): CharacterValuationView? = executor.executeOrDefault(
-        {
-            val query = Query(Criteria.where("userIgn").`is`(userIgn))
-            mongoTemplate.findOne(query, CharacterValuationView::class.java, PRODUCTION_COLLECTION)
-        },
-        null,
-        TaskContext.of("BatchMongo", "FindInProduction", userIgn),
-    )
+    private fun findInProduction(userIgn: String?): CharacterValuationView? {
+        return executor.executeOrDefault(
+            {
+                val query = Query(Criteria.where("userIgn").`is`(userIgn))
+                mongoTemplate.findOne(query, CharacterValuationView::class.java, PRODUCTION_COLLECTION)
+            },
+            null,
+            TaskContext.of("BatchMongo", "FindInProduction", userIgn)
+        )
+    }
 
     /** Internal upsert to staging collection. */
     private fun upsertToStagingInternal(view: CharacterValuationView) {
@@ -186,7 +184,7 @@ class BatchCharacterViewService(
             {
                 // Use upsert by messageId (idempotent)
                 val query = org.springframework.data.mongodb.core.query.Query(
-                    Criteria.where("messageId").`is`(view.messageId),
+                    Criteria.where("messageId").`is`(view.messageId)
                 )
                 val update = org.springframework.data.mongodb.core.query.Update()
                     .set("userIgn", view.userIgn)
@@ -203,7 +201,7 @@ class BatchCharacterViewService(
 
                 mongoTemplate.upsert(query, update, CharacterValuationView::class.java, STAGING_COLLECTION)
             },
-            context,
+            context
         )
     }
 
@@ -216,7 +214,7 @@ class BatchCharacterViewService(
                     .append("to", newName)
                 mongoTemplate.db.runCommand(command)
             },
-            TaskContext.of("BatchMongo", "RenameCollection", "$oldName->$newName"),
+            TaskContext.of("BatchMongo", "RenameCollection", "$oldName->$newName")
         )
     }
 
@@ -231,7 +229,7 @@ class BatchCharacterViewService(
                     log.warn("[BatchStaging] Failed to drop backup collection: {}", collectionName)
                 }
             },
-            TaskContext.of("BatchMongo", "DropBackupCollection", collectionName),
+            TaskContext.of("BatchMongo", "DropBackupCollection", collectionName)
         )
     }
 }

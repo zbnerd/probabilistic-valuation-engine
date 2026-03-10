@@ -59,6 +59,12 @@ class PostgresLockStrategy(
     private val acquiredLocks: ThreadLocal<MutableMap<Long, Long>> = ThreadLocal.withInitial { ConcurrentHashMap() }
 
     /**
+     * Lock acquisition order tracking for deadlock prevention
+     * Maintains ordered list of acquired lock IDs per thread
+     */
+    private val lockOrder: ThreadLocal<MutableList<Long>> = ThreadLocal.withInitial { mutableListOf() }
+
+    /**
      * PostgreSQL Advisory Lock 획득 시도
      *
      * <p>pg_try_advisory_lock(bigint)을 사용하여 락 획득을 시도합니다.
@@ -83,17 +89,39 @@ class PostgresLockStrategy(
 
         // 폴링 방식으로 락 획득 시도 (PostgreSQL은 대기 시간 지원 안 함)
         while (System.currentTimeMillis() < deadline) {
-            if (tryAcquireAdvisoryLock(advisoryLockId)) {
-                // 락 획득 성공 - lease time 등록
-                val leaseDeadline = if (leaseTime > 0) System.currentTimeMillis() + (leaseTime * 1000) else Long.MAX_VALUE
-                acquiredLocks.get()[advisoryLockId] = leaseDeadline
+            var lockAcquired = false
+            try {
+                if (tryAcquireAdvisoryLock(advisoryLockId)) {
+                    lockAcquired = true
+                    // 락 획득 성공 - lease time 등록 (원자적 등록)
+                    val leaseDeadline = if (leaseTime > 0) System.currentTimeMillis() + (leaseTime * 1000) else Long.MAX_VALUE
 
-                // [Issue #310] 락 대기 시간 기록
-                val waitTimeMs = System.currentTimeMillis() - startTime
-                lockMetrics.recordWaitTime(waitTimeMs, "postgres")
+                    // Register lease BEFORE any other operations
+                    acquiredLocks.get()[advisoryLockId] = leaseDeadline
 
-                log.debug("🔓 [Postgres Lock] Acquired lock for key='{}' (id={}, lease={}s)", lockKey, advisoryLockId, leaseTime)
-                return true
+                    // Track lock order for deadlock prevention
+                    lockOrder.get().add(advisoryLockId)
+
+                    // [Issue #310] 락 대기 시간 기록
+                    val waitTimeMs = System.currentTimeMillis() - startTime
+                    lockMetrics.recordWaitTime(waitTimeMs, "postgres")
+
+                    log.debug("🔓 [Postgres Lock] Acquired lock for key='{}' (id={}, lease={}s)", lockKey, advisoryLockId, leaseTime)
+                    return true
+                }
+            } catch (e: Exception) {
+                // Ensure no stale state on failure - release lock if acquired but registration failed
+                if (lockAcquired) {
+                    try {
+                        releaseAdvisoryLock(advisoryLockId)
+                    } catch (releaseError: Exception) {
+                        log.warn("⚠️ [Postgres Lock] Failed to release lock during error recovery: {}", releaseError.message)
+                    }
+                }
+                // Clean up ThreadLocal state
+                acquiredLocks.get().remove(advisoryLockId)
+                lockOrder.get().remove(advisoryLockId)
+                throw e
             }
 
             // Park 최소 1ms ~ 최대 100ms (지수 백오프)
@@ -117,10 +145,14 @@ class PostgresLockStrategy(
         if (locks.containsKey(advisoryLockId)) {
             releaseAdvisoryLock(advisoryLockId)
             locks.remove(advisoryLockId)
+            lockOrder.get().remove(advisoryLockId) // Remove from order tracking
 
             // 빈 경우 ThreadLocal 완전 제거 (메모리 누수 방지)
             if (locks.isEmpty()) {
                 acquiredLocks.remove()
+            }
+            if (lockOrder.get().isEmpty()) {
+                lockOrder.remove()
             }
 
             log.debug("🔒 [Postgres Lock] Released lock for key='{}' (id={})", lockKey, advisoryLockId)
@@ -230,6 +262,23 @@ class PostgresLockStrategy(
     private fun isHeldByCurrentThread(advisoryLockId: Long): Boolean = acquiredLocks.get().containsKey(advisoryLockId)
 
     /**
+     * Check for potential deadlock by verifying lock ordering
+     *
+     * <p>Deadlock can occur if a thread tries to acquire a lock with a lower ID
+     * after acquiring one with a higher ID. This enforces strict ordering.
+     *
+     * @param advisoryLockId The lock ID to acquire
+     * @return true if deadlock risk detected
+     */
+    private fun isDeadlockRisk(advisoryLockId: Long): Boolean {
+        val order = lockOrder.get()
+        // Empty order means no prior locks - safe
+        if (order.isEmpty()) return false
+        // Deadlock if trying to acquire lock with lower ID after higher ID
+        return order.last() > advisoryLockId
+    }
+
+    /**
      * 문자열 키를 64bit 정수로 변환 (FNV-1a 해시)
      *
      * <p>PostgreSQL Advisory Lock은 64bit 정수(bigint)를 ID로 사용합니다.
@@ -255,6 +304,63 @@ class PostgresLockStrategy(
             hash *= FNV_64_PRIME
         }
         return hash
+    }
+
+    /**
+     * Execute task with multiple locks acquired in safe order
+     *
+     * <p>Acquires locks in sorted order to prevent deadlocks.
+     * If any lock acquisition fails, releases all acquired locks.
+     *
+     * @param keys Lock keys to acquire
+     * @param leaseTime Lock lease time in seconds
+     * @param task Task to execute with all locks held
+     * @return Task result
+     * @throws DeadlockException if lock ordering violation detected
+     */
+    fun <T> executeWithOrderedLocks(keys: List<String>, leaseTime: Long, task: () -> T): T {
+        // Sort lock IDs to ensure consistent ordering across threads
+        val sortedLockIds = keys.map { toAdvisoryLockId(buildLockKey(it)) }.sorted()
+
+        // Verify no deadlock risk
+        for (lockId in sortedLockIds) {
+            if (isDeadlockRisk(lockId)) {
+                throw IllegalStateException("Deadlock risk detected: attempting to acquire lock $lockId out of order")
+            }
+        }
+
+        // Acquire locks in order
+        val acquiredLockIds = mutableListOf<Long>()
+        try {
+            for (lockId in sortedLockIds) {
+                if (!tryAcquireAdvisoryLock(lockId)) {
+                    throw IllegalStateException("Failed to acquire lock $lockId")
+                }
+                acquiredLockIds.add(lockId)
+                lockOrder.get().add(lockId)
+
+                // Register lease
+                val leaseDeadline = if (leaseTime > 0) System.currentTimeMillis() + (leaseTime * 1000) else Long.MAX_VALUE
+                acquiredLocks.get()[lockId] = leaseDeadline
+            }
+
+            return task()
+        } finally {
+            // Release locks in reverse order
+            acquiredLockIds.reversed().forEach { lockId ->
+                releaseAdvisoryLock(lockId)
+                acquiredLocks.get().remove(lockId)
+                lockOrder.get().remove(lockId)
+            }
+
+            // Clean up empty ThreadLocals
+            if (lockOrder.get().isEmpty()) {
+                lockOrder.remove()
+            }
+            if (acquiredLocks.get().isEmpty()) {
+                acquiredLocks.remove()
+            }
+        }
     }
 
     companion object {
@@ -289,12 +395,16 @@ class PostgresLockStrategy(
         for (advisoryLockId in expiredKeys) {
             releaseAdvisoryLock(advisoryLockId)
             locks.remove(advisoryLockId)
+            lockOrder.get().remove(advisoryLockId)
             log.debug("[PostgresLockStrategy] Cleaned up expired lock (id={})", advisoryLockId)
         }
 
         // 빈 경우 ThreadLocal 완전 제거
         if (locks.isEmpty()) {
             acquiredLocks.remove()
+        }
+        if (lockOrder.get().isEmpty()) {
+            lockOrder.remove()
         }
     }
 }

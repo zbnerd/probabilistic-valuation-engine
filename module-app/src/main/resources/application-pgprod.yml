@@ -1,0 +1,29 @@
+# PostgreSQL Production Configuration
+# Enables PGMQ workers for Like and Donation systems
+
+pgmq:
+  worker:
+    like-sync:
+      enabled: true
+      polling-interval-ms: 500
+      batch-size: 20
+      max-retries: 5
+    donation:
+      enabled: true
+      polling-interval-ms: 1000
+      batch-size: 10
+      max-retries: 3
+
+# PostgreSQL connection pool for scale-out
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 20
+
+# Lock implementation: PostgreSQL Advisory Locks
+maple:
+  infra:
+    lock:
+      impl: postgres
+    singleflight:
+      impl: postgres

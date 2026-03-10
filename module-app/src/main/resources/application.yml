@@ -394,6 +394,13 @@ expectation:
 scheduler:
   like-sync:
     enabled: true  # 좋아요 동기화 스케줄러 활성화
+    # Like Sync Pipeline Timing (2x Multiplier)
+    # - L1 → L2: 3초 (UX 유지)
+    # - L2 → L3 Count: 6초 (3s * 2)
+    # - L2 → L3 Relation: 12초 (6s * 2)
+    local-flush-delay-ms: 3000       # L1 → L2 Flush (unchanged for UX)
+    global-count-delay-ms: 6000      # L2 → L3 Count Sync (5s → 6s)
+    global-relation-delay-ms: 12000  # L2 → L3 Relation Sync (10s → 12s)
   warmup:
     enabled: false  # #275 Auto Warmup: 인기 캐릭터 자동 웜업 (prod에서 활성화)
     top-count: 50   # 웜업할 상위 캐릭터 수

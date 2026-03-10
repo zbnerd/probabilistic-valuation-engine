@@ -29,8 +29,8 @@
 | Cache/Warmup | PopularCharacterWarmupScheduler | 매일 5시 + 초기 30초 | 인기 캐릭터 캐시 웜업 |
 | Cache/Warmup | ExpectationCalculationScheduler | 1시간 | 전체 사용자 계산 태스크 생성 |
 | Like Sync | LikeSyncScheduler.localFlush | 3초 | L1 → L2 Flush |
-| Like Sync | LikeSyncScheduler.globalSyncCount | 5초 | L2 → L3 Count 동기화 |
-| Like Sync | LikeSyncScheduler.globalSyncRelation | 10초 | L2 → L3 Relation 동기화 |
+| Like Sync | LikeSyncScheduler.globalSyncCount | 6초 | L2 → L3 Count 동기화 (2x multiplier) |
+| Like Sync | LikeSyncScheduler.globalSyncRelation | 12초 | L2 → L3 Relation 동기화 (2x multiplier) |
 | Outbox | EventOutboxScheduler | 10초/60초/5분 | 이벤트 아웃박스 처리 |
 | Outbox | NexonApiOutboxScheduler | 10초/5분 | Nexon API 아웃박스 처리 |
 | Outbox | OutboxScheduler | 15초/60초/5분 | 일반 아웃박스 처리 |
@@ -321,7 +321,7 @@ sequenceDiagram
     end
 
     rect rgb(255, 250, 240)
-        Note over Scheduler: L2 → L3 Count (5초)
+        Note over Scheduler: L2 → L3 Count (6초)
         alt Redis 모드
             Scheduler->>PartitionedFlush: flushAssignedPartitions()
             PartitionedFlush->>DB: 파티션별 배치 업데이트
@@ -333,7 +333,7 @@ sequenceDiagram
     end
 
     rect rgb(245, 255, 245)
-        Note over Scheduler: L2 → L3 Relation (10초)
+        Note over Scheduler: L2 → L3 Relation (12초)
         Scheduler->>LockStrategy: executeWithLock("like-relation-sync-lock")
         LockStrategy->>LikeRelationPort: syncRedisToDatabase()
         LikeRelationPort->>DB: relation 동기화

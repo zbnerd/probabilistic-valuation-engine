@@ -17,12 +17,21 @@ import org.springframework.stereotype.Component
 /**
  * 좋아요 동기화 스케줄러 (ADR-005 이관)
  *
- * <h3>동기화 주기</h3>
+ * <h3>동기화 주기 (2x Multiplier)</h3>
  * <ul>
- *   <li>L1 → L2: 3초 (로컬 → Redis)
- *   <li>L2 → L3 Count: 5초 (Redis → DB)
- *   <li>L2 → L3 Relation: 10초 (Redis → DB)
+ *   <li>L1 → L2: 3초 (로컬 → Redis) - UX를 위해 빠르게 유지
+ *   <li>L2 → L3 Count: 6초 (Redis → DB) - 3초의 2배
+ *   <li>L2 → L3 Relation: 12초 (Redis → DB) - 6초의 2배
  * </ul>
+ *
+ * <h3>Configuration (application.yml)</h3>
+ * <pre>
+ * scheduler:
+ *   like-sync:
+ *     local-flush-delay-ms: 3000
+ *     global-count-delay-ms: 6000
+ *     global-relation-delay-ms: 12000
+ * </pre>
  */
 @Component
 @ConditionalOnProperty(
@@ -42,8 +51,10 @@ class LikeSyncScheduler(
 
     /**
      * L1 → L2 Flush (likeCount + likeRelation)
+     *
+     * <p>3초 유지 - 사용자 경험(UX)을 위해 빠른 동기화 유지
      */
-    @Scheduled(fixedDelay = 3000)
+    @Scheduled(fixedDelayString = "\${scheduler.like-sync.local-flush-delay-ms:3000}")
     fun localFlush() {
         // likeCount 버퍼 동기화
         executor.executeVoidJava(
@@ -60,8 +71,10 @@ class LikeSyncScheduler(
 
     /**
      * L2 → L3 DB 동기화 (likeCount)
+     *
+     * <p>6초로 변경 (기존 5초 → 6초, 2x multiplier)
      */
-    @Scheduled(fixedDelay = 5000)
+    @Scheduled(fixedDelayString = "\${scheduler.like-sync.global-count-delay-ms:6000}")
     fun globalSyncCount() {
         val context = TaskContext.of("Scheduler", "GlobalSync.Count")
 
@@ -104,8 +117,10 @@ class LikeSyncScheduler(
 
     /**
      * L2 → L3 DB 동기화 (likeRelation)
+     *
+     * <p>12초로 변경 (기존 10초 → 12초, 2x multiplier)
      */
-    @Scheduled(fixedDelay = 10000)
+    @Scheduled(fixedDelayString = "\${scheduler.like-sync.global-relation-delay-ms:12000}")
     fun globalSyncRelation() {
         val context = TaskContext.of("Scheduler", "GlobalSync.Relation")
 

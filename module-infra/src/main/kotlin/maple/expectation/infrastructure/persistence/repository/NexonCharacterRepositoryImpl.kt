@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional
  * @see NexonCharacterRepositoryCustom#batchUpsert(List)
  * @see <a href="../../../../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
  */
-class NexonCharacterRepositoryImpl(
+open class NexonCharacterRepositoryImpl(
     private val jdbcTemplate: JdbcTemplate,
 ) : NexonCharacterRepositoryCustom {
 

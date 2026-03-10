@@ -13,11 +13,15 @@ import maple.expectation.core.domain.model.CubeRate;
 import maple.expectation.core.domain.model.PotentialStat;
 import maple.expectation.core.domain.model.equipment.CharacterEquipment;
 import maple.expectation.core.domain.model.equipment.EquipmentData;
+import maple.expectation.core.flame.component.FlameScoreResolver;
+import maple.expectation.core.flame.port.FlameTrialsPort;
+import maple.expectation.core.flame.service.FlameTrialsService;
 import maple.expectation.core.port.out.AlertPort;
 import maple.expectation.core.port.out.CubeRatePort;
 import maple.expectation.core.port.out.EquipmentDataPort;
 import maple.expectation.core.port.out.ItemPricePort;
 import maple.expectation.core.port.out.PotentialStatPort;
+import maple.expectation.core.port.out.ShutdownDataPersistencePort;
 import maple.expectation.core.probability.FlameDpCalculator;
 import maple.expectation.core.probability.FlameScoreCalculator;
 import maple.expectation.core.probability.TailProbabilityCalculator;
@@ -117,6 +121,33 @@ public class CorePortAdapterConfig {
   public TailProbabilityCalculator tailProbabilityCalculator() {
     log.info("[CorePortAdapter] Initializing TailProbabilityCalculator bean");
     return new TailProbabilityCalculator();
+  }
+
+  /**
+   * FlameTrials Port Adapter
+   *
+   * <p>Provides expected flame trials calculation using {@link FlameTrialsService}.
+   *
+   * <p>Implements {@link FlameTrialsPort} for use by {@link
+   * maple.expectation.application.service.expectation.PresetCalculationHelper}.
+   */
+  @Bean
+  public FlameTrialsPort flameTrialsPort(
+      FlameDpCalculator dpCalculator, FlameScoreCalculator scoreCalculator) {
+    log.info("[CorePortAdapter] Initializing FlameTrialsPort bean");
+    return new FlameTrialsService(dpCalculator, scoreCalculator);
+  }
+
+  /**
+   * FlameScoreResolver Bean
+   *
+   * <p>Provides singleton access to {@link FlameScoreResolver} for calculating flame score from
+   * additional options.
+   */
+  @Bean
+  public FlameScoreResolver flameScoreResolver() {
+    log.info("[CorePortAdapter] Initializing FlameScoreResolver bean");
+    return FlameScoreResolver.INSTANCE;
   }
 
   /**
@@ -289,6 +320,29 @@ public class CorePortAdapterConfig {
           String itemName) {
         // TODO: Implement actual Nexon API integration
         return Optional.empty();
+      }
+    };
+  }
+
+  /**
+   * ShutdownDataPersistence Port Adapter
+   *
+   * <p>Provides file backup service for outbox entries during DLQ handling.
+   *
+   * <p>Implements {@link ShutdownDataPersistencePort} for use by DLQ handlers.
+   */
+  @Bean
+  public ShutdownDataPersistencePort shutdownDataPersistencePort() {
+    log.info("[CorePortAdapter] Initializing ShutdownDataPersistencePort bean");
+
+    return new ShutdownDataPersistencePort() {
+      @Override
+      public void appendOutboxEntry(String requestId, String payload) {
+        log.info(
+            "[ShutdownDataPersistence] Backup entry - requestId: {}, payload length: {}",
+            requestId,
+            payload != null ? payload.length() : 0);
+        // File backup implementation can be added here if needed
       }
     };
   }

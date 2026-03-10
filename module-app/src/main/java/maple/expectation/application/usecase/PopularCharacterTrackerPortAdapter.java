@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.warmup.PopularCharacterTracker;
 import maple.expectation.core.port.out.PopularCharacterTrackerPort;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@Primary
 @RequiredArgsConstructor
 public class PopularCharacterTrackerPortAdapter implements PopularCharacterTrackerPort {
 

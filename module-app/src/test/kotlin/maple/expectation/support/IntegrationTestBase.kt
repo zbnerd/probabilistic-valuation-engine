@@ -72,6 +72,21 @@ abstract class IntegrationTestBase {
             registry.add("spring.data.redis.host") { redisContainer.host }
             registry.add("spring.data.redis.port") { redisContainer.getMappedPort(6379) }
         }
+
+        /**
+         * PostgreSQL 동적 프로퍼티 설정
+         *
+         * <p>컨테이너는 TestcontainersConfiguration에서 싱글톤으로 시작됨.
+         * 여기서는 동적 포트만 Spring Environment에 등록.
+         */
+        @JvmStatic
+        @DynamicPropertySource
+        fun postgresProperties(registry: DynamicPropertyRegistry) {
+            registry.add("spring.datasource.driver-class-name") { "org.postgresql.Driver" }
+            registry.add("spring.datasource.url") { maple.expectation.config.TestcontainersConfiguration.postgresContainer.jdbcUrl }
+            registry.add("spring.datasource.username") { maple.expectation.config.TestcontainersConfiguration.postgresContainer.username }
+            registry.add("spring.datasource.password") { maple.expectation.config.TestcontainersConfiguration.postgresContainer.password }
+        }
     }
 
     /**

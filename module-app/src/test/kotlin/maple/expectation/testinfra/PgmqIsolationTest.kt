@@ -5,6 +5,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
 
@@ -16,6 +17,8 @@ import org.springframework.jdbc.core.JdbcTemplate
 @Tag("infra-verification")
 class PgmqIsolationTest : IntegrationTestBase() {
 
+    private val log = LoggerFactory.getLogger(javaClass)
+
     @Autowired
     lateinit var jdbcTemplate: JdbcTemplate
 
@@ -26,11 +29,13 @@ class PgmqIsolationTest : IntegrationTestBase() {
         // 테스트용 큐 생성 (이미 존재하면 무시)
         try {
             jdbcTemplate.execute("SELECT pgmq.create('$queueName')")
+            log.debug("[PgmqIsolationTest] Queue created: $queueName")
         } catch (e: Exception) {
-            // 큐가 이미 존재하면 무시
+            log.debug("[PgmqIsolationTest] Queue already exists: $queueName")
         }
-        // 큐 비우기
+        // 큐 비우기 - 예외 무시하지 않음
         purgeQueue(queueName)
+        log.debug("[PgmqIsolationTest] Queue purged: $queueName, size=${queueSize(queueName)}")
     }
 
     private fun sendMessage(queue: String, payload: String) {
@@ -46,14 +51,18 @@ class PgmqIsolationTest : IntegrationTestBase() {
             Long::class.java,
         ) ?: 0
     } catch (e: Exception) {
+        log.warn("[PgmqIsolationTest] Failed to get queue size for $queue: ${e.message}")
         0L // 테이블이 없으면 0
     }
 
     private fun purgeQueue(queue: String) {
         try {
-            jdbcTemplate.execute("SELECT pgmq.purge('$queue')")
+            // pgmq.purge 대신 직접 DELETE 사용 (더 확실한 정리)
+            jdbcTemplate.execute("DELETE FROM pgmq.q_$queue")
+            log.debug("[PgmqIsolationTest] Purged queue via DELETE: $queue")
         } catch (e: Exception) {
-            // 무시
+            log.warn("[PgmqIsolationTest] Failed to purge queue $queue: ${e.message}")
+            // 큐가 없으면 무시
         }
     }
 

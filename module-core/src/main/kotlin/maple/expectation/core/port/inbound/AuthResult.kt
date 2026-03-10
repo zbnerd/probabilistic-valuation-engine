@@ -18,7 +18,7 @@ data class AuthResult(
     val role: String,
     val fingerprint: String,
     val refreshToken: String,
-    val refreshExpiresIn: Long
+    val refreshExpiresIn: Long,
 ) {
     companion object {
         /**
@@ -31,14 +31,14 @@ data class AuthResult(
             role: String,
             fingerprint: String,
             refreshToken: String,
-            refreshExpiresIn: Long
+            refreshExpiresIn: Long,
         ): AuthResult = AuthResult(
             accessToken = accessToken,
             expiresIn = expiresIn,
             role = role,
             fingerprint = fingerprint,
             refreshToken = refreshToken,
-            refreshExpiresIn = refreshExpiresIn
+            refreshExpiresIn = refreshExpiresIn,
         )
     }
 }

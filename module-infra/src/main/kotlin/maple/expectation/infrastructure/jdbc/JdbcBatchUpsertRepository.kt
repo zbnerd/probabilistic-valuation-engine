@@ -41,7 +41,7 @@ import org.springframework.stereotype.Repository
 class JdbcBatchUpsertRepository(
     private val jdbcTemplate: JdbcTemplate,
     private val executor: LogicExecutor,
-    private val checkedExecutor: CheckedLogicExecutor
+    private val checkedExecutor: CheckedLogicExecutor,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(JdbcBatchUpsertRepository::class.java)
@@ -74,11 +74,10 @@ class JdbcBatchUpsertRepository(
      * @return array of update counts (1 = insert, 2 = update)
      * @throws IllegalStateException if batch upsert fails
      */
-    fun batchUpsert(equipments: List<CharacterEquipment>): IntArray =
-        executor.execute(
-            { doBatchUpsert(equipments) },
-            TaskContext.of("JdbcBatchUpsert", "batchUpsert", equipments.size.toString())
-        )
+    fun batchUpsert(equipments: List<CharacterEquipment>): IntArray = executor.execute(
+        { doBatchUpsert(equipments) },
+        TaskContext.of("JdbcBatchUpsert", "batchUpsert", equipments.size.toString()),
+    )
 
     /**
      * Batch upsert with custom batch size.
@@ -94,7 +93,7 @@ class JdbcBatchUpsertRepository(
 
         return executor.execute(
             { doBatchUpsert(equipments, batchSize) },
-            TaskContext.of("JdbcBatchUpsert", "batchUpsert", equipments.size.toString())
+            TaskContext.of("JdbcBatchUpsert", "batchUpsert", equipments.size.toString()),
         )
     }
 
@@ -111,13 +110,13 @@ class JdbcBatchUpsertRepository(
      */
     fun batchUpsertWithRetry(
         equipments: List<CharacterEquipment>,
-        retryConfig: JdbcBatchRetryConfig?
+        retryConfig: JdbcBatchRetryConfig?,
     ): IntArray {
         val config = retryConfig ?: return batchUpsert(equipments)
 
         return executor.execute(
             { doBatchUpsertWithRetry(equipments, DEFAULT_BATCH_SIZE, config) },
-            TaskContext.of("JdbcBatchUpsert", "batchUpsertWithRetry", equipments.size.toString())
+            TaskContext.of("JdbcBatchUpsert", "batchUpsertWithRetry", equipments.size.toString()),
         )
     }
 
@@ -133,7 +132,7 @@ class JdbcBatchUpsertRepository(
     fun batchUpsertWithRetry(
         equipments: List<CharacterEquipment>,
         batchSize: Int,
-        retryConfig: JdbcBatchRetryConfig?
+        retryConfig: JdbcBatchRetryConfig?,
     ): IntArray {
         require(batchSize > 0) { "Batch size must be positive: $batchSize" }
 
@@ -141,13 +140,12 @@ class JdbcBatchUpsertRepository(
 
         return executor.execute(
             { doBatchUpsertWithRetry(equipments, batchSize, config) },
-            TaskContext.of("JdbcBatchUpsert", "batchUpsertWithRetry", equipments.size.toString())
+            TaskContext.of("JdbcBatchUpsert", "batchUpsertWithRetry", equipments.size.toString()),
         )
     }
 
     /** Internal batch upsert implementation with default batch size. */
-    private fun doBatchUpsert(equipments: List<CharacterEquipment>): IntArray =
-        doBatchUpsert(equipments, DEFAULT_BATCH_SIZE)
+    private fun doBatchUpsert(equipments: List<CharacterEquipment>): IntArray = doBatchUpsert(equipments, DEFAULT_BATCH_SIZE)
 
     /**
      * Internal batch upsert implementation.
@@ -187,7 +185,7 @@ class JdbcBatchUpsertRepository(
             "JDBC batch upsert completed: {} records in {}ms ({} records/sec)",
             equipments.size,
             duration,
-            equipments.size * 1000L / duration
+            equipments.size * 1000L / duration,
         )
 
         return results
@@ -201,7 +199,7 @@ class JdbcBatchUpsertRepository(
     private fun doBatchUpsertWithRetry(
         equipments: List<CharacterEquipment>,
         batchSize: Int,
-        retryConfig: JdbcBatchRetryConfig
+        retryConfig: JdbcBatchRetryConfig,
     ): IntArray {
         if (equipments.isEmpty()) {
             log.debug("No equipment data to upsert")
@@ -219,13 +217,12 @@ class JdbcBatchUpsertRepository(
                         "Retrying batch upsert after {}ms (attempt {}/{})",
                         backoff.toMillis(),
                         attempt,
-                        retryConfig.maxRetries
+                        retryConfig.maxRetries,
                     )
                     Thread.sleep(backoff.toMillis())
                 }
 
                 return doBatchUpsert(equipments, batchSize)
-
             } catch (e: DataAccessException) {
                 lastException = e
                 attempt++
@@ -234,12 +231,11 @@ class JdbcBatchUpsertRepository(
                     log.error("Batch upsert failed after {} attempts", attempt, e)
                     throw IllegalStateException(
                         "JDBC batch upsert failed after $attempt attempts: ${e.message}",
-                        e
+                        e,
                     )
                 }
 
                 log.warn("Batch upsert attempt {} failed: {}", attempt, e.message)
-
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 throw IllegalStateException("Batch upsert interrupted during retry backoff", e)
@@ -248,7 +244,7 @@ class JdbcBatchUpsertRepository(
 
         throw IllegalStateException(
             "JDBC batch upsert failed: " + (lastException?.message ?: "Unknown error"),
-            lastException
+            lastException,
         )
     }
 
@@ -258,8 +254,7 @@ class JdbcBatchUpsertRepository(
      * @param equipment domain model
      * @return Object array [ocid, jsonContent, updatedAt]
      */
-    private fun toBatchArgs(equipment: CharacterEquipment): Array<Any?> =
-        arrayOf(equipment.ocid(), equipment.jsonContent(), equipment.updatedAt)
+    private fun toBatchArgs(equipment: CharacterEquipment): Array<Any?> = arrayOf(equipment.ocid(), equipment.jsonContent(), equipment.updatedAt)
 
     /**
      * Performance metrics for batch operations.
@@ -269,7 +264,7 @@ class JdbcBatchUpsertRepository(
         val batchSize: Int,
         val durationMs: Long,
         val recordsPerSecond: Double,
-        val retryAttempts: Int
+        val retryAttempts: Int,
     ) {
         fun formattedDuration(): String = "${durationMs}ms"
 
@@ -282,23 +277,22 @@ class JdbcBatchUpsertRepository(
      * @param equipments list of [CharacterEquipment] to upsert
      * @return performance metrics including duration and throughput
      */
-    fun batchUpsertWithMetrics(equipments: List<CharacterEquipment>): BatchPerformanceMetrics =
-        executor.execute(
-            {
-                val startTime = System.currentTimeMillis()
-                doBatchUpsert(equipments)
-                val duration = System.currentTimeMillis() - startTime
+    fun batchUpsertWithMetrics(equipments: List<CharacterEquipment>): BatchPerformanceMetrics = executor.execute(
+        {
+            val startTime = System.currentTimeMillis()
+            doBatchUpsert(equipments)
+            val duration = System.currentTimeMillis() - startTime
 
-                BatchPerformanceMetrics(
-                    equipments.size.toLong(),
-                    DEFAULT_BATCH_SIZE,
-                    duration,
-                    equipments.size * 1000.0 / duration,
-                    0
-                )
-            },
-            TaskContext.of("JdbcBatchUpsert", "batchUpsertWithMetrics", equipments.size.toString())
-        )
+            BatchPerformanceMetrics(
+                equipments.size.toLong(),
+                DEFAULT_BATCH_SIZE,
+                duration,
+                equipments.size * 1000.0 / duration,
+                0,
+            )
+        },
+        TaskContext.of("JdbcBatchUpsert", "batchUpsertWithMetrics", equipments.size.toString()),
+    )
 
     /**
      * Batch upsert with custom batch size and performance metrics tracking.
@@ -309,7 +303,7 @@ class JdbcBatchUpsertRepository(
      */
     fun batchUpsertWithMetrics(
         equipments: List<CharacterEquipment>,
-        batchSize: Int
+        batchSize: Int,
     ): BatchPerformanceMetrics {
         require(batchSize > 0) { "Batch size must be positive: $batchSize" }
 
@@ -324,10 +318,10 @@ class JdbcBatchUpsertRepository(
                     batchSize,
                     duration,
                     equipments.size * 1000.0 / duration,
-                    0
+                    0,
                 )
             },
-            TaskContext.of("JdbcBatchUpsert", "batchUpsertWithMetrics", equipments.size.toString())
+            TaskContext.of("JdbcBatchUpsert", "batchUpsertWithMetrics", equipments.size.toString()),
         )
     }
 
@@ -364,7 +358,7 @@ class JdbcBatchUpsertRepository(
                         size,
                         duration,
                         equipments.size * 1000.0 / duration,
-                        0
+                        0,
                     )
 
                     results.add(metrics)
@@ -372,13 +366,13 @@ class JdbcBatchUpsertRepository(
                         "Batch size {}: {}ms ({})",
                         size,
                         metrics.formattedDuration(),
-                        metrics.formattedThroughput()
+                        metrics.formattedThroughput(),
                     )
                 }
 
                 results
             },
-            TaskContext.of("JdbcBatchUpsert", "compareBatchSizes", equipments.size.toString())
+            TaskContext.of("JdbcBatchUpsert", "compareBatchSizes", equipments.size.toString()),
         )
     }
 
@@ -390,9 +384,8 @@ class JdbcBatchUpsertRepository(
      * @throws Exception if batch upsert fails
      */
     @Throws(Exception::class)
-    fun batchUpsertChecked(equipments: List<CharacterEquipment>): IntArray =
-        checkedExecutor.execute(
-            { doBatchUpsert(equipments) },
-            TaskContext.of("JdbcBatchUpsert", "batchUpsertChecked", equipments.size.toString())
-        )
+    fun batchUpsertChecked(equipments: List<CharacterEquipment>): IntArray = checkedExecutor.execute(
+        { doBatchUpsert(equipments) },
+        TaskContext.of("JdbcBatchUpsert", "batchUpsertChecked", equipments.size.toString()),
+    )
 }

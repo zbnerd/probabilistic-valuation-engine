@@ -61,8 +61,36 @@ allprojects {
 			endWithNewline()
 		}
 		kotlin {
-			// TODO: ktlint 버전 호환성 해결 후 활성화
-			// 현재 Kotlin 2.1.0 + ktlint 호환성 문제로 임시 비활성화
+			ktlint('1.5.0')
+				.editorConfigOverride([
+					'ktlint_code_style'                   : 'intellij_idea',
+					'indent_size'                         : '4',
+					'continuation_indent_size'            : '4',
+					'insert_final_newline'                : 'true',
+					// Disable rules that conflict with existing code style
+					'ktlint_standard_annotation'          : 'disable',
+					'ktlint_standard_filename'            : 'disable',
+					'ktlint_standard_max-line-length'     : 'disable',
+					// Disable no-wildcard-imports to allow JPA annotations
+					'ktlint_standard_no-wildcard-imports' : 'disabled',
+					// Disable property-naming to allow SCREAMING_SNAKE_CASE constants
+					'ktlint_standard_property-naming'     : 'disabled',
+					// Disable value-parameter-comment to allow inline comments
+					'ktlint_standard_value-parameter-comment': 'disabled',
+				])
+			trimTrailingWhitespace()
+			endWithNewline()
+			// Exclude files that don't conform to ktlint rules
+			targetExclude(
+				'**/package-info.kt',
+				// Cube decorator files with ktlint processing issues
+				'**/BlackCubeDecorator.kt',
+				'**/RedCubeDecorator.kt',
+				'**/AdditionalCubeDecorator.kt',
+				'**/BlackCubeDecoratorV4.kt',
+				'**/RedCubeDecoratorV4.kt',
+				'**/AdditionalCubeDecoratorV4.kt'
+			)
 		}
 	}
 }

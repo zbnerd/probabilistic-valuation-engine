@@ -3,11 +3,13 @@ package maple.expectation.web.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.port.inbound.DlqPort
 import maple.expectation.response.ApiResponse
 import maple.expectation.web.dto.page.CursorPageResponse
 import org.springframework.data.domain.Page
 import org.springframework.http.ResponseEntity
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -39,7 +41,7 @@ import jakarta.validation.constraints.Max
 @RestController
 @RequestMapping("/api/admin/dlq")
 class DlqAdminController(
-    private val dlqPort: DlqPort
+    private val dlqPort: DlqPort,
 ) {
 
     /** DLQ 목록 조회 (페이징) */
@@ -49,13 +51,11 @@ class DlqAdminController(
         @Parameter(description = "페이지 번호 (0부터 시작)")
         @RequestParam(defaultValue = "0") page: Int,
         @Parameter(description = "페이지 크기")
-        @RequestParam(defaultValue = "20") size: Int
-    ): CompletableFuture<ResponseEntity<ApiResponse<Page<*>>>> {
-        return CompletableFuture.supplyAsync {
-            @Suppress("UNCHECKED_CAST")
-            val result = dlqPort.findAll(page, size) as Page<*>
-            ResponseEntity.ok(ApiResponse.success(result))
-        }
+        @RequestParam(defaultValue = "20") size: Int,
+    ): CompletableFuture<ResponseEntity<ApiResponse<Page<*>>>> = CompletableFuture.supplyAsync {
+        @Suppress("UNCHECKED_CAST")
+        val result = dlqPort.findAll(page, size) as Page<*>
+        ResponseEntity.ok(ApiResponse.success(result))
     }
 
     /** DLQ 상세 조회 */
@@ -63,12 +63,10 @@ class DlqAdminController(
     @GetMapping("/{id}")
     fun findById(
         @Parameter(description = "DLQ ID")
-        @PathVariable id: Long
-    ): CompletableFuture<ResponseEntity<ApiResponse<*>>> {
-        return CompletableFuture.supplyAsync {
-            val result = dlqPort.findById(id)
-            ResponseEntity.ok(ApiResponse.success(result))
-        }
+        @PathVariable id: Long,
+    ): CompletableFuture<ResponseEntity<ApiResponse<*>>> = CompletableFuture.supplyAsync {
+        val result = dlqPort.findById(id)
+        ResponseEntity.ok(ApiResponse.success(result))
     }
 
     /** DLQ 재처리 (Outbox로 복원) */
@@ -76,12 +74,10 @@ class DlqAdminController(
     @PostMapping("/{id}/reprocess")
     fun reprocess(
         @Parameter(description = "DLQ ID")
-        @PathVariable id: Long
-    ): CompletableFuture<ResponseEntity<ApiResponse<*>>> {
-        return CompletableFuture.supplyAsync {
-            val result = dlqPort.reprocess(id)
-            ResponseEntity.ok(ApiResponse.success(result))
-        }
+        @PathVariable id: Long,
+    ): CompletableFuture<ResponseEntity<ApiResponse<*>>> = CompletableFuture.supplyAsync {
+        val result = dlqPort.reprocess(id)
+        ResponseEntity.ok(ApiResponse.success(result))
     }
 
     /** DLQ 폐기 (삭제) */
@@ -89,22 +85,18 @@ class DlqAdminController(
     @DeleteMapping("/{id}")
     fun discard(
         @Parameter(description = "DLQ ID")
-        @PathVariable id: Long
-    ): CompletableFuture<ResponseEntity<ApiResponse<String>>> {
-        return CompletableFuture.supplyAsync {
-            dlqPort.discard(id)
-            ResponseEntity.ok(ApiResponse.success("DLQ entry discarded successfully: $id"))
-        }
+        @PathVariable id: Long,
+    ): CompletableFuture<ResponseEntity<ApiResponse<String>>> = CompletableFuture.supplyAsync {
+        dlqPort.discard(id)
+        ResponseEntity.ok(ApiResponse.success("DLQ entry discarded successfully: $id"))
     }
 
     /** DLQ 총 건수 조회 */
     @Operation(summary = "DLQ 총 건수", description = "현재 DLQ에 쌓인 총 항목 수를 조회합니다.")
     @GetMapping("/count")
-    fun count(): CompletableFuture<ResponseEntity<ApiResponse<Long>>> {
-        return CompletableFuture.supplyAsync {
-            val count = dlqPort.count()
-            ResponseEntity.ok(ApiResponse.success(count))
-        }
+    fun count(): CompletableFuture<ResponseEntity<ApiResponse<Long>>> = CompletableFuture.supplyAsync {
+        val count = dlqPort.count()
+        ResponseEntity.ok(ApiResponse.success(count))
     }
 
     // ========== Cursor-based Pagination (#233) ==========
@@ -116,19 +108,17 @@ class DlqAdminController(
      */
     @Operation(
         summary = "DLQ 목록 조회 (Cursor 방식)",
-        description = "Cursor-based Pagination으로 DLQ 목록을 조회합니다. Deep Paging에서도 O(1) 성능을 보장합니다."
+        description = "Cursor-based Pagination으로 DLQ 목록을 조회합니다. Deep Paging에서도 O(1) 성능을 보장합니다.",
     )
     @GetMapping("/v2")
     fun findAllByCursor(
         @Parameter(description = "이전 페이지의 마지막 ID (첫 페이지는 생략)")
         @RequestParam(required = false) cursor: Long?,
         @Parameter(description = "페이지 크기 (최대 100)")
-        @RequestParam(defaultValue = "20") size: Int
-    ): CompletableFuture<ResponseEntity<ApiResponse<CursorPageResponse<*>>>> {
-        return CompletableFuture.supplyAsync {
-            @Suppress("UNCHECKED_CAST")
-            val result = dlqPort.findAllByCursor(cursor, size) as CursorPageResponse<*>
-            ResponseEntity.ok(ApiResponse.success(result))
-        }
+        @RequestParam(defaultValue = "20") size: Int,
+    ): CompletableFuture<ResponseEntity<ApiResponse<CursorPageResponse<*>>>> = CompletableFuture.supplyAsync {
+        @Suppress("UNCHECKED_CAST")
+        val result = dlqPort.findAllByCursor(cursor, size) as CursorPageResponse<*>
+        ResponseEntity.ok(ApiResponse.success(result))
     }
 }

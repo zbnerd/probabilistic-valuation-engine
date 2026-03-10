@@ -12,7 +12,7 @@ data class DonationCommand(
     val guestUuid: String,
     val adminFingerprint: String,
     val amount: Long,
-    val requestId: String
+    val requestId: String,
 ) {
     companion object {
         @JvmStatic
@@ -20,7 +20,7 @@ data class DonationCommand(
             guestUuid: String,
             adminFingerprint: String,
             amount: Long,
-            requestId: String
+            requestId: String,
         ): DonationCommand = DonationCommand(guestUuid, adminFingerprint, amount, requestId)
     }
 }

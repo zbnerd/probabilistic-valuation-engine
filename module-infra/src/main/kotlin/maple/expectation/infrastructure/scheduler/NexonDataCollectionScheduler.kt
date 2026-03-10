@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.scheduler
 
-import maple.expectation.core.port.out.NexonDataCollectorPort
 import maple.expectation.core.domain.model.character.GameCharacter
+import maple.expectation.core.port.out.NexonDataCollectorPort
 import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -19,23 +19,23 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(
     name = ["scheduler.nexon-data-collection.enabled"],
     havingValue = "true",
-    matchIfMissing = false
+    matchIfMissing = false,
 )
 class NexonDataCollectionScheduler(
     private val dataCollector: NexonDataCollectorPort,
     private val gameCharacterRepository: GameCharacterRepository,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(NexonDataCollectionScheduler::class.java)
 
     @Scheduled(
         fixedRateString = "\${scheduler.nexon-data-collection.rate:600000}",
-        initialDelayString = "\${scheduler.nexon-data-collection.initial-delay:30000}"
+        initialDelayString = "\${scheduler.nexon-data-collection.initial-delay:30000}",
     )
     fun collectNexonData() {
         executor.executeVoidJava(
             { processAllCharacters() },
-            TaskContext.of("Scheduler", "NexonDataCollection")
+            TaskContext.of("Scheduler", "NexonDataCollection"),
         )
     }
 
@@ -68,7 +68,7 @@ class NexonDataCollectionScheduler(
                     true
                 },
                 false,
-                TaskContext.of("Scheduler", "CollectCharacter", userIgn)
+                TaskContext.of("Scheduler", "CollectCharacter", userIgn),
             )
 
             if (success) {
@@ -76,14 +76,14 @@ class NexonDataCollectionScheduler(
                 log.debug(
                     "[NexonDataCollectionScheduler] Successfully collected data for: {} (ocid={})",
                     userIgn,
-                    ocid
+                    ocid,
                 )
             } else {
                 failureCount++
                 log.error(
                     "[NexonDataCollectionScheduler] Failed to collect data for: {} (ocid={})",
                     userIgn,
-                    ocid
+                    ocid,
                 )
             }
         }
@@ -91,7 +91,7 @@ class NexonDataCollectionScheduler(
         log.info(
             "[NexonDataCollectionScheduler] Data collection completed: success={}, failure={}",
             successCount,
-            failureCount
+            failureCount,
         )
     }
 }

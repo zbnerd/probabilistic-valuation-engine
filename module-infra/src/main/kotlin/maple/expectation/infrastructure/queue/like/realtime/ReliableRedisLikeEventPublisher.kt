@@ -31,7 +31,7 @@ class ReliableRedisLikeEventPublisher(
     private val redissonClient: RedissonClient,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String
+    @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String,
 ) : LikeEventPublisher {
 
     /**

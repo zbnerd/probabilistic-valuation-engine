@@ -2,12 +2,6 @@ package maple.expectation.infrastructure.concurrency
 
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
-import maple.expectation.core.port.out.redis.RedisOperationPort
-import maple.expectation.error.CommonErrorCode
-import maple.expectation.error.exception.SystemException
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Duration
@@ -17,6 +11,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.function.Function
 import java.util.function.Supplier
+import maple.expectation.core.port.out.redis.RedisOperationPort
+import maple.expectation.error.CommonErrorCode
+import maple.expectation.error.exception.SystemException
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import org.slf4j.LoggerFactory
 
 /**
  * Distributed Single-flight Executor (Issue #283 P0-4 Fix)
@@ -68,10 +68,11 @@ class DistributedSingleFlightExecutor<T>(
     private val leaderLockSeconds: Int = 30,
 
     /** 결과 캐시 TTL (초) - Follower가 결과를 조회할 수 있는 시간 */
-    private val resultTtlSeconds: Int = 60
+    private val resultTtlSeconds: Int = 60,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(DistributedSingleFlightExecutor::class.java)
+
         /** Redis 키 접두사 (Hash Tag for Cluster) */
         private const val KEY_PREFIX = "{single-flight}:"
 
@@ -128,20 +129,18 @@ class DistributedSingleFlightExecutor<T>(
      *
      * @return true: 선점 성공 (Leader), false: 선점 실패 (Follower)
      */
-    private fun tryAcquireLeadership(inFlightKey: String): Boolean {
-        return logicExecutor.executeOrDefault(
-            {
-                // SET NX (존재하지 않을 때만 설정)
-                val acquired = redisOperationPort.trySet(inFlightKey, true, Duration.ofSeconds(leaderLockSeconds.toLong()))
-                if (acquired) {
-                    log.debug("[DistributedSingleFlight] Leadership acquired: {}", maskKey(inFlightKey))
-                }
-                acquired
-            },
-            false,
-            TaskContext.of("DistributedSingleFlight", "TryAcquireLeadership", inFlightKey)
-        )
-    }
+    private fun tryAcquireLeadership(inFlightKey: String): Boolean = logicExecutor.executeOrDefault(
+        {
+            // SET NX (존재하지 않을 때만 설정)
+            val acquired = redisOperationPort.trySet(inFlightKey, true, Duration.ofSeconds(leaderLockSeconds.toLong()))
+            if (acquired) {
+                log.debug("[DistributedSingleFlight] Leadership acquired: {}", maskKey(inFlightKey))
+            }
+            acquired
+        },
+        false,
+        TaskContext.of("DistributedSingleFlight", "TryAcquireLeadership", inFlightKey),
+    )
 
     /** Leader 비동기 실행 (계산 + Redis 결과 저장 + cleanup) */
     private fun executeAsLeader(
@@ -149,7 +148,7 @@ class DistributedSingleFlightExecutor<T>(
         hashKey: String,
         inFlightKey: String,
         resultKey: String,
-        asyncSupplier: Supplier<CompletableFuture<T>>
+        asyncSupplier: Supplier<CompletableFuture<T>>,
     ): CompletableFuture<T> {
         val promise = CompletableFuture<T>()
 
@@ -173,7 +172,7 @@ class DistributedSingleFlightExecutor<T>(
                         log.error(
                             "[DistributedSingleFlight] Leader failed for key: {}",
                             maskKey(key),
-                            cause
+                            cause,
                         )
                         promise.completeExceptionally(cause)
                     } else {
@@ -220,7 +219,7 @@ class DistributedSingleFlightExecutor<T>(
         // 비동기 폴링 시작
         logicExecutor.executeVoid(
             { pollForResult(resultKey, result, maskedKey, System.currentTimeMillis()) },
-            TaskContext.of("DistributedSingleFlight", "ExecuteAsFollower", maskedKey)
+            TaskContext.of("DistributedSingleFlight", "ExecuteAsFollower", maskedKey),
         )
 
         return result
@@ -235,7 +234,7 @@ class DistributedSingleFlightExecutor<T>(
                         return@exceptionally logicExecutor.executeOrDefault(
                             { timeoutFallback.apply(key) },
                             null,
-                            TaskContext.of("DistributedSingleFlight", "Fallback", maskedKey)
+                            TaskContext.of("DistributedSingleFlight", "Fallback", maskedKey),
                         )
                     }
                 }
@@ -247,7 +246,7 @@ class DistributedSingleFlightExecutor<T>(
                 throw SystemException(
                     CommonErrorCode.INTERNAL_SERVER_ERROR,
                     "SingleFlight execution failed",
-                    cause
+                    cause,
                 )
             }
     }
@@ -257,7 +256,7 @@ class DistributedSingleFlightExecutor<T>(
         resultKey: String,
         result: CompletableFuture<T>,
         maskedKey: String,
-        deadline: Long
+        deadline: Long,
     ) {
         val timeoutMs = followerTimeoutSeconds * 1000L
         val remaining = deadline + timeoutMs - System.currentTimeMillis()
@@ -275,8 +274,8 @@ class DistributedSingleFlightExecutor<T>(
                 result.completeExceptionally(
                     SystemException(
                         CommonErrorCode.INTERNAL_SERVER_ERROR,
-                        "Leader failed: $errorClass"
-                    )
+                        "Leader failed: $errorClass",
+                    ),
                 )
                 return@executeVoid
             }

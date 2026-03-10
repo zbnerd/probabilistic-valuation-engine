@@ -18,7 +18,7 @@ data class ItemPrice(
     val itemId: Long,
     val itemName: String,
     val price: Long,
-    val updatedAt: LocalDateTime
+    val updatedAt: LocalDateTime,
 ) {
     init {
         require(itemId > 0) { "itemId must be positive" }
@@ -32,17 +32,13 @@ data class ItemPrice(
      * @param hours the maximum age in hours
      * @return true if price data is fresh, false otherwise
      */
-    fun isFreshWithinHours(hours: Long): Boolean {
-        return updatedAt.plusHours(hours).isAfter(LocalDateTime.now())
-    }
+    fun isFreshWithinHours(hours: Long): Boolean = updatedAt.plusHours(hours).isAfter(LocalDateTime.now())
 
     companion object {
         /**
          * Create an item price with current timestamp.
          */
         @JvmStatic
-        fun of(itemId: Long, itemName: String, price: Long): ItemPrice {
-            return ItemPrice(itemId, itemName, price, LocalDateTime.now())
-        }
+        fun of(itemId: Long, itemName: String, price: Long): ItemPrice = ItemPrice(itemId, itemName, price, LocalDateTime.now())
     }
 }

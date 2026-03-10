@@ -2,18 +2,17 @@ package maple.expectation.infrastructure.queue.like
 
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.core.port.out.LikeBufferStrategy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.queue.RedisKey
-import org.slf4j.LoggerFactory
 import org.redisson.api.RMap
 import org.redisson.api.RScript
 import org.redisson.api.RedissonClient
 import org.redisson.client.codec.LongCodec
 import org.redisson.client.codec.StringCodec
-import java.util.concurrent.atomic.AtomicReference
-import java.util.Collections
+import org.slf4j.LoggerFactory
 
 /**
  * Redis 기반 좋아요 카운터 버퍼 (#271 V5 Stateless Architecture)
@@ -21,7 +20,7 @@ import java.util.Collections
 class RedisLikeBufferStorage(
     private val redissonClient: RedissonClient,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) : LikeBufferStrategy {
 
     companion object {
@@ -91,51 +90,43 @@ class RedisLikeBufferStorage(
             .register(meterRegistry)
     }
 
-    override fun increment(userIgn: String, delta: Long): Long? {
-        return executor.executeOrDefault(
-            {
-                val buffer = getBuffer()
-                val newValue = buffer.addAndGet(userIgn, delta)
+    override fun increment(userIgn: String, delta: Long): Long? = executor.executeOrDefault(
+        {
+            val buffer = getBuffer()
+            val newValue = buffer.addAndGet(userIgn, delta)
 
-                meterRegistry.counter("like.buffer.increment", "ign", userIgn).increment()
-                log.debug("[LikeBuffer] Increment: $userIgn += $delta -> $newValue")
+            meterRegistry.counter("like.buffer.increment", "ign", userIgn).increment()
+            log.debug("[LikeBuffer] Increment: $userIgn += $delta -> $newValue")
 
-                newValue
-            },
-            null,
-            TaskContext.of("LikeBuffer", "Increment", userIgn)
-        )
-    }
+            newValue
+        },
+        null,
+        TaskContext.of("LikeBuffer", "Increment", userIgn),
+    )
 
-    override fun get(userIgn: String): Long? {
-        return executor.executeOrDefault(
-            {
-                val value = getBuffer()[userIgn]
-                value ?: 0L
-            },
-            null,
-            TaskContext.of("LikeBuffer", "Get", userIgn)
-        )
-    }
+    override fun get(userIgn: String): Long? = executor.executeOrDefault(
+        {
+            val value = getBuffer()[userIgn]
+            value ?: 0L
+        },
+        null,
+        TaskContext.of("LikeBuffer", "Get", userIgn),
+    )
 
-    override fun getAllCounters(): Map<String, Long> {
-        return executor.executeOrDefault(
-            {
-                val rawMap: Map<*, *> = getBuffer().readAllMap()
-                rawMap.entries.associate { it.key.toString() to it.value.toString().toLong() }
-            },
-            emptyMap(),
-            TaskContext.of("LikeBuffer", "GetAll")
-        )
-    }
+    override fun getAllCounters(): Map<String, Long> = executor.executeOrDefault(
+        {
+            val rawMap: Map<*, *> = getBuffer().readAllMap()
+            rawMap.entries.associate { it.key.toString() to it.value.toString().toLong() }
+        },
+        emptyMap(),
+        TaskContext.of("LikeBuffer", "GetAll"),
+    )
 
-    override fun fetchAndClear(limit: Int): Map<String, Long> {
-        return executor.executeOrDefault(
-            { doFetchAndClear(limit) },
-            emptyMap(),
-            TaskContext.of("LikeBuffer", "FetchAndClear")
-        )
-    }
+    override fun fetchAndClear(limit: Int): Map<String, Long> = executor.executeOrDefault(
+        { doFetchAndClear(limit) },
+        emptyMap(),
+        TaskContext.of("LikeBuffer", "FetchAndClear"),
+    )
 
     /** Lua Script 실행 */
     @Suppress("UNCHECKED_CAST")
@@ -146,7 +137,7 @@ class RedisLikeBufferStorage(
         val rawResult: List<List<String>> = executor.executeOrCatch(
             { evalWithCachedSha(script, sha, limit) },
             { e -> evalWithReloadedSha(script, limit) },
-            TaskContext.of("LikeBuffer", "EvalScript")
+            TaskContext.of("LikeBuffer", "EvalScript"),
         )
 
         return parseRawResult(rawResult)
@@ -162,7 +153,7 @@ class RedisLikeBufferStorage(
             sha,
             RScript.ReturnType.MULTI,
             listOf(bufferKey),
-            limit.toString()
+            limit.toString(),
         ) as List<List<String>>
     }
 
@@ -175,7 +166,7 @@ class RedisLikeBufferStorage(
             sha,
             RScript.ReturnType.MULTI,
             listOf(bufferKey),
-            limit.toString()
+            limit.toString(),
         ) as List<List<String>>
     }
 
@@ -197,27 +188,21 @@ class RedisLikeBufferStorage(
         return result.toMap()
     }
 
-    override fun getBufferSize(): Int {
-        return executor.executeOrDefault(
-            { getBuffer().size },
-            0,
-            TaskContext.of("LikeBuffer", "Size")
-        )
-    }
+    override fun getBufferSize(): Int = executor.executeOrDefault(
+        { getBuffer().size },
+        0,
+        TaskContext.of("LikeBuffer", "Size"),
+    )
 
     /** 총 delta 합계 조회 (메트릭용) */
-    private fun getTotalDelta(): Long {
-        return executor.executeOrDefault(
-            { getBuffer().readAllValues().stream().mapToLong { it }.sum() },
-            0L,
-            TaskContext.of("LikeBuffer", "TotalDelta")
-        )
-    }
+    private fun getTotalDelta(): Long = executor.executeOrDefault(
+        { getBuffer().readAllValues().stream().mapToLong { it }.sum() },
+        0L,
+        TaskContext.of("LikeBuffer", "TotalDelta"),
+    )
 
     /** Redis HASH 버퍼 접근 (LongCodec 사용) */
-    private fun getBuffer(): RMap<String, Long> {
-        return redissonClient.getMap(bufferKey, LongCodec.INSTANCE)
-    }
+    private fun getBuffer(): RMap<String, Long> = redissonClient.getMap(bufferKey, LongCodec.INSTANCE)
 
     /** 버퍼 키 조회 (테스트용) */
     fun getBufferKey(): String = bufferKey

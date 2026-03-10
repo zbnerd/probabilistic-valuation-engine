@@ -1,7 +1,7 @@
 package maple.expectation.core.domain.model.character
 
-import maple.expectation.core.domain.model.equipment.CharacterEquipment
 import java.time.LocalDateTime
+import maple.expectation.core.domain.model.equipment.CharacterEquipment
 
 /**
  * 게임 캐릭터 도메인 모델 (순수 도메인)
@@ -28,112 +28,98 @@ data class GameCharacter(
     @get:JvmName("getBasicInfoUpdatedAt") val basicInfoUpdatedAt: LocalDateTime?,
     @get:JvmName("getLikeCount") val likeCount: Long,
     @get:JvmName("getVersion") val version: Long?,
-    @get:JvmName("getUpdatedAt") val updatedAt: LocalDateTime
+    @get:JvmName("getUpdatedAt") val updatedAt: LocalDateTime,
 ) {
 
-  /** 새 캐릭터 생성 (최소 필드만) */
-  companion object {
-    @JvmStatic
-    fun create(userIgn: UserIgn, characterId: CharacterId): GameCharacter {
-      return GameCharacter(
-        id = null,
-        userIgn = userIgn,
-        characterId = characterId,
-        equipment = null,
-        worldName = null,
-        characterClass = null,
-        characterImage = null,
-        basicInfoUpdatedAt = null,
-        likeCount = 0L,
-        version = null,
-        updatedAt = LocalDateTime.now()
-      )
+    /** 새 캐릭터 생성 (최소 필드만) */
+    companion object {
+        @JvmStatic
+        fun create(userIgn: UserIgn, characterId: CharacterId): GameCharacter = GameCharacter(
+            id = null,
+            userIgn = userIgn,
+            characterId = characterId,
+            equipment = null,
+            worldName = null,
+            characterClass = null,
+            characterImage = null,
+            basicInfoUpdatedAt = null,
+            likeCount = 0L,
+            version = null,
+            updatedAt = LocalDateTime.now(),
+        )
+
+        /**
+         * JPA/Redis 복원을 위한 정적 팩토리
+         *
+         * <p>Persist 레이어에서 전체 필드를 복원할 때 사용
+         */
+        @JvmStatic
+        fun restore(
+            id: Long?,
+            characterId: CharacterId,
+            userIgn: UserIgn,
+            equipment: CharacterEquipment?,
+            worldName: String?,
+            characterClass: String?,
+            characterImage: String?,
+            basicInfoUpdatedAt: LocalDateTime?,
+            likeCount: Long,
+            version: Long?,
+            updatedAt: LocalDateTime,
+        ): GameCharacter = GameCharacter(
+            id = id,
+            userIgn = userIgn,
+            characterId = characterId,
+            equipment = equipment,
+            worldName = worldName,
+            characterClass = characterClass,
+            characterImage = characterImage,
+            basicInfoUpdatedAt = basicInfoUpdatedAt,
+            likeCount = likeCount,
+            version = version,
+            updatedAt = updatedAt,
+        )
     }
 
-    /**
-     * JPA/Redis 복원을 위한 정적 팩토리
-     *
-     * <p>Persist 레이어에서 전체 필드를 복원할 때 사용
-     */
-    @JvmStatic
-    fun restore(
-      id: Long?,
-      characterId: CharacterId,
-      userIgn: UserIgn,
-      equipment: CharacterEquipment?,
-      worldName: String?,
-      characterClass: String?,
-      characterImage: String?,
-      basicInfoUpdatedAt: LocalDateTime?,
-      likeCount: Long,
-      version: Long?,
-      updatedAt: LocalDateTime
-    ): GameCharacter {
-      return GameCharacter(
-        id = id,
-        userIgn = userIgn,
-        characterId = characterId,
+    /** 장비 정보 포함된 새 인스턴스 반환 */
+    fun withEquipment(equipment: CharacterEquipment): GameCharacter = copy(
         equipment = equipment,
+        updatedAt = LocalDateTime.now(),
+    )
+
+    /** 기본 정보 업데이트된 새 인스턴스 반환 */
+    fun withBasicInfo(worldName: String, characterClass: String, characterImage: String): GameCharacter = copy(
         worldName = worldName,
         characterClass = characterClass,
         characterImage = characterImage,
-        basicInfoUpdatedAt = basicInfoUpdatedAt,
-        likeCount = likeCount,
-        version = version,
-        updatedAt = updatedAt
-      )
-    }
-  }
-
-  /** 장비 정보 포함된 새 인스턴스 반환 */
-  fun withEquipment(equipment: CharacterEquipment): GameCharacter {
-    return copy(
-      equipment = equipment,
-      updatedAt = LocalDateTime.now()
+        basicInfoUpdatedAt = LocalDateTime.now(),
+        updatedAt = LocalDateTime.now(),
     )
-  }
 
-  /** 기본 정보 업데이트된 새 인스턴스 반환 */
-  fun withBasicInfo(worldName: String, characterClass: String, characterImage: String): GameCharacter {
-    return copy(
-      worldName = worldName,
-      characterClass = characterClass,
-      characterImage = characterImage,
-      basicInfoUpdatedAt = LocalDateTime.now(),
-      updatedAt = LocalDateTime.now()
+    /** 좋아요 수 증가된 새 인스턴스 반환 */
+    fun withIncrementedLike(): GameCharacter = copy(
+        likeCount = likeCount + 1,
+        updatedAt = LocalDateTime.now(),
     )
-  }
 
-  /** 좋아요 수 증가된 새 인스턴스 반환 */
-  fun withIncrementedLike(): GameCharacter {
-    return copy(
-      likeCount = likeCount + 1,
-      updatedAt = LocalDateTime.now()
+    /** 버전 증가된 새 인스턴스 반환 (낙관적 락) */
+    fun withNextVersion(): GameCharacter = copy(
+        version = if (version != null) version + 1 else 1L,
+        updatedAt = LocalDateTime.now(),
     )
-  }
 
-  /** 버전 증가된 새 인스턴스 반환 (낙관적 락) */
-  fun withNextVersion(): GameCharacter {
-    return copy(
-      version = if (version != null) version + 1 else 1L,
-      updatedAt = LocalDateTime.now()
-    )
-  }
+    /** ID가 할당된 새 인스턴스 반환 (영속化 후) */
+    fun withId(id: Long): GameCharacter = copy(id = id)
 
-  /** ID가 할당된 새 인스턴스 반환 (영속化 후) */
-  fun withId(id: Long): GameCharacter {
-    return copy(id = id)
-  }
+    /** 장비 데이터 존재 여부 */
+    fun hasEquipment(): Boolean = equipment != null && equipment.hasData()
 
-  /** 장비 데이터 존재 여부 */
-  fun hasEquipment(): Boolean = equipment != null && equipment.hasData()
+    /** 기본 정보 존재 여부 */
+    fun hasBasicInfo(): Boolean = !worldName.isNullOrBlank()
 
-  /** 기본 정보 존재 여부 */
-  fun hasBasicInfo(): Boolean = !worldName.isNullOrBlank()
+    /** 새 캐릭터 여부 (ID 없음) */
+    fun isNew(): Boolean = id == null
 
-  /** 새 캐릭터 여부 (ID 없음) */
-  fun isNew(): Boolean = id == null
-
-  /** OCID 반환 (편의 메서드) */
-  fun getOcid(): String? = characterId?.value
+    /** OCID 반환 (편의 메서드) */
+    fun getOcid(): String? = characterId?.value
 }

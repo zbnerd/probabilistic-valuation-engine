@@ -23,5 +23,5 @@ import org.springframework.validation.annotation.Validated
 @Validated
 @ConfigurationProperties(prefix = "executor.logging")
 data class ExecutorLoggingProperties(
-  @DefaultValue("200") @Min(0) @Max(60_000) val slowMs: Long = 200
+    @DefaultValue("200") @Min(0) @Max(60_000) val slowMs: Long = 200,
 )

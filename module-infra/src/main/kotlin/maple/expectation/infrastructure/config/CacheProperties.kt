@@ -37,7 +37,11 @@ data class CacheProperties(
 
     /** Singleflight (분산 락) 설정 */
     @field:NotNull @field:Valid
-    var singleflight: Singleflight = Singleflight()
+    var singleflight: Singleflight = Singleflight(),
+
+    /** L2 캐시 설정 (Issue #555: Caffeine-only mode 지원) */
+    @field:NotNull @field:Valid
+    var l2: L2 = L2(),
 ) {
     /**
      * 캐시별 L1/L2 스펙
@@ -60,7 +64,7 @@ data class CacheProperties(
         var l2TtlMinutes: Int = 15,
 
         @field:NotNull
-        var l2Serializer: String = "json"
+        var l2Serializer: String = "json",
     )
 
     /**
@@ -74,6 +78,25 @@ data class CacheProperties(
      */
     data class Singleflight(
         @Min(1) @Max(60)
-        var lockWaitSeconds: Int = 5
+        var lockWaitSeconds: Int = 5,
+    )
+
+    /**
+     * L2 캐시 설정 (Issue #555: Caffeine-only mode)
+     *
+     * <h4>설계 의도</h4>
+     *
+     * <ul>
+     *   <li>L2 캐시 활성화/비활성화 제어</li>
+     *   <li>비활성화 시 Caffeine L1-only 모드 동작</li>
+     *   <li>기본값: true (기존 동작 호환)</li>
+     * </ul>
+     */
+    data class L2(
+        /** L2 캐시 활성화 여부 (false 시 Caffeine-only 모드) */
+        var enabled: Boolean = true,
+
+        /** L2 구현체 선택 (redis | postgres, 기본값: redis) */
+        var impl: String = "redis",
     )
 }

@@ -3,18 +3,17 @@ package maple.expectation.infrastructure.lifecycle
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import java.time.LocalDateTime
+import java.util.concurrent.TimeUnit
 import maple.expectation.domain.v2.DonationOutbox
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.DonationOutboxRepository
 import maple.expectation.infrastructure.shutdown.ShutdownProperties
 import org.slf4j.LoggerFactory
+import org.springframework.context.SmartLifecycle
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Component
-import org.springframework.context.SmartLifecycle
-import java.time.LocalDateTime
-import java.util.concurrent.TimeUnit
-import java.util.Arrays
 
 @Component
 class OutboxDrainOnShutdown(
@@ -22,7 +21,7 @@ class OutboxDrainOnShutdown(
     private val executor: LogicExecutor,
     private val properties: ShutdownProperties,
     private val outboxProcessor: OutboxShutdownProcessor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) : SmartLifecycle {
 
     private val logger = LoggerFactory.getLogger(OutboxDrainOnShutdown::class.java)
@@ -59,7 +58,7 @@ class OutboxDrainOnShutdown(
                     shutdownDrainTimer.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS)
                 }
             },
-            context
+            context,
         )
 
         var totalProcessed = 0
@@ -109,33 +108,27 @@ class OutboxDrainOnShutdown(
 
     override fun isAutoStartup(): Boolean = true
 
-    private fun countRemainingEntries(): Long {
-        return executor.executeOrDefault(
-            { outboxRepository.countByStatusIn(listOf(DonationOutbox.OutboxStatus.PENDING)) },
-            0L,
-            TaskContext.of("OutboxDrain", "CountRemaining")
-        )
-    }
+    private fun countRemainingEntries(): Long = executor.executeOrDefault(
+        { outboxRepository.countByStatusIn(listOf(DonationOutbox.OutboxStatus.PENDING)) },
+        0L,
+        TaskContext.of("OutboxDrain", "CountRemaining"),
+    )
 
-    private fun fetchPendingBatch(batchSize: Int): List<DonationOutbox> {
-        return executor.executeOrDefault(
-            {
-                outboxRepository.findPendingWithLock(
-                    listOf(DonationOutbox.OutboxStatus.PENDING),
-                    LocalDateTime.now(),
-                    PageRequest.of(0, batchSize)
-                )
-            },
-            emptyList(),
-            TaskContext.of("OutboxDrain", "FetchBatch")
-        )
-    }
+    private fun fetchPendingBatch(batchSize: Int): List<DonationOutbox> = executor.executeOrDefault(
+        {
+            outboxRepository.findPendingWithLock(
+                listOf(DonationOutbox.OutboxStatus.PENDING),
+                LocalDateTime.now(),
+                PageRequest.of(0, batchSize),
+            )
+        },
+        emptyList(),
+        TaskContext.of("OutboxDrain", "FetchBatch"),
+    )
 
-    private fun processBatch(entries: List<DonationOutbox>): OutboxShutdownProcessor.DrainResult {
-        return executor.executeOrDefault(
-            { outboxProcessor.processBatch(entries) },
-            OutboxShutdownProcessor.DrainResult(0, 0),
-            TaskContext.of("OutboxDrain", "ProcessBatch")
-        )
-    }
+    private fun processBatch(entries: List<DonationOutbox>): OutboxShutdownProcessor.DrainResult = executor.executeOrDefault(
+        { outboxProcessor.processBatch(entries) },
+        OutboxShutdownProcessor.DrainResult(0, 0),
+        TaskContext.of("OutboxDrain", "ProcessBatch"),
+    )
 }

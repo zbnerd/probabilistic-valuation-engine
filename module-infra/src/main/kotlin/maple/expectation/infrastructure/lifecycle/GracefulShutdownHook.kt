@@ -3,6 +3,8 @@ package maple.expectation.infrastructure.lifecycle
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import java.time.Duration
+import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.shutdown.ShutdownProperties
@@ -10,15 +12,13 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
-import java.time.Duration
-import java.util.concurrent.TimeUnit
 
 @Component
 class GracefulShutdownHook(
     @Lazy private val coordinator: ShutdownCoordinator,
     private val executor: LogicExecutor,
     private val properties: ShutdownProperties,
-    meterRegistry: MeterRegistry?
+    meterRegistry: MeterRegistry?,
 ) : SmartLifecycle {
 
     private val logger = LoggerFactory.getLogger(GracefulShutdownHook::class.java)
@@ -72,55 +72,53 @@ class GracefulShutdownHook(
                 this.running = false
                 shutdownTimer?.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS)
             },
-            context
+            context,
         )
     }
 
-    private fun executeWithTimeout(): Boolean {
-        return executor.executeOrDefault(
-            {
-                val deadlineNs = System.nanoTime() + Duration.ofSeconds(30).toNanos()
+    private fun executeWithTimeout(): Boolean = executor.executeOrDefault(
+        {
+            val deadlineNs = System.nanoTime() + Duration.ofSeconds(30).toNanos()
 
-                val coordinatorThread = Thread(
-                    {
-                        try {
-                            coordinator.executeShutdown()
-                        } catch (e: Exception) {
-                            logger.error("[GracefulShutdownHook] Coordinator 실행 실패", e)
-                        }
-                    },
-                    "shutdown-coordinator"
-                )
-
-                coordinatorThread.start()
-
-                var remainingNs: Long
-                while ((System.nanoTime() - deadlineNs).also { remainingNs = deadlineNs - System.nanoTime() } > 0) {
+            val coordinatorThread = Thread(
+                {
                     try {
-                        TimeUnit.NANOSECONDS.timedJoin(coordinatorThread, remainingNs)
-                        if (!coordinatorThread.isAlive) {
-                            true // 완료
-                        }
-                    } catch (e: InterruptedException) {
-                        Thread.currentThread().interrupt()
-                        logger.warn("[GracefulShutdownHook] 대기 중 인터럽트")
-                        false
+                        coordinator.executeShutdown()
+                    } catch (e: Exception) {
+                        logger.error("[GracefulShutdownHook] Coordinator 실행 실패", e)
                     }
-                }
+                },
+                "shutdown-coordinator",
+            )
 
-                // 타임아웃 발생
-                if (coordinatorThread.isAlive) {
-                    logger.error("[GracefulShutdownHook] Coordinator 타임아웃 - 강제 종료 예정")
-                    coordinatorThread.interrupt()
+            coordinatorThread.start()
+
+            var remainingNs: Long
+            while ((System.nanoTime() - deadlineNs).also { remainingNs = deadlineNs - System.nanoTime() } > 0) {
+                try {
+                    TimeUnit.NANOSECONDS.timedJoin(coordinatorThread, remainingNs)
+                    if (!coordinatorThread.isAlive) {
+                        true // 완료
+                    }
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    logger.warn("[GracefulShutdownHook] 대기 중 인터럽트")
                     false
                 }
+            }
 
-                true
-            },
-            false,
-            TaskContext.of("GracefulShutdownHook", "ExecuteWithTimeout")
-        )
-    }
+            // 타임아웃 발생
+            if (coordinatorThread.isAlive) {
+                logger.error("[GracefulShutdownHook] Coordinator 타임아웃 - 강제 종료 예정")
+                coordinatorThread.interrupt()
+                false
+            }
+
+            true
+        },
+        false,
+        TaskContext.of("GracefulShutdownHook", "ExecuteWithTimeout"),
+    )
 
     override fun isRunning(): Boolean = running
 

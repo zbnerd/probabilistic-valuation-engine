@@ -1,12 +1,12 @@
 package maple.expectation.infrastructure.messaging
 
+import java.util.concurrent.TimeUnit
 import maple.expectation.error.exception.EventProcessingException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.redisson.api.RSet
 import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
-import java.util.concurrent.TimeUnit
 
 /**
  * Redis-based deduplication filter for event processing.
@@ -50,7 +50,7 @@ class DeduplicationFilter(
     redissonClient: RedissonClient,
     keyPrefix: String,
     private val ttlMillis: Long,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val logger = LoggerFactory.getLogger(DeduplicationFilter::class.java)
     private val processedEvents: RSet<String> = redissonClient.getSet("${keyPrefix}processed")
@@ -66,14 +66,12 @@ class DeduplicationFilter(
      * @return {@code true} if event was already processed (duplicate), {@code false} if first time
      * @throws EventProcessingException if Redis operation fails
      */
-    fun isDuplicate(eventId: String): Boolean {
-        return executor.executeOrDefault(
-            { checkDuplicate(eventId) },
-            false,
-    // Default: assume not duplicate on error (fail-open for resilience)
-            TaskContext.of("DeduplicationFilter", "IsDuplicate", eventId)
-        )
-    }
+    fun isDuplicate(eventId: String): Boolean = executor.executeOrDefault(
+        { checkDuplicate(eventId) },
+        false,
+        // Default: assume not duplicate on error (fail-open for resilience)
+        TaskContext.of("DeduplicationFilter", "IsDuplicate", eventId),
+    )
 
     /**
      * Check and mark duplicate with checked exception.
@@ -108,7 +106,7 @@ class DeduplicationFilter(
                 processedEvents.expire(ttlMillis, TimeUnit.MILLISECONDS)
                 logger.debug("[DeduplicationFilter] Manually marked: {}", eventId)
             },
-            TaskContext.of("DeduplicationFilter", "MarkProcessed", eventId)
+            TaskContext.of("DeduplicationFilter", "MarkProcessed", eventId),
         )
     }
 
@@ -117,11 +115,9 @@ class DeduplicationFilter(
      *
      * @return Number of tracked event IDs
      */
-    fun size(): Int {
-        return executor.executeOrDefault(
-            { processedEvents.size },
-            0,
-            TaskContext.of("DeduplicationFilter", "Size")
-        )
-    }
+    fun size(): Int = executor.executeOrDefault(
+        { processedEvents.size },
+        0,
+        TaskContext.of("DeduplicationFilter", "Size"),
+    )
 }

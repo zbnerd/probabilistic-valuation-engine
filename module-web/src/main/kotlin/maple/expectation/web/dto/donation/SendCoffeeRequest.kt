@@ -15,7 +15,7 @@ data class SendCoffeeRequest(
     val adminFingerprint: String,
     @field:NotNull(message = "금액은 필수입니다")
     @field:Positive(message = "금액은 양수여야 합니다")
-    val amount: Long
+    val amount: Long,
 ) {
     /** 보안: toString()에서 fingerprint 마스킹 */
     override fun toString(): String {

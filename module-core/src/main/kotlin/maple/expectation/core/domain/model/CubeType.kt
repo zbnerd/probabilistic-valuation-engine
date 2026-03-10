@@ -13,5 +13,5 @@ enum class CubeType(val description: String) {
     RED("레드큐브"),
 
     /** Additional Cube - resets additional potential options */
-    ADDITIONAL("에디셔널큐브")
+    ADDITIONAL("에디셔널큐브"),
 }

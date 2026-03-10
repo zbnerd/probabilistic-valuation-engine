@@ -4,8 +4,8 @@ import io.micrometer.core.instrument.MeterRegistry
 import maple.expectation.core.port.out.AtomicFetchStrategy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import org.redisson.api.RedissonClient
 import org.redisson.api.RScript
+import org.redisson.api.RedissonClient
 
 /**
  * Lua Script 기반 원자적 Fetch 전략
@@ -14,7 +14,7 @@ class LuaScriptAtomicFetchStrategy(
     private val redissonClient: RedissonClient,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    private val tempKeyTtlSeconds: Int
+    private val tempKeyTtlSeconds: Int,
 ) : AtomicFetchStrategy {
 
     companion object {
@@ -34,7 +34,7 @@ class LuaScriptAtomicFetchStrategy(
                     RScript.Mode.READ_WRITE,
                     LUA_SCRIPT,
                     RScript.ReturnType.MULTI,
-                    listOf(key)
+                    listOf(key),
                 )
 
                 val list = result as? List<*> ?: return@executeOrDefault mutableMapOf<String, String>()
@@ -52,10 +52,9 @@ class LuaScriptAtomicFetchStrategy(
                 map
             },
             mutableMapOf(),
-            TaskContext.of("LuaScriptAtomicFetchStrategy", "FetchAndDelete", key)
+            TaskContext.of("LuaScriptAtomicFetchStrategy", "FetchAndDelete", key),
         ) ?: mutableMapOf()
     }
 
-    override fun getStrategyType(): AtomicFetchStrategy.StrategyType =
-        AtomicFetchStrategy.StrategyType.LUA_SCRIPT
+    override fun getStrategyType(): AtomicFetchStrategy.StrategyType = AtomicFetchStrategy.StrategyType.LUA_SCRIPT
 }

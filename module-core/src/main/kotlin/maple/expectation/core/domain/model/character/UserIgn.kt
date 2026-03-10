@@ -7,13 +7,13 @@ package maple.expectation.core.domain.model.character
  */
 data class UserIgn(@get:JvmName("value") val value: String) {
 
-  init {
-    requireNotNull(value) { "UserIgn value cannot be null" }
-    require(value.isNotBlank()) { "UserIgn value cannot be blank" }
-  }
+    init {
+        requireNotNull(value) { "UserIgn value cannot be null" }
+        require(value.isNotBlank()) { "UserIgn value cannot be blank" }
+    }
 
-  companion object {
-    @JvmStatic
-    fun of(value: String): UserIgn = UserIgn(value)
-  }
+    companion object {
+        @JvmStatic
+        fun of(value: String): UserIgn = UserIgn(value)
+    }
 }

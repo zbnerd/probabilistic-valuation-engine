@@ -1,12 +1,12 @@
 package maple.expectation.testfixtures
 
+import java.time.Instant
 import maple.expectation.domain.nexon.NexonApiCharacterData
-import maple.expectation.web.dto.CubeCalculationInput
 import maple.expectation.infrastructure.external.dto.v2.CharacterListResponse
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.infrastructure.external.dto.v2.TotalExpectationResponse
 import maple.expectation.infrastructure.security.jwt.JwtPayload
-import java.time.Instant
+import maple.expectation.web.dto.CubeCalculationInput
 
 /**
  * Java 테스트에서 Kotlin data class를 쉽게 생성하기 위한 픽스처
@@ -158,11 +158,10 @@ object Fixtures {
 
     @JvmStatic
     @JvmOverloads
-    fun characterInfo(ocid: String? = null, characterName: String? = null): CharacterListResponse.CharacterInfo =
-        CharacterListResponse.CharacterInfo(
-            ocid = ocid,
-            characterName = characterName,
-        )
+    fun characterInfo(ocid: String? = null, characterName: String? = null): CharacterListResponse.CharacterInfo = CharacterListResponse.CharacterInfo(
+        ocid = ocid,
+        characterName = characterName,
+    )
 
     // ==================== TotalExpectationResponse ====================
 

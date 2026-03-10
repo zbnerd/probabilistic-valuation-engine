@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.cache.tiered
 
+import java.util.Optional
 import maple.expectation.error.exception.CachePersistenceException
 import maple.expectation.error.exception.base.BaseException
 import maple.expectation.infrastructure.cache.port.EquipmentCache
@@ -11,7 +12,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.cache.CacheManager
 import org.springframework.stereotype.Service
-import java.util.Optional
 
 /**
  * Equipment 캐시 서비스 (Issue #24: AbstractTieredCacheService 리팩토링)
@@ -28,34 +28,28 @@ class EquipmentCacheService(
     cacheManager: CacheManager,
     @Qualifier("expectationL1CacheManager") l1CacheManager: CacheManager,
     private val dbWorker: EquipmentDbWorker,
-    executor: LogicExecutor
+    executor: LogicExecutor,
 ) : AbstractTieredCacheService<EquipmentResponse>(CACHE_NAME, cacheManager, l1CacheManager, executor),
     EquipmentCache {
 
     // ==================== AbstractTieredCacheService Implementation ====================
 
-    override fun isValidNullMarker(value: EquipmentResponse?): Boolean {
-        return value != null && NULL_MARKER_CLASS == value.characterClass
-    }
+    override fun isValidNullMarker(value: EquipmentResponse?): Boolean = value != null && NULL_MARKER_CLASS == value.characterClass
 
     // ==================== EquipmentCache Interface Implementation ====================
 
     /** 캐시 조회 로직 (L1 → L2 → Warm-up) */
-    override fun getValidCache(ocid: String): Optional<EquipmentResponse>? {
-        return getFromTieredCache(ocid, EquipmentResponse::class.java)
-    }
+    override fun getValidCache(ocid: String): Optional<EquipmentResponse>? = getFromTieredCache(ocid, EquipmentResponse::class.java)
 
     /** Negative 캐시 존재 여부 확인 */
-    override fun hasNegativeCache(ocid: String): Boolean {
-        return executor.executeOrDefault(
-            {
-                val cached = tieredCache.get(ocid, EquipmentResponse::class.java)
-                cached != null && isValidNullMarker(cached)
-            },
-            false,
-            TaskContext.of("EquipmentCache", "CheckNegative", ocid)
-        )
-    }
+    override fun hasNegativeCache(ocid: String): Boolean = executor.executeOrDefault(
+        {
+            val cached = tieredCache.get(ocid, EquipmentResponse::class.java)
+            cached != null && isValidNullMarker(cached)
+        },
+        false,
+        TaskContext.of("EquipmentCache", "CheckNegative", ocid),
+    )
 
     /** 캐시 저장 및 비동기 DB persist */
     override fun saveCache(ocid: String, response: EquipmentResponse?) {
@@ -70,16 +64,14 @@ class EquipmentCacheService(
                 null
             },
             { e -> handleSaveFailure(ocid, e) },
-            context
+            context,
         )
     }
 
     // ==================== Extended Public API ====================
 
     /** L1-only 캐시 조회 (Expectation 경로 전용 - L2 우회) */
-    fun getValidCacheL1Only(ocid: String): Optional<EquipmentResponse> {
-        return getFromL1Only(ocid, EquipmentResponse::class.java)
-    }
+    fun getValidCacheL1Only(ocid: String): Optional<EquipmentResponse> = getFromL1Only(ocid, EquipmentResponse::class.java)
 
     /** L1-only 캐시 저장 (Expectation 경로 전용 - L2 우회, DB 저장도 스킵) */
     fun saveCacheL1Only(ocid: String, response: EquipmentResponse?) {
@@ -99,7 +91,7 @@ class EquipmentCacheService(
     private fun observeAsyncError(ocid: String, ex: Throwable): Void? {
         executor.executeVoidJava(
             { throw CachePersistenceException(ocid, ex) },
-            TaskContext.of("EquipmentDbWorker", "AsyncPersistFailed", ocid)
+            TaskContext.of("EquipmentDbWorker", "AsyncPersistFailed", ocid),
         )
         return null
     }
@@ -136,7 +128,7 @@ class EquipmentCacheService(
             itemEquipmentPreset3 = null,
             dragonEquipment = null,
             mechanicEquipment = null,
-            title = null
+            title = null,
         )
     }
 }

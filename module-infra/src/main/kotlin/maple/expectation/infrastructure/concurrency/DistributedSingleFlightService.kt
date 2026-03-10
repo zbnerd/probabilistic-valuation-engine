@@ -1,5 +1,8 @@
 package maple.expectation.infrastructure.concurrency
 
+import java.time.Duration
+import java.util.concurrent.ThreadLocalRandom
+import java.util.function.Supplier
 import maple.expectation.core.port.out.redis.RedisOperationPort
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
@@ -8,9 +11,6 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lock.LockStrategy
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.time.Duration
-import java.util.concurrent.ThreadLocalRandom
-import java.util.function.Supplier
 
 /**
  * 분산 Single-Flight 서비스 (Issue #283 P0-4)
@@ -36,7 +36,7 @@ class DistributedSingleFlightService(
     private val executor: LogicExecutor,
     private val checkedExecutor: CheckedLogicExecutor,
     private val lockStrategy: LockStrategy,
-    private val redisOperationPort: RedisOperationPort
+    private val redisOperationPort: RedisOperationPort,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(DistributedSingleFlightService::class.java)
@@ -55,17 +55,13 @@ class DistributedSingleFlightService(
      * @param T 결과 타입 (Serializable 필수)
      * @return 계산 결과
      */
-    fun <T : Any> executeOrShare(key: String, computation: Supplier<T>, cacheTtl: Duration): T {
-        return executor.execute(
-            { doExecuteOrShare(key, computation, cacheTtl) },
-            TaskContext.of("SingleFlight", "Distributed", key)
-        )
-    }
+    fun <T : Any> executeOrShare(key: String, computation: Supplier<T>, cacheTtl: Duration): T = executor.execute(
+        { doExecuteOrShare(key, computation, cacheTtl) },
+        TaskContext.of("SingleFlight", "Distributed", key),
+    )
 
     /** 분산 Single-Flight 실행 (기본 TTL 30초) */
-    fun <T : Any> executeOrShare(key: String, computation: Supplier<T>): T {
-        return executeOrShare(key, computation, DEFAULT_CACHE_TTL)
-    }
+    fun <T : Any> executeOrShare(key: String, computation: Supplier<T>): T = executeOrShare(key, computation, DEFAULT_CACHE_TTL)
 
     private fun <T : Any> doExecuteOrShare(key: String, computation: Supplier<T>, cacheTtl: Duration): T {
         if (key.isBlank()) {
@@ -87,7 +83,7 @@ class DistributedSingleFlightService(
                 lockStrategy.executeWithLock(
                     "single-flight:$key",
                     5,
-                    30
+                    30,
                 ) { computeAndCache(key, cacheKey, computation, cacheTtl) }
             },
             { e ->
@@ -95,13 +91,13 @@ class DistributedSingleFlightService(
                     log.debug("[DistributedSingleFlight] Lock timeout, retrying cache read: {}", key)
                     executor.execute(
                         { retryCacheRead(cacheKey, key) },
-                        TaskContext.of("SingleFlight", "RetryCacheRead", key)
+                        TaskContext.of("SingleFlight", "RetryCacheRead", key),
                     )
                 } else {
                     throw DistributedLockException("Lock execution failed", e)
                 }
             },
-            TaskContext.of("SingleFlight", "ExecuteWithLock", key)
+            TaskContext.of("SingleFlight", "ExecuteWithLock", key),
         )
     }
 
@@ -115,9 +111,7 @@ class DistributedSingleFlightService(
      * @param originalKey Original key for logging
      * @return Cached result or throws if computation fails
      */
-    private fun <T : Any> retryCacheRead(cacheKey: String, originalKey: String): T {
-        return getCachedResultWithRetry<T>(cacheKey, originalKey)
-    }
+    private fun <T : Any> retryCacheRead(cacheKey: String, originalKey: String): T = getCachedResultWithRetry<T>(cacheKey, originalKey)
 
     /**
      * Retry cache read with exponential backoff when lock acquisition fails.
@@ -136,7 +130,7 @@ class DistributedSingleFlightService(
                 log.debug(
                     "[DistributedSingleFlight] Cache HIT after retry (attempt {}): {}",
                     attempt + 1,
-                    originalKey
+                    originalKey,
                 )
                 return cached
             }
@@ -160,7 +154,8 @@ class DistributedSingleFlightService(
             } catch (ie: InterruptedException) {
                 Thread.currentThread().interrupt()
                 throw DistributedLockException(
-                    "Cache read retry interrupted [key=$originalKey]", ie
+                    "Cache read retry interrupted [key=$originalKey]",
+                    ie,
                 )
             }
         }, TaskContext.of("SingleFlight", "SleepBackoff", attempt.toString()))
@@ -176,27 +171,25 @@ class DistributedSingleFlightService(
 
         log.error(
             "[DistributedSingleFlight] Cache miss after all retries, computation may have failed: {}",
-            originalKey
+            originalKey,
         )
         throw DistributedLockException(
             "Failed to acquire lock and no cached result available after " +
-                    MAX_RETRIES + " retries [key=$originalKey]"
+                MAX_RETRIES + " retries [key=$originalKey]",
         )
     }
 
-    private fun <T : Any> getCachedResult(cacheKey: String): T? {
-        return executor.executeOrDefault(
-            { redisOperationPort.get(cacheKey) },
-            null,
-            TaskContext.of("SingleFlight", "CacheGet")
-        )
-    }
+    private fun <T : Any> getCachedResult(cacheKey: String): T? = executor.executeOrDefault(
+        { redisOperationPort.get(cacheKey) },
+        null,
+        TaskContext.of("SingleFlight", "CacheGet"),
+    )
 
     private fun <T : Any> computeAndCache(
         key: String,
         cacheKey: String,
         computation: Supplier<T>,
-        cacheTtl: Duration
+        cacheTtl: Duration,
     ): T {
         // Double-check cache after acquiring lock
         val existing = getCachedResult<T>(cacheKey)
@@ -210,7 +203,7 @@ class DistributedSingleFlightService(
         // Cache result with TTL
         executor.executeVoid(
             { redisOperationPort.set(cacheKey, result, cacheTtl) },
-            TaskContext.of("SingleFlight", "CacheSet", key)
+            TaskContext.of("SingleFlight", "CacheSet", key),
         )
 
         log.debug("[DistributedSingleFlight] Computed and cached: {}", key)

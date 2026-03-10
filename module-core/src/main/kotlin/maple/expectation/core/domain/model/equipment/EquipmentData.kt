@@ -14,29 +14,29 @@ package maple.expectation.core.domain.model.equipment
  */
 data class EquipmentData(private val json: String) {
 
-  init {
-    require(json.isNotBlank()) { "json cannot be null or blank" }
-  }
+    init {
+        require(json.isNotBlank()) { "json cannot be null or blank" }
+    }
 
-  /** JSON 컨텐츠 반환 */
-  fun jsonContent(): String = json
+    /** JSON 컨텐츠 반환 */
+    fun jsonContent(): String = json
 
-  /** 비어있는지 여부 확인 */
-  fun isEmpty(): Boolean = json.isBlank() || json.trim() == "{}"
+    /** 비어있는지 여부 확인 */
+    fun isEmpty(): Boolean = json.isBlank() || json.trim() == "{}"
 
-  /** 비어있지 않은지 여부 확인 */
-  fun isNotEmpty(): Boolean = !isEmpty()
+    /** 비어있지 않은지 여부 확인 */
+    fun isNotEmpty(): Boolean = !isEmpty()
 
-  /** JSON 길이 반환 */
-  fun length(): Int = json.length
+    /** JSON 길이 반환 */
+    fun length(): Int = json.length
 
-  companion object {
-    /** 빈 장비 데이터 생성 */
-    @JvmStatic
-    fun empty(): EquipmentData = EquipmentData("{}")
+    companion object {
+        /** 빈 장비 데이터 생성 */
+        @JvmStatic
+        fun empty(): EquipmentData = EquipmentData("{}")
 
-    /** JSON으로부터 생성 */
-    @JvmStatic
-    fun of(json: String): EquipmentData = EquipmentData(json)
-  }
+        /** JSON으로부터 생성 */
+        @JvmStatic
+        fun of(json: String): EquipmentData = EquipmentData(json)
+    }
 }

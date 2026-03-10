@@ -2,18 +2,16 @@ package maple.expectation.infrastructure.filter
 
 import jakarta.servlet.Filter
 import jakarta.servlet.FilterChain
-import jakarta.servlet.ServletException
 import jakarta.servlet.ServletRequest
 import jakarta.servlet.ServletResponse
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import java.util.UUID
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.springframework.stereotype.Component
-import java.io.IOException
-import java.util.UUID
 
 /**
  * 로그 추적용 MDC 필터 (LogicExecutor 평탄화 완료)
@@ -30,7 +28,7 @@ import java.util.UUID
  */
 @Component
 class MDCFilter(
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) : Filter {
     private val logger = LoggerFactory.getLogger(MDCFilter::class.java)
 
@@ -51,8 +49,8 @@ class MDCFilter(
                 null
             },
             { MDC.clear() },
-    // 요청 종료 시 반드시 비워줌 (메모리 누수 방지)
-            context
+            // 요청 종료 시 반드시 비워줌 (메모리 누수 방지)
+            context,
         )
     }
 

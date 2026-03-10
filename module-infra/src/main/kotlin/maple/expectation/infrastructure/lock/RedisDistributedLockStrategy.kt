@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.lock
 
+import java.time.Duration
 import maple.expectation.core.port.out.redis.RedisOperationPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
-import java.time.Duration
 
 /**
  * Redis 분산 락 전략 (RedisOperationPort 기반)
@@ -20,7 +20,7 @@ import java.time.Duration
 class RedisDistributedLockStrategy(
     private val redisOperationPort: RedisOperationPort,
     executor: LogicExecutor,
-    private val lockMetrics: LockMetrics
+    private val lockMetrics: LockMetrics,
 ) : AbstractLockStrategy(executor) {
 
     /**
@@ -50,9 +50,7 @@ class RedisDistributedLockStrategy(
         }
     }
 
-    override fun shouldUnlock(lockKey: String): Boolean {
-        return redisOperationPort.isHeldByCurrentThread(lockKey)
-    }
+    override fun shouldUnlock(lockKey: String): Boolean = redisOperationPort.isHeldByCurrentThread(lockKey)
 
     override fun tryLockImmediately(key: String, leaseTime: Long): Boolean {
         val lockKey = buildLockKey(key)
@@ -60,14 +58,12 @@ class RedisDistributedLockStrategy(
         return executor.executeOrDefault(
             { this.attemptImmediateLock(lockKey, leaseTime) },
             false,
-            TaskContext.of("Lock", "RedisTryImmediate", key) // ✅ TaskContext 적용
+            TaskContext.of("Lock", "RedisTryImmediate", key), // ✅ TaskContext 적용
         )
     }
 
     @Throws(Throwable::class)
-    private fun attemptImmediateLock(lockKey: String, leaseTime: Long): Boolean {
-        return tryLock(lockKey, 0, leaseTime)
-    }
+    private fun attemptImmediateLock(lockKey: String, leaseTime: Long): Boolean = tryLock(lockKey, 0, leaseTime)
 
     override fun onLockAcquired(lockKey: String) {
         // [Issue #310] 락 획득 성공 기록

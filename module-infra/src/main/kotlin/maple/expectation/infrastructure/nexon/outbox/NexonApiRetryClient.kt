@@ -1,22 +1,18 @@
 package maple.expectation.infrastructure.nexon.outbox
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.concurrent.TimeUnit
 import maple.expectation.domain.v2.NexonApiOutbox
 import maple.expectation.error.exception.ExternalServiceException
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
-import maple.expectation.infrastructure.external.dto.v2.CharacterBasicResponse
-import maple.expectation.infrastructure.external.dto.v2.CharacterOcidResponse
-import maple.expectation.infrastructure.external.dto.v2.CubeHistoryResponse
-import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.util.ExceptionUtils
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClientResponseException
-import java.util.concurrent.TimeUnit
 
 /**
  * Nexon API 재시도 클라이언트 구현 (N19)
@@ -64,11 +60,11 @@ class NexonApiRetryClient(
 
         return checkedExecutor.executeUnchecked(
             { doRetry(outbox) },
-            context
+            context,
         ) { e ->
             ExternalServiceException(
                 "Nexon API Outbox retry failed: ${outbox.requestId}",
-                e
+                e,
             )
         }
     }
@@ -104,12 +100,12 @@ class NexonApiRetryClient(
                     "[Retry] 재시도 실패: requestId={}, eventType={}",
                     outbox.requestId,
                     eventType,
-                    e
+                    e,
                 )
                 metrics.incrementApiCallRetry()
                 false
             },
-            context
+            context,
         )
     }
 
@@ -129,7 +125,7 @@ class NexonApiRetryClient(
                 true
             },
             { e -> handleRetryFailure("GET_OCID", characterName, e) },
-            context
+            context,
         )
     }
 
@@ -147,13 +143,13 @@ class NexonApiRetryClient(
                 log.info(
                     "[Retry] Character Basic 조회 성공: ocid={}, world={}",
                     ocid,
-                    response.worldName
+                    response.worldName,
                 )
                 metrics.incrementApiCallSuccess()
                 true
             },
             { e -> handleRetryFailure("GET_CHARACTER_BASIC", ocid, e) },
-            context
+            context,
         )
     }
 
@@ -173,7 +169,7 @@ class NexonApiRetryClient(
                 true
             },
             { e -> handleRetryFailure("GET_ITEM_DATA", ocid, e) },
-            context
+            context,
         )
     }
 
@@ -193,7 +189,7 @@ class NexonApiRetryClient(
                 true
             },
             { e -> handleRetryFailure("GET_CUBES", ocid, e) },
-            context
+            context,
         )
     }
 
@@ -213,7 +209,7 @@ class NexonApiRetryClient(
                 "[Retry] 4xx 오류로 재시도 중단: eventType={}, status={}, payload={}",
                 eventType,
                 root.statusCode,
-                maskPayload(payload)
+                maskPayload(payload),
             )
             return false
         }
@@ -223,7 +219,7 @@ class NexonApiRetryClient(
             "[Retry] 일시적 장애 발생: eventType={}, payload={}, error={}",
             eventType,
             maskPayload(payload),
-            root?.message
+            root?.message,
         )
         metrics.incrementApiCallRetry()
         return false

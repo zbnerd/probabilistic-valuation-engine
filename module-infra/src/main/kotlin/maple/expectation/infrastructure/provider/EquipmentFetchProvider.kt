@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.provider
 
+import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.aop.annotation.NexonDataCache
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Component
-import java.util.concurrent.TimeUnit
 
 /**
  * 장비 데이터 Fetch Provider (캐시 적용)
@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit
  */
 @Component
 class EquipmentFetchProvider(
-    private val nexonApiClient: NexonApiClient
+    private val nexonApiClient: NexonApiClient,
 ) {
     /**
      * 캐시 적용 장비 데이터 조회
@@ -57,12 +57,10 @@ class EquipmentFetchProvider(
      */
     @NexonDataCache
     @Cacheable(value = ["equipment"], key = "#ocid")
-    fun fetchWithCache(ocid: String): EquipmentResponse {
-        return nexonApiClient
-            .getItemDataByOcid(ocid)
-            .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .join()
-    }
+    fun fetchWithCache(ocid: String): EquipmentResponse = nexonApiClient
+        .getItemDataByOcid(ocid)
+        .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .join()
 
     private companion object {
         private const val API_TIMEOUT_SECONDS = 10L

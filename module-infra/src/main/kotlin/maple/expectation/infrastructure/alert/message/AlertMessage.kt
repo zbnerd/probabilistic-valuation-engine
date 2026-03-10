@@ -12,7 +12,7 @@ data class AlertMessage(
     private val title: String,
     private val message: String,
     private val error: Throwable?,
-    private val webhookUrl: String
+    private val webhookUrl: String,
 ) {
     fun getTitle(): String = title
 
@@ -22,11 +22,9 @@ data class AlertMessage(
 
     fun getWebhookUrl(): String = webhookUrl
 
-    fun getFormattedMessage(): String {
-        return if (error != null) {
-            String.format("**%s**\n```\n%s", message, error.toString())
-        } else {
-            String.format("**%s**", message)
-        }
+    fun getFormattedMessage(): String = if (error != null) {
+        String.format("**%s**\n```\n%s", message, error.toString())
+    } else {
+        String.format("**%s**", message)
     }
 }

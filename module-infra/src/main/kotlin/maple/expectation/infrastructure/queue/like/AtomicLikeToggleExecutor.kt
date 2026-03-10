@@ -1,15 +1,15 @@
 package maple.expectation.infrastructure.queue.like
 
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.List
+import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.queue.RedisKey
-import org.slf4j.LoggerFactory
 import org.redisson.api.RScript
 import org.redisson.api.RedissonClient
 import org.redisson.client.codec.StringCodec
-import java.util.List
-import java.util.concurrent.atomic.AtomicReference
+import org.slf4j.LoggerFactory
 
 /**
  * Lua Script 기반 원자적 좋아요 토글 실행기
@@ -43,7 +43,7 @@ import java.util.concurrent.atomic.AtomicReference
 class AtomicLikeToggleExecutor(
     private val redissonClient: RedissonClient,
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
 
     companion object {
@@ -142,7 +142,7 @@ class AtomicLikeToggleExecutor(
             relationsKey,
             pendingKey,
             bufferKey,
-            unlikedKey
+            unlikedKey,
         )
     }
 
@@ -163,7 +163,7 @@ class AtomicLikeToggleExecutor(
         return executor.executeOrDefault(
             { doToggle(relationKey, userIgn) },
             null,
-            context
+            context,
         )
     }
 
@@ -174,7 +174,7 @@ class AtomicLikeToggleExecutor(
         val result: List<Long> = executor.executeOrCatch(
             { evalToggleWithCachedSha(script, sha, relationKey, userIgn) },
             { e -> evalToggleWithReloadedSha(script, relationKey, userIgn) },
-            TaskContext.of("LikeToggle", "EvalScript", userIgn)
+            TaskContext.of("LikeToggle", "EvalScript", userIgn),
         )
 
         val action = result[ACTION_INDEX]
@@ -186,7 +186,7 @@ class AtomicLikeToggleExecutor(
             "[AtomicLikeToggle] {}: relation={}, delta={}",
             if (liked) "LIKED" else "UNLIKED",
             relationKey,
-            newDelta
+            newDelta,
         )
 
         return ToggleResult(liked, newDelta)
@@ -196,7 +196,7 @@ class AtomicLikeToggleExecutor(
         script: RScript,
         sha: String?,
         relationKey: String,
-        userIgn: String
+        userIgn: String,
     ): List<Long> {
         if (sha == null) {
             throw IllegalStateException("SHA not cached")
@@ -208,14 +208,14 @@ class AtomicLikeToggleExecutor(
             RScript.ReturnType.MULTI,
             listOf(relationsKey, pendingKey, bufferKey, unlikedKey),
             relationKey,
-            userIgn
+            userIgn,
         ) as List<Long>
     }
 
     private fun evalToggleWithReloadedSha(
         script: RScript,
         relationKey: String,
-        userIgn: String
+        userIgn: String,
     ): List<Long> {
         val sha = script.scriptLoad(LUA_ATOMIC_TOGGLE)
         toggleSha.set(sha)
@@ -226,7 +226,7 @@ class AtomicLikeToggleExecutor(
             RScript.ReturnType.MULTI,
             listOf(relationsKey, pendingKey, bufferKey, unlikedKey),
             relationKey,
-            userIgn
+            userIgn,
         ) as List<Long>
     }
 

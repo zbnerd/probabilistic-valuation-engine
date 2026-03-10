@@ -19,7 +19,7 @@ import java.util.Optional
  * @see EquipmentExpectationCalculatorPort 대상 인터페이스
  */
 abstract class EquipmentEnhanceDecorator(
-    protected val target: EquipmentExpectationCalculatorPort
+    protected val target: EquipmentExpectationCalculatorPort,
 ) : EquipmentExpectationCalculatorPort {
 
     override fun calculateCost(): BigDecimal = target.calculateCost()
@@ -28,6 +28,5 @@ abstract class EquipmentEnhanceDecorator(
 
     override fun getTrials(): Optional<BigDecimal> = target.getTrials()
 
-    override fun getDetailedCosts(): EquipmentExpectationCalculatorPort.CostBreakdown =
-        target.getDetailedCosts()
+    override fun getDetailedCosts(): EquipmentExpectationCalculatorPort.CostBreakdown = target.getDetailedCosts()
 }

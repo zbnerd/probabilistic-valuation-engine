@@ -9,7 +9,7 @@ data class ShutdownData(
     val timestamp: LocalDateTime,
     val instanceId: String,
     val likeBuffer: Map<String, Long>?,
-    val equipmentPending: List<String>?
+    val equipmentPending: List<String>?,
 ) {
     companion object {
         @JvmStatic
@@ -17,13 +17,13 @@ data class ShutdownData(
             LocalDateTime.now(),
             instanceId,
             emptyMap(),
-            emptyList()
+            emptyList(),
         )
     }
 
     @JsonIgnore
     fun isEmpty() = (likeBuffer == null || likeBuffer.isEmpty()) &&
-                     (equipmentPending == null || equipmentPending.isEmpty())
+        (equipmentPending == null || equipmentPending.isEmpty())
 
     @JsonIgnore
     fun getTotalItems(): Int {

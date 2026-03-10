@@ -178,6 +178,7 @@ class GameCharacterControllerV5Test {
         Instant.now(), // calculatedAt
         Instant.now(), // lastApiSyncAt
         1L, // version
+        null, // lastAppliedVersion
         200000L, // totalExpectedCost
         1, // maxPresetNo
         List.of(preset), // presets

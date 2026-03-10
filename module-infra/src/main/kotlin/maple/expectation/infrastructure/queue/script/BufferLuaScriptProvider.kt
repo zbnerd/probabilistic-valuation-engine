@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.queue.script
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.annotation.PostConstruct
+import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.error.exception.RedisScriptExecutionException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -11,7 +11,6 @@ import org.redisson.api.RedissonClient
 import org.redisson.client.codec.StringCodec
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Buffer Lua Script SHA 캐싱 및 NOSCRIPT 에러 핸들링 제공자
@@ -19,7 +18,7 @@ import java.util.concurrent.atomic.AtomicReference
 @Component
 class BufferLuaScriptProvider(
     private val redissonClient: RedissonClient,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(BufferLuaScriptProvider::class.java)
 
@@ -57,7 +56,7 @@ class BufferLuaScriptProvider(
                 true
             },
             false,
-            TaskContext.of("BufferLuaScript", "LoadAll")
+            TaskContext.of("BufferLuaScript", "LoadAll"),
         )
 
         if (!loaded) {
@@ -75,36 +74,52 @@ class BufferLuaScriptProvider(
     fun getGetExpiredInflightSha(): String = getExpiredInflightShaRef.updateAndGet { it ?: reloadScript(BufferLuaScripts.GET_EXPIRED_INFLIGHT, "GetExpiredInflight") }
     fun getGetQueueCountsSha(): String = getQueueCountsShaRef.updateAndGet { it ?: reloadScript(BufferLuaScripts.GET_QUEUE_COUNTS, "GetQueueCounts") }
 
-    fun updatePublishSha(sha: String) { publishShaRef.set(sha) }
-    fun updateConsumeSha(sha: String) { consumeShaRef.set(sha) }
-    fun updateAckSha(sha: String) { ackShaRef.set(sha) }
-    fun updateNackToRetrySha(sha: String) { nackToRetryShaRef.set(sha) }
-    fun updateNackToDlqSha(sha: String) { nackToDlqShaRef.set(sha) }
-    fun updateRedriveSha(sha: String) { redriveShaRef.set(sha) }
-    fun updateProcessRetryQueueSha(sha: String) { processRetryQueueShaRef.set(sha) }
-    fun updateGetExpiredInflightSha(sha: String) { getExpiredInflightShaRef.set(sha) }
-    fun updateGetQueueCountsSha(sha: String) { getQueueCountsShaRef.set(sha) }
+    fun updatePublishSha(sha: String) {
+        publishShaRef.set(sha)
+    }
+    fun updateConsumeSha(sha: String) {
+        consumeShaRef.set(sha)
+    }
+    fun updateAckSha(sha: String) {
+        ackShaRef.set(sha)
+    }
+    fun updateNackToRetrySha(sha: String) {
+        nackToRetryShaRef.set(sha)
+    }
+    fun updateNackToDlqSha(sha: String) {
+        nackToDlqShaRef.set(sha)
+    }
+    fun updateRedriveSha(sha: String) {
+        redriveShaRef.set(sha)
+    }
+    fun updateProcessRetryQueueSha(sha: String) {
+        processRetryQueueShaRef.set(sha)
+    }
+    fun updateGetExpiredInflightSha(sha: String) {
+        getExpiredInflightShaRef.set(sha)
+    }
+    fun updateGetQueueCountsSha(sha: String) {
+        getQueueCountsShaRef.set(sha)
+    }
 
     fun <T> executeWithNoscriptHandling(
         shaGetter: () -> String,
         scriptSource: String,
         shaUpdater: (String) -> Unit,
         scriptExecutor: (String) -> T,
-        scriptName: String
-    ): T {
-        return executor.executeOrCatch(
-            { scriptExecutor(shaGetter()) },
-            { e -> handleNoscriptAndRetry(e, scriptSource, shaUpdater, scriptExecutor, scriptName) },
-            TaskContext.of("BufferLuaScript", "Execute", scriptName)
-        )
-    }
+        scriptName: String,
+    ): T = executor.executeOrCatch(
+        { scriptExecutor(shaGetter()) },
+        { e -> handleNoscriptAndRetry(e, scriptSource, shaUpdater, scriptExecutor, scriptName) },
+        TaskContext.of("BufferLuaScript", "Execute", scriptName),
+    )
 
     private fun <T> handleNoscriptAndRetry(
         e: Throwable,
         scriptSource: String,
         shaUpdater: (String) -> Unit,
         scriptExecutor: (String) -> T,
-        scriptName: String
+        scriptName: String,
     ): T {
         if (!isNoscriptError(e)) {
             throw RedisScriptExecutionException(scriptName, e)

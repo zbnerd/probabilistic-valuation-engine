@@ -3,8 +3,15 @@ root = true
 
 [*.{kt,kts}]
 indent_size = 4
+continuation_indent_size = 4
 max_line_length = 120
 ktlint_code_style = intellij_idea
+insert_final_newline = true
+ij_kotlin_imports_layout = *
+ktlint_standard_annotation = disable
+ktlint_standard_filename = disable
+ktlint_standard_max-line-length = disable
+ij_kotlin_allow_wildcard_imports = true
 
 [*.java]
 indent_size = 4

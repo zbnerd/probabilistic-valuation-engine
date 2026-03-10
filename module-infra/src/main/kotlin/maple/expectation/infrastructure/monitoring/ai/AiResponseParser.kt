@@ -8,22 +8,20 @@ import org.springframework.stereotype.Component
 
 @Component
 class AiResponseParser(
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(AiResponseParser::class.java)
     }
 
-    fun parseAiResponse(response: String, originalException: Throwable): AiSreService.AiAnalysisResult {
-        return AiSreService.AiAnalysisResult.builder()
-            .rootCause(extractSection(response, "Root Cause", "원인 분석 중"))
-            .severity(extractSection(response, "Severity", "MEDIUM"))
-            .affectedComponents(extractSection(response, "Affected Components", "확인 필요"))
-            .actionItems(extractSection(response, "Action Items", "수동 점검 필요"))
-            .analysisSource("AI_GPT4O_MINI")
-            .disclaimer("이 분석은 AI가 생성한 결과이므로 검증이 필요합니다.")
-            .build()
-    }
+    fun parseAiResponse(response: String, originalException: Throwable): AiSreService.AiAnalysisResult = AiSreService.AiAnalysisResult.builder()
+        .rootCause(extractSection(response, "Root Cause", "원인 분석 중"))
+        .severity(extractSection(response, "Severity", "MEDIUM"))
+        .affectedComponents(extractSection(response, "Affected Components", "확인 필요"))
+        .actionItems(extractSection(response, "Action Items", "수동 점검 필요"))
+        .analysisSource("AI_GPT4O_MINI")
+        .disclaimer("이 분석은 AI가 생성한 결과이므로 검증이 필요합니다.")
+        .build()
 
     private fun extractSection(response: String, sectionName: String, defaultValue: String): String {
         val lines = response.split("\n")
@@ -57,7 +55,7 @@ class AiResponseParser(
         return executor.executeWithFallback(
             { parseMitigationPlanInternal(cleanedResponse, incidentId) },
             { e -> createFallbackMitigationPlan(incidentId, e) },
-            TaskContext.of("AiResponseParser", "ParseMitigationPlan", incidentId)
+            TaskContext.of("AiResponseParser", "ParseMitigationPlan", incidentId),
         )
     }
 
@@ -68,17 +66,17 @@ class AiResponseParser(
 
         val hypotheses: List<AiSreService.Hypothesis> = mapper.convertValue(
             planNode.get("hypotheses"),
-            mapper.typeFactory.constructCollectionType(MutableList::class.java, AiSreService.Hypothesis::class.java)
+            mapper.typeFactory.constructCollectionType(MutableList::class.java, AiSreService.Hypothesis::class.java),
         )
 
         val actions: List<AiSreService.Action> = mapper.convertValue(
             planNode.get("actions"),
-            mapper.typeFactory.constructCollectionType(MutableList::class.java, AiSreService.Action::class.java)
+            mapper.typeFactory.constructCollectionType(MutableList::class.java, AiSreService.Action::class.java),
         )
 
         val questions: List<AiSreService.ClarifyingQuestion> = mapper.convertValue(
             planNode.get("questions"),
-            mapper.typeFactory.constructCollectionType(MutableList::class.java, AiSreService.ClarifyingQuestion::class.java)
+            mapper.typeFactory.constructCollectionType(MutableList::class.java, AiSreService.ClarifyingQuestion::class.java),
         )
 
         val rollbackPlan = mapper.convertValue(planNode.get("rollbackPlan"), AiSreService.RollbackPlan::class.java)
@@ -90,7 +88,7 @@ class AiResponseParser(
             actions,
             questions,
             rollbackPlan,
-            "AI가 생성한 완화 계획입니다. 검증 후 실행을 권장합니다."
+            "AI가 생성한 완화 계획입니다. 검증 후 실행을 권장합니다.",
         )
     }
 
@@ -122,7 +120,7 @@ class AiResponseParser(
             listOf(AiSreService.Action(1, "수동 분석 실행", "LOW", "LLM 응답 확인 필요")),
             emptyList(),
             AiSreService.RollbackPlan("즉시", listOf("수동 개입")),
-            "JSON 파싱 실패로 기본 계획을 반환했습니다."
+            "JSON 파싱 실패로 기본 계획을 반환했습니다.",
         )
     }
 }

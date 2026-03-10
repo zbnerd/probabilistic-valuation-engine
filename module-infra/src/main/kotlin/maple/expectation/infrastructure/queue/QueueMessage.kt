@@ -34,48 +34,40 @@ data class QueueMessage<T>(
     val msgId: String,
     val payload: T,
     val retryCount: Int,
-    val createdAt: Instant
+    val createdAt: Instant,
 ) {
-  companion object {
+    companion object {
+        /**
+         * 새 메시지 생성 (retryCount = 0)
+         *
+         * @param msgId 메시지 ID
+         * @param payload 페이로드
+         * @param T 페이로드 타입
+         * @return 새 QueueMessage
+         */
+        fun <T> of(msgId: String, payload: T): QueueMessage<T> = QueueMessage(msgId, payload, 0, Instant.now())
+    }
+
     /**
-     * 새 메시지 생성 (retryCount = 0)
+     * 재시도 메시지 생성 (retryCount 증가)
      *
-     * @param msgId 메시지 ID
-     * @param payload 페이로드
-     * @param T 페이로드 타입
+     * @return retryCount가 1 증가한 새 QueueMessage
+     */
+    fun withIncrementedRetry(): QueueMessage<T> = copy(retryCount = retryCount + 1)
+
+    /**
+     * 재시도 횟수 직접 설정
+     *
+     * @param newRetryCount 새 재시도 횟수
      * @return 새 QueueMessage
      */
-    fun <T> of(msgId: String, payload: T): QueueMessage<T> {
-      return QueueMessage(msgId, payload, 0, Instant.now())
-    }
-  }
+    fun withRetryCount(newRetryCount: Int): QueueMessage<T> = copy(retryCount = newRetryCount)
 
-  /**
-   * 재시도 메시지 생성 (retryCount 증가)
-   *
-   * @return retryCount가 1 증가한 새 QueueMessage
-   */
-  fun withIncrementedRetry(): QueueMessage<T> {
-    return copy(retryCount = retryCount + 1)
-  }
-
-  /**
-   * 재시도 횟수 직접 설정
-   *
-   * @param newRetryCount 새 재시도 횟수
-   * @return 새 QueueMessage
-   */
-  fun withRetryCount(newRetryCount: Int): QueueMessage<T> {
-    return copy(retryCount = newRetryCount)
-  }
-
-  /**
-   * 최대 재시도 횟수 초과 여부 확인
-   *
-   * @param maxRetries 최대 재시도 횟수
-   * @return true: 최대 초과 (DLQ 이동 필요)
-   */
-  fun exceedsMaxRetries(maxRetries: Int): Boolean {
-    return retryCount >= maxRetries
-  }
+    /**
+     * 최대 재시도 횟수 초과 여부 확인
+     *
+     * @param maxRetries 최대 재시도 횟수
+     * @return true: 최대 초과 (DLQ 이동 필요)
+     */
+    fun exceedsMaxRetries(maxRetries: Int): Boolean = retryCount >= maxRetries
 }

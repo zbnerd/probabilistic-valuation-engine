@@ -48,7 +48,7 @@ data class NexonApiCharacterData(
     val characterImageUrl: String? = null,
 
     @JsonProperty("date")
-    val date: Instant? = null
+    val date: Instant? = null,
 ) {
     // Additional fields can be added as needed
     // This is a minimal subset for demonstration

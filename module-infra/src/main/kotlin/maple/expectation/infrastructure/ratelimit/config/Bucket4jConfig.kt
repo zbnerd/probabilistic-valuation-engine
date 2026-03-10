@@ -3,13 +3,13 @@ package maple.expectation.infrastructure.ratelimit.config
 import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy
 import io.github.bucket4j.distributed.proxy.ProxyManager
 import io.github.bucket4j.redis.redisson.Bucket4jRedisson
+import java.time.Duration
 import org.redisson.Redisson
 import org.redisson.api.RedissonClient
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import java.time.Duration
 
 /**
  * Bucket4j + Redisson 설정 (Issue #152)
@@ -30,12 +30,12 @@ import java.time.Duration
     prefix = "ratelimit",
     name = ["enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 @EnableConfigurationProperties(RateLimitProperties::class)
 class Bucket4jConfig(
     private val redissonClient: RedissonClient,
-    private val rateLimitProperties: RateLimitProperties
+    private val rateLimitProperties: RateLimitProperties,
 ) {
     /**
      * Bucket4j ProxyManager Bean (Redisson 기반)
@@ -53,7 +53,7 @@ class Bucket4jConfig(
     fun rateLimitProxyManager(): ProxyManager<String> {
         log.info(
             "Initializing Bucket4j ProxyManager with Redisson - keyPrefix={}",
-            rateLimitProperties.keyPrefix
+            rateLimitProperties.keyPrefix,
         )
 
         // Context7 Best Practice: Redisson → getCommandExecutor()
@@ -62,8 +62,8 @@ class Bucket4jConfig(
         return Bucket4jRedisson.casBasedBuilder(redisson.commandExecutor)
             .expirationAfterWrite(
                 ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
-                    Duration.ofMinutes(5)
-                )
+                    Duration.ofMinutes(5),
+                ),
             )
             .build()
     }

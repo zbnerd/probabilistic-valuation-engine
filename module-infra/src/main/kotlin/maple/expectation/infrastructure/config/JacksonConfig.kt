@@ -34,58 +34,56 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 class JacksonConfig {
 
-  companion object {
-    /**
-     * 최대 JSON 중첩 깊이
-     *
-     * <h4>Purple Agent: JSON Bomb 방어</h4>
-     *
-     * <p>50레벨 이상 중첩된 JSON은 정상적인 요청이 아닌 DoS 공격 의심
-     *
-     * <p>예: {"a":{"b":{"c":...}}} 50레벨 이상 거부
-     */
-    private const val MAX_DEPTH = 50
+    companion object {
+        /**
+         * 최대 JSON 중첩 깊이
+         *
+         * <h4>Purple Agent: JSON Bomb 방어</h4>
+         *
+         * <p>50레벨 이상 중첩된 JSON은 정상적인 요청이 아닌 DoS 공격 의심
+         *
+         * <p>예: {"a":{"b":{"c":...}}} 50레벨 이상 거부
+         */
+        private const val MAX_DEPTH = 50
 
-    /**
-     * 최대 문자열 필드 길이 (100KB)
-     *
-     * <h4>Red Agent: 메모리 소진 방지</h4>
-     *
-     * <p>100KB 이상의 문자열 필드는 메모리 소진 공격 의심
-     *
-     * <p>정상 장비 데이터는 최대 수 KB 수준
-     */
-    private const val MAX_STRING_LENGTH = 100_000
+        /**
+         * 최대 문자열 필드 길이 (100KB)
+         *
+         * <h4>Red Agent: 메모리 소진 방지</h4>
+         *
+         * <p>100KB 이상의 문자열 필드는 메모리 소진 공격 의심
+         *
+         * <p>정상 장비 데이터는 최대 수 KB 수준
+         */
+        private const val MAX_STRING_LENGTH = 100_000
 
-    /**
-     * 최대 속성명 길이 (256자)
-     *
-     * <h4>Purple Agent: 비정상 요청 필터링</h4>
-     *
-     * <p>256자 이상의 속성명은 정상적인 JSON 스키마에서 사용되지 않음
-     */
-    private const val MAX_NAME_LENGTH = 256
-  }
-
-  /**
-   * Jackson ObjectMapper 커스터마이저
-   *
-   * <h4>Spring Boot 통합</h4>
-   *
-   * <p>Jackson2ObjectMapperBuilderCustomizer를 통해 Spring Boot 자동 설정 ObjectMapper에 보안 제약 적용
-   */
-  @Bean
-  fun jsonCustomizer(): Jackson2ObjectMapperBuilderCustomizer {
-    return Jackson2ObjectMapperBuilderCustomizer { builder ->
-      builder.postConfigurer { objectMapper ->
-        objectMapper.factory.setStreamReadConstraints(
-          StreamReadConstraints.builder()
-            .maxNestingDepth(MAX_DEPTH)
-            .maxStringLength(MAX_STRING_LENGTH)
-            .maxNameLength(MAX_NAME_LENGTH)
-            .build()
-        )
-      }
+        /**
+         * 최대 속성명 길이 (256자)
+         *
+         * <h4>Purple Agent: 비정상 요청 필터링</h4>
+         *
+         * <p>256자 이상의 속성명은 정상적인 JSON 스키마에서 사용되지 않음
+         */
+        private const val MAX_NAME_LENGTH = 256
     }
-  }
+
+    /**
+     * Jackson ObjectMapper 커스터마이저
+     *
+     * <h4>Spring Boot 통합</h4>
+     *
+     * <p>Jackson2ObjectMapperBuilderCustomizer를 통해 Spring Boot 자동 설정 ObjectMapper에 보안 제약 적용
+     */
+    @Bean
+    fun jsonCustomizer(): Jackson2ObjectMapperBuilderCustomizer = Jackson2ObjectMapperBuilderCustomizer { builder ->
+        builder.postConfigurer { objectMapper ->
+            objectMapper.factory.setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                    .maxNestingDepth(MAX_DEPTH)
+                    .maxStringLength(MAX_STRING_LENGTH)
+                    .maxNameLength(MAX_NAME_LENGTH)
+                    .build(),
+            )
+        }
+    }
 }

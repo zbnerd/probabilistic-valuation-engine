@@ -43,32 +43,30 @@ data class IntegrationEvent<T>(
     /** Actual event payload. Can be any domain object that needs to be transmitted through the
      * pipeline.
      */
-    val payload: T
+    val payload: T,
 ) {
 
-  companion object {
-    /**
-     * Create a new event with auto-generated metadata.
-     *
-     * <p>This factory method encapsulates event creation logic:
-     *
-     * <ul>
-     *   <li>eventId: UUID generation
-     *   <li>timestamp: Current time in epoch millis
-     * </ul>
-     *
-     * @param type Event type identifier
-     * @param payload Event payload (domain object)
-     * @return New IntegrationEvent instance with generated metadata
-     */
-    @JvmStatic
-    fun <T> of(type: String, payload: T): IntegrationEvent<T> {
-      return IntegrationEvent(
-          eventId = UUID.randomUUID().toString(),
-          eventType = type,
-          timestamp = Instant.now().toEpochMilli(),
-          payload = payload
-      )
+    companion object {
+        /**
+         * Create a new event with auto-generated metadata.
+         *
+         * <p>This factory method encapsulates event creation logic:
+         *
+         * <ul>
+         *   <li>eventId: UUID generation
+         *   <li>timestamp: Current time in epoch millis
+         * </ul>
+         *
+         * @param type Event type identifier
+         * @param payload Event payload (domain object)
+         * @return New IntegrationEvent instance with generated metadata
+         */
+        @JvmStatic
+        fun <T> of(type: String, payload: T): IntegrationEvent<T> = IntegrationEvent(
+            eventId = UUID.randomUUID().toString(),
+            eventType = type,
+            timestamp = Instant.now().toEpochMilli(),
+            payload = payload,
+        )
     }
-  }
 }

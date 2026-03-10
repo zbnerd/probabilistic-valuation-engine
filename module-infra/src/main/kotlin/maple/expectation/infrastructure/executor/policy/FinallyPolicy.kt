@@ -47,7 +47,7 @@ import org.springframework.core.annotation.Order
 @Order(PolicyOrder.FINALLY)
 class FinallyPolicy(
     private val cleanupTask: Runnable,
-    private val failureMode: FailureMode
+    private val failureMode: FailureMode,
 ) : ExecutionPolicy {
 
     private val log = LoggerFactory.getLogger(FinallyPolicy::class.java)

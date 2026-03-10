@@ -192,6 +192,29 @@ tasks.register('integrationTest', Test) {
 	}
 }
 
+// 통합 테스트 인프라 자체의 성능과 정확성 검증
+tasks.register('testInfraVerification', Test) {
+	group = 'verification'
+	description = '통합 테스트 인프라 자체의 성능과 정확성 검증'
+
+	useJUnitPlatform {
+		includeTags 'infra-verification'
+	}
+
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+
+	// Docker socket for Testcontainers
+	environment "DOCKER_HOST", "unix:///var/run/docker.sock"
+	systemProperty "DOCKER_HOST", "unix:///var/run/docker.sock"
+	systemProperty "testcontainers.reuse.enable", "true"
+
+	testLogging {
+		events "passed", "skipped", "failed"
+		exceptionFormat "full"
+	}
+}
+
 // Fix duplicate resources issue
 tasks.withType(ProcessResources).configureEach {
 	duplicatesStrategy = DuplicatesStrategy.INCLUDE

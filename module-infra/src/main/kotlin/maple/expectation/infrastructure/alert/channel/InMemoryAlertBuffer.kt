@@ -1,10 +1,10 @@
 package maple.expectation.infrastructure.alert.channel
 
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.BlockingQueue
 import maple.expectation.infrastructure.alert.message.AlertMessage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.BlockingQueue
 
 /**
  * In-Memory Alert Buffer (Fallback Channel)
@@ -27,7 +27,9 @@ import java.util.concurrent.BlockingQueue
  * @since 2025-02-12
  */
 @Component
-class InMemoryAlertBuffer : AlertChannel, FallbackSupport {
+class InMemoryAlertBuffer :
+    AlertChannel,
+    FallbackSupport {
 
     private val log = LoggerFactory.getLogger(InMemoryAlertBuffer::class.java)
     private val buffer: BlockingQueue<AlertMessage> = ArrayBlockingQueue(MAX_CAPACITY)
@@ -55,7 +57,7 @@ class InMemoryAlertBuffer : AlertChannel, FallbackSupport {
             } else if (log.isWarnEnabled) {
                 log.warn(
                     "[InMemoryAlertBuffer] Failed to drain alert to {}: {}",
-                    targetChannel.getChannelName()
+                    targetChannel.getChannelName(),
                 )
             }
         }
@@ -66,7 +68,7 @@ class InMemoryAlertBuffer : AlertChannel, FallbackSupport {
         this.fallback = fallback
         log.info(
             "[InMemoryAlertBuffer] Fallback channel set to {}",
-            if (fallback != null) fallback.getChannelName() else "none"
+            if (fallback != null) fallback.getChannelName() else "none",
         )
     }
 

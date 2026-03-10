@@ -13,8 +13,7 @@ import maple.expectation.error.exception.base.ServerBaseException
  * @property message 실패 메시지
  * @property cause 원인 예외
  */
-class ObservabilityException(message: String, cause: Throwable? = null) :
-    ServerBaseException(CommonErrorCode.INTERNAL_SERVER_ERROR, message) {
+class ObservabilityException(message: String, cause: Throwable? = null) : ServerBaseException(CommonErrorCode.INTERNAL_SERVER_ERROR, message) {
 
     init {
         if (cause != null) {

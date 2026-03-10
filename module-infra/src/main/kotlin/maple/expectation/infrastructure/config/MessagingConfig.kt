@@ -17,38 +17,28 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 class MessagingConfig {
 
-  @Bean
-  fun characterEventTopic(redissonClient: RedissonClient): MessageTopic<String> {
-    return RedisMessageTopic(redissonClient, "char_event")
-  }
+    @Bean
+    fun characterEventTopic(redissonClient: RedissonClient): MessageTopic<String> = RedisMessageTopic(redissonClient, "char_event")
 
-  @Bean
-  fun characterJobQueue(redissonClient: RedissonClient): MessageQueue<String> {
-    return RedisMessageQueue(redissonClient, "character_job_queue")
-  }
+    @Bean
+    fun characterJobQueue(redissonClient: RedissonClient): MessageQueue<String> = RedisMessageQueue(redissonClient, "character_job_queue")
 
-  @Bean
-  fun nexonDataQueue(redissonClient: RedissonClient): MessageQueue<String> {
-    return RedisMessageQueue(redissonClient, "nexon-data")
-  }
+    @Bean
+    fun nexonDataQueue(redissonClient: RedissonClient): MessageQueue<String> = RedisMessageQueue(redissonClient, "nexon-data")
 
-  /**
-   * Event queue for RedisEventPublisher to publish IntegrationEvent messages.
-   *
-   * <p>Separate from characterJobQueue and nexonDataQueue to avoid ambiguity. This queue is
-   * specifically for domain events published through EventPublisher interface.
-   */
-  @Bean("integrationEventQueue")
-  fun integrationEventQueue(redissonClient: RedissonClient): MessageQueue<String> {
-    return RedisMessageQueue(redissonClient, "integration_event_queue")
-  }
+    /**
+     * Event queue for RedisEventPublisher to publish IntegrationEvent messages.
+     *
+     * <p>Separate from characterJobQueue and nexonDataQueue to avoid ambiguity. This queue is
+     * specifically for domain events published through EventPublisher interface.
+     */
+    @Bean("integrationEventQueue")
+    fun integrationEventQueue(redissonClient: RedissonClient): MessageQueue<String> = RedisMessageQueue(redissonClient, "integration_event_queue")
 
-  /**
-   * ResourceLoader bean for loading classpath resources. Required by TwoBucketRateLimiter for
-   * loading Lua scripts.
-   */
-  @Bean
-  fun resourceLoader(): ResourceLoader {
-    return ResourceLoader()
-  }
+    /**
+     * ResourceLoader bean for loading classpath resources. Required by TwoBucketRateLimiter for
+     * loading Lua scripts.
+     */
+    @Bean
+    fun resourceLoader(): ResourceLoader = ResourceLoader()
 }

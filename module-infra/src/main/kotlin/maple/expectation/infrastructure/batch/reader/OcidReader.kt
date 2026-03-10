@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component
 @Component
 class OcidReader(
     private val ocidQuery: OcidQueryPort,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) : ItemReader<String> {
 
     // Chunk-based fetch for memory efficiency
@@ -38,13 +38,11 @@ class OcidReader(
     private var currentPage: Int = 0
     private var hasNextPage: Boolean = true
 
-    override fun read(): String? {
-        return executor.executeOrDefault(
-            { readNextOcid() },
-            null,
-            TaskContext.of("OcidReader", "Read")
-        )
-    }
+    override fun read(): String? = executor.executeOrDefault(
+        { readNextOcid() },
+        null,
+        TaskContext.of("OcidReader", "Read"),
+    )
 
     /**
      * Read next OCID from iterator

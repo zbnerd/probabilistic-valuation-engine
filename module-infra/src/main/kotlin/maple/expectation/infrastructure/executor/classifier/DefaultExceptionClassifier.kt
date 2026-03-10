@@ -41,16 +41,14 @@ import org.springframework.stereotype.Component
 @Component
 class DefaultExceptionClassifier : ExceptionClassifier {
 
-    override fun classify(exception: Throwable): CircuitBreakerClassification {
-        return when (exception) {
-            // Business exceptions (4xx) - don't trigger circuit breaker
-            is ClientBaseException -> CircuitBreakerClassification.IGNORE
+    override fun classify(exception: Throwable): CircuitBreakerClassification = when (exception) {
+        // Business exceptions (4xx) - don't trigger circuit breaker
+        is ClientBaseException -> CircuitBreakerClassification.IGNORE
 
-            // System/infrastructure exceptions (5xx) - trigger circuit breaker
-            is ServerBaseException -> CircuitBreakerClassification.RECORD
+        // System/infrastructure exceptions (5xx) - trigger circuit breaker
+        is ServerBaseException -> CircuitBreakerClassification.RECORD
 
-            // Unknown exceptions - use default circuit breaker behavior
-            else -> CircuitBreakerClassification.DEFAULT
-        }
+        // Unknown exceptions - use default circuit breaker behavior
+        else -> CircuitBreakerClassification.DEFAULT
     }
 }

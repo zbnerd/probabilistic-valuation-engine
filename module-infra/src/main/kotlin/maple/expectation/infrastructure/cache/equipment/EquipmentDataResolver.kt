@@ -2,6 +2,10 @@ package maple.expectation.infrastructure.cache.equipment
 
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.worker.EquipmentDbWorker
@@ -12,10 +16,6 @@ import maple.expectation.util.StringMaskingUtils
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
-import java.util.concurrent.TimeUnit
 
 /**
  * 장비 데이터 확보 우선순위 처리기 (Issue #158: EquipmentResponse 캐싱 제거)
@@ -41,7 +41,7 @@ class EquipmentDataResolver(
     private val dbWorker: EquipmentDbWorker,
     @Qualifier("expectationComputeExecutor") private val expectationExecutor: Executor,
     private val executor: LogicExecutor,
-    meterRegistry: MeterRegistry
+    meterRegistry: MeterRegistry,
 ) {
     private val dbSaveFailCounter: Counter = Counter.builder("equipment.data.db.save.fail")
         .description("Equipment DB 비동기 저장 실패 횟수 (fire-and-forget)")
@@ -50,58 +50,52 @@ class EquipmentDataResolver(
     /**
      * 장비 데이터 비동기 확보 (DB → API 우선순위)
      */
-    fun resolveAsync(ocid: String, userIgn: String): CompletableFuture<ByteArray> {
-        return executor.executeOrDefault(
-            { resolveAsyncInternal(ocid, userIgn) },
-            CompletableFuture.failedFuture(
-                IllegalStateException(
-                    "[DataResolver] Resolve failed for ocid=${StringMaskingUtils.maskOcid(ocid)}"
-                )
+    fun resolveAsync(ocid: String, userIgn: String): CompletableFuture<ByteArray> = executor.executeOrDefault(
+        { resolveAsyncInternal(ocid, userIgn) },
+        CompletableFuture.failedFuture(
+            IllegalStateException(
+                "[DataResolver] Resolve failed for ocid=${StringMaskingUtils.maskOcid(ocid)}",
             ),
-            TaskContext.of("DataResolver", "ResolveAsync", StringMaskingUtils.maskOcid(ocid))
-        )
-    }
+        ),
+        TaskContext.of("DataResolver", "ResolveAsync", StringMaskingUtils.maskOcid(ocid)),
+    )
 
-    private fun resolveAsyncInternal(ocid: String, userIgn: String): CompletableFuture<ByteArray> {
-        return dbWorker.findValidJson(ocid)
-            .map { json ->
-                log.debug("[DataResolver] DB HIT for userIgn={}", userIgn)
-                CompletableFuture.completedFuture(json.toByteArray(StandardCharsets.UTF_8))
-            }
-            .orElseGet {
-                log.info("[DataResolver] DB MISS, Nexon API call required for userIgn={}", userIgn)
-                fetchFromNexonApiAndSave(ocid)
-            }
-    }
+    private fun resolveAsyncInternal(ocid: String, userIgn: String): CompletableFuture<ByteArray> = dbWorker.findValidJson(ocid)
+        .map { json ->
+            log.debug("[DataResolver] DB HIT for userIgn={}", userIgn)
+            CompletableFuture.completedFuture(json.toByteArray(StandardCharsets.UTF_8))
+        }
+        .orElseGet {
+            log.info("[DataResolver] DB MISS, Nexon API call required for userIgn={}", userIgn)
+            fetchFromNexonApiAndSave(ocid)
+        }
 
-    private fun fetchFromNexonApiAndSave(ocid: String): CompletableFuture<ByteArray> {
-        return AsyncUtils.withTimeout(
-            dataProvider.getRawEquipmentData(ocid),
-            NEXON_API_TIMEOUT_SECONDS,
-            TimeUnit.SECONDS,
-            "NexonEquipmentAPI"
-        )
-            .thenApplyAsync({ compressedData ->
-                executor.executeWithFallback(
-                    {
-                        val json = GzipUtils.decompress(compressedData)
-                        dbWorker
-                            .persistRawJson(ocid, json)
-                            .exceptionally { ex ->
-                                log.warn("[DataResolver] DB save failed (non-blocking): {}", ex.message)
-                                dbSaveFailCounter.increment()
-                                null
-                            }
-                        compressedData
-                    },
-                    { ex ->
-                        log.warn("[DataResolver] Decompress failed (non-blocking): {}", ex.message)
-                        compressedData
-                    },
-                    TaskContext.of("DataResolver", "DecompressAndSave", ocid)
-                )
-            }, expectationExecutor)
-    }
+    private fun fetchFromNexonApiAndSave(ocid: String): CompletableFuture<ByteArray> = AsyncUtils.withTimeout(
+        dataProvider.getRawEquipmentData(ocid),
+        NEXON_API_TIMEOUT_SECONDS,
+        TimeUnit.SECONDS,
+        "NexonEquipmentAPI",
+    )
+        .thenApplyAsync({ compressedData ->
+            executor.executeWithFallback(
+                {
+                    val json = GzipUtils.decompress(compressedData)
+                    dbWorker
+                        .persistRawJson(ocid, json)
+                        .exceptionally { ex ->
+                            log.warn("[DataResolver] DB save failed (non-blocking): {}", ex.message)
+                            dbSaveFailCounter.increment()
+                            null
+                        }
+                    compressedData
+                },
+                { ex ->
+                    log.warn("[DataResolver] Decompress failed (non-blocking): {}", ex.message)
+                    compressedData
+                },
+                TaskContext.of("DataResolver", "DecompressAndSave", ocid),
+            )
+        }, expectationExecutor)
 
     companion object {
         private val log = LoggerFactory.getLogger(EquipmentDataResolver::class.java)

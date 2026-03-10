@@ -19,28 +19,28 @@ import maple.expectation.infrastructure.monitoring.copilot.model.SignalDefinitio
  */
 interface SignalDeduplicationStrategy {
 
-  /**
-   * Check if an anomaly event should be skipped due to recent detection.
-   *
-   * @param event The anomaly event to check
-   * @param signal The signal definition (for query/threshold info)
-   * @param currentTimestamp Current timestamp in milliseconds
-   * @return true if the event should be skipped (duplicate), false if it should be processed
-   */
-  fun shouldSkip(event: AnomalyEvent, signal: SignalDefinition, currentTimestamp: Long): Boolean
+    /**
+     * Check if an anomaly event should be skipped due to recent detection.
+     *
+     * @param event The anomaly event to check
+     * @param signal The signal definition (for query/threshold info)
+     * @param currentTimestamp Current timestamp in milliseconds
+     * @return true if the event should be skipped (duplicate), false if it should be processed
+     */
+    fun shouldSkip(event: AnomalyEvent, signal: SignalDefinition, currentTimestamp: Long): Boolean
 
-  /**
-   * Record an anomaly detection for future deduplication.
-   *
-   * @param event The anomaly event that was detected
-   * @param currentTimestamp Current timestamp in milliseconds
-   */
-  fun recordDetection(event: AnomalyEvent, currentTimestamp: Long)
+    /**
+     * Record an anomaly detection for future deduplication.
+     *
+     * @param event The anomaly event that was detected
+     * @param currentTimestamp Current timestamp in milliseconds
+     */
+    fun recordDetection(event: AnomalyEvent, currentTimestamp: Long)
 
-  /**
-   * Cleanup stale entries from deduplication state.
-   *
-   * @param currentTimestamp Current timestamp in milliseconds
-   */
-  fun cleanup(currentTimestamp: Long)
+    /**
+     * Cleanup stale entries from deduplication state.
+     *
+     * @param currentTimestamp Current timestamp in milliseconds
+     */
+    fun cleanup(currentTimestamp: Long)
 }

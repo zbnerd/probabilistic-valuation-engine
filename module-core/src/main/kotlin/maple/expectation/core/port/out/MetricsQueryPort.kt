@@ -33,7 +33,7 @@ interface MetricsQueryPort {
      */
     data class MetricTimeSeries(
         val metric: Map<String, String>,
-        val values: List<MetricValuePoint>
+        val values: List<MetricValuePoint>,
     )
 
     /**
@@ -44,20 +44,16 @@ interface MetricsQueryPort {
      */
     data class MetricValuePoint(
         val timestamp: Long,
-        val value: String
+        val value: String,
     ) {
         /**
          * 값을 Double로 파싱
          */
-        fun getValueAsDouble(): Double {
-            return value.toDoubleOrNull() ?: 0.0
-        }
+        fun getValueAsDouble(): Double = value.toDoubleOrNull() ?: 0.0
 
         /**
          * 타임스탬프를 Instant로 변환
          */
-        fun getTimestampAsInstant(): Instant {
-            return Instant.ofEpochSecond(timestamp)
-        }
+        fun getTimestampAsInstant(): Instant = Instant.ofEpochSecond(timestamp)
     }
 }

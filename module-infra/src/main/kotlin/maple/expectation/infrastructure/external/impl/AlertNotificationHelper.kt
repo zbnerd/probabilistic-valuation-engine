@@ -1,14 +1,14 @@
 package maple.expectation.infrastructure.external.impl
 
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 import maple.expectation.error.exception.ExternalServiceException
 import maple.expectation.infrastructure.alert.StatelessAlertService
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.util.ExceptionUtils
 import org.slf4j.LoggerFactory
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
-import java.util.concurrent.RejectedExecutionException
 
 /**
  * Alert Notification Helper - 알림 발송을 담당하는 전담 클래스
@@ -28,7 +28,7 @@ import java.util.concurrent.RejectedExecutionException
 class AlertNotificationHelper(
     private val statelessAlertService: StatelessAlertService,
     private val checkedExecutor: CheckedLogicExecutor,
-    private val alertTaskExecutor: Executor
+    private val alertTaskExecutor: Executor,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(AlertNotificationHelper::class.java)
@@ -57,10 +57,10 @@ class AlertNotificationHelper(
             {
                 checkedExecutor.executeUncheckedVoid(
                     { statelessAlertService.sendCritical("외부 API 장애", "OCID: $ocid", alertCause) },
-                    TaskContext.of("Alert", "SendCritical", ocid)
+                    TaskContext.of("Alert", "SendCritical", ocid),
                 ) { e: Exception -> ExternalServiceException(SERVICE_DISCORD, e) }
             },
-            alertTaskExecutor // commonPool 대신 전용 Executor 사용
+            alertTaskExecutor, // commonPool 대신 전용 Executor 사용
         ).exceptionally { ex -> handleAlertFailure(ex, ocid) }
     }
 

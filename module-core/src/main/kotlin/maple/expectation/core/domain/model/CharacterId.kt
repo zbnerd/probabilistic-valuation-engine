@@ -19,17 +19,13 @@ data class CharacterId(@get:JvmName("value") val value: String) {
      *
      * @return true if valid, false otherwise
      */
-    fun isValid(): Boolean {
-        return value.isNotBlank()
-    }
+    fun isValid(): Boolean = value.isNotBlank()
 
     companion object {
         /**
          * Create a character ID.
          */
         @JvmStatic
-        fun of(ocid: String): CharacterId {
-            return CharacterId(ocid)
-        }
+        fun of(ocid: String): CharacterId = CharacterId(ocid)
     }
 }

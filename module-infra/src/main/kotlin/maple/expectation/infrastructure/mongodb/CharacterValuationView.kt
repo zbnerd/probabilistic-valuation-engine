@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.mongodb
 
 import com.fasterxml.jackson.annotation.JsonIgnore
+import java.time.Instant
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.index.CompoundIndex
 import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
-import java.time.Instant
 
 /**
  * V5 CQRS: MongoDB Read Model for Character Valuation Views
@@ -77,14 +77,14 @@ data class CharacterValuationView(
 
     var presets: List<PresetView>? = null,
 
-    var fromCache: Boolean? = null
+    var fromCache: Boolean? = null,
 ) {
     data class PresetView(
         val presetNo: Int? = null,
         val totalExpectedCost: Long? = null,
         val totalCostText: String? = null,
         val costBreakdown: CostBreakdownView? = null,
-        val items: List<ItemExpectationView>? = null
+        val items: List<ItemExpectationView>? = null,
     )
 
     data class CostBreakdownView(
@@ -92,12 +92,12 @@ data class CharacterValuationView(
         val redCubeCost: Long? = null,
         val additionalCubeCost: Long? = null,
         val starforceCost: Long? = null,
-        val flameCost: Long? = null
+        val flameCost: Long? = null,
     )
 
     data class ItemExpectationView(
         val itemName: String? = null,
         val expectedCost: Long? = null,
-        val costText: String? = null
+        val costText: String? = null,
     )
 }

@@ -284,8 +284,9 @@ public class ViewTransformer {
         event.getCharacterLevel(),
         Instant.EPOCH,
         Instant.now(),
-        0L,
-        0L,
+        0L, // version
+        0L, // lastAppliedVersion
+        0L, // totalExpectedCost
         event.getMaxPresetNo(),
         List.of(),
         false);

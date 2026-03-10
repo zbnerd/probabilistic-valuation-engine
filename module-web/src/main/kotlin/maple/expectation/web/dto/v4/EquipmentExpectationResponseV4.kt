@@ -14,7 +14,7 @@ data class EquipmentExpectationResponseV4(
     val totalCostText: String,
     val totalCostBreakdown: CostBreakdownDto,
     val maxPresetNo: Int,
-    val presets: List<PresetExpectation>
+    val presets: List<PresetExpectation>,
 ) {
     /** Java 호환성을 위한 메서드 */
     fun isFromCache(): Boolean = fromCache
@@ -50,7 +50,7 @@ data class EquipmentExpectationResponseV4(
             totalCostText = totalCostText!!,
             totalCostBreakdown = totalCostBreakdown!!,
             maxPresetNo = maxPresetNo,
-            presets = presets!!
+            presets = presets!!,
         )
     }
 
@@ -59,7 +59,7 @@ data class EquipmentExpectationResponseV4(
         val totalExpectedCost: BigDecimal,
         val totalCostText: String,
         val costBreakdown: CostBreakdownDto,
-        val items: List<ItemExpectationV4>
+        val items: List<ItemExpectationV4>,
     )
 
     data class ItemExpectationV4(
@@ -80,7 +80,7 @@ data class EquipmentExpectationResponseV4(
         val blackCubeExpectation: CubeExpectationDto,
         val additionalCubeExpectation: CubeExpectationDto,
         val starforceExpectation: StarforceExpectationDto,
-        val flameExpectation: FlameExpectationDto
+        val flameExpectation: FlameExpectationDto,
     ) {
         companion object {
             @JvmStatic
@@ -143,7 +143,7 @@ data class EquipmentExpectationResponseV4(
                 blackCubeExpectation = blackCubeExpectation!!,
                 additionalCubeExpectation = additionalCubeExpectation!!,
                 starforceExpectation = starforceExpectation!!,
-                flameExpectation = flameExpectation!!
+                flameExpectation = flameExpectation!!,
             )
         }
     }
@@ -154,7 +154,7 @@ data class EquipmentExpectationResponseV4(
         val expectedTrials: BigDecimal,
         val currentGrade: String,
         val targetGrade: String,
-        val potential: String
+        val potential: String,
     ) {
         companion object {
             @JvmStatic
@@ -164,7 +164,7 @@ data class EquipmentExpectationResponseV4(
                 expectedTrials = BigDecimal.ZERO,
                 currentGrade = "",
                 targetGrade = "",
-                potential = ""
+                potential = "",
             )
 
             @JvmStatic
@@ -191,7 +191,7 @@ data class EquipmentExpectationResponseV4(
                 expectedTrials = expectedTrials!!,
                 currentGrade = currentGrade!!,
                 targetGrade = targetGrade!!,
-                potential = potential!!
+                potential = potential!!,
             )
         }
     }
@@ -205,7 +205,7 @@ data class EquipmentExpectationResponseV4(
         val expectedDestroyCountWithout: BigDecimal,
         val costWithDestroyPrevention: BigDecimal,
         val costWithDestroyPreventionText: String,
-        val expectedDestroyCountWith: BigDecimal
+        val expectedDestroyCountWith: BigDecimal,
     ) {
         companion object {
             @JvmStatic
@@ -218,7 +218,7 @@ data class EquipmentExpectationResponseV4(
                 expectedDestroyCountWithout = BigDecimal.ZERO,
                 costWithDestroyPrevention = BigDecimal.ZERO,
                 costWithDestroyPreventionText = "0",
-                expectedDestroyCountWith = BigDecimal.ZERO
+                expectedDestroyCountWith = BigDecimal.ZERO,
             )
 
             @JvmStatic
@@ -254,7 +254,7 @@ data class EquipmentExpectationResponseV4(
                 expectedDestroyCountWithout = expectedDestroyCountWithout!!,
                 costWithDestroyPrevention = costWithDestroyPrevention!!,
                 costWithDestroyPreventionText = costWithDestroyPreventionText!!,
-                expectedDestroyCountWith = expectedDestroyCountWith!!
+                expectedDestroyCountWith = expectedDestroyCountWith!!,
             )
         }
     }
@@ -262,14 +262,14 @@ data class EquipmentExpectationResponseV4(
     data class FlameExpectationDto(
         val powerfulFlameTrials: BigDecimal,
         val eternalFlameTrials: BigDecimal,
-        val abyssFlameTrials: BigDecimal
+        val abyssFlameTrials: BigDecimal,
     ) {
         companion object {
             @JvmStatic
             fun empty() = FlameExpectationDto(
                 powerfulFlameTrials = BigDecimal.ZERO,
                 eternalFlameTrials = BigDecimal.ZERO,
-                abyssFlameTrials = BigDecimal.ZERO
+                abyssFlameTrials = BigDecimal.ZERO,
             )
 
             @JvmStatic
@@ -287,7 +287,7 @@ data class EquipmentExpectationResponseV4(
             fun build() = FlameExpectationDto(
                 powerfulFlameTrials = powerfulFlameTrials!!,
                 eternalFlameTrials = eternalFlameTrials!!,
-                abyssFlameTrials = abyssFlameTrials!!
+                abyssFlameTrials = abyssFlameTrials!!,
             )
         }
     }
@@ -296,7 +296,7 @@ data class EquipmentExpectationResponseV4(
         val blackCubeCost: BigDecimal,
         val redCubeCost: BigDecimal,
         val additionalCubeCost: BigDecimal,
-        val starforceCost: BigDecimal
+        val starforceCost: BigDecimal,
     ) {
         companion object {
             @JvmStatic
@@ -304,7 +304,7 @@ data class EquipmentExpectationResponseV4(
                 blackCubeCost = BigDecimal.ZERO,
                 redCubeCost = BigDecimal.ZERO,
                 additionalCubeCost = BigDecimal.ZERO,
-                starforceCost = BigDecimal.ZERO
+                starforceCost = BigDecimal.ZERO,
             )
 
             /**
@@ -322,7 +322,7 @@ data class EquipmentExpectationResponseV4(
                     blackCubeCost = blackCubeCost,
                     redCubeCost = redCubeCost,
                     additionalCubeCost = additionalCubeCost,
-                    starforceCost = starforceCost
+                    starforceCost = starforceCost,
                 )
             }
         }
@@ -331,7 +331,7 @@ data class EquipmentExpectationResponseV4(
             blackCubeCost = blackCubeCost.add(other.blackCubeCost),
             redCubeCost = redCubeCost.add(other.redCubeCost),
             additionalCubeCost = additionalCubeCost.add(other.additionalCubeCost),
-            starforceCost = starforceCost.add(other.starforceCost)
+            starforceCost = starforceCost.add(other.starforceCost),
         )
     }
 }

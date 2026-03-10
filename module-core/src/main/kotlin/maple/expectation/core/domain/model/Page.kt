@@ -18,7 +18,7 @@ data class Page<T>(
     val pageNumber: Int,
     val pageSize: Int,
     val totalElements: Long,
-    val hasNext: Boolean
+    val hasNext: Boolean,
 ) {
     /**
      * 전체 페이지 수 계산
@@ -47,7 +47,7 @@ data class Page<T>(
             pageNumber = 0,
             pageSize = 0,
             totalElements = 0,
-            hasNext = false
+            hasNext = false,
         )
     }
 
@@ -70,7 +70,7 @@ data class Page<T>(
  */
 data class PageRequest(
     val page: Int = 0,
-    val size: Int = 10
+    val size: Int = 10,
 ) {
     init {
         require(page >= 0) { "Page index must not be less than zero" }

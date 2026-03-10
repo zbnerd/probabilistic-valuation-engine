@@ -10,19 +10,19 @@ import maple.expectation.infrastructure.external.dto.v2.CharacterListResponse
  */
 interface NexonAuthClient {
 
-  /**
-   * 사용자의 캐릭터 목록을 조회합니다.
-   *
-   * @param apiKey 사용자의 Nexon API Key
-   * @return 캐릭터 목록 응답 (Optional)
-   */
-  fun getCharacterList(apiKey: String): Optional<CharacterListResponse>
+    /**
+     * 사용자의 캐릭터 목록을 조회합니다.
+     *
+     * @param apiKey 사용자의 Nexon API Key
+     * @return 캐릭터 목록 응답 (Optional)
+     */
+    fun getCharacterList(apiKey: String): Optional<CharacterListResponse>
 
-  /**
-   * API Key 유효성을 검증합니다.
-   *
-   * @param apiKey 사용자의 Nexon API Key
-   * @return 유효 여부
-   */
-  fun validateApiKey(apiKey: String): Boolean
+    /**
+     * API Key 유효성을 검증합니다.
+     *
+     * @param apiKey 사용자의 Nexon API Key
+     * @return 유효 여부
+     */
+    fun validateApiKey(apiKey: String): Boolean
 }

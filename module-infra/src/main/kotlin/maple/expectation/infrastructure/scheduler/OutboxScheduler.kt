@@ -27,13 +27,13 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(
     name = ["scheduler.outbox.enabled"],
     havingValue = "true",
-    matchIfMissing = true
+    matchIfMissing = true,
 )
 class OutboxScheduler(
     private val outboxProcessor: OutboxProcessorPort,
     private val outboxMetrics: OutboxMetricsPort,
     private val executor: LogicExecutor,
-    private val properties: OutboxProperties
+    private val properties: OutboxProperties,
 ) {
     private val log = LoggerFactory.getLogger(OutboxScheduler::class.java)
 
@@ -47,7 +47,7 @@ class OutboxScheduler(
                 outboxProcessor.pollAndProcess()
                 outboxMetrics.updatePendingCount()
             },
-            TaskContext.of("Scheduler", "Outbox.Poll")
+            TaskContext.of("Scheduler", "Outbox.Poll"),
         )
     }
 
@@ -66,7 +66,7 @@ class OutboxScheduler(
                     log.warn("[Outbox] 백로그 감지: {}건 (임계값: {}건)", currentSize, threshold)
                 }
             },
-            TaskContext.of("Scheduler", "Outbox.MonitorSize")
+            TaskContext.of("Scheduler", "Outbox.MonitorSize"),
         )
     }
 
@@ -77,7 +77,7 @@ class OutboxScheduler(
     fun recoverStalled() {
         executor.executeVoidJava(
             { outboxProcessor.recoverStalled() },
-            TaskContext.of("Scheduler", "Outbox.RecoverStalled")
+            TaskContext.of("Scheduler", "Outbox.RecoverStalled"),
         )
     }
 }

@@ -68,7 +68,6 @@ data class LoginResponse(
             ReplaceWith("of(accessToken, expiresIn, role, fingerprint, null, null)"),
         )
         @JvmStatic
-        fun of(accessToken: String?, expiresIn: Long?, role: String?, fingerprint: String?): LoginResponse =
-            LoginResponse(accessToken, expiresIn, role, fingerprint)
+        fun of(accessToken: String?, expiresIn: Long?, role: String?, fingerprint: String?): LoginResponse = LoginResponse(accessToken, expiresIn, role, fingerprint)
     }
 }

@@ -10,5 +10,5 @@ package maple.expectation.infrastructure.monitoring.copilot.model
 data class SeverityMapping(
     val warnThreshold: Double? = null,
     val critThreshold: Double? = null,
-    val comparator: String? = null
+    val comparator: String? = null,
 )

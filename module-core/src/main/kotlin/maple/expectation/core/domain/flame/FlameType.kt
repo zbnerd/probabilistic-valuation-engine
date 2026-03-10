@@ -11,5 +11,5 @@ enum class FlameType {
     ETERNAL,
 
     /** 심연의 환생의 불꽃 */
-    ABYSS
+    ABYSS,
 }

@@ -2,9 +2,12 @@ package maple.expectation.infrastructure.config
 
 import io.micrometer.core.instrument.MeterRegistry
 import maple.expectation.core.port.out.AtomicFetchStrategy
+import maple.expectation.core.port.out.like.LikeAtomicFetchStrategy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.queue.like.strategy.LuaScriptAtomicFetchStrategy
+import maple.expectation.infrastructure.queue.like.strategy.LuaScriptLikeAtomicFetchStrategy
 import maple.expectation.infrastructure.queue.like.strategy.RenameAtomicFetchStrategy
+import maple.expectation.infrastructure.queue.like.strategy.RenameLikeAtomicFetchStrategy
 import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -35,7 +38,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @Configuration
 class LikeSyncConfig(
     @Value("\${like.sync.strategy:lua}") private val strategyType: String,
-    @Value("\${like.sync.temp-key-ttl-seconds:3600}") private val tempKeyTtlSeconds: Int
+    @Value("\${like.sync.temp-key-ttl-seconds:3600}") private val tempKeyTtlSeconds: Int,
 ) {
 
     companion object {
@@ -55,7 +58,7 @@ class LikeSyncConfig(
         redissonClient: RedissonClient,
         redisTemplate: StringRedisTemplate,
         executor: LogicExecutor,
-        meterRegistry: MeterRegistry
+        meterRegistry: MeterRegistry,
     ): AtomicFetchStrategy = when (strategyType.lowercase()) {
         STRATEGY_RENAME -> {
             log.info("AtomicFetchStrategy initialized: RENAME (fallback), TTL={}s", tempKeyTtlSeconds)
@@ -64,6 +67,28 @@ class LikeSyncConfig(
         else -> {
             log.info("AtomicFetchStrategy initialized: LUA_SCRIPT (primary), TTL={}s", tempKeyTtlSeconds)
             LuaScriptAtomicFetchStrategy(redissonClient, executor, meterRegistry, tempKeyTtlSeconds)
+        }
+    }
+
+    /**
+     * LikeAtomicFetchStrategy Bean 등록
+     *
+     * <p>설정에 따라 Lua Script 또는 Rename 전략 선택
+     */
+    @Bean
+    fun likeAtomicFetchStrategy(
+        redissonClient: RedissonClient,
+        redisTemplate: StringRedisTemplate,
+        executor: LogicExecutor,
+        meterRegistry: MeterRegistry,
+    ): LikeAtomicFetchStrategy = when (strategyType.lowercase()) {
+        STRATEGY_RENAME -> {
+            log.info("LikeAtomicFetchStrategy initialized: RENAME (fallback), TTL={}s", tempKeyTtlSeconds)
+            RenameLikeAtomicFetchStrategy(redisTemplate, executor, meterRegistry, tempKeyTtlSeconds)
+        }
+        else -> {
+            log.info("LikeAtomicFetchStrategy initialized: LUA_SCRIPT (primary), TTL={}s", tempKeyTtlSeconds)
+            LuaScriptLikeAtomicFetchStrategy(redissonClient, executor, meterRegistry, tempKeyTtlSeconds)
         }
     }
 }

@@ -1,6 +1,9 @@
 package maple.expectation.infrastructure.aop.aspect
 
-import maple.expectation.core.domain.stat.StatType
+import java.util.Optional
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import maple.expectation.error.exception.ExternalServiceException
 import maple.expectation.error.exception.InternalSystemException
 import maple.expectation.infrastructure.aop.context.SkipEquipmentL2CacheContext
@@ -9,19 +12,15 @@ import maple.expectation.infrastructure.config.NexonApiProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
-import org.slf4j.LoggerFactory
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.aspectj.lang.reflect.MethodSignature
 import org.redisson.api.RCountDownLatch
 import org.redisson.api.RedissonClient
+import org.slf4j.LoggerFactory
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
-import java.util.Optional
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 
 /**
  * Nexon API Cache AOP - 분산 캐시 전략 (Leader-Follower 패턴)
@@ -33,7 +32,7 @@ class NexonDataCacheAspect(
     private val cacheService: EquipmentCache,
     private val redissonClient: RedissonClient,
     private val executor: LogicExecutor,
-    private val nexonApiProperties: NexonApiProperties
+    private val nexonApiProperties: NexonApiProperties,
 ) {
 
     companion object {
@@ -41,7 +40,7 @@ class NexonDataCacheAspect(
     }
 
     @Around(
-        "@annotation(maple.expectation.infrastructure.aop.annotation.NexonDataCache) && args(ocid, ..)"
+        "@annotation(maple.expectation.infrastructure.aop.annotation.NexonDataCache) && args(ocid, ..)",
     )
     fun handleNexonCache(joinPoint: ProceedingJoinPoint, ocid: String): Any {
         val signature = joinPoint.signature as MethodSignature
@@ -54,7 +53,7 @@ class NexonDataCacheAspect(
     private fun executeDistributedStrategy(
         joinPoint: ProceedingJoinPoint,
         ocid: String,
-        returnType: Class<*>
+        returnType: Class<*>,
     ): Any {
         val latchKey = "latch:eq:$ocid"
         val latch = redissonClient.getCountDownLatch(latchKey)
@@ -72,19 +71,17 @@ class NexonDataCacheAspect(
         joinPoint: ProceedingJoinPoint,
         ocid: String,
         returnType: Class<*>,
-        latch: RCountDownLatch
-    ): Any {
-        return executor.execute(
-            { fetchAndCacheData(joinPoint, ocid, returnType, latch) },
-            TaskContext.of("NexonCache", "Leader", ocid)
-        )
-    }
+        latch: RCountDownLatch,
+    ): Any = executor.execute(
+        { fetchAndCacheData(joinPoint, ocid, returnType, latch) },
+        TaskContext.of("NexonCache", "Leader", ocid),
+    )
 
     private fun fetchAndCacheData(
         joinPoint: ProceedingJoinPoint,
         ocid: String,
         returnType: Class<*>,
-        latch: RCountDownLatch
+        latch: RCountDownLatch,
     ): Any {
         val result = joinPoint.proceed()
 
@@ -96,7 +93,7 @@ class NexonDataCacheAspect(
         return executor.executeWithFinally(
             { saveAndWrap(result, ocid, returnType) },
             { finalizeLatch(latch) },
-            TaskContext.of("NexonCache", "SyncCache", ocid)
+            TaskContext.of("NexonCache", "SyncCache", ocid),
         )
     }
 
@@ -104,7 +101,7 @@ class NexonDataCacheAspect(
     private fun handleAsyncResult(
         future: CompletableFuture<*>,
         ocid: String,
-        latch: RCountDownLatch
+        latch: RCountDownLatch,
     ): Any {
         val skipContextSnap = SkipEquipmentL2CacheContext.snapshot() // V5: MDC 기반
 
@@ -112,7 +109,7 @@ class NexonDataCacheAspect(
             executor.executeWithFinally(
                 { processAsyncCallback(res, ex, ocid, skipContextSnap ?: "") },
                 { finalizeLatch(latch) },
-                TaskContext.of("NexonCache", "AsyncCache", ocid)
+                TaskContext.of("NexonCache", "AsyncCache", ocid),
             )
         }
     }
@@ -122,7 +119,7 @@ class NexonDataCacheAspect(
         res: Any?,
         ex: Throwable?,
         ocid: String,
-        skipContextSnap: String
+        skipContextSnap: String,
     ): Any {
         val before = SkipEquipmentL2CacheContext.snapshot() // V5: MDC 기반
         SkipEquipmentL2CacheContext.restore(skipContextSnap)
@@ -130,7 +127,7 @@ class NexonDataCacheAspect(
         return executor.executeWithFinally(
             { doProcessAsyncCallback(res, ex, ocid) },
             { SkipEquipmentL2CacheContext.restore(before) },
-            TaskContext.of("NexonCache", "AsyncCallback", ocid)
+            TaskContext.of("NexonCache", "AsyncCallback", ocid),
         )
     }
 
@@ -190,21 +187,19 @@ class NexonDataCacheAspect(
         return wrap(response, returnType)
     }
 
-    private fun executeAsFollower(ocid: String, returnType: Class<*>, latch: RCountDownLatch): Any {
-        return executor.execute(
-            {
-                log.info("[Follower] 대장 완료 대기 중...: $ocid")
-                val timeoutSeconds = nexonApiProperties.cacheFollowerTimeoutSeconds.toLong()
-                if (!latch.await(timeoutSeconds, TimeUnit.SECONDS)) {
-                    throw InternalSystemException("NexonCache Follower Timeout: $ocid")
-                }
+    private fun executeAsFollower(ocid: String, returnType: Class<*>, latch: RCountDownLatch): Any = executor.execute(
+        {
+            log.info("[Follower] 대장 완료 대기 중...: $ocid")
+            val timeoutSeconds = nexonApiProperties.cacheFollowerTimeoutSeconds.toLong()
+            if (!latch.await(timeoutSeconds, TimeUnit.SECONDS)) {
+                throw InternalSystemException("NexonCache Follower Timeout: $ocid")
+            }
 
-                getCachedResult(ocid, returnType)
-                    .orElseThrow { InternalSystemException("NexonCache Leader Failed: $ocid") }
-            },
-            TaskContext.of("NexonCache", "Follower", ocid)
-        )
-    }
+            getCachedResult(ocid, returnType)
+                .orElseThrow { InternalSystemException("NexonCache Leader Failed: $ocid") }
+        },
+        TaskContext.of("NexonCache", "Follower", ocid),
+    )
 
     private fun finalizeLatch(latch: RCountDownLatch) {
         latch.countDown()
@@ -223,16 +218,14 @@ class NexonDataCacheAspect(
                     wrap(null, returnType)
                 } else {
                     null
-                }
+                },
             )
         }
     }
 
-    private fun wrap(res: EquipmentResponse?, type: Class<*>): Any {
-        return if (CompletableFuture::class.java.isAssignableFrom(type)) {
-            CompletableFuture.completedFuture(res)
-        } else {
-            res!!
-        }
+    private fun wrap(res: EquipmentResponse?, type: Class<*>): Any = if (CompletableFuture::class.java.isAssignableFrom(type)) {
+        CompletableFuture.completedFuture(res)
+    } else {
+        res!!
     }
 }

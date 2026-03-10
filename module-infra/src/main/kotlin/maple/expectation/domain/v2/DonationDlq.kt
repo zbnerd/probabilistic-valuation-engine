@@ -23,8 +23,8 @@ import java.time.LocalDateTime
     name = "donation_dlq",
     indexes = [
         Index(name = "idx_dlq_moved_at", columnList = "moved_at"),
-        Index(name = "idx_dlq_request_id", columnList = "request_id")
-    ]
+        Index(name = "idx_dlq_request_id", columnList = "request_id"),
+    ],
 )
 class DonationDlq {
 
@@ -66,13 +66,9 @@ class DonationDlq {
             return dlq
         }
 
-        private fun truncate(str: String?, maxLen: Int): String? {
-            return if (str != null && str.length > maxLen) str.substring(0, maxLen) else str
-        }
+        private fun truncate(str: String?, maxLen: Int): String? = if (str != null && str.length > maxLen) str.substring(0, maxLen) else str
     }
 
     /** PII 마스킹 (CLAUDE.md 19 준수) */
-    override fun toString(): String {
-        return "DonationDlq[id=$id, requestId=$requestId, failureReason=$failureReason, payload=MASKED]"
-    }
+    override fun toString(): String = "DonationDlq[id=$id, requestId=$requestId, failureReason=$failureReason, payload=MASKED]"
 }

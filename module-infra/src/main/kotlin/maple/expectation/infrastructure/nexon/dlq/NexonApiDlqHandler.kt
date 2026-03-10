@@ -63,7 +63,7 @@ class NexonApiDlqHandler(
         executor.executeOrCatch(
             { saveToDbDlq(entry, cause) },
             { dbEx -> handleDbDlqFailure(entry, cause, context) },
-            context
+            context,
         )
     }
 
@@ -81,7 +81,7 @@ class NexonApiDlqHandler(
         executor.executeOrCatch(
             { saveToDbDlq(entry, reason) },
             { dbEx -> handleDbDlqFailure(entry, reason, context) },
-            context
+            context,
         )
     }
 
@@ -99,7 +99,7 @@ class NexonApiDlqHandler(
         log.warn(
             "[NexonApiDLQ] Entry moved to DLQ: requestId={}, reason={}",
             entry.requestId,
-            reason
+            reason,
         )
         return null
     }
@@ -108,18 +108,18 @@ class NexonApiDlqHandler(
     private fun handleDbDlqFailure(
         entry: NexonApiOutbox,
         cause: Throwable?,
-        context: TaskContext
+        context: TaskContext,
     ): Unit? {
         val reason = cause?.message ?: "Unknown error"
         log.error(
             "[NexonApiDLQ] DB DLQ 저장 실패, File Backup 시도: requestId={}",
-            entry.requestId
+            entry.requestId,
         )
 
         executor.executeOrCatch(
             { saveToFileBackup(entry) },
             { fileEx -> handleCriticalFailure(entry, reason, fileEx) },
-            context
+            context,
         )
         return null
     }
@@ -128,17 +128,17 @@ class NexonApiDlqHandler(
     private fun handleDbDlqFailure(
         entry: NexonApiOutbox,
         reason: String,
-        context: TaskContext
+        context: TaskContext,
     ): Unit? {
         log.error(
             "[NexonApiDLQ] DB DLQ 저장 실패, File Backup 시도: requestId={}",
-            entry.requestId
+            entry.requestId,
         )
 
         executor.executeOrCatch(
             { saveToFileBackup(entry) },
             { fileEx -> handleCriticalFailure(entry, reason, fileEx) },
-            context
+            context,
         )
         return null
     }
@@ -165,7 +165,7 @@ class NexonApiDlqHandler(
     private fun handleCriticalFailure(
         entry: NexonApiOutbox,
         reason: String,
-        fileEx: Throwable?
+        fileEx: Throwable?,
     ): Unit? {
         metrics.incrementDlqCriticalFailure()
 
@@ -182,7 +182,7 @@ class NexonApiDlqHandler(
         log.error(
             "[CRITICAL] All safety nets failed for NexonApiOutbox: requestId={}, eventType={} - Manual intervention required!",
             entry.requestId,
-            entry.eventType?.name
+            entry.eventType?.name,
         )
 
         return null

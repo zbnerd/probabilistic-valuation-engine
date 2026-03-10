@@ -1,11 +1,12 @@
 package maple.expectation.web.controller
 
 import jakarta.validation.Valid
-import maple.expectation.web.dto.admin.AddAdminRequest
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.port.inbound.AdminPort
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import maple.expectation.response.ApiResponse
 import maple.expectation.util.StringMaskingUtils
+import maple.expectation.web.dto.admin.AddAdminRequest
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -17,7 +18,6 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.util.concurrent.CompletableFuture
 
 /**
  * Admin 관리 API
@@ -38,17 +38,15 @@ import java.util.concurrent.CompletableFuture
 @RestController
 @RequestMapping("/api/admin")
 class AdminController(
-    private val adminPort: AdminPort
+    private val adminPort: AdminPort,
 ) {
 
     /** 전체 Admin 목록 조회 */
     @GetMapping("/admins")
     @PreAuthorize("hasRole('ADMIN')")
-    fun getAdmins(): CompletableFuture<ResponseEntity<ApiResponse<Set<String>>>> {
-        return CompletableFuture.supplyAsync {
-            val admins = adminPort.getAllAdmins()
-            ResponseEntity.ok(ApiResponse.success(admins))
-        }
+    fun getAdmins(): CompletableFuture<ResponseEntity<ApiResponse<Set<String>>>> = CompletableFuture.supplyAsync {
+        val admins = adminPort.getAllAdmins()
+        ResponseEntity.ok(ApiResponse.success(admins))
     }
 
     /**
@@ -63,16 +61,14 @@ class AdminController(
     @PreAuthorize("hasRole('ADMIN')")
     fun addAdmin(
         @Valid @RequestBody request: AddAdminRequest,
-        @AuthenticationPrincipal currentUser: AuthenticatedUser
-    ): CompletableFuture<ResponseEntity<ApiResponse<String>>> {
-        return CompletableFuture.supplyAsync {
-            adminPort.addAdmin(request.fingerprint)
-            ResponseEntity.ok(
-                ApiResponse.success(
-                    "Admin added successfully: ${request.maskedFingerprint()}"
-                )
-            )
-        }
+        @AuthenticationPrincipal currentUser: AuthenticatedUser,
+    ): CompletableFuture<ResponseEntity<ApiResponse<String>>> = CompletableFuture.supplyAsync {
+        adminPort.addAdmin(request.fingerprint)
+        ResponseEntity.ok(
+            ApiResponse.success(
+                "Admin added successfully: ${request.maskedFingerprint()}",
+            ),
+        )
     }
 
     /**
@@ -84,14 +80,14 @@ class AdminController(
     @PreAuthorize("hasRole('ADMIN')")
     fun removeAdmin(
         @PathVariable fingerprint: String,
-        @AuthenticationPrincipal currentUser: AuthenticatedUser
+        @AuthenticationPrincipal currentUser: AuthenticatedUser,
     ): CompletableFuture<ResponseEntity<ApiResponse<String>>> {
         return CompletableFuture.supplyAsync {
             // 자기 자신은 제거 불가
             if (fingerprint == currentUser.fingerprint) {
                 return@supplyAsync ResponseEntity.badRequest()
                     .body(
-                        ApiResponse.error("SELF_REMOVAL_NOT_ALLOWED", "자기 자신의 Admin 권한은 제거할 수 없습니다.")
+                        ApiResponse.error("SELF_REMOVAL_NOT_ALLOWED", "자기 자신의 Admin 권한은 제거할 수 없습니다."),
                     )
             }
 
@@ -104,8 +100,8 @@ class AdminController(
 
             ResponseEntity.ok(
                 ApiResponse.success(
-                    "Admin removed successfully: ${StringMaskingUtils.maskFingerprintWithSuffix(fingerprint)}"
-                )
+                    "Admin removed successfully: ${StringMaskingUtils.maskFingerprintWithSuffix(fingerprint)}",
+                ),
             )
         }
     }

@@ -15,37 +15,33 @@ data class GameCharacterDto(
     var characterClass: String? = null,
     var characterImage: String? = null,
     var basicInfoUpdatedAt: LocalDateTime? = null,
-    var likeCount: Long? = null
+    var likeCount: Long? = null,
 ) : BaseDto() {
 
     var id: Long? = null
 
     companion object {
         @JvmStatic
-        fun from(entity: GameCharacter): GameCharacterDto {
-            return GameCharacterDto(
-                userIgn = entity.userIgn.value,
-                ocid = entity.characterId.value,
-                worldName = entity.worldName,
-                characterClass = entity.characterClass,
-                characterImage = entity.characterImage,
-                basicInfoUpdatedAt = entity.basicInfoUpdatedAt,
-                likeCount = entity.likeCount
-            ).apply {
-                id = entity.id
-                updatedAt = entity.updatedAt
-                }
+        fun from(entity: GameCharacter): GameCharacterDto = GameCharacterDto(
+            userIgn = entity.userIgn.value,
+            ocid = entity.characterId.value,
+            worldName = entity.worldName,
+            characterClass = entity.characterClass,
+            characterImage = entity.characterImage,
+            basicInfoUpdatedAt = entity.basicInfoUpdatedAt,
+            likeCount = entity.likeCount,
+        ).apply {
+            id = entity.id
+            updatedAt = entity.updatedAt
         }
 
         @JvmStatic
-        fun forCreation(userIgn: String, ocid: String): GameCharacterDto {
-            return GameCharacterDto(
-                userIgn = userIgn,
-                ocid = ocid,
-                likeCount = 0L
-            ).apply {
-                initTimestamps()
-            }
+        fun forCreation(userIgn: String, ocid: String): GameCharacterDto = GameCharacterDto(
+            userIgn = userIgn,
+            ocid = ocid,
+            likeCount = 0L,
+        ).apply {
+            initTimestamps()
         }
     }
 
@@ -64,7 +60,7 @@ data class GameCharacterDto(
             basicInfoUpdatedAt,
             likeCount ?: 0L,
             version,
-            updatedAt ?: LocalDateTime.now()
+            updatedAt ?: LocalDateTime.now(),
         )
     }
 }

@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.executor.strategy
 
 import com.fasterxml.jackson.core.JsonProcessingException
+import java.io.IOException
+import java.util.concurrent.Callable
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.util.ExceptionUtils
 import org.springframework.cache.Cache
-import java.io.IOException
-import java.util.concurrent.Callable
 
 /**
  * 특정 예외를 도메인 예외로 변환하는 전략
@@ -32,20 +32,19 @@ fun interface ExceptionTranslator {
          * 3. unwrap된 예외를 내부 translator에 위임
          */
         @JvmStatic
-        fun withErrorGuardAndUnwrap(inner: ExceptionTranslator): ExceptionTranslator =
-            ExceptionTranslator { e, context ->
-                when (e) {
-                    is Error -> throw e
-                    else -> {
-                        val unwrapped = ExceptionUtils.unwrapAsyncException(e) ?: e
-                        // RuntimeException pass-through for now
-                        when (unwrapped) {
-                            is RuntimeException -> unwrapped
-                            else -> inner.translate(unwrapped, context)
-                        }
+        fun withErrorGuardAndUnwrap(inner: ExceptionTranslator): ExceptionTranslator = ExceptionTranslator { e, context ->
+            when (e) {
+                is Error -> throw e
+                else -> {
+                    val unwrapped = ExceptionUtils.unwrapAsyncException(e) ?: e
+                    // RuntimeException pass-through for now
+                    when (unwrapped) {
+                        is RuntimeException -> unwrapped
+                        else -> inner.translate(unwrapped, context)
                     }
                 }
             }
+        }
 
         /** JSON 처리 예외 변환기 */
         @JvmStatic
@@ -53,7 +52,7 @@ fun interface ExceptionTranslator {
             when (unwrapped) {
                 is JsonProcessingException -> RuntimeException(
                     "JSON 직렬화 실패 [${context.toTaskName()}]: ${unwrapped.message}",
-                    unwrapped
+                    unwrapped,
                 )
                 else -> RuntimeException("json-operation:${context.toTaskName()}", unwrapped)
             }
@@ -96,20 +95,19 @@ fun interface ExceptionTranslator {
             when (unwrapped) {
                 is IOException -> RuntimeException(
                     "메이플 데이터 파싱 중 기술적 오류 발생: ${unwrapped.message}",
-                    unwrapped
+                    unwrapped,
                 )
                 else -> RuntimeException(context.toTaskName(), unwrapped)
             }
         }
 
         @JvmStatic
-        fun forCache(key: Any, loader: Callable<*>): ExceptionTranslator =
-            ExceptionTranslator { e, context ->
-                when (e) {
-                    is Error -> throw e
-                    else -> Cache.ValueRetrievalException(key, loader, e)
-                }
+        fun forCache(key: Any, loader: Callable<*>): ExceptionTranslator = ExceptionTranslator { e, context ->
+            when (e) {
+                is Error -> throw e
+                else -> Cache.ValueRetrievalException(key, loader, e)
             }
+        }
 
         /**
          * Redis Lua Script 예외 변환기 (Context7 Best Practice)
@@ -133,12 +131,11 @@ fun interface ExceptionTranslator {
          * - Configuration 로딩 실패
          */
         @JvmStatic
-        fun forStartup(componentName: String): ExceptionTranslator =
-            withErrorGuardAndUnwrap { unwrapped, context ->
-                RuntimeException(
-                    "startup:$componentName:${context.operation}",
-                    unwrapped
-                )
-            }
+        fun forStartup(componentName: String): ExceptionTranslator = withErrorGuardAndUnwrap { unwrapped, context ->
+            RuntimeException(
+                "startup:$componentName:${context.operation}",
+                unwrapped,
+            )
+        }
     }
 }

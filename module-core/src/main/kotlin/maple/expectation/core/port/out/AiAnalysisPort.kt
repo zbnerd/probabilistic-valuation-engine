@@ -55,7 +55,7 @@ interface AiAnalysisPort {
         val affectedComponents: String,
         val actionItems: String,
         val analysisSource: String,
-        val disclaimer: String
+        val disclaimer: String,
     )
 
     /**
@@ -68,7 +68,7 @@ interface AiAnalysisPort {
     data class AiIncidentContext(
         val incidentId: String,
         val summary: String,
-        val metadata: Map<String, Any> = emptyMap()
+        val metadata: Map<String, Any> = emptyMap(),
     )
 
     /**
@@ -85,7 +85,7 @@ interface AiAnalysisPort {
         val analysisSource: String,
         val hypotheses: List<AiHypothesis>,
         val actions: List<AiAction>,
-        val disclaimer: String
+        val disclaimer: String,
     )
 
     /**
@@ -98,7 +98,7 @@ interface AiAnalysisPort {
     data class AiHypothesis(
         val cause: String,
         val confidence: String,
-        val evidence: List<String>
+        val evidence: List<String>,
     )
 
     /**
@@ -113,6 +113,6 @@ interface AiAnalysisPort {
         val step: Int,
         val action: String,
         val risk: String,
-        val expectedOutcome: String
+        val expectedOutcome: String,
     )
 }

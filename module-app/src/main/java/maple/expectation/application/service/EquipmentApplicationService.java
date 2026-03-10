@@ -171,7 +171,7 @@ public class EquipmentApplicationService {
    * @param characterId the character identifier
    * @return true if equipment exists, false otherwise
    */
-  @Transactional(readOnly = true)
+  @Transactional(transactionManager = "transactionManager", readOnly = true)
   public boolean equipmentExists(CharacterId characterId) {
     if (characterId == null) {
       throw new IllegalArgumentException("CharacterId cannot be null");

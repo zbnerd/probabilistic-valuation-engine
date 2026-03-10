@@ -20,7 +20,7 @@ data class AuthenticatedUser(
     val accountId: String,
     val apiKey: String,
     val myOcids: Set<String>,
-    val role: String
+    val role: String,
 ) {
     /**
      * 주어진 OCID가 이 사용자의 캐릭터인지 확인합니다.
@@ -28,14 +28,10 @@ data class AuthenticatedUser(
      * @param ocid 확인할 OCID
      * @return 본인 캐릭터 여부
      */
-    fun isMyCharacter(ocid: String?): Boolean {
-        return myOcids.contains(ocid)
-    }
+    fun isMyCharacter(ocid: String?): Boolean = myOcids.contains(ocid)
 
     /** ADMIN 권한인지 확인합니다. */
-    fun isAdmin(): Boolean {
-        return "ADMIN" == role
-    }
+    fun isAdmin(): Boolean = "ADMIN" == role
 
     /**
      * API Key 마스킹된 문자열 반환
@@ -44,22 +40,18 @@ data class AuthenticatedUser(
      *
      * <p><b>Purple Agent P1 FIX:</b> Record 기본 toString()은 모든 필드를 노출하므로 오버라이드 필수
      */
-    override fun toString(): String {
-        return "AuthenticatedUser[" +
-                "sessionId=$sessionId, " +
-                "fingerprint=$fingerprint, " +
-                "userIgn=$userIgn, " +
-                "accountId=$accountId, " +
-                "apiKey=${maskApiKey(apiKey)}, " +
-                "myOcids=$myOcids, " +
-                "role=$role]"
-    }
+    override fun toString(): String = "AuthenticatedUser[" +
+        "sessionId=$sessionId, " +
+        "fingerprint=$fingerprint, " +
+        "userIgn=$userIgn, " +
+        "accountId=$accountId, " +
+        "apiKey=${maskApiKey(apiKey)}, " +
+        "myOcids=$myOcids, " +
+        "role=$role]"
 
-    private fun maskApiKey(key: String?): String {
-        return if (key == null || key.length < 8) {
-            "****"
-        } else {
-            key.substring(0, 4) + "****" + key.substring(key.length - 4)
-        }
+    private fun maskApiKey(key: String?): String = if (key == null || key.length < 8) {
+        "****"
+    } else {
+        key.substring(0, 4) + "****" + key.substring(key.length - 4)
     }
 }

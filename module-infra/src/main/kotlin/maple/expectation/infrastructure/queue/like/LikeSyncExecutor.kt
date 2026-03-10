@@ -1,13 +1,10 @@
 package maple.expectation.infrastructure.queue.like
 
-import io.micrometer.core.instrument.MeterRegistry
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import java.sql.PreparedStatement
-import java.sql.SQLException
 import java.util.List
 import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.error.exception.LikeSyncCircuitOpenException
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.BatchPreparedStatementSetter
 import org.springframework.jdbc.core.JdbcTemplate
@@ -15,7 +12,6 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 
 /**
  * 좋아요 동기화 실행기 (Issue #48: Batch Update 지원)
@@ -32,7 +28,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 @Component
 open class LikeSyncExecutor(
     private val gameCharacterRepository: GameCharacterRepository,
-    private val jdbcTemplate: JdbcTemplate
+    private val jdbcTemplate: JdbcTemplate,
 ) {
 
     companion object {
@@ -91,7 +87,7 @@ open class LikeSyncExecutor(
                 }
 
                 override fun getBatchSize(): Int = entries.size
-            }
+            },
         )
 
         log.debug("Batch update completed: {} entries", entries.size)
@@ -107,7 +103,7 @@ open class LikeSyncExecutor(
         log.warn(
             "[LikeSync] Circuit OPEN, batch skipped ({} entries): {}",
             entries.size,
-            t.message
+            t.message,
         )
         throw LikeSyncCircuitOpenException(t)
     }

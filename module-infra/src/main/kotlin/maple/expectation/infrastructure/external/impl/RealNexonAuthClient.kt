@@ -6,13 +6,12 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonAuthClient
 import maple.expectation.infrastructure.external.dto.v2.CharacterListResponse
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.WebClientResponseException
 import reactor.core.publisher.Mono
-import org.slf4j.LoggerFactory
-
 
 /**
  * 인증용 Nexon API 클라이언트 구현체
@@ -43,7 +42,7 @@ class RealNexonAuthClient(
     @Qualifier("mapleWebClient")
     private val mapleWebClient: WebClient,
     private val executor: LogicExecutor,
-    private val timeoutProperties: TimeoutProperties
+    private val timeoutProperties: TimeoutProperties,
 ) : NexonAuthClient {
     private val logger = org.slf4j.LoggerFactory.getLogger(RealNexonAuthClient::class.java)
 
@@ -51,13 +50,11 @@ class RealNexonAuthClient(
         const val CHARACTER_LIST_PATH = "/maplestory/v1/character/list"
     }
 
-    override fun getCharacterList(apiKey: String): Optional<CharacterListResponse> {
-        return executor.executeOrDefault(
-            { doGetCharacterList(apiKey) },
-            Optional.empty(),
-            TaskContext.of("NexonAuth", "CharacterList", "auth")
-        )
-    }
+    override fun getCharacterList(apiKey: String): Optional<CharacterListResponse> = executor.executeOrDefault(
+        { doGetCharacterList(apiKey) },
+        Optional.empty(),
+        TaskContext.of("NexonAuth", "CharacterList", "auth"),
+    )
 
     /**
      * WebClient.onErrorResume()을 활용하여 try-catch 없이 에러 처리
@@ -80,14 +77,14 @@ class RealNexonAuthClient(
             .retrieve()
             .bodyToMono(CharacterListResponse::class.java)
             .onErrorResume(
-                WebClientResponseException::class.java
+                WebClientResponseException::class.java,
             ) { ex ->
                 if (ex.statusCode.is4xxClientError) {
                     // 4xx: Invalid API Key 등 클라이언트 에러 → 실제 에러 본문 로깅
                     logger.warn(
                         "[NexonAuth] API Call Failed. Status: {}, Body: {}",
                         ex.statusCode,
-                        ex.responseBodyAsString
+                        ex.responseBodyAsString,
                     )
                     return@onErrorResume Mono.empty()
                 }
@@ -105,7 +102,5 @@ class RealNexonAuthClient(
             }
     }
 
-    override fun validateApiKey(apiKey: String): Boolean {
-        return getCharacterList(apiKey).isPresent
-    }
+    override fun validateApiKey(apiKey: String): Boolean = getCharacterList(apiKey).isPresent
 }

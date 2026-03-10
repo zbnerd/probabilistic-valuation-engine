@@ -1,5 +1,8 @@
 package maple.expectation.infrastructure.lock
 
+import java.sql.Connection
+import java.util.ArrayDeque
+import java.util.Deque
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.error.exception.DatabaseNamedLockException
 import maple.expectation.error.exception.DistributedLockException
@@ -12,9 +15,6 @@ import org.springframework.jdbc.core.ConnectionCallback
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.SingleConnectionDataSource
 import org.springframework.stereotype.Component
-import java.sql.Connection
-import java.util.ArrayDeque
-import java.util.Deque
 
 /**
  * MySQL Named Lock 전략
@@ -26,7 +26,7 @@ class MySqlNamedLockStrategy(
     private val lockJdbcTemplate: JdbcTemplate,
     private val executor: LogicExecutor,
     private val lockOrderMetrics: LockOrderMetrics,
-    private val lockMetrics: LockMetrics
+    private val lockMetrics: LockMetrics,
 ) : LockStrategy {
 
     /**
@@ -42,24 +42,22 @@ class MySqlNamedLockStrategy(
         return executor.executeWithTranslation(
             { this.executeInSession(lockKey, waitTime, task, context) },
             ExceptionTranslator.forLock(),
-            context
+            context,
         )
     }
 
-    override fun <T> executeWithLock(key: String, task: ThrowingSupplier<T>): T {
-        return executeWithLock(key, 10, 20, task)
-    }
+    override fun <T> executeWithLock(key: String, task: ThrowingSupplier<T>): T = executeWithLock(key, 10, 20, task)
 
     /** 평탄화의 핵심: 람다 중첩과 try-catch를 메서드 추출로 해결 */
     private fun <T> executeInSession(
         lockKey: String,
         waitTime: Long,
         task: ThrowingSupplier<T>,
-        context: TaskContext
+        context: TaskContext,
     ): T {
         // 1. 명시적 캐스팅으로 람다 모호성 해결 (괄호 한 번만 열림)
         return lockJdbcTemplate.execute(
-            ConnectionCallback<T> { conn -> this.runLogicWithPinnedSession(conn, lockKey, waitTime, task, context) }
+            ConnectionCallback<T> { conn -> this.runLogicWithPinnedSession(conn, lockKey, waitTime, task, context) },
         )!!
     }
 
@@ -69,7 +67,7 @@ class MySqlNamedLockStrategy(
         lockKey: String,
         waitTime: Long,
         task: ThrowingSupplier<T>,
-        context: TaskContext
+        context: TaskContext,
     ): T {
         val sessionJdbc = JdbcTemplate(SingleConnectionDataSource(conn, true))
 
@@ -78,7 +76,7 @@ class MySqlNamedLockStrategy(
         return executor.executeWithFinally(
             { this.acquireAndExecute(sessionJdbc, lockKey, waitTime, task) },
             { this.releaseAndCleanup(sessionJdbc, lockKey, context) },
-            context
+            context,
         )
     }
 
@@ -90,7 +88,7 @@ class MySqlNamedLockStrategy(
         sessionJdbc: JdbcTemplate,
         lockKey: String,
         waitTime: Long,
-        task: ThrowingSupplier<T>
+        task: ThrowingSupplier<T>,
     ): T {
         // 1. Lock Ordering 검증 (Deadlock 위험 감지)
         validateLockOrder(lockKey)
@@ -161,7 +159,7 @@ class MySqlNamedLockStrategy(
             "SELECT GET_LOCK(?, ?)",
             Int::class.java,
             lockKey,
-            waitTime
+            waitTime,
         ) ?: throw DatabaseNamedLockException("GET_LOCK", lockKey, waitTime)
 
         return acquiredFlag == 1
@@ -173,7 +171,7 @@ class MySqlNamedLockStrategy(
                 val r: Int? = sessionJdbc.queryForObject(
                     "SELECT RELEASE_LOCK(?)",
                     Int::class.java,
-                    lockKey
+                    lockKey,
                 )
 
                 if (r == null) {
@@ -185,27 +183,23 @@ class MySqlNamedLockStrategy(
 
                 log.debug("🔒 [MySQL Lock] '{}' 해제 완료", lockKey)
             },
-            context
+            context,
         )
     }
 
     /**
      * MySQL Named Lock은 세션 기반이므로 "획득만" 패턴 지원 불가
      */
-    override fun tryLockImmediately(key: String, leaseTime: Long): Boolean {
-        throw UnsupportedOperationException(
-            "MySQL Named Lock은 세션 기반이므로 tryLockImmediately() 지원 불가. " +
-            "executeWithLock()을 사용하세요."
-        )
-    }
+    override fun tryLockImmediately(key: String, leaseTime: Long): Boolean = throw UnsupportedOperationException(
+        "MySQL Named Lock은 세션 기반이므로 tryLockImmediately() 지원 불가. " +
+            "executeWithLock()을 사용하세요.",
+    )
 
     override fun unlock(key: String) {
         log.debug("ℹ️ [MySQL Lock] unlock() 호출됨 (세션 기반이라 실제 동작 안 함)")
     }
 
-    private fun buildLockKey(key: String): String {
-        return "maple_lock:$key"
-    }
+    private fun buildLockKey(key: String): String = "maple_lock:$key"
 
     companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(MySqlNamedLockStrategy::class.java)

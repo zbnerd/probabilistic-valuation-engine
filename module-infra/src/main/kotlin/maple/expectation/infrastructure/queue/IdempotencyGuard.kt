@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.queue
 
 import io.micrometer.core.instrument.MeterRegistry
-import java.time.Duration
+import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.redisson.api.RBucket
@@ -9,14 +9,13 @@ import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.util.concurrent.TimeUnit
 
 @Component
 class IdempotencyGuard(
     private val redissonClient: RedissonClient,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    @Value("\${idempotency.ttl-hours:24}") private val ttlHours: Int
+    @Value("\${idempotency.ttl-hours:24}") private val ttlHours: Int,
 ) {
     private val log = LoggerFactory.getLogger(IdempotencyGuard::class.java)
 
@@ -47,7 +46,7 @@ class IdempotencyGuard(
                 acquired
             },
             false,
-            TaskContext.of("Idempotency", "TryAcquire", msgId)
+            TaskContext.of("Idempotency", "TryAcquire", msgId),
         )
     }
 
@@ -85,15 +84,11 @@ class IdempotencyGuard(
         return executor.executeOrDefault(
             { redissonClient.getBucket<String>(key).get() },
             null,
-            TaskContext.of("Idempotency", "GetStatus", msgId)
+            TaskContext.of("Idempotency", "GetStatus", msgId),
         )
     }
 
-    fun isCompleted(jobType: String, msgId: String): Boolean {
-        return STATUS_COMPLETED == getStatus(jobType, msgId)
-    }
+    fun isCompleted(jobType: String, msgId: String): Boolean = STATUS_COMPLETED == getStatus(jobType, msgId)
 
-    private fun buildKey(jobType: String, msgId: String): String {
-        return RedisKey.IDEMPOTENCY_PREFIX.key + "job:" + jobType + ":" + msgId
-    }
+    private fun buildKey(jobType: String, msgId: String): String = RedisKey.IDEMPOTENCY_PREFIX.key + "job:" + jobType + ":" + msgId
 }

@@ -6,5 +6,5 @@ package maple.expectation.infrastructure.monitoring.copilot.model
 data class Hypothesis(
     val cause: String,
     val confidence: Double? = null,
-    val evidence: String? = null
+    val evidence: String? = null,
 )

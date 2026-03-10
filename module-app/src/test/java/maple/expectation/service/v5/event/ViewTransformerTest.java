@@ -181,6 +181,7 @@ class ViewTransformerTest {
         .maxPresetNo(1)
         .calculatedAt(Instant.now().toString())
         .payload(null) // Null to skip Kotlin data class deserialization
+        .version(Long.parseLong(TEST_TASK_ID)) // Version for causal consistency
         .build();
   }
 }

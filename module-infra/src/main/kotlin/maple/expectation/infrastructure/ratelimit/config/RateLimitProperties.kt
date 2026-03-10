@@ -3,9 +3,9 @@ package maple.expectation.infrastructure.ratelimit.config
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
+import java.time.Duration
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
-import java.time.Duration
 
 /**
  * Rate Limiting 설정 프로퍼티 (Issue #152)
@@ -68,12 +68,10 @@ data class RateLimitProperties(
     var trustedHeaders: List<String> = listOf("X-Forwarded-For", "X-Real-IP"),
 
     /** Rate Limit 바이패스 대상 경로 (Swagger, Actuator 등) */
-    var bypassPaths: List<String> = listOf("/swagger-ui/**", "/v3/api-docs/**", "/actuator/health", "/actuator/info")
+    var bypassPaths: List<String> = listOf("/swagger-ui/**", "/v3/api-docs/**", "/actuator/health", "/actuator/info"),
 ) {
     /** fail-open 모드인지 확인 */
-    fun isFailOpen(): Boolean {
-        return "fail-open".equals(failureMode, ignoreCase = true)
-    }
+    fun isFailOpen(): Boolean = "fail-open".equals(failureMode, ignoreCase = true)
 
     /**
      * IP 기반 Rate Limiting 설정
@@ -105,7 +103,7 @@ data class RateLimitProperties(
          * <p>계산: window / (capacity / refillTokens) = 60s / 10 = 6s
          */
         @get:NotNull
-        var refillPeriod: Duration = Duration.ofSeconds(6)
+        var refillPeriod: Duration = Duration.ofSeconds(6),
     )
 
     /**
@@ -134,6 +132,6 @@ data class RateLimitProperties(
 
         /** 토큰 리필 주기 (기본: 6초) */
         @get:NotNull
-        var refillPeriod: Duration = Duration.ofSeconds(6)
+        var refillPeriod: Duration = Duration.ofSeconds(6),
     )
 }

@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component
 @Component
 @ConditionalOnProperty(name = ["v5.enabled"], havingValue = "true", matchIfMissing = false)
 class MongoDBHealthIndicator(
-    private val mongoConfig: MongoDBConfig
+    private val mongoConfig: MongoDBConfig,
 ) : HealthIndicator {
 
     override fun health(): Health {

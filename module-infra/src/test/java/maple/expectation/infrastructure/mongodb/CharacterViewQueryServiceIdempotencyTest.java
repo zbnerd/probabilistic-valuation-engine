@@ -5,8 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.util.Optional;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -65,13 +67,61 @@ class CharacterViewQueryServiceIdempotencyTest {
 
   @BeforeEach
   void setUp() {
+    // Setup executor to pass through execute calls
+    lenient()
+        .when(mockExecutor.execute(any(ThrowingSupplier.class), any(TaskContext.class)))
+        .thenAnswer(
+            inv -> {
+              ThrowingSupplier<?> task = inv.getArgument(0);
+              return task.get();
+            });
+
+    // Setup executor to pass through executeOrDefault calls
+    lenient()
+        .when(
+            mockExecutor.executeOrDefault(
+                any(ThrowingSupplier.class), any(), any(TaskContext.class)))
+        .thenAnswer(
+            inv -> {
+              ThrowingSupplier<?> task = inv.getArgument(0);
+              Object defaultValue = inv.getArgument(1);
+              try {
+                Object result = task.get();
+                return result != null ? result : defaultValue;
+              } catch (Throwable t) {
+                return defaultValue;
+              }
+            });
+
+    // Setup executor to pass through executeVoid calls
+    lenient()
+        .doAnswer(
+            inv -> {
+              ThrowingRunnable task = inv.getArgument(0);
+              task.run();
+              return null;
+            })
+        .when(mockExecutor)
+        .executeVoid(any(ThrowingRunnable.class), any(TaskContext.class));
+
+    // Setup executor to pass through executeVoidJava calls
+    lenient()
+        .doAnswer(
+            inv -> {
+              Runnable task = inv.getArgument(0);
+              task.run();
+              return null;
+            })
+        .when(mockExecutor)
+        .executeVoidJava(any(Runnable.class), any(TaskContext.class));
+
     queryService =
         new CharacterViewQueryService(
             mockRepository, mockMongoTemplate, mockExecutor, mockMeterRegistry);
   }
 
   private CharacterValuationView createView(
-      String id, String messageId, String userIgn, Long totalExpectedCost) {
+      String id, String messageId, String userIgn, Long totalExpectedCost, Long version) {
     return new CharacterValuationView(
         id,
         userIgn,
@@ -81,51 +131,65 @@ class CharacterViewQueryServiceIdempotencyTest {
         null,
         null,
         null,
-        null,
+        version,
+        null, // lastAppliedVersion
         totalExpectedCost,
         null,
         null,
         null);
   }
 
+  private CharacterValuationView createView(
+      String id, String messageId, String userIgn, Long totalExpectedCost) {
+    return createView(id, messageId, userIgn, totalExpectedCost, null);
+  }
+
   @Test
   @DisplayName("Idempotent upsert: Same document ID updates existing record (no duplicate)")
   void testIdempotentUpsert_SameDocumentId_UpdatesExisting() {
-    CharacterValuationView view = createView(DETERMINISTIC_ID, "msg-123", TEST_IGN, 100000L);
+    // Incoming version (2) > existing version (1) triggers update
+    CharacterValuationView view = createView(DETERMINISTIC_ID, "msg-123", TEST_IGN, 100000L, 2L);
+    CharacterValuationView existing = createView(DETERMINISTIC_ID, "msg-old", TEST_IGN, 50000L, 1L);
 
-    doAnswer(
-            inv -> {
-              ThrowingRunnable runnable = inv.getArgument(0);
-              runnable.run();
-              return null;
-            })
-        .when(mockExecutor)
-        .executeVoid(any(), any(TaskContext.class));
+    // Mock repository to return existing document (triggers update path)
+    when(mockRepository.findById(DETERMINISTIC_ID)).thenReturn(Optional.of(existing));
+
+    // Mock meter registry for counter
+    when(mockMeterRegistry.counter(any(String.class), any(String[].class)))
+        .thenReturn(mock(Counter.class));
+
+    // Mock updateFirst to return successful result
+    when(mockMongoTemplate.updateFirst(any(), any(), eq(CharacterValuationView.class)))
+        .thenReturn(com.mongodb.client.result.UpdateResult.acknowledged(1L, 1L, null));
 
     queryService.upsert(view);
 
-    verify(mockMongoTemplate, times(1)).upsert(any(), any(), eq(CharacterValuationView.class));
+    verify(mockMongoTemplate, times(1)).updateFirst(any(), any(), eq(CharacterValuationView.class));
   }
 
   @Test
   @DisplayName("Idempotent upsert: Multiple calls with same ID result in single document")
   void testIdempotentUpsert_MultipleCalls_SingleDocument() {
-    CharacterValuationView view = createView(DETERMINISTIC_ID, "msg-123", TEST_IGN, 100000L);
+    // Incoming version (2) > existing version (1) triggers update
+    CharacterValuationView view = createView(DETERMINISTIC_ID, "msg-123", TEST_IGN, 100000L, 2L);
+    CharacterValuationView existing = createView(DETERMINISTIC_ID, "msg-old", TEST_IGN, 50000L, 1L);
 
-    doAnswer(
-            inv -> {
-              ThrowingRunnable runnable = inv.getArgument(0);
-              runnable.run();
-              return null;
-            })
-        .when(mockExecutor)
-        .executeVoid(any(), any(TaskContext.class));
+    // Mock repository to return existing document (triggers update path)
+    when(mockRepository.findById(DETERMINISTIC_ID)).thenReturn(Optional.of(existing));
+
+    // Mock meter registry for counter
+    when(mockMeterRegistry.counter(any(String.class), any(String[].class)))
+        .thenReturn(mock(Counter.class));
+
+    // Mock updateFirst to return successful result
+    when(mockMongoTemplate.updateFirst(any(), any(), eq(CharacterValuationView.class)))
+        .thenReturn(com.mongodb.client.result.UpdateResult.acknowledged(1L, 1L, null));
 
     queryService.upsert(view);
     queryService.upsert(view);
     queryService.upsert(view);
 
-    verify(mockMongoTemplate, times(3)).upsert(any(), any(), eq(CharacterValuationView.class));
+    verify(mockMongoTemplate, times(3)).updateFirst(any(), any(), eq(CharacterValuationView.class));
   }
 
   @Test
@@ -133,58 +197,66 @@ class CharacterViewQueryServiceIdempotencyTest {
   void testIdempotentUpsert_DifferentTaskIds_DifferentDocuments() {
     String taskId1 = "task-1";
     String taskId2 = "task-2";
-    CharacterValuationView view1 = createView(TEST_IGN + ":" + taskId1, "msg-1", TEST_IGN, 100000L);
-    CharacterValuationView view2 = createView(TEST_IGN + ":" + taskId2, "msg-2", TEST_IGN, 200000L);
+    // Incoming versions > existing versions
+    CharacterValuationView view1 =
+        createView(TEST_IGN + ":" + taskId1, "msg-1", TEST_IGN, 100000L, 2L);
+    CharacterValuationView view2 =
+        createView(TEST_IGN + ":" + taskId2, "msg-2", TEST_IGN, 200000L, 2L);
+    CharacterValuationView existing =
+        createView(TEST_IGN + ":" + taskId1, "msg-old", TEST_IGN, 50000L, 1L);
 
-    doAnswer(
-            inv -> {
-              ThrowingRunnable runnable = inv.getArgument(0);
-              runnable.run();
-              return null;
-            })
-        .when(mockExecutor)
-        .executeVoid(any(), any(TaskContext.class));
+    // Mock meter registry for counter
+    when(mockMeterRegistry.counter(any(String.class), any(String[].class)))
+        .thenReturn(mock(Counter.class));
+
+    // Mock repository to return existing documents (triggers update path)
+    when(mockRepository.findById(any())).thenReturn(Optional.of(existing));
+
+    // Mock updateFirst to return successful result
+    when(mockMongoTemplate.updateFirst(any(), any(), eq(CharacterValuationView.class)))
+        .thenReturn(com.mongodb.client.result.UpdateResult.acknowledged(1L, 1L, null));
 
     queryService.upsert(view1);
     queryService.upsert(view2);
 
-    verify(mockMongoTemplate, times(2)).upsert(any(), any(), eq(CharacterValuationView.class));
+    verify(mockMongoTemplate, times(2)).updateFirst(any(), any(), eq(CharacterValuationView.class));
   }
 
   @Test
   @DisplayName("Idempotent upsert: Korean IGN (아델) handled correctly")
   void testIdempotentUpsert_KoreanIGN_HandledCorrectly() {
-    CharacterValuationView view = createView(DETERMINISTIC_ID, "msg-123", TEST_IGN, 100000L);
+    // Incoming version (2) > existing version (1) triggers update
+    CharacterValuationView view = createView(DETERMINISTIC_ID, "msg-123", TEST_IGN, 100000L, 2L);
+    CharacterValuationView existing = createView(DETERMINISTIC_ID, "msg-old", TEST_IGN, 50000L, 1L);
     view.setCharacterOcid("ocid-123");
 
-    doAnswer(
-            inv -> {
-              ThrowingRunnable runnable = inv.getArgument(0);
-              runnable.run();
-              return null;
-            })
-        .when(mockExecutor)
-        .executeVoid(any(), any(TaskContext.class));
+    // Mock meter registry for counter
+    when(mockMeterRegistry.counter(any(String.class), any(String[].class)))
+        .thenReturn(mock(Counter.class));
+
+    // Mock repository to return existing document (triggers update path)
+    when(mockRepository.findById(DETERMINISTIC_ID)).thenReturn(Optional.of(existing));
+
+    // Mock updateFirst to return successful result
+    when(mockMongoTemplate.updateFirst(any(), any(), eq(CharacterValuationView.class)))
+        .thenReturn(com.mongodb.client.result.UpdateResult.acknowledged(1L, 1L, null));
 
     queryService.upsert(view);
 
-    verify(mockMongoTemplate).upsert(any(), any(), eq(CharacterValuationView.class));
+    verify(mockMongoTemplate).updateFirst(any(), any(), eq(CharacterValuationView.class));
     assertThat(view.getUserIgn()).isEqualTo(TEST_IGN);
   }
 
   @Test
   @DisplayName("Graceful degradation: MongoDB failure returns null on findByUserIgn")
   void testGracefulDegradation_MongoDBFailure_ReturnsNull() throws Exception {
-    when(mockExecutor.executeOrDefault(any(), any(), any()))
-        .thenAnswer(
-            inv -> {
-              return inv.getArgument(1);
-            });
+    // When repository throws exception, executor returns default value
+    when(mockRepository.findByUserIgn(TEST_IGN))
+        .thenThrow(new RuntimeException("MongoDB connection failed"));
 
     CharacterValuationView result = queryService.findByUserIgn(TEST_IGN);
 
     assertThat(result).isNull();
-    verify(mockRepository, never()).findByUserIgn(any());
   }
 
   @Test
@@ -194,12 +266,6 @@ class CharacterViewQueryServiceIdempotencyTest {
 
     when(mockRepository.findByUserIgn(TEST_IGN)).thenReturn(view);
     when(mockMeterRegistry.timer(any(String.class), any(String[].class))).thenReturn(mockTimer);
-    when(mockExecutor.executeOrDefault(any(), any(), any()))
-        .thenAnswer(
-            inv -> {
-              ThrowingSupplier<CharacterValuationView> supplier = inv.getArgument(0);
-              return supplier.get();
-            });
 
     queryService.findByUserIgn(TEST_IGN);
 
@@ -212,12 +278,6 @@ class CharacterViewQueryServiceIdempotencyTest {
   void testMetrics_CacheMiss_RecordsLatency() throws Exception {
     when(mockRepository.findByUserIgn(TEST_IGN)).thenReturn(null);
     when(mockMeterRegistry.timer(any(String.class), any(String[].class))).thenReturn(mockTimer);
-    when(mockExecutor.executeOrDefault(any(), any(), any()))
-        .thenAnswer(
-            inv -> {
-              ThrowingSupplier<CharacterValuationView> supplier = inv.getArgument(0);
-              return supplier.get();
-            });
 
     queryService.findByUserIgn(TEST_IGN);
 
@@ -228,15 +288,6 @@ class CharacterViewQueryServiceIdempotencyTest {
   @Test
   @DisplayName("Delete by user IGN: Removes all documents for user")
   void testDeleteByUserIgn_RemovesAllDocuments() {
-    doAnswer(
-            inv -> {
-              ThrowingRunnable runnable = inv.getArgument(0);
-              runnable.run();
-              return null;
-            })
-        .when(mockExecutor)
-        .executeVoid(any(), any(TaskContext.class));
-
     queryService.deleteByUserIgn(TEST_IGN);
 
     verify(mockRepository).deleteByUserIgn(TEST_IGN);

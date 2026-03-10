@@ -13,19 +13,19 @@ import maple.expectation.core.domain.model.PotentialStat
  */
 interface PotentialStatPort {
 
-  /**
-   * Find potential stat by option name.
-   *
-   * @param optionName the name of the potential option
-   * @return Optional containing the potential stat, or empty if not found
-   */
-  fun findByOptionName(optionName: String): Optional<PotentialStat>
+    /**
+     * Find potential stat by option name.
+     *
+     * @param optionName the name of the potential option
+     * @return Optional containing the potential stat, or empty if not found
+     */
+    fun findByOptionName(optionName: String): Optional<PotentialStat>
 
-  /**
-   * Check if an option name is a valid potential stat.
-   *
-   * @param optionName the name to check
-   * @return true if valid, false otherwise
-   */
-  fun isValidOption(optionName: String): Boolean
+    /**
+     * Check if an option name is a valid potential stat.
+     *
+     * @param optionName the name to check
+     * @return true if valid, false otherwise
+     */
+    fun isValidOption(optionName: String): Boolean
 }

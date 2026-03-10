@@ -1,14 +1,14 @@
 package maple.expectation.infrastructure.queue.like
 
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.TimeUnit
+import java.util.function.BiConsumer
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.queue.RedisKey
-import org.slf4j.LoggerFactory
 import org.redisson.api.RLock
 import org.redisson.api.RedissonClient
-import java.util.concurrent.TimeUnit
-import java.util.function.BiConsumer
+import org.slf4j.LoggerFactory
 
 /**
  * 파티션 기반 분산 Flush 전략 (#271 V5 Stateless Architecture)
@@ -22,7 +22,7 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
     private val partitionCount: Int = 4,
     private val lockWaitMs: Long = 100L,
     private val lockLeaseMs: Long = 30000L,
-    private val batchSize: Int = 1000
+    private val batchSize: Int = 1000,
 ) {
 
     companion object {
@@ -36,9 +36,7 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
     /**
      * 담당 파티션 Flush 실행 (P0-10: Flush Race 해결)
      */
-    fun flushAssignedPartitions(): FlushResult {
-        return flushWithPartitions(syncProcessor)
-    }
+    fun flushAssignedPartitions(): FlushResult = flushWithPartitions(syncProcessor)
 
     /**
      * 파티션별 분산 Flush 실행
@@ -79,7 +77,7 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
         recordFlushMetrics(acquiredPartitions, processedEntries, totalDelta, failedPartitions)
 
         log.info(
-            "[Flush] Completed: partitions=$acquiredPartitions/${partitioned.size}, entries=$processedEntries, delta=$totalDelta"
+            "[Flush] Completed: partitions=$acquiredPartitions/${partitioned.size}, entries=$processedEntries, delta=$totalDelta",
         )
 
         return FlushResult(acquiredPartitions, processedEntries, totalDelta, failedPartitions)
@@ -88,9 +86,8 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
     private fun processPartition(
         partitionId: Int,
         entries: Map<String, Long>,
-        processor: BiConsumer<String, Long>
+        processor: BiConsumer<String, Long>,
     ): PartitionResult {
-
         val lockKey = RedisKey.LIKE_FLUSH_PARTITION.withSuffix(partitionId.toString())
         val lock = redissonClient.getLock(lockKey)
 
@@ -98,7 +95,7 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
         val acquired = executor.executeOrDefault(
             { lock.tryLock(lockWaitMs, lockLeaseMs, TimeUnit.MILLISECONDS) },
             false,
-            TaskContext.of("Flush", "TryLock", partitionId.toString())
+            TaskContext.of("Flush", "TryLock", partitionId.toString()),
         )
 
         if (!acquired) {
@@ -111,16 +108,15 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
         return executor.executeWithFinally(
             { doProcessPartition(partitionId, entries, processor) },
             { unlockSafely(lock) },
-            TaskContext.of("Flush", "ProcessPartition", partitionId.toString())
+            TaskContext.of("Flush", "ProcessPartition", partitionId.toString()),
         )
     }
 
     private fun doProcessPartition(
         partitionId: Int,
         entries: Map<String, Long>,
-        processor: BiConsumer<String, Long>
+        processor: BiConsumer<String, Long>,
     ): PartitionResult {
-
         var processedCount = 0
         var totalDelta = 0L
         val failedEntries = mutableListOf<Pair<String, Long>>()
@@ -132,7 +128,7 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
                     true
                 },
                 false,
-                TaskContext.of("Flush", "Process", userIgn)
+                TaskContext.of("Flush", "Process", userIgn),
             )
 
             if (success == true) {
@@ -147,7 +143,7 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
         if (failedEntries.isNotEmpty()) {
             restoreEntries(failedEntries)
             log.warn(
-                "[Flush] Partition $partitionId had ${failedEntries.size} failed entries, restored to buffer"
+                "[Flush] Partition $partitionId had ${failedEntries.size} failed entries, restored to buffer",
             )
         }
 
@@ -165,9 +161,7 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
         return partitioned
     }
 
-    private fun getPartitionId(userIgn: String): Int {
-        return kotlin.math.abs(userIgn.hashCode() % partitionCount)
-    }
+    private fun getPartitionId(userIgn: String): Int = kotlin.math.abs(userIgn.hashCode() % partitionCount)
 
     private fun restoreEntries(entries: Map<String, Long>) {
         entries.forEach { (userIgn, delta) -> bufferStorage.increment(userIgn, delta) }
@@ -183,7 +177,7 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
         partitions: Int,
         entries: Int,
         delta: Long,
-        failed: Int
+        failed: Int,
     ) {
         meterRegistry.counter("like.flush.partitions.acquired").increment(partitions.toDouble())
         meterRegistry.counter("like.flush.entries.processed").increment(entries.toDouble())
@@ -206,7 +200,7 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
         val acquiredPartitions: Int,
         val processedEntries: Int,
         val totalDelta: Long,
-        val failedPartitions: Int
+        val failedPartitions: Int,
     ) {
 
         companion object {
@@ -225,7 +219,7 @@ class PartitionedFlushStrategy @JvmOverloads constructor(
         val acquired: Boolean,
         val success: Boolean,
         val processedCount: Int,
-        val totalDelta: Long
+        val totalDelta: Long,
     ) {
 
         companion object {

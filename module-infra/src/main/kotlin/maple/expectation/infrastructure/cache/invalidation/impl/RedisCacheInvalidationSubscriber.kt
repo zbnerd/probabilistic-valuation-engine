@@ -13,10 +13,9 @@ import maple.expectation.infrastructure.queue.RedisKey
 import org.redisson.api.RTopic
 import org.redisson.api.RedissonClient
 import org.redisson.api.listener.MessageListener
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.cache.Cache
-import org.springframework.stereotype.Component
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Component
 
 /**
  * Redis RTopic 기반 캐시 무효화 이벤트 구독자
@@ -48,7 +47,7 @@ class RedisCacheInvalidationSubscriber(
     private val tieredCacheManager: TieredCacheManager?,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String
+    @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String,
 ) : CacheInvalidationSubscriber {
     companion object {
         private val log = LoggerFactory.getLogger(RedisCacheInvalidationSubscriber::class.java)
@@ -72,15 +71,13 @@ class RedisCacheInvalidationSubscriber(
             log.info(
                 "[CacheInvalidation] Subscribed to topic: {}, instanceId={}",
                 RedisKey.CACHE_INVALIDATION_TOPIC.key,
-                instanceId
+                instanceId,
             )
         }, context)
     }
 
     /** 메시지 리스너 생성 (CLAUDE.md Section 15: 람다 3줄 이내) */
-    private fun createMessageListener(): MessageListener<CacheInvalidationEvent> {
-        return MessageListener { _, event -> onEvent(event) }
-    }
+    private fun createMessageListener(): MessageListener<CacheInvalidationEvent> = MessageListener { _, event -> onEvent(event) }
 
     /**
      * 이벤트 수신 및 처리
@@ -126,7 +123,7 @@ class RedisCacheInvalidationSubscriber(
                     "[CacheInvalidation] L1 evicted: cache={}, key={}, source={}",
                     event.cacheName,
                     event.key,
-                    event.sourceInstanceId
+                    event.sourceInstanceId,
                 )
             }
             InvalidationType.CLEAR_ALL -> {
@@ -134,7 +131,7 @@ class RedisCacheInvalidationSubscriber(
                 log.debug(
                     "[CacheInvalidation] L1 cleared: cache={}, source={}",
                     event.cacheName,
-                    event.sourceInstanceId
+                    event.sourceInstanceId,
                 )
             }
         }

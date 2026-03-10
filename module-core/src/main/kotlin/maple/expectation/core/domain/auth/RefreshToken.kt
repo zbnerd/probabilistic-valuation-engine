@@ -33,7 +33,7 @@ data class RefreshToken(
     val fingerprint: String,
     val familyId: String,
     val expiresAt: Instant,
-    val used: Boolean
+    val used: Boolean,
 ) {
     // Explicit Record-style accessors for production code compatibility
     // (Java Record pattern: direct property name as method)
@@ -62,14 +62,14 @@ data class RefreshToken(
             sessionId: String,
             fingerprint: String,
             familyId: String,
-            expirationSeconds: Long
+            expirationSeconds: Long,
         ): RefreshToken = RefreshToken(
             UUID.randomUUID().toString(),
             sessionId,
             fingerprint,
             familyId,
             Instant.now().plusSeconds(expirationSeconds),
-            false
+            false,
         )
     }
 

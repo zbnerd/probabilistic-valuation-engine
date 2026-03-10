@@ -21,13 +21,13 @@ object BossEquipmentRegistry {
         "앱솔랩스",
         "아케인셰이드",
         "제네시스",
-        "데스티니"
+        "데스티니",
     )
 
     /** 보스 드랍 방어구 접두어 (세트 장비) */
     private val BOSS_ARMOR_PREFIXES = setOf(
         "네크로", "로얄 반 레온", "라이온하트", "드래곤테일", "팔콘윙", "레이븐혼", "샤크투스", "이글아이", "트릭스터", "하이네스", "앱솔랩스",
-        "아케인셰이드", "에테르넬"
+        "아케인셰이드", "에테르넬",
     )
 
     /** 보스 드랍 장신구 (정확한 이름) */
@@ -54,7 +54,7 @@ object BossEquipmentRegistry {
         "저주받은 적의 마도서",
         "죽음의 맹세",
         "불멸의 유산",
-        "오만의 원죄"
+        "오만의 원죄",
     )
 
     /**
@@ -85,11 +85,7 @@ object BossEquipmentRegistry {
      * @param isWeapon 무기 여부
      * @return 제로 무기이면 true (보스 드랍 제외 대상)
      */
-    fun isZeroWeapon(characterClass: String?, isWeapon: Boolean): Boolean {
-        return isWeapon && characterClass == "제로"
-    }
+    fun isZeroWeapon(characterClass: String?, isWeapon: Boolean): Boolean = isWeapon && characterClass == "제로"
 
-    private fun matchesAnyPrefix(itemName: String, prefixes: Set<String>): Boolean {
-        return prefixes.any { itemName.startsWith(it) }
-    }
+    private fun matchesAnyPrefix(itemName: String, prefixes: Set<String>): Boolean = prefixes.any { itemName.startsWith(it) }
 }

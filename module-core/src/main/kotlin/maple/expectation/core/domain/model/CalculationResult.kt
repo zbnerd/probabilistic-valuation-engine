@@ -9,7 +9,7 @@ import java.math.BigDecimal
 sealed class CalculationResult(
     open val correlationId: String,
     open val timestamp: Long,
-    open val metadata: Map<String, Any> = emptyMap()
+    open val metadata: Map<String, Any> = emptyMap(),
 )
 
 /**
@@ -23,7 +23,7 @@ data class EnhanceResult(
     val targetLevel: Int,
     val expectedCost: BigDecimal,
     val successRate: BigDecimal,
-    val failureCost: BigDecimal
+    val failureCost: BigDecimal,
 ) : CalculationResult(correlationId, timestamp, metadata)
 
 /**
@@ -40,7 +40,7 @@ data class CubeResult(
     val slotCount: Int,
     val expectedCost: BigDecimal,
     val successRate: BigDecimal,
-    val options: List<String>
+    val options: List<String>,
 ) : CalculationResult(correlationId, timestamp, metadata)
 
 /**
@@ -54,7 +54,7 @@ data class FlameResult(
     val targetScore: Int,
     val expectedTrials: BigDecimal,
     val expectedCost: BigDecimal,
-    val successRate: BigDecimal
+    val successRate: BigDecimal,
 ) : CalculationResult(correlationId, timestamp, metadata)
 
 /**
@@ -71,5 +71,5 @@ data class StarforceResult(
     val expectedCost: BigDecimal,
     val successRate: BigDecimal,
     val enhancementCost: BigDecimal,
-    val baseCost: BigDecimal
+    val baseCost: BigDecimal,
 ) : CalculationResult(correlationId, timestamp, metadata)

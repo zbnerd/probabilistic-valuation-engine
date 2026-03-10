@@ -43,147 +43,149 @@ import maple.expectation.error.exception.ProbabilityInvariantException
  */
 object ProbabilityConverter {
 
-  private const val MASS_TOLERANCE = 1e-12
-  private const val NEGATIVE_TOLERANCE = -1e-15
+    private const val MASS_TOLERANCE = 1e-12
+    private const val NEGATIVE_TOLERANCE = -1e-15
 
-  /**
-   * Convolve multiple slot PMFs into single dense PMF.
-   *
-   * <p><b>Preconditions:</b>
-   *
-   * <ul>
-   *   <li>Mass conservation: Σ=1 ± MASS_TOLERANCE
-   *   <li>No NaN/Inf allowed
-   *   <li>If enableTailClamp=true, max value = target+1
-   * </ul>
-   *
-   * @param slotPmfs list of slot PMFs
-   * @param target target sum (number of successful rolls)
-   * @param enableTailClamp whether to enable tail clamping
-   * @return convolved dense PMF
-   * @throws ProbabilityInvariantException if invariant is violated
-   */
-  @JvmStatic
-  fun convolveAll(
-      slotPmfs: List<SparsePmf>,
-      target: Int,
-      enableTailClamp: Boolean
-  ): DensePmf {
-    if (slotPmfs == null) {
-      throw IllegalArgumentException("slotPmfs cannot be null")
-    }
-    if (target < 0) {
-      throw IllegalArgumentException("target must be non-negative")
-    }
+    /**
+     * Convolve multiple slot PMFs into single dense PMF.
+     *
+     * <p><b>Preconditions:</b>
+     *
+     * <ul>
+     *   <li>Mass conservation: Σ=1 ± MASS_TOLERANCE
+     *   <li>No NaN/Inf allowed
+     *   <li>If enableTailClamp=true, max value = target+1
+     * </ul>
+     *
+     * @param slotPmfs list of slot PMFs
+     * @param target target sum (number of successful rolls)
+     * @param enableTailClamp whether to enable tail clamping
+     * @return convolved dense PMF
+     * @throws ProbabilityInvariantException if invariant is violated
+     */
+    @JvmStatic
+    fun convolveAll(
+        slotPmfs: List<SparsePmf>,
+        target: Int,
+        enableTailClamp: Boolean,
+    ): DensePmf {
+        if (slotPmfs == null) {
+            throw IllegalArgumentException("slotPmfs cannot be null")
+        }
+        if (target < 0) {
+            throw IllegalArgumentException("target must be non-negative")
+        }
 
-    val maxIndex = if (enableTailClamp) target else calculateMaxSum(slotPmfs)
-    val acc = initializeAccumulator(maxIndex)
+        val maxIndex = if (enableTailClamp) target else calculateMaxSum(slotPmfs)
+        val acc = initializeAccumulator(maxIndex)
 
-    var currentAcc = acc
-    for (slot in slotPmfs) {
-      currentAcc = convolveSlot(currentAcc, slot, maxIndex)
-    }
+        var currentAcc = acc
+        for (slot in slotPmfs) {
+            currentAcc = convolveSlot(currentAcc, slot, maxIndex)
+        }
 
-    val result = DensePmf.fromArray(currentAcc)
-    validateInvariants(result)
-    return result
-  }
-
-  /**
-   * Initializes probability accumulator array.
-   *
-   * @param maxIndex maximum index to allocate
-   * @return initialized accumulator with p(0)=1.0
-   */
-  private fun initializeAccumulator(maxIndex: Int): DoubleArray {
-    val acc = DoubleArray(maxIndex + 1)
-    acc[0] = 1.0 // Initial state: probability of sum=0 is 100%
-    return acc
-  }
-
-  /**
-   * Convolves a single slot into the accumulator.
-   *
-   * @param acc current accumulator
-   * @param slot slot PMF to convolve
-   * @param maxIndex maximum index
-   * @return updated accumulator
-   */
-  private fun convolveSlot(acc: DoubleArray, slot: SparsePmf, maxIndex: Int): DoubleArray {
-    val next = DoubleArray(maxIndex + 1)
-
-    for (i in 0..maxIndex) {
-      if (acc[i] == 0.0) continue
-      accumulateSlotContributions(acc, slot, next, i, maxIndex)
+        val result = DensePmf.fromArray(currentAcc)
+        validateInvariants(result)
+        return result
     }
 
-    return next
-  }
-
-  /**
-   * Accumulates slot contributions to next state.
-   *
-   * @param acc current accumulator
-   * @param slot slot PMF
-   * @param next next accumulator (output)
-   * @param currentIndex current index being processed
-   * @param maxIndex maximum index
-   */
-  private fun accumulateSlotContributions(
-      acc: DoubleArray,
-      slot: SparsePmf,
-      next: DoubleArray,
-      currentIndex: Int,
-      maxIndex: Int
-  ) {
-    for (k in 0 until slot.size()) {
-      val value = slot.valueAt(k)
-      val prob = slot.probAt(k)
-
-      // P2 Fix (PR #159 Code refactoring): Guard against negative values
-      // Prevents ArrayIndexOutOfBoundsException when parsing/extraction bugs occur
-      if (value < 0) {
-        throw maple.expectation.error.exception.ProbabilityInvariantException(
-            "Negative contribution detected: value=$value (slot index=$k)")
-      }
-
-      val targetIndex = minOf(currentIndex + value, maxIndex) // Tail Clamp
-      next[targetIndex] += acc[currentIndex] * prob
+    /**
+     * Initializes probability accumulator array.
+     *
+     * @param maxIndex maximum index to allocate
+     * @return initialized accumulator with p(0)=1.0
+     */
+    private fun initializeAccumulator(maxIndex: Int): DoubleArray {
+        val acc = DoubleArray(maxIndex + 1)
+        acc[0] = 1.0 // Initial state: probability of sum=0 is 100%
+        return acc
     }
-  }
 
-  /**
-   * Calculates maximum possible sum across all slots.
-   *
-   * @param slotPmfs list of slot PMFs
-   * @return maximum sum value
-   */
-  private fun calculateMaxSum(slotPmfs: List<SparsePmf>): Int {
-    return slotPmfs.sumOf { it.maxValue() }
-  }
+    /**
+     * Convolves a single slot into the accumulator.
+     *
+     * @param acc current accumulator
+     * @param slot slot PMF to convolve
+     * @param maxIndex maximum index
+     * @return updated accumulator
+     */
+    private fun convolveSlot(acc: DoubleArray, slot: SparsePmf, maxIndex: Int): DoubleArray {
+        val next = DoubleArray(maxIndex + 1)
 
-  /**
-   * Validates DensePmf invariants using Kahan summation.
-   *
-   * @param pmf PMF to validate
-   * @throws ProbabilityInvariantException if invariant is violated
-   */
-  private fun validateInvariants(pmf: DensePmf) {
-    val sum = pmf.totalMassKahan()
-    if (Math.abs(sum - 1.0) > MASS_TOLERANCE) {
-      throw maple.expectation.error.exception.ProbabilityInvariantException(
-          "Mass conservation violated: Σp=$sum")
+        for (i in 0..maxIndex) {
+            if (acc[i] == 0.0) continue
+            accumulateSlotContributions(acc, slot, next, i, maxIndex)
+        }
+
+        return next
     }
-    if (pmf.hasNegative(NEGATIVE_TOLERANCE)) {
-      throw maple.expectation.error.exception.ProbabilityInvariantException(
-          "Negative probability detected")
+
+    /**
+     * Accumulates slot contributions to next state.
+     *
+     * @param acc current accumulator
+     * @param slot slot PMF
+     * @param next next accumulator (output)
+     * @param currentIndex current index being processed
+     * @param maxIndex maximum index
+     */
+    private fun accumulateSlotContributions(
+        acc: DoubleArray,
+        slot: SparsePmf,
+        next: DoubleArray,
+        currentIndex: Int,
+        maxIndex: Int,
+    ) {
+        for (k in 0 until slot.size()) {
+            val value = slot.valueAt(k)
+            val prob = slot.probAt(k)
+
+            // P2 Fix (PR #159 Code refactoring): Guard against negative values
+            // Prevents ArrayIndexOutOfBoundsException when parsing/extraction bugs occur
+            if (value < 0) {
+                throw maple.expectation.error.exception.ProbabilityInvariantException(
+                    "Negative contribution detected: value=$value (slot index=$k)",
+                )
+            }
+
+            val targetIndex = minOf(currentIndex + value, maxIndex) // Tail Clamp
+            next[targetIndex] += acc[currentIndex] * prob
+        }
     }
-    if (pmf.hasNaNOrInf()) {
-      throw maple.expectation.error.exception.ProbabilityInvariantException("NaN/Inf detected")
+
+    /**
+     * Calculates maximum possible sum across all slots.
+     *
+     * @param slotPmfs list of slot PMFs
+     * @return maximum sum value
+     */
+    private fun calculateMaxSum(slotPmfs: List<SparsePmf>): Int = slotPmfs.sumOf { it.maxValue() }
+
+    /**
+     * Validates DensePmf invariants using Kahan summation.
+     *
+     * @param pmf PMF to validate
+     * @throws ProbabilityInvariantException if invariant is violated
+     */
+    private fun validateInvariants(pmf: DensePmf) {
+        val sum = pmf.totalMassKahan()
+        if (Math.abs(sum - 1.0) > MASS_TOLERANCE) {
+            throw maple.expectation.error.exception.ProbabilityInvariantException(
+                "Mass conservation violated: Σp=$sum",
+            )
+        }
+        if (pmf.hasNegative(NEGATIVE_TOLERANCE)) {
+            throw maple.expectation.error.exception.ProbabilityInvariantException(
+                "Negative probability detected",
+            )
+        }
+        if (pmf.hasNaNOrInf()) {
+            throw maple.expectation.error.exception.ProbabilityInvariantException("NaN/Inf detected")
+        }
+        if (pmf.hasValueExceedingOne()) {
+            throw maple.expectation.error.exception.ProbabilityInvariantException(
+                "Probability > 1 detected",
+            )
+        }
     }
-    if (pmf.hasValueExceedingOne()) {
-      throw maple.expectation.error.exception.ProbabilityInvariantException(
-          "Probability > 1 detected")
-    }
-  }
 }

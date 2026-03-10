@@ -17,7 +17,7 @@ import java.util.Optional
  * @see EnhanceDecorator 추상 장식자
  */
 data class BaseItem(
-    private val itemName: String
+    private val itemName: String,
 ) : ExpectationCalculatorPort {
 
     override fun calculateCost(): Long = 0 // 기본 아이템 자체의 소모 비용은 0

@@ -63,10 +63,11 @@ class DatabaseMetricsCollector(
     collectTimeoutMetrics(this, hikariMetrics)
   }
 
-  override fun supports(category: MetricCategory): Boolean =
-      MetricCategory.DATABASE == category
+    override fun getCategoryName(): String = MetricCategory.DATABASE.key
 
-  override fun getOrder(): Int = 4
+    override fun collect(): Map<String, Any> = buildMap {
+        // Query metrics once and reuse (efficiency optimization)
+        val hikariMetrics = queryHikariMetrics()
 
   /**
    * Data class to hold queried HikariCP metrics (avoid repeated lookups)

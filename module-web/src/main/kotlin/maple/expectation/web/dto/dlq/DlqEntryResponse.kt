@@ -1,7 +1,7 @@
 package maple.expectation.web.dto.dlq
 
-import maple.expectation.domain.v2.DonationDlq
 import java.time.LocalDateTime
+import maple.expectation.domain.v2.DonationDlq
 
 /**
  * DLQ 조회 응답 DTO
@@ -23,22 +23,21 @@ data class DlqEntryResponse(
     val eventType: String,
     val payloadPreview: String?,
     val failureReason: String?,
-    val movedAt: LocalDateTime
+    val movedAt: LocalDateTime,
 ) {
     companion object {
         private const val PREVIEW_LENGTH = 100
 
         @JvmStatic
-        fun from(dlq: DonationDlq): DlqEntryResponse =
-            DlqEntryResponse(
-                id = dlq.id ?: 0L,
-                originalOutboxId = dlq.originalOutboxId ?: 0L,
-                requestId = dlq.requestId ?: "",
-                eventType = dlq.eventType ?: "",
-                payloadPreview = truncatePayload(dlq.payload),
-                failureReason = dlq.failureReason,
-                movedAt = dlq.movedAt ?: LocalDateTime.now()
-            )
+        fun from(dlq: DonationDlq): DlqEntryResponse = DlqEntryResponse(
+            id = dlq.id ?: 0L,
+            originalOutboxId = dlq.originalOutboxId ?: 0L,
+            requestId = dlq.requestId ?: "",
+            eventType = dlq.eventType ?: "",
+            payloadPreview = truncatePayload(dlq.payload),
+            failureReason = dlq.failureReason,
+            movedAt = dlq.movedAt ?: LocalDateTime.now(),
+        )
 
         private fun truncatePayload(payload: String?): String? {
             if (payload == null) return null

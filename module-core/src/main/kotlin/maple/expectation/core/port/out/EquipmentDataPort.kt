@@ -14,34 +14,34 @@ import maple.expectation.core.domain.model.equipment.EquipmentData
  */
 interface EquipmentDataPort {
 
-  /**
-   * Find equipment data by character ID.
-   *
-   * @param characterId the unique character identifier
-   * @return Optional containing the equipment data, or empty if not found
-   */
-  fun findByCharacterId(characterId: CharacterId): Optional<EquipmentData>
+    /**
+     * Find equipment data by character ID.
+     *
+     * @param characterId the unique character identifier
+     * @return Optional containing the equipment data, or empty if not found
+     */
+    fun findByCharacterId(characterId: CharacterId): Optional<EquipmentData>
 
-  /**
-   * Find equipment data by character OCID.
-   *
-   * @param ocid the character's OCID
-   * @return Optional containing the equipment data, or empty if not found
-   */
-  fun findByOcid(ocid: String): Optional<EquipmentData>
+    /**
+     * Find equipment data by character OCID.
+     *
+     * @param ocid the character's OCID
+     * @return Optional containing the equipment data, or empty if not found
+     */
+    fun findByOcid(ocid: String): Optional<EquipmentData>
 
-  /**
-   * Save or update equipment data for a character.
-   *
-   * @param characterId the unique character identifier
-   * @param equipmentData the equipment data to save
-   */
-  fun save(characterId: CharacterId, equipmentData: EquipmentData)
+    /**
+     * Save or update equipment data for a character.
+     *
+     * @param characterId the unique character identifier
+     * @param equipmentData the equipment data to save
+     */
+    fun save(characterId: CharacterId, equipmentData: EquipmentData)
 
-  /**
-   * Delete equipment data for a character.
-   *
-   * @param characterId the unique character identifier
-   */
-  fun deleteByCharacterId(characterId: CharacterId)
+    /**
+     * Delete equipment data for a character.
+     *
+     * @param characterId the unique character identifier
+     */
+    fun deleteByCharacterId(characterId: CharacterId)
 }

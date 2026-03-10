@@ -1,6 +1,8 @@
 package maple.expectation.web.controller.v5
 
 import jakarta.validation.constraints.NotBlank
+import java.util.Optional
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.port.inbound.CalculationQueuePort
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -19,8 +21,6 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.util.Optional
-import java.util.concurrent.CompletableFuture
 
 /**
  * V5 CQRS 캐릭터 컨트롤러 (ADR-005 이관)
@@ -40,7 +40,7 @@ import java.util.concurrent.CompletableFuture
 class GameCharacterControllerV5(
     private val queryPort: CharacterViewQueryPort,
     private val queuePort: CalculationQueuePort,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
 
     /**
@@ -52,7 +52,7 @@ class GameCharacterControllerV5(
     @GetMapping("/{userIgn}/expectation")
     @PreAuthorize("permitAll()")
     fun getExpectationV5(
-        @PathVariable @NotBlank userIgn: String
+        @PathVariable @NotBlank userIgn: String,
     ): CompletableFuture<ResponseEntity<*>> {
         log.debug("[V5] Query expectation for: {}", maskIgn(userIgn))
         return CompletableFuture.supplyAsync { processMongoDBCacheFirstLookup(userIgn) }
@@ -72,7 +72,7 @@ class GameCharacterControllerV5(
                 }
             },
             Optional.empty<EquipmentExpectationResponseV5>(),
-            context
+            context,
         )
 
         // 2. HIT: Return immediately (1-10ms)
@@ -94,7 +94,7 @@ class GameCharacterControllerV5(
     @PostMapping("/{userIgn}/expectation/recalculate")
     @PreAuthorize("permitAll()")
     fun recalculateExpectationV5(
-        @PathVariable userIgn: String
+        @PathVariable userIgn: String,
     ): CompletableFuture<ResponseEntity<*>> {
         log.info("[V5] Force recalculation requested: {}", maskIgn(userIgn))
         return CompletableFuture.supplyAsync { processCacheInvalidation(userIgn) }
@@ -115,12 +115,12 @@ class GameCharacterControllerV5(
     private fun queueCalculationTask(
         userIgn: String,
         forceRecalculation: Boolean,
-        context: TaskContext
+        context: TaskContext,
     ): ResponseEntity<*> {
         val queued = executor.executeOrDefault(
             { queuePort.offerHighPriority(userIgn, forceRecalculation) },
             false,
-            context
+            context,
         )
 
         return if (queued) {

@@ -4,10 +4,10 @@ import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import jakarta.annotation.PostConstruct
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 
 /**
  * Lock Instrumentation Metrics (Issue #310 Phase 0)
@@ -62,7 +62,7 @@ class LockMetrics(private val registry: MeterRegistry) {
             .register(registry)
 
         log.info(
-            "[LockMetrics] Initialized - Timer (p50/p95/p99), Counters (redis/mysql failures), Gauges (active locks) registered"
+            "[LockMetrics] Initialized - Timer (p50/p95/p99), Counters (redis/mysql failures), Gauges (active locks) registered",
         )
     }
 
@@ -111,11 +111,9 @@ class LockMetrics(private val registry: MeterRegistry) {
     }
 
     /** 현재 활성 락 수 조회 (테스트용) */
-    fun getActiveLocks(implementation: String): Long {
-        return when (implementation.lowercase()) {
-            "redis" -> redisActiveLocks.get()
-            "mysql" -> mysqlActiveLocks.get()
-            else -> 0L
-        }
+    fun getActiveLocks(implementation: String): Long = when (implementation.lowercase()) {
+        "redis" -> redisActiveLocks.get()
+        "mysql" -> mysqlActiveLocks.get()
+        else -> 0L
     }
 }

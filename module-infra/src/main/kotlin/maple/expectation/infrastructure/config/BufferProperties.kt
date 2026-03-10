@@ -36,7 +36,7 @@ import org.springframework.validation.annotation.Validated
 data class BufferProperties(
     @DefaultValue("30") @Min(10) @Max(120) val shutdownAwaitTimeoutSeconds: Int = 30,
     @DefaultValue("10") @Min(5) @Max(100) val casMaxRetries: Int = 10,
-    @DefaultValue("10000") @Min(1000) @Max(100000) val maxQueueSize: Int = 10000
+    @DefaultValue("10000") @Min(1000) @Max(100000) val maxQueueSize: Int = 10000,
 ) {
     companion object {
         /**

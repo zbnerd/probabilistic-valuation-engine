@@ -6,10 +6,12 @@ import java.util.concurrent.locks.Lock
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.context.annotation.Profile
-import org.springframework.stereotype.Component
 
-/** Guava Striped Lock 전략 (테스트 환경 전용 - 100% 평탄화 완료) */
-@Component
+/**
+ * Guava Striped Lock 전략 (테스트 환경 전용 - 100% 평탄화 완료)
+ *
+ * <p>주의: 이 클래스는 Spring Bean으로 등록되지 않습니다.
+ * 테스트에서 필요한 경우 수동으로 생성해서 사용하세요 */
 @Profile("test")
 class GuavaLockStrategy(executor: LogicExecutor) : AbstractLockStrategy(executor) {
 

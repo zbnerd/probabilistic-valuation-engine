@@ -68,7 +68,7 @@ class LikeRealtimeSyncConfig(
         private val cacheManager: TieredCacheManager,
         private val executor: LogicExecutor,
         private val meterRegistry: MeterRegistry,
-        private val instanceId: String,
+        @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String,
     ) {
 
         private val log = LoggerFactory.getLogger(RTopicConfig::class.java)
@@ -104,7 +104,7 @@ class LikeRealtimeSyncConfig(
         private val cacheManager: TieredCacheManager,
         private val executor: LogicExecutor,
         private val meterRegistry: MeterRegistry,
-        private val instanceId: String,
+        @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String,
     ) {
 
         private val log = LoggerFactory.getLogger(ReliableTopicConfig::class.java)

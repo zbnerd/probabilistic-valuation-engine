@@ -172,20 +172,4 @@ class EventConsumerConfig {
             }
         }
     }
-
-    /**
-     * High-priority consumer properties bean.
-     *
-     * @return Properties with defaults applied
-     */
-    @Bean
-    fun highPriorityConsumerProperties(): HighPriorityConsumerProperties = HighPriorityConsumerProperties.defaults()
-
-    /**
-     * Low-priority consumer properties bean.
-     *
-     * @return Properties with defaults applied
-     */
-    @Bean
-    fun lowPriorityConsumerProperties(): LowPriorityConsumerProperties = LowPriorityConsumerProperties.defaults()
 }

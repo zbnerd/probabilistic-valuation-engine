@@ -34,6 +34,13 @@ spring:
   scheduling:
     enable: false
 
+  # Spring Batch 비활성화 (테스트 환경에서 DB 스키마 자동 생성 방지)
+  batch:
+    jdbc:
+      initialize-schema: never
+    job:
+      enabled: false
+
 # MySQL Fallback 비활성화 (테스트 환경: Redis read-only replica 문제 방지)
 resilience:
   mysql-fallback:
@@ -132,6 +139,14 @@ cors:
 ai:
   sre:
     enabled: false
+
+# Event Consumer 설정 (테스트용 기본값)
+event:
+  consumer:
+    high:
+      max-concurrent: 50
+    low:
+      max-concurrent: 20
 
 langchain4j:
   glm-4:

@@ -67,8 +67,8 @@ class DatabaseCleaner(
             em.createNativeQuery("TRUNCATE TABLE $tableName CASCADE").executeUpdate()
         }
 
-        // FK 무시 모드 비활성화
-        em.createNativeQuery("SET session_replication_role = 'DEFAULT'").executeUpdate()
+        // FK 무시 모드 비활성화 (origin = 기본 모드)
+        em.createNativeQuery("SET session_replication_role = 'origin'").executeUpdate()
     }
 
     /**
@@ -81,6 +81,6 @@ class DatabaseCleaner(
         tableNames.forEach { tableName ->
             em.createNativeQuery("TRUNCATE TABLE $tableName CASCADE").executeUpdate()
         }
-        em.createNativeQuery("SET session_replication_role = 'DEFAULT'").executeUpdate()
+        em.createNativeQuery("SET session_replication_role = 'origin'").executeUpdate()
     }
 }

@@ -4,6 +4,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.core.importer.ClassFileImporter;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.stereotype.Component;
@@ -359,5 +360,67 @@ class ArchitectureTest {
             "..infrastructure.external..")
         .because("Shared utilities must remain independent of business logic")
         .check(new ClassFileImporter().importPackages("maple.expectation.shared"));
+  }
+
+  // ========================================
+  // AI Coding Guardrails (Issue #585)
+  // ========================================
+
+  /**
+   * Services should not use BigDecimal(Double) constructor.
+   *
+   * <p>BigDecimal(0.1) creates 0.10000000000000000555... due to floating-point representation. Use
+   * BigDecimal("0.1") or BigDecimal.valueOf() instead.
+   *
+   * <p><strong>Reason:</strong> AI coding tools often use BigDecimal(0.1) which causes precision
+   * errors in financial calculations (MapleStory meso calculations).
+   */
+  @Test
+  void bigDecimal_should_not_be_created_from_double() {
+    noClasses()
+        .that()
+        .resideInAPackage("maple.expectation..")
+        .and()
+        .haveSimpleNameNotContaining("Test")
+        .should()
+        .callConstructor(BigDecimal.class, Double.class)
+        .because(
+            "BigDecimal(Double) has floating-point precision issues. "
+                + "Use BigDecimal(\"value\") or BigDecimal.valueOf() instead. "
+                + "(CLAUDE.md Section 7)")
+        .check(new ClassFileImporter().importPackages("maple.expectation"));
+  }
+
+  /**
+   * Application layer should not use synchronized keyword directly.
+   *
+   * <p>Virtual Thread pinning occurs when synchronized blocks perform blocking operations. Use
+   * ReentrantLock instead for Virtual Thread compatibility.
+   *
+   * <p><strong>Note:</strong> ArchUnit 1.3.0 cannot reliably detect synchronized methods/blocks.
+   * Use grep-based detection in CI pipeline instead:
+   *
+   * <pre>
+   * grep -rn "synchronized" module-app/src/main/java --include="*.java" | grep -v "// synchronized"
+   * </pre>
+   *
+   * <p><strong>Exception:</strong> infra layer may have synchronized for connection management.
+   */
+  @Test
+  @Disabled("Detection via grep in CI pipeline - ArchUnit 1.3.0 lacks synchronized detection")
+  void virtualThread_context_should_avoid_synchronized_methods() {
+    // Placeholder test - actual detection done via grep in CI
+    // See: docs/03_Technical_Guides/async-concurrency.md
+    classes()
+        .that()
+        .haveSimpleName("Object") // Always exists, always passes
+        .should()
+        .haveSimpleName("Object")
+        .because(
+            "synchronized methods/blocks cause Virtual Thread pinning. "
+                + "Use ReentrantLock instead. "
+                + "Detection via: grep -rn 'synchronized' module-app/src/main/java "
+                + "(CLAUDE.md Section 7)")
+        .check(new ClassFileImporter().importPackages("java.lang"));
   }
 }

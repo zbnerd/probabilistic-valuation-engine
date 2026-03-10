@@ -6,6 +6,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.out.redis.RedisOperationPort
+import maple.expectation.infrastructure.cache.CaffeineOnlyCacheManager
 import maple.expectation.infrastructure.cache.RestrictedCacheManager
 import maple.expectation.infrastructure.cache.TieredCacheManager
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -33,6 +34,13 @@ import org.springframework.data.redis.serializer.StringRedisSerializer
  * <h4>P1-2: TTL/Size 하드코딩 → CacheProperties 외부화</h4>
  *
  * <p>specs.forEach()로 동적 등록하여 신규 캐시 추가 시 YAML만 변경
+ *
+ * <h4>Issue #555: Caffeine-only mode 지원</h4>
+ *
+ * <ul>
+ *   <li>cache.l2.enabled=false 시 L2 비활성화</li>
+ *   <li>CaffeineOnlyCacheManager로 L2 대체</li>
+ * </ul>
  */
 @Configuration
 @EnableCaching
@@ -45,6 +53,8 @@ class CacheConfig {
      * <h4>Issue #148: 분산 락 및 메트릭 지원</h4>
      *
      * <h4>P0-4: lockWaitSeconds 외부 설정 (CacheProperties)</h4>
+     *
+     * <h4>Issue #555: L2 활성화 여부에 따라 L2 CacheManager 선택</h4>
      *
      * @Primary 기존 @Cacheable 인프라 영향 최소화
      */
@@ -117,15 +127,24 @@ class CacheConfig {
      *
      * <h4>Issue #240: cubeTrials 캐시 ClassCastException 수정</h4>
      *
+     * <h4>Issue #555: L2 활성화 여부에 따른 조건부 생성</h4>
+     *
      * <ul>
-     *   <li>GenericJackson2JsonRedisSerializer는 Double 타입 보존 실패
-     *   <li>JdkSerializationRedisSerializer 사용으로 타입 안전성 확보
+     *   <li>L2 활성화 시: RedisCacheManager 생성</li>
+     *   <li>L2 비활성화 시: CaffeineOnlyCacheManager (no-op) 반환</li>
+     *   <li>GenericJackson2JsonRedisSerializer는 Double 타입 보존 실패</li>
+     *   <li>JdkSerializationRedisSerializer 사용으로 타입 안전성 확보</li>
      * </ul>
      */
     private fun createL2Manager(
         factory: RedisConnectionFactory,
         cacheProperties: CacheProperties,
     ): CacheManager {
+        // Issue #555: Caffeine-only mode when L2 is disabled
+        if (!cacheProperties.l2.enabled) {
+            return CaffeineOnlyCacheManager()
+        }
+
         val defaultConfig =
             RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(15))

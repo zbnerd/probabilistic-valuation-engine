@@ -121,3 +121,18 @@ data class DonationRequest(
     val message: String?,
     val requestedAt: String,
 )
+
+/**
+ * Nexon 데이터 수집 요청 메시지 페이로드 (ADR-006)
+ *
+ * <p>calculation_queue로 발행되어 CalculationWorker가 처리
+ *
+ * @param ocid 캐릭터 OCID
+ * @param userIgn 사용자 IGN
+ * @param requestedAt 요청 시점
+ */
+data class NexonCollectionRequest(
+    val ocid: String,
+    val userIgn: String,
+    val requestedAt: String,
+)

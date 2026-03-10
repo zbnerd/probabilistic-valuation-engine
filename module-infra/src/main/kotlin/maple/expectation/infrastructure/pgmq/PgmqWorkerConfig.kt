@@ -33,6 +33,9 @@ class PgmqWorkerConfig {
     /** Donation Worker 설정 */
     var donation: WorkerSettings = WorkerSettings()
 
+    /** Nexon Collector 설정 */
+    var nexonCollector: WorkerSettings = WorkerSettings(enabled = true)
+
     data class CommonSettings(
         /** 폴링 간격 (ms) */
         var pollingIntervalMs: Long = 1000,

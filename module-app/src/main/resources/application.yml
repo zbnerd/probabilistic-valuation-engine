@@ -298,8 +298,12 @@ springdoc:
   default-consumes-media-type: application/json
   default-produces-media-type: application/json
 
-# Cache 설정 (P1-2: TTL/Size 외부화, P0-4: lockWaitSeconds)
+# Cache 설정 (P1-2: TTL/Size 외부화, P0-4: lockWaitSeconds, Issue #555: L2 활성화)
 cache:
+  # Issue #555: L2 캐시 활성화 여부 (false 시 Caffeine-only 모드)
+  l2:
+    enabled: true  # 기본값: true (기존 동작 호환)
+    impl: redis    # redis | postgres
   specs:
     equipment:
       l1-ttl-minutes: 5

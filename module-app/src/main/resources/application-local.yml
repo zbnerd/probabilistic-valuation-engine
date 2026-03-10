@@ -100,7 +100,11 @@ cube:
   table-mass:
     policy: LENIENT  # 로컬 환경: 확률 테이블 정규화 허용 (Σp ≈ 1.0)
 
-
+# Issue #555: Caffeine-only 캐시 모드 (로컬 개발용 예시)
+# Redis 없이 Caffeine L1만 사용하려면 아래 설정 활성화
+# cache:
+#   l2:
+#     enabled: false  # L2 비활성화 → Caffeine-only 모드
 
 # Rate Limiting 비활성화 (부하 테스트용)
 ratelimit:

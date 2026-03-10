@@ -16,6 +16,16 @@ import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
 import org.springframework.cache.Cache.ValueWrapper
 
+/**
+ * Issue #555: Check if L2 cache is in Caffeine-only (no-op) mode
+ */
+private fun isL2Disabled(cache: Cache): Boolean = cache is CaffeineOnlyCacheManager.NoOpCacheImplementation
+
+/**
+ * Issue #555: Check if cache is NoOpCache implementation
+ */
+private fun Cache?.isNoOp(): Boolean = this != null && this is CaffeineOnlyCacheManager.NoOpCacheImplementation
+
 class TieredCache(
     private val l1: Cache,
     private val l2: Cache,
@@ -36,17 +46,25 @@ class TieredCache(
     private val lockFailureCounter: Counter
     private val l2FailureCounter: Counter
 
+    /** Issue #555: L2 disabled flag (Caffeine-only mode) */
+    private val l2Enabled: Boolean
+
     init {
         val cacheName = l2.name
+        l2Enabled = !isL2Disabled(l2)
         l1HitCounter = Counter.builder("cache.hit").tag("layer", "L1").tag("cache", cacheName).register(meterRegistry)
         l2HitCounter = Counter.builder("cache.hit").tag("layer", "L2").tag("cache", cacheName).register(meterRegistry)
         missCounter = Counter.builder("cache.miss").tag("cache", cacheName).register(meterRegistry)
         lockFailureCounter = Counter.builder("cache.lock.failure").tag("cache", cacheName).register(meterRegistry)
         l2FailureCounter = Counter.builder("cache.l2.failure").tag("cache", cacheName).register(meterRegistry)
+
+        if (!l2Enabled) {
+            log.info("[TieredCache] Caffeine-only mode (L2 disabled): cache={}", cacheName)
+        }
     }
 
     override fun getName(): String = l2.name
-    override fun getNativeCache(): Any = l2.nativeCache
+    override fun getNativeCache(): Any = l1.nativeCache ?: l2.nativeCache ?: emptyMap<Any, Any>()
 
     override fun get(key: Any): ValueWrapper? {
         val context = TaskContext.of("Cache", "Get", key.toString())
@@ -55,7 +73,10 @@ class TieredCache(
 
     private fun getFromCacheLayers(key: Any): ValueWrapper? = Optional.ofNullable(l1.get(key))
         .map { w -> tapCacheHit(w, "L1") }
-        .orElseGet { getFromL2WithBackfill(key) }
+        .orElseGet {
+            // Issue #555: Skip L2 when disabled
+            if (l2Enabled) getFromL2WithBackfill(key) else null
+        }
 
     private fun getFromL2WithBackfill(key: Any): ValueWrapper? = Optional.ofNullable(l2.get(key))
         .map { w ->
@@ -66,6 +87,11 @@ class TieredCache(
 
     override fun put(key: Any, value: Any?) {
         val context = TaskContext.of("Cache", "Put", key.toString())
+        // Issue #555: In L1-only mode, skip L2 and put directly to L1
+        if (!l2Enabled) {
+            executor.executeVoid({ l1.put(key, value) }, context)
+            return
+        }
         val l2Success = executor.executeOrDefault({
             l2.put(key, value)
             true
@@ -81,6 +107,11 @@ class TieredCache(
 
     override fun evict(key: Any) {
         val context = TaskContext.of("Cache", "Evict", key.toString())
+        // Issue #555: In L1-only mode, skip L2 and evict directly from L1
+        if (!l2Enabled) {
+            executor.executeVoid({ l1.evict(key) }, context)
+            return
+        }
         val l2Success = executor.executeOrDefault({
             l2.evict(key)
             true
@@ -95,6 +126,11 @@ class TieredCache(
 
     override fun clear() {
         val context = TaskContext.of("Cache", "Clear")
+        // Issue #555: In L1-only mode, skip L2 and clear L1 directly
+        if (!l2Enabled) {
+            executor.executeVoid({ l1.clear() }, context)
+            return
+        }
         val l2Success = executor.executeOrDefault({
             l2.clear()
             true
@@ -146,6 +182,8 @@ class TieredCache(
             l1HitCounter.increment()
             return l1Result.get() as? T
         }
+        // Issue #555: Skip L2 lookup when disabled
+        if (!l2Enabled) return null
         val l2Result = executor.executeOrDefault({ l2.get(key) }, null, TaskContext.of("Cache", "GetL2", key.toString()))
         if (l2Result != null) {
             l1.put(key, l2Result.get())
@@ -156,6 +194,10 @@ class TieredCache(
     }
 
     private fun <T> executeWithDistributedLock(key: Any, valueLoader: Callable<T>, keyStr: String): T {
+        // Issue #555: Skip distributed lock in L1-only mode (single-instance mode)
+        if (!l2Enabled) {
+            return executeAndCache(key, valueLoader)
+        }
         val lockKey = "cache:sf:" + l2.name + ":" + keyStr
         val acquired = redisOperationPort.tryLock(lockKey, Duration.ofSeconds(lockWaitSeconds.toLong()), Duration.ofSeconds(30))
         if (!acquired) {
@@ -183,6 +225,11 @@ class TieredCache(
 
     private fun <T> executeAndCache(key: Any, valueLoader: Callable<T>): T {
         val value = valueLoader.call()
+        // Issue #555: In L1-only mode, skip L2 put
+        if (!l2Enabled) {
+            l1.put(key, value)
+            return value
+        }
         val l2Success = executor.executeOrDefault({
             l2.put(key, value)
             true

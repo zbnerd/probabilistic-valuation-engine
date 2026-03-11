@@ -15,14 +15,14 @@ import org.springframework.test.context.TestPropertySource;
  * <p>This base class provides:
  *
  * <ul>
- *   <li>SharedContainers for JVM-wide singleton MySQL containers
+ *   <li>SharedContainers for JVM-wide singleton PostgreSQL containers
  *   <li>Dynamic property injection for Spring Boot test context
- *   <li>Data isolation via TRUNCATE (MySQL) in @BeforeEach
+ *   <li>Data isolation via TRUNCATE (PostgreSQL) in @BeforeEach
  * </ul>
  *
- * <h3>V5 Migration (Issue #589)</h3>
+ * <h3>V5 Migration (Issue #589, #590, #591)</h3>
  *
- * <p>Redis dependency removed. PostgreSQL-only mode for integration tests.
+ * <p>MySQL and Redis dependencies removed. PostgreSQL-only mode for integration tests.
  *
  * <h3>Usage</h3>
  *
@@ -31,7 +31,7 @@ import org.springframework.test.context.TestPropertySource;
  * class MyIntegrationTest extends AppIntegrationTestSupport {
  *     @Test
  *     void testSomething() {
- *         // Test code here - MySQL is available
+ *         // Test code here - PostgreSQL is available
  *         // Data is isolated via @BeforeEach cleanup
  *     }
  * }
@@ -56,14 +56,14 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
 
   @DynamicPropertySource
   static void props(DynamicPropertyRegistry registry) {
-    // MySQL dynamic properties from SharedContainers
-    registry.add("spring.datasource.url", SharedContainers.MYSQL::getJdbcUrl);
-    registry.add("spring.datasource.username", SharedContainers.MYSQL::getUsername);
-    registry.add("spring.datasource.password", SharedContainers.MYSQL::getPassword);
-    registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+    // PostgreSQL dynamic properties from SharedContainers
+    registry.add("spring.datasource.url", SharedContainers.POSTGRES::getJdbcUrl);
+    registry.add("spring.datasource.username", SharedContainers.POSTGRES::getUsername);
+    registry.add("spring.datasource.password", SharedContainers.POSTGRES::getPassword);
+    registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
 
-    // Hibernate dialect for MySQL
-    registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
+    // Hibernate dialect for PostgreSQL
+    registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
   }
 
   /**
@@ -72,7 +72,7 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
    * <p><b>Core Principle:</b> "Containers are shared, data is isolated"
    *
    * <ul>
-   *   <li>MySQL: TRUNCATE resets all tables (handles FK constraints)
+   *   <li>PostgreSQL: TRUNCATE resets all tables (handles FK constraints via CASCADE)
    * </ul>
    *
    * <p>This approach is stronger than @Transactional rollback:
@@ -95,13 +95,9 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
 
     List<String> tables = TABLES.updateAndGet(prev -> prev != null ? prev : loadTableNames());
 
-    jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
-    try {
-      for (String table : tables) {
-        jdbcTemplate.execute("TRUNCATE TABLE `" + table + "`");
-      }
-    } finally {
-      jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
+    // PostgreSQL uses CASCADE for FK constraints
+    for (String table : tables) {
+      jdbcTemplate.execute("TRUNCATE TABLE \"" + table + "\" CASCADE");
     }
   }
 
@@ -110,9 +106,10 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
         """
             SELECT table_name
             FROM information_schema.tables
-            WHERE table_schema = DATABASE()
+            WHERE table_schema = 'public'
               AND table_type = 'BASE TABLE'
-              AND table_name <> 'flyway_schema_history'
+              AND table_name NOT LIKE 'pg_%'
+              AND table_name NOT LIKE 'flyway_schema_history'
             """,
         String.class);
   }

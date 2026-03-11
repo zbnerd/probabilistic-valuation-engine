@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional
 /**
  * V5 CQRS Query Side Service - PostgreSQL Read Operations
  *
- * MongoDB CharacterViewQueryService의 PostgreSQL 마이그레이션
+ * MongoDB CharacterViewQueryService의 PostgreSQL 마이그레이션 (Issue #590)
  *
  * <h3>Responsibilities</h3>
  * <ul>
@@ -22,8 +22,6 @@ import org.springframework.transaction.annotation.Transactional
  *   <li>LogicExecutor pattern for exception handling
  *   <li>Micrometer metrics for monitoring
  * </ul>
- *
- * @see maple.expectation.infrastructure.mongodb.CharacterViewQueryService
  */
 @Service
 @ConditionalOnProperty(name = ["app.v5.enabled"], havingValue = "true", matchIfMissing = false)

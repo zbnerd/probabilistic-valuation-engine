@@ -59,10 +59,6 @@ dependencies {
 	runtimeOnly(libs.h2)
 	implementation(libs.postgresql)
 
-	// MongoDB
-	implementation(libs.spring.boot.starter.data.mongodb)
-	implementation(libs.mongodb.driver.sync)
-
 	// Caffeine Cache
 	implementation(libs.caffeine)
 	implementation(libs.spring.boot.starter.cache)
@@ -108,7 +104,6 @@ dependencies {
 
 	testImplementation(libs.spring.boot.starter.test)
 	testImplementation(libs.testcontainers.mysql)
-	testImplementation(libs.testcontainers.mongodb)
 	testImplementation(libs.mockito.kotlin)
 
 	// Integration Test Dependencies
@@ -116,7 +111,6 @@ dependencies {
 	integrationTestImplementation(libs.testcontainers)
 	integrationTestImplementation(libs.testcontainers.junit.jupiter)
 	integrationTestImplementation(libs.testcontainers.mysql)
-	integrationTestImplementation(libs.testcontainers.mongodb)
 	integrationTestRuntimeOnly(libs.junit.platform.launcher)
 }
 

@@ -4,9 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Caffeine
 import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.cache.CaffeineOnlyCacheManager
-import maple.expectation.infrastructure.external.dto.v2.TotalExpectationResponse
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.CacheManager
 import org.springframework.cache.annotation.EnableCaching
@@ -14,8 +12,6 @@ import org.springframework.cache.caffeine.CaffeineCacheManager
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
-import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer
-import org.springframework.data.redis.serializer.RedisSerializer
 
 /**
  * Caffeine-only Cache Configuration (PostgreSQL-only mode)
@@ -29,13 +25,17 @@ import org.springframework.data.redis.serializer.RedisSerializer
  *
  * <p>Only active when `spring.data.redis.host` is not configured (Redis disabled).
  *
+ * <h3>V5 Migration (Issue #589)</h3>
+ *
+ * <p>Redis dependency removed. Uses ObjectMapper directly for serialization size calculation.
+ * This is now the primary cache configuration for PostgreSQL-only deployments.
+ *
  * @see CacheProperties
  * @see CaffeineOnlyCacheManager
  */
 @Configuration
 @EnableCaching
 @EnableConfigurationProperties(CacheProperties::class)
-@ConditionalOnMissingBean(CacheConfig::class)
 class CaffeineOnlyCacheConfig {
 
     /**
@@ -96,18 +96,14 @@ class CaffeineOnlyCacheConfig {
     }
 
     /**
-     * Expectation 전용 Serializer (for compatibility with existing code)
+     * ObjectMapper for Expectation cache serialization size calculation
+     *
+     * <p>V5 Migration: Replaces RedisSerializer-based bean.
+     * Used by TotalExpectationCacheService for 5KB size guard.
      */
     @Bean
-    @Qualifier("expectationCacheSerializer")
-    fun expectationCacheSerializer(objectMapper: ObjectMapper): RedisSerializer<Any> {
-        val serializer =
-            Jackson2JsonRedisSerializer(objectMapper, TotalExpectationResponse::class.java)
-
-        @Suppress("UNCHECKED_CAST", "rawtypes")
-        val casted: RedisSerializer<Any> = serializer as RedisSerializer<Any>
-        return casted
-    }
+    @Qualifier("expectationObjectMapper")
+    fun expectationObjectMapper(): ObjectMapper = ObjectMapper()
 
     /**
      * L2 Cache Manager for Expectation (Caffeine-only fallback)

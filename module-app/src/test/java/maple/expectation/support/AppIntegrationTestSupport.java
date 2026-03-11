@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -16,18 +15,14 @@ import org.springframework.test.context.TestPropertySource;
  * <p>This base class provides:
  *
  * <ul>
- *   <li>SharedContainers for JVM-wide singleton MySQL/Redis containers
+ *   <li>SharedContainers for JVM-wide singleton MySQL containers
  *   <li>Dynamic property injection for Spring Boot test context
- *   <li>Data isolation via TRUNCATE (MySQL) and FLUSHDB (Redis) in @BeforeEach
+ *   <li>Data isolation via TRUNCATE (MySQL) in @BeforeEach
  * </ul>
  *
- * <h3>Performance Benefits</h3>
+ * <h3>V5 Migration (Issue #589)</h3>
  *
- * <ul>
- *   <li>Containers start once per JVM instead of per-test class
- *   <li>Deep startup ensures all containers are ready before first test
- *   <li>Estimated 60-80% reduction in container startup time
- * </ul>
+ * <p>Redis dependency removed. PostgreSQL-only mode for integration tests.
  *
  * <h3>Usage</h3>
  *
@@ -36,7 +31,7 @@ import org.springframework.test.context.TestPropertySource;
  * class MyIntegrationTest extends AppIntegrationTestSupport {
  *     @Test
  *     void testSomething() {
- *         // Test code here - MySQL and Redis are available
+ *         // Test code here - MySQL is available
  *         // Data is isolated via @BeforeEach cleanup
  *     }
  * }
@@ -56,9 +51,6 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
   @Autowired(required = false)
   JdbcTemplate jdbcTemplate;
 
-  @Autowired(required = false)
-  StringRedisTemplate redisTemplate;
-
   // Cache table names to avoid repeated information_schema queries
   private static final AtomicReference<List<String>> TABLES = new AtomicReference<>();
 
@@ -72,11 +64,6 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
 
     // Hibernate dialect for MySQL
     registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
-
-    // Redis dynamic properties from SharedContainers
-    registry.add("spring.data.redis.host", SharedContainers.REDIS::getHost);
-    registry.add(
-        "spring.data.redis.port", () -> SharedContainers.REDIS.getMappedPort(6379).toString());
   }
 
   /**
@@ -85,7 +72,6 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
    * <p><b>Core Principle:</b> "Containers are shared, data is isolated"
    *
    * <ul>
-   *   <li>Redis: FLUSHDB removes all keys
    *   <li>MySQL: TRUNCATE resets all tables (handles FK constraints)
    * </ul>
    *
@@ -98,21 +84,8 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
    * </ul>
    */
   @BeforeEach
-  void resetDatabaseAndRedisState() {
-    flushRedis();
+  void resetDatabaseState() {
     truncateAllTables();
-  }
-
-  private void flushRedis() {
-    if (redisTemplate == null) {
-      return;
-    }
-    var connection = redisTemplate.getConnectionFactory().getConnection();
-    try {
-      connection.flushDb();
-    } finally {
-      connection.close();
-    }
   }
 
   private void truncateAllTables() {

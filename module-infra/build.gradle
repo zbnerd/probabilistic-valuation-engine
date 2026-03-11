@@ -1,5 +1,5 @@
 // ========================================
-// Module-Infra: JPA, Redis, 외부 API 구현체
+// Module-Infra: JPA, 외부 API 구현체
 // ADR-017: Infrastructure Layer
 // ========================================
 
@@ -63,11 +63,9 @@ dependencies {
 	implementation(libs.spring.boot.starter.data.mongodb)
 	implementation(libs.mongodb.driver.sync)
 
-	// Redis
-	implementation(libs.redisson.spring.boot.starter)
-
 	// Caffeine Cache
 	implementation(libs.caffeine)
+	implementation(libs.spring.boot.starter.cache)
 
 	// Spring Boot (minimal)
 	implementation(libs.spring.boot)
@@ -88,7 +86,6 @@ dependencies {
 
 	// Bucket4j
 	implementation(libs.bucket4j.core)
-	implementation(libs.bucket4j.redisson)
 
 	// Jackson
 	implementation(libs.jackson.databind)

@@ -10,17 +10,11 @@ spring:
       on-profile: local
 
   datasource:
-    # MySQL Configuration (Current/Default)
-    url: jdbc:mysql://localhost:3306/maple_expectation?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&rewriteBatchedStatements=true
-    username: root
+    # PostgreSQL Configuration (Issue #591: MySQL migration complete)
+    url: jdbc:postgresql://localhost:5432/maple_expectation
+    username: maple
     password: ${DB_ROOT_PASSWORD}
-
-    # PostgreSQL Configuration (Alternative - for future migration)
-    # To use PostgreSQL instead of MySQL, use profile: pglocal
-    # url: jdbc:postgresql://localhost:5432/maple_expectation?serverTimezone=Asia/Seoul
-    # username: maple
-    # password: ${DB_ROOT_PASSWORD}
-    # driver-class-name: org.postgresql.Driver
+    driver-class-name: org.postgresql.Driver
 
     hikari:
       maximum-pool-size: 100
@@ -29,8 +23,7 @@ spring:
       leak-detection-threshold: 60000
       # P2 Unit 7: JMX monitoring for HikariCP metrics (connections, pending, latency)
       register-mbeans: true
-      # [P0-N07 Fix] MDL Freeze 방지 - 로컬 환경도 동일 설정
-      connection-init-sql: "SET SESSION lock_wait_timeout = 10"
+      # PostgreSQL: no lock_wait_timeout needed
 
   jpa:
     open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지
@@ -44,12 +37,7 @@ spring:
         order_inserts: true
         order_updates: true
 
-  # Redis Standalone 설정 (Sentinel 장애 시 폴백)
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      # Redisson 기본 설정 사용 (커스텀 설정 제거 - 오버헤드 테스트)
+  # Redis/MongoDB removed in Issue #589, #590
 
   # Auth configuration
   auth:
@@ -70,26 +58,8 @@ spring:
     discord:
       webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
 
-# MongoDB Configuration (V5 CQRS)
-# P1-10: Eventual Consistency Settings
-# Local: Single node - use primary for consistency
-spring:
-  data:
-    mongodb:
-      host: localhost
-      port: 27017
-      database: maple_expectation_v5
-      auto-index-creation: true
-      # P1-10: Read Preference - primary for local dev (single node)
-      # read-preference: primary
-      # P1-10: Read Concern - local for low latency (single node)
-      # read-concern: local
-      # Connection pool settings for optimal performance
-      # connect-timeout: 10000
-      # socket-timeout: 30000
-      # max-connection-per-host: 50
-      # max-connection-idle-time: 60000
-      # max-connection-life-time: 120000
+# MongoDB Configuration (V5 CQRS) - REMOVED in Issue #590
+# All V5 data now stored in PostgreSQL
 
 # DP 엔진 테이블 검증 설정
 cube:
@@ -142,7 +112,7 @@ scheduler:
     rate: 600000  # 10 minutes (default)
     initial-delay: 30000  # 30 seconds
 
-# Disable other schedulers to prevent MySQLLockPool exhaustion during ACL testing
+# Disable other schedulers during local development
   like-sync:
     enabled: false
   expectation-sync:

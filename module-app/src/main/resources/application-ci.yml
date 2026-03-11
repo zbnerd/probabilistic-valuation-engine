@@ -4,9 +4,11 @@ spring:
       on-profile: ci
 
   datasource:
-    url: jdbc:mysql://localhost:3306/${DB_SCHEMA_NAME:maple_test}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&rewriteBatchedStatements=true
-    username: root
+    # PostgreSQL Configuration (Issue #591: MySQL migration complete)
+    url: jdbc:postgresql://localhost:5432/${DB_SCHEMA_NAME:maple_test}
+    username: maple
     password: ${DB_ROOT_PASSWORD:testpassword}
+    driver-class-name: org.postgresql.Driver
 
     hikari:
       maximum-pool-size: 200  # P2 Unit 7: Match default Tomcat threads (200)
@@ -28,11 +30,7 @@ spring:
         order_inserts: true
         order_updates: true
 
-  # Redis 단일 모드 (CI 환경용 - Sentinel 미사용)
-  data:
-    redis:
-      host: localhost
-      port: 6379
+  # Redis/MongoDB removed in Issue #589, #590
 
 alert:
   discord:

@@ -12,16 +12,16 @@ spring:
   profiles:
     active: local # [Safety Guard] 별도 설정 없으면 무조건 로컬 모드
   lifecycle:
-    timeout-per-shutdown-phase: 50s # Graceful Shutdown 시 충분한 시간 확보 (Equipment 대기 20s + Redis sync + 여유)
+    timeout-per-shutdown-phase: 50s # Graceful Shutdown 시 충분한 시간 확보 (Equipment 대기 20s + PostgreSQL sync + 여유)
 
-  # 공통 드라이버 설정
+  # 공통 드라이버 설정 (PostgreSQL - Issue #591)
   datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    driver-class-name: org.postgresql.Driver
     hikari:
       register-mbeans: true # JMX를 통해 지표 노출 활성화
       connection-timeout: 3000      # 커넥션 획득 타임아웃 3초 (Red Agent P1 Fix)
       leak-detection-threshold: 60000  # 60초 이상 반납 안되면 누수 의심 로그
-# Profile-specific: MySQL connection init SQL (NOT for test/chaos)
+# Profile-specific: PostgreSQL connection init SQL (NOT for test/chaos)
 # ADR-087 P2 Fix: Removed YAML document separator (---) to unify configuration
 spring:
   config:
@@ -29,10 +29,7 @@ spring:
       on-profile: "!test & !chaos"
   datasource:
     hikari:
-      # [P0-N07 Fix] MDL Freeze 방지 - 세션 lock_wait_timeout 설정
-      # 단일 문장만 지원 (P1-GREEN-01), MDL에는 lock_wait_timeout이 효과적
-      # Issue #225: lock_wait_timeout 10s → 8s (Timeout Hierarchy 정렬 - Redis timeout과 동일)
-      connection-init-sql: "SET SESSION lock_wait_timeout = 8"
+      # PostgreSQL connection init - no lock_wait_timeout needed (uses pg_try_advisory_xact_lock)
 
   # 공통 JPA 설정
   jpa:
@@ -144,16 +141,14 @@ resilience4j:
         minimumNumberOfCalls: 3         # 최소 3번 호출 후 통계 산출
         permittedNumberOfCallsInHalfOpenState: 2
         registerHealthIndicator: true
-      redisLock:  # Redis 분산 락 전용 Circuit Breaker
+      postgresLock:  # PostgreSQL 분산 락 전용 Circuit Breaker (Issue #591)
         slidingWindowSize: 20              # 락 작업은 빈번하므로 더 많은 샘플 수집
         failureRateThreshold: 60           # 60% 실패율에서 Open (락 경합은 정상적일 수 있음)
-        waitDurationInOpenState: 30s       # Open 후 30초 대기 (Redis 복구 시간 확보)
+        waitDurationInOpenState: 30s       # Open 후 30초 대기 (DB 복구 시간 확보)
         minimumNumberOfCalls: 5            # 최소 5번 호출 후 통계 산출
         permittedNumberOfCallsInHalfOpenState: 3
         registerHealthIndicator: true
         recordExceptions:                  # 이 예외들이 발생하면 실패로 간주
-          - org.redisson.client.RedisException
-          - org.redisson.client.RedisTimeoutException
           - java.util.concurrent.TimeoutException
       openAiApi:  # [P0-Red] Issue #251: OpenAI API Circuit Breaker
         baseConfig: default
@@ -254,10 +249,7 @@ app:
     archive-directory: /tmp/maple-shutdown/processed
   buffer:
     redis:
-      # Redis Only 모드 활성화 (필수: true)
-      # Scale-out 환경에서 데이터 유실 방지를 위해 반드시 true 유지
-      # false 설정 시 In-Memory 버퍼 사용 → 인스턴스 장애 시 데이터 유실
-      enabled: true
+      enabled: false  # Redis removed in Issue #589
   monitoring:
     grafana:
       dashboards-path: ./grafana/dashboards
@@ -311,7 +303,7 @@ cache:
   # Issue #555: L2 캐시 활성화 여부 (false 시 Caffeine-only 모드)
   l2:
     enabled: true  # 기본값: true (기존 동작 호환)
-    impl: redis    # redis | postgres
+    impl: postgres  # postgres (redis removed in Issue #589)
   specs:
     equipment:
       l1-ttl-minutes: 5
@@ -350,18 +342,18 @@ cache:
     pubsub:
       enabled: true  # Scale-out 환경 L1 캐시 무효화 Pub/Sub 활성화
 
-# Like Sync 설정 (Issue #147: Redis 원자성, Issue #48: 청킹)
+# Like Sync 설정 (Issue #147: PostgreSQL, Issue #48: 청킹)
 like:
   sync:
-    strategy: lua  # lua(기본) | rename(폴백) - Lua Script 미지원 환경용
-    chunk-size: 500  # Issue #48: 청크 크기 (Green Agent 분석: MySQL InnoDB 최적값)
+    strategy: postgres  # postgres (redis removed in Issue #589)
+    chunk-size: 500  # Issue #48: 청크 크기 (Green Agent 분석: PostgreSQL 최적값)
     recovery:
       enabled: true  # 서버 시작 시 Orphan Key 자동 복구 (@PostConstruct)
     temp-key-ttl-seconds: 3600  # 임시 키 TTL (1시간) - JVM 크래시 대비 안전장치
   # Issue #278: Scale-out 환경 실시간 좋아요 동기화
   realtime:
-    enabled: true  # Pub/Sub 활성화 (인스턴스 간 L1 캐시 무효화)
-    transport: rtopic  # rtopic(기본, at-most-once) | reliable-topic(at-least-once)
+    enabled: false  # Redis Pub/Sub removed in Issue #589
+    transport: pgmq  # pgmq (rtopic removed with Redis)
 
 # BYOK 인증 설정 (Issue #146)
 auth:
@@ -388,7 +380,7 @@ expectation:
     like-relation-sync-size: 100         # 좋아요 관계 동기화 배치 크기
     expectation-write-size: 100          # Expectation 배치 DB 동기화 크기
     acl-writer-size: 1000                # ACL Pipeline 배치 크기
-    mysql-fallback-sync-size: 100        # MySQL Fallback Sync 배치 크기
+    mysql-fallback-sync-size: 100        # Legacy: kept for config compatibility
   # Discord timeout configuration (P1 externalization)
   discord:
     webhook-timeout-seconds: 5           # Discord Webhook 요청 타임아웃 (초)
@@ -440,10 +432,10 @@ prometheus:
     trusted-proxies: "127.0.0.1,::1,localhost"  # 신뢰할 수 있는 프록시 IP (쉼표 구분)
     internal-networks: "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16"  # 내부 네트워크 CIDR
 
-# MySQL Resilience 설정 (Issue #218: Stateless 아키텍처)
+# MySQL Resilience 설정 (Issue #218, #591: PostgreSQL migration - deprecated)
 resilience:
   mysql-fallback:
-    enabled: true
+    enabled: false  # Disabled: MySQL removed in #591
     # P1-2: Hash Tag 적용 (Redis Cluster 환경 동일 슬롯 보장)
     state-key: "{mysql}:state"
     ttl-lock-key: "{mysql}:ttl:lock"
@@ -507,16 +499,15 @@ chaos:
     metrics:
       interval: 5000  # 5초 간격으로 메트릭 수집
 
-# Redis 기반 Write-Behind 버퍼 (P1-2: Scale-out 지원)
-# true: Redis Reliable Queue, false: In-Memory ConcurrentLinkedQueue
-# → app.buffer.redis.enabled는 상단 app: 블록(line 184)에서 관리
+# PostgreSQL 기반 Write-Behind 버퍼 (P1-2: Scale-out 지원)
+# Redis removed in Issue #589
 
 
 # Thread Pool 설정 외부화 (P1-1)
 # Lock DataSource Pool Size 외부화 (Issue #284 DoD)
-# Issue #310: MySQL → Redis Lock Migration
+# Issue #310, #591: PostgreSQL Lock (Redis removed, MySQL removed)
 lock:
-  impl: redis  # 분산 락 구현체 (redis | mysql, default: redis)
+  impl: postgres  # 분산 락 구현체 (postgres, default: postgres)
   datasource:
     pool-size: 30  # 기본값 (prod에서 150으로 오버라이드)
   migration:
@@ -584,7 +575,7 @@ shutdown:
 # V5 CQRS Configuration
 v5:
   enabled: true
-  query-side-enabled: true  # Enable MongoDB Sync Worker and Event Publisher
+  query-side-enabled: true  # Enable PostgreSQL Sync Worker and Event Publisher
 
 # Stateless Alert System Feature Flags (Issue #345: ADR-0345 Phase 3)
 alert:

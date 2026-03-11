@@ -1,129 +1,6 @@
 version: '3.8'
 
 services:
-  db:
-    image: mysql:8.0
-    container_name: maple-mysql
-    restart: always
-    ports:
-      - "3306:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_SCHEMA_NAME}
-      TZ: ${TZ}
-    command:
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-      --default-authentication-plugin=mysql_native_password
-    volumes:
-      - ./mysql_data:/var/lib/mysql
-      - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
-      - ./docker/logs/mysql:/var/log/mysql
-    networks:
-      - maple-network
-
-  # Redis HA: Master Node
-  redis-master:
-    image: redis:7.0
-    container_name: redis-master
-    restart: always
-    ports:
-      - "6379:6379"
-    command: >
-      redis-server
-      --save 60 1
-      --loglevel warning
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-    volumes:
-      - ./redis_data/master:/data
-    networks:
-      maple-network:
-        ipv4_address: 172.20.0.10
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 1s
-      timeout: 3s
-      retries: 30
-
-  # Redis HA: Slave Node
-  redis-slave:
-    image: redis:7.0
-    container_name: redis-slave
-    restart: always
-    ports:
-      - "6380:6379"
-    command: >
-      redis-server
-      --slaveof redis-master 6379
-      --save 60 1
-      --loglevel warning
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-    volumes:
-      - ./redis_data/slave:/data
-    networks:
-      maple-network:
-        aliases:
-          - redis-slave
-    depends_on:
-      redis-master:
-        condition: service_healthy
-
-  # Redis Sentinel 1 (Quorum 2/3)
-  redis-sentinel-1:
-    image: redis:7.0
-    container_name: maple-sentinel-1
-    restart: always
-    ports:
-      - "26379:26379"
-    command: redis-sentinel /etc/redis/sentinel.conf
-    volumes:
-      - ./sentinel/sentinel-1.conf:/etc/redis/sentinel.conf
-    networks:
-      - maple-network
-    depends_on:
-      redis-master:
-        condition: service_healthy
-      redis-slave:
-        condition: service_started
-
-  # Redis Sentinel 2 (Quorum 2/3)
-  redis-sentinel-2:
-    image: redis:7.0
-    container_name: maple-sentinel-2
-    restart: always
-    ports:
-      - "26380:26379"
-    command: redis-sentinel /etc/redis/sentinel.conf
-    volumes:
-      - ./sentinel/sentinel-2.conf:/etc/redis/sentinel.conf
-    networks:
-      - maple-network
-    depends_on:
-      redis-master:
-        condition: service_healthy
-      redis-slave:
-        condition: service_started
-
-  # Redis Sentinel 3 (Quorum 2/3)
-  redis-sentinel-3:
-    image: redis:7.0
-    container_name: maple-sentinel-3
-    restart: always
-    ports:
-      - "26381:26379"
-    command: redis-sentinel /etc/redis/sentinel.conf
-    volumes:
-      - ./sentinel/sentinel-3.conf:/etc/redis/sentinel.conf
-    networks:
-      - maple-network
-    depends_on:
-      redis-master:
-        condition: service_healthy
-      redis-slave:
-        condition: service_started
-
   # Prometheus for metrics collection
   prometheus:
     image: prom/prometheus:latest
@@ -144,27 +21,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # MongoDB for V5 CQRS Read Side
-  mongodb:
-    image: mongo:7.0
-    container_name: maple-mongodb
-    restart: always
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_DATABASE: maple_expectation
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
-    networks:
-      - maple-network
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # PostgreSQL + PGMQ (Replacing MySQL + MongoDB + Redis Queue)
+  # PostgreSQL + PGMQ (Primary Database - Issue #589, #590, #591)
+  # Replaced: MySQL, MongoDB, Redis Queue
   postgres:
     image: jumski/postgres-17-pgmq:latest
     container_name: maple-postgres
@@ -213,10 +71,6 @@ networks:
         - subnet: 172.20.0.0/16
 
 volumes:
-  mysql_data:
-  redis_data:
-  mongodb_data:
-  mongodb_config:
   prometheus_data:
   grafana_data:
   postgres_data:

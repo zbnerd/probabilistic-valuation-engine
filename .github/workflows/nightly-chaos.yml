@@ -204,7 +204,7 @@ jobs:
           echo "Scenario Categories:"
           echo "- Network Chaos: Clock Drift, Split Brain, Gray Failure"
           echo "- Resource Chaos: OOM, Disk Full, GC Pause"
-          echo "- Core Chaos: MySQL/Redis Death"
+          echo "- Core Chaos: PostgreSQL Death"
           echo "- Nightmare: N01-N18 Extreme Scenarios"
 
       - name: Upload Combined Reports

@@ -19,12 +19,8 @@ spring:
         order_updates: true
     show-sql: false
 
-  # 🔥 [Issue #77] 테스트 환경: Sentinel 비활성화, 단일 Redis 사용
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      # Sentinel 설정 제거 (테스트는 단일 Redis 사용)
+  # V5 Migration (Issue #589, #590, #591): PostgreSQL-only mode
+  # Redis removed - no external cache dependencies
 
   # 테스트 환경에서 Scheduler 비활성화 (CI Outbox Table not found 에러 방지)
   task:
@@ -40,10 +36,10 @@ spring:
     job:
       enabled: false
 
-# MySQL Fallback 비활성화 (테스트 환경: Redis read-only replica 문제 방지)
+# V5 Migration: Legacy fallback disabled
 resilience:
   mysql-fallback:
-    enabled: false
+    enabled: false  # Deprecated - MySQL removed
 
 # Issue #202: Resilience4j 테스트 환경 설정
 resilience4j:

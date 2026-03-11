@@ -95,7 +95,7 @@ dependencies {
 
 	// Spring Data JPA
 	implementation(libs.spring.boot.starter.data.jpa)
-	runtimeOnly(libs.mysql.connector.j)
+	runtimeOnly(libs.postgresql)
 	runtimeOnly(libs.h2)
 
 	// Resilience4j
@@ -153,7 +153,7 @@ tasks.named('test') {
 
 // Integration Test Task
 tasks.register('integrationTest', Test) {
-	description = 'Runs integration tests (Testcontainers, DB, Redis).'
+	description = 'Runs integration tests (Testcontainers, PostgreSQL).'
 	group = 'verification'
 
 	testClassesDirs = sourceSets.integrationTest.output.classesDirs

@@ -113,7 +113,7 @@ dependencies {
 
 // Integration Test Task
 tasks.register('integrationTest', Test) {
-	description = 'Runs integration tests (Testcontainers, DB, Redis).'
+	description = 'Runs integration tests (Testcontainers, PostgreSQL).'
 	group = 'verification'
 
 	testClassesDirs = sourceSets.integrationTest.output.classesDirs

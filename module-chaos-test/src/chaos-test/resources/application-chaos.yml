@@ -4,17 +4,18 @@
 # Purpose: Dedicated configuration for chaos engineering and nightmare tests
 # Usage: SPRING_PROFILES_ACTIVE=chaos
 # Note: DataSource URLs are overridden by AbstractContainerBaseTest
+# V5 Migration (Issue #589, #590, #591): PostgreSQL-only mode
 # ========================================
 
 spring:
   application:
     name: maple-expectation-chaos-test
 
-  # DataSource: Testcontainers MySQL (overridden by AbstractContainerBaseTest)
+  # DataSource: Testcontainers PostgreSQL (overridden by AbstractContainerBaseTest)
   # The URL, username, password are set dynamically via System.setProperty()
   datasource:
-    url: jdbc:mysql://localhost:3306/testdb  # Placeholder - overridden by Testcontainers
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:postgresql://localhost:5432/testdb  # Placeholder - overridden by Testcontainers
+    driver-class-name: org.postgresql.Driver
     username: test  # Placeholder - overridden by Testcontainers
     password: test  # Placeholder - overridden by Testcontainers
     hikari:
@@ -30,30 +31,10 @@ spring:
       ddl-auto: create-drop
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
         show_sql: false
     open-in-view: false
-
-  # Redis Configuration (Testcontainers-managed)
-  data:
-    redis:
-      host: localhost  # Overridden by AbstractContainerBaseTest
-      port: 6379  # Overridden by AbstractContainerBaseTest
-      timeout: 5000ms
-      lettuce:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
-          max-wait: -1ms
-
-  # Cache Configuration
-  cache:
-    type: redis
-    redis:
-      time-to-live: 300000
-      cache-null-values: false
 
 # Auth Configuration (for chaos tests)
 auth:
@@ -80,23 +61,6 @@ cors:
 nexon:
   api:
     key: dummy-chaos-test-key
-
-# Redisson Configuration (Redis Client)
-redisson:
-  config: |
-    singleServerConfig:
-      address: "redis://localhost:6379"
-      connectionPoolSize: 10
-      connectionMinimumIdleSize: 2
-      idleConnectionTimeout: 10000
-      connectTimeout: 10000
-      timeout: 3000
-      retryAttempts: 3
-      retryInterval: 1500
-      subscriptionsPerConnection: 5
-      subscriptionConnectionPoolSize: 2
-    threads: 16
-    nettyThreads: 32
 
 # Resilience4j Configuration
 resilience4j:
@@ -158,7 +122,6 @@ logging:
     maple.expectation: DEBUG
     org.springframework.test: DEBUG
     org.testcontainers: INFO
-    com.redis.testcontainers: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 

@@ -7,7 +7,7 @@ import maple.expectation.core.port.inbound.CalculationQueuePort
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.mongodb.CharacterValuationView
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.mapper.CharacterViewMapper
 import org.slf4j.LoggerFactory
@@ -64,7 +64,7 @@ class GameCharacterControllerV5(
         val cachedResult: Optional<EquipmentExpectationResponseV5> = executor.executeOrDefault(
             {
                 val view = queryPort.findByUserIgn(userIgn)
-                if (view is CharacterValuationView) {
+                if (view is CharacterValuationViewEntity) {
                     CharacterViewMapper.toResponseDto(view)
                 } else {
                     Optional.empty<EquipmentExpectationResponseV5>()

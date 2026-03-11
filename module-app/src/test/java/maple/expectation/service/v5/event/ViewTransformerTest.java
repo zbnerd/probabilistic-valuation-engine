@@ -11,7 +11,7 @@ import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.core.event.ExpectationCalculationCompletedEvent;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.mongodb.CharacterValuationView;
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -25,6 +25,8 @@ import org.mockito.stubbing.Answer;
  * ViewTransformer 단위 테스트
  *
  * <p>ADR-085: P1 소수점 파싱으로 데이터 손실 수정
+ *
+ * <p>Issue #590: MongoDB → PostgreSQL 마이그레이션
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ViewTransformer 단위 테스트")
@@ -67,7 +69,7 @@ class ViewTransformerTest {
       event.setTotalExpectedCost("123.45");
 
       // When
-      CharacterValuationView result = transformer.toDocument(event);
+      CharacterValuationViewEntity result = transformer.toDocument(event);
 
       // Then: 123.45 -> 123 (소수점 이하 절삭)
       assertThat(result.getTotalExpectedCost()).isEqualTo(123L);
@@ -81,7 +83,7 @@ class ViewTransformerTest {
       event.setTotalExpectedCost("1,234.56");
 
       // When
-      CharacterValuationView result = transformer.toDocument(event);
+      CharacterValuationViewEntity result = transformer.toDocument(event);
 
       // Then: 1,234.56 -> 1234
       assertThat(result.getTotalExpectedCost()).isEqualTo(1234L);
@@ -95,7 +97,7 @@ class ViewTransformerTest {
       event.setTotalExpectedCost("10,000,000.99");
 
       // When
-      CharacterValuationView result = transformer.toDocument(event);
+      CharacterValuationViewEntity result = transformer.toDocument(event);
 
       // Then: 10,000,000.99 -> 10000000
       assertThat(result.getTotalExpectedCost()).isEqualTo(10_000_000L);
@@ -109,7 +111,7 @@ class ViewTransformerTest {
       event.setTotalExpectedCost("5000");
 
       // When
-      CharacterValuationView result = transformer.toDocument(event);
+      CharacterValuationViewEntity result = transformer.toDocument(event);
 
       // Then
       assertThat(result.getTotalExpectedCost()).isEqualTo(5000L);
@@ -123,7 +125,7 @@ class ViewTransformerTest {
       event.setTotalExpectedCost("");
 
       // When
-      CharacterValuationView result = transformer.toDocument(event);
+      CharacterValuationViewEntity result = transformer.toDocument(event);
 
       // Then
       assertThat(result.getTotalExpectedCost()).isEqualTo(0L);
@@ -137,7 +139,7 @@ class ViewTransformerTest {
       event.setTotalExpectedCost(null);
 
       // When
-      CharacterValuationView result = transformer.toDocument(event);
+      CharacterValuationViewEntity result = transformer.toDocument(event);
 
       // Then
       assertThat(result.getTotalExpectedCost()).isEqualTo(0L);
@@ -149,7 +151,7 @@ class ViewTransformerTest {
   class FullTransformationTests {
 
     @Test
-    @DisplayName("Event를 Document로 변환 - 모든 필드 포함")
+    @DisplayName("Event를 Entity로 변환 - 모든 필드 포함")
     void toDocument_ShouldTransformAllFields() {
       // Given
       ExpectationCalculationCompletedEvent event = createEvent();
@@ -157,14 +159,14 @@ class ViewTransformerTest {
       event.setCalculatedAt(Instant.now().toString());
 
       // When
-      CharacterValuationView result = transformer.toDocument(event);
+      CharacterValuationViewEntity result = transformer.toDocument(event);
 
       // Then
       assertThat(result.getUserIgn()).isEqualTo(TEST_USER_IGN);
       assertThat(result.getTotalExpectedCost()).isEqualTo(1234L);
       assertThat(result.getCharacterOcid()).isEqualTo(TEST_OCID);
       assertThat(result.getVersion()).isEqualTo(Long.parseLong(TEST_TASK_ID));
-      assertThat(result.getId()).isEqualTo(TEST_USER_IGN + ":" + TEST_TASK_ID);
+      // Note: PostgreSQL entity uses auto-generated id, not deterministic id
     }
   }
 

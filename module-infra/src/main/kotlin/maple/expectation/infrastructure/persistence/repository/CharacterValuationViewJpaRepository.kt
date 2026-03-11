@@ -11,9 +11,7 @@ import org.springframework.transaction.annotation.Transactional
 /**
  * V5 CQRS: PostgreSQL Repository for Character Valuation Views
  *
- * MongoDB CharacterValuationRepository의 PostgreSQL 마이그레이션
- *
- * @see maple.expectation.infrastructure.mongodb.CharacterValuationRepository
+ * MongoDB CharacterValuationRepository의 PostgreSQL 마이그레이션 (Issue #590)
  */
 @Repository
 interface CharacterValuationViewJpaRepository : JpaRepository<CharacterValuationViewEntity, Long> {

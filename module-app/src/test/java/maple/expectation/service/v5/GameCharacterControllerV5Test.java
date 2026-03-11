@@ -10,11 +10,11 @@ import java.time.Instant;
 import java.util.List;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
-import maple.expectation.infrastructure.mongodb.CharacterValuationView;
-import maple.expectation.infrastructure.mongodb.CharacterValuationView.CostBreakdownView;
-import maple.expectation.infrastructure.mongodb.CharacterValuationView.ItemExpectationView;
-import maple.expectation.infrastructure.mongodb.CharacterValuationView.PresetView;
-import maple.expectation.infrastructure.mongodb.CharacterViewQueryService;
+import maple.expectation.infrastructure.persistence.CharacterViewQueryServicePostgres;
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity;
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.CostBreakdownView;
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.ItemExpectationView;
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.PresetView;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -31,21 +31,21 @@ import org.springframework.http.ResponseEntity;
  * <h3>Test Scope</h3>
  *
  * <ul>
- *   <li>MongoDB HIT scenarios (cached views)
- *   <li>MongoDB MISS scenarios (queue delegation)
+ *   <li>PostgreSQL HIT scenarios (cached views)
+ *   <li>PostgreSQL MISS scenarios (queue delegation)
  *   <li>Force recalculation (cache invalidation)
  *   <li>Backpressure (queue full)
  * </ul>
  *
  * <h3>Test Strategy</h3>
  *
- * Uses Mockito mocks for infrastructure components (MongoDB, Queue, Redis). Focuses on controller
- * logic and CQRS flow validation.
+ * Uses Mockito mocks for infrastructure components (PostgreSQL, Queue, Redis). Focuses on
+ * controller logic and CQRS flow validation.
  */
 @Tag("unit")
 class GameCharacterControllerV5Test {
 
-  @Mock private CharacterViewQueryService queryService;
+  @Mock private CharacterViewQueryServicePostgres queryService;
   @Mock private ExpectationCalculationQueue queue;
 
   @InjectMocks private TestableGameCharacterControllerV5 controller;
@@ -60,10 +60,10 @@ class GameCharacterControllerV5Test {
   }
 
   @Test
-  @DisplayName("MongoDB HIT: Return cached view immediately")
-  void testMongoDBHit_ReturnsCachedView() {
-    // Given: MongoDB has cached view
-    CharacterValuationView mockView = createMockView();
+  @DisplayName("PostgreSQL HIT: Return cached view immediately")
+  void testPostgreSQLHit_ReturnsCachedView() {
+    // Given: PostgreSQL has cached view
+    CharacterValuationViewEntity mockView = createMockView();
     when(queryService.findByUserIgn(TEST_IGN)).thenReturn(mockView);
     // Default queue mock behavior - offer returns true (not used in HIT case)
     when(queue.offer(any(ExpectationCalculationTask.class))).thenReturn(true);
@@ -80,9 +80,9 @@ class GameCharacterControllerV5Test {
   }
 
   @Test
-  @DisplayName("MongoDB MISS: Queue calculation and return 202")
-  void testMongoDBMiss_QueuesCalculation_Returns202() {
-    // Given: MongoDB has no cached view
+  @DisplayName("PostgreSQL MISS: Queue calculation and return 202")
+  void testPostgreSQLMiss_QueuesCalculation_Returns202() {
+    // Given: PostgreSQL has no cached view
     when(queryService.findByUserIgn(TEST_IGN)).thenReturn(null);
     when(queue.offer(any(ExpectationCalculationTask.class))).thenReturn(true);
 
@@ -99,7 +99,7 @@ class GameCharacterControllerV5Test {
   @Test
   @DisplayName("Queue Full: Return 503 Service Unavailable")
   void testQueueFull_Returns503() {
-    // Given: MongoDB miss and queue full
+    // Given: PostgreSQL miss and queue full
     when(queryService.findByUserIgn(TEST_IGN)).thenReturn(null);
     when(queue.offer(any(ExpectationCalculationTask.class))).thenReturn(false);
 
@@ -141,7 +141,7 @@ class GameCharacterControllerV5Test {
 
   // ==================== Helper Methods ====================
 
-  private CharacterValuationView createMockView() {
+  private CharacterValuationViewEntity createMockView() {
     CostBreakdownView breakdown =
         new CostBreakdownView(
             100000L, // blackCubeCost
@@ -168,8 +168,8 @@ class GameCharacterControllerV5Test {
             items // items
             );
 
-    return new CharacterValuationView(
-        "test-id", // id
+    return new CharacterValuationViewEntity(
+        1L, // id
         TEST_IGN, // userIgn
         null, // messageId
         "test-ocid", // characterOcid
@@ -192,11 +192,11 @@ class GameCharacterControllerV5Test {
    * Testable wrapper for GameCharacterControllerV5 to expose package-private methods for testing.
    */
   static class TestableGameCharacterControllerV5 {
-    private final CharacterViewQueryService queryService;
+    private final CharacterViewQueryServicePostgres queryService;
     private final ExpectationCalculationQueue queue;
 
     TestableGameCharacterControllerV5(
-        CharacterViewQueryService queryService, ExpectationCalculationQueue queue) {
+        CharacterViewQueryServicePostgres queryService, ExpectationCalculationQueue queue) {
       this.queryService = queryService;
       this.queue = queue;
     }
@@ -232,7 +232,7 @@ class GameCharacterControllerV5Test {
       }
     }
 
-    private Object toResponseDto(CharacterValuationView view) {
+    private Object toResponseDto(CharacterValuationViewEntity view) {
       return java.util.Map.of(
           "userIgn",
           view.getUserIgn(),

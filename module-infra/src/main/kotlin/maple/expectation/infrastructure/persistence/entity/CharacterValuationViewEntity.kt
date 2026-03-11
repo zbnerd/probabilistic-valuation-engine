@@ -8,9 +8,7 @@ import org.hibernate.type.SqlTypes
 /**
  * V5 CQRS: PostgreSQL Read Model for Character Valuation Views
  *
- * MongoDB CharacterValuationView의 PostgreSQL 마이그레이션
- *
- * @see maple.expectation.infrastructure.mongodb.CharacterValuationView
+ * MongoDB CharacterValuationView의 PostgreSQL 마이그레이션 (Issue #590)
  */
 @Entity
 @Table(

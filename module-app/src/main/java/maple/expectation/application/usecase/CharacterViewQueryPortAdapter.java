@@ -3,20 +3,20 @@ package maple.expectation.application.usecase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.inbound.CharacterViewQueryPort;
-import maple.expectation.infrastructure.mongodb.CharacterViewQueryService;
+import maple.expectation.infrastructure.persistence.CharacterViewQueryServicePostgres;
 import org.springframework.stereotype.Component;
 
 /**
  * CharacterViewQueryPort 구현체 (ADR-005)
  *
- * <p>책임: CharacterViewQueryService에 위임
+ * <p>책임: CharacterViewQueryServicePostgres에 위임 (PostgreSQL)
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class CharacterViewQueryPortAdapter implements CharacterViewQueryPort {
 
-  private final CharacterViewQueryService queryService;
+  private final CharacterViewQueryServicePostgres queryService;
 
   @Override
   public Object findByUserIgn(String userIgn) {

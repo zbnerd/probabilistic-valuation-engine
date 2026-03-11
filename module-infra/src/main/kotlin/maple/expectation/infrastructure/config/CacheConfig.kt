@@ -12,6 +12,7 @@ import maple.expectation.infrastructure.cache.TieredCacheManager
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.external.dto.v2.TotalExpectationResponse
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.CacheManager
 import org.springframework.cache.annotation.EnableCaching
@@ -41,10 +42,16 @@ import org.springframework.data.redis.serializer.StringRedisSerializer
  *   <li>cache.l2.enabled=false 시 L2 비활성화</li>
  *   <li>CaffeineOnlyCacheManager로 L2 대체</li>
  * </ul>
+ *
+ * <h4>PostgreSQL-only mode</h4>
+ *
+ * <p>Redis가 비활성화된 경우 이 설정은 로드되지 않음.
+ * 대신 CaffeineOnlyCacheConfig가 Caffeine-only 캐시 매니저를 제공.
  */
 @Configuration
 @EnableCaching
 @EnableConfigurationProperties(CacheProperties::class)
+@ConditionalOnProperty(name = ["spring.data.redis.host"])
 class CacheConfig {
 
     /**

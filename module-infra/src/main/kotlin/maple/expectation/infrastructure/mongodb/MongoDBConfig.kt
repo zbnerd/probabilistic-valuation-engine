@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct
 import java.util.concurrent.TimeUnit
 import lombok.RequiredArgsConstructor
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.domain.Sort
@@ -37,6 +38,7 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
  */
 @Configuration
 @RequiredArgsConstructor
+@ConditionalOnBean(MongoTemplate::class)
 @ConditionalOnProperty(name = ["v5.enabled"], havingValue = "true", matchIfMissing = false)
 @EnableMongoRepositories(basePackages = ["maple.expectation.infrastructure.mongodb"])
 class MongoDBConfig(

@@ -6,7 +6,7 @@ import maple.expectation.infrastructure.aop.annotation.ObservedTransaction
 import maple.expectation.infrastructure.config.OutboxProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.messaging.RedisStreamPublisher
+import maple.expectation.infrastructure.messaging.PgmqStreamPublisher
 import maple.expectation.infrastructure.metrics.EventOutboxMetrics
 import maple.expectation.infrastructure.persistence.repository.EventOutboxRepository
 import org.slf4j.LoggerFactory
@@ -44,7 +44,7 @@ class EventOutboxProcessor(
     private val transactionTemplate: TransactionTemplate,
     private val properties: OutboxProperties,
     private val eventOutboxRepository: EventOutboxRepository,
-    private val redisStreamPublisher: RedisStreamPublisher,
+    private val pgmqStreamPublisher: PgmqStreamPublisher,
 ) : EventProcessorPort {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -128,7 +128,7 @@ class EventOutboxProcessor(
             return false
         }
 
-        publishToRedisStream(entry)
+        publishToPgmqQueue(entry)
         entry.markCompleted()
         eventOutboxRepository.save(entry)
         metrics.incrementProcessed()
@@ -172,24 +172,24 @@ class EventOutboxProcessor(
         dlqHandler.handleDeadLetter(entry, "Integrity verification failed")
     }
 
-    /** Redis Stream에 이벤트 발행 */
-    private fun publishToRedisStream(entry: EventOutbox) {
+    /** PGMQ Queue에 이벤트 발행 */
+    private fun publishToPgmqQueue(entry: EventOutbox) {
         val eventId = entry.id?.toString() ?: "unknown"
         val context = TaskContext.of("EventOutbox", "Publish", eventId)
 
         executor.executeOrCatch(
             {
-                redisStreamPublisher.publish(
+                pgmqStreamPublisher.publish(
                     streamName = entry.targetStream ?: "default",
                     eventId = eventId,
                     eventType = entry.eventType ?: "unknown",
                     payload = entry.payload ?: "{}",
                 )
-                log.info("[EventOutbox] Redis Stream 발행 완료: eventId={}, stream={}", eventId, entry.targetStream)
+                log.info("[EventOutbox] PGMQ 발행 완료: eventId={}, queue={}", eventId, entry.targetStream)
                 metrics.incrementPublished()
             },
             { e ->
-                log.error("[EventOutbox] Redis Stream 발행 실패: eventId={}", eventId, e)
+                log.error("[EventOutbox] PGMQ 발행 실패: eventId={}", eventId, e)
                 throw e // Re-throw for retry logic
             },
             context,

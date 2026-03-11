@@ -16,6 +16,7 @@ import maple.expectation.infrastructure.queue.pgmq.NexonDataQueueProducer
 import maple.expectation.infrastructure.ratelimit.PostgresRateLimiter
 import maple.expectation.infrastructure.ratelimit.RateLimiter
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -47,6 +48,7 @@ import org.springframework.stereotype.Component
  * @see NexonDataQueueProducer
  */
 @Component
+@ConditionalOnBean(RateLimiter::class)
 @ConditionalOnProperty(
     name = ["scheduler.nexon-api-collector.enabled"],
     havingValue = "true",

@@ -11,9 +11,9 @@ import org.springframework.context.annotation.Profile
 import org.springframework.jdbc.core.JdbcTemplate
 
 /**
- * MySQL Named Lock 전용 HikariCP 설정
+ * PostgreSQL Advisory Lock 전용 HikariCP 설정
  *
- * <p>[목적] - Redis 장애 시 MySQL Named Lock을 사용할 때 메인 커넥션 풀이 고갈되는 것을 방지 - 락 전용 커넥션 풀을 별도로 운영하여 애플리케이션
+ * <p>[목적] - PostgreSQL Advisory Lock을 사용할 때 메인 커넥션 풀이 고갈되는 것을 방지 - 락 전용 커넥션 풀을 별도로 운영하여 애플리케이션
  * 안정성 확보
  *
  * <p>[설계 원칙] - Fixed Pool Size: Min과 Max를 동일하게 설정하여 연결 비용(Handshake) 제거 - Size 30: RPS 235 트래픽이
@@ -47,7 +47,7 @@ class LockHikariConfig(
         config.jdbcUrl = jdbcUrl
         config.username = username
         config.password = password
-        config.driverClassName = "com.mysql.cj.jdbc.Driver"
+        config.driverClassName = "org.postgresql.Driver"
 
         // [핵심 수정 1] Pool Size 증설 (10 -> 30) 및 고정 (Fixed Pool)
         // Redis가 죽으면 트래픽이 몰리므로 10개로는 부족함.
@@ -59,7 +59,7 @@ class LockHikariConfig(
         config.connectionTimeout = 5000 // 5초 안에 연결 못 얻으면 에러 (스레드 보호)
         config.idleTimeout = 300000
         config.maxLifetime = 600000
-        config.poolName = "MySQLLockPool"
+        config.poolName = "PostgreSQLLockPool"
 
         // 검증 설정 (JDBC4 isValid 사용으로 쿼리 비용 절감)
         config.validationTimeout = 3000
@@ -68,7 +68,7 @@ class LockHikariConfig(
         // 주요 HikariPool 메트릭은 기본 DataSource에서 충분히 수집 가능
 
         log.info(
-            "[Lock Pool] Initialized dedicated MySQL lock connection pool (Fixed Size: {}, Metrics: disabled)",
+            "[Lock Pool] Initialized dedicated PostgreSQL lock connection pool (Fixed Size: {}, Metrics: disabled)",
             poolSize,
         )
 

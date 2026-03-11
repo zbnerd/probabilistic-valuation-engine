@@ -12,6 +12,7 @@ import maple.expectation.infrastructure.queue.like.realtime.ReliableRedisLikeEve
 import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -44,6 +45,7 @@ import org.springframework.context.annotation.Configuration
     havingValue = "true",
     matchIfMissing = true,
 )
+@ConditionalOnProperty(name = ["spring.data.redis.host"])
 class LikeRealtimeSyncConfig(
     @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String,
 ) {
@@ -63,6 +65,7 @@ class LikeRealtimeSyncConfig(
         havingValue = "rtopic",
         matchIfMissing = true,
     )
+    @ConditionalOnBean(TieredCacheManager::class)
     class RTopicConfig(
         private val redissonClient: RedissonClient,
         private val cacheManager: TieredCacheManager,
@@ -99,6 +102,7 @@ class LikeRealtimeSyncConfig(
      */
     @Configuration
     @ConditionalOnProperty(name = ["like.realtime.transport"], havingValue = "reliable-topic")
+    @ConditionalOnBean(TieredCacheManager::class)
     class ReliableTopicConfig(
         private val redissonClient: RedissonClient,
         private val cacheManager: TieredCacheManager,

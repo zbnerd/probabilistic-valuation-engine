@@ -11,6 +11,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.jdbc.core.ConnectionCallback
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.SingleConnectionDataSource
@@ -18,9 +19,13 @@ import org.springframework.stereotype.Component
 
 /**
  * MySQL Named Lock 전략
+ *
+ * Note: MySQL 데이터베이스에서만 활성화됨
+ * PostgreSQL 모드에서는 PostgresAdvisoryLockStrategy 사용
  */
 @Component
 @ConditionalOnBean(name = ["lockJdbcTemplate"])
+@ConditionalOnProperty(name = ["maple.database.type"], havingValue = "mysql", matchIfMissing = false)
 class MySqlNamedLockStrategy(
     @Qualifier("lockJdbcTemplate")
     private val lockJdbcTemplate: JdbcTemplate,

@@ -10,6 +10,7 @@ import org.springframework.batch.core.repository.JobRepository
 import org.springframework.batch.core.step.builder.StepBuilder
 import org.springframework.batch.item.ItemReader
 import org.springframework.batch.item.ItemWriter
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.transaction.PlatformTransactionManager
@@ -53,6 +54,7 @@ import org.springframework.transaction.PlatformTransactionManager
  * @see maple.expectation.infrastructure.batch.listener.BatchOptimisticLockListener
  */
 @Configuration
+@ConditionalOnBean(name = ["batchCharacterViewService"])
 class BatchConfig(
     private val jobRepository: JobRepository,
     private val recoveryListener: BatchJobRecoveryListener,

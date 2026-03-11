@@ -2,9 +2,11 @@ package maple.expectation.infrastructure.lock
 
 import java.sql.Connection
 import maple.expectation.common.function.ThrowingSupplier
+import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Primary
 import org.springframework.jdbc.core.ConnectionCallback
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -26,12 +28,17 @@ import org.springframework.stereotype.Component
  *
  * <h3>Session Scoped Locks</h3>
  * <p>Advisory locks are automatically released when the database session ends.
+ *
+ * <h3>PostgreSQL-only Mode</h3>
+ * <p>When Redis is disabled, this becomes the primary lock strategy.
  */
+@Primary
 @Component
 class PostgresAdvisoryLockStrategy(
     private val jdbcTemplate: JdbcTemplate,
     private val executor: LogicExecutor,
-) : LeaderElectionStrategy {
+) : LockStrategy,
+    LeaderElectionStrategy {
 
     override fun <T> executeWithLeaderElection(
         key: String,
@@ -47,6 +54,80 @@ class PostgresAdvisoryLockStrategy(
                 executeWithConnectionLock(conn, lockId, key, waitTimeSeconds, leaderTask, followerTask, context)
             },
         )!!
+    }
+
+    // ==================== LockStrategy Implementation ====================
+
+    override fun <T> executeWithLock(key: String, waitTime: Long, leaseTime: Long, task: ThrowingSupplier<T>): T {
+        val lockId = generateLockId(key)
+        val context = TaskContext.of("AdvisoryLock", "ExecuteWithLock", key)
+
+        return jdbcTemplate.execute(
+            ConnectionCallback { conn ->
+                executeWithAdvisoryLock(conn, lockId, key, waitTime, task, context)
+            },
+        )!!
+    }
+
+    override fun <T> executeWithLock(key: String, task: ThrowingSupplier<T>): T = executeWithLock(key, 10, 20, task)
+
+    override fun tryLockImmediately(key: String, leaseTime: Long): Boolean {
+        val lockId = generateLockId(key)
+        return jdbcTemplate.queryForObject(
+            "SELECT pg_try_advisory_lock(?)",
+            Boolean::class.java,
+            lockId,
+        ) ?: false
+    }
+
+    override fun unlock(key: String) {
+        val lockId = generateLockId(key)
+        jdbcTemplate.queryForObject(
+            "SELECT pg_advisory_unlock(?)",
+            Boolean::class.java,
+            lockId,
+        )
+        log.debug("🔓 [AdvisoryLock] Unlocked key: {}", key)
+    }
+
+    private fun <T> executeWithAdvisoryLock(
+        conn: Connection,
+        lockId: Long,
+        key: String,
+        waitTime: Long,
+        task: ThrowingSupplier<T>,
+        context: TaskContext,
+    ): T {
+        // Try to acquire lock with timeout
+        val startTime = System.currentTimeMillis()
+        val timeoutMs = waitTime * 1000L
+        val pollIntervalMs = 100L
+        var acquired = false
+
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            if (tryAcquireLock(conn, lockId)) {
+                acquired = true
+                break
+            }
+            try {
+                Thread.sleep(pollIntervalMs)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw DistributedLockException("Interrupted while waiting for lock: $key", e)
+            }
+        }
+
+        if (!acquired) {
+            throw DistributedLockException("Failed to acquire lock within timeout: $key")
+        }
+
+        log.debug("🔒 [AdvisoryLock] Acquired lock for key: {}", key)
+
+        return executor.executeWithFinally(
+            { task.get() },
+            { releaseLock(conn, lockId, key) },
+            context,
+        )
     }
 
     // ==================== Private Methods ====================

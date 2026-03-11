@@ -16,16 +16,17 @@ import org.redisson.client.RedisException
 import org.redisson.client.RedisTimeoutException
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.context.annotation.Primary
 import org.springframework.lang.Nullable
 import org.springframework.stereotype.Component
 
 /**
  * 회복력 있는 락 전략 (Redis 우선, 실패 시 MySQL로 복구)
+ *
+ * Note: @Primary 제거됨 - Redis 모드에서만 활성화됨
+ * PostgreSQL-only 모드에서는 PostgresAdvisoryLockStrategy가 Primary
  */
-@Primary
 @Component
-@ConditionalOnProperty(name = ["lock.impl"], havingValue = "redis", matchIfMissing = true)
+@ConditionalOnProperty(name = ["lock.impl"], havingValue = "redis", matchIfMissing = false)
 class ResilientLockStrategy(
     @Qualifier("redisDistributedLockStrategy")
     private val redisLockStrategy: LockStrategy,

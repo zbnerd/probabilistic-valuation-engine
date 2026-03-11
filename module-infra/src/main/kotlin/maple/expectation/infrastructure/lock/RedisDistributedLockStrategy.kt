@@ -5,6 +5,7 @@ import maple.expectation.core.port.out.redis.RedisOperationPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
 /**
@@ -14,9 +15,13 @@ import org.springframework.stereotype.Component
  *
  * <h4>ADR-012: DIP 준수</h4>
  * <p>RedissonClient 대신 RedisOperationPort에 의존하여 DIP 준수.
+ *
+ * <h4>Redis 비활성화 시 자동 비활성화</h4>
+ * <p>app.data.redis.enabled=false인 경우 이 빈은 생성되지 않습니다.
  */
 @Component
 @Qualifier("redisDistributedLockStrategy")
+@ConditionalOnProperty(name = ["spring.data.redis.host"], matchIfMissing = false)
 class RedisDistributedLockStrategy(
     private val redisOperationPort: RedisOperationPort,
     executor: LogicExecutor,

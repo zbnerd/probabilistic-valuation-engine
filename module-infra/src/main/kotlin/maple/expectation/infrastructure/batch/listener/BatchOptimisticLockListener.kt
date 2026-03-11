@@ -51,7 +51,7 @@ import org.springframework.stereotype.Component
  * </ul>
  */
 @Component
-@ConditionalOnBean(BatchCharacterViewService::class)
+@ConditionalOnBean(name = ["batchCharacterViewService"])
 class BatchOptimisticLockListener(
     private val batchViewService: BatchCharacterViewService,
     private val executor: LogicExecutor,

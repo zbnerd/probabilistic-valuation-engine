@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.mongodb
 
 import org.springframework.boot.actuate.health.Health
 import org.springframework.boot.actuate.health.HealthIndicator
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Component
  * Only active when v5.enabled=true
  */
 @Component
+@ConditionalOnBean(MongoDBConfig::class)
 @ConditionalOnProperty(name = ["v5.enabled"], havingValue = "true", matchIfMissing = false)
 class MongoDBHealthIndicator(
     private val mongoConfig: MongoDBConfig,

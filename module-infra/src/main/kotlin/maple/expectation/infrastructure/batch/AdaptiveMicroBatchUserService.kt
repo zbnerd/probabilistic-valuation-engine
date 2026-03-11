@@ -24,7 +24,6 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.Cache
-import org.springframework.stereotype.Service
 
 private val log = KotlinLogging.logger {}
 
@@ -70,7 +69,8 @@ private val log = KotlinLogging.logger {}
  * @see AdaptiveMicroBatchProperties
  * @see BatchRequest
  */
-@Service
+// Note: @Service removed - this is a generic class that must be instantiated manually with specific loaders
+// Used only in tests and specialized configurations
 @EnableConfigurationProperties(AdaptiveMicroBatchProperties::class)
 class AdaptiveMicroBatchUserService<T : Any>(
     private val properties: AdaptiveMicroBatchProperties,

@@ -10,6 +10,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.metrics.EventOutboxMetrics
 import maple.expectation.infrastructure.persistence.repository.EventOutboxRepository
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.data.domain.PageRequest
 import org.springframework.scheduling.annotation.Scheduled
@@ -32,6 +33,7 @@ import org.springframework.stereotype.Component
  * @see maple.expectation.infrastructure.metrics.EventOutboxMetrics
  */
 @Component
+@ConditionalOnBean(EventOutboxProperties::class)
 @ConditionalOnProperty(
     name = ["scheduler.event-outbox.enabled"],
     havingValue = "true",

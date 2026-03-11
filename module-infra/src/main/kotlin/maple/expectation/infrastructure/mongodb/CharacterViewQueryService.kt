@@ -5,6 +5,7 @@ import java.time.Duration
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service
  * </ul>
  */
 @Service
+@ConditionalOnBean(MongoTemplate::class)
 class CharacterViewQueryService(
     private val repository: CharacterValuationRepository,
     private val mongoTemplate: MongoTemplate,

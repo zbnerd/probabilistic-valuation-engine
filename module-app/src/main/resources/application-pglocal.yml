@@ -82,15 +82,16 @@ cors:
     - "http://127.0.0.1:5173"
 
 # App configuration
+# V5 Migration (Issue #589): Redis removed, PostgreSQL-only
 app:
   buffer:
     redis:
-      enabled: true  # Keep Redis for cache
+      enabled: false  # V5 Migration: Redis removed
     postgres:
       enabled: true
       unlogged-buffer-size: 10000
   event-publisher:
-    type: redis  # Keep Redis for now, migrate to PGMQ later
+    type: pgmq  # PGMQ (PostgreSQL)
   aop:
     trace:
       enabled: true

@@ -56,10 +56,13 @@ cube:
     policy: LENIENT
 
 # V5 Stateless Architecture (#271)
+# V5 Migration (Issue #589): Redis removed, PostgreSQL-only
 app:
   buffer:
     redis:
-      enabled: true  # Scale-out 모드 활성화
+      enabled: false  # V5 Migration: Redis removed
+    postgres:
+      enabled: true   # PostgreSQL buffer (PGMQ)
 
 # Issue #284 DoD: Redis 장애 시 1000 RPS fallback 용량
 # NOTE: Main Pool(50) + Lock Pool(50) = 100 total (RDS max_connections 고려)

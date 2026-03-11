@@ -86,15 +86,17 @@ cors:
     - "http://127.0.0.1:3001"
     - "http://127.0.0.1:5173"
 
-# Issue #283 P0-2: 로컬 환경에서만 In-Memory 버퍼 사용
-# prod/default에서는 Redis 버퍼가 기본 활성화 (Scale-out 지원)
+# Issue #283 P0-2: 로컬 환경 In-Memory 버퍼 사용
+# V5 Migration (Issue #589): Redis buffer removed, use PostgreSQL
 # Issue #300: ACL Phase 2 - Nexon Data Collection Scheduler
 app:
   buffer:
     redis:
-      enabled: true  # ACL Phase 2: Enable Redis buffer for queue
+      enabled: false  # V5 Migration: Redis removed
+    postgres:
+      enabled: true   # PostgreSQL buffer
   event-publisher:
-    type: redis  # Use Redis (default)
+    type: pgmq  # Use PGMQ (PostgreSQL)
   aop:
     trace:
       enabled: true  # TraceAspect 활성화 (V5 로그 분석용)

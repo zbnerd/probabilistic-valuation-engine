@@ -6,12 +6,12 @@ import maple.expectation.core.domain.event.IntegrationEvent
 /**
  * Strategy interface for event publishing.
  *
- * <p><strong>Strategy Pattern:</strong> Concrete implementations (Redis, Kafka) are interchangeable
+ * <p><strong>Strategy Pattern:</strong> Concrete implementations (PGMQ, Kafka) are interchangeable
  * via configuration. This enables OCP compliance - open for extension (new publishers), closed for
  * modification (existing code unchanged).
  *
  * <p><strong>DIP Compliance:</strong> Business logic depends on this abstraction, not concrete
- * Redis/Kafka implementations.
+ * PGMQ/Kafka implementations.
  *
  * <p><strong>Usage Example:</strong>
  *
@@ -31,9 +31,9 @@ import maple.expectation.core.domain.event.IntegrationEvent
  * @Configuration
  * class MessagingConfig {
  *     @Bean
- *     @ConditionalOnProperty(name = ["app.event-publisher.type"], havingValue = "redis")
- *     fun redisEventPublisher(): EventPublisher {
- *         return RedisEventPublisher(...)
+ *     @ConditionalOnProperty(name = ["app.event-publisher.type"], havingValue = "pgmq")
+ *     fun pgmqEventPublisher(): EventPublisher {
+ *         return PgmqEventPublisher(...)
  *     }
  *
  *     @Bean
@@ -44,16 +44,7 @@ import maple.expectation.core.domain.event.IntegrationEvent
  * }
  * }</pre>
  *
- * <h3>Migration Path (Redis → Kafka):</h3>
- *
- * <ol>
- *   <li>Current: {@code app.event-publisher.type=redis} (default)
- *   <li>Future (Phase 8): Change to {@code app.event-publisher.type=kafka}
- *   <li>Result: Zero code changes in business logic
- * </ol>
- *
- * @see maple.expectation.infrastructure.messaging.RedisEventPublisher
- * @see maple.expectation.infrastructure.messaging.KafkaEventPublisher
+ * @see maple.expectation.infrastructure.messaging.PgmqStreamPublisher
  * @see ADR-018 Strategy Pattern for ACL
  */
 interface EventPublisher {

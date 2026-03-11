@@ -17,13 +17,10 @@ kotlinx-coroutines = "1.9.0"
 lombok = "1.18.30"
 
 # Databases
-mysql-connector = "9.1.0"
 h2 = "2.3.232"
-mongodb-driver = "5.3.0"
 postgresql = "42.7.4"
 
-# Redis & Cache
-redisson = "3.48.0"
+# Cache
 caffeine = "3.1.8"
 
 # Resilience & Circuit Breaker
@@ -94,8 +91,6 @@ spring-boot-starter-validation = { module = "org.springframework.boot:spring-boo
 spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
-spring-boot-starter-data-mongodb = { module = "org.springframework.boot:spring-boot-starter-data-mongodb" }
-spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
 spring-boot-starter-cache = { module = "org.springframework.boot:spring-boot-starter-cache" }
 spring-boot-starter-batch = { module = "org.springframework.boot:spring-boot-starter-batch" }
 spring-boot-starter-aop = { module = "org.springframework.boot:spring-boot-starter-aop" }
@@ -106,13 +101,10 @@ spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-star
 spring-boot = { module = "org.springframework.boot:spring-boot" }
 
 # Databases
-mysql-connector-j = { module = "com.mysql:mysql-connector-j", version.ref = "mysql-connector" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
-mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version.ref = "mongodb-driver" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 
-# Redis & Cache
-redisson-spring-boot-starter = { module = "org.redisson:redisson-spring-boot-starter", version.ref = "redisson" }
+# Cache
 caffeine = { module = "com.github.ben-manes.caffeine:caffeine", version.ref = "caffeine" }
 
 # Resilience4j
@@ -120,7 +112,6 @@ resilience4j-spring-boot3 = { module = "io.github.resilience4j:resilience4j-spri
 
 # Rate Limiting
 bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
-bucket4j-redisson = { module = "com.bucket4j:bucket4j_jdk17-redisson", version.ref = "bucket4j" }
 
 # Jackson
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
@@ -140,8 +131,6 @@ jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
-testcontainers-mysql = { module = "org.testcontainers:mysql", version.ref = "testcontainers" }
-testcontainers-mongodb = { module = "org.testcontainers:mongodb", version.ref = "testcontainers" }
 testcontainers-toxiproxy = { module = "org.testcontainers:toxiproxy", version.ref = "testcontainers" }
 testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
 archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }

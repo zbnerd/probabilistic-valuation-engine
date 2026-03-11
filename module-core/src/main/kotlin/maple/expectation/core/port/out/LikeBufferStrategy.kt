@@ -5,8 +5,7 @@ package maple.expectation.core.port.out
  *
  * <h3>Role</h3>
  *
- * <p>Defines the strategy for buffering like increments. Supports pluggable implementations:
- * In-Memory (Caffeine) or Redis via Feature Flag.
+ * <p>Defines the strategy for buffering like increments. In-Memory (Caffeine) implementation.
  *
  * <h3>5-Agent Council Agreement</h3>
  *
@@ -21,11 +20,9 @@ package maple.expectation.core.port.out
  *
  * <ul>
  *   <li>maple.expectation.service.v2.cache.LikeBufferStorage - In-Memory Caffeine
- *   <li>maple.expectation.infrastructure.queue.like.RedisLikeBufferStorage - Redis
  * </ul>
  *
  * @see maple.expectation.service.v2.cache.LikeBufferStorage In-Memory implementation
- * @see maple.expectation.infrastructure.queue.like.RedisLikeBufferStorage Redis implementation
  */
 interface LikeBufferStrategy {
 

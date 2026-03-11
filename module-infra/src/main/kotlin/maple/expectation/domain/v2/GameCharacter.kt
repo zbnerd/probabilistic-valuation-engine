@@ -23,7 +23,7 @@ import org.hibernate.annotations.NotFoundAction
 @Table(name = "game_character_v2")
 @NamedEntityGraph(
     name = "GameCharacter.withEquipment",
-    attributeNodes = [NamedAttributeNode("equipment")]
+    attributeNodes = [NamedAttributeNode("equipment")],
 )
 class GameCharacter {
 

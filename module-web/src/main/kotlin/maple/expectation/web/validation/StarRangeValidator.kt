@@ -16,7 +16,7 @@ class StarRangeValidator : ConstraintValidator<ValidStarRange, EquipmentCalculat
 
     override fun isValid(
         value: EquipmentCalculationInput?,
-        context: ConstraintValidatorContext?
+        context: ConstraintValidatorContext?,
     ): Boolean {
         if (value == null) {
             return true
@@ -29,7 +29,7 @@ class StarRangeValidator : ConstraintValidator<ValidStarRange, EquipmentCalculat
         if (currentStar < 0 || currentStar > 25) {
             context?.disableDefaultConstraintViolation()
             context?.buildConstraintViolationWithTemplate(
-                "currentStar는 0~25 사이여야 합니다 (현재: $currentStar)"
+                "currentStar는 0~25 사이여야 합니다 (현재: $currentStar)",
             )?.addConstraintViolation()
             return false
         }
@@ -37,7 +37,7 @@ class StarRangeValidator : ConstraintValidator<ValidStarRange, EquipmentCalculat
         if (targetStar < 0 || targetStar > 25) {
             context?.disableDefaultConstraintViolation()
             context?.buildConstraintViolationWithTemplate(
-                "targetStar는 0~25 사이여야 합니다 (현재: $targetStar)"
+                "targetStar는 0~25 사이여야 합니다 (현재: $targetStar)",
             )?.addConstraintViolation()
             return false
         }
@@ -46,7 +46,7 @@ class StarRangeValidator : ConstraintValidator<ValidStarRange, EquipmentCalculat
         if (targetStar < currentStar) {
             context?.disableDefaultConstraintViolation()
             context?.buildConstraintViolationWithTemplate(
-                "targetStar는 currentStar보다 크거나 같아야 합니다 (current: $currentStar, target: $targetStar)"
+                "targetStar는 currentStar보다 크거나 같아야 합니다 (current: $currentStar, target: $targetStar)",
             )?.addConstraintViolation()
             return false
         }

@@ -97,6 +97,7 @@ public class ViewTransformer {
         parseInstant(event.getCalculatedAt()),
         Instant.now(),
         eventVersion, // Use event version for causal consistency
+        eventVersion, // lastAppliedVersion: initialize with event version for ordering
         parseCostToLong(event.getTotalExpectedCost()),
         event.getMaxPresetNo(),
         presetViews,

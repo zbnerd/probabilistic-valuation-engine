@@ -5,9 +5,9 @@ import static org.mockito.Mockito.*;
 
 import maple.expectation.application.scheduler.StreamJanitorScheduler;
 import maple.expectation.application.worker.MongoDBSyncWorker;
+import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.executor.function.ThrowingSupplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -51,23 +51,24 @@ class StreamJanitorSchedulerTest {
 
   @BeforeEach
   void setUp() {
-    // Mock executor to actually execute tasks
+    // Mock executor.executeOrCatch to execute task and catch exceptions
     doAnswer(
             invocation -> {
               ThrowingSupplier<?> task = invocation.getArgument(0);
+              @SuppressWarnings("unchecked")
+              kotlin.jvm.functions.Function1<Throwable, ?> errorHandler = invocation.getArgument(1);
               try {
                 return task.get();
               } catch (Throwable e) {
-                // If recovery is provided, use it
-                if (invocation.getArguments().length > 2) {
-                  java.util.function.Function<Throwable, ?> recovery = invocation.getArgument(2);
-                  return recovery.apply(e);
-                }
-                throw new RuntimeException(e);
+                // Call error handler and return its result (don't re-throw)
+                return errorHandler.invoke(e);
               }
             })
         .when(executor)
-        .executeOrCatch(any(ThrowingSupplier.class), any(), any(TaskContext.class));
+        .executeOrCatch(
+            any(ThrowingSupplier.class),
+            any(kotlin.jvm.functions.Function1.class),
+            any(TaskContext.class));
 
     scheduler = new StreamJanitorScheduler(mongoDBSyncWorker, executor);
   }

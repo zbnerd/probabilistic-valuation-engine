@@ -178,13 +178,13 @@ class JwtTokenProvider(
         // P0: Explicit "none" algorithm rejection (case-insensitive)
         require(headerAlgorithm.lowercase() !in FORBIDDEN_ALGORITHMS.map { it.lowercase() }) {
             "JWT algorithm 'none' is forbidden. This is a known algorithm confusion attack vector. " +
-            "Received: '$headerAlgorithm'"
+                "Received: '$headerAlgorithm'"
         }
 
         // P0: Algorithm whitelist enforcement
         require(headerAlgorithm in ALLOWED_ALGORITHMS) {
             "JWT algorithm not in whitelist. Allowed: $ALLOWED_ALGORITHMS, Received: '$headerAlgorithm'. " +
-            "Possible algorithm confusion attack."
+                "Possible algorithm confusion attack."
         }
 
         // JJWT 0.12.x: verifyWith() ensures HMAC signature verification with SecretKey
@@ -198,7 +198,7 @@ class JwtTokenProvider(
         val parsedAlgorithm = jws.header.algorithm
         require(parsedAlgorithm == EXPECTED_ALGORITHM) {
             "JWT algorithm mismatch after parsing: expected $EXPECTED_ALGORITHM, got $parsedAlgorithm. " +
-            "Possible algorithm confusion attack."
+                "Possible algorithm confusion attack."
         }
 
         val claims: io.jsonwebtoken.Claims = jws.payload
@@ -228,27 +228,6 @@ class JwtTokenProvider(
         val parts = token.split(".")
         require(parts.size == 3) {
             "Invalid JWT format: expected 3 parts (header.payload.signature), got ${parts.size}"
-        }
-
-        // Decode header (Base64URL) - use JJWT's built-in decoder
-        val headerBytes = io.jsonwebtoken.io.Decoders.BASE64URL.decode(parts[0])
-        val headerJson = String(headerBytes, Charsets.UTF_8)
-
-        // Extract "alg" field using simple JSON parsing
-        // Use regex to avoid heavy JSON library dependency for this simple extraction
-        val algPattern = """"alg"\s*:\s*"([^"]+)"""".toRegex()
-        val match = algPattern.find(headerJson)
-
-        return match?.groupValues?.get(1) ?: throw IllegalArgumentException(
-            "JWT header missing 'alg' field. Header: $headerJson"
-        )
-    }
-
-    private fun maskToken(token: String?): String {
-        return if (token == null || token.length < 10) {
-            "***"
-        } else {
-            token.substring(0, 6) + "..."
         }
 
         // Decode header (Base64URL) - use JJWT's built-in decoder

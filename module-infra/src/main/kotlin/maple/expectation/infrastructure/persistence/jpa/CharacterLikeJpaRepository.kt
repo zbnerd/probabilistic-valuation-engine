@@ -70,13 +70,13 @@ interface CharacterLikeJpaRepository : JpaRepository<CharacterLikeJpaEntity, Lon
      */
     fun existsByTargetOcidAndLikerAccountId(targetOcid: String?, likerAccountId: String?): Boolean
 
-  /**
-   * Delete like by target OCID and liker account ID.
-   *
-   * @param targetOcid OCID of character
-   * @param likerAccountId account ID of user
-   */
-  @Modifying(clearAutomatically = true)
-  @Transactional("transactionManager")
-  fun deleteByTargetOcidAndLikerAccountId(targetOcid: String?, likerAccountId: String?)
+    /**
+     * Delete like by target OCID and liker account ID.
+     *
+     * @param targetOcid OCID of character
+     * @param likerAccountId account ID of user
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional("transactionManager")
+    fun deleteByTargetOcidAndLikerAccountId(targetOcid: String?, likerAccountId: String?)
 }

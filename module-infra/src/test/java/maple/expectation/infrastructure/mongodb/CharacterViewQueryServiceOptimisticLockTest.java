@@ -5,12 +5,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import com.mongodb.client.result.UpdateResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
+import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,17 +63,19 @@ class CharacterViewQueryServiceOptimisticLockTest {
         new CharacterViewQueryService(repository, mongoTemplate, executor, meterRegistry);
 
     // Setup LogicExecutor to execute tasks directly for testing
-    doAnswer(
+    lenient()
+        .doAnswer(
             invocation -> {
-              LogicExecutor.ThrowingSupplier<?> task = invocation.getArgument(0);
+              ThrowingSupplier<?> task = invocation.getArgument(0);
               return task.get();
             })
         .when(executor)
         .executeOrDefault(any(), any(), any(TaskContext.class));
 
-    doAnswer(
+    lenient()
+        .doAnswer(
             invocation -> {
-              LogicExecutor.ThrowingRunnable task = invocation.getArgument(0);
+              ThrowingRunnable task = invocation.getArgument(0);
               task.run();
               return null;
             })
@@ -83,7 +88,7 @@ class CharacterViewQueryServiceOptimisticLockTest {
   void realtimeUpdateWinsOverBatch() {
     // Given: Existing document with high version (realtime)
     CharacterValuationView existing = createView("user1", 1704000000000L);
-    when(repository.findById(any())).thenReturn(existing);
+    when(repository.findById(any())).thenReturn(java.util.Optional.of(existing));
 
     // When: Batch tries to update with low version
     CharacterValuationView batchUpdate = createView("user1", 1000L);
@@ -102,7 +107,14 @@ class CharacterViewQueryServiceOptimisticLockTest {
   void batchUpdateSucceedsWhenRealtimeIsOlder() {
     // Given: Existing document with low version (old realtime)
     CharacterValuationView existing = createView("user1", 500L);
-    when(repository.findById(any())).thenReturn(existing);
+    when(repository.findById(any())).thenReturn(java.util.Optional.of(existing));
+
+    // Mock updateFirst to return a valid UpdateResult
+    UpdateResult mockResult = mock(UpdateResult.class);
+    when(mockResult.getModifiedCount()).thenReturn(1L);
+    when(mongoTemplate.updateFirst(
+            any(Query.class), any(Update.class), eq(CharacterValuationView.class)))
+        .thenReturn(mockResult);
 
     // When: Batch tries to update with higher version
     CharacterValuationView batchUpdate = createView("user1", 1000L);
@@ -128,8 +140,8 @@ class CharacterViewQueryServiceOptimisticLockTest {
   @Test
   @DisplayName("New document should be inserted with version 1")
   void newDocumentInsertedWithVersion1() {
-    // Given: Document doesn't exist
-    when(repository.findById(any())).thenReturn(null);
+    // Given: Document doesn't exist - return Optional.empty() not null
+    when(repository.findById(any())).thenReturn(java.util.Optional.empty());
 
     // When: Upsert is called
     CharacterValuationView newView = createView("newUser", 1000L);
@@ -153,7 +165,7 @@ class CharacterViewQueryServiceOptimisticLockTest {
     // Given: Existing realtime update with timestamp version
     long realtimeTimestamp = System.currentTimeMillis();
     CharacterValuationView existing = createView("user1", realtimeTimestamp);
-    when(repository.findById(any())).thenReturn(existing);
+    when(repository.findById(any())).thenReturn(java.util.Optional.of(existing));
 
     // When: Batch tries to update with fixed low version
     CharacterValuationView batchUpdate = createView("user1", 1000L);
@@ -180,6 +192,7 @@ class CharacterViewQueryServiceOptimisticLockTest {
         Instant.now(),
         Instant.now(),
         version,
+        version, // lastAppliedVersion
         1000000L,
         3,
         java.util.List.of(),

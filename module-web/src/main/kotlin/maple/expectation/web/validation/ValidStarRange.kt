@@ -21,5 +21,5 @@ import kotlin.reflect.KClass
 annotation class ValidStarRange(
     val message: String = "스타포스 범위가 유효하지 않습니다 (currentStar: 0-25, targetStar: 0-25, targetStar >= currentStar)",
     val groups: Array<KClass<*>> = [],
-    val payload: Array<KClass<out Payload>> = []
+    val payload: Array<KClass<out Payload>> = [],
 )

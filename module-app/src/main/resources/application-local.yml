@@ -70,26 +70,26 @@ spring:
     discord:
       webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
 
-  # MongoDB Configuration (V5 CQRS)
-  # P1-10: Eventual Consistency Settings
-  # Local: Single node - use primary for consistency
-  spring:
-    data:
-      mongodb:
-        host: localhost
-        port: 27017
-        database: maple_expectation_v5
-        auto-index-creation: true
-        # P1-10: Read Preference - primary for local dev (single node)
-        # read-preference: primary
-        # P1-10: Read Concern - local for low latency (single node)
-        # read-concern: local
-        # Connection pool settings for optimal performance
-        # connect-timeout: 10000
-        # socket-timeout: 30000
-        # max-connection-per-host: 50
-        # max-connection-idle-time: 60000
-        # max-connection-life-time: 120000
+# MongoDB Configuration (V5 CQRS)
+# P1-10: Eventual Consistency Settings
+# Local: Single node - use primary for consistency
+spring:
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: maple_expectation_v5
+      auto-index-creation: true
+      # P1-10: Read Preference - primary for local dev (single node)
+      # read-preference: primary
+      # P1-10: Read Concern - local for low latency (single node)
+      # read-concern: local
+      # Connection pool settings for optimal performance
+      # connect-timeout: 10000
+      # socket-timeout: 30000
+      # max-connection-per-host: 50
+      # max-connection-idle-time: 60000
+      # max-connection-life-time: 120000
 
 # DP 엔진 테이블 검증 설정
 cube:

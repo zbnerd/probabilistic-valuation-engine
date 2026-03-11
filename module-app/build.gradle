@@ -38,6 +38,12 @@ dependencies {
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
 	implementation(libs.kotlin.stdlib)
 
+	// Lombok for main and test sources
+	compileOnly(libs.lombok)
+	annotationProcessor(libs.lombok)
+	testCompileOnly(libs.lombok)
+	testAnnotationProcessor(libs.lombok)
+
 	// Lombok for integration tests
 	integrationTestCompileOnly(libs.lombok)
 	integrationTestAnnotationProcessor(libs.lombok)
@@ -112,6 +118,10 @@ dependencies {
 	implementation(libs.spring.dotenv)
 
 	testImplementation(libs.spring.boot.starter.test)
+	testImplementation("org.springframework.boot:spring-boot-testcontainers")
+	testImplementation(libs.testcontainers)
+	testImplementation(libs.testcontainers.junit.jupiter)
+	testImplementation(libs.testcontainers.postgresql)
 	testImplementation(libs.testcontainers.toxiproxy)
 	testImplementation(libs.mockito.core)
 	testImplementation(libs.mockito.junit.jupiter)
@@ -139,8 +149,9 @@ bootRun {
 tasks.named('test') {
 	exclude '**/test-legacy/**'
 	// Integration tests run separately via 'integrationTest' task
+	// Infra-verification tests run separately via 'testInfraVerification' task
 	useJUnitPlatform {
-		excludeTags 'integration'
+		excludeTags 'integration', 'infra-verification'
 	}
 }
 
@@ -223,6 +234,7 @@ tasks.withType(ProcessResources).configureEach {
 // Ensure Java compilation depends on Kotlin compilation (Kotlin-Java interop)
 tasks.named('compileJava') {
 	dependsOn tasks.named('compileKotlin')
+	options.annotationProcessorPath = configurations.annotationProcessor
 }
 
 // Lombok annotation processor for integration tests

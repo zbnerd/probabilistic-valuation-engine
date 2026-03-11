@@ -183,68 +183,6 @@ class CharacterViewQueryService(
         )
     }
 
-    /**
-     * Handle update with optimistic locking check.
-     *
-     * <p>Only updates if incoming version is greater than current version.
-     * This ensures realtime updates (higher version) win over batch (lower version).
-     */
-    private fun handleUpdateWithOptimisticLock(incoming: CharacterValuationView, existing: CharacterValuationView) {
-        val incomingVersion = incoming.version ?: 0L
-        val currentVersion = existing.version ?: 0L
-
-        if (incomingVersion > currentVersion) {
-            // Incoming update is newer - apply update and increment version
-            val query = Query(Criteria.where("id").`is`(existing.id))
-            val update = Update()
-                .set("userIgn", incoming.userIgn)
-                .set("characterOcid", incoming.characterOcid)
-                .set("characterClass", incoming.characterClass)
-                .set("characterLevel", incoming.characterLevel)
-                .set("totalExpectedCost", incoming.totalExpectedCost)
-                .set("maxPresetNo", incoming.maxPresetNo)
-                .set("calculatedAt", incoming.calculatedAt)
-                .set("lastApiSyncAt", incoming.lastApiSyncAt)
-                .set("version", incomingVersion + 1) // Increment version
-                .set("lastAppliedVersion", incomingVersion) // Update lastAppliedVersion for event ordering
-                .set("fromCache", incoming.fromCache)
-                .set("presets", incoming.presets)
-
-            val result = mongoTemplate.updateFirst(query, update, CharacterValuationView::class.java)
-
-            if (result.modifiedCount > 0) {
-                meterRegistry.counter("mongodb.optimistic_lock.updated").increment()
-                log.debug("[OptimisticLock] Updated document: userIgn={}, version={}->{}",
-                    incoming.userIgn, currentVersion, incomingVersion + 1)
-            } else {
-                meterRegistry.counter("mongodb.optimistic_lock.skipped").increment()
-                log.debug("[OptimisticLock] Skipped update (no modification): userIgn={}, version={}",
-                    incoming.userIgn, incomingVersion)
-            }
-        } else {
-            // Incoming update is older or same - skip to preserve realtime data
-            meterRegistry.counter("mongodb.optimistic_lock.skipped").increment()
-            log.debug("[OptimisticLock] Skipped update (version too old): userIgn={}, incoming={}, current={}",
-                incoming.userIgn, incomingVersion, currentVersion)
-        }
-    }
-
-    /**
-     * Handle insert of new document with initial version.
-     */
-    private fun handleInsertNew(view: CharacterValuationView) {
-        val newView = view.copy(
-            version = 1L, // Initial version for new documents
-            lastAppliedVersion = view.version ?: 1L, // Set lastAppliedVersion for event ordering
-            id = view.id ?: view.messageId // Use messageId as ID if not set
-        )
-
-        repository.save(newView)
-        meterRegistry.counter("mongodb.optimistic_lock.inserted").increment()
-        log.debug("[OptimisticLock] Inserted new document: userIgn={}, version=1, lastAppliedVersion={}",
-            view.userIgn, view.version)
-    }
-
     /** Delete by user IGN (for invalidation) */
     fun deleteByUserIgn(userIgn: String) {
         val context = TaskContext.of("MongoQuery", "Delete", userIgn)
@@ -306,35 +244,6 @@ class CharacterViewQueryService(
             },
             0L,
             context,
-        )
-    }
-
-    /**
-     * Get the last applied event version for a user (Unit 4: Event Ordering & Versioning)
-     *
-     * <p>Used by MongoDBSyncWorker to determine if an event should be applied or buffered.
-     *
-     * <h3>Event Ordering Logic</h3>
-     *
-     * <ul>
-     *   <li>If event.version <= lastAppliedVersion: Skip (already applied)
-     *   <li>If event.version == lastAppliedVersion + 1: Apply immediately (next expected)
-     *   <li>If event.version > lastAppliedVersion + 1: Buffer (out-of-order, waiting for gap)
-     * </ul>
-     *
-     * @param userIgn User in-game name
-     * @return Last applied version, or 0L if no document exists
-     */
-    fun getLastAppliedVersion(userIgn: String): Long {
-        val context = TaskContext.of("MongoQuery", "GetLastAppliedVersion", userIgn)
-
-        return executor.executeOrDefault(
-            {
-                val view = repository.findByUserIgn(userIgn)
-                view?.lastAppliedVersion ?: 0L
-            },
-            0L,
-            context
         )
     }
 }

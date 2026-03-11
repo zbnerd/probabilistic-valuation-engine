@@ -63,7 +63,7 @@ public class DonationService {
    * @throws AdminMemberNotFoundException Admin의 Member 계정이 없음
    * @throws InsufficientPointException 잔액 부족
    */
-  @Transactional("transactionManager", isolation = Isolation.READ_COMMITTED)
+  @Transactional(transactionManager = "tm", isolation = Isolation.READ_COMMITTED)
   @Locked(key = "#guestUuid")
   @ObservedTransaction("service.v2.DonationService.sendCoffee")
   public void sendCoffee(String guestUuid, String adminFingerprint, Long amount, String requestId) {

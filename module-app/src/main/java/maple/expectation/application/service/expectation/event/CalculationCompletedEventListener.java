@@ -45,7 +45,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *   → @TransactionalEventListener(BEFORE_COMMIT) intercepts
  *   → TransactionalEventPublisher.saveToOutbox() [same TX]
  *   → TX Commit (both V4 result AND EventOutbox saved atomically)
- *   → EventOutboxProcessor (new TX) → Redis Stream → MongoDB
+ *   → EventOutboxProcessor (new TX) → PGMQ → PostgreSQL
  * </pre>
  *
  * <h3>Section 12 Compliance</h3>

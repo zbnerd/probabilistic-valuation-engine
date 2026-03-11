@@ -60,6 +60,14 @@ batch:
     chunk-size: 100
     fetch-size: 1000
 
+# Adaptive Micro-Batching Configuration (Issue #588)
+adaptive-micro-batch:
+  semaphore-permits: 10      # Fast Lane 동시 실행 수 (DB 커넥션 풀 크기 고려)
+  batch-max-wait-ms: 10      # 배치 최대 대기 시간 (ms)
+  batch-max-size: 50         # 배치 최대 크기
+  chunk-size: 100            # IN 쿼리 최대 파라미터 수
+  request-timeout-ms: 500    # 요청 타임아웃 (ms)
+
 management:
   endpoints:
     web:

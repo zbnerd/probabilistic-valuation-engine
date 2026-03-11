@@ -39,6 +39,11 @@ dependencies {
 
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
 	implementation(libs.kotlin.stdlib)
+	implementation(libs.kotlin.logging.jvm)
+	implementation(libs.kotlinx.coroutines.core)
+	implementation(libs.kotlinx.coroutines.jdk8)
+	implementation(libs.kotlinx.coroutines.core)
+	implementation(libs.kotlinx.coroutines.jdk8)
 
 	// Lombok
 	compileOnly(libs.lombok)
@@ -107,6 +112,7 @@ dependencies {
 	testImplementation(libs.spring.boot.starter.test)
 	testImplementation(libs.testcontainers.mysql)
 	testImplementation(libs.testcontainers.mongodb)
+	testImplementation(libs.mockito.kotlin)
 
 	// Integration Test Dependencies
 	integrationTestImplementation(libs.spring.boot.starter.test)

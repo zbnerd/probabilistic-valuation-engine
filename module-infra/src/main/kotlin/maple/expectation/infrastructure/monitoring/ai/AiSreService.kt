@@ -10,7 +10,6 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.monitoring.context.SystemContextProvider
 import maple.expectation.infrastructure.monitoring.copilot.model.IncidentContext
 import maple.expectation.infrastructure.monitoring.security.PiiMaskingFilter
-import maple.expectation.infrastructure.monitoring.throttle.AlertThrottler
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -23,7 +22,6 @@ class AiSreService(
     private val chatModel: ChatLanguageModel,
     private val contextProvider: SystemContextProvider,
     private val piiFilter: PiiMaskingFilter,
-    private val throttler: AlertThrottler,
     private val executor: LogicExecutor,
     @Qualifier("aiTaskExecutor") private val aiTaskExecutor: Executor,
     private val promptBuilder: AiPromptBuilder,
@@ -40,11 +38,8 @@ class AiSreService(
     fun analyzeError(exception: Throwable): Optional<AiAnalysisResult> {
         val context = TaskContext.of("AiSre", "AnalyzeError", exception.javaClass.simpleName)
 
-        val errorPattern = exception.javaClass.simpleName
-        if (!throttler.canSendAiAnalysisWithThrottle(errorPattern)) {
-            log.debug("[AiSre] 스로틀링으로 AI 분석 스킵: {}", errorPattern)
-            return Optional.of(createThrottledResult(exception))
-        }
+        // V5 Migration (Issue #589): Redis-based throttling removed
+        // Always proceed with analysis when enabled
 
         return executor.executeOrDefault(
             { performAnalysisInternal(exception) },
@@ -87,15 +82,6 @@ class AiSreService(
                 .build(),
         )
     }
-
-    private fun createThrottledResult(exception: Throwable): AiAnalysisResult = AiAnalysisResult.builder()
-        .rootCause("동일 에러 패턴 반복 발생")
-        .severity("INFO")
-        .affectedComponents(exception.javaClass.simpleName)
-        .actionItems("이전 분석 결과 참조")
-        .analysisSource("THROTTLED")
-        .disclaimer("스로틀링으로 인해 새로운 AI 분석이 생략되었습니다.")
-        .build()
 
     private fun analyzeByKeyword(errorType: String, message: String): String {
         val combined = ("$errorType $message").lowercase()

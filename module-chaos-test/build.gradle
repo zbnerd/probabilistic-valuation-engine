@@ -83,12 +83,6 @@ dependencies {
 	chaosTestCompileOnly(libs.lombok)
 	chaosTestAnnotationProcessor(libs.lombok)
 
-	// Redisson for distributed locking chaos tests
-	testImplementation(libs.redisson.spring.boot.starter)
-
-	// Spring Data Redis for RedisTemplate
-	testImplementation(libs.spring.boot.starter.data.redis)
-
 	// ============================================================
 	// ArchUnit (Architecture Validation for Chaos Tests)
 	// ============================================================

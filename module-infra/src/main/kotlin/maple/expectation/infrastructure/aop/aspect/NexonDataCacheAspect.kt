@@ -2,7 +2,6 @@ package maple.expectation.infrastructure.aop.aspect
 
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import maple.expectation.error.exception.ExternalServiceException
 import maple.expectation.error.exception.InternalSystemException
@@ -12,25 +11,27 @@ import maple.expectation.infrastructure.config.NexonApiProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
+import maple.expectation.infrastructure.lock.LeaderElectionStrategy
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.aspectj.lang.reflect.MethodSignature
-import org.redisson.api.RCountDownLatch
-import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
 /**
  * Nexon API Cache AOP - 분산 캐시 전략 (Leader-Follower 패턴)
+ *
+ * V5 Migration: Redis RCountDownLatch → PostgreSQL Advisory Lock
+ * Uses LeaderElectionStrategy (implemented by PostgresAdvisoryLockStrategy)
  */
 @Aspect
 @Component
 @Order(1)
 class NexonDataCacheAspect(
     private val cacheService: EquipmentCache,
-    private val redissonClient: RedissonClient,
+    private val leaderElectionStrategy: LeaderElectionStrategy,
     private val executor: LogicExecutor,
     private val nexonApiProperties: NexonApiProperties,
 ) {
@@ -47,69 +48,55 @@ class NexonDataCacheAspect(
         val returnType = signature.returnType
 
         return getCachedResult(ocid, returnType)
-            .orElseGet { executeDistributedStrategy(joinPoint, ocid, returnType) }
+            .orElseGet { executeWithLeaderElection(joinPoint, ocid, returnType) }
     }
 
-    private fun executeDistributedStrategy(
+    private fun executeWithLeaderElection(
         joinPoint: ProceedingJoinPoint,
         ocid: String,
         returnType: Class<*>,
     ): Any {
-        val latchKey = "latch:eq:$ocid"
-        val latch = redissonClient.getCountDownLatch(latchKey)
+        val waitTimeSeconds = nexonApiProperties.cacheFollowerTimeoutSeconds
 
-        return if (latch.trySetCount(1)) {
-            val initialTtl = nexonApiProperties.latchInitialTtlSeconds.toLong()
-            redissonClient.keys.expire(latchKey, initialTtl, TimeUnit.SECONDS)
-            executeAsLeader(joinPoint, ocid, returnType, latch)
-        } else {
-            executeAsFollower(ocid, returnType, latch)
-        }
+        return leaderElectionStrategy.executeWithLeaderElection(
+            key = ocid,
+            waitTimeSeconds = waitTimeSeconds,
+            leaderTask = { executeAsLeader(joinPoint, ocid, returnType) },
+            followerTask = { executeAsFollower(ocid, returnType) },
+        )
     }
 
     private fun executeAsLeader(
         joinPoint: ProceedingJoinPoint,
         ocid: String,
         returnType: Class<*>,
-        latch: RCountDownLatch,
-    ): Any = executor.execute(
-        { fetchAndCacheData(joinPoint, ocid, returnType, latch) },
-        TaskContext.of("NexonCache", "Leader", ocid),
-    )
-
-    private fun fetchAndCacheData(
-        joinPoint: ProceedingJoinPoint,
-        ocid: String,
-        returnType: Class<*>,
-        latch: RCountDownLatch,
     ): Any {
+        log.info("[Leader] 캐시 갱신 시작: $ocid")
         val result = joinPoint.proceed()
 
-        if (result is CompletableFuture<*>) {
-            return handleAsyncResult(result as CompletableFuture<*>, ocid, latch)
+        return if (result is CompletableFuture<*>) {
+            handleAsyncResult(result as CompletableFuture<*>, ocid, returnType)
+        } else {
+            // 동기 경로
+            executor.execute(
+                { saveAndWrap(result, ocid, returnType) },
+                TaskContext.of("NexonCache", "LeaderSync", ocid),
+            )
         }
-
-        // 동기 경로
-        return executor.executeWithFinally(
-            { saveAndWrap(result, ocid, returnType) },
-            { finalizeLatch(latch) },
-            TaskContext.of("NexonCache", "SyncCache", ocid),
-        )
     }
 
     /** 비동기 결과 처리 (평탄화) */
     private fun handleAsyncResult(
         future: CompletableFuture<*>,
         ocid: String,
-        latch: RCountDownLatch,
+        returnType: Class<*>,
     ): Any {
-        val skipContextSnap = SkipEquipmentL2CacheContext.snapshot() // V5: MDC 기반
+        val skipContextSnap = SkipEquipmentL2CacheContext.snapshot()
 
         return future.handle { res, ex ->
-            executor.executeWithFinally(
-                { processAsyncCallback(res, ex, ocid, skipContextSnap ?: "") },
-                { finalizeLatch(latch) },
-                TaskContext.of("NexonCache", "AsyncCache", ocid),
+            executor.execute(
+                { processAsyncCallback(res, ex, ocid, returnType, skipContextSnap ?: "") },
+                TaskContext.of("NexonCache", "AsyncCallback", ocid),
             )
         }
     }
@@ -119,20 +106,21 @@ class NexonDataCacheAspect(
         res: Any?,
         ex: Throwable?,
         ocid: String,
+        returnType: Class<*>,
         skipContextSnap: String,
     ): Any {
-        val before = SkipEquipmentL2CacheContext.snapshot() // V5: MDC 기반
+        val before = SkipEquipmentL2CacheContext.snapshot()
         SkipEquipmentL2CacheContext.restore(skipContextSnap)
 
         return executor.executeWithFinally(
-            { doProcessAsyncCallback(res, ex, ocid) },
+            { doProcessAsyncCallback(res, ex, ocid, returnType) },
             { SkipEquipmentL2CacheContext.restore(before) },
-            TaskContext.of("NexonCache", "AsyncCallback", ocid),
+            TaskContext.of("NexonCache", "AsyncCallbackInner", ocid),
         )
     }
 
     /** 비동기 콜백 핵심 로직 */
-    private fun doProcessAsyncCallback(res: Any?, ex: Throwable?, ocid: String): Any {
+    private fun doProcessAsyncCallback(res: Any?, ex: Throwable?, ocid: String, returnType: Class<*>): Any {
         if (ex != null) {
             throw toRuntimeException(ex, ocid)
         }
@@ -142,7 +130,7 @@ class NexonDataCacheAspect(
         }
 
         @Suppress("UNCHECKED_CAST")
-        return res as Any
+        return wrap(res as? EquipmentResponse, returnType)
     }
 
     /** Equipment 저장 (Expectation 경로 분기) */
@@ -187,25 +175,10 @@ class NexonDataCacheAspect(
         return wrap(response, returnType)
     }
 
-    private fun executeAsFollower(ocid: String, returnType: Class<*>, latch: RCountDownLatch): Any = executor.execute(
-        {
-            log.info("[Follower] 대장 완료 대기 중...: $ocid")
-            val timeoutSeconds = nexonApiProperties.cacheFollowerTimeoutSeconds.toLong()
-            if (!latch.await(timeoutSeconds, TimeUnit.SECONDS)) {
-                throw InternalSystemException("NexonCache Follower Timeout: $ocid")
-            }
-
-            getCachedResult(ocid, returnType)
-                .orElseThrow { InternalSystemException("NexonCache Leader Failed: $ocid") }
-        },
-        TaskContext.of("NexonCache", "Follower", ocid),
-    )
-
-    private fun finalizeLatch(latch: RCountDownLatch) {
-        latch.countDown()
-        val finalizeTtl = nexonApiProperties.latchFinalizeTtlSeconds.toLong()
-        redissonClient.keys.expire(latch.name, finalizeTtl, TimeUnit.SECONDS)
-        log.debug("[Leader] 래치 정리 완료 ({}초 뒤 만료)", finalizeTtl)
+    private fun executeAsFollower(ocid: String, returnType: Class<*>): Any {
+        log.info("[Follower] 리더 완료 후 캐시 조회: $ocid")
+        return getCachedResult(ocid, returnType)
+            .orElseThrow { InternalSystemException("NexonCache Leader Failed: $ocid") }
     }
 
     private fun getCachedResult(ocid: String, returnType: Class<*>): Optional<Any> {

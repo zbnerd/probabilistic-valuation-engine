@@ -32,7 +32,7 @@ interface CharacterValuationViewJpaRepository : JpaRepository<CharacterValuation
      * userIgn으로 삭제
      */
     @Modifying
-    @Transactional
+    @Transactional("transactionManager")
     @Query("DELETE FROM CharacterValuationViewEntity e WHERE e.userIgn = :userIgn")
     fun deleteByUserIgn(@Param("userIgn") userIgn: String): Int
 }

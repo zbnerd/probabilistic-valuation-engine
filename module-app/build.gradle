@@ -98,9 +98,6 @@ dependencies {
 	runtimeOnly(libs.mysql.connector.j)
 	runtimeOnly(libs.h2)
 
-	// Redisson (Redis)
-	implementation(libs.redisson.spring.boot.starter)
-
 	// Resilience4j
 	implementation(libs.resilience4j.spring.boot3)
 
@@ -109,7 +106,6 @@ dependencies {
 
 	// Bucket4j
 	implementation(libs.bucket4j.core)
-	implementation(libs.bucket4j.redisson)
 
 	// Jackson CSV
 	implementation(libs.jackson.dataformat.csv)

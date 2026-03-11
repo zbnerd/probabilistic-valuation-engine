@@ -63,7 +63,7 @@ class CharacterViewQueryServicePostgres(
      *
      * @param entity The entity to upsert
      */
-    @Transactional
+    @Transactional("transactionManager")
     fun upsert(entity: CharacterValuationViewEntity) {
         val context = TaskContext.of("PostgresQuery", "Upsert", entity.userIgn)
 
@@ -140,7 +140,7 @@ class CharacterViewQueryServicePostgres(
     }
 
     /** Delete by user IGN (for invalidation) */
-    @Transactional
+    @Transactional("transactionManager")
     fun deleteByUserIgn(userIgn: String) {
         val context = TaskContext.of("PostgresQuery", "Delete", userIgn)
 
@@ -151,7 +151,7 @@ class CharacterViewQueryServicePostgres(
     }
 
     /** Delete all documents (for testing) */
-    @Transactional
+    @Transactional("transactionManager")
     fun deleteAll() {
         val context = TaskContext.of("PostgresQuery", "DeleteAll", "all")
 

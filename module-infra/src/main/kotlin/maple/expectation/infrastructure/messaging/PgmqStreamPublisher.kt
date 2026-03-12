@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(
     prefix = "app.event-publisher",
     name = ["type"],
-    havingValue = "postgres",
+    havingValue = "pgmq",
     matchIfMissing = false,
 )
 class PgmqStreamPublisher(

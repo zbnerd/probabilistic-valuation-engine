@@ -8,6 +8,7 @@ import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.context.properties.bind.Name
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -39,6 +40,10 @@ import org.springframework.context.annotation.Configuration
  * @see maple.expectation.event.LowPriorityEventConsumer
  */
 @Configuration
+@EnableConfigurationProperties(
+    EventConsumerConfig.HighPriorityConsumerProperties::class,
+    EventConsumerConfig.LowPriorityConsumerProperties::class,
+)
 class EventConsumerConfig {
 
     private val log = LoggerFactory.getLogger(EventConsumerConfig::class.java)
@@ -50,7 +55,7 @@ class EventConsumerConfig {
      */
     @ConfigurationProperties(prefix = "event.consumer.high")
     data class HighPriorityConsumerProperties(
-        @Name("max-concurrent") val maxConcurrent: Int,
+        @Name("max-concurrent") val maxConcurrent: Int = 50,
     ) {
         init {
             if (maxConcurrent <= 0) {
@@ -71,7 +76,7 @@ class EventConsumerConfig {
      */
     @ConfigurationProperties(prefix = "event.consumer.low")
     data class LowPriorityConsumerProperties(
-        @Name("max-concurrent") val maxConcurrent: Int,
+        @Name("max-concurrent") val maxConcurrent: Int = 20,
     ) {
         init {
             if (maxConcurrent <= 0) {

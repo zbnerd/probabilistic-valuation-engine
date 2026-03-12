@@ -9,6 +9,7 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.stereotype.Component
 
 /**
  * PostgreSQL L2 Cache Strategy Implementation (Issue #247)
@@ -51,6 +52,7 @@ import org.springframework.jdbc.core.JdbcTemplate
  * @see L2CacheStrategy
  * @see PostgresL2CacheFactory
  */
+@Component
 class PostgresL2CacheStrategy(
     private val jdbcTemplate: JdbcTemplate,
     private val executor: LogicExecutor,

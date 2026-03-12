@@ -1,5 +1,6 @@
 package maple.expectation.web.dto.v4
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
@@ -17,6 +18,7 @@ data class EquipmentExpectationResponseV4(
     val presets: List<PresetExpectation>,
 ) {
     /** Java 호환성을 위한 메서드 */
+    @JsonIgnore
     fun isFromCache(): Boolean = fromCache
 
     companion object {

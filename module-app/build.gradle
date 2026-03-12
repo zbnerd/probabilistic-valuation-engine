@@ -37,6 +37,7 @@ idea {
 dependencies {
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
 	implementation(libs.kotlin.stdlib)
+	implementation(libs.kotlin.reflect)
 
 	// Lombok for main and test sources
 	compileOnly(libs.lombok)

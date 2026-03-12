@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine
 import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.cache.CaffeineOnlyCacheManager
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.CacheManager
 import org.springframework.cache.annotation.EnableCaching
@@ -23,7 +24,7 @@ import org.springframework.context.annotation.Primary
  *
  * <h3>Activation</h3>
  *
- * <p>Only active when `spring.data.redis.host` is not configured (Redis disabled).
+ * <p>Only active when `cache.l2.impl` is NOT postgres (L2 cache disabled or different impl).
  *
  * <h3>V5 Migration (Issue #589)</h3>
  *
@@ -36,6 +37,11 @@ import org.springframework.context.annotation.Primary
 @Configuration
 @EnableCaching
 @EnableConfigurationProperties(CacheProperties::class)
+@ConditionalOnProperty(
+    name = ["cache.l2.enabled"],
+    havingValue = "false",
+    matchIfMissing = false,
+)
 class CaffeineOnlyCacheConfig {
 
     /**

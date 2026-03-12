@@ -28,7 +28,7 @@ spring:
   jpa:
     open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지
     hibernate:
-      ddl-auto: update
+      ddl-auto: none  # Disable DDL auto-management for local dev
     properties:
       hibernate:
         default_batch_fetch_size: 100

@@ -39,6 +39,7 @@ dependencies {
 
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
 	implementation(libs.kotlin.stdlib)
+	implementation(libs.kotlin.reflect)
 	implementation(libs.kotlin.logging.jvm)
 	implementation(libs.kotlinx.coroutines.core)
 	implementation(libs.kotlinx.coroutines.jdk8)
@@ -85,6 +86,7 @@ dependencies {
 	// Jackson
 	implementation(libs.jackson.databind)
 	implementation(libs.jackson.dataformat.csv)
+	implementation(libs.jackson.module.kotlin)
 
 	// Guava
 	implementation(libs.guava)

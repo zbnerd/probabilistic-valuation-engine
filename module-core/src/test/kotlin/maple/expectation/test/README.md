@@ -60,10 +60,10 @@ fun badTest() {
 
 | 상황 | 대안 |
 |------|------|
-| **통합 테스트 필요** | `IntegrationTestSupport` 사용 |
+| **통합 테스트 필요** | `IntegrationTestBase` 사용 |
 | **Database 조회** | `@SpringBootTest` + `Testcontainers` |
-| **외부 API 연동** | `@MockBean` 또한 `WireMock` |
-| **비동기 작업 테스트** | `Awaitility`와 통합 테스트 |
+| **외부 API 연동** | `ExternalApiTestTemplate` 사용 |
+| **비동기 작업 테스트** | `UsecaseTestTemplate` + `Awaitility` |
 
 ## 빠른 시작
 
@@ -227,10 +227,11 @@ assertTrue(condition, "조건 설명")
 assertFalse(condition, "실패 이유")
 ```
 
-### assertNotNull
+### assertNotNull / assertNull
 
 ```kotlin
 assertNotNull(value, "null이면 안 되는 이유")
+assertNull(value, "null이어야 하는 이유")
 ```
 
 ### assertThrows
@@ -252,15 +253,15 @@ assertThat(exception.message).contains("must be positive")
 ./gradlew :module-core:test --tests CoreUnitTestTemplateExample
 ```
 
-### 예제涵盖 내용
+### 예제 내용
 
 1. Given-When-Then 패턴
 2. Assertion Helpers 사용
 3. 예외 검증
 4. Business Logic 테스트
-5. Data-Driven Testing (Parameterized)
-6. Companion Object Factory 테스트
-7. Edge Case 테스트
+5. Edge Case 테스트
+6. Data-Driven Testing (Parameterized)
+7. Companion Object Factory 테스트
 
 ## Best Practices
 

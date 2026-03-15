@@ -2,6 +2,7 @@ package maple.expectation.test
 
 import java.time.Clock
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import maple.expectation.core.domain.model.ItemPrice
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -10,15 +11,16 @@ import org.junit.jupiter.api.assertThrows
 /**
  * CoreUnitTestTemplate 사용 예제
  *
- * <p>ItemPrice Value Object를 사용하여 템플릿의 다양한 기능을 보여줍니다.
+ * ItemPrice Value Object를 사용하여 템플릿의 다양한 기능을 보여줍니다.
  *
- * <h3>예제涵盖</h3>
- * <ul>
- *   <li>Given-When-Then 패턴</li>
- *   <li>일반 단위 테스트</li>
- *   <li>예외 검증</li>
- *   <li>Property-based testing 기초</li>
- * </ul>
+ * 예제 내용:
+ * 1. Given-When-Then 패턴
+ * 2. Assertion Helpers 사용
+ * 3. 예외 검증
+ * 4. Business Logic 테스트
+ * 5. Edge Case 테스트
+ * 6. Data-Driven Testing
+ * 7. Companion Object Factory 테스트
  *
  * @see CoreUnitTestTemplate
  */
@@ -62,26 +64,17 @@ class CoreUnitTestTemplateExample : CoreUnitTestTemplate() {
         // Given
         val price = given { ItemPrice.of(1L, "테스트 아이템", 5000L) }
 
-        // When & Then
-        `when` {
-            price.itemId
-        }.also { actualId ->
-            assertEqual(expected = 1L, actual = actualId)
-        }
+        // When & Then: itemId 검증
+        val actualId = `when` { price.itemId }
+        assertEqual(expected = 1L, actual = actualId)
 
-        // When & Then
-        `when` {
-            price.itemName.isNotBlank()
-        }.also { hasName ->
-            assertTrue(hasName, "아이템 이름이 있어야 함")
-        }
+        // When & Then: itemName 검증
+        val hasName = `when` { price.itemName.isNotBlank() }
+        assertTrue(hasName, "아이템 이름이 있어야 함")
 
-        // When & Then
-        `when` {
-            price.price < 0
-        }.also { isNegative ->
-            assertFalse(isNegative, "가격은 음수일 수 없음")
-        }
+        // When & Then: price가 음수가 아님을 검증
+        val isNotNegative = `when` { price.price >= 0 }
+        assertTrue(isNotNegative, "가격은 음수일 수 없음")
     }
 
     // ========================================
@@ -100,7 +93,7 @@ class CoreUnitTestTemplateExample : CoreUnitTestTemplate() {
             )
         }
 
-        // Then
+        // Then: 예외 메시지 검증
         assertTrue(
             exception.message?.contains("must be positive") == true,
             "예외 메시지에 'must be positive'가 포함되어야 함",
@@ -135,8 +128,8 @@ class CoreUnitTestTemplateExample : CoreUnitTestTemplate() {
     fun freshness_business_logic() {
         // Given: 고정 시계 사용 (테스트 결정성 보장)
         val fixedClock = Clock.fixed(
-            LocalDateTime.of(2024, 3, 15, 10, 0).toInstant(java.time.ZoneOffset.UTC),
-            java.time.ZoneOffset.UTC,
+            LocalDateTime.of(2024, 3, 15, 10, 0).toInstant(ZoneOffset.UTC),
+            ZoneOffset.UTC,
         )
         val pastTime = LocalDateTime.now(fixedClock).minusHours(25)
 
@@ -149,27 +142,54 @@ class CoreUnitTestTemplateExample : CoreUnitTestTemplate() {
             )
         }
 
-        // When & Then
-        val isWithin24Hours = `when` {
-            oldPrice.isFreshWithinHours(24)
+        // Then: 24시간 기준으로는 신선하지 않음
+        val isWithin24Hours = `when` { oldPrice.isFreshWithinHours(24) }
+        assertFalse(isWithin24Hours, "25시간 전의 가격은 24시간 신선도 기준을 충족하지 않음")
+
+        // Then: 48시간 기준으로는 신선함
+        val isWithin48Hours = `when` { oldPrice.isFreshWithinHours(48) }
+        assertTrue(isWithin48Hours, "25시간 전의 가격은 48시간 신선도 기준 충족")
+    }
+
+    // ========================================
+    // Example 5: Edge Case Testing
+    // ========================================
+
+    @Test
+    @DisplayName("Edge Case: 0원 가격 허용")
+    fun edge_case_zero_price() {
+        // Given & When
+        val freeItem = given {
+            ItemPrice.of(1L, "무료 아이템", 0L)
         }
 
-        then(isWithin24Hours) { result ->
-            assertFalse(result, "25시간 전의 가격은 24시간 신선도 기준을 충족하지 않음")
+        // Then
+        then(freeItem.price) { price ->
+            assertEqual(0L, price)
+            assertTrue(price >= 0, "0원 가격은 허용되어야 함")
+        }
+    }
+
+    @Test
+    @DisplayName("Edge Case: 매우 큰 가격 처리")
+    fun edge_case_very_large_price() {
+        // Given & When
+        val expensiveItem = given {
+            ItemPrice.of(
+                itemId = 1L,
+                itemName = "전설 아이템",
+                price = Long.MAX_VALUE,
+            )
         }
 
-        // When & Then: 48시간 기준
-        val isWithin48Hours = `when` {
-            oldPrice.isFreshWithinHours(48)
-        }
-
-        then(isWithin48Hours) { result ->
-            assertTrue(result, "25시간 전의 가격은 48시간 신선도 기준 충족")
+        // Then
+        then(expensiveItem.price) { price ->
+            assertEqual(Long.MAX_VALUE, price)
         }
     }
 
     // ========================================
-    // Example 5: Data-Driven Testing (Parameterized)
+    // Example 6: Data-Driven Testing (Parameterized)
     // ========================================
 
     @Test
@@ -192,7 +212,7 @@ class CoreUnitTestTemplateExample : CoreUnitTestTemplate() {
     }
 
     // ========================================
-    // Example 6: Companion Object Factory Test
+    // Example 7: Companion Object Factory Test
     // ========================================
 
     @Test
@@ -218,41 +238,6 @@ class CoreUnitTestTemplateExample : CoreUnitTestTemplate() {
                 diff.seconds < 1,
                 "생성된 시간은 현재 시간과 1초 이내 차이여야 함",
             )
-        }
-    }
-
-    // ========================================
-    // Example 7: Edge Case Testing
-    // ========================================
-
-    @Test
-    @DisplayName("Edge Case: 0원 가격 허용")
-    fun edge_case_zero_price() {
-        // Given & When & Then
-        val freeItem = given {
-            ItemPrice.of(1L, "무료 아이템", 0L)
-        }
-
-        then(freeItem.price) { price ->
-            assertEqual(0L, price)
-            assertTrue(price >= 0, "0원 가격은 허용되어야 함")
-        }
-    }
-
-    @Test
-    @DisplayName("Edge Case: 매우 큰 가격 처리")
-    fun edge_case_very_large_price() {
-        // Given & When & Then
-        val expensiveItem = given {
-            ItemPrice.of(
-                itemId = 1L,
-                itemName = "전설 아이템",
-                price = Long.MAX_VALUE,
-            )
-        }
-
-        then(expensiveItem.price) { price ->
-            assertEqual(Long.MAX_VALUE, price)
         }
     }
 }

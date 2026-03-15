@@ -8,6 +8,7 @@ Core 레이어 단위 테스트를 위한 표준 템플릿입니다.
 - [언제 사용해야 하나요?](#언제-사용해야-하나요)
 - [빠른 시작](#빠른-시작)
 - [Given-When-Then 패턴](#given-when-then-패턴)
+- [Property-Based Testing](#property-based-testing)
 - [Assertion Helpers](#assertion-helpers)
 - [예제 참조](#예제-참조)
 - [Best Practices](#best-practices)
@@ -73,6 +74,7 @@ package maple.expectation.core.domain.cost
 
 import maple.expectation.test.CoreUnitTestTemplate
 import org.junit.jupiter.api.Test
+import java.math.BigDecimal
 
 class CostFormatterTest : CoreUnitTestTemplate() {
 
@@ -131,6 +133,85 @@ then(isFresh) { result ->
 }
 ```
 
+### 체이닝 패턴
+
+```kotlin
+`when` { price.itemId }.also { actualId ->
+    assertEqual(12345L, actualId)
+}
+```
+
+## Property-Based Testing
+
+jqwik를 사용하여 무작위 입력값으로 불변성을 검증합니다.
+
+### 기본 패턴
+
+```kotlin
+import net.jqwik.api.Arbitrary
+import net.jqwik.api.providers.ArbitraryProvider
+import net.jqwik.api.ForAll
+
+@Property
+fun `모든 양수 itemId는 유효해야 한다`(@ForAll("positiveIds") id: Long) {
+    val price = ItemPrice.of(id, "Test", 1000L)
+    assertThat(price.itemId).isEqualTo(id)
+}
+
+companion object {
+    @Provide
+    fun positiveIds(): Arbitrary<Long> =
+        Arbitraries.longs().between(1, Long.MAX_VALUE)
+}
+```
+
+### 불변성 검증 예시
+
+```kotlin
+@Property
+fun `가격 포맷은 항상 비어있지 않은 문자열을 반환해야 한다`(
+    @ForAll("costs") cost: Long
+) {
+    val formatted = CostFormatter.format(cost)
+    assertThat(formatted).isNotEmpty()
+}
+
+companion object {
+    @Provide
+    fun costs(): Arbitrary<Long> =
+        Arbitraries.longs().between(0, 1_000_000_000_000)
+}
+```
+
+### jqwik Property-Based Testing 패턴
+
+jqwik 애너테이션을 직접 사용하는 것이 권장됩니다:
+
+```kotlin
+import net.jqwik.api.Property
+import net.jqwik.api.ForAll
+import net.jqwik.api.Arbitrary
+import net.jqwik.api.Provide
+import net.jqwik.api.Arbitraries
+
+class CostFormatterPropertyTest : CoreUnitTestTemplate() {
+
+    @Property
+    fun `모든 음수가 아닌 금액은 포맷 결과가 비어있지 않다`(
+        @ForAll("nonNegativeCosts") cost: Long
+    ) {
+        val formatted = CostFormatter.format(cost)
+        assertThat(formatted).isNotEmpty()
+    }
+
+    companion object {
+        @Provide
+        fun nonNegativeCosts(): Arbitrary<Long> =
+            Arbitraries.longs().between(0, 1_000_000_000_000)
+    }
+}
+```
+
 ## Assertion Helpers
 
 ### assertEqual
@@ -179,7 +260,8 @@ assertThat(exception.message).contains("must be positive")
 3. 예외 검증
 4. Business Logic 테스트
 5. Edge Case 테스트
-6. Companion Object Factory 테스트
+6. Data-Driven Testing (Parameterized)
+7. Companion Object Factory 테스트
 
 ## Best Practices
 
@@ -229,6 +311,12 @@ fun `itemId가 정확히 설정되어야 한다`() {
     val price = ItemPrice.of(123L, "A", 1000)
     assertEqual(123L, price.itemId)
 }
+
+@Test
+fun `itemName이 정확히 설정되어야 한다`() {
+    val price = ItemPrice.of(1L, "Arcane Symbol", 1000)
+    assertEqual("Arcane Symbol", price.itemName)
+}
 ```
 
 ### 4. Edge Case 테스트
@@ -254,10 +342,12 @@ fun `Long MAX VALUE 가격도 처리 가능해야 한다`() {
 - ❌ `Math.random()` 직접 호출 금지
 - ✅ `Clock` 주입 사용
 - ✅ 고정된 값/생성기 사용
+- ✅ `Awaitility` 사용 (비동기 대기)
 
 ## 관련 문서
 
 - [테스트 가이드](../../../docs/03_Technical_Guides/testing-guide.md)
+- [Flaky Test 방지](../../../docs/03_Technical_Guides/testing-guide.md#24-flaky-test-근본-원인-분석-및-해결-가이드-critical)
 - [CLAUDE.md - 테스트 규칙](../../../CLAUDE.md#10-definition-of-done)
 
 ## 실행 및 검증
@@ -269,3 +359,10 @@ fun `Long MAX VALUE 가격도 처리 가능해야 한다`() {
 # 테스트 실행
 ./gradlew :module-core:test
 ```
+
+## 질문?
+
+새로운 테스트 작성 시 어려움이 있으면:
+1. `CoreUnitTestTemplateExample.kt` 참조
+2. 기존 테스트 코드 확인 (`module-core/src/test/`)
+3. 팀원에게 문의 또는 Issue 생성

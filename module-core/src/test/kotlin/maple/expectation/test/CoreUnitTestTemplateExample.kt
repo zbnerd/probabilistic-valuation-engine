@@ -6,6 +6,7 @@ import java.time.ZoneOffset
 import maple.expectation.core.domain.model.ItemPrice
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 /**
  * CoreUnitTestTemplate 사용 예제
@@ -18,6 +19,8 @@ import org.junit.jupiter.api.Test
  * 3. 예외 검증
  * 4. Business Logic 테스트
  * 5. Edge Case 테스트
+ * 6. Data-Driven Testing
+ * 7. Companion Object Factory 테스트
  *
  * @see CoreUnitTestTemplate
  */
@@ -130,7 +133,6 @@ class CoreUnitTestTemplateExample : CoreUnitTestTemplate() {
         )
         val pastTime = LocalDateTime.now(fixedClock).minusHours(25)
 
-        // When: 25시간 전의 가격 생성
         val oldPrice = given {
             ItemPrice(
                 itemId = 1L,
@@ -187,7 +189,30 @@ class CoreUnitTestTemplateExample : CoreUnitTestTemplate() {
     }
 
     // ========================================
-    // Example 6: Companion Object Factory Test
+    // Example 6: Data-Driven Testing (Parameterized)
+    // ========================================
+
+    @Test
+    @DisplayName("Data-Driven 테스트: 다양한 ID에 대한 ItemPrice 생성")
+    fun data_driven_various_ids() {
+        // Given: 다양한 테스트 케이스
+        val testCases = listOf(
+            1L to "일반 아이템",
+            100L to "중급 아이템",
+            99999L to "레어 아이템",
+            Long.MAX_VALUE to "최대 ID 아이템",
+        )
+
+        // Then: 모든 케이스 검증
+        testCases.forEach { (id, name) ->
+            val price = ItemPrice.of(id, name, 1000L)
+            assertEqual(id, price.itemId)
+            assertEqual(name, price.itemName)
+        }
+    }
+
+    // ========================================
+    // Example 7: Companion Object Factory Test
     // ========================================
 
     @Test

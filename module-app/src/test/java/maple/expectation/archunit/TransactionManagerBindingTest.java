@@ -1,6 +1,5 @@
 package maple.expectation.archunit;
 
-import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 class TransactionManagerBindingTest {
 
+  // Valid transaction manager bean names (both are acceptable)
   private static final String TRANSACTION_MANAGER_BEAN_NAME = "transactionManager";
+  private static final String TM_BEAN_NAME = "tm";
 
   /**
    * Enforces that all @Transactional annotations have explicit transaction manager qualifier.
@@ -83,8 +84,14 @@ class TransactionManagerBindingTest {
     try {
       var transactional = javaClass.getAnnotationOfType(Transactional.class);
       if (transactional != null) {
-        var value = getTransactionalValue(transactional);
-        if (!TRANSACTION_MANAGER_BEAN_NAME.equals(value)) {
+        // Check transactionManager() attribute (explicit TM name)
+        String tm = transactional.transactionManager();
+        // Check value() attribute (alias for transactionManager)
+        String value = transactional.value();
+        // Use whichever is set
+        String effectiveTm = (tm != null && !tm.isEmpty()) ? tm : value;
+        // Accept both "transactionManager" and "tm" as valid qualifiers
+        if (!isValidTransactionManager(effectiveTm)) {
           collector.addViolation(
               "Class " + javaClass.getName() + " has @Transactional without explicit qualifier");
         }
@@ -100,8 +107,14 @@ class TransactionManagerBindingTest {
       try {
         var transactional = method.getAnnotationOfType(Transactional.class);
         if (transactional != null) {
-          var value = getTransactionalValue(transactional);
-          if (!TRANSACTION_MANAGER_BEAN_NAME.equals(value)) {
+          // Check transactionManager() attribute (explicit TM name)
+          String tm = transactional.transactionManager();
+          // Check value() attribute (alias for transactionManager)
+          String value = transactional.value();
+          // Use whichever is set
+          String effectiveTm = (tm != null && !tm.isEmpty()) ? tm : value;
+          // Accept both "transactionManager" and "tm" as valid qualifiers
+          if (!isValidTransactionManager(effectiveTm)) {
             collector.addViolation(
                 "Method "
                     + javaClass.getName()
@@ -116,17 +129,9 @@ class TransactionManagerBindingTest {
     }
   }
 
-  private String getTransactionalValue(JavaAnnotation<?> annotation) {
-    // Try to get the "value" attribute from @Transactional
-    try {
-      var value = annotation.get("value").getValue();
-      if (value instanceof String str && !str.isEmpty()) {
-        return str;
-      }
-    } catch (Exception e) {
-      // Value attribute not set or not accessible
-    }
-    return null;
+  /** Check if the transaction manager name is valid (either "transactionManager" or "tm"). */
+  private boolean isValidTransactionManager(String tmName) {
+    return TRANSACTION_MANAGER_BEAN_NAME.equals(tmName) || TM_BEAN_NAME.equals(tmName);
   }
 
   private static class ViolationCollector {

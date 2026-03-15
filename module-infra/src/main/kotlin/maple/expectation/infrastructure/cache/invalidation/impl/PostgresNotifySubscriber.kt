@@ -13,6 +13,7 @@ import maple.expectation.infrastructure.cache.invalidation.InvalidationType
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.postgresql.PGConnection
+import org.postgresql.PGNotification
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -161,7 +162,7 @@ class PostgresNotifySubscriber(
     }
 
     /** 수신된 알림 처리 */
-    private fun handleNotification(notification: org.postgresql.PGNotification) {
+    private fun handleNotification(notification: PGNotification) {
         val context = TaskContext.of("CacheInvalidation", "HandleNotification", notification.name)
 
         executor.executeVoid({

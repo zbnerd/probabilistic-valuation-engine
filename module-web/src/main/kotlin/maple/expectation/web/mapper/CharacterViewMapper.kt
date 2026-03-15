@@ -2,24 +2,24 @@ package maple.expectation.web.mapper
 
 import java.math.BigDecimal
 import java.util.Optional
-import maple.expectation.infrastructure.mongodb.CharacterValuationView
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5.*
 
 /**
- * V5 CQRS: MongoDB View → V5 Response DTO Mapper
+ * V5 CQRS: PostgreSQL View Entity → V5 Response DTO Mapper
  */
 object CharacterViewMapper {
 
     @JvmStatic
-    fun toResponseDto(view: CharacterValuationView?): Optional<EquipmentExpectationResponseV5> {
+    fun toResponseDto(view: CharacterValuationViewEntity?): Optional<EquipmentExpectationResponseV5> {
         if (view == null) return Optional.empty()
 
         val totalCost = view.totalExpectedCost?.toLong() ?: 0L
 
         return Optional.of(
             EquipmentExpectationResponseV5(
-                userIgn = view.userIgn ?: "",
+                userIgn = view.userIgn,
                 calculatedAt = view.calculatedAt ?: java.time.Instant.now(),
                 fromCache = view.fromCache ?: true,
                 totalExpectedCost = view.totalExpectedCost?.toBigDecimal() ?: BigDecimal.ZERO,
@@ -31,9 +31,9 @@ object CharacterViewMapper {
         )
     }
 
-    private fun toPresetDtos(presets: List<CharacterValuationView.PresetView>?): List<PresetExpectation> = presets?.mapNotNull { toPresetDto(it) } ?: emptyList()
+    private fun toPresetDtos(presets: List<CharacterValuationViewEntity.PresetView>?): List<PresetExpectation> = presets?.mapNotNull { toPresetDto(it) } ?: emptyList()
 
-    private fun toPresetDto(preset: CharacterValuationView.PresetView?): PresetExpectation? {
+    private fun toPresetDto(preset: CharacterValuationViewEntity.PresetView?): PresetExpectation? {
         if (preset == null) return null
 
         return PresetExpectation(
@@ -45,9 +45,9 @@ object CharacterViewMapper {
         )
     }
 
-    private fun toItemDtos(items: List<CharacterValuationView.ItemExpectationView>?): List<ItemExpectationV5> = items?.mapNotNull { toItemDto(it) } ?: emptyList()
+    private fun toItemDtos(items: List<CharacterValuationViewEntity.ItemExpectationView>?): List<ItemExpectationV5> = items?.mapNotNull { toItemDto(it) } ?: emptyList()
 
-    private fun toItemDto(item: CharacterValuationView.ItemExpectationView?): ItemExpectationV5? {
+    private fun toItemDto(item: CharacterValuationViewEntity.ItemExpectationView?): ItemExpectationV5? {
         if (item == null) return null
 
         return ItemExpectationV5(
@@ -72,7 +72,7 @@ object CharacterViewMapper {
         )
     }
 
-    private fun toCostBreakdownDto(breakdown: CharacterValuationView.CostBreakdownView?): CostBreakdownDto {
+    private fun toCostBreakdownDto(breakdown: CharacterValuationViewEntity.CostBreakdownView?): CostBreakdownDto {
         if (breakdown == null) return CostBreakdownDto.empty()
 
         return CostBreakdownDto(

@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.persistence.repository
 
 import jakarta.persistence.LockModeType
 import jakarta.persistence.QueryHint
+import java.time.LocalDateTime
 import maple.expectation.domain.v2.EventOutbox
 import maple.expectation.domain.v2.EventOutbox.EventOutboxStatus
 import org.springframework.data.domain.Pageable
@@ -11,7 +12,6 @@ import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.jpa.repository.QueryHints
 import org.springframework.data.repository.query.Param
-import java.time.LocalDateTime
 
 /**
  * Event Outbox Repository for Multi-Stream Support (Issue #490)
@@ -52,7 +52,7 @@ interface EventOutboxRepository : JpaRepository<EventOutbox, Long> {
     fun findByTargetStreamAndStatusOrderByCreatedAtAsc(
         @Param("targetStream") targetStream: String,
         @Param("status") status: EventOutboxStatus,
-        pageable: Pageable
+        pageable: Pageable,
     ): List<EventOutbox>
 
     /**
@@ -64,7 +64,7 @@ interface EventOutboxRepository : JpaRepository<EventOutbox, Long> {
      */
     fun findByStatusOrderByCreatedAtAsc(
         @Param("status") status: EventOutboxStatus,
-        pageable: Pageable
+        pageable: Pageable,
     ): List<EventOutbox>
 
     /**
@@ -87,12 +87,12 @@ interface EventOutboxRepository : JpaRepository<EventOutbox, Long> {
     @QueryHints(QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
     @Query(
         "SELECT e FROM EventOutbox e WHERE e.status IN :statuses " +
-            "AND e.nextRetryAt <= :now ORDER BY e.id"
+            "AND e.nextRetryAt <= :now ORDER BY e.id",
     )
     fun findPendingWithLock(
         @Param("statuses") statuses: List<EventOutboxStatus>,
         @Param("now") now: LocalDateTime,
-        pageable: Pageable
+        pageable: Pageable,
     ): List<EventOutbox>
 
     /**
@@ -111,13 +111,13 @@ interface EventOutboxRepository : JpaRepository<EventOutbox, Long> {
     @Query(
         "SELECT e FROM EventOutbox e WHERE e.targetStream = :targetStream " +
             "AND e.status IN :statuses " +
-            "AND e.nextRetryAt <= :now ORDER BY e.id"
+            "AND e.nextRetryAt <= :now ORDER BY e.id",
     )
     fun findPendingByTargetStreamWithLock(
         @Param("targetStream") targetStream: String,
         @Param("statuses") statuses: List<EventOutboxStatus>,
         @Param("now") now: LocalDateTime,
-        pageable: Pageable
+        pageable: Pageable,
     ): List<EventOutbox>
 
     /**
@@ -130,7 +130,7 @@ interface EventOutboxRepository : JpaRepository<EventOutbox, Long> {
      */
     fun findByStatusAndLockedAtBefore(
         status: EventOutboxStatus,
-        lockedAt: LocalDateTime
+        lockedAt: LocalDateTime,
     ): List<EventOutbox>
 
     /**
@@ -141,7 +141,7 @@ interface EventOutboxRepository : JpaRepository<EventOutbox, Long> {
     @Modifying
     @Query(
         "UPDATE EventOutbox e SET e.status = 'PENDING', e.lockedBy = NULL, e.lockedAt = NULL " +
-            "WHERE e.status = 'PROCESSING' AND e.lockedAt < :staleTime"
+            "WHERE e.status = 'PROCESSING' AND e.lockedAt < :staleTime",
     )
     fun resetStalledProcessing(@Param("staleTime") staleTime: LocalDateTime): Int
 
@@ -161,11 +161,11 @@ interface EventOutboxRepository : JpaRepository<EventOutbox, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
     @Query(
-        "SELECT e FROM EventOutbox e WHERE e.status = 'PROCESSING' AND e.lockedAt < :staleTime ORDER BY e.id"
+        "SELECT e FROM EventOutbox e WHERE e.status = 'PROCESSING' AND e.lockedAt < :staleTime ORDER BY e.id",
     )
     fun findStalledProcessing(
         @Param("staleTime") staleTime: LocalDateTime,
-        pageable: Pageable
+        pageable: Pageable,
     ): List<EventOutbox>
 
     /**
@@ -179,7 +179,7 @@ interface EventOutboxRepository : JpaRepository<EventOutbox, Long> {
      */
     fun findByStatusAndUpdatedAtBefore(
         status: EventOutboxStatus,
-        threshold: LocalDateTime
+        threshold: LocalDateTime,
     ): List<EventOutbox>
 
     /**
@@ -207,7 +207,7 @@ interface EventOutboxRepository : JpaRepository<EventOutbox, Long> {
      */
     fun countByTargetStreamAndStatus(
         targetStream: String,
-        status: EventOutboxStatus
+        status: EventOutboxStatus,
     ): Long
 
     /**
@@ -221,10 +221,10 @@ interface EventOutboxRepository : JpaRepository<EventOutbox, Long> {
      */
     @Modifying
     @Query(
-        "DELETE FROM EventOutbox e WHERE e.status = :status AND e.updatedAt < :threshold"
+        "DELETE FROM EventOutbox e WHERE e.status = :status AND e.updatedAt < :threshold",
     )
     fun deleteByStatusAndUpdatedAtBefore(
         @Param("status") status: EventOutboxStatus,
-        @Param("threshold") threshold: LocalDateTime
+        @Param("threshold") threshold: LocalDateTime,
     ): Int
 }

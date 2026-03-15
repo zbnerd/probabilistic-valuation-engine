@@ -2,16 +2,16 @@ package maple.expectation.infrastructure.cache
 
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
-import java.time.Duration
 import java.util.Optional
 import java.util.concurrent.Callable
 import java.util.function.Consumer
 import java.util.function.Supplier
-import maple.expectation.core.port.out.redis.RedisOperationPort
+import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
+import maple.expectation.infrastructure.lock.LeaderElectionStrategy
 import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
 import org.springframework.cache.Cache.ValueWrapper
@@ -30,7 +30,7 @@ class TieredCache(
     private val l1: Cache,
     private val l2: Cache,
     private val executor: LogicExecutor,
-    private val redisOperationPort: RedisOperationPort,
+    private val leaderElectionStrategy: LeaderElectionStrategy?,
     private val meterRegistry: MeterRegistry,
     private val lockWaitSeconds: Int,
     private val instanceIdSupplier: Supplier<String>,
@@ -195,21 +195,17 @@ class TieredCache(
 
     private fun <T> executeWithDistributedLock(key: Any, valueLoader: Callable<T>, keyStr: String): T {
         // Issue #555: Skip distributed lock in L1-only mode (single-instance mode)
-        if (!l2Enabled) {
+        if (!l2Enabled || leaderElectionStrategy == null) {
             return executeAndCache(key, valueLoader)
         }
         val lockKey = "cache:sf:" + l2.name + ":" + keyStr
-        val acquired = redisOperationPort.tryLock(lockKey, Duration.ofSeconds(lockWaitSeconds.toLong()), Duration.ofSeconds(30))
-        if (!acquired) {
-            log.warn("[TieredCache] Lock acquisition failed, executing directly: {}", lockKey)
-            lockFailureCounter.increment()
-            return executeAndCache(key, valueLoader)
-        }
-        try {
-            return executeDoubleCheckAndLoad(key, valueLoader)
-        } finally {
-            redisOperationPort.unlock(lockKey)
-        }
+
+        return leaderElectionStrategy.executeWithLeaderElection(
+            key = lockKey,
+            waitTimeSeconds = lockWaitSeconds,
+            leaderTask = ThrowingSupplier { executeDoubleCheckAndLoad(key, valueLoader) },
+            followerTask = ThrowingSupplier { executeDoubleCheckAndLoad(key, valueLoader) },
+        )
     }
 
     @Suppress("UNCHECKED_CAST")

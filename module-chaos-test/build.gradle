@@ -55,7 +55,7 @@ dependencies {
 	// ============================================================
 	testImplementation(libs.testcontainers)
 	testImplementation(libs.testcontainers.junit.jupiter)
-	testImplementation(libs.testcontainers.mysql)
+	testImplementation(libs.testcontainers.postgresql)
 	testImplementation(libs.testcontainers.toxiproxy)
 
 	// ============================================================
@@ -82,12 +82,6 @@ dependencies {
 	// Lombok for chaosTest source set
 	chaosTestCompileOnly(libs.lombok)
 	chaosTestAnnotationProcessor(libs.lombok)
-
-	// Redisson for distributed locking chaos tests
-	testImplementation(libs.redisson.spring.boot.starter)
-
-	// Spring Data Redis for RedisTemplate
-	testImplementation(libs.spring.boot.starter.data.redis)
 
 	// ============================================================
 	// ArchUnit (Architecture Validation for Chaos Tests)

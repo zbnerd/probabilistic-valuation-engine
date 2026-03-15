@@ -38,18 +38,7 @@ spring:
         order_inserts: true
         order_updates: true
 
-  # Redis Standalone 설정 (운영 환경)
-  data:
-    redis:
-      host: localhost
-      port: 6379
-    # P1-10: MongoDB Eventual Consistency Configuration
-    # In replica set: secondaryPreferred for read scalability, majority for strong consistency
-    mongodb:
-      # Read from secondaries when available (reduces primary load)
-      read-preference: secondaryPreferred
-      # Strong consistency: only read committed data replicated to majority
-      read-concern: majority
+  # Redis/MongoDB removed in Issue #589, #590
 
 # Discord Alert Configuration
 alert:
@@ -67,10 +56,13 @@ cube:
     policy: LENIENT
 
 # V5 Stateless Architecture (#271)
+# V5 Migration (Issue #589): Redis removed, PostgreSQL-only
 app:
   buffer:
     redis:
-      enabled: true  # Scale-out 모드 활성화
+      enabled: false  # V5 Migration: Redis removed
+    postgres:
+      enabled: true   # PostgreSQL buffer (PGMQ)
 
 # Issue #284 DoD: Redis 장애 시 1000 RPS fallback 용량
 # NOTE: Main Pool(50) + Lock Pool(50) = 100 total (RDS max_connections 고려)

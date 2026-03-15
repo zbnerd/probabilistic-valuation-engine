@@ -50,27 +50,15 @@ scrape_configs:
           component: 'system'
 
   # ============================================
-  # Redis Metrics (via Redis Exporter)
+  # PostgreSQL Metrics (via postgres_exporter)
+  # V5 Migration (Issue #589, #590, #591): Single DB
   # ============================================
-  - job_name: 'redis'
+  - job_name: 'postgresql'
     scrape_interval: 15s
     static_configs:
-      - targets: ['redis-master:6379']
+      - targets: ['postgres-exporter:9187']
         labels:
-          component: 'redis-master'
-      - targets: ['redis-slave:6379']
-        labels:
-          component: 'redis-slave'
-
-  # ============================================
-  # MySQL Metrics (via Exporter)
-  # ============================================
-  - job_name: 'mysql'
-    scrape_interval: 30s
-    static_configs:
-      - targets: ['mysql-exporter:9104']
-        labels:
-          component: 'mysql'
+          component: 'postgresql'
 
   # ============================================
   # Blackbox Probes

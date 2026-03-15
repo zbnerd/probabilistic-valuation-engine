@@ -58,49 +58,49 @@ import org.springframework.validation.annotation.Validated
 @Validated
 @ConfigurationProperties(prefix = "executor")
 data class ExecutorProperties(
-  @DefaultValue val equipment: PoolConfig = PoolConfig(),
-  @DefaultValue val preset: PoolConfig = PoolConfig(),
-  @DefaultValue val alert: PoolConfig = PoolConfig(),
-  @DefaultValue val expectation: PoolConfig = PoolConfig(),
-  @DefaultValue val async: PoolConfig = PoolConfig()
+    @DefaultValue val equipment: PoolConfig = PoolConfig(),
+    @DefaultValue val preset: PoolConfig = PoolConfig(),
+    @DefaultValue val alert: PoolConfig = PoolConfig(),
+    @DefaultValue val expectation: PoolConfig = PoolConfig(),
+    @DefaultValue val async: PoolConfig = PoolConfig(),
 ) {
-  /**
-   * 개별 Thread Pool 설정
-   *
-   * <p><b>P2-25 표준화 규칙:</b> corePoolSize:maxPoolSize는 항상 1:2 비율 유지
-   *
-   * @property corePoolSize 코어 스레드 수 (기본값: equipment=8, preset=12, alert=2, expectation=4)
-   * @property maxPoolSize 최대 스레드 수 (기본값: equipment=16, preset=24, alert=4, expectation=8)
-   * @property queueCapacity 큐 용량 (기본값: equipment=200, preset=100, alert=200, expectation=200)
-   */
-  data class PoolConfig(
-    @DefaultValue("8") @Min(1) @Max(64) var corePoolSize: Int = 8,
-    @DefaultValue("16") @Min(1) @Max(128) var maxPoolSize: Int = 16,
-    @DefaultValue("200") @Min(10) @Max(5000) var queueCapacity: Int = 200
-  ) {
     /**
-     * P2-25: 1:2 core:max 비율 검증
+     * 개별 Thread Pool 설정
      *
-     * @throws IllegalStateException 비율이 1:2가 아닐 경우
+     * <p><b>P2-25 표준화 규칙:</b> corePoolSize:maxPoolSize는 항상 1:2 비율 유지
+     *
+     * @property corePoolSize 코어 스레드 수 (기본값: equipment=8, preset=12, alert=2, expectation=4)
+     * @property maxPoolSize 최대 스레드 수 (기본값: equipment=16, preset=24, alert=4, expectation=8)
+     * @property queueCapacity 큐 용량 (기본값: equipment=200, preset=100, alert=200, expectation=200)
      */
-    fun validateRatio(name: String) {
-      require(maxPoolSize == corePoolSize * 2) {
-        "[ExecutorProperties] $name executor violates 1:2 core:max ratio (core=$corePoolSize, max=$maxPoolSize). " +
-        "P2-25 requires maxPoolSize = corePoolSize × 2"
-      }
+    data class PoolConfig(
+        @DefaultValue("8") @Min(1) @Max(64) var corePoolSize: Int = 8,
+        @DefaultValue("16") @Min(1) @Max(128) var maxPoolSize: Int = 16,
+        @DefaultValue("200") @Min(10) @Max(5000) var queueCapacity: Int = 200,
+    ) {
+        /**
+         * P2-25: 1:2 core:max 비율 검증
+         *
+         * @throws IllegalStateException 비율이 1:2가 아닐 경우
+         */
+        fun validateRatio(name: String) {
+            require(maxPoolSize == corePoolSize * 2) {
+                "[ExecutorProperties] $name executor violates 1:2 core:max ratio (core=$corePoolSize, max=$maxPoolSize). " +
+                    "P2-25 requires maxPoolSize = corePoolSize × 2"
+            }
+        }
     }
-  }
 
-  /**
-   * 전체 설정 검증 (P2-25)
-   *
-   * @throws IllegalStateException 비율 위반 시
-   */
-  fun validateAll() {
-    equipment.validateRatio("equipment")
-    preset.validateRatio("preset")
-    alert.validateRatio("alert")
-    expectation.validateRatio("expectation")
-    async.validateRatio("async")
-  }
+    /**
+     * 전체 설정 검증 (P2-25)
+     *
+     * @throws IllegalStateException 비율 위반 시
+     */
+    fun validateAll() {
+        equipment.validateRatio("equipment")
+        preset.validateRatio("preset")
+        alert.validateRatio("alert")
+        expectation.validateRatio("expectation")
+        async.validateRatio("async")
+    }
 }

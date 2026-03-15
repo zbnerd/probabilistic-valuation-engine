@@ -28,7 +28,6 @@ import maple.expectation.core.probability.TailProbabilityCalculator;
 import maple.expectation.domain.repository.CharacterEquipmentRepository;
 import maple.expectation.domain.repository.CubeProbabilityRepository;
 import maple.expectation.domain.v2.CubeProbability;
-import maple.expectation.infrastructure.queue.priority.PriorityCalculationQueue;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -63,7 +62,6 @@ public class CorePortAdapterConfig {
 
   private final CubeProbabilityRepository cubeProbabilityRepository;
   private final CharacterEquipmentRepository characterEquipmentRepository;
-  private final PriorityCalculationQueue priorityCalculationQueue;
 
   /**
    * Core Utility Beans

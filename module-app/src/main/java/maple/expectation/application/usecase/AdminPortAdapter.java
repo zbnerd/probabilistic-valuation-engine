@@ -1,48 +1,65 @@
 package maple.expectation.application.usecase;
 
+import java.util.HashSet;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.application.service.auth.AdminService;
 import maple.expectation.core.port.inbound.AdminPort;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
  * AdminPort 구현체 (ADR-005)
  *
- * <p>책임: AdminService에 위임(delegate)
+ * <p>책임: 설정 파일에서 읽은 bootstrap admin 목록 관리
  *
- * <p>위임 이유:
- *
- * <ul>
- *   <li>순환 의존성 해결: module-web → module-app → module-core
- *   <li>기존 Service 로직 재사용
- * </ul>
+ * <p>V5 Migration (Issue #589): Redis 기반 AdminService 제거 후 설정 기반 단순 구현으로 대체.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class AdminPortAdapter implements AdminPort {
 
-  private final AdminService adminService;
+  /** Bootstrap admin fingerprints (설정에서 읽음, 런타임에 수정 불가) */
+  private final Set<String> bootstrapAdmins;
+
+  public AdminPortAdapter(@Value("${spring.auth.admin.allowlist:}") String allowlist) {
+    this.bootstrapAdmins = parseAllowlist(allowlist);
+    log.info("[AdminPort] Initialized with {} bootstrap admins", bootstrapAdmins.size());
+  }
 
   @Override
   public boolean isAdmin(String fingerprint) {
-    return adminService.isAdmin(fingerprint);
+    return bootstrapAdmins.contains(fingerprint);
   }
 
   @Override
   public void addAdmin(String fingerprint) {
-    adminService.addAdmin(fingerprint);
+    // Bootstrap admin만 지원 - 런타임 추가는 지원하지 않음
+    log.warn("[AdminPort] Runtime admin addition not supported. Use configuration.");
   }
 
   @Override
   public boolean removeAdmin(String fingerprint) {
-    return adminService.removeAdmin(fingerprint);
+    // Bootstrap admin은 제거 불가
+    log.warn("[AdminPort] Bootstrap admin removal not supported.");
+    return false;
   }
 
   @Override
   public Set<String> getAllAdmins() {
-    return adminService.getAllAdmins();
+    return new HashSet<>(bootstrapAdmins);
+  }
+
+  /** 쉼표로 구분된 fingerprint 목록을 Set으로 변환 */
+  private Set<String> parseAllowlist(String allowlist) {
+    Set<String> admins = new HashSet<>();
+    if (allowlist != null && !allowlist.isBlank()) {
+      for (String fp : allowlist.split(",")) {
+        String trimmed = fp.trim();
+        if (!trimmed.isEmpty()) {
+          admins.add(trimmed);
+        }
+      }
+    }
+    return admins;
   }
 }

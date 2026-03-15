@@ -41,11 +41,7 @@ spring:
         order_inserts: true
         order_updates: true
 
-  # Redis for cache, session, and lock (kept for these use cases)
-  data:
-    redis:
-      host: localhost
-      port: 6379
+  # Redis/MongoDB removed in Issue #589, #590
 
   # Auth configuration
   auth:
@@ -86,15 +82,16 @@ cors:
     - "http://127.0.0.1:5173"
 
 # App configuration
+# V5 Migration (Issue #589): Redis removed, PostgreSQL-only
 app:
   buffer:
     redis:
-      enabled: true  # Keep Redis for cache
+      enabled: false  # V5 Migration: Redis removed
     postgres:
       enabled: true
       unlogged-buffer-size: 10000
   event-publisher:
-    type: redis  # Keep Redis for now, migrate to PGMQ later
+    type: pgmq  # PGMQ (PostgreSQL)
   aop:
     trace:
       enabled: true

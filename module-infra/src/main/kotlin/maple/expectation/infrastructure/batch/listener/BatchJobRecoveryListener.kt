@@ -2,15 +2,14 @@ package maple.expectation.infrastructure.batch.listener
 
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.JobExecution
 import org.springframework.batch.core.JobExecutionListener
 import org.springframework.stereotype.Component
-import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Spring Batch Job Recovery Listener (P2-19)
@@ -50,112 +49,110 @@ import java.util.concurrent.atomic.AtomicLong
 @Component
 class BatchJobRecoveryListener(
     private val executor: LogicExecutor,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) : JobExecutionListener {
 
-  /** Track failed job executions - key: jobInstanceId, value: failure metadata */
-  private val failedJobs = ConcurrentHashMap<Long, JobFailureMetadata>()
+    /** Track failed job executions - key: jobInstanceId, value: failure metadata */
+    private val failedJobs = ConcurrentHashMap<Long, JobFailureMetadata>()
 
-  /** Failure counter per job name */
-  private val failureCounters = ConcurrentHashMap<String, Counter>()
+    /** Failure counter per job name */
+    private val failureCounters = ConcurrentHashMap<String, Counter>()
 
-  /**
-   * Before job callback - log job start
-   */
-  override fun beforeJob(jobExecution: JobExecution) {
-    val context = TaskContext.of("BatchRecovery", "beforeJob")
+    /**
+     * Before job callback - log job start
+     */
+    override fun beforeJob(jobExecution: JobExecution) {
+        val context = TaskContext.of("BatchRecovery", "beforeJob")
 
-    executor.executeVoidJava({
-      val jobName = jobExecution.jobInstance.jobName
-      logJobStart(jobName, jobExecution.jobInstance.id)
-    }, context)
-  }
-
-  /**
-   * After job callback - track failures
-   *
-   * <p>If job failed, store metadata for recovery and increment metrics.
-   */
-  override fun afterJob(jobExecution: JobExecution) {
-    val context = TaskContext.of("BatchRecovery", "afterJob")
-
-    executor.executeVoidJava({
-      val jobName = jobExecution.jobInstance.jobName
-      val status = jobExecution.status
-
-      if (status.isUnsuccessful && status.name != "STOPPED") {
-        handleJobFailure(jobExecution, jobName)
-      } else {
-        logJobSuccess(jobName, jobExecution.jobInstance.id)
-      }
-    }, context)
-  }
-
-  /** Get failed job metadata for recovery */
-  fun getFailedJobs(): Map<Long, JobFailureMetadata> = failedJobs.toMap()
-
-  /** Remove job from failed tracking (after recovery attempt) */
-  fun removeFailedJob(jobInstanceId: Long) {
-    failedJobs.remove(jobInstanceId)
-  }
-
-  /** Get failure count for a specific job */
-  fun getFailureCount(jobName: String): Long {
-    return failureCounters[jobName]?.count()?.toLong() ?: 0L
-  }
-
-  // ========== Private Methods ==========
-
-  /** Handle job failure - store metadata and increment metrics */
-  private fun handleJobFailure(jobExecution: JobExecution, jobName: String) {
-    val metadata = JobFailureMetadata(
-        jobInstanceId = jobExecution.jobInstance.id,
-        jobName = jobName,
-        jobExecutionId = jobExecution.id,
-        timestamp = Instant.now(),
-        exitStatus = jobExecution.exitStatus.exitCode,
-        failureExceptions = jobExecution.allFailureExceptions.map { it.message ?: "Unknown" }
-    )
-
-    failedJobs[jobExecution.jobInstance.id] = metadata
-
-    // Increment failure counter
-    val counter = failureCounters.computeIfAbsent(jobName) {
-      Counter.builder("batch.job.failed.count")
-          .tag("job_name", jobName)
-          .description("Number of failed batch job executions")
-          .register(meterRegistry)
+        executor.executeVoidJava({
+            val jobName = jobExecution.jobInstance.jobName
+            logJobStart(jobName, jobExecution.jobInstance.id)
+        }, context)
     }
-    counter.increment()
 
-    logJobFailure(jobName, metadata)
-  }
+    /**
+     * After job callback - track failures
+     *
+     * <p>If job failed, store metadata for recovery and increment metrics.
+     */
+    override fun afterJob(jobExecution: JobExecution) {
+        val context = TaskContext.of("BatchRecovery", "afterJob")
 
-  /** Log job start */
-  private fun logJobStart(jobName: String, jobInstanceId: Long) {
-    log.debug("[BatchRecovery] Job started: {} (instanceId: {})", jobName, jobInstanceId)
-  }
+        executor.executeVoidJava({
+            val jobName = jobExecution.jobInstance.jobName
+            val status = jobExecution.status
 
-  /** Log job success */
-  private fun logJobSuccess(jobName: String, jobInstanceId: Long) {
-    log.info("[BatchRecovery] Job completed successfully: {} (instanceId: {})", jobName, jobInstanceId)
-  }
+            if (status.isUnsuccessful && status.name != "STOPPED") {
+                handleJobFailure(jobExecution, jobName)
+            } else {
+                logJobSuccess(jobName, jobExecution.jobInstance.id)
+            }
+        }, context)
+    }
 
-  /** Log job failure with details */
-  private fun logJobFailure(jobName: String, metadata: JobFailureMetadata) {
-    log.error(
-        "[BatchRecovery] Job failed: {} (instanceId: {}, executionId: {}, exitStatus: {}, exceptions: {})",
-        jobName,
-        metadata.jobInstanceId,
-        metadata.jobExecutionId,
-        metadata.exitStatus,
-        metadata.failureExceptions
-    )
-  }
+    /** Get failed job metadata for recovery */
+    fun getFailedJobs(): Map<Long, JobFailureMetadata> = failedJobs.toMap()
 
-  companion object {
-    private val log = LoggerFactory.getLogger(BatchJobRecoveryListener::class.java)
-  }
+    /** Remove job from failed tracking (after recovery attempt) */
+    fun removeFailedJob(jobInstanceId: Long) {
+        failedJobs.remove(jobInstanceId)
+    }
+
+    /** Get failure count for a specific job */
+    fun getFailureCount(jobName: String): Long = failureCounters[jobName]?.count()?.toLong() ?: 0L
+
+    // ========== Private Methods ==========
+
+    /** Handle job failure - store metadata and increment metrics */
+    private fun handleJobFailure(jobExecution: JobExecution, jobName: String) {
+        val metadata = JobFailureMetadata(
+            jobInstanceId = jobExecution.jobInstance.id,
+            jobName = jobName,
+            jobExecutionId = jobExecution.id,
+            timestamp = Instant.now(),
+            exitStatus = jobExecution.exitStatus.exitCode,
+            failureExceptions = jobExecution.allFailureExceptions.map { it.message ?: "Unknown" },
+        )
+
+        failedJobs[jobExecution.jobInstance.id] = metadata
+
+        // Increment failure counter
+        val counter = failureCounters.computeIfAbsent(jobName) {
+            Counter.builder("batch.job.failed.count")
+                .tag("job_name", jobName)
+                .description("Number of failed batch job executions")
+                .register(meterRegistry)
+        }
+        counter.increment()
+
+        logJobFailure(jobName, metadata)
+    }
+
+    /** Log job start */
+    private fun logJobStart(jobName: String, jobInstanceId: Long) {
+        log.debug("[BatchRecovery] Job started: {} (instanceId: {})", jobName, jobInstanceId)
+    }
+
+    /** Log job success */
+    private fun logJobSuccess(jobName: String, jobInstanceId: Long) {
+        log.info("[BatchRecovery] Job completed successfully: {} (instanceId: {})", jobName, jobInstanceId)
+    }
+
+    /** Log job failure with details */
+    private fun logJobFailure(jobName: String, metadata: JobFailureMetadata) {
+        log.error(
+            "[BatchRecovery] Job failed: {} (instanceId: {}, executionId: {}, exitStatus: {}, exceptions: {})",
+            jobName,
+            metadata.jobInstanceId,
+            metadata.jobExecutionId,
+            metadata.exitStatus,
+            metadata.failureExceptions,
+        )
+    }
+
+    companion object {
+        private val log = LoggerFactory.getLogger(BatchJobRecoveryListener::class.java)
+    }
 }
 
 /**
@@ -174,5 +171,5 @@ data class JobFailureMetadata(
     val jobExecutionId: Long,
     val timestamp: Instant,
     val exitStatus: String?,
-    val failureExceptions: List<String>
+    val failureExceptions: List<String>,
 )

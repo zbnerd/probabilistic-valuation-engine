@@ -4,9 +4,9 @@ import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.function.Consumer
-import maple.expectation.core.port.out.redis.RedisOperationPort
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.lock.LeaderElectionStrategy
 import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
 import org.springframework.cache.CacheManager
@@ -42,8 +42,8 @@ class TieredCacheManager(
     private val l1Manager: CacheManager,
     private val l2Manager: CacheManager,
     private val executor: LogicExecutor,
-    private val redisOperationPort: RedisOperationPort,
-    // Issue #148: 분산 락용 (ADR-012: RedisOperationPort로 추상화)
+    private val leaderElectionStrategy: LeaderElectionStrategy?,
+    // Issue #148: 분산 락용 (ADR-012: LeaderElectionStrategy로 추상화)
     val meterRegistry: MeterRegistry,
     // Issue #148: 메트릭 수집용 (public for access)
     private val lockWaitSeconds: Int, // P0-4: 외부 설정
@@ -100,7 +100,7 @@ class TieredCacheManager(
             l1 = l1,
             l2 = l2,
             executor = executor,
-            redisOperationPort = redisOperationPort,
+            leaderElectionStrategy = leaderElectionStrategy,
             meterRegistry = meterRegistry,
             lockWaitSeconds = lockWaitSeconds,
             instanceIdSupplier = { instanceIdRef.get() },

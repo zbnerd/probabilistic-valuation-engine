@@ -1,7 +1,6 @@
 package maple.expectation.support;
 
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -12,6 +11,10 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p>This works because the JVM guarantees that static initializers run exactly once when a class
  * is first loaded.
+ *
+ * <h3>V5 Migration (Issue #589, #590, #591)</h3>
+ *
+ * <p>MySQL and Redis containers removed. PostgreSQL-only mode for chaos tests.
  */
 public final class ContainerManager {
 
@@ -19,66 +22,46 @@ public final class ContainerManager {
 
   private ContainerManager() {}
 
-  public static MySQLContainer<?> getMySQLContainer() {
-    return HOLDER.mysql;
+  public static PostgreSQLContainer<?> getPostgresContainer() {
+    return HOLDER.postgres;
   }
 
-  public static GenericContainer<?> getRedisContainer() {
-    return HOLDER.redis;
+  public static String getPostgresJdbcUrl() {
+    return HOLDER.postgres.getJdbcUrl();
   }
 
-  public static String getMySQLJdbcUrl() {
-    return HOLDER.mysql.getJdbcUrl();
+  public static String getPostgresUsername() {
+    return HOLDER.postgres.getUsername();
   }
 
-  public static String getMySQLUsername() {
-    return HOLDER.mysql.getUsername();
-  }
-
-  public static String getMySQLPassword() {
-    return HOLDER.mysql.getPassword();
-  }
-
-  public static String getRedisHost() {
-    return HOLDER.redis.getHost();
-  }
-
-  public static Integer getRedisPort() {
-    return HOLDER.redis.getMappedPort(6379);
+  public static String getPostgresPassword() {
+    return HOLDER.postgres.getPassword();
   }
 
   public static boolean isRunning() {
-    return HOLDER.mysql.isRunning() && HOLDER.redis.isRunning();
+    return HOLDER.postgres.isRunning();
   }
 
   /** Holder class for lazy initialization - containers start only when first accessed */
   private static final class ContainerHolder {
-    private final MySQLContainer<?> mysql;
-    private final GenericContainer<?> redis;
+    private final PostgreSQLContainer<?> postgres;
 
     ContainerHolder() {
-      this.mysql =
-          new MySQLContainer<>("mysql:8.0")
+      this.postgres =
+          new PostgreSQLContainer<>(DockerImageName.parse("postgres:17"))
               .withDatabaseName("testdb")
               .withUsername("tc_test_user")
               .withPassword("tc_test_password")
               .withReuse(true);
 
-      this.redis =
-          new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
-              .withExposedPorts(6379)
-              .withReuse(true);
-
-      // Start containers
-      this.mysql.start();
-      this.redis.start();
+      // Start container
+      this.postgres.start();
 
       System.getLogger("ContainerManager")
           .log(
               System.Logger.Level.INFO,
-              "Containers started - MySQL: {0}, Redis: {1}",
-              mysql.getJdbcUrl(),
-              redis.getHost() + ":" + redis.getMappedPort(6379));
+              "Container started - PostgreSQL: {0}",
+              postgres.getJdbcUrl());
     }
   }
 }

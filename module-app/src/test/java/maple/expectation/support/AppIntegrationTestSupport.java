@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -16,18 +15,14 @@ import org.springframework.test.context.TestPropertySource;
  * <p>This base class provides:
  *
  * <ul>
- *   <li>SharedContainers for JVM-wide singleton MySQL/Redis containers
+ *   <li>SharedContainers for JVM-wide singleton PostgreSQL containers
  *   <li>Dynamic property injection for Spring Boot test context
- *   <li>Data isolation via TRUNCATE (MySQL) and FLUSHDB (Redis) in @BeforeEach
+ *   <li>Data isolation via TRUNCATE (PostgreSQL) in @BeforeEach
  * </ul>
  *
- * <h3>Performance Benefits</h3>
+ * <h3>V5 Migration (Issue #589, #590, #591)</h3>
  *
- * <ul>
- *   <li>Containers start once per JVM instead of per-test class
- *   <li>Deep startup ensures all containers are ready before first test
- *   <li>Estimated 60-80% reduction in container startup time
- * </ul>
+ * <p>MySQL and Redis dependencies removed. PostgreSQL-only mode for integration tests.
  *
  * <h3>Usage</h3>
  *
@@ -36,7 +31,7 @@ import org.springframework.test.context.TestPropertySource;
  * class MyIntegrationTest extends AppIntegrationTestSupport {
  *     @Test
  *     void testSomething() {
- *         // Test code here - MySQL and Redis are available
+ *         // Test code here - PostgreSQL is available
  *         // Data is isolated via @BeforeEach cleanup
  *     }
  * }
@@ -56,27 +51,19 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
   @Autowired(required = false)
   JdbcTemplate jdbcTemplate;
 
-  @Autowired(required = false)
-  StringRedisTemplate redisTemplate;
-
   // Cache table names to avoid repeated information_schema queries
   private static final AtomicReference<List<String>> TABLES = new AtomicReference<>();
 
   @DynamicPropertySource
   static void props(DynamicPropertyRegistry registry) {
-    // MySQL dynamic properties from SharedContainers
-    registry.add("spring.datasource.url", SharedContainers.MYSQL::getJdbcUrl);
-    registry.add("spring.datasource.username", SharedContainers.MYSQL::getUsername);
-    registry.add("spring.datasource.password", SharedContainers.MYSQL::getPassword);
-    registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+    // PostgreSQL dynamic properties from SharedContainers
+    registry.add("spring.datasource.url", SharedContainers.POSTGRES::getJdbcUrl);
+    registry.add("spring.datasource.username", SharedContainers.POSTGRES::getUsername);
+    registry.add("spring.datasource.password", SharedContainers.POSTGRES::getPassword);
+    registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
 
-    // Hibernate dialect for MySQL
-    registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
-
-    // Redis dynamic properties from SharedContainers
-    registry.add("spring.data.redis.host", SharedContainers.REDIS::getHost);
-    registry.add(
-        "spring.data.redis.port", () -> SharedContainers.REDIS.getMappedPort(6379).toString());
+    // Hibernate dialect for PostgreSQL
+    registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
   }
 
   /**
@@ -85,8 +72,7 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
    * <p><b>Core Principle:</b> "Containers are shared, data is isolated"
    *
    * <ul>
-   *   <li>Redis: FLUSHDB removes all keys
-   *   <li>MySQL: TRUNCATE resets all tables (handles FK constraints)
+   *   <li>PostgreSQL: TRUNCATE resets all tables (handles FK constraints via CASCADE)
    * </ul>
    *
    * <p>This approach is stronger than @Transactional rollback:
@@ -98,21 +84,8 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
    * </ul>
    */
   @BeforeEach
-  void resetDatabaseAndRedisState() {
-    flushRedis();
+  void resetDatabaseState() {
     truncateAllTables();
-  }
-
-  private void flushRedis() {
-    if (redisTemplate == null) {
-      return;
-    }
-    var connection = redisTemplate.getConnectionFactory().getConnection();
-    try {
-      connection.flushDb();
-    } finally {
-      connection.close();
-    }
   }
 
   private void truncateAllTables() {
@@ -122,13 +95,9 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
 
     List<String> tables = TABLES.updateAndGet(prev -> prev != null ? prev : loadTableNames());
 
-    jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
-    try {
-      for (String table : tables) {
-        jdbcTemplate.execute("TRUNCATE TABLE `" + table + "`");
-      }
-    } finally {
-      jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
+    // PostgreSQL uses CASCADE for FK constraints
+    for (String table : tables) {
+      jdbcTemplate.execute("TRUNCATE TABLE \"" + table + "\" CASCADE");
     }
   }
 
@@ -137,9 +106,10 @@ public abstract class AppIntegrationTestSupport extends IntegrationTestSupport {
         """
             SELECT table_name
             FROM information_schema.tables
-            WHERE table_schema = DATABASE()
+            WHERE table_schema = 'public'
               AND table_type = 'BASE TABLE'
-              AND table_name <> 'flyway_schema_history'
+              AND table_name NOT LIKE 'pg_%'
+              AND table_name NOT LIKE 'flyway_schema_history'
             """,
         String.class);
   }

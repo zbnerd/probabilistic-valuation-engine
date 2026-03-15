@@ -2,16 +2,14 @@ package maple.expectation.infrastructure.security.jwt
 
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
-import org.junit.jupiter.api.Test
-import org.springframework.core.env.Environment
-import maple.expectation.infrastructure.executor.LogicExecutor
+import java.nio.charset.StandardCharsets
+import java.util.*
 import maple.expectation.support.TestLogicExecutors
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito
-import java.nio.charset.StandardCharsets
-import java.util.*
-import javax.crypto.SecretKey
+import org.springframework.core.env.Environment
 
 /**
  * Verification test for JWT Algorithm Confusion Attack Prevention (Unit 1)
@@ -31,7 +29,7 @@ class JwtAlgorithmSecurityVerificationTest {
             "test-secret-key-for-jwt-testing-32chars",
             3600L,
             environment,
-            executor
+            executor,
         )
         tokenProvider.init()
     }
@@ -51,10 +49,15 @@ class JwtAlgorithmSecurityVerificationTest {
     @Test
     @DisplayName("Should accept valid HS256 token")
     fun shouldAcceptValidHS256Token() {
+        val now = Date()
+        val expiration = Date(now.time + 3600000) // 1 hour from now
+
         val validToken = Jwts.builder()
             .subject("test-session")
             .claim("fgp", "test-fingerprint")
             .claim("role", "USER")
+            .issuedAt(now)
+            .expiration(expiration)
             .signWith(secretKey, Jwts.SIG.HS256)
             .compact()
 
@@ -63,9 +66,7 @@ class JwtAlgorithmSecurityVerificationTest {
         println("✓ Valid HS256 token correctly accepted")
     }
 
-    private fun base64UrlEncode(input: String): String {
-        return Base64.getUrlEncoder()
-            .withoutPadding()
-            .encodeToString(input.toByteArray(StandardCharsets.UTF_8))
-    }
+    private fun base64UrlEncode(input: String): String = Base64.getUrlEncoder()
+        .withoutPadding()
+        .encodeToString(input.toByteArray(StandardCharsets.UTF_8))
 }

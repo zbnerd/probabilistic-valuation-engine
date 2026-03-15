@@ -6,11 +6,12 @@
 #
 # [단계별 실행] (Issue #194)
 # Step 1: Unit Tests (fastTest) - 빠른 피드백
-# Step 2: Integration Tests - DB/Redis 연동
+# Step 2: Integration Tests - PostgreSQL 연동
 # Step 3: Chaos Tests - 장애 주입 테스트
 # Step 4: Nightmare Tests - 극한 시나리오
 #
 # [최적화] services 제거 - Testcontainers가 컨테이너를 직접 관리
+# V5 Migration (Issue #589, #590, #591): PostgreSQL-only mode
 # =============================================================================
 
 name: Nightly Full Test

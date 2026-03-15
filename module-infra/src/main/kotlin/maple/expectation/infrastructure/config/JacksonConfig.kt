@@ -1,6 +1,8 @@
 package maple.expectation.infrastructure.config
 
 import com.fasterxml.jackson.core.StreamReadConstraints
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
+import com.fasterxml.jackson.module.kotlin.KotlinModule
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -76,6 +78,9 @@ class JacksonConfig {
      */
     @Bean
     fun jsonCustomizer(): Jackson2ObjectMapperBuilderCustomizer = Jackson2ObjectMapperBuilderCustomizer { builder ->
+        // Register Kotlin module for Kotlin data class serialization
+        builder.modules(KotlinModule.Builder().build(), JavaTimeModule())
+
         builder.postConfigurer { objectMapper ->
             objectMapper.factory.setStreamReadConstraints(
                 StreamReadConstraints.builder()

@@ -38,7 +38,7 @@ public class DonationProcessor {
    * @param receiverFingerprint 수신자 Admin fingerprint
    * @param amount 결제 금액
    */
-  @Transactional("transactionManager", propagation = Propagation.MANDATORY)
+  @Transactional(transactionManager = "tm", propagation = Propagation.MANDATORY)
   public void executeTransferToAdmin(String senderUuid, String receiverFingerprint, Long amount) {
     log.debug("[DonationProcessor] Delegating to strategy: {}", paymentStrategy.getStrategyName());
     paymentStrategy.processPayment(senderUuid, receiverFingerprint, amount);

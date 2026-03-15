@@ -1,5 +1,5 @@
 // ========================================
-// Module-Infra: JPA, Redis, 외부 API 구현체
+// Module-Infra: JPA, 외부 API 구현체
 // ADR-017: Infrastructure Layer
 // ========================================
 
@@ -39,6 +39,12 @@ dependencies {
 
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
 	implementation(libs.kotlin.stdlib)
+	implementation(libs.kotlin.reflect)
+	implementation(libs.kotlin.logging.jvm)
+	implementation(libs.kotlinx.coroutines.core)
+	implementation(libs.kotlinx.coroutines.jdk8)
+	implementation(libs.kotlinx.coroutines.core)
+	implementation(libs.kotlinx.coroutines.jdk8)
 
 	// Lombok
 	compileOnly(libs.lombok)
@@ -50,18 +56,12 @@ dependencies {
 
 	// Spring Data JPA
 	implementation(libs.spring.boot.starter.data.jpa)
-	runtimeOnly(libs.mysql.connector.j)
 	runtimeOnly(libs.h2)
-
-	// MongoDB
-	implementation(libs.spring.boot.starter.data.mongodb)
-	implementation(libs.mongodb.driver.sync)
-
-	// Redis
-	implementation(libs.redisson.spring.boot.starter)
+	implementation(libs.postgresql)
 
 	// Caffeine Cache
 	implementation(libs.caffeine)
+	implementation(libs.spring.boot.starter.cache)
 
 	// Spring Boot (minimal)
 	implementation(libs.spring.boot)
@@ -82,11 +82,11 @@ dependencies {
 
 	// Bucket4j
 	implementation(libs.bucket4j.core)
-	implementation(libs.bucket4j.redisson)
 
 	// Jackson
 	implementation(libs.jackson.databind)
 	implementation(libs.jackson.dataformat.csv)
+	implementation(libs.jackson.module.kotlin)
 
 	// Guava
 	implementation(libs.guava)
@@ -104,21 +104,18 @@ dependencies {
 	runtimeOnly(libs.jjwt.jackson)
 
 	testImplementation(libs.spring.boot.starter.test)
-	testImplementation(libs.testcontainers.mysql)
-	testImplementation(libs.testcontainers.mongodb)
+	testImplementation(libs.mockito.kotlin)
 
 	// Integration Test Dependencies
 	integrationTestImplementation(libs.spring.boot.starter.test)
 	integrationTestImplementation(libs.testcontainers)
 	integrationTestImplementation(libs.testcontainers.junit.jupiter)
-	integrationTestImplementation(libs.testcontainers.mysql)
-	integrationTestImplementation(libs.testcontainers.mongodb)
 	integrationTestRuntimeOnly(libs.junit.platform.launcher)
 }
 
 // Integration Test Task
 tasks.register('integrationTest', Test) {
-	description = 'Runs integration tests (Testcontainers, DB, Redis).'
+	description = 'Runs integration tests (Testcontainers, PostgreSQL).'
 	group = 'verification'
 
 	testClassesDirs = sourceSets.integrationTest.output.classesDirs

@@ -22,6 +22,8 @@
 ## Phase 3: 실행 (Implement)
 - 사용자가 계획을 승인했을 때만 코드 작성
 - 합의된 계획에 따라서만 수정
+- 작업전 반드시 브랜치생성할것 
+- 작업후 PR develop base로 생성할것.
 
 ## Context Optimization (100k+ LOC 필수)
 **대규모 코드베이스에서 context 낭비를 방지하는 규칙:**
@@ -143,19 +145,44 @@ L1 (Caffeine) → L2 (PostgreSQL UNLOGGED) → SingleFlight → Loader
 - [ ] Unit 테스트 통과 (`./gradlew test`)
 - [ ] CLAUDE.md 원칙 준수
 - [ ] 통합테스트 금지 (Testcontainers 포함) - Issue #207
+- [ ] 브랜치 생성
 
 ## 11. 검증 명령어
 
 ```bash
-./gradlew compileKotlin compileJava  # 컴파일 확인
+./gradlew compileKotlin compileJava --continue  # 컴파일 확인
 ./gradlew test                        # 전체 테스트
 ```
+- 컴파일검증시 --continue 반드시 사용할것.
+- 컴파일, 테스트 검증시 처음부터 실패하는경우, 에러나는경우만 메시지 나타나도록 할것. 없으면 성공.
 
 ## 12. Flaky Test Prevention
-
+- kotlin `delay()` 사용금지
 - `Thread.sleep()` 금지 → `Awaitility` 사용
 - 테스트 간 상태 공유 금지
 - `@DirtiesContext` 남용 금지
+
+## 13. YAML Configuration Rules (AI 수정 시 필수 준수)
+
+**금지 패턴:**
+- 동일 root key 중복 생성 (예: `spring:` 블록이 파일 내 여러 개)
+- 기존 블록 무시하고 파일 끝에 append
+- 중첩된 키 실수 (예: `spring.spring.data`)
+
+**필수 규칙:**
+1. **수정 전 전체 파일 읽기**: 구조 파악 후 수정
+2. **기존 블록에 merge**: 새 root key 생성 금지
+3. **프로필별 설정 분리**: 환경 설정은 `application-{profile}.yml` 사용
+4. **들여쓰기 검증**: YAML은 2-space, 중첩 레벨 정확히 확인
+
+**프로필 구조:**
+```
+application.yml          # 공통 설정 (592줄)
+├── application-local.yml  # 로컬 개발
+├── application-prod.yml   # 프로덕션
+├── application-ci.yml     # CI/CD
+└── application-test.yml   # 테스트 (src/test/resources)
+```
 
 ---
 

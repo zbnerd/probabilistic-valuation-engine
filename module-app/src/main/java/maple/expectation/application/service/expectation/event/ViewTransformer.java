@@ -10,10 +10,10 @@ import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.event.ExpectationCalculationCompletedEvent;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.mongodb.CharacterValuationView;
-import maple.expectation.infrastructure.mongodb.CharacterValuationView.CostBreakdownView;
-import maple.expectation.infrastructure.mongodb.CharacterValuationView.ItemExpectationView;
-import maple.expectation.infrastructure.mongodb.CharacterValuationView.PresetView;
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity;
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.CostBreakdownView;
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.ItemExpectationView;
+import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.PresetView;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
@@ -62,7 +62,7 @@ public class ViewTransformer {
    * @param event Calculation completion event from Redis Stream
    * @return MongoDB view document for upsert
    */
-  public CharacterValuationView toDocument(ExpectationCalculationCompletedEvent event) {
+  public CharacterValuationViewEntity toDocument(ExpectationCalculationCompletedEvent event) {
     return executor.executeOrDefault(
         () -> toDocumentInternal(event),
         createEmptyView(event),
@@ -74,8 +74,8 @@ public class ViewTransformer {
    *
    * <p>Extracted for LogicExecutor pattern (Section 12).
    */
-  private CharacterValuationView toDocumentInternal(ExpectationCalculationCompletedEvent event)
-      throws Exception {
+  private CharacterValuationViewEntity toDocumentInternal(
+      ExpectationCalculationCompletedEvent event) throws Exception {
     // Deterministic ID for idempotency: "userIgn:taskId"
     String deterministicId = buildDeterministicId(event.getUserIgn(), event.getTaskId());
 
@@ -87,8 +87,8 @@ public class ViewTransformer {
     long eventVersion =
         event.getVersion() != null ? event.getVersion() : System.currentTimeMillis();
 
-    return new CharacterValuationView(
-        deterministicId,
+    return new CharacterValuationViewEntity(
+        null, // id (auto-generated)
         event.getUserIgn(),
         event.getMessageId(),
         event.getCharacterOcid(),
@@ -97,6 +97,7 @@ public class ViewTransformer {
         parseInstant(event.getCalculatedAt()),
         Instant.now(),
         eventVersion, // Use event version for causal consistency
+        eventVersion, // lastAppliedVersion: initialize with event version for ordering
         parseCostToLong(event.getTotalExpectedCost()),
         event.getMaxPresetNo(),
         presetViews,
@@ -274,9 +275,9 @@ public class ViewTransformer {
    *
    * <p>Used when transformation fails to prevent sync pipeline from blocking.
    */
-  private CharacterValuationView createEmptyView(ExpectationCalculationCompletedEvent event) {
-    return new CharacterValuationView(
-        buildDeterministicId(event.getUserIgn(), event.getTaskId()),
+  private CharacterValuationViewEntity createEmptyView(ExpectationCalculationCompletedEvent event) {
+    return new CharacterValuationViewEntity(
+        null, // id (auto-generated)
         event.getUserIgn(),
         event.getMessageId(),
         event.getCharacterOcid(),

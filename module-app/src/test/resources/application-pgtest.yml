@@ -33,13 +33,8 @@ spring:
         jdbc:
           batch_size: 20
 
-  # Disable other services for pure PostgreSQL testing
-  data:
-    mongodb:
-      auto-index-creation: false
-    redis:
-      host: localhost
-      port: 6379
+  # V5 Migration (Issue #589, #590, #591): PostgreSQL-only mode
+  # Redis and MongoDB removed
 
   # Auth configuration (use test secrets)
   auth:
@@ -96,7 +91,7 @@ cors:
 app:
   buffer:
     redis:
-      enabled: false  # 테스트에서는 Redis 버퍼 비활성화
+      enabled: false  # V5 Migration: Redis removed
   event-publisher:
     type: sync        # 테스트에서는 동기 발행
   aop:

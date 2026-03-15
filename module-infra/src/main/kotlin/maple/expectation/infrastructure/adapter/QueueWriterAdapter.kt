@@ -1,26 +1,31 @@
-package maple.expectation.infra.adapter
+package maple.expectation.infrastructure.adapter
 
 import maple.expectation.core.port.out.QueueWriterPort
-import maple.expectation.infrastructure.queue.priority.PriorityCalculationQueue
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 /**
- * QueueWriterPort의 Redis 기반 구현체
+ * No-op QueueWriterPort 구현체
  *
- * <h3>Wiring</h3>
- * module-infra의 PriorityCalculationQueue에 위임
+ * Redis 제거 후 큐 라이터 기능 비활성화 상태.
+ * LowPriorityQueueWriter 정상 시작을 위해 빈 등록만 수행.
  */
 @Component
-class QueueWriterAdapter(
-    private val delegate: PriorityCalculationQueue,
-) : QueueWriterPort {
+class QueueWriterAdapter : QueueWriterPort {
 
-    override fun addLowPriorityTask(userIgn: String): Boolean = delegate.addLowPriorityTask(userIgn)
+    override fun addLowPriorityTask(userIgn: String): Boolean {
+        log.debug("[QueueWriter] No-op implementation - accepting task for: {}", userIgn)
+        return true
+    }
 
-    override fun addHighPriorityTask(userIgn: String, forceRecalculation: Boolean): Boolean = delegate.addHighPriorityTask(userIgn, forceRecalculation)
+    override fun addHighPriorityTask(userIgn: String, forceRecalculation: Boolean): Boolean {
+        log.debug("[QueueWriter] No-op implementation - accepting high priority task for: {}", userIgn)
+        return true
+    }
 
-    override fun size(): Int {
-        val (high, low) = delegate.getQueueSize()
-        return high + low
+    override fun size(): Int = 0
+
+    companion object {
+        private val log = LoggerFactory.getLogger(QueueWriterAdapter::class.java)
     }
 }

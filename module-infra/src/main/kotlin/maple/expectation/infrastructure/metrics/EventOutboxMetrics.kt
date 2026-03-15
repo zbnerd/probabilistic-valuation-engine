@@ -1,8 +1,8 @@
 package maple.expectation.infrastructure.metrics
 
 import io.micrometer.core.instrument.*
-import org.springframework.stereotype.Component
 import java.util.concurrent.atomic.AtomicLong
+import org.springframework.stereotype.Component
 
 /**
  * Event Outbox Pattern Metrics (Issue #490)

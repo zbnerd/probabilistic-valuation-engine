@@ -137,7 +137,10 @@ abstract class CoreUnitTestTemplate {
     protected fun <T : Throwable> assertThrows(
         exceptionClass: Class<T>,
         block: () -> Unit,
-    ): T = org.assertj.core.api.Assertions.assertThatThrownBy(block)
-        .isInstanceOf(exceptionClass)
-        .let { exceptionClass.cast(it) }
+    ): T {
+        val throwable = org.assertj.core.api.Assertions.catchThrowable(block)
+        assertThat(throwable).isInstanceOf(exceptionClass)
+        @Suppress("UNCHECKED_CAST")
+        return throwable as T
+    }
 }

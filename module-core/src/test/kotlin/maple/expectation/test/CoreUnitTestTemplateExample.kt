@@ -1,8 +1,6 @@
 package maple.expectation.test
 
-import java.time.Clock
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import maple.expectation.core.domain.model.ItemPrice
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -126,12 +124,8 @@ class CoreUnitTestTemplateExample : CoreUnitTestTemplate() {
     @Test
     @DisplayName("가격 신선도 확인 - 시간 경과에 따른 상태 변화")
     fun freshness_business_logic() {
-        // Given: 고정 시계 사용 (테스트 결정성 보장)
-        val fixedClock = Clock.fixed(
-            LocalDateTime.of(2024, 3, 15, 10, 0).toInstant(ZoneOffset.UTC),
-            ZoneOffset.UTC,
-        )
-        val pastTime = LocalDateTime.now(fixedClock).minusHours(25)
+        // Given: 현재 시간 기준으로 25시간 전 (isFreshWithinHours가 LocalDateTime.now() 사용)
+        val pastTime = LocalDateTime.now().minusHours(25)
 
         val oldPrice = given {
             ItemPrice(

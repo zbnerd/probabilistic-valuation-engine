@@ -135,6 +135,11 @@ ai:
   sre:
     enabled: false
 
+# Cache 설정 (테스트 환경 - L2 비활성화, Caffeine만 사용)
+cache:
+  l2:
+    enabled: false  # 테스트 환경에서는 Caffeine만 사용
+
 # Event Consumer 설정 (테스트용 기본값)
 event:
   consumer:

@@ -99,11 +99,12 @@ return Optional.ofNullable(l1.get(key))
 
 **Checked Exception 구조적 분리:** Optional.orElseGet() 안에서 try-catch 금지. 예외 발생 가능한 작업은 Optional 밖에서 직접 호출.
 
-## 5. Anti-Pattern: Error Handling
+## 5. Anti-Pattern: Error Handling & Logging
 
 - **Catch and Ignore:** 예외를 잡고 무시 금지
 - **Hardcoded Messages:** 에러 메시지는 `ErrorCode` Enum에서 관리
-- **Standard Output:** `e.printStackTrace()` 금지, `@Slf4j` 사용
+- **Standard Output:** `System.out.println()`, `e.printStackTrace()` 금지, `@Slf4j` 사용
+- **Test Output:** 테스트 코드에서 `System.out` 사용 금지. 느려짐. Assertion 메시지로 충분.
 - **Raw Thread:** `new Thread()`, `Future` 직접 사용 금지
 
 ---

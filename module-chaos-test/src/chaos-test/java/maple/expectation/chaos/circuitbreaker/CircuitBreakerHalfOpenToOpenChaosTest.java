@@ -8,20 +8,26 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import maple.expectation.support.AbstractContainerBaseTest;
 import org.junit.jupiter.api.*;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 
-/** Circuit Breaker HALF_OPEN to OPEN Re-failure Chaos Test */
+/**
+ * Circuit Breaker HALF_OPEN to OPEN Re-failure Chaos Test
+ *
+ * <h4>5-Agent Council</h4>
+ *
+ * <ul>
+ *   <li>🔴 Red (SRE): 장애 주입 - HALF_OPEN 상태에서 연속 실패
+ *   <li>🔵 Blue (Architect): 흐름 검증 - 실패 시 다시 OPEN 전이
+ *   <li>🟢 Green (Performance): 메트릭 검증 - 전이 시간
+ *   <li>🟣 Purple (Auditor): 데이터 검증 - 상태 일관성
+ * </ul>
+ */
 @Tag("chaos")
-@SpringBootTest
 @DisplayName("Circuit Breaker HALF_OPEN to OPEN Re-failure")
-class CircuitBreakerHalfOpenToOpenChaosTest extends AbstractContainerBaseTest {
-
-  @Autowired private CircuitBreakerRegistry circuitBreakerRegistry;
+class CircuitBreakerHalfOpenToOpenChaosTest {
 
   private CircuitBreaker testCircuitBreaker;
+  private CircuitBreakerRegistry circuitBreakerRegistry;
 
   @BeforeEach
   void setUp() {
@@ -34,6 +40,7 @@ class CircuitBreakerHalfOpenToOpenChaosTest extends AbstractContainerBaseTest {
             .permittedNumberOfCallsInHalfOpenState(3)
             .build();
 
+    circuitBreakerRegistry = CircuitBreakerRegistry.ofDefaults();
     testCircuitBreaker = circuitBreakerRegistry.circuitBreaker("test-cb-half-open-to-open", config);
     testCircuitBreaker.reset();
   }
@@ -41,16 +48,13 @@ class CircuitBreakerHalfOpenToOpenChaosTest extends AbstractContainerBaseTest {
   @Test
   @DisplayName("Failed calls in HALF_OPEN - CB reopens")
   void failedCallsInHalfOpen_circuitBreakerReopens() {
-    System.out.println("┌────────────────────────────────────────────────────────────┐");
-    System.out.println("│   Circuit Breaker HALF_OPEN → OPEN Re-failure Test         │");
-    System.out.println("├────────────────────────────────────────────────────────────┤");
-
     testCircuitBreaker.transitionToOpenState();
     testCircuitBreaker.transitionToHalfOpenState();
 
     CircuitBreaker.State initialState = testCircuitBreaker.getState();
-    System.out.printf("│ Initial CB State: %s%n", initialState);
-    assertThat(initialState).isEqualTo(CircuitBreaker.State.HALF_OPEN);
+    assertThat(initialState)
+        .as("Initial CB state should be HALF_OPEN")
+        .isEqualTo(CircuitBreaker.State.HALF_OPEN);
 
     int permittedCalls =
         testCircuitBreaker.getCircuitBreakerConfig().getPermittedNumberOfCallsInHalfOpenState();
@@ -67,37 +71,27 @@ class CircuitBreakerHalfOpenToOpenChaosTest extends AbstractContainerBaseTest {
         results.add("REJECTED");
       } catch (RuntimeException e) {
         results.add("FAILED");
-        System.out.printf("│ Call %d: FAILED (State: %s)%n", i + 1, testCircuitBreaker.getState());
       }
     }
 
     CircuitBreaker.State finalState = testCircuitBreaker.getState();
-    System.out.println("├────────────────────────────────────────────────────────────┤");
-    System.out.printf("│ Final CB State: %s%n", finalState);
-    System.out.println("└────────────────────────────────────────────────────────────┘");
 
     assertThat(finalState)
-        .as("Circuit Breaker should reopen after failures in HALF_OPEN")
+        .as("Circuit Breaker should reopen after failures in HALF_OPEN (results: %s)", results)
         .isEqualTo(CircuitBreaker.State.OPEN);
   }
 
   @Test
   @DisplayName("Full failure cycle: CLOSED → OPEN → HALF_OPEN → OPEN")
   void fullFailureCycle() {
-    System.out.println("┌────────────────────────────────────────────────────────────┐");
-    System.out.println("│     Full Failure Cycle Test                                │");
-    System.out.println("├────────────────────────────────────────────────────────────┤");
-
     List<CircuitBreaker.State> stateHistory = new ArrayList<>();
     stateHistory.add(testCircuitBreaker.getState());
 
     testCircuitBreaker.transitionToOpenState();
     stateHistory.add(testCircuitBreaker.getState());
-    System.out.printf("│ Phase 1: %s → %s%n", stateHistory.get(0), stateHistory.get(1));
 
     testCircuitBreaker.transitionToHalfOpenState();
     stateHistory.add(testCircuitBreaker.getState());
-    System.out.printf("│ Phase 2: %s → %s%n", stateHistory.get(1), stateHistory.get(2));
 
     int permitted =
         testCircuitBreaker.getCircuitBreakerConfig().getPermittedNumberOfCallsInHalfOpenState();
@@ -113,10 +107,9 @@ class CircuitBreakerHalfOpenToOpenChaosTest extends AbstractContainerBaseTest {
     }
 
     stateHistory.add(testCircuitBreaker.getState());
-    System.out.printf("│ Phase 3: %s → %s%n", stateHistory.get(2), stateHistory.get(3));
-    System.out.println("└────────────────────────────────────────────────────────────┘");
 
     assertThat(stateHistory)
+        .as("State history should show full cycle: CLOSED → OPEN → HALF_OPEN → OPEN")
         .containsExactly(
             CircuitBreaker.State.CLOSED,
             CircuitBreaker.State.OPEN,

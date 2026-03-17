@@ -27,7 +27,7 @@ open class CharacterEquipmentJpaEntity {
 
     @Convert(converter = GzipStringConverter::class)
     @Lob
-    @Column(columnDefinition = "LONGBLOB", nullable = false)
+    @Column(columnDefinition = "BYTEA", nullable = false)
     open var jsonContent: String? = null
 
     open var updatedAt: LocalDateTime? = null

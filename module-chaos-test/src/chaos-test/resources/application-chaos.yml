@@ -11,6 +11,13 @@ spring:
   application:
     name: maple-expectation-chaos-test
 
+# V5 Features (required for Spring context to load)
+app:
+  v5:
+    enabled: true
+  event-publisher:
+    type: pgmq
+
   # DataSource: Testcontainers PostgreSQL (overridden by AbstractContainerBaseTest)
   # The URL, username, password are set dynamically via System.setProperty()
   datasource:
@@ -80,8 +87,8 @@ resilience4j:
           - java.io.IOException
           - maple.expectation.error.exception.base.ServerBaseException
         ignore-exceptions:
-          - maple.expectation.error.exception.auth.DuplicateLikeException
-          - maple.expectation.error.exception.auth.SelfLikeNotAllowedException
+          - maple.expectation.error.exception.DuplicateLikeException
+          - maple.expectation.error.exception.SelfLikeNotAllowedException
 
   timelimiter:
     configs:
@@ -96,8 +103,8 @@ resilience4j:
         retry-exceptions:
           - java.io.IOException
         ignore-exceptions:
-          - maple.expectation.error.exception.auth.DuplicateLikeException
-          - maple.expectation.error.exception.auth.SelfLikeNotAllowedException
+          - maple.expectation.error.exception.DuplicateLikeException
+          - maple.expectation.error.exception.SelfLikeNotAllowedException
 
 # Actuator Configuration
 management:

@@ -7,20 +7,26 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.time.Duration;
-import maple.expectation.support.AbstractContainerBaseTest;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.*;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 
-/** Circuit Breaker OPEN to HALF_OPEN Transition Chaos Test */
+/**
+ * Circuit Breaker OPEN to HALF_OPEN Transition Chaos Test
+ *
+ * <h4>5-Agent Council</h4>
+ *
+ * <ul>
+ *   <li>🔴 Red (SRE): 장애 주입 - OPEN 상태에서 HALF_OPEN 전이 대기
+ *   <li>🔵 Blue (Architect): 흐름 검증 - waitDurationInOpenState 경과 후 전이
+ *   <li>🟢 Green (Performance): 메트릭 검증 - 전이 시간 정확성
+ * </ul>
+ */
 @Tag("chaos")
-@SpringBootTest
 @DisplayName("Circuit Breaker OPEN to HALF_OPEN Chaos")
-class CircuitBreakerOpenToHalfOpenChaosTest extends AbstractContainerBaseTest {
-
-  @Autowired private CircuitBreakerRegistry circuitBreakerRegistry;
+class CircuitBreakerOpenToHalfOpenChaosTest {
 
   private CircuitBreaker testCircuitBreaker;
+  private CircuitBreakerRegistry circuitBreakerRegistry;
 
   @BeforeEach
   void setUp() {
@@ -34,6 +40,7 @@ class CircuitBreakerOpenToHalfOpenChaosTest extends AbstractContainerBaseTest {
             .automaticTransitionFromOpenToHalfOpenEnabled(true)
             .build();
 
+    circuitBreakerRegistry = CircuitBreakerRegistry.ofDefaults();
     testCircuitBreaker = circuitBreakerRegistry.circuitBreaker("test-cb-open-to-half-open", config);
     testCircuitBreaker.reset();
   }
@@ -41,26 +48,18 @@ class CircuitBreakerOpenToHalfOpenChaosTest extends AbstractContainerBaseTest {
   @Test
   @DisplayName("Wait duration elapsed - CB enters HALF_OPEN")
   void waitDurationElapsed_circuitBreakerHalfOpen() {
-    System.out.println("┌────────────────────────────────────────────────────────────┐");
-    System.out.println("│     Circuit Breaker OPEN → HALF_OPEN Transition Test       │");
-    System.out.println("├────────────────────────────────────────────────────────────┤");
-
     testCircuitBreaker.transitionToOpenState();
-    System.out.printf("│ [Red] Forced CB to OPEN: %s%n", testCircuitBreaker.getState());
 
-    assertThat(testCircuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
+    assertThat(testCircuitBreaker.getState())
+        .as("CB should be OPEN after manual transition")
+        .isEqualTo(CircuitBreaker.State.OPEN);
 
-    // Wait for automatic transition
     await()
-        .atMost(Duration.ofSeconds(3))
-        .pollInterval(Duration.ofMillis(100))
+        .atMost(3, TimeUnit.SECONDS)
+        .pollInterval(100, TimeUnit.MILLISECONDS)
         .until(() -> testCircuitBreaker.getState() == CircuitBreaker.State.HALF_OPEN);
 
-    CircuitBreaker.State finalState = testCircuitBreaker.getState();
-    System.out.printf("│ [Blue] CB State after wait: %s%n", finalState);
-    System.out.println("└────────────────────────────────────────────────────────────┘");
-
-    assertThat(finalState)
+    assertThat(testCircuitBreaker.getState())
         .as("Circuit Breaker should transition to HALF_OPEN after wait duration")
         .isEqualTo(CircuitBreaker.State.HALF_OPEN);
   }

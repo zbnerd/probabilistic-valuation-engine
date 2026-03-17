@@ -39,6 +39,19 @@ dependencies {
 
 	// ArchUnit (Architecture Testing)
 	testImplementation(libs.archunit.junit5)
+
+	// Testing
+	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.spring.security.test)
+	testImplementation(libs.assertj.core)
+	testImplementation(libs.junit.jupiter)
+
+	// Testcontainers for integration tests
+	testImplementation(libs.testcontainers)
+	testImplementation(libs.testcontainers.postgresql)
+
+	// JPA for testing (EntityManager, @Table, etc.)
+	testImplementation(libs.spring.boot.starter.data.jpa)
 }
 
 // Enable plain jar for inter-module dependencies

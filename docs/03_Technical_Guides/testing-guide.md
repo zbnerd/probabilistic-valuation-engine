@@ -480,3 +480,262 @@ grep -r "@Testcontainers" src/test/java --include="*.java"
 - QA Checklist: `docs/03-analysis/QA_MONITORING_CHECKLIST.md`
 - Zero Script QA: `docs/03-analysis/zero-script-qa-2026-01-30.md`
 - Chaos Test Results: `docs/02_Chaos_Engineering/06_Nightmare/Results/`
+
+---
+
+## 26. Test Templates (Issues #508-#512)
+
+> **Status:** Active (2026-03-15)
+> **Issues:** #508, #509, #510, #511, #512
+
+프로젝트 전체에서 일관된 테스트 패턴을 보장하기 위한 표준 템플릿입니다.
+
+### Template Overview
+
+| Template | Module | Purpose | Base Class |
+|----------|--------|---------|------------|
+| `CoreUnitTestTemplate` | module-core | 순수 도메인 로직 테스트 | 없음 (Spring 미사용) |
+| `UsecaseTestTemplate` | module-app | Application Service/Facade 테스트 | IntegrationTestBase |
+| `ServiceTestTemplate` | module-app | Domain Service 테스트 (@Transactional) | IntegrationTestBase |
+| `InfraAdapterTestTemplate` | module-infra | Infrastructure Adapter 통합 테스트 | Testcontainers |
+| `ExternalApiTestTemplate` | module-infra | 외부 API 클라이언트 테스트 | WireMock |
+| `ControllerContractTestTemplate` | module-web | REST API 계약 테스트 | IntegrationTestBase (RANDOM_PORT) |
+| `SmokeTestBase` | module-app | P0 Critical Path 검증 | IntegrationTestBase (RANDOM_PORT) |
+
+### CoreUnitTestTemplate (#508)
+
+순수 Kotlin/Java 로직 테스트를 위한 템플릿입니다. Spring Context를 로드하지 않아 빠른 실행이 가능합니다.
+
+**위치**: `module-core/src/test/kotlin/maple/expectation/test/CoreUnitTestTemplate.kt`
+
+**특징**:
+- Spring Context 로딩 없음 (< 100ms 실행)
+- Given-When-Then 패턴 헬퍼
+- Property-based testing (jqwik) 지원
+- Assertion 헬퍼
+
+**사용 예시**:
+```kotlin
+class ItemPriceTest : CoreUnitTestTemplate() {
+    @Test
+    fun `가격 생성 검증`() {
+        val price = given { ItemPrice.of(1L, "아이템", 1000L) }
+        val isFresh = `when` { price.isFreshWithinHours(24) }
+        then(isFresh) { assertTrue(it) }
+    }
+}
+```
+
+### UsecaseTestTemplate (#509)
+
+Application 레이어의 Facade/Usecase 클래스 테스트를 위한 템플릿입니다.
+
+**위치**: `module-app/src/test/kotlin/maple/expectation/test/usecase/UsecaseTestTemplate.kt`
+
+**특징**:
+- IntegrationTestBase 상속 (DB 격리)
+- Awaitility 비동기 테스트 헬퍼
+- WebEnvironment.NONE (서버 없이 테스트)
+
+**사용 예시**:
+```kotlin
+class ExpectationFacadeTest : UsecaseTestTemplate() {
+    @Autowired
+    lateinit var expectationFacade: ExpectationFacade
+
+    @Test
+    fun `비동기 계산 완료 대기`() {
+        // Given
+        val future = expectationFacade.calculateAsync("character")
+
+        // When & Then
+        awaitCompletion {
+            assertThat(future).isCompleted
+        }
+    }
+}
+```
+
+### ServiceTestTemplate (#509)
+
+Domain Service 테스트를 위한 템플릿입니다. @Transactional 롤백을 지원합니다.
+
+**위치**: `module-app/src/test/kotlin/maple/expectation/test/service/ServiceTestTemplate.kt`
+
+**특징**:
+- @Transactional 롤백 지원
+- flushAndClear() 영속성 컨텍스트 제어
+- JPA 영속성 로직 검증에 최적화
+
+**사용 예시**:
+```kotlin
+@Transactional
+class CalculationServiceTest : ServiceTestTemplate() {
+    @Test
+    fun `엔티티 저장 후 조회`() {
+        val character = Character(ign = "test")
+        persistAndFlush(character)
+
+        val found = findFromDb(Character::class.java, character.id)
+        assertThat(found).isNotNull
+    }
+}
+```
+
+### InfraAdapterTestTemplate (#510)
+
+Infrastructure 레이어 어댑터 통합 테스트를 위한 템플릿입니다.
+
+**위치**: `module-infra/src/test/kotlin/maple/expectation/test/InfraAdapterTestTemplate.kt`
+
+**특징**:
+- Testcontainers (PostgreSQL, Redis)
+- Circuit Breaker 검증 헬퍼
+- Resilience4j 통합
+
+**사용 예시**:
+```kotlin
+class UserRepositoryAdapterTest : InfraAdapterTestTemplate() {
+    @Test
+    fun `Circuit Breaker OPEN 검증`() {
+        // 연속 실패 유발
+        repeat(5) { adapter.findById("invalid") }
+
+        // Circuit Breaker 상태 검증
+        assertCircuitBreakerOpen(circuitBreaker)
+    }
+}
+```
+
+### ExternalApiTestTemplate (#510)
+
+외부 API 클라이언트 테스트를 위한 WireMock 기반 템플릿입니다.
+
+**위치**: `module-infra/src/test/kotlin/maple/expectation/test/ExternalApiTestTemplate.kt`
+
+**특징**:
+- WireMock HTTP Mocking
+- 동적 포트 할당
+- 타임아웃/에러 응답 테스트
+
+**사용 예시**:
+```kotlin
+class NexonApiClientTest : ExternalApiTestTemplate() {
+    @Test
+    fun `API 호출 성공`() {
+        mockExternalApi("/v1/user/basic", 200, """{"name":"test"}""")
+
+        val result = client.fetchBasic("test")
+
+        assertThat(result.name).isEqualTo("test")
+        verifyApiCalled("/v1/user/basic")
+    }
+}
+```
+
+### ControllerContractTestTemplate (#511)
+
+REST API 계약 테스트를 위한 템플릿입니다.
+
+**위치**: `module-web/src/test/kotlin/maple/expectation/test/ControllerContractTestTemplate.kt`
+
+**특징**:
+- RANDOM_PORT (실제 HTTP 서버)
+- HTTP Request 헬퍼 (GET, POST, PUT, DELETE)
+- 응답 시간 검증
+
+**사용 예시**:
+```kotlin
+class CharacterControllerTest : ControllerContractTestTemplate() {
+    @Test
+    fun `캐릭터 조회 API`() {
+        val startTime = System.currentTimeMillis()
+
+        val response = get(
+            "/api/v1/characters/test",
+            CharacterResponse::class.java,
+            withBearerToken(token)
+        )
+
+        assertOk(response)
+        assertResponseTime(startTime, 500)
+    }
+}
+```
+
+### SmokeTestBase (#512)
+
+P0 Critical Path 스모크 테스트를 위한 템플릿입니다.
+
+**위치**: `module-app/src/test/kotlin/maple/expectation/smoke/SmokeTestBase.kt`
+
+**P0 Critical Paths**:
+
+| Scenario ID | Path | Description |
+|-------------|------|-------------|
+| S001 | /actuator/health | Health check |
+| S002 | /actuator/health/liveness | Liveness probe |
+| S003 | /actuator/health/readiness | Readiness probe |
+| S004 | /api/v1/characters/{userIgn} | Character lookup |
+| S005 | /api/v4/characters/{userIgn}/expectation | Expectation calculation |
+
+**사용 예시**:
+```kotlin
+@DisplayName("P0 Smoke - Health Check")
+class P0HealthSmokeTest : SmokeTestBase() {
+    @Test
+    fun `Health endpoint returns UP`() {
+        val startTime = System.currentTimeMillis()
+
+        val response = get("/actuator/health", String::class.java)
+
+        assertHealthy(response)
+        assertP0ResponseTime(startTime)  // < 500ms
+    }
+}
+```
+
+### Template Selection Guide
+
+| 테스트 대상 | 추천 템플릿 | 이유 |
+|------------|------------|------|
+| Value Object | CoreUnitTestTemplate | 빠른 실행, 순수 로직 |
+| Domain Service | ServiceTestTemplate | @Transactional, JPA 제어 |
+| Facade/Usecase | UsecaseTestTemplate | Port 조합, 비동기 |
+| Repository Adapter | InfraAdapterTestTemplate | Testcontainers |
+| External API Client | ExternalApiTestTemplate | WireMock |
+| REST Controller | ControllerContractTestTemplate | HTTP 계약 |
+| Critical Path | SmokeTestBase | 응답 시간, 필수 필드 |
+
+### 실행 명령어
+
+```bash
+# Core 단위 테스트
+./gradlew :module-core:test
+
+# App 통합 테스트
+./gradlew :module-app:test
+
+# Infra 어댑터 테스트
+./gradlew :module-infra:test
+
+# Web 계약 테스트
+./gradlew :module-web:test
+
+# P0 스모크 테스트
+./gradlew :module-app:test --tests "*SmokeTest*"
+
+# 통합 테스트만 실행
+./gradlew test --include-tag "integration"
+
+# 스모크 테스트만 실행
+./gradlew test --include-tag "smoke"
+```
+
+### Related Documentation
+
+- [Core Test Template README](../../module-core/src/test/kotlin/maple/expectation/test/README.md)
+- [App Test Template README](../../module-app/src/test/kotlin/maple/expectation/test/usecase/README.md)
+- [Infra Test Template README](../../module-infra/src/test/kotlin/maple/expectation/test/README.md)
+- [Web Test Template README](../../module-web/src/test/kotlin/maple/expectation/test/README.md)
+- [Smoke Test Scenarios](../../module-app/src/test/kotlin/maple/expectation/smoke/SmokeTestScenarios.md)

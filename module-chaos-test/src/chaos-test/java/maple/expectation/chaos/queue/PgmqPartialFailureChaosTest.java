@@ -78,6 +78,7 @@ class PgmqPartialFailureChaosTest {
   void partialFailures_circuitBreakerHandlesIntermittentErrors() {
     int successCount = 0;
     int failureCount = 0;
+    int rejectedCount = 0;
 
     for (int i = 0; i < 10; i++) {
       try {
@@ -90,6 +91,8 @@ class PgmqPartialFailureChaosTest {
                 throw new RuntimeException("Intermittent failure");
               });
         }
+      } catch (io.github.resilience4j.circuitbreaker.CallNotPermittedException e) {
+        rejectedCount++;
       } catch (RuntimeException e) {
         failureCount++;
       }
@@ -98,11 +101,21 @@ class PgmqPartialFailureChaosTest {
     CircuitBreaker.State finalState = testCircuitBreaker.getState();
     CircuitBreaker.Metrics metrics = testCircuitBreaker.getMetrics();
 
-    assertThat(successCount).as("Half of calls should succeed").isEqualTo(5);
+    assertThat(successCount)
+        .as("At least 3 calls should succeed before CB opens (got %d)", successCount)
+        .isGreaterThanOrEqualTo(3);
 
-    assertThat(failureCount).as("Half of calls should fail").isEqualTo(5);
+    assertThat(failureCount)
+        .as("At least 3 failures should occur (got %d)", failureCount)
+        .isGreaterThanOrEqualTo(3);
 
-    assertThat(finalState).as("CB state after 50%% failure rate (threshold=50%%)").isNotNull();
+    assertThat(rejectedCount)
+        .as("Some calls should be rejected when CB is OPEN (got %d)", rejectedCount)
+        .isGreaterThan(0);
+
+    assertThat(finalState)
+        .as("CB should be OPEN after 50%% failure rate exceeds threshold")
+        .isEqualTo(CircuitBreaker.State.OPEN);
   }
 
   @Test

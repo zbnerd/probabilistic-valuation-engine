@@ -9,7 +9,6 @@ import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEven
 import maple.expectation.infrastructure.lock.PostgresLockStrategy
 import maple.expectation.infrastructure.ratelimit.ConsumeResult
 import maple.expectation.infrastructure.ratelimit.RateLimiter
-import maple.expectation.support.IntegrationTestBase
 import org.assertj.core.api.Assertions.assertThat
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
@@ -18,8 +17,10 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.cache.CacheManager
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.test.context.ActiveProfiles
 
 /**
  * PostgreSQL 기능 통합 테스트
@@ -38,10 +39,12 @@ import org.springframework.jdbc.core.JdbcTemplate
  * @see PostgresLockStrategy
  * @see PostgresRateLimiter
  */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@ActiveProfiles("test")
 @Tag("integration")
 @Tag("postgresql")
 @DisplayName("PostgreSQL 기능 통합 테스트")
-class PostgresIntegrationTest : IntegrationTestBase() {
+class PostgresIntegrationTest {
 
     @Autowired
     private lateinit var dataSource: DataSource

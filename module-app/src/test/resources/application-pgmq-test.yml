@@ -1,0 +1,42 @@
+spring:
+  config:
+    activate:
+      on-profile: pgmq-test
+
+  # PGMQ Worker 테스트 설정
+  # 빠른 테스트를 위해 VT를 1초로 설정
+pgmq:
+  worker:
+    # 공통 설정
+    common:
+      polling-interval-ms: 100  # 빠른 폴링 (기본 1000ms)
+      batch-size: 1              # 테스트에서는 1개씩 처리
+      max-retries: 2             # 빠른 실패 확인
+      visibility-timeout-sec: 1  # 핵심: 1초 VT로 빠른 테스트
+
+    # Calculation Worker 테스트 설정
+    calculation:
+      enabled: true
+      polling-interval-ms: 100
+      batch-size: 1
+      max-retries: 2
+
+    # LikeSync Worker 테스트 설정
+    like-sync:
+      enabled: true
+      polling-interval-ms: 100
+      batch-size: 1
+      max-retries: 2
+
+    # Donation Worker 테스트 설정
+    donation:
+      enabled: true
+      polling-interval-ms: 100
+      batch-size: 1
+      max-retries: 2
+
+# 테스트용 큐 이름 접두사
+# 테스트 환경에서 큐 이름 충돌 방지
+test:
+  pgmq:
+    queue-prefix: "test_"

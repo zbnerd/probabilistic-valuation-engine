@@ -1,6 +1,11 @@
 package maple.expectation.support;
 
+import java.sql.Connection;
+import java.sql.Statement;
+import javax.sql.DataSource;
 import maple.expectation.config.ChaosTestConfig;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
@@ -16,11 +21,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * <p>Key features:
  *
  * <ul>
- *   <li>Single MySQL container shared across ALL tests (via ContainerManager singleton)
- *   <li>Single Redis container shared across ALL tests
- *   <li>Data cleanup between tests (TRUNCATE for MySQL, FLUSHDB for Redis)
+ *   <li>Single PostgreSQL container shared across ALL tests (via ContainerManager singleton)
+ *   <li>Data cleanup between tests (TRUNCATE for PostgreSQL)
  *   <li>Fast test execution (~100ms per test vs ~30s per test with individual containers)
  * </ul>
+ *
+ * <h3>V5 Migration (Issue #589, #590, #591)</h3>
+ *
+ * <p>MySQL and Redis containers removed. PostgreSQL-only mode for chaos tests.
  */
 @Testcontainers
 @SpringBootTest(classes = maple.expectation.ExpectationApplication.class)
@@ -30,8 +38,6 @@ public abstract class AbstractContainerBaseTest {
 
   @Autowired protected DataSource dataSource;
 
-  @Autowired protected RedisTemplate<String, String> redisTemplate;
-
   /**
    * Register dynamic properties for Spring Boot using ContainerManager singleton. This ensures
    * containers are started before Spring context loads.
@@ -39,60 +45,48 @@ public abstract class AbstractContainerBaseTest {
   @DynamicPropertySource
   static void registerContainerProperties(DynamicPropertyRegistry registry) {
     // Access ContainerManager to ensure containers are started
-    registry.add("spring.datasource.url", ContainerManager::getMySQLJdbcUrl);
-    registry.add("spring.datasource.username", ContainerManager::getMySQLUsername);
-    registry.add("spring.datasource.password", ContainerManager::getMySQLPassword);
-    registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
-    registry.add("spring.data.redis.host", ContainerManager::getRedisHost);
-    registry.add("spring.data.redis.port", () -> ContainerManager.getRedisPort().toString());
+    registry.add("spring.datasource.url", ContainerManager::getPostgresJdbcUrl);
+    registry.add("spring.datasource.username", ContainerManager::getPostgresUsername);
+    registry.add("spring.datasource.password", ContainerManager::getPostgresPassword);
+    registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
   }
 
   /** Clean up test data before each test. This ensures test isolation while reusing containers. */
   @BeforeEach
   void cleanupTestData() {
-    cleanupMySQL();
-    cleanupRedis();
+    cleanupPostgreSQL();
   }
 
-  /** Clean up MySQL data between tests. Uses TRUNCATE for fast cleanup (faster than DELETE). */
-  private void cleanupMySQL() {
+  /**
+   * Clean up PostgreSQL data between tests. Uses TRUNCATE for fast cleanup (faster than DELETE).
+   */
+  private void cleanupPostgreSQL() {
     try (Connection conn = dataSource.getConnection();
         Statement stmt = conn.createStatement()) {
 
-      // Disable foreign key checks for truncate
-      stmt.execute("SET FOREIGN_KEY_CHECKS = 0");
-
-      // Get all tables and truncate them
+      // Get all tables in the public schema (excluding PGMQ internal tables)
       var rs =
           stmt.executeQuery(
-              "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'testdb'");
-      StringBuilder truncateSql = new StringBuilder();
+              "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
+                  + "AND tablename NOT LIKE 'pgmq_%' AND tablename NOT LIKE 'q_%'");
+
       while (rs.next()) {
         String tableName = rs.getString(1);
-        truncateSql.append("TRUNCATE TABLE ").append(tableName).append(";");
+        try {
+          stmt.execute("TRUNCATE TABLE " + tableName + " CASCADE");
+        } catch (Exception e) {
+          // Log but continue with other tables
+          System.getLogger("ContainerCleanup")
+              .log(
+                  System.Logger.Level.DEBUG,
+                  "Could not truncate " + tableName + ": " + e.getMessage());
+        }
       }
-
-      if (truncateSql.length() > 0) {
-        stmt.execute(truncateSql.toString());
-      }
-
-      // Re-enable foreign key checks
-      stmt.execute("SET FOREIGN_KEY_CHECKS = 1");
 
     } catch (Exception e) {
       // Log but don't fail - some tests may not have tables yet
       System.getLogger("ContainerCleanup")
-          .log(System.Logger.Level.DEBUG, "MySQL cleanup: " + e.getMessage());
-    }
-  }
-
-  /** Clean up Redis data between tests. Uses FLUSHDB to clear all keys. */
-  private void cleanupRedis() {
-    try {
-      redisTemplate.getConnectionFactory().getConnection().flushDb();
-    } catch (Exception e) {
-      System.getLogger("ContainerCleanup")
-          .log(System.Logger.Level.DEBUG, "Redis cleanup: " + e.getMessage());
+          .log(System.Logger.Level.DEBUG, "PostgreSQL cleanup: " + e.getMessage());
     }
   }
 }

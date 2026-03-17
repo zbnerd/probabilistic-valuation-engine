@@ -1,6 +1,8 @@
 package maple.expectation.config;
 
 import maple.expectation.common.resource.ResourceLoader;
+import maple.expectation.infrastructure.ratelimit.config.RateLimitProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 
@@ -11,6 +13,9 @@ import org.springframework.context.annotation.Bean;
  * infrastructure beans.
  */
 @TestConfiguration
+@EnableConfigurationProperties({
+  RateLimitProperties.class,
+})
 public class ChaosTestConfig {
 
   /**

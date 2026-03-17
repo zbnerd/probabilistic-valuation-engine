@@ -147,3 +147,7 @@ chaos:
     cleanup:
       enabled: true  # Always cleanup after tests
       docker: true   # Cleanup Docker containers
+
+# Rate limiting disabled for chaos tests (no Redis/ProxyManager required)
+ratelimit:
+  enabled: false

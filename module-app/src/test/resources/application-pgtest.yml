@@ -1,6 +1,7 @@
 # PostgreSQL Testcontainers Test Profile
-# Used by PostgresContainerBaseTest and related tests
+# Used by IntegrationTestBase and related tests
 # Issue #547: PostgreSQL Migration
+# Issue #563: Integration Tests with Testcontainers + PGMQ
 
 spring:
   config:
@@ -8,12 +9,9 @@ spring:
       on-profile: pgtest
 
   datasource:
-    # Testcontainers will override these values via @DynamicPropertySource
-    # Static values here are fallback only
-    url: jdbc:postgresql://localhost:5432/maple_expectation_test
-    username: maple
-    password: test
-    driver-class-name: org.postgresql.Driver
+    # Testcontainers @ServiceConnection will provide all connection details
+    # Setting url to empty string prevents H2 fallback from base application.yml
+    url: ""
     hikari:
       maximum-pool-size: 5       # 테스트에서는 적게
       minimum-idle: 2
@@ -77,10 +75,40 @@ langchain4j:
   glm-4:
     chat-model:
       enabled: false
+      base-url: "http://localhost:8080"  # Dummy URL for test
+  open-ai:
+    chat-model:
+      enabled: false
+      api-key: "test-api-key"  # Dummy API key for test
+      base-url: "http://localhost:8080"  # Dummy URL for test
 
 # Disable rate limiting in test
 ratelimit:
   enabled: false
+
+# Cache configuration for test
+cache:
+  l2:
+    enabled: false  # Use Caffeine-only cache (no Redis)
+  specs:
+    equipment:
+      l1-ttl-minutes: 5
+      l1-max-size: 5000
+    cubeTrials:
+      l1-ttl-minutes: 10
+      l1-max-size: 5000
+    flameTrials:
+      l1-ttl-minutes: 10
+      l1-max-size: 5000
+    ocidCache:
+      l1-ttl-minutes: 30
+      l1-max-size: 5000
+    characterBasic:
+      l1-ttl-minutes: 15
+      l1-max-size: 5000
+    expectationV4:
+      l1-ttl-minutes: 60
+      l1-max-size: 5000
 
 # CORS for test
 cors:

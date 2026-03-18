@@ -59,7 +59,7 @@ class TestcontainersConfiguration {
                     "-c",
                     "full_page_writes=off",
                     "-c",
-                    "max_connections=50",
+                    "max_connections=100",
                 )
                 withInitScript("sql/init-pgmq.sql")
                 withReuse(true)

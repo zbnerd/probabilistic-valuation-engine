@@ -115,6 +115,7 @@ open class GameCharacterJpaEntity {
                 entity.characterImage = domain.characterImage
                 entity.basicInfoUpdatedAt = domain.basicInfoUpdatedAt
                 entity.likeCount = domain.likeCount
+                entity.version = domain.version
                 entity.updatedAt = domain.updatedAt ?: LocalDateTime.now()
                 entity
             }

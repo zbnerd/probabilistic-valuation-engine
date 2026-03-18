@@ -1,10 +1,17 @@
 package maple.expectation.test
 
 import jakarta.persistence.EntityManager
+import maple.expectation.config.TestcontainersConfiguration.Companion.postgresContainer
+import maple.expectation.core.port.out.EventPublisher
+import maple.expectation.infrastructure.cache.TieredCacheManager
+import maple.expectation.infrastructure.messaging.PgmqStreamPublisher
 import org.junit.jupiter.api.BeforeEach
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 
 /**
  * 통합 테스트 베이스 클래스
@@ -33,16 +40,45 @@ import org.springframework.test.context.ActiveProfiles
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = [
-        "spring.datasource.driver-class-name=org.postgresql.Driver",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect",
         "spring.jpa.properties.hibernate.default_batch_fetch_size=20",
         "spring.jpa.open-in-view=false",
-        "spring.datasource.hikari.maximum-pool-size=5",
+        "spring.datasource.hikari.maximum-pool-size=2",
+        "lock.datasource.pool-size=2",
     ],
 )
 @ActiveProfiles("pgtest")
 abstract class IntegrationTestBase {
+
+    companion object {
+        /**
+         * PostgreSQL 동적 프로퍼티 설정
+         *
+         * 컨테이너는 TestcontainersConfiguration에서 싱글톤으로 시작됨.
+         * 여기서는 동적 포트만 Spring Environment에 등록.
+         */
+        @JvmStatic
+        @DynamicPropertySource
+        fun postgresProperties(registry: DynamicPropertyRegistry) {
+            registry.add("spring.datasource.driver-class-name") { "org.postgresql.Driver" }
+            registry.add("spring.datasource.url") { postgresContainer.jdbcUrl }
+            registry.add("spring.datasource.username") { postgresContainer.username }
+            registry.add("spring.datasource.password") { postgresContainer.password }
+        }
+    }
+
+    // Mock TieredCacheManager to avoid Spring context loading issues
+    @MockBean
+    lateinit var tieredCacheManager: TieredCacheManager
+
+    // Mock PgmqStreamPublisher to avoid dependency on PGMQ infrastructure
+    @MockBean
+    lateinit var pgmqStreamPublisher: PgmqStreamPublisher
+
+    // Mock EventPublisher to avoid dependency on event publishing infrastructure
+    @MockBean
+    lateinit var eventPublisher: EventPublisher
 
     @Autowired
     lateinit var databaseCleaner: DatabaseCleaner
@@ -68,16 +104,45 @@ abstract class IntegrationTestBase {
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = [
-        "spring.datasource.driver-class-name=org.postgresql.Driver",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect",
         "spring.jpa.properties.hibernate.default_batch_fetch_size=20",
         "spring.jpa.open-in-view=false",
-        "spring.datasource.hikari.maximum-pool-size=5",
+        "spring.datasource.hikari.maximum-pool-size=2",
+        "lock.datasource.pool-size=2",
     ],
 )
 @ActiveProfiles("pgtest")
 abstract class ServiceIntegrationTestBase {
+
+    companion object {
+        /**
+         * PostgreSQL 동적 프로퍼티 설정
+         *
+         * 컨테이너는 TestcontainersConfiguration에서 싱글톤으로 시작됨.
+         * 여기서는 동적 포트만 Spring Environment에 등록.
+         */
+        @JvmStatic
+        @DynamicPropertySource
+        fun postgresProperties(registry: DynamicPropertyRegistry) {
+            registry.add("spring.datasource.driver-class-name") { "org.postgresql.Driver" }
+            registry.add("spring.datasource.url") { postgresContainer.jdbcUrl }
+            registry.add("spring.datasource.username") { postgresContainer.username }
+            registry.add("spring.datasource.password") { postgresContainer.password }
+        }
+    }
+
+    // Mock TieredCacheManager to avoid Spring context loading issues
+    @MockBean
+    lateinit var tieredCacheManager: TieredCacheManager
+
+    // Mock PgmqStreamPublisher to avoid dependency on PGMQ infrastructure
+    @MockBean
+    lateinit var pgmqStreamPublisher: PgmqStreamPublisher
+
+    // Mock EventPublisher to avoid dependency on event publishing infrastructure
+    @MockBean
+    lateinit var eventPublisher: EventPublisher
 
     @Autowired
     lateinit var databaseCleaner: DatabaseCleaner

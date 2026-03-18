@@ -1,14 +1,12 @@
 package maple.expectation.test
 
-import jakarta.persistence.EntityManager
-import jakarta.persistence.PersistenceContext
-import jakarta.persistence.Table
-import org.springframework.beans.factory.InitializingBean
+import javax.sql.DataSource
+import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 
 /**
- * 데이터베이스 정리 유틸리티
+ * 데이터베이스 정리 유틸리티 (pgtest 프로필용)
  *
  * <h3>규칙 준수 (Issue #547)</h3>
  *
@@ -16,6 +14,7 @@ import org.springframework.stereotype.Component
  *   <li>@BeforeEach에서 호출 - @AfterEach가 아님 (테스트 실패 시 오염 방지)
  *   <li>FK 무시하고 TRUNCATE - session_replication_role = 'replica'
  *   <li>PGMQ 내부 테이블 제외 - pgmq.* 테이블 건드리면 안 됨
+ *   <li>동적 테이블 조회 - 실제 존재하는 테이블만 TRUNCATE
  * </ul>
  *
  * <p>사용법:
@@ -29,58 +28,74 @@ import org.springframework.stereotype.Component
 @Component
 @Profile("pgtest")
 class DatabaseCleaner(
-    @PersistenceContext private val em: EntityManager,
-) : InitializingBean {
-
-    private lateinit var tableNames: List<String>
-
-    override fun afterPropertiesSet() {
-        tableNames =
-            em.metamodel.entities
-                .filter { it.javaType.isAnnotationPresent(Table::class.java) }
-                .mapNotNull {
-                    it.javaType.getAnnotation(Table::class.java)?.name
-                        ?: it.name.lowercase()
-                }
-                .filter { tableName ->
-                    // PGMQ 내부 테이블은 건드리면 안 됨
-                    !tableName.startsWith("pgmq") &&
-                        !tableName.startsWith("pg_") &&
-                        !tableName.startsWith("information_schema")
-                }
-    }
+    private val dataSource: DataSource,
+) {
+    private val log = LoggerFactory.getLogger(javaClass)
 
     /**
      * 모든 테이블 데이터 삭제
      *
-     * <p>FK 제약 조건을 무시하고 TRUNCATE 실행
+     * <p>FK 제약 조건을 무시하고 TRUNCATE 실행.
+     * <p>호출 시마다 테이블 목록을 새로 조회하여 동적 생성 테이블도 포함.
      */
     @Suppress("SqlSourceToSinkFlow")
     fun clean() {
-        em.flush()
+        dataSource.connection.use { conn ->
+            conn.autoCommit = false
+            conn.createStatement().use { stmt ->
+                // FK 무시 모드 활성화
+                stmt.execute("SET session_replication_role = 'replica'")
 
-        // FK 무시 모드 활성화
-        em.createNativeQuery("SET session_replication_role = 'replica'").executeUpdate()
+                // 현재 존재하는 모든 테이블 조회 (동적 생성 테이블 포함)
+                val rs = stmt.executeQuery(
+                    """
+                    SELECT tablename FROM pg_tables
+                    WHERE schemaname = 'public'
+                    AND tablename NOT LIKE 'pgmq\_%'  -- PGMQ 메타 테이블 제외
+                    AND tablename NOT LIKE 'pg_%'     -- 시스템 테이블 제외
+                    AND tablename NOT LIKE 'batch_%'  -- Spring Batch 메타 테이블 제외
+                    AND tablename NOT LIKE 'flyway_%' -- Flyway 메타 테이블 제외
+                    """.trimIndent(),
+                )
 
-        // 각 테이블 TRUNCATE
-        tableNames.forEach { tableName ->
-            em.createNativeQuery("TRUNCATE TABLE $tableName CASCADE").executeUpdate()
+                val tables = mutableListOf<String>()
+                while (rs.next()) {
+                    tables.add(rs.getString("tablename"))
+                }
+                rs.close()
+
+                // 각 테이블 TRUNCATE (테이블이 존재하는 경우에만)
+                tables.forEach { tableName ->
+                    try {
+                        stmt.execute("TRUNCATE TABLE \"$tableName\" CASCADE")
+                    } catch (e: Exception) {
+                        // 테이블이 존재하지 않으면 무시 (create-drop이 아직 테이블을 생성하지 않은 경우)
+                        log.debug("Table '$tableName' does not exist yet, skipping: ${e.message}")
+                    }
+                }
+
+                // FK 무시 모드 비활성화 (origin = 기본 모드)
+                stmt.execute("SET session_replication_role = 'origin'")
+            }
+            conn.commit()
         }
-
-        // FK 무시 모드 비활성화 (origin = 기본 모드)
-        em.createNativeQuery("SET session_replication_role = 'origin'").executeUpdate()
     }
 
     /**
      * 특정 테이블만 삭제
      */
     @Suppress("SqlSourceToSinkFlow")
-    fun clean(vararg tableNames: String) {
-        em.flush()
-        em.createNativeQuery("SET session_replication_role = 'replica'").executeUpdate()
-        tableNames.forEach { tableName ->
-            em.createNativeQuery("TRUNCATE TABLE $tableName CASCADE").executeUpdate()
+    fun clean(vararg tables: String) {
+        dataSource.connection.use { conn ->
+            conn.autoCommit = false
+            conn.createStatement().use { stmt ->
+                stmt.execute("SET session_replication_role = 'replica'")
+                tables.forEach { tableName ->
+                    stmt.execute("TRUNCATE TABLE \"$tableName\" CASCADE")
+                }
+                stmt.execute("SET session_replication_role = 'origin'")
+            }
+            conn.commit()
         }
-        em.createNativeQuery("SET session_replication_role = 'origin'").executeUpdate()
     }
 }

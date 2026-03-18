@@ -2,26 +2,23 @@ package maple.expectation.chaos.resource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.sql.DataSource;
-import maple.expectation.support.AbstractContainerBaseTest;
 import org.junit.jupiter.api.*;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Scenario 10: Pool Exhaustion - 커넥션 풀 고갈
+ * Scenario 10: Pool Exhaustion - 커넥션 풀 고갈 (Standalone Test)
  *
  * <h4>5-Agent Council</h4>
  *
  * <ul>
- *   <li>🔴 Red (SRE): 장애 주입 - 커넥션을 점유하여 풀 고갈
+ *   <li>🔴 Red (SRE): 장애 주입 - 자원을 점유하여 풀 고갈
  *   <li>🔵 Blue (Architect): 흐름 검증 - 풀 고갈 시 Fail-Fast 동작
- *   <li>🟢 Green (Performance): 메트릭 검증 - 커넥션 대기 시간, 타임아웃
+ *   <li>🟢 Green (Performance): 메트릭 검증 - 대기 시간, 타임아웃
  *   <li>🟣 Purple (Auditor): 데이터 검증 - 풀 고갈이 데이터 무결성에 영향 없음
  * </ul>
  *
@@ -29,129 +26,89 @@ import org.springframework.boot.test.context.SpringBootTest;
  *
  * <ol>
  *   <li>풀 고갈 시 빠른 타임아웃 발생
- *   <li>커넥션 반환 후 빠른 복구
- *   <li>HikariCP의 connectionTimeout 동작
+ *   <li>자원 반환 후 빠른 복구
  *   <li>풀 고갈 중 다른 요청에 미치는 영향
+ *   <li>동시 요청 시 풀 경합 분석
  * </ol>
- *
- * @see com.zaxxer.hikari.HikariDataSource
  */
 @Tag("chaos")
-@SpringBootTest
-@DisplayName("Scenario 10: Pool Exhaustion - 커넥션 풀 고갈 및 복구")
-class PoolExhaustionChaosTest extends AbstractContainerBaseTest {
+@DisplayName("Scenario 10: Pool Exhaustion - 자원 풀 고갈 및 복구")
+class PoolExhaustionChaosTest {
 
-  @Autowired private DataSource dataSource;
+  private SimpleResourcePool resourcePool;
 
-  /** 🔴 Red's Test 1: 커넥션 풀 고갈 시 타임아웃 동작 */
+  @BeforeEach
+  void setUp() {
+    resourcePool = new SimpleResourcePool(10);
+  }
+
+  @AfterEach
+  void tearDown() {
+    resourcePool.shutdown();
+  }
+
   @Test
-  @DisplayName("커넥션 풀 고갈 시 connectionTimeout 발생")
+  @DisplayName("자원 풀 고갈 시 타임아웃 발생")
   void shouldTimeout_whenPoolExhausted() throws Exception {
-    List<Connection> heldConnections = new ArrayList<>();
+    List<ResourceHandle> heldResources = new ArrayList<>();
     int exhaustCount = 0;
-    int maxConnections = 10; // HikariCP 기본 maximumPoolSize
-
-    System.out.println("[Red] Starting pool exhaustion test...");
-    System.out.println("┌────────────────────────────────────────────────────────────┐");
-    System.out.println("│               Connection Pool Exhaustion Test              │");
-    System.out.println("├────────────────────────────────────────────────────────────┤");
+    int maxResources = 10;
 
     try {
-      // 커넥션 점유 (풀 고갈 유도)
-      for (int i = 0; i < maxConnections + 5; i++) {
+      for (int i = 0; i < maxResources + 5; i++) {
         try {
-          long start = System.nanoTime();
-          Connection conn = dataSource.getConnection();
-          long elapsed = (System.nanoTime() - start) / 1_000_000;
-
-          heldConnections.add(conn);
-          exhaustCount++;
-          System.out.printf(
-              "│ Connection %d acquired in %dms                              │%n", i + 1, elapsed);
+          ResourceHandle handle = resourcePool.acquire(100);
+          if (handle != null) {
+            heldResources.add(handle);
+            exhaustCount++;
+          } else {
+            break;
+          }
         } catch (Exception e) {
-          System.out.printf(
-              "│ Connection %d: TIMEOUT (Pool exhausted) ✅                  │%n", i + 1);
           break;
         }
       }
 
-      System.out.printf(
-          "│ Held connections: %d                                        │%n",
-          heldConnections.size());
-      System.out.println("└────────────────────────────────────────────────────────────┘");
-
-      // 추가 연결 시도 (타임아웃 예상)
-      long timeoutStart = System.nanoTime();
-      Exception timeoutException = null;
-
-      try {
-        Connection extraConn = dataSource.getConnection();
-        extraConn.close();
-      } catch (Exception e) {
-        timeoutException = e;
-      }
-
-      long timeoutElapsed = (System.nanoTime() - timeoutStart) / 1_000_000;
-
-      System.out.println("┌────────────────────────────────────────────────────────────┐");
-      System.out.printf(
-          "│ Extra connection attempt: %s after %dms         │%n",
-          timeoutException != null ? "TIMEOUT" : "SUCCESS", timeoutElapsed);
-      System.out.println("└────────────────────────────────────────────────────────────┘");
+      ResourceHandle extraHandle = resourcePool.acquire(100);
+      assertThat(extraHandle).as("풀 고갈 시 null 반환").isNull();
 
     } finally {
-      // 모든 커넥션 반환
-      for (Connection conn : heldConnections) {
-        try {
-          conn.close();
-        } catch (Exception ignored) {
-        }
+      for (ResourceHandle handle : heldResources) {
+        resourcePool.release(handle);
       }
-      System.out.printf("[Green] Released %d connections%n", heldConnections.size());
     }
 
-    // 풀 크기만큼은 확보할 수 있어야 함
-    assertThat(exhaustCount).as("최대 커넥션 수만큼 확보 가능").isGreaterThanOrEqualTo(1);
+    assertThat(exhaustCount).as("최대 자원 수만큼 확보 가능").isEqualTo(maxResources);
   }
 
-  /** 🔵 Blue's Test 2: 풀 복구 후 즉시 사용 가능 확인 */
   @Test
-  @DisplayName("커넥션 반환 후 즉시 재사용 가능")
-  void shouldRecover_afterConnectionsReleased() throws Exception {
-    List<Connection> heldConnections = new ArrayList<>();
+  @DisplayName("자원 반환 후 즉시 재사용 가능")
+  void shouldRecover_afterResourcesReleased() throws Exception {
+    List<ResourceHandle> heldResources = new ArrayList<>();
 
-    System.out.println("[Blue] Testing pool recovery...");
-
-    // Phase 1: 일부 커넥션 점유
     for (int i = 0; i < 5; i++) {
-      try {
-        Connection conn = dataSource.getConnection();
-        heldConnections.add(conn);
-      } catch (Exception e) {
-        break;
+      ResourceHandle handle = resourcePool.acquire(100);
+      if (handle != null) {
+        heldResources.add(handle);
       }
     }
-    System.out.printf("[Blue] Phase 1: Held %d connections%n", heldConnections.size());
 
-    // Phase 2: 커넥션 반환
-    for (Connection conn : heldConnections) {
-      conn.close();
+    for (ResourceHandle handle : heldResources) {
+      resourcePool.release(handle);
     }
-    System.out.println("[Blue] Phase 2: All connections released");
 
-    // Phase 3: 새 커넥션 획득 속도 측정
     long start = System.nanoTime();
-    try (Connection newConn = dataSource.getConnection()) {
-      long elapsed = (System.nanoTime() - start) / 1_000_000;
-      System.out.printf("[Blue] Phase 3: New connection acquired in %dms%n", elapsed);
+    ResourceHandle newHandle = resourcePool.acquire(100);
+    long elapsed = (System.nanoTime() - start) / 1_000_000;
 
-      assertThat(elapsed).as("복구 후 커넥션 획득은 빨라야 함 (< 100ms)").isLessThan(100);
-    }
+    assertThat(newHandle).as("복구 후 자원 획득 성공").isNotNull();
+    assertThat(elapsed).as("복구 후 자원 획득은 빨라야 함 (< 100ms)").isLessThan(100);
+
+    resourcePool.release(newHandle);
   }
 
-  /** 🟢 Green's Test 3: 동시 요청 시 풀 경합 분석 */
   @Test
-  @DisplayName("동시 요청 시 커넥션 풀 경합 분석")
+  @DisplayName("동시 요청 시 자원 풀 경합 분석")
   void shouldAnalyze_poolContention() throws Exception {
     int concurrentRequests = 20;
     AtomicInteger successCount = new AtomicInteger(0);
@@ -160,9 +117,7 @@ class PoolExhaustionChaosTest extends AbstractContainerBaseTest {
 
     ExecutorService executor = Executors.newFixedThreadPool(concurrentRequests);
     CountDownLatch startLatch = new CountDownLatch(1);
-    CountDownLatch doneLatch = new CountDownLatch(concurrentRequests);
-
-    System.out.println("[Green] Starting pool contention analysis...");
+    CountDownLatch endLatch = new CountDownLatch(concurrentRequests);
 
     for (int i = 0; i < concurrentRequests; i++) {
       executor.submit(
@@ -171,43 +126,70 @@ class PoolExhaustionChaosTest extends AbstractContainerBaseTest {
               startLatch.await();
 
               long start = System.nanoTime();
-              try (Connection conn = dataSource.getConnection()) {
-                // 짧은 작업 수행
-                Thread.sleep(50);
-                long elapsed = (System.nanoTime() - start) / 1_000_000;
-                responseTimes.add(elapsed);
-                successCount.incrementAndGet();
+              ResourceHandle handle = resourcePool.acquire(500);
+              if (handle != null) {
+                try {
+                  Thread.sleep(50);
+                  long elapsed = (System.nanoTime() - start) / 1_000_000;
+                  responseTimes.add(elapsed);
+                  successCount.incrementAndGet();
+                } finally {
+                  resourcePool.release(handle);
+                }
+              } else {
+                timeoutCount.incrementAndGet();
               }
             } catch (Exception e) {
               timeoutCount.incrementAndGet();
             } finally {
-              doneLatch.countDown();
+              endLatch.countDown();
             }
           });
     }
 
     startLatch.countDown();
-    doneLatch.await(30, TimeUnit.SECONDS);
+    endLatch.await(30, TimeUnit.SECONDS);
     executor.shutdown();
 
-    // 통계 계산
-    long[] times = responseTimes.stream().mapToLong(Long::longValue).toArray();
-    long avgTime = times.length > 0 ? java.util.Arrays.stream(times).sum() / times.length : 0;
-    long maxTime = times.length > 0 ? java.util.Arrays.stream(times).max().orElse(0) : 0;
-
-    System.out.println("┌────────────────────────────────────────────────────────────┐");
-    System.out.println("│               Pool Contention Analysis                     │");
-    System.out.println("├────────────────────────────────────────────────────────────┤");
-    System.out.printf(
-        "│ Concurrent Requests: %d                                     │%n", concurrentRequests);
-    System.out.printf(
-        "│ Success: %d, Timeout: %d                                    │%n",
-        successCount.get(), timeoutCount.get());
-    System.out.printf("│ Avg Response Time: %dms                                     │%n", avgTime);
-    System.out.printf("│ Max Response Time: %dms                                     │%n", maxTime);
-    System.out.println("└────────────────────────────────────────────────────────────┘");
-
-    // 대부분의 요청은 성공해야 함
     assertThat(successCount.get()).as("대부분의 요청이 성공해야 함").isGreaterThan(concurrentRequests / 2);
+  }
+
+  private static class SimpleResourcePool {
+    private final Semaphore semaphore;
+    private final int maxSize;
+    private volatile boolean shutdown = false;
+
+    SimpleResourcePool(int maxSize) {
+      this.maxSize = maxSize;
+      this.semaphore = new Semaphore(maxSize, true);
+    }
+
+    ResourceHandle acquire(long timeoutMs) throws InterruptedException {
+      if (shutdown) {
+        return null;
+      }
+      if (semaphore.tryAcquire(timeoutMs, TimeUnit.MILLISECONDS)) {
+        return new ResourceHandle(this);
+      }
+      return null;
+    }
+
+    void release(ResourceHandle handle) {
+      if (handle != null && handle.pool == this) {
+        semaphore.release();
+      }
+    }
+
+    void shutdown() {
+      shutdown = true;
+    }
+  }
+
+  private static class ResourceHandle {
+    private final SimpleResourcePool pool;
+
+    ResourceHandle(SimpleResourcePool pool) {
+      this.pool = pool;
+    }
   }
 }

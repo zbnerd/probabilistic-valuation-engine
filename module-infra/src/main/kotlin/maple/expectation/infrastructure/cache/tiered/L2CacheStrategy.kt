@@ -63,6 +63,18 @@ interface L2CacheStrategy {
     fun evictAll(cacheName: String)
 
     /**
+     * Retrieve multiple values from L2 cache (batch query)
+     *
+     * <p>Default implementation iterates single gets for backward compatibility.
+     * Implementations should override for optimized batch retrieval.
+     *
+     * @param keys List of cache keys
+     * @param type Target type for deserialization
+     * @return Map of key to cached value (only found entries)
+     */
+    fun <T : Any> getAll(keys: List<String>, type: Class<T>): Map<String, T> = keys.mapNotNull { key -> get(key, type)?.let { key to it } }.toMap()
+
+    /**
      * Check if L2 cache is healthy and operational
      *
      * @return true if cache is available, false otherwise

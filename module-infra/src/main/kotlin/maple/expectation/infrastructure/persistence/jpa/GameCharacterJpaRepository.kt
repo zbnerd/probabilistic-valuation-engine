@@ -75,4 +75,12 @@ interface GameCharacterJpaRepository : JpaRepository<GameCharacterJpaEntity, Lon
     @Modifying
     @Query("UPDATE GameCharacterJpaEntity g SET g.likeCount = g.likeCount + :count WHERE g.userIgn = :userIgn")
     fun incrementLikeCount(userIgn: String?, count: Long)
+
+    /**
+     * Find all characters by user IGNs (batch query).
+     *
+     * @param userIgns list of in-game names
+     * @return list of matching JPA entities
+     */
+    fun findAllByUserIgnIn(userIgns: List<String>): List<GameCharacterJpaEntity>
 }

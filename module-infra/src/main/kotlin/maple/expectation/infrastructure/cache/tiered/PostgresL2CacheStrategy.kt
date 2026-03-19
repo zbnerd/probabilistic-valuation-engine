@@ -67,6 +67,7 @@ class PostgresL2CacheStrategy(
 
     // Metrics
     private val getCounter: Counter = meterRegistry.counter("cache.l2.strategy.get", "impl", "postgres")
+    private val getAllCounter: Counter = meterRegistry.counter("cache.l2.strategy.getall", "impl", "postgres")
     private val putCounter: Counter = meterRegistry.counter("cache.l2.strategy.put", "impl", "postgres")
     private val evictCounter: Counter = meterRegistry.counter("cache.l2.strategy.evict", "impl", "postgres")
     private val evictAllCounter: Counter = meterRegistry.counter("cache.l2.strategy.evictall", "impl", "postgres")
@@ -101,6 +102,48 @@ class PostgresL2CacheStrategy(
             context,
         ).also { error ->
             if (error != null) {
+                errorCounter.increment()
+            }
+        }
+    }
+
+    /**
+     * Batch retrieval from L2 cache using IN query
+     *
+     * <p>More efficient than individual gets when retrieving multiple keys.
+     */
+    override fun <T : Any> getAll(keys: List<String>, type: Class<T>): Map<String, T> {
+        if (keys.isEmpty()) return emptyMap()
+
+        val context = TaskContext.of("PostgresL2Strategy", "GetAll", "${keys.size}")
+
+        return executor.executeOrDefault(
+            {
+                getAllCounter.increment()
+
+                val placeholders = keys.map { "?" }.joinToString(",")
+                val sql = """
+                    SELECT cache_key, cache_value
+                    FROM cache_storage
+                    WHERE cache_key IN ($placeholders)
+                      AND expires_at > NOW()
+                """.trimIndent()
+
+                jdbcTemplate.query(
+                    sql,
+                    { rs, _ ->
+                        val key = rs.getString("cache_key")
+                        val bytes = rs.getBytes("cache_value")
+                        @Suppress("UNCHECKED_CAST")
+                        key to (objectMapper.readValue(bytes, type) as T)
+                    },
+                    *keys.toTypedArray(),
+                ).associate { it }
+            },
+            emptyMap(),
+            context,
+        ).also { error ->
+            if (error.isNotEmpty()) {
                 errorCounter.increment()
             }
         }

@@ -1,0 +1,396 @@
+# =============================================================================
+# MapleExpectation Load Testing Workflow
+# =============================================================================
+# Issue #562: Load Testing + Optimization
+#
+# Scheduled weekly load testing with manual trigger support
+# Tests application performance under various traffic scenarios
+#
+# Scenarios:
+# - normal: Baseline traffic (0.5 QPS)
+# - patch-day: High traffic (500 QPS) - strict thresholds
+# - viral-spike: Extreme traffic (2000 QPS) - lenient thresholds
+# - mixed: Combined workload pattern
+# =============================================================================
+
+name: Load Test
+
+on:
+  schedule:
+    # Weekly on Sunday at 2 AM UTC (11 AM KST)
+    - cron: '0 2 * * 0'
+
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Load test scenario'
+        required: true
+        type: choice
+        options:
+          - normal
+          - patch-day
+          - viral-spike
+          - mixed
+        default: 'normal'
+
+      duration:
+        description: 'Test duration (e.g., 60s, 5m, 10m)'
+        required: false
+        type: string
+        default: '60s'
+
+      matrix_run:
+        description: 'Run all scenarios in matrix (scheduled only)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  checks: write
+
+env:
+  JAVA_VERSION: '21'
+  GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.jvmargs=-Xmx2g'
+  APP_PORT: 8080
+  K6_VERSION: '0.52.0'
+
+concurrency:
+  group: load-test-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ==========================================================================
+  # JOB 1: Load Test Execution
+  # ==========================================================================
+  load-test:
+    name: Load Test - ${{ matrix.scenario || inputs.scenario }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Only use matrix on scheduled runs or when explicitly requested
+        scenario: ${{ github.event_name == 'schedule' || inputs.matrix_run == 'true' && ['normal', 'patch-day', 'viral-spike', 'mixed'] || [inputs.scenario] }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: false
+
+      - name: Grant Execute Permission
+        run: chmod +x gradlew
+
+      - name: Build Application JAR
+        run: |
+          echo "🔨 Building application JAR..."
+          ./gradlew clean :module-app:bootJar -x test --no-daemon --stacktrace
+        env:
+          SPRING_PROFILES_ACTIVE: test
+
+      - name: Create Results Directory
+        run: mkdir -p load-test/results
+
+      - name: Start Application
+        run: |
+          echo "🚀 Starting application on port ${APP_PORT}..."
+          JAR_FILE=$(find module-app/build/libs -name "*.jar" | head -n 1)
+          echo "Using JAR: $JAR_FILE"
+
+          # Start application in background with proper logging
+          nohup java -jar "$JAR_FILE" \
+            --server.port=${APP_PORT} \
+            --spring.profiles.active=test \
+            --spring.datasource.url=jdbc:h2:mem:testdb \
+            --spring.jpa.hibernate.ddl-auto=update \
+            > load-test/results/app.log 2>&1 &
+
+          # Save PID for cleanup
+          echo $! > load-test/results/app.pid
+
+          echo "Application started with PID: $(cat load-test/results/app.pid)"
+        env:
+          SPRING_PROFILES_ACTIVE: test
+
+      - name: Wait for Health Check
+        run: |
+          echo "⏳ Waiting for application to be ready..."
+
+          MAX_RETRIES=30
+          RETRY_COUNT=0
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if curl -f -s http://localhost:${APP_PORT}/actuator/health > /dev/null 2>&1; then
+              echo "✅ Application is ready after ${RETRY_COUNT} attempts"
+              exit 0
+            fi
+
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "Attempt ${RETRY_COUNT}/${MAX_RETRIES}: Application not ready yet..."
+            sleep 2
+          done
+
+          echo "❌ Application failed to start within timeout"
+          echo "=== Application Log ==="
+          cat load-test/results/app.log || true
+          exit 1
+
+      - name: Install K6
+        run: |
+          echo "📦 Installing K6..."
+
+          # Add K6 GPG key and repository
+          sudo gpg -k
+          gpg_key=$(curl -fsSL https://dl.k6.io/rpm/repo.asc | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg 2>&1)
+
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | \
+            sudo tee /etc/apt/sources.list.d/k6.list
+
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+          k6 version
+
+      - name: Configure Test Environment
+        run: |
+          echo "🔧 Configuring test environment..."
+
+          # Set environment variables for K6
+          echo "BASE_URL=http://localhost:${APP_PORT}" >> $GITHUB_ENV
+          echo "SCENARIO=${{ matrix.scenario || inputs.scenario }}" >> $GITHUB_ENV
+
+          # Parse duration input
+          DURATION="${{ inputs.duration }}"
+          if [[ "$DURATION" == *"s"* ]]; then
+            echo "TEST_DURATION_SEC=${DURATION%s}" >> $GITHUB_ENV
+          elif [[ "$DURATION" == *"m"* ]]; then
+            SECONDS=$((${DURATION%m} * 60))
+            echo "TEST_DURATION_SEC=$SECONDS" >> $GITHUB_ENV
+          else
+            echo "TEST_DURATION_SEC=60" >> $GITHUB_ENV
+          fi
+
+          echo "Test Configuration:"
+          echo "  Scenario: ${{ matrix.scenario || inputs.scenario }}"
+          echo "  Duration: $DURATION"
+          echo "  Base URL: http://localhost:${APP_PORT}"
+
+      - name: Run K6 Load Test
+        id: k6_test
+        run: |
+          echo "🚀 Running K6 load test - Scenario: ${{ matrix.scenario || inputs.scenario }}"
+
+          SCENARIO="${{ matrix.scenario || inputs.scenario }}"
+          DURATION="${{ inputs.duration }}"
+
+          # Build K6 command with environment variables
+          export BASE_URL="http://localhost:${APP_PORT}"
+          export SCENARIO="$SCENARIO"
+
+          # Run K6 test
+          k6 run \
+            --out json=load-test/results/k6-metrics-${SCENARIO}.json \
+            --summary-export=load-test/results/k6-summary-${SCENARIO}.json \
+            --duration "$DURATION" \
+            load-test/k6/main.js \
+            2>&1 | tee load-test/results/k6-output-${SCENARIO}.log
+
+          # Save exit code for threshold checking
+          echo "K6_EXIT_CODE=$?" >> $GITHUB_ENV
+        env:
+          BASE_URL: http://localhost:${APP_PORT}
+          SCENARIO: ${{ matrix.scenario || inputs.scenario }}
+
+      - name: Check Test Results
+        if: always()
+        run: |
+          echo "📊 Checking test results..."
+
+          SCENARIO="${{ matrix.scenario || inputs.scenario }}"
+          SUMMARY_FILE="load-test/results/k6-summary-${SCENARIO}.json"
+
+          if [ -f "$SUMMARY_FILE" ]; then
+            echo "=== K6 Summary ==="
+            cat "$SUMMARY_FILE" | jq '.' || echo "Failed to parse JSON"
+          fi
+
+          echo ""
+          echo "=== K6 Output Log ==="
+          tail -n 50 "load-test/results/k6-output-${SCENARIO}.log" || true
+
+          # Check if K6 passed threshold checks
+          if [ "${{ env.K6_EXIT_CODE }}" != "0" ]; then
+            echo "❌ K6 test failed threshold checks"
+            exit 1
+          fi
+
+          echo "✅ K6 test passed all thresholds"
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results-${{ matrix.scenario || inputs.scenario }}
+          path: |
+            load-test/results/k6-metrics-${{ matrix.scenario || inputs.scenario }}.json
+            load-test/results/k6-summary-${{ matrix.scenario || inputs.scenario }}.json
+            load-test/results/k6-output-${{ matrix.scenario || inputs.scenario }}.log
+            load-test/results/app.log
+          retention-days: 30
+
+      - name: Cleanup - Stop Application
+        if: always()
+        run: |
+          echo "🧹 Cleaning up..."
+
+          if [ -f load-test/results/app.pid ]; then
+            PID=$(cat load-test/results/app.pid)
+            echo "Stopping application (PID: $PID)..."
+
+            # Try graceful shutdown first
+            kill $PID 2>/dev/null || true
+            sleep 5
+
+            # Force kill if still running
+            if ps -p $PID > /dev/null 2>&1; then
+              echo "Force killing application..."
+              kill -9 $PID 2>/dev/null || true
+            fi
+
+            rm -f load-test/results/app.pid
+          fi
+
+          # Clean up any processes on the port
+          fuser -k -n tcp ${APP_PORT} 2>/dev/null || true
+
+      - name: Fail on Threshold Violation
+        if: steps.k6_test.outcome == 'failure'
+        run: |
+          echo "❌ Load test failed threshold checks"
+          echo "Please review the uploaded artifacts for detailed metrics"
+          exit 1
+
+  # ==========================================================================
+  # JOB 2: Notification on Failure (Optional)
+  # ==========================================================================
+  notify-on-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: load-test
+    if: failure()
+
+    steps:
+      - name: Send Slack Notification
+        if: vars.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          webhook: ${{ vars.SLACK_WEBHOOK_URL }}
+          payload: |
+            {
+              "text": "❌ Load Test Failed",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "❌ Load Test Failed"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Scenario:*\n${{ inputs.scenario || 'matrix' }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered by:*\n${{ github.event_name }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Workflow Run"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+
+  # ==========================================================================
+  # JOB 3: Summary Report (Matrix Only)
+  # ==========================================================================
+  summary-report:
+    name: Generate Summary Report
+    runs-on: ubuntu-latest
+    needs: load-test
+    if: always() && (github.event_name == 'schedule' || inputs.matrix_run == 'true')
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download All Results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-results
+        continue-on-error: true
+
+      - name: Generate Summary
+        run: |
+          echo "📊 Load Test Summary Report"
+          echo "=========================="
+          echo ""
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Scenarios tested:"
+
+          for dir in all-results/load-test-results-*; do
+            if [ -d "$dir" ]; then
+              SCENARIO=$(echo "$dir" | sed 's|all-results/load-test-results-||')
+              echo "  - $SCENARIO"
+
+              # Try to extract key metrics
+              SUMMARY_FILE="$dir/k6-summary-$SCENARIO.json"
+              if [ -f "$SUMMARY_FILE" ]; then
+                P99=$(cat "$SUMMARY_FILE" | jq -r '.metrics.http_req_duration.values."p(99)" // "N/A"')
+                ERROR_RATE=$(cat "$SUMMARY_FILE" | jq -r '.metrics.http_req_failed.values.rate // "N/A"')
+                echo "    p99: ${P99}ms, Error Rate: $(echo "scale=2; $ERROR_RATE * 100" | bc)%"
+              fi
+            fi
+          done
+
+      - name: Upload Combined Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-combined-report
+          path: all-results/
+          retention-days: 30
+        continue-on-error: true

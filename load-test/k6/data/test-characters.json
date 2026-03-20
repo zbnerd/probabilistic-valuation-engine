@@ -1,0 +1,75 @@
+{
+  "characters": [
+    {
+      "ign": "아델",
+      "ignEncoded": "%EC%95%84%EB%8D%B8",
+      "world": "크로아",
+      "description": "Primary test character - high activity"
+    },
+    {
+      "ign": "강은호",
+      "ignEncoded": "%EA%B0%95%EC%9D%80%ED%98%B8",
+      "world": "스카니아",
+      "description": "Secondary test character - moderate activity"
+    },
+    {
+      "ign": "진격캐넌",
+      "ignEncoded": "%EC%A7%84%EA%B2%A9%EC%BA%90%EB%84%8C",
+      "world": "베라",
+      "description": "Tertiary test character - variable activity"
+    },
+    {
+      "ign": "메이플킹",
+      "ignEncoded": "%EB%A9%94%EC%9D%B4%ED%94%8C%ED%82%B9",
+      "world": "루나",
+      "description": "Test character for cache miss scenarios"
+    },
+    {
+      "ign": "하이퍼버스터",
+      "ignEncoded": "%ED%95%98%EC%9D%B4%ED%8D%BC%EB%B2%84%EC%8A%A4%ED%84%B0",
+      "world": "제니스",
+      "description": "Test character for heavy equipment data"
+    },
+    {
+      "ign": "레전드히어로",
+      "ignEncoded": "%EB%A0%88%EC%A0%A0%EB%93%9C%ED%9E%88%EC%96%B4%EB%A1%9C",
+      "world": "유니온",
+      "description": "Test character for union data scenarios"
+    },
+    {
+      "ign": "다크나이트",
+      "ignEncoded": "%EB%8B%A4%ED%81%AC%EB%82%98%EC%9D%B4%ED%8A%B8",
+      "world": "스카니아",
+      "description": "Test character - popular world"
+    },
+    {
+      "ign": "팔라딘마스터",
+      "ignEncoded": "%ED%8C%94%EB%9D%BC%EB%94%98%EB%A7%88%EC%8A%A4%ED%84%B0",
+      "world": "크로아",
+      "description": "Test character - same world as primary"
+    },
+    {
+      "ign": "보우마스터",
+      "ignEncoded": "%EB%B3%B4%EC%9A%B0%EB%A7%88%EC%8A%A4%ED%84%B0",
+      "world": "베라",
+      "description": "Test character - archer class"
+    },
+    {
+      "ign": "나이트로드",
+      "ignEncoded": "%EB%82%98%EC%9D%B4%ED%8A%B8%EB%A1%9C%EB%93%9C",
+      "world": "루나",
+      "description": "Test character - thief class"
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "lastUpdated": "2024-01-01",
+    "source": "load-test/wrk-v4-expectation.lua",
+    "notes": [
+      "Characters are real IGNs from the Korean MapleStory community",
+      "Use 'ignEncoded' for URL path construction",
+      "Distribution: 3 primary + 7 secondary characters",
+      "World distribution: 2 Scania, 2 Croa, 2 Luna, 2 Vera, 1 Union, 1 Zenith"
+    ]
+  }
+}

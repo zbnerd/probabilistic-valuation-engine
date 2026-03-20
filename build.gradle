@@ -245,3 +245,87 @@ subprojects {
         }
     }
 }
+
+// ========================================
+// Load Testing Tasks
+// K6 performance testing scenarios
+// ========================================
+
+// Create results directory for load test outputs
+tasks.register('createResultsDir') {
+    doLast {
+        def resultsDir = file('load-test/results')
+        if (!resultsDir.exists()) {
+            resultsDir.mkdirs()
+        }
+    }
+}
+
+// Main load test task with configurable scenario
+tasks.register('loadTest', Exec) {
+    group = 'verification'
+    description = 'Run K6 load test with specified scenario (default: patch-day)'
+
+    workingDir project.rootDir
+    def resultsDir = file('load-test/results')
+
+    dependsOn 'createResultsDir'
+
+    def scenario = project.findProperty('scenario') ?: 'patch-day'
+
+    environment 'SCENARIO', scenario
+    commandLine 'k6', 'run', 'load-test/k6/main.js'
+
+    doFirst {
+        if (!file('load-test/k6/main.js').exists()) {
+            throw new GradleException('K6 test file not found: load-test/k6/main.js')
+        }
+    }
+}
+
+// Generate comparison report between two test runs
+tasks.register('loadTestReport', Exec) {
+    group = 'verification'
+    description = 'Generate comparison report from two test result files'
+
+    workingDir project.rootDir
+
+    def beforeFile = project.findProperty('beforeFile')
+    def afterFile = project.findProperty('afterFile')
+
+    doFirst {
+        if (!beforeFile || !afterFile) {
+            throw new GradleException('Both beforeFile and afterFile properties are required. Usage: ./gradlew loadTestReport -PbeforeFile=<path> -PafterFile=<path>')
+        }
+        if (!file(beforeFile).exists()) {
+            throw new GradleException("Before file not found: ${beforeFile}")
+        }
+        if (!file(afterFile).exists()) {
+            throw new GradleException("After file not found: ${afterFile}")
+        }
+    }
+
+    commandLine './load-test/scripts/generate-report.sh', beforeFile, afterFile
+}
+
+// Quick smoke test for CI validation
+tasks.register('loadTestQuick', Exec) {
+    group = 'verification'
+    description = 'Quick load test validation (30s, 10 VUs for CI smoke testing)'
+
+    workingDir project.rootDir
+
+    dependsOn 'createResultsDir'
+
+    environment 'DURATION', '30s'
+    environment 'VUS', '10'
+    environment 'SCENARIO', 'quick'
+
+    commandLine 'k6', 'run', 'load-test/k6/main.js'
+
+    doFirst {
+        if (!file('load-test/k6/main.js').exists()) {
+            throw new GradleException('K6 test file not found: load-test/k6/main.js')
+        }
+    }
+}

@@ -22,7 +22,6 @@ import kotlinx.coroutines.withTimeout
 import maple.expectation.infrastructure.config.AdaptiveMicroBatchProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.Cache
 
 private val log = KotlinLogging.logger {}
@@ -71,7 +70,7 @@ private val log = KotlinLogging.logger {}
  */
 // Note: @Service removed - this is a generic class that must be instantiated manually with specific loaders
 // Used only in tests and specialized configurations
-@EnableConfigurationProperties(AdaptiveMicroBatchProperties::class)
+// AdaptiveMicroBatchProperties is enabled via AdaptiveMicroBatchConfig
 class AdaptiveMicroBatchUserService<T : Any>(
     private val properties: AdaptiveMicroBatchProperties,
     private val logicExecutor: LogicExecutor,

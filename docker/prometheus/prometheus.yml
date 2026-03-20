@@ -6,7 +6,9 @@ global:
 
 # Rule files
 rule_files:
-  - "alert_rules.yml"
+  - "rules/alert_rules.yml"
+  - "rules/lock-alerts.yml"
+  - "rules/load-test-rules.yml"
 
 # Alertmanager configuration
 alerting:

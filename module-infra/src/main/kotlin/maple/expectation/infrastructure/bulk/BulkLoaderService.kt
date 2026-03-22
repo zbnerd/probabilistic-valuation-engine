@@ -58,8 +58,8 @@ class BulkLoaderService(
     private val log = LoggerFactory.getLogger(BulkLoaderService::class.java)
 
     companion object {
-        private const val LOCK_KEY = "bulk:load:lock"
-        private const val LOCK_WAIT_TIME_SECONDS = 0L
+        private const val LOCK_KEY = "bulk:load:lock:v2"
+        private const val LOCK_WAIT_TIME_SECONDS = 5L
         private const val LOCK_LEASE_TIME_SECONDS = 3600L
         private const val BACKPRESSURE_THRESHOLD = 1000
         private const val PROGRESS_LOG_INTERVAL = 100

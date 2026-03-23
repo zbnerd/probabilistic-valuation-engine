@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.persistence.repository
 
-import java.math.BigDecimal
 import maple.expectation.domain.v2.EquipmentExpectationSummary
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
@@ -14,6 +13,13 @@ import org.springframework.transaction.annotation.Transactional
  *
  * <p><strong>P1-11 Multi-DataSource:</strong> Uses explicit `"transactionManager"` qualifier
  * to prevent ambiguity in multi-datasource environments (MongoDB read replicas).
+ *
+ * <h3>성능 최적화 (2026-03-23)</h3>
+ *
+ * <ul>
+ *   <li>BigDecimal → Double로 변경하여 계산 비용 절감
+ *   <li>모든 비용 필드를 Double로 저장
+ * </ul>
  *
  * @see EquipmentExpectationSummary 연관 엔티티
  * @see <a href="../../../../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
@@ -66,10 +72,10 @@ interface EquipmentExpectationSummaryRepository : JpaRepository<EquipmentExpecta
     fun upsertExpectationSummary(
         @Param("gameCharacterId") gameCharacterId: Long,
         @Param("presetNo") presetNo: Int,
-        @Param("totalExpectedCost") totalExpectedCost: BigDecimal,
-        @Param("blackCubeCost") blackCubeCost: BigDecimal,
-        @Param("redCubeCost") redCubeCost: BigDecimal,
-        @Param("additionalCubeCost") additionalCubeCost: BigDecimal,
-        @Param("starforceCost") starforceCost: BigDecimal,
+        @Param("totalExpectedCost") totalExpectedCost: Double,
+        @Param("blackCubeCost") blackCubeCost: Double,
+        @Param("redCubeCost") redCubeCost: Double,
+        @Param("additionalCubeCost") additionalCubeCost: Double,
+        @Param("starforceCost") starforceCost: Double,
     )
 }

@@ -1,6 +1,5 @@
 package maple.expectation.application.service.calculator.v4;
 
-import java.math.BigDecimal;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 
@@ -15,6 +14,13 @@ import lombok.RequiredArgsConstructor;
  *
  * <p>새로운 강화 타입 추가 시 이 클래스를 상속하여 확장
  *
+ * <h3>성능 최적화 (2026-03-23)</h3>
+ *
+ * <ul>
+ *   <li>BigDecimal → Double로 변경하여 계산 비용 절감
+ *   <li>모든 반환 타입을 Double로 통일
+ * </ul>
+ *
  * @see EquipmentExpectationCalculator 대상 인터페이스
  */
 @RequiredArgsConstructor
@@ -23,7 +29,7 @@ public abstract class EquipmentEnhanceDecorator implements EquipmentExpectationC
   protected final EquipmentExpectationCalculator target;
 
   @Override
-  public BigDecimal calculateCost() {
+  public double calculateCost() {
     return target.calculateCost();
   }
 
@@ -33,7 +39,7 @@ public abstract class EquipmentEnhanceDecorator implements EquipmentExpectationC
   }
 
   @Override
-  public Optional<BigDecimal> getTrials() {
+  public Optional<Double> getTrials() {
     return target.getTrials();
   }
 

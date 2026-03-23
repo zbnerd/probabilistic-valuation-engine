@@ -126,7 +126,7 @@ class GameCharacterControllerV4(
             response.userIgn,
             response.calculatedAt,
             response.fromCache,
-            if (filteredPresets.isEmpty()) BigDecimal.ZERO else filteredPresets[0].totalExpectedCost,
+            if (filteredPresets.isEmpty()) 0.0 else filteredPresets[0].totalExpectedCost,
             if (filteredPresets.isEmpty()) "0" else filteredPresets[0].totalCostText,
             if (filteredPresets.isEmpty()) EquipmentExpectationResponseV4.CostBreakdownDto.empty() else filteredPresets[0].costBreakdown,
             response.maxPresetNo,

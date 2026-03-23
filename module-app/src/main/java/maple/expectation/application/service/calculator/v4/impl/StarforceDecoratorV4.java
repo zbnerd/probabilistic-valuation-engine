@@ -1,7 +1,5 @@
 package maple.expectation.application.service.calculator.v4.impl;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Optional;
 import maple.expectation.application.service.calculator.v4.EquipmentEnhanceDecorator;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator;
@@ -33,7 +31,7 @@ public class StarforceDecoratorV4 extends EquipmentEnhanceDecorator {
   private final int currentStar;
   private final int targetStar;
   private final int itemLevel;
-  private BigDecimal starforceCost;
+  private Double starforceCost;
 
   /**
    * 스타포스 데코레이터 생성
@@ -67,10 +65,10 @@ public class StarforceDecoratorV4 extends EquipmentEnhanceDecorator {
   }
 
   @Override
-  public BigDecimal calculateCost() {
-    BigDecimal previousCost = super.calculateCost();
-    BigDecimal sfCost = calculateStarforceCost();
-    return previousCost.add(sfCost);
+  public double calculateCost() {
+    double previousCost = super.calculateCost();
+    double sfCost = calculateStarforceCost();
+    return previousCost + sfCost;
   }
 
   /**
@@ -80,24 +78,23 @@ public class StarforceDecoratorV4 extends EquipmentEnhanceDecorator {
    *
    * @return 스타포스 기대 비용
    */
-  public BigDecimal calculateStarforceCost() {
+  public double calculateStarforceCost() {
     if (starforceCost == null) {
       // 이미 목표 스타에 도달한 경우
       if (currentStar >= targetStar) {
-        starforceCost = BigDecimal.ZERO;
+        starforceCost = 0.0;
       } else {
-        // Lookup Table에서 기대값 조회
+        // Lookup Table에서 기대값 조회 (이미 Double 반환)
         starforceCost =
             lookupPort
-                .getExpectedCost(currentStar, targetStar, itemLevel)
-                .setScale(PRECISION_SCALE, RoundingMode.HALF_UP);
+                .getExpectedCost(currentStar, targetStar, itemLevel);
       }
     }
     return starforceCost;
   }
 
   @Override
-  public Optional<BigDecimal> getTrials() {
+  public Optional<Double> getTrials() {
     // 스타포스는 단순 시도 횟수로 표현하기 어려움 (성공/실패/파괴 복합 확률)
     // 대신 calculateStarforceCost()를 사용하여 기대 비용 제공
     return Optional.empty();
@@ -106,8 +103,8 @@ public class StarforceDecoratorV4 extends EquipmentEnhanceDecorator {
   @Override
   public CostBreakdown getDetailedCosts() {
     CostBreakdown base = super.getDetailedCosts();
-    BigDecimal sfCost = calculateStarforceCost();
-    return base.withStarforce(base.starforceCost().add(sfCost));
+    double sfCost = calculateStarforceCost();
+    return base.withStarforce(base.starforceCost() + sfCost);
   }
 
   @Override

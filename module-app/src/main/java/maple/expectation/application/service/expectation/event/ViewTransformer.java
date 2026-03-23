@@ -204,22 +204,18 @@ public class ViewTransformer {
   /**
    * Parse cost string to Long (mesos units).
    *
-   * <p>Handles Korean number format with commas as thousand separators. Decimal points are handled
-   * by BigDecimal parsing.
-   *
-   * <p>ADR-085 P1 Fix: Use BigDecimal instead of string manipulation to correctly handle decimal
-   * values.
+   * <p>Handles Korean number format with commas as thousand separators.
    *
    * <p>Examples:
    *
    * <ul>
-   *   <li>"1,234.56" -> 1234 (decimal truncated)
+   *   <li>"1,234.56" -> 1235 (rounded)
    *   <li>"100" -> 100
    *   <li>"50.25" -> 50
    *   <li>null/blank -> 0
    * </ul>
    *
-   * @param costStr Cost string from BigDecimal serialization
+   * @param costStr Cost string from Double serialization
    * @return Long value in mesos units
    */
   private Long parseCostToLong(String costStr) {
@@ -229,19 +225,19 @@ public class ViewTransformer {
     return parseSafely(
         () -> {
           String cleaned = costStr.replace(",", ""); // Remove thousand separators
-          BigDecimal decimal = new BigDecimal(cleaned);
-          return decimal.longValue(); // Truncate decimal part
+          double value = Double.parseDouble(cleaned);
+          return Math.round(value); // Round to nearest long
         },
         0L);
   }
 
   /**
-   * Convert BigDecimal to Long (mesos units).
+   * Convert Double to Long (mesos units).
    *
    * <p>Null-safe conversion.
    */
-  private Long toLong(BigDecimal value) {
-    return value != null ? value.longValue() : 0L;
+  private Long toLong(Double value) {
+    return value != null ? (long) Math.round(value) : 0L;
   }
 
   /**

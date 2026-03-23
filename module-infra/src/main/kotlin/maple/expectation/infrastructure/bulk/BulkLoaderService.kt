@@ -21,6 +21,7 @@ import maple.expectation.infrastructure.config.BulkLoadProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lock.LockStrategy
+import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheStrategy
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -120,19 +121,29 @@ class BulkLoaderService(
             stopRequested.set(false)
             isRunning.set(true)
 
-            val ignList = readCsvFile(path)
+            // Disable L2 cache writes during bulk loading for performance
+            PostgresL2CacheStrategy.disableL2Writes.set(true)
+            log.info("[BulkLoaderService] L2 cache writes disabled for bulk loading")
 
-            val total = ignList.size
-            totalCharacters.set(total.toLong())
-            log.info("[BulkLoaderService] Read {} characters from CSV", total)
+            try {
+                val ignList = readCsvFile(path)
 
-            if (total == 0) {
-                return@executeWithLock CompletableFuture.completedFuture(
-                    LoadResult(0, 0, 0, 0, 0),
-                )
+                val total = ignList.size
+                totalCharacters.set(total.toLong())
+                log.info("[BulkLoaderService] Read {} characters from CSV", total)
+
+                if (total == 0) {
+                    return@executeWithLock CompletableFuture.completedFuture(
+                        LoadResult(0, 0, 0, 0, 0),
+                    )
+                }
+
+                processBatch(ignList, emptySet(), 0, total, start, force)
+            } finally {
+                // Re-enable L2 cache writes after bulk loading completes
+                PostgresL2CacheStrategy.disableL2Writes.set(false)
+                log.info("[BulkLoaderService] L2 cache writes re-enabled")
             }
-
-            processBatch(ignList, emptySet(), 0, total, start, force)
         }
     }
 

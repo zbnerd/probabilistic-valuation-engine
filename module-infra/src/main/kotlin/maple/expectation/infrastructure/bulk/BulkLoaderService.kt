@@ -8,6 +8,8 @@ import java.nio.file.Paths
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -64,6 +66,10 @@ class BulkLoaderService(
         private const val BACKPRESSURE_THRESHOLD = 1000
         private const val PROGRESS_LOG_INTERVAL = 100
         private const val CHECKPOINT_INTERVAL = 500
+
+        // Bounded executor for bulk loading - prevents ForkJoinPool exhaustion
+        // 10 threads: matches semaphore permits to avoid Nexon API rate limiting
+        private val BULK_EXECUTOR: ExecutorService = Executors.newFixedThreadPool(10)
     }
 
     // State
@@ -252,19 +258,17 @@ class BulkLoaderService(
         val futures = mutableListOf<CompletableFuture<Void>>()
 
         ignList.forEachIndexed { index, ign ->
-            val future = CompletableFuture.runAsync {
+            val future = CompletableFuture.runAsync({
                 semaphore.acquire()
-                executor.executeWithFinally(
-                    task = {
-                        processCharacter(
-                            ign, force, completedSet, loaded, failed, skipped,
-                            total, start, startIndex, index,
-                        )
-                    },
-                    finallyBlock = { semaphore.release() },
-                    TaskContext.of("BulkLoaderService", "processCharacter", ign),
-                )
-            }
+                try {
+                    processCharacter(
+                        ign, force, completedSet, loaded, failed, skipped,
+                        total, start, startIndex, index,
+                    )
+                } finally {
+                    semaphore.release()
+                }
+            }, BULK_EXECUTOR) // Use bounded executor instead of ForkJoinPool
             futures.add(future)
         }
 
@@ -338,6 +342,7 @@ class BulkLoaderService(
         }
 
         // Load character with recovery using executeOrCatch (returns Unit?)
+        val singleStart = System.currentTimeMillis()
         val result: Unit? = executor.executeOrCatch(
             task = {
                 cacheWarmupPort.warmup(ign, force)
@@ -354,6 +359,8 @@ class BulkLoaderService(
             },
             context = TaskContext.of("BulkLoaderService", "warmup", ign),
         )
+        val singleElapsed = System.currentTimeMillis() - singleStart
+        log.info("[BulkLoaderService] Single character load: ign={} took {}ms", ign, singleElapsed)
 
         // Progress logging
         val currentLoaded = loaded.get()
@@ -481,3 +488,6 @@ class BulkLoaderService(
         isRunning.set(false)
     }
 }
+// DevTools warm restart test - 09:56:52
+
+// Warm restart test 09:57:35

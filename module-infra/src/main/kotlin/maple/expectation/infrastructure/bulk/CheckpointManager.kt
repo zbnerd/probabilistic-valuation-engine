@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.bulk
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.File
@@ -19,6 +20,7 @@ class CheckpointManager(
 ) {
     private val log = LoggerFactory.getLogger(CheckpointManager::class.java)
     private val mapper: ObjectMapper = jacksonObjectMapper()
+        .registerModule(JavaTimeModule())
 
     data class Checkpoint(
         val timestamp: LocalDateTime,

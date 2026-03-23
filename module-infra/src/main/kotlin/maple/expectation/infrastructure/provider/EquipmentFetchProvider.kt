@@ -45,6 +45,8 @@ import org.springframework.stereotype.Component
 class EquipmentFetchProvider(
     private val nexonApiClient: NexonApiClient,
 ) {
+    private val logger = org.slf4j.LoggerFactory.getLogger(EquipmentFetchProvider::class.java)
+
     /**
      * 캐시 적용 장비 데이터 조회
      *
@@ -56,11 +58,19 @@ class EquipmentFetchProvider(
      * @return 장비 응답 (캐시 HIT 시 즉시 반환, MISS 시 API 호출)
      */
     @NexonDataCache
-    @Cacheable(value = ["equipment"], key = "#ocid")
-    fun fetchWithCache(ocid: String): EquipmentResponse = nexonApiClient
-        .getItemDataByOcid(ocid)
-        .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .join()
+    @Cacheable(value = ["equipment"], key = "#ocid", unless = "#root == null")
+    fun fetchWithCache(ocid: String): EquipmentResponse {
+        val start = System.currentTimeMillis()
+        val response = nexonApiClient
+            .getItemDataByOcid(ocid)
+            .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .join()
+        val elapsed = System.currentTimeMillis() - start
+        if (elapsed > 100) {
+            logger.warn("[EquipmentProvider] Slow API fetch: ocid={} took {}ms", ocid, elapsed)
+        }
+        return response
+    }
 
     private companion object {
         private const val API_TIMEOUT_SECONDS = 10L

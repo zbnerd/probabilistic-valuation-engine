@@ -63,6 +63,12 @@ class PostgresL2CacheStrategy(
     companion object {
         private val log = LoggerFactory.getLogger(PostgresL2CacheStrategy::class.java)
         private const val KEY_VERSION = "v1"
+
+        /**
+         * ThreadLocal flag to disable L2 cache writes during bulk loading.
+         * When true, put() operations are skipped to avoid Postgres write overhead.
+         */
+        val disableL2Writes: ThreadLocal<Boolean> = ThreadLocal.withInitial { false }
     }
 
     // Metrics
@@ -94,8 +100,10 @@ class PostgresL2CacheStrategy(
                 )
 
                 result?.let { bytes ->
+                    // Deserialize as TypedValue wrapper to preserve type information
+                    val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
                     @Suppress("UNCHECKED_CAST")
-                    objectMapper.readValue(bytes, type) as? T
+                    typedValue.value as? T
                 }
             },
             null,
@@ -134,8 +142,10 @@ class PostgresL2CacheStrategy(
                     { rs, _ ->
                         val key = rs.getString("cache_key")
                         val bytes = rs.getBytes("cache_value")
+                        // Deserialize as TypedValue wrapper to preserve type information
+                        val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
                         @Suppress("UNCHECKED_CAST")
-                        key to (objectMapper.readValue(bytes, type) as T)
+                        key to (typedValue.value as T)
                     },
                     *keys.toTypedArray(),
                 ).associate { it }
@@ -150,14 +160,21 @@ class PostgresL2CacheStrategy(
     }
 
     override fun put(key: String, value: Any, ttlMinutes: Long) {
+        // Skip L2 writes if disabled (e.g., during bulk loading)
+        if (disableL2Writes.get() == true) {
+            log.debug("[PostgresL2] Skipping L2 write (disabled): key={}", key)
+            return
+        }
+
         val context = TaskContext.of("PostgresL2Strategy", "Put", key)
 
         executor.executeVoidJava(
             {
                 putCounter.increment()
 
-                // Serialize value to JSON bytes
-                val valueBytes: ByteArray = objectMapper.writeValueAsBytes(value)
+                // Wrap value in TypedValue to preserve type information during deserialization
+                val typedValue = TypedValue(value)
+                val valueBytes: ByteArray = objectMapper.writeValueAsBytes(typedValue)
 
                 // Calculate expiration timestamp
                 val expiresAt = Timestamp.from(

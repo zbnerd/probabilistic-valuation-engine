@@ -1,0 +1,107 @@
+# application-vultr.yml
+# Vultr Seoul KR environment configuration
+
+server:
+  tomcat:
+    threads:
+      max: 100
+    max-http-post-size: 2MB
+
+spring:
+  config:
+    activate:
+      on-profile: vultr
+
+  datasource:
+    # PostgreSQL Configuration for Vultr Seoul
+    url: jdbc:postgresql://${DB_SERVER_IP:158.247.218.6}:5432/maple_expectation
+    username: ${DB_USER:maple}
+    password: ${DB_ROOT_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      maximum-pool-size: 100
+      minimum-idle: 50
+      leak-detection-threshold: 60000
+      register-mbeans: true
+      connection-timeout: 3000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none  # Flyway manages schema
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
+
+  batch:
+    jdbc:
+      initialize-schema: always
+    job:
+      enabled: false  # Disable schedulers for initial setup
+
+# Discord Alert (optional)
+alert:
+  discord:
+    webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
+
+# CORS
+cors:
+  allowed-origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+
+# V5 Stateless Architecture
+app:
+  buffer:
+    redis:
+      enabled: false
+    postgres:
+      enabled: true
+  event-publisher:
+    type: pgmq
+  aop:
+    trace:
+      enabled: true
+  v5:
+    enabled: true
+    query-side-enabled: true
+
+# Rate Limiting
+ratelimit:
+  enabled: false  # Disable for initial testing
+
+# Disable schedulers
+scheduler:
+  nexon-data-collection:
+    enabled: false
+  warmup:
+    enabled: false
+  like-sync:
+    enabled: false
+  expectation-sync:
+    enabled: false
+  popular-character-warmup:
+    enabled: false
+
+outbox:
+  scheduler:
+    nexon-api-outbox:
+      enabled: false
+
+# SpringDoc (Swagger) - enabled for testing
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+# Disable LangChain4j
+langchain4j:
+  glm-4:
+    chat-model:
+      enabled: false

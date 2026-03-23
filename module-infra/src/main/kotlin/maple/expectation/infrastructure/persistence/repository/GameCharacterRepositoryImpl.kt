@@ -2,6 +2,8 @@ package maple.expectation.infrastructure.persistence.repository
 
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.domain.repository.GameCharacterRepository as DomainGameCharacterRepository
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity
 import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepository
 import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepositoryCustom
@@ -23,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional
 open class GameCharacterRepositoryImpl(
     private val jpaRepo: GameCharacterJpaRepository,
     private val jpaCustomRepo: GameCharacterJpaRepositoryCustom,
+    private val logicExecutor: LogicExecutor,
 ) : DomainGameCharacterRepository {
 
     @Nullable
@@ -52,5 +55,17 @@ open class GameCharacterRepositoryImpl(
 
     override fun incrementLikeCount(userIgn: String, count: Long) {
         jpaRepo.incrementLikeCount(userIgn, count)
+    }
+
+    override fun findByUserIgnIn(userIgns: List<String>): Map<String, GameCharacter> {
+        if (userIgns.isEmpty()) return emptyMap()
+
+        val context = TaskContext.of("GameCharacterRepository", "FindByUserIgnIn", "${userIgns.size}")
+
+        return logicExecutor.executeOrDefault(
+            { jpaRepo.findAllByUserIgnIn(userIgns).associate { it.userIgn!! to it.toDomain() } },
+            emptyMap(),
+            context,
+        )
     }
 }

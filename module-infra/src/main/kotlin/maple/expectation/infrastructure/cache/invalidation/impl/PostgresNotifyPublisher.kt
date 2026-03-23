@@ -40,7 +40,7 @@ class PostgresNotifyPublisher(
 ) : CacheInvalidationPublisher {
     companion object {
         private val log = LoggerFactory.getLogger(PostgresNotifyPublisher::class.java)
-        private const val CHANNEL_PREFIX = "cache_invalidation_"
+        private const val CHANNEL = "cache_invalidation"
     }
 
     /**
@@ -63,11 +63,10 @@ class PostgresNotifyPublisher(
 
     /** NOTIFY 실행 */
     private fun performNotify(event: CacheInvalidationEvent): Boolean {
-        val channel = CHANNEL_PREFIX + event.cacheName
         val payload = objectMapper.writeValueAsString(event)
 
-        // PostgreSQL NOTIFY with payload
-        jdbcTemplate.execute("NOTIFY \"$channel\", '$payload'")
+        // PostgreSQL NOTIFY with payload (single channel for all caches)
+        jdbcTemplate.execute("NOTIFY \"$CHANNEL\", '$payload'")
 
         return true
     }

@@ -11,7 +11,7 @@ spring:
 
   datasource:
     # PostgreSQL Configuration (Issue #591: MySQL migration complete)
-    url: jdbc:postgresql://localhost:5432/maple_expectation
+    url: jdbc:postgresql://${DB_SERVER_IP:localhost}:5432/maple_expectation
     username: maple
     password: ${DB_ROOT_PASSWORD}
     driver-class-name: org.postgresql.Driver
@@ -75,6 +75,12 @@ cube:
 # Rate Limiting 비활성화 (부하 테스트용)
 ratelimit:
   enabled: false
+
+# Retry Budget 비활성화 (Bulk Loading용)
+# Issue #611: 300k 캐릭터 로딩 시 API 호출이 많아 예산 소진 방지
+resilience:
+  retry-budget:
+    enabled: false  # Bulk Loading 시 재시도 예산 제한 해제
 
 # CORS 설정 (Issue #172: 로컬 개발 환경)
 cors:
@@ -160,3 +166,20 @@ resilience4j:
     instances:
       discordWebhook:
         timeoutDuration: 5s
+
+# Bulk Loading Configuration (Issue #611)
+bulk:
+  enabled: true
+  csv-path: classpath:data/userIgn_List.csv
+  checkpoint-path: ./checkpoint.json
+  failed-path: ./failed.csv
+  semaphore:
+    permits: 10  # Reduced from 150 - Nexon API rate limiting
+  batch:
+    initial-size: 100
+    min-size: 10
+    max-size: 200
+  delay:
+    initial-ms: 100  # Increased delay between requests
+    min-ms: 50
+    max-ms: 1000

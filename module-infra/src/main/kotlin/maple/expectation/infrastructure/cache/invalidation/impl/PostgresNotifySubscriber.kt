@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.cache.invalidation.impl
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
+import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -63,7 +64,6 @@ class PostgresNotifySubscriber(
 ) : CacheInvalidationSubscriber {
     companion object {
         private val log = LoggerFactory.getLogger(PostgresNotifySubscriber::class.java)
-        private const val CHANNEL_PREFIX = "cache_invalidation_"
         private const val POLL_INTERVAL_MS = 100L
         private const val RECONNECT_DELAY_MS = 5000L
     }
@@ -76,7 +76,8 @@ class PostgresNotifySubscriber(
 
     private val running = AtomicBoolean(false)
 
-    /** 이벤트 구독 시작 (애플리케이션 시작 시) */
+    /** 이벤트 구독 시작 (애플리케이션 시작 시 자동 호출) */
+    @PostConstruct
     override fun subscribe() {
         val context = TaskContext.of("CacheInvalidation", "PostgresSubscribe", instanceId)
 

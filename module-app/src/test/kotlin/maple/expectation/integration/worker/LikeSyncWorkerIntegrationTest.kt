@@ -1,27 +1,27 @@
-package maple.expectation.integration
+package maple.expectation.integration.worker
 
 import java.sql.ResultSet
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
-import javax.sql.DataSource
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.core.domain.model.character.UserIgn
 import maple.expectation.domain.repository.GameCharacterRepository
+import maple.expectation.infrastructure.cache.TieredCacheManager
+import maple.expectation.infrastructure.messaging.PgmqStreamPublisher
 import maple.expectation.infrastructure.pgmq.LikeSyncRequest
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.queue.pgmq.LikeSyncQueueProducer
+import maple.expectation.support.IntegrationTestBase
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.TestPropertySource
 
 /**
@@ -43,7 +43,7 @@ import org.springframework.test.context.TestPropertySource
  *
  * <h3>ADR 문서 참조</h3>
  * <ul>
- *   <li><a href="../../../../docs/adr/002-pgmq-queue-architecture.md">ADR-002: PGMQ Queue Architecture</a>
+ *   <li><a href="../../../../../docs/adr/002-pgmq-queue-architecture.md">ADR-002: PGMQ Queue Architecture</a>
  * </ul>
  *
  * @see maple.expectation.infrastructure.worker.LikeSyncWorker
@@ -53,23 +53,25 @@ import org.springframework.test.context.TestPropertySource
 @Tag("pgmq")
 @Tag("worker")
 @DisplayName("LikeSyncWorker 통합 테스트")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@ActiveProfiles("test")
 @TestPropertySource(
     properties = [
         "pgmq.worker.like-sync.enabled=true",
         "pgmq.worker.common.polling-interval-ms=100",
         "pgmq.worker.common.visibility-timeout-sec=1",
         "pgmq.worker.common.max-retries=2",
+        "spring.datasource.hikari.maximum-pool-size=2",
+        "lock.datasource.pool-size=2",
     ],
 )
-class LikeSyncWorkerIntegrationTest {
+class LikeSyncWorkerIntegrationTest : IntegrationTestBase() {
 
-    // Note: DatabaseCleaner is in test source set, not accessible from integrationTest
-    // Manual cleanup is done in @AfterEach
+    // Mock TieredCacheManager to avoid dependency on Redis
+    @MockBean
+    lateinit var tieredCacheManager: TieredCacheManager
 
-    @Autowired
-    private lateinit var dataSource: DataSource
+    // Mock PgmqStreamPublisher to avoid event publishing infrastructure
+    @MockBean
+    lateinit var pgmqStreamPublisher: PgmqStreamPublisher
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -92,18 +94,11 @@ class LikeSyncWorkerIntegrationTest {
     private val testQueueName = "${LikeSyncQueueProducer.QUEUE_NAME}_test"
 
     @BeforeEach
-    fun setUp() {
+    fun setUpTest() {
         // 테스트용 큐 생성
         createTestQueue()
         // 테스트용 캐릭터 생성
         createTestCharacter()
-    }
-
-    @AfterEach
-    fun tearDown() {
-        // 테스트 데이터 정리
-        dropTestQueue()
-        cleanTestData()
     }
 
     @Test
@@ -431,16 +426,6 @@ class LikeSyncWorkerIntegrationTest {
         log.info("✅ Created test queue: $testQueueName")
     }
 
-    private fun dropTestQueue() {
-        // PGMQ 큐 삭제
-        try {
-            jdbcTemplate.execute("SELECT pgmq.drop_queue('$testQueueName')")
-            log.info("🗑️ Dropped test queue: $testQueueName")
-        } catch (e: Exception) {
-            log.warn("⚠️ Failed to drop test queue (may not exist): $testQueueName")
-        }
-    }
-
     private fun createTestCharacter() {
         val character = GameCharacter.create(
             userIgn = UserIgn(TEST_CHARACTER_NAME),
@@ -451,7 +436,7 @@ class LikeSyncWorkerIntegrationTest {
     }
 
     private fun getCharacterLikeCount(characterName: String): Long = jdbcTemplate.queryForObject(
-        "SELECT like_count FROM game_character WHERE userIgn = ?",
+        "SELECT like_count FROM game_character WHERE user_ign = ?",
         Long::class.java,
         characterName,
     ) ?: 0L
@@ -462,15 +447,6 @@ class LikeSyncWorkerIntegrationTest {
             "SELECT msg_id FROM $archiveTableName ORDER BY enqueued_at DESC LIMIT 100",
         ) { rs: ResultSet, _: Int ->
             rs.getLong("msg_id")
-        }
-    }
-
-    private fun cleanTestData() {
-        // 테스트 캐릭터 삭제
-        try {
-            jdbcTemplate.update("DELETE FROM game_character WHERE userIgn LIKE ?", "$TEST_CHARACTER_NAME%")
-        } catch (e: Exception) {
-            log.warn("⚠️ Failed to clean test character data")
         }
     }
 }

@@ -143,4 +143,14 @@ interface GameCharacterRepository {
      * @see maple.expectation.infrastructure.queue.like.LikeSyncExecutor
      */
     fun incrementLikeCount(userIgn: String, count: Long)
+
+    /**
+     * Find characters by multiple user IGNs (batch query for micro-batching)
+     *
+     * <p>This method is optimized for bulk lookups used in adaptive micro-batching.
+     *
+     * @param userIgns list of in-game names to search for
+     * @return Map of userIgn to GameCharacter (only found entries)
+     */
+    fun findByUserIgnIn(userIgns: List<String>): Map<String, GameCharacter>
 }

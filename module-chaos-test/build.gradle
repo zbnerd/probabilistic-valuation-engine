@@ -83,6 +83,12 @@ dependencies {
 	chaosTestCompileOnly(libs.lombok)
 	chaosTestAnnotationProcessor(libs.lombok)
 
+	// Bucket4j for rate limiting mock
+	chaosTestImplementation(libs.bucket4j.core)
+
+	// H2 Database for standalone pool tests
+	chaosTestImplementation(libs.h2)
+
 	// ============================================================
 	// ArchUnit (Architecture Validation for Chaos Tests)
 	// ============================================================

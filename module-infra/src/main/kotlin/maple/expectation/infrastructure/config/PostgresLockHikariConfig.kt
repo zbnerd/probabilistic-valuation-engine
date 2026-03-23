@@ -6,8 +6,12 @@ import javax.sql.DataSource
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Condition
+import org.springframework.context.annotation.ConditionContext
+import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
+import org.springframework.core.type.AnnotatedTypeMetadata
 import org.springframework.jdbc.core.JdbcTemplate
 
 /**
@@ -26,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate
  */
 @Configuration
 @Profile("pgtest | pgprod")
+@Conditional(PostgresLockHikariConfig.PostgresDatasourceCondition::class)
 class PostgresLockHikariConfig(
     @Value("\${spring.datasource.url}") private val jdbcUrl: String,
     @Value("\${spring.datasource.username}") private val username: String,
@@ -72,4 +77,34 @@ class PostgresLockHikariConfig(
 
     @Bean(name = ["lockJdbcTemplate"])
     fun lockJdbcTemplate(): JdbcTemplate = JdbcTemplate(lockDataSource())
+
+    /**
+     * Condition that only matches when datasource URL is a PostgreSQL URL.
+     *
+     * <p>Issue #563: When using @ActiveProfiles("pgtest") with Testcontainers, Spring may
+     * resolve datasource URL from base application.yml (H2) instead of Testcontainers-provided URL
+     * during early bean initialization. This condition prevents the lock pool from being created
+     * when H2 is detected, allowing tests to run without the lock pool.
+     */
+    class PostgresDatasourceCondition : Condition {
+        private val log = LoggerFactory.getLogger(PostgresDatasourceCondition::class.java)
+
+        override fun matches(context: ConditionContext, metadata: AnnotatedTypeMetadata): Boolean {
+            val environment = context.environment
+            val datasourceUrl = environment.getProperty("spring.datasource.url") ?: return false
+
+            // Check for actual PostgreSQL JDBC URL (jdbc:postgresql:)
+            // H2 with MODE=PostgreSQL should NOT match (jdbc:h2:mem:...;MODE=PostgreSQL)
+            val isPostgres = datasourceUrl.startsWith("jdbc:postgresql:", ignoreCase = true)
+
+            if (!isPostgres) {
+                log.info(
+                    "[PostgresLockPool] Skipping lock pool creation - datasource URL is not PostgreSQL: {}",
+                    datasourceUrl.substringBefore("?"),
+                )
+            }
+
+            return isPostgres
+        }
+    }
 }

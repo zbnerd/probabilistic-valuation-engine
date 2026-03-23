@@ -11,7 +11,7 @@ spring:
 
   datasource:
     # PostgreSQL Configuration (Issue #591: MySQL migration complete)
-    url: jdbc:postgresql://localhost:5432/maple_expectation
+    url: jdbc:postgresql://${DB_SERVER_IP:localhost}:5432/maple_expectation
     username: maple
     password: ${DB_ROOT_PASSWORD}
     driver-class-name: org.postgresql.Driver

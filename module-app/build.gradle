@@ -116,6 +116,9 @@ dependencies {
 
 	testImplementation(libs.spring.boot.starter.test)
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
+
+	// DevTools for hot reload during development
+	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	testImplementation(libs.testcontainers)
 	testImplementation(libs.testcontainers.junit.jupiter)
 	testImplementation(libs.testcontainers.postgresql)
@@ -136,9 +139,10 @@ tasks.named("jar") {
 
 bootRun {
 	jvmArgs = [
-		'-Xms512m',
-		'-Xmx1024m',
-		'-XX:+UseG1GC'
+		'-Xms1g',
+		'-Xmx2g',
+		'-XX:+UseG1GC',
+		'-Dspring.devtools.restart.enabled=true'
 	]
 }
 

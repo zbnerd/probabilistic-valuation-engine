@@ -4,6 +4,55 @@
 
 ---
 
+# Environment Setup (CRITICAL)
+
+**모든 작업 시작 전 반드시 실행:**
+```bash
+source .env
+```
+
+Environment file location: `/home/maple/MapleExpectation/.env`
+
+Required env vars:
+- `DB_ROOT_PASSWORD`
+- `NEXON_API_KEY`
+- `JWT_SECRET`
+- `FINGERPRINT_SECRET`
+- `ADMIN_FINGERPRINTS`
+- `ALERT_DISCORD_WEBHOOK_URL`
+
+**앱 시작 실패 시 체크리스트:**
+1. `echo $NEXON_API_KEY` → 비어있으면 `source .env` 후 재시도
+2. PostgreSQL 실행 중인지 확인: `docker ps | grep postgres`
+3. 포트 충돌 확인: `lsof -i :8080`
+
+---
+
+# Dev Workflow (Hot Reload ~2s)
+
+**터미널 2개 유지:**
+
+```bash
+# Terminal 1: Continuous compilation
+./gradlew compileKotlin --continuous
+
+# Terminal 2: App 실행 (한 번만)
+source .env && export DB_ROOT_PASSWORD NEXON_API_KEY JWT_SECRET FINGERPRINT_SECRET ADMIN_FINGERPRINTS ALERT_DISCORD_WEBHOOK_URL
+./gradlew :module-app:bootRun
+```
+
+**코드 수정 후:**
+- Terminal 1이 자동 컴파일 (~1s)
+- DevTools가 감지 → Spring 재시작 (~1-2s)
+- **Total: ~2초 피드백 루프**
+
+**주의사항:**
+- 앱 수동 재시작 금지 (DB migration 추가 시에만)
+- Cold start: 40s, Warm restart: 2s
+- FastAPI 수준의 개발 경험
+
+---
+
 # RPI Workflow (Research - Plan - Implement)
 
 **핵심 원칙:** 코드를 작성하기 전에 반드시 철저한 분석과 계획을 세운다.

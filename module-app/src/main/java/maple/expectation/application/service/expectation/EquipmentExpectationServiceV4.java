@@ -208,7 +208,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private PresetExpectation findMaxPreset(List<PresetExpectation> presetResults) {
     return presetResults.stream()
-        .max((p1, p2) -> p1.getTotalExpectedCost().compareTo(p2.getTotalExpectedCost()))
+        .max((p1, p2) -> Double.compare(p1.getTotalExpectedCost(), p2.getTotalExpectedCost()))
         .orElse(null);
   }
 
@@ -217,7 +217,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       PresetExpectation maxPreset,
       List<PresetExpectation> presetResults,
       boolean fromCache) {
-    BigDecimal totalCost = maxPreset != null ? maxPreset.getTotalExpectedCost() : BigDecimal.ZERO;
+    double totalCost = maxPreset != null ? maxPreset.getTotalExpectedCost() : 0.0;
     CostBreakdownDto totalBreakdown =
         maxPreset != null ? maxPreset.getCostBreakdown() : CostBreakdownDto.empty();
     int maxPresetNo = maxPreset != null ? maxPreset.getPresetNo() : 0;

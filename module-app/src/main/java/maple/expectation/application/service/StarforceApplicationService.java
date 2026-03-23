@@ -1,6 +1,5 @@
 package maple.expectation.application.service;
 
-import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.calculator.port.StarforceLookupPort;
@@ -20,6 +19,13 @@ import org.springframework.stereotype.Service;
  *    ↓ 사용
  * Infra Layer (LookupTable): 인메모리 Lookup Table (O(1) 조회)
  * </pre>
+ *
+ * <h3>성능 최적화 (2026-03-23)</h3>
+ *
+ * <ul>
+ *   <li>BigDecimal → Double로 변경하여 계산 비용 절감
+ *   <li>모든 반환 타입을 Double로 통일
+ * </ul>
  */
 @Slf4j
 @Service
@@ -39,10 +45,10 @@ public class StarforceApplicationService {
    * @param itemLevel 아이템 레벨 (1~300)
    * @return 기대 비용 (메소)
    */
-  public BigDecimal calculateExpectedCost(int currentStar, int targetStar, int itemLevel) {
+  public double calculateExpectedCost(int currentStar, int targetStar, int itemLevel) {
     return executor.executeOrDefault(
         () -> starforceLookupPort.getExpectedCost(currentStar, targetStar, itemLevel),
-        BigDecimal.ZERO,
+        0.0,
         TaskContext.of(
             "StarforceApplicationService",
             "CalculateExpectedCost",
@@ -69,10 +75,10 @@ public class StarforceApplicationService {
    * @param currentStar 현재 스타포스 (0~24)
    * @return 성공 확률 (0.0 ~ 1.0)
    */
-  public BigDecimal getSuccessProbability(int currentStar) {
+  public double getSuccessProbability(int currentStar) {
     return executor.executeOrDefault(
         () -> starforceLookupPort.getSuccessProbability(currentStar),
-        BigDecimal.ZERO,
+        0.0,
         TaskContext.of(
             "StarforceApplicationService", "GetSuccessProbability", String.valueOf(currentStar)));
   }
@@ -83,10 +89,10 @@ public class StarforceApplicationService {
    * @param currentStar 현재 스타포스 (0~24)
    * @return 파괴 확률 (0.0 ~ 1.0)
    */
-  public BigDecimal getDestroyProbability(int currentStar) {
+  public double getDestroyProbability(int currentStar) {
     return executor.executeOrDefault(
         () -> starforceLookupPort.getDestroyProbability(currentStar),
-        BigDecimal.ZERO,
+        0.0,
         TaskContext.of(
             "StarforceApplicationService", "GetDestroyProbability", String.valueOf(currentStar)));
   }
@@ -98,10 +104,10 @@ public class StarforceApplicationService {
    * @param itemLevel 아이템 레벨
    * @return 1회 강화 비용 (메소)
    */
-  public BigDecimal getSingleEnhanceCost(int currentStar, int itemLevel) {
+  public double getSingleEnhanceCost(int currentStar, int itemLevel) {
     return executor.executeOrDefault(
         () -> starforceLookupPort.getSingleEnhanceCost(currentStar, itemLevel),
-        BigDecimal.ZERO,
+        0.0,
         TaskContext.of(
             "StarforceApplicationService", "GetSingleEnhanceCost", currentStar + ":" + itemLevel));
   }
@@ -118,7 +124,7 @@ public class StarforceApplicationService {
    * @param useDestroyPrevention 파괴방지 사용 여부
    * @return 기대 비용
    */
-  public BigDecimal calculateExpectedCostWithOptions(
+  public double calculateExpectedCostWithOptions(
       int currentStar,
       int targetStar,
       int itemLevel,
@@ -136,7 +142,7 @@ public class StarforceApplicationService {
                 useSundayMaple,
                 useDiscount,
                 useDestroyPrevention),
-        BigDecimal.ZERO,
+        0.0,
         TaskContext.of(
             "StarforceApplicationService",
             "CalculateExpectedCostWithOptions",
@@ -153,7 +159,7 @@ public class StarforceApplicationService {
    * @param useDestroyPrevention 파괴방지 사용 여부
    * @return 기대 파괴 횟수
    */
-  public BigDecimal calculateExpectedDestroyCount(
+  public double calculateExpectedDestroyCount(
       int currentStar,
       int targetStar,
       boolean useStarCatch,
@@ -163,7 +169,7 @@ public class StarforceApplicationService {
         () ->
             starforceLookupPort.getExpectedDestroyCount(
                 currentStar, targetStar, useStarCatch, useSundayMaple, useDestroyPrevention),
-        BigDecimal.ZERO,
+        0.0,
         TaskContext.of(
             "StarforceApplicationService",
             "CalculateExpectedDestroyCount",

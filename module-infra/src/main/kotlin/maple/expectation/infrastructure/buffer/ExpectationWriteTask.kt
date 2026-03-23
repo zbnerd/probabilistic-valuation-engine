@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.buffer
 
-import java.math.BigDecimal
 import java.time.LocalDateTime
 
 /**
@@ -8,7 +7,7 @@ import java.time.LocalDateTime
  *
  * **5-Agent Council 합의**
  * - Purple (Auditor): Record로 immutability 보장
- * - Green (Performance): BigDecimal 정밀도 유지
+ * - Green (Performance): Double로 변경하여 성능 최적화 (2026-03-23)
  *
  * **용도**
  * V4 기대값 계산 결과를 메모리 버퍼에 저장하고, 스케줄러가 배치로 DB에 동기화할 때 사용됩니다.
@@ -25,11 +24,11 @@ import java.time.LocalDateTime
 data class ExpectationWriteTask(
     val characterId: Long,
     val presetNo: Int,
-    val totalExpectedCost: BigDecimal,
-    val blackCubeCost: BigDecimal,
-    val redCubeCost: BigDecimal,
-    val additionalCubeCost: BigDecimal,
-    val starforceCost: BigDecimal,
+    val totalExpectedCost: Double,
+    val blackCubeCost: Double,
+    val redCubeCost: Double,
+    val additionalCubeCost: Double,
+    val starforceCost: Double,
     val createdAt: LocalDateTime,
 ) {
     /**

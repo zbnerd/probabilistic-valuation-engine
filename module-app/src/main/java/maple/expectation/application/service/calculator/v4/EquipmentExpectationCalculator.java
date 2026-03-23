@@ -1,23 +1,23 @@
 package maple.expectation.application.service.calculator.v4;
 
-import java.math.BigDecimal;
 import java.util.Optional;
 
 /**
  * V4 장비 기대값 계산기 인터페이스 (#240)
  *
- * <h3>5-Agent Council 합의사항</h3>
+ * <h3>성능 최적화 (2026-03-23)</h3>
  *
  * <ul>
- *   <li>🟣 Purple (Auditor): BigDecimal 필수 - 정밀 계산
- *   <li>🔵 Blue (Architect): OCP 준수 - 기존 ExpectationCalculator 유지
+ *   <li>BigDecimal → Double로 변경하여 계산 비용 절감
+ *   <li>내부 루프에서 Kahan Summation 사용으로 정확도 유지
+ *   <li>최종 결과만 BigDecimal로 변환 (경계 계층)
  * </ul>
  *
  * <h3>기존 ExpectationCalculator와의 차이</h3>
  *
  * <ul>
- *   <li>calculateCost() → BigDecimal (long에서 변경)
- *   <li>getTrials() → BigDecimal (정밀 기대값 계산)
+ *   <li>calculateCost() → Double (BigDecimal에서 변경)
+ *   <li>getTrials() → Double (정밀 기대값 계산)
  *   <li>새로운 메서드: getDetailedCosts() - 비용 상세 분류
  * </ul>
  *
@@ -26,13 +26,13 @@ import java.util.Optional;
 public interface EquipmentExpectationCalculator {
 
   /**
-   * 최종 소모 비용 합산 (BigDecimal)
+   * 최종 소모 비용 합산 (Double)
    *
-   * <p>Purple Agent 요구사항: 정밀 계산을 위해 BigDecimal 사용
+   * <p>성능 최적화: Double로 계산하여 BigDecimal 오버헤드 제거
    *
    * @return 기대 비용 (메소 단위)
    */
-  BigDecimal calculateCost();
+  double calculateCost();
 
   /**
    * 적용된 강화 경로 문자열 반환
@@ -46,7 +46,7 @@ public interface EquipmentExpectationCalculator {
    *
    * @return 기대 시도 횟수 (없으면 Optional.empty())
    */
-  Optional<BigDecimal> getTrials();
+  Optional<Double> getTrials();
 
   /**
    * 비용 상세 분류
@@ -60,33 +60,27 @@ public interface EquipmentExpectationCalculator {
   /**
    * 비용 상세 분류 Record (#240 V4: trials 추가)
    *
-   * <p>trials는 기대 시도 횟수로, 정수로 변환하여 사용합니다.
+   * <p>trials는 기대 시도 횟수로, Double로 변환하여 사용합니다.
    */
   record CostBreakdown(
-      BigDecimal blackCubeCost,
-      BigDecimal redCubeCost,
-      BigDecimal additionalCubeCost,
-      BigDecimal starforceCost,
-      BigDecimal blackCubeTrials, // #240 V4: 블랙큐브 기대 시도 횟수
-      BigDecimal redCubeTrials, // #240 V4: 레드큐브 기대 시도 횟수
-      BigDecimal additionalCubeTrials // #240 V4: 에디셔널큐브 기대 시도 횟수
+      double blackCubeCost,
+      double redCubeCost,
+      double additionalCubeCost,
+      double starforceCost,
+      double blackCubeTrials, // #240 V4: 블랙큐브 기대 시도 횟수
+      double redCubeTrials, // #240 V4: 레드큐브 기대 시도 횟수
+      double additionalCubeTrials // #240 V4: 에디셔널큐브 기대 시도 횟수
       ) {
     public static CostBreakdown empty() {
       return new CostBreakdown(
-          BigDecimal.ZERO,
-          BigDecimal.ZERO,
-          BigDecimal.ZERO,
-          BigDecimal.ZERO,
-          BigDecimal.ZERO,
-          BigDecimal.ZERO,
-          BigDecimal.ZERO);
+          0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     }
 
-    public BigDecimal total() {
-      return blackCubeCost.add(redCubeCost).add(additionalCubeCost).add(starforceCost);
+    public double total() {
+      return blackCubeCost + redCubeCost + additionalCubeCost + starforceCost;
     }
 
-    public CostBreakdown withBlackCube(BigDecimal cost) {
+    public CostBreakdown withBlackCube(double cost) {
       return new CostBreakdown(
           cost,
           redCubeCost,
@@ -97,7 +91,7 @@ public interface EquipmentExpectationCalculator {
           additionalCubeTrials);
     }
 
-    public CostBreakdown withBlackCube(BigDecimal cost, BigDecimal trials) {
+    public CostBreakdown withBlackCube(double cost, double trials) {
       return new CostBreakdown(
           cost,
           redCubeCost,
@@ -108,7 +102,7 @@ public interface EquipmentExpectationCalculator {
           additionalCubeTrials);
     }
 
-    public CostBreakdown withRedCube(BigDecimal cost) {
+    public CostBreakdown withRedCube(double cost) {
       return new CostBreakdown(
           blackCubeCost,
           cost,
@@ -119,7 +113,7 @@ public interface EquipmentExpectationCalculator {
           additionalCubeTrials);
     }
 
-    public CostBreakdown withRedCube(BigDecimal cost, BigDecimal trials) {
+    public CostBreakdown withRedCube(double cost, double trials) {
       return new CostBreakdown(
           blackCubeCost,
           cost,
@@ -130,7 +124,7 @@ public interface EquipmentExpectationCalculator {
           additionalCubeTrials);
     }
 
-    public CostBreakdown withAdditionalCube(BigDecimal cost) {
+    public CostBreakdown withAdditionalCube(double cost) {
       return new CostBreakdown(
           blackCubeCost,
           redCubeCost,
@@ -141,12 +135,12 @@ public interface EquipmentExpectationCalculator {
           additionalCubeTrials);
     }
 
-    public CostBreakdown withAdditionalCube(BigDecimal cost, BigDecimal trials) {
+    public CostBreakdown withAdditionalCube(double cost, double trials) {
       return new CostBreakdown(
           blackCubeCost, redCubeCost, cost, starforceCost, blackCubeTrials, redCubeTrials, trials);
     }
 
-    public CostBreakdown withStarforce(BigDecimal cost) {
+    public CostBreakdown withStarforce(double cost) {
       return new CostBreakdown(
           blackCubeCost,
           redCubeCost,

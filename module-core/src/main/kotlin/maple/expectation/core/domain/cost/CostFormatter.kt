@@ -82,6 +82,20 @@ object CostFormatter {
     fun format(cost: Long): String = format(BigDecimal.valueOf(cost))
 
     /**
+     * Double 금액을 한국식 표기로 포맷
+     *
+     * @param cost 금액 (메소)
+     * @return 포맷된 문자열
+     */
+    @JvmStatic
+    fun format(cost: Double): String {
+        if (cost <= 0) {
+            return "0"
+        }
+        return format(BigDecimal.valueOf(cost).setScale(0, RoundingMode.HALF_UP))
+    }
+
+    /**
      * 간략화된 표기 (가장 큰 단위만)
      *
      * <p>예: 12345678900000 → "12조"

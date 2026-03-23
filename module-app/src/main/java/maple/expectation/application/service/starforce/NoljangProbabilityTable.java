@@ -1,7 +1,5 @@
 package maple.expectation.application.service.starforce;
 
-import java.math.BigDecimal;
-import java.math.MathContext;
 import java.math.RoundingMode;
 
 /**
@@ -42,10 +40,16 @@ import java.math.RoundingMode;
  *   <li>강화 비용: 일반 스타포스와 동일 (메소)
  *   <li>실패 비용: 9,400원 (캐시, 게임 내 약 150,000,000 메소 환산)
  * </ul>
+ *
+ * <h3>성능 최적화 (2026-03-23)</h3>
+ *
+ * <ul>
+ *   <li>BigDecimal → Double로 변경하여 계산 비용 절감
+ *   <li>루프에서 Kahan Summation 사용 가능
+ *   <li>내부 계산은 Double, 최종 결과만 Double로 반환
+ * </ul>
  */
 public final class NoljangProbabilityTable {
-
-  private static final MathContext MC = new MathContext(10, RoundingMode.HALF_UP);
 
   /** 놀장 최대 스타 */
   public static final int MAX_NOLJANG_STAR = 15;
@@ -64,8 +68,7 @@ public final class NoljangProbabilityTable {
   public static final long CASH_TO_MESO_RATE = 16000L;
 
   /** 놀장 실패 비용 (메소 환산) */
-  public static final BigDecimal FAIL_COST_MESO =
-      BigDecimal.valueOf(FAIL_CASH_COST_KRW * CASH_TO_MESO_RATE);
+  public static final double FAIL_COST_MESO = (double) FAIL_CASH_COST_KRW * CASH_TO_MESO_RATE;
 
   /**
    * 놀장 성공 확률 테이블 (star 0~14, 스타캐치 미적용)
@@ -138,33 +141,29 @@ public final class NoljangProbabilityTable {
    * @param itemLevel 아이템 레벨
    * @return 1회 강화 비용 (메소)
    */
-  public static BigDecimal getSingleEnhanceCost(int currentStar, int itemLevel) {
+  public static double getSingleEnhanceCost(int currentStar, int itemLevel) {
     if (currentStar < 0 || currentStar >= MAX_NOLJANG_STAR) {
-      return BigDecimal.ZERO;
+      return 0.0;
     }
 
     int level = Math.max(1, itemLevel);
     int starFactor = currentStar + 1;
     long levelCubed = (long) level * level * level;
 
-    BigDecimal baseCost = BigDecimal.valueOf(1000);
+    double baseCost = 1000.0;
 
     if (currentStar < 10) {
       // 0~9성: 1000 + L³(S+1)/36
-      BigDecimal levelComponent =
-          BigDecimal.valueOf(levelCubed * starFactor).divide(BigDecimal.valueOf(36), MC);
-      return roundToNearest100(baseCost.add(levelComponent));
+      double levelComponent = (levelCubed * starFactor) / 36.0;
+      return roundToNearest100(baseCost + levelComponent);
     } else {
       // 10성+: 1000 + L³(S+1)^2.7/divisor
       double starPower = Math.pow(starFactor, 2.7);
       int divisor = COST_DIVISORS[currentStar];
 
-      BigDecimal levelComponent =
-          BigDecimal.valueOf(levelCubed)
-              .multiply(BigDecimal.valueOf(starPower))
-              .divide(BigDecimal.valueOf(divisor), MC);
+      double levelComponent = (levelCubed * starPower) / divisor;
 
-      return roundToNearest100(baseCost.add(levelComponent));
+      return roundToNearest100(baseCost + levelComponent);
     }
   }
 
@@ -183,7 +182,7 @@ public final class NoljangProbabilityTable {
    * @param useDiscount 30% 할인 적용 여부
    * @return 기대 비용 (메소)
    */
-  public static BigDecimal getExpectedCost(
+  public static double getExpectedCost(
       int targetStar, int itemLevel, boolean useStarCatch, boolean useDiscount) {
     return getExpectedCostFromStar(0, targetStar, itemLevel, useStarCatch, useDiscount);
   }
@@ -198,63 +197,60 @@ public final class NoljangProbabilityTable {
    * @param useDiscount 30% 할인 적용 여부
    * @return 기대 비용 (메소)
    */
-  public static BigDecimal getExpectedCostFromStar(
+  public static double getExpectedCostFromStar(
       int currentStar, int targetStar, int itemLevel, boolean useStarCatch, boolean useDiscount) {
     // 범위 검증
     if (targetStar > MAX_NOLJANG_STAR) {
       targetStar = MAX_NOLJANG_STAR;
     }
     if (currentStar >= targetStar || currentStar < 0) {
-      return BigDecimal.ZERO;
+      return 0.0;
     }
 
-    BigDecimal totalExpected = BigDecimal.ZERO;
+    double totalExpected = 0.0;
 
     for (int star = currentStar; star < targetStar; star++) {
-      BigDecimal singleCost =
+      double singleCost =
           computeExpectedCostForSingleStar(star, itemLevel, useStarCatch, useDiscount);
-      totalExpected = totalExpected.add(singleCost);
+      totalExpected += singleCost;
     }
 
-    return totalExpected.setScale(0, RoundingMode.HALF_UP);
+    return Math.round(totalExpected);
   }
 
   /** 단일 스타 강화 기대값 계산 */
-  private static BigDecimal computeExpectedCostForSingleStar(
+  private static double computeExpectedCostForSingleStar(
       int star, int itemLevel, boolean useStarCatch, boolean useDiscount) {
     // 성공 확률
     double successRate = getSuccessRate(star, useStarCatch);
     if (successRate <= 0) {
-      return BigDecimal.valueOf(Long.MAX_VALUE);
+      return Double.MAX_VALUE;
     }
 
     // 강화 비용 (메소)
-    BigDecimal enhanceCost = getSingleEnhanceCost(star, itemLevel);
+    double enhanceCost = getSingleEnhanceCost(star, itemLevel);
     if (useDiscount) {
-      enhanceCost = enhanceCost.multiply(BigDecimal.valueOf(0.7));
+      enhanceCost *= 0.7;
     }
 
     // 실패 확률
     double failRate = 1.0 - successRate;
 
     // 기대 시도 횟수 = 1 / 성공확률
-    BigDecimal expectedTrials = BigDecimal.ONE.divide(BigDecimal.valueOf(successRate), MC);
+    double expectedTrials = 1.0 / successRate;
 
     // 기대 실패 횟수 = (1 - 성공확률) / 성공확률
-    BigDecimal expectedFails =
-        BigDecimal.valueOf(failRate).divide(BigDecimal.valueOf(successRate), MC);
+    double expectedFails = failRate / successRate;
 
     // 총 기대 비용 = (강화비용 × 기대시도횟수) + (실패비용 × 기대실패횟수)
-    BigDecimal enhanceTotal = enhanceCost.multiply(expectedTrials);
-    BigDecimal failTotal = FAIL_COST_MESO.multiply(expectedFails);
+    double enhanceTotal = enhanceCost * expectedTrials;
+    double failTotal = FAIL_COST_MESO * expectedFails;
 
-    return enhanceTotal.add(failTotal);
+    return enhanceTotal + failTotal;
   }
 
   /** 100 단위로 반올림 */
-  private static BigDecimal roundToNearest100(BigDecimal value) {
-    return value
-        .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
-        .multiply(BigDecimal.valueOf(100));
+  private static double roundToNearest100(double value) {
+    return Math.round(value / 100.0) * 100.0;
   }
 }

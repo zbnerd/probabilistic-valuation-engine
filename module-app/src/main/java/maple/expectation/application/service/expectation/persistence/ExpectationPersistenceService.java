@@ -74,7 +74,7 @@ public class ExpectationPersistenceService {
       maple.expectation.domain.v2.EquipmentExpectationSummary summary =
           maple.expectation.domain.v2.EquipmentExpectationSummary.create(
               characterId,
-              preset.getPresetNo(),
+              Integer.valueOf(preset.getPresetNo()),
               java.math.BigDecimal.valueOf(preset.getTotalExpectedCost()),
               java.math.BigDecimal.valueOf(preset.getCostBreakdown().getBlackCubeCost()),
               java.math.BigDecimal.valueOf(preset.getCostBreakdown().getRedCubeCost()),

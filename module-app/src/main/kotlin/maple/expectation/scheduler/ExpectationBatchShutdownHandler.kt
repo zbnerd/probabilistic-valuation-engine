@@ -137,7 +137,7 @@ class ExpectationBatchShutdownHandler(
         for (task in batch) {
             val success = executor.executeOrDefault(
                 {
-                    val summary = EquipmentExpectationSummary(
+                    val summary = EquipmentExpectationSummary.create(
                         gameCharacterId = task.characterId,
                         presetNo = task.presetNo,
                         totalExpectedCost = task.totalExpectedCost?.let { java.math.BigDecimal.valueOf(it) },

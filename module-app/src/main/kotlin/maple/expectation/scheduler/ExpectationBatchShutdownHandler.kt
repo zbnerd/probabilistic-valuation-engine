@@ -136,15 +136,16 @@ class ExpectationBatchShutdownHandler(
         for (task in batch) {
             val success = executor.executeOrDefault(
                 {
-                    repository.upsertExpectationSummary(
-                        task.characterId,
-                        task.presetNo,
-                        task.totalExpectedCost,
-                        task.blackCubeCost,
-                        task.redCubeCost,
-                        task.additionalCubeCost,
-                        task.starforceCost,
+                    val summary = EquipmentExpectationSummary(
+                        gameCharacterId = task.characterId,
+                        presetNo = task.presetNo,
+                        totalExpectedCost = task.totalExpectedCost,
+                        blackCubeCost = task.blackCubeCost,
+                        redCubeCost = task.redCubeCost,
+                        additionalCubeCost = task.additionalCubeCost,
+                        starforceCost = task.starforceCost,
                     )
+                    repository.saveOrUpdate(summary)
                     true
                 },
                 false,

@@ -9,7 +9,6 @@ import maple.expectation.infrastructure.buffer.ExpectationWriteTask;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.lock.LockStrategy;
-import maple.expectation.infrastructure.persistence.repository.EquipmentExpectationSummaryBatchRepository;
 import maple.expectation.infrastructure.persistence.repository.EquipmentExpectationSummaryRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -69,7 +68,6 @@ public class ExpectationBatchWriteScheduler {
 
   private final ExpectationWriteBackBuffer buffer;
   private final EquipmentExpectationSummaryRepository repository;
-  private final EquipmentExpectationSummaryBatchRepository batchRepository;
   private final LockStrategy lockStrategy;
   private final LogicExecutor executor;
   private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
@@ -110,7 +108,7 @@ public class ExpectationBatchWriteScheduler {
           // 분산 락으로 중복 실행 방지
           lockStrategy.executeWithLock(
               LOCK_NAME,
-              3,
+              0,
               10,
               () -> {
                 flushBatch();
@@ -134,35 +132,35 @@ public class ExpectationBatchWriteScheduler {
       return;
     }
 
-    // JDBC Batch upsert (single transaction, atomic)
-    executor.executeOrCatch(
-        () -> {
-          int[] results = batchRepository.batchUpsertExpectations(batch);
-          int successCount = results.length;
+    // 개별 upsert (batch upsert가 구현될 때까지)
+    int successCount = 0;
+    for (ExpectationWriteTask task : batch) {
+      executor.executeOrCatch(
+          () -> {
+            repository.upsertExpectationSummary(
+                task.getCharacterId(),
+                task.getPresetNo(),
+                task.getTotalExpectedCost(),
+                task.getBlackCubeCost(),
+                task.getRedCubeCost(),
+                task.getAdditionalCubeCost(),
+                task.getStarforceCost());
+            return null;
+          },
+          e -> {
+            log.error("[ExpectationBatch] Upsert failed for {}: {}", task.key(), e.getMessage());
+            return null;
+          },
+          TaskContext.of("ExpectationBatch", "Upsert", task.key()));
+      successCount++;
+    }
 
-          // 메트릭 기록
-          meterRegistry.counter("expectation.buffer.flushed").increment(successCount);
-          log.debug(
-              "[ExpectationBatch] Batch upsert completed: {} tasks, remaining={}",
-              successCount,
-              buffer.getPendingCount());
-
-          return null;
-        },
-        e -> {
-          // Batch failure: entire batch rolled back, tasks return to buffer
-          // Next flush cycle will retry the same tasks
-          log.error(
-              "[ExpectationBatch] Batch upsert failed for {} tasks: {}",
-              batch.size(),
-              e.getMessage(),
-              e);
-
-          // Re-queue failed tasks back to buffer for retry
-          buffer.offer(batch);
-          return null;
-        },
-        TaskContext.of("ExpectationBatch", "Flush", String.valueOf(batch.size())));
+    // 메트릭 기록
+    meterRegistry.counter("expectation.buffer.flushed").increment(successCount);
+    log.debug(
+        "[ExpectationBatch] Flushed {} tasks, remaining={}",
+        successCount,
+        buffer.getPendingCount());
   }
 
   /** 플러시 실패 처리 */

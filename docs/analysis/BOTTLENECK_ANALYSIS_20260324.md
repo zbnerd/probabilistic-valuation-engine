@@ -85,9 +85,10 @@ Return gzipped response
 
 | Operation | Estimated CPU % | Evidence |
 |-----------|-----------------|----------|
-| **JSON Parsing (200~300KB)** | **25~30%** | `EquipmentStreamingParser.java` - Jackson streaming |
-| **3 Preset Calculation** | **20~25%** | `PresetCalculationHelper.java` - 3x parallel |
-| **Gzip Compression** | **10~15%** | `GzipUtils.kt` - ~10KB → ~2KB |
+| **JSON Parsing (200~300KB)** | **20~25%** | `EquipmentStreamingParser.java` - Jackson streaming |
+| **3 Preset Calculation (Parallel)** | **15~20%** | `PresetCalculationHelper.java` - 3x parallel via CompletableFuture |
+| **Probability Convolution (DP)** | **15~20%** | `ProbabilityConvolver.kt` - O(n³) nested loops |
+| **Gzip Compression** | **8~12%** | `GzipUtils.kt` - ~10KB → ~2KB |
 | **BigDecimal → Double** | **Already optimized** | 2026-03-23 refactored |
 | **PostgreSQL upsert** | **5~10%** | Batch upsert, index maintenance |
 | **Thread overhead** | **5~10%** | Virtual threads, executor switching |
@@ -127,33 +128,35 @@ public class EquipmentStreamingParser {
 - Fields: ~20 fields mapped per equipment item
 - Estimated CPU: 25-30% of total request time
 
-### 2.4 3 Preset Calculation Cost
+### 2.4 3 Preset Calculation Cost (Already Parallel)
 
 **Evidence**:
 ```java
-// EquipmentExpectationServiceV4.java:169-184
-private EquipmentExpectationResponseV4 doCalculateExpectation(String userIgn) {
-    ...
-    List<PresetExpectation> presetResults =
-        calculateAllPresets(equipmentData, character.getCharacterClass());
-    ...
-}
+// EquipmentExpectationServiceV4.java:257-277
+List<CompletableFuture<PresetExpectation>> futures =
+    IntStream.rangeClosed(1, 3)
+        .mapToObj(presetNo -> CompletableFuture.supplyAsync(() -> {
+            var cubeInputs = streamingParser.parseCubeInputsForPreset(decompressedData, presetNo);
+            return presetHelper.calculatePreset(cubeInputs, presetNo, characterClass);
+        }, presetExecutor))  // Separate executor for preset calculation
+        .toList();
+```
 
-// PresetCalculationHelper.java:70-96
-public PresetExpectation calculatePreset(...) {
-    for (var cubeInput : cubeInputs) {  // ~15 items per preset
-        EquipmentExpectationCalculator calculator = ...;
-        double itemCost = calculator.calculateCost();  // Starforce + Cube probability
-        ...
-    }
-}
+**Thread Pool** (`application.yml:520-523`):
+```yaml
+preset:
+  core-pool-size: 12
+  max-pool-size: 24
+  queue-capacity: 100
 ```
 
 **Analysis**:
-- 3 presets calculated sequentially per request
-- ~15 items × 3 presets = 45 item calculations
+- **Already parallelized**: 3 presets calculated concurrently via separate `presetExecutor`
+- ~15 items × 3 presets = 45 item calculations (parallel)
 - Each item: Starforce probability + Cube probability (geometric distribution)
-- Estimated CPU: 20-25% of total request time
+- Estimated CPU: 15-20% of total request time
+
+**Note**: 3 preset calculation is **already optimized** with parallel execution.
 
 ### 2.5 Gzip Compression Cost
 
@@ -173,8 +176,53 @@ fun compress(str: String?): ByteArray {
 **Analysis**:
 - Input: ~10KB JSON response
 - Output: ~2KB compressed (80% reduction)
-- Estimated CPU: 10-15% of total request time
+- Estimated CPU: 8-12% of total request time
 - Trade-off: CPU → Network bandwidth (acceptable trade-off)
+
+### 2.6 Probability Convolution (DP Algorithm) - **NEW FINDING**
+
+**Evidence** (`ProbabilityConvolver.kt:81-113`):
+```kotlin
+private fun convolveSlot(
+    slot: List<ItemProbability>,
+    maxIndex: Int
+): Map<Int, Double> {
+    // O(maxIndex × slot.size()) nested loops
+    val result = mutableMapOf<Int, Double>()
+    for (i in 0 until maxIndex) {
+        for (item in slot) {
+            // Probability convolution arithmetic
+        }
+    }
+    return result
+}
+```
+
+**Evidence** (`FlameDpCalculator.kt:108-152`):
+```kotlin
+fun runDp(
+    n: Int,
+    maxK: Int,
+    target: Int,
+    pmf: List<Double>
+): Double {
+    // O(n × maxK × target × pmf.size()) nested loops
+    for (i in 1..n) {
+        for (k in 0..maxK) {
+            for (t in 0..target) {
+                // Dynamic programming recurrence
+            }
+        }
+    }
+}
+```
+
+**Analysis**:
+- Called **30-45 times per request** (10-15 items × 3 presets)
+- O(n³) nested loops with probability calculations
+- Most CPU-intensive operation in the calculation path
+- Estimated CPU: 15-20% of total request time
+- **Optimization opportunity**: DP calculations could run in parallel per item
 
 ---
 
@@ -283,9 +331,12 @@ L1: Caffeine (in-memory, local)
 
 L2: PostgreSQL (shared, remote)
     ├─ TTL: 60 minutes
-    ├─ Table: cache_storage
-    └─ Serializer: JSON
+    ├─ Table: cache_storage (UNLOGGED)
+    ├─ Serializer: JSON
+    └─ **Redis REMOVED** in ADR-022 (Issue #589)
 ```
+
+**Important**: Redis has been **completely removed** from the codebase. The current L2 implementation uses PostgreSQL with `UNLOGGED` tables for performance.
 
 ### 4.2 Cache Miss Path
 
@@ -337,12 +388,24 @@ public EquipmentExpectationResponseV4 getOrCalculate(
 **Scenario**: 1000 users × 1000 different characters = 1M unique keys
 
 **Analysis**:
-1. **Single-flight ineffective**: Each key is unique, no coalescing
+1. **Single-flight ineffective**: Each key is unique (different OCID), no coalescing
 2. **CPU saturation**: 1000 concurrent calculations × 50ms CPU = 50,000ms CPU time
-3. **Nexon API rate limiting**: 50 concurrent limit (bulkhead config)
+3. **Nexon API rate limiting**: 50 concurrent limit (bulkhead config - `Resilience4j`)
 4. **PostgreSQL connection pool**: Exhausted by concurrent upserts
+5. **Rate limiting**: **Currently DISABLED** (`ratelimit.enabled: false`)
 
-**Conclusion**: Single-flight helps with same-key stampede, **NOT** with unique-key fan-out.
+**Distributed Lock Behavior** (`PostgresAdvisoryLockStrategy.kt`):
+- Lock key: `"cache:sf:{cacheName}:{ocid}"` - unique per character
+- Each of 1000 different keys gets its own lock
+- **No contention** between different characters
+- **No protection** against fan-out explosion
+
+**Current Protections**:
+- `BulkLoaderService`: Semaphore with 100 permits (limits concurrent backfill)
+- `PopularCharacterWarmupScheduler`: Warms top 50 characters
+- **Missing**: Global admission control for concurrent unique cache misses
+
+**Conclusion**: Single-flight helps with same-key stampede, **NOT** with unique-key fan-out. **Fan-out explosion is a legitimate vulnerability.**
 
 ---
 
@@ -408,11 +471,14 @@ public EquipmentExpectationResponseV4 getOrCalculate(
 
 | Priority | Item | Expected Impact | Effort |
 |----------|------|-----------------|--------|
-| **P0** | JSON 파싱 최적화 (부분 파싱) | 20-30% CPU reduction | Medium |
-| **P0** | 3 프리셋 병렬화 (현재 순차) | 2x calculation speed | Low |
-| **P1** | Gzip 압축 수준 조정 (level 6 → 4) | 5-10% CPU reduction | Low |
+| **P0** | JSON 파싱 최적화 (부분 파싱, DTO 축소) | 15-20% CPU reduction | Medium |
+| **P0** | Probability DP 병렬화 (item 단위) | 10-15% CPU reduction | Medium |
+| **P0** | Rate limiting 활성화 (global admission control) | Fan-out 보호 | Low |
+| **P1** | Gzip 압축 수준 조정 (level 6 → 4) | 3-5% CPU reduction | Low |
 | **P1** | JDBC batch size tuning (100 → 200) | 10-20% write throughput | Low |
-| **P2** | Connection pool sizing (HikariCP) | 5-10% latency reduction | Low |
+| **P2** | Connection pool sizing (HikariCP warmup) | 5-10% latency reduction | Low |
+
+**Note**: 3 프리셋 병렬화는 **이미 완료됨** (`presetExecutor`로 분리 실행 중)
 
 ### 6.2 중기 구조개선 (1-2 months)
 
@@ -554,13 +620,35 @@ DB upsert (async, batched)
 | Statement | Type | Confidence |
 |-----------|------|------------|
 | BigDecimal already migrated to Double | **Verified** | 100% (code evidence) |
+| 3 preset calculation already parallelized | **Verified** | 100% (code evidence) |
+| Redis removed (ADR-022, Issue #589) | **Verified** | 100% (code evidence) |
+| Rate limiting currently DISABLED | **Verified** | 100% (config: `ratelimit.enabled: false`) |
 | 200~300KB JSON per character | **Verified** | 100% (user statement) |
 | CPU 700% observed | **Verified** | 100% (user statement) |
 | 158,428 persisted rows | **Verified** | 100% (user statement) |
-| JSON parsing 25-30% CPU | **Inference** | 70% (estimated) |
-| 3 preset calc 20-25% CPU | **Inference** | 70% (estimated) |
-| Gzip 10-15% CPU | **Inference** | 60% (estimated) |
+| JSON parsing 20-25% CPU | **Inference** | 70% (estimated) |
+| Probability DP 15-20% CPU | **Inference** | 80% (algorithm analysis) |
+| Gzip 8-12% CPU | **Inference** | 60% (estimated) |
 | Index maintenance causing backfill slowdown | **Inference** | 80% (database theory) |
+
+## Appendix C: Additional Agent Findings
+
+### CPU Analyst Discoveries
+1. **Probability Convolution DP**: O(n³) nested loops, called 30-45 times per request
+2. **3 Preset already parallel**: Uses separate `presetExecutor` with 12 core / 24 max threads
+3. **No explicit gzip level tuning**: Using default Java GZIPOutputStream
+
+### Cache Analyst Discoveries
+1. **Redis completely removed**: ADR-022, Issue #589
+2. **Rate limiting disabled**: `ratelimit.enabled: false` in all configs
+3. **Fan-out vulnerability confirmed**: 1000 different keys = 1000 concurrent API calls
+4. **No global admission control**: Only per-IP rate limiting exists
+
+### DB Analyst Discoveries
+1. **No explicit WAL tuning**: Using PostgreSQL defaults
+2. **Dedicated lock pool**: 40 connections (separate from main pool)
+3. **Missing rewriteBatchedStatements**: MySQL optimization flag not found in Postgres config
+4. **Double-buffering risk**: Write-behind buffer + Hibernate batch could add latency
 
 ---
 

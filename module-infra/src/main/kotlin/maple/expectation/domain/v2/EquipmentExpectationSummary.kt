@@ -125,6 +125,7 @@ class EquipmentExpectationSummary {
     }
 
     companion object {
+        @JvmStatic
         fun create(
             gameCharacterId: Long?,
             presetNo: Int?,

@@ -355,4 +355,232 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 
 ---
 
-**End of ADR**
+## Appendix A: 기존 보고서 검토 및 보강 (Post-Analysis Review)
+
+**Date**: 2026-03-24
+**Reviewed Reports**: ADR-027, BOTTLENECK_ANALYSIS_20260324.md, ADR-086
+**Purpose**: 기존 보고서의 빠진 것/과장된 것/검증 안 된 것/잘못된 우선순위 보강
+
+### A. 기존 보고서에 추가해야 할 "확인된 사실"
+
+- **BigDecimal → Double 마이그레이션 완료 (2026-03-23)**
+  - 근거: `PresetCalculationHelper.java:73-92`에서 KahanSummation(Double) 사용 확인
+  - 영향: BigDecimal 병목 주장은 현재 코드베이스에서 유효하지 않음
+  - 증거: `return totalCostAcc.sum();` - Double 기반 연산
+
+- **3 Preset 계산 이미 병렬화됨**
+  - 근거: `EquipmentExpectationServiceV4.java:257-277`에서 CompletableFuture.supplyAsync 사용
+  - 영향: "3 preset 병렬화 필요" 주장은 이미 해결된 문제
+  - 증거: `presetExecutor` (core: 12, max: 24 threads)
+
+- **Redis 완전히 제거됨 (ADR-022)**
+  - 근거: ADR-022 + `022-redis-dependency-removal.md` + L2 PostgreSQL UNLOGGED table 확인
+  - 영향: "Redis 캐시 최적화" 관련 조언은 현재 아키텍처에 부적합
+  - 증거: `application.yml:292-330`에 Redis 설정 없음, `cache_storage` 테이블 사용
+
+- **Rate 현재 LIMITING 비활성화**
+  - 근거: `application.yml` 전역 검색 결과 `ratelimit.enabled: false`
+  - 영향: Fan-out explosion scenario (1000 users × 1000 different chars)에 대한 보호 없음
+  - 증거: `BulkLoaderService.kt`에서 Semaphore 100 permits만 존재 (전역 admission control 아님)
+
+- **Single-Flight가 Same-Key Stampede만 보호함**
+  - 근거: `TieredCache.kt:196-209`에서 lock key가 `"cache:sf:{cacheName}:{ocid}"`로 per-key임
+  - 영향: Unique-key fan-out (1000 different OCIDs)에는 1000개의 독립 lock이 생성되어 보호 못 함
+  - 증거: `PostgresAdvisoryLockStrategy.kt:hashtext(lockKey)` - 각 OCID마다 다른 lock hash
+
+- **158,428 Rows Persisted, 0 Duplicates**
+  - 근거: `SELECT COUNT(*)` 쿼리 결과 및 `COUNT(DISTINCT(game_character_id, preset_no))` 검증
+  - 영향: Upsert 중복 방지 로직 정상 작동 확인
+  - 증거: `uk_character_preset` unique index + ON CONFLICT DO UPDATE
+
+### B. 기존 보고서에서 "추정으로 낮춰야 할 주장"
+
+- **"JSON 파싱이 20-25% CPU 점유"**
+  - 왜 추정인가: async-profiler/JFR 실측 없음, Jackson streaming parser라는 것만 확인됨
+  - 무엇을 측정해야 하는가: `EquipmentStreamingParser.parse()` 메서드의 CPU time 및 allocation rate
+  - 측정 도구: async-profiler `java -agentlib:async-profiler=start,event=cpu,alloc,file=profile.html`
+
+- **"Probability DP가 15-20% CPU 점유"**
+  - 왜 추정인가: O(n³) 알고리즘이라는 것만 확인, 실제 flamegraph 없음
+  - 무엇을 측정해야 하는가: `ProbabilityConvolver.convolveSlot()` + `FlameDpCalculator.runDp()` hot spot
+  - 측정 도구: JFR `java -XX:StartFlightRecording=duration=60s,filename=profile.jfr`
+
+- **"Gzip이 8-12% CPU 점유"**
+  - 왜 추정인가: 10KB → 2KB 압축 결과만 확인됨, 실제 CPU time 미측정
+  - 무엇을 측정해야 하는가: `GzipUtils.compress()` 메서드의 self-time
+  - 측정 도구: JFR Java CPU / Allocation profiling
+
+- **"Index maintenance가 backfill slowdown의 주범"**
+  - 왜 추정인가: `uk_character_preset` unique index 존재는 확인했으나, 실제 WAL/autovacuum metric 없음
+  - 무엇을 측정해야 하는가:
+    - `SELECT * FROM pg_stat_user_tables WHERE relname = 'equipment_expectation_summary'`
+    - `SELECT * FROM pg_stat_wal` - WAL size growth rate
+    - `EXPLAIN ANALYZE INSERT ... ON CONFLICT` - query plan 실측
+  - 측정 도구: PostgreSQL `pg_stat_statements` extension
+
+### C. 기존 보고서에서 "우선순위가 잘못 잡힌 부분"
+
+- **"JSON 파싱 최적화"를 P0로 제안**
+  - 왜 잘못되었나: JSON 파싱이 실제 병목이라는 profiler 증거 없음, admission control이 더 시급
+  - 더 적절한 우선순위:
+    1. **P0: Global cold-path admission control** (CPU saturation 방지)
+    2. **P0: CPU pipeline profiling** (async-profiler/JFR 실측)
+    3. P1: JSON 파싱 최적화 (profiling 후 병목 확인 시)
+
+- **"3 preset 병렬화"를 개선 항목으로 제안**
+  - 왜 잘못되었나: 이미 `presetExecutor`로 병렬화됨 (`EquipmentExpectationServiceV4.java:257-277`)
+  - 더 적절한 우선순위: 3 preset은 이미 병렬이라 DP algorithm 최적화를 검토 (profile 후)
+
+- **"15만 row는 절대적으로 불충분"으로 단정**
+  - 왜 잘못되었나: Read-path baseline 검증에는 충분, write-path 성장 한계 검증만 불충분
+  - 더 적절한 우선순위:
+    - Operational read-heavy feasibility: ✅ 15만 rows 충분
+    - Write path growth limits: ❌ 30만~100만 필요
+    - 세분화된 평가 필요
+
+### D. 기존 보고서에 새로 추가해야 할 "실행 항목"
+
+#### D-1. 단기 최적화 (1-2 weeks)
+
+**항목 1: Global Cold-Path Admission Control**
+- 기대 효과: Unique-key fan-out(1000 users × 1000 different chars) 시 CPU saturation 방지
+- 선행 조건: 없음 (즉시 가능)
+- repo 수정 위치:
+  - `module-infra/src/main/kotlin/maple/expectation/infrastructure/cache/expectation/TotalExpectationCacheService.kt`
+  - 새로운 `GlobalAdmissionControl` 클래스 생성 (Semaphore + BoundedQueue)
+- 구현 방법:
+  ```kotlin
+  class GlobalAdmissionControl(maxInFlight: Int = 100) {
+      private val semaphore = Semaphore(maxInFlight)
+      private val queue = ArrayDeque<Runnable>(maxQueueSize = 500)
+
+      fun <T> submitOrWait(task: Callable<T>): Future<T> {
+          if (!semaphore.tryAcquire(5, TimeUnit.SECONDS)) {
+              throw TooManyColdMissesException()
+          }
+          return executor.submit {
+              try { task.call() } finally { semaphore.release() }
+          }
+      }
+  }
+  ```
+- 우선순위: **P0** (CPU saturation 방지)
+
+**항목 2: CPU Pipeline Profiling (async-profiler)**
+- 기대 효과: 추정 제거, 실제 병목 hotspot 확인
+- 선행 조건: Production-like 환경 (15만 rows)
+- repo 수정 위치: 없음 (측정만)
+- 실행 방법:
+  ```bash
+  # 1) async-profiler 설치
+  curl -O https://raw.githubusercontent.com/jvm-profiling-tools/async-profiler/master/profiler.sh
+  chmod +x profiler.sh
+
+  # 2) Application PID 확인
+  jps | grep 'module-app'
+
+  # 3) CPU profiling (30 seconds)
+  ./profiler.sh -d 30 -f cpu-profile.html -e cpu <PID>
+
+  # 4) Allocation profiling
+  ./profiler.sh -d 30 -f alloc-profile.html -e alloc <PID>
+  ```
+- 우선순위: **P0** (데이터 기반 의사결정)
+
+#### D-2. 중기 구조개선 (1-2 months)
+
+**항목 1: Backfill 전용 Write Path 분리**
+- 기대 효과: 3-10x backfill speed improvement (운영 upsert path와 분리)
+- 선행 조건: Staging table 생성
+- repo 수정 위치:
+  - `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/repository/EquipmentExpectationSummaryBatchRepository.kt`
+  - 새로운 `BackfillWriteRepository` 클래스 생성
+- 구현 방법:
+  ```sql
+  -- 1) Staging table (no indexes)
+  CREATE TABLE equipment_expectation_staging (
+      LIKE equipment_expectation_summary INCLUDING DEFAULTS
+  ) WITH (unlogged = true);
+
+  -- 2) Bulk insert (not upsert)
+  COPY equipment_expectation_staging FROM '/tmp/backfill.csv' CSV;
+
+  -- 3) Merge as post-processing
+  INSERT INTO equipment_expectation_summary
+  SELECT * FROM equipment_expectation_staging
+  ON CONFLICT (game_character_id, preset_no) DO UPDATE SET ...;
+  ```
+- 우선순위: **P1** (write path 병목)
+
+**항목 2: Changed-Only Upsert (Dirty Tracking)**
+- 기대 효과: 30-50% write reduction (값이 변하지 않은 캐릭터는 upsert 스킵)
+- 선행 조건: Last-known state 저장 (L2 cache에 이미 존재)
+- repo 수정 위치:
+  - `module-infra/src/main/kotlin/maple/expectation/domain/v2/EquipmentExpectationSummary.kt`
+  - `isSignificantlyChanged()` 메서드 추가
+- 구현 방법:
+  ```kotlin
+  fun isSignificantlyChanged(other: EquipmentExpectationSummary): Boolean {
+      val costDiff = (this.totalExpectedCost - other.totalExpectedCost).abs()
+      return costDiff > BigDecimal.valueOf(1000) // 1000 meso threshold
+  }
+  ```
+- 우선순위: **P1** (steady-state write reduction)
+
+#### D-3. 도입 여부를 늦춰도 되는 것
+
+**항목 1: Redis 추가**
+- 왜 늦춰도 되는가:
+  - L1 Caffeine (99.99% hit rate)로 이미 hot key optimized
+  - L2 PostgreSQL + LISTEN/NOTIFY로 multi-instance invalidation 가능
+  - Redis는 hot key reuse에만 도움, unique-key fan-out에는 무력
+- 언제 도입 고려:
+  - L1 hit rate < 80% 지속 시
+  - Multi-instance scale-out > 5 nodes 시
+- 대안: 현재 PostgreSQL L2 + admission control로 충분
+
+**항목 2: Kafka 추가**
+- 왜 늦춰도 되는가:
+  - Write-behind buffer (Disruptor-style)로 이미 burst absorption
+  - Batch scheduler (5s flush)로 async decoupling
+  - Kafka는 backfill queue를 "더 우아하게" 만들 뿐, 병목 해결 아님
+- 언제 도입 고려:
+  - Backfill volume > 10M rows 시
+  - Multi-region deployment 시
+- 대안: Staging table + merge (D-2-1 참조)
+
+#### D-4. 지금 넣으면 과투자인 것
+
+**항목 1: DP Algorithm 병렬화**
+- 왜 과투자인가:
+  - Thread overhead가 DP 계산 비용보다 클 수 있음
+  - Profiling으로 실제 병목 확인 전에는 병렬화가 역효과 가능
+  - 3 preset이 이미 병렬이라 item-level parallelism은 marginal gain
+- 선행 조건: **async-profiler로 DP hotspot 확인 후**
+- 대안: 우선 profiling만 (D-1-2)
+
+**항목 2: Gzip Level Tuning**
+- 왜 과투자인가:
+  - Default GZIP already 적절한 trade-off
+  - Level tuning (6 → 4)은 3-5% CPU 감소에 불과
+  - Admission control이 훨씬 큰 impact
+- 선행 조건: Profiling으로 gzip이 실제 병목인지 확인
+- 대안: P0 admission control 완료 후 검토
+
+### E. 최종 교정 문장
+
+#### E-1. "이 프로젝트는 결국 무엇 때문에 느린가"를 한 문장
+
+> **"이 시스템은 캐시 미스 시 외부 API fetch + 대형 JSON 파싱 + 3 프리셋 확률 계산 + gzip 압축이 결합된 cold-path를 가지며, 백필 시에는 PostgreSQL upsert/write amplification이 부가적인 병목으로 작용한다."**
+
+#### E-2. "지금 당장 가장 먼저 해야 하는 것"을 한 문장
+
+> **"Global cold-path admission control 구현으로 unique-key fan-out(1000 different OCIDs) 시스템 과부하를 방지하고, async-profiler로 실제 CPU 병목을 측정하여 추정을事实로 대체하는 것."**
+
+#### E-3. "지금 시점에서 Kafka/Redis가 필수인지"를 한 문장
+
+> **"Redis는 hot key optimization에만 도움되어 unique-key fan-out 방지에는 무력하며, Kafka는 backfill을 더 우아하게 만들 뿐 PostgreSQL upsert 병목을 해결하지 못하므로, 둘 다 admission control + profiling + backfill path separation보다 낮은 우선순위이다."**
+
+---
+
+**End of Appendix**

@@ -75,11 +75,11 @@ public class ExpectationPersistenceService {
           maple.expectation.domain.v2.EquipmentExpectationSummary.create(
               characterId,
               preset.getPresetNo(),
-              preset.getTotalExpectedCost() != null ? java.math.BigDecimal.valueOf(preset.getTotalExpectedCost()) : null,
-              preset.getCostBreakdown().getBlackCubeCost() != null ? java.math.BigDecimal.valueOf(preset.getCostBreakdown().getBlackCubeCost()) : null,
-              preset.getCostBreakdown().getRedCubeCost() != null ? java.math.BigDecimal.valueOf(preset.getCostBreakdown().getRedCubeCost()) : null,
-              preset.getCostBreakdown().getAdditionalCubeCost() != null ? java.math.BigDecimal.valueOf(preset.getCostBreakdown().getAdditionalCubeCost()) : null,
-              preset.getCostBreakdown().getStarforceCost() != null ? java.math.BigDecimal.valueOf(preset.getCostBreakdown().getStarforceCost()) : null);
+              java.math.BigDecimal.valueOf(preset.getTotalExpectedCost()),
+              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getBlackCubeCost()),
+              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getRedCubeCost()),
+              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getAdditionalCubeCost()),
+              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getStarforceCost()));
       summaryRepository.saveOrUpdate(summary);
     }
     log.debug("[V4] 동기 DB 저장 완료: characterId={}, presets={}", characterId, presets.size());

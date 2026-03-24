@@ -880,4 +880,203 @@ DB upsert (async, batched)
 
 ---
 
+## Appendix B: Global Admission Control과 Micro-Batching의 관계 (Issue #617)
+
+**Date**: 2026-03-24
+**Context**: Issue #617 Global Admission Control 구현
+**Purpose**: Admission control과 micro-batching의 상호 보완적 관계 명확화
+
+### B.1 핵심 원칙
+
+**Global admission control**과 **micro-batching**은 같은 문제를 푸는 것이 아니라 **서로 다른 층을 막는 장치**이므로, 둘을 **직렬로 결합**해야 한다.
+
+핵심 구조:
+> **앞단에서는 cold-path 동시 실행 수를 제한하고, 뒷단에서는 완료된 결과 쓰기를 짧은 시간창으로 모아 배치 upsert 한다.**
+
+### B.2 병목 위치 분석
+
+#### Admission Control이 해결하는 병목
+- **대상**: API fetch / parse / calc / compress 쪽 CPU 폭주
+- **시나리오**: Cold miss가 동시에 너무 많이 들어오는 경우
+  - Nexon API fetch 폭증
+  - 200~300KB JSON 파싱 폭증
+  - 3 preset 계산 폭증
+  - Gzip 압축 폭증
+
+#### Micro-Batching이 해결하는 병목
+- **대상**: save / upsert 쪽 DB write amplification 완화
+- **시나리오**: 계산 결과가 다 끝난 뒤 DB upsert가 몰리는 경우
+- **결과**: DB는 덜 아픈데, 앞단 CPU는 여전히 터질 수 있음
+
+**결론**: 둘 다 필요하다. Micro-batching만 넣으면 DB는 좀 덜 아픈데 앞단 CPU는 여전히 터질 수 있다.
+
+### B.3 추천 아키텍처
+
+#### 1단계: Global Admission Control
+
+**목표**: Cold miss 요청이 들어오면 바로 전부 계산시키지 말고 제어
+
+**구현 요소**:
+1. 전역 in-flight cold miss permits 둔다
+2. Permit 안에 드는 요청만 실제 fetch/parse/calc로 진입
+3. 초과 요청은 즉시 버리지 말고 대기 큐로 보낸다
+
+**정책** ("안 받는 건 안 된다" 요구사항 반영):
+- 429보다 아래 정책 우선:
+  - 같은 키면 single-flight에 붙여 대기
+  - 다른 키면 global queue에서 대기
+  - 대기가 길어지면 명시적 timeout/fallback 정책 적용
+- 가능하면 드롭보다 대기/비동기 전환 우선
+
+#### 2단계: 계산 완료 후 Write Task를 Micro-Batch Queue에 넣기
+
+**목표**: 각 요청이 계산을 마치면 바로 개별 upsert 하지 말고 공용 버퍼에 넣는다
+
+**Flush 기준** (이중 트리거):
+1. **Size threshold**: 예: 200개, 500개, 1000개
+2. **Time threshold**: 예: 20ms, 50ms, 100ms
+
+**예시**:
+- 500개 모이면 바로 flush
+- 안 모여도 50ms 지나면 flush
+
+**장점**:
+- Write latency를 무한정 늘리지 않음
+- Traffic burst 때는 batch size가 커져서 DB 효율이 올라감
+- Traffic low일 때도 너무 오래 안 기다림
+
+### B.4 네 상황에 특히 맞는 이유
+
+현재 시스템 흐름:
+1. Nexon API 응답 (200~300KB)
+2. 파싱
+3. 3 preset 계산
+4. Gzip 압축
+5. 결과 캐시
+6. Summary upsert / write-behind
+
+**문제점**: 요청당 작업비용이 크기 때문에 앞단에서 무제한 병렬 처리하는 순간 CPU가 먼저 터지고, 뒤에서는 upsert가 WAL/index 때문에 느려진다.
+
+**해결**: 조합은 이렇게 가야 한다
+- 운영 read path: same-key → single-flight, unique-key → global admission control, 계산 완료 → result cache 저장, write task → micro-batch writer로 전달
+- Backfill path: 운영 read path랑 분리, 별도 admission control, 가능하면 별도 staging/merge path, 운영 요청과 같은 executor/queue 쓰지 않기
+
+### B.5 가장 중요한 설계 포인트
+
+#### 1. "한 큐"라고 해도 큐 하나로 다 섞으면 안 됨
+
+**권장 분리**:
+- **Cold compute queue**: fetch / parse / calc 진입 제어
+- **Write batch queue**: 계산 완료 결과를 모아 batch upsert
+
+**이유**:
+- DB가 느려질 때 compute까지 같이 막히고
+- Compute burst가 write flush starvation을 일으키고
+- 결국 병목 위치를 관측하기 어려워짐
+
+즉 logical queue는 2개가 낫다.
+
+#### 2. Request 단위 batching이 아니라 Result 단위 batching
+
+- **HTTP request 묶음**: ❌
+- **계산 완료된 summary rows 묶음**: ✅
+
+Batching 대상은 결과 row들을 batch upsert 하는 쪽이 맞다.
+
+#### 3. Dedupe를 같이 넣어야 함
+
+Micro-batching에서 제일 효과 큰 건 사실 **batching + dedupe**다.
+
+**예시**: 짧은 윈도우 안에 같은 (game_character_id, preset_no)가 여러 번 들어오면
+- 마지막 값만 남기고
+- 이전 write task는 덮어쓴다
+
+**구조**: Write buffer는 단순 queue보다 이런 식이 더 낫다
+- Queue + map 조합
+- Key: (characterId, presetNo)
+- Value: latest summary
+
+Flush 시엔 중복 제거된 최신 row만 upsert. Changed-only upsert랑도 궁합이 좋다.
+
+### B.6 추천 플로우
+
+```
+Request
+  ↓
+L1/L2 cache lookup
+  ↓ miss
+same-key?
+  ├─ yes → single-flight join
+  └─ no  → global admission queue
+             ↓ permit 획득
+             Nexon API fetch
+             JSON parse
+             3 preset calculate
+             gzip/compress/cache save
+             ↓
+             write task enqueue
+             ↓
+       micro-batch writer
+         ├─ dedupe by (characterId, presetNo)
+         ├─ flush on size threshold
+         └─ flush on time threshold
+             ↓
+       batch upsert
+```
+
+### B.7 이 구조의 장점
+
+1. **CPU 보호**: 무한 cold miss 동시 실행을 막는다 (제일 중요)
+2. **DB 효율 향상**: 개별 upsert 폭탄 대신 batch upsert로 변경
+   - Round trip 감소
+   - Transaction 수 감소
+   - WAL flush 횟수 감소
+   - Index touch amortization
+3. **"안 받는 건 안 된다" 요구와 양립 가능**: 즉시 reject 대신 bounded waiting, fair scheduling, async handoff 가능
+
+### B.8 주의할 점
+
+1. **수천 개를 너무 오래 모으면 tail latency가 늘어남**
+   - Micro-batch는 무조건 크게 모은다고 좋은 게 아니다
+   - 운영 요청에서는 보통 20~50ms, 많아도 100ms 내외가 현실적
+   - 백필 전용이면 더 길게 잡아도 되지만, 운영 read path write-behind라면 너무 길게 기다리면 안 됨
+
+2. **Admission control 없이 micro-batching만 넣으면 실패**
+   - DB는 덜 터짐
+   - CPU는 계속 터질 수 있음
+   - 즉 둘 중 하나만 고르면 안 되고, 우선순위는 admission control이 먼저
+
+3. **Backfill은 운영 큐와 분리해야 함**
+   - 섞으면 운영 트래픽이 backfill 때문에 밀린다
+   - 운영 요청으로 생긴 write task vs 백필로 생긴 write task는 최소한 서로 다른 budget / queue / scheduler를 가져야 함
+
+### B.9 네 상황 기준 추천 우선순위
+
+**P0**:
+- Global cold-miss admission control (unique-key fan-out 방지, bounded queue, fairness)
+
+**P1**:
+- Write micro-batching + dedupe ((game_character_id, preset_no) latest-wins, size/time dual-trigger flush)
+
+**P1**:
+- 운영/백필 queue 분리 (executor 분리, batch writer 분리, budget 분리)
+
+**P2**:
+- Changed-only upsert (실제 값 변화 없으면 skip)
+
+**P2**:
+- Staging/merge는 backfill 전용으로 검토 (운영 path엔 과할 수 있음, backfill엔 매우 유효)
+
+### B.10 ADR에 넣기 좋은 한 문장
+
+> **Global admission control은 cold-path compute 폭주를 막고, micro-batching은 완료된 결과 쓰기를 짧은 시간창으로 묶어 PostgreSQL upsert 비용을 완화하므로, 두 기법은 대체 관계가 아니라 상호 보완 관계다.**
+
+### B.11 구현 아이디어 한 줄 버전
+
+앞단: Semaphore + bounded fair queue
+중간: same-key single-flight 유지
+뒷단: ConcurrentHashMap(latest wins) + periodic/size-trigger batch flush
+
+---
+
 **End of Appendix**

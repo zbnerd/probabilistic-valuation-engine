@@ -106,4 +106,28 @@ class NexonApiProperties {
     @Min(5)
     @Max(60)
     var latchFinalizeTtlSeconds: Int = 10
+
+    /**
+     * 장비 데이터 로드 타임아웃 (초)
+     *
+     * {@link maple.expectation.application.service.expectation.EquipmentExpectationServiceV4#loadEquipmentDataAsync}
+     * 에서 사용하는 application-level 타임아웃
+     *
+     * <p><strong>중요:</strong> Resilience4j TimeLimiter(28s)와 동기화 필요
+     *
+     * <p>계산 공식: 3*(connectTimeout + responseTimeout) + 2*retryWait + margin
+     * <ul>
+     *   <li>3회 재시도: 3*(3s+5s) = 24s</li>
+     *   <li>재시도 대기: 2*0.5s = 1s</li>
+     *   <li>안전 마진: 3s</li>
+     *   <li>총계: 28s</li>
+     * </ul>
+     *
+     * 기본값: 28초 (Resilience4j TimeLimiter와 일치)
+     *
+     * 허용 범위: 10 ~ 60초
+     */
+    @Min(10)
+    @Max(60)
+    var dataLoadTimeoutSeconds: Int = 28
 }

@@ -54,7 +54,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private static final long ASYNC_TIMEOUT_SECONDS = 30L;
-  private static final long DATA_LOAD_TIMEOUT_SECONDS = 10L;
 
   private final GameCharacterFacade gameCharacterFacade;
   private final GameCharacterService gameCharacterService;
@@ -69,6 +68,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   private final ExpectationCacheCoordinator cacheCoordinator;
   private final ExpectationPersistenceService persistenceService;
   private final ObjectProvider<EquipmentExpectationServiceV4> selfProvider;
+  private final maple.expectation.infrastructure.config.NexonApiProperties nexonApiProperties;
 
   public EquipmentExpectationServiceV4(
       GameCharacterFacade gameCharacterFacade,
@@ -82,7 +82,8 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       @Qualifier("presetCalculationExecutor") Executor presetExecutor,
       ExpectationCacheCoordinator cacheCoordinator,
       ExpectationPersistenceService persistenceService,
-      ObjectProvider<EquipmentExpectationServiceV4> selfProvider) {
+      ObjectProvider<EquipmentExpectationServiceV4> selfProvider,
+      maple.expectation.infrastructure.config.NexonApiProperties nexonApiProperties) {
     this.gameCharacterFacade = gameCharacterFacade;
     this.gameCharacterService = gameCharacterService;
     this.equipmentProvider = equipmentProvider;
@@ -95,6 +96,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
     this.cacheCoordinator = cacheCoordinator;
     this.persistenceService = persistenceService;
     this.selfProvider = selfProvider;
+    this.nexonApiProperties = nexonApiProperties;
   }
 
   // ==================== Public API ====================
@@ -247,7 +249,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
     }
     return equipmentProvider
         .getRawEquipmentData(character.getCharacterId().value())
-        .orTimeout(DATA_LOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        .orTimeout(nexonApiProperties.getDataLoadTimeoutSeconds(), TimeUnit.SECONDS);
   }
 
   // ==================== Preset Calculation ====================

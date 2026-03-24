@@ -59,12 +59,12 @@ interface EquipmentExpectationSummaryRepository : JpaRepository<EquipmentExpecta
             VALUES
                 (:gameCharacterId, :presetNo, :totalExpectedCost, :blackCubeCost,
                  :redCubeCost, :additionalCubeCost, :starforceCost, NOW(), 0)
-            ON DUPLICATE KEY UPDATE
-                total_expected_cost = :totalExpectedCost,
-                black_cube_cost = :blackCubeCost,
-                red_cube_cost = :redCubeCost,
-                additional_cube_cost = :additionalCubeCost,
-                starforce_cost = :starforceCost,
+            ON CONFLICT (game_character_id, preset_no) DO UPDATE SET
+                total_expected_cost = EXCLUDED.total_expected_cost,
+                black_cube_cost = EXCLUDED.black_cube_cost,
+                red_cube_cost = EXCLUDED.red_cube_cost,
+                additional_cube_cost = EXCLUDED.additional_cube_cost,
+                starforce_cost = EXCLUDED.starforce_cost,
                 calculated_at = NOW()
             """,
         nativeQuery = true,

@@ -140,11 +140,11 @@ class ExpectationBatchShutdownHandler(
                     val summary = EquipmentExpectationSummary(
                         gameCharacterId = task.characterId,
                         presetNo = task.presetNo,
-                        totalExpectedCost = task.totalExpectedCost,
-                        blackCubeCost = task.blackCubeCost,
-                        redCubeCost = task.redCubeCost,
-                        additionalCubeCost = task.additionalCubeCost,
-                        starforceCost = task.starforceCost,
+                        totalExpectedCost = task.totalExpectedCost?.let { java.math.BigDecimal.valueOf(it) },
+                        blackCubeCost = task.blackCubeCost?.let { java.math.BigDecimal.valueOf(it) },
+                        redCubeCost = task.redCubeCost?.let { java.math.BigDecimal.valueOf(it) },
+                        additionalCubeCost = task.additionalCubeCost?.let { java.math.BigDecimal.valueOf(it) },
+                        starforceCost = task.starforceCost?.let { java.math.BigDecimal.valueOf(it) },
                     )
                     repository.saveOrUpdate(summary)
                     true

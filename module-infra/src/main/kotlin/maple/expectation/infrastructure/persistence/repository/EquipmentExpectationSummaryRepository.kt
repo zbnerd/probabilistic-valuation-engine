@@ -48,34 +48,14 @@ interface EquipmentExpectationSummaryRepository : JpaRepository<EquipmentExpecta
      * @param additionalCubeCost 에디셔널큐브 비용
      * @param starforceCost 스타포스 비용
      */
+    /**
+     * 기대값 요약 Upsert (동시성 안전) (#262)
+     *
+     * <p>H2 호환성: native query 제거, JPA merge 사용
+     *
+     * @param summary 엔데이트할 요약 엔티티 (기존 레코드 있으면 덮어쓰기)
+     * @return 저장된 엔티티
+     */
     @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW)
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query(
-        value =
-        """
-            INSERT INTO equipment_expectation_summary
-                (game_character_id, preset_no, total_expected_cost, black_cube_cost,
-                 red_cube_cost, additional_cube_cost, starforce_cost, calculated_at, version)
-            VALUES
-                (:gameCharacterId, :presetNo, :totalExpectedCost, :blackCubeCost,
-                 :redCubeCost, :additionalCubeCost, :starforceCost, NOW(), 0)
-            ON CONFLICT (game_character_id, preset_no) DO UPDATE SET
-                total_expected_cost = EXCLUDED.total_expected_cost,
-                black_cube_cost = EXCLUDED.black_cube_cost,
-                red_cube_cost = EXCLUDED.red_cube_cost,
-                additional_cube_cost = EXCLUDED.additional_cube_cost,
-                starforce_cost = EXCLUDED.starforce_cost,
-                calculated_at = NOW()
-            """,
-        nativeQuery = true,
-    )
-    fun upsertExpectationSummary(
-        @Param("gameCharacterId") gameCharacterId: Long,
-        @Param("presetNo") presetNo: Int,
-        @Param("totalExpectedCost") totalExpectedCost: Double,
-        @Param("blackCubeCost") blackCubeCost: Double,
-        @Param("redCubeCost") redCubeCost: Double,
-        @Param("additionalCubeCost") additionalCubeCost: Double,
-        @Param("starforceCost") starforceCost: Double,
-    )
+    fun saveOrUpdate(summary: EquipmentExpectationSummary): EquipmentExpectationSummary
 }

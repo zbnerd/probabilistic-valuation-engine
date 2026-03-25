@@ -3,10 +3,12 @@ package maple.expectation.web.controller.v4
 import jakarta.validation.constraints.NotBlank
 import java.math.BigDecimal
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -37,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController
 class GameCharacterControllerV4(
     private val expectationPort: ExpectationV4Port,
     private val trackerPort: PopularCharacterTrackerPort,
+    @Qualifier("taskExecutor") private val taskExecutor: Executor,
 ) {
 
     @GetMapping("/{userIgn}/expectation")
@@ -69,12 +72,12 @@ class GameCharacterControllerV4(
         return if (acceptsGzip(acceptEncoding)) {
             expectationPort
                 .getGzipExpectationAsync(userIgn, force)
-                .thenApply { gzipBytes -> buildGzipResponse(gzipBytes ?: ByteArray(0)) }
+                .thenApplyAsync({ gzipBytes -> buildGzipResponse(gzipBytes ?: ByteArray(0)) }, taskExecutor)
         } else {
             // JSON 응답
             expectationPort
                 .calculateExpectationAsync(userIgn, force)
-                .thenApply { this.buildJsonResponse(it) }
+                .thenApplyAsync({ this.buildJsonResponse(it) }, taskExecutor)
         }
     }
 
@@ -99,8 +102,8 @@ class GameCharacterControllerV4(
 
         return expectationPort
             .calculateExpectationAsync(userIgn, false)
-            .thenApply { r -> r as EquipmentExpectationResponseV4 }
-            .thenApply { response -> ResponseEntity.ok(filterByPreset(response, presetNo)) }
+            .thenApplyAsync({ r -> r as EquipmentExpectationResponseV4 }, taskExecutor)
+            .thenApplyAsync({ response -> ResponseEntity.ok(filterByPreset(response, presetNo)) }, taskExecutor)
     }
 
     @PostMapping("/{userIgn}/expectation/recalculate")
@@ -112,8 +115,8 @@ class GameCharacterControllerV4(
 
         return expectationPort
             .calculateExpectationAsync(userIgn, true)
-            .thenApply { r -> r as EquipmentExpectationResponseV4 }
-            .thenApply { ResponseEntity.ok(it) }
+            .thenApplyAsync({ r -> r as EquipmentExpectationResponseV4 }, taskExecutor)
+            .thenApplyAsync({ ResponseEntity.ok(it) }, taskExecutor)
     }
 
     private fun filterByPreset(

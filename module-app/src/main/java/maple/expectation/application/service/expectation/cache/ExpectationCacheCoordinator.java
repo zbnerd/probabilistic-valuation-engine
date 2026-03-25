@@ -44,6 +44,7 @@ public class ExpectationCacheCoordinator {
   /**
    * Constructor with admission control (US-002: Issue #617)
    */
+  @org.springframework.beans.factory.annotation.Autowired
   public ExpectationCacheCoordinator(
       LogicExecutor executor,
       ObjectMapper objectMapper,

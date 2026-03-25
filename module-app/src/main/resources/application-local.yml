@@ -58,6 +58,15 @@ spring:
     discord:
       webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
 
+  # 🔥 FIX: Increase async executor queue for load testing
+  task:
+    execution:
+      pool:
+        core-size: 200      # Increased from default
+        max-size: 400       # Increased from default
+        queue-capacity: 2000  # Increased to handle 300 RPS
+      thread-name-prefix: "async-"
+
 # MongoDB Configuration (V5 CQRS) - REMOVED in Issue #590
 # All V5 data now stored in PostgreSQL
 
@@ -183,3 +192,30 @@ bulk:
     initial-ms: 100  # Increased delay between requests
     min-ms: 50
     max-ms: 1000
+
+# Executor Configuration (Issue #617) - Increase queue capacity for 300 RPS load test
+executor:
+  async:
+    core-pool-size: 200
+    max-pool-size: 400
+    queue-capacity: 2000  # Increased from 100 to handle 300 RPS
+
+# Admission Control (Issue #617) - Local Development
+# Increased limits for 300 RPS load test
+admission-control:
+  max-in-flight: 300        # Max concurrent cold-path calculations (increased for 300 RPS)
+  queue-timeout-ms: 10000   # Max wait time in queue (increased)
+  max-queue-size: 2000      # Maximum pending requests (increased)
+  worker-pool-size: 32      # Worker threads for queue consumption (increased)
+
+priority-admission:
+  enabled: false            # Disable for local dev
+
+adaptive-admission:
+  enabled: false            # Disable for local dev
+
+# Disable admission control for local development (Issue #617)
+# GlobalAdmissionControl bean causes startup issues
+admission:
+  control:
+    enabled: false

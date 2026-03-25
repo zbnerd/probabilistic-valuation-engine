@@ -8,7 +8,9 @@ import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
+import java.lang.management.ManagementFactory
 import java.util.concurrent.Callable
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Semaphore
@@ -55,11 +57,19 @@ class GlobalAdmissionControl(
     private val admissionQueue: BlockingQueue<AdmissionRequest<*>> =
         ArrayBlockingQueue(properties.maxQueueSize)
 
+    // 🔥 P0 FIX #2: OS bean for CPU load monitoring (early rejection)
+    private val osBean = ManagementFactory.getOperatingSystemMXBean()
+
     // Metrics
     private val queueTimeoutCounter: Counter
     private val queueFullCounter: Counter
     private val admissionRejectedCounter: Counter
     private val queueWaitTimeTimer: Timer
+    private val earlyRejectionCounter: Counter  // 🔥 P0 FIX #2: Early rejection metric
+
+    // 🔥 LAZY INIT: Worker pool started on first submit
+    @Volatile
+    private var workerPoolStarted = false
 
     init {
         queueTimeoutCounter = Counter.builder("admission_control.queue.timeout")
@@ -72,6 +82,11 @@ class GlobalAdmissionControl(
 
         admissionRejectedCounter = Counter.builder("admission_control.rejected")
             .description("Requests rejected due to queue full")
+            .register(meterRegistry)
+
+        // 🔥 P0 FIX #2: Early rejection counter (queue near full + CPU high)
+        earlyRejectionCounter = Counter.builder("admission_control.early_rejection")
+            .description("Requests rejected early due to heavy load (queue near full + CPU high)")
             .register(meterRegistry)
 
         // 🔥 ADDED: Queue wait time distribution
@@ -88,11 +103,9 @@ class GlobalAdmissionControl(
             .description("Requests waiting in admission queue (REAL BOUNDED QUEUE)")
             .register(meterRegistry)
 
-        // 🔥 FIXED: Start worker pool
-        startWorkerPool(properties.workerPoolSize)
-
+        // 🔥 LAZY INIT: Don't start worker pool yet
         log.info(
-            "[AdmissionControl] Initialized: maxInFlight={}, maxQueueSize={}, workerPoolSize={}",
+            "[AdmissionControl] Initialized: maxInFlight={}, maxQueueSize={}, workerPoolSize={} (lazy)",
             properties.maxInFlight,
             properties.maxQueueSize,
             properties.workerPoolSize
@@ -110,8 +123,40 @@ class GlobalAdmissionControl(
      * @return CompletableFuture with result
      */
     fun <T> submitOrWait(key: String, task: Callable<T>): CompletableFuture<T> {
+        // 🔥 LAZY INIT: Start worker pool on first submit
+        if (!workerPoolStarted) {
+            synchronized(this) {
+                if (!workerPoolStarted) {
+                    startWorkerPool(properties.workerPoolSize)
+                    workerPoolStarted = true
+                }
+            }
+        }
+
         val future = CompletableFuture<T>()
         val request = AdmissionRequest(key, task, future, System.nanoTime())
+
+        // 🔥 P0 FIX #2: EARLY REJECTION - Reject if queue near full AND CPU high
+        // Prevents timeout storm by rejecting before queue fills completely
+        val currentQueueDepth = admissionQueue.size
+        val cpuLoad = osBean.systemLoadAverage
+
+        if (currentQueueDepth > properties.maxQueueSize * 0.8 && cpuLoad > 5.0) {
+            earlyRejectionCounter.increment()
+            admissionRejectedCounter.increment()
+            future.completeExceptionally(
+                AdmissionRejectedException(
+                    "System under heavy load (queue=${currentQueueDepth}/${properties.maxQueueSize}, CPU=${String.format("%.2f", cpuLoad)})"
+                )
+            )
+            log.warn(
+                "[AdmissionControl] 🔥 P0 FIX #2: Early rejection - key={}, queueSize={}, CPU={}",
+                key,
+                currentQueueDepth,
+                String.format("%.2f", cpuLoad)
+            )
+            return future
+        }
 
         // Fast path: try immediate execution
         if (tryAcquireImmediately(request)) {
@@ -133,6 +178,13 @@ class GlobalAdmissionControl(
         }
 
         return future
+    }
+
+    /**
+     * 🔥 P0 FIX #2: Get current CPU load for early rejection
+     */
+    private fun getCurrentCpuLoad(): Double {
+        return osBean.systemLoadAverage
     }
 
     private fun <T> tryAcquireImmediately(request: AdmissionRequest<T>): Boolean {

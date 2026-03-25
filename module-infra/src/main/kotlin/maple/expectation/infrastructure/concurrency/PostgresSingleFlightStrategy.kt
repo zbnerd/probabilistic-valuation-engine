@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.concurrency
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.function.Supplier
@@ -55,7 +56,8 @@ import org.springframework.stereotype.Component
 class PostgresSingleFlightStrategy(
     @Qualifier("postgresAdvisoryLockStrategy")
     private val lockStrategy: PostgresLockStrategy,
-    private val executor: LogicExecutor,
+    private val logicExecutor: LogicExecutor,
+    @Qualifier("taskExecutor") private val taskExecutor: Executor,
 ) : SingleFlightStrategy {
 
     companion object {
@@ -74,13 +76,13 @@ class PostgresSingleFlightStrategy(
      */
     private val resultCache = ConcurrentHashMap<String, CompletableFuture<Any>>()
 
-    override fun <T> execute(key: String, supplier: Supplier<T>): T = executeAsync(key) { CompletableFuture.supplyAsync(supplier) }.join()
+    override fun <T> execute(key: String, supplier: Supplier<T>): T = executeAsync(key) { CompletableFuture.supplyAsync(supplier, taskExecutor) }.join()
 
     override fun <T> executeAsync(key: String, asyncSupplier: Supplier<CompletableFuture<T>>): CompletableFuture<T> {
         val context = TaskContext.of("SingleFlight", "Execute", key)
         val lockKey = "sf:$key"
 
-        return executor.execute(
+        return logicExecutor.execute(
             {
                 // Try to become leader
                 if (lockStrategy.tryLockImmediately(lockKey, CACHE_TTL_SECONDS)) {
@@ -167,7 +169,7 @@ class PostgresSingleFlightStrategy(
         val future = CompletableFuture<T>()
         val startTime = System.currentTimeMillis()
 
-        CompletableFuture.runAsync {
+        CompletableFuture.runAsync({
             while (System.currentTimeMillis() - startTime < DEFAULT_TIMEOUT.toMillis()) {
                 val cached = resultCache[key]
                 if (cached != null) {
@@ -178,7 +180,7 @@ class PostgresSingleFlightStrategy(
                 Thread.sleep(POLL_INTERVAL_MS)
             }
             future.completeExceptionally(TimeoutException("Leader result not available within ${DEFAULT_TIMEOUT.seconds}s"))
-        }
+        }, taskExecutor)
 
         return future
     }

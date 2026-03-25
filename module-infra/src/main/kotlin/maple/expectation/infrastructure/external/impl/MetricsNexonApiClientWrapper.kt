@@ -36,7 +36,7 @@ import java.util.concurrent.CompletableFuture
  * <ul>
  *   <li>Limits total concurrent Nexon API calls across ALL endpoints</li>
  *   <li>Prevents downstream saturation (Nexon API latency saturation)</li>
- *   <li>Starting value: 30 (tune based on load testing)</li>
+ *   <li>Default value: 10 (for sweep testing: change via code)</li>
  *   <li>Formula: Sustainable RPS = Semaphore / Latency</li>
  * </ul>
  *
@@ -52,7 +52,8 @@ class MetricsNexonApiClientWrapper(
 
     // 🔥 Global semaphore to limit total concurrent Nexon API calls
     // All endpoints share this to prevent Nexon API saturation
-    private val nexonSemaphore = java.util.concurrent.Semaphore(30)
+    // Sweep test values: 10 → 20 → 30 → 50 → 80 (modify here for testing)
+    private val nexonSemaphore = java.util.concurrent.Semaphore(80)
 
     // Counters
     private val successCounter: Counter

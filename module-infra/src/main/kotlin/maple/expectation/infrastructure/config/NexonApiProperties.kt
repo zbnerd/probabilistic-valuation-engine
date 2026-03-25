@@ -130,4 +130,5 @@ class NexonApiProperties {
     @Min(10)
     @Max(60)
     var dataLoadTimeoutSeconds: Int = 28
+
 }

@@ -1,9 +1,8 @@
 -- Fixed wrk Lua script - no string.format issues
 
--- Fixed user IGN list (first 100 from CSV)
+-- Fixed user IGN list (first 10 for testing admission control)
 user_igns = {
-    "강은호", "아델", "뉴비렌붕잉", "쯔단", "고딩", "곰자몽", "테스트", "샘플", "예제", "캐릭터",
-    "스타일링", "후임", "느님", "zneo", "기러기푸드득", "녹부", "Cremorne", "숙코", "늑때눔", "노문"
+    "강은호", "아델", "뉴비렌붕잉", "쯔단", "고딩", "곰자몽", "테스트", "샘플", "예제", "캐릭터"
 }
 
 total_users = #user_igns

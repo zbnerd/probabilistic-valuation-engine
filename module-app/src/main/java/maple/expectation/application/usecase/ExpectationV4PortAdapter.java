@@ -31,6 +31,24 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
     return expectationService.getGzipExpectationAsync(userIgn, force);
   }
 
+  /**
+   * 🔥 Sync implementation for admission control
+   * Delegates to service's sync method (returns byte[] directly, not Optional)
+   */
+  @Override
+  public byte[] getGzipExpectation(String userIgn, boolean force) {
+    return expectationService.getGzipExpectation(userIgn, force);
+  }
+
+  /**
+   * 🔥 Sync implementation for admission control
+   * Delegates to service's sync method
+   */
+  @Override
+  public Object calculateExpectation(String userIgn, boolean force) {
+    return expectationService.calculateExpectation(userIgn, force);
+  }
+
   @Override
   public byte[] getGzipFromL1CacheDirect(String userIgn) {
     var result = expectationService.getGzipFromL1CacheDirect(userIgn);

@@ -6,6 +6,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
+import maple.expectation.infrastructure.admission.GlobalAdmissionControl
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -39,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController
 class GameCharacterControllerV4(
     private val expectationPort: ExpectationV4Port,
     private val trackerPort: PopularCharacterTrackerPort,
+    private val admissionControl: GlobalAdmissionControl,
     @Qualifier("taskExecutor") private val taskExecutor: Executor,
 ) {
 
@@ -59,7 +61,8 @@ class GameCharacterControllerV4(
         // Auto Warmup
         trackerPort.recordAccess(userIgn)
 
-        // Fast Path: GZIP + force=false + L1 캐시 히트
+        // 🔥 Fast Path: GZIP + force=false + L1 캐시 히트
+        // NOTE: Fast path bypasses admission (already cached, no CPU work needed)
         if (acceptsGzip(acceptEncoding) && !force) {
             val fastPathResult = expectationPort.getGzipFromL1CacheDirect(userIgn)
             if (fastPathResult != null) {
@@ -68,16 +71,20 @@ class GameCharacterControllerV4(
             }
         }
 
-        // GZIP 응답
+        // 🔥 Cold Path: Cache miss → Admission Control → Port (sync)
+        // All cold misses go through admission control for backpressure
+        val key = "expectation:$userIgn" // For metrics/tracing
+
         return if (acceptsGzip(acceptEncoding)) {
-            expectationPort
-                .getGzipExpectationAsync(userIgn, force)
-                .thenApplyAsync({ gzipBytes -> buildGzipResponse(gzipBytes ?: ByteArray(0)) }, taskExecutor)
+            // GZIP 요청: admission → sync port → async response
+            admissionControl.submitOrWait(key) {
+                expectationPort.getGzipExpectation(userIgn, force)
+            }.thenApplyAsync({ gzipBytes -> buildGzipResponse(gzipBytes ?: ByteArray(0)) }, taskExecutor)
         } else {
-            // JSON 응답
-            expectationPort
-                .calculateExpectationAsync(userIgn, force)
-                .thenApplyAsync({ this.buildJsonResponse(it) }, taskExecutor)
+            // JSON 요청: admission → sync port → async response
+            admissionControl.submitOrWait(key) {
+                expectationPort.calculateExpectation(userIgn, force)
+            }.thenApplyAsync({ this.buildJsonResponse(it) }, taskExecutor)
         }
     }
 

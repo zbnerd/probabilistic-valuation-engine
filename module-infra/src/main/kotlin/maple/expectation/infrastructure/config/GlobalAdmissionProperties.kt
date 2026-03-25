@@ -11,6 +11,13 @@ import org.springframework.validation.annotation.Validated
 data class GlobalAdmissionProperties(
     /**
      * Maximum concurrent cold-path calculations
+     *
+     * 🔥 TUNED: 100 (balanced for I/O-bound workload with Nexon API calls)
+     *
+     * Service is NOT CPU-bound (waits for Nexon API, DB), so higher concurrency OK
+     *
+     * Formula for I/O-bound: cores × 10~20
+     * - 8 cores × 12.5 = 100 ← CURRENT
      */
     @DefaultValue("100") @Min(10) @Max(500)
     val maxInFlight: Int = 100,

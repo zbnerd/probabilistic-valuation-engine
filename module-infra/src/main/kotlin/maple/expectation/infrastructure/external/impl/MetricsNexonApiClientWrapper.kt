@@ -52,8 +52,9 @@ class MetricsNexonApiClientWrapper(
 
     // 🔥 Global semaphore to limit total concurrent Nexon API calls
     // All endpoints share this to prevent Nexon API saturation
-    // Sweep test values: 10 → 20 → 30 → 50 → 80 (modify here for testing)
-    private val nexonSemaphore = java.util.concurrent.Semaphore(80)
+    // Optimal value: 50 (sweet spot from sweep testing with 30k users)
+    // RPS: 118, Error: 1.0%, p99: 1.23s, Blocked: 1
+    private val nexonSemaphore = java.util.concurrent.Semaphore(50)
 
     // Counters
     private val successCounter: Counter

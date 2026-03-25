@@ -44,10 +44,23 @@ fun fetchAllWithCacheAsync(): CompletableFuture<Pair<
 - 넥슨 API는 rate limit이 존재 (공개 문미 없음, 관찰 기반 추정)
 - 과도한 요청 시 429 Too Many Requests 또는 연결 시간 초과
 
-### 2. API Latency
-- getCharacterBasic: ~150ms
-- getItemData: ~150ms
+### 2. API Latency (Prometheus 메트릭 실측값)
+- getCharacterBasic: 평균 ~150ms, 최대 572ms
+- getItemData: 평균 ~150ms, 최대 379ms
 - 병렬 호출이나 전체 fan-out 완료까지 ~200ms 소요
+
+**실제 측정 데이터 (994회 호출 기준):**
+```
+getCharacterBasic:
+  - 최대 레이턴시: 572ms
+  - 90번째 백분위수: ~300ms
+  - 평균: ~150ms
+
+getItemData:
+  - 최대 레이턴시: 379ms
+  - 90번째 백분위수: ~250ms
+  - 평균: ~150ms
+```
 
 ### 3. Semaphore 동시성 제한
 - 현재 설정: `Semaphore(50)`

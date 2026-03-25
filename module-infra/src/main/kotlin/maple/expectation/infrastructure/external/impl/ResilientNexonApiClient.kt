@@ -52,6 +52,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 @Primary
 @Component("resilientNexonApiClient")
 class ResilientNexonApiClient(
+    @org.springframework.beans.factory.annotation.Qualifier("metricsNexonApiClientWrapper")
     private val delegate: NexonApiClient,
     private val fallbackHandler: FallbackHandler,
     private val retryBudgetManager: RetryBudgetManager,

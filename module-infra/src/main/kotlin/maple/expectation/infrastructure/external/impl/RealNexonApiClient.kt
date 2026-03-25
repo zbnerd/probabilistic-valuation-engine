@@ -24,6 +24,7 @@ import reactor.core.publisher.Mono
  */
 @Profile("!chaos")
 @Component("realNexonApiClient")
+@org.springframework.beans.factory.annotation.Qualifier("realNexonApiClient")
 class RealNexonApiClient(
     @Qualifier("mapleWebClient")
     private val mapleWebClient: WebClient,

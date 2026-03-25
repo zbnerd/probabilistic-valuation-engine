@@ -85,3 +85,11 @@ scaleout-verification-report.md
 
 # Kotlin compiler errors
 .kotlin/errors/
+
+# Experiment logs (2026-03-25 calculation parallelization)
+app-*.log
+load-test-*.txt
+valid-users-*.txt
+
+# Load test scripts (experimental)
+load-test-scripts/wrk-*.lua

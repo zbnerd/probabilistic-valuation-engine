@@ -242,13 +242,15 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
    * 장비 데이터 비동기 로드 (P0-2: .join() 블로킹 분리)
    *
    * <p>DB에 캐시된 데이터가 있으면 즉시 반환, 없으면 API 비동기 호출
+   *
+   * <p>🔥 FAN-OUT 적용: Nexon API 3개 병렬 호출 (getCharacterBasic, getItemData, getCubeHistory)
    */
   private CompletableFuture<byte[]> loadEquipmentDataAsync(GameCharacter character) {
     if (character.getEquipment() != null && character.getEquipment().jsonContent() != null) {
       return CompletableFuture.completedFuture(character.getEquipment().jsonContent().getBytes());
     }
     return equipmentProvider
-        .getRawEquipmentData(character.getCharacterId().value())
+        .getRawEquipmentDataWithFanout(character.getCharacterId().value())  // 🔥 fan-out 메서드 호출
         .orTimeout(nexonApiProperties.getDataLoadTimeoutSeconds(), TimeUnit.SECONDS);
   }
 

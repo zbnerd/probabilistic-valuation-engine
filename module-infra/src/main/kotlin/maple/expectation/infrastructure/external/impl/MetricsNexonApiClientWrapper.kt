@@ -28,9 +28,17 @@ import java.util.concurrent.CompletableFuture
  * <p>Architecture: This sits between ResilientNexonApiClient and RealNexonApiClient
  * <pre>
  * ResilientNexonApiClient (circuit breaker, retry, bulkhead)
- *   → MetricsNexonApiClientWrapper (observability)
+ *   → MetricsNexonApiClientWrapper (observability + global concurrency control)
  *     → RealNexonApiClient (actual API calls)
  * </pre>
+ *
+ * <p>🔥 Global Semaphore:
+ * <ul>
+ *   <li>Limits total concurrent Nexon API calls across ALL endpoints</li>
+ *   <li>Prevents downstream saturation (Nexon API latency saturation)</li>
+ *   <li>Starting value: 30 (tune based on load testing)</li>
+ *   <li>Formula: Sustainable RPS = Semaphore / Latency</li>
+ * </ul>
  *
  * @param delegate Actual NexonApiClient implementation (RealNexonApiClient)
  * @param meterRegistry Micrometer registry
@@ -42,11 +50,16 @@ class MetricsNexonApiClientWrapper(
 
     private val logger = LoggerFactory.getLogger(MetricsNexonApiClientWrapper::class.java)
 
+    // 🔥 Global semaphore to limit total concurrent Nexon API calls
+    // All endpoints share this to prevent Nexon API saturation
+    private val nexonSemaphore = java.util.concurrent.Semaphore(30)
+
     // Counters
     private val successCounter: Counter
     private val errorCounter: Counter
     private val timeoutCounter: Counter
     private val throttledCounter: Counter
+    private val semaphoreBlockedCounter: Counter
 
     init {
         // Request counters
@@ -67,7 +80,11 @@ class MetricsNexonApiClientWrapper(
             .description("Nexon API throttled (429 rate limit)")
             .register(meterRegistry)
 
-        logger.info("[NexonMetrics] Metrics wrapper initialized")
+        semaphoreBlockedCounter = Counter.builder("nexon.api.semaphore.blocked")
+            .description("Requests blocked waiting for semaphore permit")
+            .register(meterRegistry)
+
+        logger.info("[NexonMetrics] Metrics wrapper initialized with global semaphore (permits={})", nexonSemaphore.availablePermits())
     }
 
     override fun getOcidByCharacterName(characterName: String): CompletableFuture<CharacterOcidResponse> {
@@ -95,30 +112,59 @@ class MetricsNexonApiClientWrapper(
     }
 
     /**
-     * 🔥 Instrument API call with metrics
+     * 🔥 Instrument API call with metrics and global semaphore control
+     *
+     * <p>Flow:
+     * <ol>
+     *   <li>Acquire semaphore permit (blocks if all permits in use)</li>
+     *   <li>Execute API call</li>
+     *   <li>Record metrics (latency, errors)</li>
+     *   <li>Release semaphore permit</li>
+     * </ol>
      *
      * <p>Captures:
      * <ul>
-     *   <li>Latency histogram</li>
+     *   <li>Latency histogram (p50, p95, p99)</li>
      *   <li>Success/error counters</li>
+     *   <li>Semaphore blocking time</li>
      *   <li>Exception type tracking</li>
      * </ul>
      */
     private fun <T> recordApiCall(endpoint: String, key: String, block: () -> CompletableFuture<T>): CompletableFuture<T> {
         val sample = Timer.start(meterRegistry)
 
+        // 🔥 Acquire semaphore permit (blocks if no permits available)
+        val acquireStart = System.nanoTime()
+        nexonSemaphore.acquire()
+        val acquireTime = System.nanoTime() - acquireStart
+
+        // Track if we had to wait for permit
+        if (acquireTime > 1_000_000) {  // > 1ms
+            semaphoreBlockedCounter.increment()
+            logger.debug("[NexonSemaphore] {} blocked for {}ms waiting for permit", endpoint, acquireTime / 1_000_000)
+        }
+
         return block()
             .whenComplete { result, ex ->
                 try {
+                    // 🔥 Always release permit after call completes
+                    nexonSemaphore.release()
+
                     val timer = getTimer(endpoint, if (ex == null) "success" else "error")
                     val duration = sample.stop(timer)  // Returns duration in nanos
 
                     if (ex == null) {
                         successCounter.increment()
-                        logger.debug("[NexonMetrics] {} success: {}ms", endpoint, java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(duration))
+                        logger.debug("[NexonMetrics] {} success: {}ms (acquire: {}ms)",
+                            endpoint,
+                            java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(duration),
+                            acquireTime / 1_000_000)
                     } else {
                         recordError(endpoint, ex)
-                        logger.warn("[NexonMetrics] {} failed: {}", endpoint, ex.javaClass.simpleName)
+                        logger.warn("[NexonMetrics] {} failed: {} (acquire: {}ms)",
+                            endpoint,
+                            ex.javaClass.simpleName,
+                            acquireTime / 1_000_000)
                     }
                 } catch (e: Exception) {
                     logger.error("[NexonMetrics] Metric recording failed", e)

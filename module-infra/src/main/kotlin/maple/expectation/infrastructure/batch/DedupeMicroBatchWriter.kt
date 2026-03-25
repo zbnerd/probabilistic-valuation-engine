@@ -84,6 +84,11 @@ class DedupeMicroBatchWriter(
         Thread(runnable, "micro-batch-flush-scheduler").apply { isDaemon = true }
     }
 
+    // 🔥 P0 FIX #3: Dedicated flush executor (prevents worker deadlock)
+    private val flushExecutor: ScheduledExecutorService = ScheduledThreadPoolExecutor(2) { runnable ->
+        Thread(runnable, "micro-batch-flush-worker").apply { isDaemon = true }
+    }
+
     // Metrics
     private val dedupeCounter: Counter
     private val flushCounter: Counter
@@ -135,7 +140,7 @@ class DedupeMicroBatchWriter(
         startTimeTriggeredFlush()
 
         log.info(
-            "[MicroBatchWriter] 🔥 PRODUCTION-READY Initialized: flushSize={}, flushIntervalMs={}, MAX_BUFFER_SIZE={}",
+            "[MicroBatchWriter] 🔥 PRODUCTION-READY Initialized: flushSize={}, flushIntervalMs={}, MAX_BUFFER_SIZE={}, flushExecutorThreads=2",
             properties.flushSize,
             properties.flushIntervalMs,
             MAX_BUFFER_SIZE,
@@ -149,7 +154,7 @@ class DedupeMicroBatchWriter(
      * <ul>
      *   <li>Key: task.key() = "characterId:presetNo"</li>
      *   <li>Latest-wins: Newer task overwrites older task with same key</li>
-     *   <li>🔥 If buffer.size >= MAX_BUFFER_SIZE: Immediate flush + add task</li>
+     *   <li>🔥 If buffer.size >= MAX_BUFFER_SIZE: Async flush + add task</li>
      * </ul>
      *
      * @param task ExpectationWriteTask to add to buffer
@@ -168,18 +173,20 @@ class DedupeMicroBatchWriter(
             log.debug("[MicroBatchWriter] Dedupe: key={}, replaced previous task", key)
         }
 
-        // 🔥 FIXED: Check buffer limit FIRST (before size-trigger)
+        // 🔥 P0 FIX #3: Check buffer limit FIRST (before size-trigger)
         if (buffer.size >= MAX_BUFFER_SIZE) {
             bufferLimitCounter.increment()
             log.warn(
-                "[MicroBatchWriter] 🔴 Buffer limit reached: size={}, triggering immediate flush",
+                "[MicroBatchWriter] 🔴 Buffer limit reached: size={}, triggering ASYNC flush",
                 buffer.size
             )
 
-            // Immediate synchronous flush to free up memory
-            flushNowSynchronous("buffer_limit")
+            // 🔥 P0 FIX #3: ASYNC FLUSH - Don't block caller thread (prevents worker deadlock)
+            flushExecutor.submit {
+                flushNowSynchronous("buffer_limit")
+            }
 
-            // After flush, add task to buffer
+            // After triggering flush, add task to buffer
             buffer.put(key, task)
             return CompletableFuture.completedFuture(null)
         }
@@ -376,14 +383,22 @@ class DedupeMicroBatchWriter(
     fun shutdown() {
         log.info("[MicroBatchWriter] Shutting down...")
         scheduler.shutdown()
+        // 🔥 P0 FIX #3: Shutdown flush executor
+        flushExecutor.shutdown()
         try {
             if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
                 log.warn("[MicroBatchWriter] Scheduler did not terminate in time")
                 scheduler.shutdownNow()
             }
+            // 🔥 P0 FIX #3: Wait for flush executor to terminate
+            if (!flushExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("[MicroBatchWriter] Flush executor did not terminate in time")
+                flushExecutor.shutdownNow()
+            }
         } catch (e: InterruptedException) {
             log.error("[MicroBatchWriter] Shutdown interrupted", e)
             scheduler.shutdownNow()
+            flushExecutor.shutdownNow()
             Thread.currentThread().interrupt()
         }
         log.info("[MicroBatchWriter] Shutdown complete")

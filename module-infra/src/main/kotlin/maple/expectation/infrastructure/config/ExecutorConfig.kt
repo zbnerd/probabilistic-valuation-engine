@@ -52,7 +52,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
  * corePoolSize:maxPoolSize는 항상 1:2 비율을 유지해야 합니다.
  */
 @Configuration
-@EnableConfigurationProperties(ExecutorLoggingProperties::class, ExecutorProperties::class)
+@EnableConfigurationProperties(ExecutorLoggingProperties::class, ExecutorProperties::class, MicroBatchWriterProperties::class)
 class ExecutorConfig(
     private val meterRegistry: MeterRegistry,
     private val executorProperties: ExecutorProperties,
@@ -64,12 +64,14 @@ class ExecutorConfig(
         // P2-25: 시작 시점에 1:2 비율 검증
         executorProperties.validateAll()
         log.info(
-            "[ExecutorConfig] P2-25 ThreadPool configuration validated: equipment={}/{}, preset={}/{}, alert={}/{}, expectation={}/{}, async={}/{}",
+            "[ExecutorConfig] P2-25 ThreadPool configuration validated: equipment={}/{}, preset={}/{}, alert={}/{}, expectation={}/{}, async={}/{}, operational={}/{}, backfill={}/{}",
             executorProperties.equipment.corePoolSize, executorProperties.equipment.maxPoolSize,
             executorProperties.preset.corePoolSize, executorProperties.preset.maxPoolSize,
             executorProperties.alert.corePoolSize, executorProperties.alert.maxPoolSize,
             executorProperties.expectation.corePoolSize, executorProperties.expectation.maxPoolSize,
             executorProperties.async.corePoolSize, executorProperties.async.maxPoolSize,
+            executorProperties.operational.corePoolSize, executorProperties.operational.maxPoolSize,
+            executorProperties.backfill.corePoolSize, executorProperties.backfill.maxPoolSize,
         )
     }
 
@@ -243,6 +245,79 @@ class ExecutorConfig(
 
         log.info(
             "[ExecutorConfig] expectationComputeExecutor initialized: core={}, max={}, queue={}",
+            config.corePoolSize,
+            config.maxPoolSize,
+            config.queueCapacity,
+        )
+
+        return executor
+    }
+
+    /**
+     * Operational Executor for real-time user requests (Issue #617 US-004)
+     *
+     * <p>Prevents starvation from backfill operations by maintaining a separate pool.
+     * Uses the same configuration as the equipment executor for consistency.
+     */
+    @Bean(name = ["operationalExecutor"])
+    @ConditionalOnMissingBean(name = ["operationalExecutor"])
+    fun operationalExecutor(contextPropagatingDecorator: TaskDecorator): Executor {
+        val config = executorProperties.operational
+        val executor = ThreadPoolTaskExecutor()
+        executor.corePoolSize = config.corePoolSize
+        executor.maxPoolSize = config.maxPoolSize
+        executor.queueCapacity = config.queueCapacity
+        executor.setThreadNamePrefix("operational-")
+        executor.setAllowCoreThreadTimeOut(true)
+        executor.setKeepAliveSeconds(30)
+
+        executor.setTaskDecorator(contextPropagatingDecorator)
+        executor.setRejectedExecutionHandler(rejectionPolicyFactory().createAlertAbortPolicy())
+        executor.setWaitForTasksToCompleteOnShutdown(true)
+        executor.setAwaitTerminationSeconds(30)
+
+        executor.initialize()
+        executorMetricsConfigurator().registerExecutorMetrics(executor, "operational")
+
+        log.info(
+            "[ExecutorConfig] operationalExecutor initialized: core={}, max={}, queue={}",
+            config.corePoolSize,
+            config.maxPoolSize,
+            config.queueCapacity,
+        )
+
+        return executor
+    }
+
+    /**
+     * Backfill Executor for batch/background operations (Issue #617 US-004)
+     *
+     * <p>Separate pool with smaller capacity (4:8) but larger queue (500) to prevent
+     * starvation of operational threads. Uses CallerRunsPolicy for backpressure.
+     * Longer shutdown timeout (60s) to allow batch operations to complete gracefully.
+     */
+    @Bean(name = ["backfillExecutor"])
+    @ConditionalOnMissingBean(name = ["backfillExecutor"])
+    fun backfillExecutor(contextPropagatingDecorator: TaskDecorator): Executor {
+        val config = executorProperties.backfill
+        val executor = ThreadPoolTaskExecutor()
+        executor.corePoolSize = config.corePoolSize
+        executor.maxPoolSize = config.maxPoolSize
+        executor.queueCapacity = config.queueCapacity
+        executor.setThreadNamePrefix("backfill-")
+        executor.setAllowCoreThreadTimeOut(true)
+        executor.setKeepAliveSeconds(30)
+
+        executor.setTaskDecorator(contextPropagatingDecorator)
+        executor.setRejectedExecutionHandler(java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy())
+        executor.setWaitForTasksToCompleteOnShutdown(true)
+        executor.setAwaitTerminationSeconds(60)
+
+        executor.initialize()
+        executorMetricsConfigurator().registerExecutorMetrics(executor, "backfill")
+
+        log.info(
+            "[ExecutorConfig] backfillExecutor initialized: core={}, max={}, queue={}",
             config.corePoolSize,
             config.maxPoolSize,
             config.queueCapacity,

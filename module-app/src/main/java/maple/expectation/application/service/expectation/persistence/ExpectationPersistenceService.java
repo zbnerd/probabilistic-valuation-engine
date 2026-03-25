@@ -80,7 +80,7 @@ public class ExpectationPersistenceService {
               java.math.BigDecimal.valueOf(preset.getCostBreakdown().getRedCubeCost()),
               java.math.BigDecimal.valueOf(preset.getCostBreakdown().getAdditionalCubeCost()),
               java.math.BigDecimal.valueOf(preset.getCostBreakdown().getStarforceCost()));
-      summaryRepository.saveOrUpdate(summary);
+      summaryRepository.save(summary);
     }
     log.debug("[V4] 동기 DB 저장 완료: characterId={}, presets={}", characterId, presets.size());
   }

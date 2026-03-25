@@ -96,7 +96,8 @@ object AsyncUtils {
             if (executor != null) {
                 CompletableFuture.supplyAsync({ executeCallableWithExceptionTranslation(supplier, context) }, executor)
             } else {
-                CompletableFuture.supplyAsync({ executeCallableWithExceptionTranslation(supplier, context) })
+                // 🔥 FIX: Use ForkJoinPool explicitly or throw error - never use implicit executor
+                throw IllegalStateException("Executor must be provided for async operations")
             }
 
         return future.exceptionally { e ->

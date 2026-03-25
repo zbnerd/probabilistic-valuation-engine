@@ -8,6 +8,8 @@ import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import java.lang.management.ManagementFactory
 import java.util.concurrent.Callable
@@ -36,6 +38,7 @@ import java.util.concurrent.BlockingQueue
  * @param executor Logic executor for async operations
  */
 @Component
+@ConditionalOnProperty(name = ["adaptive-admission.enabled"], havingValue = "true", matchIfMissing = false)
 class AdaptiveAdmissionControl(
     private val properties: GlobalAdmissionProperties,
     private val meterRegistry: MeterRegistry,

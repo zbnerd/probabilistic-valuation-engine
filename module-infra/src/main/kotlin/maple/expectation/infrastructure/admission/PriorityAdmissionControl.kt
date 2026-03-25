@@ -8,6 +8,7 @@ import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.util.concurrent.Callable
 import java.util.concurrent.CompletableFuture
@@ -36,6 +37,7 @@ import java.util.concurrent.BlockingQueue
  * @param executor Logic executor for async operations
  */
 @Component
+@ConditionalOnProperty(name = ["priority-admission.enabled"], havingValue = "true", matchIfMissing = false)
 class PriorityAdmissionControl(
     private val properties: GlobalAdmissionProperties,
     private val meterRegistry: MeterRegistry,
@@ -214,10 +216,27 @@ class PriorityAdmissionControl(
                 val waitTimeNanos = System.nanoTime() - request.enqueuedAtNanos
                 queueWaitTimeTimer.record(waitTimeNanos, TimeUnit.NANOSECONDS)
 
+                // 🔥 P0 FIX #1: Priority aging - boost priority if waiting too long
+                val waitTimeMs = waitTimeNanos / 1_000_000
+                if (waitTimeMs > 1000) {  // 1 second threshold
+                    val oldPriority = request.boostedPriority
+                    request.boostedPriority = minOf(request.boostedPriority + 10, 100)
+                    if (oldPriority != request.boostedPriority) {
+                        log.info(
+                            "[PriorityAdmissionControl] 🔥 Priority aging: {} boosted from {} to {} after {}ms wait",
+                            request.key,
+                            oldPriority,
+                            request.boostedPriority,
+                            waitTimeMs
+                        )
+                    }
+                }
+
                 log.debug(
-                    "[PriorityAdmissionControl] Worker {}: Processing request (priority={}): key={}",
+                    "[PriorityAdmissionControl] Worker {}: Processing request (priority={} → boosted={}): key={}",
                     workerIndex,
                     request.priority,
+                    request.boostedPriority,
                     request.key
                 )
 
@@ -278,11 +297,12 @@ class PriorityAdmissionControl(
         val task: Callable<T>,
         val future: CompletableFuture<T>,
         val enqueuedAtNanos: Long,
-        val priority: Int  // 🔥 PRIORITY FIELD
+        val priority: Int,  // 🔥 PRIORITY FIELD
+        @Volatile var boostedPriority: Int = priority  // 🔥 P0 FIX #1: Priority aging
     ) : Comparable<PriorityAdmissionRequest<*>> {
         override fun compareTo(other: PriorityAdmissionRequest<*>): Int {
-            // Higher priority = processed first (descending order)
-            return other.priority.compareTo(this.priority)
+            // 🔥 P0 FIX #1: Use boosted priority for comparison (prevents starvation)
+            return other.boostedPriority.compareTo(this.boostedPriority)
         }
     }
 }

@@ -25,37 +25,4 @@ import org.springframework.transaction.annotation.Transactional
  * @see <a href="../../../../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
  */
 interface EquipmentExpectationSummaryRepository : JpaRepository<EquipmentExpectationSummary, Long> {
-
-    /**
-     * 기대값 요약 Upsert (동시성 안전) (#262)
-     *
-     * <h3>Issue #262: Cache Stampede 해결</h3>
-     *
-     * <p>MySQL `INSERT ... ON DUPLICATE KEY UPDATE`로 동시 쓰기 Race Condition 제거
-     *
-     * <p>Unique Key: (game_character_id, preset_no)
-     *
-     * <h3>P1-11 Transaction Management</h3>
-     *
-     * <p>Uses explicit `"transactionManager"` qualifier with `REQUIRES_NEW` propagation
-     * to ensure independent transaction in multi-datasource environments.
-     *
-     * @param gameCharacterId 캐릭터 ID
-     * @param presetNo 프리셋 번호
-     * @param totalExpectedCost 총 기대 비용
-     * @param blackCubeCost 블랙큐브 비용
-     * @param redCubeCost 레드큐브 비용
-     * @param additionalCubeCost 에디셔널큐브 비용
-     * @param starforceCost 스타포스 비용
-     */
-    /**
-     * 기대값 요약 Upsert (동시성 안전) (#262)
-     *
-     * <p>H2 호환성: native query 제거, JPA merge 사용
-     *
-     * @param summary 엔데이트할 요약 엔티티 (기존 레코드 있으면 덮어쓰기)
-     * @return 저장된 엔티티
-     */
-    @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW)
-    fun saveOrUpdate(summary: EquipmentExpectationSummary): EquipmentExpectationSummary
 }

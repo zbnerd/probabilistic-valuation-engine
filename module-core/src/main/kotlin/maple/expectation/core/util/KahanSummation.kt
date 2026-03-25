@@ -26,7 +26,7 @@ package maple.expectation.core.util
  */
 class KahanSummation {
     private var sum = 0.0
-    private var c = 0.0  // Compensation for lost low-order bits
+    private var c = 0.0 // Compensation for lost low-order bits
 
     /**
      * Add a value to the summation with Kahan compensation

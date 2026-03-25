@@ -146,7 +146,7 @@ class ExpectationBatchShutdownHandler(
                         additionalCubeCost = task.additionalCubeCost?.let { java.math.BigDecimal.valueOf(it) },
                         starforceCost = task.starforceCost?.let { java.math.BigDecimal.valueOf(it) },
                     )
-                    repository.saveOrUpdate(summary)
+                    repository.save(summary)
                     true
                 },
                 false,

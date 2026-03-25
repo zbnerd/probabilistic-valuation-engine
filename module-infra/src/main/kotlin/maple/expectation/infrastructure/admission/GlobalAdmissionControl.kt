@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component
 import java.lang.management.ManagementFactory
 import java.util.concurrent.Callable
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -45,7 +47,9 @@ import java.util.concurrent.BlockingQueue
 class GlobalAdmissionControl(
     private val properties: GlobalAdmissionProperties,
     private val meterRegistry: MeterRegistry,
-    private val executor: LogicExecutor,
+    private val logicExecutor: LogicExecutor,
+    @org.springframework.beans.factory.annotation.Qualifier("taskExecutor")
+    private val workerExecutor: Executor,
 ) {
     private val log = LoggerFactory.getLogger(GlobalAdmissionControl::class.java)
 
@@ -201,9 +205,9 @@ class GlobalAdmissionControl(
      */
     private fun startWorkerPool(size: Int) {
         repeat(size) { workerIndex ->
-            executor.executeVoid({
+            workerExecutor.execute {
                 workerLoop(workerIndex)
-            }, TaskContext.of("AdmissionControl", "Worker", "worker-$workerIndex"))
+            }
         }
         log.info("[AdmissionControl] Started {} worker threads", size)
     }
@@ -257,7 +261,7 @@ class GlobalAdmissionControl(
     }
 
     private fun <T> executeRequest(request: AdmissionRequest<T>) {
-        executor.executeVoid({
+        logicExecutor.executeVoid({
             try {
                 val result = request.task.call()
                 request.future.complete(result)

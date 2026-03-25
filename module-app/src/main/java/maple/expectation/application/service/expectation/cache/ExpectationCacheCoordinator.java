@@ -7,6 +7,7 @@ import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.error.exception.CacheDataNotFoundException;
 import maple.expectation.error.exception.EquipmentDataProcessingException;
+import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
 import maple.expectation.infrastructure.cache.TieredCacheManager;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -38,14 +39,30 @@ public class ExpectationCacheCoordinator {
   private final Cache expectationCache;
   private final TieredCacheManager tieredCacheManager;
   private final MeterRegistry meterRegistry;
+  private final GlobalAdmissionControl admissionControl;
 
+  /**
+   * Constructor with admission control (US-002: Issue #617)
+   */
   public ExpectationCacheCoordinator(
-      LogicExecutor executor, ObjectMapper objectMapper, TieredCacheManager tieredCacheManager) {
+      LogicExecutor executor,
+      ObjectMapper objectMapper,
+      TieredCacheManager tieredCacheManager,
+      GlobalAdmissionControl admissionControl) {
     this.executor = executor;
     this.objectMapper = objectMapper;
     this.tieredCacheManager = tieredCacheManager;
     this.expectationCache = tieredCacheManager.getCache(CACHE_NAME);
     this.meterRegistry = tieredCacheManager.getMeterRegistry();
+    this.admissionControl = admissionControl;
+  }
+
+  /**
+   * Constructor without admission control (backward compatibility)
+   */
+  public ExpectationCacheCoordinator(
+      LogicExecutor executor, ObjectMapper objectMapper, TieredCacheManager tieredCacheManager) {
+    this(executor, objectMapper, tieredCacheManager, null);
   }
 
   /**
@@ -96,7 +113,7 @@ public class ExpectationCacheCoordinator {
 
     // Cache miss - calculate and store
     log.info("[V4] Cache MISS - 계산 시작: {}", userIgn);
-    EquipmentExpectationResponseV4 response = executeCalculator(calculator);
+    EquipmentExpectationResponseV4 response = executeCalculatorWithAdmission(userIgn, calculator);
     String compressedBase64 =
         executor.executeWithTranslation(
             () -> compressAndSerialize(response, userIgn),
@@ -149,7 +166,7 @@ public class ExpectationCacheCoordinator {
 
     // Cache miss - calculate and store
     log.info("[V4] Cache MISS (GZIP) - 계산 시작: {}", userIgn);
-    EquipmentExpectationResponseV4 response = executeCalculator(calculator);
+    EquipmentExpectationResponseV4 response = executeCalculatorWithAdmission(userIgn, calculator);
     String compressedBase64 =
         executor.executeWithTranslation(
             () -> compressAndSerialize(response, userIgn),
@@ -273,6 +290,50 @@ public class ExpectationCacheCoordinator {
   private EquipmentExpectationResponseV4 executeCalculator(
       Callable<EquipmentExpectationResponseV4> calculator) {
     return executor.execute(calculator::call, TaskContext.of("CacheCoordinator", "Calculate"));
+  }
+
+  /**
+   * Execute calculator with global admission control (US-002: Issue #617)
+   *
+   * <h3>Admission Control Integration</h3>
+   * <ul>
+   *   <li>If admissionControl is available: wrap with submitOrWait() for global concurrency limit</li>
+   *   <li>If admissionControl is null: execute directly (backward compatibility)</li>
+   *   <li>Preserves single-key single-flight behavior (handled by caller via cache check)</li>
+   * </ul>
+   *
+   * @param userIgn Request key for admission control
+   * @param calculator Cold-path calculation task
+   * @return Calculation result
+   */
+  private EquipmentExpectationResponseV4 executeCalculatorWithAdmission(
+      String userIgn, Callable<EquipmentExpectationResponseV4> calculator) {
+    if (admissionControl == null) {
+      log.debug("[V4] Admission control disabled - executing directly: {}", userIgn);
+      return executeCalculator(calculator);
+    }
+
+    log.debug("[V4] Admission control enabled - queuing calculation: {}", userIgn);
+    try {
+      return admissionControl
+          .submitOrWait(userIgn, calculator)
+          .get(); // Blocking wait for CompletableFuture
+    } catch (Exception e) {
+      // Handle timeout (waited too long in queue)
+      if (e.getCause() instanceof maple.expectation.infrastructure.admission.AdmissionTimeoutException) {
+        log.error("[V4] Admission control timeout for: {}", userIgn);
+        throw new EquipmentDataProcessingException(
+            String.format("Calculation rejected due to system overload: %s", userIgn), e.getCause());
+      }
+      // Handle queue full (fast reject - queue at capacity)
+      if (e.getCause() instanceof maple.expectation.infrastructure.admission.AdmissionRejectedException) {
+        log.warn("[V4] Admission control queue full - rejecting: {}", userIgn);
+        throw new EquipmentDataProcessingException(
+            String.format("System at capacity - queue full: %s", userIgn), e.getCause());
+      }
+      throw new EquipmentDataProcessingException(
+          String.format("Calculation failed with admission control: %s", userIgn), e);
+    }
   }
 
   /** Response → JSON → GZIP → Base64 String 변환 (#262) */

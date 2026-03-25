@@ -93,6 +93,14 @@ executor:
     core-pool-size: 4     # @Async methods: 1:2 ratio
     max-pool-size: 8
     queue-capacity: 100
+  operational:
+    core-pool-size: 16    # Real-time user requests: same as equipment (I/O-bound)
+    max-pool-size: 32
+    queue-capacity: 500
+  backfill:
+    core-pool-size: 4     # Batch/background: smaller pool, larger queue
+    max-pool-size: 8
+    queue-capacity: 500
 
 # Issue #278: Scale-out 환경 실시간 좋아요 동기화 (prod)
 like:
@@ -112,6 +120,41 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+
+# Global Admission Control (Issue #617) - Production Configuration
+admission-control:
+  max-in-flight: 100        # Max concurrent cold-path calculations (t3.small: 2vCPU)
+  queue-timeout-ms: 5000    # Max wait time in queue
+  max-queue-size: 1000      # Maximum pending requests (10x max-in-flight)
+  worker-pool-size: 16      # Worker threads for queue consumption (non-blocking HTTP threads)
+
+# Advanced Admission Control Features (Phase 2) - Production
+priority-admission:
+  enabled: true             # 🔥 ENABLED: Priority queue for hot characters
+  levels:
+    cache-hit: 100
+    hot-character: 80
+    normal: 50
+    cold-heavy: 10
+
+adaptive-admission:
+  enabled: true             # 🔥 ENABLED: CPU-based adaptive control
+  cpu-thresholds:
+    critical: 7.0
+    high: 5.0
+    normal: 5.0
+
+degrade-strategy:
+  enabled: true             # 🔥 ENABLED: Stale cache fallback on rejection
+  levels:
+    fresh-cache: true
+    stale-cache: true
+    fallback: true
+
+cache-prefetch:
+  enabled: true             # 🔥 ENABLED: Hot character prefetch
+  interval-ms: 60000
+  hot-character-count: 100
 
 # ADR-0345: Resilience4j Configuration for Stateless Alert System
 resilience4j:

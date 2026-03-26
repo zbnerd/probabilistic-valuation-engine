@@ -159,7 +159,11 @@ subprojects {
 			'-XX:MaxMetaspaceSize=512m'
 		]
 
-		// 테스트 실행 시간 표시 (각 테스트 종료 후 출력)
+		// 테스트 실행 시간 표시 (시작/종료 후 출력)
+		beforeTest { desc ->
+			def className = desc.className.split('\\.').last()
+			println "[START] ${className} > ${desc.name}"
+		}
 		afterTest { desc, result ->
 			def duration = result.endTime - result.startTime
 			def className = desc.className.split('\\.').last()

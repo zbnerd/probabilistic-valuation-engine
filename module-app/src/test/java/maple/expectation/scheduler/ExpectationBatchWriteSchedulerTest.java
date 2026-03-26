@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Test;
  *   <li>빈 버퍼 스킵
  * </ul>
  */
-@Tag("unit")
+@Tag("integration")
 class ExpectationBatchWriteSchedulerTest {
 
   private ExpectationWriteBackBuffer buffer;

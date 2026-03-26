@@ -1,6 +1,0 @@
-*.log
-app-*.log
-sweep-*.log
-performance-*.log
-validation-*.log
-load-test-results/

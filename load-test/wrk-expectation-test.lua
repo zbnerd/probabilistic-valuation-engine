@@ -1,9 +1,10 @@
--- wrk script for V4 expectation endpoint
--- Correct path: /api/v4/characters/{userIgn}/expectation
+-- wrk script for testing /api/v4/expectation/{userIgn} endpoint
+-- Uses valid-users-30000.txt for cache MISS testing
 
 counter = 0
 user_igns = {}
 
+-- URL encode function
 function url_encode(str)
     if str == nil then return "" end
     str = string.gsub(str, "\n", "\r\n")
@@ -13,6 +14,7 @@ function url_encode(str)
     return str
 end
 
+-- Load user IGNS from file
 function load_user_igns()
     local file = io.open("/home/maple/probabilistic-valuation-engine/valid-users-30000.txt", "r")
     if not file then
@@ -40,7 +42,7 @@ function request()
     local idx = (counter - 1) % #user_igns + 1
     local user_ign = user_igns[idx]
     local encoded_ign = url_encode(user_ign)
-    local path = "/api/v4/characters/" .. encoded_ign .. "/expectation"
+    local path = "/api/v4/expectation/" .. encoded_ign
     return wrk.format("GET", path)
 end
 

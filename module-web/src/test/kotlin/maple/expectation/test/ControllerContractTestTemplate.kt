@@ -1,6 +1,6 @@
 package maple.expectation.test
 
-import maple.expectation.test.DatabaseCleaner
+import maple.expectation.config.DatabaseCleaner
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "P0 Issues Resolution - Lock Health Monitoring (N02, N07, N09)",
+  "description": "V5 Migration - PostgreSQL Advisory Lock & PGMQ Monitoring",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -215,44 +215,31 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Circuit breaker state for Redis Lock (0=closed, 1=open, 0.5=half_open)",
+      "description": "V5 Migration: PostgreSQL Advisory Lock wait time (P99)",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "CLOSED"
-                },
-                "0.5": {
-                  "color": "yellow",
-                  "index": 1,
-                  "text": "HALF_OPEN"
-                },
-                "1": {
-                  "color": "red",
-                  "index": 2,
-                  "text": "OPEN"
-                }
-              },
-              "type": "value"
-            }
-          ],
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.1
               }
             ]
           },
-          "unit": "short"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -265,7 +252,7 @@
       "id": 4,
       "options": {
         "colorMode": "background",
-        "graphMode": "none",
+        "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
@@ -281,11 +268,11 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "resilience4j_circuitbreaker_state{name=\"redisLock\",state=\"open\"} * 1 + resilience4j_circuitbreaker_state{name=\"redisLock\",state=\"half_open\"} * 0.5 or vector(0)",
+          "expr": "histogram_quantile(0.99, rate(postgres_advisory_lock_wait_seconds_bucket[5m])) or vector(0)",
           "refId": "A"
         }
       ],
-      "title": "Redis Lock CB State",
+      "title": "PG Advisory Lock P99",
       "type": "stat"
     },
     {
@@ -497,7 +484,7 @@
       },
       "id": 102,
       "panels": [],
-      "title": "Connection Pool (N07/N11)",
+      "title": "Connection Pool & PGMQ (V5 Migration)",
       "type": "row"
     },
     {
@@ -505,7 +492,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "N11: MySQL Lock Pool connection usage",
+      "description": "V5 Migration: PGMQ queue depth for all queues",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -542,8 +529,6 @@
             }
           },
           "mappings": [],
-          "max": 30,
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -553,11 +538,11 @@
               },
               {
                 "color": "yellow",
-                "value": 24
+                "value": 500
               },
               {
                 "color": "red",
-                "value": 28
+                "value": 1000
               }
             ]
           },
@@ -590,30 +575,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "hikaricp_connections_active{pool=\"MySQLLockPool\"}",
-          "legendFormat": "Active",
+          "expr": "pgmq_queue_depth",
+          "legendFormat": "{{queue_name}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "hikaricp_connections_idle{pool=\"MySQLLockPool\"}",
-          "legendFormat": "Idle",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "hikaricp_connections_max{pool=\"MySQLLockPool\"}",
-          "legendFormat": "Max (30)",
-          "refId": "C"
         }
       ],
-      "title": "MySQL Lock Pool Connections",
+      "title": "PGMQ Queue Depth",
       "type": "timeseries"
     },
     {
@@ -621,7 +588,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Redis to MySQL fallback rate",
+      "description": "V5 Migration: PGMQ message processing rate",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -696,12 +663,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(lock_fallback_to_mysql_total[1m])",
-          "legendFormat": "Fallback Rate",
+          "expr": "sum(rate(pgmq_messages_processed_total{queue_name=~\"calculation|like_sync|donation\"}[1m])) by (queue_name)",
+          "legendFormat": "{{queue_name}}",
           "refId": "A"
         }
       ],
-      "title": "Redis → MySQL Fallback Rate",
+      "title": "PGMQ Processing Rate",
       "type": "timeseries"
     },
     {
@@ -714,7 +681,7 @@
       },
       "id": 103,
       "panels": [],
-      "title": "MySQL MDL Monitoring (N07)",
+      "title": "PostgreSQL Advisory Lock Monitoring (V5)",
       "type": "row"
     },
     {
@@ -722,95 +689,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "N07: MySQL row lock waits (indicator of MDL contention)",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 24
-      },
-      "id": 9,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "rate(mysql_global_status_innodb_row_lock_waits[1m])",
-          "legendFormat": "Lock Waits/sec",
-          "refId": "A"
-        }
-      ],
-      "title": "MySQL InnoDB Row Lock Waits",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "N07: Average row lock wait time",
+      "description": "V5 Migration: PostgreSQL Advisory Lock wait time distribution",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -856,15 +735,121 @@
               },
               {
                 "color": "yellow",
-                "value": 3
+                "value": 0.05
               },
               {
                 "color": "red",
-                "value": 5
+                "value": 0.1
               }
             ]
           },
           "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.99, rate(postgres_advisory_lock_wait_seconds_bucket[5m])) or vector(0)",
+          "legendFormat": "P99",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, rate(postgres_advisory_lock_wait_seconds_bucket[5m])) or vector(0)",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.50, rate(postgres_advisory_lock_wait_seconds_bucket[5m])) or vector(0)",
+          "legendFormat": "P50",
+          "refId": "C"
+        }
+      ],
+      "title": "PG Advisory Lock Wait Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "V5 Migration: Advisory lock contention rate",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ops"
         },
         "overrides": []
       },
@@ -893,18 +878,18 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "mysql_global_status_innodb_row_lock_time_avg / 1000",
-          "legendFormat": "Avg Lock Time (sec)",
+          "expr": "rate(postgres_advisory_lock_contention_total[1m])",
+          "legendFormat": "Contention Rate",
           "refId": "A"
         }
       ],
-      "title": "MySQL Avg Row Lock Time",
+      "title": "PG Advisory Lock Contention",
       "type": "timeseries"
     }
   ],
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["p0", "lock", "nightmare", "n02", "n07", "n09"],
+  "tags": ["v5", "postgresql", "pgmq", "advisory-lock", "lock"],
   "templating": {
     "list": []
   },
@@ -914,8 +899,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Lock Health Monitoring (P0)",
-  "uid": "lock-health-p0",
+  "title": "PostgreSQL Lock & PGMQ Health (V5)",
+  "uid": "postgres-lock-pgmq-v5",
   "version": 1,
   "weekStart": ""
 }

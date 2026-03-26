@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "MySQL Slow Query Log 시각화 (Issue #209)",
+  "description": "PostgreSQL Slow Query Log 시각화 (V5 Migration)",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -366,9 +366,10 @@
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
-    "mysql",
+    "postgresql",
     "slow-query",
-    "observability"
+    "observability",
+    "v5"
   ],
   "templating": {
     "list": []
@@ -379,8 +380,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "MySQL Slow Query Dashboard",
-  "uid": "mysql-slow-query",
+  "title": "PostgreSQL Slow Query Dashboard",
+  "uid": "postgresql-slow-query",
   "version": 1,
   "weekStart": ""
 }

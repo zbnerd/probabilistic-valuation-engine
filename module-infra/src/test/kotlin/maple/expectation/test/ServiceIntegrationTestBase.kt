@@ -1,7 +1,7 @@
 package maple.expectation.test
 
 import jakarta.persistence.EntityManager
-import maple.expectation.config.DatabaseCleaner
+import maple.expectation.test.DatabaseCleaner
 import org.junit.jupiter.api.BeforeEach
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest

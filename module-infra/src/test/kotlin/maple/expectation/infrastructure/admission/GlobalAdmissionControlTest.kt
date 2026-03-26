@@ -20,7 +20,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-@Tag("unit")
+@Tag("integration")
 @DisplayName("GlobalAdmissionControl Tests")
 class GlobalAdmissionControlTest {
 

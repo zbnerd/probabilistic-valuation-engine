@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit
  *   <li>Time-trigger flush: Flush even when buffer size < flushSize</li>
  * </ul>
  */
-@Tag("unit")
+@Tag("integration")
 @DisplayName("DedupeMicroBatchWriter Tests")
 class DedupeMicroBatchWriterTest {
 

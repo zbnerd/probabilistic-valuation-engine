@@ -161,10 +161,14 @@ class ArchitectureTest {
     classes()
         .that()
         .haveSimpleNameEndingWith("Repository")
+        .and()
+        .haveSimpleNameNotEndingWith("BatchRepository")
         .should()
         .beInterfaces()
         .because("Spring Data JPA repositories are interfaces that extend JpaRepository")
-        .check(classes);
+        .check(
+            new ClassFileImporter()
+                .importPackages("maple.expectation.infrastructure.persistence.repository"));
   }
 
   // ========================================

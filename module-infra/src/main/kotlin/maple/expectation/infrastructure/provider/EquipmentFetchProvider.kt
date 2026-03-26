@@ -4,6 +4,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.aop.annotation.NexonDataCache
 import maple.expectation.infrastructure.external.NexonApiClient
+import maple.expectation.infrastructure.external.dto.v2.CharacterBasicResponse
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Component
@@ -71,6 +72,21 @@ class EquipmentFetchProvider(
             logger.warn("[EquipmentProvider] Slow API fetch: ocid={} took {}ms", ocid, elapsed)
         }
         return response
+    }
+
+    /**
+     * Fan-out: getCharacterBasic + getItemDataByOcid 병렬 호출
+     *
+     * Equipment는 @Cacheable(fetchWithCache) 사용, Basic은 직접 호출
+     */
+    fun fetchAllWithCacheAsync(ocid: String): CompletableFuture<Pair<CharacterBasicResponse, EquipmentResponse>> {
+        val basicFuture = nexonApiClient
+            .getCharacterBasic(ocid)
+            .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+
+        val itemFuture = CompletableFuture.supplyAsync { fetchWithCache(ocid) }
+
+        return basicFuture.thenCombine(itemFuture) { basic, item -> Pair(basic, item) }
     }
 
     private companion object {

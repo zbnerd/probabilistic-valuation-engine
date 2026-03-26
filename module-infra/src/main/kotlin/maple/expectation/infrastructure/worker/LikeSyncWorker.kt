@@ -10,7 +10,7 @@ import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.queue.pgmq.LikeSyncQueueProducer
 import org.slf4j.LoggerFactory
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 
 /**
@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component
  * @see GameCharacterRepository 캐릭터 리포지토리
  */
 @Component
-@ConditionalOnProperty(name = ["pgmq.worker.like-sync.enabled"], havingValue = "true")
+@Profile("!test")
 class LikeSyncWorker(
     pgmqClient: PgmqClient,
     executor: LogicExecutor,

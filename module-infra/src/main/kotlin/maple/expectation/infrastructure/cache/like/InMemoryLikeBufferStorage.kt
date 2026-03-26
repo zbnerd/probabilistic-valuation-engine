@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicLong
 import maple.expectation.core.port.out.LikeBufferStrategy
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 
 /**
@@ -24,8 +24,8 @@ import org.springframework.stereotype.Component
  *
  * @see maple.expectation.infrastructure.queue.like.RedisLikeBufferStorage Redis 구현
  */
-@ConditionalOnProperty(name = ["app.buffer.redis.enabled"], havingValue = "false", matchIfMissing = true)
 @Component
+@Profile("local")
 class InMemoryLikeBufferStorage(
     registry: MeterRegistry,
     @Value("\${like.buffer.local.max-size:10000}") maxSize: Int,

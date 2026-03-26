@@ -10,7 +10,7 @@ import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.queue.pgmq.CalculationQueueProducer
 import org.slf4j.LoggerFactory
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 
 /**
@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component
  * @see ExpectationV4Port 계산 포트
  */
 @Component
-@ConditionalOnProperty(name = ["pgmq.worker.calculation.enabled"], havingValue = "true")
+@Profile("!test")
 class CalculationWorker(
     pgmqClient: PgmqClient,
     executor: LogicExecutor,

@@ -228,8 +228,10 @@ jobs:
           NEXON_API_KEY: ${{ secrets.CI_NEXON_API_KEY }}
           JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
           FINGERPRINT_SECRET: ${{ secrets.CI_FINGERPRINT_SECRET }}
-          DB_SCHEMA_NAME: ${{ secrets.CI_MYSQL_DATABASE }}
-          DB_ROOT_PASSWORD: ${{ secrets.CI_MYSQL_ROOT_PASSWORD }}
+          DB_SCHEMA_NAME: maple_expectation
+          DB_ROOT_PASSWORD: ${{ secrets.CI_POSTGRES_ROOT_PASSWORD || 'test' }}
+          DB_URL: jdbc:postgresql://localhost:5432/maple_expectation
+          DB_USER: maple
           DISCORD_WEBHOOK_URL: ${{ secrets.CI_DISCORD_WEBHOOK_URL }}
 
       # ------------------------------------------------------------------

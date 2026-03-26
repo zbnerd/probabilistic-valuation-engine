@@ -5,6 +5,7 @@ import maple.expectation.config.DatabaseCleaner
 import maple.expectation.config.TestcontainersConfiguration
 import maple.expectation.config.TestcontainersConfiguration.Companion.redisContainer
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Tag
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
@@ -48,6 +49,7 @@ import org.springframework.test.context.DynamicPropertySource
  * @see maple.expectation.config.TestcontainersConfiguration
  * @see DatabaseCleaner
  */
+@Tag("integration")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("test")
 abstract class IntegrationTestBase {
@@ -118,6 +120,7 @@ abstract class IntegrationTestBase {
  * <p>RANDOM_PORT에서는 @Transactional이 롤백 안 됨.
  * 반드시 DatabaseCleaner로 @BeforeEach에서 정리해야 함.
  */
+@Tag("integration")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 abstract class ApiIntegrationTestBase {

@@ -1,6 +1,7 @@
 package maple.expectation.support;
 
 import maple.expectation.config.GlobalTestConfig;
+import org.junit.jupiter.api.Tag;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
@@ -13,6 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
  * @see SpringBootTest
  * @see ActiveProfiles
  */
+@Tag("integration")
 @SpringBootTest(classes = maple.expectation.ExpectationApplication.class)
 @ActiveProfiles("test")
 @Import(GlobalTestConfig.class)

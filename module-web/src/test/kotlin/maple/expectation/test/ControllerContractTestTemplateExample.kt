@@ -5,6 +5,7 @@ import maple.expectation.core.port.out.GameCharacterPort
 import maple.expectation.web.dto.response.CharacterResponse
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -33,6 +34,7 @@ import org.springframework.security.test.context.support.WithMockUser
  *   <li>이 클래스는 템플릿 사용 예시를 보여주는 목적</li>
  * </ul>
  */
+@Disabled("Template example - requires full application context from module-app")
 @DisplayName("GameCharacterControllerV1 Contract Test Example")
 class ControllerContractTestTemplateExample : ControllerContractTestTemplate() {
 

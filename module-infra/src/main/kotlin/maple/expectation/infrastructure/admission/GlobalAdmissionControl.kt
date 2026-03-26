@@ -76,6 +76,7 @@ class GlobalAdmissionControl(
 
     // 🔥 P0 FIX #2: Use AtomicBoolean for thread-safe lazy initialization
     private val workerPoolStarted = AtomicBoolean(false)
+    private val running = AtomicBoolean(true)
 
     init {
         queueTimeoutCounter = Counter.builder("admission_control.queue.timeout")
@@ -229,11 +230,13 @@ class GlobalAdmissionControl(
     }
 
     private fun workerLoop(workerIndex: Int) {
-        while (!Thread.currentThread().isInterrupted) {
+        while (running.get() && !Thread.currentThread().isInterrupted) {
             try {
                 // 🔥 FIXED: Block HERE (in worker thread, not HTTP thread)
                 @Suppress("UNCHECKED_CAST")
                 val request = admissionQueue.take() as AdmissionRequest<*>
+
+                if (!running.get()) break
 
                 val waitTimeNanos = System.nanoTime() - request.enqueuedAtNanos
                 queueWaitTimeTimer.record(waitTimeNanos, TimeUnit.NANOSECONDS)
@@ -288,6 +291,26 @@ class GlobalAdmissionControl(
                 inFlightCount.decrementAndGet()
             }
         }, TaskContext.of("AdmissionControl", "Execute", request.key))
+    }
+
+    /**
+     * Gracefully shut down the admission control worker pool.
+     * Signals workers to stop and unblocks any threads waiting on the queue.
+     */
+    fun shutdown() {
+        running.set(false)
+        admissionQueue.clear()
+        // Unblock workers blocked on take()
+        repeat(properties.workerPoolSize) {
+            admissionQueue.offer(
+                AdmissionRequest(
+                    key = "__shutdown__",
+                    task = Callable { null },
+                    future = CompletableFuture(),
+                    enqueuedAtNanos = 0
+                )
+            )
+        }
     }
 
     data class AdmissionRequest<T>(

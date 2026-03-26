@@ -168,7 +168,7 @@ subprojects {
 
 		useJUnitPlatform {
 			if (project.hasProperty('fastTest')) {
-				excludeTags 'sentinel', 'slow', 'quarantine', 'chaos', 'nightmare', 'integration', 'flaky'
+				excludeTags 'sentinel', 'slow', 'quarantine', 'chaos', 'nightmare', 'integration', 'flaky', 'smoke', 'pgmq'
 			} else if (project.hasProperty('integrationTest')) {
 				includeTags 'integration'
 			} else if (project.hasProperty('chaosTest')) {
@@ -177,6 +177,15 @@ subprojects {
 				includeTags 'nightmare'
 			} else {
 				excludeTags 'sentinel', 'quarantine', 'flaky'
+			}
+		}
+
+		// JUnit 5 @Tag는 상속되지 않으므로, 통합 테스트 base class를 상속한
+		// 테스트를 태그 필터만으로 제외할 수 없음. 패키지 기반 필터로 보완.
+		if (project.hasProperty('fastTest')) {
+			filter {
+				excludeTestsMatching 'maple.expectation.integration.*'
+				excludeTestsMatching 'maple.expectation.smoke.*'
 			}
 		}
 

@@ -1,9 +1,11 @@
 package maple.expectation.infrastructure.provider
 
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.aop.annotation.NexonDataCache
 import maple.expectation.infrastructure.external.NexonApiClient
+import maple.expectation.infrastructure.external.dto.v2.CharacterBasicResponse
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Component

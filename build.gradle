@@ -190,6 +190,7 @@ subprojects {
 			filter {
 				excludeTestsMatching 'maple.expectation.integration.*'
 				excludeTestsMatching 'maple.expectation.smoke.*'
+				excludeTestsMatching 'maple.expectation.testinfra.*'
 			}
 		}
 

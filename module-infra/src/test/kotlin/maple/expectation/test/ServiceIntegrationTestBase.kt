@@ -3,6 +3,7 @@ package maple.expectation.test
 import jakarta.persistence.EntityManager
 import maple.expectation.test.DatabaseCleaner
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Tag
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
@@ -37,6 +38,7 @@ import org.springframework.test.context.ActiveProfiles
         "spring.datasource.hikari.maximum-pool-size=5",
     ],
 )
+@Tag("integration")
 @ActiveProfiles("test")
 abstract class ServiceIntegrationTestBase {
 

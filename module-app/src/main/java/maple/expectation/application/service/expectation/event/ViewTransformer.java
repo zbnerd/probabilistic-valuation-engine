@@ -226,7 +226,7 @@ public class ViewTransformer {
         () -> {
           String cleaned = costStr.replace(",", ""); // Remove thousand separators
           double value = Double.parseDouble(cleaned);
-          return Math.round(value); // Round to nearest long
+          return (long) value; // Truncate decimal (ADR-085 P1)
         },
         0L);
   }

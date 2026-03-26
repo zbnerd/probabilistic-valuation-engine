@@ -6,6 +6,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
  * slices (Character, Calculator, etc.) still use the old structure and are excluded from these
  * rules.
  */
+@Tag("architecture")
 @DisplayName("Clean Architecture Rules (ADR-017 Equipment Slice)")
 public class CleanArchitectureTest {
 

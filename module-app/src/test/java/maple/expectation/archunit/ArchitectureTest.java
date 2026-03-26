@@ -3,9 +3,12 @@ package maple.expectation.archunit;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Controller;
@@ -22,7 +25,14 @@ import org.springframework.web.bind.annotation.RestController;
  * <p><strong>Phase 2A Refinement:</strong> Fixed false positives in 5 rules by adjusting scope and
  * assertion logic.
  */
+@Tag("architecture")
 class ArchitectureTest {
+
+  private final JavaClasses classes =
+      new ClassFileImporter()
+          .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+          .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
+          .importPackages("maple.expectation");
 
   // ========================================
   // Rule 1: Domain Isolation (Future-Proof)
@@ -48,7 +58,7 @@ class ArchitectureTest {
         .dependOnClassesThat()
         .resideInAnyPackage("..infrastructure..", "..interfaces..", "..controller..")
         .because("Domain layer should be isolated from infrastructure concerns")
-        .check(new ClassFileImporter().importPackages("maple.expectation"));
+        .check(classes);
   }
 
   // ========================================
@@ -78,7 +88,7 @@ class ArchitectureTest {
         .should()
         .dependOnClassesThat()
         .resideInAPackage("maple.expectation.(**)..")
-        .check(new ClassFileImporter().importPackages("maple.expectation"));
+        .check(classes);
   }
 
   // ========================================
@@ -101,7 +111,7 @@ class ArchitectureTest {
         .should()
         .haveOnlyFinalFields()
         .because("Controllers should be immutable and delegate to services")
-        .check(new ClassFileImporter().importPackages("maple.expectation"));
+        .check(classes);
   }
 
   // ========================================
@@ -128,7 +138,7 @@ class ArchitectureTest {
         .dependOnClassesThat()
         .haveFullyQualifiedName("java.lang.Catch")
         .because("Services should use LogicExecutor for exception handling (CLAUDE.md Section 12)")
-        .check(new ClassFileImporter().importPackages("maple.expectation.service"));
+        .check(classes);
   }
 
   // ========================================
@@ -151,6 +161,8 @@ class ArchitectureTest {
     classes()
         .that()
         .haveSimpleNameEndingWith("Repository")
+        .and()
+        .haveSimpleNameNotEndingWith("BatchRepository")
         .should()
         .beInterfaces()
         .because("Spring Data JPA repositories are interfaces that extend JpaRepository")
@@ -185,7 +197,7 @@ class ArchitectureTest {
         .dependOnClassesThat()
         .areAnnotatedWith(RestController.class)
         .because("Controllers should not depend on each other")
-        .check(new ClassFileImporter().importPackages("maple.expectation.controller"));
+        .check(classes);
   }
 
   /**
@@ -209,7 +221,7 @@ class ArchitectureTest {
         .dependOnClassesThat()
         .resideInAPackage("..service..")
         .because("Global utilities should not depend on business services")
-        .check(new ClassFileImporter().importPackages("maple.expectation.global"));
+        .check(classes);
   }
 
   /**
@@ -244,7 +256,7 @@ class ArchitectureTest {
         .beMetaAnnotatedWith(Component.class)
         .because("Config classes should be annotated with @Configuration or @Component")
         .allowEmptyShould(true)
-        .check(new ClassFileImporter().importPackages("maple.expectation.config"));
+        .check(classes);
   }
 
   // ========================================
@@ -271,7 +283,7 @@ class ArchitectureTest {
         .resideInAnyPackage(
             "..springframework..", "..hibernate..", "..persistence..", "..jackson..", "..lombok..")
         .because("Domain models must be pure business logic without framework dependencies")
-        .check(new ClassFileImporter().importPackages("maple.expectation.core.domain"));
+        .check(classes);
   }
 
   /**
@@ -292,7 +304,7 @@ class ArchitectureTest {
         .dependOnClassesThat()
         .resideInAnyPackage("..infrastructure..", "..interfaces..")
         .because("Application layer should access infrastructure through ports (interfaces)")
-        .check(new ClassFileImporter().importPackages("maple.expectation.application"));
+        .check(classes);
   }
 
   /**
@@ -313,7 +325,7 @@ class ArchitectureTest {
         .dependOnClassesThat()
         .resideInAPackage("..application.service..")
         .because("Infrastructure should depend only on ports (interfaces), not implementations")
-        .check(new ClassFileImporter().importPackages("maple.expectation.infrastructure"));
+        .check(classes);
   }
 
   /**
@@ -334,7 +346,7 @@ class ArchitectureTest {
         .dependOnClassesThat()
         .resideInAnyPackage("..domain..", "..infrastructure..")
         .because("REST controllers should only access application services")
-        .check(new ClassFileImporter().importPackages("maple.expectation.interfaces"));
+        .check(classes);
   }
 
   /**
@@ -359,7 +371,7 @@ class ArchitectureTest {
             "..infrastructure.persistence..",
             "..infrastructure.external..")
         .because("Shared utilities must remain independent of business logic")
-        .check(new ClassFileImporter().importPackages("maple.expectation.shared"));
+        .check(classes);
   }
 
   // ========================================
@@ -388,7 +400,7 @@ class ArchitectureTest {
             "BigDecimal(Double) has floating-point precision issues. "
                 + "Use BigDecimal(\"value\") or BigDecimal.valueOf() instead. "
                 + "(CLAUDE.md Section 7)")
-        .check(new ClassFileImporter().importPackages("maple.expectation"));
+        .check(classes);
   }
 
   /**

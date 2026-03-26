@@ -6,8 +6,6 @@ import java.util.concurrent.locks.LockSupport
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler
 import org.springframework.stereotype.Component
@@ -41,8 +39,6 @@ import org.springframework.stereotype.Component
  */
 @Component
 @Qualifier("postgresAdvisoryLockStrategy")
-@ConditionalOnBean(name = ["lockJdbcTemplate"])
-@ConditionalOnProperty(name = ["maple.infra.lock.impl"], havingValue = "postgres", matchIfMissing = false)
 class PostgresLockStrategy(
     @Qualifier("lockJdbcTemplate")
     private val lockJdbcTemplate: JdbcTemplate,

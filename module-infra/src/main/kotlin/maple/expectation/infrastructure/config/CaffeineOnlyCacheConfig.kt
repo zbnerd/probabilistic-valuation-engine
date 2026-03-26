@@ -5,9 +5,9 @@ import com.github.benmanes.caffeine.cache.Caffeine
 import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.cache.CaffeineOnlyCacheManager
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.CacheManager
+import org.springframework.context.annotation.Profile
 import org.springframework.cache.annotation.EnableCaching
 import org.springframework.cache.caffeine.CaffeineCacheManager
 import org.springframework.context.annotation.Bean
@@ -37,11 +37,7 @@ import org.springframework.context.annotation.Primary
 @Configuration
 @EnableCaching
 @EnableConfigurationProperties(CacheProperties::class)
-@ConditionalOnProperty(
-    name = ["cache.l2.enabled"],
-    havingValue = "false",
-    matchIfMissing = false,
-)
+@Profile("local")
 class CaffeineOnlyCacheConfig {
 
     /**

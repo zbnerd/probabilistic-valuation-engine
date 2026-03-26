@@ -54,7 +54,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private static final long ASYNC_TIMEOUT_SECONDS = 30L;
-  private static final long DATA_LOAD_TIMEOUT_SECONDS = 10L;
 
   private final GameCharacterFacade gameCharacterFacade;
   private final GameCharacterService gameCharacterService;
@@ -69,6 +68,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   private final ExpectationCacheCoordinator cacheCoordinator;
   private final ExpectationPersistenceService persistenceService;
   private final ObjectProvider<EquipmentExpectationServiceV4> selfProvider;
+  private final maple.expectation.infrastructure.config.NexonApiProperties nexonApiProperties;
 
   public EquipmentExpectationServiceV4(
       GameCharacterFacade gameCharacterFacade,
@@ -82,7 +82,8 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       @Qualifier("presetCalculationExecutor") Executor presetExecutor,
       ExpectationCacheCoordinator cacheCoordinator,
       ExpectationPersistenceService persistenceService,
-      ObjectProvider<EquipmentExpectationServiceV4> selfProvider) {
+      ObjectProvider<EquipmentExpectationServiceV4> selfProvider,
+      maple.expectation.infrastructure.config.NexonApiProperties nexonApiProperties) {
     this.gameCharacterFacade = gameCharacterFacade;
     this.gameCharacterService = gameCharacterService;
     this.equipmentProvider = equipmentProvider;
@@ -95,6 +96,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
     this.cacheCoordinator = cacheCoordinator;
     this.persistenceService = persistenceService;
     this.selfProvider = selfProvider;
+    this.nexonApiProperties = nexonApiProperties;
   }
 
   // ==================== Public API ====================
@@ -208,7 +210,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private PresetExpectation findMaxPreset(List<PresetExpectation> presetResults) {
     return presetResults.stream()
-        .max((p1, p2) -> p1.getTotalExpectedCost().compareTo(p2.getTotalExpectedCost()))
+        .max((p1, p2) -> Double.compare(p1.getTotalExpectedCost(), p2.getTotalExpectedCost()))
         .orElse(null);
   }
 
@@ -217,7 +219,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       PresetExpectation maxPreset,
       List<PresetExpectation> presetResults,
       boolean fromCache) {
-    BigDecimal totalCost = maxPreset != null ? maxPreset.getTotalExpectedCost() : BigDecimal.ZERO;
+    double totalCost = maxPreset != null ? maxPreset.getTotalExpectedCost() : 0.0;
     CostBreakdownDto totalBreakdown =
         maxPreset != null ? maxPreset.getCostBreakdown() : CostBreakdownDto.empty();
     int maxPresetNo = maxPreset != null ? maxPreset.getPresetNo() : 0;
@@ -240,14 +242,16 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
    * 장비 데이터 비동기 로드 (P0-2: .join() 블로킹 분리)
    *
    * <p>DB에 캐시된 데이터가 있으면 즉시 반환, 없으면 API 비동기 호출
+   *
+   * <p>🔥 FAN-OUT 적용: Nexon API 3개 병렬 호출 (getCharacterBasic, getItemData, getCubeHistory)
    */
   private CompletableFuture<byte[]> loadEquipmentDataAsync(GameCharacter character) {
     if (character.getEquipment() != null && character.getEquipment().jsonContent() != null) {
       return CompletableFuture.completedFuture(character.getEquipment().jsonContent().getBytes());
     }
     return equipmentProvider
-        .getRawEquipmentData(character.getCharacterId().value())
-        .orTimeout(DATA_LOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        .getRawEquipmentDataWithFanout(character.getCharacterId().value())  // 🔥 fan-out 메서드 호출
+        .orTimeout(nexonApiProperties.getDataLoadTimeoutSeconds(), TimeUnit.SECONDS);
   }
 
   // ==================== Preset Calculation ====================

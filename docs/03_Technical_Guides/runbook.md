@@ -1,7 +1,7 @@
 # MapleExpectation 운영 가이드 (Runbook)
 
-> **Last Updated:** 2026-02-05
-> **Documentation Version:** 1.0
+> **Last Updated:** 2026-03-26
+> **Documentation Version:** 2.0 (V5 Migration)
 > **Production Status:** Active (Validated through P0/P1 incident responses)
 
 ## Terminology
@@ -12,13 +12,16 @@
 | **RateLimitExceededException** | API 호출 한도 초과 예외 |
 | **Circuit Breaker** | 장애 확산 방지 패턴 |
 | **Graceful Degradation** | 장애 시 서비스 가용성 유지 |
+| **PostgreSQL Advisory Lock** | PostgreSQL 내장 락 메커니즘 (V5) |
+| **PGMQ** | PostgreSQL 기반 메시지 큐 (V5) |
 
 ## Documentation Integrity Statement
 
 This runbook is based on **production incident response** from 2025-2026:
 - P0 incidents: 23 resolution procedures validated (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
 - P1 nightmare issues: 7 distributed system problems resolved (Evidence: [P1 Report](../04_Reports/P1_Nightmare_Issues_Resolution_Report.md))
-- Graceful shutdown: 100% data preservation during deployments (Evidence: [ADR-008](../adr/ADR-008-durability-graceful-shutdown.md))
+- Graceful shutdown: 100% data preservation during deployments (Evidence: [ADR-008](../01_Adr/ADR-008-durability-graceful-shutdown.md))
+- **V5 Migration (2026-03)**: PostgreSQL, PGMQ, Advisory Lock adoption (Evidence: [ADR-027](../01_Adr/ADR-027-v5-postgresql-pgmq-migration.md))
 
 ---
 
@@ -50,32 +53,65 @@ This runbook is based on **production incident response** from 2025-2026:
 2. IP/User별 요청량 모니터링
 3. 필요 시 Rate Limit 임계값 조정
 
-### 1.3 Redis 장애
+### 1.3 PostgreSQL 장애 (V5 Migration)
 
-> **Production Incident:** P0 #73 - Redis failover caused 30s outage before Circuit Breaker implementation.
-> **Current MTTR:** < 10 seconds (automatic failover + MySQL fallback)
-> **Validation:** N01 (redis-death) chaos test passed (Evidence: [N01 Results](../01_Chaos_Engineering/01_Core/01-redis-death.md)).
-
-**증상:**
-- 로그: `[WARN] Redis connection failed, using Fail-Open`
-- 영향: 캐시 MISS 증가, DB 부하 상승
-
-**조치:**
-1. Redis 서버 상태 확인
-2. Sentinel failover 확인
-3. 임시 조치: 서비스는 Fail-Open으로 계속 동작
-4. MySQL Named Lock Pool 모니터링 (`MySQLLockPool` - Fixed Size: 30)
-
-### 1.4 MySQL Named Lock Pool 고갈
+> **Production Frequency:** PostgreSQL primary/replica failover (rare)
+> **MTTR Target:** < 5 minutes (connection pool refresh)
+> **Validation:** Testcontainers integration tests pass
 
 **증상:**
-- 로그: `HikariPool-MySQLLockPool - Connection is not available`
-- 영향: 락 획득 실패, 동시성 제어 불가
+- 로그: `[ERROR] Connection to PostgreSQL refused`
+- 영향: 모든 서비스 장애 (DB 의존)
 
 **조치:**
-1. Redis 복구 우선 시도 (근본 원인)
-2. Pool 상태 확인: `/actuator/metrics/hikaricp.connections`
-3. 비상시 Pool Size 임시 증설 (환경변수 또는 재배포)
+1. PostgreSQL 상태 확인
+   ```bash
+   docker ps | grep postgres
+   docker logs maple-postgres
+   ```
+2. Connection pool 상태 확인
+   ```bash
+   curl http://localhost:8080/actuator/metrics/hikaricp.connections.active
+   curl http://localhost:8080/actuator/metrics/hikaricp.connections.max
+   ```
+3. 즉시: Application 재시작 (connection pool refresh)
+4. 근본: PostgreSQL 서버 상태 점검
+5. 영구: Connection pool 설정 검토 (`maximum-pool-size`)
+
+### 1.4 Connection Pool 고갈 (V5 Migration)
+
+**증상:**
+- 로그: `HikariPool-1 - Connection is not available`
+- 영향: Request timeout, 서비스 느려짐
+
+**조치:**
+1. Connection pool metrics 확인
+   ```bash
+   curl http://localhost:8080/actuator/metrics/hikaricp.connections.active
+   curl http://localhost:8080/actuator/metrics/hikaricp.connections.pending
+   ```
+2. 즉시: Application 재시작 (connection leak 해제)
+3. 설정: `maximum-pool-size` 증가 (기본값 10 → 20)
+4. 근본: Connection leak 원인 코드 수정
+
+### 1.5 PGMQ 큐 적체 (V5 Migration)
+
+> **Production Frequency:** Worker 속도 저하 시 발생
+> **MTTR Target:** < 10 minutes (worker scale-out)
+> **Validation:** PGMQ integration tests pass
+
+**증상:**
+- 로그: `[WARN] PGMQ queue depth high`
+- 영향: 좋아요 동기화 지연, 기부 알림 지연
+
+**조치:**
+1. Queue depth 확인
+   ```sql
+   SELECT queue_name, count(*) FROM pgmq.metrics GROUP BY queue_name;
+   ```
+2. Worker 상태 확인 (CPU, 메모리)
+3. Worker scale-out (환경 변수로 worker 수 증가)
+4. 실패 메시지 재시도 (DLQ 처리)
 
 ## 2. 모니터링 체크리스트
 
@@ -92,7 +128,8 @@ This runbook is based on **production incident response** from 2025-2026:
 | `cache.hit{layer=L1}` | > 80% | < 60% |
 | `cache.hit{layer=L2}` | > 90% | < 70% |
 | `hikaricp.connections.active` | < 80% pool | > 90% pool |
-| `resilience4j.circuitbreaker.state` | CLOSED | OPEN |
+| `postgres_advisory_lock_wait_seconds` | < 50ms | > 100ms |
+| `pgmq_queue_depth` | < 100 | > 1000 |
 
 ### 2.3 JaCoCo 커버리지 리포트
 - 로컬: `build/reports/jacoco/test/html/index.html`
@@ -141,8 +178,9 @@ kubectl rollout undo deployment/maple-expectation
 This runbook would be invalidated if:
 - **Incident response procedures don't work**: Compare with actual production logs
 - **Rollback procedures don't match environment**: Verify deployment environment
-- **Metrics not collected**: Verify Actuator endpoints
+- **Metrics not collected**: Verify Actuator endpoints and Prometheus targets
 - **Discord alerts not firing**: Test alert endpoint
+- **PostgreSQL metrics unavailable**: Check `postgres_exporter` is running
 
 ### Verification Commands
 ```bash

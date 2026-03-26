@@ -1,6 +1,5 @@
 package maple.expectation.application.service.calculator.v4.impl
 
-import java.math.BigDecimal
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator.CostBreakdown
 import maple.expectation.application.service.cube.AbstractCubeDecoratorV4
@@ -16,10 +15,7 @@ import maple.expectation.web.dto.CubeCalculationInput
  * - 중복 로직 제거: AbstractCubeDecoratorV4 템플릿 사용
  * - 코드 감소: ~60% (119 → 47 라인)
  * - 단일 책임: 큐브 타입과 경로 접미사만 정의
- *
- * 5-Agent Council 합의사항:
- * - 🟣 Purple (Auditor): BigDecimal 필수 - truncation 방지
- * - RoundingMode.HALF_UP 명시적 사용 (템플릿에서 처리)
+ * - 성능 최적화: BigDecimal → Double로 변경 (2026-03-23)
  *
  * 블랙큐브 특성:
  * - 윗잠재(메인 잠재능력) 재설정
@@ -39,5 +35,6 @@ class BlackCubeDecoratorV4(
 
     override fun getCubePathSuffix(): String = " > 블랙큐브(윗잠)"
 
-    override fun updateCostBreakdown(base: CostBreakdown, cubeCost: BigDecimal, trials: BigDecimal): CostBreakdown = base.withBlackCube(base.blackCubeCost.add(cubeCost), trials)
+    override fun updateCostBreakdown(base: CostBreakdown, cubeCost: Double, trials: Double): CostBreakdown =
+        base.withBlackCube(base.blackCubeCost + cubeCost, trials)
 }

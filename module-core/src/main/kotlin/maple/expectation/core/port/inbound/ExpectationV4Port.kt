@@ -24,6 +24,18 @@ interface ExpectationV4Port {
     fun calculateExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<Any>
 
     /**
+     * 🔥 기대값 동기 계산 (Admission Control용)
+     *
+     * <p>NOTE: Admission control은 sync 작업만 관리합니다.
+     * Async 작업은 외부에서 thenApplyAsync로 처리합니다.
+     *
+     * @param userIgn 캐릭터 IGN
+     * @param force 강제 재계산 여부
+     * @return 기대값 응답 (Any = EquipmentExpectationResponseV4)
+     */
+    fun calculateExpectation(userIgn: String, force: Boolean): Any
+
+    /**
      * GZIP 기대값 비동기 조회
      *
      * @param userIgn 캐릭터 IGN
@@ -31,6 +43,18 @@ interface ExpectationV4Port {
      * @return GZIP 바이트 배열
      */
     fun getGzipExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<ByteArray?>
+
+    /**
+     * 🔥 GZIP 기대값 동기 조회 (Admission Control용)
+     *
+     * <p>NOTE: Admission control은 sync 작업만 관리합니다.
+     * Async 작업은 외부에서 thenApplyAsync로 처리합니다.
+     *
+     * @param userIgn 캐릭터 IGN
+     * @param force 강제 재계산 여부
+     * @return GZIP 바이트 배열
+     */
+    fun getGzipExpectation(userIgn: String, force: Boolean): ByteArray?
 
     /**
      * L1 캐시에서 GZIP 직접 조회 (Fast Path)

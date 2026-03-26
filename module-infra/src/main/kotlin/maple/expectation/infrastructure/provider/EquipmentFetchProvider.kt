@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.provider
 
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.aop.annotation.NexonDataCache
 import maple.expectation.infrastructure.external.NexonApiClient

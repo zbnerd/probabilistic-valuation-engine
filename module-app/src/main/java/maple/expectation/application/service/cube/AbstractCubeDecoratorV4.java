@@ -1,6 +1,5 @@
 package maple.expectation.application.service.cube;
 
-import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Optional;
 import maple.expectation.application.service.calculator.v4.EquipmentEnhanceDecorator;
@@ -11,12 +10,12 @@ import maple.expectation.domain.v2.CubeType;
 import maple.expectation.web.dto.CubeCalculationInput;
 
 /**
- * V4-specific abstract cube decorator using BigDecimal type.
+ * V4-specific abstract cube decorator using Double type for performance.
  *
  * <p>Extends AbstractCubeDecorator with V4-specific implementations:
  *
  * <ul>
- *   <li>Type parameter: BigDecimal (precise decimal arithmetic)
+ *   <li>Type parameter: Double (performance optimization)
  *   <li>Rounds trials to integer (HALF_UP) before cost calculation
  *   <li>Extends EquipmentEnhanceDecorator for V4 calculator chain
  *   <li>Supports CostBreakdown for detailed cost tracking
@@ -25,40 +24,16 @@ import maple.expectation.web.dto.CubeCalculationInput;
  * <h3>V4 Improvements over V2</h3>
  *
  * <ul>
- *   <li>Precision: BigDecimal prevents floating-point truncation
+ *   <li>Performance: Double prevents BigDecimal object allocation overhead
  *   <li>Rounding: Trials rounded to integer before multiplication
  *   <li>Detailed breakdown: Separate tracking of cube costs and trials
  * </ul>
- *
- * <h3>Usage Example</h3>
- *
- * <pre>{@code
- * public class BlackCubeDecoratorV4 extends AbstractCubeDecoratorV4 {
- *   public BlackCubeDecoratorV4(
- *       EquipmentExpectationCalculator target,
- *       CubeTrialsProvider trialsProvider,
- *       CubeCostPolicy costPolicy,
- *       CubeCalculationInput input) {
- *     super(target, trialsProvider, costPolicy, input);
- *   }
- *
- *   @Override
- *   protected CubeType getCubeType() {
- *     return CubeType.BLACK;
- *   }
- *
- *   @Override
- *   protected String getCubePathSuffix() {
- *     return " > 블랙큐브(윗잠)";
- *   }
- * }
- * }</pre>
  */
 public abstract class AbstractCubeDecoratorV4 extends EquipmentEnhanceDecorator {
 
   private static final int PRECISION_SCALE = 2;
 
-  private final AbstractCubeDecorator<BigDecimal, EquipmentExpectationCalculator> delegate;
+  private final AbstractCubeDecorator<Double, EquipmentExpectationCalculator> delegate;
 
   /**
    * Constructor that initializes both the decorator chain and the generic delegate.
@@ -77,7 +52,7 @@ public abstract class AbstractCubeDecoratorV4 extends EquipmentEnhanceDecorator 
 
     // Create delegate with V4-specific implementations
     this.delegate =
-        new AbstractCubeDecorator<BigDecimal, EquipmentExpectationCalculator>(
+        new AbstractCubeDecorator<Double, EquipmentExpectationCalculator>(
             target, trialsProvider, costPolicy, input) {
 
           @Override
@@ -86,18 +61,18 @@ public abstract class AbstractCubeDecoratorV4 extends EquipmentEnhanceDecorator 
           }
 
           @Override
-          protected Optional<BigDecimal> getTrialsOptional() {
+          protected Optional<Double> getTrialsOptional() {
             return AbstractCubeDecoratorV4.this.getTrials();
           }
 
           @Override
-          protected BigDecimal getCostPerTrial() {
-            return BigDecimal.valueOf(
-                costPolicy.getCubeCost(getCubeType(), input.getLevel(), input.getGrade()));
+          protected Double getCostPerTrial() {
+            return (double)
+                costPolicy.getCubeCost(getCubeType(), input.getLevel(), input.getGrade());
           }
 
           @Override
-          protected BigDecimal calculateTotalCost() {
+          protected Double calculateTotalCost() {
             return AbstractCubeDecoratorV4.this.calculateCost();
           }
 
@@ -112,28 +87,28 @@ public abstract class AbstractCubeDecoratorV4 extends EquipmentEnhanceDecorator 
           }
 
           @Override
-          protected BigDecimal convertFromDouble(Double value) {
-            return BigDecimal.valueOf(value);
+          protected Double convertFromDouble(Double value) {
+            return value;
           }
 
           @Override
-          protected BigDecimal convertFromLong(long value) {
-            return BigDecimal.valueOf(value);
+          protected Double convertFromLong(long value) {
+            return (double) value;
           }
 
           @Override
-          protected BigDecimal getZero() {
-            return BigDecimal.ZERO;
+          protected Double getZero() {
+            return 0.0;
           }
 
           @Override
-          protected BigDecimal add(BigDecimal a, BigDecimal b) {
-            return a.add(b);
+          protected Double add(Double a, Double b) {
+            return a + b;
           }
 
           @Override
-          protected BigDecimal multiply(BigDecimal a, BigDecimal b) {
-            return a.multiply(b);
+          protected Double multiply(Double a, Double b) {
+            return a * b;
           }
 
           @Override
@@ -160,9 +135,9 @@ public abstract class AbstractCubeDecoratorV4 extends EquipmentEnhanceDecorator 
   /**
    * Calculate expected trials using delegate.
    *
-   * @return Expected number of trials (BigDecimal)
+   * @return Expected number of trials (Double)
    */
-  public BigDecimal calculateTrials() {
+  public double calculateTrials() {
     return delegate.calculateTrials();
   }
 
@@ -172,7 +147,7 @@ public abstract class AbstractCubeDecoratorV4 extends EquipmentEnhanceDecorator 
    * @return Optional containing trials
    */
   @Override
-  public Optional<BigDecimal> getTrials() {
+  public Optional<Double> getTrials() {
     return Optional.of(delegate.calculateTrials());
   }
 
@@ -181,26 +156,26 @@ public abstract class AbstractCubeDecoratorV4 extends EquipmentEnhanceDecorator 
    *
    * <p>V4 improvement: Trials are rounded to integer before cost calculation.
    *
-   * @return Total cost (BigDecimal)
+   * @return Total cost (Double)
    */
   @Override
-  public BigDecimal calculateCost() {
+  public double calculateCost() {
     // 1. Previous stage cumulative cost
-    BigDecimal previousCost = super.calculateCost();
+    double previousCost = super.calculateCost();
 
     // 2. Expected trials for cube
-    BigDecimal expectedTrials = delegate.calculateTrials();
+    double expectedTrials = delegate.calculateTrials();
 
     // 3. Round trials to integer (V4 improvement)
-    BigDecimal roundedTrials = expectedTrials.setScale(0, RoundingMode.HALF_UP);
+    long roundedTrials = Math.round(expectedTrials);
 
     // 4. Cost per trial from policy
-    BigDecimal costPerTrial = BigDecimal.valueOf(delegate.getLongCostPerTrial());
+    double costPerTrial = delegate.getLongCostPerTrial();
 
     // 5. Total cost = previous + (roundedTrials × costPerTrial)
-    BigDecimal cubeCost = roundedTrials.multiply(costPerTrial);
+    double cubeCost = roundedTrials * costPerTrial;
 
-    return previousCost.add(cubeCost);
+    return previousCost + cubeCost;
   }
 
   /**
@@ -215,10 +190,10 @@ public abstract class AbstractCubeDecoratorV4 extends EquipmentEnhanceDecorator 
     CostBreakdown base = super.getDetailedCosts();
 
     // Calculate trials and cost
-    BigDecimal expectedTrials = delegate.calculateTrials();
-    BigDecimal roundedTrials = expectedTrials.setScale(0, RoundingMode.HALF_UP);
-    BigDecimal costPerTrial = BigDecimal.valueOf(delegate.getLongCostPerTrial());
-    BigDecimal cubeCost = roundedTrials.multiply(costPerTrial);
+    double expectedTrials = delegate.calculateTrials();
+    long roundedTrials = Math.round(expectedTrials);
+    double costPerTrial = delegate.getLongCostPerTrial();
+    double cubeCost = roundedTrials * costPerTrial;
 
     // Delegate to subclass for specific CostBreakdown method
     return updateCostBreakdown(base, cubeCost, roundedTrials);
@@ -241,7 +216,7 @@ public abstract class AbstractCubeDecoratorV4 extends EquipmentEnhanceDecorator 
    * @return Updated CostBreakdown
    */
   protected abstract CostBreakdown updateCostBreakdown(
-      CostBreakdown base, BigDecimal cubeCost, BigDecimal trials);
+      CostBreakdown base, double cubeCost, double trials);
 
   /**
    * Get base enhance path from target.
@@ -263,7 +238,7 @@ public abstract class AbstractCubeDecoratorV4 extends EquipmentEnhanceDecorator 
   }
 
   /**
-   * Get precision scale for BigDecimal operations.
+   * Get precision scale for operations.
    *
    * @return Scale value (2)
    */

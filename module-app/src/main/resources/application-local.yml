@@ -58,6 +58,16 @@ spring:
     discord:
       webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
 
+  # 🔥 P1 FIX #2: Reduced thread pool sizing to prevent context switching overhead
+  # Recommendation: Set to availableProcessors * 2 for optimal performance
+  task:
+    execution:
+      pool:
+        core-size: 32       # 🔥 P1 FIX #2: Reduced from 200 (was causing excessive context switching)
+        max-size: 64        # 🔥 P1 FIX #2: Reduced from 400 (2x core-size is typical)
+        queue-capacity: 1000  # 🔥 P1 FIX #1: Reduced from 2000 to prevent timeout storm
+      thread-name-prefix: "async-"
+
 # MongoDB Configuration (V5 CQRS) - REMOVED in Issue #590
 # All V5 data now stored in PostgreSQL
 

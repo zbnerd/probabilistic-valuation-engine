@@ -152,17 +152,30 @@ groups:
           description: "P99 connection acquire time is {{ $value }}s for more than 5 minutes"
 
       # ============================================
-      # Redis Connection Alert
+      # PostgreSQL Advisory Lock Alert (V5 Migration)
       # ============================================
-      - alert: RedisConnectionHighLatency
-        expr: redis_info_latency_seconds > 0.1
+      - alert: PostgresAdvisoryLockContention
+        expr: rate(postgres_advisory_lock_wait_seconds_total[5m]) > 0.1
         for: 2m
         labels:
           severity: warning
-          category: redis
+          category: database
         annotations:
-          summary: "High Redis latency on {{ $labels.instance }}"
-          description: "Redis latency is {{ $value }}s for more than 2 minutes"
+          summary: "PostgreSQL advisory lock contention on {{ $labels.instance }}"
+          description: "Lock wait time is {{ $value }}s for more than 2 minutes"
+
+      # ============================================
+      # PGMQ Queue Depth Alert (V5 Migration)
+      # ============================================
+      - alert: PgmqQueueDepthHigh
+        expr: pgmq_queue_depth{queue_name=~"calculation|like_sync|donation"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: queue
+        annotations:
+          summary: "PGMQ queue depth high: {{ $labels.queue_name }}"
+          description: "Queue depth is {{ $value }} messages for more than 5 minutes"
 
       # ============================================
       # Chaos Test Alert

@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import java.util.concurrent.TimeUnit
+import maple.expectation.domain.v2.EquipmentExpectationSummary
 import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer
 import maple.expectation.infrastructure.buffer.ExpectationWriteTask
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -136,15 +137,16 @@ class ExpectationBatchShutdownHandler(
         for (task in batch) {
             val success = executor.executeOrDefault(
                 {
-                    repository.upsertExpectationSummary(
-                        task.characterId,
-                        task.presetNo,
-                        task.totalExpectedCost,
-                        task.blackCubeCost,
-                        task.redCubeCost,
-                        task.additionalCubeCost,
-                        task.starforceCost,
+                    val summary = EquipmentExpectationSummary.create(
+                        gameCharacterId = task.characterId,
+                        presetNo = task.presetNo,
+                        totalExpectedCost = task.totalExpectedCost?.let { java.math.BigDecimal.valueOf(it) },
+                        blackCubeCost = task.blackCubeCost?.let { java.math.BigDecimal.valueOf(it) },
+                        redCubeCost = task.redCubeCost?.let { java.math.BigDecimal.valueOf(it) },
+                        additionalCubeCost = task.additionalCubeCost?.let { java.math.BigDecimal.valueOf(it) },
+                        starforceCost = task.starforceCost?.let { java.math.BigDecimal.valueOf(it) },
                     )
+                    repository.save(summary)
                     true
                 },
                 false,

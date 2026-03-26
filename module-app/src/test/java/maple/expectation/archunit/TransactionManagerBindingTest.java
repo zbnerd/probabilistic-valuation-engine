@@ -1,6 +1,8 @@
 package maple.expectation.archunit;
 
 import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  * @see <a
  *     href="../../../../module-infra/src/main/kotlin/maple/expectation/infrastructure/config/TransactionConfig.kt">TransactionConfig</a>
  */
+@Tag("architecture")
 class TransactionManagerBindingTest {
 
   // Valid transaction manager bean names (both are acceptable)
@@ -42,6 +45,8 @@ class TransactionManagerBindingTest {
   void all_transactional_annotations_must_have_explicit_transaction_manager() {
     var classes =
         new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
             .importPackages("maple.expectation.application", "maple.expectation.infrastructure");
 
     var violationCollector = new ViolationCollector();

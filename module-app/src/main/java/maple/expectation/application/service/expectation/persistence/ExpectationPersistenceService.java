@@ -71,14 +71,16 @@ public class ExpectationPersistenceService {
    */
   public void saveResultsSync(Long characterId, List<PresetExpectation> presets) {
     for (PresetExpectation preset : presets) {
-      summaryRepository.upsertExpectationSummary(
-          characterId,
-          preset.getPresetNo(),
-          preset.getTotalExpectedCost(),
-          preset.getCostBreakdown().getBlackCubeCost(),
-          preset.getCostBreakdown().getRedCubeCost(),
-          preset.getCostBreakdown().getAdditionalCubeCost(),
-          preset.getCostBreakdown().getStarforceCost());
+      maple.expectation.domain.v2.EquipmentExpectationSummary summary =
+          maple.expectation.domain.v2.EquipmentExpectationSummary.create(
+              characterId,
+              Integer.valueOf(preset.getPresetNo()),
+              java.math.BigDecimal.valueOf(preset.getTotalExpectedCost()),
+              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getBlackCubeCost()),
+              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getRedCubeCost()),
+              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getAdditionalCubeCost()),
+              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getStarforceCost()));
+      summaryRepository.save(summary);
     }
     log.debug("[V4] 동기 DB 저장 완료: characterId={}, presets={}", characterId, presets.size());
   }

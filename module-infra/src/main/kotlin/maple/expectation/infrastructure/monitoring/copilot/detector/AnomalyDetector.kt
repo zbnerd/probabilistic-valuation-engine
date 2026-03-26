@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.monitoring.copilot.detector
 
 import java.util.Optional
+import maple.expectation.core.util.KahanSummation
 import maple.expectation.infrastructure.monitoring.copilot.model.*
 import org.slf4j.LoggerFactory
 
@@ -170,24 +171,40 @@ class AnomalyDetector {
         }
     }
 
+    /**
+     * Calculate mean using Kahan Summation for improved numerical accuracy
+     *
+     * @param values list of double values
+     * @return mean value
+     */
     private fun calculateMean(values: List<Double>): Double {
         if (values.isEmpty()) {
             return 0.0
         }
 
-        val sum = values.sum()
+        // 🔥 P2 FIX #2: Use Kahan Summation for accurate floating-point accumulation
+        val sum = KahanSummation.sum(values)
         return sum / values.size
     }
 
+    /**
+     * Calculate standard deviation using Kahan Summation for improved numerical accuracy
+     *
+     * @param values list of double values
+     * @param mean pre-calculated mean value
+     * @return standard deviation
+     */
     private fun calculateStdDev(values: List<Double>, mean: Double): Double {
         if (values.size < 2) {
             return 0.0
         }
 
-        val sumSquaredDiff = values.sumOf { value ->
+        // 🔥 P2 FIX #2: Use Kahan Summation for accurate floating-point accumulation
+        val squaredDiffs = values.map { value ->
             val diff = value - mean
             diff * diff
         }
+        val sumSquaredDiff = KahanSummation.sum(squaredDiffs)
 
         return Math.sqrt(sumSquaredDiff / (values.size - 1))
     }

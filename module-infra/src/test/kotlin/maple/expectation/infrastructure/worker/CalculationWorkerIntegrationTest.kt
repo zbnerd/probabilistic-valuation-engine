@@ -528,7 +528,23 @@ class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {
             }
         }
 
+        override fun calculateExpectation(userIgn: String, force: Boolean): Any {
+            // 호출 카운트 증가
+            callCountMap.computeIfAbsent(userIgn) { AtomicInteger(0) }.incrementAndGet()
+
+            return if (success || currentFailCount >= failCount) {
+                // 성공 시나리오
+                mockResponse()
+            } else {
+                // 실패 시나리오
+                currentFailCount++
+                throw RuntimeException("Simulated calculation failure")
+            }
+        }
+
         override fun getGzipExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<ByteArray?> = CompletableFuture.completedFuture(byteArrayOf())
+
+        override fun getGzipExpectation(userIgn: String, force: Boolean): ByteArray? = byteArrayOf()
 
         override fun getGzipFromL1CacheDirect(userIgn: String): ByteArray? = null
 

@@ -8,9 +8,12 @@ import static org.mockito.Mockito.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import maple.expectation.core.port.inbound.ExpectationV4Port;
 import maple.expectation.core.port.out.PopularCharacterTrackerPort;
+import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
 import maple.expectation.web.controller.v4.GameCharacterControllerV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,18 +43,30 @@ import org.springframework.http.ResponseEntity;
  *   <li>Auto Warmup 호출 기록 (#275)
  * </ul>
  */
-@Tag("unit")
+@Tag("integration")
 class GameCharacterControllerV4Test {
 
   private ExpectationV4Port expectationPort;
   private PopularCharacterTrackerPort trackerPort;
+  private GlobalAdmissionControl admissionControl;
+  private Executor taskExecutor;
   private GameCharacterControllerV4 controller;
 
   @BeforeEach
   void setUp() {
     expectationPort = mock(ExpectationV4Port.class);
     trackerPort = mock(PopularCharacterTrackerPort.class);
-    controller = new GameCharacterControllerV4(expectationPort, trackerPort);
+    admissionControl = mock(GlobalAdmissionControl.class);
+    taskExecutor = Runnable::run;
+    controller = new GameCharacterControllerV4(expectationPort, trackerPort, admissionControl, taskExecutor);
+
+    // admissionControl.submitOrWait() executes the callable synchronously
+    lenient()
+        .when(admissionControl.submitOrWait(anyString(), any(Callable.class)))
+        .thenAnswer(invocation -> {
+          Callable<?> callable = invocation.getArgument(1);
+          return CompletableFuture.completedFuture(callable.call());
+        });
   }
 
   @Nested
@@ -85,8 +100,8 @@ class GameCharacterControllerV4Test {
       String userIgn = "FallbackUser";
       byte[] gzipData = new byte[] {0x1f, (byte) 0x8b};
       given(expectationPort.getGzipFromL1CacheDirect(userIgn)).willReturn(null);
-      given(expectationPort.getGzipExpectationAsync(eq(userIgn), eq(false)))
-          .willReturn(CompletableFuture.completedFuture(gzipData));
+      given(expectationPort.getGzipExpectation(eq(userIgn), eq(false)))
+          .willReturn(gzipData);
 
       // when
       CompletableFuture<ResponseEntity<?>> future =
@@ -96,7 +111,7 @@ class GameCharacterControllerV4Test {
       // then
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_ENCODING)).isEqualTo("gzip");
-      verify(expectationPort).getGzipExpectationAsync(userIgn, false);
+      verify(expectationPort).getGzipExpectation(userIgn, false);
     }
 
     @Test
@@ -105,8 +120,8 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "ForceUser";
       byte[] gzipData = new byte[] {0x1f, (byte) 0x8b};
-      given(expectationPort.getGzipExpectationAsync(eq(userIgn), eq(true)))
-          .willReturn(CompletableFuture.completedFuture(gzipData));
+      given(expectationPort.getGzipExpectation(eq(userIgn), eq(true)))
+          .willReturn(gzipData);
 
       // when
       CompletableFuture<ResponseEntity<?>> future =
@@ -115,7 +130,7 @@ class GameCharacterControllerV4Test {
 
       // then - L1 캐시 조회하지 않음
       verify(expectationPort, never()).getGzipFromL1CacheDirect(anyString());
-      verify(expectationPort).getGzipExpectationAsync(userIgn, true);
+      verify(expectationPort).getGzipExpectation(userIgn, true);
     }
 
     @Test
@@ -124,8 +139,8 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "JsonUser";
       EquipmentExpectationResponseV4 mockResponse = createMockResponse(userIgn);
-      given(expectationPort.calculateExpectationAsync(eq(userIgn), eq(false)))
-          .willReturn(CompletableFuture.completedFuture(mockResponse));
+      given(expectationPort.calculateExpectation(eq(userIgn), eq(false)))
+          .willReturn(mockResponse);
 
       // when
       CompletableFuture<ResponseEntity<?>> future = controller.getExpectation(userIgn, false, null);
@@ -142,8 +157,8 @@ class GameCharacterControllerV4Test {
     void shouldRecordAccessToTracker() {
       // given
       String userIgn = "TrackedUser";
-      given(expectationPort.calculateExpectationAsync(anyString(), anyBoolean()))
-          .willReturn(CompletableFuture.completedFuture(createMockResponse(userIgn)));
+      given(expectationPort.calculateExpectation(anyString(), anyBoolean()))
+          .willReturn(createMockResponse(userIgn));
 
       // when
       controller.getExpectation(userIgn, false, null);
@@ -197,7 +212,7 @@ class GameCharacterControllerV4Test {
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(response.getBody()).isNotNull();
       assertThat(response.getBody().getPresets()).isEmpty();
-      assertThat(response.getBody().getTotalExpectedCost()).isEqualTo(BigDecimal.ZERO);
+      assertThat(response.getBody().getTotalExpectedCost()).isEqualTo(0.0);
     }
   }
 
@@ -257,7 +272,7 @@ class GameCharacterControllerV4Test {
         userIgn,
         LocalDateTime.now(),
         false,
-        BigDecimal.valueOf(10000000),
+        BigDecimal.valueOf(10000000).doubleValue(),
         "10,000,000 메소",
         EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
         0,
@@ -268,7 +283,7 @@ class GameCharacterControllerV4Test {
     EquipmentExpectationResponseV4.PresetExpectation preset1 =
         new EquipmentExpectationResponseV4.PresetExpectation(
             1,
-            BigDecimal.valueOf(5000000),
+            BigDecimal.valueOf(5000000).doubleValue(),
             "5,000,000 메소",
             EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
             List.of());
@@ -276,7 +291,7 @@ class GameCharacterControllerV4Test {
     EquipmentExpectationResponseV4.PresetExpectation preset2 =
         new EquipmentExpectationResponseV4.PresetExpectation(
             2,
-            BigDecimal.valueOf(3000000),
+            BigDecimal.valueOf(3000000).doubleValue(),
             "3,000,000 메소",
             EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
             List.of());
@@ -285,7 +300,7 @@ class GameCharacterControllerV4Test {
         userIgn,
         LocalDateTime.now(),
         false,
-        BigDecimal.valueOf(8000000),
+        BigDecimal.valueOf(8000000).doubleValue(),
         "8,000,000 메소",
         EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
         2,

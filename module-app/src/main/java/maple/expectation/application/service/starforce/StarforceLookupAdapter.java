@@ -1,7 +1,5 @@
 package maple.expectation.application.service.starforce;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
@@ -31,13 +29,12 @@ import org.springframework.stereotype.Component;
  * E[12] = b[12] / (1 - a[12])
  * </pre>
  *
- * <h3>옵션</h3>
+ * <h3>성능 최적화 (2026-03-23)</h3>
  *
  * <ul>
- *   <li>스타캐치: 성공률 1.05배
- *   <li>썬데이메이플: 파괴율 30% 감소 (15-21성만)
- *   <li>30% 할인: 강화비용 30% 할인
- *   <li>파괴방지 (15-17성): 비용 3배, 파괴율 0%
+ *   <li>BigDecimal → Double로 변경하여 메모리/계산 비용 절감
+ *   <li>내부 계산은 primitive double 사용
+ *   <li>캐시도 Double로 저장
  * </ul>
  *
  * @see StarforceLookupPort Core Port 인터페이스
@@ -87,7 +84,7 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
 
   private final LogicExecutor executor;
 
-  private final ConcurrentHashMap<String, BigDecimal> expectedCostCache = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Double> expectedCostCache = new ConcurrentHashMap<>();
   private final AtomicBoolean initialized = new AtomicBoolean(false);
 
   @Override
@@ -123,7 +120,7 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
   }
 
   @Override
-  public BigDecimal getExpectedCost(int currentStar, int targetStar, int itemLevel) {
+  public double getExpectedCost(int currentStar, int targetStar, int itemLevel) {
     return getExpectedCost(currentStar, targetStar, itemLevel, true, true, true, false);
   }
 
@@ -141,7 +138,7 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
    * </pre>
    */
   @Override
-  public BigDecimal getExpectedCost(
+  public double getExpectedCost(
       int currentStar,
       int targetStar,
       int itemLevel,
@@ -156,7 +153,7 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
     validateStarRange(currentStar, targetStar, maxStar);
 
     if (currentStar >= targetStar) {
-      return BigDecimal.ZERO;
+      return 0.0;
     }
 
     // 캐시 키
@@ -169,13 +166,13 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
             useSundayMaple,
             useDiscount,
             useDestroyPrevention);
-    BigDecimal cached = expectedCostCache.get(key);
+    Double cached = expectedCostCache.get(key);
     if (cached != null) {
       return cached;
     }
 
     // 마르코프 체인 기대값 계산
-    BigDecimal result =
+    double result =
         computeMarkovExpectedCost(
             currentStar,
             targetStar,
@@ -194,7 +191,7 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
    *
    * <p>E[s] = a[s]*E[12] + b[s] 형태로 표현 후, E[12] = b[12] / (1 - a[12])로 닫아서 해결
    */
-  private BigDecimal computeMarkovExpectedCost(
+  private double computeMarkovExpectedCost(
       int currentStar,
       int targetStar,
       int itemLevel,
@@ -214,7 +211,8 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
       double[] params =
           getStageParams(
               s, itemLevel, useStarCatch, useSundayMaple, useDiscount, useDestroyPrevention);
-      double p = params[0]; // 성공확률      double m = params[1]; // 유지확률 (사용 안함, p+d로 계산)
+      double p = params[0]; // 성공확률
+      double m = params[1]; // 유지확률 (사용 안함, p+d로 계산)
       double d = params[2]; // 파괴확률
       double c = params[3]; // 비용
 
@@ -254,7 +252,7 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
     // E[currentStar] = a[currentStar]*E[12] + b[currentStar]
     double result = a[currentStar] * E12 + b[currentStar];
 
-    return BigDecimal.valueOf(result).setScale(0, RoundingMode.HALF_UP);
+    return Math.round(result);
   }
 
   /**
@@ -344,25 +342,25 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
   }
 
   @Override
-  public BigDecimal getSuccessProbability(int currentStar) {
+  public double getSuccessProbability(int currentStar) {
     if (currentStar < 0 || currentStar >= MAX_STAR) {
       throw new IllegalArgumentException("Invalid star: " + currentStar);
     }
-    return BigDecimal.valueOf(BASE_SUCCESS_RATES[currentStar]);
+    return BASE_SUCCESS_RATES[currentStar];
   }
 
   @Override
-  public BigDecimal getDestroyProbability(int currentStar) {
+  public double getDestroyProbability(int currentStar) {
     if (currentStar < 0 || currentStar >= MAX_STAR) {
-      return BigDecimal.ZERO;
+      return 0.0;
     }
-    return BigDecimal.valueOf(BASE_DESTROY_RATES[currentStar]);
+    return BASE_DESTROY_RATES[currentStar];
   }
 
   @Override
-  public BigDecimal getSingleEnhanceCost(int currentStar, int itemLevel) {
+  public double getSingleEnhanceCost(int currentStar, int itemLevel) {
     double raw = getSingleEnhanceCostRaw(currentStar, itemLevel);
-    return BigDecimal.valueOf(roundToNearest10(raw));
+    return roundToNearest10(raw);
   }
 
   @Override
@@ -377,7 +375,7 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
    * a[12])
    */
   @Override
-  public BigDecimal getExpectedDestroyCount(
+  public double getExpectedDestroyCount(
       int currentStar,
       int targetStar,
       boolean useStarCatch,
@@ -388,7 +386,7 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
       targetStar = maxStar;
     }
     if (currentStar >= targetStar) {
-      return BigDecimal.ZERO;
+      return 0.0;
     }
 
     int T = targetStar;
@@ -433,7 +431,7 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
     }
 
     double result = a[currentStar] * B12 + b[currentStar];
-    return BigDecimal.valueOf(result).setScale(2, RoundingMode.HALF_UP);
+    return Math.round(result * 100.0) / 100.0; // 소수점 2자리로 반올림
   }
 
   private void computeAndCache(
@@ -445,7 +443,7 @@ public class StarforceLookupAdapter implements StarforceLookupPort {
       boolean discount,
       boolean destroyPrev) {
     String key = cacheKey(currentStar, targetStar, level, starCatch, sunday, discount, destroyPrev);
-    BigDecimal cost =
+    double cost =
         computeMarkovExpectedCost(
             currentStar, targetStar, level, starCatch, sunday, discount, destroyPrev);
     expectedCostCache.put(key, cost);

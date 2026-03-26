@@ -33,6 +33,25 @@ class EquipmentDataProvider(
             .thenApply { response -> serializeResponse(response, context) }
     }
 
+    /**
+     * 🔥 [FAN-OUT] 원본 데이터 획득 - Nexon API 병렬 호출 (getCharacterBasic, getItemData)
+     *
+     * <p>Purpose: Latency 최적화를 위해 2개 Nexon API를 병렬로 호출
+     * <p>호출되는 API: getCharacterBasic, getItemDataByOcid
+     *
+     * @param ocid 캐릭터 OCID
+     * @return 장비 데이터 ByteArray (getItemData만 직렬화하여 반환)
+     */
+    fun getRawEquipmentDataWithFanout(ocid: String): CompletableFuture<ByteArray?> {
+        val context = TaskContext.of("EquipmentProvider", "GetRawDataFanout", ocid)
+
+        return fetchProvider.fetchAllWithCacheAsync(ocid)
+            .thenApply { (basic, item) ->
+                // Equipment만 직렬화하여 반환 (기존 호환성 유지)
+                serializeResponse(item, context)
+            }
+    }
+
     /** ✅ [V2] Response DTO 획득 */
     fun getEquipmentResponse(ocid: String): CompletableFuture<EquipmentResponse?> = CompletableFuture.completedFuture(
         executor.execute(

@@ -219,7 +219,7 @@ class ExpectationCacheCoordinatorTest {
         .userIgn(TEST_USER_IGN)
         .calculatedAt(java.time.LocalDateTime.now())
         .fromCache(true)
-        .totalExpectedCost(new BigDecimal("100000"))
+        .totalExpectedCost(new BigDecimal("100000").doubleValue())
         .totalCostText("100,000 메소")
         .totalCostBreakdown(EquipmentExpectationResponseV4.CostBreakdownDto.empty())
         .maxPresetNo(1)

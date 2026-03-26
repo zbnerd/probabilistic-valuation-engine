@@ -4,6 +4,7 @@ import java.time.Instant
 import maple.expectation.infrastructure.pgmq.CalculationRequest
 import maple.expectation.infrastructure.worker.CalculationWorker
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.test.context.ActiveProfiles
@@ -13,13 +14,13 @@ import org.springframework.test.context.ActiveProfiles
  *
  * <p>실제 테스트가 아니며, PgmqWorkerTestBase의 사용법을 보여주는 예제 코드
  *
+ * <p>DISABLED: Testcontainers/Docker 환경 의존으로 CI에서 불안정
+ *
  * <h3>예제 시나리오</h3>
- * <ul>
- *   <li>메시지 발행 후 처리 대기
- *   <li>아카이브 검증
- *   <li>삭제 검증 (재시도 초과 시)
- * </ul>
+ *
+ * @suppress
  */
+@Disabled("Testcontainers/Docker 환경 의존 - CI에서 불안정")
 @ActiveProfiles("test")
 class PgmqWorkerTestBaseExample : PgmqWorkerTestBase() {
 

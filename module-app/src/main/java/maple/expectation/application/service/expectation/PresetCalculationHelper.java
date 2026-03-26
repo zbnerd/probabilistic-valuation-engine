@@ -1,7 +1,5 @@
 package maple.expectation.application.service.expectation;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +15,7 @@ import maple.expectation.core.domain.flame.FlameEquipCategory;
 import maple.expectation.core.domain.flame.FlameType;
 import maple.expectation.core.flame.port.FlameTrialsPort;
 import maple.expectation.core.probability.FlameScoreCalculator;
+import maple.expectation.core.util.KahanSummation;
 import maple.expectation.web.dto.CubeCalculationInput;
 import maple.expectation.web.dto.v4.EquipmentCalculationInput;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
@@ -36,6 +35,14 @@ import org.springframework.stereotype.Component;
  *   <li>프리셋 기대값 계산 (calculatePreset)
  *   <li>개별 아이템 빌드 (buildInput, buildItemResult)
  *   <li>스타포스/큐브 기대값 계산 (calculateStarforceExpectation, buildCubeExpectation)
+ * </ul>
+ *
+ * <h3>성능 최적화 (2026-03-23)</h3>
+ *
+ * <ul>
+ *   <li>BigDecimal → Double로 변경하여 계산 비용 절감
+ *   <li>루프에서 Kahan Summation 사용으로 정확도 유지
+ *   <li>모든 반환 타입을 Double로 통일
  * </ul>
  *
  * <h3>분해 근거</h3>
@@ -63,7 +70,7 @@ public class PresetCalculationHelper {
   public PresetExpectation calculatePreset(
       List<CubeCalculationInput> cubeInputs, int presetNo, String characterClass) {
     List<ItemExpectationV4> itemResults = new ArrayList<>();
-    BigDecimal totalCost = BigDecimal.ZERO;
+    KahanSummation totalCostAcc = new KahanSummation();  // Double + Kahan for performance
     CostBreakdownDto totalBreakdown = CostBreakdownDto.empty();
 
     for (var cubeInput : cubeInputs) {
@@ -76,9 +83,13 @@ public class PresetCalculationHelper {
       ItemExpectationV4 itemResult = calculateSingleItem(input, cubeInput, characterClass);
 
       itemResults.add(itemResult);
-      totalCost = totalCost.add(itemResult.getExpectedCost());
+      // Performance: Use double + Kahan instead of BigDecimal
+      totalCostAcc.add(itemResult.getExpectedCost());
       totalBreakdown = totalBreakdown.add(itemResult.getCostBreakdown());
     }
+
+    // Keep as double - no BigDecimal conversion needed
+    double totalCost = totalCostAcc.sum();
 
     return new PresetExpectation(
         presetNo, totalCost, CostFormatter.format(totalCost), totalBreakdown, itemResults);
@@ -118,7 +129,7 @@ public class PresetCalculationHelper {
   private ItemExpectationV4 calculateSingleItem(
       EquipmentCalculationInput input, CubeCalculationInput cubeInput, String characterClass) {
     EquipmentExpectationCalculator calculator = calculatorFactory.createFullCalculator(input);
-    BigDecimal itemCost = calculator.calculateCost();
+    double itemCost = calculator.calculateCost();
     var costBreakdown = calculator.getDetailedCosts();
 
     return buildItemResult(
@@ -129,7 +140,7 @@ public class PresetCalculationHelper {
   private ItemExpectationV4 buildItemResult(
       EquipmentCalculationInput input,
       CubeCalculationInput cubeInput,
-      BigDecimal itemCost,
+      double itemCost,
       EquipmentExpectationCalculator.CostBreakdown costBreakdown,
       String enhancePath,
       String characterClass) {
@@ -191,7 +202,7 @@ public class PresetCalculationHelper {
         .itemIcon(cubeInput.getItemIcon())
         .itemPart(cubeInput.getPart())
         .itemLevel(cubeInput.getLevel())
-        .expectedCost(BigDecimal.ZERO)
+        .expectedCost(0.0)
         .expectedCostText("0원")
         .costBreakdown(CostBreakdownDto.empty())
         .enhancePath("")
@@ -210,19 +221,19 @@ public class PresetCalculationHelper {
 
   /** 큐브 기대값 DTO 빌드 */
   CubeExpectationDto buildCubeExpectation(
-      BigDecimal cost,
-      BigDecimal trials,
+      double cost,
+      double trials,
       String currentGrade,
       String targetGrade,
       String potentialText) {
-    if (cost == null || cost.compareTo(BigDecimal.ZERO) == 0) {
+    if (cost == 0.0) {
       return CubeExpectationDto.empty();
     }
 
     return CubeExpectationDto.builder()
         .expectedCost(cost)
         .expectedCostText(CostFormatter.format(cost))
-        .expectedTrials(trials != null ? trials : BigDecimal.ZERO)
+        .expectedTrials(trials)
         .currentGrade(currentGrade)
         .targetGrade(targetGrade)
         .potential(potentialText)
@@ -240,39 +251,39 @@ public class PresetCalculationHelper {
 
   private StarforceExpectationDto calculateNoljangStarforce(
       int currentStar, int targetStar, int itemLevel) {
-    BigDecimal noljangCost =
+    double noljangCost =
         NoljangProbabilityTable.getExpectedCostFromStar(
             currentStar, targetStar, itemLevel, true, true);
-    BigDecimal roundedCost = roundToNearest100(noljangCost);
+    double roundedCost = roundToNearest100(noljangCost);
     return StarforceExpectationDto.builder()
         .currentStar(currentStar)
         .targetStar(targetStar)
         .isNoljang(true)
         .costWithoutDestroyPrevention(roundedCost)
         .costWithoutDestroyPreventionText(CostFormatter.format(roundedCost))
-        .expectedDestroyCountWithout(BigDecimal.ZERO)
+        .expectedDestroyCountWithout(0.0)
         .costWithDestroyPrevention(roundedCost)
         .costWithDestroyPreventionText(CostFormatter.format(roundedCost))
-        .expectedDestroyCountWith(BigDecimal.ZERO)
+        .expectedDestroyCountWith(0.0)
         .build();
   }
 
   private StarforceExpectationDto calculateRegularStarforce(
       int currentStar, int targetStar, int itemLevel) {
-    BigDecimal costWithout =
+    double costWithout =
         starforceLookupPort.getExpectedCost(
             currentStar, targetStar, itemLevel, true, true, true, false);
-    BigDecimal destroyCountWithout =
+    double destroyCountWithout =
         starforceLookupPort.getExpectedDestroyCount(currentStar, targetStar, true, true, false);
 
-    BigDecimal costWith =
+    double costWith =
         starforceLookupPort.getExpectedCost(
             currentStar, targetStar, itemLevel, true, true, true, true);
-    BigDecimal destroyCountWith =
+    double destroyCountWith =
         starforceLookupPort.getExpectedDestroyCount(currentStar, targetStar, true, true, true);
 
-    BigDecimal roundedCostWithout = roundToNearest100(costWithout);
-    BigDecimal roundedCostWith = roundToNearest100(costWith);
+    double roundedCostWithout = roundToNearest100(costWithout);
+    double roundedCostWith = roundToNearest100(costWith);
 
     return StarforceExpectationDto.builder()
         .currentStar(currentStar)
@@ -322,12 +333,12 @@ public class PresetCalculationHelper {
     int baseAtt = flameInput.baseAtt();
     int baseMag = flameInput.baseMag();
 
-    BigDecimal powerful =
+    double powerful =
         calculateFlameTrials(
             category, FlameType.POWERFUL, level, weights, target, baseAtt, baseMag);
-    BigDecimal eternal =
+    double eternal =
         calculateFlameTrials(category, FlameType.ETERNAL, level, weights, target, baseAtt, baseMag);
-    BigDecimal abyss =
+    double abyss =
         calculateFlameTrials(category, FlameType.ABYSS, level, weights, target, baseAtt, baseMag);
 
     return FlameExpectationDto.builder()
@@ -337,7 +348,7 @@ public class PresetCalculationHelper {
         .build();
   }
 
-  private BigDecimal calculateFlameTrials(
+  private double calculateFlameTrials(
       FlameEquipCategory category,
       FlameType flameType,
       int level,
@@ -350,18 +361,13 @@ public class PresetCalculationHelper {
             category, flameType, level, weights, target, baseAtt, baseMag);
 
     if (trials == null || !Double.isFinite(trials)) {
-      return BigDecimal.ZERO;
+      return 0.0;
     }
-    return BigDecimal.valueOf(trials).setScale(2, RoundingMode.HALF_UP);
+    return Math.round(trials * 100.0) / 100.0; // 소수점 2자리로 반올림
   }
 
   /** 100원 단위 반올림 */
-  BigDecimal roundToNearest100(BigDecimal value) {
-    if (value == null) {
-      return BigDecimal.ZERO;
-    }
-    return value
-        .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
-        .multiply(BigDecimal.valueOf(100));
+  double roundToNearest100(double value) {
+    return Math.round(value / 100.0) * 100.0;
   }
 }

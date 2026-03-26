@@ -533,6 +533,54 @@ executor:
     core-pool-size: 4
     max-pool-size: 8
     queue-capacity: 100
+  operational:
+    core-pool-size: 8
+    max-pool-size: 16
+    queue-capacity: 200
+  backfill:
+    core-pool-size: 4
+    max-pool-size: 8
+    queue-capacity: 500
+
+# Global Admission Control (Issue #617) - PRODUCTION READY
+admission-control:
+  max-in-flight: 100        # Max concurrent cold-path calculations
+  queue-timeout-ms: 5000    # Max wait time in queue
+  max-queue-size: 1000      # Maximum pending requests
+  worker-pool-size: 16      # Worker threads for queue consumption
+
+# Advanced Admission Control Features (Phase 2)
+priority-admission:
+  enabled: false            # Priority queue (hot character priority)
+  levels:
+    cache-hit: 100          # Cache hit expected
+    hot-character: 80       # Hot character
+    normal: 50              # Normal request
+    cold-heavy: 10          # Cold + heavy calculation
+
+adaptive-admission:
+  enabled: false            # CPU-based adaptive control
+  cpu-thresholds:
+    critical: 7.0           # Reduce to 50%
+    high: 5.0               # Reduce to 80%
+    normal: 5.0             # Full capacity
+
+degrade-strategy:
+  enabled: false            # Fast-fail with stale cache fallback
+  levels:
+    fresh-cache: true       # Try fresh cache first
+    stale-cache: true       # Try stale cache second
+    fallback: true          # Default response last
+
+cache-prefetch:
+  enabled: false            # Hot character prefetch
+  interval-ms: 60000        # Prefetch interval (60 seconds)
+  hot-character-count: 100  # Number of hot characters to prefetch
+
+# Micro-Batch Writer (Issue #617 US-003)
+micro-batch-writer:
+  flush-size: 500           # Buffer size threshold for size-triggered flush
+  flush-interval-ms: 50     # Time interval for time-triggered flush (ms)
 
 # Outbox 설정 (P1-8: 하드코딩 제거 → YAML 외부화)
 outbox:

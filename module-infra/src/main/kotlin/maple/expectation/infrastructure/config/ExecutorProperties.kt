@@ -29,6 +29,14 @@ import org.springframework.validation.annotation.Validated
  *     core-pool-size: 4
  *     max-pool-size: 8
  *     queue-capacity: 200
+ *   operational:
+ *     core-pool-size: 8
+ *     max-pool-size: 16
+ *     queue-capacity: 200
+ *   backfill:
+ *     core-pool-size: 4
+ *     max-pool-size: 8
+ *     queue-capacity: 500
  * </pre>
  *
  * <h3>CPU 기반 설정 가이드라인 (P2-25)</h3>
@@ -63,6 +71,8 @@ data class ExecutorProperties(
     @DefaultValue val alert: PoolConfig = PoolConfig(),
     @DefaultValue val expectation: PoolConfig = PoolConfig(),
     @DefaultValue val async: PoolConfig = PoolConfig(),
+    @DefaultValue val operational: PoolConfig = PoolConfig(),
+    @DefaultValue val backfill: PoolConfig = PoolConfig(),
 ) {
     /**
      * 개별 Thread Pool 설정
@@ -102,5 +112,7 @@ data class ExecutorProperties(
         alert.validateRatio("alert")
         expectation.validateRatio("expectation")
         async.validateRatio("async")
+        operational.validateRatio("operational")
+        backfill.validateRatio("backfill")
     }
 }

@@ -1,7 +1,5 @@
 package maple.expectation.core.calculator.port
 
-import java.math.BigDecimal
-
 /**
  * Outbound Port: 스타포스 기대값 조회 인터페이스
  *
@@ -9,6 +7,10 @@ import java.math.BigDecimal
  * - Core 도메인이 필요로 하는 스타포스 기대값 조회 기능을 정의
  * - module-app가 이 인터페이스를 구현하는 Adapter 제공
  * - 의존성 방향: app → core ← infra
+ *
+ * 성능 최적화 (2026-03-23):
+ * - BigDecimal → Double로 변경하여 계산 비용 절감
+ * - 조회 결과는 Double로 반환
  *
  * @see maple.expectation.service.v2.starforce.StarforceLookupTable Java 인터페이스 (module-app)
  */
@@ -20,7 +22,7 @@ interface StarforceLookupPort {
      * @param itemLevel 아이템 레벨
      * @return 기대 비용 (메소)
      */
-    fun getExpectedCost(currentStar: Int, targetStar: Int, itemLevel: Int): BigDecimal
+    fun getExpectedCost(currentStar: Int, targetStar: Int, itemLevel: Int): Double
 
     /**
      * 레벨별 최대 스타포스 조회
@@ -34,14 +36,14 @@ interface StarforceLookupPort {
      * @param currentStar 현재 스타포스 (0~29)
      * @return 성공 확률 (0.0 ~ 1.0)
      */
-    fun getSuccessProbability(currentStar: Int): BigDecimal
+    fun getSuccessProbability(currentStar: Int): Double
 
     /**
      * 특정 스타에서 파괴 확률 조회
      * @param currentStar 현재 스타포스 (0~29)
      * @return 파괴 확률 (0.0 ~ 1.0), 파괴 없으면 0
      */
-    fun getDestroyProbability(currentStar: Int): BigDecimal
+    fun getDestroyProbability(currentStar: Int): Double
 
     /**
      * 단일 스타 강화 비용 조회
@@ -49,7 +51,7 @@ interface StarforceLookupPort {
      * @param itemLevel 아이템 레벨
      * @return 1회 강화 비용 (메소)
      */
-    fun getSingleEnhanceCost(currentStar: Int, itemLevel: Int): BigDecimal
+    fun getSingleEnhanceCost(currentStar: Int, itemLevel: Int): Double
 
     /**
      * 옵션별 기대 비용 계산
@@ -70,7 +72,7 @@ interface StarforceLookupPort {
         useSundayMaple: Boolean,
         useDiscount: Boolean,
         useDestroyPrevention: Boolean,
-    ): BigDecimal
+    ): Double
 
     /**
      * 기대 파괴 횟수 계산
@@ -87,7 +89,7 @@ interface StarforceLookupPort {
         useStarCatch: Boolean,
         useSundayMaple: Boolean,
         useDestroyPrevention: Boolean,
-    ): BigDecimal
+    ): Double
 
     /**
      * 초기화 (서버 시작 시 호출)

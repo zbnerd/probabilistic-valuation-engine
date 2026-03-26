@@ -104,18 +104,8 @@ class EquipmentPersistenceTrackerTest {
   @Test
   @DisplayName("awaitAllCompletion - Timeout 발생 테스트")
   void testAwaitAllCompletionTimeout() {
-    // given - 5초 걸리는 작업
-    CompletableFuture<Void> longRunningTask =
-        CompletableFuture.runAsync(
-            () -> {
-              // Simulate long-running task - never completes
-              // Use CompletableFuture that never completes to simulate timeout
-              try {
-                Thread.sleep(Long.MAX_VALUE);
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-              }
-            });
+    // given - 완료되지 않는 작업 (스레드 누수 없음)
+    CompletableFuture<Void> longRunningTask = new CompletableFuture<>();
 
     tracker.trackOperation("ocid1", longRunningTask);
 

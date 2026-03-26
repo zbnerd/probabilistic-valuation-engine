@@ -6,6 +6,7 @@ import maple.expectation.core.port.out.EventPublisher
 import maple.expectation.infrastructure.cache.TieredCacheManager
 import maple.expectation.infrastructure.messaging.PgmqStreamPublisher
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Tag
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
@@ -37,6 +38,7 @@ import org.springframework.test.context.DynamicPropertySource
  * @see DatabaseCleaner
  * @see PostgresContainerBaseTest
  */
+@Tag("integration")
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = [

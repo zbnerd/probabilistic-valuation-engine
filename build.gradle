@@ -191,6 +191,7 @@ subprojects {
 				excludeTestsMatching 'maple.expectation.integration.*'
 				excludeTestsMatching 'maple.expectation.smoke.*'
 				excludeTestsMatching 'maple.expectation.testinfra.*'
+				excludeTestsMatching 'maple.expectation.test.*'
 			}
 		}
 

@@ -2,6 +2,7 @@ package maple.expectation.test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>이 테스트는 PostgresContainerBaseTest의 싱글톤 컨테이너가 정상 작동하는지 검증한다.
  */
+@Tag("integration")
 public class PostgresContainerTest extends PostgresContainerBaseTest {
 
   @Test

@@ -20,31 +20,6 @@ on:
     # Weekly on Sunday at 2 AM UTC (11 AM KST)
     - cron: '0 2 * * 0'
 
-  workflow_dispatch:
-    inputs:
-      scenario:
-        description: 'Load test scenario'
-        required: true
-        type: choice
-        options:
-          - normal
-          - patch-day
-          - viral-spike
-          - mixed
-        default: 'normal'
-
-      duration:
-        description: 'Test duration (e.g., 60s, 5m, 10m)'
-        required: false
-        type: string
-        default: '60s'
-
-      matrix_run:
-        description: 'Run all scenarios in matrix (scheduled only)'
-        required: false
-        type: boolean
-        default: false
-
 permissions:
   contents: read
   checks: write
@@ -64,15 +39,15 @@ jobs:
   # JOB 1: Load Test Execution
   # ==========================================================================
   load-test:
-    name: Load Test - ${{ matrix.scenario || inputs.scenario }}
+    name: Load Test - ${{ matrix.scenario }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     strategy:
       fail-fast: false
       matrix:
-        # Only use matrix on scheduled runs or when explicitly requested
-        scenario: ${{ github.event_name == 'schedule' || inputs.matrix_run == 'true' && ['normal', 'patch-day', 'viral-spike', 'mixed'] || [inputs.scenario] }}
+        # Scheduled runs always test all scenarios
+        scenario: ['normal', 'patch-day', 'viral-spike', 'mixed']
 
     steps:
       - name: Checkout Repository
@@ -169,31 +144,23 @@ jobs:
 
           # Set environment variables for K6
           echo "BASE_URL=http://localhost:${APP_PORT}" >> $GITHUB_ENV
-          echo "SCENARIO=${{ matrix.scenario || inputs.scenario }}" >> $GITHUB_ENV
+          echo "SCENARIO=${{ matrix.scenario }}" >> $GITHUB_ENV
 
-          # Parse duration input
-          DURATION="${{ inputs.duration }}"
-          if [[ "$DURATION" == *"s"* ]]; then
-            echo "TEST_DURATION_SEC=${DURATION%s}" >> $GITHUB_ENV
-          elif [[ "$DURATION" == *"m"* ]]; then
-            SECONDS=$((${DURATION%m} * 60))
-            echo "TEST_DURATION_SEC=$SECONDS" >> $GITHUB_ENV
-          else
-            echo "TEST_DURATION_SEC=60" >> $GITHUB_ENV
-          fi
+          # Fixed duration for scheduled runs
+          echo "TEST_DURATION_SEC=60" >> $GITHUB_ENV
 
           echo "Test Configuration:"
-          echo "  Scenario: ${{ matrix.scenario || inputs.scenario }}"
-          echo "  Duration: $DURATION"
+          echo "  Scenario: ${{ matrix.scenario }}"
+          echo "  Duration: 60s"
           echo "  Base URL: http://localhost:${APP_PORT}"
 
       - name: Run K6 Load Test
         id: k6_test
         run: |
-          echo "🚀 Running K6 load test - Scenario: ${{ matrix.scenario || inputs.scenario }}"
+          echo "🚀 Running K6 load test - Scenario: ${{ matrix.scenario }}"
 
-          SCENARIO="${{ matrix.scenario || inputs.scenario }}"
-          DURATION="${{ inputs.duration }}"
+          SCENARIO="${{ matrix.scenario }}"
+          DURATION="60s"
 
           # Build K6 command with environment variables
           export BASE_URL="http://localhost:${APP_PORT}"
@@ -211,7 +178,7 @@ jobs:
           echo "K6_EXIT_CODE=$?" >> $GITHUB_ENV
         env:
           BASE_URL: http://localhost:${APP_PORT}
-          SCENARIO: ${{ matrix.scenario || inputs.scenario }}
+          SCENARIO: ${{ matrix.scenario }}
 
       - name: Check Test Results
         if: always()
@@ -242,11 +209,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: load-test-results-${{ matrix.scenario || inputs.scenario }}
+          name: load-test-results-${{ matrix.scenario }}
           path: |
-            load-test/results/k6-metrics-${{ matrix.scenario || inputs.scenario }}.json
-            load-test/results/k6-summary-${{ matrix.scenario || inputs.scenario }}.json
-            load-test/results/k6-output-${{ matrix.scenario || inputs.scenario }}.log
+            load-test/results/k6-metrics-${{ matrix.scenario }}.json
+            load-test/results/k6-summary-${{ matrix.scenario }}.json
+            load-test/results/k6-output-${{ matrix.scenario }}.log
             load-test/results/app.log
           retention-days: 30
 
@@ -321,7 +288,7 @@ jobs:
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "*Scenario:*\n${{ inputs.scenario || 'matrix' }}"
+                      "text": "*Scenario:*\nScheduled Matrix Run"
                     },
                     {
                       "type": "mrkdwn",
@@ -352,7 +319,7 @@ jobs:
     name: Generate Summary Report
     runs-on: ubuntu-latest
     needs: load-test
-    if: always() && (github.event_name == 'schedule' || inputs.matrix_run == 'true')
+    if: always() && github.event_name == 'schedule'
 
     steps:
       - name: Checkout Repository

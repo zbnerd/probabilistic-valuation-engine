@@ -8,8 +8,8 @@ import java.nio.file.Paths
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -23,7 +23,6 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lock.LockStrategy
 import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheStrategy
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 
 /**
@@ -58,7 +57,6 @@ class BulkLoaderService(
     private val writeBackBuffer: ExpectationWriteBackBuffer,
     private val lockStrategy: LockStrategy,
     private val executor: LogicExecutor,
-    @Qualifier("backfillExecutor") private val backfillExecutor: Executor,
 ) {
     private val log = LoggerFactory.getLogger(BulkLoaderService::class.java)
 
@@ -69,6 +67,10 @@ class BulkLoaderService(
         private const val BACKPRESSURE_THRESHOLD = 1000
         private const val PROGRESS_LOG_INTERVAL = 100
         private const val CHECKPOINT_INTERVAL = 500
+
+        // Bounded executor for bulk loading - prevents ForkJoinPool exhaustion
+        // 10 threads: matches semaphore permits to avoid Nexon API rate limiting
+        private val BULK_EXECUTOR: ExecutorService = Executors.newFixedThreadPool(10)
     }
 
     // State
@@ -277,7 +279,7 @@ class BulkLoaderService(
                 } finally {
                     semaphore.release()
                 }
-            }, backfillExecutor) // Use backfill executor for bulk operations
+            }, BULK_EXECUTOR) // Use bounded executor instead of ForkJoinPool
             futures.add(future)
         }
 

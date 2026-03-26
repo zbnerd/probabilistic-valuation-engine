@@ -193,30 +193,3 @@ bulk:
     initial-ms: 100  # Increased delay between requests
     min-ms: 50
     max-ms: 1000
-
-# Executor Configuration (Issue #617) - Increase queue capacity for 300 RPS load test
-executor:
-  async:
-    core-pool-size: 200
-    max-pool-size: 400
-    queue-capacity: 2000  # Increased from 100 to handle 300 RPS
-
-# Admission Control (Issue #617) - Local Development
-# 🔥 P1 FIX #1: Reduced queue capacity to prevent timeout storm
-admission-control:
-  max-in-flight: 300        # Max concurrent cold-path calculations
-  queue-timeout-ms: 10000   # Max wait time in queue
-  max-queue-size: 750       # 🔥 P1 FIX #1: Reduced from 2000 to prevent timeout storm (2.5x of max-in-flight)
-  worker-pool-size: 32      # Worker threads for queue consumption
-
-priority-admission:
-  enabled: false            # Disable for local dev
-
-adaptive-admission:
-  enabled: false            # Disable for local dev
-
-# Disable admission control for local development (Issue #617)
-# GlobalAdmissionControl bean causes startup issues
-admission:
-  control:
-    enabled: false

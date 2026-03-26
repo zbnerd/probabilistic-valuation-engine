@@ -1,7 +1,6 @@
 package maple.expectation.test
 
 import jakarta.persistence.EntityManager
-import maple.expectation.config.DatabaseCleaner
 import maple.expectation.config.TestcontainersConfiguration.Companion.postgresContainer
 import maple.expectation.core.port.out.EventPublisher
 import maple.expectation.infrastructure.cache.TieredCacheManager

@@ -172,7 +172,7 @@ subprojects {
 
 		useJUnitPlatform {
 			if (project.hasProperty('fastTest')) {
-				excludeTags 'sentinel', 'slow', 'quarantine', 'chaos', 'nightmare', 'integration', 'flaky', 'smoke', 'pgmq'
+				excludeTags 'sentinel', 'slow', 'quarantine', 'chaos', 'nightmare', 'integration', 'flaky', 'smoke', 'pgmq', 'architecture'
 			} else if (project.hasProperty('integrationTest')) {
 				includeTags 'integration'
 			} else if (project.hasProperty('chaosTest')) {

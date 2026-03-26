@@ -9,8 +9,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import maple.expectation.core.port.inbound.ExpectationV4Port;
 import maple.expectation.core.port.out.PopularCharacterTrackerPort;
+import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
 import maple.expectation.web.controller.v4.GameCharacterControllerV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,13 +47,17 @@ class GameCharacterControllerV4Test {
 
   private ExpectationV4Port expectationPort;
   private PopularCharacterTrackerPort trackerPort;
+  private GlobalAdmissionControl admissionControl;
+  private Executor taskExecutor;
   private GameCharacterControllerV4 controller;
 
   @BeforeEach
   void setUp() {
     expectationPort = mock(ExpectationV4Port.class);
     trackerPort = mock(PopularCharacterTrackerPort.class);
-    controller = new GameCharacterControllerV4(expectationPort, trackerPort);
+    admissionControl = mock(GlobalAdmissionControl.class);
+    taskExecutor = mock(Executor.class);
+    controller = new GameCharacterControllerV4(expectationPort, trackerPort, admissionControl, taskExecutor);
   }
 
   @Nested
@@ -257,7 +263,7 @@ class GameCharacterControllerV4Test {
         userIgn,
         LocalDateTime.now(),
         false,
-        BigDecimal.valueOf(10000000),
+        BigDecimal.valueOf(10000000).doubleValue(),
         "10,000,000 메소",
         EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
         0,
@@ -268,7 +274,7 @@ class GameCharacterControllerV4Test {
     EquipmentExpectationResponseV4.PresetExpectation preset1 =
         new EquipmentExpectationResponseV4.PresetExpectation(
             1,
-            BigDecimal.valueOf(5000000),
+            BigDecimal.valueOf(5000000).doubleValue(),
             "5,000,000 메소",
             EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
             List.of());
@@ -276,7 +282,7 @@ class GameCharacterControllerV4Test {
     EquipmentExpectationResponseV4.PresetExpectation preset2 =
         new EquipmentExpectationResponseV4.PresetExpectation(
             2,
-            BigDecimal.valueOf(3000000),
+            BigDecimal.valueOf(3000000).doubleValue(),
             "3,000,000 메소",
             EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
             List.of());
@@ -285,7 +291,7 @@ class GameCharacterControllerV4Test {
         userIgn,
         LocalDateTime.now(),
         false,
-        BigDecimal.valueOf(8000000),
+        BigDecimal.valueOf(8000000).doubleValue(),
         "8,000,000 메소",
         EquipmentExpectationResponseV4.CostBreakdownDto.empty(),
         2,

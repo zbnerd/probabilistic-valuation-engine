@@ -15,6 +15,7 @@ import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer;
 import maple.expectation.infrastructure.buffer.ExpectationWriteTask;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.lock.LockStrategy;
+import maple.expectation.infrastructure.persistence.repository.EquipmentExpectationSummaryBatchRepository;
 import maple.expectation.infrastructure.persistence.repository.EquipmentExpectationSummaryRepository;
 import maple.expectation.support.TestLogicExecutors;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +45,7 @@ class ExpectationBatchWriteSchedulerTest {
 
   private ExpectationWriteBackBuffer buffer;
   private EquipmentExpectationSummaryRepository repository;
+  private EquipmentExpectationSummaryBatchRepository batchRepository;
   private LockStrategy lockStrategy;
   private LogicExecutor executor;
   private MeterRegistry meterRegistry;
@@ -53,6 +55,7 @@ class ExpectationBatchWriteSchedulerTest {
   void setUp() {
     buffer = mock(ExpectationWriteBackBuffer.class);
     repository = mock(EquipmentExpectationSummaryRepository.class);
+    batchRepository = mock(EquipmentExpectationSummaryBatchRepository.class);
     lockStrategy = mock(LockStrategy.class);
     executor = TestLogicExecutors.passThrough();
     meterRegistry = mock(MeterRegistry.class);
@@ -65,7 +68,7 @@ class ExpectationBatchWriteSchedulerTest {
 
     scheduler =
         new ExpectationBatchWriteScheduler(
-            buffer, repository, lockStrategy, executor, meterRegistry, batchProperties);
+            buffer, repository, batchRepository, lockStrategy, executor, meterRegistry, batchProperties);
   }
 
   @Nested
@@ -114,11 +117,11 @@ class ExpectationBatchWriteSchedulerTest {
                   new ExpectationWriteTask(
                       1L,
                       1,
-                      BigDecimal.valueOf(1000),
-                      BigDecimal.ZERO,
-                      BigDecimal.ZERO,
-                      BigDecimal.ZERO,
-                      BigDecimal.ZERO,
+                      BigDecimal.valueOf(1000).doubleValue(),
+                      BigDecimal.ZERO.doubleValue(),
+                      BigDecimal.ZERO.doubleValue(),
+                      BigDecimal.ZERO.doubleValue(),
+                      BigDecimal.ZERO.doubleValue(),
                       LocalDateTime.now())));
       given(buffer.getPendingCount()).willReturn(0);
       given(
@@ -169,20 +172,20 @@ class ExpectationBatchWriteSchedulerTest {
                   new ExpectationWriteTask(
                       1L,
                       1,
-                      BigDecimal.valueOf(1000),
-                      BigDecimal.valueOf(100),
-                      BigDecimal.valueOf(200),
-                      BigDecimal.valueOf(300),
-                      BigDecimal.valueOf(400),
+                      BigDecimal.valueOf(1000).doubleValue(),
+                      BigDecimal.valueOf(100).doubleValue(),
+                      BigDecimal.valueOf(200).doubleValue(),
+                      BigDecimal.valueOf(300).doubleValue(),
+                      BigDecimal.valueOf(400).doubleValue(),
                       LocalDateTime.now()),
                   new ExpectationWriteTask(
                       2L,
                       2,
-                      BigDecimal.valueOf(2000),
-                      BigDecimal.valueOf(500),
-                      BigDecimal.valueOf(600),
-                      BigDecimal.valueOf(700),
-                      BigDecimal.valueOf(200),
+                      BigDecimal.valueOf(2000).doubleValue(),
+                      BigDecimal.valueOf(500).doubleValue(),
+                      BigDecimal.valueOf(600).doubleValue(),
+                      BigDecimal.valueOf(700).doubleValue(),
+                      BigDecimal.valueOf(200).doubleValue(),
                       LocalDateTime.now())));
       given(buffer.getPendingCount()).willReturn(0);
       given(
@@ -197,16 +200,8 @@ class ExpectationBatchWriteSchedulerTest {
       // when
       scheduler.flush();
 
-      // then - 2개의 upsert 호출 예상
-      verify(repository, times(2))
-          .upsertExpectationSummary(
-              anyLong(),
-              anyInt(),
-              any(BigDecimal.class),
-              any(BigDecimal.class),
-              any(BigDecimal.class),
-              any(BigDecimal.class),
-              any(BigDecimal.class));
+      // then - batch upsert가 1번 호출되어야 함
+      verify(batchRepository, times(1)).batchUpsertExpectations(anyList());
     }
   }
 }

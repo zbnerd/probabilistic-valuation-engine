@@ -58,13 +58,14 @@ spring:
     discord:
       webhook-url: ${ALERT_DISCORD_WEBHOOK_URL:}
 
-  # 🔥 FIX: Increase async executor queue for load testing
+  # 🔥 P1 FIX #2: Reduced thread pool sizing to prevent context switching overhead
+  # Recommendation: Set to availableProcessors * 2 for optimal performance
   task:
     execution:
       pool:
-        core-size: 200      # Increased from default
-        max-size: 400       # Increased from default
-        queue-capacity: 2000  # Increased to handle 300 RPS
+        core-size: 32       # 🔥 P1 FIX #2: Reduced from 200 (was causing excessive context switching)
+        max-size: 64        # 🔥 P1 FIX #2: Reduced from 400 (2x core-size is typical)
+        queue-capacity: 1000  # 🔥 P1 FIX #1: Reduced from 2000 to prevent timeout storm
       thread-name-prefix: "async-"
 
 # MongoDB Configuration (V5 CQRS) - REMOVED in Issue #590
@@ -201,12 +202,12 @@ executor:
     queue-capacity: 2000  # Increased from 100 to handle 300 RPS
 
 # Admission Control (Issue #617) - Local Development
-# Increased limits for 300 RPS load test
+# 🔥 P1 FIX #1: Reduced queue capacity to prevent timeout storm
 admission-control:
-  max-in-flight: 300        # Max concurrent cold-path calculations (increased for 300 RPS)
-  queue-timeout-ms: 10000   # Max wait time in queue (increased)
-  max-queue-size: 2000      # Maximum pending requests (increased)
-  worker-pool-size: 32      # Worker threads for queue consumption (increased)
+  max-in-flight: 300        # Max concurrent cold-path calculations
+  queue-timeout-ms: 10000   # Max wait time in queue
+  max-queue-size: 750       # 🔥 P1 FIX #1: Reduced from 2000 to prevent timeout storm (2.5x of max-in-flight)
+  worker-pool-size: 32      # Worker threads for queue consumption
 
 priority-admission:
   enabled: false            # Disable for local dev

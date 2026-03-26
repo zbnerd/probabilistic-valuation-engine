@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -27,6 +28,7 @@ class GlobalAdmissionControlTest {
     private lateinit var properties: GlobalAdmissionProperties
     private lateinit var admissionControl: GlobalAdmissionControl
     private lateinit var executor: LogicExecutor
+    private lateinit var workerExecutor: Executor
 
     @BeforeEach
     fun setup() {
@@ -39,6 +41,7 @@ class GlobalAdmissionControlTest {
 
         // Create simple executor for testing
         val testExecutor = Executors.newSingleThreadExecutor()
+        workerExecutor = Executors.newFixedThreadPool(4) // Worker pool for admission control
         executor = object : LogicExecutor {
             override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T {
                 return testExecutor.submit(task::get).get()
@@ -97,7 +100,7 @@ class GlobalAdmissionControlTest {
             }
         }
 
-        admissionControl = GlobalAdmissionControl(properties, meterRegistry, executor)
+        admissionControl = GlobalAdmissionControl(properties, meterRegistry, executor, workerExecutor)
     }
 
     @AfterEach
@@ -171,7 +174,8 @@ class GlobalAdmissionControlTest {
             }
         }
 
-        return GlobalAdmissionControl(testProperties, meterRegistry, testExecutorService)
+        val workerPool = Executors.newFixedThreadPool(4)
+        return GlobalAdmissionControl(testProperties, meterRegistry, testExecutorService, workerPool)
     }
 
     @Test
@@ -299,7 +303,8 @@ class GlobalAdmissionControlTest {
     @Test
     @DisplayName("should execute immediately when permit available")
     fun `should execute immediately when permit available`() {
-        val testControl = GlobalAdmissionControl(properties, meterRegistry, executor)
+        val testWorkerPool = Executors.newFixedThreadPool(4)
+        val testControl = GlobalAdmissionControl(properties, meterRegistry, executor, testWorkerPool)
 
         val startTime = System.nanoTime()
         val future = testControl.submitOrWait("immediate-key") {

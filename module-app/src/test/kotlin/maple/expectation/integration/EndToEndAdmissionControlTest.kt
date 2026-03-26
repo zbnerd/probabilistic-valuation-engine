@@ -180,7 +180,7 @@ class EndToEndAdmissionControlTest {
             queueTimeoutMs = 5000,
             maxQueueSize = 1000
         )
-        admissionControl = GlobalAdmissionControl(admissionProperties, meterRegistry, executor)
+        admissionControl = GlobalAdmissionControl(admissionProperties, meterRegistry, executor, testExecutor)
 
         // Create DedupeMicroBatchWriter
         val batchProperties = MicroBatchWriterProperties(

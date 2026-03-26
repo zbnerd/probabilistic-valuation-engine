@@ -19,6 +19,7 @@ import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.BlockingQueue
 
 /**
@@ -69,11 +70,12 @@ class GlobalAdmissionControl(
     private val queueFullCounter: Counter
     private val admissionRejectedCounter: Counter
     private val queueWaitTimeTimer: Timer
-    private val earlyRejectionCounter: Counter  // 🔥 P0 FIX #2: Early rejection metric
+    // 🔥 P2 FIX #1: Split early rejection metrics for better observability
+    private val earlyRejectionQueueFullCounter: Counter  // Queue near capacity
+    private val earlyRejectionCpuHighCounter: Counter     // CPU load high
 
-    // 🔥 LAZY INIT: Worker pool started on first submit
-    @Volatile
-    private var workerPoolStarted = false
+    // 🔥 P0 FIX #2: Use AtomicBoolean for thread-safe lazy initialization
+    private val workerPoolStarted = AtomicBoolean(false)
 
     init {
         queueTimeoutCounter = Counter.builder("admission_control.queue.timeout")
@@ -88,9 +90,13 @@ class GlobalAdmissionControl(
             .description("Requests rejected due to queue full")
             .register(meterRegistry)
 
-        // 🔥 P0 FIX #2: Early rejection counter (queue near full + CPU high)
-        earlyRejectionCounter = Counter.builder("admission_control.early_rejection")
-            .description("Requests rejected early due to heavy load (queue near full + CPU high)")
+        // 🔥 P2 FIX #1: Split early rejection metrics for better observability
+        earlyRejectionQueueFullCounter = Counter.builder("admission_control.early_rejection.queue_full")
+            .description("Requests rejected early due to queue near capacity (>80%)")
+            .register(meterRegistry)
+
+        earlyRejectionCpuHighCounter = Counter.builder("admission_control.early_rejection.cpu_high")
+            .description("Requests rejected early due to high CPU load (>5.0)")
             .register(meterRegistry)
 
         // 🔥 ADDED: Queue wait time distribution
@@ -127,12 +133,11 @@ class GlobalAdmissionControl(
      * @return CompletableFuture with result
      */
     fun <T> submitOrWait(key: String, task: Callable<T>): CompletableFuture<T> {
-        // 🔥 LAZY INIT: Start worker pool on first submit
-        if (!workerPoolStarted) {
+        // 🔥 P0 FIX #2: Thread-safe lazy initialization using AtomicBoolean
+        if (!workerPoolStarted.get()) {
             synchronized(this) {
-                if (!workerPoolStarted) {
+                if (workerPoolStarted.compareAndSet(false, true)) {
                     startWorkerPool(properties.workerPoolSize)
-                    workerPoolStarted = true
                 }
             }
         }
@@ -140,13 +145,24 @@ class GlobalAdmissionControl(
         val future = CompletableFuture<T>()
         val request = AdmissionRequest(key, task, future, System.nanoTime())
 
-        // 🔥 P0 FIX #2: EARLY REJECTION - Reject if queue near full AND CPU high
+        // 🔥 P0 FIX #1: EARLY REJECTION - Reject if queue near full AND CPU high
         // Prevents timeout storm by rejecting before queue fills completely
         val currentQueueDepth = admissionQueue.size
-        val cpuLoad = osBean.systemLoadAverage
 
-        if (currentQueueDepth > properties.maxQueueSize * 0.8 && cpuLoad > 5.0) {
-            earlyRejectionCounter.increment()
+        // 🔥 P0 FIX #1: OS detection for CPU load monitoring (Windows returns -1.0)
+        val isLinux = System.getProperty("os.name").lowercase().contains("linux")
+        val cpuLoad = if (isLinux) {
+            osBean.systemLoadAverage
+        } else {
+            // On non-Linux systems, skip CPU check (systemLoadAverage returns -1.0)
+            0.0
+        }
+
+        // Only apply CPU check on Linux systems
+        if (currentQueueDepth > properties.maxQueueSize * 0.8 && isLinux && cpuLoad > 5.0) {
+            // 🔥 P2 FIX #1: Split metrics for better observability
+            earlyRejectionQueueFullCounter.increment()  // Queue near capacity
+            earlyRejectionCpuHighCounter.increment()      // CPU load high
             admissionRejectedCounter.increment()
             future.completeExceptionally(
                 AdmissionRejectedException(
@@ -154,7 +170,7 @@ class GlobalAdmissionControl(
                 )
             )
             log.warn(
-                "[AdmissionControl] 🔥 P0 FIX #2: Early rejection - key={}, queueSize={}, CPU={}",
+                "[AdmissionControl] 🔥 P0 FIX #1: Early rejection - key={}, queueSize={}, CPU={}",
                 key,
                 currentQueueDepth,
                 String.format("%.2f", cpuLoad)

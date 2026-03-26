@@ -60,7 +60,11 @@ public class ExpectationCacheCoordinator {
 
   /**
    * Constructor without admission control (backward compatibility)
+   *
+   * @deprecated Use {@link #ExpectationCacheCoordinator(LogicExecutor, ObjectMapper, TieredCacheManager, GlobalAdmissionControl)} instead.
+   *             This constructor will be removed in v2.0.0. Please provide admission control explicitly.
    */
+  @Deprecated
   public ExpectationCacheCoordinator(
       LogicExecutor executor, ObjectMapper objectMapper, TieredCacheManager tieredCacheManager) {
     this(executor, objectMapper, tieredCacheManager, null);
@@ -319,21 +323,34 @@ public class ExpectationCacheCoordinator {
       return admissionControl
           .submitOrWait(userIgn, calculator)
           .get(); // Blocking wait for CompletableFuture
-    } catch (Exception e) {
-      // Handle timeout (waited too long in queue)
-      if (e.getCause() instanceof maple.expectation.infrastructure.admission.AdmissionTimeoutException) {
+    } catch (InterruptedException ie) {
+      // 🔥 P1 FIX #3: Handle InterruptedException properly
+      Thread.currentThread().interrupt();
+      log.error("[V4] Admission control interrupted for: {}", userIgn, ie);
+      throw new EquipmentDataProcessingException(
+          String.format("Calculation interrupted: %s", userIgn), ie);
+    } catch (java.util.concurrent.ExecutionException ee) {
+      // 🔥 P1 FIX #3: Improved exception handling with proper root cause logging
+      Throwable cause = ee.getCause();
+      if (cause instanceof maple.expectation.infrastructure.admission.AdmissionTimeoutException) {
         log.error("[V4] Admission control timeout for: {}", userIgn);
         throw new EquipmentDataProcessingException(
-            String.format("Calculation rejected due to system overload: %s", userIgn), e.getCause());
+            String.format("Calculation rejected due to system overload: %s", userIgn), cause);
       }
-      // Handle queue full (fast reject - queue at capacity)
-      if (e.getCause() instanceof maple.expectation.infrastructure.admission.AdmissionRejectedException) {
+      if (cause instanceof maple.expectation.infrastructure.admission.AdmissionRejectedException) {
         log.warn("[V4] Admission control queue full - rejecting: {}", userIgn);
         throw new EquipmentDataProcessingException(
-            String.format("System at capacity - queue full: %s", userIgn), e.getCause());
+            String.format("System at capacity - queue full: %s", userIgn), cause);
       }
+      // 🔥 P1 FIX #3: Log unexpected exceptions with full stack trace
+      log.error("[V4] Unexpected exception during admission control for: {}", userIgn, cause);
       throw new EquipmentDataProcessingException(
-          String.format("Calculation failed with admission control: %s", userIgn), e);
+          String.format("Calculation failed with admission control: %s", userIgn), cause);
+    } catch (Exception e) {
+      // 🔥 P1 FIX #3: Catch-all for any other unexpected exceptions
+      log.error("[V4] Unexpected error in admission control for: {}", userIgn, e);
+      throw new EquipmentDataProcessingException(
+          String.format("Calculation failed: %s", userIgn), e);
     }
   }
 

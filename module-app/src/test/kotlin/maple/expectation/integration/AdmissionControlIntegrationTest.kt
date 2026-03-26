@@ -308,14 +308,15 @@ class AdmissionControlIntegrationTest {
         @org.springframework.context.annotation.Bean
         fun globalAdmissionControl(
             meterRegistry: MeterRegistry,
-            executor: LogicExecutor
+            executor: LogicExecutor,
+            testExecutor: java.util.concurrent.Executor
         ): GlobalAdmissionControl {
             val properties = GlobalAdmissionProperties(
                 maxInFlight = 100,
                 queueTimeoutMs = 5000,
                 maxQueueSize = 1000
             )
-            return GlobalAdmissionControl(properties, meterRegistry, executor)
+            return GlobalAdmissionControl(properties, meterRegistry, executor, testExecutor)
         }
 
         @org.springframework.context.annotation.Bean

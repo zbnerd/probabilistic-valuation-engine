@@ -86,11 +86,7 @@ class JwtAuthenticationFilter(
             return null
         }
 
-        val ocid = character.characterId?.value() ?: run {
-            log.warn("[JWT] OCID is null for userIgn={}", userIgn)
-            return null
-        }
-
+        val ocid = character.characterId.value
         val myOcids = setOf(ocid)
         val accountId = accountIdGenerator.generate(myOcids)
 

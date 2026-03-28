@@ -1,6 +1,8 @@
 package maple.expectation.infrastructure.security.filter
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
 import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
@@ -59,7 +61,12 @@ class JwtAuthenticationFilter(
     private val jwtTokenProvider: JwtTokenProvider,
     private val characterOcidPort: CharacterOcidPort,
     private val objectMapper: ObjectMapper,
+    meterRegistry: MeterRegistry,
 ) : OncePerRequestFilter() {
+
+    private val unauthorizedCounter = Counter.builder("auth.failure.unauthorized")
+        .description("Count of 401 unauthorized responses from JWT filter")
+        .register(meterRegistry)
 
     @Throws(ServletException::class, IOException::class)
     override fun doFilterInternal(
@@ -141,6 +148,9 @@ class JwtAuthenticationFilter(
 
         // 현재 로그인 캐릭터의 OCID만 조회 (P0 제약사항: fingerprint별 모든 캐릭터 조회 불가)
         val myOcid = characterOcidPort.resolveOcid(userIgn)
+        if (myOcid == null) {
+            log.warn("[JWT] OCID resolution returned null for userIgn={}, self-like prevention may be incomplete", userIgn)
+        }
         val myOcids = if (myOcid != null) setOf(myOcid) else emptySet()
 
         // TODO (P0): game_character 테이블에 fingerprint 컬럼 추가 후
@@ -168,6 +178,7 @@ class JwtAuthenticationFilter(
      * 401 Unauthorized 응답 전송 (P1: silent pass-through 제거)
      */
     private fun sendUnauthorizedResponse(response: HttpServletResponse, message: String) {
+        unauthorizedCounter.increment()
         response.status = HttpServletResponse.SC_UNAUTHORIZED
         response.contentType = "application/json"
         response.characterEncoding = "UTF-8"

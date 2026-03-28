@@ -50,7 +50,7 @@ class PostgresL2CacheFactory(
 
     private val cacheMap = ConcurrentHashMap<String, Cache>()
 
-    override fun getCache(name: String): Cache? = cacheMap.getOrPut(name) { createPostgresL2CacheAdapter(name) }
+    override fun getCache(name: String): Cache? = cacheMap.computeIfAbsent(name) { createPostgresL2CacheAdapter(it) }
 
     override fun getCacheNames(): MutableCollection<String> = cacheMap.keys
 

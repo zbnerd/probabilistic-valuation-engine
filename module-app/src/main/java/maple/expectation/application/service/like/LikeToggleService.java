@@ -6,8 +6,10 @@ import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.model.like.LikeToggleResult;
 import maple.expectation.core.domain.model.like.LikeToggleWithCount;
 import maple.expectation.core.port.inbound.LikeTogglePort;
+import maple.expectation.core.port.out.CharacterOcidPort;
 import maple.expectation.domain.repository.CharacterLikeRepository;
 import maple.expectation.domain.repository.GameCharacterRepository;
+import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.exception.SelfLikeNotAllowedException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -33,7 +35,7 @@ public class LikeToggleService implements LikeTogglePort {
 
     private final CharacterLikeRepository characterLikeRepository;
     private final GameCharacterRepository gameCharacterRepository;
-    private final OcidResolutionService ocidResolutionService;
+    private final CharacterOcidPort characterOcidPort;
     private final LogicExecutor executor;
 
     /**
@@ -109,7 +111,11 @@ public class LikeToggleService implements LikeTogglePort {
     }
 
     private String resolveTargetOcid(String targetUserIgn) {
-        return ocidResolutionService.resolveOcid(targetUserIgn);
+        String ocid = characterOcidPort.resolveOcid(targetUserIgn);
+        if (ocid == null) {
+            throw new CharacterNotFoundException(targetUserIgn);
+        }
+        return ocid;
     }
 
     private void validateNotSelfLike(String userIgn, String targetOcid, Set<String> myOcids) {

@@ -84,13 +84,15 @@ public class OcidResolutionService {
      */
     public java.util.Set<String> resolveAllOcids() {
         return executor.execute(
-                () -> {
-                    List<GameCharacter> characters = gameCharacterRepository.findAll();
-                    return characters.stream()
-                            .map(c -> c.getCharacterId().value())
-                            .collect(java.util.stream.Collectors.toSet());
-                },
+                this::loadAllOcids,
                 TaskContext.of("OcidResolutionService", "ResolveAllOcids")
         );
+    }
+
+    private java.util.Set<String> loadAllOcids() {
+        List<GameCharacter> characters = gameCharacterRepository.findAll();
+        return characters.stream()
+                .map(c -> c.getCharacterId().value())
+                .collect(java.util.stream.Collectors.toSet());
     }
 }

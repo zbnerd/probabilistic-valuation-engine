@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.security.config
 
+import jakarta.servlet.http.HttpServletResponse
 import maple.expectation.infrastructure.security.filter.JwtAuthenticationFilter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -44,6 +45,9 @@ class SecurityConfig(
                     // Everything else
                     .anyRequest().permitAll()
             }
+            .exceptionHandling { it.authenticationEntryPoint { _, response, _ ->
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
+            } }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
             .build()
     }

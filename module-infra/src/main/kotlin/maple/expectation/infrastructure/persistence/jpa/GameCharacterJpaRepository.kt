@@ -74,7 +74,7 @@ interface GameCharacterJpaRepository : JpaRepository<GameCharacterJpaEntity, Lon
      */
     @Modifying
     @Query("UPDATE GameCharacterJpaEntity g SET g.likeCount = GREATEST(g.likeCount + :count, 0) WHERE g.userIgn = :userIgn")
-    fun incrementLikeCount(userIgn: String?, count: Long)
+    fun incrementLikeCount(userIgn: String, count: Long)
 
     /**
      * Find all characters by user IGNs (batch query).

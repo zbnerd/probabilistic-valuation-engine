@@ -8,6 +8,7 @@ import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl
 import maple.expectation.core.domain.model.like.LikeToggleResult
+import maple.expectation.core.domain.model.like.LikeToggleWithCount
 import maple.expectation.core.port.inbound.LikeTogglePort
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import maple.expectation.response.ApiResponse
@@ -161,12 +162,11 @@ class GameCharacterControllerV4(
         @AuthenticationPrincipal user: AuthenticatedUser,
     ): ResponseEntity<ApiResponse<LikeToggleResponse>> {
         log.debug("[V4] Like toggle: target={} by={}", maskIgn(userIgn), maskIgn(user.userIgn))
-        val result = likeTogglePort.toggleLike(userIgn, user.accountId, user.myOcids)
-        val likeCount = likeTogglePort.getLikeCount(userIgn)
+        val toggleWithCount = likeTogglePort.toggleLikeWithCount(userIgn, user.accountId, user.myOcids)
         val response = LikeToggleResponse(
             targetUserIgn = userIgn,
-            liked = result == LikeToggleResult.LIKED,
-            likeCount = likeCount,
+            liked = toggleWithCount.result == LikeToggleResult.LIKED,
+            likeCount = toggleWithCount.likeCount,
         )
         return ResponseEntity.ok(ApiResponse.success(response))
     }

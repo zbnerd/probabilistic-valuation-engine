@@ -4,6 +4,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.model.like.LikeToggleResult;
+import maple.expectation.core.domain.model.like.LikeToggleWithCount;
 import maple.expectation.core.port.inbound.LikeTogglePort;
 import maple.expectation.domain.repository.CharacterLikeRepository;
 import maple.expectation.domain.repository.GameCharacterRepository;
@@ -48,12 +49,22 @@ public class LikeToggleService implements LikeTogglePort {
      */
     @Transactional("transactionManager")
     public LikeToggleResult toggleLike(String targetUserIgn, String likerAccountId, Set<String> myOcids) {
+        return toggleLikeWithCount(targetUserIgn, likerAccountId, myOcids).getResult();
+    }
+
+    @Override
+    @Transactional("transactionManager")
+    public LikeToggleWithCount toggleLikeWithCount(String targetUserIgn, String likerAccountId, Set<String> myOcids) {
         String targetOcid = resolveTargetOcid(targetUserIgn);
         validateNotSelfLike(targetUserIgn, targetOcid, myOcids);
 
         return executor.execute(
-                () -> toggleRelation(targetOcid, targetUserIgn, likerAccountId),
-                TaskContext.of("LikeToggleService", "ToggleLike", targetUserIgn)
+                () -> {
+                    LikeToggleResult result = toggleRelation(targetOcid, targetUserIgn, likerAccountId);
+                    long count = characterLikeRepository.countByTargetOcid(targetOcid);
+                    return new LikeToggleWithCount(result, count);
+                },
+                TaskContext.of("LikeToggleService", "ToggleLikeWithCount", targetUserIgn)
         );
     }
 

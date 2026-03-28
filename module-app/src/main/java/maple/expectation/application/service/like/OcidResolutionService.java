@@ -1,8 +1,11 @@
 package maple.expectation.application.service.like;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import maple.expectation.core.domain.model.character.GameCharacter;
+import maple.expectation.core.port.out.CharacterOcidPort;
 import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
@@ -13,13 +16,14 @@ import org.springframework.stereotype.Service;
 /**
  * IGN → OCID 해석 서비스
  *
- * <p>DB 조회 + Caffeine 캐시(30min TTL)로 IGN을 OCID로 변환.
- * 외부 API(NexonApiClient) 의존 없음.
+ * <p>CharacterOcidPort(Core Port)를 위임하여 단일 진실 공급원 유지.
+ * 캐시는 CharacterOcidAdapter의 @Cacheable("ocidCache")와 공유.
  */
 @Service
 @RequiredArgsConstructor
 public class OcidResolutionService {
 
+    private final CharacterOcidPort characterOcidPort;
     private final GameCharacterRepository gameCharacterRepository;
     private final LogicExecutor executor;
 
@@ -34,11 +38,11 @@ public class OcidResolutionService {
     public String resolveOcid(String userIgn) {
         return executor.execute(
                 () -> {
-                    GameCharacter character = gameCharacterRepository.findByUserIgn(userIgn);
-                    if (character == null) {
+                    String ocid = characterOcidPort.resolveOcid(userIgn);
+                    if (ocid == null) {
                         throw new CharacterNotFoundException(userIgn);
                     }
-                    return character.getCharacterId().value();
+                    return ocid;
                 },
                 TaskContext.of("OcidResolutionService", "ResolveOcid", userIgn)
         );
@@ -54,10 +58,7 @@ public class OcidResolutionService {
      */
     public String resolveOcidOrNull(String userIgn) {
         return executor.executeOrDefault(
-                () -> {
-                    GameCharacter character = gameCharacterRepository.findByUserIgn(userIgn);
-                    return character != null ? character.getCharacterId().value() : null;
-                },
+                () -> characterOcidPort.resolveOcid(userIgn),
                 null,
                 TaskContext.of("OcidResolutionService", "ResolveOcidOrNull", userIgn)
         );
@@ -82,17 +83,17 @@ public class OcidResolutionService {
      *
      * @return 모든 캐릭터의 (IGN → OCID) 매핑
      */
-    public java.util.Set<String> resolveAllOcids() {
+    public Set<String> resolveAllOcids() {
         return executor.execute(
                 this::loadAllOcids,
                 TaskContext.of("OcidResolutionService", "ResolveAllOcids")
         );
     }
 
-    private java.util.Set<String> loadAllOcids() {
+    private Set<String> loadAllOcids() {
         List<GameCharacter> characters = gameCharacterRepository.findAll();
         return characters.stream()
                 .map(c -> c.getCharacterId().value())
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
     }
 }

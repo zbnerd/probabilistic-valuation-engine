@@ -56,7 +56,7 @@ class LikeToggleServiceTest {
 
   @Mock private maple.expectation.domain.repository.GameCharacterRepository gameCharacterRepository;
 
-  @Mock private OcidResolutionService ocidResolutionService;
+  @Mock private maple.expectation.core.port.out.CharacterOcidPort characterOcidPort;
 
   private maple.expectation.infrastructure.executor.LogicExecutor executor;
 
@@ -68,10 +68,10 @@ class LikeToggleServiceTest {
 
     likeToggleService =
         new LikeToggleService(
-            characterLikeRepository, gameCharacterRepository, ocidResolutionService, executor);
+            characterLikeRepository, gameCharacterRepository, characterOcidPort, executor);
 
     // Default mock behaviors
-    lenient().when(ocidResolutionService.resolveOcid(TARGET_IGN)).thenReturn(TARGET_OCID);
+    lenient().when(characterOcidPort.resolveOcid(TARGET_IGN)).thenReturn(TARGET_OCID);
     lenient()
         .when(characterLikeRepository.existsByTargetOcidAndLikerAccountId(TARGET_OCID, LIKER_ACCOUNT_ID))
         .thenReturn(false);
@@ -189,9 +189,9 @@ class LikeToggleServiceTest {
   @Test
   @DisplayName("GIVEN: non-existent IGN WHEN: toggleLike THEN: throws CharacterNotFoundException")
   void given_nonExistentIgn_when_toggleLike_then_throwsCharacterNotFoundException() {
-    // given: OCID resolution throws CharacterNotFoundException
-    when(ocidResolutionService.resolveOcid(TARGET_IGN))
-        .thenThrow(new CharacterNotFoundException(TARGET_IGN));
+    // given: OCID resolution returns null (character not found)
+    when(characterOcidPort.resolveOcid(TARGET_IGN))
+        .thenReturn(null);
 
     // when & then
     assertThatThrownBy(() -> likeToggleService.toggleLike(TARGET_IGN, LIKER_ACCOUNT_ID, MY_OCIDS))

@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>흐름:
  * <ol>
- *   <li>IGN → OCID 해석 (OcidResolutionService + Caffeine 캐시)</li>
+ *   <li>IGN → OCID 해석 (CharacterOcidPort + @Cacheable)</li>
  *   <li>Self-like 방지 검증</li>
  *   <li>존재 여부 확인 → INSERT/DELETE + count 증감</li>
  * </ol>

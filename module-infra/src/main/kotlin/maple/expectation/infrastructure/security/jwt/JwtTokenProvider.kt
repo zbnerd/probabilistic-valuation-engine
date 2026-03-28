@@ -38,6 +38,7 @@ class JwtTokenProvider(
         private const val ISSUER = "maple-expectation"
         private const val CLAIM_FINGERPRINT = "fgp"
         private const val CLAIM_ROLE = "role"
+        private const val CLAIM_USER_IGN = "userIgn"
         private const val DEFAULT_SECRET_PREFIX = "dev-secret"
         private const val PLACEHOLDER_PATTERN = "\${"
         private const val MIN_SECRET_LENGTH = 32
@@ -134,6 +135,7 @@ class JwtTokenProvider(
         .subject(payload.sessionId)
         .claim(CLAIM_FINGERPRINT, payload.fingerprint)
         .claim(CLAIM_ROLE, payload.role)
+        .claim(CLAIM_USER_IGN, payload.userIgn)
         .issuedAt(Date.from(payload.issuedAt))
         .expiration(Date.from(payload.expiration))
         .signWith(secretKey, Jwts.SIG.HS256)
@@ -149,6 +151,20 @@ class JwtTokenProvider(
      */
     fun generateToken(sessionId: String, fingerprint: String, role: String): String {
         val payload = JwtPayload.of(sessionId, fingerprint, role, expirationSeconds)
+        return generateToken(payload)
+    }
+
+    /**
+     * 세션 ID, fingerprint, role, userIgn로 토큰을 생성합니다.
+     *
+     * @param sessionId 세션 ID
+     * @param fingerprint fingerprint
+     * @param role 권한
+     * @param userIgn 캐릭터 닉네임
+     * @return 생성된 JWT 토큰 문자열
+     */
+    fun generateToken(sessionId: String, fingerprint: String, role: String, userIgn: String): String {
+        val payload = JwtPayload.of(sessionId, fingerprint, role, expirationSeconds, userIgn)
         return generateToken(payload)
     }
 
@@ -207,6 +223,7 @@ class JwtTokenProvider(
             claims.subject,
             claims[CLAIM_FINGERPRINT, String::class.java],
             claims[CLAIM_ROLE, String::class.java],
+            claims[CLAIM_USER_IGN, String::class.java] ?: "",
             claims.issuedAt.toInstant(),
             claims.expiration.toInstant(),
         )

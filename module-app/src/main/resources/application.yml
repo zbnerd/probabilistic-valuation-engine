@@ -7,8 +7,6 @@ spring:
   autoconfigure:
     exclude:
       - dev.langchain4j.openai.spring.AutoConfig
-      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
-      - org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
   profiles:
     active: local # [Safety Guard] 별도 설정 없으면 무조건 로컬 모드
   lifecycle:

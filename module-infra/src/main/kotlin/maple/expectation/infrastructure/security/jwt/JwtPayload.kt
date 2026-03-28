@@ -17,6 +17,7 @@ data class JwtPayload(
     val sessionId: String,
     val fingerprint: String,
     val role: String,
+    val userIgn: String = "",
     val issuedAt: Instant,
     val expiration: Instant,
 ) {
@@ -37,9 +38,9 @@ data class JwtPayload(
          * @param ttlSeconds 유효 시간 (초)
          * @return JwtPayload
          */
-        fun of(sessionId: String, fingerprint: String, role: String, ttlSeconds: Long): JwtPayload {
+        fun of(sessionId: String, fingerprint: String, role: String, ttlSeconds: Long, userIgn: String = ""): JwtPayload {
             val now = Instant.now()
-            return JwtPayload(sessionId, fingerprint, role, now, now.plusSeconds(ttlSeconds))
+            return JwtPayload(sessionId, fingerprint, role, userIgn, now, now.plusSeconds(ttlSeconds))
         }
     }
 }

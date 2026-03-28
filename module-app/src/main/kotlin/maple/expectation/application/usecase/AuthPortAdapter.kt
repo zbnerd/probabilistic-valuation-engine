@@ -33,7 +33,7 @@ class AuthPortAdapter(
         val role = determineRole(fingerprint)
 
         // Generate JWT token
-        val accessToken = jwtTokenProvider.generateToken(sessionId, fingerprint, role)
+        val accessToken = jwtTokenProvider.generateToken(sessionId, fingerprint, role, command.userIgn)
         val expiresIn = jwtTokenProvider.getExpirationSeconds()
 
         log.info("[AuthPort] Login successful: sessionId={}, role={}", sessionId, role)

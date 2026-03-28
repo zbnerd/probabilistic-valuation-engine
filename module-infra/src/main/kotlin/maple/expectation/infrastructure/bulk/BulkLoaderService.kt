@@ -121,29 +121,19 @@ class BulkLoaderService(
             stopRequested.set(false)
             isRunning.set(true)
 
-            // Disable L2 cache writes during bulk loading for performance
-            PostgresL2CacheStrategy.disableL2Writes.set(true)
-            log.info("[BulkLoaderService] L2 cache writes disabled for bulk loading")
+            val ignList = readCsvFile(path)
 
-            try {
-                val ignList = readCsvFile(path)
+            val total = ignList.size
+            totalCharacters.set(total.toLong())
+            log.info("[BulkLoaderService] Read {} characters from CSV", total)
 
-                val total = ignList.size
-                totalCharacters.set(total.toLong())
-                log.info("[BulkLoaderService] Read {} characters from CSV", total)
-
-                if (total == 0) {
-                    return@executeWithLock CompletableFuture.completedFuture(
-                        LoadResult(0, 0, 0, 0, 0),
-                    )
-                }
-
-                processBatch(ignList, emptySet(), 0, total, start, force)
-            } finally {
-                // Re-enable L2 cache writes after bulk loading completes
-                PostgresL2CacheStrategy.disableL2Writes.set(false)
-                log.info("[BulkLoaderService] L2 cache writes re-enabled")
+            if (total == 0) {
+                return@executeWithLock CompletableFuture.completedFuture(
+                    LoadResult(0, 0, 0, 0, 0),
+                )
             }
+
+            processBatch(ignList, emptySet(), 0, total, start, force)
         }
     }
 
@@ -352,24 +342,26 @@ class BulkLoaderService(
             return
         }
 
-        // Load character with recovery using executeOrCatch (returns Unit?)
+        // Load character with L2 writes disabled (worker thread needs its own ThreadLocal)
         val singleStart = System.currentTimeMillis()
-        val result: Unit? = executor.executeOrCatch(
-            task = {
-                cacheWarmupPort.warmup(ign, force)
-                completedSet.add(ign)
-                loaded.incrementAndGet()
-                loadedCount.incrementAndGet()
-                null
-            },
-            recovery = { e: Throwable ->
-                failed.incrementAndGet()
-                errorCount.incrementAndGet()
-                recordFailure(ign, e)
-                null
-            },
-            context = TaskContext.of("BulkLoaderService", "warmup", ign),
-        )
+        val result: Unit? = PostgresL2CacheStrategy.withL2WritesDisabled {
+            executor.executeOrCatch(
+                task = {
+                    cacheWarmupPort.warmup(ign, force)
+                    completedSet.add(ign)
+                    loaded.incrementAndGet()
+                    loadedCount.incrementAndGet()
+                    null
+                },
+                recovery = { e: Throwable ->
+                    failed.incrementAndGet()
+                    errorCount.incrementAndGet()
+                    recordFailure(ign, e)
+                    null
+                },
+                context = TaskContext.of("BulkLoaderService", "warmup", ign),
+            )
+        }
         val singleElapsed = System.currentTimeMillis() - singleStart
         log.info("[BulkLoaderService] Single character load: ign={} took {}ms", ign, singleElapsed)
 

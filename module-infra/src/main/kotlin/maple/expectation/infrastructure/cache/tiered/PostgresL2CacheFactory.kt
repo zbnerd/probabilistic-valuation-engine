@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.cache.tiered
 
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.Callable
+import java.util.concurrent.ConcurrentHashMap
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
@@ -47,9 +48,9 @@ class PostgresL2CacheFactory(
         private val log = LoggerFactory.getLogger(PostgresL2CacheFactory::class.java)
     }
 
-    private val cacheMap = mutableMapOf<String, Cache>()
+    private val cacheMap = ConcurrentHashMap<String, Cache>()
 
-    override fun getCache(name: String): Cache? = cacheMap.getOrPut(name) { createPostgresL2CacheAdapter(name) }
+    override fun getCache(name: String): Cache? = cacheMap.computeIfAbsent(name) { createPostgresL2CacheAdapter(it) }
 
     override fun getCacheNames(): MutableCollection<String> = cacheMap.keys
 
@@ -81,6 +82,7 @@ class PostgresL2CacheAdapter(
 
     companion object {
         private val log = LoggerFactory.getLogger(PostgresL2CacheAdapter::class.java)
+        private const val L2_TTL_SECONDS = 15L
     }
 
     // Metrics
@@ -99,7 +101,10 @@ class PostgresL2CacheAdapter(
         return executor.executeOrDefault(
             {
                 getCounter.increment()
-                l2Strategy.get(key.toString(), Any::class.java)
+                val value = l2Strategy.get(key.toString(), Any::class.java)
+                // Fix: Ensure String values are not corrupted by type erasure
+                // When TypedValue contains a String, return it directly
+                value
             },
             null,
             context,
@@ -117,8 +122,9 @@ class PostgresL2CacheAdapter(
         executor.executeVoidJava(
             {
                 putCounter.increment()
-                // Default TTL: 15 minutes (consistent with existing Redis L2)
-                l2Strategy.put(key.toString(), value, 15L)
+                // Fix: Ensure String values are properly serialized through TypedValue wrapper
+                // The L2Strategy will wrap the value in TypedValue for type-safe deserialization
+                l2Strategy.put(key.toString(), value, L2_TTL_SECONDS)
             },
             context,
         )

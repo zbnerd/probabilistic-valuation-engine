@@ -6,8 +6,10 @@ import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.model.like.LikeToggleResult;
 import maple.expectation.core.domain.model.like.LikeToggleWithCount;
 import maple.expectation.core.port.inbound.LikeTogglePort;
+import maple.expectation.core.port.out.CharacterOcidPort;
 import maple.expectation.domain.repository.CharacterLikeRepository;
 import maple.expectation.domain.repository.GameCharacterRepository;
+import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.exception.SelfLikeNotAllowedException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -21,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>흐름:
  * <ol>
- *   <li>IGN → OCID 해석 (OcidResolutionService + Caffeine 캐시)</li>
+ *   <li>IGN → OCID 해석 (CharacterOcidPort + @Cacheable)</li>
  *   <li>Self-like 방지 검증</li>
  *   <li>존재 여부 확인 → INSERT/DELETE + count 증감</li>
  * </ol>
@@ -33,7 +35,7 @@ public class LikeToggleService implements LikeTogglePort {
 
     private final CharacterLikeRepository characterLikeRepository;
     private final GameCharacterRepository gameCharacterRepository;
-    private final OcidResolutionService ocidResolutionService;
+    private final CharacterOcidPort characterOcidPort;
     private final LogicExecutor executor;
 
     /**
@@ -89,6 +91,11 @@ public class LikeToggleService implements LikeTogglePort {
     /**
      * 좋아요 수 조회
      *
+     * <p><b>Eventual Consistency:</b> 이 메서드는 DB에서 직접 조회하므로
+     * 캐시 갱신 지연(~10ms)이 없어 가장 최신값을 반환합니다.
+     *
+     * <p>좋아요 토글 후 즉시 호출하면 트랜잭션 커밋 후의 최신값이 반환됩니다.
+     *
      * @param targetUserIgn 조회할 캐릭터 닉네임
      * @return 좋아요 수
      */
@@ -104,7 +111,11 @@ public class LikeToggleService implements LikeTogglePort {
     }
 
     private String resolveTargetOcid(String targetUserIgn) {
-        return ocidResolutionService.resolveOcid(targetUserIgn);
+        String ocid = characterOcidPort.resolveOcid(targetUserIgn);
+        if (ocid == null) {
+            throw new CharacterNotFoundException(targetUserIgn);
+        }
+        return ocid;
     }
 
     private void validateNotSelfLike(String userIgn, String targetOcid, Set<String> myOcids) {

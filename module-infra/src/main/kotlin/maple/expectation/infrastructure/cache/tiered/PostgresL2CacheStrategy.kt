@@ -173,14 +173,15 @@ class PostgresL2CacheStrategy(
                         val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
                         // Apply same type safety as get() method
                         @Suppress("UNCHECKED_CAST")
-                        when {
+                        val value: T? = when {
                             type == String::class.java || type == Any::class.java -> typedValue.value as? T
                             typedValue.value != null && type.isInstance(typedValue.value) -> typedValue.value as T
                             else -> null
                         }
+                        if (value != null) key to value else null
                     },
                     *keys.toTypedArray(),
-                ).associate { it }
+                ).filterNotNull().associate { it }
             },
             emptyMap(),
             context,

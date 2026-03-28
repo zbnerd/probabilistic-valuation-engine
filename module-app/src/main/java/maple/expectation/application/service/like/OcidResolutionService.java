@@ -1,5 +1,6 @@
 package maple.expectation.application.service.like;
 
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import maple.expectation.core.domain.model.character.GameCharacter;
 import maple.expectation.domain.repository.GameCharacterRepository;

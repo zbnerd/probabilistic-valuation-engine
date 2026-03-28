@@ -48,7 +48,7 @@ class CharacterOcidAdapter(
     }
 
     override fun resolveOcid(userIgn: String): String? {
-        return singleOcidCache.get(userIgn) { _, _ ->
+        return singleOcidCache.get(userIgn) {
             executor.execute(
                 { resolveFromDb(userIgn) },
                 TaskContext.of("CharacterOcidAdapter", "ResolveOcid", userIgn),
@@ -74,7 +74,7 @@ class CharacterOcidAdapter(
     }
 
     override fun resolveAllOcids(): Map<String, String> {
-        return allOcidsCache.get(Unit) { _, _ ->
+        return allOcidsCache.get(Unit) {
             executor.execute(
                 { loadAllOcidsFromDb() },
                 TaskContext.of("CharacterOcidAdapter", "ResolveAllOcids"),
@@ -89,7 +89,9 @@ class CharacterOcidAdapter(
 
     private fun loadAllOcidsFromDb(): Map<String, String> {
         val entities = jpaRepository.findAll()
-        val result = entities.associateBy({ it.userIgn ?: "" }, { it.ocid ?: "" })
+        val result = entities
+            .filter { it.userIgn != null && it.ocid != null }
+            .associateBy({ it.userIgn!! }, { it.ocid!! })
 
         log.debug("[CharacterOcidAdapter] Loaded {} characters from DB", result.size)
 
@@ -97,6 +99,6 @@ class CharacterOcidAdapter(
     }
 
     companion object {
-        private val log = LoggerFactory.getLogger(CharacterOcidAdapter::class)
+        private val log = LoggerFactory.getLogger(CharacterOcidAdapter::class.java)
     }
 }

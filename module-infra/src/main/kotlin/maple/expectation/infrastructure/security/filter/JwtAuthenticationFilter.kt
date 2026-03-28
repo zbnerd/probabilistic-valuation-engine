@@ -149,7 +149,7 @@ class JwtAuthenticationFilter(
         // 현재 로그인 캐릭터의 OCID만 조회 (P0 제약사항: fingerprint별 모든 캐릭터 조회 불가)
         val myOcid = characterOcidPort.resolveOcid(userIgn)
         if (myOcid == null) {
-            log.warn("[JWT] OCID resolution returned null for userIgn={}, self-like prevention may be incomplete", userIgn)
+            log.debug("[JWT] OCID resolution returned null for userIgn={}, self-like prevention may be incomplete", userIgn)
         }
         val myOcids = if (myOcid != null) setOf(myOcid) else emptySet()
 

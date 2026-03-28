@@ -82,6 +82,7 @@ class PostgresL2CacheAdapter(
 
     companion object {
         private val log = LoggerFactory.getLogger(PostgresL2CacheAdapter::class.java)
+        private const val L2_TTL_SECONDS = 15L
     }
 
     // Metrics
@@ -123,7 +124,7 @@ class PostgresL2CacheAdapter(
                 putCounter.increment()
                 // Fix: Ensure String values are properly serialized through TypedValue wrapper
                 // The L2Strategy will wrap the value in TypedValue for type-safe deserialization
-                l2Strategy.put(key.toString(), value, 15L)
+                l2Strategy.put(key.toString(), value, L2_TTL_SECONDS)
             },
             context,
         )

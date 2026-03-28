@@ -4,6 +4,8 @@ import java.util.Optional
 import maple.expectation.infrastructure.persistence.entity.CharacterLikeJpaEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import org.springframework.transaction.annotation.Transactional
 
 /**
@@ -71,12 +73,34 @@ interface CharacterLikeJpaRepository : JpaRepository<CharacterLikeJpaEntity, Lon
     fun existsByTargetOcidAndLikerAccountId(targetOcid: String?, likerAccountId: String?): Boolean
 
     /**
+     * Atomic INSERT with duplicate protection (ADR-029 Race Condition fix).
+     *
+     * Uses INSERT ... ON CONFLICT DO NOTHING to prevent TOCTOU race conditions
+     * when two concurrent like requests arrive for the same (target, liker) pair.
+     *
+     * @return 1 if inserted, 0 if already exists (concurrent request)
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional("transactionManager")
+    @Query(
+        value = "INSERT INTO character_like (target_ocid, liker_account_id, created_at) " +
+            "VALUES (:targetOcid, :likerAccountId, NOW()) " +
+            "ON CONFLICT (target_ocid, liker_account_id) DO NOTHING",
+        nativeQuery = true,
+    )
+    fun insertIfAbsent(
+        @Param("targetOcid") targetOcid: String,
+        @Param("likerAccountId") likerAccountId: String,
+    ): Int
+
+    /**
      * Delete like by target OCID and liker account ID.
      *
      * @param targetOcid OCID of character
      * @param likerAccountId account ID of user
+     * @return number of deleted rows (0 if already deleted by concurrent request)
      */
     @Modifying(clearAutomatically = true)
     @Transactional("transactionManager")
-    fun deleteByTargetOcidAndLikerAccountId(targetOcid: String?, likerAccountId: String?)
+    fun deleteByTargetOcidAndLikerAccountId(targetOcid: String?, likerAccountId: String?): Long
 }

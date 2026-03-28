@@ -7,8 +7,8 @@ import java.util.concurrent.Executor
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl
-import maple.expectation.application.service.like.LikeToggleResult
-import maple.expectation.application.service.like.LikeToggleService
+import maple.expectation.core.domain.model.like.LikeToggleResult
+import maple.expectation.core.port.inbound.LikeTogglePort
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import maple.expectation.response.ApiResponse
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4
@@ -48,7 +48,7 @@ class GameCharacterControllerV4(
     private val expectationPort: ExpectationV4Port,
     private val trackerPort: PopularCharacterTrackerPort,
     private val admissionControl: GlobalAdmissionControl,
-    private val likeToggleService: LikeToggleService,
+    private val likeTogglePort: LikeTogglePort,
     @Qualifier("taskExecutor") private val taskExecutor: Executor,
 ) {
 
@@ -161,10 +161,12 @@ class GameCharacterControllerV4(
         @AuthenticationPrincipal user: AuthenticatedUser,
     ): ResponseEntity<ApiResponse<LikeToggleResponse>> {
         log.debug("[V4] Like toggle: target={} by={}", maskIgn(userIgn), maskIgn(user.userIgn))
-        val result = likeToggleService.toggleLike(userIgn, user.accountId, user.myOcids)
+        val result = likeTogglePort.toggleLike(userIgn, user.accountId, user.myOcids)
+        val likeCount = likeTogglePort.getLikeCount(userIgn)
         val response = LikeToggleResponse(
             targetUserIgn = userIgn,
             liked = result == LikeToggleResult.LIKED,
+            likeCount = likeCount,
         )
         return ResponseEntity.ok(ApiResponse.success(response))
     }
@@ -176,8 +178,8 @@ class GameCharacterControllerV4(
         @AuthenticationPrincipal user: AuthenticatedUser,
     ): ResponseEntity<ApiResponse<LikeStatusResponse>> {
         log.debug("[V4] Like status: target={} by={}", maskIgn(userIgn), maskIgn(user.userIgn))
-        val liked = likeToggleService.isLiked(userIgn, user.accountId)
-        val likeCount = likeToggleService.getLikeCount(userIgn)
+        val liked = likeTogglePort.isLiked(userIgn, user.accountId)
+        val likeCount = likeTogglePort.getLikeCount(userIgn)
         val response = LikeStatusResponse(
             targetUserIgn = userIgn,
             liked = liked,

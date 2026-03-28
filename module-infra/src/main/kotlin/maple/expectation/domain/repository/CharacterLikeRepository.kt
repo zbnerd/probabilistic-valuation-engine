@@ -122,9 +122,10 @@ interface CharacterLikeRepository {
      *
      * @param targetOcid the OCID of the character (must not be null)
      * @param likerAccountId the account ID of the user (must not be null)
+     * @return number of deleted rows (0 if already deleted by concurrent request)
      * @throws IllegalArgumentException if targetOcid or likerAccountId is null/blank
      */
-    fun deleteByTargetOcidAndLikerAccountId(targetOcid: String, likerAccountId: String)
+    fun deleteByTargetOcidAndLikerAccountId(targetOcid: String, likerAccountId: String): Long
 
     /**
      * Count total likes received by a specific character
@@ -162,4 +163,15 @@ interface CharacterLikeRepository {
      * @throws IllegalArgumentException if targetOcid or likerAccountId is null/blank
      */
     fun existsByTargetOcidAndLikerAccountId(targetOcid: String, likerAccountId: String): Boolean
+
+    /**
+     * Atomic INSERT with duplicate protection (ADR-029 Race Condition fix).
+     *
+     * <p>Uses INSERT ... ON CONFLICT DO NOTHING to prevent TOCTOU race conditions.
+     *
+     * @param targetOcid the OCID of the character being liked
+     * @param likerAccountId the account ID of the user who liked
+     * @return 1 if inserted, 0 if already exists
+     */
+    fun insertIfAbsent(targetOcid: String, likerAccountId: String): Int
 }

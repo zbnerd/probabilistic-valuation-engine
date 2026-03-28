@@ -73,7 +73,7 @@ interface GameCharacterJpaRepository : JpaRepository<GameCharacterJpaEntity, Lon
      * @param count the amount to increment (can be positive or negative)
      */
     @Modifying
-    @Query("UPDATE GameCharacterJpaEntity g SET g.likeCount = g.likeCount + :count WHERE g.userIgn = :userIgn")
+    @Query("UPDATE GameCharacterJpaEntity g SET g.likeCount = GREATEST(g.likeCount + :count, 0) WHERE g.userIgn = :userIgn")
     fun incrementLikeCount(userIgn: String?, count: Long)
 
     /**

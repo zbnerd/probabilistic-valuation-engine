@@ -4,6 +4,8 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.model.like.CharacterLike;
+import maple.expectation.core.domain.model.like.LikeToggleResult;
+import maple.expectation.core.port.inbound.LikeTogglePort;
 import maple.expectation.domain.repository.CharacterLikeRepository;
 import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.error.exception.SelfLikeNotAllowedException;
@@ -27,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class LikeToggleService {
+public class LikeToggleService implements LikeTogglePort {
 
     private final CharacterLikeRepository characterLikeRepository;
     private final GameCharacterRepository gameCharacterRepository;
@@ -104,20 +106,28 @@ public class LikeToggleService {
         if (existing == null) {
             return likeCharacter(targetOcid, targetUserIgn, likerAccountId);
         }
-        return unlikeCharacter(existing, targetUserIgn);
+        return unlikeCharacter(targetOcid, targetUserIgn, likerAccountId);
     }
 
     private LikeToggleResult likeCharacter(String targetOcid, String targetUserIgn, String likerAccountId) {
-        characterLikeRepository.save(CharacterLike.create(targetOcid, likerAccountId));
-        gameCharacterRepository.incrementLikeCount(targetUserIgn, 1);
-        log.debug("Like added: target={}, liker={}", targetUserIgn, maskId(likerAccountId));
+        int inserted = characterLikeRepository.insertIfAbsent(targetOcid, likerAccountId);
+        if (inserted > 0) {
+            gameCharacterRepository.incrementLikeCount(targetUserIgn, 1);
+            log.info("Like added: target={}, liker={}", targetUserIgn, maskId(likerAccountId));
+        } else {
+            log.debug("Like duplicate (concurrent): target={}", targetUserIgn);
+        }
         return LikeToggleResult.LIKED;
     }
 
-    private LikeToggleResult unlikeCharacter(CharacterLike existing, String targetUserIgn) {
-        characterLikeRepository.delete(existing);
-        gameCharacterRepository.incrementLikeCount(targetUserIgn, -1);
-        log.debug("Like removed: target={}, liker={}", targetUserIgn, maskId(existing.getLikerAccountId()));
+    private LikeToggleResult unlikeCharacter(String targetOcid, String targetUserIgn, String likerAccountId) {
+        long deleted = characterLikeRepository.deleteByTargetOcidAndLikerAccountId(targetOcid, likerAccountId);
+        if (deleted > 0) {
+            gameCharacterRepository.incrementLikeCount(targetUserIgn, -1);
+            log.info("Like removed: target={}", targetUserIgn);
+        } else {
+            log.debug("Like already removed (concurrent): target={}", targetUserIgn);
+        }
         return LikeToggleResult.UNLIKED;
     }
 

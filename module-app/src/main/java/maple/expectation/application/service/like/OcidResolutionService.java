@@ -29,7 +29,7 @@ public class OcidResolutionService {
      * @return OCID 문자열
      * @throws CharacterNotFoundException 캐릭터가 DB에 없을 때
      */
-    @Cacheable(value = "ocidCache", key = "#userIgn")
+    @Cacheable(value = "ocidCache", key = "#userIgn", unless = "#result == null")
     public String resolveOcid(String userIgn) {
         return executor.execute(
                 () -> {
@@ -37,7 +37,7 @@ public class OcidResolutionService {
                     if (character == null) {
                         throw new CharacterNotFoundException(userIgn);
                     }
-                    return character.getCharacterId().getValue();
+                    return character.getCharacterId().value();
                 },
                 TaskContext.of("OcidResolutionService", "ResolveOcid", userIgn)
         );

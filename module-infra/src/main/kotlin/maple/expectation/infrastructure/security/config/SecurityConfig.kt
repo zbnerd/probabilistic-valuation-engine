@@ -11,24 +11,7 @@ import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
-/**
- * Spring Security 설정 (ADR-005, ADR-029)
- *
- * <p>Stateless JWT 기반 인증/인가 설정.
- *
- * <h3>핵심 정책</h3>
- * <ul>
- *   <li>CSRF 비활성화 (Stateless API)</li>
- *   <li>세션 미사용 (SESSIONLESS)</li>
- *   <li>JWT 필터 → @PreAuthorize 메서드 보안</li>
- * </ul>
- *
- * <h3>엔드포인트 접근 제어</h3>
- * <ul>
- *   <li>공개: /auth/**, /actuator/**, /swagger-ui/**, /v3/api-docs/**</li>
- *   <li>인증 필요: /api/**</li>
- * </ul>
- */
+/** Spring Security 설정 (ADR-005, ADR-029) - Stateless JWT 기반 인증/인가 */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)

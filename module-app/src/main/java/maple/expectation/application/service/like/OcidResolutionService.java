@@ -29,7 +29,6 @@ public class OcidResolutionService {
      * @return OCID 문자열
      * @throws CharacterNotFoundException 캐릭터가 DB에 없을 때
      */
-    @Cacheable(value = "ocidCache", key = "#userIgn", unless = "#result == null")
     public String resolveOcid(String userIgn) {
         return executor.execute(
                 () -> {

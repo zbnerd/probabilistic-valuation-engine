@@ -26,15 +26,15 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity(prePostEnabled = true)
 class SecurityConfig(
     private val jwtAuthenticationFilter: JwtAuthenticationFilter,
-    private val meterRegistry: MeterRegistry,
 ) {
 
-    private val unauthorizedCounter = Counter.builder("auth.failure.unauthorized")
-        .description("Count of 401 unauthorized authentication failures")
-        .register(meterRegistry)
-
     @Bean
-    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    fun securityFilterChain(http: HttpSecurity, meterRegistry: MeterRegistry): SecurityFilterChain {
+        // Security entry point counter — distinct from JWT filter counter
+        val entrypointCounter = Counter.builder("auth.failure.entrypoint")
+            .description("Count of 401 from Spring Security entry point (non-JWT paths)")
+            .register(meterRegistry)
+
         return http
             // CSRF 비활성화: stateless JWT API, 세션 쿠키 미사용
             .csrf { it.disable() }
@@ -60,7 +60,7 @@ class SecurityConfig(
                     .anyRequest().denyAll()
             }
             .exceptionHandling { it.authenticationEntryPoint { _, response, _ ->
-                unauthorizedCounter.increment()
+                entrypointCounter.increment()
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
             } }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)

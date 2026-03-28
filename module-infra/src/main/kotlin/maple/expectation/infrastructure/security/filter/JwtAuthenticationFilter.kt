@@ -5,8 +5,6 @@ import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import java.io.IOException
-import maple.expectation.domain.repository.GameCharacterRepository
-import maple.expectation.infrastructure.security.AccountIdGenerator
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.slf4j.LoggerFactory
@@ -19,21 +17,20 @@ import org.springframework.web.filter.OncePerRequestFilter
 /**
  * JWT Authentication Filter (ADR-005, ADR-029)
  *
- * <p>Authorization 헤더에서 Bearer 토큰을 추출하여 SecurityContext에 AuthenticatedUser를 설정합니다.
+ * Authorization 헤더에서 Bearer 토큰을 추출하여 SecurityContext에 AuthenticatedUser를 설정합니다.
  *
- * <p>흐름:
- * <ol>
- *   <li>Authorization: Bearer {token} 추출</li>
- *   <li>JwtTokenProvider로 토큰 파싱</li>
- *   <li>userIgn → DB에서 OCID 조회</li>
- *   <li>AuthenticatedUser 생성 → SecurityContext 설정</li>
- * </ol>
+ * 흐름:
+ * 1. Authorization: Bearer {token} 추출
+ * 2. JwtTokenProvider로 토큰 파싱
+ * 3. JWT claims로 AuthenticatedUser 생성
+ * 4. SecurityContext 설정
+ *
+ * accountId는 fingerprint(SHA-256 of apiKey)를 사용하여
+ * 동일 API Key = 동일 accountId를 보장합니다.
  */
 @Component
 class JwtAuthenticationFilter(
     private val jwtTokenProvider: JwtTokenProvider,
-    private val gameCharacterRepository: GameCharacterRepository,
-    private val accountIdGenerator: AccountIdGenerator,
 ) : OncePerRequestFilter() {
 
     @Throws(ServletException::class, IOException::class)
@@ -74,29 +71,18 @@ class JwtAuthenticationFilter(
 
     private fun resolveAuthenticatedUser(jwt: maple.expectation.infrastructure.security.jwt.JwtPayload): AuthenticatedUser? {
         val userIgn = jwt.userIgn
+        val fingerprint = jwt.fingerprint
 
-        if (userIgn.isBlank()) {
-            log.warn("[JWT] userIgn claim is empty - cannot resolve AuthenticatedUser")
-            return null
-        }
-
-        val character = gameCharacterRepository.findByUserIgn(userIgn)
-        if (character == null) {
-            log.warn("[JWT] Character not found for userIgn={}", userIgn)
-            return null
-        }
-
-        val ocid = character.characterId.value
-        val myOcids = setOf(ocid)
-        val accountId = accountIdGenerator.generate(myOcids)
+        // accountId = fingerprint (HMAC of apiKey, unique per Nexon account)
+        val accountId = fingerprint
 
         return AuthenticatedUser(
             sessionId = jwt.sessionId,
-            fingerprint = jwt.fingerprint,
+            fingerprint = fingerprint,
             userIgn = userIgn,
             accountId = accountId,
             apiKey = "",
-            myOcids = myOcids,
+            myOcids = emptySet(),
             role = jwt.role,
         )
     }

@@ -27,8 +27,8 @@ interface CharacterLikeJpaRepository : JpaRepository<CharacterLikeJpaEntity, Lon
      * @return JPA entity or empty
      */
     fun findByTargetOcidAndLikerAccountId(
-        targetOcid: String?,
-        likerAccountId: String?,
+        targetOcid: String,
+        likerAccountId: String,
     ): Optional<CharacterLikeJpaEntity>
 
     /**
@@ -37,7 +37,7 @@ interface CharacterLikeJpaRepository : JpaRepository<CharacterLikeJpaEntity, Lon
      * @param likerAccountId account ID of user
      * @return list of JPA entities
      */
-    fun findByLikerAccountIdOrderByCreatedAtDesc(likerAccountId: String?): List<CharacterLikeJpaEntity>
+    fun findByLikerAccountIdOrderByCreatedAtDesc(likerAccountId: String): List<CharacterLikeJpaEntity>
 
     /**
      * Find all likes for target OCID, ordered by creation time (newest first).
@@ -45,7 +45,7 @@ interface CharacterLikeJpaRepository : JpaRepository<CharacterLikeJpaEntity, Lon
      * @param targetOcid OCID of character
      * @return list of JPA entities
      */
-    fun findByTargetOcidOrderByCreatedAtDesc(targetOcid: String?): List<CharacterLikeJpaEntity>
+    fun findByTargetOcidOrderByCreatedAtDesc(targetOcid: String): List<CharacterLikeJpaEntity>
 
     /**
      * Count likes by target OCID.
@@ -53,7 +53,7 @@ interface CharacterLikeJpaRepository : JpaRepository<CharacterLikeJpaEntity, Lon
      * @param targetOcid OCID of character
      * @return count of likes
      */
-    fun countByTargetOcid(targetOcid: String?): Long
+    fun countByTargetOcid(targetOcid: String): Long
 
     /**
      * Count likes by liker account ID.
@@ -61,7 +61,7 @@ interface CharacterLikeJpaRepository : JpaRepository<CharacterLikeJpaEntity, Lon
      * @param likerAccountId account ID of user
      * @return count of likes
      */
-    fun countByLikerAccountId(likerAccountId: String?): Long
+    fun countByLikerAccountId(likerAccountId: String): Long
 
     /**
      * Check if like exists by target OCID and liker account ID.
@@ -70,7 +70,7 @@ interface CharacterLikeJpaRepository : JpaRepository<CharacterLikeJpaEntity, Lon
      * @param likerAccountId account ID of user
      * @return true if exists
      */
-    fun existsByTargetOcidAndLikerAccountId(targetOcid: String?, likerAccountId: String?): Boolean
+    fun existsByTargetOcidAndLikerAccountId(targetOcid: String, likerAccountId: String): Boolean
 
     /**
      * Atomic INSERT with duplicate protection (ADR-029 Race Condition fix).
@@ -102,5 +102,5 @@ interface CharacterLikeJpaRepository : JpaRepository<CharacterLikeJpaEntity, Lon
      */
     @Modifying(clearAutomatically = true)
     @Transactional("transactionManager")
-    fun deleteByTargetOcidAndLikerAccountId(targetOcid: String?, likerAccountId: String?): Long
+    fun deleteByTargetOcidAndLikerAccountId(targetOcid: String, likerAccountId: String): Long
 }

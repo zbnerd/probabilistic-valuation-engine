@@ -6,7 +6,6 @@ import maple.expectation.infrastructure.persistence.entity.CharacterLikeJpaEntit
 import maple.expectation.infrastructure.persistence.jpa.CharacterLikeJpaRepository
 import org.springframework.lang.Nullable
 import org.springframework.stereotype.Repository
-import org.springframework.transaction.annotation.Transactional
 
 /**
  * CharacterLike JPA Repository Implementation (P1-11: Multi-DataSource Support)
@@ -18,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional
  * @see <a href="../../../../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
  */
 @Repository
-@Transactional("transactionManager")
 open class CharacterLikeRepositoryImpl(
     private val jpaRepo: CharacterLikeJpaRepository,
 ) : DomainCharacterLikeRepository {

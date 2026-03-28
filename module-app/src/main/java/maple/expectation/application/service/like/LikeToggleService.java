@@ -3,7 +3,6 @@ package maple.expectation.application.service.like;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.core.domain.model.like.CharacterLike;
 import maple.expectation.core.domain.model.like.LikeToggleResult;
 import maple.expectation.core.port.inbound.LikeTogglePort;
 import maple.expectation.domain.repository.CharacterLikeRepository;
@@ -65,6 +64,7 @@ public class LikeToggleService implements LikeTogglePort {
      * @param likerAccountId 조회자 계정 ID
      * @return 좋아요 여부
      */
+    @Transactional(value = "transactionManager", readOnly = true)
     public boolean isLiked(String targetUserIgn, String likerAccountId) {
         String targetOcid = resolveTargetOcid(targetUserIgn);
 
@@ -81,6 +81,7 @@ public class LikeToggleService implements LikeTogglePort {
      * @param targetUserIgn 조회할 캐릭터 닉네임
      * @return 좋아요 수
      */
+    @Transactional(value = "transactionManager", readOnly = true)
     public long getLikeCount(String targetUserIgn) {
         String targetOcid = resolveTargetOcid(targetUserIgn);
 
@@ -102,8 +103,8 @@ public class LikeToggleService implements LikeTogglePort {
     }
 
     private LikeToggleResult toggleRelation(String targetOcid, String targetUserIgn, String likerAccountId) {
-        CharacterLike existing = characterLikeRepository.findByTargetOcidAndLikerAccountId(targetOcid, likerAccountId);
-        if (existing == null) {
+        boolean exists = characterLikeRepository.existsByTargetOcidAndLikerAccountId(targetOcid, likerAccountId);
+        if (!exists) {
             return likeCharacter(targetOcid, targetUserIgn, likerAccountId);
         }
         return unlikeCharacter(targetOcid, targetUserIgn, likerAccountId);

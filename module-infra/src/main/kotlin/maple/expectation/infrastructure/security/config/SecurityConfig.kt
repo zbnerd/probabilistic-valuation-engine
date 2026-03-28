@@ -56,8 +56,8 @@ class SecurityConfig(
                     .requestMatchers(HttpMethod.GET, "/").permitAll()
                     // API endpoints require authentication
                     .requestMatchers("/api/**").authenticated()
-                    // Everything else
-                    .anyRequest().permitAll()
+                    // Everything else - deny by default (explicit allow list above)
+                    .anyRequest().denyAll()
             }
             .exceptionHandling { it.authenticationEntryPoint { _, response, _ ->
                 unauthorizedCounter.increment()

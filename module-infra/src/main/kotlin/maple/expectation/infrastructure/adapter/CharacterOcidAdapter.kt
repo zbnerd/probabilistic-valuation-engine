@@ -64,7 +64,9 @@ class CharacterOcidAdapter(
         return executor.execute(
             {
                 val entities = jpaRepository.findAllByUserIgnIn(userIgns.toList())
-                entities.associateBy({ it.userIgn ?: "" }, { it.ocid ?: "" })
+                entities
+                    .filter { it.userIgn != null && it.ocid != null }
+                    .associateBy({ it.userIgn!! }, { it.ocid!! })
                     .filterKeys { it in userIgns }
             },
             TaskContext.of("CharacterOcidAdapter", "ResolveOcids", "count=${userIgns.size}"),

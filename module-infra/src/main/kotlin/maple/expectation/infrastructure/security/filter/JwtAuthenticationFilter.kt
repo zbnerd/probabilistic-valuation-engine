@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.security.filter
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import maple.expectation.application.service.like.OcidResolutionService
+import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.slf4j.LoggerFactory
@@ -46,17 +46,19 @@ import java.io.IOException
  * <p>Bearer 토큰이 존재하지만 JWT 파싱/검증에 실패하면 더 이상 silently continue하지 않고
  * 즉시 401 Unauthorized 응답을 반환합니다.
  *
- * <h3>P1 DIP 위반 수정</h3>
- * <p>GameCharacterRepository(도메인 포트)에 직접 의존하는 것을 피하고 OcidResolutionService를 통해
- * OCID를 조회하도록 수정했습니다.
+ * <h3>P1 DIP 준수</h3>
+ * <p>GameCharacterRepository(도메인 포트)에 직접 의존하는 것을 피하고 CharacterOcidPort(코어 포트)를 통해
+ * OCID를 조회합니다. ObjectMapper는 Bean을 주입받아 매번 새 인스턴스 생성을 방지합니다.
  *
  * @property jwtTokenProvider JWT 토큰 제공자
- * @property ocidResolutionService OCID 해결 서비스
+ * @property characterOcidPort 코어 포트 (DIP 준수)
+ * @property objectMapper JSON 직렬화용 ObjectMapper Bean
  */
 @Component
 class JwtAuthenticationFilter(
     private val jwtTokenProvider: JwtTokenProvider,
-    private val ocidResolutionService: OcidResolutionService,
+    private val characterOcidPort: CharacterOcidPort,
+    private val objectMapper: ObjectMapper,
 ) : OncePerRequestFilter() {
 
     @Throws(ServletException::class, IOException::class)
@@ -138,7 +140,7 @@ class JwtAuthenticationFilter(
         val fingerprint = jwt.fingerprint
 
         // 현재 로그인 캐릭터의 OCID만 조회 (P0 제약사항: fingerprint별 모든 캐릭터 조회 불가)
-        val myOcid = ocidResolutionService.resolveOcidOrNull(userIgn)
+        val myOcid = characterOcidPort.resolveOcid(userIgn)
         val myOcids = if (myOcid != null) setOf(myOcid) else emptySet()
 
         // TODO (P0): game_character 테이블에 fingerprint 컬럼 추가 후
@@ -177,7 +179,7 @@ class JwtAuthenticationFilter(
         )
 
         try {
-            response.writer.write(jacksonObjectMapper().writeValueAsString(errorResponse))
+            response.writer.write(objectMapper.writeValueAsString(errorResponse))
         } catch (e: IOException) {
             log.error("[JWT] Failed to write error response", e)
         }

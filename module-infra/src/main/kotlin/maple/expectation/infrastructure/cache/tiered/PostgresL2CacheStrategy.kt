@@ -67,8 +67,23 @@ class PostgresL2CacheStrategy(
         /**
          * ThreadLocal flag to disable L2 cache writes during bulk loading.
          * When true, put() operations are skipped to avoid Postgres write overhead.
+         *
+         * IMPORTANT: Must be cleaned up after use via [remove()] to prevent
+         * thread pool pollution in Tomcat/Virtual Thread environments.
          */
-        val disableL2Writes: ThreadLocal<Boolean> = ThreadLocal.withInitial { false }
+        internal val disableL2Writes: ThreadLocal<Boolean> = ThreadLocal.withInitial { false }
+
+        /**
+         * Execute a block with L2 writes disabled, ensuring ThreadLocal cleanup.
+         */
+        fun <T> withL2WritesDisabled(block: () -> T): T {
+            disableL2Writes.set(true)
+            try {
+                return block()
+            } finally {
+                disableL2Writes.remove()
+            }
+        }
     }
 
     // Metrics
@@ -155,10 +170,14 @@ class PostgresL2CacheStrategy(
                     { rs, _ ->
                         val key = rs.getString("cache_key")
                         val bytes = rs.getBytes("cache_value")
-                        // Deserialize as TypedValue wrapper to preserve type information
                         val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
+                        // Apply same type safety as get() method
                         @Suppress("UNCHECKED_CAST")
-                        key to (typedValue.value as T)
+                        when {
+                            type == String::class.java || type == Any::class.java -> typedValue.value as? T
+                            typedValue.value != null && type.isInstance(typedValue.value) -> typedValue.value as T
+                            else -> null
+                        }
                     },
                     *keys.toTypedArray(),
                 ).associate { it }

@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.cache.tiered
 
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.Callable
+import java.util.concurrent.ConcurrentHashMap
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
@@ -47,7 +48,7 @@ class PostgresL2CacheFactory(
         private val log = LoggerFactory.getLogger(PostgresL2CacheFactory::class.java)
     }
 
-    private val cacheMap = mutableMapOf<String, Cache>()
+    private val cacheMap = ConcurrentHashMap<String, Cache>()
 
     override fun getCache(name: String): Cache? = cacheMap.getOrPut(name) { createPostgresL2CacheAdapter(name) }
 

@@ -121,11 +121,10 @@ class BulkLoaderService(
             stopRequested.set(false)
             isRunning.set(true)
 
-            // Disable L2 cache writes during bulk loading for performance
-            PostgresL2CacheStrategy.disableL2Writes.set(true)
-            log.info("[BulkLoaderService] L2 cache writes disabled for bulk loading")
+            // Disable L2 cache writes during bulk loading for performance (using withL2WritesDisabled wrapper for automatic cleanup)
+            PostgresL2CacheStrategy.withL2WritesDisabled {
+                log.info("[BulkLoaderService] L2 cache writes disabled for bulk loading")
 
-            try {
                 val ignList = readCsvFile(path)
 
                 val total = ignList.size
@@ -139,10 +138,6 @@ class BulkLoaderService(
                 }
 
                 processBatch(ignList, emptySet(), 0, total, start, force)
-            } finally {
-                // Re-enable L2 cache writes after bulk loading completes
-                PostgresL2CacheStrategy.disableL2Writes.set(false)
-                log.info("[BulkLoaderService] L2 cache writes re-enabled")
             }
         }
     }

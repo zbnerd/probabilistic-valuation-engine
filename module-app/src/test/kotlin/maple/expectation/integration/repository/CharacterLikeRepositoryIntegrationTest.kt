@@ -8,6 +8,10 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import java.time.Instant
+import org.awaitility.Awaitility.await
+import java.time.Duration
+import java.time.temporal.ChronoUnit
 
 /**
  * CharacterLikeRepository 통합 테스트
@@ -78,9 +82,9 @@ class CharacterLikeRepositoryIntegrationTest : RepositoryIntegrationTestBase() {
             // Given
             val likerAccountId = "user-002"
             val like1 = characterLikeRepository.save(CharacterLike.of("char-001", likerAccountId))
-            Thread.sleep(10) // 타임스탬프 차이 보장
+            await().atLeast(Duration.of(10, ChronoUnit.MILLIS)).until { true }
             val like2 = characterLikeRepository.save(CharacterLike.of("char-002", likerAccountId))
-            Thread.sleep(10)
+            await().atLeast(Duration.of(10, ChronoUnit.MILLIS)).until { true }
             val like3 = characterLikeRepository.save(CharacterLike.of("char-003", likerAccountId))
             flushAndClear()
 
@@ -115,9 +119,9 @@ class CharacterLikeRepositoryIntegrationTest : RepositoryIntegrationTestBase() {
             // Given
             val targetOcid = "char-003"
             val like1 = characterLikeRepository.save(CharacterLike.of(targetOcid, "user-001"))
-            Thread.sleep(10)
+            await().atLeast(Duration.of(10, ChronoUnit.MILLIS)).until { true }
             val like2 = characterLikeRepository.save(CharacterLike.of(targetOcid, "user-002"))
-            Thread.sleep(10)
+            await().atLeast(Duration.of(10, ChronoUnit.MILLIS)).until { true }
             val like3 = characterLikeRepository.save(CharacterLike.of(targetOcid, "user-003"))
             flushAndClear()
 

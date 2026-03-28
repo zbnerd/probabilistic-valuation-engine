@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import java.io.IOException
+import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.slf4j.LoggerFactory
@@ -31,6 +32,7 @@ import org.springframework.web.filter.OncePerRequestFilter
 @Component
 class JwtAuthenticationFilter(
     private val jwtTokenProvider: JwtTokenProvider,
+    private val gameCharacterRepository: GameCharacterRepository,
 ) : OncePerRequestFilter() {
 
     @Throws(ServletException::class, IOException::class)
@@ -73,6 +75,10 @@ class JwtAuthenticationFilter(
         val userIgn = jwt.userIgn
         val fingerprint = jwt.fingerprint
 
+        // Resolve OCID from DB for self-like prevention
+        val character = gameCharacterRepository.findByUserIgn(userIgn)
+        val myOcids = if (character != null) setOf(character.characterId.value) else emptySet()
+
         // accountId = fingerprint (HMAC of apiKey, unique per Nexon account)
         val accountId = fingerprint
 
@@ -82,7 +88,7 @@ class JwtAuthenticationFilter(
             userIgn = userIgn,
             accountId = accountId,
             apiKey = "",
-            myOcids = emptySet(),
+            myOcids = myOcids,
             role = jwt.role,
         )
     }

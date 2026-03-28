@@ -7,8 +7,16 @@ import java.util.concurrent.Executor
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl
+import maple.expectation.core.domain.model.like.LikeToggleResult
+import maple.expectation.core.domain.model.like.LikeToggleWithCount
+import maple.expectation.core.port.inbound.LikeTogglePort
+import maple.expectation.infrastructure.security.AuthenticatedUser
+import maple.expectation.response.ApiResponse
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4
+import maple.expectation.web.dto.v4.LikeStatusResponse
+import maple.expectation.web.dto.v4.LikeToggleResponse
 import org.slf4j.LoggerFactory
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
@@ -41,6 +49,7 @@ class GameCharacterControllerV4(
     private val expectationPort: ExpectationV4Port,
     private val trackerPort: PopularCharacterTrackerPort,
     private val admissionControl: GlobalAdmissionControl,
+    private val likeTogglePort: LikeTogglePort,
     @Qualifier("taskExecutor") private val taskExecutor: Executor,
 ) {
 
@@ -142,6 +151,41 @@ class GameCharacterControllerV4(
             response.maxPresetNo,
             filteredPresets,
         )
+    }
+
+    // === Like Endpoints (ADR-029) ===
+
+    @PostMapping("/{userIgn}/like")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
+    fun toggleLike(
+        @PathVariable @NotBlank userIgn: String,
+        @AuthenticationPrincipal user: AuthenticatedUser,
+    ): ResponseEntity<ApiResponse<LikeToggleResponse>> {
+        log.debug("[V4] Like toggle: target={} by={}", maskIgn(userIgn), maskIgn(user.userIgn))
+        val toggleWithCount = likeTogglePort.toggleLikeWithCount(userIgn, user.accountId, user.myOcids)
+        val response = LikeToggleResponse(
+            targetUserIgn = userIgn,
+            liked = toggleWithCount.result == LikeToggleResult.LIKED,
+            likeCount = toggleWithCount.likeCount,
+        )
+        return ResponseEntity.ok(ApiResponse.success(response))
+    }
+
+    @GetMapping("/{userIgn}/like/status")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
+    fun getLikeStatus(
+        @PathVariable @NotBlank userIgn: String,
+        @AuthenticationPrincipal user: AuthenticatedUser,
+    ): ResponseEntity<ApiResponse<LikeStatusResponse>> {
+        log.debug("[V4] Like status: target={} by={}", maskIgn(userIgn), maskIgn(user.userIgn))
+        val liked = likeTogglePort.isLiked(userIgn, user.accountId)
+        val likeCount = likeTogglePort.getLikeCount(userIgn)
+        val response = LikeStatusResponse(
+            targetUserIgn = userIgn,
+            liked = liked,
+            likeCount = likeCount,
+        )
+        return ResponseEntity.ok(ApiResponse.success(response))
     }
 
     private fun maskIgn(ign: String?): String {

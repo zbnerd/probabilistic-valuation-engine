@@ -25,8 +25,8 @@ data class CharacterLike(
     companion object {
         @JvmStatic
         fun create(targetOcid: String, likerAccountId: String): CharacterLike {
-            requireNotNull(targetOcid) { "targetOcid cannot be null" }
-            requireNotNull(likerAccountId) { "likerAccountId cannot be null" }
+            require(targetOcid.isNotBlank()) { "targetOcid cannot be blank" }
+            require(likerAccountId.isNotBlank()) { "likerAccountId cannot be blank" }
             return CharacterLike(null, targetOcid, likerAccountId, LocalDateTime.now())
         }
 

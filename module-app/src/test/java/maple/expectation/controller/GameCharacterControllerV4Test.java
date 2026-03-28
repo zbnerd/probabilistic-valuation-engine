@@ -12,6 +12,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import maple.expectation.core.port.inbound.ExpectationV4Port;
+import maple.expectation.core.port.inbound.LikeTogglePort;
 import maple.expectation.core.port.out.PopularCharacterTrackerPort;
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
 import maple.expectation.web.controller.v4.GameCharacterControllerV4;
@@ -58,7 +59,7 @@ class GameCharacterControllerV4Test {
     trackerPort = mock(PopularCharacterTrackerPort.class);
     admissionControl = mock(GlobalAdmissionControl.class);
     taskExecutor = Runnable::run;
-    controller = new GameCharacterControllerV4(expectationPort, trackerPort, admissionControl, taskExecutor);
+    controller = new GameCharacterControllerV4(expectationPort, trackerPort, admissionControl, mock(LikeTogglePort.class), taskExecutor);
 
     // admissionControl.submitOrWait() executes the callable synchronously
     lenient()

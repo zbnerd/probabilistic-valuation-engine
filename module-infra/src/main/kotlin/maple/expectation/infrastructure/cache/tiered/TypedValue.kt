@@ -18,10 +18,10 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
  *   <li>Enables proper deserialization to concrete types</li>
  * </ul>
  *
- * <h3>GZIP Fix (Issue #XXX)</h3>
+ * <h3>String Value Handling</h3>
  *
- * <p>String values are stored directly without GZIP compression to prevent
- * corrupted String representations on cache hit from L2.
+ * <p>String values are serialized with explicit type information to ensure
+ * proper round-trip through L2 cache without type erasure.
  *
  * @see PostgresL2CacheStrategy
  */

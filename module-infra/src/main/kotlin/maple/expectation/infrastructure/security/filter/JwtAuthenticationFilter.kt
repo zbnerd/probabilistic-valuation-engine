@@ -30,7 +30,10 @@ import java.io.IOException
  * </ol>
  *
  * <h3>P0 Self-Like 방지</h3>
- * <p>모든 캐릭터 OCID를 myOcids에 포함하여 사용자가 자신의 어떤 캐릭터에도 좋아요를 누르지 못하게 합니다.
+ * <p>현재 로그인 캐릭터의 OCID를 myOcids에 포함하여 자신의 캐릭터에 좋아요를 누르지 못하게 합니다.
+ *
+ * <p><b>P0 제약사항:</b> 사용자가 여러 캐릭터를 소유한 경우 다른 캐릭터로 자신을 좋아요할 수 있는 취약점이 있습니다.
+ * game_character 테이블에 fingerprint 컬럼이 없어서 사용자가 소유한 모든 캐릭터를 식별할 수 없습니다.
  *
  * <h3>P1 accountId 정체성 제약사항</h3>
  * <p>accountId = fingerprint (API Key의 HMAC-SHA256 해시)를 사용합니다.
@@ -43,8 +46,12 @@ import java.io.IOException
  * <p>Bearer 토큰이 존재하지만 JWT 파싱/검증에 실패하면 더 이상 silently continue하지 않고
  * 즉시 401 Unauthorized 응답을 반환합니다.
  *
+ * <h3>P1 DIP 위반 수정</h3>
+ * <p>GameCharacterRepository(도메인 포트)에 직접 의존하는 것을 피하고 OcidResolutionService를 통해
+ * OCID를 조회하도록 수정했습니다.
+ *
  * @property jwtTokenProvider JWT 토큰 제공자
- * @property ocidResolutionService OCID 해결 서비스 (P0: 모든 캐릭터 OCID 조회)
+ * @property ocidResolutionService OCID 해결 서비스
  */
 @Component
 class JwtAuthenticationFilter(
@@ -110,34 +117,39 @@ class JwtAuthenticationFilter(
     }
 
     /**
-     * AuthenticatedUser 생성 (P0: 모든 캐릭터 OCID 포함)
+     * AuthenticatedUser 생성
      *
-     * <p>P0 수정: 이전 구현에서는 현재 로그인 캐릭터의 OCID만 myOcids에 포함했으나,
-     * 사용자가 여러 캐릭터를 소유한 경우 다른 캐릭터로 자신을 좋아요할 수 있는 취약점이 있었습니다.
-     * 이제 모든 캐릭터 OCID를 조회하여 myOcids에 포함시킵니다.
+     * <p>P0 Self-Like 방지: 현재 로그인 캐릭터의 OCID를 myOcids에 포함하여
+     * 자신의 캐릭터에 좋아요를 누르지 못하게 합니다.
      *
-     * <p>P1 제약사항: 현재 game_character 테이블에 fingerprint 컬럼이 없어서
-     * DB에 존재하는 모든 캐릭터 OCID를 조회합니다. 정확한 Self-Like 방지를 위해서는
-     * fingerprint 컬럼 추가가 필요합니다.
+     * <p><b>P0 제약사항:</b> 사용자가 여러 캐릭터를 소유한 경우 다른 캐릭터로 자신을 좋아요할 수 있는 취약점이 있습니다.
+     * game_character 테이블에 fingerprint 컬럼이 없어서 사용자가 소유한 모든 캐릭터를 식별할 수 없습니다.
+     *
+     * <p><b>TODO (P0):</b> game_character 테이블에 fingerprint 컬럼을 추가하여
+     * 해당 fingerprint를 가진 모든 캐릭터 OCID를 조회하도록 수정해야 합니다.
+     *
+     * <p>P1 accountId 정체성 제약사항: accountId = fingerprint (API Key의 HMAC-SHA256 해시)
+     * 동일한 Nexon 계정이라도 API Key가 다르면 다른 accountId로 인식되어 중복 좋아요가 가능합니다.
+     *
+     * <p><b>TODO (P1):</b> Nexon 계정 단위의 accountId를 생성하도록 수정 필요
      */
     private fun resolveAuthenticatedUser(jwt: maple.expectation.infrastructure.security.jwt.JwtPayload): AuthenticatedUser? {
         val userIgn = jwt.userIgn
         val fingerprint = jwt.fingerprint
 
-        // P0: 모든 캐릭터 OCID를 조회하여 Self-Like 방지
-        // TODO (P1): game_character 테이블에 fingerprint 컬럼 추가 후
-        //            해당 fingerprint를 가진 캐릭터만 조회하도록 수정 필요
-        val allOcids = ocidResolutionService.resolveAllOcids()
+        // 현재 로그인 캐릭터의 OCID만 조회 (P0 제약사항: fingerprint별 모든 캐릭터 조회 불가)
+        val myOcid = ocidResolutionService.resolveOcidOrNull(userIgn)
+        val myOcids = if (myOcid != null) setOf(myOcid) else emptySet()
 
-        // P1 제약사항: 현재는 모든 캐릭터를 myOcids에 포함
-        // TODO (P1): fingerprint별 캐릭터 매핑이 가능해지면 여기서 필터링 필요
-        val myOcids = allOcids
+        // TODO (P0): game_character 테이블에 fingerprint 컬럼 추가 후
+        //            해당 fingerprint를 가진 모든 캐릭터 OCID를 조회하도록 수정 필요
+        //            val myOcids = ocidResolutionService.resolveOcidsByFingerprint(fingerprint)
 
         // accountId = fingerprint (P1 제약사항: API Key별로 다른 accountId)
         // TODO (P1): Nexon 계정 단위의 accountId를 생성하도록 수정 필요
         val accountId = fingerprint
 
-        log.debug("[JWT] Resolved myOcids: count={}, accountId={}", myOcids.size, accountId)
+        log.debug("[JWT] Resolved myOcids: userIgn={}, ocid={}, accountId={}", userIgn, myOcid, accountId)
 
         return AuthenticatedUser(
             sessionId = jwt.sessionId,

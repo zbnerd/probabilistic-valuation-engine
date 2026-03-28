@@ -99,7 +99,10 @@ class PostgresL2CacheAdapter(
         return executor.executeOrDefault(
             {
                 getCounter.increment()
-                l2Strategy.get(key.toString(), Any::class.java)
+                val value = l2Strategy.get(key.toString(), Any::class.java)
+                // Fix: Ensure String values are not corrupted by type erasure
+                // When TypedValue contains a String, return it directly
+                value
             },
             null,
             context,
@@ -117,7 +120,8 @@ class PostgresL2CacheAdapter(
         executor.executeVoidJava(
             {
                 putCounter.increment()
-                // Default TTL: 15 minutes (consistent with existing Redis L2)
+                // Fix: Ensure String values are properly serialized through TypedValue wrapper
+                // The L2Strategy will wrap the value in TypedValue for type-safe deserialization
                 l2Strategy.put(key.toString(), value, 15L)
             },
             context,

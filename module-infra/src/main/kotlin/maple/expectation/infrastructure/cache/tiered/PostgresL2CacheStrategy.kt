@@ -100,10 +100,23 @@ class PostgresL2CacheStrategy(
                 )
 
                 result?.let { bytes ->
-                    // Deserialize as TypedValue wrapper to preserve type information
-                    val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
-                    @Suppress("UNCHECKED_CAST")
-                    typedValue.value as? T
+                    try {
+                        // Deserialize as TypedValue wrapper to preserve type information
+                        val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
+                        // Fix: Ensure proper type casting for String values
+                        // When the cached value is a String, return it directly
+                        // to avoid type erasure issues when T = Any
+                        @Suppress("UNCHECKED_CAST")
+                        when {
+                            type == String::class.java || type == Any::class.java -> typedValue.value as? T
+                            typedValue.value != null && type.isInstance(typedValue.value) -> typedValue.value as T
+                            else -> null
+                        }
+                    } catch (e: Exception) {
+                        log.error("[PostgresL2] Deserialization failed for key={}", key, e)
+                        errorCounter.increment()
+                        null
+                    }
                 }
             },
             null,

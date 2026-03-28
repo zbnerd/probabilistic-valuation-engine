@@ -89,6 +89,11 @@ public class LikeToggleService implements LikeTogglePort {
     /**
      * 좋아요 수 조회
      *
+     * <p><b>Eventual Consistency:</b> 이 메서드는 DB에서 직접 조회하므로
+     * 캐시 갱신 지연(~10ms)이 없어 가장 최신값을 반환합니다.
+     *
+     * <p>좋아요 토글 후 즉시 호출하면 트랜잭션 커밋 후의 최신값이 반환됩니다.
+     *
      * @param targetUserIgn 조회할 캐릭터 닉네임
      * @return 좋아요 수
      */

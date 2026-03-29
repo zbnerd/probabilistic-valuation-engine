@@ -6,8 +6,10 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepository
 import org.slf4j.LoggerFactory
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 
 /**
  * Character OCID Resolution Adapter (ADR-005, ADR-030)
@@ -64,6 +66,24 @@ class CharacterOcidAdapter(
         return executor.execute(
             { loadAllOcidsFromDb() },
             TaskContext.of("CharacterOcidAdapter", "ResolveAllOcids"),
+        )
+    }
+
+    @Cacheable(value = ["fingerprintOcidsCache"], key = "#fingerprint", unless = "#result.isEmpty()")
+    override fun resolveOcidsByFingerprint(fingerprint: String): Set<String> {
+        require(fingerprint.isNotBlank()) { "fingerprint must not be blank" }
+        return executor.execute(
+            { jpaRepository.findAllByFingerprint(fingerprint).mapNotNull { it.ocid }.toSet() },
+            TaskContext.of("CharacterOcidAdapter", "ResolveOcidsByFingerprint", fingerprint),
+        )
+    }
+
+    @CacheEvict(value = ["fingerprintOcidsCache"], key = "#fingerprint")
+    @Transactional("transactionManager")
+    override fun updateFingerprint(ocid: String, fingerprint: String, accountId: String): Int {
+        return executor.execute(
+            { jpaRepository.updateFingerprintByOcid(ocid, fingerprint, accountId) },
+            TaskContext.of("CharacterOcidAdapter", "UpdateFingerprint", ocid),
         )
     }
 

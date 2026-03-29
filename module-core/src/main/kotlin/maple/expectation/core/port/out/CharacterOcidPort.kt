@@ -44,14 +44,30 @@ interface CharacterOcidPort {
      *
      * <p><b>성능 고려사항:</b> 결과 셋이 클 수 있으므로 호출 시점에 주의가 필요합니다.
      *
-     * <p><b>제약사항:</b> 현재 구조에서는 `game_character` 테이블이 사용자의 API Key(fingerprint)를
-     * 저장하지 않습니다. 따라서 이 메서드는 DB에 존재하는 모든 캐릭터를 반환합니다.
-     *
-     * <p><b>TODO (P1):</b> 정확한 Self-Like 방지를 위해 `game_character` 테이블에
-     * `fingerprint` 컬럼을 추가하여 사용자가 소유한 캐릭터만 정확히 식별할 수 있어야 합니다.
-     * 현재는 모든 캐릭터를 조회한 후 애플리케이션 레벨에서 필터링해야 하는 제약이 있습니다.
-     *
      * @return 모든 캐릭터의 (IGN → OCID) 매핑
      */
     fun resolveAllOcids(): Map<String, String>
+
+    /**
+     * Fingerprint 기반 OCID 해석 (#662)
+     *
+     * <p>동일 fingerprint를 가진 모든 캐릭터의 OCID를 반환합니다.
+     * Self-like 방지를 위해 JWT filter에서 사용합니다.
+     *
+     * @param fingerprint API Key의 HMAC-SHA256 해시
+     * @return 해당 fingerprint를 가진 캐릭터의 OCID 집합
+     */
+    fun resolveOcidsByFingerprint(fingerprint: String): Set<String>
+
+    /**
+     * Lazy backfill: fingerprint 미설정 캐릭터에 stamp (#662)
+     *
+     * <p>fingerprint가 NULL인 캐릭터에만 업데이트 (덮어쓰기 방지).
+     *
+     * @param ocid 캐릭터 OCID
+     * @param fingerprint API Key의 HMAC-SHA256 해시
+     * @param accountId 계정 ID (= fingerprint)
+     * @return 업데이트된 row 수 (0이면 이미 설정됨)
+     */
+    fun updateFingerprint(ocid: String, fingerprint: String, accountId: String): Int
 }

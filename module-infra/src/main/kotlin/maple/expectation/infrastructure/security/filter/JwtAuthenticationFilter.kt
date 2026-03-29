@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.infrastructure.security.AuthenticatedUser
+import org.springframework.dao.DuplicateKeyException
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.slf4j.LoggerFactory
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
@@ -31,18 +32,14 @@ import java.io.IOException
  *   <li>SecurityContext 설정
  * </ol>
  *
- * <h3>P0 Self-Like 방지</h3>
- * <p>현재 로그인 캐릭터의 OCID를 myOcids에 포함하여 자신의 캐릭터에 좋아요를 누르지 못하게 합니다.
+ * <h3>Self-Like 방지 (#662 해결)</h3>
+ * <p>fingerprint 기반으로 사용자가 소유한 모든 캐릭터 OCID를 myOcids에 포함하여
+ * 자신의 캐릭터에 좋아요를 누르지 못하게 합니다.
+ * Lazy backfill로 fingerprint 미배정 캐릭터를 최초 인증 시 stamp합니다.
  *
- * <p><b>P0 제약사항:</b> 사용자가 여러 캐릭터를 소유한 경우 다른 캐릭터로 자신을 좋아요할 수 있는 취약점이 있습니다.
- * game_character 테이블에 fingerprint 컬럼이 없어서 사용자가 소유한 모든 캐릭터를 식별할 수 없습니다.
- *
- * <h3>P1 accountId 정체성 제약사항</h3>
- * <p>accountId = fingerprint (API Key의 HMAC-SHA256 해시)를 사용합니다.
- * 동일한 Nexon 계정이라도 API Key가 다르면 다른 accountId로 인식되어 중복 좋아요가 가능합니다.
- *
- * <p><b>TODO (P1):</b> game_character 테이블에 fingerprint 컬럼을 추가하여
- * Nexon 계정 단위의 정확한 accountId를 생성해야 합니다. 현재는 API Key 단위로 식별하는 제약이 있습니다.
+ * <h3>accountId 정체성</h3>
+ * <p>accountId = fingerprint (API Key HMAC-SHA256 해시).
+ * 동일 API Key = 동일 계정으로 인식. ADR-031 참조.
  *
  * <h3>P1 Invalid Token Silent Pass-Through 수정</h3>
  * <p>Bearer 토큰이 존재하지만 JWT 파싱/검증에 실패하면 더 이상 silently continue하지 않고
@@ -128,40 +125,51 @@ class JwtAuthenticationFilter(
     /**
      * AuthenticatedUser 생성
      *
-     * <p>P0 Self-Like 방지: 현재 로그인 캐릭터의 OCID를 myOcids에 포함하여
-     * 자신의 캐릭터에 좋아요를 누르지 못하게 합니다.
+     * <p>Self-Like 방지 (#662 해결): fingerprint 기반으로 사용자가 소유한 모든 캐릭터 OCID를
+     * myOcids에 포함하여 자신의 캐릭터에 좋아요를 누르지 못하게 합니다.
      *
-     * <p><b>P0 제약사항:</b> 사용자가 여러 캐릭터를 소유한 경우 다른 캐릭터로 자신을 좋아요할 수 있는 취약점이 있습니다.
-     * game_character 테이블에 fingerprint 컬럼이 없어서 사용자가 소유한 모든 캐릭터를 식별할 수 없습니다.
+     * <p>accountId 정체성: accountId = fingerprint (API Key HMAC-SHA256 해시).
+     * 동일 API Key = 동일 계정으로 인식. ADR-031 참조.
      *
-     * <p><b>TODO (P0):</b> game_character 테이블에 fingerprint 컬럼을 추가하여
-     * 해당 fingerprint를 가진 모든 캐릭터 OCID를 조회하도록 수정해야 합니다.
-     *
-     * <p>P1 accountId 정체성 제약사항: accountId = fingerprint (API Key의 HMAC-SHA256 해시)
-     * 동일한 Nexon 계정이라도 API Key가 다르면 다른 accountId로 인식되어 중복 좋아요가 가능합니다.
-     *
-     * <p><b>TODO (P1):</b> Nexon 계정 단위의 accountId를 생성하도록 수정 필요
+     * <p>Lazy backfill: fingerprint 미배정 캐릭터는 최초 인증 시 stamp (idempotent).
      */
     private fun resolveAuthenticatedUser(jwt: maple.expectation.infrastructure.security.jwt.JwtPayload): AuthenticatedUser? {
         val userIgn = jwt.userIgn
         val fingerprint = jwt.fingerprint
 
-        // 현재 로그인 캐릭터의 OCID만 조회 (P0 제약사항: fingerprint별 모든 캐릭터 조회 불가)
-        val myOcid = characterOcidPort.resolveOcid(userIgn)
-        if (myOcid == null) {
-            log.debug("[JWT] OCID resolution returned null for userIgn={}, self-like prevention may be incomplete", userIgn)
+        // #662: fingerprint 기반 모든 OCID 조회
+        val fingerprintOcids = if (fingerprint.isNotBlank()) {
+            characterOcidPort.resolveOcidsByFingerprint(fingerprint)
+        } else {
+            emptySet()
         }
-        val myOcids = if (myOcid != null) setOf(myOcid) else emptySet()
 
-        // TODO (P0): game_character 테이블에 fingerprint 컬럼 추가 후
-        //            해당 fingerprint를 가진 모든 캐릭터 OCID를 조회하도록 수정 필요
-        //            val myOcids = ocidResolutionService.resolveOcidsByFingerprint(fingerprint)
+        // 현재 캐릭터 OCID (fingerprint 미배정 경우 fallback)
+        val myOcid = if (userIgn.isNotBlank()) {
+            characterOcidPort.resolveOcid(userIgn)
+        } else {
+            null
+        }
+        val allMyOcids = if (myOcid != null) fingerprintOcids + myOcid else fingerprintOcids
 
-        // accountId = fingerprint (P1 제약사항: API Key별로 다른 accountId)
-        // TODO (P1): Nexon 계정 단위의 accountId를 생성하도록 수정 필요
+        // Defensive: 기존 캐릭터가 fingerprint에 매핑되지 않은 경우 모니터링
+        if (allMyOcids.isEmpty() && myOcid != null) {
+            log.warn("[JWT] No OCIDs resolved for fingerprint despite existing character. Self-like protection may be incomplete: userIgn={}", userIgn)
+        }
+
+        // Lazy backfill: fingerprint NULL인 캐릭터에만 stamp (idempotent)
+        if (myOcid != null && !fingerprintOcids.contains(myOcid) && fingerprint.isNotBlank()) {
+            try {
+                characterOcidPort.updateFingerprint(myOcid, fingerprint, fingerprint)
+            } catch (e: DuplicateKeyException) {
+                // uk_account_user_ign 위반: 다른 계정이 이미 해당 조합을 소유
+                log.warn("[JWT] Unique index violation during backfill. Character already registered by different account.")
+            }
+        }
+
         val accountId = fingerprint
 
-        log.debug("[JWT] Resolved myOcids: userIgn={}, ocid={}, accountId={}", userIgn, myOcid, accountId)
+        log.debug("[JWT] Resolved myOcids: userIgn={}, ocidCount={}, accountId={}", userIgn, allMyOcids.size, accountId)
 
         return AuthenticatedUser(
             sessionId = jwt.sessionId,
@@ -169,7 +177,7 @@ class JwtAuthenticationFilter(
             userIgn = userIgn,
             accountId = accountId,
             apiKey = "",
-            myOcids = myOcids,
+            myOcids = allMyOcids,
             role = jwt.role,
         )
     }

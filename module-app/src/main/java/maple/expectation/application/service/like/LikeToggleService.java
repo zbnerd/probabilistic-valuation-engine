@@ -8,7 +8,6 @@ import maple.expectation.core.domain.model.like.LikeToggleWithCount;
 import maple.expectation.core.port.inbound.LikeTogglePort;
 import maple.expectation.core.port.out.CharacterOcidPort;
 import maple.expectation.domain.repository.CharacterLikeRepository;
-import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.exception.SelfLikeNotAllowedException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
@@ -34,7 +33,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class LikeToggleService implements LikeTogglePort {
 
     private final CharacterLikeRepository characterLikeRepository;
-    private final GameCharacterRepository gameCharacterRepository;
     private final CharacterOcidPort characterOcidPort;
     private final LogicExecutor executor;
 
@@ -135,7 +133,6 @@ public class LikeToggleService implements LikeTogglePort {
     private LikeToggleResult likeCharacter(String targetOcid, String targetUserIgn, String likerAccountId) {
         int inserted = characterLikeRepository.insertIfAbsent(targetOcid, likerAccountId);
         if (inserted > 0) {
-            gameCharacterRepository.incrementLikeCount(targetUserIgn, 1);
             log.info("Like added: target={}, liker={}", targetUserIgn, maskId(likerAccountId));
         } else {
             log.debug("Like duplicate (concurrent): target={}", targetUserIgn);
@@ -146,7 +143,6 @@ public class LikeToggleService implements LikeTogglePort {
     private LikeToggleResult unlikeCharacter(String targetOcid, String targetUserIgn, String likerAccountId) {
         long deleted = characterLikeRepository.deleteByTargetOcidAndLikerAccountId(targetOcid, likerAccountId);
         if (deleted > 0) {
-            gameCharacterRepository.incrementLikeCount(targetUserIgn, -1);
             log.info("Like removed: target={}", targetUserIgn);
         } else {
             log.debug("Like already removed (concurrent): target={}", targetUserIgn);

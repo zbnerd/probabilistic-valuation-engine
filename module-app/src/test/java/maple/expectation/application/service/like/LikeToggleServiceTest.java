@@ -54,8 +54,6 @@ class LikeToggleServiceTest {
 
   @Mock private maple.expectation.domain.repository.CharacterLikeRepository characterLikeRepository;
 
-  @Mock private maple.expectation.domain.repository.GameCharacterRepository gameCharacterRepository;
-
   @Mock private maple.expectation.core.port.out.CharacterOcidPort characterOcidPort;
 
   private maple.expectation.infrastructure.executor.LogicExecutor executor;
@@ -68,7 +66,7 @@ class LikeToggleServiceTest {
 
     likeToggleService =
         new LikeToggleService(
-            characterLikeRepository, gameCharacterRepository, characterOcidPort, executor);
+            characterLikeRepository, characterOcidPort, executor);
 
     // Default mock behaviors
     lenient().when(characterOcidPort.resolveOcid(TARGET_IGN)).thenReturn(TARGET_OCID);
@@ -107,7 +105,6 @@ class LikeToggleServiceTest {
     // then
     assertThat(result).isEqualTo(LikeToggleResult.LIKED);
     verify(characterLikeRepository).insertIfAbsent(TARGET_OCID, LIKER_ACCOUNT_ID);
-    verify(gameCharacterRepository).incrementLikeCount(TARGET_IGN, 1);
   }
 
   @Test
@@ -140,7 +137,6 @@ class LikeToggleServiceTest {
     // then
     assertThat(result).isEqualTo(LikeToggleResult.UNLIKED);
     verify(characterLikeRepository).deleteByTargetOcidAndLikerAccountId(TARGET_OCID, LIKER_ACCOUNT_ID);
-    verify(gameCharacterRepository).incrementLikeCount(TARGET_IGN, -1);
   }
 
   @Test

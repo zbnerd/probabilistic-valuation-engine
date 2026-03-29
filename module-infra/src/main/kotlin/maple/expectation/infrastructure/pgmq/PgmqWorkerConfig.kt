@@ -36,6 +36,12 @@ class PgmqWorkerConfig {
     /** Nexon Collector 설정 */
     var nexonCollector: WorkerSettings = WorkerSettings(enabled = true)
 
+    /** Expectation Calc High Priority Worker 설정 */
+    var expectationCalcHigh: WorkerSettings = WorkerSettings()
+
+    /** Expectation Calc Low Priority Worker 설정 */
+    var expectationCalcLow: WorkerSettings = WorkerSettings()
+
     data class CommonSettings(
         /** 폴링 간격 (ms) */
         var pollingIntervalMs: Long = 1000,

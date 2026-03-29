@@ -2,9 +2,13 @@ package maple.expectation.infrastructure.batch
 
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.buffer.ExpectationWriteTask
 import maple.expectation.infrastructure.config.MicroBatchWriterProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.executor.function.ThrowingRunnable
+import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import maple.expectation.infrastructure.persistence.repository.ExpectationBatchRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
@@ -22,7 +26,7 @@ import java.util.concurrent.TimeUnit
  *
  * <h3>Test Coverage</h3>
  * <ul>
- *   <li>Deduplication: 2 tasks with same key → buffer size = 1</li>
+ *   <li>Deduplication: 2 tasks with same key -> buffer size = 1</li>
  *   <li>Size-trigger flush: Buffer reaches flushSize threshold</li>
  *   <li>Time-trigger flush: Flush even when buffer size < flushSize</li>
  * </ul>
@@ -34,8 +38,43 @@ class DedupeMicroBatchWriterTest {
     @Mock
     private lateinit var repository: ExpectationBatchRepository
 
-    @Mock
-    private lateinit var executor: LogicExecutor
+    /**
+     * Simple pass-through LogicExecutor that directly invokes lambdas.
+     * Mockito @Mock would swallow executeVoid calls, preventing flush metrics from being recorded.
+     */
+    private val executor: LogicExecutor = object : LogicExecutor {
+        override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T =
+            try { task.get() } catch (e: Throwable) { throw e as RuntimeException }
+
+        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T =
+            try { task.get() } catch (_: Throwable) { defaultValue }
+
+        override fun <T> executeWithTranslation(task: ThrowingSupplier<T>, customTranslator: ExceptionTranslator, context: TaskContext): T =
+            try { task.get() } catch (e: Throwable) { throw customTranslator.translate(e, context) as RuntimeException }
+
+        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T =
+            try { task.get() } catch (e: Throwable) { fallback(e) }
+
+        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: ExceptionTranslator, context: TaskContext): T =
+            try { task.get() } catch (e: Throwable) { throw fallback.translate(e, context) as RuntimeException }
+
+        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T =
+            try { task.get() } catch (e: Throwable) { recovery(e) }
+
+        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: ExceptionTranslator, context: TaskContext): T =
+            try { task.get() } catch (e: Throwable) { throw recovery.translate(e, context) as RuntimeException }
+
+        override fun executeVoid(task: ThrowingRunnable, context: TaskContext) {
+            try { task.run() } catch (e: Throwable) { throw e as RuntimeException }
+        }
+
+        override fun executeVoidJava(task: Runnable, context: TaskContext) {
+            task.run()
+        }
+
+        override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T =
+            try { task.get() } finally { finallyBlock.run() }
+    }
 
     private lateinit var meterRegistry: MeterRegistry
     private lateinit var properties: MicroBatchWriterProperties
@@ -53,7 +92,6 @@ class DedupeMicroBatchWriterTest {
             flushIntervalMs = 100,  // 100ms for testing
         )
 
-        // Writer will be created with test-specific properties
         writer = DedupeMicroBatchWriter(
             properties,
             repository,
@@ -85,11 +123,8 @@ class DedupeMicroBatchWriterTest {
         val dedupeCount = meterRegistry.counter("micro_batch_dedupe").count()
         assertThat(dedupeCount).isGreaterThan(0.0)
 
-        // Verify flush was called with only 1 task (task2 replaced task1)
-        // Wait a bit for async flush
+        // Wait a bit for any async operations
         Thread.sleep(200)
-        // Note: In actual test, we would verify repository.batchUpsert() was called
-        // Since executor is mocked, we can't easily verify the exact call without more setup
     }
 
     @Test
@@ -104,7 +139,6 @@ class DedupeMicroBatchWriterTest {
         tasks.forEach { writer.offer(it) }
 
         // Then: Flush should be triggered (size-trigger)
-        // Wait for async flush
         Thread.sleep(200)
 
         val flushCount = meterRegistry.counter("micro_batch_flush").count()
@@ -153,7 +187,6 @@ class DedupeMicroBatchWriterTest {
 
         val bufferSize = meterRegistry.get("micro_batch_buffer_size").gauge()
         assertThat(bufferSize).isNotNull
-        // Note: Gauge value may be 0 if flush already occurred, so we just check it exists
     }
 
     @Test

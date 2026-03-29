@@ -78,6 +78,10 @@ class InMemoryLikeBufferStorage(
 
     override fun getType(): LikeBufferStrategy.StrategyType = LikeBufferStrategy.StrategyType.IN_MEMORY
 
+    override fun restoreEntries(entries: Map<String, Long>) {
+        entries.forEach { (userIgn, delta) -> getCounter(userIgn).addAndGet(delta) }
+    }
+
     /**
      * 카운터 조회 (없으면 생성)
      */

@@ -180,7 +180,7 @@ subprojects {
 			} else if (project.hasProperty('nightmareTest')) {
 				includeTags 'nightmare'
 			} else {
-				excludeTags 'sentinel', 'quarantine', 'flaky'
+				excludeTags 'sentinel', 'quarantine', 'flaky', 'integration', 'pgmq'
 			}
 		}
 

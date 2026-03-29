@@ -1,14 +1,22 @@
 package maple.expectation.application.service.expectation.queue;
 
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import maple.expectation.infrastructure.pgmq.ExpectationCalcMessage;
+import maple.expectation.infrastructure.pgmq.PgmqClient;
+import maple.expectation.infrastructure.worker.ExpectationCalcLowWorker;
+import maple.expectation.infrastructure.worker.ExpectationCalcWorker;
 import org.springframework.stereotype.Component;
 
 /**
- * V5 CQRS: Priority Queue for Expectation Calculation
+ * V5 CQRS: Priority Queue for Expectation Calculation (Issue #634 PGMQ migration)
+ *
+ * <h3>PGMQ Migration</h3>
+ *
+ * <p>Replaced in-memory {@code LinkedBlockingQueue} with PGMQ-backed durable queues.
+ * Message consumption is handled by {@link ExpectationCalcWorker} (HIGH) and
+ * {@link ExpectationCalcLowWorker} (LOW) via the {@code PgmqWorker} abstraction.
  *
  * <h3>Priority Strategy</h3>
  *
@@ -17,26 +25,9 @@ import org.springframework.stereotype.Component;
  *   <li>LOW: Batch/scheduled updates (background processing)
  * </ul>
  *
- * <h3>ADR-038 Fix: Separate Bounded Queues</h3>
- *
- * <p>Prior to this fix, the queue used a single {@code PriorityBlockingQueue} which:
- *
- * <ul>
- *   <li>Was unbounded (memory exhaustion risk)
- *   <li>Allowed LOW priority tasks to be picked up by HIGH priority workers (isolation failure)
- * </ul>
- *
- * <p>Now uses separate {@link LinkedBlockingQueue} instances per priority with bounded capacity:
- *
- * <ul>
- *   <li>highPriorityQueue: capacity 1,000 (bounded, protects user requests)
- *   <li>lowPriorityQueue: capacity 10,000 (bounded, protects memory)
- *   <li>Complete worker isolation: HIGH workers only process HIGH tasks
- * </ul>
- *
  * <h3>Backpressure</h3>
  *
- * <p>When HIGH priority queue is full, LOW priority tasks are rejected to protect user experience.
+ * <p>When a queue exceeds its capacity limit, new tasks are rejected.
  */
 @Slf4j
 @Component
@@ -45,23 +36,19 @@ public class ExpectationCalculationQueue {
   private static final int MAX_QUEUE_SIZE = 10_000;
   private static final int HIGH_PRIORITY_CAPACITY = 1_000;
 
-  // ADR-038 Fix: Separate bounded queues per priority
-  private final LinkedBlockingQueue<ExpectationCalculationTask> highPriorityQueue;
-  private final LinkedBlockingQueue<ExpectationCalculationTask> lowPriorityQueue;
+  private final PgmqClient pgmqClient;
   private final LogicExecutor executor;
 
-  public ExpectationCalculationQueue(LogicExecutor executor) {
+  public ExpectationCalculationQueue(PgmqClient pgmqClient, LogicExecutor executor) {
+    this.pgmqClient = pgmqClient;
     this.executor = executor;
-    // ADR-038 Fix: Bounded queues prevent memory exhaustion
-    this.highPriorityQueue = new LinkedBlockingQueue<>(HIGH_PRIORITY_CAPACITY);
-    this.lowPriorityQueue = new LinkedBlockingQueue<>(MAX_QUEUE_SIZE);
   }
 
   /**
-   * Offer task to appropriate priority queue with backpressure control.
+   * Offer task to appropriate PGMQ queue with backpressure control.
    *
-   * <p>ADR-038 Fix: Routes tasks to separate queues based on priority. When HIGH priority queue is
-   * full, LOW priority tasks are rejected to protect user experience.
+   * <p>Routes tasks to separate PGMQ queues based on priority. Backpressure is applied
+   * when the queue exceeds its capacity limit.
    *
    * @return true if queued, false if rejected (backpressure)
    */
@@ -70,28 +57,28 @@ public class ExpectationCalculationQueue {
 
     return executor.executeOrDefault(
         () -> {
-          boolean added =
-              switch (task.getPriority()) {
-                case HIGH -> highPriorityQueue.offer(task);
-                case LOW -> {
-                  // ADR-038 Fix: If high priority queue is full, reject low priority
-                  if (highPriorityQueue.remainingCapacity() == 0) {
-                    log.warn(
-                        "[Queue] High priority queue full, rejecting LOW priority: {}",
-                        task.getUserIgn());
-                    yield false;
-                  }
-                  yield lowPriorityQueue.offer(task);
-                }
-              };
+          String queueName = resolveQueueName(task.getPriority());
+          int maxSize = resolveMaxSize(task.getPriority());
 
-          if (!added) {
+          long queueLength = pgmqClient.queueLength(queueName);
+          if (queueLength >= maxSize) {
             log.warn(
                 "[Queue] Queue full, rejecting: priority={}, userIgn={}",
                 task.getPriority(),
                 task.getUserIgn());
+            return false;
           }
-          return added;
+
+          ExpectationCalcMessage message =
+              new ExpectationCalcMessage(
+                  task.getUserIgn(), task.isForceRecalculation());
+          pgmqClient.send(queueName, message);
+
+          log.debug(
+              "[Queue] Task queued: priority={}, userIgn={}",
+              task.getPriority(),
+              task.getUserIgn());
+          return true;
         },
         false,
         context);
@@ -116,73 +103,74 @@ public class ExpectationCalculationQueue {
   }
 
   /**
-   * Poll next task from the specified priority queue (blocking).
+   * Poll next task from the specified priority queue.
    *
-   * <p>ADR-038 Fix: Each worker polls from its designated queue, ensuring complete isolation.
+   * <p>DEPRECATED: PGMQ workers handle message consumption. This method throws
+   * UnsupportedOperationException.
    *
-   * @param priority The priority queue to poll from
-   * @return task from the specified queue
-   * @throws InterruptedException if interrupted while waiting
+   * @throws UnsupportedOperationException always - PGMQ workers handle consumption
    */
   public ExpectationCalculationTask poll(QueuePriority priority) throws InterruptedException {
-    return switch (priority) {
-      case HIGH -> highPriorityQueue.take();
-      case LOW -> lowPriorityQueue.take();
-    };
+    throw new UnsupportedOperationException(
+        "poll() is no longer supported. PGMQ workers (ExpectationCalcWorker, ExpectationCalcLowWorker) handle message consumption.");
   }
 
   /**
-   * Poll next task with timeout (non-blocking when timeout expires).
+   * Poll next task with timeout.
    *
-   * <p>Uses LogicExecutor.executeOrDefault() for Section 12 compliance. InterruptedException is
-   * caught at IO boundary, thread is restored, and null is returned.
+   * <p>DEPRECATED: PGMQ workers handle message consumption. This method throws
+   * UnsupportedOperationException.
    *
-   * <p>ADR-038 Fix: Polls from the specified priority queue only.
-   *
-   * @param priority The priority queue to poll from
-   * @param timeoutMs timeout in milliseconds
-   * @return task or null if timeout or interrupted
+   * @throws UnsupportedOperationException always - PGMQ workers handle consumption
    */
   public ExpectationCalculationTask poll(QueuePriority priority, long timeoutMs) {
-    return executor.executeOrDefault(
-        () -> {
-          try {
-            return switch (priority) {
-              case HIGH -> highPriorityQueue.poll(timeoutMs, TimeUnit.MILLISECONDS);
-              case LOW -> lowPriorityQueue.poll(timeoutMs, TimeUnit.MILLISECONDS);
-            };
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.info("[Queue] Poll interrupted for priority {}, returning null", priority);
-            return null;
-          }
-        },
-        null,
-        TaskContext.of("Queue", "PollWithTimeout", priority.name()));
+    throw new UnsupportedOperationException(
+        "poll() is no longer supported. PGMQ workers (ExpectationCalcWorker, ExpectationCalcLowWorker) handle message consumption.");
   }
 
-  /** Get total queue size (both priorities). */
+  /** Get total queue size (both priorities) from PGMQ. */
   public int size() {
-    return highPriorityQueue.size() + lowPriorityQueue.size();
+    return getHighPriorityCount() + getLowPriorityCount();
   }
 
-  /** Get high priority queue size. */
+  /** Get high priority queue size from PGMQ. */
   public int getHighPriorityCount() {
-    return highPriorityQueue.size();
+    TaskContext context = TaskContext.of("Queue", "HighPriorityCount", ExpectationCalcWorker.QUEUE_NAME);
+    return executor.executeOrDefault(
+        () -> Math.toIntExact(pgmqClient.queueLength(ExpectationCalcWorker.QUEUE_NAME)),
+        0,
+        context);
   }
 
-  /** Get low priority queue size. */
+  /** Get low priority queue size from PGMQ. */
   public int getLowPriorityCount() {
-    return lowPriorityQueue.size();
+    TaskContext context = TaskContext.of("Queue", "LowPriorityCount", ExpectationCalcLowWorker.QUEUE_NAME);
+    return executor.executeOrDefault(
+        () -> Math.toIntExact(pgmqClient.queueLength(ExpectationCalcLowWorker.QUEUE_NAME)),
+        0,
+        context);
   }
 
   /**
    * Mark task as completed.
    *
-   * <p>ADR-038 Fix: Since we now use separate queues, this method is kept for compatibility but
-   * doesn't need to decrement counters (the queues themselves track size).
+   * <p>DEPRECATED: PGMQ workers handle archiving on success. This method is a no-op.
    */
   public void complete(ExpectationCalculationTask task) {
-    task.setCompletedAt(java.time.Instant.now());
+    // No-op: PGMQ workers handle archiving on successful processing
+  }
+
+  private String resolveQueueName(QueuePriority priority) {
+    return switch (priority) {
+      case HIGH -> ExpectationCalcWorker.QUEUE_NAME;
+      case LOW -> ExpectationCalcLowWorker.QUEUE_NAME;
+    };
+  }
+
+  private int resolveMaxSize(QueuePriority priority) {
+    return switch (priority) {
+      case HIGH -> HIGH_PRIORITY_CAPACITY;
+      case LOW -> MAX_QUEUE_SIZE;
+    };
   }
 }

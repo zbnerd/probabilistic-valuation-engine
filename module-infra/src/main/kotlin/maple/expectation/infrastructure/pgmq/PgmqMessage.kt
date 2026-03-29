@@ -136,3 +136,16 @@ data class NexonCollectionRequest(
     val userIgn: String,
     val requestedAt: String,
 )
+
+/**
+ * 기대값 계산 요청 메시지 페이로드 (Issue #634)
+ *
+ * <p>expectation_calc_high / expectation_calc_low 큐로 발행
+ *
+ * @param userIgn 캐릭터 IGN
+ * @param forceRecalculation 강제 재계산 여부
+ */
+data class ExpectationCalcMessage(
+    val userIgn: String,
+    val forceRecalculation: Boolean,
+)

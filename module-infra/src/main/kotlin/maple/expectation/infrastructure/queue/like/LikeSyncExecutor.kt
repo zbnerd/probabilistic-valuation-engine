@@ -1,5 +1,7 @@
 package maple.expectation.infrastructure.queue.like
 
+import java.util.List
+import maple.expectation.core.port.out.LikeBufferStrategy
 import maple.expectation.error.exception.LikeSyncCircuitOpenException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -13,7 +15,9 @@ import org.springframework.stereotype.Component
  */
 @Deprecated("#664: DB Trigger handles like_count atomicity")
 @Component
-open class LikeSyncExecutor {
+open class LikeSyncExecutor(
+    private val bufferStrategy: LikeBufferStrategy,
+) {
 
     companion object {
         private val log = LoggerFactory.getLogger(LikeSyncExecutor::class.java)
@@ -38,14 +42,13 @@ open class LikeSyncExecutor {
 
     /**
      * CircuitBreaker Fallback (서킷 오픈 시)
+     *
+     * Issue #635: 버퍼 복원 후 throw (데이터 유실 방지)
      */
     @SuppressWarnings("unused") // CircuitBreaker fallback으로 사용됨
     fun batchFallback(entries: List<Map.Entry<String, Long>>, t: Throwable) {
-        log.warn(
-            "[LikeSync] Circuit OPEN, batch skipped ({} entries): {}",
-            entries.size,
-            t.message,
-        )
+        log.warn("[LikeSync] Circuit OPEN, restoring {} entries to buffer", entries.size)
+        bufferStrategy.restoreEntries(entries.associate { it.key to it.value })
         throw LikeSyncCircuitOpenException(t)
     }
 }

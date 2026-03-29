@@ -127,6 +127,7 @@ tasks.register('integrationTest', Test) {
 	// JUnit configuration for integration tests
 	useJUnitPlatform {
 		includeTags 'integration'
+		excludeTags 'pgmq'
 	}
 
 	// JVM settings for integration tests

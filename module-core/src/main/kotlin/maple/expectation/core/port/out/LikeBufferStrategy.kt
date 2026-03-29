@@ -72,6 +72,14 @@ interface LikeBufferStrategy {
      */
     fun getType(): StrategyType
 
+    /**
+     * Restore entries that were buffered (for recovery after failed sync)
+     * Default: re-increment each entry (safe for implementations that don't override)
+     */
+    fun restoreEntries(entries: Map<String, Long>) {
+        entries.forEach { (userIgn, delta) -> increment(userIgn, delta) }
+    }
+
     /** Strategy type enum */
     enum class StrategyType {
         IN_MEMORY,

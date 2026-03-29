@@ -13,6 +13,16 @@ pgmq:
       polling-interval-ms: 1000
       batch-size: 10
       max-retries: 3
+    expectation-calc-high:
+      enabled: true
+      polling-interval-ms: 100
+      batch-size: 10
+      max-retries: 3
+    expectation-calc-low:
+      enabled: true
+      polling-interval-ms: 500
+      batch-size: 50
+      max-retries: 3
 
 # PostgreSQL connection pool for scale-out
 spring:

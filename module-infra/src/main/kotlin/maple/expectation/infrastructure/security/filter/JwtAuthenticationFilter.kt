@@ -37,9 +37,10 @@ import java.io.IOException
  * 자신의 캐릭터에 좋아요를 누르지 못하게 합니다.
  * Lazy backfill로 fingerprint 미배정 캐릭터를 최초 인증 시 stamp합니다.
  *
- * <h3>accountId 정체성</h3>
- * <p>accountId = fingerprint (API Key HMAC-SHA256 해시).
- * 동일 API Key = 동일 계정으로 인식. ADR-031 참조.
+ * <h3>accountId 정체성 (#667)</h3>
+ * <p>accountId = fingerprint = Nexon account_id.
+ * 동일 Nexon 계정의 다른 API Key라도 동일 account_id 반환.
+ * 1 계정 = 1 좋아요, 동일 계정 내 캐릭터끼리 좋아요 불가.
  *
  * <h3>P1 Invalid Token Silent Pass-Through 수정</h3>
  * <p>Bearer 토큰이 존재하지만 JWT 파싱/검증에 실패하면 더 이상 silently continue하지 않고
@@ -128,8 +129,8 @@ class JwtAuthenticationFilter(
      * <p>Self-Like 방지 (#662 해결): fingerprint 기반으로 사용자가 소유한 모든 캐릭터 OCID를
      * myOcids에 포함하여 자신의 캐릭터에 좋아요를 누르지 못하게 합니다.
      *
-     * <p>accountId 정체성: accountId = fingerprint (API Key HMAC-SHA256 해시).
-     * 동일 API Key = 동일 계정으로 인식. ADR-031 참조.
+     * <p>accountId 정체성 (#667): accountId = fingerprint = Nexon account_id.
+     * 동일 Nexon 계정 = 동일 account_id. API Key 무관.
      *
      * <p>Lazy backfill: fingerprint 미배정 캐릭터는 최초 인증 시 stamp (idempotent).
      */

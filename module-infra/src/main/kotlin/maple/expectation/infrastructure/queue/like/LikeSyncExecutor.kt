@@ -2,10 +2,8 @@ package maple.expectation.infrastructure.queue.like
 
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import java.util.List
-import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.error.exception.LikeSyncCircuitOpenException
 import org.slf4j.LoggerFactory
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Propagation
@@ -20,10 +18,7 @@ import org.springframework.transaction.annotation.Transactional
  */
 @Deprecated("#664: DB Trigger handles like_count atomicity")
 @Component
-open class LikeSyncExecutor(
-    private val gameCharacterRepository: GameCharacterRepository,
-    private val jdbcTemplate: JdbcTemplate,
-) {
+open class LikeSyncExecutor() {
 
     companion object {
         private val log = LoggerFactory.getLogger(LikeSyncExecutor::class.java)

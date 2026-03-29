@@ -32,18 +32,14 @@ import java.io.IOException
  *   <li>SecurityContext 설정
  * </ol>
  *
- * <h3>P0 Self-Like 방지</h3>
- * <p>현재 로그인 캐릭터의 OCID를 myOcids에 포함하여 자신의 캐릭터에 좋아요를 누르지 못하게 합니다.
+ * <h3>Self-Like 방지 (#662 해결)</h3>
+ * <p>fingerprint 기반으로 사용자가 소유한 모든 캐릭터 OCID를 myOcids에 포함하여
+ * 자신의 캐릭터에 좋아요를 누르지 못하게 합니다.
+ * Lazy backfill로 fingerprint 미배정 캐릭터를 최초 인증 시 stamp합니다.
  *
- * <p><b>P0 제약사항:</b> 사용자가 여러 캐릭터를 소유한 경우 다른 캐릭터로 자신을 좋아요할 수 있는 취약점이 있습니다.
- * game_character 테이블에 fingerprint 컬럼이 없어서 사용자가 소유한 모든 캐릭터를 식별할 수 없습니다.
- *
- * <h3>P1 accountId 정체성 제약사항</h3>
- * <p>accountId = fingerprint (API Key의 HMAC-SHA256 해시)를 사용합니다.
- * 동일한 Nexon 계정이라도 API Key가 다르면 다른 accountId로 인식되어 중복 좋아요가 가능합니다.
- *
- * <p><b>TODO (P1):</b> game_character 테이블에 fingerprint 컬럼을 추가하여
- * Nexon 계정 단위의 정확한 accountId를 생성해야 합니다. 현재는 API Key 단위로 식별하는 제약이 있습니다.
+ * <h3>accountId 정체성</h3>
+ * <p>accountId = fingerprint (API Key HMAC-SHA256 해시).
+ * 동일 API Key = 동일 계정으로 인식. ADR-031 참조.
  *
  * <h3>P1 Invalid Token Silent Pass-Through 수정</h3>
  * <p>Bearer 토큰이 존재하지만 JWT 파싱/검증에 실패하면 더 이상 silently continue하지 않고
@@ -151,6 +147,11 @@ class JwtAuthenticationFilter(
         // 현재 캐릭터 OCID (fingerprint 미배정 경우 fallback)
         val myOcid = characterOcidPort.resolveOcid(userIgn)
         val allMyOcids = if (myOcid != null) fingerprintOcids + myOcid else fingerprintOcids
+
+        // Defensive: self-like 보호가 무력화될 수 있는 상황 모니터링
+        if (allMyOcids.isEmpty() && fingerprint.isNotBlank()) {
+            log.warn("[JWT] No OCIDs resolved for fingerprint. Self-like protection may be incomplete: userIgn={}", userIgn)
+        }
 
         // Lazy backfill: fingerprint NULL인 캐릭터에만 stamp (idempotent)
         if (myOcid != null && !fingerprintOcids.contains(myOcid) && fingerprint.isNotBlank()) {

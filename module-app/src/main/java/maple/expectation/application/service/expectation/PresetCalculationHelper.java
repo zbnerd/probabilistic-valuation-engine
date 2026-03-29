@@ -176,7 +176,7 @@ public class PresetCalculationHelper {
         .itemLevel(input.getItemLevel())
         .expectedCost(itemCost)
         .expectedCostText(CostFormatter.format(itemCost))
-        .costBreakdown(CostBreakdownDto.from(costBreakdown))
+        .costBreakdown(toCostBreakdownDto(costBreakdown))
         .enhancePath(enhancePath)
         .potentialGrade(input.getPotentialGrade())
         .additionalPotentialGrade(input.getAdditionalPotentialGrade())
@@ -369,5 +369,12 @@ public class PresetCalculationHelper {
   /** 100원 단위 반올림 */
   double roundToNearest100(double value) {
     return Math.round(value / 100.0) * 100.0;
+  }
+
+  /** CostBreakdown → CostBreakdownDto 타입 안전 변환 (#630) */
+  private static CostBreakdownDto toCostBreakdownDto(
+      EquipmentExpectationCalculator.CostBreakdown cb) {
+    return new CostBreakdownDto(
+        cb.blackCubeCost(), cb.redCubeCost(), cb.additionalCubeCost(), cb.starforceCost());
   }
 }

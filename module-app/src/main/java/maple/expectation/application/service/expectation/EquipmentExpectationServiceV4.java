@@ -27,6 +27,7 @@ import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.lang.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -146,7 +147,8 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   }
 
   /** L1 캐시 직접 조회 - Fast Path (#264 성능 최적화) */
-  public Optional<byte[]> getGzipFromL1CacheDirect(String userIgn) {
+  @Nullable
+  public byte[] getGzipFromL1CacheDirect(String userIgn) {
     return cacheCoordinator.getGzipFromL1CacheDirect(userIgn);
   }
 

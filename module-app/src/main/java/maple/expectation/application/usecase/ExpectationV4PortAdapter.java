@@ -51,7 +51,6 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
 
   @Override
   public byte[] getGzipFromL1CacheDirect(String userIgn) {
-    var result = expectationService.getGzipFromL1CacheDirect(userIgn);
-    return result.orElse(null);
+    return expectationService.getGzipFromL1CacheDirect(userIgn);
   }
 }

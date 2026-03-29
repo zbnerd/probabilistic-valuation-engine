@@ -2,9 +2,9 @@ package maple.expectation.application.service.expectation.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.Optional;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import maple.expectation.error.exception.CacheDataNotFoundException;
 import maple.expectation.error.exception.EquipmentDataProcessingException;
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
@@ -189,19 +189,20 @@ public class ExpectationCacheCoordinator {
    * L1 캐시 직접 조회 - Fast Path (#264 성능 최적화)
    *
    * @param userIgn 캐릭터 IGN
-   * @return GZIP 바이트 (L1 히트 시), Empty (L1 미스 시)
+   * @return GZIP 바이트 (L1 히트 시), null (L1 미스 시)
    */
-  public Optional<byte[]> getGzipFromL1CacheDirect(String userIgn) {
+  @Nullable
+  public byte[] getGzipFromL1CacheDirect(String userIgn) {
     Cache l1Cache = tieredCacheManager.getL1CacheDirect(CACHE_NAME);
     if (l1Cache == null) {
       recordFastPathMiss();
-      return Optional.empty();
+      return null;
     }
 
     Cache.ValueWrapper wrapper = l1Cache.get(userIgn);
     if (wrapper == null || wrapper.get() == null) {
       recordFastPathMiss();
-      return Optional.empty();
+      return null;
     }
 
     Object cachedValue = wrapper.get();
@@ -209,12 +210,12 @@ public class ExpectationCacheCoordinator {
 
     if (gzipBytes == null) {
       recordFastPathMiss();
-      return Optional.empty();
+      return null;
     }
 
     recordFastPathHit();
     log.debug("[V4] L1 Fast Path HIT: {} ({}KB)", userIgn, gzipBytes.length / 1024);
-    return Optional.of(gzipBytes);
+    return gzipBytes;
   }
 
   /**

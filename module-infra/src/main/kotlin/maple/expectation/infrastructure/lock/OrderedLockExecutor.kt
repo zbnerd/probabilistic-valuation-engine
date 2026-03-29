@@ -225,7 +225,8 @@ class OrderedLockExecutor(
         }
 
         // CAS 실패 시 다른 스레드가 이미 설정한 값 반환
-        return nestedStrategyRequired.get()!!
+        return nestedStrategyRequired.get()
+            ?: throw IllegalStateException("Nested strategy required but not initialized after CAS failure")
     }
 
     /**

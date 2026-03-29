@@ -9,6 +9,9 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.datasource.DataSourceTransactionManager
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 
 /**
  * PostgreSQL Advisory Lock 전용 HikariCP 설정
@@ -77,4 +80,12 @@ class LockHikariConfig(
 
     @Bean(name = ["lockJdbcTemplate"])
     fun lockJdbcTemplate(): JdbcTemplate = JdbcTemplate(lockDataSource())
+
+    @Bean(name = ["lockTransactionManager"])
+    fun lockTransactionManager(): PlatformTransactionManager =
+        DataSourceTransactionManager(lockDataSource())
+
+    @Bean(name = ["lockTransactionTemplate"])
+    fun lockTransactionTemplate(): TransactionTemplate =
+        TransactionTemplate(lockTransactionManager())
 }

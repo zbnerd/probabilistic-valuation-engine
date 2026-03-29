@@ -307,25 +307,6 @@ data class EquipmentExpectationResponseV4(
                 additionalCubeCost = 0.0,
                 starforceCost = 0.0,
             )
-
-            /**
-             * V4 Calculator CostBreakdown에서 변환
-             * @param breakdown EquipmentExpectationCalculator.CostBreakdown
-             */
-            @JvmStatic
-            fun from(breakdown: Any): CostBreakdownDto {
-                // Reflection to access CostBreakdown record methods
-                val blackCubeCost = breakdown.javaClass.getDeclaredMethod("blackCubeCost").invoke(breakdown) as Number
-                val redCubeCost = breakdown.javaClass.getDeclaredMethod("redCubeCost").invoke(breakdown) as Number
-                val additionalCubeCost = breakdown.javaClass.getDeclaredMethod("additionalCubeCost").invoke(breakdown) as Number
-                val starforceCost = breakdown.javaClass.getDeclaredMethod("starforceCost").invoke(breakdown) as Number
-                return CostBreakdownDto(
-                    blackCubeCost = blackCubeCost.toDouble(),
-                    redCubeCost = redCubeCost.toDouble(),
-                    additionalCubeCost = additionalCubeCost.toDouble(),
-                    starforceCost = starforceCost.toDouble(),
-                )
-            }
         }
 
         fun add(other: CostBreakdownDto): CostBreakdownDto = copy(

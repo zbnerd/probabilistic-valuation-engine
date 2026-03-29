@@ -146,6 +146,13 @@ if [ -z "$TOKEN1" ] || [ -z "$TOKEN2" ] || [ -z "$TOKEN3" ]; then
 fi
 echo ""
 
+# ── Step 0.5: Ensure clean state for Step 1 ──
+RESP=$(like_status "$TOKEN1" "$USER3_IGN")
+BODY=$(echo "$RESP" | head -n -1)
+if [ "$(json_bool "$BODY" "liked")" = "true" ]; then
+    toggle_like "$TOKEN1" "$USER3_IGN" > /dev/null 2>&1
+fi
+
 # ── Step 1: Basic Toggle Flow ──
 echo -e "${YELLOW}[Step 1] Basic Toggle Flow${NC}"
 

@@ -50,11 +50,10 @@ class LikeSyncWorker(
         val context = TaskContext.of("LikeSyncWorker", "Process", request.characterName)
 
         return executor.executeOrDefault({
-            log.info("🔄 [LikeSyncWorker] Processing: character={}, delta={}", request.characterName, request.delta)
-
-            characterRepository.incrementLikeCount(request.characterName, request.delta)
-
-            log.info("✅ [LikeSyncWorker] Completed: character={}, delta={}", request.characterName, request.delta)
+            // #664: DB Trigger(fn_like_count_trigger)가 character_like INSERT/DELETE 시
+            // like_count를 자동 증감하므로 app-level incrementLikeCount는 불필요.
+            // 남은 PGMQ 메시지는 stale이며, V104 reconciliation이 이미 count를 보정함.
+            log.info("[LikeSyncWorker] Acknowledged stale message (trigger handles count): character={}, delta={}", request.characterName, request.delta)
             true
         }, false, context)
     }

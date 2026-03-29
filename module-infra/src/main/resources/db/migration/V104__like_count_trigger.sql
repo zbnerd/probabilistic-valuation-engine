@@ -13,12 +13,18 @@ BEGIN
         SET like_count = GREATEST(COALESCE(like_count, 0) + 1, 0),
             updated_at = NOW()
         WHERE ocid = NEW.target_ocid;
+        IF NOT FOUND THEN
+            RAISE WARNING 'Like count trigger: no game_character found for ocid=%', NEW.target_ocid;
+        END IF;
         RETURN NEW;
     ELSIF TG_OP = 'DELETE' THEN
         UPDATE game_character
         SET like_count = GREATEST(COALESCE(like_count, 0) - 1, 0),
             updated_at = NOW()
         WHERE ocid = OLD.target_ocid;
+        IF NOT FOUND THEN
+            RAISE WARNING 'Like count trigger: no game_character found for ocid=%', OLD.target_ocid;
+        END IF;
         RETURN OLD;
     END IF;
     RETURN NULL;
@@ -37,6 +43,7 @@ CREATE TRIGGER trg_like_count
 -- 3. Reconciliation: 기존 drift 수정
 --    pg_try_advisory_xact_lock으로 rolling update 중인
 --    incrementLikeCount와의 deadlock 방지
+--    NOTE: lock 획득 실패 시 해당 row는 skip됨 (다음 마이그레이션 재실행 시 재시도)
 -- ============================================================
 WITH correct AS (
     SELECT target_ocid, COUNT(*) AS cnt

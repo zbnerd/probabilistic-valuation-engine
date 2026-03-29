@@ -55,14 +55,17 @@ class ApiKeyValidator(
     /**
      * API Key를 검증하고 캐릭터 소유권을 확인합니다.
      *
+     * <p>#667: Nexon API에서 account_id를 추출하여 계정 식별자로 사용합니다.
+     * 동일 Nexon 계정의 다른 API Key라도 동일 account_id를 반환합니다.
+     *
      * @param apiKey Nexon API Key
      * @param userIgn 사용자 캐릭터명
-     * @return 캐릭터 소유권 검증 결과
+     * @return 캐릭터 소유권 검증 결과 (accountId + myOcids)
      * @throws InvalidApiKeyException API Key가 유효하지 않은 경우
      * @throws CharacterNotOwnedException 캐릭터가 사용자 소유가 아닌 경우
      */
     fun validateAndVerifyOwnership(apiKey: String, userIgn: String): CharacterOwnershipValidationResult {
-        // 1. API Key 검증
+        // 1. API Key 검증 (Nexon API 호출)
         val characterList = validateApiKey(apiKey)
 
         // 2. 캐릭터 목록 추출
@@ -78,18 +81,29 @@ class ApiKeyValidator(
         // 4. 모든 캐릭터 OCID 수집
         val myOcids = characters.mapNotNull { it.ocid }.toSet()
 
-        log.info("API key validation successful: userIgn={}, ocids={}", userIgn, myOcids.size)
+        // 5. #667: Nexon account_id 추출 (동일 계정 = 동일 ID, API Key 무관)
+        val accountId = characterList.accountList
+            ?.firstOrNull()
+            ?.accountId
+            ?: throw InvalidApiKeyException()
 
-        return CharacterOwnershipValidationResult(myOcids)
+        log.info("API key validation successful: userIgn={}, ocids={}, accountId={}", userIgn, myOcids.size, accountId)
+
+        return CharacterOwnershipValidationResult(accountId = accountId, myOcids = myOcids)
     }
 
     /**
      * 캐릭터 소유권 검증 결과
      *
+     * @property accountId Nexon 계정 식별자 (동일 계정 = 동일 ID, API Key 무관)
      * @property myOcids 사용자가 소유한 모든 캐릭터 OCID 목록
      */
-    data class CharacterOwnershipValidationResult(val myOcids: Set<String>) {
+    data class CharacterOwnershipValidationResult(
+        val accountId: String,
+        val myOcids: Set<String>,
+    ) {
         init {
+            require(accountId.isNotBlank()) { "accountId must not be blank" }
             require(myOcids.isNotEmpty()) { "myOcids must not be null or empty" }
         }
     }

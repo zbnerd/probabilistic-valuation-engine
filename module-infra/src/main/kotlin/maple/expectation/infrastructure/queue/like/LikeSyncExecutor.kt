@@ -1,13 +1,8 @@
 package maple.expectation.infrastructure.queue.like
 
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
-import java.util.List
 import maple.expectation.error.exception.LikeSyncCircuitOpenException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import org.springframework.transaction.annotation.Isolation
-import org.springframework.transaction.annotation.Propagation
-import org.springframework.transaction.annotation.Transactional
 
 /**
  * 좋아요 동기화 실행기 (Issue #48: Batch Update 지원)
@@ -18,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional
  */
 @Deprecated("#664: DB Trigger handles like_count atomicity")
 @Component
-open class LikeSyncExecutor() {
+open class LikeSyncExecutor {
 
     companion object {
         private val log = LoggerFactory.getLogger(LikeSyncExecutor::class.java)
@@ -28,7 +23,6 @@ open class LikeSyncExecutor() {
      * @deprecated #664: DB Trigger가 like_count를 자동 증감하므로 no-op.
      */
     @Deprecated("#664: DB Trigger handles like_count atomicity")
-    @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     fun executeIncrement(userIgn: String, count: Long) {
         log.info("[LikeSyncExecutor] Skipped deprecated increment: userIgn={}, count={} (trigger handles count)", userIgn, count)
     }
@@ -37,8 +31,6 @@ open class LikeSyncExecutor() {
      * @deprecated #664: DB Trigger가 like_count를 자동 증감하므로 no-op.
      */
     @Deprecated("#664: DB Trigger handles like_count atomicity")
-    @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
-    @CircuitBreaker(name = "likeSyncDb", fallbackMethod = "batchFallback")
     fun executeIncrementBatch(entries: List<Map.Entry<String, Long>>) {
         if (entries.isEmpty()) return
         log.info("[LikeSyncExecutor] Skipped deprecated batch increment: {} entries (trigger handles count)", entries.size)

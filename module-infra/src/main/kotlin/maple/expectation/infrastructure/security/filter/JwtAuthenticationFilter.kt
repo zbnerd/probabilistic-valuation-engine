@@ -145,12 +145,16 @@ class JwtAuthenticationFilter(
         }
 
         // 현재 캐릭터 OCID (fingerprint 미배정 경우 fallback)
-        val myOcid = characterOcidPort.resolveOcid(userIgn)
+        val myOcid = if (userIgn.isNotBlank()) {
+            characterOcidPort.resolveOcid(userIgn)
+        } else {
+            null
+        }
         val allMyOcids = if (myOcid != null) fingerprintOcids + myOcid else fingerprintOcids
 
-        // Defensive: self-like 보호가 무력화될 수 있는 상황 모니터링
-        if (allMyOcids.isEmpty() && fingerprint.isNotBlank()) {
-            log.warn("[JWT] No OCIDs resolved for fingerprint. Self-like protection may be incomplete: userIgn={}", userIgn)
+        // Defensive: 기존 캐릭터가 fingerprint에 매핑되지 않은 경우 모니터링
+        if (allMyOcids.isEmpty() && myOcid != null) {
+            log.warn("[JWT] No OCIDs resolved for fingerprint despite existing character. Self-like protection may be incomplete: userIgn={}", userIgn)
         }
 
         // Lazy backfill: fingerprint NULL인 캐릭터에만 stamp (idempotent)

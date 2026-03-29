@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse
 import java.io.IOException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.web.filter.OncePerRequestFilter
@@ -93,7 +94,7 @@ open class CorsValidationFilter(
         response.contentType = "application/json;charset=UTF-8"
 
         val maskedOrigin = maskOrigin(originHeader)
-        println("[CorsValidation-Rejected] Origin '$maskedOrigin' is not in allowed list")
+        log.warn("[CorsValidation-Rejected] Origin '$maskedOrigin' is not in allowed list")
 
         val errorResponse = "{\"code\":\"CORS_FORBIDDEN\",\"message\":\"허용되지 않는 오리진입니다.\"}"
 
@@ -145,5 +146,9 @@ open class CorsValidationFilter(
         "***"
     } else {
         domain.substring(0, 2) + "***" + domain.substring(domain.length - 2)
+    }
+
+    companion object {
+        private val log = LoggerFactory.getLogger(CorsValidationFilter::class.java)
     }
 }

@@ -10,6 +10,7 @@ import java.util.Optional
 import javax.crypto.SecretKey
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
@@ -35,6 +36,7 @@ class JwtTokenProvider(
     private lateinit var secretKey: SecretKey
 
     companion object {
+        private val log = LoggerFactory.getLogger(JwtTokenProvider::class.java)
         private const val ISSUER = "maple-expectation"
         private const val CLAIM_FINGERPRINT = "fgp"
         private const val CLAIM_ROLE = "role"
@@ -75,7 +77,7 @@ class JwtTokenProvider(
     fun init() {
         validateSecretKeyForProduction()
         this.secretKey = Keys.hmacShaKeyFor(secret.toByteArray(StandardCharsets.UTF_8))
-        println("JWT TokenProvider initialized with expiration: ${expirationSeconds}s")
+        log.info("JWT TokenProvider initialized with expiration: ${expirationSeconds}s")
     }
 
     /**

@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.infrastructure.security.AuthenticatedUser
+import org.springframework.dao.DuplicateKeyException
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.slf4j.LoggerFactory
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
@@ -146,22 +147,30 @@ class JwtAuthenticationFilter(
         val userIgn = jwt.userIgn
         val fingerprint = jwt.fingerprint
 
-        // 현재 로그인 캐릭터의 OCID만 조회 (P0 제약사항: fingerprint별 모든 캐릭터 조회 불가)
-        val myOcid = characterOcidPort.resolveOcid(userIgn)
-        if (myOcid == null) {
-            log.debug("[JWT] OCID resolution returned null for userIgn={}, self-like prevention may be incomplete", userIgn)
+        // #662: fingerprint 기반 모든 OCID 조회
+        val fingerprintOcids = if (fingerprint.isNotBlank()) {
+            characterOcidPort.resolveOcidsByFingerprint(fingerprint)
+        } else {
+            emptySet()
         }
-        val myOcids = if (myOcid != null) setOf(myOcid) else emptySet()
 
-        // TODO (P0): game_character 테이블에 fingerprint 컬럼 추가 후
-        //            해당 fingerprint를 가진 모든 캐릭터 OCID를 조회하도록 수정 필요
-        //            val myOcids = ocidResolutionService.resolveOcidsByFingerprint(fingerprint)
+        // 현재 캐릭터 OCID (fingerprint 미배정 경우 fallback)
+        val myOcid = characterOcidPort.resolveOcid(userIgn)
+        val allMyOcids = if (myOcid != null) fingerprintOcids + myOcid else fingerprintOcids
 
-        // accountId = fingerprint (P1 제약사항: API Key별로 다른 accountId)
-        // TODO (P1): Nexon 계정 단위의 accountId를 생성하도록 수정 필요
+        // Lazy backfill: fingerprint NULL인 캐릭터에만 stamp (idempotent)
+        if (myOcid != null && !fingerprintOcids.contains(myOcid) && fingerprint.isNotBlank()) {
+            try {
+                characterOcidPort.updateFingerprint(myOcid, fingerprint, fingerprint)
+            } catch (e: DuplicateKeyException) {
+                // uk_account_user_ign 위반: 다른 계정이 이미 해당 조합을 소유
+                log.warn("[JWT] Unique index violation during backfill. Character already registered by different account.")
+            }
+        }
+
         val accountId = fingerprint
 
-        log.debug("[JWT] Resolved myOcids: userIgn={}, ocid={}, accountId={}", userIgn, myOcid, accountId)
+        log.debug("[JWT] Resolved myOcids: userIgn={}, ocidCount={}, accountId={}", userIgn, allMyOcids.size, accountId)
 
         return AuthenticatedUser(
             sessionId = jwt.sessionId,
@@ -169,7 +178,7 @@ class JwtAuthenticationFilter(
             userIgn = userIgn,
             accountId = accountId,
             apiKey = "",
-            myOcids = myOcids,
+            myOcids = allMyOcids,
             role = jwt.role,
         )
     }

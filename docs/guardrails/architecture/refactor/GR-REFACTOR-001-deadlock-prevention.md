@@ -106,7 +106,7 @@ finally {
 ```
 
 ## 출처
-- [P0 Issues Resolution Report](../../../../05_Reports/04_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md) - Issues #221, #228
+- [P0 Issues Resolution Report](../../../../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md) - Issues #221, #228
 - [ADR-006: Redis Lock Lease Timeout HA](../../../../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md) - Section 4, 5
 
 ## 관련 메트릭

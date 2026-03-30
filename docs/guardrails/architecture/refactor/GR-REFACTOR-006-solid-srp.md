@@ -167,5 +167,5 @@ class EquipmentStreamingService {
 | 유지보수성 | 어려움 | 쉬움 | - |
 
 ## 출처
-- [SOLID Violations Report](../../../../05_Reports/04_08_Refactor/SOLID_VIOLATIONS.md) - SRP-001 ~ SRP-012
-- [Code Quality Analysis](../../../../05_Reports/04_08_Refactor/CODE_QUALITY_ANALYSIS_2026-02-08.md)
+- [SOLID Violations Report](../../../../05_Reports/05_08_Refactor/SOLID_VIOLATIONS.md) - SRP-001 ~ SRP-012
+- [Code Quality Analysis](../../../../05_Reports/05_08_Refactor/CODE_QUALITY_ANALYSIS_2026-02-08.md)

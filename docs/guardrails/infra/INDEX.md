@@ -38,6 +38,6 @@
 
 ## 관련 문서
 
-- [docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md](../../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
+- [docs/05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md](../../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)
 - [docs/03_Technical_Guides/infrastructure.md](../03_Technical_Guides/infrastructure.md)
 - CLAUDE.md Section 18: Stateless Architecture Principles

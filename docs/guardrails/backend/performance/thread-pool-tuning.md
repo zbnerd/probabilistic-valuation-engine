@@ -157,5 +157,5 @@ Note: Max Pool Size는 vCPU 수에 비례하지 않고 **작업 유형(I/O_bound
 - [Thread Pool Sizing Strategy](https://blog.deferred.io/why-you-should-always-use-a-boundedqueue-and-how-to-size-it-correctly/)
 
 ## 출처
-- [docs/05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md](../../../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md)
+- [docs/05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md](../../../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md)
 - Evidence ID: EVIDENCE-001, EVIDENCE-003, EVIDENCE-006

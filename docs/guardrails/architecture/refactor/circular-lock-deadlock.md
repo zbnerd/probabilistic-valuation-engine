@@ -81,7 +81,7 @@ default <T> T executeWithOrderedLocks(
 3. **메트릭 기록**: 역순 획득 시 Prometheus 카운터 기록
 
 ## 출처
-- 문서: [docs/05_Reports/04_05_Incidents/P0_Issues_Resolution_Report.md](../../../05_Reports/04_05_Incidents/P0_Issues_Resolution_Report.md)
+- 문서: [docs/05_Reports/05_05_Incidents/P0_Issues_Resolution_Report.md](../../../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report.md)
 - 이슈: #228 (N09-Circular Lock), #221 (N02-Lock Ordering)
 - Nightmare: CircularLockDeadlockNightmareTest, DeadlockTrapNightmareTest
 - ADR: [ADR-006](../../../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md)

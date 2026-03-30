@@ -93,5 +93,5 @@ public class SnowflakeIdGenerator {
 3. **영구성 보장**: 애플리케이션 재시작 후에도 ID 유지
 
 ## 출처
-- 문서: [docs/05_Reports/04_08_Refactor/STATEFUL_REFACTORING_TARGETS.md](../../../05_Reports/04_08_Refactor/STATEFUL_REFACTORING_TARGETS.md)
+- 문서: [docs/05_Reports/05_08_Refactor/STATEFUL_REFACTORING_TARGETS.md](../../../05_Reports/05_08_Refactor/STATEFUL_REFACTORING_TARGETS.md)
 - 관련 ADR: [ADR-010](../../../01_ADR/ADR-010-outbox-pattern.md) (Write-Behind Buffer)

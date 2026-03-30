@@ -85,5 +85,5 @@ public class EquipmentService {
 3. **환경별 구성**: local/dev/prod별로 다른 타임아웃 설정 가능
 
 ## 출처
-- 문서: [docs/05_Reports/04_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/04_08_Refactor/duplicated-code-analysis.md)
+- 문서: [docs/05_Reports/05_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/05_08_Refactor/duplicated-code-analysis.md)
 - 카테고리: P1 (중간 수준 중복)

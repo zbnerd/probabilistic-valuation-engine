@@ -261,4 +261,4 @@ public CompletableFuture<NexonApiCharacterResponse> callNexonApiAsync(String ign
 
 ### 관련 ADR
 - `docs/01_ADR/ADR-052-resilience4j-circuit-breaker.md`
-- `docs/05_Reports/04_08_Refactor/AUDIT_BASELINE.md` (lines 74-109)
+- `docs/05_Reports/05_08_Refactor/AUDIT_BASELINE.md` (lines 74-109)

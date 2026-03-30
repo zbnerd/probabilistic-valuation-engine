@@ -44,7 +44,7 @@ All Phase 1 objectives achieved. The probabilistic-valuation-engine project now 
 
 **Key Insight:** Most failures are **test rule issues**, not actual architecture problems. The codebase is in good shape.
 
-**Documentation:** `docs/05_Reports/04_08_Refactor/ARCHUNIT_RULES.md` (558 lines)
+**Documentation:** `docs/05_Reports/05_08_Refactor/ARCHUNIT_RULES.md` (558 lines)
 
 ### 2. Spotless Code Formatting
 
@@ -64,8 +64,8 @@ All Phase 1 objectives achieved. The probabilistic-valuation-engine project now 
 ```
 
 **Documentation:**
-- `docs/05_Reports/04_08_Refactor/FORMATTING_STANDARDS.md`
-- `docs/05_Reports/04_08_Refactor/SPOTLESS_PHASE1_REPORT.md`
+- `docs/05_Reports/05_08_Refactor/FORMATTING_STANDARDS.md`
+- `docs/05_Reports/05_08_Refactor/SPOTLESS_PHASE1_REPORT.md`
 
 ### 3. SpotBugs Static Analysis
 
@@ -90,7 +90,7 @@ All Phase 1 objectives achieved. The probabilistic-valuation-engine project now 
 - Default platform encoding (4 locations)
 - Mutable static arrays in `FlameOptionType`
 
-**Documentation:** `docs/05_Reports/04_08_Refactor/SPOTBUGS_BASELINE.md`
+**Documentation:** `docs/05_Reports/05_08_Refactor/SPOTBUGS_BASELINE.md`
 
 ### 4. CI/CD Pipeline Configuration
 
@@ -117,7 +117,7 @@ Checks:
   - spotbugsMain
 ```
 
-**Documentation:** `docs/05_Reports/04_08_Refactor/CI_STRATEGY.md` (558 lines)
+**Documentation:** `docs/05_Reports/05_08_Refactor/CI_STRATEGY.md` (558 lines)
 
 ---
 
@@ -179,12 +179,12 @@ M 594 Java files (Spotless formatting)
 
 ### Documentation
 ```
-A docs/05_Reports/04_08_Refactor/ARCHUNIT_RULES.md
-A docs/05_Reports/04_08_Refactor/FORMATTING_STANDARDS.md
-A docs/05_Reports/04_08_Refactor/SPOTBUGS_BASELINE.md
-A docs/05_Reports/04_08_Refactor/CI_STRATEGY.md
-A docs/05_Reports/04_08_Refactor/SPOTLESS_PHASE1_REPORT.md
-A docs/05_Reports/04_08_Refactor/PHASE1_CI_COMPLETE.md
+A docs/05_Reports/05_08_Refactor/ARCHUNIT_RULES.md
+A docs/05_Reports/05_08_Refactor/FORMATTING_STANDARDS.md
+A docs/05_Reports/05_08_Refactor/SPOTBUGS_BASELINE.md
+A docs/05_Reports/05_08_Refactor/CI_STRATEGY.md
+A docs/05_Reports/05_08_Refactor/SPOTLESS_PHASE1_REPORT.md
+A docs/05_Reports/05_08_Refactor/PHASE1_CI_COMPLETE.md
 ```
 
 ---

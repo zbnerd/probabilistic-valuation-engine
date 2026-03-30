@@ -363,7 +363,7 @@ executor.setRejectedExecutionHandler((r, e) -> {
 |-------------|--------|-------------|
 | **EVIDENCE-001** | [build.gradle:21-23](../../build.gradle) | Java 21 toolchain 설정 |
 | **EVIDENCE-002** | [async-concurrency.md:34](../03_Technical_Guides/async-concurrency.md) | Async pipeline 719 RPS vs blocking 89 RPS |
-| **EVIDENCE-003** | [high-traffic-performance-analysis.md:67](../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md) | Thread Pool 병목 분석 |
+| **EVIDENCE-003** | [high-traffic-performance-analysis.md:67](../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md) | Thread Pool 병목 분석 |
 | **EVIDENCE-004** | [ROADMAP.md:262](../00_Start_Here/ROADMAP.md) | Java 21 선택 기록 |
 | **EVIDENCE-005** | [architecture.md:36](../00_Start_Here/architecture.md) | Virtual Threads 아키텍처 정의 |
 
@@ -381,7 +381,7 @@ executor.setRejectedExecutionHandler((r, e) -> {
 ### Test Evidence
 
 - [N23 WRK V4 Results](../05_Reports/Cost_Performance/N23_WRK_V4_RESULTS.md) - Load test validation
-- [Performance Report 260105](../05_Reports/04_02_Cost_Performance/PERFORMANCE_260105.md) - 235 RPS baseline
+- [Performance Report 260105](../05_Reports/05_02_Cost_Performance/PERFORMANCE_260105.md) - 235 RPS baseline
 
 ---
 

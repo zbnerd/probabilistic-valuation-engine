@@ -297,5 +297,5 @@ redis-cli --scan --pattern "*:lock:*" | wc -l
 - [Kubernetes Leader Election](https://kubernetes.io/docs/concepts/architecture/leader-election/)
 
 ## 출처
-- [docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md](../../../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
+- [docs/05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md](../../../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)
 - Evidence ID: EVIDENCE-S001 ~ EVIDENCE-S020

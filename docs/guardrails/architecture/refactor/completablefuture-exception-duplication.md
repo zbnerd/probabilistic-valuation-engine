@@ -95,5 +95,5 @@ public CompletableFuture<TotalExpectationResponse> calculateTotalExpectationAsyn
 3. **일관된 예외 타입**: ApiTimeoutException, AsyncOperationException 사용
 
 ## 출처
-- 문서: [docs/05_Reports/04_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/04_08_Refactor/duplicated-code-analysis.md)
+- 문서: [docs/05_Reports/05_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/05_08_Refactor/duplicated-code-analysis.md)
 - 카테고리: P0 (심각한 중복)

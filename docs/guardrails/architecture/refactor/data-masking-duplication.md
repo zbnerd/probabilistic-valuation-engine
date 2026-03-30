@@ -66,5 +66,5 @@ log.debug("Processing: {}", maskIgn(userIgn));
 3. **보안 정책 중앙화**: 모든 마스킹 로직을 한 곳에서 관리
 
 ## 출처
-- 문서: [docs/05_Reports/04_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/04_08_Refactor/duplicated-code-analysis.md)
+- 문서: [docs/05_Reports/05_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/05_08_Refactor/duplicated-code-analysis.md)
 - 카테고리: P1 (중간 수준 중복)

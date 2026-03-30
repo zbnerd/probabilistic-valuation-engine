@@ -729,7 +729,7 @@ public void trackOperation(String ocid, CompletableFuture<Void> future) {
 
 ## 8. 관련 문서
 
-- [Scale-out 방해 요소 전수 분석](/home/maple/probabilistic-valuation-engine/docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
+- [Scale-out 방해 요소 전수 분석](/home/maple/probabilistic-valuation-engine/docs/05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)
 - [CLAUDE.md Section 17: TieredCache](/home/maple/probabilistic-valuation-engine/CLAUDE.md#L407)
 - [ADR-008: Graceful Shutdown](/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-008-durability-graceful-shutdown.md.backup)
 - [Service Modules Guide](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/service-modules.md)

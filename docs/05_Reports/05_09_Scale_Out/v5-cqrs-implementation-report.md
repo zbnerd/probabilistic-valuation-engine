@@ -679,7 +679,7 @@ probabilistic-valuation-engine/
     ├── 04_Sequence_Diagrams/
     │   └── v5-cqrs-sequence.md
     └── 05_Reports/
-        └── 04_09_Scale_Out/
+        └── 05_09_Scale_Out/
             └── v5-cqrs-implementation-report.md
 ```
 

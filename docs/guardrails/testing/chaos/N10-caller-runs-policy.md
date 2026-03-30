@@ -128,4 +128,4 @@ public void submitTask(Runnable task) {
 ## 출처
 
 - `docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N10-caller-runs-policy.md`
-- `docs/05_Reports/04_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md` (Issue #222)
+- `docs/05_Reports/05_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md` (Issue #222)

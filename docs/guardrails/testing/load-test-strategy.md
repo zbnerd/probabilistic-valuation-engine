@@ -446,4 +446,4 @@ locust -f locust/locustfile.py --headless -u 50 -r 10 -t 60s
 - [chaos-engineering.md](chaos-engineering.md) - Chaos Engineering 전략
 - [nightmare-tests.md](nightmare-tests.md) - Nightmare 시나리오 (N01-N19)
 - [testing-guide.md](../../03_Technical_Guides/testing-guide.md) - 테스트 작성 가이드
-- [LOAD_TEST_REPORT_FIXES_SUMMARY.md](../../05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_FIXES_SUMMARY.md) - 부하 테스트 리포트 요약
+- [LOAD_TEST_REPORT_FIXES_SUMMARY.md](../../05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_FIXES_SUMMARY.md) - 부하 테스트 리포트 요약

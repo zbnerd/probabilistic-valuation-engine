@@ -90,7 +90,7 @@ done
 
 ### 3. Metrics Baseline ✅
 
-**Location:** `docs/05_Reports/04_08_Refactor/PHASE3_BASELINE_METRICS.md`
+**Location:** `docs/05_Reports/05_08_Refactor/PHASE3_BASELINE_METRICS.md`
 
 **Contents (28 KB):**
 - 6 performance metrics (p50, p95, p99, throughput, error rate, saturation)
@@ -116,7 +116,7 @@ scripts/README.md                            # Quick reference
 
 ### 4. 5-Agent Council Review Framework ✅
 
-**Location:** `docs/05_Reports/04_08_Refactor/PHASE3_AGENT_REVIEW.md`
+**Location:** `docs/05_Reports/05_08_Refactor/PHASE3_AGENT_REVIEW.md`
 
 **Council Votes (Preparatory):**
 
@@ -295,7 +295,7 @@ echo "All 5 runs passed - tests are stable"
 ### Phase 3 Preparation Documents
 
 ```
-docs/05_Reports/04_08_Refactor/
+docs/05_Reports/05_08_Refactor/
 ├── CHARACTERIZATION_TESTS.md                    # Test catalog
 ├── PHASE3_CHARACTERIZATION_SUMMARY.md            # Test summary
 ├── QA_REPORT_CHARACTERIZATION_TESTS.md          # QA report

@@ -28,13 +28,13 @@ All 5 agents have completed their baseline analysis. The probabilistic-valuation
 
 | Agent | Document | Location | Purpose |
 |-------|----------|----------|---------|
-| **Blue** | ARCHITECTURE_MAP.md | docs/05_Reports/04_08_Refactor/ | Current state mapping |
-| **Blue** | SOLID_VIOLATIONS.md | docs/05_Reports/04_08_Refactor/ | 43 violations with evidence |
-| **Blue** | TARGET_STRUCTURE.md | docs/05_Reports/04_08_Refactor/ | Clean Architecture proposal |
-| **Green** | PERFORMANCE_BASELINE.md | docs/05_Reports/04_08_Refactor/ | Performance metrics |
-| **Yellow** | RISK_REGISTER.md | docs/05_Reports/04_08_Refactor/ | Top 10 risks + mitigation |
-| **Purple** | AUDIT_BASELINE.md | docs/05_Reports/04_08_Refactor/ | Audit verification |
-| **Red** | RESILIENCE_BASELINE.md | docs/05_Reports/04_08_Refactor/ | Operations baseline |
+| **Blue** | ARCHITECTURE_MAP.md | docs/05_Reports/05_08_Refactor/ | Current state mapping |
+| **Blue** | SOLID_VIOLATIONS.md | docs/05_Reports/05_08_Refactor/ | 43 violations with evidence |
+| **Blue** | TARGET_STRUCTURE.md | docs/05_Reports/05_08_Refactor/ | Clean Architecture proposal |
+| **Green** | PERFORMANCE_BASELINE.md | docs/05_Reports/05_08_Refactor/ | Performance metrics |
+| **Yellow** | RISK_REGISTER.md | docs/05_Reports/05_08_Refactor/ | Top 10 risks + mitigation |
+| **Purple** | AUDIT_BASELINE.md | docs/05_Reports/05_08_Refactor/ | Audit verification |
+| **Red** | RESILIENCE_BASELINE.md | docs/05_Reports/05_08_Refactor/ | Operations baseline |
 
 ---
 

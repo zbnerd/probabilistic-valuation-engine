@@ -4,7 +4,7 @@
 **Date**: 2026-02-15
 **Author**: probabilistic-valuation-engine Architecture Team
 **Supersedes**: [ADR-036](ADR-036-v5-cqrs-mongodb.md)
-**Related**: [V5 Implementation Report](../05_Reports/04_09_Scale_Out/v5-cqrs-implementation-report.md)
+**Related**: [V5 Implementation Report](../05_Reports/05_09_Scale_Out/v5-cqrs-implementation-report.md)
 
 ---
 
@@ -615,7 +615,7 @@ dependencies {
 ### Related Documents
 
 - **ADR-036**: [V5 CQRS Architecture Design](ADR-036-v5-cqrs-mongodb.md)
-- **Implementation Report**: [V5 CQRS Implementation](../05_Reports/04_09_Scale_Out/v5-cqrs-implementation-report.md)
+- **Implementation Report**: [V5 CQRS Implementation](../05_Reports/05_09_Scale_Out/v5-cqrs-implementation-report.md)
 - **Sequence Diagram**: [V5 CQRS Sequence](../04_Sequence_Diagrams/v5-cqrs-sequence.md)
 
 ### Architecture Decisions

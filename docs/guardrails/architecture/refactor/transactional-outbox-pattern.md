@@ -76,6 +76,6 @@ LIMIT 100;
 4. **Triple Safety Net**: DLQ → File Backup → Discord Alert
 
 ## 출처
-- 문서: [docs/05_Reports/04_07_Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md](../../../05_Reports/04_07_Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md)
+- 문서: [docs/05_Reports/05_07_Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md](../../../05_Reports/05_07_Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md)
 - 인시던트: N19-20260205-140000
 - ADR: [ADR-016](../../../01_ADR/ADR-016-nexon-api-outbox-pattern.md)

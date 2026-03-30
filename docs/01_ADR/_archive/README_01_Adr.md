@@ -179,9 +179,9 @@ ADR-XXX-{short-description}.md
 - [docs/03_Technical_Guides/testing-guide.md](../03_Technical_Guides/testing-guide.md) - Testing guide
 
 ### Refactoring
-- [docs/05_Reports/04_08_Refactor/REFACTOR_PLAN.md](../05_Reports/04_08_Refactor/REFACTOR_PLAN.md) - Refactoring roadmap
-- [docs/05_Reports/04_08_Refactor/TARGET_STRUCTURE.md](../05_Reports/04_08_Refactor/TARGET_STRUCTURE.md) - Target architecture
-- [docs/05_Reports/04_08_Refactor/SOLID_VIOLATIONS.md](../05_Reports/04_08_Refactor/SOLID_VIOLATIONS.md) - SOLID violations
+- [docs/05_Reports/05_08_Refactor/REFACTOR_PLAN.md](../05_Reports/05_08_Refactor/REFACTOR_PLAN.md) - Refactoring roadmap
+- [docs/05_Reports/05_08_Refactor/TARGET_STRUCTURE.md](../05_Reports/05_08_Refactor/TARGET_STRUCTURE.md) - Target architecture
+- [docs/05_Reports/05_08_Refactor/SOLID_VIOLATIONS.md](../05_Reports/05_08_Refactor/SOLID_VIOLATIONS.md) - SOLID violations
 
 ### Chaos Engineering
 - [docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md](../02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md) - Test strategy

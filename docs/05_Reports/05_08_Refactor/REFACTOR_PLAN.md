@@ -100,7 +100,7 @@ Characterization Tests: All LogicExecutor patterns covered
 - `build.gradle` - Spotless, SpotBugs, ArchUnit dependencies
 - `src/test/java/archunit/` - Architecture test suite
 - `.github/workflows/` - Updated CI configuration
-- `docs/05_Reports/04_08_Refactor/ARCHUNIT_RULES.md` - Architecture rule documentation
+- `docs/05_Reports/05_08_Refactor/ARCHUNIT_RULES.md` - Architecture rule documentation
 
 **ArchUnit Rules:**
 ```java
@@ -720,14 +720,14 @@ git checkout -b feature/phaseX-redo
 
 ## References
 
-- **Phase 0 Summary:** `docs/05_Reports/04_08_Refactor/PHASE0_SUMMARY.md`
-- **Architecture Map:** `docs/05_Reports/04_08_Refactor/ARCHITECTURE_MAP.md`
-- **SOLID Violations:** `docs/05_Reports/04_08_Refactor/SOLID_VIOLATIONS.md`
-- **Target Structure:** `docs/05_Reports/04_08_Refactor/TARGET_STRUCTURE.md`
-- **Performance Baseline:** `docs/05_Reports/04_08_Refactor/PERFORMANCE_BASELINE.md`
-- **Risk Register:** `docs/05_Reports/04_08_Refactor/RISK_REGISTER.md`
-- **Audit Baseline:** `docs/05_Reports/04_08_Refactor/AUDIT_BASELINE.md`
-- **Resilience Baseline:** `docs/05_Reports/04_08_Refactor/RESILIENCE_BASELINE.md`
+- **Phase 0 Summary:** `docs/05_Reports/05_08_Refactor/PHASE0_SUMMARY.md`
+- **Architecture Map:** `docs/05_Reports/05_08_Refactor/ARCHITECTURE_MAP.md`
+- **SOLID Violations:** `docs/05_Reports/05_08_Refactor/SOLID_VIOLATIONS.md`
+- **Target Structure:** `docs/05_Reports/05_08_Refactor/TARGET_STRUCTURE.md`
+- **Performance Baseline:** `docs/05_Reports/05_08_Refactor/PERFORMANCE_BASELINE.md`
+- **Risk Register:** `docs/05_Reports/05_08_Refactor/RISK_REGISTER.md`
+- **Audit Baseline:** `docs/05_Reports/05_08_Refactor/AUDIT_BASELINE.md`
+- **Resilience Baseline:** `docs/05_Reports/05_08_Refactor/RESILIENCE_BASELINE.md`
 
 ---
 

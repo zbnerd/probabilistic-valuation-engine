@@ -35,4 +35,4 @@
 
 ## 관련 문서
 
-- [docs/05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md](../../../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md)
+- [docs/05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md](../../../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md)

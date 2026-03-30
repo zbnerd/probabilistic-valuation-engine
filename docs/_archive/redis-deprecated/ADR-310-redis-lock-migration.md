@@ -447,8 +447,8 @@ echo "=== Verification Complete ==="
 ## Evidence Links (증거 링크)
 
 ### 문서
-- [Scale-out Blockers Analysis](../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md) - MySQL Lock 병점 분석
-- [High Traffic Performance Analysis](../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md) - 부하 테스트 결과
+- [Scale-out Blockers Analysis](../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md) - MySQL Lock 병점 분석
+- [High Traffic Performance Analysis](../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md) - 부하 테스트 결과
 - [Chaos Test Results](../02_Chaos_Engineering/) - N02, N18 테스트 결과 (Note: Directory structure may vary)
 
 ### 모니터링

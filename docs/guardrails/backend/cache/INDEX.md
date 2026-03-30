@@ -86,4 +86,4 @@
 - [infrastructure.md](../../../03_Technical_Guides/infrastructure.md) Section 17: TieredCache
 - [cache-sequence.md](../../../04_Sequence_Diagrams/cache-sequence.md) - TieredCache SingleFlight 시퀀스
 - [expectation-cache-sequence.md](../../../04_Sequence_Diagrams/expectation-cache-sequence.md) - Two-Phase Snapshot 흐름
-- [p1-p2-performance-improvements-report.md](../../../05_Reports/04_02_Cost_Performance/p1-p2-performance-improvements-report.md) - PER 알고리즘
+- [p1-p2-performance-improvements-report.md](../../../05_Reports/05_02_Cost_Performance/p1-p2-performance-improvements-report.md) - PER 알고리즘

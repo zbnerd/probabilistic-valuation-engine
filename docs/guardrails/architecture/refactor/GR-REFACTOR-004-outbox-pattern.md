@@ -161,7 +161,7 @@ expected_events = processed_success + dlq_events + ignored_duplicates
 - **ignored_duplicates**: 멱등성 탐지로 안전하게 스킵된 중복 이벤트 수
 
 ## 출처
-- [N19 Outbox Replay Recovery Report](../../../../05_Reports/04_07_Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md)
+- [N19 Outbox Replay Recovery Report](../../../../05_Reports/05_07_Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md)
 - [ADR-016: Nexon API Outbox Pattern](../../../../01_ADR/ADR-016-nexon-api-outbox-pattern.md)
 
 ## 복구 성과 (N19 사례)

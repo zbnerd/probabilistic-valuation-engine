@@ -50,7 +50,7 @@ module-chaos-test/
         ├── application-chaos.yml                   ✅ Created
         └── junit-platform.properties               ✅ Created
 
-docs/02_Technical_Guides/
+docs/03_Technical_Guides/
 ├── chaos-test-module-architecture.md              ✅ Created (500+ lines)
 ├── chaos-test-quick-start.md                      ✅ Created
 └── chaos-test-cicd-patterns.md                    ✅ Created
@@ -241,9 +241,9 @@ None identified. Design is complete and ready for implementation.
 ## References
 
 - **ADR-025**: [Chaos Test Module Separation](/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-025-chaos-test-module-separation.md)
-- **Architecture**: [Chaos Test Module Architecture](/home/maple/probabilistic-valuation-engine/docs/02_Technical_Guides/chaos-test-module-architecture.md)
-- **Quick Start**: [Chaos Test Quick Start](/home/maple/probabilistic-valuation-engine/docs/02_Technical_Guides/chaos-test-quick-start.md)
-- **CI/CD Patterns**: [CI/CD Integration Patterns](/home/maple/probabilistic-valuation-engine/docs/02_Technical_Guides/chaos-test-cicd-patterns.md)
+- **Architecture**: [Chaos Test Module Architecture](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/chaos-test-module-architecture.md)
+- **Quick Start**: [Chaos Test Quick Start](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/chaos-test-quick-start.md)
+- **CI/CD Patterns**: [CI/CD Integration Patterns](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/chaos-test-cicd-patterns.md)
 
 ---
 

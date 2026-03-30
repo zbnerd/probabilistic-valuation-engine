@@ -12,9 +12,9 @@
 ## Documentation Integrity Statement
 
 This guide is based on **production load testing** and **performance analysis** from high-traffic scenarios:
-- Load test results: 240 RPS sustained on AWS t3.small (Evidence: [N23_WRK_V4_RESULTS.md](../04_Reports/Cost_Performance/N23_WRK_V4_RESULTS.md))
-- Thread pool analysis: 11 bottlenecks identified and resolved (Evidence: [high-traffic-performance-analysis.md](../04_Reports/high-traffic-performance-analysis.md))
-- P1 performance improvements: 40% latency reduction (Evidence: [p1-p2-performance-improvements-report.md](../04_Reports/p1-p2-performance-improvements-report.md))
+- Load test results: 240 RPS sustained on AWS t3.small (Evidence: [N23_WRK_V4_RESULTS.md](../05_Reports/Cost_Performance/N23_WRK_V4_RESULTS.md))
+- Thread pool analysis: 11 bottlenecks identified and resolved (Evidence: [high-traffic-performance-analysis.md](../05_Reports/high-traffic-performance-analysis.md))
+- P1 performance improvements: 40% latency reduction (Evidence: [p1-p2-performance-improvements-report.md](../05_Reports/p1-p2-performance-improvements-report.md))
 
 ## Terminology
 
@@ -30,7 +30,7 @@ This guide is based on **production load testing** and **performance analysis** 
 
 ## 21. Async Non-Blocking Pipeline Pattern (Critical)
 
-> **Performance Evidence:** Async pipeline achieved 719 RPS vs 89 RPS blocking (8.1x improvement) (Evidence: [Performance Report](../04_Reports/PERFORMANCE_260105.md)).
+> **Performance Evidence:** Async pipeline achieved 719 RPS vs 89 RPS blocking (8.1x improvement) (Evidence: [Performance Report](../05_Reports/PERFORMANCE_260105.md)).
 > **Why NOT blocking:** Blocking on tomcat threads limits concurrency to ~200 threads. Virtual threads enable 10,000+ concurrent operations.
 > **Known Limitations:** Async debugging complexity; mitigate with structured logging (TraceAspect).
 > **Rollback Plan:** Disable `@Async` and return to synchronous controllers if observability becomes unmanageable.
@@ -167,7 +167,7 @@ return CompletableFuture
 
 > **Production Incident:** P1 #168 (2025-11) - CallerRunsPolicy caused tomcat thread exhaustion during traffic spike.
 > **Root Cause:** Rejected tasks ran on tomcat threads, blocking new requests and creating death spiral.
-> **Fix Validated:** AbortPolicy + 503 response prevented cascade failure (Evidence: [P1 Report](../04_Reports/P1_Nightmare_Issues_Resolution_Report.md) Section 3.4).
+> **Fix Validated:** AbortPolicy + 503 response prevented cascade failure (Evidence: [P1 Report](../05_Reports/P1_Nightmare_Issues_Resolution_Report.md) Section 3.4).
 > **Metrics Proof:** Rejected count increased from 0 (hidden) to visible metrics, enabling proper autoscaling.
 
 ThreadPoolTaskExecutor의 RejectedExecutionHandler 설정 및 메트릭 수집을 위한 필수 규칙입니다.
@@ -317,4 +317,4 @@ curl -s http://localhost:8080/actuator/metrics/executor.active | jq
 ### Related Evidence
 - Load Test: `docs/05_Reports/Cost_Performance/N23_WRK_V4_RESULTS.md`
 - Performance Analysis: `docs/05_Reports/high-traffic-performance-analysis.md`
-- ADR-012: `docs/01_Adr/ADR-012-stateless-scalability-roadmap.md` (Async architecture decision)
+- ADR-012: `docs/01_ADR/ADR-012-stateless-scalability-roadmap.md` (Async architecture decision)

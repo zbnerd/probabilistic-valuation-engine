@@ -44,7 +44,7 @@
 - ✅ All data models (`SignalDefinition`, `AnomalyEvent`, `MitigationPlan`, etc.)
 
 ### 5. **Documentation** (NEW)
-- **File:** `docs/02_Technical_Guides/monitoring-copilot-implementation.md`
+- **File:** `docs/03_Technical_Guides/monitoring-copilot-implementation.md`
 - Comprehensive 300+ line guide covering:
   - Architecture diagram
   - Component descriptions
@@ -341,7 +341,7 @@ probabilistic-valuation-engine/
 │       └── pipeline/
 │           └── MonitoringPipelineService.java  ✨ NEW
 ├── docs/
-│   └── 02_Technical_Guides/
+│   └── 03_Technical_Guides/
 │       └── monitoring-copilot-implementation.md ✨ NEW
 └── grafana/
     └── dashboards/                               ✅ Existing (5 files)

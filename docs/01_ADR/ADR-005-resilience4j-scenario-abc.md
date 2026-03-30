@@ -287,7 +287,7 @@ curl -s http://localhost:8080/actuator/metrics/resilience4j.circuitbreaker.calls
 ## 관련 문서
 
 ### 연결된 ADR
-- **[ADR-006](ADR-006-redis-lock-lease-timeout-ha.md)** - Redis 장애 시 CB 폴백
+- **[ADR-006](ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md)** - Redis 장애 시 CB 폴백
 - **[ADR-003](ADR-003-tiered-cache-singleflight.md)** - Cache Stampede 방지
 
 ### 코드 참조
@@ -297,4 +297,4 @@ curl -s http://localhost:8080/actuator/metrics/resilience4j.circuitbreaker.calls
 
 ### 이슈 및 문서
 - **[Chaos N06](../02_Chaos_Engineering/06_Nightmare/Scenarios/N06-timeout-cascade.md)** - Timeout Cascade 시나리오
-- **[Load Test #266](../05_Reports/04_06_Load_Tests/)** - 719 RPS 달성
+- **[Load Test #266](../05_Reports/05_06_Load_Tests/)** - 719 RPS 달성

@@ -196,5 +196,5 @@ Formula: `Max Pool = (RPS × query_time) × 1.5 (buffer)`
 - [Database Sharding Patterns](https://www.pingcap.com/blog/hot-row-optimization-in-distributed-databases/)
 
 ## 출처
-- [docs/05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md](../../../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md)
+- [docs/05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md](../../../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md)
 - Evidence ID: EVIDENCE-002, EVIDENCE-005, EVIDENCE-010

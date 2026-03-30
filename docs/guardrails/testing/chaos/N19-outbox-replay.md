@@ -160,4 +160,4 @@ rate(outbox_dlq_total[5m])
 
 - `docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N19-outbox-replay.md`
 - `docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N19-compound-failures.md` (Compound Failures)
-- `docs/05_Reports/04_03_Deep_Dive/CHAOS_REPORT_DEEP_DIVE.md`
+- `docs/05_Reports/05_03_Deep_Dive/CHAOS_REPORT_DEEP_DIVE.md`

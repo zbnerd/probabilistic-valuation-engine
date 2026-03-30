@@ -145,10 +145,10 @@ grep -r "live_" logs/ | grep -v "****"
 grep -r "password=" logs/ | grep -v "***"
 
 # 3. toString() 마스킹 확인
-grep -r "toString" src/main/java/**/dto/ | grep -v "mask"
+grep -r "toString" src/main/kotlin/**/dto/ | grep -v "mask"
 
 # 4. TaskContext 민감 정보 확인
-grep -r "TaskContext.of.*apiKey" src/main/java/
+grep -r "TaskContext.of.*apiKey" src/main/kotlin/
 ```
 
 ## 출처

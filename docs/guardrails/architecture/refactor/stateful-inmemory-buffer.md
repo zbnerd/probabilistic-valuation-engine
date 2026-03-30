@@ -80,5 +80,5 @@ public Boolean addRelation(String accountId, String targetOcid) {
 3. **모니터링**: L1/L2 hit rate를 Prometheus로 모니터링
 
 ## 출처
-- 문서: [docs/05_Reports/04_08_Refactor/STATEFUL_REFACTORING_TARGETS.md](../../../05_Reports/04_08_Refactor/STATEFUL_REFACTORING_TARGETS.md)
+- 문서: [docs/05_Reports/05_08_Refactor/STATEFUL_REFACTORING_TARGETS.md](../../../05_Reports/05_08_Refactor/STATEFUL_REFACTORING_TARGETS.md)
 - 관련 문서: [docs/03_Technical_Guides/infrastructure.md](../../../03_Technical_Guides/infrastructure.md) (Section 17: TieredCache)

@@ -134,7 +134,7 @@ public Executor asyncTaskExecutor() {
 ## 검증 명령어
 ```bash
 # Thread Pool 설정 확인
-grep -r "ThreadPoolTaskExecutor" src/main/java/maple/expectation/config/
+grep -r "ThreadPoolTaskExecutor" src/main/kotlin/maple/expectation/config/
 
 # Virtual Thread 활성화 확인
 grep -r "virtual.enabled" src/main/resources/application*.properties

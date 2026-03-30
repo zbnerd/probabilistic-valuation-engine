@@ -128,4 +128,4 @@ hikaricp_connections_timeout_total{pool="LockPool"}
 ## 출처
 
 - `docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N11-lock-fallback-avalanche.md`
-- `docs/05_Reports/04_03_Deep_Dive/CHAOS_REPORT_DEEP_DIVE.md`
+- `docs/05_Reports/05_03_Deep_Dive/CHAOS_REPORT_DEEP_DIVE.md`

@@ -427,7 +427,7 @@ echo "=== Verification Complete ==="
 ## 관련 문서
 
 ### 연결된 ADR
-- **[ADR-006](ADR-006-redis-lock-lease-timeout-ha.md)** - Redis Lock 기본 전략
+- **[ADR-006](ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md)** - Redis Lock 기본 전략
 - **[ADR-003](ADR-003-tiered-cache-singleflight.md)** - Cache Stampede 방지
 - **[ADR-014](ADR-014-multi-module-cross-cutting-concerns.md)** - 모듈 분리 전략
 
@@ -447,8 +447,8 @@ echo "=== Verification Complete ==="
 ## Evidence Links (증거 링크)
 
 ### 문서
-- [Scale-out Blockers Analysis](../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md) - MySQL Lock 병점 분석
-- [High Traffic Performance Analysis](../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md) - 부하 테스트 결과
+- [Scale-out Blockers Analysis](../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md) - MySQL Lock 병점 분석
+- [High Traffic Performance Analysis](../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md) - 부하 테스트 결과
 - [Chaos Test Results](../02_Chaos_Engineering/) - N02, N18 테스트 결과 (Note: Directory structure may vary)
 
 ### 모니터링

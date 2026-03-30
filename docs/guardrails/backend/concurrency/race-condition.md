@@ -232,16 +232,16 @@ Optional<GameCharacter> findByUserIgnWithPessimisticLock(@Param("userIgn") Strin
 ## 검증 명령어
 ```bash
 # Atomic Update 사용 확인
-grep -r "SET.*=.*\+" src/main/java --include="*.java" | grep UPDATE
+grep -r "SET.*=.*\+" src/main/kotlin --include="*.java" | grep UPDATE
 
 # Redis INCR 사용 확인
-grep -r "increment(" src/main/java --include="*.java" | grep redisTemplate
+grep -r "increment(" src/main/kotlin --include="*.java" | grep redisTemplate
 
 # @Version 사용 확인
-grep -r "@Version" src/main/java --include="*.java"
+grep -r "@Version" src/main/kotlin --include="*.java"
 
 # Pessimistic Lock 사용 확인 (Hot Row 주의)
-grep -r "PESSIMISTIC_WRITE" src/main/java --include="*.java"
+grep -r "PESSIMISTIC_WRITE" src/main/kotlin --include="*.java"
 ```
 
 ## 롤백 계획

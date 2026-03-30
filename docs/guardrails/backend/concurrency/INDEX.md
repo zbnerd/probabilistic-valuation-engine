@@ -37,4 +37,4 @@
 ## 관련 문서
 
 - [async-concurrency.md](../../../03_Technical_Guides/async-concurrency.md) Section 21: Async Non-Blocking Pipeline
-- [high-traffic-performance-analysis.md](../../../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md)
+- [high-traffic-performance-analysis.md](../../../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md)

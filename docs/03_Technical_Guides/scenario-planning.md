@@ -12,8 +12,8 @@
 ## Documentation Integrity Statement
 
 This guide is based on **actual production analysis** from:
-- Scale-out blockers analysis: 22 stateful components identified (Evidence: [scale-out-blockers-analysis.md](../04_Reports/scale-out-blockers-analysis.md))
-- High-traffic performance analysis: 5 P0 bottlenecks at 1000 RPS target (Evidence: [high-traffic-performance-analysis.md](../04_Reports/high-traffic-performance-analysis.md))
+- Scale-out blockers analysis: 22 stateful components identified (Evidence: [scale-out-blockers-analysis.md](../05_Reports/scale-out-blockers-analysis.md))
+- High-traffic performance analysis: 5 P0 bottlenecks at 1000 RPS target (Evidence: [high-traffic-performance-analysis.md](../05_Reports/high-traffic-performance-analysis.md))
 - ADR decision records: 14 architecture decisions validated (Evidence: [ADR Directory](../01_ADR/))
 
 ---
@@ -1145,8 +1145,8 @@ gantt
 
 | Section | Evidence Source |
 |---------|-----------------|
-| **Scale-out Blockers** | [scale-out-blockers-analysis.md](../04_Reports/scale-out-blockers-analysis.md) |
-| **High-Traffic Analysis** | [high-traffic-performance-analysis.md](../04_Reports/high-traffic-performance-analysis.md) |
+| **Scale-out Blockers** | [scale-out-blockers-analysis.md](../05_Reports/scale-out-blockers-analysis.md) |
+| **High-Traffic Analysis** | [high-traffic-performance-analysis.md](../05_Reports/high-traffic-performance-analysis.md) |
 | **Architecture** | [architecture.md](../00_Start_Here/architecture.md) |
 | **Roadmap** | [ROADMAP.md](../00_Start_Here/ROADMAP.md) |
 | **ADR-013 (Event Pipeline)** | [ADR-013](../01_ADR/ADR-013-high-throughput-event-pipeline.md) |
@@ -1181,8 +1181,8 @@ for file in \
   "docs/05_Reports/scale-out-blockers-analysis.md" \
   "docs/05_Reports/high-traffic-performance-analysis.md" \
   "docs/00_Start_Here/architecture.md" \
-  "docs/01_Adr/ADR-013-high-throughput-event-pipeline.md" \
-  "docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md"
+  "docs/01_ADR/ADR-013-high-throughput-event-pipeline.md" \
+  "docs/01_ADR/ADR-014-multi-module-cross-cutting-concerns.md"
 do
   if [ -f "$file" ]; then
     echo "✓ $file exists"

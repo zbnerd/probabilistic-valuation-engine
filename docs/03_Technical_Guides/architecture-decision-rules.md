@@ -771,7 +771,7 @@ class ApiClient {
 
 **Decision:** Implement Option 2 (Pre-warm cache) ✅
 
-**ADR Created:** [ADR-015: Cache Pre-warming Strategy](../01_ADR/ADR-015-cache-warming.md)
+**ADR Created:** [ADR-015: Cache Pre-warming Strategy](../01_ADR/(DEPRECATED - see ADR-007).md)
 
 ---
 

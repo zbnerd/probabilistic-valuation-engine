@@ -14,14 +14,14 @@ Issue #562에서 부하 테스트를 통해 시스템 성능을 검증하고, 97
 
 | 문서 | 위치 | 주요 내용 |
 |------|------|----------|
-| Chaos Engineering Report | `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260120.md` | Nightmare chaos tests (223 RPS baseline) |
-| V4 Singleflight Report | `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260124_V4_SINGLEFLIGHT.md` | Singleflight 도입 (97 RPS - 회귀) |
-| V4 Phase 2 Report | `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260124_V4_PHASE2.md` | L1 Fast Path (555 RPS) |
-| V4 Parallel Write-Behind | `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260125_V4_PARALLEL_WRITEBEHIND.md` | 병렬 쓰기 (674 RPS) |
-| V4 ADR Refactoring | `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260126_V4_ADR_REFACTORING.md` | 리팩토링 검증 (965 RPS) |
-| V5 Stateless | `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260127_V5_STATELESS.md` | Stateless 아키텍처 (325-688 RPS) |
-| Multi-Instance Warmup | `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260127_MULTI_INSTANCE_WARMUP.md` | Auto Warmup (940 RPS) |
-| LISTEN/NOTIFY Baseline | `docs/05_Reports/04_06_Load_Tests/baseline-report-2026-03-19.md` | PostgreSQL NOTIFY (7,347 → 10,994 RPS) |
+| Chaos Engineering Report | `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260120.md` | Nightmare chaos tests (223 RPS baseline) |
+| V4 Singleflight Report | `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260124_V4_SINGLEFLIGHT.md` | Singleflight 도입 (97 RPS - 회귀) |
+| V4 Phase 2 Report | `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260124_V4_PHASE2.md` | L1 Fast Path (555 RPS) |
+| V4 Parallel Write-Behind | `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260125_V4_PARALLEL_WRITEBEHIND.md` | 병렬 쓰기 (674 RPS) |
+| V4 ADR Refactoring | `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260126_V4_ADR_REFACTORING.md` | 리팩토링 검증 (965 RPS) |
+| V5 Stateless | `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260127_V5_STATELESS.md` | Stateless 아키텍처 (325-688 RPS) |
+| Multi-Instance Warmup | `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260127_MULTI_INSTANCE_WARMUP.md` | Auto Warmup (940 RPS) |
+| LISTEN/NOTIFY Baseline | `docs/05_Reports/05_06_Load_Tests/baseline-report-2026-03-19.md` | PostgreSQL NOTIFY (7,347 → 10,994 RPS) |
 
 ---
 
@@ -355,7 +355,7 @@ scheduler:
 
 ### Phase 8: PostgreSQL LISTEN/NOTIFY (2026-03-19 ~ 2026-03-20) - 7,347 → 10,994 RPS
 
-**Source**: `docs/05_Reports/04_06_Load_Tests/baseline-report-2026-03-19.md`
+**Source**: `docs/05_Reports/05_06_Load_Tests/baseline-report-2026-03-19.md`
 
 **Optimization**: Redis Pub/Sub → PostgreSQL NOTIFY
 
@@ -521,14 +521,14 @@ rate(expectation_buffer_rejected_backpressure_total[1m])
 
 ### Load Test Reports
 
-- `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260120.md`
-- `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260124_V4_SINGLEFLIGHT.md`
-- `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260124_V4_PHASE2.md`
-- `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260125_V4_PARALLEL_WRITEBEHIND.md`
-- `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260126_V4_ADR_REFOCTORING.md`
-- `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260127_V5_STATELESS.md`
-- `docs/05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260127_MULTI_INSTANCE_WARMUP.md`
-- `docs/05_Reports/04_06_Load_Tests/baseline-report-2026-03-19.md`
+- `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260120.md`
+- `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260124_V4_SINGLEFLIGHT.md`
+- `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260124_V4_PHASE2.md`
+- `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260125_V4_PARALLEL_WRITEBEHIND.md`
+- `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260126_V4_ADR_REFOCTORING.md`
+- `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260127_V5_STATELESS.md`
+- `docs/05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260127_MULTI_INSTANCE_WARMUP.md`
+- `docs/05_Reports/05_06_Load_Tests/baseline-report-2026-03-19.md`
 
 ### Related ADRs
 

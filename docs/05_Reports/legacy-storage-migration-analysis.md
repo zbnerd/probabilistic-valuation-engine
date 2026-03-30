@@ -298,6 +298,6 @@ implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
 ## 참고 문서
 
-- [ADR-002: PGMQ Integration](../01_ADR/ADR-002-pgmq-integration.md)
-- [ADR-007: PostgreSQL MongoDB Replacement](../01_ADR/ADR-007-postgresql-mongodb-replacement.md)
+- [ADR-002: PGMQ Integration](../01_ADR/ADR-316-pgmq-integration.md)
+- [ADR-007: PostgreSQL MongoDB Replacement](../01_ADR/ADR-325-postgresql-mongodb-replacement.md)
 - [PostgreSQL Migration Phase 2 Plan](../plan/postgresql-migration-phase2-plan.md)

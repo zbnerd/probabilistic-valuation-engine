@@ -596,27 +596,27 @@ Map<Type, List<Dto>> grouped = entities.stream()
 # IDE 플러그인 또는 SonarQube 규칙 활용 권장
 
 # 중첩 람다 패턴 확인
-grep -r "execute.*->.*execute" src/main/java/
+grep -r "execute.*->.*execute" src/main/kotlin/
 
 # Method Reference 미사용 패턴 확인
-grep -r "-> service\." src/main/java/ | grep -v "::"
-grep -r "-> this\." src/main/java/ | grep -v "::"
+grep -r "-> service\." src/main/kotlin/ | grep -v "::"
+grep -r "-> this\." src/main/kotlin/ | grep -v "::"
 
 # forEach 내부 side effect 확인
-grep -r "forEach.*{" src/main/java/ | grep -A 5 "\.add("
+grep -r "forEach.*{" src/main/kotlin/ | grep -A 5 "\.add("
 ```
 
 ### Clean Code 검증
 
 ```bash
 # 메서드 길이 확인 (20라인 초과 시 경고)
-find src/main/java -name "*.java" -exec wc -l {} \; | awk '$1 > 20 { print $0 }'
+find src/main/kotlin -name "*.java" -exec wc -l {} \; | awk '$1 > 20 { print $0 }'
 
 # 중첩 깊이 확인 (2단계 초과 시 경고)
 # IDE 플러그인 또는 SonarQube 규칙 활용 권장
 
 # Optional 체이닝 미사용 확인
-grep -r "if.*!= null" src/main/java/
+grep -r "if.*!= null" src/main/kotlin/
 ```
 
 ---

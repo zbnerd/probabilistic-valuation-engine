@@ -98,5 +98,5 @@ public class LikeRelationBuffer extends AbstractTieredBuffer<String, Boolean> {
 3. **메트릭 등록 통일**: 생성자에서 일관되게 메트릭 등록
 
 ## 출처
-- 문서: [docs/05_Reports/04_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/04_08_Refactor/duplicated-code-analysis.md)
+- 문서: [docs/05_Reports/05_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/05_08_Refactor/duplicated-code-analysis.md)
 - 카테고리: P1 (중간 수준 중복)

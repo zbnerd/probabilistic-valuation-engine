@@ -125,5 +125,5 @@ public class EquipmentCacheService extends AbstractTieredCacheService<String, Eq
 3. **SRP 준수**: 각 서비스는 전략 구현만 담당
 
 ## 출처
-- 문서: [docs/05_Reports/04_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/04_08_Refactor/duplicated-code-analysis.md)
+- 문서: [docs/05_Reports/05_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/05_08_Refactor/duplicated-code-analysis.md)
 - 카테고리: P0 (심각한 중복)

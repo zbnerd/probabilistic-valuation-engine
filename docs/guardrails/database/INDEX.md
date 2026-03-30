@@ -41,7 +41,7 @@ Buffer Pool Instances = 1 (if < 4GB), else = Buffer Pool Size / 1GB
 
 ## 관련 문서
 
-- [docs/05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md](../../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md) - P0/P1 Analysis
-- [docs/05_Reports/04_02_Cost_Performance/p1-p2-performance-improvements-report.md](../../05_Reports/04_02_Cost_Performance/p1-p2-performance-improvements-report.md) - InnoDB Tuning
-- [docs/05_Reports/04_02_Cost_Performance/COST_PERF_REPORT_N23.md](../../05_Reports/04_02_Cost_Performance/COST_PERF_REPORT_N23.md) - Scale-out Cost Analysis
+- [docs/05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md](../../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md) - P0/P1 Analysis
+- [docs/05_Reports/05_02_Cost_Performance/p1-p2-performance-improvements-report.md](../../05_Reports/05_02_Cost_Performance/p1-p2-performance-improvements-report.md) - InnoDB Tuning
+- [docs/05_Reports/05_02_Cost_Performance/COST_PERF_REPORT_N23.md](../../05_Reports/05_02_Cost_Performance/COST_PERF_REPORT_N23.md) - Scale-out Cost Analysis
 - [docs/03_Technical_Guides/infrastructure.md](../03_Technical_Guides/infrastructure.md) - Infrastructure Guide

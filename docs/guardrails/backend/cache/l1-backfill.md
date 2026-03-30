@@ -357,5 +357,5 @@ rate(cache_eviction_total{layer="L1"}[5m])
 ## 출처
 
 - [cache-sequence.md](../../../04_Sequence_Diagrams/cache-sequence.md) - Write Order 규칙 (L2 → L1)
-- TieredCache 구현: `src/main/java/maple/expectation/global/cache/TieredCache.java`
+- TieredCache 구현: `src/main/kotlin/maple/expectation/global/cache/TieredCache.java`
 - infrastructure.md Section 17: TieredCache & Cache Stampede Prevention

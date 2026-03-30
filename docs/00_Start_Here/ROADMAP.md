@@ -340,7 +340,7 @@ P0/P1 Stateful 컴포넌트를 분산 환경에서 안전하게 동작하도록 
 - [ ] P99 Latency 50ms 이하 유지
 
 **관련 문서:**
-- [Transactional Outbox 패턴 ADR](../01_ADR/ADR-XXX-outbox-pattern.md) (TBD)
+- [Transactional Outbox 패턴 ADR](../01_ADR/ADR-010-outbox-pattern.md) (TBD)
 - [Debebium 공식 문서](https://debezium.io/documentation/reference/stable/)
 
 ---

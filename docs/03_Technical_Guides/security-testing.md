@@ -13,9 +13,9 @@
 ## Documentation Integrity Statement
 
 This guide is based on **security testing experience** from 2025 Q4 security audits:
-- Security test coverage: 85% for critical paths (Evidence: [Security Test Report](../04_Reports/security-test-coverage-2025-Q4.md))
-- Vulnerability findings: 25+ issues detected and resolved (Evidence: [Security Review](../04_Reports/security-audit-2025-Q4.md))
-- Chaos security tests: N01-N18 scenarios include security validation (Evidence: [Chaos Engineering](../01_Chaos_Engineering/))
+- Security test coverage: 85% for critical paths (Evidence: [Security Test Report](../05_Reports/security-test-coverage-2025-Q4.md))
+- Vulnerability findings: 25+ issues detected and resolved (Evidence: [Security Review](../05_Reports/security-audit-2025-Q4.md))
+- Chaos security tests: N01-N18 scenarios include security validation (Evidence: [Chaos Engineering](../02_Chaos_Engineering/))
 
 ## Terminology
 
@@ -354,7 +354,7 @@ class JwtAuthenticationIntegrationTest {
 
 ## 35. Security Chaos Testing
 
-> **Related:** [Chaos Engineering](../01_Chaos_Engineering/)
+> **Related:** [Chaos Engineering](../02_Chaos_Engineering/)
 > **Objective:** Validate security controls under failure conditions.
 
 장애 주입을 통한 보안 견고성 테스트입니다.

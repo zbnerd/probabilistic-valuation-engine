@@ -329,5 +329,5 @@ rate(singleflight_leader_total[5m]) / rate(singleflight_follower_total[5m])
 ## 출처
 
 - [cache-sequence.md](../../../04_Sequence_Diagrams/cache-sequence.md) - Follower Lock 대기 시나리오
-- SingleFlightExecutor 구현: `src/main/java/maple/expectation/global/cache/SingleFlightExecutor.java`
+- SingleFlightExecutor 구현: `src/main/kotlin/maple/expectation/global/cache/SingleFlightExecutor.java`
 - GR-CACHE-001: TieredCache & SingleFlight

@@ -35,7 +35,7 @@ class SingleFlightExecutor {
 
 ### 문제점: Scale-out 차단 + Hot Key 스탬프
 
-**Scale-out Blockers 분석 결과** (docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md):
+**Scale-out Blockers 분석 결과** (docs/05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md):
 
 | 분류 | P0 (Critical) | P1 (High) | 합계 |
 |------|:---:|:---:|:---:|
@@ -626,7 +626,7 @@ FROM single_flight_results;
 - [ADR-001 PostgreSQL 단일 DB 전략](001-postgresql-single-db-strategy.md)
 - [ADR-002 PGMQ Integration](002-pgmq-integration.md)
 - [ADR-003 PostgreSQL Advisory Lock](003-postgresql-advisory-lock.md)
-- [Scale-out Blockers Analysis](../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
+- [Scale-out Blockers Analysis](../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)
 - [TieredCache Implementation](../03_Technical_Guides/infrastructure.md#17-tieredcache)
 
 ---

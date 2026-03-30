@@ -112,7 +112,7 @@ TimeLimiter: 28s (상한)
 3. Transaction timeout은 **가장 긴 DB 작업**보다 커야 함
 
 ## 출처
-- [P1 Nightmare Issues Resolution Report](../../../../05_Reports/04_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md) - Issue #225
+- [P1 Nightmare Issues Resolution Report](../../../../05_Reports/05_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md) - Issue #225
 - [CLAUDE.md](../../../../CLAUDE.md) - Section 4 (Sequential Thinking)
 
 ## Zombie Request 방지

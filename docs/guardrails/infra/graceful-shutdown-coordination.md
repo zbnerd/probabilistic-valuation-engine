@@ -386,7 +386,7 @@ Post-Shutdown (정리)
 ```
 
 ## 출처
-- [docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md](../../../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
+- [docs/05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md](../../../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)
 - P0-6: LoggingAspect
 - P1-15: ExpectationWriteBackBuffer
 - P1-16: GracefulShutdownCoordinator

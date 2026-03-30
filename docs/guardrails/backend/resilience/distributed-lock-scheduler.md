@@ -401,23 +401,23 @@ void schedulerShouldRunOnlyOnSingleInstance() throws InterruptedException {
 
 ### ADR
 - Issue #275: Auto Warmup 기능 구현 (분산 락 필수)
-- `docs/01_ADR/ADR-006-redis-lock-lease-timeout-ha.md` - Redis Lock 설정
+- `docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md` - Redis Lock 설정
 
 ### 코드 (Evidence)
-- `src/main/java/maple/expectation/global/lock/RedisDistributedLockStrategy.java`
-- `src/main/java/maple/expectation/scheduler/PopularCharacterWarmupScheduler.java`
+- `src/main/kotlin/maple/expectation/global/lock/RedisDistributedLockStrategy.java`
+- `src/main/kotlin/maple/expectation/scheduler/PopularCharacterWarmupScheduler.java`
 
 ## 검증 명령어
 
 ```bash
 # 분산 락 사용 확인
-grep -r "executeWithLock\|tryLock" src/main/java --include="*.java"
+grep -r "executeWithLock\|tryLock" src/main/kotlin --include="*.java"
 
 # RedisDistributedLockStrategy 구현 확인
-find src/main/java -name "*DistributedLock*.java"
+find src/main/kotlin -name "*DistributedLock*.java"
 
 # 스케줄러 분산 락 사용 확인
-grep -A 10 "@Scheduled" src/main/java/maple/expectation/scheduler/*.java | grep -A 5 "executeWithLock"
+grep -A 10 "@Scheduled" src/main/kotlin/maple/expectation/scheduler/*.java | grep -A 5 "executeWithLock"
 
 # 다중 인스턴스 테스트 실행
 ./gradlew test --tests "*Warmup*Test"

@@ -4,7 +4,7 @@
 **Date**: 2026-02-15
 **Author**: probabilistic-valuation-engine Architecture Team
 **Supersedes**: [ADR-036](ADR-036-v5-cqrs-mongodb.md)
-**Related**: [V5 Implementation Report](../04_Reports/04_09_Scale_Out/v5-cqrs-implementation-report.md)
+**Related**: [V5 Implementation Report](../05_Reports/05_09_Scale_Out/v5-cqrs-implementation-report.md)
 
 ---
 
@@ -615,8 +615,8 @@ dependencies {
 ### Related Documents
 
 - **ADR-036**: [V5 CQRS Architecture Design](ADR-036-v5-cqrs-mongodb.md)
-- **Implementation Report**: [V5 CQRS Implementation](../04_Reports/04_09_Scale_Out/v5-cqrs-implementation-report.md)
-- **Sequence Diagram**: [V5 CQRS Sequence](../03_Sequence_Diagrams/v5-cqrs-sequence.md)
+- **Implementation Report**: [V5 CQRS Implementation](../05_Reports/05_09_Scale_Out/v5-cqrs-implementation-report.md)
+- **Sequence Diagram**: [V5 CQRS Sequence](../04_Sequence_Diagrams/v5-cqrs-sequence.md)
 
 ### Architecture Decisions
 
@@ -624,8 +624,8 @@ dependencies {
 |-----|-------|------|
 | ADR-036 | V5 CQRS Architecture Design | [Link](ADR-036-v5-cqrs-mongodb.md) |
 | ADR-014 | Multi-Module Architecture | [Link](ADR-014-multi-module-cross-cutting-concerns.md) |
-| ADR-013 | Redis Stream Design | [Link](ADR-013-redis-stream-design.md) |
-| ADR-003 | TieredCache Strategy | [Link](ADR-003-tiered-cache.md) |
+| ADR-013 | Redis Stream Design | [Link](ADR-013-high-throughput-event-pipeline.md) |
+| ADR-003 | TieredCache Strategy | [Link](ADR-003-tiered-cache-singleflight.md) |
 
 ### External References
 

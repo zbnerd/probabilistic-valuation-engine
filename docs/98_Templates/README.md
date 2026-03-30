@@ -41,7 +41,7 @@
 | 25 | 검증 명령어 | ✅ | 템플릿 사용법 | EV-TPL-025 |
 | 26 | 템플릿 커버리지 | ✅ | 주요 작업 모두 포함 | EV-TPL-026 |
 | 27 | 5-Agent Council 언급 | ✅ | Red/Purple 에이전트 | EV-TPL-027 |
-| 28 | 관련 문서 링크 | ✅ | 01_Chaos_Engineering/ | EV-TPL-028 |
+| 28 | 관련 문서 링크 | ✅ | 02_Chaos_Engineering/ | EV-TPL-028 |
 | 29 | 추상화 수준 적절성 | ✅ | 너무 구체적이지 않음 | EV-TPL-029 |
 | 30 | 유지보수 용이성 | ✅ | 중앙 집중식 관리 | EV-TPL-030 |
 
@@ -59,7 +59,7 @@
 
 | 템플릿 | 용도 | 사용 위치 | 버전 |
 |--------|------|----------|------|
-| [Chaos_Report_Template.md](./Chaos_Report_Template.md) | 카오스 테스트 시나리오 문서화 | `01_Chaos_Engineering/` | 2.0.0 |
+| [Chaos_Report_Template.md](./Chaos_Report_Template.md) | 카오스 테스트 시나리오 문서화 | `02_Chaos_Engineering/` | 2.0.0 |
 | [ISSUE_TEMPLATE.md](./ISSUE_TEMPLATE.md) | 카오스 테스트 실패 이슈 생성 | GitHub Issues | 2.0.0 |
 | [PR_TEMPLATE.md](./PR_TEMPLATE.md) | Pull Request 작성 | GitHub PRs | 2.0.0 |
 | [GITHUB_SECRETS_SETUP_GUIDE.md](./GITHUB_SECRETS_SETUP_GUIDE.md) | GitHub Secrets 설정 가이드 | CI/CD 초기 설정 | 1.0.0 |
@@ -153,7 +153,7 @@ grep -A 30 "문서 무결성 체크리스트" docs/98_Templates/*.md | grep "통
 - **EV-TPL-025**: 섹션 "사용 방법" 3단계
 - **EV-TPL-026**: 섹션 "템플릿 목록" - 카오스/이슈/PR/Secrets 커버
 - **EV-TPL-027**: ISSUE_TEMPLATE "🔴 Red + 🟣 Purple"
-- **EV-TPL-028**: Chaos_Report_Template "01_Chaos_Engineering/"
+- **EV-TPL-028**: Chaos_Report_Template "02_Chaos_Engineering/"
 - **EV-TPL-029**: 템플릿이 특정 상황에 너무 구체적이지 않음
 - **EV-TPL-030**: 98_Templates/ 중앙 집중식 관리
 

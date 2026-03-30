@@ -329,6 +329,6 @@ curl http://localhost:8080/actuator/metrics/ratelimit.denied
 | **성능** | 약간 빠름 | 충분히 빠름 |
 
 ## 출처
-- [docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md](../../../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md) P1-1
+- [docs/05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md](../../../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md) P1-1
 - [Bucket4j Documentation](https://bucket4j.com/)
 - [Redisson RateLimiter](https://redisson.org)

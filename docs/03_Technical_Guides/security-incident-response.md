@@ -13,7 +13,7 @@
 ## Documentation Integrity Statement
 
 This guide is based on **incident response experience** from 2025 P0 incidents:
-- P0 #238: Authentication bypass resolved in 2 hours (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
+- P0 #238: Authentication bypass resolved in 2 hours (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
 - P0 #241: Self-invocation security bypass resolved in 4 hours
 - P0 #287: Data loss incident resolved with DLQ implementation
 - Average MTTR: 2.5 hours for security incidents (Industry average: 48 hours)

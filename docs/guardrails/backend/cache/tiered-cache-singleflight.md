@@ -296,7 +296,7 @@ hikaricp_connections_active / hikaricp_connections_max
 
 ```bash
 # Verify hash tag usage in Lua scripts
-grep -r "redis.call\|redis.call" src/main/java/ | grep -v "{.*}"
+grep -r "redis.call\|redis.call" src/main/kotlin/ | grep -v "{.*}"
 
 # Test Redis Cluster connectivity
 redis-cli -c -h localhost -p 6379 cluster info

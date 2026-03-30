@@ -14,9 +14,9 @@
 ## Documentation Integrity Statement
 
 This guide is based on **production architecture validation** and module evolution history:
-- V4 performance validated: 719 RPS vs V2 95 RPS cold cache (Evidence: [WRK Summary](../04_Reports/WRK_Final_Summary.md))
-- SingleFlight effectiveness: 99% deduplication rate (Evidence: [N01 Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md))
-- Outbox recovery: 2.1M events processed in 47min (Evidence: [N19 Recovery](../04_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md))
+- V4 performance validated: 719 RPS vs V2 95 RPS cold cache (Evidence: [WRK Summary](../05_Reports/WRK_Final_Summary.md))
+- SingleFlight effectiveness: 99% deduplication rate (Evidence: [N01 Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md))
+- Outbox recovery: 2.1M events processed in 47min (Evidence: [N19 Recovery](../05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md))
 
 ---
 
@@ -53,10 +53,10 @@ probabilistic-valuation-engine의 서비스 레이어는 **V2 (핵심 비즈니�
 
 | 모듈 | 성능 지표 | 증거 출처 |
 |------|-----------|-----------|
-| V4 Service Root | 719 RPS throughput | [Load Test Report](../04_Reports/WRK_Final_Summary.md) |
-| ExpectationCacheCoordinator | 99% SingleFlight deduplication | [N01 Test Result](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) |
-| ExpectationWriteBackBuffer | 10,000 tasks backpressure handled | [N19 Implementation](../01_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md) |
-| NexonApiFallbackService | 47min recovery for 2.1M events | [N19 Recovery Report](../04_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md) |
+| V4 Service Root | 719 RPS throughput | [Load Test Report](../05_Reports/WRK_Final_Summary.md) |
+| ExpectationCacheCoordinator | 99% SingleFlight deduplication | [N01 Test Result](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) |
+| ExpectationWriteBackBuffer | 10,000 tasks backpressure handled | [N19 Implementation](../02_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md) |
+| NexonApiFallbackService | 47min recovery for 2.1M events | [N19 Recovery Report](../05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md) |
 
 ```mermaid
 graph TB
@@ -694,7 +694,7 @@ public void updateEquipment(String ocid) {
 - **V4 Modules:** `src/main/java/maple/expectation/service/v4/` (Evidence: [CODE-V4-001])
 - **Calculator:** `src/main/java/maple/expectation/service/v2/calculator/` (Evidence: [CODE-CALC-001])
 - **Tests:** `src/test/java/maple/expectation/service/v2/*Test.java` (Evidence: [TEST-SERVICE-001])
-- **ADR-014:** `docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md` (Module architecture decision)
+- **ADR-014:** `docs/01_ADR/ADR-014-multi-module-cross-cutting-concerns.md` (Module architecture decision)
 
 ## Technical Validity Check
 
@@ -726,7 +726,7 @@ curl -s http://localhost:8080/actuator/metrics/expectation.buffer.pending | jq
 - WRK Summary: `docs/05_Reports/WRK_Final_Summary.md`
 - N01 Test: `docs/02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md`
 - N19 Recovery: `docs/05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md`
-- ADR-011: `docs/01_Adr/ADR-011-controller-v4-optimization.md`
+- ADR-011: `docs/01_ADR/ADR-011-controller-v4-optimization.md`
 
 ---
 
@@ -747,8 +747,8 @@ curl -s http://localhost:8080/actuator/metrics/expectation.buffer.pending | jq
 - **[P3]** Write-Behind Buffer: `docs/02_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md` (Evidence: [PERF-003])
 
 ### Architecture Evidence
-- **[A1]** ADR-011: `docs/01_Adr/ADR-011-controller-v4-optimization.md` (Evidence: [ARCH-001])
-- **[A2]** ADR-014: `docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md` (Evidence: [ARCH-002])
+- **[A1]** ADR-011: `docs/01_ADR/ADR-011-controller-v4-optimization.md` (Evidence: [ARCH-001])
+- **[A2]** ADR-014: `docs/01_ADR/ADR-014-multi-module-cross-cutting-concerns.md` (Evidence: [ARCH-002])
 
 ### Test Evidence
 - **[T1]** Service Tests: `src/test/java/maple/expectation/service/v2/*Test.java` (Evidence: [TEST-SERVICE-001])
@@ -864,8 +864,8 @@ grep -r "extends.*Decorator" src/main/java/maple/expectation/service/v*/ | head 
 - WRK Summary: `docs/05_Reports/WRK_Final_Summary.md`
 - N01 Test: `docs/02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md`
 - N19 Recovery: `docs/05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md`
-- ADR-011: `docs/01_Adr/ADR-011-controller-v4-optimization.md`
-- ADR-014: `docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md`
+- ADR-011: `docs/01_ADR/ADR-011-controller-v4-optimization.md`
+- ADR-014: `docs/01_ADR/ADR-014-multi-module-cross-cutting-concerns.md`
 
 ---
 

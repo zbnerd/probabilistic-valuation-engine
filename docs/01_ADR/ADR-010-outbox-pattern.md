@@ -376,5 +376,5 @@ curl -s http://localhost:8080/actuator/metrics | jq '.names[] | select(. | conta
 
 ## 관련 문서
 - **코드:** `src/main/java/maple/expectation/domain/v2/DonationOutbox.java`
-- **시퀀스:** `docs/03_Sequence_Diagrams/outbox-sequence.md`
+- **시퀀스:** `docs/04_Sequence_Diagrams/outbox-sequence.md`
 - **이슈:** #80, #229

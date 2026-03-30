@@ -21,7 +21,7 @@
 ## Documentation Integrity Statement
 
 This guide is based on **production Redis failover testing** and distributed systems research:
-- Issue #77 resolution: Redis Failover stability improvements validated (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md))
+- Issue #77 resolution: Redis Failover stability improvements validated (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md))
 - Failover test results: 100% data preservation, 1-2s detection (Evidence: Chaos N01, N02 test results)
 - Martin Kleppmann analysis: Redlock criticism considered in architecture decision (Evidence: [Distributed Locking](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html))
 
@@ -31,7 +31,7 @@ This guide is based on **production Redis failover testing** and distributed sys
 
 ### 1.1 아키텍처
 
-> **Production Validated:** AWS t3.small deployment with 100% uptime during 3 failover events (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md)).
+> **Production Validated:** AWS t3.small deployment with 100% uptime during 3 failover events (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md)).
 > **Why NOT Cluster:** Cluster requires 3+ masters (6+ nodes); Sentinel sufficient for current read-after-write consistency needs.
 > **Rollback Plan:** Enable Redis Cluster if sharding becomes necessary (>10GB dataset).
 
@@ -291,7 +291,7 @@ if (circuitBreaker.isOpen()) {
 
 > **Production Incident:** P0 #77 (2025-11) - Redis Failover caused READONLY errors and application crashes.
 > **Root Cause:** Redisson cached old Master topology; attempted writes to promoted Slave.
-> **Fix Validated:** ReadMode.MASTER + 1s scanInterval eliminated all READONLY errors (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md)).
+> **Fix Validated:** ReadMode.MASTER + 1s scanInterval eliminated all READONLY errors (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md)).
 > **Metrics Proof:** Failover time reduced from 30s to 1-2s; application uptime 99.9% during failover.
 
 #### 6.2.1 Redisson Sentinel 설정 강화
@@ -416,7 +416,7 @@ Half-Open: 3회 시도로 Redis 상태 확인
 ## Evidence Links
 - **RedissonConfig:** `src/main/java/maple/expectation/config/RedissonConfig.java` (Evidence: [CODE-REDIS-CONFIG-001])
 - **Failover Tests:** `src/test/java/maple/expectation/chaos/nightmare/*SentinelTest.java` (Evidence: [TEST-FAILOVER-001])
-- **ADR-006:** `docs/01_Adr/ADR-006-redis-lock-lease-timeout-ha.md` (Sentinel HA decision)
+- **ADR-006:** `docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md` (Sentinel HA decision)
 - **Redlock Analysis:** Martin Kleppmann's critique referenced for architecture decision
 
 ## Technical Validity Check
@@ -443,6 +443,6 @@ curl -s http://localhost:8080/actuator/health | jq
 ```
 
 ### Related Evidence
-- ADR-006: `docs/01_Adr/ADR-006-redis-lock-lease-timeout-ha.md`
+- ADR-006: `docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md`
 - P0 Report: `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md`
 - Chaos N01/N02: `docs/02_Chaos_Engineering/06_Nightmare/Results/`

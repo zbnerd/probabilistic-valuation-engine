@@ -8,7 +8,7 @@
 ## Documentation Integrity Statement
 
 This guide is based on **traffic pattern analysis** and automatic scenario response:
-- 4-quadrant matrix validated through production incidents (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
+- 4-quadrant matrix validated through production incidents (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
 - Circuit Breaker thresholds: 50% failure rate based on Nexon API patterns (Evidence: [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md))
 - Graceful Shutdown: 100% data preservation during 50s drain period (Evidence: [ADR-008](../01_ADR/ADR-008-durability-graceful-shutdown.md))
 
@@ -676,8 +676,8 @@ changes(scenario_current_mode[24h])
 
 ### Documentation Evidence
 - **[D1]** P0 Report: `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md`
-- **[D2]** ADR-005: `docs/01_Adr/ADR-005-resilience4j-scenario-abc.md`
-- **[D3]** ADR-008: `docs/01_Adr/ADR-008-durability-graceful-shutdown.md`
+- **[D2]** ADR-005: `docs/01_ADR/ADR-005-resilience4j-scenario-abc.md`
+- **[D3]** ADR-008: `docs/01_ADR/ADR-008-durability-graceful-shutdown.md`
 
 ---
 
@@ -746,8 +746,8 @@ curl -s http://localhost:8080/actuator/health/details | jq
 
 ## Related Documents
 
-- [KPI-BSC Dashboard](../04_Reports/KPI_BSC_DASHBOARD.md) - 성과 지표
-- [Chaos Engineering](../01_Chaos_Engineering/06_Nightmare/) - Nightmare 시나리오
+- [KPI-BSC Dashboard](../05_Reports/KPI_BSC_DASHBOARD.md) - 성과 지표
+- [Chaos Engineering](../02_Chaos_Engineering/06_Nightmare/) - Nightmare 시나리오
 - [Infrastructure Guide](./infrastructure.md) - 인프라 설정
 - [Resilience Guide](./resilience.md) - 회복 탄력성 패턴
 

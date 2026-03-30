@@ -64,5 +64,5 @@ public GameCharacter findCharacter(String userIgn) {
 3. **일관된 로그**: 모든 TaskContext가 동일한 형식 사용
 
 ## 출처
-- 문서: [docs/05_Reports/04_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/04_08_Refactor/duplicated-code-analysis.md)
+- 문서: [docs/05_Reports/05_08_Refactor/duplicated-code-analysis.md](../../../05_Reports/05_08_Refactor/duplicated-code-analysis.md)
 - 카테고리: P1 (중간 수준 중복)

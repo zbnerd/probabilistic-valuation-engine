@@ -210,15 +210,15 @@ public class LikeSyncScheduler {
 ## 출처
 - lock-strategy.md - 3-Tier Lock Architecture
 - Production Incident: P1-P7-P8-P9 (2025 Q4) - Scheduler duplicate execution during Redis failover
-- ADR-006: `docs/01_Adr/ADR-006-redis-lock-lease-timeout-ha.md` (Watchdog decision)
+- ADR-006: `docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md` (Watchdog decision)
 
 ## 검증 명령어
 ```bash
 # LockStrategy 구현 확인
-find src/main/java -name "*LockStrategy.java"
+find src/main/kotlin -name "*LockStrategy.java"
 
 # Feature Flag 구현 확인
-find src/main/java -name "*FeatureFlag*.java"
+find src/main/kotlin -name "*FeatureFlag*.java"
 
 # Redis Lock Metrics 확인
 curl -s http://localhost:8080/actuator/metrics/lock.acquired | jq

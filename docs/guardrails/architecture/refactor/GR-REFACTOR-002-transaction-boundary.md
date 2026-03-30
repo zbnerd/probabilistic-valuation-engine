@@ -111,7 +111,7 @@ hikaricp_connections_pending{pool="MySQLLockPool"} == 0
 ```
 
 ## 출처
-- [P1 Nightmare Issues Resolution Report](../../../../05_Reports/04_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md) - Issue #226
+- [P1 Nightmare Issues Resolution Report](../../../../05_Reports/05_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md) - Issue #226
 - [CLAUDE.md](../../../../CLAUDE.md) - Section 21 (Async Non-Blocking Pipeline)
 - [async-concurrency.md](../../../../03_Technical_Guides/async-concurrency.md) - Section 21
 

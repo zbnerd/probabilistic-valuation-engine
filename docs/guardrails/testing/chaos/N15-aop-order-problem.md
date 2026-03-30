@@ -115,4 +115,4 @@ static final ArchRule all_aspects_must_have_explicit_order =
 ## 출처
 
 - `docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N15-aop-order-problem.md`
-- `docs/05_Reports/04_03_Deep_Dive/CHAOS_REPORT_DEEP_DIVE.md`
+- `docs/05_Reports/05_03_Deep_Dive/CHAOS_REPORT_DEEP_DIVE.md`

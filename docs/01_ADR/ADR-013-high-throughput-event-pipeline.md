@@ -1478,8 +1478,8 @@ return 0
 
 ## 참고 자료
 
-- `docs/01_Adr/ADR-010-outbox-pattern.md` - Outbox 패턴 설계
-- `docs/01_Adr/ADR-012-stateless-scalability-roadmap.md` - Stateless 전환 로드맵
+- `docs/01_ADR/ADR-010-outbox-pattern.md` - Outbox 패턴 설계
+- `docs/01_ADR/ADR-012-stateless-scalability-roadmap.md` - Stateless 전환 로드맵
 - `docs/03_Technical_Guides/async-concurrency.md` - 비동기 처리 가이드
 - GitHub Issue #126 - CQRS 아키텍처 도입 논의
 
@@ -1691,8 +1691,8 @@ redis-cli -c cluster keyslot upd:{12345}:ver
 
 ## 참고 자료
 
-- `docs/01_Adr/ADR-010-outbox-pattern.md` - Outbox 패턴 설계
-- `docs/01_Adr/ADR-012-stateless-scalability-roadmap.md` - Stateless 전환 로드맵
+- `docs/01_ADR/ADR-010-outbox-pattern.md` - Outbox 패턴 설계
+- `docs/01_ADR/ADR-012-stateless-scalability-roadmap.md` - Stateless 전환 로드맵
 - `docs/03_Technical_Guides/async-concurrency.md` - 비동기 처리 가이드
 - GitHub Issue #126 - CQRS 아키텍처 도입 논의
 

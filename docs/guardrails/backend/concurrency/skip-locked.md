@@ -221,18 +221,18 @@ public class DonationOutboxProcessor {
 
 ## 출처
 - lock-strategy.md Section 2 (후원 도메인)
-- ADR-010: `docs/01_Adr/ADR-010-outbox-pattern.md` (Transactional Outbox Pattern)
+- ADR-010: `docs/01_ADR/ADR-010-outbox-pattern.md` (Transactional Outbox Pattern)
 
 ## 검증 명령어
 ```bash
 # SKIP LOCKED 사용 확인
-grep -r "SKIP LOCKED\|skipLocked\|lock.timeout.*-2" src/main/java --include="*.java"
+grep -r "SKIP LOCKED\|skipLocked\|lock.timeout.*-2" src/main/kotlin --include="*.java"
 
 # Outbox Repository 확인
-find src/main/java -name "*OutboxRepository.java"
+find src/main/kotlin -name "*OutboxRepository.java"
 
 # 배치 스케줄러 확인
-find src/main/java -name "*Scheduler.java" | xargs grep -l "@Scheduled"
+find src/main/kotlin -name "*Scheduler.java" | xargs grep -l "@Scheduled"
 ```
 
 ## 롤백 계획

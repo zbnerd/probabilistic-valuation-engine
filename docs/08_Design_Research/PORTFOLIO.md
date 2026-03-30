@@ -140,7 +140,7 @@ MISS:   Singleflight로 1회만 DB 호출 → 나머지 대기 후 결과 공유
 
 **의사결정:** 비용 대비 효율이 꺾이는 지점을 찾아 최적점 선택
 
-📄 [Cost Performance Report](docs/04_Reports/Cost_Performance/COST_PERF_REPORT_N23.md)
+📄 [Cost Performance Report](docs/05_Reports/Cost_Performance/COST_PERF_REPORT_N23.md)
 
 ### 최적화 성과
 
@@ -167,7 +167,7 @@ MISS:   Singleflight로 1회만 DB 호출 → 나머지 대기 후 결과 공유
 - Transactional Outbox + File Backup 3중 안전망 작동
 - 복구 후 자동 재처리 **99.98%**, 수동 개입 **0**
 
-📄 [Recovery Report](docs/04_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md)
+📄 [Recovery Report](docs/05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md)
 
 ### 자동 장애 완화 검증 (N21)
 
@@ -176,7 +176,7 @@ MISS:   Singleflight로 1회만 DB 호출 → 나머지 대기 후 결과 공유
 3. **자동 복구:** Half-Open 전환 → p99 21초 → 3초 복구
 4. **운영자 대응 시간:** 0분 (알림만 확인)
 
-📄 [Incident Report](docs/04_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md)
+📄 [Incident Report](docs/05_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md)
 
 ---
 
@@ -231,7 +231,7 @@ MISS:   Singleflight로 1회만 DB 호출 → 나머지 대기 후 결과 공유
 
 - [Full README](README.md)
 - [Architecture](docs/00_Start_Here/architecture.md)
-- [Chaos Tests](docs/01_Chaos_Engineering/06_Nightmare/)
+- [Chaos Tests](docs/02_Chaos_Engineering/06_Nightmare/)
 - [Postmortem: Issue #130](docs/postmortem/ISSUE-130-Exception-Misclassification.md)
 
 ---

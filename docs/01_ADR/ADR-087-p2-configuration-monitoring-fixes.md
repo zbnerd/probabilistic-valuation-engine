@@ -58,7 +58,7 @@ private fun getResourceAsStream(path: String): InputStream {
 
 ### 1.6 Issue 5: Grafana 대시보드 메트릭 이름
 
-**분석 필요:** `docs/04_Reports/issue-344-grafana-dashboard.json` 확인 필요
+**분석 필요:** `docs/05_Reports/issue-344-grafana-dashboard.json` 확인 필요
 
 ---
 

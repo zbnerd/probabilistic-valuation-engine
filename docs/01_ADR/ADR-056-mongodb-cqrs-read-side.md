@@ -4,7 +4,7 @@
 **Date**: 2026-02-19
 **Author**: probabilistic-valuation-engine Architecture Team
 **Supersedes**: None
-**Related**: [ADR-038](ADR-038-v5-cqrs-implementation.md), [ADR-015](ADR-015-v5-cqrs-mongodb.md)
+**Related**: [ADR-038](ADR-038-v5-cqrs-implementation.md), [ADR-015](ADR-036-v5-cqrs-mongodb.md)
 **Category**: Technology Stack
 
 ---

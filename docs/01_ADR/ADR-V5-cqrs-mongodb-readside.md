@@ -4,7 +4,7 @@
 **Date**: 2026-02-15
 **Author**: probabilistic-valuation-engine Architecture Team
 **Supersedes**: ADR-036, ADR-037, ADR-038
-**Related**: [ADR-014](ADR-014-multi-module-cross-cutting-concerns.md), [ADR-013](ADR-013-redis-stream-design.md)
+**Related**: [ADR-014](ADR-014-multi-module-cross-cutting-concerns.md), [ADR-013](ADR-013-high-throughput-event-pipeline.md)
 
 ---
 
@@ -820,8 +820,8 @@ dependencies {
 ### Related Documents
 
 - **ADR-014**: [Multi-Module Architecture](ADR-014-multi-module-cross-cutting-concerns.md)
-- **ADR-013**: [Redis Stream Design](ADR-013-redis-stream-design.md)
-- **ADR-003**: [TieredCache Strategy](ADR-003-tiered-cache.md)
+- **ADR-013**: [Redis Stream Design](ADR-013-high-throughput-event-pipeline.md)
+- **ADR-003**: [TieredCache Strategy](ADR-003-tiered-cache-singleflight.md)
 - **V4 Service**: [EquipmentExpectationServiceV4.java](../module-app/src/main/java/maple/expectation/service/v4/EquipmentExpectationServiceV4.java)
 
 ### External References

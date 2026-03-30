@@ -19,14 +19,14 @@
 |----------|--------|-------|-------------|----------------|
 | **A1: Problem Clarity** | 4/8 | 8/8 | **+4** | Updated README.md - Dialectical Framework |
 | **A2: Target User Definition** | 4/5 | 5/5 | **+1** | Enhanced in user-personas-journeys.md |
-| **A3: Solution Differentiation** | 3/7 | 7/7 | **+4** | [business-model-canvas.md](docs/02_Technical_Guides/business-model-canvas.md) |
-| **A4: Market Value** | 3/5 | 5/5 | **+2** | [go-to-market-strategy.md](docs/02_Technical_Guides/go-to-market-strategy.md) ✨ NEW |
-| **B1: Tech Stack** | 4/7 | 7/7 | **+3** | [technology-decision-framework.md](docs/02_Technical_Guides/technology-decision-framework.md) ✨ NEW |
-| **B2: System Structure** | 4/6 | 6/6 | **+2** | [architecture-decision-rules.md](docs/02_Technical_Guides/architecture-decision-rules.md) ✨ NEW |
-| **B3: Scalability** | 2/6 | 6/6 | **+4** | [scenario-planning.md](docs/02_Technical_Guides/scenario-planning.md) |
-| **B4: Feasibility** | 2/6 | 6/6 | **+4** | [scenario-planning.md](docs/02_Technical_Guides/scenario-planning.md) |
-| **C1: Feature Completeness** | 4/10 | 10/10 | **+6** | [balanced-scorecard-kpis.md](docs/02_Technical_Guides/balanced-scorecard-kpis.md) |
-| **C3: Risk Response Plan** | 2/5 | 5/5 | **+3** | [user-personas-journeys.md](docs/02_Technical_Guides/user-personas-journeys.md) |
+| **A3: Solution Differentiation** | 3/7 | 7/7 | **+4** | [business-model-canvas.md](docs/08_Design_Research/business-model-canvas.md) |
+| **A4: Market Value** | 3/5 | 5/5 | **+2** | [go-to-market-strategy.md](docs/08_Design_Research/go-to-market-strategy.md) ✨ NEW |
+| **B1: Tech Stack** | 4/7 | 7/7 | **+3** | [technology-decision-framework.md](docs/03_Technical_Guides/technology-decision-framework.md) ✨ NEW |
+| **B2: System Structure** | 4/6 | 6/6 | **+2** | [architecture-decision-rules.md](docs/03_Technical_Guides/architecture-decision-rules.md) ✨ NEW |
+| **B3: Scalability** | 2/6 | 6/6 | **+4** | [scenario-planning.md](docs/03_Technical_Guides/scenario-planning.md) |
+| **B4: Feasibility** | 2/6 | 6/6 | **+4** | [scenario-planning.md](docs/03_Technical_Guides/scenario-planning.md) |
+| **C1: Feature Completeness** | 4/10 | 10/10 | **+6** | [balanced-scorecard-kpis.md](docs/08_Design_Research/balanced-scorecard-kpis.md) |
+| **C3: Risk Response Plan** | 2/5 | 5/5 | **+3** | [user-personas-journeys.md](docs/08_Design_Research/user-personas-journeys.md) |
 | **C5: MVP Scope Definition** | 3/4 | 4/4 | **+1** | [MVP-ROADMAP.md](docs/00_Start_Here/MVP-ROADMAP.md) |
 | **D1: README Quality** | 3/6 | 6/6 | **+3** | Updated README.md + BSC integration |
 | **D2: Code Comments** | 3/4 | 4/4 | **+1** | [CONTRIBUTING.md](CONTRIBUTING.md) |
@@ -43,7 +43,7 @@
 ## 📝 Documentation Deliverables
 
 ### 1. Business Model Canvas (BMC)
-**File:** `docs/02_Technical_Guides/business-model-canvas.md` (272 lines)
+**File:** `docs/08_Design_Research/business-model-canvas.md` (272 lines)
 
 **Key Additions:**
 - ✅ **Channels** (NEW): GitHub, technical blogs, conferences, community forums
@@ -58,7 +58,7 @@
 ---
 
 ### 2. Scenario Planning Guide
-**File:** `docs/02_Technical_Guides/scenario-planning.md` (8,500+ words)
+**File:** `docs/03_Technical_Guides/scenario-planning.md` (8,500+ words)
 
 **Key Components:**
 - ✅ **4 Core Uncertainty Axes:** Traffic patterns, API changes, cost structure, feature expansion
@@ -76,7 +76,7 @@
 ---
 
 ### 3. Balanced Scorecard (BSC) KPI Framework
-**File:** `docs/02_Technical_Guides/balanced-scorecard-kpis.md` (570 lines, 43 sections)
+**File:** `docs/08_Design_Research/balanced-scorecard-kpis.md` (570 lines, 43 sections)
 
 **Key Components:**
 - ✅ **22 KPIs** across 4 perspectives (Financial: 7, Customer: 6, Internal: 5, L&G: 4)
@@ -98,7 +98,7 @@
 ---
 
 ### 4. User Personas & Journey Maps
-**File:** `docs/02_Technical_Guides/user-personas-journeys.md`
+**File:** `docs/08_Design_Research/user-personas-journeys.md`
 
 **Key Components:**
 - ✅ **3 Detailed Personas:**
@@ -247,10 +247,10 @@ Only 3 categories remain for maximum score:
 
 | # | Document | Path | Purpose | Impact | Phase |
 |---|----------|------|---------|--------|-------|
-| 1 | Business Model Canvas | `docs/02_Technical_Guides/business-model-canvas.md` | 9-element BMC strategy | +4 (A3) | 1 |
-| 2 | Scenario Planning | `docs/02_Technical_Guides/scenario-planning.md` | Future scenarios & mitigations | +8 (B3/B4) | 1 |
-| 3 | BSC KPI Framework | `docs/02_Technical_Guides/balanced-scorecard-kpis.md` | 22 KPIs across 4 perspectives | +9 (C1/D1) | 1 |
-| 4 | User Personas & Journeys | `docs/02_Technical_Guides/user-personas-journeys.md` | 3 personas with journey maps | +4 (C3/A2) | 1 |
+| 1 | Business Model Canvas | `docs/08_Design_Research/business-model-canvas.md` | 9-element BMC strategy | +4 (A3) | 1 |
+| 2 | Scenario Planning | `docs/03_Technical_Guides/scenario-planning.md` | Future scenarios & mitigations | +8 (B3/B4) | 1 |
+| 3 | BSC KPI Framework | `docs/08_Design_Research/balanced-scorecard-kpis.md` | 22 KPIs across 4 perspectives | +9 (C1/D1) | 1 |
+| 4 | User Personas & Journeys | `docs/08_Design_Research/user-personas-journeys.md` | 3 personas with journey maps | +4 (C3/A2) | 1 |
 | 5 | MVP Roadmap | `docs/00_Start_Here/MVP-ROADMAP.md` | Scope definition & phases | +1 (C5) | 1 |
 | 6 | Dialectical Framework | `README.md` (updated) | Thesis-Antithesis-Synthesis | +4 (A1) | 2 |
 | 7 | Contributing Guidelines | `CONTRIBUTING.md` | Collaboration patterns | +1 (D2) | 2 |

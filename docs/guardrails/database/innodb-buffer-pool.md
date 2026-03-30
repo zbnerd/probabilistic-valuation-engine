@@ -271,6 +271,6 @@ WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads';
 
 ## 출처
 
-- [p1-p2-performance-improvements-report.md](../../../05_Reports/04_02_Cost_Performance/p1-p2-performance-improvements-report.md) Phase 5: #208 InnoDB Buffer Pool 튜닝
-- [high-traffic-performance-analysis.md](../../../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md) EVIDENCE-007
+- [p1-p2-performance-improvements-report.md](../../../05_Reports/05_02_Cost_Performance/p1-p2-performance-improvements-report.md) Phase 5: #208 InnoDB Buffer Pool 튜닝
+- [high-traffic-performance-analysis.md](../../../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md) EVIDENCE-007
 - MySQL 8.0 Reference Manual: https://dev.mysql.com/doc/refman/8.0/en/innodb-buffer-pool.html

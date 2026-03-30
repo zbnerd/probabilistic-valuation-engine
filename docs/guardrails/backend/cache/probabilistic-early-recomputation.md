@@ -256,6 +256,6 @@ rate(cache_per_stale_hit_total[1m])
 
 ## 출처
 
-- [p1-p2-performance-improvements-report.md](../../../05_Reports/04_02_Cost_Performance/p1-p2-performance-improvements-report.md) Phase 4: #219 PER 알고리즘
+- [p1-p2-performance-improvements-report.md](../../../05_Reports/05_02_Cost_Performance/p1-p2-performance-improvements-report.md) Phase 4: #219 PER 알고리즘
 - ADR-XXX: Probabilistic Early Recomputation
 - [infrastructure.md](../../../03_Technical_Guides/infrastructure.md) Section 17: Cache Stampede Prevention

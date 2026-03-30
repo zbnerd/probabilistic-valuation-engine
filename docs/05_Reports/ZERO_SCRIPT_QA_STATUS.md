@@ -100,17 +100,17 @@
 ### Generated Files
 
 1. **Main QA Report**
-   - Path: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/03-analysis/zero-script-qa-2026-01-30.md`
+   - Path: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/05_Reports/zero-script-qa-2026-01-30.md`
    - Content: Infrastructure status, initial findings, recommendations
    - Status: Complete
 
 2. **QA Monitoring Guide**
-   - Path: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/03-analysis/ZERO_SCRIPT_QA_GUIDE.md`
+   - Path: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/03_Technical_Guides/ZERO_SCRIPT_QA_GUIDE.md`
    - Content: Step-by-step guide, patterns, troubleshooting
    - Status: Complete (ready for use)
 
 3. **QA Monitoring Checklist**
-   - Path: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/03-analysis/QA_MONITORING_CHECKLIST.md`
+   - Path: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/03_Technical_Guides/QA_MONITORING_CHECKLIST.md`
    - Content: Verification steps, test plan, issue format
    - Status: Complete (ready to execute)
 
@@ -144,9 +144,9 @@ docker compose logs -f | grep -E '(ERROR|status.*5|duration.*[0-9]{4})'
 
 ### Option 2: Review Documentation First
 
-1. Read: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/03-analysis/ZERO_SCRIPT_QA_GUIDE.md`
-2. Use: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/03-analysis/QA_MONITORING_CHECKLIST.md`
-3. Report: Update `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/03-analysis/zero-script-qa-2026-01-30.md`
+1. Read: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/03_Technical_Guides/ZERO_SCRIPT_QA_GUIDE.md`
+2. Use: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/03_Technical_Guides/QA_MONITORING_CHECKLIST.md`
+3. Report: Update `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/05_Reports/zero-script-qa-2026-01-30.md`
 
 ---
 
@@ -287,7 +287,7 @@ docker compose logs -f | grep -E '(ERROR|status.*5|duration.*[0-9]{4})'
 - zero-script-qa-2026-01-30.md - Infrastructure analysis
 
 **Commands Reference**:
-- View: `docs/03-analysis/ZERO_SCRIPT_QA_GUIDE.md` (Monitoring Commands Reference section)
+- View: `docs/03_Technical_Guides/ZERO_SCRIPT_QA_GUIDE.md` (Monitoring Commands Reference section)
 - Quick filter: `docker compose logs -f | grep '"level":"ERROR"'`
 
 ---

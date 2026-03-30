@@ -288,5 +288,5 @@ public abstract class AbstractTieredCacheService<K, V> {
 | **전체 코드 라인** | - | - | **15% 감소** |
 
 ## 출처
-- [Duplicated Code Analysis](../../../../05_Reports/04_08_Refactor/duplicated-code-analysis.md)
-- [Clean Code Analysis](../../../../05_Reports/04_08_Refactor/cleancode-analysis-2026-02-08.md)
+- [Duplicated Code Analysis](../../../../05_Reports/05_08_Refactor/duplicated-code-analysis.md)
+- [Clean Code Analysis](../../../../05_Reports/05_08_Refactor/cleancode-analysis-2026-02-08.md)

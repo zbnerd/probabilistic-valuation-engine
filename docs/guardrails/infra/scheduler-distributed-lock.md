@@ -271,10 +271,10 @@ ALERT DistributedLockAcquisitionFailed
 
 ```bash
 # 1. @Scheduled 메서드 확인
-grep -A3 "@Scheduled" src/main/java/**/*Scheduler.java | grep -B1 "void " | grep -v "@Locked"
+grep -A3 "@Scheduled" src/main/kotlin/**/*Scheduler.java | grep -B1 "void " | grep -v "@Locked"
 
 # 2. 분산 락 확인
-grep -A5 "@Scheduled" src/main/java/**/*Scheduler.java | grep "@Locked"
+grep -A5 "@Scheduled" src/main/kotlin/**/*Scheduler.java | grep "@Locked"
 
 # 3. Scale-out 테스트
 docker-compose up -d --scale app=2
@@ -312,7 +312,7 @@ curl http://localhost:8080/actuator/metrics/scheduler.executed
 | **Cron Stagger** | 설정만으로 분산 | 정확한 단일 실행 보장 안 됨 | 동시성 중요도 낮은 경우 |
 
 ## 출처
-- [docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md](../../../05/Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
+- [docs/05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md](../../../05/Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)
 - P1-7: BufferRecoveryScheduler
 - P1-8: LikeSyncScheduler
 - P1-9: OutboxScheduler

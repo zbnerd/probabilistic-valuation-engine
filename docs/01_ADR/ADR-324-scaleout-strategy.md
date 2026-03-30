@@ -19,7 +19,7 @@
 
 probabilistic-valuation-engine은 **In-Memory 상태 컴포넌트**로 인해 다중 인스턴스 구성이 불가능했습니다.
 
-**Scale-out Blockers 분석 결과** (docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md):
+**Scale-out Blockers 분석 결과** (docs/05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md):
 
 | 분류 | 원본 P0 (Critical) | 검증 후 실제 P0 | 합계 |
 |------|:---:|:---:|:---:|
@@ -682,8 +682,8 @@ groups:
 - [ADR-005 Single Flight + Hot Key](005-single-flight-hot-key.md)
 
 ### Reports
-- [Scale-out Blockers Analysis](../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
-- [High Traffic Performance Analysis](../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md)
+- [Scale-out Blockers Analysis](../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)
+- [High Traffic Performance Analysis](../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md)
 
 ### Technical Guides
 - [Infrastructure & Integration Guide](../03_Technical_Guides/infrastructure.md)

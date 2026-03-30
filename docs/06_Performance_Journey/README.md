@@ -64,6 +64,6 @@ RPS Evolution (2026-01-20 ~ 2026-03-30)
 ## 관련 자료
 
 - [ADR-027: Load Test Performance Evolution](../01_ADR/ADR-342-load-test-performance-evolution.md)
-- [ADR-086: Performance Baseline Analysis](../01_ADR/ADR-086-performance-analysis-20260324.md)
+- [ADR-086: Performance Baseline Analysis](../01_ADR/ADR-364-performance-analysis-20260324.md)
 - [ADR-028: 300k Bulk Loading](../01_ADR/ADR-343-bulk-loading-300k-characters.md)
-- [부하 테스트 보고서 모음](../05_Reports/04_06_Load_Tests/)
+- [부하 테스트 보고서 모음](../05_Reports/05_06_Load_Tests/)

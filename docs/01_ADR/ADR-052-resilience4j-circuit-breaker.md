@@ -388,7 +388,7 @@ void businessExceptionShouldNotAffectCircuitBreaker() {
 | 격리 | 10:15:35 | 외부 API 호출 차단 | Fallback (DB 캐시)로 전환 |
 | 복구 | 10:17:30 | Half-Open → 성공률 확인 → CLOSED | p99 50ms 복귀 |
 
-**증거:** `/home/maple/probabilistic-valuation-engine/docs/05_Reports/04_05_Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md`
+**증거:** `/home/maple/probabilistic-valuation-engine/docs/05_Reports/05_05_Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md`
 
 #### 5.1.3 ResilientLockStrategy Fallback 검증
 
@@ -458,7 +458,7 @@ if (throwable instanceof CompletionException ce) {
 
 ### 관련 문서
 - **Resilience Guide**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/resilience.md`
-- **N21 Incident Report**: `/home/maple/probabilistic-valuation-engine/docs/05_Reports/04_05_Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md`
+- **N21 Incident Report**: `/home/maple/probabilistic-valuation-engine/docs/05_Reports/05_05_Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md`
 - **README**: `/home/maple/probabilistic-valuation-engine/README.md` (Lines 98-102, 259-271)
 
 ### 코드 증거

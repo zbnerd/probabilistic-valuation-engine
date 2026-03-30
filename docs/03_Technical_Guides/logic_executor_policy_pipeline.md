@@ -10,7 +10,7 @@
 ## Documentation Integrity Statement
 
 This guide is based on **production exception handling requirements** and architectural best practices:
-- Zero try-catch policy: 47 flaky test incidents resolved through standardized exception handling (Evidence: [zero-script-qa](../03-analysis/zero-script-qa-2026-01-30.md))
+- Zero try-catch policy: 47 flaky test incidents resolved through standardized exception handling (Evidence: [zero-script-qa](../05_Reports/zero-script-qa-2026-01-30.md))
 - Policy Pipeline architecture: 4-phase separation (BEFORE → TASK → ON_FAILURE → ON_SUCCESS → AFTER) (Evidence: [E2] ExecutionPipeline)
 - Error prioritization: "First Error wins" prevents exception masking (Evidence: [E12] promoteError)
 - Interview-proof defense: All attack vectors preemptively addressed in specification
@@ -1530,7 +1530,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 ```
 
 ### Related Evidence
-- Zero Script QA: `docs/03-analysis/zero-script-qa-2026-01-30.md`
+- Zero Script QA: `do../05_Reports/zero-script-qa-2026-01-30.md`
 - CLAUDE.md Section 12: Zero Try-Catch Policy
 - ExecutionPipelineTest: `src/test/java/maple/expectation/global/executor/policy/ExecutionPipelineTest.java`
 
@@ -1701,7 +1701,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 ```
 
 ### Related Evidence
-- Zero Script QA: `docs/03-analysis/zero-script-qa-2026-01-30.md`
+- Zero Script QA: `do../05_Reports/zero-script-qa-2026-01-30.md`
 - CLAUDE.md Section 12: Zero Try-Catch Policy
 - ExecutionPipelineTest: `src/test/java/maple/expectation/global/executor/policy/ExecutionPipelineTest.java`
 

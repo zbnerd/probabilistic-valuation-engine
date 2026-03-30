@@ -30,7 +30,7 @@ probabilistic-valuation-engine은 ADR-035(2025년 2월)에서 멀티모듈 구�
 | **순환 의존성 위험** | ADR-039: module-app에 인프라 누수 | 모듈 경계 붕괴 |
 | **프레임워크 결합** | Service 클래스가 Spring @Component 의존 | 도메인 로직 테스트 어려움 |
 | **MSA 전환 장벽** | 단일 모듈로 밀접하게 결합 | 서비스 분리 비용 증가 |
-| **Scale-out 방해** | 22개 P0/P1 Stateful 컴포넌트 | [scale-out-blockers-analysis.md](../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md) |
+| **Scale-out 방해** | 22개 P0/P1 Stateful 컴포넌트 | [scale-out-blockers-analysis.md](../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md) |
 
 ---
 
@@ -494,7 +494,7 @@ Step 3: #126 Pragmatic CQRS
 
 ### Analysis Documents
 
-- **[Scale-out Blockers Analysis](../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)** - 22개 P0/P1 Stateful 컴포넌트 식별
+- **[Scale-out Blockers Analysis](../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)** - 22개 P0/P1 Stateful 컴포넌트 식별
 - **[ROADMAP.md](../00_Start_Here/ROADMAP.md)** - Phase 7: Scale-out Architecture Transition
 
 ### Technical Guides

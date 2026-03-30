@@ -45,7 +45,7 @@
 
 ### 📊 ADR (Architecture Decision Record) Process
 
-**Template (from docs/01_Adr/0000-template.md):**
+**Template (from docs/01_ADR/0000-template.md):**
 
 ```markdown
 # ADR-XXX: [Title]
@@ -694,6 +694,6 @@ spring.redis.cluster.max-redirects: 3
 
 **Related Documents:**
 - [ADR Index](../01_ADR/)
-- [Load Test Report #266](../04_Reports/Load_Test_Report.md)
+- [Load Test Report #266](../05_Reports/Load_Test_Report.md)
 - [Architecture Overview](../00_Start_Here/architecture.md)
 - [Business Model Canvas](./business-model-canvas.md)

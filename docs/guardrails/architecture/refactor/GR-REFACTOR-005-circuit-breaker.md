@@ -149,5 +149,5 @@ rate(resilience4j_circuitbreaker_not_permitted_calls_total{name="nexonApi"}[5m])
 ```
 
 ## 출처
-- [Incident Report N21: Auto-Mitigation](../../../../05_Reports/04_05_Incidents/INCIDENT_REPORT_N21_ACTUAL.md)
-- [Resilience Baseline](../../../../05_Reports/04_08_Refactor/RESILIENCE_BASELINE.md)
+- [Incident Report N21: Auto-Mitigation](../../../../05_Reports/05_05_Incidents/INCIDENT_REPORT_N21_ACTUAL.md)
+- [Resilience Baseline](../../../../05_Reports/05_08_Refactor/RESILIENCE_BASELINE.md)

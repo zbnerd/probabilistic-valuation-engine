@@ -27,7 +27,7 @@ probabilistic-valuation-engine은 현재 **Redisson RLock**을 사용하여 다�
 
 ### 문제점: Redis 의존성이 Scale-out을 차단
 
-**Scale-out Blockers 분석 결과** (docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md):
+**Scale-out Blockers 분석 결과** (docs/05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md):
 
 | 분류 | P0 (Critical) | P1 (High) | 합계 |
 |------|:---:|:---:|:---:|
@@ -545,7 +545,7 @@ groups:
 
 - [ADR-001 PostgreSQL 단일 DB 전략](001-postgresql-single-db-strategy.md)
 - [ADR-005 PostgreSQL Advisory Lock 설계](005-postgresql-advisory-lock.md)
-- [Scale-out Blockers Analysis](../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
+- [Scale-out Blockers Analysis](../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)
 - [PostgreSQL Advisory Locks 공식 문서](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS)
 - [FNV-1a Hash Algorithm](https://en.wikipedia.org/wiki/FNV_hash)
 

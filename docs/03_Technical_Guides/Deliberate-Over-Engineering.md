@@ -61,7 +61,7 @@ This document is based on **Problem-Driven Design (PDD)** - every architectural 
 
 ### [E1] 동시성 제어 - ResilientLockStrategy
 > **Production Incident:** P1-P7-P8-P9 (2025 Q4) - Scheduler duplicate execution during Redis failover.
-> **Fix Validated:** 3-tier lock architecture (Redis → MySQL → None) prevents duplicates (Evidence: [P1-7-8-9 Report](../04_Reports/P1-7-8-9-scheduler-distributed-lock.md)).
+> **Fix Validated:** 3-tier lock architecture (Redis → MySQL → None) prevents duplicates (Evidence: [P1-7-8-9 Report](../05_Reports/P1-7-8-9-scheduler-distributed-lock.md)).
 
 - **파일**: `src/main/java/maple/expectation/global/lock/ResilientLockStrategy.java`
 - **증거**: Redis Lock 실패 시 MySQL 폴백 구현
@@ -81,7 +81,7 @@ public class ResilientLockStrategy implements LockStrategy {
 ```
 
 ### [E2] 다중 계층 캐시 - TieredCache
-> **Performance Evidence:** L1 cache hit rate 87%, reducing Redis load by same percentage (Evidence: [Performance Report](../04_Reports/PERFORMANCE_260105.md)).
+> **Performance Evidence:** L1 cache hit rate 87%, reducing Redis load by same percentage (Evidence: [Performance Report](../05_Reports/PERFORMANCE_260105.md)).
 
 - **파일**: `src/main/java/maple/expectation/global/cache/TieredCache.java`
 - **증거**: L1(Caffeine) → L2(Redis) → L3(MySQL) 3계층 구조
@@ -103,7 +103,7 @@ public class TieredCache implements Cache {
 
 ### [E3] 예외 처리 정책 - LogicExecutor
 > **Design Decision:** Zero try-catch in business logic (Section 12 of CLAUDE.md).
-> **Validation:** All 47 flaky test incidents resolved through standardized exception handling (Evidence: [zero-script-qa](../03-analysis/zero-script-qa-2026-01-30.md)).
+> **Validation:** All 47 flaky test incidents resolved through standardized exception handling (Evidence: [zero-script-qa](../05_Reports/zero-script-qa-2026-01-30.md)).
 
 - **파일**: `src/main/java/maple/expectation/global/executor/LogicExecutor.java`
 - **증거**: 8가지 실행 패턴 표준화
@@ -128,17 +128,17 @@ public interface LogicExecutor {
 - **증거**: CountDownLatch를 활용한 동시 요청 재현
 
 ### [E6] 장애 주입 테스트
-> **Chaos Engineering:** 18 Nightmare scenarios (N01-N18) validating resilience (Evidence: [Chaos Results](../01_Chaos_Engineering/06_Nightmare/Results/)).
+> **Chaos Engineering:** 18 Nightmare scenarios (N01-N18) validating resilience (Evidence: [Chaos Results](../02_Chaos_Engineering/06_Nightmare/Results/)).
 - **참조**: `docs/02_Chaos_Engineering/06_Nightmare/`
 - **증거**: N01-N18 시나리오 구현
 
 ### [E7] Singleflight
-> **Effectiveness:** 99% request deduplication rate measured (Evidence: [N01 Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md)).
+> **Effectiveness:** 99% request deduplication rate measured (Evidence: [N01 Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md)).
 - **파일**: `src/main/java/maple/expectation/service/v4/cache/ExpectationCacheCoordinator.java`
 - **증거**: TieredCache.get() 기반 요청 병합
 
 ### [E8] Write-Behind Buffer
-> **Throughput:** 10,000 tasks backpressure handled without data loss (Evidence: [N19 Summary](../01_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md)).
+> **Throughput:** 10,000 tasks backpressure handled without data loss (Evidence: [N19 Summary](../02_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md)).
 - **파일**: `src/main/java/maple/expectation/service/v4/buffer/ExpectationWriteBackBuffer.java`
 - **증거**: CAS-based lock-free 버퍼링
 
@@ -382,7 +382,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 
 ### 3.2 다중 계층 캐시 전략
 
-> **Performance Validated:** L1 hit rate 87% → Redis load reduced by 87% (Evidence: [Performance Report](../04_Reports/PERFORMANCE_260105.md)).
+> **Performance Validated:** L1 hit rate 87% → Redis load reduced by 87% (Evidence: [Performance Report](../05_Reports/PERFORMANCE_260105.md)).
 
 - **L1**: Caffeine (In-Memory)
 - **L2**: Redis
@@ -496,14 +496,14 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 - **[P6]** P1-7-8-9 Report: `docs/05_Reports/P1-7-8-9-scheduler-distributed-lock.md`
 
 ### Test Evidence
-- **[T1]** Zero Script QA: `docs/03-analysis/zero-script-qa-2026-01-30.md`
+- **[T1]** Zero Script QA: `do../05_Reports/zero-script-qa-2026-01-30.md`
 - **[T2]** Testing Guide: `docs/03_Technical_Guides/testing-guide.md`
 - **[T3]** Chaos Engineering: `docs/02_Chaos_Engineering/06_Nightmare/`
 
 ### Architecture Evidence
-- **[A1]** ADR-005: `docs/01_Adr/ADR-005-resilience4j-scenario-abc.md`
-- **[A2]** ADR-008: `docs/01_Adr/ADR-008-durability-graceful-shutdown.md`
-- **[A3]** ADR-010: `docs/01_Adr/ADR-010-outbox-pattern.md`
+- **[A1]** ADR-005: `docs/01_ADR/ADR-005-resilience4j-scenario-abc.md`
+- **[A2]** ADR-008: `docs/01_ADR/ADR-008-durability-graceful-shutdown.md`
+- **[A3]** ADR-010: `docs/01_ADR/ADR-010-outbox-pattern.md`
 
 ### Documentation Evidence
 - **[D1]** Testing Guide Section 23: `docs/03_Technical_Guides/testing-guide.md`
@@ -594,12 +594,12 @@ redis-cli ping || echo "Redis 연결 실패"
 
 ## Related Evidence
 
-- [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md)
-- [P1-7-8-9 Report](../04_Reports/P1-7-8-9-scheduler-distributed-lock.md)
+- [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md)
+- [P1-7-8-9 Report](../05_Reports/P1-7-8-9-scheduler-distributed-lock.md)
 - [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md)
 - [ADR-008](../01_ADR/ADR-008-durability-graceful-shutdown.md)
 - [ADR-010](../01_ADR/ADR-010-outbox-pattern.md)
-- [Chaos Engineering Results](../01_Chaos_Engineering/06_Nightmare/Results/)
+- [Chaos Engineering Results](../02_Chaos_Engineering/06_Nightmare/Results/)
 
 ---
 

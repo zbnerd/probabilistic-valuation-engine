@@ -56,6 +56,6 @@ hikariConfig.setConnectionInitSql("SET SESSION lock_wait_timeout = 10");
 3. **Online DDL 도구**: 프로덕션에서는 pt-online-schema-change 또는 gh-ost 사용
 
 ## 출처
-- 문서: [docs/05_Reports/04_05_Incidents/P0_Issues_Resolution_Report.md](../../../05_Reports/04_05_Incidents/P0_Issues_Resolution_Report.md)
+- 문서: [docs/05_Reports/05_05_Incidents/P0_Issues_Resolution_Report.md](../../../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report.md)
 - 이슈: #227 (N07-MDL Freeze)
 - Nightmare: MetadataLockFreezeNightmareTest

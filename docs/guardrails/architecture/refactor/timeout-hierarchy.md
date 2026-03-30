@@ -59,6 +59,6 @@ template.setTimeout(10); // 5 → 10 (MySQL lock_wait 8s보다 여유 있게)
 3. **빠른 실패 감지**: Connect timeout은 operation timeout보다 짧게
 
 ## 출처
-- 문서: [docs/05_Reports/04_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md](../../../05_Reports/04_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md)
+- 문서: [docs/05_Reports/05_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md](../../../05_Reports/05_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md)
 - 이슈: #225 (Timeout Hierarchy)
 - Nightmare: TimeoutCascadeNightmareTest

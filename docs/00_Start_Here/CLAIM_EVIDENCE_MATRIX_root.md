@@ -1,3 +1,5 @@
+> **Note:** 최신 상세 버전은 [CLAIM_EVIDENCE_MATRIX.md](./CLAIM_EVIDENCE_MATRIX.md)를 참조하세요.
+
 # Claim-Evidence Matrix: AI SRE 운영 증거 체계
 
 > **"누가/어떻게/무엇을 근거로/어떤 변경을 했는지"가 감사 가능하게 재현됩니다**

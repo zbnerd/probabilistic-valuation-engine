@@ -5,7 +5,7 @@ This directory contains comprehensive rollback procedures for the multi-module r
 ## 📁 Directory Structure
 
 ```
-docs/rollback/
+docs/20_Rollback/
 ├── strategy.md          # Comprehensive rollback strategy documentation
 ├── README.md           # This quick reference guide
 └── scripts/            # Executable rollback scripts

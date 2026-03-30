@@ -616,4 +616,4 @@ Expected: All tests pass
 
 *Plan Version: 2.0.0 (Kotlin Integrated)*
 *Created: 2026-02-27*
-*Related Design: docs/plans/2026-02-27-module-separation-design.md*
+*Related Design: docs/09_Plans/2026-02-27-module-separation-design.md*

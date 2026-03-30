@@ -115,9 +115,9 @@ BUILD SUCCESSFUL in 54s
 - ✅ `docs/reports/api-compatibility-assessment.md`
 
 ### Strategy & Guides
-- ✅ `docs/rollback/strategy.md`
-- ✅ `docs/rollback/README.md`
-- ✅ `docs/metrics/verification-strategy.md`
+- ✅ `docs/20_Rollback/strategy.md`
+- ✅ `docs/20_Rollback/README.md`
+- ✅ `docs/17_Metrics/verification-strategy.md`
 
 ### Scripts
 - ✅ `scripts/verify-rollback.sh`

@@ -15,7 +15,7 @@ v2/postgresql-redesign 브랜치를 생성하고, Java → Kotlin 변환의 기�
 - [ ] Kotlin 컴파일러 옵션 설정 (jvmTarget = 21)
 - [ ] ktlint 설정 (.editorconfig, build.gradle.kts)
 - [ ] Java 파일을 Kotlin으로 변환할 때 사용할 IntelliJ 설정 가이드 작성
-- [ ] 삭제 대상 파일 목록 작성 (docs/migration/deletion-targets.md)
+- [ ] 삭제 대상 파일 목록 작성 (docs/10_Migration/deletion-targets.md)
 
 **Acceptance Criteria:**
 - [ ] v2/postgresql-redesign 브랜치 생성 완료

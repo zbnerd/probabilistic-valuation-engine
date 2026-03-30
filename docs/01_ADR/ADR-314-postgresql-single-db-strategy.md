@@ -250,8 +250,8 @@ Phase 7-8: Performance & Deployment
 - [PGMQ GitHub](https://github.com/tembo-io/pgmq)
 - [PostgreSQL Advisory Locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS)
 - [PostgreSQL jsonb](https://www.postgresql.org/docs/current/datatype-json.html)
-- [Design Document](../plans/2026-03-06-postgresql-migration-design.md)
-- [Deletion Targets](../migration/deletion-targets.md)
+- [Design Document](../09_Plans/2026-03-06-postgresql-migration-design.md)
+- [Deletion Targets](../10_Migration/deletion-targets.md)
 
 ---
 

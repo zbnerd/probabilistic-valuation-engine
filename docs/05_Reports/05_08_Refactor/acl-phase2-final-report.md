@@ -911,9 +911,9 @@ public CompletableFuture<NexonApiCharacterData> fetchAndPublish(String ocid) {
 
 ### Documentation
 - [ADR-018: Anti-Corruption Layer with Strategy Pattern](../01_ADR/ADR-018-acl-strategy-pattern.md)
-- [Issue #300: ACL Pipeline Implementation](../../issues/300)
-- [Issue #126: Pragmatic CQRS](../../issues/126) (Dependent feature)
-- [Issue #283: Scale-out Blockers Removal](../../issues/283) (Prerequisite)
+- [Issue #300: ACL Pipeline Implementation](../../15_Issues/300)
+- [Issue #126: Pragmatic CQRS](../../15_Issues/126) (Dependent feature)
+- [Issue #283: Scale-out Blockers Removal](../../15_Issues/283) (Prerequisite)
 
 ### Technical Artifacts
 - **Git Commits:** `09d7b8744d59af905fa3e70048579c3ddc6138d3` → `0aafc28`

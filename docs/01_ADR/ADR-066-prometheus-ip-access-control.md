@@ -9,7 +9,7 @@
 
 #### 1.1 무방비한 메트릭 엔드포인트 노출
 
-PR #214 이전까지 MapleExpectation 프로젝트의 Prometheus 메트릭 엔드포인트(`/actuator/prometheus`)는 **IP 기반 접근 제어 없이 공개되어 있었습니다**. 이는 다음과 같은 심각한 보안 위협을 초래했습니다:
+PR #214 이전까지 probabilistic-valuation-engine 프로젝트의 Prometheus 메트릭 엔드포인트(`/actuator/prometheus`)는 **IP 기반 접근 제어 없이 공개되어 있었습니다**. 이는 다음과 같은 심각한 보안 위협을 초래했습니다:
 
 1. **시스템 내부 정보 노출**: JVM 메트릭, DB 커넥션 풀 상태, 캐시 적중률 등 운영 정보가 공개
 2. **경쟁사 공격 표면**: 트래픽 패턴, 병목 지점, 서비스 구조가 노출
@@ -142,7 +142,7 @@ public class PrometheusAccessControlFilter implements Filter {
 
 #### 3.1 선택: IP 화이트리스트 기반 접근 제어
 
-MapleExpectation 프로젝트는 **선택지 3: IP 화이트리스트 기반 접근 제어**를 채택했습니다.
+probabilistic-valuation-engine 프로젝트는 **선택지 3: IP 화이트리스트 기반 접근 제어**를 채택했습니다.
 
 **결정 근거**:
 1. **운영 환경이 AWS VPC 내부**: Prometheus 서버는 내부 IP에서 접근

@@ -1,8 +1,8 @@
 package maple.expectation.web.controller
 
+import maple.expectation.common.executor.TaskContext
 import maple.expectation.core.port.inbound.AlertPort
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.core.port.inbound.ExecutorPort
 import org.springframework.context.annotation.Profile
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RestController
@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController
 @Profile("!prod")
 class AlertTestController(
     private val alertPort: AlertPort,
-    private val executor: LogicExecutor,
+    private val executor: ExecutorPort,
 ) {
 
     @PostMapping("/api/admin/test/alert")

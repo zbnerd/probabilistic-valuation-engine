@@ -1,4 +1,4 @@
-# MapleExpectation — 의도된 상향 설계(Deliberate Over-Engineering) 설명서
+# probabilistic-valuation-engine — 의도된 상향 설계(Deliberate Over-Engineering) 설명서
 
 > **Last Updated:** 2026-02-05
 > **Documentation Version:** 1.0
@@ -13,7 +13,7 @@
 
 This document is based on **Problem-Driven Design (PDD)** - every architectural decision responds to an actual production incident:
 - Concurrency issues: Resolved through ResilientLockStrategy (Evidence: [E1])
-- Cache stampede: Solved via Single-flight + TieredCache (Evidence: [E2], Chaos N01)
+- Cache stampede: Solved via SingleFlight + TieredCache (Evidence: [E2], Chaos N01)
 - External API failures: Mitigated through Circuit Breaker + Graceful Degradation (Evidence: [C1], P0 Report)
 
 ---
@@ -61,7 +61,7 @@ This document is based on **Problem-Driven Design (PDD)** - every architectural 
 
 ### [E1] 동시성 제어 - ResilientLockStrategy
 > **Production Incident:** P1-P7-P8-P9 (2025 Q4) - Scheduler duplicate execution during Redis failover.
-> **Fix Validated:** 3-tier lock architecture (Redis → MySQL → None) prevents duplicates (Evidence: [P1-7-8-9 Report](../04_Reports/P1-7-8-9-scheduler-distributed-lock.md)).
+> **Fix Validated:** 3-tier lock architecture (Redis → MySQL → None) prevents duplicates (Evidence: [P1-7-8-9 Report](../05_Reports/P1-7-8-9-scheduler-distributed-lock.md)).
 
 - **파일**: `src/main/java/maple/expectation/global/lock/ResilientLockStrategy.java`
 - **증거**: Redis Lock 실패 시 MySQL 폴백 구현
@@ -81,7 +81,7 @@ public class ResilientLockStrategy implements LockStrategy {
 ```
 
 ### [E2] 다중 계층 캐시 - TieredCache
-> **Performance Evidence:** L1 cache hit rate 87%, reducing Redis load by same percentage (Evidence: [Performance Report](../04_Reports/PERFORMANCE_260105.md)).
+> **Performance Evidence:** L1 cache hit rate 87%, reducing Redis load by same percentage (Evidence: [Performance Report](../05_Reports/PERFORMANCE_260105.md)).
 
 - **파일**: `src/main/java/maple/expectation/global/cache/TieredCache.java`
 - **증거**: L1(Caffeine) → L2(Redis) → L3(MySQL) 3계층 구조
@@ -103,7 +103,7 @@ public class TieredCache implements Cache {
 
 ### [E3] 예외 처리 정책 - LogicExecutor
 > **Design Decision:** Zero try-catch in business logic (Section 12 of CLAUDE.md).
-> **Validation:** All 47 flaky test incidents resolved through standardized exception handling (Evidence: [zero-script-qa](../03-analysis/zero-script-qa-2026-01-30.md)).
+> **Validation:** All 47 flaky test incidents resolved through standardized exception handling (Evidence: [zero-script-qa](../05_Reports/zero-script-qa-2026-01-30.md)).
 
 - **파일**: `src/main/java/maple/expectation/global/executor/LogicExecutor.java`
 - **증거**: 8가지 실행 패턴 표준화
@@ -128,17 +128,17 @@ public interface LogicExecutor {
 - **증거**: CountDownLatch를 활용한 동시 요청 재현
 
 ### [E6] 장애 주입 테스트
-> **Chaos Engineering:** 18 Nightmare scenarios (N01-N18) validating resilience (Evidence: [Chaos Results](../01_Chaos_Engineering/06_Nightmare/Results/)).
+> **Chaos Engineering:** 18 Nightmare scenarios (N01-N18) validating resilience (Evidence: [Chaos Results](../02_Chaos_Engineering/06_Nightmare/Results/)).
 - **참조**: `docs/02_Chaos_Engineering/06_Nightmare/`
 - **증거**: N01-N18 시나리오 구현
 
 ### [E7] Singleflight
-> **Effectiveness:** 99% request deduplication rate measured (Evidence: [N01 Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md)).
+> **Effectiveness:** 99% request deduplication rate measured (Evidence: [N01 Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md)).
 - **파일**: `src/main/java/maple/expectation/service/v4/cache/ExpectationCacheCoordinator.java`
 - **증거**: TieredCache.get() 기반 요청 병합
 
 ### [E8] Write-Behind Buffer
-> **Throughput:** 10,000 tasks backpressure handled without data loss (Evidence: [N19 Summary](../01_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md)).
+> **Throughput:** 10,000 tasks backpressure handled without data loss (Evidence: [N19 Summary](../02_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md)).
 - **파일**: `src/main/java/maple/expectation/service/v4/buffer/ExpectationWriteBackBuffer.java`
 - **증거**: CAS-based lock-free 버퍼링
 
@@ -147,7 +147,7 @@ public interface LogicExecutor {
 ## 설정 증거 (Configuration Evidence)
 
 ### [C1] Resilience4j 설정
-> **Thresholds Rationale:** 60% failure rate based on Nexon API maintenance patterns (Evidence: [ADR-005](../adr/ADR-005-resilience4j-scenario-abc.md)).
+> **Thresholds Rationale:** 60% failure rate based on Nexon API maintenance patterns (Evidence: [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md)).
 ```yaml
 # application.yml (Line 55-82)
 resilience4j.circuitbreaker:
@@ -175,7 +175,7 @@ spring:
 ```
 
 ### [C3] Graceful Shutdown
-> **Validation:** 100% data preservation during deployments (Evidence: [ADR-008](../adr/ADR-008-durability-graceful-shutdown.md)).
+> **Validation:** 100% data preservation during deployments (Evidence: [ADR-008](../01_ADR/ADR-008-durability-graceful-shutdown.md)).
 ```yaml
 # application.yml (Line 10)
 server:
@@ -209,7 +209,7 @@ server:
 1. **Kafka/RabbitMQ 도입 검토 → ❌ 채택 안 함**
    - **이유**: 현재 트래픽 규모에서 불필요한 복잡도
    - **대신 채택**: Write-Behind Buffer + Outbox Pattern
-   - **Evidence:** [ADR-010](../adr/ADR-010-outbox-pattern.md) - Transactional Outbox sufficient
+   - **Evidence:** [ADR-010](../01_ADR/ADR-010-outbox-pattern.md) - Transactional Outbox sufficient
 
 2. **Distributed Lock 전체 교체 → ❌ 유지**
    - **이유**: 정합성 보장을 위해 DB Unique 제약 필요
@@ -382,7 +382,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 
 ### 3.2 다중 계층 캐시 전략
 
-> **Performance Validated:** L1 hit rate 87% → Redis load reduced by 87% (Evidence: [Performance Report](../04_Reports/PERFORMANCE_260105.md)).
+> **Performance Validated:** L1 hit rate 87% → Redis load reduced by 87% (Evidence: [Performance Report](../05_Reports/PERFORMANCE_260105.md)).
 
 - **L1**: Caffeine (In-Memory)
 - **L2**: Redis
@@ -390,7 +390,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 
 추가 전략:
 - Negative Caching
-- Request Collapsing (Single-flight 기반)
+- Request Collapsing (SingleFlight 기반)
 
 > **의도**: 조회 폭주 상황에서도 외부 API 보호
 
@@ -398,7 +398,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 
 ### 3.3 외부 API 장애 대응 (Resilience4j)
 
-> **Scenario Validated:** A/B/C scenarios tested in chaos N05, N06 (Evidence: [ADR-005](../adr/ADR-005-resilience4j-scenario-abc.md)).
+> **Scenario Validated:** A/B/C scenarios tested in chaos N05, N06 (Evidence: [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md)).
 
 도입 요소:
 - Circuit Breaker
@@ -465,7 +465,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 
 ## 6. 한 문장 결론
 
-> **MapleExpectation은 기능 데모가 아니라,
+> **probabilistic-valuation-engine은 기능 데모가 아니라,
 > "서비스가 실제로 깨지는 지점을 어떻게 방어했는지"를 보여주는 프로젝트입니다.**
 
 ---
@@ -492,18 +492,18 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 - **[P2]** N01 Thundering Herd: `docs/02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md`
 - **[P3]** N19 Implementation: `docs/02_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md`
 - **[P4]** Chaos Results: `docs/02_Chaos_Engineering/06_Nightmare/Results/`
-- **[P5]** P0 Report: `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md`
+- **[P5]** P0 Report: `../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md`
 - **[P6]** P1-7-8-9 Report: `docs/05_Reports/P1-7-8-9-scheduler-distributed-lock.md`
 
 ### Test Evidence
-- **[T1]** Zero Script QA: `docs/03-analysis/zero-script-qa-2026-01-30.md`
+- **[T1]** Zero Script QA: `../05_Reports/zero-script-qa-2026-01-30.md`
 - **[T2]** Testing Guide: `docs/03_Technical_Guides/testing-guide.md`
 - **[T3]** Chaos Engineering: `docs/02_Chaos_Engineering/06_Nightmare/`
 
 ### Architecture Evidence
-- **[A1]** ADR-005: `docs/01_Adr/ADR-005-resilience4j-scenario-abc.md`
-- **[A2]** ADR-008: `docs/01_Adr/ADR-008-durability-graceful-shutdown.md`
-- **[A3]** ADR-010: `docs/01_Adr/ADR-010-outbox-pattern.md`
+- **[A1]** ADR-005: `docs/01_ADR/ADR-005-resilience4j-scenario-abc.md`
+- **[A2]** ADR-008: `docs/01_ADR/ADR-008-durability-graceful-shutdown.md`
+- **[A3]** ADR-010: `docs/01_ADR/ADR-010-outbox-pattern.md`
 
 ### Documentation Evidence
 - **[D1]** Testing Guide Section 23: `docs/03_Technical_Guides/testing-guide.md`
@@ -518,7 +518,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 1. **[F1]** Redis Lock 장애 시 MySQL로의 자동 전환이 동작하지 않을 경우
 2. **[F2]** TieredCache가 L1→L2→DB 전략을 일관되게 적용하지 않을 경우
 3. **[F3]** LogicExecutor 표준화 패턴이 8가지로 정해져 있지 않을 경우
-4. **[F4]** Single-flight 패턴이 95% 이상의 중복 제거율을 보장하지 않을 경우
+4. **[F4]** SingleFlight 패턴이 95% 이상의 중복 제거율을 보장하지 않을 경우
 
 **검증 방법**:
 ```bash
@@ -532,7 +532,7 @@ curl -s http://localhost:8080/actuator/metrics/cachehit.ratio | jq '.measurement
 grep -r "execute.*TaskContext" src/main/java/maple/expectation/global/executor/LogicExecutor.java | wc -l
 # 예상: 8가지 패턴 확인
 
-# F4: Single-flight 검증
+# F4: SingleFlight 검증
 curl -s http://localhost:8080/actuator/metrics/singleflight.deduplication | jq '.measurements[0].value > 0.95'
 ```
 
@@ -594,12 +594,12 @@ redis-cli ping || echo "Redis 연결 실패"
 
 ## Related Evidence
 
-- [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md)
-- [P1-7-8-9 Report](../04_Reports/P1-7-8-9-scheduler-distributed-lock.md)
-- [ADR-005](../adr/ADR-005-resilience4j-scenario-abc.md)
-- [ADR-008](../adr/ADR-008-durability-graceful-shutdown.md)
-- [ADR-010](../adr/ADR-010-outbox-pattern.md)
-- [Chaos Engineering Results](../01_Chaos_Engineering/06_Nightmare/Results/)
+- [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md)
+- [P1-7-8-9 Report](../05_Reports/P1-7-8-9-scheduler-distributed-lock.md)
+- [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md)
+- [ADR-008](../01_ADR/ADR-008-durability-graceful-shutdown.md)
+- [ADR-010](../01_ADR/ADR-010-outbox-pattern.md)
+- [Chaos Engineering Results](../02_Chaos_Engineering/06_Nightmare/Results/)
 
 ---
 

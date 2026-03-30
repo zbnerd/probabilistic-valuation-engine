@@ -365,7 +365,7 @@ spring:
 ## 19. Evidence IDs (증거 식별자)
 
 ### Code Evidence
-- **[C1]** `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/network/GrayFailureChaosTest.java`
+- **[C1]** `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/network/GrayFailureChaosTest.java`
   - Line 57-126: `shouldMaintainHighSuccessRate_with3PercentPacketLoss()` - 3% 손실 시 성공률 검증
   - Line 131-185: `shouldOvercome_grayFailureWithRetry()` - 재시도 효과 검증
   - Line 190-233: `shouldNotOpenCircuitBreaker_with3PercentFailure()` - Circuit Breaker 상태 검증
@@ -460,7 +460,7 @@ java -version
 
 ### 1단계: 의존성 설치
 ```bash
-cd /home/maple/MapleExpectation
+cd /home/maple/probabilistic-valuation-engine
 ./gradlew dependencies
 ```
 

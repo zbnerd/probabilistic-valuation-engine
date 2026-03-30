@@ -971,7 +971,7 @@ buffer:
 
 ## 참고 문서
 
-- [ADR-002: PGMQ Integration](../01_ADR/ADR-002-pgmq-integration.md)
+- [ADR-002: PGMQ Integration](../01_ADR/ADR-316-pgmq-integration.md)
 - [ADR-005: Scheduler Migration](../01_ADR/ADR-005-scheduler-migration.md)
 - [ADR-006: Nexon API Collector](../01_ADR/ADR-006-nexon-api-collector.md)
 - [Outbox Pattern Sequence](outbox-sequence.md)

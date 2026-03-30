@@ -27,7 +27,7 @@
 
 ### 1.2 웹 애플리케이션에서의 메모리 계층
 
-**MapleExpectation의 캐시 계층:**
+**probabilistic-valuation-engine의 캐시 계층:**
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -209,7 +209,7 @@ class CaffeineCache<K, V> {
 8. volatile-ttl       (TTL 가장 짧은 키부터)
 ```
 
-**MapleExpectation의 선택: `allkeys-lru`**
+**probabilistic-valuation-engine의 선택: `allkeys-lru`**
 
 ```redis
 # redis.conf
@@ -295,14 +295,14 @@ Redis LRU Algorithm:
 - Cluster 환경에서의 안정성 (Redis Sentinel)
 - 복잡한 데이터 구조 (Hash, ZSet for Ranking)
 
-### 4.3 Cache Stampede 방지: Single-flight Pattern
+### 4.3 Cache Stampede 방지: SingleFlight Pattern
 
 **문제**: L2 Miss 시 여러 스레드가 동일한 DB 조회
 
 **해결**: Redisson Distributed Lock
 
 ```java
-// TieredCache의 Single-flight 구현
+// TieredCache의 SingleFlight 구현
 public ValueWrapper get(Object key) {
     // 1. L1 조회
     ValueWrapper value = l1.get(key);
@@ -454,7 +454,7 @@ public ValueWrapper get(Object key) {
 1. **L1/L2 캐싱은 메모리 계층의 응용**: CPU L1/L2 → 앱 Caffeine/Redis
 2. **Cache Coherence는 분산 환경의 숙제**: Pub/Sub로 L1 무효화, L2→L1 순서 저장
 3. **W-TinyLFU는 LRU보다 25% 정확**: 빈도 + 시간의 하이브리드
-4. **Single-flight는 Cache Stampede의 해결사**: 분산 락으로 DB 중복 조회 방지
+4. **SingleFlight는 Cache Stampede의 해결사**: 분산 락으로 DB 중복 조회 방지
 5. **100배 트래픽 대비**: Sharding, Request Coalescing, Dynamic Sizing
 
 ---

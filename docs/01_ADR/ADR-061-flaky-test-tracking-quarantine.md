@@ -136,7 +136,7 @@ public @interface Quarantine {}
 
 #### 3.1 선택: 근본적 수정 + Quarantine 병행
 
-MapleExpectation 프로젝트는 **선택지 3: 근본적 수정 + Quarantine 병행**을 채택했습니다.
+probabilistic-valuation-engine 프로젝트는 **선택지 3: 근본적 수정 + Quarantine 병행**을 채택했습니다.
 
 **결정 근거**:
 1. **CI 신뢰도는 생존 문제**: Issue #207의 "CI 통과율 85%"는 개발 생산성에 치명적

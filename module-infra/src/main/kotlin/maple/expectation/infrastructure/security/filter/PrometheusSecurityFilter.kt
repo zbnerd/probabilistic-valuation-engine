@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse
 import java.io.IOException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.lang.NonNull
 import org.springframework.web.filter.OncePerRequestFilter
@@ -45,7 +46,7 @@ open class PrometheusSecurityFilter(
         this.trustedProxies = trustedProxies.split(",")
         this.internalNetworks = internalNetworks.split(",")
 
-        println(
+        log.info(
             "[Prometheus-Security] Filter initialized - enabled: $enabled, " +
                 "trustedProxies: ${this.trustedProxies}, internalNetworks: ${this.internalNetworks}",
         )
@@ -78,7 +79,7 @@ open class PrometheusSecurityFilter(
         )
 
         if (!isAllowed) {
-            println(
+            log.warn(
                 "[Prometheus-Security] Access denied - remoteAddr: ${request.remoteAddr}, " +
                     "xForwardedFor: ${request.getHeader("X-Forwarded-For")}, path: $path",
             )
@@ -90,7 +91,7 @@ open class PrometheusSecurityFilter(
             return
         }
 
-        println("[Prometheus-Security] Access granted - remoteAddr: ${request.remoteAddr}, path: $path")
+        log.debug("[Prometheus-Security] Access granted - remoteAddr: ${request.remoteAddr}, path: $path")
         filterChain.doFilter(request, response)
     }
 
@@ -222,10 +223,14 @@ open class PrometheusSecurityFilter(
 
             false
         } catch (e: NumberFormatException) {
-            println("[Prometheus-Security] Invalid IP format: $ip")
+            log.warn("[Prometheus-Security] Invalid IP format: $ip")
             false
         }
     }
 
     override fun shouldNotFilter(@NonNull request: HttpServletRequest): Boolean = !enabled
+
+    companion object {
+        private val log = LoggerFactory.getLogger(PrometheusSecurityFilter::class.java)
+    }
 }

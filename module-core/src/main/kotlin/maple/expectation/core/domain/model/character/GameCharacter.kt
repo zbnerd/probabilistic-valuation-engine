@@ -29,6 +29,8 @@ data class GameCharacter(
     @get:JvmName("getLikeCount") val likeCount: Long,
     @get:JvmName("getVersion") val version: Long?,
     @get:JvmName("getUpdatedAt") val updatedAt: LocalDateTime,
+    @get:JvmName("getFingerprint") val fingerprint: String? = null,
+    @get:JvmName("getAccountId") val accountId: String? = null,
 ) {
 
     /** 새 캐릭터 생성 (최소 필드만) */
@@ -66,6 +68,8 @@ data class GameCharacter(
             likeCount: Long,
             version: Long?,
             updatedAt: LocalDateTime,
+            fingerprint: String? = null,
+            accountId: String? = null,
         ): GameCharacter = GameCharacter(
             id = id,
             userIgn = userIgn,
@@ -78,6 +82,8 @@ data class GameCharacter(
             likeCount = likeCount,
             version = version,
             updatedAt = updatedAt,
+            fingerprint = fingerprint,
+            accountId = accountId,
         )
     }
 

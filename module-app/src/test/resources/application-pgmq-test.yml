@@ -35,6 +35,19 @@ pgmq:
       batch-size: 1
       max-retries: 2
 
+    # Expectation Calc Worker 테스트 설정
+    expectation-calc-high:
+      enabled: true
+      polling-interval-ms: 100
+      batch-size: 1
+      max-retries: 2
+
+    expectation-calc-low:
+      enabled: true
+      polling-interval-ms: 100
+      batch-size: 1
+      max-retries: 2
+
 # 테스트용 큐 이름 접두사
 # 테스트 환경에서 큐 이름 충돌 방지
 test:

@@ -6,6 +6,7 @@ import java.util.concurrent.locks.LockSupport
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.context.annotation.Profile
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler
 import org.springframework.stereotype.Component
@@ -38,6 +39,7 @@ import org.springframework.stereotype.Component
  * @property leaseScheduler Lease time 관리를 위한 스케줄러
  */
 @Component
+@Profile("!local")
 @Qualifier("postgresAdvisoryLockStrategy")
 class PostgresLockStrategy(
     @Qualifier("lockJdbcTemplate")

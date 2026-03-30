@@ -13,7 +13,7 @@
 
 ### 배경
 
-2025년 말 MapleExpectation은 V2 아키텍처(15개 모듈, ~97개 클래스)를 기반으로 안정적인 서비스를 제공하고 있었습니다. 하지만 트래픽이 지속적으로 증가하면서 다음과 같은 성능 병목이 발생하기 시작했습니다.
+2025년 말 probabilistic-valuation-engine은 V2 아키텍처(15개 모듈, ~97개 클래스)를 기반으로 안정적인 서비스를 제공하고 있었습니다. 하지만 트래픽이 지속적으로 증가하면서 다음과 같은 성능 병목이 발생하기 시작했습니다.
 
 ### 문제 1: 빅뱅 마이그레이션의 위험
 
@@ -30,7 +30,7 @@ V2를 V4로 완전히 교체하는 rewrite 방식은 다음의 리스크가 있�
 | 지표 | V2 성능 | 한계 |
 |------|---------|------|
 | Cold Cache Throughput | 95 RPS | 동시 요청 처리 불가 |
-| Single-flight 없음 | 중복 API 호출 100% | Nexon API 과부하 |
+| SingleFlight 없음 | 중복 API 호출 100% | Nexon API 과부하 |
 | 동기 DB Write | 처리량 300 TPS 제한 | DB 병목 발생 |
 
 ### 문제 3: 점진적 전환의 필요성
@@ -106,7 +106,7 @@ V2를 V4로 완전히 교체하는 rewrite 방식은 다음의 리스크가 있�
 | 모듈 | V2 | V4 | 개선율 |
 |------|-----|-----|--------|
 | Cold Cache Throughput | 95 RPS | 719 RPS | **7.6x** |
-| Single-flight 중복 제거 | 0% | 99% | **-99% API 호출** |
+| SingleFlight 중복 제거 | 0% | 99% | **-99% API 호출** |
 | Write-Behind 처리량 | 300 TPS | 1,000 TPS | **3.3x** |
 | GZIP 압축률 | 0% | 90% | **350KB→35KB** |
 
@@ -138,13 +138,13 @@ V5 CQRS (Query/Worker Separation)
 
 ### 4.1 V2 핵심 비즈니스 서비스 (15개 모듈)
 
-**패키지 경로:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/`
+**패키지 경로:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/`
 
 **핵심 모듈 구조:**
 
 | 모듈 | 역할 | 주요 클래스 | 설계 패턴 |
 |------|------|-------------|-----------|
-| **root** | 장비 계산, 캐릭터 관리 | `EquipmentService`, `GameCharacterService`, `DonationService` | Single-flight, Transactional Outbox |
+| **root** | 장비 계산, 캐릭터 관리 | `EquipmentService`, `GameCharacterService`, `DonationService` | SingleFlight, Transactional Outbox |
 | **facade** | 통합 진입점 | `GameCharacterFacade` | Facade |
 | **cache** | 다계층 캐싱 | `EquipmentCacheService`, `TotalExpectationCacheService` | Strategy, TieredCache |
 | **calculator** | 기댓값 계산 | `ExpectationCalculator`, `CubeRateCalculator` | Decorator, Factory |
@@ -164,14 +164,14 @@ V5 CQRS (Query/Worker Separation)
 
 ### 4.2 V4 성능 강화 서비스 (6개 모듈)
 
-**패키지 경로:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v4/`
+**패키지 경로:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v4/`
 
 **핵심 모듈 구조:**
 
 | 모듈 | 역할 | 주요 클래스 | 설계 패턴 | 성능 개선 |
 |------|------|-------------|-----------|-----------|
 | **root** | 메인 Facade | `EquipmentExpectationServiceV4` | Facade, Async Pipeline | 3-프리셋 병렬 계산 |
-| **cache** | 캐시 코디네이션 | `ExpectationCacheCoordinator` | Single-flight, Compression | 99% 중복 제거 |
+| **cache** | 캐시 코디네이션 | `ExpectationCacheCoordinator` | SingleFlight, Compression | 99% 중복 제거 |
 | **buffer** | Write-Behind 버퍼 | `ExpectationWriteBackBuffer`, `ExpectationBatchShutdownHandler` | Strategy, SmartLifecycle | 3.3x 처리량 |
 | **persistence** | 영속화 오케스트레이션 | `ExpectationPersistenceService` | Write-Behind, Backpressure | 비동기 DB write |
 | **fallback** | Nexon API 장애 대응 | `NexonApiFallbackService` | Fallback, Circuit Breaker | 99.9% 가용성 |
@@ -238,7 +238,7 @@ graph TB
 
 ### 4.4 핵심 성능 패턴 구현
 
-#### 패턴 1: Single-flight (99% 중복 제거)
+#### 패턴 1: SingleFlight (99% 중복 제거)
 
 **구현 위치:** `service/v4/cache/ExpectationCacheCoordinator.java`
 
@@ -249,7 +249,7 @@ public class ExpectationCacheCoordinator {
     private final SingleFlightExecutor singleFlight;
 
     public String getEquipmentData(String ocid) {
-        // Single-flight 패턴으로 중복 API 호출 방지
+        // SingleFlight 패턴으로 중복 API 호출 방지
         return singleFlight.execute(ocid, () -> {
             return loadFromNexonApi(ocid);
         });
@@ -373,7 +373,7 @@ grep -r "private.*v2Service" src/main/java/maple/expectation/service/v4/ || echo
 |------|------|------|
 | **V2 안정성** | ✅ 프로덕션 안정화 | 15개 모듈, ~97개 클래스 운영 중 |
 | **V4 성능** | ✅ 719 RPS 달성 | [WRK Summary](../05_Reports/Portfolio_Enhancement_WRK_Final_Summary.md) |
-| **Single-flight** | ✅ 99% 중복 제거 | [N01 Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) |
+| **SingleFlight** | ✅ 99% 중복 제거 | [N01 Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) |
 | **Write-Behind** | ✅ 47분 2.1M 이벤트 처리 | [N19 Recovery](../05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md) |
 | **GZIP 압축** | ✅ 90% 스토리지 절감 | [architecture.md](../00_Start_Here/architecture.md) |
 
@@ -429,7 +429,7 @@ V5: Query Server + Worker Server 분리
 | 지표 | 목표 | 실제 | 달성률 |
 |------|------|------|--------|
 | Throughput | 500+ RPS | 719 RPS | **144%** |
-| Single-flight 효율 | 95%+ | 99% | **104%** |
+| SingleFlight 효율 | 95%+ | 99% | **104%** |
 | GZIP 압축률 | 85%+ | 90% | **106%** |
 | Write-Behind 처리량 | 500+ TPS | 1,000 TPS | **200%** |
 | P99 Latency | <500ms | 280ms | **178%** |
@@ -444,7 +444,7 @@ V5: Query Server + Worker Server 분리
 | **V4 Module Structure** | [service-modules.md](../03_Technical_Guides/service-modules.md#v4---성능-강화-서비스) |
 | **Performance Metrics** | [architecture.md Section 12](../00_Start_Here/architecture.md#12-evidence-based-performance-claims) |
 | **WRK Load Test** | [WRK Final Summary](../05_Reports/Portfolio_Enhancement_WRK_Final_Summary.md) |
-| **Single-flight Test** | [N01 Test Result](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) |
+| **SingleFlight Test** | [N01 Test Result](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) |
 | **Write-Behind Recovery** | [N19 Recovery Report](../05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md) |
 | **ROADMAP Phase 7** | [ROADMAP.md](../00_Start_Here/ROADMAP.md#phase-7-scale-out-아키텍처-전환) |
 | **ADR-011** | [ADR-011](ADR-011-controller-v4-optimization.md) |
@@ -483,7 +483,7 @@ wrk -t4 -c100 -d30s --latency http://localhost:8080/api/v2/character/test/expect
 
 1. **[F1]** V4 모듈 내부에서 V2 모듈을 직접 호출하는 경우
 2. **[F2]** Write-Behind 버퍼 동기 드레인을 사용하는 경우
-3. **[F3]** Single-flight 패턴이 95% 이상의 중복 제거율을 보장하지 않는 경우
+3. **[F3]** SingleFlight 패턴이 95% 이상의 중복 제거율을 보장하지 않는 경우
 4. **[F4]** V4 throughput이 V2 대비 3배 이상 개선되지 않는 경우
 5. **[F5]** V2/V4 모듈 의존성 방향이 반대로 되는 경우
 

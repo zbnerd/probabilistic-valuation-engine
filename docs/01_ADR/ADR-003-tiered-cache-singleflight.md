@@ -77,7 +77,7 @@ Accepted
 | 용어 | 정의 |
 |------|------|
 | **Cache Stampede** | 캐시 만료 시점에 다수 요청이 동시에 DB/외부 API 호출하는 현상 (Thundering Herd) |
-| **Tiered Cache** | L1(로컬) + L2(분산) 다계층 구조. L1 미스 시 L2 조회, L2 미스 시 DataSource. |
+| **TieredCache** | L1(로컬) + L2(분산) 다계층 구조. L1 미스 시 L2 조회, L2 미스 시 DataSource. |
 | **SingleFlight** | 동일 key에 대한 동시 요청을 병합하여 단 한 번의 실행만 수행하는 패턴. |
 | **Leader/Follower** | SingleFlight에서 첫 요청자(Leader)는 실제 작업 수행, 나머지(Follower)는 결과 대기. |
 | **Follower Timeout** | Leader 작업 지연 시 Follower가 독립적으로 타임아웃 처리하는 메커니즘. |
@@ -454,5 +454,5 @@ grep -A 10 "executeAsFollower" src/main/java/maple/expectation/global/concurrenc
 - **테스트:** `src/test/java/maple/expectation/chaos/nightmare/N01ThunderingHerdTest.java`
 
 ### 이슈 및 PR
-- **[PR #160](https://github.com/zbnerd/MapleExpectation/pull/160)** - SingleFlight Follower Timeout Fix
+- **[PR #160](https://github.com/zbnerd/probabilistic-valuation-engine/pull/160)** - SingleFlight Follower Timeout Fix
 - **Chaos Tests:** `docs/02_Chaos_Engineering/06_Nightmare/`

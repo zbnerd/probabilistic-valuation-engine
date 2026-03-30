@@ -11,7 +11,7 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeoutException
 import maple.expectation.error.dto.ErrorResponse
 import maple.expectation.error.exception.base.BaseException
-import maple.expectation.infrastructure.ratelimit.exception.RateLimitExceededException
+import maple.expectation.error.exception.RateLimitExceededException
 import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
 import org.springframework.http.HttpStatus
@@ -223,11 +223,14 @@ class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException::class)
     protected fun handleMethodArgumentNotValid(e: MethodArgumentNotValidException): ResponseEntity<ErrorResponse> {
         // 검증 실패 필드 정보 수집
-        val errorMessage = e.bindingResult.fieldErrors
+        val fieldErrorMessages = e.bindingResult.fieldErrors
             .map { fe -> "${fe.field}: ${fe.defaultMessage}" }
-            .joinToString(", ")
+        val globalErrorMessages = e.bindingResult.globalErrors
+            .map { ge -> "${ge.objectName}: ${ge.defaultMessage}" }
+        val errorMessage = (fieldErrorMessages + globalErrorMessages).joinToString(", ")
 
-        log.warn("Validation failed: {}", errorMessage)
+        log.warn("Validation failed: {} | fieldErrors={} globalErrors={} allErrors={}", errorMessage, e.bindingResult.fieldErrors.size, e.bindingResult.globalErrors.size, e.bindingResult.errorCount)
+        log.debug("Validation exception details: ", e)
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(

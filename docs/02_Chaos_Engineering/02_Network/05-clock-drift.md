@@ -578,7 +578,7 @@ public class ClockUsageChecker {
 ## 19. Evidence IDs (증거 식별자)
 
 ### Code Evidence
-- **[C1]** `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/network/ClockDriftChaosTest.java`
+- **[C1]** `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/network/ClockDriftChaosTest.java`
   - Line 76-96: `shouldUsServerTime_forRedisTTL()` - Redis TTL이 서버 시간 기준임 검증
   - Line 108-135: `shouldExpireLock_basedOnMonotonicTime()` - 분산 락 TTL 정확도 검증
   - Line 142-191: `shouldMaintainFIFO_forConcurrentLockRequests()` - FIFO 순서 보장 검증
@@ -654,7 +654,7 @@ java -version
 
 ### 1단계: 의존성 설치
 ```bash
-cd /home/maple/MapleExpectation
+cd /home/maple/probabilistic-valuation-engine
 ./gradlew dependencies
 ```
 

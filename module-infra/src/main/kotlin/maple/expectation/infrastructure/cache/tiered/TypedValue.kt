@@ -18,6 +18,11 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
  *   <li>Enables proper deserialization to concrete types</li>
  * </ul>
  *
+ * <h3>String Value Handling</h3>
+ *
+ * <p>String values are serialized with explicit type information to ensure
+ * proper round-trip through L2 cache without type erasure.
+ *
  * @see PostgresL2CacheStrategy
  */
 @JsonTypeInfo(

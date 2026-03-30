@@ -517,7 +517,7 @@ public void createOrderIdempotent(String requestId, Order order) {
 ## 19. Evidence IDs (증거 식별자)
 
 ### Code Evidence
-- **[C1]** `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/network/BlackHoleCommitChaosTest.java`
+- **[C1]** `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/network/BlackHoleCommitChaosTest.java`
   - Line 84-139: `shouldTimeout_butDataMayExist_whenAckDropped()` - ACK 유실 시뮬레이션
   - Line 146-177: `shouldPreventDuplicateWrite_withIdempotencyKey()` - Idempotency 패턴 검증
   - Line 184-215: `shouldDetectProtocolError_whenPartialResponseLost()` - 부분 응답 유실
@@ -611,7 +611,7 @@ java -version
 
 ### 1단계: 의존성 설치
 ```bash
-cd /home/maple/MapleExpectation
+cd /home/maple/probabilistic-valuation-engine
 ./gradlew dependencies
 ```
 

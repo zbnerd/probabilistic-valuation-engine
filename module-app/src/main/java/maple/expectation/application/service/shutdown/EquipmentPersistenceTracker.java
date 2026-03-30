@@ -1,5 +1,6 @@
 package maple.expectation.application.service.shutdown;
 
+import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -7,74 +8,78 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.out.PersistenceTrackerPort;
 import maple.expectation.core.port.out.PersistenceTrackerStrategy;
 import maple.expectation.core.port.out.PersistenceTrackerStrategy.StrategyType;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Equipment 비동기 저장 작업 추적기 (최종 평탄화 완료)
+ * Equipment 비동기 저장 작업 추적기 (PostgreSQL 백업)
  *
- * <h3>#271 V5 Stateless Architecture</h3>
+ * <h3>Issue #633: In-Memory → PostgreSQL</h3>
  *
- * <p>PersistenceTrackerStrategy 인터페이스 구현체 (In-Memory 모드)
- *
- * <h3>Issue #283 P1-15: Scale-out 분산 안전성</h3>
- *
- * <p>이 구현체는 {@code @ConditionalOnProperty(name = "app.buffer.redis.enabled", havingValue =
- * "false")}로 In-Memory 모드에서만 활성화됩니다. Scale-out 환경에서는 Redis 구현체 ({@code
- * RedisEquipmentPersistenceTracker})가 대신 로드됩니다.
+ * <p>PersistenceTrackerStrategy 인터페이스 구현체 (PostgreSQL 모드).
+ * 비동기 작업을 PostgreSQL regular table에 기록하여 인스턴스 장애 시 복구 가능.
  *
  * <ul>
- *   <li>{@code shutdownInProgress}: AtomicBoolean - 인스턴스 로컬 shutdown 상태. 각 인스턴스가 독립적으로 자신의 비동기 작업
- *       완료를 대기하므로 분산화 불필요.
- *   <li>{@code pendingOperations}: ConcurrentHashMap - 이 인스턴스에서 시작된 비동기 작업만 추적. CompletableFuture는
- *       본질적으로 로컬이므로 분산화 불가.
+ *   <li>{@code shutdownInProgress}: AtomicBoolean - 인스턴스 로컬 shutdown 상태.
+ *   <li>{@code pendingOperations}: ConcurrentHashMap - 이 인스턴스에서 시작된 비동기 작업만 추적.
+ *   <li>{@code port}: PersistenceTrackerPort - PostgreSQL 어댑터 (Port/Adapter 패턴).
  * </ul>
  *
- * <p><b>결론: 이미 Strategy 패턴으로 In-Memory/Redis 분리 완료. 추가 변환 불필요.</b>
- *
  * @see PersistenceTrackerStrategy 전략 인터페이스
- * @see maple.expectation.infrastructure.queue.persistence.RedisEquipmentPersistenceTracker Redis
- *     구현체
+ * @see PersistenceTrackerPort Port 인터페이스
+ * @see maple.expectation.infrastructure.persistence.PostgresPersistenceTrackerAdapter PostgreSQL
+ *     어댑터
  */
 @Slf4j
-@ConditionalOnProperty(name = "app.buffer.redis.enabled", havingValue = "false")
 @Component
-@RequiredArgsConstructor
 public class EquipmentPersistenceTracker implements PersistenceTrackerStrategy {
 
   private final LogicExecutor executor;
+  private final PersistenceTrackerPort port;
+  private final String instanceId;
   private final ConcurrentHashMap<String, CompletableFuture<Void>> pendingOperations =
       new ConcurrentHashMap<>();
 
   // P1-9 Fix: CLAUDE.md Section 23 - volatile → AtomicBoolean (CAS 연산으로 race condition 방지)
   private final AtomicBoolean shutdownInProgress = new AtomicBoolean(false);
 
+  public EquipmentPersistenceTracker(
+      LogicExecutor executor,
+      PersistenceTrackerPort port,
+      @Value("${app.instance-id:${HOSTNAME:unknown}}") String instanceId) {
+    this.executor = executor;
+    this.port = port;
+    this.instanceId = instanceId;
+  }
+
   @Override
   public void trackOperation(String ocid, CompletableFuture<Void> future) {
     // P1-9 Fix: AtomicBoolean.get()으로 thread-safe 읽기
     if (shutdownInProgress.get()) {
-      log.warn("⚠️ [Persistence] Shutdown 진행 중 - 작업 거부: {}", ocid);
-      throw new IllegalStateException("Shutdown 진행 중에는 등록할 수 없습니다.");
+      log.warn("[Persistence] Shutdown in progress - rejecting: {}", ocid);
+      throw new IllegalStateException("Shutdown in progress");
     }
 
+    port.insertPending(ocid, instanceId);
     pendingOperations.put(ocid, future);
 
     future.whenComplete(
         (result, throwable) ->
             executor.executeVoidJava(
                 () -> {
+                  port.markCompleted(ocid);
                   pendingOperations.remove(ocid);
                   if (throwable != null) {
-                    log.error("❌ [Persistence] 비동기 저장 실패: {}", ocid);
+                    log.error("[Persistence] Async save failed: {}", ocid);
                     return;
                   }
-                  log.debug("✅ [Persistence] 비동기 저장 완료: {}", ocid);
+                  log.debug("[Persistence] Async save completed: {}", ocid);
                 },
                 TaskContext.of("Persistence", "CompleteOperation", ocid)));
   }
@@ -144,6 +149,14 @@ public class EquipmentPersistenceTracker implements PersistenceTrackerStrategy {
 
   @Override
   public StrategyType getType() {
-    return StrategyType.IN_MEMORY;
+    return StrategyType.POSTGRES;
+  }
+
+  @PostConstruct
+  void recoverPendingOperations() {
+    List<String> pending = port.findPendingOperations();
+    if (pending.isEmpty()) return;
+    log.warn("[Persistence] Found {} pending operations from previous run: {}", pending.size(), pending);
+    pending.forEach(ocid -> log.warn("[Persistence] Unrecovered pending: ocid={}", ocid));
   }
 }

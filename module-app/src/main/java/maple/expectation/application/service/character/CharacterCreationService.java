@@ -19,6 +19,7 @@ import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import maple.expectation.infrastructure.character.notify.CharacterCreationNotifier;
 
 /**
  * 캐릭터 생성 공통 서비스 (OcidResolver + GameCharacterService 중복 제거)
@@ -52,6 +53,7 @@ public class CharacterCreationService {
   private final NexonApiClient nexonApiClient;
   private final CacheManager cacheManager;
   private final LogicExecutor executor;
+  private final CharacterCreationNotifier characterCreationNotifier;
 
   /**
    * 캐릭터 생성 - Issue #226: 트랜잭션 경계 분리
@@ -105,6 +107,9 @@ public class CharacterCreationService {
 
     // Positive Cache: OCID 캐시
     Optional.ofNullable(cacheManager.getCache("ocidCache")).ifPresent(c -> c.put(userIgn, ocid));
+
+    // Notify character creation event (replaces Thread.sleep polling in GameCharacterFacade)
+    characterCreationNotifier.notifyCharacterCreated(userIgn);
 
     return saved;
   }

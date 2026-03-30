@@ -80,7 +80,7 @@
 |------|------|
 | **제목** | docs: Add guardrails documentation with hook patterns |
 | **아키텍처 변경** | ✅ Yes (**새로운 Guardrails 시스템 도입**) |
-| **변경 규모** | 42개 파일 추가 (docs/guardrails/) |
+| **변경 규모** | 42개 파일 추가 (docs/16_Guardrails/) |
 | **관련 ADR** | **없음 - ADR-006 작성 필요** |
 | **조치** | **ADR-006 신규 작성 필요** |
 
@@ -172,7 +172,7 @@
    - Architecture (17개): Stateless, ADR decisions, System design
    - Backend/Spring (23개): LogicExecutor, Exception handling, SOLID
    - Backend/Resilience (8개): Circuit Breaker, Marker Interface
-   - Backend/Cache (8개): TieredCache, Single-flight
+   - Backend/Cache (8개): TieredCache, SingleFlight
    - Backend/Concurrency (6개): Async patterns, Thread pool
    - Testing (6개): Unit test, Flaky test prevention
    - Infrastructure (5개): Redis, Scale-out

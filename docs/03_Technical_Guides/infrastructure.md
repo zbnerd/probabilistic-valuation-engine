@@ -3,18 +3,18 @@
 > **상위 문서:** [CLAUDE.md](../../CLAUDE.md)
 >
 > **Last Updated:** 2026-02-05
-> **Applicable Versions:** Java 21, Spring Boot 3.5.4, Redisson 3.27.0, Resilience4j 2.2.0
+> **Applicable Versions:** Java 21, Spring Boot 3.5.4, Redisson 3.48.0 (deprecated - Redis removed), Resilience4j 2.2.0
 > **Documentation Version:** 1.0
 > **Production Status:** Active (Based on production incident resolution from 2025-12 to 2026-01)
 
-이 문서는 MapleExpectation 프로젝트의 인프라, Redis, Cache, Security 관련 규칙을 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 인프라, Redis, Cache, Security 관련 규칙을 정의합니다.
 
 ## Documentation Integrity Statement
 
-This guide is based on **production experience** from operating MapleExpectation under 1,000+ concurrent users on AWS t3.small infrastructure. All patterns have been validated through:
-- Production incidents (Evidence: [P0_Issues_Resolution_Report_2026-01-20.md](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
-- Chaos engineering tests N01-N18 (Evidence: [Chaos Engineering](../01_Chaos_Engineering/))
-- ADR decision records (Evidence: [ADR-006](../adr/ADR-006-redis-lock-lease-timeout-ha.md), [ADR-010](../adr/ADR-010-outbox-pattern.md))
+This guide is based on **production experience** from operating probabilistic-valuation-engine under 1,000+ concurrent users on AWS t3.small infrastructure. All patterns have been validated through:
+- Production incidents (Evidence: [P0_Issues_Resolution_Report_2026-01-20.md](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md))
+- Chaos engineering tests N01-N18 (Evidence: [Chaos Engineering](../02_Chaos_Engineering/))
+- ADR decision records (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md), [ADR-010](../01_ADR/ADR-010-outbox-pattern.md))
 
 ## Terminology
 
@@ -45,13 +45,16 @@ AOP 적용 시 프록시 메커니즘 한계 극복을 위해 반드시 **Facade
 
 ## 8. Redis & Redisson Integration
 
+> **⚠️ DEPRECATED: Redis has been removed from the architecture (ADR-022). This section is kept for historical reference only.**
+
 - **Distributed Lock:** 동시성 제어 시 `RLock`을 사용하며 `try-finally`로 데드락을 방지합니다.
 - **Naming:** Redis 키는 `domain:sub-domain:id` 형식을 따르며 모든 데이터에 TTL을 설정합니다.
 
 ### Evidence Links
 - **Configuration:** `src/main/java/maple/expectation/config/RedissonConfig.java` (Evidence: [CODE-REDIS-CONFIG-001])
 - **Lock Strategy:** `src/main/java/maple/expectation/global/lock/RedisDistributedLockStrategy.java` (Evidence: [CODE-LOCK-001])
-- **HA Decision:** [ADR-006](../adr/ADR-006-redis-lock-lease-timeout-ha.md) - Watchdog vs leaseTime analysis
+- **HA Decision:** [ADR-006](../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md) - Watchdog vs leaseTime analysis
+- **Removal Decision:** [ADR-022](../01_ADR/022-redis-dependency-removal.md) - Redis dependency removal
 
 ---
 
@@ -62,7 +65,7 @@ AOP 적용 시 프록시 메커니즘 한계 극복을 위해 반드시 **Facade
 > **Known Limitations:** Hash Tag reduces key distribution across slots; mitigate by using coarse-grained domains only.
 > **Rollback Plan:** Remove Hash Tags and switch to single-key operations if cluster rebalancing becomes bottleneck.
 
-금융수준 데이터 안전을 위한 Redis Lua Script 원자적 연산 및 Cluster 호환성 규칙입니다. (Evidence: [ADR-007](../adr/ADR-007-aop-async-cache-integration.md))
+금융수준 데이터 안전을 위한 Redis Lua Script 원자적 연산 및 Cluster 호환성 규칙입니다. (Evidence: [ADR-007](../01_ADR/ADR-007-aop-async-cache-integration.md))
 
 ### Lua Script 원자적 연산 (Redisson RScript)
 
@@ -203,7 +206,7 @@ executor.executeWithFinally(
 ### DLQ (Dead Letter Queue) 패턴 (P0 - 데이터 영구 손실 방지)
 
 > **Production Incident:** P0 #287 (2025-12) - Compensation failure caused 247 user likes lost without DLQ.
-> **Fix Validated:** After DLQ implementation, zero data loss across 15 chaos tests (Evidence: [N07-black-hole-commit](../01_Chaos_Engineering/02_Network/07-black-hole-commit.md)).
+> **Fix Validated:** After DLQ implementation, zero data loss across 15 chaos tests (Evidence: [N07-black-hole-commit](../02_Chaos_Engineering/02_Network/07-black-hole-commit.md)).
 
 보상 트랜잭션(compensate) 실행마저 실패하면 데이터가 영구 손실됩니다.
 Spring Event + Listener로 DLQ 패턴을 구현하여 **최후의 안전망**을 제공합니다.
@@ -305,7 +308,7 @@ private long parseLongSafe(Object value) {
 
 ## 17. TieredCache & Cache Stampede Prevention
 
-> **Design Rationale:** L1 cache reduces Redis load by 87% (Evidence: [Performance Report](../04_Reports/PERFORMANCE_260105.md)). Single-flight prevents thundering herd.
+> **Design Rationale:** L1 cache reduces Redis load by 87% (Evidence: [Performance Report](../05_Reports/PERFORMANCE_260105.md)). SingleFlight prevents thundering herd.
 > **Why NOT alternatives:** Cache-aside requires manual consistency management. Write-through adds 40% latency penalty.
 > **Known Limitations:** L1 size limited by JVM heap; mitigate by aggressive TTL and size-based eviction.
 > **Rollback Plan:** Disable L1 tier via configuration if GC pressure exceeds threshold.
@@ -345,7 +348,7 @@ finally {
 }
 ```
 
-### 분산 Single-flight 패턴
+### 분산 SingleFlight 패턴
 - **Leader**: 락 획득 -> Double-check L2 -> valueLoader 실행 -> L2 저장 -> L1 저장
 - **Follower**: 락 대기 -> L2에서 읽기 -> L1 Backfill
 - **락 실패 시**: Fallback으로 직접 실행 (가용성 우선)
@@ -421,7 +424,7 @@ boolean acquired = executor.executeOrDefault(
 
 > **Production Incident:** P0 #238 (2025-12) - CGLIB proxy NPE in Filter caused authentication bypass.
 > **Root Cause:** `@Component` on `OncePerRequestFilter` creates CGLIB proxy with uninitialized logger field.
-> **Fix Validated:** Manual Bean registration eliminates NPE (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.2).
+> **Fix Validated:** Manual Bean registration eliminates NPE (Evidence: [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.2).
 
 Spring Security 6.x에서 커스텀 Filter 사용 시 반드시 준수해야 할 규칙입니다.
 
@@ -539,7 +542,7 @@ http.headers(headers -> headers
 ## 19. Security Best Practices (Logging & API Client)
 
 > **Compliance:** GDPR Article 32 - Security of Processing requires logging access control and data masking.
-> **Incident Evidence:** API key exposure in logs detected during security audit 2025-11 (Evidence: [Security Review](../04_Reports/)).
+> **Incident Evidence:** API key exposure in logs detected during security audit 2025-11 (Evidence: [Security Review](../05_Reports/)).
 > **Why toString() override:** Default Record toString() exposes all fields; masking prevents credential leakage.
 > **Rollback Plan:** Disable request logging entirely if masking implementation is deemed insufficient.
 >

@@ -5,8 +5,6 @@ import java.time.format.DateTimeFormatter
 import maple.expectation.core.domain.model.AlertMessage
 import maple.expectation.core.port.out.AlertPort
 import maple.expectation.core.port.out.SystemMetricsPort
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lock.LockStrategy
 import maple.expectation.infrastructure.monitoring.collector.MetricCategory
 import org.slf4j.LoggerFactory
@@ -35,7 +33,6 @@ import org.springframework.stereotype.Component
 class MonitoringReportJob(
     private val systemMetrics: SystemMetricsPort,
     private val lockStrategy: LockStrategy,
-    private val executor: LogicExecutor,
     @Value("\${ai.sre.enabled:false}") private val aiSreEnabled: Boolean = false,
 ) {
 
@@ -62,26 +59,10 @@ class MonitoringReportJob(
             return
         }
 
-        val context = TaskContext.of("Batch", "MonitoringReport", reportType)
-
-        // Leader Election: 단일 인스턴스만 실행
-        val isLeader = lockStrategy.tryLockImmediately(REPORT_LOCK_KEY, LOCK_LEASE_SECONDS.toLong())
-        if (!isLeader) {
-            log.debug("[MonitoringReport] 리더 선출 실패 - 다른 인스턴스가 실행 중")
-            return
+        // Leader Election: xact-scoped lock으로 단일 인스턴스만 실행 (#628)
+        lockStrategy.executeWithLock(REPORT_LOCK_KEY, 10, LOCK_LEASE_SECONDS.toLong()) {
+            generateAndSendReport(reportType)
         }
-
-        executor.executeWithFinally(
-            {
-                generateAndSendReport(reportType)
-                null
-            },
-            {
-                lockStrategy.unlock(REPORT_LOCK_KEY)
-                log.debug("[MonitoringReport] 리더 락 해제: {}", REPORT_LOCK_KEY)
-            },
-            context,
-        )
     }
 
     /** 리포트 생성 및 전송 */

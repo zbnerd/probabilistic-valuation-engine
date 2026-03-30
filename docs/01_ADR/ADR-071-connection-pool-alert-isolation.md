@@ -175,7 +175,7 @@ public class DiscordAlertService {
 
 #### 3.1 선택: 알림 전송 무상태(Stateless) HTTP 호출 격리
 
-MapleExpectation 프로젝트는 **선택지 3: 알림 전송을 무상태 HTTP 호출로 격리**를 채택했습니다.
+probabilistic-valuation-engine 프로젝트는 **선택지 3: 알림 전송을 무상태 HTTP 호출로 격리**를 채택했습니다.
 
 **결정 근거**:
 1. **장애 상황에서도 알림 필수**: Connection Pool 고갈 시에도 Discord 알림은 반드시 전송되어야 함

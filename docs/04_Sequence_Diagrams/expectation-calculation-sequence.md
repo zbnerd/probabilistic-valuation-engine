@@ -1,7 +1,7 @@
 # Expectation Calculation Pipeline Sequence Diagram
 
 > **Last Updated:** 2026-02-13
-> **Code Version:** MapleExpectation v1.x
+> **Code Version:** probabilistic-valuation-engine v1.x
 > **Diagram Version:** 1.0
 
 ## 개요

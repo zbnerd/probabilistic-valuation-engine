@@ -423,11 +423,11 @@ spring:
 - [ADR-0345: Stateless Alert System](ADR-0345-stateless-alert-system.md) - Issue #345 (향후 참조)
 
 ### 관련 Issues
-- [#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/MapleExpectation/issues/283) - Scheduler 분산 락 적용 (P1-7, P1-8, P1-9)
-- [#310 MySQL → Redis Lock Migration](https://github.com/zbnerd/MapleExpectation/issues/310) - Lock DataSource Pool Size 설정
+- [#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/probabilistic-valuation-engine/issues/283) - Scheduler 분산 락 적용 (P1-7, P1-8, P1-9)
+- [#310 MySQL → Redis Lock Migration](https://github.com/zbnerd/probabilistic-valuation-engine/issues/310) - Lock DataSource Pool Size 설정
 
 ### 관련 문서
-- [Scale-out Blockers Analysis](../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md) - P0/P1 Stateful 컴포넌트 분석
+- [Scale-out Blockers Analysis](../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md) - P0/P1 Stateful 컴포넌트 분석
 - [Spring Framework Scheduling Documentation](https://docs.spring.io/spring-framework/reference/integration/scheduling.html) - @Scheduled 가이드
 
 ---

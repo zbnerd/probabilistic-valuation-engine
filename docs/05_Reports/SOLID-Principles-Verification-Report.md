@@ -1,7 +1,7 @@
 # SOLID Principles Verification Report
 
 **Date:** 2026-02-16
-**Project:** MapleExpectation
+**Project:** probabilistic-valuation-engine
 **Total Files Analyzed:** 630 Java files
 **Verification Scope:** module-app, module-infra, module-core
 
@@ -34,7 +34,7 @@ The codebase demonstrates strong adherence to SOLID principles with strategic us
 ### Critical Findings (Classes >400 lines)
 
 #### 🔴 P0 - EquipmentStreamingParser (479 lines)
-**File:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/parser/EquipmentStreamingParser.java`
+**File:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/parser/EquipmentStreamingParser.java`
 
 **Violations:**
 - **Multiple Responsibilities:** JSON parsing, GZIP decompression, field mapping, preset handling, stat parsing
@@ -54,7 +54,7 @@ The codebase demonstrates strong adherence to SOLID principles with strategic us
 ```
 
 #### 🟡 P1 - RedisStreamEventConsumer (492 lines)
-**File:** `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/messaging/RedisStreamEventConsumer.java`
+**File:** `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/messaging/RedisStreamEventConsumer.java`
 
 **Violations:**
 - **Multiple Responsibilities:** Event consumption, handler discovery, reflection dispatch, deduplication
@@ -68,7 +68,7 @@ The codebase demonstrates strong adherence to SOLID principles with strategic us
 - `EventDispatcher` (reflection-based dispatch)
 
 #### 🟡 P1 - StarforceLookupTableImpl (478 lines)
-**File:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/service/v2/starforce/StarforceLookupTableImpl.java`
+**File:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/service/v2/starforce/StarforceLookupTableImpl.java`
 
 **Violations:**
 - **Multiple Responsibilities:** Markov chain calculation, probability table management, cost calculation, cache management
@@ -86,7 +86,7 @@ The codebase demonstrates strong adherence to SOLID principles with strategic us
 **Status:** ACCEPTABLE - Domain complexity justifies size
 
 #### 🟡 P1 - LikeSyncService (404 lines)
-**File:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/service/v2/LikeSyncService.java`
+**File:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/service/v2/LikeSyncService.java`
 
 **Violations:**
 - **Multiple Responsibilities:** L1→L2 flush, L2→L3 sync, chunk processing, compensation, metrics
@@ -103,7 +103,7 @@ The codebase demonstrates strong adherence to SOLID principles with strategic us
 **Status:** GOOD - Delegation pattern properly used
 
 #### 🟡 P1 - AiSreService (420 lines)
-**File:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/monitoring/ai/AiSreService.java`
+**File:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/monitoring/ai/AiSreService.java`
 
 **Violations:**
 - **Multiple Responsibilities:** AI analysis, fallback logic, incident analysis, prompt building
@@ -589,7 +589,7 @@ private static final ObjectMapper objectMapper = new ObjectMapper();
 
 ## Conclusion
 
-The MapleExpectation codebase demonstrates **strong SOLID principles compliance (88%)** with strategic use of:
+The probabilistic-valuation-engine codebase demonstrates **strong SOLID principles compliance (88%)** with strategic use of:
 
 ✅ **Strengths:**
 - Constructor injection everywhere (DIP)

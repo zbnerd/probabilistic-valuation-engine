@@ -33,7 +33,7 @@ lock:
   impl: postgres  # redis → postgres
 ```
 
-### 1.2 캐시 (Tiered Cache L2)
+### 1.2 캐시 (TieredCache L2)
 
 **현재 상태:** Redis L2 → PostgreSQL L2 마이그레이션 진행 중
 
@@ -298,6 +298,6 @@ implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
 ## 참고 문서
 
-- [ADR-002: PGMQ Integration](../01_ADR/ADR-002-pgmq-integration.md)
-- [ADR-007: PostgreSQL MongoDB Replacement](../01_ADR/ADR-007-postgresql-mongodb-replacement.md)
+- [ADR-002: PGMQ Integration](../01_ADR/ADR-316-pgmq-integration.md)
+- [ADR-007: PostgreSQL MongoDB Replacement](../01_ADR/ADR-325-postgresql-mongodb-replacement.md)
 - [PostgreSQL Migration Phase 2 Plan](../plan/postgresql-migration-phase2-plan.md)

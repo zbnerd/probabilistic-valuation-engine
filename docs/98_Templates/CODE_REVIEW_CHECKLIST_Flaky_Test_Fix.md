@@ -2,7 +2,7 @@
 
 > **Version**: 1.0.0
 > **Last Updated**: 2026-02-10
-> **Related ADR**: [ADR-020](../adr/ADR-020-flaky-test-fixing-solid-refactoring.md)
+> **Related ADR**: [ADR-020](../01_ADR/ADR-020-flaky-test-fixing-solid-refactoring.md)
 > **Related Issues**: #328, #329, #330
 
 ---

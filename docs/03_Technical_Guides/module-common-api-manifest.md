@@ -20,7 +20,7 @@
 
 ## Overview
 
-Module-Common provides shared infrastructure and utilities for the MapleExpectation application. It contains **65 Kotlin source files** exposing public APIs across 5 major packages:
+Module-Common provides shared infrastructure and utilities for the probabilistic-valuation-engine application. It contains **65 Kotlin source files** exposing public APIs across 5 major packages:
 
 ### Package Summary
 
@@ -871,4 +871,4 @@ throw SystemException(CommonErrorCode.SYSTEM_ERROR, cause)
 
 **Document Version:** 1.0.0
 **Next Review:** 2025-09-15
-**Maintainer:** MapleExpectation Team
+**Maintainer:** probabilistic-valuation-engine Team

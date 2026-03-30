@@ -1,7 +1,7 @@
 # Expectation API 캐시 데이터 흐름
 
 > **Last Updated:** 2026-02-05
-> **Code Version:** MapleExpectation v1.x
+> **Code Version:** probabilistic-valuation-engine v1.x
 > **Diagram Version:** 1.0
 
 ## 개요
@@ -14,7 +14,7 @@ TieredCache (L1:Caffeine + L2:Redis), Light/Two-Phase Snapshot, Single-Flight �
 | 패턴 | 설명 | 효과 |
 |------|------|------|
 | **Two-Phase Snapshot** | Light → Full 단계적 로드 | 캐시 HIT 시 불필요한 DB 조회 방지 |
-| **Tiered Cache (L1/L2)** | Caffeine → Redis | 레이턴시 최소화 |
+| **TieredCache (L1/L2)** | Caffeine → Redis | 레이턴시 최소화 |
 | **Single-Flight** | 동일 키 동시 요청 시 1회만 계산 | 중복 계산 방지 |
 | **Light Snapshot** | 캐시 키 생성용 최소 필드 (ocid, fingerprint) | 캐시 조회 최적화 |
 | **Full Snapshot** | 계산용 전체 필드 | 정확한 계산 수행 |

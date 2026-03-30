@@ -61,11 +61,11 @@
 ## 🔗 Evidence IDs (증거 식별자)
 
 ### 코드 증거 (Code Evidence)
-- [C1] **ResilientNexonApiClient**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/external/impl/ResilientNexonApiClient.java` (line 1-428)
+- [C1] **ResilientNexonApiClient**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/external/impl/ResilientNexonApiClient.java` (line 1-428)
   - `@Retry`, `@CircuitBreaker`, `@TimeLimiter` 애너테이션 (line 96-127)
   - Outbox Fallback 패턴 (line 314-428)
 
-- [C2] **application.yml**: `/home/maple/MapleExpectation/src/main/resources/application.yml` (line 171-176)
+- [C2] **application.yml**: `/home/maple/probabilistic-valuation-engine/src/main/resources/application.yml` (line 171-176)
   ```yaml
   nexon:
     api:
@@ -76,7 +76,7 @@
 
 ### 테스트 증거 (Test Evidence)
 - [T1] **테스트 파일**: ✅ **구현 완료**
-  - 위치: `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/resource/GcPauseChaosTest.java`
+  - 위치: `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/resource/GcPauseChaosTest.java`
   - 테스트 메서드:
     - `shouldSurviveGcPause_withoutDataLoss()` - GC Pause 시 서비스 가용성 유지 검증
     - `shouldMaintainTransactionStability_duringGcPause()` - GC Pause 시 트랜잭션 안정성 검증

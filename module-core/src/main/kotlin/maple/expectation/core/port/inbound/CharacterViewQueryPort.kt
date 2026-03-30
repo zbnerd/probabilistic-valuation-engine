@@ -1,13 +1,16 @@
 package maple.expectation.core.port.inbound
 
+import maple.expectation.core.domain.model.character.CharacterView
+import java.util.Optional
+
 /**
- * V5 CQRS Query Side Port (ADR-005)
+ * V5 CQRS Query Side Port (ADR-005, Issue #639)
  *
- * <p>책임: MongoDB CharacterValuationView 조회
+ * <p>책임: PostgreSQL CharacterValuationView 조회
  *
  * <p>구현체:
  * <ul>
- *   <li>module-app/adapter/in/CharacterViewQueryPortAdapter - CharacterViewQueryService에 위임
+ *   <li>module-infra/CharacterViewQueryServicePostgres - PostgreSQL 조회
  * </ul>
  */
 interface CharacterViewQueryPort {
@@ -16,9 +19,9 @@ interface CharacterViewQueryPort {
      * 캐릭터 조회 (userIgn 기준)
      *
      * @param userIgn 캐릭터 IGN
-     * @return CharacterValuationView 또는 null
+     * @return CharacterView 또는 empty
      */
-    fun findByUserIgn(userIgn: String): Any?
+    fun findByUserIgn(userIgn: String): Optional<CharacterView>
 
     /**
      * 캐릭터 삭제 (Cache Invalidation)

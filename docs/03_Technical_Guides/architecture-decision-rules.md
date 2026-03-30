@@ -480,7 +480,7 @@ DataSource dataSource = new CircuitBreakerDataSource(
 **Detection:**
 ```bash
 # Use jdeps or dependency-analyzer
-jdeps MapleExpectation.jar -verbose | grep "->"
+jdeps probabilistic-valuation-engine.jar -verbose | grep "->"
 
 # Look for cycles:
 ServiceA -> ServiceB
@@ -771,7 +771,7 @@ class ApiClient {
 
 **Decision:** Implement Option 2 (Pre-warm cache) ✅
 
-**ADR Created:** [ADR-015: Cache Pre-warming Strategy](../adr/ADR-015-cache-warming.md)
+**ADR Created:** [ADR-015: Cache Pre-warming Strategy](../01_ADR/(DEPRECATED - see ADR-007).md)
 
 ---
 
@@ -854,13 +854,13 @@ class ApiClient {
 
 ---
 
-**Prepared By:** MapleExpectation Team
+**Prepared By:** probabilistic-valuation-engine Team
 **Date:** 2026-02-06
 **Review Frequency:** Quarterly
 **Next Review:** 2026-05-06
 
 **Related Documents:**
 - [Technology Decision Framework](./technology-decision-framework.md)
-- [ADR Index](../adr/)
+- [ADR Index](../01_ADR/)
 - [Architecture Overview](../00_Start_Here/architecture.md)
 - [CLAUDE.md](../../CLAUDE.md)

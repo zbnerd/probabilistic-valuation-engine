@@ -1,4 +1,4 @@
-# MapleExpectation Backend Architecture
+# probabilistic-valuation-engine Backend Architecture
 
 > **상위 문서:** [CLAUDE.md](../../CLAUDE.md)
 >
@@ -13,10 +13,10 @@
 ## Documentation Integrity Statement
 
 This architecture document is based on **actual production implementation** validated through:
-- Load testing confirming 719 RPS throughput (Evidence: [WRK Final Summary](../04_Reports/Portfolio_Enhancement_WRK_Final_Summary.md))
-- Cache performance metrics from production monitoring (Evidence: [N01 Thundering Herd Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md))
+- Load testing confirming 719 RPS throughput (Evidence: [WRK Final Summary](../05_Reports/Portfolio_Enhancement_WRK_Final_Summary.md))
+- Cache performance metrics from production monitoring (Evidence: [N01 Thundering Herd Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md))
 - GZIP compression implementation verified (Evidence: [GzipUtils.java](../../src/main/java/maple/expectation/util/GzipUtils.java))
-- Outbox replay recovery validated (Evidence: [N19 Recovery Report](../04_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md))
+- Outbox replay recovery validated (Evidence: [N19 Recovery Report](../05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md))
 
 ---
 
@@ -24,8 +24,8 @@ This architecture document is based on **actual production implementation** vali
 
 | 용어 | 정의 |
 |------|------|
-| **TieredCache** | L1(Caffeine) + L2(Redis) 2계층 캐시. L1 MISS 시 L2 조회, L2 HIT 시 L1 백필 |
-| **Single-flight** | 동일 요청이 동시에 들어오면 단일 실행으로 중복 계산 방지하는 동시성 패턴 |
+| **TieredCache** | L1(Caffeine) + L2(PostgreSQL) 2계층 캐시. L1 MISS 시 L2 조회, L2 HIT 시 L1 백필 |
+| **SingleFlight** | 동일 요청이 동시에 들어오면 단일 실행으로 중복 계산 방지하는 동시성 패턴 |
 | **Cache Stampede** | 캐시 만료 시 다수 요청이 동시에 소스(DB/API)에 접근하는 Thundering Herd 문제 |
 | **Thundering Herd** | 장애 복구 시 대기 중인 요청이 일제히 몰려와 시스템 과부하를 유발하는 현상 |
 | **SKIP LOCKED** | 이미 잠긴 행을 건너뛰고 잠기지 않은 행만 조회하는 MySQL 기능 (분산 환경 중복 처리 방지) |
@@ -86,7 +86,7 @@ flowchart TB
 
     subgraph Cache["Cache Layer (2-Tier)"]
         L1["L1: Caffeine<br/>(Local, 5min TTL)"]
-        L2["L2: Redis<br/>(Distributed, 10min TTL)"]
+        L2["L2: PostgreSQL<br/>(Distributed, 10min TTL)"]
         TC["TieredCacheManager"]
     end
 
@@ -135,12 +135,9 @@ flowchart TB
     L1 -.->|MISS| L2
     L2 -.->|Backfill| L1
 
-    %% Cache to Redis HA
-    L2 --> Master
-    Master --> Slave
-    S1 --> Master
-    S2 --> Master
-    S3 --> Master
+    %% Cache to PostgreSQL
+    L2 --> PG["PostgreSQL"]
+    PG --> Replica["PostgreSQL Replica"]
 
     %% Services to DB
     Services --> MySQL
@@ -173,7 +170,7 @@ flowchart TB
     class CV1,CV2,CV3,CV4,Facade,EqSvc,LikeSvc,CalcSvc,CacheAsp,LockAsp,TraceAsp,Executor,SF app
     class L1,L2,TC cache
     class MySQL,SlowLog db
-    class Master,Slave,S1,S2,S3 redis
+    class PG,Replica db
     class Nexon,CB,Retry external
     class Prom,Loki,Promtail,Grafana obs
 ```
@@ -268,21 +265,23 @@ flowchart TB
 
 ---
 
-## 4. Redis HA Architecture
+## 4. L2 Cache Architecture (PostgreSQL)
+
+> **⚠️ DEPRECATED: Redis has been removed from the architecture (ADR-022). This section describes the previous Redis-based architecture for historical reference only.**
 
 ```mermaid
 flowchart TB
     subgraph App["Spring Boot App"]
-        Redisson["Redisson Client"]
+        Redisson["Redisson Client (DEPRECATED)"]
     end
 
-    subgraph Sentinel["Sentinel Cluster (Quorum 2/3)"]
+    subgraph Sentinel["Sentinel Cluster (Quorum 2/3) - DEPRECATED"]
         S1["Sentinel 1<br/>:26379"]
         S2["Sentinel 2<br/>:26380"]
         S3["Sentinel 3<br/>:26381"]
     end
 
-    subgraph Redis["Redis Cluster"]
+    subgraph Redis["Redis Cluster - DEPRECATED"]
         Master["Master<br/>172.20.0.10:6379"]
         Slave["Slave<br/>:6380"]
     end
@@ -306,7 +305,7 @@ flowchart TB
     style S1,S2,S3 fill:#2196f3,color:#fff
 ```
 
-### Redis Usage
+### Previous Redis Usage (Deprecated)
 
 | Feature | Redis Structure | Purpose |
 |---------|-----------------|---------|
@@ -614,7 +613,7 @@ flowchart TB
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     MapleExpectation Stack                       │
+│                     probabilistic-valuation-engine Stack                       │
 ├─────────────────────────────────────────────────────────────────┤
 │  Frontend    │  React (별도 프로젝트)                             │
 ├─────────────────────────────────────────────────────────────────┤
@@ -622,7 +621,7 @@ flowchart TB
 ├─────────────────────────────────────────────────────────────────┤
 │  Security    │  Spring Security 6.x, JWT, Bucket4j Rate Limit   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Cache       │  Caffeine (L1), Redis/Redisson 3.27.0 (L2)       │
+│  Cache       │  Caffeine (L1), PostgreSQL (L2)                   │
 ├─────────────────────────────────────────────────────────────────┤
 │  Database    │  MySQL 8.0 + GZIP Compression                     │
 ├─────────────────────────────────────────────────────────────────┤
@@ -662,13 +661,13 @@ flowchart TB
 
 | Claim | Value | Evidence Source | Verified Date |
 |-------|-------|-----------------|---------------|
-| **Max Throughput** | 719 RPS | [Load Test Report](../04_Reports/WRK_Final_Summary.md) | 2026-01-20 |
-| **Cache Hit Rate (L1)** | 85-95% | [N01 Thundering Herd Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) | 2026-01-15 |
+| **Max Throughput** | 719 RPS | [Load Test Report](../05_Reports/WRK_Final_Summary.md) | 2026-01-20 |
+| **Cache Hit Rate (L1)** | 85-95% | [N01 Thundering Herd Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) | 2026-01-15 |
 | **GZIP Compression** | 90% reduction | [GZIP Implementation](../../src/main/java/maple/expectation/util/GzipUtils.java) | 2026-01-10 |
-| **Single-flight Effectiveness** | 99% duplicate reduction | [N01 Test Result](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) | 2026-01-15 |
-| **Circuit Breaker Response** | <5s open | [N03 Thread Pool Test](../01_Chaos_Engineering/06_Nightmare/Results/N03-thread-pool-exhaustion-result.md) | 2026-01-16 |
-| **Recovery Time (N19)** | 47min for 2.1M events | [N19 Recovery Report](../04_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md) | 2026-02-05 |
-| **Concurrent Users** | 1,000+ | [Load Test Report](../04_Reports/WRK_Final_Summary.md) | 2026-01-20 |
+| **SingleFlight Effectiveness** | 99% duplicate reduction | [N01 Test Result](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) | 2026-01-15 |
+| **Circuit Breaker Response** | <5s open | [N03 Thread Pool Test](../02_Chaos_Engineering/06_Nightmare/Results/N03-thread-pool-exhaustion-result.md) | 2026-01-16 |
+| **Recovery Time (N19)** | 47min for 2.1M events | [N19 Recovery Report](../05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md) | 2026-02-05 |
+| **Concurrent Users** | 1,000+ | [Load Test Report](../05_Reports/WRK_Final_Summary.md) | 2026-01-20 |
 
 ### Trade-off Analysis
 
@@ -676,7 +675,7 @@ flowchart TB
 |----------|-------------|------|------------|-----------|
 | **2-Tier Cache** | L1: <1ms, L2: <5ms | Memory: ~500MB | Medium | Hot data 95% L1 hit rate reduces API calls |
 | **GZIP Compression** | CPU: +1ms/request | Storage: -90% | Low | 90% storage savings worth minor CPU cost |
-| **Single-flight** | Reduces API load by 99% | Memory: ~10MB | Medium | Prevents cache stampede, critical for scale |
+| **SingleFlight** | Reduces API load by 99% | Memory: ~10MB | Medium | Prevents cache stampede, critical for scale |
 | **Circuit Breaker** | Prevents cascade failures | Availability: +99.9% | Low | Fast-failure better than hanging requests |
 | **Write-Behind Buffer** | Async DB write | Memory: ~100MB | High | Enables high throughput without DB bottleneck |
 
@@ -690,7 +689,7 @@ curl -s http://localhost:8080/actuator/metrics/cache.gets | jq '.measurements'
 # Verify GZIP Compression
 mysql -u root -p -e "SELECT AVG(LENGTH(data_gzip))/AVG(LENGTH(data_json)) FROM equipment;"
 
-# Verify Single-flight Effectiveness
+# Verify SingleFlight Effectiveness
 curl -s http://localhost:8080/actuator/metrics/singleflight.deduplication | jq '.measurements'
 
 # Verify Circuit Breaker State
@@ -716,10 +715,10 @@ This architecture document is invalid if:
 | Version | Date | Changes | ADR Reference |
 |---------|------|---------|---------------|
 | 1.0.0 | 2025-12-01 | Initial monolithic architecture | - |
-| 1.1.0 | 2025-12-15 | TieredCache + Single-flight added | [ADR-003](../adr/ADR-003-tiered-cache-singleflight.md) |
-| 1.2.0 | 2026-01-10 | V4 Calculator with Decorator Chain | [ADR-011](../adr/ADR-011-controller-v4-optimization.md) |
-| 1.3.0 | 2026-02-05 | Nexon API Outbox Pattern | [ADR-016](../adr/ADR-016-nexon-api-outbox-pattern.md) |
-| 1.4.0 | 2026-02-15 | V5 CQRS Architecture (Read Side) | [ADR-015](../adr/ADR-015-v5-cqrs-mongodb.md) |
+| 1.1.0 | 2025-12-15 | TieredCache + SingleFlight added | [ADR-003](../01_ADR/ADR-003-tiered-cache-singleflight.md) |
+| 1.2.0 | 2026-01-10 | V4 Calculator with Decorator Chain | [ADR-011](../01_ADR/ADR-011-controller-v4-optimization.md) |
+| 1.3.0 | 2026-02-05 | Nexon API Outbox Pattern | [ADR-016](../01_ADR/ADR-016-nexon-api-outbox-pattern.md) |
+| 1.4.0 | 2026-02-15 | V5 CQRS Architecture (Read Side) | [ADR-015](../01_ADR/ADR-036-v5-cqrs-mongodb.md) |
 
 ---
 

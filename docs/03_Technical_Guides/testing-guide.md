@@ -7,14 +7,14 @@
 > **Documentation Version:** 1.0
 > **Production Status:** Active (Zero flaky tests in CI since 2025-12 implementation)
 
-이 문서는 MapleExpectation 프로젝트의 테스트 작성, 동시성 테스트, Flaky Test 방지 규칙을 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 테스트 작성, 동시성 테스트, Flaky Test 방지 규칙을 정의합니다.
 
 ## Documentation Integrity Statement
 
 This guide is based on **CI/CD production experience** from resolving 47 flaky test incidents:
-- Flaky test elimination: 47 incidents resolved to zero flaky rate (Evidence: [zero-script-qa-2026-01-30.md](../03-analysis/zero-script-qa-2026-01-30.md))
-- QA checklist: 30-question top-tier validation standard (Evidence: [QA_MONITORING_CHECKLIST.md](../03-analysis/QA_MONITORING_CHECKLIST.md))
-- Chaos test validation: N01-N18 scenarios with reproducible results (Evidence: [Chaos Engineering](../01_Chaos_Engineering/06_Nightmare/Results/))
+- Flaky test elimination: 47 incidents resolved to zero flaky rate (Evidence: [zero-script-qa-2026-01-30.md](../05_Reports/zero-script-qa-2026-01-30.md))
+- QA checklist: 30-question top-tier validation standard (Evidence: [QA_MONITORING_CHECKLIST.md](./QA_MONITORING_CHECKLIST.md))
+- Chaos test validation: N01-N18 scenarios with reproducible results (Evidence: [Chaos Engineering](../02_Chaos_Engineering/06_Nightmare/Results/))
 
 ## Terminology
 
@@ -31,7 +31,7 @@ This guide is based on **CI/CD production experience** from resolving 47 flaky t
 
 > **Production Issue:** P2 #207 - Flaky test caused 15% CI failure rate due to missing awaitTermination().
 > **Root Cause:** shutdown() returns immediately; assertion executed before tasks completed.
-> **Fix Validated:** awaitTermination() + CountDownLatch eliminated all race conditions (Evidence: [P2 Resolution](../04_Reports/P1-p2-performance-improvements-report.md)).
+> **Fix Validated:** awaitTermination() + CountDownLatch eliminated all race conditions (Evidence: [P2 Resolution](../05_Reports/P1-p2-performance-improvements-report.md)).
 > **Metrics Proof:** CI pass rate improved from 85% to 99.7% after implementation.
 
 동시성 테스트에서 Race Condition을 방지하기 위한 필수 패턴입니다.
@@ -119,7 +119,7 @@ public AtomicLong getCounter(String userIgn) {
 
 ## 24. Flaky Test 근본 원인 분석 및 해결 가이드 (Critical)
 
-> **Production Impact:** 47 flaky test incidents analyzed across 2025 Q4 (Evidence: [zero-script-qa](../03-analysis/zero-script-qa-2026-01-30.md)).
+> **Production Impact:** 47 flaky test incidents analyzed across 2025 Q4 (Evidence: [zero-script-qa](../05_Reports/zero-script-qa-2026-01-30.md)).
 > **Business Cost:** Flaky tests caused 2-3 hour delays in PR validation, reducing team velocity by ~15%.
 > **Solution Validated:** 6-principle framework reduced flaky rate from 12% to <0.3% (40x improvement).
 > **Alternative Considered:** Test retries rejected as they mask root cause and increase CI time.
@@ -350,7 +350,7 @@ for i in {1..10}; do ./gradlew test --tests "TargetTest" || echo "Failed at $i";
 mvn -Dsurefire.rerunFailingTestsCount=3 test
 ```
 
-### MapleExpectation 프로젝트 특화 규칙
+### probabilistic-valuation-engine 프로젝트 특화 규칙
 
 | 컴포넌트 | Flaky 원인 | 해결책 |
 |----------|-----------|--------|
@@ -448,7 +448,7 @@ junit.jupiter.execution.parallel.config.dynamic.factor=0.5
 - **Test Base Classes:** `src/test/java/maple/expectation/config/` (Evidence: [CODE-TEST-BASE-001])
 - **Example Tests:** `src/test/java/maple/expectation/service/v2/` (Evidence: [CODE-TEST-EXAMPLE-001])
 - **JUnit Config:** `src/test/resources/junit-platform.properties` (Evidence: [CONF-JUNIT-001])
-- **Flaky Test Analysis:** `docs/03-analysis/zero-script-qa-2026-01-30.md` (Evidence: [ANALYSIS-FLAKY-001])
+- **Flaky Test Analysis:** `../05_Reports/zero-script-qa-2026-01-30.md` (Evidence: [ANALYSIS-FLAKY-001])
 
 ## Technical Validity Check
 
@@ -477,8 +477,8 @@ grep -r "@Testcontainers" src/test/java --include="*.java"
 ```
 
 ### Related Evidence
-- QA Checklist: `docs/03-analysis/QA_MONITORING_CHECKLIST.md`
-- Zero Script QA: `docs/03-analysis/zero-script-qa-2026-01-30.md`
+- QA Checklist: `do./QA_MONITORING_CHECKLIST.md`
+- Zero Script QA: `../05_Reports/zero-script-qa-2026-01-30.md`
 - Chaos Test Results: `docs/02_Chaos_Engineering/06_Nightmare/Results/`
 
 ---

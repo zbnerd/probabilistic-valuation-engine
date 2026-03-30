@@ -1,4 +1,4 @@
-# MapleExpectation 프로젝트 종합 분석 보고서
+# probabilistic-valuation-engine 프로젝트 종합 분석 보고서
 
 **분석 일자:** 2026-02-26
 **분석 팀:** 10명 Code-Reviewer 에이전트 (병렬 분석)
@@ -28,7 +28,7 @@
 
 ## 프로젝트 개요
 
-**MapleExpectation**은 Nexon Open API를 활용하여 메이플스토리 장비 업그레이드 비용을 계산하는 Spring Boot 애플리케이션입니다.
+**probabilistic-valuation-engine**은 Nexon Open API를 활용하여 메이플스토리 장비 업그레이드 비용을 계산하는 Spring Boot 애플리케이션입니다.
 
 | 항목 | 값 |
 |------|-----|
@@ -44,7 +44,7 @@
 ### 5개 Gradle 멀티모듈
 
 ```
-MapleExpectation/
+probabilistic-valuation-engine/
 ├── module-app/          # 메인 애플리케이션 (Java 21)
 │   ├── controller/      # 8개 REST Controller
 │   ├── service/         # V2/V4/V5 서비스 계층
@@ -799,7 +799,7 @@ return Optional.ofNullable(l1.get(key))
 
 ### 요약
 
-MapleExpectation은 **잘 설계된 고성능 Spring Boot 애플리케이션**입니다:
+probabilistic-valuation-engine은 **잘 설계된 고성능 Spring Boot 애플리케이션**입니다:
 
 1. **멀티모듈 아키텍처**: 5개 모듈로 관심사 분리
 2. **CQRS 패턴**: V5에서 Command/Query 분리

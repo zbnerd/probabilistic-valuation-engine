@@ -11,10 +11,10 @@
 
 This protocol is based on **actual development practices** from the project:
 - Pentagonal Pipeline workflow used in production PR reviews (Evidence: [PR Template](../98_Templates/PR_TEMPLATE.md))
-- Agent roles derived from actual SOLID violations and performance issues (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
-- Trade-off decisions documented in actual ADRs (Evidence: [ADR Directory](../adr/))
+- Agent roles derived from actual SOLID violations and performance issues (Evidence: [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md))
+- Trade-off decisions documented in actual ADRs (Evidence: [ADR Directory](../01_ADR/))
 
-이 문서는 MapleExpectation 프로젝트의 5-Agent Council 프로토콜을 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 5-Agent Council 프로토콜을 정의합니다.
 
 ## Terminology
 
@@ -180,9 +180,9 @@ This protocol is based on **actual development practices** from the project:
 |-----------|-----------------|
 | **PR Template** | [PR_TEMPLATE.md](../98_Templates/PR_TEMPLATE.md) |
 | **Issue Template** | [ISSUE_TEMPLATE.md](../98_Templates/ISSUE_TEMPLATE.md) |
-| **P0 Incidents** | [P0 Report](../05_Reports/04_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md) |
-| **ADR Decisions** | [ADR Directory](../adr/) |
-| **Code Quality** | [N19 Code Review](../01_Chaos_Engineering/06_Nightmare/Results/N19-code-quality-review.md) |
+| **P0 Incidents** | [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md) |
+| **ADR Decisions** | [ADR Directory](../01_ADR/) |
+| **Code Quality** | [N19 Code Review](../02_Chaos_Engineering/06_Nightmare/Results/N19-code-quality-review.md) |
 
 ## Technical Validity Check
 
@@ -205,7 +205,7 @@ grep -c "###.*:" docs/00_Start_Here/multi-agent-protocol.md | head -10
 grep -A 30 "Pentagonal Pipeline" docs/00_Start_Here/multi-agent-protocol.md
 
 # Check ADRs follow protocol
-grep -l "Trade-off\|Blue\|Green\|Yellow\|Purple\|Red" docs/01_Adr/*.md | wc -l
+grep -l "Trade-off\|Blue\|Green\|Yellow\|Purple\|Red" docs/01_ADR/*.md | wc -l
 ```
 
 ### Verification Commands

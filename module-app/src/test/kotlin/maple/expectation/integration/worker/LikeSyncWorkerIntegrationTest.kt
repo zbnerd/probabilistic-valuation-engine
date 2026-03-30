@@ -2,6 +2,8 @@ package maple.expectation.integration.worker
 
 import java.sql.ResultSet
 import java.time.Instant
+import java.time.Duration
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.AtomicInteger
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.character.GameCharacter
@@ -15,6 +17,7 @@ import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.queue.pgmq.LikeSyncQueueProducer
 import maple.expectation.support.IntegrationTestBase
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
@@ -169,8 +172,8 @@ class LikeSyncWorkerIntegrationTest : IntegrationTestBase() {
         assertThat(messages1).hasSize(1)
         assertThat(messages1[0].readCount).isEqualTo(0)
 
-        // 처리하지 않고 VT가 만료될 때까지 대기
-        Thread.sleep(1100) // VT = 1초 + 100ms 여유
+        // 처리하지 않고 VT가 만료될 때까지 대기 (VT = 1초 + 100ms 여유)
+        await().atLeast(Duration.of(1100, ChronoUnit.MILLIS)).until { true }
 
         // 두 번째 읽기 (readCount = 1, 재시도)
         val messages2 = pgmqClient.read(testQueueName, LikeSyncRequest::class.java, 1, 1)
@@ -209,7 +212,7 @@ class LikeSyncWorkerIntegrationTest : IntegrationTestBase() {
         assertThat(messages1[0].readCount).isEqualTo(0)
 
         // 처리하지 않고 VT 만료 대기
-        Thread.sleep(1100)
+        await().atLeast(Duration.of(1100, ChronoUnit.MILLIS)).until { true }
 
         // 두 번째 읽기 (readCount = 1)
         val messages2 = pgmqClient.read(testQueueName, LikeSyncRequest::class.java, 1, 1)
@@ -217,7 +220,7 @@ class LikeSyncWorkerIntegrationTest : IntegrationTestBase() {
         assertThat(messages2[0].readCount).isEqualTo(1)
 
         // 처리하지 않고 VT 만료 대기
-        Thread.sleep(1100)
+        await().atLeast(Duration.of(1100, ChronoUnit.MILLIS)).until { true }
 
         // 세 번째 읽기 (readCount = 2)
         val messages3 = pgmqClient.read(testQueueName, LikeSyncRequest::class.java, 1, 1)
@@ -225,7 +228,7 @@ class LikeSyncWorkerIntegrationTest : IntegrationTestBase() {
         assertThat(messages3[0].readCount).isEqualTo(2)
 
         // 처리하지 않고 VT 만료 대기
-        Thread.sleep(1100)
+        await().atLeast(Duration.of(1100, ChronoUnit.MILLIS)).until { true }
 
         // 네 번째 읽기 (readCount = 3, maxRetries = 2 초과)
         val messages4 = pgmqClient.read(testQueueName, LikeSyncRequest::class.java, 1, 1)
@@ -403,7 +406,7 @@ class LikeSyncWorkerIntegrationTest : IntegrationTestBase() {
         // When
         // Worker가 비활성화되어 있으면 자동 처리되지 않음
         // 수동으로만 읽을 수 있음
-        Thread.sleep(500) // Worker가 자동으로 처리할 시간을 줌 (하지만 비활성화되어 있음)
+        await().atLeast(Duration.of(500, ChronoUnit.MILLIS)).until { true } // Worker가 자동으로 처리할 시간을 줌 (하지만 비활성화되어 있음)
 
         // Then: 좋아요 수가 변하지 않았음
         val likeCountAfterWait = getCharacterLikeCount(TEST_CHARACTER_NAME)

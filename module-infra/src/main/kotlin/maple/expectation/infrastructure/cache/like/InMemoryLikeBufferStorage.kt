@@ -38,7 +38,8 @@ class InMemoryLikeBufferStorage(
 
     init {
         Gauge.builder("like.buffer.local_pending", this) { storage ->
-            storage.likeCache.asMap().values.sumOf { it.get().toDouble() }
+            val keys = ArrayList(storage.likeCache.asMap().keys)
+            keys.sumOf { key -> storage.likeCache.getIfPresent(key)?.get()?.toDouble() ?: 0.0 }
         }
             .description("현재 인스턴스의 미반영 좋아요 총합")
             .register(registry)
@@ -48,27 +49,38 @@ class InMemoryLikeBufferStorage(
 
     override fun get(userIgn: String): Long = likeCache.getIfPresent(userIgn)?.get() ?: 0L
 
-    override fun getAllCounters(): Map<String, Long> = likeCache.asMap().mapValues { it.value.get().toLong() }
+    override fun getAllCounters(): Map<String, Long> {
+        val keys = ArrayList(likeCache.asMap().keys)
+        return keys.mapNotNull { key ->
+            likeCache.getIfPresent(key)?.let { key to it.get().toLong() }
+        }.toMap()
+    }
 
     override fun fetchAndClear(limit: Int): Map<String, Long> {
         val result = mutableMapOf<String, Long>()
+        // Key snapshot: snapshot 이후 추가된 key는 다음 사이클에서 처리됨
+        val keys = ArrayList(likeCache.asMap().keys)
         var count = 0
 
-        for ((key, counter) in likeCache.asMap()) {
+        for (key in keys) {
             if (count >= limit) break
+            val counter = likeCache.getIfPresent(key) ?: continue
             val value = counter.getAndSet(0)
             if (value != 0L) {
                 result[key] = value
                 count++
             }
         }
-
         return result
     }
 
     override fun getBufferSize(): Int = likeCache.estimatedSize().toInt()
 
     override fun getType(): LikeBufferStrategy.StrategyType = LikeBufferStrategy.StrategyType.IN_MEMORY
+
+    override fun restoreEntries(entries: Map<String, Long>) {
+        entries.forEach { (userIgn, delta) -> getCounter(userIgn).addAndGet(delta) }
+    }
 
     /**
      * 카운터 조회 (없으면 생성)

@@ -100,15 +100,15 @@
 
 | ID | 파일 경로 | 라인 | 설명 | 검증 상태 |
 |----|----------|------|------|----------|
-| [E6] | `/home/maple/MapleExpectation/src/main/resources/application.yml` | 17 | datasource.hikari.connection-timeout=3000 | ✅ 확인됨 |
+| [E6] | `/home/maple/probabilistic-valuation-engine/src/main/resources/application.yml` | 17 | datasource.hikari.connection-timeout=3000 | ✅ 확인됨 |
 | [E7] | `application.yml` | 81-86 | resilience4j.circuitbreaker.instances.likeSyncDb 설정 | ✅ 확인됨 |
-| [E8] | `/home/maple/MapleExpectation/src/main/java/maple/expectation/scheduler/LikeSyncScheduler.java` | 전체 | 좋아요 동기화 스케줄러 | ✅ 확인됨 |
+| [E8] | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/scheduler/LikeSyncScheduler.java` | 전체 | 좋아요 동기화 스케줄러 | ✅ 확인됨 |
 
 ### 테스트 증거 (Test Evidence)
 
 | ID | 파일 경로 | 테스트 메서드 | 설명 | 검증 상태 |
 |----|----------|-------------|------|----------|
-| [T5] | `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/core/MySQLDeathChaosTest.java` | shouldFailFast_whenMySQLDown | Fail Fast 검증 | ✅ 확인됨 |
+| [T5] | `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/core/MySQLDeathChaosTest.java` | shouldFailFast_whenMySQLDown | Fail Fast 검증 | ✅ 확인됨 |
 | [T6] | [T5] 동일 | shouldServeFromCache_whenMySQLDown | 캐시 Fallback 검증 | ✅ 확인됨 |
 | [T7] | [T5] 동일 | shouldRecover_afterMySQLRestart | 복구 검증 | ✅ 확인됨 |
 
@@ -177,7 +177,7 @@ grep -A 5 "likeSyncDb:" src/main/resources/application.yml
 ### Phase 1: 환경 세팅
 
 ```bash
-cd /home/maple/MapleExpectation
+cd /home/maple/probabilistic-valuation-engine
 docker-compose up -d
 ```
 
@@ -819,7 +819,7 @@ sequenceDiagram
 
 > **테스트는 PASS되었으나, 개선 이슈가 발견되었습니다.**
 >
-> 📎 **GitHub Issue**: [#218 - feat: MySQL 장애 시 Resilience 강화](https://github.com/zbnerd/MapleExpectation/issues/218)
+> 📎 **GitHub Issue**: [#218 - feat: MySQL 장애 시 Resilience 강화](https://github.com/zbnerd/probabilistic-valuation-engine/issues/218)
 
 ---
 

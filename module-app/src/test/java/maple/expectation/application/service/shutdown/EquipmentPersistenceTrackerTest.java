@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import maple.expectation.core.port.out.PersistenceTrackerPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.support.TestLogicExecutors;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,13 +22,18 @@ class EquipmentPersistenceTrackerTest {
   private EquipmentPersistenceTracker tracker;
   private LogicExecutor executor;
 
+  /** No-op stub for PersistenceTrackerPort in unit tests. */
+  private static final PersistenceTrackerPort STUB_PORT =
+      new PersistenceTrackerPort() {
+        @Override public void insertPending(String ocid, String instanceId) {}
+        @Override public void markCompleted(String ocid) {}
+        @Override public List<String> findPendingOperations() { return Collections.emptyList(); }
+      };
+
   @BeforeEach
   void setUp() {
-    // ✅ [해결] TestLogicExecutors로 boilerplate 제거
     executor = TestLogicExecutors.passThrough();
-
-    // 리팩토링된 생성자로 주입
-    tracker = new EquipmentPersistenceTracker(executor);
+    tracker = new EquipmentPersistenceTracker(executor, STUB_PORT, "test-instance");
   }
 
   @Test

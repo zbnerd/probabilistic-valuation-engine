@@ -3,7 +3,7 @@
 ## 제1장: 문제의 발견 (Problem)
 
 ### 초기 상황
-프로젝트 시작 시점에서 MapleExpectation은 Spring Boot 3.5.4 기반의 멀티모듈 구조로 설계되었습니다. 빌드 도구 선택은 다음과 같은 문제들에 직면해 있었습니다:
+프로젝트 시작 시점에서 probabilistic-valuation-engine은 Spring Boot 3.5.4 기반의 멀티모듈 구조로 설계되었습니다. 빌드 도구 선택은 다음과 같은 문제들에 직면해 있었습니다:
 
 1. **XML의 verbosity (Maven pom.xml 복잡도)**
    - 의존성 관리를 위한 중복 선언 (부모 POM 상속 구조)
@@ -105,7 +105,7 @@
 
 ### 최종 선택: Gradle 8.5 with Kotlin DSL (.gradle.kts)
 
-MapleExpectation은 **Gradle 8.5**를 빌드 도구로 채택하고, **Kotlin DSL**을 빌드 스크립트 언어로 선택했습니다.
+probabilistic-valuation-engine은 **Gradle 8.5**를 빌드 도구로 채택하고, **Kotlin DSL**을 빌드 스크립트 언어로 선택했습니다.
 
 ### 결정의 핵심 근거
 
@@ -188,7 +188,7 @@ dependencyManagement {
 
 ### 4.1 Gradle 8.5 설정
 
-**File: `/home/maple/MapleExpectation/gradle/wrapper/gradle-wrapper.properties`**
+**File: `/home/maple/probabilistic-valuation-engine/gradle/wrapper/gradle-wrapper.properties`**
 ```properties
 distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
@@ -205,7 +205,7 @@ validateDistributionUrl=true
 
 ### 4.2 Multi-Module 구조 정의
 
-**File: `/home/maple/MapleExpectation/settings.gradle`**
+**File: `/home/maple/probabilistic-valuation-engine/settings.gradle`**
 ```groovy
 // #262: JDK 21 자동 다운로드를 위한 Foojay Toolchain Resolver
 plugins {
@@ -233,7 +233,7 @@ include 'module-chaos-test'
 
 ### 4.3 Root Project Build Configuration (Groovy DSL)
 
-**File: `/home/maple/MapleExpectation/build.gradle`**
+**File: `/home/maple/probabilistic-valuation-engine/build.gradle`**
 
 #### Core Plugins & Toolchain
 ```groovy
@@ -319,7 +319,7 @@ subprojects {
 
 #### Module-App (Spring Boot 실행 모듈)
 
-**File: `/home/maple/MapleExpectation/module-app/build.gradle`**
+**File: `/home/maple/probabilistic-valuation-engine/module-app/build.gradle`**
 
 ```groovy
 plugins {
@@ -385,7 +385,7 @@ tasks.named("jar") {
 
 #### Module-Core (순수 도메인)
 
-**File: `/home/maple/MapleExpectation/module-core/build.gradle`**
+**File: `/home/maple/probabilistic-valuation-engine/module-core/build.gradle`**
 
 ```groovy
 dependencies {
@@ -417,7 +417,7 @@ test {
 
 ### 4.5 Test Configuration (Build Performance 최적화)
 
-**File: `/home/maple/MapleExpectation/build.gradle` (Subprojects Block)**
+**File: `/home/maple/probabilistic-valuation-engine/build.gradle` (Subprojects Block)**
 
 ```groovy
 test {
@@ -465,7 +465,7 @@ test {
 
 ### 4.6 Integration Test Source Set
 
-**File: `/home/maple/MapleExpectation/module-app/build.gradle`**
+**File: `/home/maple/probabilistic-valuation-engine/module-app/build.gradle`**
 
 ```groovy
 sourceSets {
@@ -626,7 +626,7 @@ tasks.withType(JavaCompile).configureEach {
 
 ## 결론 (Conclusion)
 
-MapleExpectation은 **Gradle 8.5**를 빌드 도구로 채택하여 다음과 같은 이점을 달성했습니다:
+probabilistic-valuation-engine은 **Gradle 8.5**를 빌드 도구로 채택하여 다음과 같은 이점을 달성했습니다:
 
 1. **Build Performance**: Build cache + Incremental compilation으로 CI 시간 50% 단축
 2. **Multi-Module Structure**: 5개 모듈 (Core, Infra, App, Common, Chaos-Test)의 유연한 관리
@@ -638,6 +638,6 @@ Groovy DSL을 사용했지만, 향후 Kotlin DSL로의 마이그레이션 여지
 **ADR 상태**: **Accepted** (2026-02-19 기준, 프로덕션 운영 중)
 
 **관련 ADR**:
-- [ADR-014: 멀티모듈 구조 설계](/home/maple/MapleExpectation/docs/01_ADR/ADR-014-multi-module-structure.md)
-- [ADR-017: 애플리케이션 계층 분리](/home/maple/MapleExpectation/docs/01_ADR/ADR-017-application-layer-separation.md)
-- [ADR-025: 카오스 테스트 모듈 분리](/home/maple/MapleExpectation/docs/01_ADR/ADR-025-chaos-test-module.md)
+- [ADR-014: 멀티모듈 구조 설계](/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-014-multi-module-structure.md)
+- [ADR-017: 애플리케이션 계층 분리](/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-017-application-layer-separation.md)
+- [ADR-025: 카오스 테스트 모듈 분리](/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-025-chaos-test-module.md)

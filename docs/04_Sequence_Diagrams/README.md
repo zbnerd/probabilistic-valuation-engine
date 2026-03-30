@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-이 디렉토리는 MapleExpectation 프로젝트의 주요 비즈니스 흐름을 시퀀스 다이어그램으로 문서화합니다.
+이 디렉토리는 probabilistic-valuation-engine 프로젝트의 주요 비즈니스 흐름을 시퀀스 다이어그램으로 문서화합니다.
 
 ## 다이어그램 목록
 

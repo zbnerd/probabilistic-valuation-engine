@@ -1,4 +1,4 @@
-# MapleExpectation Demo Script & Q&A Template
+# probabilistic-valuation-engine Demo Script & Q&A Template
 
 **Purpose:** Comprehensive demo scenario and preparation guide for presentations (D3: 4/6 → 6/6 improvement)
 
@@ -33,7 +33,7 @@
 **Duration:** 15 minutes (10 min talk + 5 min Q&A)
 
 **Flow:**
-1. **Introduction (1 min)** - Who uses MapleExpectation + why
+1. **Introduction (1 min)** - Who uses probabilistic-valuation-engine + why
 2. **Demo (4 min)** - Live calculation with real character data
 3. **Behind the Scenes (3 min)** - Architecture overview (diagram)
 4. **Results (2 min)** - Performance numbers + cost efficiency
@@ -58,7 +58,7 @@
 
 **Slide 1: Title Slide**
 ```
-MapleExpectation: Enterprise-Grade Resilience on a Budget
+probabilistic-valuation-engine: Enterprise-Grade Resilience on a Budget
 "1 Request = 150 Standard Requests"
 
 RPS 965 | p50 95ms | p99 214ms | 0% Failure
@@ -87,7 +87,7 @@ Date: [Date]
 ```
 Problem: Extreme Payload Density
 
-| Metric | Typical Web | MapleExpectation | Ratio |
+| Metric | Typical Web | probabilistic-valuation-engine | Ratio |
 |--------|-------------|------------------|-------|
 | Payload per Request | ~2KB | 200-300KB | 100-150x |
 | Memory per 100 Users | ~10MB | 1.5GB | 150x |
@@ -115,7 +115,7 @@ Problem: Extreme Payload Density
 **Slide 3: 7-Module Architecture**
 ```
 ┌─────────────────────────────────────────────┐
-│           MapleExpectation Architecture      │
+│           probabilistic-valuation-engine Architecture      │
 ├─────────────────────────────────────────────┤
 │                                             │
 │  ┌─────────┐    ┌──────────────────────┐   │
@@ -457,7 +457,7 @@ Top 3 Learnings:
 
 ## 🔗 Related Resources
 
-- [Balanced Scorecard KPIs](../03_Technical_Guides/balanced-scorecard-kpis.md) - Performance metrics reference
+- [Balanced Scorecard KPIs](../08_Design_Research/balanced-scorecard-kpis.md) - Performance metrics reference
 - [N21 Auto Mitigation Report](../05_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md) - Incident deep dive
 - [N23 Cost Performance Report](../05_Reports/Cost_Performance/COST_PERF_REPORT_N23.md) - Cost optimization evidence
 - [Scenario Planning Guide](../03_Technical_Guides/scenario-planning.md) - Future scenarios and mitigation

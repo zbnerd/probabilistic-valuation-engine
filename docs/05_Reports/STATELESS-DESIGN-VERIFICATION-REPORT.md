@@ -2,7 +2,7 @@
 
 **Generated:** 2026-02-16
 **Skill:** verify-stateless
-**Project:** MapleExpectation
+**Project:** probabilistic-valuation-engine
 **Analysis Scope:** All Java modules (module-app, module-core, module-infra, module-common)
 **Total Files Analyzed:** 500+ Java files
 **Spring Beans:** 163 components
@@ -11,7 +11,7 @@
 
 ## Executive Summary
 
-MapleExpectation demonstrates **EXCELLENT stateless design compliance** with strategic use of in-memory state where appropriate. The codebase follows modern Java 21 patterns with Virtual Threads, ConcurrentHashMap for thread safety, and clear separation between distributed (Redis) and local state.
+probabilistic-valuation-engine demonstrates **EXCELLENT stateless design compliance** with strategic use of in-memory state where appropriate. The codebase follows modern Java 21 patterns with Virtual Threads, ConcurrentHashMap for thread safety, and clear separation between distributed (Redis) and local state.
 
 ### Key Findings
 
@@ -65,7 +65,7 @@ The codebase has **ZERO critical scale-out blockers**. All previously identified
 **Previous Issue:** In-Memory AtomicInteger for daily AI call count
 **Current State:** ✅ **MIGRATED TO REDIS**
 
-**Evidence:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/monitoring/throttle/AlertThrottler.java`
+**Evidence:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/monitoring/throttle/AlertThrottler.java`
 
 ```java
 // Line 70-76: Redis-based distributed counter
@@ -110,7 +110,7 @@ private RMap<String, Long> getPatternTimesMap() {
 **Previous Issue:** Caffeine local cache causing count divergence
 **Current State:** ✅ **TIERED CACHE (L1 Caffeine + L2 Redis)**
 
-**Evidence:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/service/v2/cache/LikeRelationBuffer.java`
+**Evidence:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/service/v2/cache/LikeRelationBuffer.java`
 
 ```java
 // Lines 52-56: L1 Caffeine + L2 Redis distributed pattern
@@ -146,7 +146,7 @@ public RSet<String> getRelationSet() {
 - **Mitigation:** Acceptable trade-off for performance vs. complexity
 
 **Justification:**
-1. Single-flight is a **performance optimization**, not a data consistency requirement
+1. SingleFlight is a **performance optimization**, not a data consistency requirement
 2. Duplicate calls are idempotent (GET requests)
 3. Redis-based distributed single-flight adds 1-5ms latency per operation
 4. Current implementation provides 99%+ benefit in single-instance mode
@@ -204,7 +204,7 @@ public RSet<String> getRelationSet() {
 
 ### P1-1: DeDuplicationCache
 
-**File:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/monitoring/copilot/pipeline/DeDuplicationCache.java`
+**File:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/monitoring/copilot/pipeline/DeDuplicationCache.java`
 
 ```java
 // Line 42: In-Memory incident tracking
@@ -227,7 +227,7 @@ private final ConcurrentHashMap<String, Long> recentIncidents = new ConcurrentHa
 
 ### P1-2: EventDispatcher
 
-**File:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/event/EventDispatcher.java`
+**File:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/event/EventDispatcher.java`
 
 ```java
 // Line 75: Event handler registry
@@ -250,7 +250,7 @@ private final Map<Class<?>, List<HandlerMethod>> handlers = new ConcurrentHashMa
 
 ### P1-3: StarforceLookupTableImpl
 
-**File:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/service/v2/starforce/StarforceLookupTableImpl.java`
+**File:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/service/v2/starforce/StarforceLookupTableImpl.java`
 
 ```java
 // Line 87: Pre-computed Markov chain expected costs
@@ -276,7 +276,7 @@ private final AtomicBoolean initialized = new AtomicBoolean(false);
 
 ### P1-4: CustomSpelParser
 
-**File:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/aop/util/CustomSpelParser.java`
+**File:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/aop/util/CustomSpelParser.java`
 
 ```java
 // Line: SpEL expression parsing cache
@@ -299,7 +299,7 @@ private final Map<String, Expression> expressionCache = new ConcurrentHashMap<>(
 
 ### P1-5: ExpectationWriteBackBuffer
 
-**File:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/service/v4/buffer/ExpectationWriteBackBuffer.java`
+**File:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/service/v4/buffer/ExpectationWriteBackBuffer.java`
 
 ```java
 // Lines 51-96: Write-behind buffer with shutdown coordination
@@ -613,7 +613,7 @@ app:
 
 ## Conclusion
 
-MapleExpectation demonstrates **EXCELLENT stateless design compliance** with 94% stateless components and all remaining stateful components properly justified. The codebase is **production-ready for horizontal scaling** with clear documentation and strategic use of in-memory state where appropriate.
+probabilistic-valuation-engine demonstrates **EXCELLENT stateless design compliance** with 94% stateless components and all remaining stateful components properly justified. The codebase is **production-ready for horizontal scaling** with clear documentation and strategic use of in-memory state where appropriate.
 
 ### Key Successes
 
@@ -651,6 +651,6 @@ The system is production-ready. Future enhancements (scheduler @Locked, addition
 **Analysis Date:** 2026-02-16
 **Next Review:** After major architecture changes or when adding new stateful components
 **Related Documents:**
-- [Scale-out Blockers Analysis](/home/maple/MapleExpectation/docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
-- [Stateless Design Compliance (Legacy)](/home/maple/MapleExpectation/docs/05_Reports/stateless-design-compliance.md)
-- [ADR-012: Stateless Scalability Roadmap](/home/maple/MapleExpectation/docs/99_Adr/ADR-012-stateless-scalability-roadmap.md)
+- [Scale-out Blockers Analysis](/home/maple/probabilistic-valuation-engine/docs/05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)
+- [Stateless Design Compliance (Legacy)](/home/maple/probabilistic-valuation-engine/docs/05_Reports/stateless-design-compliance.md)
+- [ADR-012: Stateless Scalability Roadmap](/home/maple/probabilistic-valuation-engine/docs/99_Adr/ADR-012-stateless-scalability-roadmap.md)

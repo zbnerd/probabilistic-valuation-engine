@@ -1,7 +1,7 @@
 # Expectation API 데이터 흐름 분석
 
 > **Last Updated:** 2026-02-13
-> **Code Version:** MapleExpectation v1.x
+> **Code Version:** probabilistic-valuation-engine v1.x
 > **Diagram Version:** 2.0 (Split into focused diagrams)
 
 ## 개요
@@ -30,7 +30,7 @@
 | **Light Snapshot** | 캐시 키 생성용 최소 필드 (ocid, fingerprint) |
 | **Full Snapshot** | 계산용 전체 필드 |
 | **Single-Flight** | 동시 요청 1회만 계산 |
-| **Tiered Cache** | L1(Caffeine) + L2(Redis) |
+| **TieredCache** | L1(Caffeine) + L2(Redis) |
 | **GZIP** | 응답 압축 |
 
 ---
@@ -42,7 +42,7 @@
 | **Non-Blocking Async** | 톰캣 스레드 즉시 반환 (0ms) | RPS 719 달성 (wrk 벤치마크) |
 | **Two-Phase Snapshot** | Light → Full 단계적 로드 | 캐시 HIT 시 불필요한 DB 조회 방지 |
 | **Single-Flight** | 동일 키 동시 요청 시 1회만 계산 | 중복 계산 방지 |
-| **Tiered Cache (L1/L2)** | Caffeine → Redis | 레이턴시 최소화 |
+| **TieredCache (L1/L2)** | Caffeine → Redis | 레이턴시 최소화 |
 | **Resilient API Client** | Circuit Breaker + Retry | 외부 API 장애 격리 |
 | **Write-Behind** | 응답 후 비동기 DB 저장 | 응답 시간 단축 |
 
@@ -330,7 +330,7 @@ grep "CompletableFuture" src/main/java/maple/expectation/service/v2/EquipmentSer
 # Two-Phase 구현 확인
 grep -A 10 "fetchLightSnapshot\|fetchFullSnapshot" src/main/java/maple/expectation/service/v2/
 
-# Single-flight 확인
+# SingleFlight 확인
 grep -A 20 "getWithLoader\|SingleFlight" src/main/java/maple/expectation/global/cache/
 ```
 
@@ -497,6 +497,6 @@ grep "CompletableFuture" src/main/java/maple/expectation/service/v2/EquipmentSer
 # Two-Phase 구현 확인
 grep -A 10 "fetchLightSnapshot\|fetchFullSnapshot" src/main/java/maple/expectation/service/v2/
 
-# Single-flight 확인
+# SingleFlight 확인
 grep -A 20 "getWithLoader\|SingleFlight" src/main/java/maple/expectation/global/cache/
 ```

@@ -51,6 +51,12 @@ open class GameCharacterJpaEntity {
 
     open var updatedAt: LocalDateTime? = null
 
+    @Column(length = 64)
+    open var fingerprint: String? = null
+
+    @Column(name = "account_id", length = 64)
+    open var accountId: String? = null
+
     protected constructor()
 
     /**
@@ -88,6 +94,8 @@ open class GameCharacterJpaEntity {
             likeCount,
             version,
             updatedAt ?: LocalDateTime.now(),
+            fingerprint,
+            accountId,
         )
     }
 
@@ -117,6 +125,8 @@ open class GameCharacterJpaEntity {
                 entity.likeCount = domain.likeCount
                 entity.version = domain.version
                 entity.updatedAt = domain.updatedAt ?: LocalDateTime.now()
+                entity.fingerprint = domain.fingerprint
+                entity.accountId = domain.accountId
                 entity
             }
         }

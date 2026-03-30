@@ -2,8 +2,8 @@
 
 **Status**: Accepted (Implementation Phase)
 **Date**: 2026-02-14
-**Author**: MapleExpectation Architecture Team
-**Supersedes**: [ADR-014](ADR-014-multi-module-cross-cutting-concerns.md), [ADR-013](ADR-013-redis-stream-design.md), [ADR-003](ADR-003-tiered-cache.md)
+**Author**: probabilistic-valuation-engine Architecture Team
+**Supersedes**: [ADR-014](ADR-014-multi-module-cross-cutting-concerns.md), [ADR-013](ADR-013-high-throughput-event-pipeline.md), [ADR-003](ADR-003-tiered-cache-singleflight.md)
 
 ## Summary
 
@@ -231,8 +231,8 @@ public class MongoSecurityConfig {
 ## References
 
 - [ADR-014: Multi-module architecture](ADR-014-multi-module-cross-cutting-concerns.md)
-- [ADR-013: Redis Stream design](ADR-013-redis-stream-design.md)
-- [ADR-003: Tiered cache strategy](ADR-003-tiered-cache.md)
+- [ADR-013: Redis Stream design](ADR-013-high-throughput-event-pipeline.md)
+- [ADR-003: Tiered cache strategy](ADR-003-tiered-cache-singleflight.md)
 - Spring Data MongoDB 3.5.4 Best Practices
 - Redisson 3.27.0 Stream API Documentation
 - MongoDB CQRS Pattern Guide

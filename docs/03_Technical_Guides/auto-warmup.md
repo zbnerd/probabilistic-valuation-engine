@@ -20,7 +20,7 @@
 ## Documentation Integrity Statement
 
 This guide is based on **V4 API cold start performance analysis**:
-- Cold cache impact: RPS dropped from 310 to 95 (69% reduction) (Evidence: [N23_V4_API_RESULTS.md](../04_Reports/Cost_Performance/N23_V4_API_RESULTS.md))
+- Cold cache impact: RPS dropped from 310 to 95 (69% reduction) (Evidence: [N23_V4_API_RESULTS.md](../05_Reports/Cost_Performance/N23_V4_API_RESULTS.md))
 - Warmup effectiveness: 3.3x RPS improvement after warmup (95 -> 310 RPS)
 - Stateless design: Distributed lock prevents duplicate warmup across instances (Evidence: Issue #275)
 
@@ -38,7 +38,7 @@ V4 API의 Cold Cache 문제를 해결하기 위한 자동 웜업 시스템입니
 
 ### 1.1 문제 상황
 
-> **Performance Evidence:** Load test N23 measured 95 RPS cold vs 310 RPS warm (Evidence: [N23 Results](../04_Reports/Cost_Performance/N23_V4_API_RESULTS.md)).
+> **Performance Evidence:** Load test N23 measured 95 RPS cold vs 310 RPS warm (Evidence: [N23 Results](../05_Reports/Cost_Performance/N23_V4_API_RESULTS.md)).
 
 | 상태 | RPS | P50 Latency | Timeout |
 |------|-----|-------------|---------|

@@ -52,7 +52,7 @@ echo $DB_SERVER_IP
 ## Phase 2: 계획 (Plan)
 - 구체적이고 명확한 작업 계획 수립
 - '어떤 파일'의 '어떤 부분'을 '어떻게' 수정할지 Step-by-step 작성
-- **ADR 선행:** 구현 작업은 반드시 ADR 문서 먼저 작성 (`docs/adr/`)
+- **ADR 선행:** 구현 작업은 반드시 ADR 문서 먼저 작성 (`docs/01_ADR/`)
 - 계획 제시 후 **반드시 승인 대기**
 
 ## Phase 3: 실행 (Implement)
@@ -83,11 +83,12 @@ echo $DB_SERVER_IP
 | 패턴 | 메서드 | 용도 |
 |------|--------|------|
 | 1 | `execute(task, context)` | 일반 실행. 예외 발생 시 로그 기록 후 상위 전파 |
-| 2 | `executeVoid(task, context)` | 반환값 없는 작업 |
+| 2 | `executeVoid(task, context)` | 반환값 없는 작업 (Kotlin), `executeVoidJava` (Java-friendly) |
 | 3 | `executeOrDefault(task, default, context)` | 예외 발생 시 기본값 반환 |
-| 4 | `executeWithRecovery(task, recovery, context)` | 예외 발생 시 복구 로직 실행 |
-| 5 | `executeWithFinally(task, finalizer, context)` | 자원 해제 등 finally 필요 시 |
-| 6 | `executeWithTranslation(task, translator, context)` | 기술적 예외를 도메인 예외로 변환 |
+| 4 | `executeOrCatch(task, recovery, context)` | 예외 발생 시 복구 로직 실행 (번역된 예외 전달) |
+| 5 | `executeWithFallback(task, fallback, context)` | 예외 발생 시 폴백 실행 (원본 예외 전달) |
+| 6 | `executeWithFinally(task, finalizer, context)` | 자원 해제 등 finally 필요 시 |
+| 7 | `executeWithTranslation(task, translator, context)` | 기술적 예외를 도메인 예외로 변환 |
 
 **허용 예외:** LogicExecutor 구현체 내부, AOP 순환참조 방지
 
@@ -227,11 +228,19 @@ application.yml          # 공통 설정 (592줄)
 
 | 주제 | 위치 |
 |------|------|
-| 인프라 (Redis, Cache, Security) | [docs/03_Technical_Guides/infrastructure.md](docs/03_Technical_Guides/infrastructure.md) |
+| 인프라 (Cache, Security) | [docs/03_Technical_Guides/infrastructure.md](docs/03_Technical_Guides/infrastructure.md) |
 | 비동기 & 동시성 | [docs/03_Technical_Guides/async-concurrency.md](docs/03_Technical_Guides/async-concurrency.md) |
 | 테스트 가이드 | [docs/03_Technical_Guides/testing-guide.md](docs/03_Technical_Guides/testing-guide.md) |
 | 멀티 에이전트 프로토콜 | [docs/00_Start_Here/multi-agent-protocol.md](docs/00_Start_Here/multi-agent-protocol.md) |
 | 카오스 엔지니어링 | [docs/02_Chaos_Engineering/](docs/02_Chaos_Engineering/) |
 | 서비스 모듈 | [docs/03_Technical_Guides/service-modules.md](docs/03_Technical_Guides/service-modules.md) |
+| 퍼포먼스 저니 | [docs/06_Performance_Journey/](docs/06_Performance_Journey/) |
+| 심화 교재 | [docs/07_Deep_Dive_Textbook/](docs/07_Deep_Dive_Textbook/) |
 | Scale-out 분석 | [docs/05_Reports/](docs/05_Reports/) |
-| ADR | [docs/adr/](docs/adr/) |
+| ADR | [docs/01_ADR/](docs/01_ADR/) |
+| 계획 | [docs/09_Plans/](docs/09_Plans/) |
+| 마이그레이션 | [docs/10_Migration/](docs/10_Migration/) |
+| 관측성 | [docs/11_Observability/](docs/11_Observability/) |
+| 이벤트 스키마 | [docs/12_Events/](docs/12_Events/) |
+| 가드레일 | [docs/16_Guardrails/](docs/16_Guardrails/) |
+| 운영 가이드 | [docs/21_Operations/](docs/21_Operations/) |

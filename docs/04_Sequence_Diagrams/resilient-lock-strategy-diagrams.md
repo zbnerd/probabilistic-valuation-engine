@@ -395,5 +395,5 @@ mindmap
 ## 참조 문서
 
 - [Lock Strategy Guide](../03_Technical_Guides/lock-strategy.md)
-- [ADR-006: Redis Lock Lease Timeout HA](../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md)
+- [ADR-006: Redis Lock Lease Timeout HA](../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md)
 - [ADR-310: Redis Lock Migration](../01_ADR/ADR-310-redis-lock-migration.md)

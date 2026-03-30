@@ -6,7 +6,7 @@
 > **Applicable Versions:** JUnit 5, Testcontainers 1.x, Spring Boot 3.x
 > **Documentation Version:** 1.0
 
-이 문서는 MapleExpectation 프로젝트에서 통합 테스트를 작성하는 방법, 베이스 클래스 사용법, 태깅 규칙, 모범 사례를 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트에서 통합 테스트를 작성하는 방법, 베이스 클래스 사용법, 태깅 규칙, 모범 사례를 정의합니다.
 
 ---
 
@@ -978,7 +978,7 @@ class LikeSyncWorkerIntegrationTest : IntegrationTestBase() {
 - [Testing Guide](testing-guide.md) - 테스트 작성 기본 가이드
 - [Async Concurrency Guide](async-concurrency.md) - 비동기 테스트 패턴
 - [Infrastructure Guide](infrastructure.md) - Testcontainers 설정
-- [ADR-002: PGMQ Queue Architecture](../../adr/002-pgmq-queue-architecture.md)
+- [ADR-002: PGMQ Queue Architecture](../../01_ADR/002-pgmq-queue-architecture.md)
 
 ## Evidence Links
 

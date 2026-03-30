@@ -8,14 +8,14 @@
 > **Documentation Version:** 1.0
 > **Compliance:** GDPR Article 32, OWASP Top 10 2021
 
-이 문서는 MapleExpectation 프로젝트의 보안 강화 규칙을 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 보안 강화 규칙을 정의합니다.
 
 ## Documentation Integrity Statement
 
 This guide is based on **security audit findings** from 2025 Q4:
-- Security hardening: 25+ vulnerabilities addressed (Evidence: [Security Review](../04_Reports/security-audit-2025-Q4.md))
-- Production incidents resolved: P0 #238, #241, #287 (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
-- OWASP Top 10 alignment: All 10 categories addressed (Evidence: [OWASP Checklist](../04_Reports/owasp-compliance.md))
+- Security hardening: 25+ vulnerabilities addressed (Evidence: [Security Review](../05_Reports/security-audit-2025-Q4.md))
+- Production incidents resolved: P0 #238, #241, #287 (Evidence: [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md))
+- OWASP Top 10 alignment: All 10 categories addressed (Evidence: [OWASP Checklist](../05_Reports/owasp-compliance.md))
 
 ## Terminology
 
@@ -101,7 +101,7 @@ if (rateLimitExceeded(clientIp)) {
 ## 27. JWT Security Best Practices
 
 > **Production Incident:** P0 #238 (2025-12) - Weak JWT secret caused authentication bypass.
-> **Fix Validated:** Fail-fast validation prevents startup with weak secrets (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.3).
+> **Fix Validated:** Fail-fast validation prevents startup with weak secrets (Evidence: [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.3).
 > **Algorithm Choice:** HS256 chosen over RS256 for simplicity; symmetric key sufficient for single-service architecture.
 
 JWT 토큰 생성, 검증, 관리를 위한 필수 규칙입니다.
@@ -395,7 +395,7 @@ log.info("User input: {}", sanitized);
 ## 31. Sensitive Data Logging Rules
 
 > **Compliance:** GDPR Article 32 - Security of Processing requires logging access control and data masking.
-> **Incident Evidence:** API key exposure in logs detected during security audit 2025-11 (Evidence: [Security Review](../04_Reports/security-audit-2025-Q4.md)).
+> **Incident Evidence:** API key exposure in logs detected during security audit 2025-11 (Evidence: [Security Review](../05_Reports/security-audit-2025-Q4.md)).
 
 민감 정보 로깅 규칙입니다.
 
@@ -541,5 +541,5 @@ grep -r "log.info.*apiKey\|log.info.*password" --include="*.java"
 
 ### Related Evidence
 - Security Audit: `docs/05_Reports/security-audit-2025-Q4.md`
-- P0 Resolution: `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md`
+- P0 Resolution: `../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md`
 - OWASP Compliance: `docs/05_Reports/owasp-compliance.md`

@@ -171,4 +171,10 @@ class TieredCacheManager(
     fun evict(cacheName: String, key: Any) {
         getCache(cacheName)?.evict(key)
     }
+
+    fun getKeyVersion(cacheName: String, key: Any): Long? = (getCache(cacheName) as? TieredCache)?.getKeyVersion(key)
+
+    fun clearKeyVersions(cacheName: String) {
+        (getCache(cacheName) as? TieredCache)?.clearKeyVersions()
+    }
 }

@@ -571,7 +571,7 @@ public class FencingTokenGuard {
 ## 19. Evidence IDs (증거 식별자)
 
 ### Code Evidence
-- **[C1]** ✅ `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/network/SplitBrainChaosTest.java` (존재)
+- **[C1]** ✅ `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/network/SplitBrainChaosTest.java` (존재)
   - Line 82-112: `shouldElectNewMaster_whenOriginalMasterIsolated()` - Master 격리 시 Failover 검증
   - Line 126-177: `shouldLastWriterWin_whenConcurrentWritesDuringSplitBrain()` - 동시 쓰기 충돌 해결 검증
   - Line 192-237: `shouldMaintainLockSafety_whenMasterIsolatedDuringLock()` - 분산 락 안전성 검증
@@ -660,7 +660,7 @@ java -version
 ### 1단계: 의존성 설치
 ```bash
 # 프로젝트 클론 (이미 있는 경우 생략)
-cd /home/maple/MapleExpectation
+cd /home/maple/probabilistic-valuation-engine
 
 # 의존성 다운로드
 ./gradlew dependencies

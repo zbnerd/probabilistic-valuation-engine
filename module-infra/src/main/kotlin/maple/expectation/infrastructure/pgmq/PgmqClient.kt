@@ -133,6 +133,20 @@ class PgmqClient(
         return executor.executeWithTranslation({ performDelete(queueName, messageId) }, translator, context)
     }
 
+    /**
+     * 큐 길이 조회
+     *
+     * <p>지정된 큐의 현재 대기 중인 메시지 수를 반환.
+     * Backpressure 체크에 사용.
+     *
+     * @param queueName 큐 이름
+     * @return 대기 중인 메시지 수
+     */
+    fun queueLength(queueName: String): Long {
+        val context = TaskContext.of("PgmqClient", "QueueLength", queueName)
+        return executor.executeOrDefault({ performQueueLength(queueName) }, 0L, context)
+    }
+
     // ==================== Internal Implementation ====================
 
     private fun <T : Any> performSend(queueName: String, message: T): Long {
@@ -217,6 +231,14 @@ class PgmqClient(
             log.debug("🗑️ [PGMQ] Deleted message: queue={}, msgId={}", queueName, messageId)
         }
         return result
+    }
+
+    private fun performQueueLength(queueName: String): Long {
+        return jdbcTemplate.queryForObject(
+            "SELECT pgmq.queue_length(?)",
+            Long::class.java,
+            queueName,
+        ) ?: 0L
     }
 
     // ==================== Fallback Methods ====================

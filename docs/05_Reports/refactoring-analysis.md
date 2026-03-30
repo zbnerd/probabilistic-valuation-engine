@@ -1,4 +1,4 @@
-# MapleExpectation 리팩토링 맥락 분석 리포트
+# probabilistic-valuation-engine 리팩토링 맥락 분석 리포트
 
 > **작성일:** 2026-02-13
 > **목적:** ADR-035 Stateless Alert System 리팩토링을 위한 사전 분석
@@ -165,7 +165,7 @@ sequenceDiagram
 | 컴포넌트 | 역할 | 성능 기여 |
 |----------|------|-----------|
 | **EquipmentExpectationServiceV4** | 메인 Facade, 3-preset 병렬 계산 | 719 RPS |
-| **ExpectationCacheCoordinator** | Single-flight + GZIP 압축 캐시 | 99% 중복 제거 |
+| **ExpectationCacheCoordinator** | SingleFlight + GZIP 압축 캐시 | 99% 중복 제거 |
 | **ExpectationWriteBackBuffer** | Lock-free CAS 버퍼 | 10,000 tasks backpressure |
 | **PresetCalculationHelper** | calculatePreset() 분해 (SRP 준수) | 20줄 이내 메서드 |
 | **PopularCharacterTracker** | Redis ZSET 기반 캐시 워밍업 | 사전 로딩 |
@@ -310,7 +310,7 @@ module-common/src/main/java/maple/expectation/error/
 |------|-------------|--------------|
 | **Controller** | `GameCharacterControllerV2` (disabled) | `GameCharacterControllerV4` |
 | **Service** | `EquipmentService` (disabled) | `EquipmentExpectationServiceV4` |
-| **Cache** | TieredCache (L1+L2) | ExpectationCacheCoordinator (Single-flight) |
+| **Cache** | TieredCache (L1+L2) | ExpectationCacheCoordinator (SingleFlight) |
 | **Buffer** | In-Memory | Redis Write-Behind |
 | **성능** | 95 RPS (cold cache) | 719 RPS (cold cache) |
 | **응답** | JSON | GZIP 압축 JSON |
@@ -371,7 +371,7 @@ module-common/src/main/java/maple/expectation/error/
 | 보고서 | 경로 |
 |--------|------|
 | Service Modules Guide | `docs/03_Technical_Guides/service-modules.md` |
-| Stateful Refactoring Targets | `docs/05_Reports/04_08_Refactor/STATEFUL_REFACTORING_TARGETS.md` |
+| Stateful Refactoring Targets | `docs/05_Reports/05_08_Refactor/STATEFUL_REFACTORING_TARGETS.md` |
 | Migration Status | `MIGRATION_STATUS.md` |
 
 ---

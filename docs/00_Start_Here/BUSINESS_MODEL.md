@@ -8,8 +8,8 @@
 ## Documentation Integrity Statement
 
 This Business Model Canvas is based on **actual production metrics** from 2025-2026:
-- Performance claims validated through WRK load testing (Evidence: [Load Test Report](../05_Reports/04_03_Deep_Dive/Portfolio_Enhancement_WRK_Final_Summary.md))
-- Cost calculations verified from AWS actual billing (Evidence: [Cost Performance Report](../05_Reports/04_02_Cost_Performance/COST_PERF_REPORT_N23_ACTUAL.md))
+- Performance claims validated through WRK load testing (Evidence: [Load Test Report](../05_Reports/05_03_Deep_Dive/Portfolio_Enhancement_WRK_Final_Summary.md))
+- Cost calculations verified from AWS actual billing (Evidence: [Cost Performance Report](../05_Reports/05_02_Cost_Performance/COST_PERF_REPORT_N23_ACTUAL.md))
 - Infrastructure specifications matched against actual deployment (Evidence: [Deployment Architecture](./architecture.md))
 
 ## Terminology
@@ -20,13 +20,13 @@ This Business Model Canvas is based on **actual production metrics** from 2025-2
 | **P50 Latency** | 50백분위 응답 시간 |
 | **T3.small** | AWS 2 vCPU, 2GB RAM 인스턴스 |
 | **Circuit Breaker** | 장애 확산 방지 패턴 |
-| **TieredCache** | 2계층 캐시 (L1: Caffeine, L2: Redis) |
+| **TieredCache** | 2계층 캐시 (L1: Caffeine, L2: PostgreSQL UNLOGGED) |
 
 ---
 
 ## Overview
 
-MapleExpectation은 메이플스토리 장비 강화 비용을 계산하는 서비스로, 극한의 성능 최적화와 회복 탄력성을 통해 저비용 고효율 인프라에서 대규모 동시 사용자를 처리합니다.
+probabilistic-valuation-engine은 메이플스토리 장비 강화 비용을 계산하는 서비스로, 극한의 성능 최적화와 회복 탄력성을 통해 저비용 고효율 인프라에서 대규모 동시 사용자를 처리합니다.
 
 ---
 
@@ -141,7 +141,7 @@ External API:
 |----------|---------------|------|
 | **Compute** | AWS t3.small | ~$15/month |
 | **Database** | MySQL 8.0 | (included) |
-| **Cache** | Redis (Redisson) | (included) |
+| **Cache** | PostgreSQL (UNLOGGED) | (included) |
 | **Monitoring** | Prometheus + Grafana | (included) |
 
 ---
@@ -176,7 +176,7 @@ External API:
 
 ### Performance Comparison
 
-| Aspect | MapleExpectation | Typical Service |
+| Aspect | probabilistic-valuation-engine | Typical Service |
 |--------|------------------|------------------|
 | **RPS** | 719 | ~50 |
 | **p50 Latency** | 164ms (Load) | ~100ms |
@@ -193,7 +193,7 @@ External API:
 
 2. TieredCache (L1/L2)
    - L1: Caffeine (<5ms)
-   - L2: Redis (<20ms)
+   - L2: PostgreSQL (10min TTL)
    - DB 쿼리 비율 ≤10%
 
 3. LogicExecutor Pipeline
@@ -228,7 +228,7 @@ External API:
 
 | Channel | Purpose | URL |
 |---------|---------|-----|
-| **GitHub** | 코드 배포 | [Repository](https://github.com/zbnerd/MapleExpectation) |
+| **GitHub** | 코드 배포 | [Repository](https://github.com/zbnerd/probabilistic-valuation-engine) |
 | **Docker Hub** | 이미지 배포 | (TBD) |
 | **API Endpoint** | 서비스 제공 | localhost:8080 (dev) |
 
@@ -293,7 +293,7 @@ Tier 3: Direct Contact (Critical issues)
 
 ## Related Documents
 
-- [KPI-BSC Dashboard](../05_Reports/04_01_Baseline/KPI_BSC_DASHBOARD.md) - 성과 지표 대시보드
+- [KPI-BSC Dashboard](../05_Reports/05_01_Baseline/KPI_BSC_DASHBOARD.md) - 성과 지표 대시보드
 - [Architecture](./architecture.md) - 시스템 아키텍처
 - [ROADMAP](./ROADMAP.md) - 프로젝트 로드맵
 
@@ -308,11 +308,11 @@ Tier 3: Direct Contact (Critical issues)
 
 | Claim | Evidence Source |
 |-------|-----------------|
-| **719 RPS Throughput** | [WRK Load Test Results](../05_Reports/04_03_Deep_Dive/Portfolio_Enhancement_WRK_Final_Summary.md) |
-| **p50 164ms Latency** | [Performance Report](../05_Reports/04_02_Cost_Performance/PERFORMANCE_260105.md) |
-| **AWS t3.small Cost** | [Cost Performance Report](../05_Reports/04_02_Cost_Performance/COST_PERF_REPORT_N23_ACTUAL.md) |
-| **0% Failure Rate** | [Load Test Results](../05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260120.md) |
-| **479 Test Cases** | [QA Monitoring Checklist](../04_Sequence_Diagrams/QA_MONITORING_CHECKLIST.md) |
+| **719 RPS Throughput** | [WRK Load Test Results](../05_Reports/05_03_Deep_Dive/Portfolio_Enhancement_WRK_Final_Summary.md) |
+| **p50 164ms Latency** | [Performance Report](../05_Reports/05_02_Cost_Performance/PERFORMANCE_260105.md) |
+| **AWS t3.small Cost** | [Cost Performance Report](../05_Reports/05_02_Cost_Performance/COST_PERF_REPORT_N23_ACTUAL.md) |
+| **0% Failure Rate** | [Load Test Results](../05_Reports/05_06_Load_Tests/LOAD_TEST_REPORT_20260120.md) |
+| **479 Test Cases** | [QA Monitoring Checklist](../03_Technical_Guides/QA_MONITORING_CHECKLIST.md) |
 
 ## Technical Validity Check
 
@@ -351,7 +351,7 @@ grep -A 20 "Deployment Architecture" docs/00_Start_Here/architecture.md
 ### Verification Commands
 ```bash
 # Load Test 결과 확인
-find docs/04_Reports -name "*load*test*"
+find docs/05_Reports -name "*load*test*"
 
 # 성능 메트릭 확인
 grep "RPS\|Latency\|Throughput" docs/05_Reports/*.md

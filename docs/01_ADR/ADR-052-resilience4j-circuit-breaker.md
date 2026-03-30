@@ -4,7 +4,7 @@
 
 ### 1.1 외부 API 장애의 전이 (Cascading Failure)
 
-2025년 11월부터 2026년 1월 사이, 넥슨 오픈 API 장애가 MapleExpectation 서비스 전체로 전파되는 심각한 문제가 발생했습니다.
+2025년 11월부터 2026년 1월 사이, 넥슨 오픈 API 장애가 probabilistic-valuation-engine 서비스 전체로 전파되는 심각한 문제가 발생했습니다.
 
 **증상:**
 - 외부 API 타임아웃 시 요청이 큐에 쌓여 Thread Pool 고갈
@@ -197,7 +197,7 @@ public class NexonApiTimeoutException extends ServerBaseException
 
 ### 4.1 Resilience4j BOM 추가
 
-**파일:** `/home/maple/MapleExpectation/build.gradle` (Line 47)
+**파일:** `/home/maple/probabilistic-valuation-engine/build.gradle` (Line 47)
 
 ```gradle
 dependencyManagement {
@@ -211,7 +211,7 @@ dependencyManagement {
 
 ### 4.2 Circuit Breaker 설정
 
-**파일:** `/home/maple/MapleExpectation/src/main/resources/application.yml`
+**파일:** `/home/maple/probabilistic-valuation-engine/src/main/resources/application.yml`
 
 ```yaml
 resilience4j:
@@ -241,7 +241,7 @@ resilience4j:
 
 ### 4.3 Marker Interface 구현
 
-**파일:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/marker/`
+**파일:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/marker/`
 
 ```java
 // CircuitBreakerIgnoreMarker.java
@@ -275,7 +275,7 @@ public interface CircuitBreakerRecordMarker {
 
 ### 4.4 예외 계층 구조 적용
 
-**파일:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/`
+**파일:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/`
 
 ```java
 // ClientBaseException.java (4xx)
@@ -293,7 +293,7 @@ public abstract class ServerBaseException extends RuntimeException
 
 ### 4.5 ResilientLockStrategy Fallback 구현
 
-**파일:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/lock/ResilientLockStrategy.java`
+**파일:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/lock/ResilientLockStrategy.java`
 
 ```java
 public class ResilientLockStrategy implements LockStrategy {
@@ -321,7 +321,7 @@ public class ResilientLockStrategy implements LockStrategy {
 
 ### 4.6 테스트 검증
 
-**파일:** `/home/maple/MapleExpectation/src/test/java/maple/expectation/external/ResilientNexonApiClientTest.java`
+**파일:** `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/external/ResilientNexonApiClientTest.java`
 
 ```java
 @Test
@@ -388,7 +388,7 @@ void businessExceptionShouldNotAffectCircuitBreaker() {
 | 격리 | 10:15:35 | 외부 API 호출 차단 | Fallback (DB 캐시)로 전환 |
 | 복구 | 10:17:30 | Half-Open → 성공률 확인 → CLOSED | p99 50ms 복귀 |
 
-**증거:** `/home/maple/MapleExpectation/docs/05_Reports/04_05_Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md`
+**증거:** `/home/maple/probabilistic-valuation-engine/docs/05_Reports/05_05_Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md`
 
 #### 5.1.3 ResilientLockStrategy Fallback 검증
 
@@ -457,15 +457,15 @@ if (throwable instanceof CompletionException ce) {
 ## 참고 문헌 (References)
 
 ### 관련 문서
-- **Resilience Guide**: `/home/maple/MapleExpectation/docs/03_Technical_Guides/resilience.md`
-- **N21 Incident Report**: `/home/maple/MapleExpectation/docs/05_Reports/04_05_Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md`
-- **README**: `/home/maple/MapleExpectation/README.md` (Lines 98-102, 259-271)
+- **Resilience Guide**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/resilience.md`
+- **N21 Incident Report**: `/home/maple/probabilistic-valuation-engine/docs/05_Reports/05_05_Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md`
+- **README**: `/home/maple/probabilistic-valuation-engine/README.md` (Lines 98-102, 259-271)
 
 ### 코드 증거
-- **build.gradle**: `/home/maple/MapleExpectation/build.gradle` (Line 47: BOM)
-- **application.yml**: `/home/maple/MapleExpectation/src/main/resources/application.yml` (resilience4j 섹션)
-- **Marker Interfaces**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/marker/`
-- **ResilientLockStrategy**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/lock/ResilientLockStrategy.java`
+- **build.gradle**: `/home/maple/probabilistic-valuation-engine/build.gradle` (Line 47: BOM)
+- **application.yml**: `/home/maple/probabilistic-valuation-engine/src/main/resources/application.yml` (resilience4j 섹션)
+- **Marker Interfaces**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/marker/`
+- **ResilientLockStrategy**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/lock/ResilientLockStrategy.java`
 
 ### 공식 문서
 - [Resilience4j 공식 문서](https://resilience4j.readme.io/)

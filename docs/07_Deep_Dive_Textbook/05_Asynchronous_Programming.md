@@ -63,7 +63,7 @@ Thread.ofVirtual().start(() -> {
 
 ### 1.3 Asynchronous Processing Pipeline
 
-**MapleExpectation의 파이프라인:**
+**probabilistic-valuation-engine의 파이프라인:**
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -333,7 +333,7 @@ onNext(1) ───────────────────> request(1) 
 | **DB 지원** | 모두 (JDBC, JPA) | 제한적 (R2DBC, Reactive Redis) |
 | **생태계** | 성숙 | 성장 중 |
 
-**선택 이유**: MapleExpectation은 Spring MVC 선택
+**선택 이유**: probabilistic-valuation-engine은 Spring MVC 선택
 - 이미 JPA/MyBatis 사용 중 (R2DBC 미사용)
 - 팀 생산성 우선
 - @Async로 충분한 성능

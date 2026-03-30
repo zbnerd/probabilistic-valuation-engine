@@ -488,10 +488,10 @@ Migration is successful when ALL of the following are true:
 
 ## 8. References
 
-- [ADR-014: Multi-module Cross-cutting Concerns](/home/maple/MapleExpectation/docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md)
-- [Test Strategy](/home/maple/MapleExpectation/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
-- [Flaky Test Management Guide](/home/maple/MapleExpectation/docs/03_Technical_Guides/flaky-test-management.md)
-- [Nightmare Scenarios](/home/maple/MapleExpectation/docs/02_Chaos_Engineering/06_Nightmare/Scenarios/)
+- [ADR-014: Multi-module Cross-cutting Concerns](/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
+- [Test Strategy](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
+- [Flaky Test Management Guide](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/flaky-test-management.md)
+- [Nightmare Scenarios](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/06_Nightmare/Scenarios/)
 
 ---
 

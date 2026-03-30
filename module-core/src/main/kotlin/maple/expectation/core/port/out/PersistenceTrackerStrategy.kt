@@ -82,5 +82,8 @@ interface PersistenceTrackerStrategy {
 
         /** Redis SET based (scale-out enabled) */
         REDIS,
+
+        /** PostgreSQL regular table based (crash recovery) */
+        POSTGRES,
     }
 }

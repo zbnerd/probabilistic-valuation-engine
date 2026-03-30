@@ -4,7 +4,7 @@
 
 **기술 부채와 생태계 변화**
 
-MapleExpectation 프로젝트는 2025년 초 Spring Boot 2.x 기반으로 시작되었으나, 다음과 같은 문제들이 대두되었습니다:
+probabilistic-valuation-engine 프로젝트는 2025년 초 Spring Boot 2.x 기반으로 시작되었으나, 다음과 같은 문제들이 대두되었습니다:
 
 1. **Jakarta EE 전환 필연성**: Java生态系统가 `javax.*`에서 `jakarta.*`로의 전환을 완료하며, Spring Boot 2.x는 유지보수 단계에 진입
 2. **Legacy API 의존성**: `WebClient` (Spring 5) 대신 구형 `RestTemplate` 사용 중이었으며, 최신 HTTP/2 지원 부족
@@ -101,7 +101,7 @@ MapleExpectation 프로젝트는 2025년 초 Spring Boot 2.x 기반으로 시작
 
 ### 1. Build Configuration (build.gradle)
 
-**Evidence**: `/home/maple/MapleExpectation/build.gradle` (lines 45-46)
+**Evidence**: `/home/maple/probabilistic-valuation-engine/build.gradle` (lines 45-46)
 
 ```groovy
 dependencyManagement {
@@ -135,7 +135,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 ### 3. Spring Security 6.x Filter Registration (P0 #238 해결)
 
-**Evidence**: `/home/maple/MapleExpectation/docs/03_Technical_Guides/infrastructure.md` (lines 420-522)
+**Evidence**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/infrastructure.md` (lines 420-522)
 
 ```java
 @Configuration
@@ -194,11 +194,11 @@ server:
       max: 200  # Virtual Threads 사용 시 필요 없으나 안전장치로 유지
 ```
 
-**적용 결과**: V4 async pipeline에서 `CompletableFuture` + Virtual Threads로 719 RPS 달성 (Evidence: `/home/maple/MapleExpectation/docs/03_Technical_Guides/async-concurrency.md` lines 31-56)
+**적용 결과**: V4 async pipeline에서 `CompletableFuture` + Virtual Threads로 719 RPS 달성 (Evidence: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/async-concurrency.md` lines 31-56)
 
 ### 5. Observability Integration (Micrometer + Prometheus)
 
-**Evidence**: `/home/maple/MapleExpectation/docs/03_Technical_Guides/infrastructure.md` (lines 353-389)
+**Evidence**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/infrastructure.md` (lines 353-389)
 
 **메트릭 명명 규칙**:
 ```java
@@ -221,7 +221,7 @@ meterRegistry.counter("cache_hit").increment();
 
 ### 6. SpringDoc OpenAPI 3.x Integration
 
-**Evidence**: `/home/maple/MapleExpectation/docs/03_Technical_Guides/infrastructure.md` (lines 633-726)
+**Evidence**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/infrastructure.md` (lines 633-726)
 
 **의존성**:
 ```groovy
@@ -232,7 +232,7 @@ implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13'
 ```java
 @OpenAPIDefinition(
     info = @Info(
-        title = "MapleExpectation API",
+        title = "probabilistic-valuation-engine API",
         version = "2.0.0",
         description = "메이플스토리 장비 강화 비용 계산 API"
     ),
@@ -295,7 +295,7 @@ public class OpenApiConfig {}
 
 - [Spring Boot 3.5 Release Notes](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-3.5-Release-Notes)
 - [Jakarta EE 10 Specification](https://jakarta.ee/specifications/)
-- [ADR-011: V4 Controller Optimization](../adr/ADR-011-controller-v4-optimization.md)
+- [ADR-011: V4 Controller Optimization](../01_ADR/ADR-011-controller-v4-optimization.md)
 - [infrastructure.md Section 18: Spring Security 6.x Filter Best Practice](../03_Technical_Guides/infrastructure.md#18-spring-security-6x-filter-best-practice-context7)
 - [async-concurrency.md Section 21: Async Non-Blocking Pipeline](../03_Technical_Guides/async-concurrency.md#21-async-non-blocking-pipeline-pattern-critical)
 

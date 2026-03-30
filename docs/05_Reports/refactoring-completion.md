@@ -1,4 +1,4 @@
-# MapleExpectation Refactoring Completion Report
+# probabilistic-valuation-engine Refactoring Completion Report
 
 > **Report Date:** 2026-02-13
 > **Refactoring Period:** 2026-02-10 ~ 2026-02-13
@@ -409,7 +409,7 @@ BUILD SUCCESSFUL in 54s
 
 ## 8. Conclusion
 
-The refactoring completed for **Issue #282** and **ADR-014** represents a significant milestone in the MapleExpectation project's evolution toward a clean, scalable, and maintainable architecture.
+The refactoring completed for **Issue #282** and **ADR-014** represents a significant milestone in the probabilistic-valuation-engine project's evolution toward a clean, scalable, and maintainable architecture.
 
 **Key Achievements:**
 - ✅ Multi-module architecture established (5 modules)
@@ -487,9 +487,9 @@ The refactoring completed for **Issue #282** and **ADR-014** represents a signif
 
 | Document | Path | Purpose |
 |----------|------|---------|
-| ADR-014 | `docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md` | Multi-module architecture decision |
+| ADR-014 | `docs/01_ADR/ADR-014-multi-module-cross-cutting-concerns.md` | Multi-module architecture decision |
 | ADR-035 | `docs/99_Adr/ADR-035-issue-282-completion.md` | Issue #282 completion details |
-| ADR-0345 | `docs/01_Adr/ADR-0345-stateless-alert-system.md` | Stateless alert system design |
+| ADR-0345 | `docs/01_ADR/ADR-0345-stateless-alert-system.md` | Stateless alert system design |
 | Refactoring Analysis | `docs/05_Reports/refactoring-analysis.md` | Pre-refactoring context |
 | Service Modules | `docs/03_Technical_Guides/service-modules.md` | Module architecture guide |
 | Architecture | `docs/00_Start_Here/architecture.md` | System architecture diagrams |

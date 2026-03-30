@@ -4,6 +4,8 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.Optional
 import java.util.concurrent.Callable
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import java.util.function.Consumer
 import java.util.function.Supplier
 import maple.expectation.common.function.ThrowingSupplier
@@ -39,6 +41,9 @@ class TieredCache(
     companion object {
         private val log = LoggerFactory.getLogger(TieredCache::class.java)
     }
+
+    private val versionCounter = AtomicLong(0)
+    private val keyVersions = ConcurrentHashMap<Any, Long>()
 
     private val l1HitCounter: Counter
     private val l2HitCounter: Counter
@@ -81,6 +86,7 @@ class TieredCache(
     private fun getFromL2WithBackfill(key: Any): ValueWrapper? = Optional.ofNullable(l2.get(key))
         .map { w ->
             l1.put(key, w.get())
+            keyVersions[key] = versionCounter.incrementAndGet()
             tapCacheHit(w, "L2")
         }
         .orElse(null)
@@ -98,7 +104,9 @@ class TieredCache(
         }, false, context)
         if (l2Success) {
             executor.executeVoid({ l1.put(key, value) }, context)
-            publishEvictEvent(key)
+            val ver = versionCounter.incrementAndGet()
+            keyVersions[key] = ver
+            publishEvictEvent(key, ver)
         } else {
             log.warn("[TieredCache] L2 put failed, skipping L1 for consistency: key={}", key)
             l2FailureCounter.increment()
@@ -121,7 +129,8 @@ class TieredCache(
             l2FailureCounter.increment()
         }
         executor.executeVoid({ l1.evict(key) }, context)
-        publishEvictEvent(key)
+        keyVersions.remove(key)
+        publishEvictEvent(key, versionCounter.get())
     }
 
     override fun clear() {
@@ -143,13 +152,21 @@ class TieredCache(
         publishClearAllEvent()
     }
 
-    private fun publishEvictEvent(key: Any) {
-        callbackSupplier.get().accept(CacheInvalidationEvent.evict(name, key.toString(), instanceIdSupplier.get()))
+    private fun publishEvictEvent(key: Any, version: Long) {
+        callbackSupplier.get().accept(CacheInvalidationEvent.evict(name, key.toString(), instanceIdSupplier.get(), version))
     }
 
     private fun publishClearAllEvent() {
-        callbackSupplier.get().accept(CacheInvalidationEvent.clearAll(name, instanceIdSupplier.get()))
+        callbackSupplier.get().accept(CacheInvalidationEvent.clearAll(name, instanceIdSupplier.get(), versionCounter.get()))
     }
+
+    fun clearKeyVersions() {
+        keyVersions.clear()
+    }
+
+    fun getKeyVersion(key: Any): Long? = keyVersions[key]
+
+    fun getCurrentVersion(): Long = versionCounter.get()
 
     override fun <T : Any?> get(key: Any, type: Class<T>?): T? {
         val wrapper = get(key)

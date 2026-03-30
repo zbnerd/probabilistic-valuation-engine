@@ -313,8 +313,8 @@ markAsProcessed(requestId);
 ## References
 
 - [N19-outbox-replay.md](./N19-outbox-replay.md) - Base N19 scenario
-- [ADR-006](../../../../01_Adr/ADR-006-redis-lock-lease-timeout-ha.md) - Redis HA strategy
-- [ADR-010](../../../../01_Adr/ADR-010-outbox-pattern.md) - Outbox pattern implementation
+- [ADR-006](../../../../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md) - Redis HA strategy
+- [ADR-010](../../../../01_ADR/ADR-010-outbox-pattern.md) - Outbox pattern implementation
 
 ---
 

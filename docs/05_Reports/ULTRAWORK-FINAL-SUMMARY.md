@@ -142,7 +142,7 @@
 ## 📁 Files Created/Modified
 
 ### New Documentation (16 files)
-- docs/01_Adr/ADR-039-current-architecture-assessment.md
+- docs/01_ADR/ADR-039-current-architecture-assessment.md
 - docs/05_Reports/Multi-Module-Refactoring-Analysis.md
 - docs/05_Reports/circular-dependency-analysis.md
 - docs/05_Reports/stateless-design-compliance.md

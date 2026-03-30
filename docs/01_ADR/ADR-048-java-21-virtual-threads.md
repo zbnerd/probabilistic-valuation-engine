@@ -13,7 +13,7 @@ Java 8/17의 **Platform Thread** 모델은 높은 동시성 처리 요구사항�
 
 ### 1.2 비즈니스 요구사항
 
-MapleExpectation 서비스는 **1,000+ concurrent users** 처리가 필요합니다:
+probabilistic-valuation-engine 서비스는 **1,000+ concurrent users** 처리가 필요합니다:
 - AWS t3.small (2 vCPU, 2GB RAM) 저사양 인프라에서 **240 RPS** 달성
 - 장비 강화 비용 계산 = CPU-Bound 작업 (GZIP 압축 해제 + JSON 파싱 + DP 계산)
 - Nexon Open API 연동 = I/O-Bound 작업 (5초 timeout)
@@ -363,7 +363,7 @@ executor.setRejectedExecutionHandler((r, e) -> {
 |-------------|--------|-------------|
 | **EVIDENCE-001** | [build.gradle:21-23](../../build.gradle) | Java 21 toolchain 설정 |
 | **EVIDENCE-002** | [async-concurrency.md:34](../03_Technical_Guides/async-concurrency.md) | Async pipeline 719 RPS vs blocking 89 RPS |
-| **EVIDENCE-003** | [high-traffic-performance-analysis.md:67](../05_Reports/04_02_Cost_Performance/high-traffic-performance-analysis.md) | Thread Pool 병목 분석 |
+| **EVIDENCE-003** | [high-traffic-performance-analysis.md:67](../05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md) | Thread Pool 병목 분석 |
 | **EVIDENCE-004** | [ROADMAP.md:262](../00_Start_Here/ROADMAP.md) | Java 21 선택 기록 |
 | **EVIDENCE-005** | [architecture.md:36](../00_Start_Here/architecture.md) | Virtual Threads 아키텍처 정의 |
 
@@ -371,7 +371,7 @@ executor.setRejectedExecutionHandler((r, e) -> {
 
 - **ADR-012**: [Stateless Scalability Roadmap](ADR-012-stateless-scalability-roadmap.md)
 - **ADR-013**: [High Throughput Event Pipeline](ADR-013-high-throughput-event-pipeline.md)
-- **ADR-015**: [V5 CQRS Architecture](ADR-015-v5-cqrs-mongodb.md)
+- **ADR-015→036**: [V5 CQRS Architecture](ADR-036-v5-cqrs-mongodb.md)
 
 ### Technical Guides
 
@@ -381,7 +381,7 @@ executor.setRejectedExecutionHandler((r, e) -> {
 ### Test Evidence
 
 - [N23 WRK V4 Results](../05_Reports/Cost_Performance/N23_WRK_V4_RESULTS.md) - Load test validation
-- [Performance Report 260105](../05_Reports/04_02_Cost_Performance/PERFORMANCE_260105.md) - 235 RPS baseline
+- [Performance Report 260105](../05_Reports/05_02_Cost_Performance/PERFORMANCE_260105.md) - 235 RPS baseline
 
 ---
 

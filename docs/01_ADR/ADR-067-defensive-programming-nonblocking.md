@@ -173,7 +173,7 @@ public record CubeRequest(@NotNull @Min(0) BigInteger cost, @NotNull @Min(1) Int
 
 #### 3.1 선택: Virtual Threads + Non-Blocking Reactive + 방어적 프로그래밍
 
-MapleExpectation 프로젝트는 **선택지 3: Virtual Threads + Non-Blocking Reactive + 방어적 프로그래밍**을 채택했습니다.
+probabilistic-valuation-engine 프로젝트는 **선택지 3: Virtual Threads + Non-Blocking Reactive + 방어적 프로그래밍**을 채택했습니다.
 
 **결정 근거**:
 1. **ADR-048 (Java 21 Virtual Threads)**와 **ADR-045 (Virtual Threads Non-Blocking Pipeline)**의 연장선

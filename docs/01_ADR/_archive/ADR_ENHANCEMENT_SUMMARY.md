@@ -280,7 +280,7 @@ ADR-001-streaming-parser.md.backup
 ADR-003-tiered-cache-singleflight.md.backup
 ADR-004-logicexecutor-policy-pipeline.md.backup
 ADR-005-resilience4j-scenario-abc.md.backup
-ADR-006-redis-lock-lease-timeout-ha.md.backup
+ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md.backup
 ADR-007-aop-async-cache-integration.md.backup
 ADR-008-durability-graceful-shutdown.md.backup
 ADR-009-cube-dp-calculator-probability.md.backup
@@ -308,7 +308,7 @@ done
 
 ### 1. 체크리스트 완성도 확인
 ```bash
-cd /home/maple/MapleExpectation/docs/adr
+cd /home/maple/probabilistic-valuation-engine/docs/adr
 grep -l "문서 무결성 체크리스트" ADR-*.md | wc -l
 # Expected: 11 (ADR-001, ADR-003, ADR-004, ADR-005, ADR-006, ADR-007, ADR-009, ADR-010, ADR-011, ADR-012, ADR-015)
 ```

@@ -1,8 +1,11 @@
 package maple.expectation.service.v5;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
@@ -16,205 +19,151 @@ import maple.expectation.infrastructure.executor.function.CheckedRunnable;
 import maple.expectation.infrastructure.executor.function.CheckedSupplier;
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
+import maple.expectation.infrastructure.pgmq.PgmqClient;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("unit")
-@DisplayName("V5 CQRS: Priority Queue Tests")
+@DisplayName("V5 CQRS: Priority Queue Tests (PGMQ)")
 class ExpectationCalculationQueueTest {
 
   private LogicExecutor executor;
   private CheckedLogicExecutor checkedExecutor;
+  private PgmqClient pgmqClient;
   private ExpectationCalculationQueue queue;
 
-  @org.junit.jupiter.api.BeforeEach
+  @BeforeEach
   void setUp() {
     executor = new TestLogicExecutor();
     checkedExecutor = new TestCheckedLogicExecutor();
-    queue = new ExpectationCalculationQueue(executor);
+    pgmqClient = mock(PgmqClient.class);
+    queue = new ExpectationCalculationQueue(pgmqClient, executor);
   }
 
   @Test
-  @DisplayName("고우선순위 작업이 먼저 처리되어야 함")
-  void highPriorityProcessedBeforeLow() {
+  @DisplayName("offer()는 PGMQ 큐에 메시지를 발행함")
+  void offerSendsToPgmq() {
+    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
+    when(pgmqClient.send(anyString(), any())).thenReturn(1L);
+
+    ExpectationCalculationTask highTask = ExpectationCalculationTask.highPriority("user1", false);
+    assertThat(queue.offer(highTask)).isTrue();
+  }
+
+  @Test
+  @DisplayName("HIGH 우선순위와 LOW 우선순위 모두 offer 가능")
+  void offerBothPriorities() {
+    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
+    when(pgmqClient.send(anyString(), any())).thenReturn(1L);
+
     ExpectationCalculationTask highTask = ExpectationCalculationTask.highPriority("user1", false);
     ExpectationCalculationTask lowTask = ExpectationCalculationTask.lowPriority("user2");
 
     assertThat(queue.offer(highTask)).isTrue();
     assertThat(queue.offer(lowTask)).isTrue();
-    assertThat(queue.size()).isEqualTo(2);
   }
 
   @Test
-  @DisplayName("LOW 우선순위는 큐가 가득 차지 않으면 추가 가능")
-  void lowPriorityAcceptedWhenNotFull() {
-    ExpectationCalculationTask lowTask = ExpectationCalculationTask.lowPriority("user1");
-    boolean accepted = queue.offer(lowTask);
+  @DisplayName("큐가 가득 차면 백프레셔로 reject")
+  void backpressureWhenQueueFull() {
+    when(pgmqClient.queueLength(anyString())).thenReturn(1000L);
+
+    ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user1", false);
+    boolean accepted = queue.offer(task);
+
+    assertThat(accepted).isFalse();
+  }
+
+  @Test
+  @DisplayName("큐가 가득 차지 않으면 수락")
+  void acceptedWhenQueueNotFull() {
+    when(pgmqClient.queueLength(anyString())).thenReturn(500L);
+    when(pgmqClient.send(anyString(), any())).thenReturn(1L);
+
+    ExpectationCalculationTask task = ExpectationCalculationTask.lowPriority("user1");
+    boolean accepted = queue.offer(task);
 
     assertThat(accepted).isTrue();
-    assertThat(queue.size()).isEqualTo(1);
   }
 
   @Test
-  @DisplayName("큐 사이즈 확인")
-  void queueSize() {
-    assertThat(queue.size()).isEqualTo(0);
-    assertThat(queue.getHighPriorityCount()).isEqualTo(0);
+  @DisplayName("poll()은 UnsupportedOperationException 발생")
+  void pollThrowsUnsupportedOperation() {
+    assertThatThrownBy(() -> queue.poll(QueuePriority.HIGH))
+        .isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
-  @DisplayName("고우선순위 capacity 초과 시 백프레셔 발생")
-  void highPriorityBackpressureWhenCapacityExceeded() {
-    // Given: HIGH priority capacity is 1000
-    for (int i = 0; i < 1000; i++) {
-      ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user" + i, false);
-      assertThat(queue.offer(task)).isTrue();
-    }
-
-    // When: Try to add 1001st HIGH priority task
-    ExpectationCalculationTask overflowTask =
-        ExpectationCalculationTask.highPriority("overflow", false);
-    boolean accepted = queue.offer(overflowTask);
-
-    // Then: Should be rejected due to backpressure
-    assertThat(accepted).isFalse();
-    assertThat(queue.getHighPriorityCount()).isEqualTo(1000);
+  @DisplayName("poll(timeout)은 UnsupportedOperationException 발생")
+  void pollWithTimeoutThrowsUnsupportedOperation() {
+    assertThatThrownBy(() -> queue.poll(QueuePriority.HIGH, 100))
+        .isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
-  @DisplayName("LOW 우선순위 작업은 HIGH 큐가 꽉 차지 않았을 때 수락됨")
-  void lowPriorityAcceptedWhenHighQueueNotFull() {
-    // Given: HIGH priority NOT at capacity (less than 1000)
-    for (int i = 0; i < 500; i++) {
-      ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user" + i, false);
-      queue.offer(task);
-    }
-
-    // When: Add LOW priority tasks
-    for (int i = 0; i < 100; i++) {
-      ExpectationCalculationTask task = ExpectationCalculationTask.lowPriority("low" + i);
-      boolean accepted = queue.offer(task);
-
-      // Then: All LOW priority tasks should be accepted (HIGH queue not full)
-      assertThat(accepted).isTrue();
-    }
-
-    assertThat(queue.size()).isEqualTo(600); // 500 HIGH + 100 LOW
-    assertThat(queue.getHighPriorityCount()).isEqualTo(500);
-  }
-
-  @Test
-  @DisplayName("poll()은 큐가 비어있으면 블로킹됨")
-  void pollBlocksWhenEmpty() throws InterruptedException {
-    // Given: Empty queue
-    assertThat(queue.size()).isEqualTo(0);
-
-    // When/Then: Poll in separate thread should block
-    java.util.concurrent.CountDownLatch pollingStarted = new java.util.concurrent.CountDownLatch(1);
-    Thread pollingThread =
-        new Thread(
-            () -> {
-              pollingStarted.countDown(); // Signal that we're now blocking on poll()
-              ExpectationCalculationTask task = queue.poll(QueuePriority.HIGH, 5000);
-              // If we reach here, task should not be null (blocking worked)
-              assertNotNull(task);
-            });
-
-    pollingThread.start();
-    // Wait for polling thread to start blocking before interrupting
-    pollingStarted.await(5, java.util.concurrent.TimeUnit.SECONDS);
-
-    // Clean up: Interrupt the polling thread
-    pollingThread.interrupt();
-    pollingThread.join(500);
-  }
-
-  @Test
-  @DisplayName("poll(timeoutMs)은 타임아웃 시 null 반환")
-  void pollWithTimeoutReturnsNull() {
-    // Given: Empty queue
-    assertThat(queue.size()).isEqualTo(0);
-
-    // When: Poll with short timeout
-    ExpectationCalculationTask task = queue.poll(QueuePriority.HIGH, 100);
-
-    // Then: Should return null (timeout)
-    assertNull(task);
-  }
-
-  @Test
-  @DisplayName("poll(timeoutMs)은 타임아웃 내에 작업이 도착하면 반환")
-  void pollWithTimeoutReturnsTaskWhenAvailable() throws InterruptedException {
-    // Given: Empty queue
-    assertThat(queue.size()).isEqualTo(0);
-
-    // When: Add task after delay and poll with longer timeout
-    Thread adderThread =
-        new Thread(
-            () -> {
-              // Rely on poll(timeout) mechanism for timing
-              ExpectationCalculationTask task =
-                  ExpectationCalculationTask.highPriority("delayed", false);
-              queue.offer(task);
-            });
-
-    adderThread.start();
-    ExpectationCalculationTask task = queue.poll(QueuePriority.HIGH, 200);
-
-    // Then: Should return the task
-    assertNotNull(task);
-    assertThat(task.getUserIgn()).isEqualTo("delayed");
-    adderThread.join();
-  }
-
-  @Test
-  @DisplayName("고우선순위 작업 완료 시 completedAt 설정됨")
-  void completeTaskSetsCompletedAt() {
-    // Given: Add HIGH priority task
+  @DisplayName("complete()은 no-op으로 동작 (예외 없음)")
+  void completeIsNoOp() {
     ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user1", false);
-    queue.offer(task);
-    assertThat(queue.getHighPriorityCount()).isEqualTo(1);
-    assertThat(task.getCompletedAt()).isNull();
-
-    // When: Complete the task (only sets completedAt, doesn't remove from queue)
+    // Should not throw
     queue.complete(task);
-
-    // Then: completedAt is set but task remains in queue
-    assertThat(queue.getHighPriorityCount()).isEqualTo(1); // Task still in queue
-    assertThat(task.getCompletedAt()).isNotNull();
   }
 
   @Test
-  @DisplayName("저우선순위 작업 완료 시 highPriorityCount 변화 없음")
-  void completeLowPriorityTaskDoesNotAffectHighPriorityCount() {
-    // Given: Add LOW priority task
-    ExpectationCalculationTask task = ExpectationCalculationTask.lowPriority("user1");
-    queue.offer(task);
-    int initialCount = queue.getHighPriorityCount();
+  @DisplayName("addHighPriorityTask 편의 메서드 동작")
+  void addHighPriorityTaskConvenienceMethod() {
+    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
+    when(pgmqClient.send(anyString(), any())).thenReturn(1L);
 
-    // When: Complete the task
-    queue.complete(task);
+    boolean added = queue.addHighPriorityTask("user1", true);
 
-    // Then: Counter should not change
-    assertThat(queue.getHighPriorityCount()).isEqualTo(initialCount);
-    assertThat(task.getCompletedAt()).isNotNull();
+    assertThat(added).isTrue();
+  }
+
+  @Test
+  @DisplayName("addLowPriorityTask 편의 메서드 동작")
+  void addLowPriorityTaskConvenienceMethod() {
+    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
+    when(pgmqClient.send(anyString(), any())).thenReturn(1L);
+
+    boolean added = queue.addLowPriorityTask("user1");
+
+    assertThat(added).isTrue();
+  }
+
+  @Test
+  @DisplayName("size()는 PGMQ 큐 길이 합 반환")
+  void sizeReturnsPgmqQueueLengthSum() {
+    when(pgmqClient.queueLength("expectation_calc_high")).thenReturn(5L);
+    when(pgmqClient.queueLength("expectation_calc_low")).thenReturn(3L);
+
+    assertThat(queue.size()).isEqualTo(8);
+  }
+
+  @Test
+  @DisplayName("getHighPriorityCount()는 HIGH 큐 길이 반환")
+  void highPriorityCountReturnsHighQueueLength() {
+    when(pgmqClient.queueLength("expectation_calc_high")).thenReturn(5L);
+
+    assertThat(queue.getHighPriorityCount()).isEqualTo(5);
+  }
+
+  @Test
+  @DisplayName("getLowPriorityCount()는 LOW 큐 길이 반환")
+  void lowPriorityCountReturnsLowQueueLength() {
+    when(pgmqClient.queueLength("expectation_calc_low")).thenReturn(3L);
+
+    assertThat(queue.getLowPriorityCount()).isEqualTo(3);
   }
 
   @Test
   @DisplayName("forceRecalculation 플래그 유지")
   void forceRecalculationFlagPreserved() {
-    // Given
     ExpectationCalculationTask task1 = ExpectationCalculationTask.highPriority("user1", true);
     ExpectationCalculationTask task2 = ExpectationCalculationTask.highPriority("user2", false);
     ExpectationCalculationTask task3 = ExpectationCalculationTask.lowPriority("user3");
 
-    // When
-    queue.offer(task1);
-    queue.offer(task2);
-    queue.offer(task3);
-
-    // Then
     assertThat(task1.isForceRecalculation()).isTrue();
     assertThat(task2.isForceRecalculation()).isFalse();
     assertThat(task3.isForceRecalculation()).isFalse();
@@ -223,12 +172,10 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("작업 생성 시간 설정 확인")
   void taskCreatedAtSet() {
-    // When
     Instant beforeCreation = Instant.now();
     ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user1", false);
     Instant afterCreation = Instant.now();
 
-    // Then
     assertThat(task.getCreatedAt()).isNotNull();
     assertThat(task.getCreatedAt()).isBetween(beforeCreation, afterCreation);
   }
@@ -236,11 +183,9 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("UUID 기반 taskId 생성 확인")
   void taskIdIsUUID() {
-    // When
     ExpectationCalculationTask task1 = ExpectationCalculationTask.highPriority("user1", false);
     ExpectationCalculationTask task2 = ExpectationCalculationTask.highPriority("user1", false);
 
-    // Then: Each task should have unique ID
     assertThat(task1.getTaskId()).isNotNull();
     assertThat(task2.getTaskId()).isNotNull();
     assertThat(task1.getTaskId()).isNotEqualTo(task2.getTaskId());
@@ -249,38 +194,12 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("Priority 순서: HIGH(0) < LOW(1)")
   void priorityOrdering() {
-    // When
     ExpectationCalculationTask highTask = ExpectationCalculationTask.highPriority("user1", false);
     ExpectationCalculationTask lowTask = ExpectationCalculationTask.lowPriority("user2");
 
-    // Then: HIGH should have lower ordinal (processed first)
     assertThat(highTask.getPriority().ordinal()).isLessThan(lowTask.getPriority().ordinal());
     assertThat(highTask.getPriority()).isEqualTo(QueuePriority.HIGH);
     assertThat(lowTask.getPriority()).isEqualTo(QueuePriority.LOW);
-  }
-
-  @Test
-  @DisplayName("addHighPriorityTask 편의 메서드 동작")
-  void addHighPriorityTaskConvenienceMethod() {
-    // When
-    boolean added = queue.addHighPriorityTask("user1", true);
-
-    // Then
-    assertThat(added).isTrue();
-    assertThat(queue.size()).isEqualTo(1);
-    assertThat(queue.getHighPriorityCount()).isEqualTo(1);
-  }
-
-  @Test
-  @DisplayName("addLowPriorityTask 편의 메서드 동작")
-  void addLowPriorityTaskConvenienceMethod() {
-    // When
-    boolean added = queue.addLowPriorityTask("user1");
-
-    // Then
-    assertThat(added).isTrue();
-    assertThat(queue.size()).isEqualTo(1);
-    assertThat(queue.getHighPriorityCount()).isEqualTo(0);
   }
 
   /** 테스트용 간단한 LogicExecutor 구현 */

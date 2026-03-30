@@ -29,6 +29,7 @@ import org.springframework.test.context.ActiveProfiles
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    classes = [InfraTestConfiguration::class],
     properties = [
         "spring.datasource.driver-class-name=org.postgresql.Driver",
         "spring.jpa.hibernate.ddl-auto=create-drop",

@@ -4,7 +4,7 @@
 > **Chaos Test**: N19 - 6시간 장애 복구 시나리오
 >
 > **Last Updated:** 2026-02-05
-> **Code Version:** MapleExpectation v1.x
+> **Code Version:** probabilistic-valuation-engine v1.x
 > **Diagram Version:** 1.0
 
 ## 1. 개요
@@ -421,10 +421,10 @@ CREATE TABLE nexon_api_dlq (
 
 ## 12. 관련 문서
 
-- [ADR-016: Nexon API Outbox Pattern](../../adr/ADR-016-nexon-api-outbox-pattern.md)
-- [ADR-010: Transactional Outbox Pattern](../../adr/ADR-010-outbox-pattern.md)
-- [N19 Recovery Report](../../04_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md)
-- [N19 Implementation Summary](../../01_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md)
+- [ADR-016: Nexon API Outbox Pattern](../../01_ADR/ADR-016-nexon-api-outbox-pattern.md)
+- [ADR-010: Transactional Outbox Pattern](../../01_ADR/ADR-010-outbox-pattern.md)
+- [N19 Recovery Report](../../05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md)
+- [N19 Implementation Summary](../../02_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md)
 - [Outbox Sequence (Donation Reference)](./outbox-sequence.md)
 
 ## Evidence Links

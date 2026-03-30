@@ -15,9 +15,9 @@ All 4 P1 issues have been verified as **COMPLETE** with comprehensive documentat
 
 | Requirement | Evidence | Status |
 |-------------|----------|--------|
-| Sample Event 1 | `docs/events/samples/donation-created.v1.md` | ✅ |
-| Sample Event 2 | `docs/events/samples/character-calculated.v1.md` | ✅ |
-| Sample Event 3 | `docs/events/samples/cache-invalidated.v1.md` | ✅ |
+| Sample Event 1 | `docs/12_Events/samples/donation-created.v1.md` | ✅ |
+| Sample Event 2 | `docs/12_Events/samples/character-calculated.v1.md` | ✅ |
+| Sample Event 3 | `docs/12_Events/samples/cache-invalidated.v1.md` | ✅ |
 
 ### Each Sample Includes
 - Event envelope with all common fields (`eventId`, `eventType`, `occurredAt`, `version`, `producer`, `idempotencyKey`)
@@ -39,7 +39,7 @@ All 4 P1 issues have been verified as **COMPLETE** with comprehensive documentat
 ## Issue #503: 이벤트 변경 호환성 규칙 정의 ✅
 
 ### Evidence
-- **File:** `docs/events/compatibility.md` (6,922 bytes)
+- **File:** `docs/12_Events/compatibility.md` (6,922 bytes)
 
 ### Requirements Met
 
@@ -87,7 +87,7 @@ All 4 P1 issues have been verified as **COMPLETE** with comprehensive documentat
 ## Event Naming/Common Fields Standards ✅
 
 ### Evidence
-- **File:** `docs/events/contract-v1.md` (6,899 bytes)
+- **File:** `docs/12_Events/contract-v1.md` (6,899 bytes)
 
 ### Requirements Met
 

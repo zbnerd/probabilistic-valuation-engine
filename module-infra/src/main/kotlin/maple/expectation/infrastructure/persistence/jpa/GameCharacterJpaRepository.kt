@@ -5,6 +5,7 @@ import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntit
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
 /**
  * Spring Data JPA Repository for GameCharacter.
@@ -73,8 +74,8 @@ interface GameCharacterJpaRepository : JpaRepository<GameCharacterJpaEntity, Lon
      * @param count the amount to increment (can be positive or negative)
      */
     @Modifying
-    @Query("UPDATE GameCharacterJpaEntity g SET g.likeCount = g.likeCount + :count WHERE g.userIgn = :userIgn")
-    fun incrementLikeCount(userIgn: String?, count: Long)
+    @Query("UPDATE GameCharacterJpaEntity g SET g.likeCount = GREATEST(COALESCE(g.likeCount, 0) + :count, 0) WHERE g.userIgn = :userIgn")
+    fun incrementLikeCount(userIgn: String, count: Long)
 
     /**
      * Find all characters by user IGNs (batch query).
@@ -83,4 +84,29 @@ interface GameCharacterJpaRepository : JpaRepository<GameCharacterJpaEntity, Lon
      * @return list of matching JPA entities
      */
     fun findAllByUserIgnIn(userIgns: List<String>): List<GameCharacterJpaEntity>
+
+    /**
+     * Find all characters by fingerprint for self-like prevention (#662).
+     *
+     * @param fingerprint API Key HMAC-SHA256 hash
+     * @return list of matching entities
+     */
+    fun findAllByFingerprint(fingerprint: String): List<GameCharacterJpaEntity>
+
+    /**
+     * Lazy backfill: stamp fingerprint on NULL rows only (#662).
+     * Idempotent — only updates if fingerprint is currently NULL.
+     *
+     * @return number of rows updated (0 if already stamped)
+     */
+    @Modifying
+    @Query(
+        "UPDATE GameCharacterJpaEntity g SET g.fingerprint = :fingerprint, g.accountId = :accountId " +
+            "WHERE g.ocid = :ocid AND g.fingerprint IS NULL",
+    )
+    fun updateFingerprintByOcid(
+        @Param("ocid") ocid: String,
+        @Param("fingerprint") fingerprint: String,
+        @Param("accountId") accountId: String,
+    ): Int
 }

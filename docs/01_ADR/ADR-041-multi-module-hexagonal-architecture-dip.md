@@ -16,7 +16,7 @@
 
 ### 1.1 배경
 
-MapleExpectation은 ADR-035(2025년 2월)에서 멀티모듈 구조로 전환하여 순환 의존성을 해결했으나, 여전히 아키텍처적 부채가 존재합니다. ADR-039(2026년 2월 16일)의 평가에 따르면:
+probabilistic-valuation-engine은 ADR-035(2025년 2월)에서 멀티모듈 구조로 전환하여 순환 의존성을 해결했으나, 여전히 아키텍처적 부채가 존재합니다. ADR-039(2026년 2월 16일)의 평가에 따르면:
 
 1. **module-app 방대함 (342파일)**: 애플리케이션 계층이 인프라 관심사를 포함하여 SRP 위반
 2. **56개 @Configuration 클래스**: 인프라 설정이 module-app에 위치하여 모듈 경계 모호
@@ -30,7 +30,7 @@ MapleExpectation은 ADR-035(2025년 2월)에서 멀티모듈 구조로 전환하
 | **순환 의존성 위험** | ADR-039: module-app에 인프라 누수 | 모듈 경계 붕괴 |
 | **프레임워크 결합** | Service 클래스가 Spring @Component 의존 | 도메인 로직 테스트 어려움 |
 | **MSA 전환 장벽** | 단일 모듈로 밀접하게 결합 | 서비스 분리 비용 증가 |
-| **Scale-out 방해** | 22개 P0/P1 Stateful 컴포넌트 | [scale-out-blockers-analysis.md](../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md) |
+| **Scale-out 방해** | 22개 P0/P1 Stateful 컴포넌트 | [scale-out-blockers-analysis.md](../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md) |
 
 ---
 
@@ -39,7 +39,7 @@ MapleExpectation은 ADR-035(2025년 2월)에서 멀티모듈 구조로 전환하
 ### 2.1 대안 1: 단일 모듈 Monolithic 구조
 
 ```text
-MapleExpectation (Single Module)
+probabilistic-valuation-engine (Single Module)
 ├── controller/
 ├── service/
 ├── repository/
@@ -251,10 +251,10 @@ public class GameCharacterService {
 
 ### 4.1 Gradle 모듈 구성
 
-**파일 경로:** `/home/maple/MapleExpectation/settings.gradle`
+**파일 경로:** `/home/maple/probabilistic-valuation-engine/settings.gradle`
 
 ```gradle
-rootProject.name = 'MapleExpectation'
+rootProject.name = 'probabilistic-valuation-engine'
 
 include 'module-app'
 include 'module-infra'
@@ -264,7 +264,7 @@ include 'module-common'
 
 ### 4.2 의존성 설정
 
-**파일 경로:** `/home/maple/MapleExpectation/build.gradle`
+**파일 경로:** `/home/maple/probabilistic-valuation-engine/build.gradle`
 
 ```gradle
 // module-app/build.gradle
@@ -297,7 +297,7 @@ dependencies {
 
 ### 4.3 ArchUnit 테스트로 순환 의존성 방지
 
-**파일 경로:** `/home/maple/MapleExpectation/module-app/src/test/java/maple/expectation/architecture/ArchitectureTest.java`
+**파일 경로:** `/home/maple/probabilistic-valuation-engine/module-app/src/test/java/maple/expectation/architecture/ArchitectureTest.java`
 
 ```java
 @AnalyzeClasses(packages = "maple.expectation")
@@ -336,7 +336,7 @@ public class ArchitectureTest {
 
 ### 4.4 포트 인터페이스 증거
 
-**파일 경로:** `/home/maple/MapleExpectation/module-core/src/main/java/maple/expectation/application/port/`
+**파일 경로:** `/home/maple/probabilistic-valuation-engine/module-core/src/main/java/maple/expectation/application/port/`
 
 ```java
 // CacheStrategy.java
@@ -367,7 +367,7 @@ public interface LockStrategy {
 
 ### 4.5 어댑터 구현체 증거
 
-**파일 경로:** `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/cache/`
+**파일 경로:** `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/cache/`
 
 ```java
 // RedisCacheStrategy.java
@@ -494,7 +494,7 @@ Step 3: #126 Pragmatic CQRS
 
 ### Analysis Documents
 
-- **[Scale-out Blockers Analysis](../05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)** - 22개 P0/P1 Stateful 컴포넌트 식별
+- **[Scale-out Blockers Analysis](../05_Reports/05_09_Scale_Out/scale-out-blockers-analysis.md)** - 22개 P0/P1 Stateful 컴포넌트 식별
 - **[ROADMAP.md](../00_Start_Here/ROADMAP.md)** - Phase 7: Scale-out Architecture Transition
 
 ### Technical Guides
@@ -536,4 +536,4 @@ find module-common/src/main/java -type f -name "*.java" | wc -l
 
 ---
 
-*이 ADR은 MapleExpectation의 헥사고날 아키텍처 도입과 DIP 준수를 위한 의사결정 기록입니다. 모든 관련 이슈와 리팩토링 작업은 이 문서를 참조하여 수행해야 합니다.*
+*이 ADR은 probabilistic-valuation-engine의 헥사고날 아키텍처 도입과 DIP 준수를 위한 의사결정 기록입니다. 모든 관련 이슈와 리팩토링 작업은 이 문서를 참조하여 수행해야 합니다.*

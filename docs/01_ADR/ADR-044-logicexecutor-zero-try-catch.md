@@ -4,7 +4,7 @@
 
 ### 1.1 불일치하는 예외 처리 패턴의 만연
 
-MapleExpectation 프로젝트가 성장함에 따라 35개 이상의 서비스 클래스에서 **상호矛盾的인 예외 처리 패턴**이 발견되었습니다. 초기 개발 단계에서 개발자마다 다른 스타일로 try-catch 블록을 작성한 결과, 다음과 같은 문제들이 누적되었습니다:
+probabilistic-valuation-engine 프로젝트가 성장함에 따라 35개 이상의 서비스 클래스에서 **상호矛盾的인 예외 처리 패턴**이 발견되었습니다. 초기 개발 단계에서 개발자마다 다른 스타일로 try-catch 블록을 작성한 결과, 다음과 같은 문제들이 누적되었습니다:
 
 ```java
 // Anti-Pattern 1: Catch and Ignore (가장 위험한 패턴)
@@ -200,7 +200,7 @@ public Character findCharacter(String ign) {
 
 ### 3.1 선택: LogicExecutor 기반 Zero Try-Catch 정책
 
-MapleExpectation 프로젝트는 **모든 비즈니스 로직, 인프라 모듈, 글로벌 모듈에서 `try-catch` 및 `try-finally` 블록 사용을 엄격히 금지**하고, 모든 실행 흐름과 예외 처리를 **`LogicExecutor`** 템플릿에 위임하기로 결정했습니다.
+probabilistic-valuation-engine 프로젝트는 **모든 비즈니스 로직, 인프라 모듈, 글로벌 모듈에서 `try-catch` 및 `try-finally` 블록 사용을 엄격히 금지**하고, 모든 실행 흐름과 예외 처리를 **`LogicExecutor`** 템플릿에 위임하기로 결정했습니다.
 
 > **적용 범위**: `service/`, `scheduler/`, `config/`, `global/`, `aop/` 등 **모든 패키지**
 
@@ -295,7 +295,7 @@ executor.execute(
 
 ### 4.1 LogicExecutor 인터페이스 정의
 
-`/home/maple/MapleExpectation/src/main/java/maple/expectation/global/executor/LogicExecutor.java`
+`/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/executor/LogicExecutor.java`
 
 ```java
 /**
@@ -354,7 +354,7 @@ public interface LogicExecutor {
 
 ### 4.2 TaskContext로 구조화된 로깅
 
-`/home/maple/MapleExpectation/src/main/java/maple/expectation/global/executor/TaskContext.java`
+`/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/executor/TaskContext.java`
 
 ```java
 /**
@@ -384,7 +384,7 @@ public record TaskContext(
 
 ### 4.3 예외 계층 구조와 Circuit Breaker Marker
 
-`/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/ClientBaseException.java`
+`/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/ClientBaseException.java`
 
 ```java
 /**
@@ -411,7 +411,7 @@ public abstract class ClientBaseException extends RuntimeException
 }
 ```
 
-`/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/ServerBaseException.java`
+`/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/ServerBaseException.java`
 
 ```java
 /**
@@ -440,7 +440,7 @@ public abstract class ServerBaseException extends RuntimeException
 
 ### 4.4 Graceful Degradation 패턴 구현 (Cache 예시)
 
-`/home/maple/MapleExpectation/src/main/java/maple/expectation/global/cache/TieredCache.java` (요약)
+`/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/cache/TieredCache.java` (요약)
 
 ```java
 /**
@@ -551,7 +551,7 @@ public class TraceAspect {
 
 ### 5.1 현재 상태
 
-LogicExecutor 도입 후 MapleExpectation 프로젝트는 다음과 같은 개선을 달성했습니다:
+LogicExecutor 도입 후 probabilistic-valuation-engine 프로젝트는 다음과 같은 개선을 달성했습니다:
 
 #### 5.1.1 잘 된 점 (Success)
 

@@ -127,9 +127,9 @@ branch_protection:
 
 ```bash
 # Feature branches for refactoring phases
-featu../05_Reports/04_08_Refactor/phase-1-cleanup
-featu../05_Reports/04_08_Refactor/phase-2-infra-migration
-featu../05_Reports/04_08_Refactor/phase-3-service-split
+featu../05_Reports/05_08_Refactor/phase-1-cleanup
+featu../05_Reports/05_08_Refactor/phase-2-infra-migration
+featu../05_Reports/05_08_Refactor/phase-3-service-split
 
 # Rollback branches (if needed)
 hotfix/rollback-phase-2-monitoring
@@ -201,7 +201,7 @@ hotfix/rollback-phase-3-service-split
    ```bash
    # Reset to last good tag
    git reset --hard pre-phase-N
-   git push origin featu../05_Reports/04_08_Refactor/phase-N --force
+   git push origin featu../05_Reports/05_08_Refactor/phase-N --force
 
    # Verify clean state
    ./gradlew clean build
@@ -388,7 +388,7 @@ wrk -t12 -c400 -d30s http://staging.api.example.com/api/characters/123
    # Result: All tests pass
 
    # Verify Phase 3 is broken
-   git checkout featu../05_Reports/04_08_Refactor/phase-3-service-split
+   git checkout featu../05_Reports/05_08_Refactor/phase-3-service-split
    ./gradlew test
    # Result: 45 tests fail
    ```
@@ -397,7 +397,7 @@ wrk -t12 -c400 -d30s http://staging.api.example.com/api/characters/123
    ```bash
    # Reset to pre-phase-3
    git checkout develop
-   git merge featu../05_Reports/04_08_Refactor/phase-2-infra-migration  # Keep Phase 2
+   git merge featu../05_Reports/05_08_Refactor/phase-2-infra-migration  # Keep Phase 2
    git push origin develop
    ```
 
@@ -1045,7 +1045,7 @@ git reset --hard pre-phase-N
 git reset --soft pre-phase-N
 
 # Check branch protection rules
-gh api repos/zbnerd/MapleExpectation/branches/develop/protection
+gh api repos/zbnerd/probabilistic-valuation-engine/branches/develop/protection
 
 # Create rollback branch
 git checkout -b rollback/phase-N pre-phase-N

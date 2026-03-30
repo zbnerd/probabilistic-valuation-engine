@@ -1,5 +1,7 @@
 # LogicExecutor Policy Pipeline 고도화 PRD (Issue #142) — Final
 
+> **참고**: 이 문서의 코드 예제는 Java 기준으로 작성된 역사적 PRD입니다. 실제 구현은 Kotlin으로 마이그레이션되었습니다 (`module-infra/src/main/kotlin/` 참조). Evidence ID의 파일 경로 중 `.java`는 실제 `.kt` 파일에 해당합니다.
+
 > **문서 목적**: LogicExecutor의 실행/관측/정리 로직을 **Policy Pipeline**으로 표준화
 > **최종 승인**: 2026-01-06 (PR 4 리뷰 완료)
 > **구현 완료**: 2026-02-05
@@ -8,7 +10,7 @@
 ## Documentation Integrity Statement
 
 This guide is based on **production exception handling requirements** and architectural best practices:
-- Zero try-catch policy: 47 flaky test incidents resolved through standardized exception handling (Evidence: [zero-script-qa](../03-analysis/zero-script-qa-2026-01-30.md))
+- Zero try-catch policy: 47 flaky test incidents resolved through standardized exception handling (Evidence: [zero-script-qa](../05_Reports/zero-script-qa-2026-01-30.md))
 - Policy Pipeline architecture: 4-phase separation (BEFORE → TASK → ON_FAILURE → ON_SUCCESS → AFTER) (Evidence: [E2] ExecutionPipeline)
 - Error prioritization: "First Error wins" prevents exception masking (Evidence: [E12] promoteError)
 - Interview-proof defense: All attack vectors preemptively addressed in specification
@@ -1528,7 +1530,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 ```
 
 ### Related Evidence
-- Zero Script QA: `docs/03-analysis/zero-script-qa-2026-01-30.md`
+- Zero Script QA: `../05_Reports/zero-script-qa-2026-01-30.md`
 - CLAUDE.md Section 12: Zero Try-Catch Policy
 - ExecutionPipelineTest: `src/test/java/maple/expectation/global/executor/policy/ExecutionPipelineTest.java`
 
@@ -1699,7 +1701,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 ```
 
 ### Related Evidence
-- Zero Script QA: `docs/03-analysis/zero-script-qa-2026-01-30.md`
+- Zero Script QA: `../05_Reports/zero-script-qa-2026-01-30.md`
 - CLAUDE.md Section 12: Zero Try-Catch Policy
 - ExecutionPipelineTest: `src/test/java/maple/expectation/global/executor/policy/ExecutionPipelineTest.java`
 

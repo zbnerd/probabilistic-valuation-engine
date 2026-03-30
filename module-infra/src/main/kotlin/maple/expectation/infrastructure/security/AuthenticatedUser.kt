@@ -6,9 +6,9 @@ package maple.expectation.infrastructure.security
  * <p>SecurityContext에 저장되어 컨트롤러에서 접근 가능
  *
  * @property sessionId 세션 ID
- * @property fingerprint API Key의 HMAC-SHA256 해시
+ * @property fingerprint Nexon account_id (#667: 동일 계정 = 동일 ID, API Key 무관)
  * @property userIgn 로그인 캐릭터명
- * @property accountId 넥슨 계정 식별자 (SHA-256 of sorted myOcids) - 좋아요 중복 판별 키
+ * @property accountId Nexon account_id (좋아요 중복 판별 키)
  * @property apiKey Nexon API Key (서비스 레이어에서만 사용)
  * @property myOcids 사용자가 소유한 캐릭터 OCID 목록
  * @property role 권한 (USER 또는 ADMIN)

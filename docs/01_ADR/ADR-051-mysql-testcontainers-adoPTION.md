@@ -109,7 +109,7 @@ Metrics (2025 Q4):
 **MySQL 8.0 선택 이유:**
 
 ```yaml
-# /home/maple/MapleExpectation/docker-compose.yml
+# /home/maple/probabilistic-valuation-engine/docker-compose.yml
 services:
   db:
     image: mysql:8.0
@@ -166,7 +166,7 @@ MySQL BLOB storage에 GZIP 압축을 적용하여 스토리지 효율성을 90% 
 ### 3.4 CI/CD 안정화
 
 ```yaml
-# /home/maple/MapleExpectation/.github/workflows/nightly.yml
+# /home/maple/probabilistic-valuation-engine/.github/workflows/nightly.yml
 env:
   DOCKER_HOST: unix:///var/run/docker.sock
   TESTCONTAINERS_RYUK_DISABLED: false
@@ -180,7 +180,7 @@ CI 환경에서 Docker Socket을 통해 Testcontainers를 안정적으로 실행
 
 ### 4.1 Testcontainers BOM 설정
 
-**파일:** `/home/maple/MapleExpectation/build.gradle`
+**파일:** `/home/maple/probabilistic-valuation-engine/build.gradle`
 
 ```gradle
 // 라인 48: Testcontainers BOM 추가
@@ -205,7 +205,7 @@ test {
 
 ### 4.2 MySQL 8.0 Docker Compose 설정
 
-**파일:** `/home/maple/MapleExpectation/docker-compose.yml`
+**파일:** `/home/maple/probabilistic-valuation-engine/docker-compose.yml`
 
 ```yaml
 # 라인 4-23: MySQL 8.0 Production Database
@@ -234,7 +234,7 @@ services:
 
 ### 4.3 Testcontainers Integration Pattern
 
-**참고:** `/home/maple/MapleExpectation/docs/03_Technical_Guides/testing-guide.md`
+**참고:** `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/testing-guide.md`
 
 ```java
 // Section 24: Flaky Test 근본 원인 분석 (라인 218-228)
@@ -259,7 +259,7 @@ class RedisIntegrationTest {
 
 ### 4.4 CI/CD 파이프라인 통합
 
-**파일:** `/home/maple/MapleExpectation/.github/workflows/nightly.yml`
+**파일:** `/home/maple/probabilistic-valuation-engine/.github/workflows/nightly.yml`
 
 ```yaml
 # 라인 78-86: Unit Tests
@@ -339,10 +339,10 @@ PR 검증 시간:
 
 ## 참고 문헌
 
-1. **Testing Guide**: `/home/maple/MapleExpectation/docs/03_Technical_Guides/testing-guide.md`
-2. **Docker Compose**: `/home/maple/MapleExpectation/docker-compose.yml`
-3. **Build Config**: `/home/maple/MapleExpectation/build.gradle`
-4. **Nightly Workflow**: `/home/maple/MapleExpectation/.github/workflows/nightly.yml`
+1. **Testing Guide**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/testing-guide.md`
+2. **Docker Compose**: `/home/maple/probabilistic-valuation-engine/docker-compose.yml`
+3. **Build Config**: `/home/maple/probabilistic-valuation-engine/build.gradle`
+4. **Nightly Workflow**: `/home/maple/probabilistic-valuation-engine/.github/workflows/nightly.yml`
 5. **Flaky Test Analysis**: Issue #207 - 경량 테스트 강제 규칙
 6. **Chaos Engineering**: N01-N18 Nightmare Scenarios
 

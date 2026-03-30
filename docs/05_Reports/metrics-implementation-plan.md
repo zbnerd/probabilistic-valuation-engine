@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides a practical implementation plan for the multi-module refactoring metrics verification strategy documented in [docs/metrics/verification-strategy.md](../metrics/verification-strategy.md).
+This document provides a practical implementation plan for the multi-module refactoring metrics verification strategy documented in [docs/17_Metrics/verification-strategy.md](../17_Metrics/verification-strategy.md).
 
 **Goal:** Implement automated metrics collection to quantitatively measure refactoring success and validate architectural improvements.
 
@@ -606,7 +606,7 @@ jobs:
 
 ### 3.1 Before Refactoring Dashboard
 
-**Location:** `docs/metrics/dashboards/before-refactoring.json`
+**Location:** `docs/17_Metrics/dashboards/before-refactoring.json`
 
 **Purpose:** Establish baseline metrics before refactoring begins.
 
@@ -786,7 +786,7 @@ jobs:
 
 ### 3.2 After Refactoring Dashboard
 
-**Location:** `docs/metrics/dashboards/after-refactoring.json`
+**Location:** `docs/17_Metrics/dashboards/after-refactoring.json`
 
 **Purpose:** Compare metrics after refactoring to validate improvements.
 
@@ -1206,7 +1206,7 @@ After implementation:
 1. **Collect baseline metrics for 7 days** before starting refactoring
 2. **Export "Before Refactoring" dashboard snapshot** (PDF/JSON)
 3. **Communicate baseline** to team via Slack/Email
-4. **Start refactoring** using [ADR-014](../adr/ADR-014-multi-module-cross-cutting-concerns.md)
+4. **Start refactoring** using [ADR-014](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
 5. **Re-run verification script** after each major refactoring milestone
 6. **Update "After Refactoring" dashboard** to track progress
 7. **Document improvements** in refactoring retrospective
@@ -1215,8 +1215,8 @@ After implementation:
 
 ## References
 
-- [Verification Strategy](../metrics/verification-strategy.md)
-- [ADR-014: Multi-Module Cross-Cutting Concerns](../adr/ADR-014-multi-module-cross-cutting-concerns.md)
+- [Verification Strategy](../17_Metrics/verification-strategy.md)
+- [ADR-014: Multi-Module Cross-Cutting Concerns](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
 - [Multi-Module Refactoring Analysis](./Multi-Module-Refactoring-Analysis.md)
 - [Spring Boot Actuator Documentation](https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html)
 - [Micrometer Reference](https://micrometer.io/docs)

@@ -5,11 +5,13 @@ import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import jakarta.annotation.PostConstruct
 import java.nio.charset.StandardCharsets
+import java.time.Instant
 import java.util.Date
 import java.util.Optional
 import javax.crypto.SecretKey
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
@@ -35,9 +37,11 @@ class JwtTokenProvider(
     private lateinit var secretKey: SecretKey
 
     companion object {
+        private val log = LoggerFactory.getLogger(JwtTokenProvider::class.java)
         private const val ISSUER = "maple-expectation"
         private const val CLAIM_FINGERPRINT = "fgp"
         private const val CLAIM_ROLE = "role"
+        private const val CLAIM_USER_IGN = "userIgn"
         private const val DEFAULT_SECRET_PREFIX = "dev-secret"
         private const val PLACEHOLDER_PATTERN = "\${"
         private const val MIN_SECRET_LENGTH = 32
@@ -74,7 +78,7 @@ class JwtTokenProvider(
     fun init() {
         validateSecretKeyForProduction()
         this.secretKey = Keys.hmacShaKeyFor(secret.toByteArray(StandardCharsets.UTF_8))
-        println("JWT TokenProvider initialized with expiration: ${expirationSeconds}s")
+        log.info("JWT TokenProvider initialized with expiration: ${expirationSeconds}s")
     }
 
     /**
@@ -134,6 +138,7 @@ class JwtTokenProvider(
         .subject(payload.sessionId)
         .claim(CLAIM_FINGERPRINT, payload.fingerprint)
         .claim(CLAIM_ROLE, payload.role)
+        .claim(CLAIM_USER_IGN, payload.userIgn)
         .issuedAt(Date.from(payload.issuedAt))
         .expiration(Date.from(payload.expiration))
         .signWith(secretKey, Jwts.SIG.HS256)
@@ -149,6 +154,20 @@ class JwtTokenProvider(
      */
     fun generateToken(sessionId: String, fingerprint: String, role: String): String {
         val payload = JwtPayload.of(sessionId, fingerprint, role, expirationSeconds)
+        return generateToken(payload)
+    }
+
+    /**
+     * 세션 ID, fingerprint, role, userIgn로 토큰을 생성합니다.
+     *
+     * @param sessionId 세션 ID
+     * @param fingerprint fingerprint
+     * @param role 권한
+     * @param userIgn 캐릭터 닉네임
+     * @return 생성된 JWT 토큰 문자열
+     */
+    fun generateToken(sessionId: String, fingerprint: String, role: String, userIgn: String): String {
+        val payload = JwtPayload.of(sessionId, fingerprint, role, expirationSeconds, userIgn)
         return generateToken(payload)
     }
 
@@ -203,12 +222,17 @@ class JwtTokenProvider(
 
         val claims: io.jsonwebtoken.Claims = jws.payload
 
+        // Null-safe claim extraction: provide defaults for required fields
+        val issuedAt = claims.issuedAt?.toInstant() ?: Instant.now()
+        val expiration = claims.expiration?.toInstant() ?: issuedAt.plusSeconds(expirationSeconds)
+
         val payload = JwtPayload(
             claims.subject,
             claims[CLAIM_FINGERPRINT, String::class.java],
             claims[CLAIM_ROLE, String::class.java],
-            claims.issuedAt.toInstant(),
-            claims.expiration.toInstant(),
+            claims[CLAIM_USER_IGN, String::class.java] ?: "",
+            issuedAt,
+            expiration,
         )
 
         return Optional.of(payload)

@@ -7,6 +7,7 @@ import maple.expectation.test.ServiceIntegrationTestBase
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.support.TransactionTemplate
@@ -31,6 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate
  * @see DonationQueueProducer
  * @see ServiceIntegrationTestBase
  */
+@Tag("pgmq")
 @DisplayName("DonationQueueProducer 통합 테스트")
 class DonationQueueProducerIntegrationTest : ServiceIntegrationTestBase() {
 

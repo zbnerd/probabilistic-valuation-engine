@@ -17,6 +17,7 @@ import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -53,6 +54,7 @@ import org.springframework.context.annotation.Primary
  *
  * @see CalculationWorker
  */
+@Tag("pgmq")
 @DisplayName("CalculationWorker 통합 테스트")
 @Import(CalculationWorkerIntegrationTest.TestConfig::class)
 class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory contains Architecture Decision Records (ADRs) for the MapleExpectation project. ADRs document significant architectural decisions, their context, alternatives considered, and consequences.
+This directory contains Architecture Decision Records (ADRs) for the probabilistic-valuation-engine project. ADRs document significant architectural decisions, their context, alternatives considered, and consequences.
 
 **Template:** [ADR-014](ADR-014-multi-module-cross-cutting-concerns.md) serves as the template for 30-point documentation integrity.
 
@@ -32,7 +32,7 @@ This directory contains Architecture Decision Records (ADRs) for the MapleExpect
 | ADR | Title | Status | Date | Impact |
 |-----|-------|--------|------|--------|
 | [ADR-005](ADR-005-resilience4j-scenario-abc.md) | Resilience4j 시나리오 A/B/C 전략 | Accepted | 2026-02-05 | 장애 격리 |
-| [ADR-006](ADR-006-redis-lock-lease-timeout-ha.md) | Redis Lock Lease & Timeout HA | Accepted | 2026-02-05 | 분산락 안정성 |
+| [ADR-006](ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md) | Redis Lock Lease & Timeout HA | Accepted | 2026-02-05 | 분산락 안정성 |
 | [ADR-008](ADR-008-durability-graceful-shutdown.md) | Durability & Graceful Shutdown | Accepted | 2026-02-05 | 안전 종료 4단계 |
 | [ADR-010](ADR-010-outbox-pattern.md) | Outbox Pattern (트리플 안전망) | Accepted | 2026-02-05 | 중복 전송 방지 |
 
@@ -179,9 +179,9 @@ ADR-XXX-{short-description}.md
 - [docs/03_Technical_Guides/testing-guide.md](../03_Technical_Guides/testing-guide.md) - Testing guide
 
 ### Refactoring
-- [docs/05_Reports/04_08_Refactor/REFACTOR_PLAN.md](../05_Reports/04_08_Refactor/REFACTOR_PLAN.md) - Refactoring roadmap
-- [docs/05_Reports/04_08_Refactor/TARGET_STRUCTURE.md](../05_Reports/04_08_Refactor/TARGET_STRUCTURE.md) - Target architecture
-- [docs/05_Reports/04_08_Refactor/SOLID_VIOLATIONS.md](../05_Reports/04_08_Refactor/SOLID_VIOLATIONS.md) - SOLID violations
+- [docs/05_Reports/05_08_Refactor/REFACTOR_PLAN.md](../05_Reports/05_08_Refactor/REFACTOR_PLAN.md) - Refactoring roadmap
+- [docs/05_Reports/05_08_Refactor/TARGET_STRUCTURE.md](../05_Reports/05_08_Refactor/TARGET_STRUCTURE.md) - Target architecture
+- [docs/05_Reports/05_08_Refactor/SOLID_VIOLATIONS.md](../05_Reports/05_08_Refactor/SOLID_VIOLATIONS.md) - SOLID violations
 
 ### Chaos Engineering
 - [docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md](../02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md) - Test strategy

@@ -604,10 +604,10 @@ module-infra (MongoDB, Redis, MySQL)
 
 - **[Multi-Module-Refactoring-Analysis.md](Multi-Module-Refactoring-Analysis.md)** - Comprehensive module structure analysis
 - **[circular-dependency-analysis.md](circular-dependency-analysis.md)** - Initial dependency analysis
-- **[ADR-014](../adr/ADR-014-multi-module-cross-cutting-concerns.md)** - Multi-module design principles
-- **[ADR-035](../adr/ADR-035.md)** - Multi-module migration completion
+- **[ADR-014](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)** - Multi-module design principles
+- **[ADR-035](../01_ADR/ADR-035.md)** - Multi-module migration completion
 - **[refactoring-analysis.md](refactoring-analysis.md)** - Historical .disabled files analysis
-- **[service-modules.md](../02_Technical_Guides/service-modules.md)** - Service layer documentation
+- **[service-modules.md](../03_Technical_Guides/service-modules.md)** - Service layer documentation
 
 ---
 

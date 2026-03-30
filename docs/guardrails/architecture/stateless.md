@@ -9,7 +9,7 @@ keywords: [HttpSession, @SessionScope, @SessionAttributes, session, stateful, st
 
 ## Overview
 
-MapleExpectation은 **완전한 Stateless 아키텍처**로 설계되어야 합니다. 모든 상태는 인프라 계층(Redis, MySQL, MongoDB, Kafka)에 위임하여 수평 확장성(Horizontal Scalability)을 확보합니다.
+probabilistic-valuation-engine은 **완전한 Stateless 아키텍처**로 설계되어야 합니다. 모든 상태는 인프라 계층(Redis, MySQL, MongoDB, Kafka)에 위임하여 수평 확장성(Horizontal Scalability)을 확보합니다.
 
 ---
 

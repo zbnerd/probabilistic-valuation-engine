@@ -1,4 +1,4 @@
-# MapleExpectation 로드맵
+# probabilistic-valuation-engine 로드맵
 
 > 최종 업데이트: 2026-02-05
 > **Documentation Version:** 1.0
@@ -7,8 +7,8 @@
 ## Documentation Integrity Statement
 
 This roadmap is based on **actual GitHub issues and ADRs** from the project:
-- All issue references validated against GitHub repository (Evidence: [GitHub Issues](https://github.com/zbnerd/MapleExpectation/issues))
-- Phase 7 dependency structure validated through ADR-013, ADR-014 (Evidence: [ADR Directory](../adr/))
+- All issue references validated against GitHub repository (Evidence: [GitHub Issues](https://github.com/zbnerd/probabilistic-valuation-engine/issues))
+- Phase 7 dependency structure validated through ADR-013, ADR-014 (Evidence: [ADR Directory](../01_ADR/))
 - Stateful component analysis completed (Evidence: [Scale-out Blockers Analysis](../05_Reports/scale-out-blockers-analysis.md))
 
 ## Terminology
@@ -22,7 +22,7 @@ This roadmap is based on **actual GitHub issues and ADRs** from the project:
 
 ## 개요
 
-본 문서는 MapleExpectation 프로젝트의 기술 부채 해소 및 기능 개선을 위한 로드맵입니다.
+본 문서는 probabilistic-valuation-engine 프로젝트의 기술 부채 해소 및 기능 개선을 위한 로드맵입니다.
 우선순위는 **보안 → 안정성 → 데이터 무결성 → 관측성 → 성능 → 코드 품질 → Scale-out** 순서를 따릅니다.
 
 ---
@@ -47,9 +47,9 @@ This roadmap is based on **actual GitHub issues and ADRs** from the project:
 
 | 순서 | 이슈 | 제목 | 우선순위 | 근거 |
 |:---:|:---:|------|:---:|------|
-| 1 | [#146](https://github.com/zbnerd/MapleExpectation/issues/146) | Admin/핵심 API 인증·인가 최소선 구축 | P0 | 보안 구멍은 모든 것보다 우선 - 인증 없는 API는 공격 벡터 |
-| 2 | [#145](https://github.com/zbnerd/MapleExpectation/issues/145) | Nexon WebClient 무한 대기 방지 및 Timeout 강제 | P0 | 무한 대기 = 스레드 고갈 = 서비스 다운 |
-| 3 | [#150](https://github.com/zbnerd/MapleExpectation/issues/150) | PermutationUtil OOM 방지 (입력 제한) | P0 | 입력 제한 없으면 DoS 공격 가능 |
+| 1 | [#146](https://github.com/zbnerd/probabilistic-valuation-engine/issues/146) | Admin/핵심 API 인증·인가 최소선 구축 | P0 | 보안 구멍은 모든 것보다 우선 - 인증 없는 API는 공격 벡터 |
+| 2 | [#145](https://github.com/zbnerd/probabilistic-valuation-engine/issues/145) | Nexon WebClient 무한 대기 방지 및 Timeout 강제 | P0 | 무한 대기 = 스레드 고갈 = 서비스 다운 |
+| 3 | [#150](https://github.com/zbnerd/probabilistic-valuation-engine/issues/150) | PermutationUtil OOM 방지 (입력 제한) | P0 | 입력 제한 없으면 DoS 공격 가능 |
 
 ### 완료 기준 (Definition of Done)
 - [ ] 모든 Admin API에 인증 적용
@@ -64,9 +64,9 @@ This roadmap is based on **actual GitHub issues and ADRs** from the project:
 
 | 순서 | 이슈 | 제목 | 우선순위 | 근거 |
 |:---:|:---:|------|:---:|------|
-| 4 | [#147](https://github.com/zbnerd/MapleExpectation/issues/147) | LikeSyncService 데이터 유실 방지 (Redis 원자성) | P0 | 데이터 유실 = 사용자 신뢰 상실 |
-| 5 | [#148](https://github.com/zbnerd/MapleExpectation/issues/148) | TieredCache Race Condition 제거 (L1/L2 일관성) | P0 | L1/L2 불일치 → 잘못된 데이터 노출 |
-| 6 | [#130](https://github.com/zbnerd/MapleExpectation/issues/130) | Tiered Locking 정합성 결함 및 MySQL 세션 락 오류 수정 | Bug | #148과 연관, MySQL 세션 락 버그 |
+| 4 | [#147](https://github.com/zbnerd/probabilistic-valuation-engine/issues/147) | LikeSyncService 데이터 유실 방지 (Redis 원자성) | P0 | 데이터 유실 = 사용자 신뢰 상실 |
+| 5 | [#148](https://github.com/zbnerd/probabilistic-valuation-engine/issues/148) | TieredCache Race Condition 제거 (L1/L2 일관성) | P0 | L1/L2 불일치 → 잘못된 데이터 노출 |
+| 6 | [#130](https://github.com/zbnerd/probabilistic-valuation-engine/issues/130) | Tiered Locking 정합성 결함 및 MySQL 세션 락 오류 수정 | Bug | #148과 연관, MySQL 세션 락 버그 |
 
 ### 완료 기준 (Definition of Done)
 - [ ] Redis MULTI/EXEC 또는 Lua 스크립트로 원자성 보장
@@ -81,9 +81,9 @@ This roadmap is based on **actual GitHub issues and ADRs** from the project:
 
 | 순서 | 이슈 | 제목 | 우선순위 | 근거 |
 |:---:|:---:|------|:---:|------|
-| 7 | [#151](https://github.com/zbnerd/MapleExpectation/issues/151) | 입력값 검증(Validation) 전면 적용 | P0/P1 | Phase 1~2 완료 후 전면 적용 |
-| 8 | [#152](https://github.com/zbnerd/MapleExpectation/issues/152) | Rate Limiting 도입 | P1 | 부하 폭주 방어 (Phase 1 보안과 시너지) |
-| 9 | [#153](https://github.com/zbnerd/MapleExpectation/issues/153) | CI/CD Quality Gate (Test Skip 금지) | P1 | 테스트 스킵 금지로 품질 게이트 강제 |
+| 7 | [#151](https://github.com/zbnerd/probabilistic-valuation-engine/issues/151) | 입력값 검증(Validation) 전면 적용 | P0/P1 | Phase 1~2 완료 후 전면 적용 |
+| 8 | [#152](https://github.com/zbnerd/probabilistic-valuation-engine/issues/152) | Rate Limiting 도입 | P1 | 부하 폭주 방어 (Phase 1 보안과 시너지) |
+| 9 | [#153](https://github.com/zbnerd/probabilistic-valuation-engine/issues/153) | CI/CD Quality Gate (Test Skip 금지) | P1 | 테스트 스킵 금지로 품질 게이트 강제 |
 
 ### 완료 기준 (Definition of Done)
 - [ ] 모든 Controller DTO에 Bean Validation 적용
@@ -98,10 +98,10 @@ This roadmap is based on **actual GitHub issues and ADRs** from the project:
 
 | 순서 | 이슈 | 제목 | 분류 | 근거 |
 |:---:|:---:|------|:---:|------|
-| 10 | [#143](https://github.com/zbnerd/MapleExpectation/issues/143) | 관측성(Observability) 인프라 구축 (Loki + Grafana + Tracing) | DevOps | 먼저 관측성 확보 → 이후 개선의 기반 |
-| 11 | [#118](https://github.com/zbnerd/MapleExpectation/issues/118) | 비동기 파이프라인 전환 및 .join() 제거 | Refactor | 성능 병목 해소의 핵심 |
-| 12 | [#119](https://github.com/zbnerd/MapleExpectation/issues/119) | 순환 참조 제거 및 좋아요 도메인 로직 분리 | Refactor | 코드 복잡도 감소 → 이후 리팩토링 용이 |
-| 13 | [#138](https://github.com/zbnerd/MapleExpectation/issues/138) | 메트릭 카디널리티 제어 및 관측성 어스펙트 고도화 | Design | #143과 시너지 |
+| 10 | [#143](https://github.com/zbnerd/probabilistic-valuation-engine/issues/143) | 관측성(Observability) 인프라 구축 (Loki + Grafana + Tracing) | DevOps | 먼저 관측성 확보 → 이후 개선의 기반 |
+| 11 | [#118](https://github.com/zbnerd/probabilistic-valuation-engine/issues/118) | 비동기 파이프라인 전환 및 .join() 제거 | Refactor | 성능 병목 해소의 핵심 |
+| 12 | [#119](https://github.com/zbnerd/probabilistic-valuation-engine/issues/119) | 순환 참조 제거 및 좋아요 도메인 로직 분리 | Refactor | 코드 복잡도 감소 → 이후 리팩토링 용이 |
+| 13 | [#138](https://github.com/zbnerd/probabilistic-valuation-engine/issues/138) | 메트릭 카디널리티 제어 및 관측성 어스펙트 고도화 | Design | #143과 시너지 |
 
 ### 완료 기준 (Definition of Done)
 - [ ] Grafana 대시보드 구축 및 알림 설정
@@ -117,10 +117,10 @@ This roadmap is based on **actual GitHub issues and ADRs** from the project:
 
 | 순서 | 이슈 | 제목 | 분류 | 근거 |
 |:---:|:---:|------|:---:|------|
-| 14 | [#81](https://github.com/zbnerd/MapleExpectation/issues/81) | 트랜잭션 격리 수준 조정 (RR → RC) | Optimization | 동시성 성능 향상 |
-| 15 | [#63](https://github.com/zbnerd/MapleExpectation/issues/63) | V3 스트리밍 경로 최적화 및 캐시 표준화 | Performance | V3 경로 개선 |
-| 16 | [#48](https://github.com/zbnerd/MapleExpectation/issues/48) | 대량 데이터 동기화 시 DB 락 경합 최적화 | Stability | DB 부하 감소 |
-| 17 | [#139](https://github.com/zbnerd/MapleExpectation/issues/139) | 큐브 기대값 엔진 고도화: DP 기반 누적 확률 연산 도입 | Refactor | 핵심 비즈니스 로직 개선 |
+| 14 | [#81](https://github.com/zbnerd/probabilistic-valuation-engine/issues/81) | 트랜잭션 격리 수준 조정 (RR → RC) | Optimization | 동시성 성능 향상 |
+| 15 | [#63](https://github.com/zbnerd/probabilistic-valuation-engine/issues/63) | V3 스트리밍 경로 최적화 및 캐시 표준화 | Performance | V3 경로 개선 |
+| 16 | [#48](https://github.com/zbnerd/probabilistic-valuation-engine/issues/48) | 대량 데이터 동기화 시 DB 락 경합 최적화 | Stability | DB 부하 감소 |
+| 17 | [#139](https://github.com/zbnerd/probabilistic-valuation-engine/issues/139) | 큐브 기대값 엔진 고도화: DP 기반 누적 확률 연산 도입 | Refactor | 핵심 비즈니스 로직 개선 |
 
 ### 완료 기준 (Definition of Done)
 - [ ] 격리 수준 변경 후 데이터 정합성 테스트 통과
@@ -135,15 +135,15 @@ This roadmap is based on **actual GitHub issues and ADRs** from the project:
 
 | 순서 | 이슈 | 제목 | 분류 |
 |:---:|:---:|------|:---:|
-| 18 | [#127](https://github.com/zbnerd/MapleExpectation/issues/127) | 데이터 복구 로직의 멱등성 확보 | Reliability |
-| 19 | [#128](https://github.com/zbnerd/MapleExpectation/issues/128) | 엔티티-DTO 분리를 통한 API 응답 페이로드 최적화 | Performance |
-| 20 | [#120](https://github.com/zbnerd/MapleExpectation/issues/120) | Rich Domain Model 전환 | Refactor |
-| 21 | [#126](https://github.com/zbnerd/MapleExpectation/issues/126) | Pragmatic CQRS: 조회/처리 서버 분리 | Architecture |
-| 22 | [#80](https://github.com/zbnerd/MapleExpectation/issues/80) | Transactional Outbox 패턴 도입 | Reliability |
-| 23 | [#56](https://github.com/zbnerd/MapleExpectation/issues/56) | JaCoCo 테스트 커버리지 분석 및 사각지대 해소 | QA |
-| 24 | [#64](https://github.com/zbnerd/MapleExpectation/issues/64) | DTO 네이밍 충돌 해결 및 Runbook 문서화 | Refactor |
-| 25 | [#28](https://github.com/zbnerd/MapleExpectation/issues/28) | Pessimistic Lock vs Atomic Update 선택 근거 정리 | Design |
-| 26 | [#14](https://github.com/zbnerd/MapleExpectation/issues/14) | 미사용 및 Deprecated 코드베이스 정리 | Cleanup |
+| 18 | [#127](https://github.com/zbnerd/probabilistic-valuation-engine/issues/127) | 데이터 복구 로직의 멱등성 확보 | Reliability |
+| 19 | [#128](https://github.com/zbnerd/probabilistic-valuation-engine/issues/128) | 엔티티-DTO 분리를 통한 API 응답 페이로드 최적화 | Performance |
+| 20 | [#120](https://github.com/zbnerd/probabilistic-valuation-engine/issues/120) | Rich Domain Model 전환 | Refactor |
+| 21 | [#126](https://github.com/zbnerd/probabilistic-valuation-engine/issues/126) | Pragmatic CQRS: 조회/처리 서버 분리 | Architecture |
+| 22 | [#80](https://github.com/zbnerd/probabilistic-valuation-engine/issues/80) | Transactional Outbox 패턴 도입 | Reliability |
+| 23 | [#56](https://github.com/zbnerd/probabilistic-valuation-engine/issues/56) | JaCoCo 테스트 커버리지 분석 및 사각지대 해소 | QA |
+| 24 | [#64](https://github.com/zbnerd/probabilistic-valuation-engine/issues/64) | DTO 네이밍 충돌 해결 및 Runbook 문서화 | Refactor |
+| 25 | [#28](https://github.com/zbnerd/probabilistic-valuation-engine/issues/28) | Pessimistic Lock vs Atomic Update 선택 근거 정리 | Design |
+| 26 | [#14](https://github.com/zbnerd/probabilistic-valuation-engine/issues/14) | 미사용 및 Deprecated 코드베이스 정리 | Cleanup |
 
 ---
 
@@ -228,7 +228,7 @@ P0/P1 Stateful 컴포넌트를 분산 환경에서 안전하게 동작하도록 
 - [ ] `implementation project(':maple-core')` 한 줄로 인프라 Bean 자동 등록
 - [ ] 순환 의존 없음 (Gradle dependency report)
 
-**관련 문서:** [ADR-014: 멀티 모듈 전환](../01_Adr/ADR-014-multi-module-cross-cutting-concerns.md)
+**관련 문서:** [ADR-014: 멀티 모듈 전환](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
 
 ### Step 3: Pragmatic CQRS (#126)
 
@@ -247,7 +247,7 @@ P0/P1 Stateful 컴포넌트를 분산 환경에서 안전하게 동작하도록 
 - [ ] 대량 업데이트 시에도 메인 API 응답 속도 일정 유지
 - [ ] Worker 장애 시 조회 서비스 생존 확인
 
-**관련 문서:** [ADR-013: 비동기 이벤트 파이프라인](../01_Adr/ADR-013-high-throughput-event-pipeline.md)
+**관련 문서:** [ADR-013: 비동기 이벤트 파이프라인](../01_ADR/ADR-013-high-throughput-event-pipeline.md)
 
 ---
 
@@ -340,7 +340,7 @@ P0/P1 Stateful 컴포넌트를 분산 환경에서 안전하게 동작하도록 
 - [ ] P99 Latency 50ms 이하 유지
 
 **관련 문서:**
-- [Transactional Outbox 패턴 ADR](../01_Adr/ADR-XXX-outbox-pattern.md) (TBD)
+- [Transactional Outbox 패턴 ADR](../01_ADR/ADR-XXX-outbox-pattern.md) (TBD)
 - [Debebium 공식 문서](https://debezium.io/documentation/reference/stable/)
 
 ---
@@ -364,7 +364,7 @@ P0/P1 Stateful 컴포넌트를 분산 환경에서 안전하게 동작하도록 
 **현재 (Monolith):**
 ```
 ┌─────────────────────────────────────────┐
-│         MapleExpectation App           │
+│         probabilistic-valuation-engine App           │
 │  ┌──────────┐  ┌──────────┐  ┌───────┐ │
 │  │  Query   │  │ Worker   │  │ Calc  │ │
 │  │  Server  │  │  Server  │  │Engine │ │
@@ -569,9 +569,9 @@ P0/P1 Stateful 컴포넌트를 분산 환경에서 안전하게 동작하도록 
 
 | Section | Evidence Source |
 |---------|-----------------|
-| **Phase 7 Dependencies** | [ADR-014](../01_Adr/ADR-014-multi-module-cross-cutting-concerns.md), [ADR-013](../01_Adr/ADR-013-high-throughput-event-pipeline.md) |
+| **Phase 7 Dependencies** | [ADR-014](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md), [ADR-013](../01_ADR/ADR-013-high-throughput-event-pipeline.md) |
 | **Stateful Components** | [Scale-out Blockers Analysis](../05_Reports/scale-out-blockers-analysis.md) |
-| **Issue References** | [GitHub Issues](https://github.com/zbnerd/MapleExpectation/issues) |
+| **Issue References** | [GitHub Issues](https://github.com/zbnerd/probabilistic-valuation-engine/issues) |
 | **P0/P1 Classifications** | [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md), [P1 Report](../05_Reports/P1_Nightmare_Issues_Resolution_Report.md) |
 
 ## Technical Validity Check
@@ -588,7 +588,7 @@ This roadmap would be invalidated if:
 # Validate issue references exist
 for issue in 146 145 150 147 148 130 151 152 153; do
     echo "Checking issue #$issue"
-    curl -s "https://api.github.com/repos/zbnerd/MapleExpectation/issues/$issue" | jq -r '.title'
+    curl -s "https://api.github.com/repos/zbnerd/probabilistic-valuation-engine/issues/$issue" | jq -r '.title'
 done
 
 # Verify Phase 7 dependency structure

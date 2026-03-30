@@ -2,8 +2,8 @@
 
 **Date**: 2026-02-14
 **Status**: Implementation Complete (Compilation Errors Require Fix)
-**Author**: MapleExpectation Architecture Team
-**Related ADR**: [ADR-036](../../adr/ADR-036-v5-cqrs-mongodb.md)
+**Author**: probabilistic-valuation-engine Architecture Team
+**Related ADR**: [ADR-036](../../01_ADR/ADR-036-v5-cqrs-mongodb.md)
 **Sequence Diagram**: [v5-cqrs-sequence.md](../../03_Sequence_Diagrams/v5-cqrs-sequence.md)
 
 ---
@@ -624,7 +624,7 @@ dependencies {
 
 ### 10.1 Related Documents
 
-- **ADR-036**: [V5 CQRS Architecture with MongoDB](../../adr/ADR-036-v5-cqrs-mongodb.md)
+- **ADR-036**: [V5 CQRS Architecture with MongoDB](../../01_ADR/ADR-036-v5-cqrs-mongodb.md)
 - **Sequence Diagram**: [V5 CQRS Sequence](../../03_Sequence_Diagrams/v5-cqrs-sequence.md)
 - **Issue**: [#300 CQRS Architecture Update](../../../.omc/issue-300-cqrs-update.md)
 
@@ -632,10 +632,10 @@ dependencies {
 
 | ADR | Topic | Link |
 |-----|-------|------|
-| ADR-036 | V5 CQRS Architecture | [Link](../../adr/ADR-036-v5-cqrs-mongodb.md) |
-| ADR-014 | Multi-Module Architecture | [Link](../../adr/ADR-014-multi-module-cross-cutting-concerns.md) |
-| ADR-013 | Redis Stream Design | [Link](../../adr/ADR-013-redis-stream-design.md) |
-| ADR-003 | Tiered Cache Strategy | [Link](../../adr/ADR-003-tiered-cache.md) |
+| ADR-036 | V5 CQRS Architecture | [Link](../../01_ADR/ADR-036-v5-cqrs-mongodb.md) |
+| ADR-014 | Multi-Module Architecture | [Link](../../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md) |
+| ADR-013 | Redis Stream Design | [Link](../../01_ADR/ADR-013-redis-stream-design.md) |
+| ADR-003 | TieredCache Strategy | [Link](../../01_ADR/ADR-003-tiered-cache.md) |
 
 ### 10.3 External References
 
@@ -649,7 +649,7 @@ dependencies {
 ## Appendix A: File Tree
 
 ```
-MapleExpectation/
+probabilistic-valuation-engine/
 ├── module-app/
 │   ├── src/main/java/maple/expectation/
 │   │   ├── controller/
@@ -687,4 +687,4 @@ MapleExpectation/
 
 **Report Generated**: 2026-02-14
 **Next Review**: After compilation fixes and integration tests complete
-**Owner**: MapleExpectation Architecture Team
+**Owner**: probabilistic-valuation-engine Architecture Team

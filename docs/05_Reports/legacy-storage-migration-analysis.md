@@ -33,7 +33,7 @@ lock:
   impl: postgres  # redis → postgres
 ```
 
-### 1.2 캐시 (Tiered Cache L2)
+### 1.2 캐시 (TieredCache L2)
 
 **현재 상태:** Redis L2 → PostgreSQL L2 마이그레이션 진행 중
 

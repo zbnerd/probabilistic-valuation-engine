@@ -1,4 +1,4 @@
-# MapleExpectation — 의도된 상향 설계(Deliberate Over-Engineering) 설명서
+# probabilistic-valuation-engine — 의도된 상향 설계(Deliberate Over-Engineering) 설명서
 
 > **Last Updated:** 2026-02-05
 > **Documentation Version:** 1.0
@@ -13,7 +13,7 @@
 
 This document is based on **Problem-Driven Design (PDD)** - every architectural decision responds to an actual production incident:
 - Concurrency issues: Resolved through ResilientLockStrategy (Evidence: [E1])
-- Cache stampede: Solved via Single-flight + TieredCache (Evidence: [E2], Chaos N01)
+- Cache stampede: Solved via SingleFlight + TieredCache (Evidence: [E2], Chaos N01)
 - External API failures: Mitigated through Circuit Breaker + Graceful Degradation (Evidence: [C1], P0 Report)
 
 ---
@@ -147,7 +147,7 @@ public interface LogicExecutor {
 ## 설정 증거 (Configuration Evidence)
 
 ### [C1] Resilience4j 설정
-> **Thresholds Rationale:** 60% failure rate based on Nexon API maintenance patterns (Evidence: [ADR-005](../adr/ADR-005-resilience4j-scenario-abc.md)).
+> **Thresholds Rationale:** 60% failure rate based on Nexon API maintenance patterns (Evidence: [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md)).
 ```yaml
 # application.yml (Line 55-82)
 resilience4j.circuitbreaker:
@@ -175,7 +175,7 @@ spring:
 ```
 
 ### [C3] Graceful Shutdown
-> **Validation:** 100% data preservation during deployments (Evidence: [ADR-008](../adr/ADR-008-durability-graceful-shutdown.md)).
+> **Validation:** 100% data preservation during deployments (Evidence: [ADR-008](../01_ADR/ADR-008-durability-graceful-shutdown.md)).
 ```yaml
 # application.yml (Line 10)
 server:
@@ -209,7 +209,7 @@ server:
 1. **Kafka/RabbitMQ 도입 검토 → ❌ 채택 안 함**
    - **이유**: 현재 트래픽 규모에서 불필요한 복잡도
    - **대신 채택**: Write-Behind Buffer + Outbox Pattern
-   - **Evidence:** [ADR-010](../adr/ADR-010-outbox-pattern.md) - Transactional Outbox sufficient
+   - **Evidence:** [ADR-010](../01_ADR/ADR-010-outbox-pattern.md) - Transactional Outbox sufficient
 
 2. **Distributed Lock 전체 교체 → ❌ 유지**
    - **이유**: 정합성 보장을 위해 DB Unique 제약 필요
@@ -390,7 +390,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 
 추가 전략:
 - Negative Caching
-- Request Collapsing (Single-flight 기반)
+- Request Collapsing (SingleFlight 기반)
 
 > **의도**: 조회 폭주 상황에서도 외부 API 보호
 
@@ -398,7 +398,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 
 ### 3.3 외부 API 장애 대응 (Resilience4j)
 
-> **Scenario Validated:** A/B/C scenarios tested in chaos N05, N06 (Evidence: [ADR-005](../adr/ADR-005-resilience4j-scenario-abc.md)).
+> **Scenario Validated:** A/B/C scenarios tested in chaos N05, N06 (Evidence: [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md)).
 
 도입 요소:
 - Circuit Breaker
@@ -465,7 +465,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 
 ## 6. 한 문장 결론
 
-> **MapleExpectation은 기능 데모가 아니라,
+> **probabilistic-valuation-engine은 기능 데모가 아니라,
 > "서비스가 실제로 깨지는 지점을 어떻게 방어했는지"를 보여주는 프로젝트입니다.**
 
 ---
@@ -518,7 +518,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 1. **[F1]** Redis Lock 장애 시 MySQL로의 자동 전환이 동작하지 않을 경우
 2. **[F2]** TieredCache가 L1→L2→DB 전략을 일관되게 적용하지 않을 경우
 3. **[F3]** LogicExecutor 표준화 패턴이 8가지로 정해져 있지 않을 경우
-4. **[F4]** Single-flight 패턴이 95% 이상의 중복 제거율을 보장하지 않을 경우
+4. **[F4]** SingleFlight 패턴이 95% 이상의 중복 제거율을 보장하지 않을 경우
 
 **검증 방법**:
 ```bash
@@ -532,7 +532,7 @@ curl -s http://localhost:8080/actuator/metrics/cachehit.ratio | jq '.measurement
 grep -r "execute.*TaskContext" src/main/java/maple/expectation/global/executor/LogicExecutor.java | wc -l
 # 예상: 8가지 패턴 확인
 
-# F4: Single-flight 검증
+# F4: SingleFlight 검증
 curl -s http://localhost:8080/actuator/metrics/singleflight.deduplication | jq '.measurements[0].value > 0.95'
 ```
 
@@ -596,9 +596,9 @@ redis-cli ping || echo "Redis 연결 실패"
 
 - [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md)
 - [P1-7-8-9 Report](../04_Reports/P1-7-8-9-scheduler-distributed-lock.md)
-- [ADR-005](../adr/ADR-005-resilience4j-scenario-abc.md)
-- [ADR-008](../adr/ADR-008-durability-graceful-shutdown.md)
-- [ADR-010](../adr/ADR-010-outbox-pattern.md)
+- [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md)
+- [ADR-008](../01_ADR/ADR-008-durability-graceful-shutdown.md)
+- [ADR-010](../01_ADR/ADR-010-outbox-pattern.md)
 - [Chaos Engineering Results](../01_Chaos_Engineering/06_Nightmare/Results/)
 
 ---

@@ -7,14 +7,14 @@
 > **Documentation Version:** 1.0
 > **Production Status:** Active (Based on scale-out blockers analysis #283 and high-traffic analysis #284)
 
-이 문서는 MapleExpectation 프로젝트의 **불확실성 대응 시나리오 계획**을 정의합니다. 핵심 불확실성 축을 중심으로 4가지 미래 시나리오를 전개하고, 각 시나리오별 전략적 대응 방안을 제시합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 **불확실성 대응 시나리오 계획**을 정의합니다. 핵심 불확실성 축을 중심으로 4가지 미래 시나리오를 전개하고, 각 시나리오별 전략적 대응 방안을 제시합니다.
 
 ## Documentation Integrity Statement
 
 This guide is based on **actual production analysis** from:
 - Scale-out blockers analysis: 22 stateful components identified (Evidence: [scale-out-blockers-analysis.md](../04_Reports/scale-out-blockers-analysis.md))
 - High-traffic performance analysis: 5 P0 bottlenecks at 1000 RPS target (Evidence: [high-traffic-performance-analysis.md](../04_Reports/high-traffic-performance-analysis.md))
-- ADR decision records: 14 architecture decisions validated (Evidence: [ADR Directory](../adr/))
+- ADR decision records: 14 architecture decisions validated (Evidence: [ADR Directory](../01_ADR/))
 
 ---
 
@@ -974,7 +974,7 @@ graph TB
     subgraph Foundation["기반 기술"]
         M1["TieredCache<br/>L1 95% hit rate"]
         M2["Circuit Breaker<br/>Resilience4j"]
-        M3["Single-flight<br/>API 중복 방지"]
+        M3["SingleFlight<br/>API 중복 방지"]
     end
 
     subgraph Observability["관측성"]
@@ -1149,8 +1149,8 @@ gantt
 | **High-Traffic Analysis** | [high-traffic-performance-analysis.md](../04_Reports/high-traffic-performance-analysis.md) |
 | **Architecture** | [architecture.md](../00_Start_Here/architecture.md) |
 | **Roadmap** | [ROADMAP.md](../00_Start_Here/ROADMAP.md) |
-| **ADR-013 (Event Pipeline)** | [ADR-013](../adr/ADR-013-high-throughput-event-pipeline.md) |
-| **ADR-014 (Multi-Module)** | [ADR-014](../adr/ADR-014-multi-module-cross-cutting-concerns.md) |
+| **ADR-013 (Event Pipeline)** | [ADR-013](../01_ADR/ADR-013-high-throughput-event-pipeline.md) |
+| **ADR-014 (Multi-Module)** | [ADR-014](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md) |
 
 ### Runbooks
 

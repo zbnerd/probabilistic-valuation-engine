@@ -9,7 +9,7 @@ keywords: [Thread.sleep, Awaitility, @DirtiesContext, test isolation, Testcontai
 
 ## 개요
 
-이 문서는 MapleExpectation 프로젝트에서 단위 테스트 작성 시 준수해야 할 Best Practices를 정의합니다. **Flaky Test를 방지**하고 **결정적(Deterministic)인 테스트**를 작성하는 데 초점을 둡니다.
+이 문서는 probabilistic-valuation-engine 프로젝트에서 단위 테스트 작성 시 준수해야 할 Best Practices를 정의합니다. **Flaky Test를 방지**하고 **결정적(Deterministic)인 테스트**를 작성하는 데 초점을 둡니다.
 
 ---
 

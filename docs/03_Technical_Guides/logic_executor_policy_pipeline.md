@@ -1,5 +1,7 @@
 # LogicExecutor Policy Pipeline 고도화 PRD (Issue #142) — Final
 
+> **참고**: 이 문서의 코드 예제는 Java 기준으로 작성된 역사적 PRD입니다. 실제 구현은 Kotlin으로 마이그레이션되었습니다 (`module-infra/src/main/kotlin/` 참조). Evidence ID의 파일 경로 중 `.java`는 실제 `.kt` 파일에 해당합니다.
+
 > **문서 목적**: LogicExecutor의 실행/관측/정리 로직을 **Policy Pipeline**으로 표준화
 > **최종 승인**: 2026-01-06 (PR 4 리뷰 완료)
 > **구현 완료**: 2026-02-05

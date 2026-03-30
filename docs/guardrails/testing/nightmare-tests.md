@@ -9,7 +9,7 @@ keywords: [Nightmare, Cache, Stampede, Singleflight, DB, Deadlock, Lock, Timeout
 
 ## 개요
 
-MapleExpectation 프로젝트의 **Chaos Engineering Nightmare 시나리오**를 정의합니다. 각 시나리오는 **운영 환경에서 발생 가능한 실제 장애**를 기반으로 하며, 시스템의 **회복 탄력성(Resilience)**을 검증합니다.
+probabilistic-valuation-engine 프로젝트의 **Chaos Engineering Nightmare 시나리오**를 정의합니다. 각 시나리오는 **운영 환경에서 발생 가능한 실제 장애**를 기반으로 하며, 시스템의 **회복 탄력성(Resilience)**을 검증합니다.
 
 > **Total Scenarios:** N01-N19 (19개 시나리오)
 > **Test Evidence:** All scenarios include reproducible test results with Before/After metrics

@@ -9,7 +9,7 @@ keywords: [Chaos, Nightmare, Test, 장애주입, 성능, 부하테스트, Circui
 
 ## 개요
 
-MapleExpectation 프로젝트의 Chaos Engineering 테스트 전략과 가드레일을 정의합니다. **5개 Agent(Blue, Green, Yellow, Purple, Red)** 관점에서 테스트 우선순위와 검증 기준을 명확히 합니다.
+probabilistic-valuation-engine 프로젝트의 Chaos Engineering 테스트 전략과 가드레일을 정의합니다. **5개 Agent(Blue, Green, Yellow, Purple, Red)** 관점에서 테스트 우선순위와 검증 기준을 명확히 합니다.
 
 > **Evidence:** Zero flaky tests in CI since 2025-12 implementation (47 incidents resolved)
 > **Validation:** N01-N18 Nightmare scenarios with reproducible results
@@ -275,7 +275,7 @@ test:
 | 테스트 | 검증 내용 | SLA |
 |--------|----------|-----|
 | Cache HIT 비율 | L1/L2 HIT 비율 | > 80% |
-| Single-flight | 동시 요청 시 loader 1회 | < 5회 |
+| SingleFlight | 동시 요청 시 loader 1회 | < 5회 |
 | O(n) 알고리즘 | DP 복잡도 검증 | < 100ms for target=500 |
 
 ### 🟡 Yellow Agent (QA-Master)

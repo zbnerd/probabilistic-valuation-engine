@@ -52,7 +52,7 @@ grep -c 'forXxx()' src/main/java/global/executor/ExceptionTranslator.java
 
 ## Executive Summary
 
-LogicExecutor Pipeline is the architectural backbone of MapleExpectation's exception handling and execution flow.
+LogicExecutor Pipeline is the architectural backbone of probabilistic-valuation-engine's exception handling and execution flow.
 This analysis identifies **3 new P0 issues**, **4 new P1 issues**, and **2 P2 observations** beyond the 5 previously discovered issues.
 
 ---

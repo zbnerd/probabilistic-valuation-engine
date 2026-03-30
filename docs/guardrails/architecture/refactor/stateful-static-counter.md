@@ -94,4 +94,4 @@ public class SnowflakeIdGenerator {
 
 ## 출처
 - 문서: [docs/05_Reports/04_08_Refactor/STATEFUL_REFACTORING_TARGETS.md](../../../05_Reports/04_08_Refactor/STATEFUL_REFACTORING_TARGETS.md)
-- 관련 ADR: [ADR-010](../../../adr/ADR-010-outbox-pattern.md) (Write-Behind Buffer)
+- 관련 ADR: [ADR-010](../../../01_ADR/ADR-010-outbox-pattern.md) (Write-Behind Buffer)

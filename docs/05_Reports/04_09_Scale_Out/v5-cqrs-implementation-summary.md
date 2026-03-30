@@ -218,5 +218,5 @@ The current Redisson version uses different method signatures for stream operati
 
 ## References
 - [V5 CQRS Sequence Diagram](../../03_Sequence_Diagrams/v5-cqrs-sequence.md)
-- [ADR-036: V5 CQRS MongoDB](../../adr/ADR-036-v5-cqrs-mongodb.md)
+- [ADR-036: V5 CQRS MongoDB](../../01_ADR/ADR-036-v5-cqrs-mongodb.md)
 - [CLAUDE.md](../../CLAUDE.md) (Section 11-16: Exception handling, LogicExecutor)

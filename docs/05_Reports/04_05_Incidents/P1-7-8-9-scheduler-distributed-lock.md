@@ -10,7 +10,7 @@ Scale-out 환경에서 스케줄러 중복 실행을 방지하기 위해 분산 
 
 ### 변경 사항
 
-**파일**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/scheduler/BufferRecoveryScheduler.java`
+**파일**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/scheduler/BufferRecoveryScheduler.java`
 
 #### 1. LockStrategy 주입 (CLAUDE.md Section 6: Constructor Injection)
 
@@ -103,7 +103,7 @@ public void redriveExpiredInflight() {
 
 ### 변경 사항
 
-**파일**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/scheduler/LikeSyncScheduler.java`
+**파일**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/scheduler/LikeSyncScheduler.java`
 
 #### 1. @Autowired(required=false) 제거 → @Nullable + Constructor Injection
 
@@ -175,7 +175,7 @@ public void localFlush() {
 
 ### 변경 사항
 
-**파일**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/scheduler/OutboxScheduler.java`
+**파일**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/scheduler/OutboxScheduler.java`
 
 #### Javadoc 추가: SKIP LOCKED로 분산 락 불필요
 

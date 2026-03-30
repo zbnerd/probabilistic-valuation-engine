@@ -2,7 +2,7 @@
 
 **버전**: 1.0
 **마지막 업데이트**: 2026-02-05
-**적용 범위**: MapleExpectation Production Operations
+**적용 범위**: probabilistic-valuation-engine Production Operations
 
 ---
 
@@ -549,7 +549,7 @@ SELECT
 
 ---
 
-*이 checklist는 MapleExpectation 프로젝트의 운영 안정성을 위해 작성되었습니다.*
+*이 checklist는 probabilistic-valuation-engine 프로젝트의 운영 안정성을 위해 작성되었습니다.*
 *모든 피드백은 `docs/98_Templates/ISSUE_TEMPLATE.md`를 통해 제출해주세요.*
 
 **버전 관리**:

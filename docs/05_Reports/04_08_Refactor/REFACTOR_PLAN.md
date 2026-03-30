@@ -1,4 +1,4 @@
-# MapleExpectation Refactoring Plan
+# probabilistic-valuation-engine Refactoring Plan
 
 > **5-Agent Council Approved:** Blue ✅ | Green ✅ | Yellow ✅ | Purple ✅ | Red ✅
 >
@@ -12,7 +12,7 @@
 
 ## Mission Statement
 
-Transform MapleExpectation into a **Clean Architecture** codebase while:
+Transform probabilistic-valuation-engine into a **Clean Architecture** codebase while:
 - ✅ Preserving all existing behavior (no regressions)
 - ✅ Maintaining performance posture (RPS ≥ 965, p99 ≤ 214ms)
 - ✅ Upholding resilience invariants (timeouts, circuit breaker, outbox)

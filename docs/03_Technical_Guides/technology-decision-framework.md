@@ -111,7 +111,7 @@ Proposed | Accepted | Deprecated | Superseded by [ADR-XXX]
 
 **Date:** 2025-10-15
 **Status:** ✅ Accepted
-**ADR:** [ADR-001: Adopt Java 21 Virtual Threads](../adr/ADR-001-java21-virtual-threads.md)
+**ADR:** [ADR-001: Adopt Java 21 Virtual Threads](../01_ADR/ADR-048-java-21-virtual-threads.md)
 
 #### Context
 
@@ -200,7 +200,7 @@ Proposed | Accepted | Deprecated | Superseded by [ADR-XXX]
 
 **Date:** 2025-10-20
 **Status:** ✅ Accepted
-**ADR:** [ADR-002: Spring Boot 3.5 as Framework](../adr/ADR-002-spring-boot-framework.md)
+**ADR:** [ADR-002: Spring Boot 3.5 as Framework](../01_ADR/ADR-049-spring-boot-3.5.4-adoption.md)
 
 #### Context
 
@@ -290,7 +290,7 @@ Proposed | Accepted | Deprecated | Superseded by [ADR-XXX]
 
 **Date:** 2025-10-25
 **Status:** ✅ Accepted
-**ADR:** [ADR-003: MySQL 8.0 for Persistence](../adr/ADR-003-mysql-persistence.md)
+**ADR:** [ADR-003: MySQL 8.0 for Persistence](../01_ADR/ADR-341-mysql-dependency-removal.md)
 
 #### Context
 
@@ -687,13 +687,13 @@ spring.redis.cluster.max-redirects: 3
 
 ---
 
-**Prepared By:** MapleExpectation Team
+**Prepared By:** probabilistic-valuation-engine Team
 **Date:** 2026-02-06
 **Review Frequency:** Quarterly
 **Next Review:** 2026-05-06
 
 **Related Documents:**
-- [ADR Index](../adr/)
+- [ADR Index](../01_ADR/)
 - [Load Test Report #266](../04_Reports/Load_Test_Report.md)
 - [Architecture Overview](../00_Start_Here/architecture.md)
 - [Business Model Canvas](./business-model-canvas.md)

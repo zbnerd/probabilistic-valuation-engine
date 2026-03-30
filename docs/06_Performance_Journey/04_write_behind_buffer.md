@@ -126,10 +126,10 @@ if (pendingCount.get() >= backpressureLimit) {
 
 **프리셋 계산이 순차 처리**되고 있었다. 3개 프리셋을 for 루프로 하나씩 계산:
 
-```java
-for (int presetNo = 1; presetNo <= 3; presetNo++) {
-    PresetExpectation preset = calculatePreset(equipmentData, presetNo);
-    results.add(preset);
+```kotlin
+for (presetNo in 1..3) {
+    val preset = calculatePreset(equipmentData, presetNo)
+    results.add(preset)
 }
 // 100ms × 3 = 300ms
 ```

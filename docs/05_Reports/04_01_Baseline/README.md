@@ -405,7 +405,7 @@ curl -s http://localhost:3000/api/health && echo "Grafana OK"
 ### Disaster Recovery Drill (Evidence: EVD-OP013)
 
 **Frequency**: Quarterly
-**Evidence Location**: `/home/maple/MapleExpectation/docs/05_Reports/DR_DRILL_Q1_2026.md`
+**Evidence Location**: `/home/maple/probabilistic-valuation-engine/docs/05_Reports/DR_DRILL_Q1_2026.md`
 
 ```bash
 # Run disaster recovery test
@@ -478,11 +478,11 @@ This section is invalidated if:
 
 ## Related Documentation (Evidence: EVD-OP017)
 
-- [Observability Guide](/home/maple/MapleExpectation/docs/04_Operations/observability.md) - Comprehensive monitoring setup
-- [Security Considerations](/home/maple/MapleExpectation/docs/04_Operations/security.md) - Security policies and access control
-- [On-Call Checklist](/home/maple/MapleExpectation/docs/05_Guides/ON_CALL_CHECKLIST.md) - Daily/weekly procedures
-- [Runbook](/home/maple/MapleExpectation/docs/04_Operations/runbook.md) - Incident response procedures
-- [Chaos Engineering](/home/maple/MapleExpectation/docs/02_Chaos_Engineering/) - N01-N18 nightmare scenarios
+- [Observability Guide](/home/maple/probabilistic-valuation-engine/docs/04_Operations/observability.md) - Comprehensive monitoring setup
+- [Security Considerations](/home/maple/probabilistic-valuation-engine/docs/04_Operations/security.md) - Security policies and access control
+- [On-Call Checklist](/home/maple/probabilistic-valuation-engine/docs/05_Guides/ON_CALL_CHECKLIST.md) - Daily/weekly procedures
+- [Runbook](/home/maple/probabilistic-valuation-engine/docs/04_Operations/runbook.md) - Incident response procedures
+- [Chaos Engineering](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/) - N01-N18 nightmare scenarios
 
 ## Fail If Wrong (Evidence: EVD-OP018)
 

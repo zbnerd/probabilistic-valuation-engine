@@ -8,7 +8,7 @@
 > **Documentation Version:** 1.0
 > **Compliance:** GDPR Article 32, OWASP Top 10 2021
 
-이 문서는 MapleExpectation 프로젝트의 보안 강화 규칙을 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 보안 강화 규칙을 정의합니다.
 
 ## Documentation Integrity Statement
 

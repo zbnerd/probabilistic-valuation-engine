@@ -9,7 +9,7 @@ keywords: [V2, V4, Facade, Decorator, ServiceModule, Dependency]
 
 ## Overview
 
-MapleExpectation 서비스 레이어는 **V2 (핵심 비즈니스)**와 **V4 (성능 강화)** 두 세대로 구성됩니다. 모듈 간 의존성 방향과 설계 패턴을 엄격히 준수해야 합니다.
+probabilistic-valuation-engine 서비스 레이어는 **V2 (핵심 비즈니스)**와 **V4 (성능 강화)** 두 세대로 구성됩니다. 모듈 간 의존성 방향과 설계 패턴을 엄격히 준수해야 합니다.
 
 ---
 
@@ -498,5 +498,5 @@ mysql -u root -p -e "SHOW TABLES LIKE '%outbox%';"
 ## Evidence Links
 
 - [service-modules.md](../../03_Technical_Guides/service-modules.md) - 전체 서비스 모듈 가이드
-- [ADR-014](../../adr/ADR-014-multi-module-cross-cutting-concerns.md) - 멀티 모듈 전환 결정
+- [ADR-014](../../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md) - 멀티 모듈 전환 결정
 - [WRK Final Summary](../../05_Reports/Portfolio_Enhancement_WRK_Final_Summary.md) - V2 vs V4 성능 비교

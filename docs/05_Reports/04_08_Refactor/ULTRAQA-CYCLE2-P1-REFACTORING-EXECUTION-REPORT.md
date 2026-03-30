@@ -343,7 +343,7 @@ grep -r "timeoutProperties.get" src/main/java/
 
 ## 7. ADR 연결
 
-- **[ADR-019](../adr/ADR-019-ultraqa-cycle2-solid-refactoring.md)** - ULTRAQA Cycle 2 SOLID 리팩토링 상세 결정
+- **[ADR-019](../01_ADR/ADR-019-ultraqa-cycle2-solid-refactoring.md)** - ULTRAQA Cycle 2 SOLID 리팩토링 상세 결정
 - **[CLAUDE.md](../CLAUDE.md)** - 섹션 4 SOLID 원칙
 
 ---

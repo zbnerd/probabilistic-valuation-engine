@@ -1,4 +1,4 @@
-# MapleExpectation 운영 가이드 (Runbook)
+# probabilistic-valuation-engine 운영 가이드 (Runbook)
 
 > **Last Updated:** 2026-03-26
 > **Documentation Version:** 2.0 (V5 Migration)
@@ -20,8 +20,8 @@
 This runbook is based on **production incident response** from 2025-2026:
 - P0 incidents: 23 resolution procedures validated (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
 - P1 nightmare issues: 7 distributed system problems resolved (Evidence: [P1 Report](../04_Reports/P1_Nightmare_Issues_Resolution_Report.md))
-- Graceful shutdown: 100% data preservation during deployments (Evidence: [ADR-008](../01_Adr/ADR-008-durability-graceful-shutdown.md))
-- **V5 Migration (2026-03)**: PostgreSQL, PGMQ, Advisory Lock adoption (Evidence: [ADR-027](../01_Adr/ADR-027-v5-postgresql-pgmq-migration.md))
+- Graceful shutdown: 100% data preservation during deployments (Evidence: [ADR-008](../01_ADR/ADR-008-durability-graceful-shutdown.md))
+- **V5 Migration (2026-03)**: PostgreSQL, PGMQ, Advisory Lock adoption (Evidence: [ADR-027](../01_ADR/ADR-027-v5-postgresql-pgmq-migration.md))
 
 ---
 

@@ -3,7 +3,7 @@
 > **분석 일자:** 2026-01-28
 > **분석 범위:** `src/main/java` 전체 (repository, service, controller, config 패키지)
 > **목표 RPS:** 1,000+ RPS (현재 235 RPS → 4배 확장)
-> **관련 이슈:** [#284](https://github.com/zbnerd/MapleExpectation/issues/284)
+> **관련 이슈:** [#284](https://github.com/zbnerd/probabilistic-valuation-engine/issues/284)
 > **분석자:** 5-Agent Council (Green Performance Lead)
 > **상태:** Accepted - Implementation In Progress
 > **검증 버전:** v1.2.0
@@ -510,7 +510,7 @@ This analysis report is **INVALID** if any of the following conditions are true:
 | 6 | Thread Pool size claim is false | `grep setMaxPoolSize ExecutorConfig.java` | PASS |
 | 7 | Connection Pool claim is false | `grep setMaximumPoolSize LockHikariConfig.java` | PASS |
 | 8 | Baseline RPS is not reproducible | `wrk` test produces 700-750 RPS | PASS |
-| 9 | Cache Stampede analysis is theoretical | Code inspection confirms no Single-flight | PASS |
+| 9 | Cache Stampede analysis is theoretical | Code inspection confirms no SingleFlight | PASS |
 | 10 | Hot Row Lock analysis assumes worst-case | LIKE pattern analysis confirms | PASS |
 
 ### Invalid If Wrong Statements
@@ -594,7 +594,7 @@ This analysis report is **INVALID** if any of the following conditions are true:
 
 3. **t3.small Specific:** Thread Pool and Connection Pool recommendations are calibrated for AWS t3.small (2 vCPU, 2GB RAM). Larger instances may require different tuning.
 
-4. **Read-Heavy Workload:** Analysis assumes MapleExpectation's typical read:write ratio of ~95:5. Write-heavy workloads would shift priorities.
+4. **Read-Heavy Workload:** Analysis assumes probabilistic-valuation-engine's typical read:write ratio of ~95:5. Write-heavy workloads would shift priorities.
 
 5. **MySQL 8.0 Only:** Connection Pool recommendations assume MySQL 8.0. Other databases (PostgreSQL, Oracle) have different connection semantics.
 
@@ -654,8 +654,8 @@ This analysis report is **INVALID** if any of the following conditions are true:
 > The `.join()` inside a task submitted to the same executor will block all threads."
 
 > "Cache Stampede (P0-4) is not theoretical. The N01 Chaos Test demonstrates:
-> - Without Single-flight: 100 requests → 100 API calls
-> - With Single-flight: 100 requests → 1 API call
+> - Without SingleFlight: 100 requests → 100 API calls
+> - With SingleFlight: 100 requests → 1 API call
 > See: docs/02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md"
 
 ### For SRE Reviewers
@@ -697,9 +697,9 @@ If any claim in this report is disputed:
 
 ## 관련 문서
 
-- [#284 대규모 트래픽 P0/P1 해결](https://github.com/zbnerd/MapleExpectation/issues/284)
-- [ADR-013: 대규모 트래픽 비동기 이벤트 파이프라인](../adr/ADR-013-high-throughput-event-pipeline.md)
-- [#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/MapleExpectation/issues/283)
+- [#284 대규모 트래픽 P0/P1 해결](https://github.com/zbnerd/probabilistic-valuation-engine/issues/284)
+- [ADR-013: 대규모 트래픽 비동기 이벤트 파이프라인](../01_ADR/ADR-013-high-throughput-event-pipeline.md)
+- [#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/probabilistic-valuation-engine/issues/283)
 - [N01 Thundering Herd Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md)
 - [N03 Thread Pool Exhaustion Test](../01_Chaos_Engineering/06_Nightmare/Results/N03-thread-pool-exhaustion-result.md)
 
@@ -712,7 +712,7 @@ If any claim in this report is disputed:
 | **Thread Pool 8→500** | +6200% capacity | +500MB heap | Low | Queue full errors → 0 |
 | **Connection Pool 30→150** | +400% DB throughput | +120MB connections | Low | Lock wait time -90% |
 | **thenCompose refactoring** | Removes deadlock | 0 | Medium | CompletableFutures chaining |
-| **Single-flight Extension** | -99% API calls | +10MB Redis | Medium | Cache stampede prevention |
+| **SingleFlight Extension** | -99% API calls | +10MB Redis | Medium | Cache stampede prevention |
 | **Like Count Sharding** | +800% UPDATE throughput | +90MB DB | High | Hot row lock elimination |
 
 ### Cost vs Performance Quantification
@@ -780,10 +780,10 @@ Thread-3: task3 → waiting for task1 (.join())
 **Problem:** 100 requests for same character → 100 Nexon API calls.
 
 **Evidence from N01 Test:**
-- Without Single-flight: 100 requests → 100 API calls
-- With Single-flight: 100 requests → 1 API call
+- Without SingleFlight: 100 requests → 100 API calls
+- With SingleFlight: 100 requests → 1 API call
 
-**Solution:** Extend Single-flight to `EquipmentResponse` level.
+**Solution:** Extend SingleFlight to `EquipmentResponse` level.
 
 ### Anti-Pattern 3: Hot Row UPDATE Lock Contention
 

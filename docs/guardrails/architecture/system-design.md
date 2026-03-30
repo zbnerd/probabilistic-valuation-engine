@@ -2,14 +2,14 @@
 id: GR-ARCH-001
 category: architecture
 severity: critical
-keywords: [Architecture, TieredCache, Single-flight, CircuitBreaker, GZIP, HA, Observability]
+keywords: [Architecture, TieredCache, SingleFlight, CircuitBreaker, GZIP, HA, Observability]
 ---
 
 # System Architecture Guardrails
 
 ## Overview
 
-MapleExpectation은 719 RPS 처리량, 1,000+ 동시 사용자를 지원하는 고가용성 분산 시스템 아키텍처를 따릅니다. 모든 아키텍처 결정은 **증거 기반(Evidence-based)**으로 검증되어야 합니다.
+probabilistic-valuation-engine은 719 RPS 처리량, 1,000+ 동시 사용자를 지원하는 고가용성 분산 시스템 아키텍처를 따릅니다. 모든 아키텍처 결정은 **증거 기반(Evidence-based)**으로 검증되어야 합니다.
 
 ---
 
@@ -42,7 +42,7 @@ private final TieredCacheManager tieredCache;
 
 public EquipmentData getEquipment(String ocid) {
     return tieredCache.get("equipment", ocid, () -> {
-        // L1 MISS -> L2 MISS -> Single-flight 로드
+        // L1 MISS -> L2 MISS -> SingleFlight 로드
         return fetchFromNexonApi(ocid);
     });
 }
@@ -52,14 +52,14 @@ public EquipmentData getEquipment(String ocid) {
 - L1(Caffeine): 5분 TTL, 로컬 메모리, < 1ms 응답
 - L2(Redis): 10분 TTL, 분산 캐시, < 5ms 응답
 - L2 HIT 시 L1 백필(Backfill) 필수
-- Single-flight 패턴으로 캐시 스탬프 방지
+- SingleFlight 패턴으로 캐시 스탬프 방지
 
 ### 출처
 - [architecture.md](../../00_Start_Here/architecture.md) - Section 3: Cache Architecture
 
 ---
 
-## GR-ARCH-002: Single-flight 패턴 필수
+## GR-ARCH-002: SingleFlight 패턴 필수
 
 ### DON'T (안티패턴)
 
@@ -76,7 +76,7 @@ public EquipmentData calculate(String ocid) {
 ### DO (베스트 프랙티스)
 
 ```java
-// Good: Single-flight로 중복 계산 방지
+// Good: SingleFlight로 중복 계산 방지
 private final SingleFlightExecutor<String, EquipmentData> singleFlight;
 
 public EquipmentData calculate(String ocid) {
@@ -309,7 +309,7 @@ public SecurityFilterChain filterChain(HttpSecurity http) {
 redis-cli --scan --pattern 'equipment:*' | wc -l  # L2 key count
 curl -s http://localhost:8080/actuator/metrics/cache.gets | jq
 
-# Single-flight 효율 검증
+# SingleFlight 효율 검증
 curl -s http://localhost:8080/actuator/metrics/singleflight.deduplication | jq
 
 # Circuit Breaker 상태 검증
@@ -328,5 +328,5 @@ redis-cli -p 26379 sentinel masters | grep mymaster
 
 - [architecture.md](../../00_Start_Here/architecture.md) - 전체 시스템 아키텍처
 - [WRK Final Summary](../../05_Reports/Portfolio_Enhancement_WRK_Final_Summary.md) - 719 RPS 성능 증거
-- [N01 Thundering Herd Test](../../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) - Single-flight 검증
+- [N01 Thundering Herd Test](../../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) - SingleFlight 검증
 - [N19 Recovery Report](../../05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md) - Outbox 복구 검증

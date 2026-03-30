@@ -910,7 +910,7 @@ public CompletableFuture<NexonApiCharacterData> fetchAndPublish(String ocid) {
 ## References
 
 ### Documentation
-- [ADR-018: Anti-Corruption Layer with Strategy Pattern](../adr/ADR-018-acl-strategy-pattern.md)
+- [ADR-018: Anti-Corruption Layer with Strategy Pattern](../01_ADR/ADR-018-acl-strategy-pattern.md)
 - [Issue #300: ACL Pipeline Implementation](../../issues/300)
 - [Issue #126: Pragmatic CQRS](../../issues/126) (Dependent feature)
 - [Issue #283: Scale-out Blockers Removal](../../issues/283) (Prerequisite)
@@ -938,4 +938,4 @@ public CompletableFuture<NexonApiCharacterData> fetchAndPublish(String ocid) {
 
 ---
 
-*This implementation sets a new architectural standard for the MapleExpectation project, demonstrating perfect SOLID compliance while delivering 5x performance improvements through the Anti-Corruption Layer pattern.*
+*This implementation sets a new architectural standard for the probabilistic-valuation-engine project, demonstrating perfect SOLID compliance while delivering 5x performance improvements through the Anti-Corruption Layer pattern.*

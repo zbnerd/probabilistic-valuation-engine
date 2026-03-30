@@ -387,7 +387,7 @@ Checkpoint:
 | **유연성** | 높음 (Dynamic SQL 가능) | 낮음 (EntityManager 제약) |
 | **복잡도** | 낮음 | 높음 (Flush, Clear 전략 필요) |
 
-**선택 이유**: MapleExpectation은 성능 최적화를 위해 JDBC Batch 선택
+**선택 이유**: probabilistic-valuation-engine은 성능 최적화를 위해 JDBC Batch 선택
 
 **JPA Batch 설정 (참고):**
 
@@ -454,7 +454,7 @@ public void insertAll(List<Equipment> all) {
 | **DB 부하** | 높음 (Outbox 테이블 조회) | 낮음 (Binlog만 읽음) |
 | **운영 오버헤드** | 높음 (Worker 관리) | 낮음 (Debezium 자동화) |
 
-**선택 이유**: MapleExpectation은 Spring Batch 기반 Outbox로 충분
+**선택 이유**: probabilistic-valuation-engine은 Spring Batch 기반 Outbox로 충분
 - 이미 Spring Batch 사용 중 (DonaionScheduler)
 - Redis Pub/Sub로 충분한 실시간성 (1초 이내)
 

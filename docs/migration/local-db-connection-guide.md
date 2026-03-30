@@ -154,7 +154,7 @@ psql -h localhost -p 5432 -U maple -d maple_expectation
 
 1. pgAdmin 실행
 2. **Add New Server**
-   - General → Name: `MapleExpectation Local`
+   - General → Name: `probabilistic-valuation-engine Local`
    - Connection:
      - Host: `localhost`
      - Port: `5432`

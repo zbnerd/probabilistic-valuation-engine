@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-MapleExpectation employs a **two-lane CI/CD strategy** to balance fast feedback with comprehensive quality assurance:
+probabilistic-valuation-engine employs a **two-lane CI/CD strategy** to balance fast feedback with comprehensive quality assurance:
 
 - **Fast Lane (CI Pipeline):** PR gates with 3-5 minute feedback loop
 - **Nightly Lane:** Full test suite including chaos and nightmare scenarios

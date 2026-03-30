@@ -199,7 +199,7 @@ orderedLockManager.executeWithLocks(
 
 #### 3.1 선택: Lock Ordering 전역 규칙 정의 및 강제
 
-MapleExpectation 프로젝트는 **선택지 3: Lock Ordering 전역 규칙 정의 및 강제**를 채택했습니다.
+probabilistic-valuation-engine 프로젝트는 **선택지 3: Lock Ordering 전역 규칙 정의 및 강제**를 채택했습니다.
 
 **결정 근거**:
 1. **Deadlock은 P0 장애**: 서비스 중단을 초래하므로 근원적 예방 필수

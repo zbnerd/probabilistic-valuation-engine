@@ -47,7 +47,7 @@
 
 **상태**: ✅ **DOCUMENTED** - 15+ 미문서화 동작 발견 및 완전 문서화 완료
 
-**파일**: `/home/maple/MapleExpectation/docs/05_Reports/IMPLICIT_BEHAVIORS_AUDIT.md`
+**파일**: `/home/maple/probabilistic-valuation-engine/docs/05_Reports/IMPLICIT_BEHAVIORS_AUDIT.md`
 
 | 카테고리 | 항목 | Code Anchor | Evidence | Status |
 |----------|------|-------------|----------|--------|
@@ -89,7 +89,7 @@ grep -r "retention" src/main/java --include="*.java" -i
 
 **상태**: ✅ **AUDITED** - 95개 Thread.sleep() 호출 발견 및 개선 계획 완료
 
-**파일**: `/home/maple/MapleExpectation/docs/05_Reports/NON_DETERMINISTIC_TEST_AUDIT_REPORT.md`
+**파일**: `/home/maple/probabilistic-valuation-engine/docs/05_Reports/NON_DETERMINISTIC_TEST_AUDIT_REPORT.md`
 
 | 위험도 | 파일 수 | Thread.sleep() 호출 | flakiness 확률 | 개선 완료 |
 |--------|---------|---------------------|-----------------|-----------|
@@ -140,7 +140,7 @@ grep -r "await()" src/test/java --include="*.java" | wc -l
 
 **상태**: ✅ **IDENTIFIED & PLANNED** - 3개 복합 장애 시나리오 식별 및 테스트 계획 완료
 
-**파일**: `/home/maple/MapleExpectation/docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N19-compound-failures.md`
+**파일**: `/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N19-compound-failures.md`
 
 | 시나리오 | Code Anchor | Evidence | 현재 상태 | 테스트 계획 |
 |----------|-------------|----------|----------|-------------|
@@ -238,7 +238,7 @@ grep "compound failure" docker/logs/application.log | tail -20
 
 **상태**: ✅ **DOCUMENTED** - 보안 고려사항 전체 문서화 완료
 
-**파일**: `/home/maple/MapleExpectation/docs/04_Operations/SECURITY_CONSIDERATIONS.md`
+**파일**: `/home/maple/probabilistic-valuation-engine/docs/04_Operations/SECURITY_CONSIDERATIONS.md`
 
 | 항목 | Code Anchor | Evidence | 상태 | 검증 방법 |
 |------|-------------|----------|------|----------|
@@ -284,7 +284,7 @@ grep -i "password\|token\|api_key" docker/logs/application.log | wc -l
 
 **상태**: ✅ **EXCELLENT** - Runbook 완비 및 On-call 체크리스트 완료
 
-**파일**: `/home/maple/MapleExpectation/docs/05_Guides/ON_CALL_CHECKLIST.md`
+**파일**: `/home/maple/probabilistic-valuation-engine/docs/05_Guides/ON_CALL_CHECKLIST.md`
 
 | 항목 | Code Anchor | Evidence | 상태 | 비고 |
 |------|-------------|----------|------|------|
@@ -532,13 +532,13 @@ curl -s http://localhost:9090/api/v1/query?query=maple_sync_queue_size | jq '.da
 ### Phase 2 완료 항목 (2026-02-05)
 
 - [x] **Security Considerations 문서화** (완료: 2026-02-05)
-  - 파일: `/home/maple/MapleExpectation/docs/04_Operations/SECURITY_CONSIDERATIONS.md`
+  - 파일: `/home/maple/probabilistic-valuation-engine/docs/04_Operations/SECURITY_CONSIDERATIONS.md`
   - 6개 보안 항목 전체 문서화
   - Code Anchor + Evidence ID 추가
   - 검증 명령어 포함
 
 - [x] **On-call Engineer Checklist 생성** (완료: 2026-02-05)
-  - 파일: `/home/maple/MapleExpectation/docs/05_Guides/ON_CALL_CHECKLIST.md`
+  - 파일: `/home/maple/probabilistic-valuation-engine/docs/05_Guides/ON_CALL_CHECKLIST.md`
   - 일일/주간 점검 항목 포함
   - 장애 대응 절차 (5단계)
   - Escalation path 정의 (L1 → L2 → L3)
@@ -551,7 +551,7 @@ curl -s http://localhost:9090/api/v1/query?query=maple_sync_queue_size | jq '.da
   - Evidence: EVD-IB003
 
 - [x] **Multi-failure 시나리오 계획 수립** (완료: 2026-02-05)
-  - 파일: `/home/maple/MapleExpectation/docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N19-compound-failures.md`
+  - 파일: `/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N19-compound-failures.md`
   - 3개 복합 장애 시나리오 식별
   - 테스트 전략 정의
   - Code Anchor 할당 (COD-MF001 ~ COD-MF003)

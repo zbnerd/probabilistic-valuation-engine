@@ -1,4 +1,4 @@
-# MapleExpectation Refactoring Completion Report
+# probabilistic-valuation-engine Refactoring Completion Report
 
 > **Report Date:** 2026-02-13
 > **Refactoring Period:** 2026-02-10 ~ 2026-02-13
@@ -409,7 +409,7 @@ BUILD SUCCESSFUL in 54s
 
 ## 8. Conclusion
 
-The refactoring completed for **Issue #282** and **ADR-014** represents a significant milestone in the MapleExpectation project's evolution toward a clean, scalable, and maintainable architecture.
+The refactoring completed for **Issue #282** and **ADR-014** represents a significant milestone in the probabilistic-valuation-engine project's evolution toward a clean, scalable, and maintainable architecture.
 
 **Key Achievements:**
 - ✅ Multi-module architecture established (5 modules)

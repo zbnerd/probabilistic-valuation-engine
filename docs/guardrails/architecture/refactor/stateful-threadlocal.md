@@ -77,4 +77,4 @@ public class DistributedLockOrderTracker {
 
 ## 출처
 - 문서: [docs/05_Reports/04_08_Refactor/STATEFUL_REFACTORING_TARGETS.md](../../../05_Reports/04_08_Refactor/STATEFUL_REFACTORING_TARGETS.md)
-- 관련 ADR: [ADR-006](../../../adr/ADR-006-redis-lock-lease-timeout-ha.md)
+- 관련 ADR: [ADR-006](../../../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md)

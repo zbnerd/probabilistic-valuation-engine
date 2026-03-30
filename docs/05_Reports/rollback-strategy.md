@@ -1045,7 +1045,7 @@ git reset --hard pre-phase-N
 git reset --soft pre-phase-N
 
 # Check branch protection rules
-gh api repos/zbnerd/MapleExpectation/branches/develop/protection
+gh api repos/zbnerd/probabilistic-valuation-engine/branches/develop/protection
 
 # Create rollback branch
 git checkout -b rollback/phase-N pre-phase-N

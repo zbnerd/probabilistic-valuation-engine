@@ -13,7 +13,7 @@
 
 ### Current Situation
 
-MapleExpectation runs on **Java 21 Virtual Threads** with the following HikariCP configuration:
+probabilistic-valuation-engine runs on **Java 21 Virtual Threads** with the following HikariCP configuration:
 
 **application-local.yml:**
 ```yaml

@@ -61,7 +61,7 @@
 **Enhancements**:
 - ✅ Fixed all ⚠️ checklist items (5 items → ✅)
 - ✅ Added Evidence IDs section with 8 evidence claims ([E1-E8])
-- ✅ Added ADR-003 reference for Tiered Cache
+- ✅ Added ADR-003 reference for TieredCache
 - ✅ Added Related ADR Documents table
 - ✅ Expanded Fail If Wrong section with 10 validation criteria ([FW-1] to [FW-10])
 - ✅ Added Outlier Handling methodology
@@ -136,7 +136,7 @@
 - **References**: wrk output, Prometheus metrics, Code snippets, Unit tests
 
 ### ADR References Added
-- **ADR-003**: Tiered Cache Singleflight
+- **ADR-003**: TieredCache Singleflight
 - **ADR-006**: Redis Lock Lease Timeout HA
 - **ADR-007**: AOP Async Cache Integration
 - **ADR-008**: Durability Graceful Shutdown

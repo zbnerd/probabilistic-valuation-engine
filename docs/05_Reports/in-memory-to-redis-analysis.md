@@ -2,7 +2,7 @@
 
 > **분석 일자:** 2026-02-18
 > **분석 범위:** 3개 In-Memory 상태 컴포넌트
-> **관련 이슈:** [#283](https://github.com/zbnerd/MapleExpectation/issues/283)
+> **관련 이슈:** [#283](https://github.com/zbnerd/probabilistic-valuation-engine/issues/283)
 > **분석자:** Oracle Agent (Medium Tier)
 > **상태:** Analysis Complete
 
@@ -41,7 +41,7 @@
 
 ### 1.1 컴포넌트 개요
 
-**파일:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/monitoring/copilot/pipeline/DeDuplicationCache.java`
+**파일:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/monitoring/copilot/pipeline/DeDuplicationCache.java`
 
 **역할:** Discord 알림 중복 방지 (Throttling)
 
@@ -212,7 +212,7 @@ public class RedisDeDuplicationCache {
 
 ### 2.1 컴포넌트 개요
 
-**파일:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/service/v2/starforce/StarforceLookupTableImpl.java`
+**파일:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/service/v2/starforce/StarforceLookupTableImpl.java`
 
 **역할:** 스타포스 강화 비용 기대값 캐시 (Markov Chain 사전 계산)
 
@@ -391,7 +391,7 @@ public class RedisStarforceLookupTable implements StarforceLookupTable {
 
 ### 3.1 컴포넌트 개요
 
-**파일:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/service/v2/shutdown/EquipmentPersistenceTracker.java`
+**파일:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/service/v2/shutdown/EquipmentPersistenceTracker.java`
 
 **역할:** Graceful Shutdown 시 비동기 저장 작업 추적
 
@@ -516,8 +516,8 @@ app.buffer.redis.enabled=true  # Redis 모드 활성화
 ```
 
 **구현 파일:**
-- `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/queue/persistence/RedisEquipmentPersistenceTracker.java`
-- `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/service/v2/shutdown/EquipmentPersistenceTracker.java`
+- `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/queue/persistence/RedisEquipmentPersistenceTracker.java`
+- `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/service/v2/shutdown/EquipmentPersistenceTracker.java`
 
 ### 3.6 권장 사항
 
@@ -729,10 +729,10 @@ public void trackOperation(String ocid, CompletableFuture<Void> future) {
 
 ## 8. 관련 문서
 
-- [Scale-out 방해 요소 전수 분석](/home/maple/MapleExpectation/docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
-- [CLAUDE.md Section 17: TieredCache](/home/maple/MapleExpectation/CLAUDE.md#L407)
-- [ADR-008: Graceful Shutdown](/home/maple/MapleExpectation/docs/01_Adr/ADR-008-durability-graceful-shutdown.md.backup)
-- [Service Modules Guide](/home/maple/MapleExpectation/docs/03_Technical_Guides/service-modules.md)
+- [Scale-out 방해 요소 전수 분석](/home/maple/probabilistic-valuation-engine/docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md)
+- [CLAUDE.md Section 17: TieredCache](/home/maple/probabilistic-valuation-engine/CLAUDE.md#L407)
+- [ADR-008: Graceful Shutdown](/home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-008-durability-graceful-shutdown.md.backup)
+- [Service Modules Guide](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/service-modules.md)
 
 ---
 

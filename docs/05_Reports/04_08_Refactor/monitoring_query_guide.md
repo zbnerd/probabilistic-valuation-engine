@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide provides a complete library of Prometheus and Loki queries for monitoring MapleExpectation performance, resilience, and system health. It is designed for quantitative validation during refactoring phases and production operations.
+This guide provides a complete library of Prometheus and Loki queries for monitoring probabilistic-valuation-engine performance, resilience, and system health. It is designed for quantitative validation during refactoring phases and production operations.
 
 **Related Documents:**
 - [Chaos Engineering Test Strategy](docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)

@@ -194,6 +194,6 @@ To diagnose the issue:
 
 ## Related Documents
 
-- [ADR-0345: Stateless Alert System](../adr/ADR-0345-stateless-alert-system.md)
+- [ADR-0345: Stateless Alert System](../01_ADR/ADR-0345-stateless-alert-system.md)
 - [CLAUDE.md](../CLAUDE.md)
 - [Discord Webhook Root Cause Analysis](./discord-webhook-root-cause-analysis.md)

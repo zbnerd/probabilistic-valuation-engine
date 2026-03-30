@@ -35,7 +35,7 @@
 | `PopularCharacterWarmupScheduler` | Cron (daily) | Cache warming for popular characters |
 | `BufferRecoveryScheduler` | Post-construct | Orphan key recovery |
 
-**Location:** `src/main/java/maple/MapleExpectation/scheduler/`
+**Location:** `src/main/java/maple/probabilistic-valuation-engine/scheduler/`
 
 ### Workers (Async Consumers)
 
@@ -134,7 +134,7 @@
 - `String`: L2 cache (equipment, OCID, expectation)
 - `Sorted Set`: Like buffer with timestamp scoring
 - `RLock`: Distributed locks
-- `RCountDownLatch`: Single-flight leader/follower
+- `RCountDownLatch`: SingleFlight leader/follower
 - `RBucket`: Rate limiting
 
 ### HTTP (External API)
@@ -260,7 +260,7 @@ resilience4j:
 - `CircuitBreakerIgnoreMarker` - Client exceptions (4xx)
 - `CircuitBreakerRecordMarker` - Server exceptions (5xx)
 
-### 3. TieredCache + Single-flight
+### 3. TieredCache + SingleFlight
 
 **Location:** `src/main/java/maple/expectation/global/cache/`
 
@@ -271,7 +271,7 @@ resilience4j:
 - `RestrictedCacheManager` - Cache with restrictions
 
 **Write Order:** L2 → L1 (consistency guarantee)
-**Single-flight:** Redisson RLock with Watchdog mode
+**SingleFlight:** Redisson RLock with Watchdog mode
 
 ### 4. AOP + Async
 
@@ -391,7 +391,7 @@ Client Request
        │
        ▼ MISS
 ┌──────────────────────────┐
-│ TieredCache              │ → Single-flight: Redis RLock
+│ TieredCache              │ → SingleFlight: Redis RLock
 └──────────────────────────┘
        │
        ├── Leader ──► Execute valueLoader

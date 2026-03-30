@@ -8,7 +8,7 @@
 
 ## Context
 
-MapleExpectation currently houses 22 chaos engineering and nightmare scenario tests in `module-app/src/test-legacy/`. These tests are:
+probabilistic-valuation-engine currently houses 22 chaos engineering and nightmare scenario tests in `module-app/src/test-legacy/`. These tests are:
 
 - **Long-running** (15-30 minutes total)
 - **Resource-intensive** (OOM, disk full, GC pause simulations)
@@ -257,10 +257,10 @@ module-chaos-test/
 
 ## References
 
-- [Architecture Documentation](/home/maple/MapleExpectation/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
-- [Quick Start Guide](/home/maple/MapleExpectation/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
-- [CI/CD Patterns](/home/maple/MapleExpectation/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
-- [Test Strategy](/home/maple/MapleExpectation/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
+- [Architecture Documentation](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
+- [Quick Start Guide](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
+- [CI/CD Patterns](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
+- [Test Strategy](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
 - [ADR-014: Multi-module Cross-cutting Concerns](ADR-014-multi-module-cross-cutting-concerns.md)
 
 ---

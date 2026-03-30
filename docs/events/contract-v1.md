@@ -7,7 +7,7 @@
 
 ## Purpose
 
-Define a standardized contract for all integration events in the MapleExpectation system. This ensures:
+Define a standardized contract for all integration events in the probabilistic-valuation-engine system. This ensures:
 
 - **Consistency:** All events follow the same structure and naming conventions
 - **Interoperability:** Events can be processed by any consumer without custom parsing logic
@@ -179,4 +179,4 @@ When payload structure changes:
 - [Event Compatibility Rules](./compatibility.md) - Backward compatibility guidelines
 - [Sample Events](./samples/) - Example event definitions
 - [IntegrationEvent.kt](../../module-core/src/main/kotlin/maple/expectation/core/domain/event/IntegrationEvent.kt) - Core implementation
-- [ADR-018](../adr/ADR-018-strategy-pattern-for-acl.md) - Anti-Corruption Layer strategy
+- [ADR-018](../01_ADR/ADR-018-strategy-pattern-for-acl.md) - Anti-Corruption Layer strategy

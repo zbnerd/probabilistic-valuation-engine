@@ -26,7 +26,7 @@ This Business Model Canvas is based on **actual production metrics** from 2025-2
 
 ## Overview
 
-MapleExpectation은 메이플스토리 장비 강화 비용을 계산하는 서비스로, 극한의 성능 최적화와 회복 탄력성을 통해 저비용 고효율 인프라에서 대규모 동시 사용자를 처리합니다.
+probabilistic-valuation-engine은 메이플스토리 장비 강화 비용을 계산하는 서비스로, 극한의 성능 최적화와 회복 탄력성을 통해 저비용 고효율 인프라에서 대규모 동시 사용자를 처리합니다.
 
 ---
 
@@ -176,7 +176,7 @@ External API:
 
 ### Performance Comparison
 
-| Aspect | MapleExpectation | Typical Service |
+| Aspect | probabilistic-valuation-engine | Typical Service |
 |--------|------------------|------------------|
 | **RPS** | 719 | ~50 |
 | **p50 Latency** | 164ms (Load) | ~100ms |
@@ -228,7 +228,7 @@ External API:
 
 | Channel | Purpose | URL |
 |---------|---------|-----|
-| **GitHub** | 코드 배포 | [Repository](https://github.com/zbnerd/MapleExpectation) |
+| **GitHub** | 코드 배포 | [Repository](https://github.com/zbnerd/probabilistic-valuation-engine) |
 | **Docker Hub** | 이미지 배포 | (TBD) |
 | **API Endpoint** | 서비스 제공 | localhost:8080 (dev) |
 

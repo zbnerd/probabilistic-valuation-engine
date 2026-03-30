@@ -51,7 +51,7 @@ The ADR-017 documentation demonstrates excellent architectural planning with str
 
 **Recommendation**: Execute load test before Slice 1 to establish true baseline:
 ```bash
-cd /home/maple/MapleExpectation/load-test
+cd /home/maple/probabilistic-valuation-engine/load-test
 wrk -t 4 -c 100 -d 30s -s wrk-v4-expectation.lua http://localhost:8080
 ```
 

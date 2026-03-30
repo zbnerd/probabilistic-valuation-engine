@@ -70,4 +70,4 @@ public GameCharacter saveCharacterWithCaching(String userIgn, String ocid) {
 - 문서: [docs/05_Reports/04_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md](../../../05_Reports/04_05_Incidents/P1_Nightmare_Issues_Resolution_Report.md)
 - 이슈: #226 (Connection Vampire)
 - Nightmare: ConnectionVampireNightmareTest
-- ADR: [ADR-010](../../../adr/ADR-010-outbox-pattern.md)
+- ADR: [ADR-010](../../../01_ADR/ADR-010-outbox-pattern.md)

@@ -191,7 +191,7 @@ public class LikeSyncService {
 - Extract `LikeSyncMetricsService` - metrics only
 - Keep `LikeSyncService` as coordinator
 
-### SRP-005: TieredCache - Caching + Single-flight + Pub/Sub (P1)
+### SRP-005: TieredCache - Caching + SingleFlight + Pub/Sub (P1)
 
 **File:** `src/main/java/maple/expectation/global/cache/TieredCache.java`
 
@@ -199,7 +199,7 @@ public class LikeSyncService {
 
 **Responsibilities Identified:**
 1. L1/L2 coordination (lines 108-132)
-2. Single-flight management (lines 230-262)
+2. SingleFlight management (lines 230-262)
 3. Distributed locking (lines 295-326)
 4. Cache invalidation Pub/Sub (lines 196-209)
 5. Metrics recording (lines 52-93, 395-402)
@@ -218,7 +218,7 @@ public class TieredCache implements Cache {
     // Line 169: Evict with Pub/Sub
     public void evict(Object key)
 
-    // Line 230: Single-flight
+    // Line 230: SingleFlight
     public <T> T get(Object key, Callable<T> valueLoader)
 
     // Line 302: Distributed locking

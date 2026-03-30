@@ -245,7 +245,7 @@ docs/01_ADR/
 ### 아키텍처 (Architecture)
 - ADR-041: Multi-Module Hexagonal Architecture DIP
 - ADR-042: V2/V4 Dual Generation Architecture
-- ADR-043: TieredCache Single-flight
+- ADR-043: TieredCache SingleFlight
 - ADR-044: LogicExecutor Zero Try-Catch
 - ADR-045: Virtual Threads Async Pipeline
 - ADR-046: Transactional Outbox Pattern

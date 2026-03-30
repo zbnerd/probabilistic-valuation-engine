@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-All Phase 2 objectives achieved. The MapleExpectation project now has a **Clean Architecture foundation** in place with proper package structure, base interfaces, and refined architectural rules.
+All Phase 2 objectives achieved. The probabilistic-valuation-engine project now has a **Clean Architecture foundation** in place with proper package structure, base interfaces, and refined architectural rules.
 
 ### Implementation Status
 

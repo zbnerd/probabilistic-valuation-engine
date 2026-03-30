@@ -33,14 +33,14 @@ Checked exception을 도메인 예외로 변환하는 `executeWithTranslation` �
 
 ### 1. 직접 try-catch 사용
 
-```java
+```kotlin
 // Bad - 직접 try-catch 사용
-public String badMethod() {
-    try {
-        return repository.findById(1L);
-    } catch (Exception e) {
-        log.error("Error", e);
-        return null;
+fun badMethod(): String? {
+    return try {
+        repository.findById(1L)
+    } catch (e: Exception) {
+        log.error("Error", e)
+        null
     }
 }
 ```
@@ -54,17 +54,17 @@ public String badMethod() {
 
 ### 2. try-finally 직접 사용
 
-```java
+```kotlin
 // Bad - 직접 try-finally 사용
-public void badMethod() {
-    RLock lock = redissonClient.getLock("key");
-    boolean acquired = false;
+fun badMethod() {
+    val lock = redissonClient.getLock("key")
+    var acquired = false
     try {
-        acquired = lock.tryLock();
+        acquired = lock.tryLock()
         // 작업 수행
     } finally {
-        if (acquired && lock.isHeldByCurrentThread()) {
-            lock.unlock();
+        if (acquired && lock.isHeldByCurrentThread) {
+            lock.unlock()
         }
     }
 }
@@ -77,13 +77,13 @@ public void badMethod() {
 
 ### 3. 예외 변환 시 RuntimeException 사용
 
-```java
+```kotlin
 // Bad - RuntimeException으로 변환
-public Object badMethod() {
-    try {
-        return externalApi.call();
-    } catch (IOException e) {
-        throw new RuntimeException(e);  // 예외 변환 안티패턴
+fun badMethod(): Any {
+    return try {
+        externalApi.call()
+    } catch (e: IOException) {
+        throw RuntimeException(e)  // 예외 변환 안티패턴
     }
 }
 ```
@@ -95,19 +95,19 @@ public Object badMethod() {
 
 ### 4. 람다 괄호 지옥 (Lambda Hell)
 
-```java
+```kotlin
 // Bad - 과도한 람다 중첩
-return executor.execute(() -> {
-    User user = repo.findById(id).orElseThrow(() -> new RuntimeException("..."));
-    if (user.isActive()) {
-        return otherService.process(user.getData().stream()
-            .filter(d -> d.isValid())
-            .map(d -> {
+return executor.execute({
+    val user = repo.findById(id).orElseThrow { RuntimeException("...") }
+    if (user.isActive) {
+        return otherService.process(user.data.stream()
+            .filter { it.isValid }
+            .map {
                 // ... complex logic ...
-                return d.toDto();
-            }).toList());
+                it.toDto()
+            }.toList())
     }
-}, context);
+}, context)
 ```
 
 **위험성:**
@@ -130,19 +130,19 @@ return executor.execute(() -> {
 
 ### 2. 패턴 1: execute (일반 실행)
 
-```java
+```kotlin
 // Good - LogicExecutor 사용
 @Service
 @RequiredArgsConstructor
-public class GoodService {
-    private final LogicExecutor executor;
-    private final Repository repository;
-
-    public String goodMethod(Long id) {
+class GoodService(
+    private val executor: LogicExecutor,
+    private val repository: Repository
+) {
+    fun goodMethod(id: Long): String {
         return executor.execute(
-            () -> repository.findById(id),
+            { repository.findById(id) },
             TaskContext.of("GoodService", "FindById", id)
-        );
+        )
     }
 }
 ```
@@ -153,14 +153,14 @@ public class GoodService {
 
 ### 3. 패턴 3: executeOrDefault (기본값 반환)
 
-```java
+```kotlin
 // Good - 조회 로직에 기본값 반환
-public Optional<User> findById(Long id) {
+fun findById(id: Long): Optional<User> {
     return executor.executeOrDefault(
-        () -> repository.findById(id),
+        { repository.findById(id) },
         Optional.empty(),
         TaskContext.of("UserService", "FindById", id)
-    );
+    )
 }
 ```
 
@@ -171,25 +171,25 @@ public Optional<User> findById(Long id) {
 
 ### 4. 패턴 5: executeWithFinally (자원 해제)
 
-```java
+```kotlin
 // Good - 분산 락 자원 해제
-public <T> T executeWithLock(String key, Supplier<T> task) {
-    RLock lock = redissonClient.getLock(key);
+fun <T> executeWithLock(key: String, task: Supplier<T>): T {
+    val lock = redissonClient.getLock(key)
     return executor.executeWithFinally(
-        () -> {
-            boolean acquired = lock.tryLock(30, TimeUnit.SECONDS);
+        {
+            val acquired = lock.tryLock(30, TimeUnit.SECONDS)
             if (!acquired) {
-                throw new ConcurrentModificationException("Lock acquisition failed");
+                throw ConcurrentModificationException("Lock acquisition failed")
             }
-            return task.get();
+            task.get()
         },
-        () -> {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
+        {
+            if (lock.isHeldByCurrentThread) {
+                lock.unlock()
             }
         },
         TaskContext.of("Lock", "Execute", key)
-    );
+    )
 }
 ```
 
@@ -199,28 +199,29 @@ public <T> T executeWithLock(String key, Supplier<T> task) {
 
 ### 5. 패턴 6: executeWithTranslation (예외 변환)
 
-```java
+```kotlin
 // Good - Checked exception을 도메인 예외로 변환
-public NexonApiCharacterResponse fetchCharacter(String ign) {
+fun fetchCharacter(ign: String): NexonApiCharacterResponse {
     return executor.executeWithTranslation(
-        () -> nexonApiClient.getCharacter(ign),
+        { nexonApiClient.getCharacter(ign) },
         ExceptionTranslator.forNexonApi(),
         TaskContext.of("NexonApi", "GetCharacter", ign)
-    );
+    )
 }
 
 // ExceptionTransformer 내부
-public static ExceptionTransformer<NexonApiCharacterResponse> forNexonApi() {
-    return cause -> {
-        if (cause instanceof IOException io) {
-            return new NexonApiTimeoutException(
+fun forNexonApi(): ExceptionTransformer<NexonApiCharacterResponse> {
+    return { cause ->
+        if (cause is IOException) {
+            NexonApiTimeoutException(
                 ErrorCode.API_TIMEOUT,
-                io,
+                cause,
                 ign
-            );
+            )
+        } else {
+            InternalServerException(ErrorCode.INTERNAL_ERROR, cause)
         }
-        return new InternalServerException(ErrorCode.INTERNAL_ERROR, cause);
-    };
+    }
 }
 ```
 
@@ -231,28 +232,28 @@ public static ExceptionTransformer<NexonApiCharacterResponse> forNexonApi() {
 
 ### 6. 람다 3줄 규칙 (Rule of Thumb)
 
-```java
+```kotlin
 // Bad (3줄 초과, 분기문 포함)
-return executor.execute(() -> {
-    User user = repo.findById(id);
-    if (user.isActive()) {
-        log.info("Active user: {}", user.getId());
-        return user.toDto();
+return executor.execute({
+    val user = repo.findById(id)
+    if (user.isActive) {
+        log.info("Active user: {}", user.id)
+        return user.toDto()
     }
-    return null;
-}, context);
+    return null
+}, context)
 
 // Good (메서드 추출: 선언적이고 깔끔함)
-return executor.execute(() -> this.processActiveUser(id), context);
+return executor.execute({ this.processActiveUser(id) }, context)
 
 // Private Helper Method
-private UserDto processActiveUser(Long id) {
-    User user = repo.findById(id);
-    if (!user.isActive()) {
-        return null;
+private fun processActiveUser(id: Long): UserDto? {
+    val user = repo.findById(id)
+    if (!user.isActive) {
+        return null
     }
-    log.info("Active user: {}", user.getId());
-    return user.toDto();
+    log.info("Active user: {}", user.id)
+    return user.toDto()
 }
 ```
 
@@ -262,15 +263,15 @@ private UserDto processActiveUser(Long id) {
 
 ### 7. Method Reference 우선
 
-```java
+```kotlin
 // Good (Method Reference)
-return executor.execute(this::processActiveUser, context);
+return executor.execute(::processActiveUser, context)
 
 // Good (Method Reference 체이닝)
 users.stream()
     .filter(User::isActive)
     .map(this::toDto)
-    .toList();
+    .toList()
 ```
 
 ## 허용 예외 (LogicExecutor 순환참조/구조적 제약)
@@ -289,50 +290,52 @@ users.stream()
 
 ### 전체 예시: Facade + LogicExecutor
 
-```java
+```kotlin
 @Facade
 @RequiredArgsConstructor
-public class GameCharacterFacade {
-    private final GameCharacterService gameCharacterService;
-    private final LogicExecutor executor;
-    private final DistributedLockStrategy lockStrategy;
-
-    public CharacterDto process(String ign) {
+class GameCharacterFacade(
+    private val gameCharacterService: GameCharacterService,
+    private val executor: LogicExecutor,
+    private val lockStrategy: DistributedLockStrategy
+) {
+    fun process(ign: String): CharacterDto {
         return executor.execute(
-            () -> lockStrategy.executeWithLock(
-                "character:" + ign,
-                () -> gameCharacterService.calculate(ign)
-            ),
+            {
+                lockStrategy.executeWithLock(
+                    "character:$ign",
+                    { gameCharacterService.calculate(ign) }
+                )
+            },
             TaskContext.of("GameCharacterFacade", "Process", ign)
-        );
+        )
     }
 }
 
 @Service
 @RequiredArgsConstructor
-public class GameCharacterService {
-    private final LogicExecutor executor;
-    private final CharacterRepository repository;
-    private final NexonApiClient nexonApiClient;
-
-    public CharacterDto calculate(String ign) {
+class GameCharacterService(
+    private val executor: LogicExecutor,
+    private val repository: CharacterRepository,
+    private val nexonApiClient: NexonApiClient
+) {
+    fun calculate(ign: String): CharacterDto {
         return executor.executeWithTranslation(
-            () -> {
-                Character character = repository.findById(ign)
-                    .orElseGet(() -> fetchFromNexonApi(ign));
-                return calculateCost(character);
+            {
+                val character = repository.findById(ign)
+                    .orElseGet { fetchFromNexonApi(ign) }
+                calculateCost(character)
             },
             ExceptionTranslator.forCharacterCalculation(),
             TaskContext.of("GameCharacterService", "Calculate", ign)
-        );
+        )
     }
 
-    private Character fetchFromNexonApi(String ign) {
+    private fun fetchFromNexonApi(ign: String): Character {
         return executor.executeWithTranslation(
-            () -> nexonApiClient.getCharacter(ign),
+            { nexonApiClient.getCharacter(ign) },
             ExceptionTranslator.forNexonApi(),
             TaskContext.of("GameCharacterService", "FetchFromNexon", ign)
-        );
+        )
     }
 }
 ```
@@ -362,14 +365,14 @@ public class GameCharacterService {
 
 ```bash
 # LogicExecutor 사용 확인
-grep -r "try {" src/main/java --include="*.java" | grep -v "DefaultLogicExecutor\|TraceAspect\|ExecutionPipeline"
+grep -r "try {" src/main/kotlin --include="*.kt" | grep -v "DefaultLogicExecutor\|TraceAspect\|ExecutionPipeline"
 
 # 람다 3줄 초과 확인
-grep -r "executor.execute" src/main/java --include="*.java" -A 5
+grep -r "executor.execute" src/main/kotlin --include="*.kt" -A 5
 
 # RuntimeException 사용 확인 (금지)
-grep -r "new RuntimeException" src/main/java --include="*.java"
+grep -r "RuntimeException" src/main/kotlin --include="*.kt"
 
 # TaskContext 사용 확인
-grep -r "TaskContext.of" src/main/java --include="*.java"
+grep -r "TaskContext.of" src/main/kotlin --include="*.kt"
 ```

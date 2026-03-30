@@ -1,10 +1,10 @@
 # Business Model Canvas
 
-**A Portfolio Project by MapleExpectation Team**
+**A Portfolio Project by probabilistic-valuation-engine Team**
 
 ## Overview
 
-This document outlines the Business Model Canvas for MapleExpectation, a sophisticated Spring Boot application that calculates MapleStory equipment upgrade costs using Nexon's Open API. The project demonstrates enterprise-grade architecture principles and is designed for resilience and scalability.
+This document outlines the Business Model Canvas for probabilistic-valuation-engine, a sophisticated Spring Boot application that calculates MapleStory equipment upgrade costs using Nexon's Open API. The project demonstrates enterprise-grade architecture principles and is designed for resilience and scalability.
 
 ## Mermaid Business Model Canvas
 

@@ -300,7 +300,7 @@ hikaricp_connections_pending{pool="MySQLLockPool"}
 |----------|-----|------|
 | Lock Health Monitoring (P0) | `lock-health-p0` | Lock 상태 모니터링 (N02, N07, N09) |
 | JVM (Micrometer) | `e5d7f052-eaa3-4454-906b-e0a03a27c794` | JVM 메트릭 |
-| MapleExpectation Application Logs | `maple-expectation-logs` | 애플리케이션 로그 |
+| probabilistic-valuation-engine Application Logs | `maple-expectation-logs` | 애플리케이션 로그 |
 
 #### Lock Health Dashboard 패널
 - **Lock Ordering Violation Count**: N09 관련, 0이어야 정상

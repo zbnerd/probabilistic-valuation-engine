@@ -58,7 +58,7 @@ private final ConcurrentHashMap<String, InFlightEntry<T>> inFlight = new Concurr
 
 **영향:**
 - 인스턴스 B에 동일 요청 시 2번 계산
-- Single-flight 효과 상실
+- SingleFlight 효과 상실
 - API 오버로드 N배
 
 ### 5. volatile 플래그로 Shutdown 동기화

@@ -1,6 +1,6 @@
 # ADR (Architecture Decision Records)
 
-이 디렉토리는 MapleExpectation 프로젝트의 중요한 아키텍처 결정과 기술 스택 선택을 문서화합니다.
+이 디렉토리는 probabilistic-valuation-engine 프로젝트의 중요한 아키텍처 결정과 기술 스택 선택을 문서화합니다.
 
 ## ADR 목록
 

@@ -211,7 +211,7 @@ This dashboard report is **INVALID** if any of the following conditions are true
 | **Throughput** | 965 x 300KB | 289.5 MB/s |
 | **Equivalent RPS** | 289.5 MB/s / 2KB | **144,750** |
 
-**Conclusion**: MapleExpectation processes equivalent of ~145K RPS for typical 2KB APIs.
+**Conclusion**: probabilistic-valuation-engine processes equivalent of ~145K RPS for typical 2KB APIs.
 
 ---
 

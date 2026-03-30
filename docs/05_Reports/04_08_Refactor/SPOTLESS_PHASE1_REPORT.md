@@ -1,14 +1,14 @@
 # Spotless Code Formatting - Phase 1 Baseline Report
 
 **Date**: 2025-02-07
-**Mission**: Implement Spotless code formatting for MapleExpectation project
+**Mission**: Implement Spotless code formatting for probabilistic-valuation-engine project
 **Status**: ✅ COMPLETE (Ready for Review)
 
 ---
 
 ## Executive Summary
 
-Spotless code formatting has been successfully configured and applied to the MapleExpectation codebase. This Phase 1 baseline establishes Google Java Format as the project-wide standard, ensuring consistent code style across 594 Java files.
+Spotless code formatting has been successfully configured and applied to the probabilistic-valuation-engine codebase. This Phase 1 baseline establishes Google Java Format as the project-wide standard, ensuring consistent code style across 594 Java files.
 
 ### Key Results
 
@@ -224,7 +224,7 @@ The Spotless configuration has been added to `build.gradle` but is **not yet int
 
 ### FORMATTING_STANDARDS.md
 
-Location: `/home/maple/MapleExpectation/do../05_Reports/04_08_Refactor/FORMATTING_STANDARDS.md`
+Location: `/home/maple/probabilistic-valuation-engine/do../05_Reports/04_08_Refactor/FORMATTING_STANDARDS.md`
 
 **Contents**:
 - Spotless configuration details
@@ -332,4 +332,4 @@ All Java files reformatted to Google Java Format standard, including:
 
 **Generated**: 2025-02-07
 **Tool**: Spotless 6.25.0 with Google Java Format
-**Project**: MapleExpectation (probabilistic-valuation-engine)
+**Project**: probabilistic-valuation-engine (probabilistic-valuation-engine)

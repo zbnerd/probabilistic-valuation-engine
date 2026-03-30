@@ -1,5 +1,5 @@
 # QA Monitoring Checklist
-## Zero Script QA - MapleExpectation
+## Zero Script QA - probabilistic-valuation-engine
 
 ---
 
@@ -36,7 +36,7 @@
 
 ### Terminal 1: Real-Time Logs
 - [ ] Open new terminal window
-- [ ] Navigate to project root: `cd /home/geek/maple_expectation/MapleExpectation`
+- [ ] Navigate to project root: `cd /home/geek/maple_expectation/probabilistic-valuation-engine`
 - [ ] Run: `docker compose logs -f 2>&1 | tee /tmp/qa_logs_$(date +%Y%m%d_%H%M%S).txt`
 - [ ] Verify output is streaming (should see existing container logs)
 - [ ] Keep terminal open during entire test
@@ -52,7 +52,7 @@
 - [ ] Open new terminal window
 - [ ] Navigate to project root
 - [ ] Run: `./gradlew bootRun --args='--spring.profiles.active=local'`
-- [ ] Look for "Started MapleExpectationApplication" in Terminal 1 logs
+- [ ] Look for "Started probabilistic-valuation-engineApplication" in Terminal 1 logs
 - [ ] Verify port 8080 is listening: `lsof -i :8080`
 - [ ] Keep terminal open (application running)
 
@@ -87,7 +87,7 @@ In Terminal 1, watch for these messages:
 
 - [ ] Application Started
   ```
-  Started MapleExpectationApplication in X seconds
+  Started probabilistic-valuation-engineApplication in X seconds
   ```
 
 ### Quick Sanity Check
@@ -359,7 +359,7 @@ docker exec -it maple-mysql mysql -u root -p -e "SELECT 1"
 ```
 
 ### Slow Startup (> 2 minutes)
-**Symptom**: "Started MapleExpectationApplication" appears after 2+ minutes
+**Symptom**: "Started probabilistic-valuation-engineApplication" appears after 2+ minutes
 
 ```bash
 # Check database initialization
@@ -550,7 +550,7 @@ lsof -i :8080
 
 ### 검증 (Verification) - [V#]
 - **[V1]** 컨테이너 상태: `docker compose ps`로 검증
-- **[V2]** 앱 시작 로그: "Started MapleExpectationApplication"
+- **[V2]** 앱 시작 로그: "Started probabilistic-valuation-engineApplication"
 - **[V3]** API 응답: `curl -X GET http://localhost:8080/api/health` → HTTP 200
 
 ### GitHub Issues (이슈 추적) - [I#]
@@ -638,7 +638,7 @@ ls -la src/main/resources/application-*.yml
 ## 문서 관리 (Document Management)
 
 ### 피드백 제출
-- **GitHub Issues**: https://github.com/your-org/MapleExpectation/issues
+- **GitHub Issues**: https://github.com/your-org/probabilistic-valuation-engine/issues
 - **라벨**: `documentation`, `qa`, `phase-4`
 
 ### 업데이트 절차
@@ -654,7 +654,7 @@ ls -la src/main/resources/application-*.yml
 ---
 
 **Checklist Version**: 1.1
-**Project**: MapleExpectation
+**Project**: probabilistic-valuation-engine
 **Phase**: Phase 4 (API Testing)
 **Date**: 2026-01-30
 **Last Updated**: 2026-02-05

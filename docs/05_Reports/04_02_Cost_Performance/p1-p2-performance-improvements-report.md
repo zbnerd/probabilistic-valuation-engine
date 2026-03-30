@@ -637,8 +637,8 @@ c027eb9 fix: #230 LogicExecutor cause 체인 보존 검증
 
 ```bash
 # Repository 클론
-git clone https://github.com/zbnerd/MapleExpectation.git
-cd MapleExpectation
+git clone https://github.com/zbnerd/probabilistic-valuation-engine.git
+cd probabilistic-valuation-engine
 
 # 해당 브랜치 체크아웃
 git checkout feature/p1-p2-performance-improvements

@@ -2,7 +2,7 @@
 
 > **분석 일자:** 2026-01-28
 > **분석 범위:** `src/main/java` 전체 (global, service, scheduler, config, aop, monitoring 패키지)
-> **관련 이슈:** [#283](https://github.com/zbnerd/MapleExpectation/issues/283)
+> **관련 이슈:** [#283](https://github.com/zbnerd/probabilistic-valuation-engine/issues/283)
 > **분석자:** 5-Agent Council
 > **상태:** Accepted
 > **검증 버전:** v1.2.0
@@ -197,7 +197,7 @@ private final ConcurrentHashMap<String, InFlightEntry<T>> inFlight = new Concurr
 | 항목 | 내용 |
 |------|------|
 | **문제** | 진행 중인 계산을 인스턴스 메모리에만 저장. 인스턴스 B에 동일 요청 시 2번 계산 |
-| **영향** | Single-flight 효과 상실, 계산 중복 N배, API 오버로드 |
+| **영향** | SingleFlight 효과 상실, 계산 중복 N배, API 오버로드 |
 | **해결** | Redis 기반 Distributed Single-Flight 구현 (`single-flight:{keyHash}` + TTL) |
 
 ---
@@ -571,10 +571,10 @@ public void stop() {
 
 ## 관련 문서
 
-- [#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/MapleExpectation/issues/283)
-- [#282 멀티 모듈 전환](https://github.com/zbnerd/MapleExpectation/issues/282)
-- [#126 Pragmatic CQRS](https://github.com/zbnerd/MapleExpectation/issues/126)
-- [ADR-014: 멀티 모듈 전환](../adr/ADR-014-multi-module-cross-cutting-concerns.md)
+- [#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/probabilistic-valuation-engine/issues/283)
+- [#282 멀티 모듈 전환](https://github.com/zbnerd/probabilistic-valuation-engine/issues/282)
+- [#126 Pragmatic CQRS](https://github.com/zbnerd/probabilistic-valuation-engine/issues/126)
+- [ADR-014: 멀티 모듈 전환](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
 
 ---
 

@@ -317,6 +317,6 @@ curl -s http://localhost:8080/actuator/metrics | jq '.names[] | select(. | conta
 ```
 
 ### 이슈
-- **[#285 V2 좋아요 엔드포인트 P0/P1 전수 분석](https://github.com/zbnerd/MapleExpectation/issues/285)**
-- **[#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/MapleExpectation/issues/283)**
+- **[#285 V2 좋아요 엔드포인트 P0/P1 전수 분석](https://github.com/zbnerd/probabilistic-valuation-engine/issues/285)**
+- **[#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/probabilistic-valuation-engine/issues/283)**
 - **[like-endpoint-p0p1-analysis.md](../05_Reports/04_08_Refactor/like-endpoint-p0p1-analysis.md)**

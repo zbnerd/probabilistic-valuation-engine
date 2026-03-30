@@ -82,8 +82,8 @@
 
 ## 관련 문서
 
-- [ADR-003](../../../01_ADR/ADR-003-tiered-cache-singleflight.md) - Tiered Cache & SingleFlight Pattern
+- [ADR-003](../../../01_ADR/ADR-003-tiered-cache-singleflight.md) - TieredCache & SingleFlight Pattern
 - [infrastructure.md](../../../03_Technical_Guides/infrastructure.md) Section 17: TieredCache
-- [cache-sequence.md](../../../04_Sequence_Diagrams/cache-sequence.md) - TieredCache Single-flight 시퀀스
+- [cache-sequence.md](../../../04_Sequence_Diagrams/cache-sequence.md) - TieredCache SingleFlight 시퀀스
 - [expectation-cache-sequence.md](../../../04_Sequence_Diagrams/expectation-cache-sequence.md) - Two-Phase Snapshot 흐름
 - [p1-p2-performance-improvements-report.md](../../../05_Reports/04_02_Cost_Performance/p1-p2-performance-improvements-report.md) - PER 알고리즘

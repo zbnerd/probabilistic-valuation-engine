@@ -138,6 +138,6 @@ docker-compose down
 
 ## Documentation References
 
-- **Full Architecture**: [chaos-test-module-architecture.md](/home/maple/MapleExpectation/docs/03_Technical_Guides/chaos-test-module-architecture.md)
-- **Test Strategy**: [TEST_STRATEGY.md](/home/maple/MapleExpectation/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
-- **Nightmare Scenarios**: [docs/02_Chaos_Engineering/06_Nightmare/](/home/maple/MapleExpectation/docs/02_Chaos_Engineering/06_Nightmare/)
+- **Full Architecture**: [chaos-test-module-architecture.md](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/chaos-test-module-architecture.md)
+- **Test Strategy**: [TEST_STRATEGY.md](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
+- **Nightmare Scenarios**: [docs/02_Chaos_Engineering/06_Nightmare/](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/06_Nightmare/)

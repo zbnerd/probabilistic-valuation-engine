@@ -1,6 +1,6 @@
-# MapleExpectation - Closed Issues PDCA Completion Report
+# probabilistic-valuation-engine - Closed Issues PDCA Completion Report
 
-> **Project**: MapleExpectation (Spring Boot 3.5.4, Java 21)
+> **Project**: probabilistic-valuation-engine (Spring Boot 3.5.4, Java 21)
 >
 > **Scope**: All 15 Priority Issues + 8 Secondary Issues
 >
@@ -16,7 +16,7 @@
 
 ## Executive Summary
 
-This report documents the PDCA cycle completion for **23 closed issues** spanning 5 phases of MapleExpectation's development roadmap. The project has successfully implemented critical infrastructure, security, resilience, and performance improvements with an **overall design-implementation match rate of 91%**.
+This report documents the PDCA cycle completion for **23 closed issues** spanning 5 phases of probabilistic-valuation-engine's development roadmap. The project has successfully implemented critical infrastructure, security, resilience, and performance improvements with an **overall design-implementation match rate of 91%**.
 
 ### Key Achievements
 
@@ -452,7 +452,7 @@ Two independent agents conducted comprehensive analysis:
 
 **Implemented**:
 - ✅ SingleFlightExecutor: Generic leader-follower pattern
-- ✅ TieredCache.get(key, Callable): Automatic single flight
+- ✅ TieredCache.get(key, Callable): Automatic SingleFlight
 - ✅ ProbabilisticCache: PER (Probabilistic Early Revalidation) pattern
 - ✅ ProbabilisticCacheAspect: Transparent activation
 - ✅ ADR-003: Design documented

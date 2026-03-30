@@ -1,4 +1,4 @@
-# MapleExpectation 종합 데이터 흐름 다이어그램
+# probabilistic-valuation-engine 종합 데이터 흐름 다이어그램
 
 > **작성일:** 2026-03-10
 > **분석 방식:** 실제 코드베이스 심층 분석 (4개 에이전트 병렬 분석)
@@ -29,7 +29,7 @@
 
 ### 1.3 모듈 구조 (settings.gradle 기반)
 ```
-MapleExpectation/
+probabilistic-valuation-engine/
 ├── module-core/       # 도메인 모델, Port 인터페이스
 ├── module-common/     # 예외, 유틸리티, 응답 타입
 ├── module-infra/      # 인프라 구현체 (Kotlin)
@@ -228,7 +228,7 @@ sequenceDiagram
             TieredCache->>L1: l1.put(key, value) [Backfill]
             TieredCache-->>CacheCoord: 캐시된 결과
         else L2 MISS
-            %% Single-flight 분산 락
+            %% SingleFlight 분산 락
             TieredCache->>SF: tryLock(cache:sf:key)
             alt Lock 획득 (Leader)
                 SF-->>TieredCache: acquired=true
@@ -303,7 +303,7 @@ flowchart TB
         Backfill["l1.put(key, value)<br/>(Backfill)"]
     end
 
-    subgraph SingleFlight["Single-flight (분산 락)"]
+    subgraph SingleFlight["SingleFlight (분산 락)"]
         LockKey["lockKey = cache:sf:name:key"]
         TryLock["redisOperationPort.tryLock()"]
         LockCheck{"acquired?"}
@@ -376,7 +376,7 @@ flowchart TB
     end
 
     subgraph Usage["사용 사례"]
-        SingleFlight["Single-flight 락<br/>(캐시 스탬프 방지)"]
+        SingleFlight["SingleFlight 락<br/>(캐시 스탬프 방지)"]
         LeaderElection["리더 선출<br/>(캐릭터 동기화)"]
         CriticalSection["임계 영역 보호"]
     end
@@ -754,7 +754,7 @@ sequenceDiagram
 | **Strategy** | 락, 결제 | `LockStrategy`, `PaymentStrategy` |
 | **Factory** | 계산기 생성 | `EquipmentExpectationCalculatorFactory` |
 | **Template Method** | 실행 | `LogicExecutor` (6가지 패턴) |
-| **Single-flight** | 캐시 | `TieredCache` + Redis Lock |
+| **SingleFlight** | 캐시 | `TieredCache` + Redis Lock |
 | **Circuit Breaker** | 외부 API | `Resilience4j` + PostgreSQL 상태 머신 |
 | **State Machine** | PostgreSQL 상태 | `HEALTHY` → `DEGRADED` → `RECOVERING` |
 | **Port-Adapter** | 의존성 역전 | `Core Port` ↔ `Infra Adapter` |

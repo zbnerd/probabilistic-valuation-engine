@@ -235,7 +235,7 @@ import maple.expectation.global.error.exception.marker.CircuitBreakerIgnoreMarke
 
 **Step 1:** marker 패키지 확인
 ```bash
-find /home/maple/MapleExpectation -name "CircuitBreakerIgnoreMarker.java" -o -name "CircuitBreakerRecordMarker.java"
+find /home/maple/probabilistic-valuation-engine -name "CircuitBreakerIgnoreMarker.java" -o -name "CircuitBreakerRecordMarker.java"
 ```
 
 **Step 2:** marker 패키지를 module-common으로 이동 (또는 생성)
@@ -336,7 +336,7 @@ module-domain
 
 ```bash
 # 1. marker 패키지가 있는지 확인
-find /home/maple/MapleExpectation -name "*Marker.java"
+find /home/maple/probabilistic-valuation-engine -name "*Marker.java"
 
 # 2. module-common에 marker 패키지 생성
 mkdir -p module-common/src/main/java/maple/expectation/common/resilience/marker
@@ -439,10 +439,10 @@ dependencies {
 
 ## 9. 참조 문서
 
-- **ADR-014**: `/home/maple/MapleExpectation/docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md`
+- **ADR-014**: `/home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md`
 - **ADR-017**: Equipment Domain Extraction (현재 진행 중)
-- **#126 Pragmatic CQRS**: https://github.com/zbnerd/MapleExpectation/issues/126
-- **CLAUDE.md**: `/home/maple/MapleExpectation/CLAUDE.md`
+- **#126 Pragmatic CQRS**: https://github.com/zbnerd/probabilistic-valuation-engine/issues/126
+- **CLAUDE.md**: `/home/maple/probabilistic-valuation-engine/CLAUDE.md`
 
 ---
 

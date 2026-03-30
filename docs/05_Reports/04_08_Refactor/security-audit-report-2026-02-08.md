@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-08
 **Auditor:** Security Reviewer (Red Agent)
-**Project:** MapleExpectation
+**Project:** probabilistic-valuation-engine
 **Version:** 0.0.1-SNAPSHOT
 
 ---
@@ -11,7 +11,7 @@
 
 ### Risk Level: MEDIUM
 
-**Overall Assessment:** The MapleExpectation application demonstrates **strong security practices** with proper implementation of authentication, rate limiting, input validation, and data protection. However, several **MEDIUM and LOW severity issues** require attention to further strengthen the security posture.
+**Overall Assessment:** The probabilistic-valuation-engine application demonstrates **strong security practices** with proper implementation of authentication, rate limiting, input validation, and data protection. However, several **MEDIUM and LOW severity issues** require attention to further strengthen the security posture.
 
 ### Summary of Findings
 
@@ -89,13 +89,13 @@ private void validateSecretKeyForProduction() {
 
 **Minor Issue - LOW:**
 - `.env` file has `644` permissions (readable by group)
-  - **Location:** `/home/maple/MapleExpectation/.env`
+  - **Location:** `/home/maple/probabilistic-valuation-engine/.env`
   - **Fix:** `chmod 600 .env` (owner read/write only)
 
 **Recommendations:**
 ```bash
 # Fix .env file permissions
-chmod 600 /home/maple/MapleExpectation/.env
+chmod 600 /home/maple/probabilistic-valuation-engine/.env
 ```
 
 ---
@@ -506,7 +506,7 @@ ConsumeResult result = executor.executeOrDefault(
 
 **Fix:**
 ```bash
-chmod 600 /home/maple/MapleExpectation/.env
+chmod 600 /home/maple/probabilistic-valuation-engine/.env
 ```
 
 ---
@@ -665,7 +665,7 @@ public void validateApiKey() {
 
 ## 11. Conclusion
 
-MapleExpectation demonstrates **strong security practices** with proper implementation of:
+probabilistic-valuation-engine demonstrates **strong security practices** with proper implementation of:
 
 - ✅ JWT authentication with refresh token rotation
 - ✅ Comprehensive rate limiting (IP + User-based)

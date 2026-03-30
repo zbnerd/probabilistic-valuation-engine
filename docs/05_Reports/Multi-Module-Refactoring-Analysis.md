@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This report analyzes the current state of MapleExpectation's multi-module architecture and provides a comprehensive assessment for the upcoming major refactoring. The codebase currently consists of **5 modules** with **613 total Java files** across module-app (342 files), module-infra (177 files), module-core (59 files), and module-common (35 files).
+This report analyzes the current state of probabilistic-valuation-engine's multi-module architecture and provides a comprehensive assessment for the upcoming major refactoring. The codebase currently consists of **5 modules** with **613 total Java files** across module-app (342 files), module-infra (177 files), module-core (59 files), and module-common (35 files).
 
 **Key Finding:** The multi-module structure established in ADR-035 is largely in place, but **module-app remains bloated** with 342 files containing mixed concerns including infrastructure implementations that should reside in module-infra.
 
@@ -83,7 +83,7 @@ module-chaos-test (test-only, depends on all)
 | `domain/repository/` | Repository interfaces | 9 interfaces |
 | `domain/nexon/` | Nexon API data models | - |
 | `domain/v2/` | JPA entities | 9 entities |
-| `infrastructure/concurrency/` | Single-flight executors | 3 |
+| `infrastructure/concurrency/` | SingleFlight executors | 3 |
 | `infrastructure/resilience/` | Resilience patterns | 7 |
 | `infrastructure/filter/` | MDC filter | 1 |
 | `infrastructure/external/` | External API infrastructure | - |

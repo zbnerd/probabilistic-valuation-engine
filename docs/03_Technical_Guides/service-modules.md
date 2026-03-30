@@ -7,7 +7,7 @@
 > **Documentation Version:** 1.0
 > **Production Status:** Active (V2 stable, V4 deployed and validated)
 >
-> **Related ADRs:** [ADR-011](../adr/ADR-011-controller-v4-optimization.md), [ADR-014](../adr/ADR-014-multi-module-cross-cutting-concerns.md)
+> **Related ADRs:** [ADR-011](../01_ADR/ADR-011-controller-v4-optimization.md), [ADR-014](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
 
 서비스 레이어의 모듈 구조와 각 모듈의 역할, 핵심 클래스, 적용된 설계 패턴을 정리한 가이드입니다.
 
@@ -15,7 +15,7 @@
 
 This guide is based on **production architecture validation** and module evolution history:
 - V4 performance validated: 719 RPS vs V2 95 RPS cold cache (Evidence: [WRK Summary](../04_Reports/WRK_Final_Summary.md))
-- Single-flight effectiveness: 99% deduplication rate (Evidence: [N01 Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md))
+- SingleFlight effectiveness: 99% deduplication rate (Evidence: [N01 Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md))
 - Outbox recovery: 2.1M events processed in 47min (Evidence: [N19 Recovery](../04_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md))
 
 ---
@@ -27,7 +27,7 @@ This guide is based on **production architecture validation** and module evoluti
 | **Facade Pattern** | 복잡한 하위 시스템을 단순화된 인터페이스로 제공하는 구조 패턴 |
 | **Decorator Pattern** | 객체에 동적으로 책임을 추가하는 구조 패턴. 장비 강화 비용 누적 계산에 활용 |
 | **Strategy Pattern** | 알고리즘군을 정의하고 각각을 캡슐화하여 교체 가능하게 만드는 패턴 |
-| **Single-flight** | 동일 요청이 동시에 들어오면 단일 실행으로 중복 계산 방지하는 동시성 패턴 |
+| **SingleFlight** | 동일 요청이 동시에 들어오면 단일 실행으로 중복 계산 방지하는 동시성 패턴 |
 | **Write-Behind** | 쓰기 요청을 버퍼에 담아두고 비동기로 일괄 처리하는 지연 쓰기 패턴 |
 | **Transactional Outbox** | 트랜잭션과 메시지 전송의 원자성을 보장하기 위해 비즈니스 변경과 메시지를 동일한 DB 트랜잭션에 저장하는 패턴 |
 | **Compensation Transaction** | 실패한 트랜잭션의 효과를 취소하는 보상 작업 |
@@ -43,7 +43,7 @@ This guide is based on **production architecture validation** and module evoluti
 > **Why Two Generations:** V2 provides stable business logic; V4 adds performance optimizations without disrupting V2.
 > **Module Count Rationale:** 15 V2 modules for domain separation; 6 V4 modules for cross-cutting concerns.
 
-MapleExpectation의 서비스 레이어는 **V2 (핵심 비즈니스)**와 **V4 (성능 강화)** 두 세대로 구성됩니다.
+probabilistic-valuation-engine의 서비스 레이어는 **V2 (핵심 비즈니스)**와 **V4 (성능 강화)** 두 세대로 구성됩니다.
 
 - **V2:** 도메인 로직, 캐싱, 계산, 동기화 등 핵심 비즈니스 기능 (15개 모듈, ~97개 클래스)
 - **V4:** Write-Behind 버퍼, 캐시 코디네이션, Fallback 등 성능/회복탄력성 강화 (6개 모듈, ~10개 클래스)
@@ -54,7 +54,7 @@ MapleExpectation의 서비스 레이어는 **V2 (핵심 비즈니스)**와 **V4 
 | 모듈 | 성능 지표 | 증거 출처 |
 |------|-----------|-----------|
 | V4 Service Root | 719 RPS throughput | [Load Test Report](../04_Reports/WRK_Final_Summary.md) |
-| ExpectationCacheCoordinator | 99% Single-flight deduplication | [N01 Test Result](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) |
+| ExpectationCacheCoordinator | 99% SingleFlight deduplication | [N01 Test Result](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) |
 | ExpectationWriteBackBuffer | 10,000 tasks backpressure handled | [N19 Implementation](../01_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md) |
 | NexonApiFallbackService | 47min recovery for 2.1M events | [N19 Recovery Report](../04_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md) |
 
@@ -117,7 +117,7 @@ graph TB
 
 | 클래스 | 역할 |
 |--------|------|
-| `EquipmentService` | 장비 업그레이드 비용 계산 오케스트레이션. Single-flight 패턴으로 중복 MISS 방지, 비동기 파이프라인, GZIP 스트리밍 |
+| `EquipmentService` | 장비 업그레이드 비용 계산 오케스트레이션. SingleFlight 패턴으로 중복 MISS 방지, 비동기 파이프라인, GZIP 스트리밍 |
 | `GameCharacterService` | 캐릭터 도메인 서비스. 조회/생성/보강, 네거티브/포지티브 캐싱, 비동기 DB 갱신 |
 | `DonationService` | 커피 후원 기능. 분산 락, 멱등성 검사, Transactional Outbox 패턴 |
 | `LikeSyncService` | 좋아요 동기화 (Financial-grade). Lua Script 원자적 fetch, 보상 트랜잭션, Graceful Shutdown 폴백 |
@@ -127,7 +127,7 @@ graph TB
 | `CubeTrialsProvider` | 큐브 기대 시행 횟수 제공 인터페이스 |
 | `LikeProcessor` | 좋아요/취소 처리 인터페이스 |
 
-**설계 패턴:** Single-flight, Transactional Outbox, Compensation Transaction, Optional Chaining
+**설계 패턴:** SingleFlight, Transactional Outbox, Compensation Transaction, Optional Chaining
 
 ---
 
@@ -459,7 +459,7 @@ BaseEquipmentItem
 | **Strategy** | `LikeBufferStrategy`, `AtomicFetchStrategy`, `BackoffStrategy`, `PaymentStrategy` | 알고리즘 교체 가능 |
 | **Transactional Outbox** | `donation/outbox/` | 이벤트 발행 신뢰성 보장 |
 | **Compensation Transaction** | `like/compensation/` | 실패 시 데이터 정합성 복구 |
-| **Single-flight** | `EquipmentService`, `ExpectationCacheCoordinator` | 동일 요청 중복 방지 |
+| **SingleFlight** | `EquipmentService`, `ExpectationCacheCoordinator` | 동일 요청 중복 방지 |
 | **Write-Behind** | `ExpectationWriteBackBuffer`, `ExpectationPersistenceService` | 비동기 DB 영속화 |
 | **Observer (Pub/Sub)** | `like/realtime/` | 실시간 좋아요 이벤트 전파 |
 | **Command** | `CompensationCommand` | 보상 명령 캡슐화 |
@@ -576,7 +576,7 @@ flowchart LR
 | 관점 | V2 Approach | V4 Approach | Trade-off |
 |------|-------------|-------------|-----------|
 | **Calculation** | Double precision (fast) | BigDecimal precision (accurate) | Performance: -15%, Accuracy: +∞ |
-| **Cache** | Synchronous get-or-compute | Single-flight with GZIP | Latency: +2ms, API load: -99% |
+| **Cache** | Synchronous get-or-compute | SingleFlight with GZIP | Latency: +2ms, API load: -99% |
 | **Persistence** | Synchronous DB write | Write-Behind buffer | Throughput: +3x, Complexity: +2x |
 | **Fallback** | DB only | DB + Nexon API direct | Availability: +99.9%, Cost: +$25/incident |
 | **Shutdown** | Immediate | 3-phase graceful | Data safety: +100%, Stop time: +5s |
@@ -585,7 +585,7 @@ flowchart LR
 
 | 복잡도 증가 요인 | 완화 방안 |
 |-----------------|-----------|
-| Single-flight 동시성 제어 | `SingleFlightExecutor` 클래스로 캡슐화 |
+| SingleFlight 동시성 제어 | `SingleFlightExecutor` 클래스로 캡슐화 |
 | Write-Behind 버퍼 관리 | `ExpectationWriteBackBuffer` 독립 모듈 |
 | 다양한 Strategy 구현체 | 인터페이스 기반 다형성, Factory 패턴 |
 | Graceful Shutdown 조정 | `SmartLifecycle` 인터페이스 표준화 |
@@ -601,7 +601,7 @@ curl -s http://localhost:8080/api/v4/character/test/expectation | jq '.presetCou
 # Verify Write-Behind Buffer metrics
 curl -s http://localhost:8080/actuator/metrics/expectation.buffer.pending | jq '.measurements[0].value'
 
-# Verify Single-flight effectiveness
+# Verify SingleFlight effectiveness
 curl -s http://localhost:8080/actuator/metrics/singleflight.deduplication | jq '.measurements'
 
 # Verify Cache Coordinator GZIP compression
@@ -763,7 +763,7 @@ curl -s http://localhost:8080/actuator/metrics/expectation.buffer.pending | jq
 1. **[F1]** V4 모듈 내부에서 V2 모듈을 직접 호출하는 경우
 2. **[F2]** Write-Behind 버퍼 동기 드레인을 사용하는 경우
 3. **[F3]** 캐시 무효화 시 관련 캐시를 함께 갱신하지 않는 경우
-4. **[F4]** Single-flight 패턴이 95% 이상의 중복 제거율을 보장하지 않는 경우
+4. **[F4]** SingleFlight 패턴이 95% 이상의 중복 제거율을 보장하지 않는 경우
 5. **[F5]** Decorator Chain이 계산 정밀도(오차 0.1% 이내)를 보장하지 않는 경우
 6. **[F6]** TieredCache의 L1→L2 전략이 일관되게 적용되지 않는 경우
 
@@ -778,7 +778,7 @@ grep -r "drain()" src/main/java/maple/expectation/service/v4/ | grep -v "@Schedu
 # F3: 캐시 연관 갱신 검증
 grep -r "evictPattern\|invalidate.*:" src/main/java/maple/expectation/service/v2/cache/ || echo "⚠️ Check cache invalidation patterns"
 
-# F4: Single-flight 효율 검증
+# F4: SingleFlight 효율 검증
 curl -s http://localhost:8080/actuator/metrics/singleflight.deduplication | jq '.measurements[0].value > 0.95'
 
 # F5: 계산 정밀도 검증

@@ -2,7 +2,7 @@
 
 **상태**: Accepted (구현 완료)
 **날짜**: 2026-02-20
-**작성자**: MapleExpectation Architecture Team
+**작성자**: probabilistic-valuation-engine Architecture Team
 **관련 문서**: [ADR-036](ADR-036-v5-cqrs-mongodb.md), [ADR-037](ADR-037-v5-cqrs-command-side.md), [ADR-038](ADR-038-v5-cqrs-implementation.md)
 
 ---
@@ -11,7 +11,7 @@
 
 ### V4 아키텍처의 한계
 
-MapleExpectation V4 시스템은 수많은 최적화에도 불구하고 근본적인 확장성 제약에 직면했습니다:
+probabilistic-valuation-engine V4 시스템은 수많은 최적화에도 불구하고 근본적인 확장성 제약에 직면했습니다:
 
 1. **블로킹 계산 파이프라인**: 장비 기대값 계산은 복잡한 확률 계산으로 인해 500ms~30초 소요
 2. **읽기-쓰기 결합**: 90% 이상의 요청이 읽기 작업이지만, 쓰기 작업과 MySQL 리소스를 경쟁
@@ -941,4 +941,4 @@ db.character_valuation_views.createIndex(
 **문서 버전**: 1.0
 **최종 업데이트**: 2026-02-20
 **다음 리뷰**: Phase 2 완료 후 (Query Side 통합)
-**소유자**: MapleExpectation Architecture Team
+**소유자**: probabilistic-valuation-engine Architecture Team

@@ -542,7 +542,7 @@ tail -f logs/application.log | grep AiSre
 
 ## CLAUDE.md Compliance
 
-This implementation follows all MapleExpectation coding standards:
+This implementation follows all probabilistic-valuation-engine coding standards:
 
 - **Section 12 (LogicExecutor)**: All exceptions handled via executor pattern
 - **Section 12-1 (Circuit Breaker)**: AI calls protected by `openAiApi` CB
@@ -553,5 +553,5 @@ This implementation follows all MapleExpectation coding standards:
 ---
 
 **Generated:** 2026-02-06
-**Author:** MapleExpectation Monitoring Team
+**Author:** probabilistic-valuation-engine Monitoring Team
 **Status:** ✅ Production Ready

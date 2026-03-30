@@ -115,6 +115,6 @@ If NOT configured, you will see:
 
 ## Related Documents
 
-- [ADR-0345: Stateless Alert System Design](../adr/ADR-0345-stateless-alert-system.md)
+- [ADR-0345: Stateless Alert System Design](../01_ADR/ADR-0345-stateless-alert-system.md)
 - [Discord Webhook Root Cause Analysis](./discord-webhook-root-cause-analysis.md)
 - [CLAUDE.md](../CLAUDE.md)

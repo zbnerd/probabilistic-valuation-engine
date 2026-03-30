@@ -1,8 +1,8 @@
-# MapleExpectation 테스트 전략 문서
+# probabilistic-valuation-engine 테스트 전략 문서
 
 ## 개요
 
-MapleExpectation 프로젝트의 테스트 전략을 정의합니다. 5개 Agent(Blue, Green, Yellow, Purple, Red) 관점에서 테스트 우선순위와 검증 기준을 명확히 합니다.
+probabilistic-valuation-engine 프로젝트의 테스트 전략을 정의합니다. 5개 Agent(Blue, Green, Yellow, Purple, Red) 관점에서 테스트 우선순위와 검증 기준을 명확히 합니다.
 
 ---
 
@@ -272,7 +272,7 @@ void invalidateL1AndL2_onlyOneDBCall() throws Exception {
 | 테스트 | 검증 내용 | SLA |
 |--------|----------|-----|
 | Cache HIT 비율 | L1/L2 HIT 비율 | > 80% |
-| Single-flight | 동시 요청 시 loader 1회 | < 5회 |
+| SingleFlight | 동시 요청 시 loader 1회 | < 5회 |
 | O(n) 알고리즘 | DP 복잡도 검증 | < 100ms for target=500 |
 
 ### 6.3 Yellow Agent (QA-Master)

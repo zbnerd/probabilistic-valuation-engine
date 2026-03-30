@@ -13,7 +13,7 @@
 ## Generated Documents
 
 ### 1. Main Completion Report
-**File**: `/home/geek/maple_expectation/MapleExpectation/docs/04-report/closed-issues-completion.report.md`
+**File**: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/04-report/closed-issues-completion.report.md`
 
 **Size**: ~15,000 words (45+ pages)
 
@@ -43,7 +43,7 @@
 ---
 
 ### 2. Changelog
-**File**: `/home/geek/maple_expectation/MapleExpectation/docs/04-report/changelog.md`
+**File**: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/04-report/changelog.md`
 
 **Size**: ~4,000 words (12+ pages)
 
@@ -67,7 +67,7 @@
 ---
 
 ### 3. Report Index
-**File**: `/home/geek/maple_expectation/MapleExpectation/docs/04-report/INDEX.md`
+**File**: `/home/geek/maple_expectation/probabilistic-valuation-engine/docs/04-report/INDEX.md`
 
 **Size**: ~3,000 words (8+ pages)
 
@@ -278,7 +278,7 @@ closed-issues-completion.report.md
 ### Generated Files
 
 ```
-/home/geek/maple_expectation/MapleExpectation/docs/04-report/
+/home/geek/maple_expectation/probabilistic-valuation-engine/docs/04-report/
 ├── closed-issues-completion.report.md  ← Main report (15,000 words)
 ├── changelog.md                        ← Feature changelog (4,000 words)
 ├── INDEX.md                            ← Report index (3,000 words)
@@ -364,7 +364,7 @@ closed-issues-completion.report.md
 
 ### External Links
 
-- **GitHub Issues**: https://github.com/zbnerd/MapleExpectation/issues
+- **GitHub Issues**: https://github.com/zbnerd/probabilistic-valuation-engine/issues
 - **PR #297**: Issue #284 + #278 implementation
 
 ---

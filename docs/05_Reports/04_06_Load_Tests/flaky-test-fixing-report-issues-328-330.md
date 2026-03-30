@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Successfully eliminated all 5 flaky tests from the MapleExpectation codebase through SOLID-based refactoring. The root causes were identified as:
+Successfully eliminated all 5 flaky tests from the probabilistic-valuation-engine codebase through SOLID-based refactoring. The root causes were identified as:
 
 1. **Thread.sleep anti-pattern** - Fixed by introducing Awaitility library
 2. **Race conditions in transaction boundaries** - Fixed by explicit flush() calls
@@ -217,7 +217,7 @@ histogram_quantile(0.95, junit_tests_duration_seconds)
 
 ### Grafana Dashboard Configuration
 
-**Dashboard:** `MapleExpectation - Test Quality`
+**Dashboard:** `probabilistic-valuation-engine - Test Quality`
 
 **Panels:**
 1. **Test Pass Rate** - Gauge (Target: 100%)
@@ -261,7 +261,7 @@ histogram_quantile(0.95, junit_tests_duration_seconds)
 
 ## Related Documents
 
-- [ADR-020: Flaky Test SOLID-Based Refactoring](../adr/ADR-020-flaky-test-fixing-solid-refactoring.md)
+- [ADR-020: Flaky Test SOLID-Based Refactoring](../01_ADR/ADR-020-flaky-test-fixing-solid-refactoring.md)
 - [CLAUDE.md](../CLAUDE.md) - Section 24: Flaky Test Prevention
 - [Flaky Test Management Guide](../02_Technical_Guides/flaky-test-management.md)
 

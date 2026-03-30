@@ -141,7 +141,7 @@
 **Output:**
 1. Create GitHub Issue with label `monthly-review`
 2. Update [balanced-scorecard-kpis.md](./balanced-scorecard-kpis.md) with new metrics
-3. Post summary to [GitHub Discussions](https://github.com/zbnerd/MapleExpectation/discussions)
+3. Post summary to [GitHub Discussions](https://github.com/zbnerd/probabilistic-valuation-engine/discussions)
 
 ---
 
@@ -417,7 +417,7 @@ gh label create "phase:Scale" --color "#FF00CC" --description "Scale out phase"
 #### Step 2: Create GitHub Project Board
 
 ```bash
-gh project create "MVP Roadmap" --owner zbnerd --repo MapleExpectation
+gh project create "MVP Roadmap" --owner zbnerd --repo probabilistic-valuation-engine
 ```
 
 **Columns:**
@@ -435,7 +435,7 @@ gh project create "MVP Roadmap" --owner zbnerd --repo MapleExpectation
 ### Must Have (P0)
 - [x] **Core API Endpoints** (Foundation ✅)
 - [x] **Circuit Breaker** (Hardening ✅)
-- [x] **Tiered Cache** (Hardening ✅)
+- [x] **TieredCache** (Hardening ✅)
 - [x] **Transactional Outbox** (Production 🔄)
 - [ ] **Monitoring Dashboards** (Production ⏳)
 
@@ -679,7 +679,7 @@ gh project create "MVP Roadmap" --owner zbnerd --repo MapleExpectation
 #### Step 2: Welcome Message Template
 
 ```markdown
-## Welcome to MapleExpectation! 🎉
+## Welcome to probabilistic-valuation-engine! 🎉
 
 Hi @username, welcome aboard! 👋
 
@@ -709,7 +709,7 @@ I've assigned you **Issue #XXX: Fix typo in README**
 ### 💬 Questions?
 
 I'm typically available weekdays 7pm-10pm KST.
-Feel free to ping me in [GitHub Discussions](https://github.com/zbnerd/MapleExpectation/discussions) or Discord.
+Feel free to ping me in [GitHub Discussions](https://github.com/zbnerd/probabilistic-valuation-engine/discussions) or Discord.
 
 Looking forward to working with you! 🚀
 
@@ -868,7 +868,7 @@ Best,
 ### Weekly Workflow Summary
 
 ```markdown
-## MapleExpectation Weekly Workflow
+## probabilistic-valuation-engine Weekly Workflow
 
 **Day 1 (Monday):** Planning & Review
 - Morning: Weekly BSC Review (15 min)
@@ -987,7 +987,7 @@ Best,
 
 ## 🎯 Conclusion
 
-This workflow integration guide ensures that all strategic documentation is **actively used** rather than **passively stored**. By embedding these workflows into daily operations, MapleExpectation maintains:
+This workflow integration guide ensures that all strategic documentation is **actively used** rather than **passively stored**. By embedding these workflows into daily operations, probabilistic-valuation-engine maintains:
 
 1. **Evidence-Based Decision Making** (BSC KPIs)
 2. **User-Centric Development** (Personas & Journeys)
@@ -1005,7 +1005,7 @@ This workflow integration guide ensures that all strategic documentation is **ac
 
 ---
 
-**Prepared By:** MapleExpectation Team
+**Prepared By:** probabilistic-valuation-engine Team
 **Last Updated:** 2026-02-06
 **Next Review:** 2026-05-06
 

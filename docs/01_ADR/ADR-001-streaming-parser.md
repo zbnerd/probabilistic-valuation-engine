@@ -8,7 +8,7 @@ Accepted
 ### 1. 기본 정보 (Basic Information)
 | # | 검증 항목 | 상태 | 비고 |
 |---|-----------|------|------|
-| 1 | 의사결정 날짜 명시 | ✅ | [Issue #240](https://github.com/zbnerd/MapleExpectation/issues/240) |
+| 1 | 의사결정 날짜 명시 | ✅ | [Issue #240](https://github.com/zbnerd/probabilistic-valuation-engine/issues/240) |
 | 2 | 결정자(Decision Maker) 명시 | ✅ | Blue Agent (Architecture) |
 | 3 | 관련 Issue/PR 링크 | ✅ | #240 V4 프리셋 지원 확장 |
 | 4 | 상태(Status) 명확함 | ✅ | Accepted & Implemented |
@@ -295,5 +295,5 @@ grep -c "JsonField\." src/main/java/maple/expectation/parser/EquipmentStreamingP
 - **사용처:** `src/main/java/maple/expectation/service/v4/EquipmentExpectationServiceV4.java`
 
 ### 이슈 및 PR
-- **[Issue #240](https://github.com/zbnerd/MapleExpectation/issues/240)** - V4 프리셋 지원 확장
+- **[Issue #240](https://github.com/zbnerd/probabilistic-valuation-engine/issues/240)** - V4 프리셋 지원 확장
 - **공식 문서:** [Jackson Streaming API Documentation](https://fasterxml.github.io/jackson-core/javadoc/2.14/com/fasterxml/jackson/core/JsonParser.html)

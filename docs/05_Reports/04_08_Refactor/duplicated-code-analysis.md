@@ -1,4 +1,4 @@
-# MapleExpectation 중복 코드 분석 리포트
+# probabilistic-valuation-engine 중복 코드 분석 리포트
 
 **분석 일자:** 2026-02-08
 **분석 범위:** 전체 코드베이스 (494개 Java 파일, Service 17,545라인, Global 16,631라인)
@@ -28,9 +28,9 @@
 ### 1. Controller 비동기 응답 패턴 중복
 
 **위치:**
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/controller/GameCharacterControllerV2.java` (L63-65)
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/controller/GameCharacterControllerV3.java` (L71-74)
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/controller/GameCharacterControllerV4.java` (L114-117, L154-157)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/controller/GameCharacterControllerV2.java` (L63-65)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/controller/GameCharacterControllerV3.java` (L71-74)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/controller/GameCharacterControllerV4.java` (L114-117, L154-157)
 
 **중복 코드:**
 ```java
@@ -93,8 +93,8 @@ public CompletableFuture<ResponseEntity<TotalExpectationResponse>> calculateTota
 ### 2. Cube Decorator 계산 로직 중복 (V2 vs V4)
 
 **위치:**
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/calculator/impl/BlackCubeDecorator.java` (L38-56)
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/calculator/v4/impl/BlackCubeDecoratorV4.java` (L53-70)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/calculator/impl/BlackCubeDecorator.java` (L38-56)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/calculator/v4/impl/BlackCubeDecoratorV4.java` (L53-70)
 
 **중복 코드:**
 ```java
@@ -180,9 +180,9 @@ public class BlackCubeDecoratorV4 extends AbstractCubeDecorator<BigDecimal> {
 ### 3. Cache Service 조회/저장 로직 중복
 
 **위치:**
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/cache/EquipmentCacheService.java` (L55-64)
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/cache/TotalExpectationCacheService.java` (L81-127)
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/cache/TotalExpectationCacheService.java` (L173-184)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/cache/EquipmentCacheService.java` (L55-64)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/cache/TotalExpectationCacheService.java` (L81-127)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/cache/TotalExpectationCacheService.java` (L173-184)
 
 **중복 코드:**
 ```java
@@ -298,8 +298,8 @@ public class EquipmentCacheService extends AbstractTieredCacheService<String, Eq
 ### 4. CompletableFuture 예외 처리 중복
 
 **위치:**
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/EquipmentService.java` (L174, L290-300, L332, L377)
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v4/EquipmentExpectationServiceV4.java` (L109, L117, L214)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/EquipmentService.java` (L174, L290-300, L332, L377)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v4/EquipmentExpectationServiceV4.java` (L109, L117, L214)
 
 **중복 코드:**
 ```java
@@ -455,8 +455,8 @@ public class EquipmentService {
 ### 6. 데이터 마스킹 로직 중복
 
 **위치:**
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/controller/GameCharacterControllerV4.java` (L200-203)
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/scheduler/PopularCharacterWarmupScheduler.java` (L218)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/controller/GameCharacterControllerV4.java` (L200-203)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/scheduler/PopularCharacterWarmupScheduler.java` (L218)
 
 **중복 코드:**
 ```java
@@ -475,7 +475,7 @@ private String maskIgn(String ign) {
 
 **문제점:**
 - **동일한 마스킹 알고리즘 구현**: 2개 파일에서 중복
-- **StringMaskingUtils 존재**: 이미 `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/util/StringMaskingUtils.java`가 있음에도 불구하고 로컬 구현
+- **StringMaskingUtils 존재**: 이미 `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/util/StringMaskingUtils.java`가 있음에도 불구하고 로컬 구현
 
 **리팩토링 제안:**
 
@@ -507,8 +507,8 @@ log.debug("Processing: {}", maskIgn(userIgn));
 ### 7. LikeRelationBuffer와 LikeBufferStorage 간 구조적 중복
 
 **위치:**
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/cache/LikeRelationBuffer.java` (L46-278)
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/queue/like/RedisLikeBufferStorage.java`
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/cache/LikeRelationBuffer.java` (L46-278)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/queue/like/RedisLikeBufferStorage.java`
 
 **중복 패턴:**
 ```java
@@ -643,7 +643,7 @@ public GameCharacter findCharacter(String userIgn) {
 ### 9. Decorator getDetailedCosts() 메서드 중복
 
 **위치:**
-- `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/calculator/v4/impl/BlackCubeDecoratorV4.java` (L99-112)
+- `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/calculator/v4/impl/BlackCubeDecoratorV4.java` (L99-112)
 
 **중복 코드:**
 ```java

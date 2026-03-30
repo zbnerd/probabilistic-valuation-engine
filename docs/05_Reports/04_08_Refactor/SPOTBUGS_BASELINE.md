@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-SpotBugs static analysis has been successfully integrated into the MapleExpectation project. This baseline measurement identifies **316 total bugs** across the codebase, providing a foundation for systematic code quality improvements.
+SpotBugs static analysis has been successfully integrated into the probabilistic-valuation-engine project. This baseline measurement identifies **316 total bugs** across the codebase, providing a foundation for systematic code quality improvements.
 
 ### Bug Count by Priority
 

@@ -20,7 +20,7 @@
 
 ## Overview
 
-This document defines the base interfaces for MapleExpectation's clean architecture refactoring, following the **Ports and Adapters** pattern. These interfaces form the foundation for dependency inversion and enable testable, maintainable code.
+This document defines the base interfaces for probabilistic-valuation-engine's clean architecture refactoring, following the **Ports and Adapters** pattern. These interfaces form the foundation for dependency inversion and enable testable, maintainable code.
 
 ### Design Principles
 
@@ -757,7 +757,7 @@ public class CharacterController {
 
 ## Summary
 
-This document defines the foundation for MapleExpectation's clean architecture:
+This document defines the foundation for probabilistic-valuation-engine's clean architecture:
 
 ✅ **4 Repository Interfaces** - Pure Java, no framework dependencies
 ✅ **4 DTO Classes** - Separates API contract from domain model

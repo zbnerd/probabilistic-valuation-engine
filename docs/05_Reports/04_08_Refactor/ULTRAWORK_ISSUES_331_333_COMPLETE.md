@@ -378,6 +378,6 @@ M src/main/java/maple/expectation/service/v2/outbox/impl/NexonApiRetryClientImpl
 ```
 
 **GitHub 이슈:**
-- [#331](https://github.com/zbnerd/MapleExpectation/issues/331) - NexonDataCollector Reactive 전환
-- [#332](https://github.com/zbnerd/MapleExpectation/issues/332) - 큐브 데이터 조회 API 연동
-- [#333](https://github.com/zbnerd/MapleExpectation/issues/333) - DLQ 핸들러 연동
+- [#331](https://github.com/zbnerd/probabilistic-valuation-engine/issues/331) - NexonDataCollector Reactive 전환
+- [#332](https://github.com/zbnerd/probabilistic-valuation-engine/issues/332) - 큐브 데이터 조회 API 연동
+- [#333](https://github.com/zbnerd/probabilistic-valuation-engine/issues/333) - DLQ 핸들러 연동

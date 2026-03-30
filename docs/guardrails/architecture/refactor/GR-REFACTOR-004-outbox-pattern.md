@@ -162,7 +162,7 @@ expected_events = processed_success + dlq_events + ignored_duplicates
 
 ## 출처
 - [N19 Outbox Replay Recovery Report](../../../../05_Reports/04_07_Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md)
-- [ADR-016: Nexon API Outbox Pattern](../../../../adr/ADR-016-nexon-api-outbox-pattern.md)
+- [ADR-016: Nexon API Outbox Pattern](../../../../01_ADR/ADR-016-nexon-api-outbox-pattern.md)
 
 ## 복구 성과 (N19 사례)
 

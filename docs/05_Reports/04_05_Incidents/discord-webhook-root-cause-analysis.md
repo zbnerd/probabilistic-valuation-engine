@@ -144,5 +144,5 @@ This should be set as `ALERT_DISCORD_WEBHOOK_URL` in the environment.
 
 ## Related Documents
 
-- [ADR-0345: Stateless Alert System Design](../adr/ADR-0345-stateless-alert-system.md)
+- [ADR-0345: Stateless Alert System Design](../01_ADR/ADR-0345-stateless-alert-system.md)
 - [CLAUDE.md](../CLAUDE.md)

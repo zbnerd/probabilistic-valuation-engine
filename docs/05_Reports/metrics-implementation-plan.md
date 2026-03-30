@@ -1206,7 +1206,7 @@ After implementation:
 1. **Collect baseline metrics for 7 days** before starting refactoring
 2. **Export "Before Refactoring" dashboard snapshot** (PDF/JSON)
 3. **Communicate baseline** to team via Slack/Email
-4. **Start refactoring** using [ADR-014](../adr/ADR-014-multi-module-cross-cutting-concerns.md)
+4. **Start refactoring** using [ADR-014](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
 5. **Re-run verification script** after each major refactoring milestone
 6. **Update "After Refactoring" dashboard** to track progress
 7. **Document improvements** in refactoring retrospective
@@ -1216,7 +1216,7 @@ After implementation:
 ## References
 
 - [Verification Strategy](../metrics/verification-strategy.md)
-- [ADR-014: Multi-Module Cross-Cutting Concerns](../adr/ADR-014-multi-module-cross-cutting-concerns.md)
+- [ADR-014: Multi-Module Cross-Cutting Concerns](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
 - [Multi-Module Refactoring Analysis](./Multi-Module-Refactoring-Analysis.md)
 - [Spring Boot Actuator Documentation](https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html)
 - [Micrometer Reference](https://micrometer.io/docs)

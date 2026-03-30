@@ -1,12 +1,12 @@
-# TieredCache Single-flight 시퀀스 다이어그램
+# TieredCache SingleFlight 시퀀스 다이어그램
 
 > **Last Updated:** 2026-02-05
-> **Code Version:** MapleExpectation v1.x
+> **Code Version:** probabilistic-valuation-engine v1.x
 > **Diagram Version:** 1.0
 
 ## 개요
 
-Multi-Layer 캐시(L1: Caffeine, L2: Redis)와 분산 Single-flight 패턴으로 **Cache Stampede**를 방지합니다.
+Multi-Layer 캐시(L1: Caffeine, L2: Redis)와 분산 SingleFlight 패턴으로 **Cache Stampede**를 방지합니다.
 
 ## Terminology
 
@@ -14,7 +14,7 @@ Multi-Layer 캐시(L1: Caffeine, L2: Redis)와 분산 Single-flight 패턴으로
 |------|------|
 | **L1 Cache** | Caffeine in-memory cache (로컬, <5ms) |
 | **L2 Cache** | Redis distributed cache (분산, <20ms) |
-| **Single-flight** | 동시 요청 1회만 계산하는 패턴 |
+| **SingleFlight** | 동시 요청 1회만 계산하는 패턴 |
 | **Cache Stampede** | 캐시 만료 시 동시 계산으로 발생하는 폭주 |
 | **Watchdog** | Redisson 자동 락 갱신 (기본 30초 TTL) |
 

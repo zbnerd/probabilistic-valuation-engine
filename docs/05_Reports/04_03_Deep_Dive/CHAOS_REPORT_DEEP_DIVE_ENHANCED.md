@@ -1,4 +1,4 @@
-# MapleExpectation Chaos Test Deep Dive Report (Enhanced)
+# probabilistic-valuation-engine Chaos Test Deep Dive Report (Enhanced)
 
 > **5-Agent Council**: 🟡 Yellow (QA Master), 🔴 Red (SRE), 🔵 Blue (Architect), 🟢 Green (Performance), 🟣 Purple (Auditor)
 > **생성일**: 2026-01-19
@@ -88,9 +88,9 @@
 | [E6] | Config | HikariCP connection-init-sql 설정 | `src/main/resources/application.yml` |
 | [E7] | Test Result | N07 Metadata Lock Freeze 결과 | [N07-metadata-lock-freeze.md](../01_Chaos_Engineering/06_Nightmare/Scenarios/N07-metadata-lock-freeze.md) |
 | [E8] | Test Result | N09 Circular Lock Deadlock 결과 | [N09-circular-lock-deadlock.md](../01_Chaos_Engineering/06_Nightmare/Scenarios/N09-circular-lock-deadlock.md) |
-| [E9] | Issue | GitHub Issue #227 (MDL Freeze) | https://github.com/zbnerd/MapleExpectation/issues/227 |
-| [E10] | Issue | GitHub Issue #228 (Circular Lock) | https://github.com/zbnerd/MapleExpectation/issues/228 |
-| [E11] | Issue | GitHub Issue #221 (Lock Ordering) | https://github.com/zbnerd/MapleExpectation/issues/221 |
+| [E9] | Issue | GitHub Issue #227 (MDL Freeze) | https://github.com/zbnerd/probabilistic-valuation-engine/issues/227 |
+| [E10] | Issue | GitHub Issue #228 (Circular Lock) | https://github.com/zbnerd/probabilistic-valuation-engine/issues/228 |
+| [E11] | Issue | GitHub Issue #221 (Lock Ordering) | https://github.com/zbnerd/probabilistic-valuation-engine/issues/221 |
 | [E12] | Dashboard | Grafana Dashboard JSON | `docker/grafana/dashboards/lock-health-p0.json` |
 | [E13] | Prometheus | PromQL 쿼리 모음 | 섹션 "Prometheus 메트릭 쿼리 모음" |
 | [T1] | Test | Unit Tests (ResilientLockStrategy) | `src/test/java/.../ResilientLockStrategyTest.java` |

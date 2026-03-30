@@ -138,8 +138,10 @@ public class WarmupScheduler {
 
 ### 2. RedisDistributedLockStrategy 활용
 
+> **⚠️ OBSOLETE: Use PostgresAdvisoryLockStrategy instead (ADR-022). This example is kept for historical reference only.**
+
 ```java
-// Good - 추상화된 분산 락 전략 사용
+// Good - 추상화된 분산 락 전략 사용 (DEPRECATED - Redis removed)
 @Component
 @ConditionalOnProperty(name = "scheduler.warmup.enabled", havingValue = "true")
 @RequiredArgsConstructor

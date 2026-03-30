@@ -9,8 +9,8 @@
 
 This guide is based on **traffic pattern analysis** and automatic scenario response:
 - 4-quadrant matrix validated through production incidents (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
-- Circuit Breaker thresholds: 50% failure rate based on Nexon API patterns (Evidence: [ADR-005](../adr/ADR-005-resilience4j-scenario-abc.md))
-- Graceful Shutdown: 100% data preservation during 50s drain period (Evidence: [ADR-008](../adr/ADR-008-durability-graceful-shutdown.md))
+- Circuit Breaker thresholds: 50% failure rate based on Nexon API patterns (Evidence: [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md))
+- Graceful Shutdown: 100% data preservation during 50s drain period (Evidence: [ADR-008](../01_ADR/ADR-008-durability-graceful-shutdown.md))
 
 ---
 

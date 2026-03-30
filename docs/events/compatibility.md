@@ -313,4 +313,4 @@ Before making event schema changes:
 
 - [Event Contract v1](./contract-v1.md) - Event structure and naming
 - [Sample Events](./samples/) - Example event definitions
-- [ADR-018](../adr/ADR-018-strategy-pattern-for-acl.md) - Anti-Corruption Layer strategy
+- [ADR-018](../01_ADR/ADR-018-strategy-pattern-for-acl.md) - Anti-Corruption Layer strategy

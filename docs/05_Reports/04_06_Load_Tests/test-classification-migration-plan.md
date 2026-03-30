@@ -296,7 +296,7 @@ mkdir -p module-app/src/integrationTest/resources
 ### Step 2: Move integration tests
 
 ```bash
-cd /home/maple/MapleExpectation/module-app/src/test/java/maple/expectation
+cd /home/maple/probabilistic-valuation-engine/module-app/src/test/java/maple/expectation
 
 # Move integration tests
 mv ExpectationCacheIntegrationTest.java ../../integrationTest/java/maple/expectation/
@@ -320,18 +320,18 @@ mv NexonDataCollectorE2ETest.java ../../integrationTest/java/maple/expectation/i
 
 ```bash
 # Create chaos-test directories if not exists
-mkdir -p /home/maple/MapleExpectation/module-chaos-test/src/chaos-test/java/maple/expectation/global/lock
-mkdir -p /home/maple/MapleExpectation/module-chaos-test/src/chaos-test/java/maple/expectation/support
+mkdir -p /home/maple/probabilistic-valuation-engine/module-chaos-test/src/chaos-test/java/maple/expectation/global/lock
+mkdir -p /home/maple/probabilistic-valuation-engine/module-chaos-test/src/chaos-test/java/maple/expectation/support
 
 # Move chaos tests
-mv global/lock/CircularLockDeadlockNightmareTest.java /home/maple/MapleExpectation/module-chaos-test/src/chaos-test/java/maple/expectation/global/lock/
-mv global/lock/MetadataLockFreezeNightmareTest.java /home/maple/MapleExpectation/module-chaos-test/src/chaos-test/java/maple/expectation/global/lock/
-mv global/lock/RedisLockConsistencyTest.java /home/maple/MapleExpectation/module-chaos-test/src/chaos-test/java/maple/expectation/global/lock/
-mv global/lock/DualRunLockTest.java /home/maple/MapleExpectation/module-chaos-test/src/chaos-test/java/maple/expectation/global/lock/
+mv global/lock/CircularLockDeadlockNightmareTest.java /home/maple/probabilistic-valuation-engine/module-chaos-test/src/chaos-test/java/maple/expectation/global/lock/
+mv global/lock/MetadataLockFreezeNightmareTest.java /home/maple/probabilistic-valuation-engine/module-chaos-test/src/chaos-test/java/maple/expectation/global/lock/
+mv global/lock/RedisLockConsistencyTest.java /home/maple/probabilistic-valuation-engine/module-chaos-test/src/chaos-test/java/maple/expectation/global/lock/
+mv global/lock/DualRunLockTest.java /home/maple/probabilistic-valuation-engine/module-chaos-test/src/chaos-test/java/maple/expectation/global/lock/
 
 # Move support classes
-mv support/ChaosTestSupport.java /home/maple/MapleExpectation/module-chaos-test/src/chaos-test/java/maple/expectation/support/
-mv support/SentinelContainerBase.java /home/maple/MapleExpectation/module-chaos-test/src/chaos-test/java/maple/expectation/support/
+mv support/ChaosTestSupport.java /home/maple/probabilistic-valuation-engine/module-chaos-test/src/chaos-test/java/maple/expectation/support/
+mv support/SentinelContainerBase.java /home/maple/probabilistic-valuation-engine/module-chaos-test/src/chaos-test/java/maple/expectation/support/
 ```
 
 ### Step 4: Create module-app integrationTest configuration
@@ -413,6 +413,6 @@ tasks.register('integrationTest', Test) {
 ## References
 
 - [Module-wise Test Guide](../02_Technical_Guides/module-wise-test-guide.md)
-- [ADR-015: Test Rebuild Pyramid](../adr/ADR-015-test-reboot-pyramid.md)
-- [ADR-025: Chaos Test Module Separation](../adr/ADR-025-chaos-test-module-separation.md)
+- [ADR-015: Test Rebuild Pyramid](../01_ADR/ADR-015-test-reboot-pyramid.md)
+- [ADR-025: Chaos Test Module Separation](../01_ADR/ADR-025-chaos-test-module-separation.md)
 - [jqwik Configuration](../../module-core/src/test/resources/junit-platform.properties)

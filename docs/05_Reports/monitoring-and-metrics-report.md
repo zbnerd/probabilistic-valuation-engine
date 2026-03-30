@@ -1,7 +1,7 @@
 # Monitoring & Metrics Report
 
 **Report Date:** 2026-02-16
-**Project:** MapleExpectation Multi-Module Refactoring (Phase 1)
+**Project:** probabilistic-valuation-engine Multi-Module Refactoring (Phase 1)
 **Baseline:** Pre-refactoring monolithic structure
 **Status:** In Progress - Module Separation Complete
 
@@ -477,7 +477,7 @@ static_mutable_fields_total  # 0 ✅
 
 ```json
 {
-  "title": "MapleExpectation - Module Health Overview",
+  "title": "probabilistic-valuation-engine - Module Health Overview",
   "panels": [
     {
       "title": "Module File Counts",
@@ -527,7 +527,7 @@ static_mutable_fields_total  # 0 ✅
 
 ```json
 {
-  "title": "MapleExpectation - SOLID Compliance",
+  "title": "probabilistic-valuation-engine - SOLID Compliance",
   "panels": [
     {
       "title": "SOLID Scores by Principle",
@@ -562,7 +562,7 @@ static_mutable_fields_total  # 0 ✅
 
 ```json
 {
-  "title": "MapleExpectation - Dependency Analysis",
+  "title": "probabilistic-valuation-engine - Dependency Analysis",
   "panels": [
     {
       "title": "Circular Dependencies",
@@ -614,7 +614,7 @@ static_mutable_fields_total  # 0 ✅
 
 ```json
 {
-  "title": "MapleExpectation - Code Quality",
+  "title": "probabilistic-valuation-engine - Code Quality",
   "panels": [
     {
       "title": "Stateless Compliance",

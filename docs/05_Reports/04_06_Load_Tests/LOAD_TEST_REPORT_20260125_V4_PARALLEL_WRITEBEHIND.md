@@ -1,6 +1,6 @@
 # V4 API 병목 해소 Load Test Report
 
-> **Issue**: [#266](https://github.com/zbnerd/MapleExpectation/issues/266)
+> **Issue**: [#266](https://github.com/zbnerd/probabilistic-valuation-engine/issues/266)
 > **Date**: 2026-01-25
 > **Author**: Claude Code (5-Agent Council)
 
@@ -178,7 +178,7 @@ RPS: 719.47
 
 ### 5.2 "괴물 스펙" 환산 (The Math)
 
-MapleExpectation API는 **200-350KB** 응답을 처리합니다:
+probabilistic-valuation-engine API는 **200-350KB** 응답을 처리합니다:
 
 ```
 719 RPS × 300KB = 215.7 MB/s (초당 데이터 처리량)
@@ -481,8 +481,8 @@ wrk -t4 -c200 -d10s -s wrk_multiple_users.lua http://localhost:8080
 - **[E6]** Total request count increased from 16,650 (#264) to 20,297 (#266)
 
 **ADR References:**
-- [ADR-010: Outbox Pattern](../../adr/ADR-010-outbox-pattern.md) - Write-Behind Buffer design
-- [ADR-008: Durability Graceful Shutdown](../../adr/ADR-008-durability-graceful-shutdown.md) - SmartLifecycle implementation
+- [ADR-010: Outbox Pattern](../../01_ADR/ADR-010-outbox-pattern.md) - Write-Behind Buffer design
+- [ADR-008: Durability Graceful Shutdown](../../01_ADR/ADR-008-durability-graceful-shutdown.md) - SmartLifecycle implementation
 - **P1 Deadlock Prevention**: Separate executor pattern (ADR-010 Section 4)
 - **Write-Behind Buffer**: ADR-010 Section 3 implementation reference
 - **Graceful Shutdown**: ADR-008 Phase-based shutdown coordination
@@ -493,8 +493,8 @@ wrk -t4 -c200 -d10s -s wrk_multiple_users.lua http://localhost:8080
 
 | ADR | Title | Relevance to This Report |
 |-----|-------|--------------------------|
-| [ADR-010](../../adr/ADR-010-outbox-pattern.md) | Outbox Pattern | Write-Behind Buffer implementation |
-| [ADR-008](../../adr/ADR-008-durability-graceful-shutdown.md) | Durability Graceful Shutdown | SmartLifecycle shutdown coordination |
+| [ADR-010](../../01_ADR/ADR-010-outbox-pattern.md) | Outbox Pattern | Write-Behind Buffer implementation |
+| [ADR-008](../../01_ADR/ADR-008-durability-graceful-shutdown.md) | Durability Graceful Shutdown | SmartLifecycle shutdown coordination |
 | ADR-010 Section 3 | Write-Behind Buffer | `ExpectationWriteBackBuffer` design pattern |
 | ADR-010 Section 4 | Deadlock Prevention | Separate `presetCalculationExecutor` isolation |
 | ADR-008 Section 5 | Shutdown Phases | MAX_VALUE - 500 phase ordering |

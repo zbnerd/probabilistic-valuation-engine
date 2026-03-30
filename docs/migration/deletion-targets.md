@@ -510,7 +510,7 @@ Before deleting any file, verify:
 
 ## Related Documents
 
-- [ADR-001: PostgreSQL Single DB Strategy](../adr/001-postgresql-single-db-strategy.md)
+- [ADR-001: PostgreSQL Single DB Strategy](../01_ADR/001-postgresql-single-db-strategy.md)
 - [Local DB Connection Guide](./local-db-connection-guide.md)
 - [IntelliJ Kotlin Conversion Guide](./intellij-kotlin-conversion-guide.md)
 - [Issue #547: Docker Compose PostgreSQL + PGMQ](https://github.com/zbnerd/probabilistic-valuation-engine/issues/547)

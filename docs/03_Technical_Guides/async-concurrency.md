@@ -7,7 +7,7 @@
 > **Documentation Version:** 1.0
 > **Production Status:** Active (Validated through load testing achieving 240 RPS on t3.small)
 
-이 문서는 MapleExpectation 프로젝트의 비동기 처리, Thread Pool, 동시성 관련 규칙을 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 비동기 처리, Thread Pool, 동시성 관련 규칙을 정의합니다.
 
 ## Documentation Integrity Statement
 

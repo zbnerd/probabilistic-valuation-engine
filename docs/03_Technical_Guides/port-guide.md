@@ -206,6 +206,6 @@ class AuthPortAdapter(
 
 ## 관련 문서
 
-- [ADR-005: Module Dependency Strategy](../adr/ADR-005-module-dependency-strategy.md)
+- [ADR-005: Module Dependency Strategy](../01_ADR/ADR-005-module-dependency-strategy.md)
 - [DTO Ownership Rules](./dto-ownership.md)
 - [Service Modules Guide](./service-modules.md)

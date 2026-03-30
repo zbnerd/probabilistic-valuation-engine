@@ -1,5 +1,5 @@
 # OWASP Top 10 Security Audit Report
-**MapleExpectation Application**
+**probabilistic-valuation-engine Application**
 **Date:** 2026-02-16
 **Auditor:** Claude Code (verify-security skill)
 **Scope:** Full application security assessment against OWASP Top 10 (2021)
@@ -10,7 +10,7 @@
 
 **Overall Security Posture: STRONG** ✅
 
-The MapleExpectation application demonstrates **excellent security practices** across most OWASP Top 10 categories. The codebase shows strong security awareness with proper input validation, parameterized queries, PII masking, and comprehensive authentication/authorization implementation.
+The probabilistic-valuation-engine application demonstrates **excellent security practices** across most OWASP Top 10 categories. The codebase shows strong security awareness with proper input validation, parameterized queries, PII masking, and comprehensive authentication/authorization implementation.
 
 **Key Strengths:**
 - ✅ Zero SQL injection vulnerabilities (100% parameterized queries)
@@ -477,7 +477,7 @@ The MapleExpectation application demonstrates **excellent security practices** a
 
 ## Conclusion
 
-The MapleExpectation application demonstrates **strong security posture** with no critical or high-severity vulnerabilities. The development team shows excellent security awareness through:
+The probabilistic-valuation-engine application demonstrates **strong security posture** with no critical or high-severity vulnerabilities. The development team shows excellent security awareness through:
 
 1. **Proactive security measures** (Issue #19, #172, #21)
 2. **Comprehensive PII protection** (PiiMaskingFilter)

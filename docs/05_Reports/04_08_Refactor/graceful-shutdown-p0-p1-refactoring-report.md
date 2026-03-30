@@ -447,7 +447,7 @@ test -f src/main/java/maple/expectation/shutdown/handler/ExpectationBatchShutdow
 ```bash
 # 1. 애플리케이션 시작
 ./gradlew bootRun
-# PID 확인: jps | grep MapleExpectation
+# PID 확인: jps | grep probabilistic-valuation-engine
 
 # 2. Graceful Shutdown 시뮬레이션 (SIGTERM)
 kill -TERM <pid>

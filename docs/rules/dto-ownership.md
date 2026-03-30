@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines the ownership, location, and usage rules for Data Transfer Objects (DTOs) in the MapleExpectation multi-module architecture.
+This document defines the ownership, location, and usage rules for Data Transfer Objects (DTOs) in the probabilistic-valuation-engine multi-module architecture.
 
 ## Current State (Phase 6 Violation)
 
@@ -273,10 +273,10 @@ class AuthController(
 
 ## References
 
-- [ADR-005: Hexagonal Architecture](../adr/ADR-005-hexagonal-architecture.md)
-- [ADR-014: Multi-Module Cross-Cutting Concerns](../adr/ADR-014-multi-module-cross-cutting-concerns.md)
-- [ADR-037: Web Layer Separation](../adr/ADR-037-web-layer-separation.md)
-- [ADR-039: Current Architecture Assessment](../adr/ADR-039-current-architecture-assessment.md)
+- [ADR-005: Hexagonal Architecture](../01_ADR/ADR-041-multi-module-hexagonal-architecture-dip.md)
+- [ADR-014: Multi-Module Cross-Cutting Concerns](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
+- [ADR-037: Web Layer Separation](../01_ADR/ADR-037-exception-translator-return-vs-throw.md)
+- [ADR-039: Current Architecture Assessment](../01_ADR/ADR-039-current-architecture-assessment.md)
 - [Module Dependency Test](../../module-web/src/test/java/maple/expectation/arch/ModuleDependencyTest.java)
 
 ## Changelog

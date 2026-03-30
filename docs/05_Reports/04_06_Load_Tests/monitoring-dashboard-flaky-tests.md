@@ -1,7 +1,7 @@
 # Monitoring Dashboard - Flaky Test Fixing (Issues #328-330)
 
 **Date:** 2026-02-10
-**Dashboard:** MapleExpectation - Test Quality & Flaky Test Monitoring
+**Dashboard:** probabilistic-valuation-engine - Test Quality & Flaky Test Monitoring
 
 ---
 
@@ -75,8 +75,8 @@ sum(rate(junit_tests_total_total{test_class="LikeSyncCompensationIntegrationTest
 
 ```promql
 # CI build success rate
-sum(rate(jenkins_builds_success_total{job="MapleExpectation"}[24h])) /
-sum(rate(jenkins_builds_total{job="MapleExpectation"}[24h])) * 100
+sum(rate(jenkins_builds_success_total{job="probabilistic-valuation-engine"}[24h])) /
+sum(rate(jenkins_builds_total{job="probabilistic-valuation-engine"}[24h])) * 100
 
 # Build reruns due to flaky tests
 increase(jenkins_builds_rerun_total{reason="flaky"}[24h])
@@ -91,7 +91,7 @@ increase(jenkins_builds_rerun_total{reason="flaky"}[24h])
 ```json
 {
   "dashboard": {
-    "title": "MapleExpectation - Test Quality",
+    "title": "probabilistic-valuation-engine - Test Quality",
     "tags": ["testing", "quality", "flaky-tests"],
     "timezone": "UTC",
     "panels": [
@@ -218,7 +218,7 @@ increase(jenkins_builds_rerun_total{reason="flaky"}[24h])
 ### 1. Find Test Failures
 
 ```logql
-{filename="/home/maple/MapleExpectation/build/reports/tests/test/*.xml"}
+{filename="/home/maple/probabilistic-valuation-engine/build/reports/tests/test/*.xml"}
 |=`FAILED`
 | line_format "{{.message}}"
 ```
@@ -226,7 +226,7 @@ increase(jenkins_builds_rerun_total{reason="flaky"}[24h])
 ### 2. Find Thread.sleep Usage
 
 ```logql
-{source="MapleExpectation"}
+{source="probabilistic-valuation-engine"}
 |=`Thread.sleep`
 | line_format "Anti-pattern detected at {{.file}}:{{.line}}"
 ```
@@ -234,7 +234,7 @@ increase(jenkins_builds_rerun_total{reason="flaky"}[24h])
 ### 3. Find Redis Connection Issues
 
 ```logql
-{source="MapleExpectation"}
+{source="probabilistic-valuation-engine"}
 |="Redis"
 |="connection"
 |="failed"
@@ -330,7 +330,7 @@ scrape_configs:
 1. Navigate to Grafana → Dashboards → Import
 2. Paste the JSON configuration above
 3. Select Prometheus data source
-4. Save as "MapleExpectation - Test Quality"
+4. Save as "probabilistic-valuation-engine - Test Quality"
 
 ### 3. Alertmanager Configuration
 
@@ -367,4 +367,4 @@ The monitoring configuration ensures:
 
 **Document Version:** 1.0.0
 **Last Updated:** 2026-02-10
-**Maintained By:** MapleExpectation QA Team
+**Maintained By:** probabilistic-valuation-engine QA Team

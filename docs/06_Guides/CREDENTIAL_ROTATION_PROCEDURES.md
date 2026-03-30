@@ -7,7 +7,7 @@
 > **Documentation Version:** 1.0
 > **Compliance:** NIST SP 800-53, SOC 2, PCI DSS
 
-이 문서는 MapleExpectation 프로젝트의 자격 증명(Credential) 교체 절차를 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 자격 증명(Credential) 교체 절차를 정의합니다.
 
 ## Documentation Integrity Statement
 
@@ -809,7 +809,7 @@ After each rotation, collect evidence:
 
 ### 10.3 Compliance Requirements
 
-| Standard | Requirement | MapleExpectation Implementation |
+| Standard | Requirement | probabilistic-valuation-engine Implementation |
 |----------|-------------|-------------------------------|
 | **NIST SP 800-53** | SC-12: Cryptographic key rotation | 90-day JWT secret rotation |
 | **NIST SP 800-53** | IA-5: Authenticator rotation | 180-day password rotation |

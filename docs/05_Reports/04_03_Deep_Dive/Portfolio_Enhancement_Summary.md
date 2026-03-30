@@ -536,8 +536,8 @@ These three documents complete the portfolio transformation.
 #### N23 Cost-Performance 테스트 [L1]
 ```bash
 # 1. 사전 준비
-git clone https://github.com/zbnerd/MapleExpectation.git
-cd MapleExpectation
+git clone https://github.com/zbnerd/probabilistic-valuation-engine.git
+cd probabilistic-valuation-engine
 docker-compose up -d
 ./gradlew bootRun
 

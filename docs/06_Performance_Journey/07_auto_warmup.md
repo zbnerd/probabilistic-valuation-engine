@@ -33,6 +33,8 @@ Cold 상태에서는 20% 요청이 타임아웃된다. 모든 요청이 캐시 �
 ## 구현: Auto Warmup
 
 ```yaml
+# 예시 설정값. 실제 기본값은 application.yml 참조
+# 기본값: enabled=false, top-count=50, delay-between-ms=100
 scheduler:
   warmup:
     enabled: true           # 자동 웜업 활성화

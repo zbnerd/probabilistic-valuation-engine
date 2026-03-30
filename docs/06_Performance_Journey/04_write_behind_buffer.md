@@ -61,17 +61,17 @@ Request → Calculate → Buffer.offer (0.1ms) → Response
 
 **Phaser 기반 Shutdown Safety** — 서버 종료 시 버퍼에 남은 데이터를 안전하게 flush:
 
-```java
-private final Phaser shutdownPhaser = new Phaser();
+```kotlin
+private val shutdownPhaser = Phaser()
 
-public boolean offer(Long characterId, List<PresetExpectation> presets) {
-    if (shuttingDown) return false;
-    shutdownPhaser.register();
+fun offer(tasks: List<ExpectationWriteTask>): Boolean {
+    if (shuttingDown) return false
+    shutdownPhaser.register()
     return executor.executeWithFinally(
-        () -> offerInternal(characterId, presets),
-        shutdownPhaser::arriveAndDeregister,
-        TaskContext.of("Buffer", "Offer", "characterId=" + characterId)
-    );
+        { offerInternal(tasks) },
+        { shutdownPhaser.arriveAndDeregister() },
+        TaskContext.of("Buffer", "Offer", "tasks=${tasks.size}")
+    )
 }
 ```
 

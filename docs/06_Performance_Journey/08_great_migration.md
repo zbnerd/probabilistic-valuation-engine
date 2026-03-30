@@ -43,7 +43,7 @@ PostgreSQL은 이미 L2 캐시용 UNLOGGED 테이블로 사용 중이었다. 분
 
 ## 대이주: 3개 제거, 1개로 통합
 
-2026년 3월 11일, 3일간의 스프린트로 세 개의 데이터베이스 의존성을 제거했다.
+2026년 3월 11일, 3일간의 스프린트로 세 개의 데이터베이스 의존성을 대부분 제거했다. Session 저장소, Refresh Token 등 일부 기능은 후속 스프린트에서 완료 예정이다.
 
 ### Phase 1: Redis 제거 (Issue #589)
 
@@ -165,7 +165,7 @@ MongoDB의 문서 지향 쿼리는 편했지만, PostgreSQL JSONB + 인덱스로
 ---
 
 > **이 시점의 RPS: 변화 없음 (인프라 단순화에 집중)**
-> **관련 이슈**: #589 (Redis 제거), #590 (MongoDB 제거), #591 (MySQL 제거)
+> **관련 이슈**: #589 (Redis 제거, 일부 CLOSED), #590 (MongoDB 제거), #591 (MySQL 제거)
 > **관련 ADR**: ADR-022, ADR-023, ADR-024
 
 **다음 장**: [9장 — 최후의 도약: PostgreSQL NOTIFY](./09_postgresql_notify.md)

@@ -28,14 +28,16 @@ Request 2-100 → Follower로 대기 → Leader 결과 공유
 
 Semaphore로 동시 실행을 제어하고, 같은 키에 대한 요청은 첫 번째 요청의 결과를 기다리게 했다.
 
-```java
-// LocalSingleFlight 핵심 로직
-public <T> T execute(Supplier<T> supplier) {
-    return semaphore.tryAcquire()
-        ? supplier.get()   // Leader: 계산 수행
-        : waitForResult(); // Follower: 결과 대기
+```kotlin
+// 초기 로컬 SingleFlight 핵심 로직 (현재는 제거됨, PostgresSingleFlightStrategy로 대체)
+fun <T> execute(supplier: Supplier<T>): T {
+    return if (semaphore.tryAcquire())
+        supplier.get()    // Leader: 계산 수행
+    else waitForResult()  // Follower: 결과 대기
 }
 ```
+
+> **Note**: 이 초기 구현은 현재 코드베이스에서 제거되었다. `PostgresSingleFlightStrategy.kt`가 그 자리를 대체하고 있다.
 
 ## 결과: 97 RPS (−56% 회귀)
 
@@ -58,12 +60,12 @@ public <T> T execute(Supplier<T> supplier) {
 
 문제는 `LocalSingleFlight`가 **캐시 히트마저 blocking**했다는 것이다.
 
-```java
-// 문제의 코드
-public <T> T execute(Supplier<T> supplier) {
-    return semaphore.tryAcquire()
-        ? supplier.get()     // Leader: 캐시 히트든 미스든 실행
-        : waitForResult();   // Follower: 캐시 히트인데도 대기!
+```kotlin
+// 문제의 코드 (현재는 제거됨)
+fun <T> execute(supplier: Supplier<T>): T {
+    return if (semaphore.tryAcquire())
+        supplier.get()      // Leader: 캐시 히트든 미스든 실행
+    else waitForResult()    // Follower: 캐시 히트인데도 대기!
 }
 ```
 
@@ -90,7 +92,7 @@ LocalSingleFlight를 즉시 롤백했다. 대신 **다른 접근**이 필요했�
 
 ---
 
-> **이 시점의 RPS: 97 (회귀 후 원래대로 복귀)**
+> **이 시점의 RPS: 97 (초기 SingleFlight 롤백 후, 다른 최적화는 유지)**
 > **커밋**: `418cc04d` feat: V4 API Singleflight 패턴 적용 및 GZIP 응답 최적화
 > **관련 이슈**: #262, #263
 > **PR**: #262 (Singleflight 도입), 이후 LocalSingleFlight 롤백

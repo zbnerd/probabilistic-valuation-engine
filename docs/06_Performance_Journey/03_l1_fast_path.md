@@ -40,35 +40,32 @@ Controller → L1.getGzipDirect() → Response  // 끝!
 
 ### 구현
 
-```java
+```kotlin
 // TieredCacheManager에 직접 접근 메서드 추가
-public Cache getL1CacheDirect(String name) {
-    return l1Manager.getCache(name);
-}
+fun getL1CacheDirect(name: String): Cache? = l1Manager.getCache(name)
 
 // EquipmentExpectationServiceV4 — Fast Path
-public Optional<byte[]> getGzipFromL1CacheDirect(String userIgn) {
-    Cache l1Cache = tieredCacheManager.getL1CacheDirect(CACHE_NAME);
-    Cache.ValueWrapper wrapper = l1Cache.get(userIgn);
-    if (wrapper == null) return Optional.empty();
-    return Optional.of(Base64.getDecoder().decode((String) wrapper.get()));
+fun getGzipFromL1CacheDirect(userIgn: String): Optional<ByteArray> {
+    val l1Cache = tieredCacheManager.getL1CacheDirect(CACHE_NAME) ?: return Optional.empty()
+    val wrapper = l1Cache.get(userIgn) ?: return Optional.empty()
+    return Optional.of(Base64.getDecoder().decode(wrapper.get() as String))
 }
 ```
 
 컨트롤러에서 먼저 Fast Path를 확인하고, 미스면 기존 비동기 경로로 간다:
 
-```java
+```kotlin
 // GameCharacterControllerV4
-public ResponseEntity<byte[]> getExpectation(String userIgn) {
+fun getExpectation(userIgn: String): ResponseEntity<ByteArray> {
     // Fast Path: L1에 있으면 즉시 반환
-    Optional<byte[]> cached = service.getGzipFromL1CacheDirect(userIgn);
-    if (cached.isPresent()) {
+    val cached = service.getGzipFromL1CacheDirect(userIgn)
+    if (cached.isPresent) {
         return ResponseEntity.ok()
             .header("Content-Encoding", "gzip")
-            .body(cached.get());
+            .body(cached.get())
     }
     // Slow Path: 비동기 계산
-    return service.calculateExpectation(userIgn);
+    return service.calculateExpectation(userIgn)
 }
 ```
 
@@ -112,11 +109,11 @@ wrk (C Native):  555 RPS — 실제 서버 성능
 
 ## "괴물 스펙" 환산
 
-일반적인 웹 API는 2KB 응답을 10,000 RPS로 처리한다. 우리 API는 **300KB** 응답을 555 RPS로 처리한다.
+일반적인 웹 API는 2KB 응답을 10,000 RPS로 처리한다. 우리 API는 **300KB** 응답(압축 전 raw JSON 기준, GZIP 후 ~3-4KB)을 555 RPS로 처리한다.
 
 ```
 일반 API: 10,000 RPS × 2KB = 20 MB/s
-우리 API:    555 RPS × 300KB = 166.5 MB/s → 8.3배 더 많은 데이터 처리
+우리 API:    555 RPS × 300KB(raw) = 166.5 MB/s → 8.3배 더 많은 데이터 처리
 ```
 
 등가 환산: **8,300 RPS급** 데이터 처리 능력.

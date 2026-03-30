@@ -11,10 +11,10 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import maple.expectation.core.port.inbound.AdmissionPort;
 import maple.expectation.core.port.inbound.ExpectationV4Port;
 import maple.expectation.core.port.inbound.LikeTogglePort;
 import maple.expectation.core.port.out.PopularCharacterTrackerPort;
-import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
 import maple.expectation.web.controller.v4.GameCharacterControllerV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +49,7 @@ class GameCharacterControllerV4Test {
 
   private ExpectationV4Port expectationPort;
   private PopularCharacterTrackerPort trackerPort;
-  private GlobalAdmissionControl admissionControl;
+  private AdmissionPort admissionPort;
   private Executor taskExecutor;
   private GameCharacterControllerV4 controller;
 
@@ -57,13 +57,13 @@ class GameCharacterControllerV4Test {
   void setUp() {
     expectationPort = mock(ExpectationV4Port.class);
     trackerPort = mock(PopularCharacterTrackerPort.class);
-    admissionControl = mock(GlobalAdmissionControl.class);
+    admissionPort = mock(AdmissionPort.class);
     taskExecutor = Runnable::run;
-    controller = new GameCharacterControllerV4(expectationPort, trackerPort, admissionControl, mock(LikeTogglePort.class), taskExecutor);
+    controller = new GameCharacterControllerV4(expectationPort, trackerPort, admissionPort, mock(LikeTogglePort.class), taskExecutor);
 
-    // admissionControl.submitOrWait() executes the callable synchronously
+    // admissionPort.submitOrWait() executes the callable synchronously
     lenient()
-        .when(admissionControl.submitOrWait(anyString(), any(Callable.class)))
+        .when(admissionPort.submitOrWait(anyString(), any(Callable.class)))
         .thenAnswer(invocation -> {
           Callable<?> callable = invocation.getArgument(1);
           return CompletableFuture.completedFuture(callable.call());

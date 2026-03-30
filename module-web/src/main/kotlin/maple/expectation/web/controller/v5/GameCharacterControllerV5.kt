@@ -3,11 +3,11 @@ package maple.expectation.web.controller.v5
 import jakarta.validation.constraints.NotBlank
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
+import maple.expectation.common.executor.TaskContext
+import maple.expectation.core.domain.model.character.CharacterView
 import maple.expectation.core.port.inbound.CalculationQueuePort
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
+import maple.expectation.core.port.inbound.ExecutorPort
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.mapper.CharacterViewMapper
 import org.slf4j.LoggerFactory
@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController
 class GameCharacterControllerV5(
     private val queryPort: CharacterViewQueryPort,
     private val queuePort: CalculationQueuePort,
-    private val executor: LogicExecutor,
+    private val executorPort: ExecutorPort,
 ) {
 
     /**
@@ -61,16 +61,13 @@ class GameCharacterControllerV5(
         val context = TaskContext.of("V5Query", "CacheFirstLookup", userIgn)
 
         // 1. Query Side: Check PostgreSQL first via Port
-        val cachedResult: Optional<EquipmentExpectationResponseV5> = executor.executeOrDefault(
+        val cachedResult: Optional<EquipmentExpectationResponseV5> = executorPort.executeOrDefault(
             {
-                val view = queryPort.findByUserIgn(userIgn)
-                if (view is CharacterValuationViewEntity) {
-                    CharacterViewMapper.toResponseDto(view)
-                } else {
-                    Optional.empty<EquipmentExpectationResponseV5>()
-                }
+                queryPort.findByUserIgn(userIgn)
+                    .map { CharacterViewMapper.toResponseDto(it) }
+                    .orElse(Optional.empty())
             },
-            Optional.empty<EquipmentExpectationResponseV5>(),
+            Optional.empty(),
             context,
         )
 
@@ -103,7 +100,7 @@ class GameCharacterControllerV5(
         val context = TaskContext.of("V5Query", "InvalidateAndRecalculate", userIgn)
 
         // 1. Invalidate PostgreSQL cache via Port
-        executor.executeVoidJava({ queryPort.deleteByUserIgn(userIgn) }, context)
+        executorPort.executeVoidJava({ queryPort.deleteByUserIgn(userIgn) }, context)
 
         // 2. Queue with force=true via Port
         return queueCalculationTask(userIgn, true, context)
@@ -116,7 +113,7 @@ class GameCharacterControllerV5(
         forceRecalculation: Boolean,
         context: TaskContext,
     ): ResponseEntity<*> {
-        val queued = executor.executeOrDefault(
+        val queued = executorPort.executeOrDefault(
             { queuePort.offerHighPriority(userIgn, forceRecalculation) },
             false,
             context,

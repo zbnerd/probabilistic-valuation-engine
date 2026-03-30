@@ -11,7 +11,7 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeoutException
 import maple.expectation.error.dto.ErrorResponse
 import maple.expectation.error.exception.base.BaseException
-import maple.expectation.infrastructure.ratelimit.exception.RateLimitExceededException
+import maple.expectation.error.exception.RateLimitExceededException
 import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
 import org.springframework.http.HttpStatus

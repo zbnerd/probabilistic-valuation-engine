@@ -5,6 +5,7 @@ import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import jakarta.annotation.PostConstruct
 import java.nio.charset.StandardCharsets
+import java.time.Instant
 import java.util.Date
 import java.util.Optional
 import javax.crypto.SecretKey
@@ -221,13 +222,17 @@ class JwtTokenProvider(
 
         val claims: io.jsonwebtoken.Claims = jws.payload
 
+        // Null-safe claim extraction: provide defaults for required fields
+        val issuedAt = claims.issuedAt?.toInstant() ?: Instant.now()
+        val expiration = claims.expiration?.toInstant() ?: issuedAt.plusSeconds(expirationSeconds)
+
         val payload = JwtPayload(
             claims.subject,
             claims[CLAIM_FINGERPRINT, String::class.java],
             claims[CLAIM_ROLE, String::class.java],
             claims[CLAIM_USER_IGN, String::class.java] ?: "",
-            claims.issuedAt.toInstant(),
-            claims.expiration.toInstant(),
+            issuedAt,
+            expiration,
         )
 
         return Optional.of(payload)

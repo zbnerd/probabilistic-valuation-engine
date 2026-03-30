@@ -4,13 +4,13 @@ import jakarta.validation.constraints.NotBlank
 import java.math.BigDecimal
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
+import maple.expectation.core.port.inbound.AdmissionPort
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
-import maple.expectation.infrastructure.admission.GlobalAdmissionControl
 import maple.expectation.core.domain.model.like.LikeToggleResult
 import maple.expectation.core.domain.model.like.LikeToggleWithCount
 import maple.expectation.core.port.inbound.LikeTogglePort
-import maple.expectation.infrastructure.security.AuthenticatedUser
+import maple.expectation.core.domain.model.security.AuthenticatedUser
 import maple.expectation.response.ApiResponse
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4
 import maple.expectation.web.dto.v4.LikeStatusResponse
@@ -48,7 +48,7 @@ import org.springframework.web.bind.annotation.RestController
 class GameCharacterControllerV4(
     private val expectationPort: ExpectationV4Port,
     private val trackerPort: PopularCharacterTrackerPort,
-    private val admissionControl: GlobalAdmissionControl,
+    private val admissionPort: AdmissionPort,
     private val likeTogglePort: LikeTogglePort,
     @Qualifier("taskExecutor") private val taskExecutor: Executor,
 ) {
@@ -86,12 +86,12 @@ class GameCharacterControllerV4(
 
         return if (acceptsGzip(acceptEncoding)) {
             // GZIP 요청: admission → sync port → async response
-            admissionControl.submitOrWait(key) {
+            admissionPort.submitOrWait(key) {
                 expectationPort.getGzipExpectation(userIgn, force)
             }.thenApplyAsync({ gzipBytes -> buildGzipResponse(gzipBytes ?: ByteArray(0)) }, taskExecutor)
         } else {
             // JSON 요청: admission → sync port → async response
-            admissionControl.submitOrWait(key) {
+            admissionPort.submitOrWait(key) {
                 expectationPort.calculateExpectation(userIgn, force)
             }.thenApplyAsync({ this.buildJsonResponse(it) }, taskExecutor)
         }

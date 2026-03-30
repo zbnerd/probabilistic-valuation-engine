@@ -4,7 +4,7 @@
 Accepted (2026-03-08)
 
 ## Context
-MapleExpectation currently operates with a single datasource (MySQL/JPA) for transactional operations. However, the roadmap includes:
+probabilistic-valuation-engine currently operates with a single datasource (MySQL/JPA) for transactional operations. However, the roadmap includes:
 
 1. **V5 CQRS Implementation**: MongoDB for read models (conditionally enabled via `v5.enabled=true`)
 2. **MongoDB Read Replicas**: Planned for scaling read operations

@@ -9,7 +9,7 @@ keywords: [5-Agent Council, Pentagonal Pipeline, Sequential Thinking, SOLID, Tra
 
 ## Overview
 
-MapleExpectation 프로젝트는 **5-Agent Council** 프로토콜을 통해 모든 기능 구현과 리팩토링을 검토합니다. 이는 단순한 형식이 아니라 **실제 PR 리뷰와 ADR 검증에 사용되는 프로세스**입니다.
+probabilistic-valuation-engine 프로젝트는 **5-Agent Council** 프로토콜을 통해 모든 기능 구현과 리팩토링을 검토합니다. 이는 단순한 형식이 아니라 **실제 PR 리뷰와 ADR 검증에 사용되는 프로세스**입니다.
 
 ---
 
@@ -407,4 +407,4 @@ public class ExpectationCalculatorFactory {
 - [PR_TEMPLATE.md](../../98_Templates/PR_TEMPLATE.md) - PR 템플릿
 - [ISSUE_TEMPLATE.md](../../98_Templates/ISSUE_TEMPLATE.md) - 이슈 템플릿
 - [P0 Report](../../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md) - 에이전트 역할 검증
-- [ADR Directory](../../adr/) - Trade-off 결정 사례
+- [ADR Directory](../../01_ADR/) - Trade-off 결정 사례

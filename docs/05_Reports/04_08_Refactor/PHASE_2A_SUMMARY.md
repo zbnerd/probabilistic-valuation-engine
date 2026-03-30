@@ -14,7 +14,7 @@
 
 ### 1. ArchitectureTest.java - Updated
 
-**Location:** `/home/maple/MapleExpectation/src/test/java/maple/expectation/archunit/ArchitectureTest.java`
+**Location:** `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/archunit/ArchitectureTest.java`
 
 **Changes:**
 - Fixed 3 failing rules (Rules 5, 6, 8)
@@ -37,7 +37,7 @@
 
 ### 3. Documentation
 
-**Created:** `/home/maple/MapleExpectation/do../05_Reports/04_08_Refactor/ARCHUNIT_RULES.md`
+**Created:** `/home/maple/probabilistic-valuation-engine/do../05_Reports/04_08_Refactor/ARCHUNIT_RULES.md`
 
 **Contents:**
 - Detailed before/after comparison for each rule

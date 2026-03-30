@@ -308,7 +308,7 @@ done
 
 ### 1. 체크리스트 완성도 확인
 ```bash
-cd /home/maple/MapleExpectation/docs/adr
+cd /home/maple/probabilistic-valuation-engine/docs/adr
 grep -l "문서 무결성 체크리스트" ADR-*.md | wc -l
 # Expected: 11 (ADR-001, ADR-003, ADR-004, ADR-005, ADR-006, ADR-007, ADR-009, ADR-010, ADR-011, ADR-012, ADR-015)
 ```

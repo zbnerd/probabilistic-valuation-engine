@@ -2,7 +2,7 @@
 
 **Status**: Accepted (Implementation Phase)
 **Date**: 2026-02-14
-**Author**: MapleExpectation Architecture Team
+**Author**: probabilistic-valuation-engine Architecture Team
 **Supersedes**: [ADR-014](ADR-014-multi-module-cross-cutting-concerns.md), [ADR-013](ADR-013-redis-stream-design.md), [ADR-003](ADR-003-tiered-cache.md)
 
 ## Summary

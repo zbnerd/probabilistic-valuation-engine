@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 제안됨 (Proposed) |
 | 결정일 | 2026-03-28 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 선행 ADR | ADR-004 Collect-Compute-Serve, ADR-006 Scale-out, ADR-037 V5 CQRS, ADR-048 Virtual Threads |
 | 관련 이슈 | #623 |

@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 제안됨 (Proposed) |
 | 결정일 | 2026-03-10 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #558 |
 | 선행 ADR | ADR-002 PGMQ 기반 비동기 처리, ADR-003 Redis 기능 PostgreSQL 대체, ADR-005 PostgreSQL Advisory Lock |
@@ -17,7 +17,7 @@
 
 ### 현재 아키텍처 문제점
 
-MapleExpectation은 현재 **요청 시점 계산 (On-Demand Calculation)** 패턴을 사용:
+probabilistic-valuation-engine은 현재 **요청 시점 계산 (On-Demand Calculation)** 패턴을 사용:
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -607,4 +607,4 @@ GROUP BY queue_name;
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-10 | ADR 초안 작성 | MapleExpectation Team |
+| 2026-03-10 | ADR 초안 작성 | probabilistic-valuation-engine Team |

@@ -130,7 +130,7 @@ AlertManager → Discord
 
 #### 3.1 선택: Percona Slow Query Log Exporter + Prometheus
 
-MapleExpectation 프로젝트는 **선택지 3: Percona Slow Query Log Exporter + Prometheus**를 채택했습니다.
+probabilistic-valuation-engine 프로젝트는 **선택지 3: Percona Slow Query Log Exporter + Prometheus**를 채택했습니다.
 
 **결정 근거**:
 1. **ADR-053 (Observability Stack)과의 통합**: 이미 Prometheus + Grafana가 있음

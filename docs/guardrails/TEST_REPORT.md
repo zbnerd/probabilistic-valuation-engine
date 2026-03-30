@@ -29,7 +29,7 @@
 | GR-ARCH-015 | Synchronous drain prohibited | YES | YES | PASS |
 | GR-ARCH-005 | fixedRate scheduler prohibited | YES | YES | PASS |
 | GR-ARCH-001 | TieredCache required | YES | YES | PASS |
-| GR-ARCH-002 | Single-flight required | YES | YES | PASS |
+| GR-ARCH-002 | SingleFlight required | YES | YES | PASS |
 | GR-STYLE-001 | FQCN discouraged | YES | YES | PASS |
 | GR-CACHE-001 | TieredCache SingleFlight | AI | AI | AI_JUDGMENT |
 | GR-CACHE-002 | Follower timeout isolation | AI | AI | AI_JUDGMENT |

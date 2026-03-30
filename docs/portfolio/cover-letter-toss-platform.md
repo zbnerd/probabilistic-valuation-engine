@@ -69,7 +69,7 @@
 
 **문제**: 부하 테스트에서 캐시 만료 시 DB 호출 폭증 (1000 reqs → 1000 API calls)
 
-**해결**: Single-flight 패턴 + TieredCache (L1 Caffeine + L2 Redis)
+**해결**: SingleFlight 패턴 + TieredCache (L1 Caffeine + L2 Redis)
 
 **성과**: DB 호출 99% 감소, p99 레이턴시 92% 개선
 

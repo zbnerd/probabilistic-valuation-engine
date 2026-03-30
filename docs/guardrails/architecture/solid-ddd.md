@@ -10,7 +10,7 @@ languages: [java, kotlin]
 
 ## Overview
 
-MapleExpectation은 **SOLID 원칙**과 **Domain-Driven Design (DDD)**을 엄격히 준수하여 유지보수 가능성과 확장성을 확보합니다. 모든 코드는 이 원칙들을 따라야 합니다.
+probabilistic-valuation-engine은 **SOLID 원칙**과 **Domain-Driven Design (DDD)**을 엄격히 준수하여 유지보수 가능성과 확장성을 확보합니다. 모든 코드는 이 원칙들을 따라야 합니다.
 
 ---
 

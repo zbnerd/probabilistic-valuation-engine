@@ -42,15 +42,15 @@ scheduler:
     delay-between-ms: 50    # Thundering Herd 방지 (50ms 간격)
 ```
 
-```java
-@Scheduled(fixedDelay = "${scheduler.warmup.delay-between-ms:50}")
-public void warmupPopularCharacters() {
-    List<String> topIgns = popularCharacterService.getTopN(topCount);
-    for (String ign : topIgns) {
+```kotlin
+@Scheduled(fixedDelay = "\${scheduler.warmup.delay-between-ms:50}")
+fun warmupPopularCharacters() {
+    val topIgns = popularCharacterService.getTopN(topCount)
+    for (ign in topIgns) {
         if (!tieredCacheManager.isCached(CACHE_NAME, ign)) {
-            equipmentExpectationService.warmup(ign);
+            equipmentExpectationService.warmup(ign)
         }
-        Thread.sleep(delayBetweenMs);  // 50ms 간격
+        Thread.sleep(delayBetweenMs)  // 50ms 간격
     }
 }
 ```

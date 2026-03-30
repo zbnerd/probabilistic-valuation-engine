@@ -676,19 +676,19 @@ grep -E "buffer.redis.enabled|like.realtime.transport|lock.datasource.pool-size"
 
 - **[ROADMAP.md](../00_Start_Here/ROADMAP.md)** - 프로젝트 로드맵 (Phase 7: #283, #282, #126)
 - **[CLAUDE.md](../../CLAUDE.md)** - 코딩 규칙 및 아키텍처 가이드
-- **[ADR-003](../adr/ADR-003-tieredcache-singleflight.md)** - TieredCache 설계
-- **[ADR-004](../adr/ADR-004-logic-executor.md)** - LogicExecutor 설계
-- **[ADR-005](../adr/ADR-005-resilience4j-scenario-abc.md)** - Circuit Breaker 시나리오
-- **[ADR-009](../adr/ADR-009-cube-dp-engine.md)** - Cube DP 엔진 설계
-- **[ADR-013](../adr/ADR-013-cqrs.md)** - CQRS 아키텍처
-- **[ADR-014](../adr/ADR-014-multi-module-cross-cutting-concerns.md)** - 멀티 모듈 전환
+- **[ADR-003](../01_ADR/ADR-003-tieredcache-singleflight.md)** - TieredCache 설계
+- **[ADR-004](../01_ADR/ADR-004-logic-executor.md)** - LogicExecutor 설계
+- **[ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md)** - Circuit Breaker 시나리오
+- **[ADR-009](../01_ADR/ADR-009-cube-dp-engine.md)** - Cube DP 엔진 설계
+- **[ADR-013](../01_ADR/ADR-013-cqrs.md)** - CQRS 아키텍처
+- **[ADR-014](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)** - 멀티 모듈 전환
 
 ---
 
 ## 문서 관리 (Document Management)
 
 ### 피드백 제출
-- **GitHub Issues**: https://github.com/your-org/MapleExpectation/issues
+- **GitHub Issues**: https://github.com/your-org/probabilistic-valuation-engine/issues
 - **라벨**: `documentation`, `gap-analysis`, `architecture`
 
 ### 업데이트 절차

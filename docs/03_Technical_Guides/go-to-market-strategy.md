@@ -1,6 +1,6 @@
 # Go-to-Market Strategy 🚀
 
-**Purpose:** Define market positioning, customer acquisition, and growth strategy for MapleExpectation
+**Purpose:** Define market positioning, customer acquisition, and growth strategy for probabilistic-valuation-engine
 **Target:** Improve A4 (Market Value) from 3/5 to 5/5 (+2 points)
 **Date:** 2026-02-06
 
@@ -23,7 +23,7 @@
 
 ### Vision Statement
 
-> "MapleExpectation: The definitive reference implementation for enterprise-grade resilience patterns on a budget."
+> "probabilistic-valuation-engine: The definitive reference implementation for enterprise-grade resilience patterns on a budget."
 
 **Mission:** Demonstrate that world-class reliability, scalability, and observability are achievable at any scale and budget.
 
@@ -99,7 +99,7 @@
 
 #### For Backend Developers:
 
-> "Learn resilience patterns (Circuit Breaker, Singleflight, Tiered Cache) in a **real production environment** without spending $500+/month on infrastructure. MapleExpectation delivers enterprise-grade reliability for **$15/month**."
+> "Learn resilience patterns (Circuit Breaker, Singleflight, TieredCache) in a **real production environment** without spending $500+/month on infrastructure. probabilistic-valuation-engine delivers enterprise-grade reliability for **$15/month**."
 
 **Key Benefits:**
 - **Hands-on Learning:** Real code, real scenarios, real failures (chaos tests)
@@ -212,10 +212,10 @@
 ```markdown
 ## 🌟 What People Say
 
-> "MapleExpectation taught me more about resilience patterns than 6 months of reading blogs."
+> "probabilistic-valuation-engine taught me more about resilience patterns than 6 months of reading blogs."
 > — [@senior_engineer](https://github.com/senior_engineer), SRE at BigTech
 
-> "We use MapleExpectation as training material for new hires. It's that good."
+> "We use probabilistic-valuation-engine as training material for new hires. It's that good."
 > — [@tech_lead](https://github.com/tech_lead), Engineering Manager
 
 > "The chaos test scenarios helped us prevent a production outage. Saved us $50K in downtime."
@@ -236,7 +236,7 @@
 #### Tactic 2.1: Developer Community Engagement
 
 **GitHub Discussions (Weekly):**
-- **"Show & Tell" Fridays:** Share your MapleExpectation setup
+- **"Show & Tell" Fridays:** Share your probabilistic-valuation-engine setup
 - **"Ask Me Anything" (AMA):** Q&A about resilience patterns
 - **"Code Review" Sessions:** Review community contributions
 
@@ -382,7 +382,7 @@
 
 #### Tactic 3.3: Certification Program
 
-**"MapleExpectation Certified Resilience Engineer"** (MCRE)
+**"probabilistic-valuation-engine Certified Resilience Engineer"** (MCRE)
 
 **Requirements:**
 1. Complete all video tutorials (20 hours)
@@ -454,7 +454,7 @@
 #### Partnership Level 1: Integration Partners
 
 **Criteria:**
-- Product complements MapleExpectation
+- Product complements probabilistic-valuation-engine
 - Co-marketing opportunities
 - Revenue share: 20% referral fee
 
@@ -462,14 +462,14 @@
 
 | Partner | Product | Integration | Revenue Share |
 |---------|---------|--------------|---------------|
-| **LogDNA** | Log Management | "LogDNA for MapleExpectation" guide | 20% |
+| **LogDNA** | Log Management | "LogDNA for probabilistic-valuation-engine" guide | 20% |
 | **PagerDuty** | Incident Management | Alert integration | 20% |
 | **Datadog** | Monitoring (Premium) | Alternative to Prometheus | 20% |
 
 **Approach:**
 1. Identify mutual customers
 2. Create joint content (webinar, blog post)
-3. Offer discount: "Get 20% off Partner X + MapleExpectation bundle"
+3. Offer discount: "Get 20% off Partner X + probabilistic-valuation-engine bundle"
 
 ---
 
@@ -477,7 +477,7 @@
 
 **Criteria:**
 - Product reaches target audience (backend developers)
-- Embed MapleExpectation in their platform
+- Embed probabilistic-valuation-engine in their platform
 - Revenue share: 30% referral fee
 
 **Target Partners:**
@@ -489,7 +489,7 @@
 | **Railway** | Cloud Platform | Template in marketplace | 30% |
 
 **Approach:**
-1. Submit MapleExpectation to marketplace
+1. Submit probabilistic-valuation-engine to marketplace
 2. Provide Docker image with clear instructions
 3. Offer revenue share for customer referrals
 
@@ -499,7 +499,7 @@
 
 **Criteria:**
 - Publish technical content for developers
-- Feature MapleExpectation in articles/videos
+- Feature probabilistic-valuation-engine in articles/videos
 - Cross-promotion on social media
 
 **Target Partners:**
@@ -511,7 +511,7 @@
 | **DZone** | 2M monthly visitors | Refcard + tutorials |
 
 **Approach:**
-1. Pitch: "MapleExpectation is a case study in resilience patterns"
+1. Pitch: "probabilistic-valuation-engine is a case study in resilience patterns"
 2. Offer: Exclusive content, early access to features
 3. Benefit: High-quality content for their audience
 
@@ -552,7 +552,7 @@
 **Year 2: Expansion**
 - Launch mobile companion app
 - Expand to cloud platforms (AWS, GCP, Azure marketplaces)
-- Host first "MapleExpectation Summit" (virtual conference)
+- Host first "probabilistic-valuation-engine Summit" (virtual conference)
 - **Goal:** 50,000 GitHub stars, $5,000 MRR
 
 **Year 3: Maturity**
@@ -684,7 +684,7 @@
 
 ## 🎯 Conclusion
 
-**MapleExpectation's go-to-market strategy** focuses on:
+**probabilistic-valuation-engine's go-to-market strategy** focuses on:
 
 1. **Content Marketing:** Establish thought leadership through technical blogs, conference talks
 2. **Community Building:** Foster active Discord community and GitHub discussions
@@ -704,7 +704,7 @@
 
 ---
 
-**Prepared By:** MapleExpectation Team
+**Prepared By:** probabilistic-valuation-engine Team
 **Date:** 2026-02-06
 **Review Frequency:** Quarterly
 **Next Review:** 2026-05-06

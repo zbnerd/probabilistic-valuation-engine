@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory contains Architecture Decision Records (ADRs) for the MapleExpectation project. ADRs document significant architectural decisions, their context, alternatives considered, and consequences.
+This directory contains Architecture Decision Records (ADRs) for the probabilistic-valuation-engine project. ADRs document significant architectural decisions, their context, alternatives considered, and consequences.
 
 **Template:** [ADR-014](ADR-014-multi-module-cross-cutting-concerns.md) serves as the template for 30-point documentation integrity.
 

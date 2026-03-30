@@ -8,10 +8,10 @@
 
 ### 1.1 분산 캐시의 필요성
 
-MapleExpectation 서비스는 1,000명 이상의 동시 사용자를 처리하며, 240 RPS의 트래픽을 감당해야 합니다. 단일 서버의 Caffeine 캐시만으로는 다중 인스턴스 환경에서 데이터 일관성을 보장할 수 없습니다.
+probabilistic-valuation-engine 서비스는 1,000명 이상의 동시 사용자를 처리하며, 240 RPS의 트래픽을 감당해야 합니다. 단일 서버의 Caffeine 캐시만으로는 다중 인스턴스 환경에서 데이터 일관성을 보장할 수 없습니다.
 
 **증거:**
-- `/home/maple/MapleExpectation/docs/00_Start_Here/architecture.md` - TieredCache 아키텍처에서 L2 계층으로 분산 캐시 필요
+- `/home/maple/probabilistic-valuation-engine/docs/00_Start_Here/architecture.md` - TieredCache 아키텍처에서 L2 계층으로 분산 캐시 필요
 - 캐시 스탬프드 방지를 위한 Single-flight 패턴은 분산 환경에서 원자적 락이 필요
 
 ### 1.2 분산 락의 필요성
@@ -112,7 +112,7 @@ MapleExpectation 서비스는 1,000명 이상의 동시 사용자를 처리하�
 ### 3.2 Master-Slave + Sentinel HA 구성
 
 ```yaml
-# /home/maple/MapleExpectation/docker-compose.yml (lines 26-125)
+# /home/maple/probabilistic-valuation-engine/docker-compose.yml (lines 26-125)
 redis-master:
   image: redis:7.0
   ports:
@@ -136,7 +136,7 @@ redis-sentinel-1/2/3:
 
 **쿼럼 설정 (2/3):**
 ```
-# /home/maple/MapleExpectation/sentinel/sentinel-1.conf
+# /home/maple/probabilistic-valuation-engine/sentinel/sentinel-1.conf
 sentinel monitor mymaster 172.20.0.10 6379 2
 sentinel down-after-milliseconds mymaster 1000
 sentinel failover-timeout mymaster 3000
@@ -182,7 +182,7 @@ private static final String LUA_ATOMIC_MOVE = """
 
 ### 4.1 Docker Compose 인프라 구성
 
-**파일**: `/home/maple/MapleExpectation/docker-compose.yml`
+**파일**: `/home/maple/probabilistic-valuation-engine/docker-compose.yml`
 
 **Redis Master (lines 26-47)**:
 ```yaml
@@ -257,7 +257,7 @@ redis-sentinel-1:
       condition: service_started
 ```
 
-**Sentinel Configuration**: `/home/maple/MapleExpectation/sentinel/sentinel-1.conf`
+**Sentinel Configuration**: `/home/maple/probabilistic-valuation-engine/sentinel/sentinel-1.conf`
 ```
 port 26379
 sentinel monitor mymaster 172.20.0.10 6379 2
@@ -269,7 +269,7 @@ logfile ""
 
 ### 4.2 Redisson 3.27.0 의존성 설정
 
-**파일**: `/home/maple/MapleExpectation/build.gradle` (lines 45-49)
+**파일**: `/home/maple/probabilistic-valuation-engine/build.gradle` (lines 45-49)
 
 ```groovy
 dependencyManagement {
@@ -285,7 +285,7 @@ dependencyManagement {
 
 ### 4.3 분산 락 전략 구현
 
-**파일**: `/home/maple/MapleExpectation/docs/03_Technical_Guides/infrastructure.md` (lines 46-55)
+**파일**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/infrastructure.md` (lines 46-55)
 
 ```java
 // Redisson RLock 사용 패턴
@@ -326,7 +326,7 @@ public class RedisDistributedLockStrategy {
 
 ### 4.4 TieredCache L2 (Redis) 통합
 
-**파일**: `/home/maple/MapleExpectation/docs/00_Start_Here/architecture.md` (lines 86-91)
+**파일**: `/home/maple/probabilistic-valuation-engine/docs/00_Start_Here/architecture.md` (lines 86-91)
 
 ```mermaid
 flowchart TB
@@ -340,7 +340,7 @@ flowchart TB
     TC --> L2
 ```
 
-**Redis 사용 패턴**: `/home/maple/MapleExpectation/docs/03_Technical_Guides/infrastructure.md` (lines 309-318)
+**Redis 사용 패턴**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/infrastructure.md` (lines 309-318)
 
 | Feature | Redis Structure | Purpose |
 |---------|-----------------|---------|
@@ -352,7 +352,7 @@ flowchart TB
 
 ### 4.5 Lua Script + Hash Tag 구현
 
-**파일**: `/home/maple/MapleExpectation/docs/03_Technical_Guides/infrastructure.md` (lines 68-90)
+**파일**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/infrastructure.md` (lines 68-90)
 
 ```java
 // 원자적 RENAME + EXPIRE + HGETALL
@@ -374,7 +374,7 @@ List<Object> result = script.eval(
 );
 ```
 
-**Hash Tag 패턴**: `/home/maple/MapleExpectation/docs/03_Technical_Guides/infrastructure.md` (lines 106-119)
+**Hash Tag 패턴**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/infrastructure.md` (lines 106-119)
 
 ```java
 // Bad (다른 해시값 -> Cluster에서 실패)
@@ -477,10 +477,10 @@ public void handleLikeEvent(LikeEvent event) {
 
 | 문서 | 설명 | 링크 |
 |------|------|------|
-| **Infrastructure Guide** | Redis, Redisson, Lua Script, Hash Tag 규칙 | `/home/maple/MapleExpectation/docs/03_Technical_Guides/infrastructure.md` |
-| **Architecture** | TieredCache, Redis HA 아키텍처 다이어그램 | `/home/maple/MapleExpectation/docs/00_Start_Here/architecture.md` |
-| **Docker Compose** | Redis 7.0 + 3-Sentinel 전체 구성 | `/home/maple/MapleExpectation/docker-compose.yml` |
-| **Sentinel Config** | 쿼럼 2/3 설정 | `/home/maple/MapleExpectation/sentinel/sentinel-1.conf` |
+| **Infrastructure Guide** | Redis, Redisson, Lua Script, Hash Tag 규칙 | `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/infrastructure.md` |
+| **Architecture** | TieredCache, Redis HA 아키텍처 다이어그램 | `/home/maple/probabilistic-valuation-engine/docs/00_Start_Here/architecture.md` |
+| **Docker Compose** | Redis 7.0 + 3-Sentinel 전체 구성 | `/home/maple/probabilistic-valuation-engine/docker-compose.yml` |
+| **Sentinel Config** | 쿼럼 2/3 설정 | `/home/maple/probabilistic-valuation-engine/sentinel/sentinel-1.conf` |
 
 ---
 

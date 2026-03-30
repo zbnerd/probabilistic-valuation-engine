@@ -43,7 +43,7 @@
 ### Architecture Documentation
 - [ROADMAP.md](../00_Start_Here/ROADMAP.md): Phase 1-7 planning
 - [architecture.md](../00_Start_Here/architecture.md): System design with diagrams
-- [ADRs](../adr/): Architectural decision records
+- [ADRs](../01_ADR/): Architectural decision records
 
 ---
 

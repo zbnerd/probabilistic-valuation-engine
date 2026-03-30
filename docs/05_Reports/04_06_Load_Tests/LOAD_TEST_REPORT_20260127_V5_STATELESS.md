@@ -559,7 +559,7 @@ curl http://localhost:8081/api/v4/characters/아델/expectation | jq .
 - **[E5]** Calculation: (324.71 / 688.34) × 100 = 47.2% (~53% reduction)
 
 **ADR References:**
-- [ADR-012 Stateless Scalability Roadmap](../../adr/ADR-012-stateless-scalability-roadmap.md) - V5 architecture design
+- [ADR-012 Stateless Scalability Roadmap](../../01_ADR/ADR-012-stateless-scalability-roadmap.md) - V5 architecture design
 - V5 Buffer implementation follows Redis-based stateless pattern
 - Trade-off analysis documented in ADR-012 Section 5 (Performance vs Consistency)
 
@@ -646,7 +646,7 @@ test -f src/main/java/maple/expectation/buffer/RedisExpectationBuffer.java && ec
 
 ## Related ADR Documents
 
-- [ADR-012: Stateless Scalability Roadmap](../../adr/ADR-012-stateless-scalability-roadmap.md) - V5 architecture design rationale
+- [ADR-012: Stateless Scalability Roadmap](../../01_ADR/ADR-012-stateless-scalability-roadmap.md) - V5 architecture design rationale
 - **Trade-off Decision**: Single-instance performance (-53%) for unlimited horizontal scaling
 - **Rolling Update Safety**: V5 Redis buffer prevents data loss during deployment
 - **Scale-out Validation**: This report validates ADR-012 DoD item #2 (500 RPS/node in production)

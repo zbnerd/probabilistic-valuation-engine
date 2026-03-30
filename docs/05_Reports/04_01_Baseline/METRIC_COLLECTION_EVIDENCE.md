@@ -407,7 +407,7 @@ curl 'http://localhost:9090/api/v1/query?query=sum(lock_order_violation_total)'
 ### Step 1: Start Infrastructure
 
 ```bash
-cd /home/maple/MapleExpectation
+cd /home/maple/probabilistic-valuation-engine
 docker-compose up -d prometheus grafana
 ```
 

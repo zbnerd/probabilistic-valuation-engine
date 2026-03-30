@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 제안됨 (Proposed) |
 | 결정일 | 2026-03-10 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #554, #559, #560, #561, #564 |
 | 선행 ADR | ADR-001 PostgreSQL 단일 DB 전략, ADR-005 PostgreSQL Advisory Lock 설계 |
@@ -17,7 +17,7 @@
 
 ### 현재 상태: Redisson 분산 락
 
-MapleExpectation은 현재 **Redisson RLock**을 사용하여 다음 시나리오에서 분산 락을 적용합니다:
+probabilistic-valuation-engine은 현재 **Redisson RLock**을 사용하여 다음 시나리오에서 분산 락을 적용합니다:
 
 | 사용 사례 | 락 키 패턴 | 목적 |
 |----------|-----------|------|
@@ -512,7 +512,7 @@ FROM (SELECT 'PostgresLockPool' as pool_name,
              count(*) FILTER (WHERE state = 'idle') as idle_connections,
              count(*) as total_connections
       FROM pg_stat_activity
-      WHERE application_name = 'MapleExpectation') t;
+      WHERE application_name = 'probabilistic-valuation-engine') t;
 ```
 
 ### Prometheus Alert Rules
@@ -555,5 +555,5 @@ groups:
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-10 | ADR 초안 작성 (제안됨) | MapleExpectation Team |
+| 2026-03-10 | ADR 초안 작성 (제안됨) | probabilistic-valuation-engine Team |
 | 2026-03-10 | PostgresLockStrategy 구현 완료 (13 tests passed) | Issue #554 Unit 1 |

@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This document establishes the performance baseline for the MapleExpectation project BEFORE any refactoring begins. All metrics below serve as the reference point for measuring the impact of architectural changes.
+This document establishes the performance baseline for the probabilistic-valuation-engine project BEFORE any refactoring begins. All metrics below serve as the reference point for measuring the impact of architectural changes.
 
 **Key Baseline Metrics:**
 - **RPS:** 965 (100 concurrent)
@@ -80,7 +80,7 @@ Based on code analysis, the test suite covers:
 
 ### 3.2 Traffic Density Comparison
 
-| Metric | Typical Web Service | MapleExpectation | Ratio |
+| Metric | Typical Web Service | probabilistic-valuation-engine | Ratio |
 |--------|---------------------|------------------|-------|
 | **Payload per Request** | ~2KB | **200-300KB** | 150x |
 | **Memory per 100 Users** | ~10MB | **~1.5GB** | 150x |
@@ -111,7 +111,7 @@ Based on code analysis, the test suite covers:
 get(key) → getFromCacheLayers(key)
   → L1 Cache (Caffeine) → HIT: <5ms
   → L2 Cache (Redis) → HIT: <20ms, Backfill L1
-  → MISS → executeWithDistributedLock() → Single-flight
+  → MISS → executeWithDistributedLock() → SingleFlight
 ```
 
 **Performance Characteristics:**

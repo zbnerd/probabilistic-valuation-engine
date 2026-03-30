@@ -1,6 +1,6 @@
 # V4 API Cache Hit 성능 최적화 Load Test Report
 
-> **Issue**: [#264](https://github.com/zbnerd/MapleExpectation/issues/264)
+> **Issue**: [#264](https://github.com/zbnerd/probabilistic-valuation-engine/issues/264)
 > **Date**: 2026-01-24
 > **Author**: Claude Code (5-Agent Council)
 
@@ -75,12 +75,12 @@ Locust(Python)와 wrk(C)의 RPS 차이 분석 결과, **Locust의 GIL(Global Int
 ### 요청의 무게 (Weight of Request)
 
 일반적인 웹 서비스 API가 **"편의점 껌 하나 파는 수준(2KB)"**이라면,
-MapleExpectation API는 **"이삿짐 트럭 한 대 처리하는 수준(300KB)"**입니다.
+probabilistic-valuation-engine API는 **"이삿짐 트럭 한 대 처리하는 수준(300KB)"**입니다.
 
 | API 유형 | 응답 크기 | 예시 |
 |----------|----------|------|
 | 일반 API (User 조회) | ~2KB | `{"id": 1, "name": "홍길동"}` |
-| **MapleExpectation V4** | **~300KB** | 장비 20개 × 기대값 계산 결과 |
+| **probabilistic-valuation-engine V4** | **~300KB** | 장비 20개 × 기대값 계산 결과 |
 | **무게 차이** | **150배** | - |
 
 ### 처리량(Throughput) 환산
@@ -671,7 +671,7 @@ wrk -t12 -c600 -d60s --latency \
 - **[E8]** wrk C native performance: No GIL limitation, true server capacity
 
 **ADR References:**
-- [ADR-003: Tiered Cache Singleflight](../../adr/ADR-003-tiered-cache-singleflight.md) - L1/L2 cache architecture
+- [ADR-003: TieredCache Singleflight](../../01_ADR/ADR-003-tiered-cache-singleflight.md) - L1/L2 cache architecture
 - **L1 Fast Path**: ADR-003 Section 5 (Zero-Copy Optimization)
 - **Cache Tuning**: ADR-003 Section 6 (TTL and Size Configuration)
 - **Performance Trade-offs**: ADR-003 Section 7 (Memory vs Latency)
@@ -682,7 +682,7 @@ wrk -t12 -c600 -d60s --latency \
 
 | ADR | Title | Relevance to This Report |
 |-----|-------|--------------------------|
-| [ADR-003](../../adr/ADR-003-tiered-cache-singleflight.md) | Tiered Cache Singleflight | L1/L2 cache architecture foundation |
+| [ADR-003](../../01_ADR/ADR-003-tiered-cache-singleflight.md) | TieredCache Singleflight | L1/L2 cache architecture foundation |
 | ADR-003 Section 5 | Zero-Copy Optimization | L1 Fast Path implementation reference |
 | ADR-003 Section 6 | Cache Configuration | TTL 60min, Max Size 5000 settings |
 | ADR-003 Section 7 | Performance Trade-offs | Memory usage (~25MB) vs latency reduction |

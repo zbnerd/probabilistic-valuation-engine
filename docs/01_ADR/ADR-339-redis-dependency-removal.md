@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-11 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #589 |
 | 선행 ADR | ADR-003 PostgreSQL Redis 대체 전략 |

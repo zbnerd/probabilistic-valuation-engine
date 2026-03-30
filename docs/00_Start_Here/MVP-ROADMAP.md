@@ -1,4 +1,4 @@
-# MapleExpectation MVP Roadmap
+# probabilistic-valuation-engine MVP Roadmap
 
 > **Documentation Version:** 2.0
 > **Last Updated:** 2026-02-06
@@ -51,7 +51,7 @@ This roadmap is based on **current production implementation** validated through
 
 | Category | Feature | Rationale | Impact |
 |----------|---------|-----------|--------|
-| **Performance** | Single-flight concurrency prevention | Prevent cache stampede | High |
+| **Performance** | SingleFlight concurrency prevention | Prevent cache stampede | High |
 | **Reliability** | Write-behind async buffer | DB load reduction | Medium |
 | **Monitoring** | Grafana dashboards (5+) | Visual metrics | High |
 | **Scalability** | Connection pool optimization | Horizontal scaling | Medium |
@@ -125,7 +125,7 @@ This roadmap is based on **current production implementation** validated through
 |------|---------|------------|-------------------|
 | 3 | Security Hardening | Bean validation + input sanitization | All inputs validated |
 | 3 | Rate Limiting | IP + user-based limits | Abuse prevention active |
-| 4 | Performance Optimization | Single-flight implementation | Cache stampede prevented |
+| 4 | Performance Optimization | SingleFlight implementation | Cache stampede prevented |
 | 5 | Data Integrity | Write-behind buffer | DB load reduced 50% |
 | 6 | Resilience Testing | Chaos engineering tests | Recovery time < 5min |
 
@@ -392,7 +392,7 @@ This MVP roadmap provides a clear path to achieve C5 4/4 classification by focus
 4. **Progress Tracking**: GitHub-based accountability
 5. **Business Alignment**: Clear success metrics
 
-**Expected Outcome**: MapleExpectation will transition from a production-ready system to an **enterprise-grade platform** with comprehensive monitoring, security, and scalability capabilities.
+**Expected Outcome**: probabilistic-valuation-engine will transition from a production-ready system to an **enterprise-grade platform** with comprehensive monitoring, security, and scalability capabilities.
 
 ---
 

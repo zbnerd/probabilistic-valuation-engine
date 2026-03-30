@@ -225,7 +225,7 @@ MISS:   Singleflight로 1회만 DB 호출 → 나머지 대기 후 결과 공유
 
 - 데이터 도메인: MMORPG economy simulation (예시 도메인)
 - **핵심은 공통 인프라 설계 + 장애 격리 + 데이터 생존**
-- Codename: `MapleExpectation` (내부 문서)
+- Codename: `probabilistic-valuation-engine` (내부 문서)
 
 ## Links
 

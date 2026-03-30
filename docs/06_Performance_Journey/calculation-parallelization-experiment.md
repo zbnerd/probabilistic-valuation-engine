@@ -14,19 +14,19 @@
 - **Method**: `CompletableFuture.supplyAsync` 사용
 
 ### 코드 변경
-```java
+```kotlin
 // Before: Sequential item calculation
-for (var cubeInput : cubeInputs) {
-    ItemExpectationV4 itemResult = calculateSingleItem(...);
-    itemResults.add(itemResult);
+for (cubeInput in cubeInputs) {
+    val itemResult = calculateSingleItem(...)
+    itemResults.add(itemResult)
 }
 
 // After: Parallel item calculation
-var itemFutures = cubeInputs.stream()
-    .map(cubeInput -> CompletableFuture.supplyAsync(
-        () -> calculateSingleItemParallel(...),
-        itemCalculationExecutor))
-    .toList();
+val itemFutures = cubeInputs.stream()
+    .map { cubeInput -> CompletableFuture.supplyAsync(
+        { calculateSingleItemParallel(...) },
+        itemCalculationExecutor) }
+    .toList()
 ```
 
 ## 📊 Results

@@ -360,35 +360,35 @@ The ultrawork mode multi-agent approach successfully completed the foundational 
 
 ### Created Directories
 ```
-/home/maple/MapleExpectation/docs/01_Adr/
+/home/maple/probabilistic-valuation-engine/docs/01_Adr/
 └── ADR-039-current-architecture-assessment.md
 
-/home/maple/MapleExpectation/docs/05_Reports/
+/home/maple/probabilistic-valuation-engine/docs/05_Reports/
 ├── Multi-Module-Refactoring-Analysis.md
 ├── circular-dependency-resolution-report.md
 ├── ULTRAWORK-REFACTORING-SUMMARY.md (this file)
 
-/home/maple/MapleExpectation/docs/reports/
+/home/maple/probabilistic-valuation-engine/docs/reports/
 ├── stateless-design-verification.md
 ├── logic-executor-compliance.md
 └── api-compatibility-assessment.md
 
-/home/maple/MapleExpectation/docs/rollback/
+/home/maple/probabilistic-valuation-engine/docs/rollback/
 ├── strategy.md
 └── README.md
 
-/home/maple/MapleExpectation/docs/metrics/
+/home/maple/probabilistic-valuation-engine/docs/metrics/
 └── verification-strategy.md
 
-/home/maple/MapleExpectation/scripts/
+/home/maple/probabilistic-valuation-engine/scripts/
 ├── verify-rollback.sh
 ├── emergency-rollback.sh
 └── monitor-rollback.sh
 
-/home/maple/MapleExpectation/module-app/src/test/java/architecture/
+/home/maple/probabilistic-valuation-engine/module-app/src/test/java/architecture/
 └── ArchTest.java
 
-/home/maple/MapleExpectation/module-core/
+/home/maple/probabilistic-valuation-engine/module-core/
 └── application/port/out/ (5 ports)
 ```
 

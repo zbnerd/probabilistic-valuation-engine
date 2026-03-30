@@ -2,7 +2,7 @@
 
 ## Overview
 
-MapleExpectation 프로젝트의 DB 인프라를 MySQL + MongoDB + Redis → PostgreSQL 단일 DB로 마이그레이션합니다.
+probabilistic-valuation-engine 프로젝트의 DB 인프라를 MySQL + MongoDB + Redis → PostgreSQL 단일 DB로 마이그레이션합니다.
 
 ## Strategy: Selective Infrastructure Replacement
 

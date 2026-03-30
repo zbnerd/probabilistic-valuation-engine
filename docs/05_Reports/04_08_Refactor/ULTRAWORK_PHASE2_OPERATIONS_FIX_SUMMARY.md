@@ -17,7 +17,7 @@ All ⚠️ warning and ❌ error markers have been **completely eliminated** fro
 ## Files Modified
 
 ### 1. ULTRAWORK_FINAL_PHASE2_COMPLETE.md
-**Path**: `/home/maple/MapleExpectation/docs/05_Reports/ULTRAWORK_FINAL_PHASE2_COMPLETE.md`
+**Path**: `/home/maple/probabilistic-valuation-engine/docs/05_Reports/ULTRAWORK_FINAL_PHASE2_COMPLETE.md`
 
 | Metric | Before | After | Status |
 |--------|--------|-------|--------|
@@ -41,7 +41,7 @@ All ⚠️ warning and ❌ error markers have been **completely eliminated** fro
 ---
 
 ### 2. Operations README.md
-**Path**: `/home/maple/MapleExpectation/docs/04_Operations/README.md`
+**Path**: `/home/maple/probabilistic-valuation-engine/docs/04_Operations/README.md`
 
 | Metric | Before | After | Status |
 |--------|--------|-------|--------|
@@ -71,7 +71,7 @@ All ⚠️ warning and ❌ error markers have been **completely eliminated** fro
 ---
 
 ### 3. Operations observability.md
-**Path**: `/home/maple/MapleExpectation/docs/04_Operations/observability.md`
+**Path**: `/home/maple/probabilistic-valuation-engine/docs/04_Operations/observability.md`
 
 | Metric | Before | After | Status |
 |--------|--------|-------|--------|
@@ -142,7 +142,7 @@ Every claim now includes:
 
 **상태**: ✅ **DOCUMENTED** - 15+ 미문서화 동작 발견 및 완전 문서화 완료
 
-**파일**: `/home/maple/MapleExpectation/docs/05_Reports/IMPLICIT_BEHAVIORS_AUDIT.md`
+**파일**: `/home/maple/probabilistic-valuation-engine/docs/05_Reports/IMPLICIT_BEHAVIORS_AUDIT.md`
 
 | 카테고리 | 항목 | Code Anchor | Evidence | Status |
 |----------|------|-------------|----------|--------|
@@ -317,7 +317,7 @@ curl -s http://localhost:3000/api/search | jq '.[] | select(.type=="dash-db") | 
 
 **상태**: ✅ **DOCUMENTED** - 15+ 미문서화 동작 발견 및 완전 문서화 완료
 
-**파일**: `/home/maple/MapleExpectation/docs/05_Reports/IMPLICIT_BEHAVIORS_AUDIT.md`
+**파일**: `/home/maple/probabilistic-valuation-engine/docs/05_Reports/IMPLICIT_BEHAVIORS_AUDIT.md`
 
 | 카테고리 | 항목 | Code Anchor | Evidence | Status |
 |----------|------|-------------|----------|--------|
@@ -378,11 +378,11 @@ The documentation is ready for production deployment and meets all operational r
 
 ### Future Work 📋
 1. **Create security.md file** (referenced as COD-SEC)
-   - Location: `/home/maple/MapleExpectation/docs/04_Operations/security.md`
+   - Location: `/home/maple/probabilistic-valuation-engine/docs/04_Operations/security.md`
    - Content: Security policies, access control, compliance
 
 2. **Create on-call-checklist.md file** (referenced as COD-OP)
-   - Location: `/home/maple/MapleExpectation/docs/05_Guides/ON_CALL_CHECKLIST.md`
+   - Location: `/home/maple/probabilistic-valuation-engine/docs/05_Guides/ON_CALL_CHECKLIST.md`
    - Content: Daily/weekly procedures, escalation paths
 
 3. **Implement multi-failure scenario tests** (Q2 2026)
@@ -404,16 +404,16 @@ The documentation is ready for production deployment and meets all operational r
 ## Appendix: File Locations
 
 ### Modified Files
-1. `/home/maple/MapleExpectation/docs/05_Reports/ULTRAWORK_FINAL_PHASE2_COMPLETE.md`
-2. `/home/maple/MapleExpectation/docs/04_Operations/README.md`
-3. `/home/maple/MapleExpectation/docs/04_Operations/observability.md`
+1. `/home/maple/probabilistic-valuation-engine/docs/05_Reports/ULTRAWORK_FINAL_PHASE2_COMPLETE.md`
+2. `/home/maple/probabilistic-valuation-engine/docs/04_Operations/README.md`
+3. `/home/maple/probabilistic-valuation-engine/docs/04_Operations/observability.md`
 
 ### Referenced Files (To Be Created)
-1. `/home/maple/MapleExpectation/docs/05_Reports/IMPLICIT_BEHAVIORS_AUDIT.md`
-2. `/home/maple/MapleExpectation/docs/05_Reports/NON_DETERMINISTIC_TEST_AUDIT_REPORT.md`
-3. `/home/maple/MapleExpectation/docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N19-compound-failures.md`
-4. `/home/maple/MapleExpectation/docs/04_Operations/SECURITY_CONSIDERATIONS.md`
-5. `/home/maple/MapleExpectation/docs/05_Guides/ON_CALL_CHECKLIST.md`
+1. `/home/maple/probabilistic-valuation-engine/docs/05_Reports/IMPLICIT_BEHAVIORS_AUDIT.md`
+2. `/home/maple/probabilistic-valuation-engine/docs/05_Reports/NON_DETERMINISTIC_TEST_AUDIT_REPORT.md`
+3. `/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/06_Nightmare/Scenarios/N19-compound-failures.md`
+4. `/home/maple/probabilistic-valuation-engine/docs/04_Operations/SECURITY_CONSIDERATIONS.md`
+5. `/home/maple/probabilistic-valuation-engine/docs/05_Guides/ON_CALL_CHECKLIST.md`
 
 ---
 

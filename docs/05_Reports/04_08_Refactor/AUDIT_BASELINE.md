@@ -1,7 +1,7 @@
 # Audit Baseline - Integrity & Security
 
 > **Purple Agent Audit Report - Phase 0**
-> **Repository:** MapleExpectation (probabilistic-valuation-engine)
+> **Repository:** probabilistic-valuation-engine (probabilistic-valuation-engine)
 > **Date:** 2026-02-07
 > **Purpose:** Establish audit-grade baseline before any refactoring
 
@@ -21,11 +21,11 @@
 | Evidence Chain | **PASS** | All README claims verified against code |
 
 **DO NOT BREAK LIST** (Audit-Critical Components):
-1. `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/base/` - Exception hierarchy
-2. `/home/maple/MapleExpectation/src/main/java/maple/expectation/domain/v2/DonationOutbox.java` - Data integrity entity
-3. `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/donation/outbox/DlqHandler.java` - Triple Safety Net
-4. `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/security/` - JWT/Fingerprint security
-5. `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/GlobalExceptionHandler.java` - Global error mapping
+1. `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/base/` - Exception hierarchy
+2. `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/domain/v2/DonationOutbox.java` - Data integrity entity
+3. `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/donation/outbox/DlqHandler.java` - Triple Safety Net
+4. `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/security/` - JWT/Fingerprint security
+5. `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/GlobalExceptionHandler.java` - Global error mapping
 
 ---
 
@@ -33,7 +33,7 @@
 
 ### 1.1 Base Exception Classes
 
-**Location:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/base/`
+**Location:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/base/`
 
 ```mermaid
 classDiagram
@@ -133,7 +133,7 @@ classDiagram
 
 ### 1.4 Circuit Breaker Marker Interfaces
 
-**Location:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/marker/`
+**Location:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/marker/`
 
 ```java
 // Marker interface for exceptions that should NOT affect circuit breaker state
@@ -156,7 +156,7 @@ public interface CircuitBreakerRecordMarker {
 
 ### 2.1 Transactional Outbox (Triple Safety Net)
 
-**Entity:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/domain/v2/DonationOutbox.java`
+**Entity:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/domain/v2/DonationOutbox.java`
 
 **Key Integrity Features:**
 - `@Version` - Optimistic locking for concurrent modification detection
@@ -185,7 +185,7 @@ graph TD
     D --> E[Manual Intervention Required]
 ```
 
-**Implementation:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/donation/outbox/DlqHandler.java`
+**Implementation:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/donation/outbox/DlqHandler.java`
 
 ```java
 public void handleDeadLetter(DonationOutbox entry, String reason) {
@@ -216,7 +216,7 @@ SELECT
 
 **Kahan Summation Implementation:**
 
-**Location 1:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/cube/dto/DensePmf.java`
+**Location 1:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/cube/dto/DensePmf.java`
 
 ```java
 public double totalMassKahan() {
@@ -232,7 +232,7 @@ public double totalMassKahan() {
 }
 ```
 
-**Location 2:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/cube/component/TailProbabilityCalculator.java`
+**Location 2:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/cube/component/TailProbabilityCalculator.java`
 
 ```java
 private double kahanSumFrom(DensePmf pmf, int target) {
@@ -249,8 +249,8 @@ private double kahanSumFrom(DensePmf pmf, int target) {
 ```
 
 **Test Coverage:**
-- `/home/maple/MapleExpectation/src/test/java/maple/expectation/service/v2/cube/dto/DensePmfTest.java`
-- `/home/maple/MapleExpectation/src/test/java/maple/expectation/service/v2/cube/component/TailProbabilityCalculatorTest.java`
+- `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/service/v2/cube/dto/DensePmfTest.java`
+- `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/service/v2/cube/component/TailProbabilityCalculatorTest.java`
 
 **Precision:** DoD (Degree of Decisiveness) 1e-12
 
@@ -260,7 +260,7 @@ private double kahanSumFrom(DensePmf pmf, int target) {
 
 ### 3.1 Authentication
 
-**JWT Filter:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/security/filter/JwtAuthenticationFilter.java`
+**JWT Filter:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/security/filter/JwtAuthenticationFilter.java`
 
 **Authentication Flow:**
 ```mermaid
@@ -307,7 +307,7 @@ private boolean validateFingerprint(Session session, String jwtFingerprint, Stri
 }
 ```
 
-**JWT Provider:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/security/jwt/JwtTokenProvider.java`
+**JWT Provider:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/security/jwt/JwtTokenProvider.java`
 
 **Security Features:**
 - HS256 algorithm
@@ -317,7 +317,7 @@ private boolean validateFingerprint(Session session, String jwtFingerprint, Stri
 
 ### 3.2 Authorization
 
-**Security Config:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/config/SecurityConfig.java`
+**Security Config:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/config/SecurityConfig.java`
 
 **RBAC Roles:**
 - `ADMIN` - Admin endpoints access
@@ -394,7 +394,7 @@ http_server_requests_seconds{uri="...",status="..."}
 
 **Evidence:** N21 Incident - `hikaricp_connections_active{pool="MySQLLockPool"} = 30/30 @ 16:22:20Z`
 
-**Prometheus Client:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/monitoring/copilot/client/PrometheusClient.java`
+**Prometheus Client:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/monitoring/copilot/client/PrometheusClient.java`
 
 ### 4.2 Logs (Loki)
 
@@ -424,12 +424,12 @@ TaskContext.of("Outbox", "PollAndProcess", instanceId)
 
 | README Claim | Code Location | Evidence | Status |
 |--------------|---------------|----------|--------|
-| RPS 965, p99 214ms | Load Test #266 | `/home/maple/MapleExpectation/docs/05_Reports/Load_Tests/` | VERIFIED |
-| 2.16M events preserved | N19 Report | `/home/maple/MapleExpectation/docs/05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md` | VERIFIED |
-| MTTD 30s, MTTR 2m | N21 Report | `/home/maple/MapleExpectation/docs/05_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md` | VERIFIED |
-| Triple Safety Net | DlqHandler.java | `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/donation/outbox/DlqHandler.java` | VERIFIED |
-| Kahan Summation | DensePmf.java, TailProbabilityCalculator.java | `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/cube/` | VERIFIED |
-| JWT Fingerprint Dual Verify | JwtAuthenticationFilter.java | `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/security/filter/` | VERIFIED |
+| RPS 965, p99 214ms | Load Test #266 | `/home/maple/probabilistic-valuation-engine/docs/05_Reports/Load_Tests/` | VERIFIED |
+| 2.16M events preserved | N19 Report | `/home/maple/probabilistic-valuation-engine/docs/05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md` | VERIFIED |
+| MTTD 30s, MTTR 2m | N21 Report | `/home/maple/probabilistic-valuation-engine/docs/05_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md` | VERIFIED |
+| Triple Safety Net | DlqHandler.java | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/donation/outbox/DlqHandler.java` | VERIFIED |
+| Kahan Summation | DensePmf.java, TailProbabilityCalculator.java | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/cube/` | VERIFIED |
+| JWT Fingerprint Dual Verify | JwtAuthenticationFilter.java | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/security/filter/` | VERIFIED |
 | Discord Ed25519 | Discord config | `-` | VERIFIED |
 
 ### 5.2 Before Refactor Checklist
@@ -461,29 +461,29 @@ TaskContext.of("Outbox", "PollAndProcess", instanceId)
 ### 6.1 Critical Files (Zero Modification Tolerance)
 
 1. **Exception Base Classes**
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/base/BaseException.java`
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/base/ClientBaseException.java`
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/base/ServerBaseException.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/base/BaseException.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/base/ClientBaseException.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/base/ServerBaseException.java`
 
 2. **Circuit Breaker Markers**
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/marker/CircuitBreakerIgnoreMarker.java`
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/marker/CircuitBreakerRecordMarker.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/marker/CircuitBreakerIgnoreMarker.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/marker/CircuitBreakerRecordMarker.java`
 
 3. **Data Integrity**
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/domain/v2/DonationOutbox.java` (SHA-256 hash logic)
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/donation/outbox/DlqHandler.java` (Triple Safety Net)
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/domain/v2/DonationOutbox.java` (SHA-256 hash logic)
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/donation/outbox/DlqHandler.java` (Triple Safety Net)
 
 4. **Security**
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/security/filter/JwtAuthenticationFilter.java`
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/security/jwt/JwtTokenProvider.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/security/filter/JwtAuthenticationFilter.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/security/jwt/JwtTokenProvider.java`
 
 5. **Precision**
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/cube/dto/DensePmf.java`
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/service/v2/cube/component/TailProbabilityCalculator.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/cube/dto/DensePmf.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/service/v2/cube/component/TailProbabilityCalculator.java`
 
 6. **Global Error Handling**
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/GlobalExceptionHandler.java`
-   - `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/dto/ErrorResponse.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/GlobalExceptionHandler.java`
+   - `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/dto/ErrorResponse.java`
 
 ### 6.2 Metric Names (Stability Contract)
 
@@ -518,7 +518,7 @@ file_backup_total
 
 ## 7. LogicExecutor Patterns (Zero Try-Catch Policy)
 
-**Location:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/executor/LogicExecutor.java`
+**Location:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/executor/LogicExecutor.java`
 
 **6 Patterns + 2 Variants:**
 
@@ -541,7 +541,7 @@ file_backup_total
 
 ## 8. Global Error Mapping
 
-**Location:** `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/GlobalExceptionHandler.java`
+**Location:** `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/GlobalExceptionHandler.java`
 
 **Exception Handlers:**
 

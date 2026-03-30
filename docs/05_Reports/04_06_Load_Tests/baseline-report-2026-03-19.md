@@ -21,7 +21,7 @@
 
 ## Test Environment
 
-- **Application**: MapleExpectation v0.0.1-SNAPSHOT
+- **Application**: probabilistic-valuation-engine v0.0.1-SNAPSHOT
 - **Java**: OpenJDK 21.0.6
 - **Spring Boot**: 3.5.4
 - **Database**: PostgreSQL 17.6 (Docker)

@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-MapleExpectation demonstrates **strong architectural foundations** for scale-out with Redis-based distributed coordination, virtual thread adoption, and proper connection pooling. However, **8 P0 critical blockers** prevent immediate horizontal scaling from 1 to N instances without data integrity risks.
+probabilistic-valuation-engine demonstrates **strong architectural foundations** for scale-out with Redis-based distributed coordination, virtual thread adoption, and proper connection pooling. However, **8 P0 critical blockers** prevent immediate horizontal scaling from 1 to N instances without data integrity risks.
 
 ### Overall Assessment
 
@@ -73,12 +73,12 @@ grep -r "HttpSession" src/main/java/ | wc -l
 ```
 Single Instance (Current):
 ✅ AlertThrottler.dailyAiCallCount = 50/day (correct)
-✅ Single-flight prevents duplicate API calls
+✅ SingleFlight prevents duplicate API calls
 ✅ AiSreService unbounded (controlled by low traffic)
 
 N Instances (Without Fixes):
 ❌ AlertThrottler.dailyAiCallCount = 50 × N (quota breach)
-❌ Single-flight bypassed → API load × N
+❌ SingleFlight bypassed → API load × N
 ❌ AiSreService unbounded × N → OOM risk
 ```
 
@@ -132,7 +132,7 @@ public TaskDecorator contextPropagatingDecorator() {
 
 ### 2.1 ✅ PASS: Redis-Based Distributed Locks
 
-**Configuration:** `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/config/RedissonConfig.java`
+**Configuration:** `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/config/RedissonConfig.java`
 
 **Key Settings:**
 ```java
@@ -235,10 +235,10 @@ spring:
 | `taskScheduler` | 3 | - | - | AbortPolicy | ✅ Yes |
 
 **Key Files:**
-- `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/config/ExecutorConfig.java`
-- `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/config/EquipmentProcessingExecutorConfig.java`
-- `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/config/PresetCalculationExecutorConfig.java`
-- `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/config/SchedulerConfig.java`
+- `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/config/ExecutorConfig.java`
+- `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/config/EquipmentProcessingExecutorConfig.java`
+- `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/config/PresetCalculationExecutorConfig.java`
+- `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/config/SchedulerConfig.java`
 
 **Status:** ✅ **READY FOR SCALE-OUT**
 
@@ -539,7 +539,7 @@ new ExecutorServiceMetrics(
 - Deploy 2 instances behind load balancer
 - Monitor:
   - AlertThrottler daily count (should NOT double)
-  - Single-flight effectiveness (API call count)
+  - SingleFlight effectiveness (API call count)
   - Scheduler duplicate execution (logs)
   - Graceful shutdown data loss
 

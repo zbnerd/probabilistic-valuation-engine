@@ -61,11 +61,11 @@
 ## 🔗 Evidence IDs (증거 식별자)
 
 ### 코드 증거 (Code Evidence)
-- [C1] **HikariCP 설정**: `/home/maple/MapleExpectation/src/main/resources/application.yml` (line 17-22)
+- [C1] **HikariCP 설정**: `/home/maple/probabilistic-valuation-engine/src/main/resources/application.yml` (line 17-22)
   - `connection-timeout: 3000` - 커넥션 풀 타임아웃 설정
   - `leak-detection-threshold: 60000` - 커넥션 누수 탐지
 
-- [C2] **Spring Boot Actuator 설정**: `/home/maple/MapleExpectation/src/main/resources/application.yml` (line 41-55)
+- [C2] **Spring Boot Actuator 설정**: `/home/maple/probabilistic-valuation-engine/src/main/resources/application.yml` (line 41-55)
   ```yaml
   management:
     endpoints:
@@ -77,12 +77,12 @@
         show-details: always
   ```
 
-- [C3] **MySQL Health Event Publisher**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/resilience/MySQLHealthEventPublisher.java`
+- [C3] **MySQL Health Event Publisher**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/resilience/MySQLHealthEventPublisher.java`
   - 데이터베이스 Health Check 이벤트 발행
 
 ### 테스트 증거 (Test Evidence)
 - [T1] **테스트 파일**: ✅ **구현 완료**
-  - 위치: `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/resource/DiskFullChaosTest.java`
+  - 위치: `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/resource/DiskFullChaosTest.java`
   - 테스트 메서드:
     - `shouldHandleDiskFull_gracefully()` - 디스크 가득 찼을 때 서비스 가용성 유지 검증
     - `shouldHandleException_whenDiskFull()` - 디스크 가득 찼을 때 예외 처리 및 Circuit Breaker 동작

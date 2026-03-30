@@ -327,4 +327,4 @@ curl -s http://localhost:8080/actuator/metrics | jq '.names[] | select(. | conta
 - **Annotation:** `src/main/java/maple/expectation/aop/annotation/NexonDataCache.java`
 
 ### 이슈
-- **[PR #264](https://github.com/zbnerd/MapleExpectation/pull/264)** - L1 Fast Path 구현
+- **[PR #264](https://github.com/zbnerd/probabilistic-valuation-engine/pull/264)** - L1 Fast Path 구현

@@ -364,7 +364,7 @@ infrastructure/
 ├── cache/
 │   ├── TieredCache.java                   # L1 + L2 coordination
 │   ├── TieredCacheManager.java
-│   ├── SingleFlightManager.java           # Single-flight
+│   ├── SingleFlightManager.java           # SingleFlight
 │   ├── CacheInvalidationPublisher.java    # Pub/Sub
 │   └── config/
 │       ├── CacheConfig.java
@@ -760,7 +760,7 @@ import org.springframework.data.jpa.repository.JpaRepository;  // ✗ DIP violat
 ### Preserving V4 Optimizations
 
 1. **Fast Path (L1 Direct Access)**: Keep in `infrastructure/cache/`
-2. **Single-flight**: Keep in `infrastructure/cache/`
+2. **SingleFlight**: Keep in `infrastructure/cache/`
 3. **Write-Behind Buffer**: Keep in `infrastructure/cache/`
 4. **Async Pipeline**: Keep in `application/service/`
 

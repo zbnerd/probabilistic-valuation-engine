@@ -1,6 +1,6 @@
 # Demo Guide (데모 시연 가이드)
 
-> MapleExpectation 핵심 기능 시연 가이드
+> probabilistic-valuation-engine 핵심 기능 시연 가이드
 > 총 소요 시간: 약 10분
 >
 > **버전**: 2.0.0
@@ -51,8 +51,8 @@
 
 ```bash
 # 1. 프로젝트 클론 및 빌드
-git clone https://github.com/zbnerd/MapleExpectation.git
-cd MapleExpectation
+git clone https://github.com/zbnerd/probabilistic-valuation-engine.git
+cd probabilistic-valuation-engine
 ./gradlew build -x test
 
 # 2. 인프라 실행 (MySQL, Redis)
@@ -409,7 +409,7 @@ curl -s http://localhost:8080/actuator/prometheus | grep -E "http_server|cache|s
 
 ## Evidence IDs
 
-- **EV-DEMO-001**: 헤더 "MapleExpectation 핵심 기능 시연 가이드"
+- **EV-DEMO-001**: 헤더 "probabilistic-valuation-engine 핵심 기능 시연 가이드"
 - **EV-DEMO-002**: 헤더 "Version 2.0.0", "마지막 수정 2026-02-05"
 - **EV-DEMO-003**: 섹션 "Terminology" - 11개 핵심 용어 정의
 - **EV-DEMO-004**: 섹션 "사전 준비" Docker/빌드/실행 4단계

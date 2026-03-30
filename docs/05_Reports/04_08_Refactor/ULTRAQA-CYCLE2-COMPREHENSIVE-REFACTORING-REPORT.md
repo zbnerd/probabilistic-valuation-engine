@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The 5-Agent Council (Blue, Green, Yellow, Purple, Red) has completed a comprehensive analysis of the MapleExpectation codebase, including all ADR documents, V4/V2 service flows, CLAUDE.md principles, and flaky test prevention strategies.
+The 5-Agent Council (Blue, Green, Yellow, Purple, Red) has completed a comprehensive analysis of the probabilistic-valuation-engine codebase, including all ADR documents, V4/V2 service flows, CLAUDE.md principles, and flaky test prevention strategies.
 
 ### Final Decision: **UNANIMOUS PASS**
 
@@ -224,7 +224,7 @@ Response (GZIP or JSON)
 | ADR | Title | Status | Key Decision |
 |-----|-------|--------|--------------|
 | ADR-001 | Streaming Parser | Accepted | Jackson Streaming API for OOM prevention |
-| ADR-003 | Tiered Cache Singleflight | Accepted | L1/L2 cache with SingleFlight |
+| ADR-003 | TieredCache Singleflight | Accepted | L1/L2 cache with SingleFlight |
 | ADR-004 | LogicExecutor Policy Pipeline | Accepted | Zero try-catch policy |
 | ADR-011 | Controller V4 Optimization | Accepted | 965 RPS performance target |
 | ADR-012 | Stateless Scalability Roadmap | Proposed | V4→V5→V6 migration path |
@@ -352,7 +352,7 @@ All P0 items are already resolved. The codebase is in excellent condition for:
 
 **ULTRAQA Cycle 2 COMPLETE - UNANIMOUS PASS**
 
-The MapleExpectation codebase demonstrates:
+The probabilistic-valuation-engine codebase demonstrates:
 - ✅ Excellent code quality (A-grade)
 - ✅ Strong adherence to CLAUDE.md guidelines
 - ✅ Proper SOLID principles throughout

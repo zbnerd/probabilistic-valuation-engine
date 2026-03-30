@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-28 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 선행 ADR | ADR-006 Scale-out Strategy, ADR-022 Redis Dependency Removal |
 

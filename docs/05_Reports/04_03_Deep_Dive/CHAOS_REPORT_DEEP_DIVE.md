@@ -1,4 +1,4 @@
-# MapleExpectation Chaos Test Deep Dive Report
+# probabilistic-valuation-engine Chaos Test Deep Dive Report
 
 > **5-Agent Council**: 🟡 Yellow (QA Master), 🔴 Red (SRE), 🔵 Blue (Architect), 🟢 Green (Performance), 🟣 Purple (Auditor)
 > **생성일**: 2026-01-19
@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-MapleExpectation 시스템의 **회복 탄력성(Resilience)**을 검증하기 위해 **17개의 극한 카오스 테스트 시나리오**와 **18개의 Nightmare 레벨 취약점 탐지 테스트**를 설계하고 실행했습니다.
+probabilistic-valuation-engine 시스템의 **회복 탄력성(Resilience)**을 검증하기 위해 **17개의 극한 카오스 테스트 시나리오**와 **18개의 Nightmare 레벨 취약점 탐지 테스트**를 설계하고 실행했습니다.
 
 ### 전체 결과
 

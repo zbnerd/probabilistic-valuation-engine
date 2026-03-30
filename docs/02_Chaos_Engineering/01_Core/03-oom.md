@@ -96,15 +96,15 @@
 
 | ID | 파일 경로 | 라인 | 설명 | 검증 상태 |
 |----|----------|------|------|----------|
-| [E9] | `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/executor/strategy/ExceptionTranslator.java` | 45-49 | Error guard 구현 (OOM 등 즉시 re-throw) | ✅ 확인됨 |
-| [E10] | `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/executor/LogicExecutor.java` | 전체 | 예외 처리 및 작업 실행 템플릿 | ✅ 확인됨 |
-| [E11] | `/home/maple/MapleExpectation/src/main/java/maple/expectation/config/JvmMetricsConfig.java` | 전체 | JVM 메트릭 설정 | ✅ 확인됨 |
+| [E9] | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/executor/strategy/ExceptionTranslator.java` | 45-49 | Error guard 구현 (OOM 등 즉시 re-throw) | ✅ 확인됨 |
+| [E10] | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/executor/LogicExecutor.java` | 전체 | 예외 처리 및 작업 실행 템플릿 | ✅ 확인됨 |
+| [E11] | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/config/JvmMetricsConfig.java` | 전체 | JVM 메트릭 설정 | ✅ 확인됨 |
 
 ### 테스트 증거 (Test Evidence)
 
 | ID | 파일 경로 | 테스트 메서드 | 설명 | 검증 상태 |
 |----|----------|-------------|------|----------|
-| [T8] | `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/core/OOMChaosTest.java` | shouldPropagateError_whenOOMOccurs | Error 전파 검증 | ✅ 확인됨 |
+| [T8] | `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/core/OOMChaosTest.java` | shouldPropagateError_whenOOMOccurs | Error 전파 검증 | ✅ 확인됨 |
 | [T9] | [T8] 동일 | shouldRecover_afterGCMemoryPressure | GC 회복 검증 | ✅ 확인됨 |
 
 ### 로그 증거 (Log Evidence)
@@ -543,7 +543,7 @@ curl http://localhost:8080/actuator/health
 ### 복구 완료 로그 증거
 ```text
 # Recovery Log Output
-19:06:00.000 INFO  [main] Application : Starting MapleExpectation...  <-- 1. 재시작
+19:06:00.000 INFO  [main] Application : Starting probabilistic-valuation-engine...  <-- 1. 재시작
 19:06:15.000 INFO  [main] HikariPool : Pool started  <-- 2. DB 연결 복구
 19:06:20.000 INFO  [main] Application : Started in 20s  <-- 3. 서비스 정상화
 ```

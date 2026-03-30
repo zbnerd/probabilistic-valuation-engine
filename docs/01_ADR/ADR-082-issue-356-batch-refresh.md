@@ -2,7 +2,7 @@
 
 **상태**: Proposed (구현 전)
 **날짜**: 2026-02-21
-**작성자**: MapleExpectation Architecture Team
+**작성자**: probabilistic-valuation-engine Architecture Team
 **관련 이슈**: #356
 **관련 문서**: [ADR-079](ADR-079-v5-cqrs-flowchart-complete.md), [ADR-037](ADR-037-v5-cqrs-command-side.md)
 
@@ -12,7 +12,7 @@
 
 ### 현재 시스템의 한계
 
-MapleExpectation V4/V5 시스템은 **사용자 요청 시에만** 장비 데이터를 갱신합니다:
+probabilistic-valuation-engine V4/V5 시스템은 **사용자 요청 시에만** 장비 데이터를 갱신합니다:
 
 1. **데이터 신선도 부족**: 오래된 데이터는 유효하지 않을 수 있음
 2. **콜드 스타트 문제**: 오랫동안 방문하지 않은 유저는 첫 요청시 30초 대기
@@ -690,4 +690,4 @@ class EquipmentRefreshJobIntegrationTest {
 **문서 버전**: 1.0
 **최종 업데이트**: 2026-02-21
 **다음 리뷰**: 구현 완료 후
-**소유자**: MapleExpectation Architecture Team
+**소유자**: probabilistic-valuation-engine Architecture Team

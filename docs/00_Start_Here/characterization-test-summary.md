@@ -3,7 +3,7 @@
 **Date:** 2026-02-10
 **Test Suite:** `CharacterEquipmentCharacterizationTest`
 **Status:** ✅ All Tests Passing (20/20)
-**File:** `/home/maple/MapleExpectation/src/test/java/maple/expectation/characterization/CharacterEquipmentCharacterizationTest.java`
+**File:** `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/characterization/CharacterEquipmentCharacterizationTest.java`
 
 ---
 

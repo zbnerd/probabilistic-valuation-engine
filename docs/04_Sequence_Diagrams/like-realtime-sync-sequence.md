@@ -1,7 +1,7 @@
 # 좋아요 실시간 동기화 시퀀스 다이어그램 (Issue #278)
 
 > **Last Updated:** 2026-02-05
-> **Code Version:** MapleExpectation v1.x
+> **Code Version:** probabilistic-valuation-engine v1.x
 > **Diagram Version:** 1.0
 > **Related Issue:** #278
 

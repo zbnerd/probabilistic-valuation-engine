@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-09 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #547, #548, #551, #552 |
 | 선행 ADR | ADR-001 PostgreSQL 단일 DB 전략 |
@@ -17,7 +17,7 @@
 
 ### 현재 아키텍처
 
-MapleExpectation은 메시지 큐를 위해 **Redis Streams + Outbox 패턴**을 사용:
+probabilistic-valuation-engine은 메시지 큐를 위해 **Redis Streams + Outbox 패턴**을 사용:
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -376,5 +376,5 @@ GROUP BY queue_name;
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-09 | ADR 초안 작성 | MapleExpectation Team |
-| 2026-03-09 | 상태를 "수락됨"으로 변경 | MapleExpectation Team |
+| 2026-03-09 | ADR 초안 작성 | probabilistic-valuation-engine Team |
+| 2026-03-09 | 상태를 "수락됨"으로 변경 | probabilistic-valuation-engine Team |

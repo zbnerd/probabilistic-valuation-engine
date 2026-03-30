@@ -201,7 +201,8 @@ public class LikeSyncScheduler {
 ### 6. Lock 전략별 성능 비교
 | Lock Strategy | 지연시간 | 처리량 | 장애 복구 | 적합 케이스 |
 |---------------|---------|--------|----------|------------|
-| **Redis (Redisson)** | < 1ms | 높음 | Circuit Breaker | 일반적인 분산 락 |
+| **Redis (Redisson)** | < 1ms | 높음 | Circuit Breaker | ~~일반적인 분산 락~~ **DEPRECATED (ADR-022)** |
+| **PostgreSQL Advisory Lock** | < 1ms | 높음 | 트랜잭션 종료 시 | 현재 권장 (ADR-003, ADR-022) |
 | **MySQL Named Lock** | 1-10ms | 중간 | 자동 (세션 종료 시) | Redis 장애 시 Fallback |
 | **JPA Pessimistic Lock** | 10-100ms | 낮음 | 트랜잭션 롤백 | 단일 DB 내 락 |
 | **낙관적 락 (@Version)** | < 1ms | 높음 | 재시도 필요 | 충돌 드문 엔티티 |

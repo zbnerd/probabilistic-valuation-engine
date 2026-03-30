@@ -381,8 +381,8 @@ kubectl scale deployment maplexpectation-v5 --replicas=3
 - **Configuration:** `src/main/resources/application.yml`
 
 ### 이슈
-- **[Issue #126](https://github.com/zbnerd/MapleExpectation/issues/126)** - Stateless 아키텍처 검토
-- **[Issue #282](https://github.com/zbnerd/MapleExpectation/issues/282)** - 수평 확장 요구사항
+- **[Issue #126](https://github.com/zbnerd/probabilistic-valuation-engine/issues/126)** - Stateless 아키텍처 검토
+- **[Issue #282](https://github.com/zbnerd/probabilistic-valuation-engine/issues/282)** - 수평 확장 요구사항
 
 ---
 

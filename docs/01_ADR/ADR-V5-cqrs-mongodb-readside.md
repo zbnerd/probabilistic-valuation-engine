@@ -2,7 +2,7 @@
 
 **Status**: Accepted (Implementation Phase)
 **Date**: 2026-02-15
-**Author**: MapleExpectation Architecture Team
+**Author**: probabilistic-valuation-engine Architecture Team
 **Supersedes**: ADR-036, ADR-037, ADR-038
 **Related**: [ADR-014](ADR-014-multi-module-cross-cutting-concerns.md), [ADR-013](ADR-013-redis-stream-design.md)
 
@@ -41,7 +41,7 @@ The current V4 system (`EquipmentExpectationServiceV4.java`) faces critical scal
 | **Read-Write Coupling** | 90%+ reads compete with writes | Single MySQL database for all operations |
 | **Vertical Scaling Only** | Cannot scale reads independently | Shared database layer |
 | **Cache Stampede Risk** | Redundant calculations | High concurrent reads on same character |
-| **Single-Flight Serial** | Limited throughput | Single-flight reduces duplicates but still serial |
+| **Single-Flight Serial** | Limited throughput | SingleFlight reduces duplicates but still serial |
 
 ### Current V4 Flow Analysis
 
@@ -821,7 +821,7 @@ dependencies {
 
 - **ADR-014**: [Multi-Module Architecture](ADR-014-multi-module-cross-cutting-concerns.md)
 - **ADR-013**: [Redis Stream Design](ADR-013-redis-stream-design.md)
-- **ADR-003**: [Tiered Cache Strategy](ADR-003-tiered-cache.md)
+- **ADR-003**: [TieredCache Strategy](ADR-003-tiered-cache.md)
 - **V4 Service**: [EquipmentExpectationServiceV4.java](../module-app/src/main/java/maple/expectation/service/v4/EquipmentExpectationServiceV4.java)
 
 ### External References
@@ -836,4 +836,4 @@ dependencies {
 **Document Version**: 1.0
 **Last Updated**: 2026-02-15
 **Next Review**: After Phase 2 completion (Query Side integration)
-**Owner**: MapleExpectation Architecture Team
+**Owner**: probabilistic-valuation-engine Architecture Team

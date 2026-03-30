@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 제안됨 (Proposed) |
 | 결정일 | 2026-03-10 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #561, #559, #560 |
 | 선행 ADR | ADR-003 PostgreSQL Advisory Lock, ADR-002 PGMQ Integration |
@@ -17,7 +17,7 @@
 
 ### 현재 상태: In-Memory Single Flight
 
-MapleExpectation은 현재 **SingleFlightExecutor**를 사용하여 캐시 스탬프(Cache Stampede)를 방지합니다:
+probabilistic-valuation-engine은 현재 **SingleFlightExecutor**를 사용하여 캐시 스탬프(Cache Stampede)를 방지합니다:
 
 ```kotlin
 class SingleFlightExecutor {
@@ -635,4 +635,4 @@ FROM single_flight_results;
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-10 | ADR 초안 작성 (제안됨) | MapleExpectation Team |
+| 2026-03-10 | ADR 초안 작성 (제안됨) | probabilistic-valuation-engine Team |

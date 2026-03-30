@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-Real-time log monitoring initiated for MapleExpectation Docker environment:
+Real-time log monitoring initiated for probabilistic-valuation-engine Docker environment:
 - **MySQL**: Healthy (multiple restart cycles detected, latest init 2026-01-30 08:24:44)
 - **Redis Master**: Healthy (latest start 2026-01-30 08:24:28)
 - **Redis Slave**: Healthy (latest start 2026-01-30 08:24:30)
@@ -366,7 +366,7 @@ When application generates logs:
    - 실제 로그와 다를 경우 재수집 필요
 
 4. **[F4]** 로그 메시지 인용 오류
-   - 예: "Started MapleExpectationApplication"
+   - 예: "Started probabilistic-valuation-engineApplication"
    - 실제 로그에 없는 메시지일 경우 전체 재검토
 
 5. **[F5]** 포트 번호 불일치
@@ -527,14 +527,14 @@ du -sh /tmp/maple_qa_logs_*.txt 2>/dev/null
 - **[QA_MONITORING_CHECKLIST.md](./QA_MONITORING_CHECKLIST.md)** - QA 모니터링 체크리스트
 - **[ZERO_SCRIPT_QA_GUIDE.md](./ZERO_SCRIPT_QA_GUIDE.md)** - QA 상세 가이드
 - **[ROADMAP.md](../00_Start_Here/ROADMAP.md)** - 프로젝트 로드맵
-- **[#77 - Redis Sentinel HA](https://github.com/your-org/MapleExpectation/issues/77)** - Redis 고가용성 이슈
+- **[#77 - Redis Sentinel HA](https://github.com/your-org/probabilistic-valuation-engine/issues/77)** - Redis 고가용성 이슈
 
 ---
 
 ## 문서 관리 (Document Management)
 
 ### 피드백 제출
-- **GitHub Issues**: https://github.com/your-org/MapleExpectation/issues
+- **GitHub Issues**: https://github.com/your-org/probabilistic-valuation-engine/issues
 - **라벨**: `documentation`, `qa-report`, `monitoring`
 
 ### 업데이트 절차

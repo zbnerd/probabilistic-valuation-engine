@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-22 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #611 |
 | 선행 ADR | ADR-021 Adaptive Micro-Batching, ADR-025 Observability Metrics |
@@ -409,4 +409,4 @@ class BulkLoadController(
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-22 | ADR 초안 작성 | MapleExpectation Team |
+| 2026-03-22 | ADR 초안 작성 | probabilistic-valuation-engine Team |

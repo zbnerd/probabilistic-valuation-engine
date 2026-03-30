@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the Clean Architecture (Hexagonal) package structure adopted for MapleExpectation as part of Issue #325 - Refactor to Clean Architecture.
+This document describes the Clean Architecture (Hexagonal) package structure adopted for probabilistic-valuation-engine as part of Issue #325 - Refactor to Clean Architecture.
 
 ## Architecture Principles
 

@@ -270,7 +270,7 @@ Division  | ~5 ns   | ~1000 ns (나눗셈 + 스케일링)
 
 ### 3.3 DP Table의 메모리 최적화
 
-**MapleExpectation의 Cost Calculator:**
+**probabilistic-valuation-engine의 Cost Calculator:**
 
 ```java
 // Naive: 3차원 배열 (메모리 낭비)
@@ -310,7 +310,7 @@ Optimized: 200 cells × 8 bytes = 1.6 KB (800배 절약)
 | **복잡도** | 쉬움 (API 사용) | 어려움 (알고리즘 구현) |
 | **메모리** | 높음 (객체 생성) | 낮음 (Primitive만) |
 
-**선택 이유**: MapleExpectation은 **Kahan Summation + Double** 선택
+**선택 이유**: probabilistic-valuation-engine은 **Kahan Summation + Double** 선택
 - 1억 메소 단위로는 Double의 15자리 정밀도로 충분
 - BigDecimal는 100배 느려서 DP 계산에 부적합
 
@@ -461,7 +461,7 @@ dp[mask] = compute();
 
 **Deep Dive Textbook이 완성되었습니다!**
 
-이 7권의 교재는 MapleExpectation의 핵심 모듈을 CS Professor와 Principal Engineer의 시각에서 분석한 것입니다. 각 챕터는:
+이 7권의 교재는 probabilistic-valuation-engine의 핵심 모듈을 CS Professor와 Principal Engineer의 시각에서 분석한 것입니다. 각 챕터는:
 
 1. **Concurrency and Lock** - 분산 락의 설계와 Deadlock 방지
 2. **Memory Hierarchy and Cache** - 계층형 캐시와 일관성

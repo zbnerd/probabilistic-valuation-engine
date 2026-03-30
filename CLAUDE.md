@@ -52,7 +52,7 @@ echo $DB_SERVER_IP
 ## Phase 2: 계획 (Plan)
 - 구체적이고 명확한 작업 계획 수립
 - '어떤 파일'의 '어떤 부분'을 '어떻게' 수정할지 Step-by-step 작성
-- **ADR 선행:** 구현 작업은 반드시 ADR 문서 먼저 작성 (`docs/adr/`)
+- **ADR 선행:** 구현 작업은 반드시 ADR 문서 먼저 작성 (`docs/01_ADR/`)
 - 계획 제시 후 **반드시 승인 대기**
 
 ## Phase 3: 실행 (Implement)
@@ -234,4 +234,4 @@ application.yml          # 공통 설정 (592줄)
 | 카오스 엔지니어링 | [docs/02_Chaos_Engineering/](docs/02_Chaos_Engineering/) |
 | 서비스 모듈 | [docs/03_Technical_Guides/service-modules.md](docs/03_Technical_Guides/service-modules.md) |
 | Scale-out 분석 | [docs/05_Reports/](docs/05_Reports/) |
-| ADR | [docs/adr/](docs/adr/) |
+| ADR | [docs/01_ADR/](docs/01_ADR/) |

@@ -21,7 +21,7 @@
 ## Documentation Integrity Statement
 
 This guide is based on **production Redis failover testing** and distributed systems research:
-- Issue #77 resolution: Redis Failover stability improvements validated (Evidence: [ADR-006](../adr/ADR-006-redis-lock-lease-timeout-ha.md))
+- Issue #77 resolution: Redis Failover stability improvements validated (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md))
 - Failover test results: 100% data preservation, 1-2s detection (Evidence: Chaos N01, N02 test results)
 - Martin Kleppmann analysis: Redlock criticism considered in architecture decision (Evidence: [Distributed Locking](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html))
 
@@ -291,7 +291,7 @@ if (circuitBreaker.isOpen()) {
 
 > **Production Incident:** P0 #77 (2025-11) - Redis Failover caused READONLY errors and application crashes.
 > **Root Cause:** Redisson cached old Master topology; attempted writes to promoted Slave.
-> **Fix Validated:** ReadMode.MASTER + 1s scanInterval eliminated all READONLY errors (Evidence: [ADR-006](../adr/ADR-006-redis-lock-lease-timeout-ha.md)).
+> **Fix Validated:** ReadMode.MASTER + 1s scanInterval eliminated all READONLY errors (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md)).
 > **Metrics Proof:** Failover time reduced from 30s to 1-2s; application uptime 99.9% during failover.
 
 #### 6.2.1 Redisson Sentinel 설정 강화

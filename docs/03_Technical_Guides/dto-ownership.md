@@ -257,6 +257,6 @@ static final ArchRule request_response_dtos_should_be_in_common =
 
 ## 관련 문서
 
-- [ADR-005: Module Dependency Strategy](../adr/ADR-005-module-dependency-strategy.md)
+- [ADR-005: Module Dependency Strategy](../01_ADR/ADR-005-module-dependency-strategy.md)
 - [Port 인터페이스 작성 가이드](./port-guide.md)
 - [Service Modules Guide](./service-modules.md)

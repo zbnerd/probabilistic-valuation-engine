@@ -152,7 +152,7 @@ Root project 'expectation'
 - [ADR-014: 멀티 모듈 전환 - 횡단 관심사 분리](./ADR-014-multi-module-cross-cutting-concerns.md)
 - [ADR-017: Pure Domain Model](./ADR-017-pure-domain-model.md)
 - [ROADMAP Phase 7 Step 2](../00_Start_Here/ROADMAP.md#step-2-멀티-모듈-전환-282)
-- [Issue #282](https://github.com/zbnerd/MapleExpectation/issues/282)
+- [Issue #282](https://github.com/zbnerd/probabilistic-valuation-engine/issues/282)
 
 ---
 

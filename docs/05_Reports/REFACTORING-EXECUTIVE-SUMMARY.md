@@ -9,7 +9,7 @@
 
 ## Executive Summary (1 page)
 
-The MapleExpectation codebase requires **urgent architectural refactoring** to resolve critical design violations and prepare for scale-out deployment. Current analysis reveals a **56% bloated module-app** (342 files) containing infrastructure concerns that violate clean architecture principles.
+The probabilistic-valuation-engine codebase requires **urgent architectural refactoring** to resolve critical design violations and prepare for scale-out deployment. Current analysis reveals a **56% bloated module-app** (342 files) containing infrastructure concerns that violate clean architecture principles.
 
 **Key Metrics:**
 - Current state: 342 files in module-app (56% bloated)

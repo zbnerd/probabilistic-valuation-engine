@@ -387,8 +387,8 @@ make
 
 ```bash
 # Repository 클론
-git clone https://github.com/zbnerd/MapleExpectation.git
-cd MapleExpectation
+git clone https://github.com/zbnerd/probabilistic-valuation-engine.git
+cd probabilistic-valuation-engine
 
 # 특정 커밋 체크아웃 (선택)
 git checkout <commit-hash>

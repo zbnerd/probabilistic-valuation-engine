@@ -5,7 +5,7 @@ Accepted (2025-03-08)
 Updated (2026-03-08): Extended configuration to CI and Chaos profiles
 
 ## Context
-MapleExpectation application uses JPA for data persistence. During the PostgreSQL redesign (Phase 7), we identified that the default JPA configuration could lead to N+1 query problems when loading multiple entities with lazy-loaded relationships.
+probabilistic-valuation-engine application uses JPA for data persistence. During the PostgreSQL redesign (Phase 7), we identified that the default JPA configuration could lead to N+1 query problems when loading multiple entities with lazy-loaded relationships.
 
 ## Problem
 1. **Default JPA Behavior**: Without explicit batch fetching configuration, Hibernate loads lazy-loaded associations one-by-one when accessed in a loop

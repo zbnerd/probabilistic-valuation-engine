@@ -3,7 +3,7 @@
 > **Issue #80, #81, #127**: 도네이션 처리의 데이터 일관성 및 멱등성 보장
 >
 > **Last Updated:** 2026-02-05
-> **Code Version:** MapleExpectation v1.x
+> **Code Version:** probabilistic-valuation-engine v1.x
 > **Diagram Version:** 1.0
 
 ## 1. 개요

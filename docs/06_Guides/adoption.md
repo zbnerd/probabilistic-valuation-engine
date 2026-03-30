@@ -1,6 +1,6 @@
 # Adoption Guide (도입 가이드)
 
-> MapleExpectation 아키텍처 패턴을 프로젝트에 적용하는 단계별 가이드
+> probabilistic-valuation-engine 아키텍처 패턴을 프로젝트에 적용하는 단계별 가이드
 >
 > **버전**: 2.0.0
 > **작성일**: 2026-01-25
@@ -33,7 +33,7 @@
 | 19 | 검증 명령어 제공 | ✅ | 각 Step별 확인 방법 | EV-ADOPT-019 |
 | 20 | 로그 예시 포함 | ✅ | Circuit Breaker 동작 확인 | EV-ADOPT-020 |
 | 21 | 아키텍처 다이어그램 | ✅ | 관련 문서 링크 제공 | EV-ADOPT-021 |
-| 22 | 실제 프로젝트 적용 사례 | ✅ | MapleExpectation 참고 코드 | EV-ADOPT-022 |
+| 22 | 실제 프로젝트 적용 사례 | ✅ | probabilistic-valuation-engine 참고 코드 | EV-ADOPT-022 |
 | 23 | 실패 시나리오 다룸 | ✅ | 장애 전파 방지 설명 | EV-ADOPT-023 |
 | 24 | 부하 테스트 가이드 | ✅ | Chaos Test 링크 | EV-ADOPT-024 |
 | 25 | 모니터링 설정 | ✅ | Prometheus 메트릭 활성화 | EV-ADOPT-025 |
@@ -368,9 +368,9 @@ A: Circuit Breaker/Timeout은 거의 없음 (< 1ms). TieredCache는 L1 HIT 시 <
 ## 관련 문서
 
 - [Architecture Overview](../00_Start_Here/architecture.md)
-- [ADR-001: Streaming Parser](../adr/ADR-001-streaming-parser.md)
-- [ADR-002: Circuit Breaker](../adr/ADR-002-circuit-breaker-config.md)
-- [ADR-003: TieredCache + SingleFlight](../adr/ADR-003-tiered-cache-singleflight.md)
+- [ADR-001: Streaming Parser](../01_ADR/ADR-001-streaming-parser.md)
+- [ADR-002: Circuit Breaker](../01_ADR/ADR-052-resilience4j-circuit-breaker.md)
+- [ADR-003: TieredCache + SingleFlight](../01_ADR/ADR-003-tiered-cache-singleflight.md)
 - [Chaos Engineering](../01_Chaos_Engineering/)
 
 ---

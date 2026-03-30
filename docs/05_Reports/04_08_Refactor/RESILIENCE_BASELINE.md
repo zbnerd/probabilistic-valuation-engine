@@ -395,34 +395,34 @@ From `docs/05_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md`:
 
 ```bash
 # 1. Check timeout values
-grep -n "timeout" /home/maple/MapleExpectation/src/main/resources/application.yml
+grep -n "timeout" /home/maple/probabilistic-valuation-engine/src/main/resources/application.yml
 
 # 2. Verify circuit breaker config
-cat /home/maple/MapleExpectation/src/main/resources/application.yml | grep -A 20 "resilience4j:"
+cat /home/maple/probabilistic-valuation-engine/src/main/resources/application.yml | grep -A 20 "resilience4j:"
 
 # 3. Test graceful shutdown
 curl -X POST http://localhost:8080/actuator/shutdown
 
 # 4. Check pool sizes
-grep -n "pool-size\|pool-size\|maximum-pool-size" /home/maple/MapleExpectation/src/main/resources/application*.yml
+grep -n "pool-size\|pool-size\|maximum-pool-size" /home/maple/probabilistic-valuation-engine/src/main/resources/application*.yml
 
 # 5. Verify rejection policies
-grep -n "AbortPolicy\|CallerRunsPolicy\|LOGGING_ABORT_POLICY\|EXPECTATION_ABORT_POLICY" /home/maple/MapleExpectation/src/main/java/maple/expectation/config/ExecutorConfig.java
+grep -n "AbortPolicy\|CallerRunsPolicy\|LOGGING_ABORT_POLICY\|EXPECTATION_ABORT_POLICY" /home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/config/ExecutorConfig.java
 
 # 6. Check marker interfaces
-ls -la /home/maple/MapleExpectation/src/main/java/maple/expectation/global/error/exception/marker/
+ls -la /home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/error/exception/marker/
 
 # 7. Verify Outbox configuration
-grep -n "outbox:" /home/maple/MapleExpectation/src/main/resources/application.yml
+grep -n "outbox:" /home/maple/probabilistic-valuation-engine/src/main/resources/application.yml
 
 # 8. Test circuit breaker state
 curl -s http://localhost:8080/actuator/health | jq '.components.circuitBreakers'
 
 # 9. Check thread pool configuration
-grep -n "core-pool-size\|max-pool-size\|queue-capacity" /home/maple/MapleExpectation/src/main/resources/application*.yml
+grep -n "core-pool-size\|max-pool-size\|queue-capacity" /home/maple/probabilistic-valuation-engine/src/main/resources/application*.yml
 
 # 10. Verify lock pool configuration
-grep -n "lock:" /home/maple/MapleExpectation/src/main/resources/application*.yml
+grep -n "lock:" /home/maple/probabilistic-valuation-engine/src/main/resources/application*.yml
 ```
 
 ### Post-Refactor Verification

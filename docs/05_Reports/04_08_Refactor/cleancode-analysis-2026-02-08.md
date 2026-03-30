@@ -1,4 +1,4 @@
-# MapleExpectation 클린코드 종합 분석 보고서
+# probabilistic-valuation-engine 클린코드 종합 분석 보고서
 
 **분석 날짜:** 2026-02-08
 **분석 범위:** 494개 Java 파일, 34,000+ 라인
@@ -9,7 +9,7 @@
 
 ## 📊 Executive Summary
 
-MapleExpectation 프로젝트는 **전반적으로 매우 우수한 코드 품질**을 유지하고 있습니다. CLAUDE.md의 핵심 원칙들이 대부분 잘 적용되어 있으나, **약간의 개선이 필요한 영역**이 확인되었습니다.
+probabilistic-valuation-engine 프로젝트는 **전반적으로 매우 우수한 코드 품질**을 유지하고 있습니다. CLAUDE.md의 핵심 원칙들이 대부분 잘 적용되어 있으나, **약간의 개선이 필요한 영역**이 확인되었습니다.
 
 ### 전체 등급
 
@@ -97,7 +97,7 @@ MapleExpectation 프로젝트는 **전반적으로 매우 우수한 코드 품�
 
 1. **ExpectationWriteBackBuffer** - Lock-free CAS + Phaser
 2. **LikeBufferStorage** - AtomicLong counters, Caffeine thread-safe
-3. **TieredCache** - Redisson distributed lock, Single-flight pattern
+3. **TieredCache** - Redisson distributed lock, SingleFlight pattern
 4. **ExecutionPipeline** - ThreadLocal with proper cleanup
 5. **MySqlNamedLockStrategy** - P0-BLUE-01 compliant cleanup
 
@@ -453,7 +453,7 @@ selfProvider.getObject().saveCharacterBasicInfoAsync(character);
 
 ### 전체 평가
 
-MapleExpectation 프로젝트는 **우수한 코드 품질**을 자랑하지만, **약간의 개선이 필요한 영역**이 있습니다:
+probabilistic-valuation-engine 프로젝트는 **우수한 코드 품질**을 자랑하지만, **약간의 개선이 필요한 영역**이 있습니다:
 
 **강점:**
 - ✅ 동시성 안전성 완벽 (Grade A)

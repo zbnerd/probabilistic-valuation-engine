@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 승인됨 (Accepted) |
 | 결정일 | 2026-03-29 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board (3-round Consensus Review) |
 | 선행 ADR | ADR-005 Hexagonal Architecture, ADR-029 Like Direct DB |
 | 관련 이슈 | #662, #663, #664, #665 |

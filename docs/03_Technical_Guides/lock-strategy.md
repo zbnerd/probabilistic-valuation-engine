@@ -3,20 +3,20 @@
 > **Issue #28**: Pessimistic Lock vs Atomic Update 선택 근거 및 도메인별 적용 기준
 >
 > **Last Updated:** 2026-02-06
-> **Applicable Versions:** Redisson 3.27.0, MySQL 8.0
+> **Applicable Versions:** Redisson 3.48.0 (deprecated - Redis removed), MySQL 8.0, PostgreSQL Advisory Lock
 > **Documentation Version:** 1.1
 > **Production Status:** Active (Validated through P1 distributed lock issues)
 > **Migration Status**: Redis lock primary with feature flags (Phase 5 Complete)
 
 ## Executive Summary
 
-MapleExpectation은 **3-Tier Lock Architecture**를 채택하여 Redis 장애 시에도 MySQL Fallback으로 가용성을 보장합니다.
+probabilistic-valuation-engine은 **3-Tier Lock Architecture**를 채택하여 Redis 장애 시에도 MySQL Fallback으로 가용성을 보장합니다.
 
 ## Documentation Integrity Statement
 
 This guide is based on **production lock contention analysis** and distributed systems best practices:
 - P1-P7-P8-P9 distributed lock resolution: 4 scheduler incidents analyzed (Evidence: [P1-7-8-9-scheduler-distributed-lock.md](../04_Reports/P1-7-8-9-scheduler-distributed-lock.md))
-- ADR-006 decision: Watchdog vs leaseTime with production metrics (Evidence: [ADR-006](../adr/ADR-006-redis-lock-lease-timeout-ha.md))
+- ADR-006 decision: Watchdog vs leaseTime with production metrics (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md))
 - Hot row performance: Atomic Update 10x faster than Pessimistic Lock on likeCount (Evidence: internal load tests)
 
 ## Terminology
@@ -147,7 +147,7 @@ void incrementLikeCount(@Param("userIgn") String userIgn, @Param("count") Long c
 
 ### 2. 후원 도메인 (Donation)
 
-> **Business Requirement:** Financial transactions require strong consistency (Evidence: [ADR-010](../adr/ADR-010-outbox-pattern.md)).
+> **Business Requirement:** Financial transactions require strong consistency (Evidence: [ADR-010](../01_ADR/ADR-010-outbox-pattern.md)).
 > **Why SKIP LOCKED:** Regular Pessimistic Lock causes wait queue; SKIP LOCKED enables parallel processing across 4 scheduler instances.
 > **Validation:** Zero duplicate donations recorded since implementation (2025-11).
 

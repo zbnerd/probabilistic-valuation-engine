@@ -101,7 +101,7 @@ Result (without admission control):
 ```
 
 **Why single-flight is insufficient**:
-- Single-flight coalesces requests for the **same** key only
+- SingleFlight coalesces requests for the **same** key only
 - With 1000 unique OCIDs, 1000 distributed locks are acquired independently
 - No protection against this type of fan-out
 
@@ -269,7 +269,7 @@ Result (without admission control):
 | Redis removed (ADR-022) | Code: Issue #589 references |
 | Rate limiting disabled | Config: `ratelimit.enabled: false` |
 | 158,428 rows persisted | DB count, 0 duplicates verified |
-| Single-flight per-key only | Code: `TieredCache.kt:196-209` |
+| SingleFlight per-key only | Code: `TieredCache.kt:196-209` |
 
 ### 7.2 Unverified (⚠️)
 

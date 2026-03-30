@@ -61,12 +61,12 @@
 ## 🔗 Evidence IDs (증거 식별자)
 
 ### 코드 증거 (Code Evidence)
-- [C1] **RetryStormChaosTest**: `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/resource/RetryStormChaosTest.java` (line 1-245)
+- [C1] **RetryStormChaosTest**: `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/resource/RetryStormChaosTest.java` (line 1-245)
   - `shouldLimitRetries_duringTemporaryFailure()`: 동시 재시도 제한 검증 (line 59-137)
   - `shouldIncreaseBackoffExponentially()`: Exponential Backoff 동작 검증 (line 144-189)
   - `shouldSucceed_afterFailureRecovery()`: 장애 복구 후 재시도 성공 검증 (line 196-244)
 
-- [C2] **Resilience4j Retry 설정**: `/home/maple/MapleExpectation/src/main/resources/application.yml` (line 115-141)
+- [C2] **Resilience4j Retry 설정**: `/home/maple/probabilistic-valuation-engine/src/main/resources/application.yml` (line 115-141)
   ```yaml
   resilience4j:
     retry:
@@ -80,7 +80,7 @@
             - org.springframework.web.reactive.function.client.WebClientRequestException
   ```
 
-- [C3] **ResilienceConfig**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/config/ResilienceConfig.java`
+- [C3] **ResilienceConfig**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/config/ResilienceConfig.java`
   - `likeSyncRetry` Bean 등록 (line 23-25)
 
 ### 테스트 증거 (Test Evidence)
@@ -101,7 +101,7 @@
   ```
 
 ### 설정 증거 (Configuration Evidence)
-- [S1] **AbstractContainerBaseTest**: `/home/maple/MapleExpectation/src/test/java/maple/expectation/support/AbstractContainerBaseTest.java`
+- [S1] **AbstractContainerBaseTest**: `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/support/AbstractContainerBaseTest.java`
   - Toxiproxy Container 설정 (redisProxy)
 
 ### 로그 증거 (Log Evidence)
@@ -761,10 +761,10 @@ curl http://localhost:8080/actuator/metrics/retry_budget_rejected_total
 - ✅ 동시성 안전성: 다중 스레드에서의 카운터 정확성
 
 ### 코드 증거 (Code Evidence)
-- [C4] **RetryBudgetProperties**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/resilience/RetryBudgetProperties.java`
-- [C5] **RetryBudgetManager**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/resilience/RetryBudgetManager.java`
-- [C6] **RetryBudgetManagerTest**: `/home/maple/MapleExpectation/src/test/java/maple/expectation/global/resilience/RetryBudgetManagerTest.java`
-- [C7] **ResilientNexonApiClient 통합**: `/home/maple/MapleExpectation/src/main/java/maple/expectation/external/impl/ResilientNexonApiClient.java` (line 100, 115, 125)
+- [C4] **RetryBudgetProperties**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/resilience/RetryBudgetProperties.java`
+- [C5] **RetryBudgetManager**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/resilience/RetryBudgetManager.java`
+- [C6] **RetryBudgetManagerTest**: `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/global/resilience/RetryBudgetManagerTest.java`
+- [C7] **ResilientNexonApiClient 통합**: `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/external/impl/ResilientNexonApiClient.java` (line 100, 115, 125)
 
 ### 참고 자료
 - [Google SRE - Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/)

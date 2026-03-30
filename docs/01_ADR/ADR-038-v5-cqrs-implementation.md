@@ -2,7 +2,7 @@
 
 **Status**: Implemented
 **Date**: 2026-02-15
-**Author**: MapleExpectation Architecture Team
+**Author**: probabilistic-valuation-engine Architecture Team
 **Supersedes**: [ADR-036](ADR-036-v5-cqrs-mongodb.md)
 **Related**: [V5 Implementation Report](../04_Reports/04_09_Scale_Out/v5-cqrs-implementation-report.md)
 
@@ -625,7 +625,7 @@ dependencies {
 | ADR-036 | V5 CQRS Architecture Design | [Link](ADR-036-v5-cqrs-mongodb.md) |
 | ADR-014 | Multi-Module Architecture | [Link](ADR-014-multi-module-cross-cutting-concerns.md) |
 | ADR-013 | Redis Stream Design | [Link](ADR-013-redis-stream-design.md) |
-| ADR-003 | Tiered Cache Strategy | [Link](ADR-003-tiered-cache.md) |
+| ADR-003 | TieredCache Strategy | [Link](ADR-003-tiered-cache.md) |
 
 ### External References
 
@@ -706,4 +706,4 @@ module-app/src/test/java/maple/expectation/service/v5/
 **Document Version**: 1.0
 **Last Updated**: 2026-02-15
 **Next Review**: After Phase 2 completion (Query Side integration)
-**Owner**: MapleExpectation Architecture Team
+**Owner**: probabilistic-valuation-engine Architecture Team

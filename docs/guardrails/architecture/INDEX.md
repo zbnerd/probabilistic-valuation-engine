@@ -11,7 +11,7 @@
 | GR-ARCH-001 | [ADR Decisions](adr-decisions.md) | critical | ADR, Hexagonal, DIP, Clean-Architecture, Multi-Module |
 | GR-ARCH-002 | [Multi-Agent Protocol](multi-agent.md) | critical | Agent, Council, 5-Agent, Protocol, Sequential-Thinking |
 | GR-ARCH-003 | [Service Modules](service-modules.md) | warning | Modules, V2, V4, Facade, Decorator, Strategy, Outbox |
-| GR-ARCH-004 | [System Design](system-design.md) | critical | TieredCache, Single-flight, CircuitBreaker, GZIP, HA, Observability |
+| GR-ARCH-004 | [System Design](system-design.md) | critical | TieredCache, SingleFlight, CircuitBreaker, GZIP, HA, Observability |
 | GR-ARCH-005 | [Stateless Architecture](stateless.md) | critical | HttpSession, SessionScope, static-mutable, Redis, MySQL |
 | GR-ARCH-030 | [SOLID & DDD](solid-ddd.md) | critical | SOLID, SRP, OCP, LSP, ISP, DIP, DDD, Aggregate, Rich-Domain |
 | GR-ARCH-040 | [Clean Code & Lambda Hell](clean-code.md) | critical | lambda, method-reference, optional-chaining, tap-pattern, clean-code |
@@ -24,7 +24,7 @@
 - **Stateless Architecture**: HttpSession 금지, Redis 상태 저장소, Scale-out 준비
 
 ### 시스템 설계
-- **System Design**: TieredCache, Single-flight, Circuit Breaker, GZIP 압축, Redis HA
+- **System Design**: TieredCache, SingleFlight, Circuit Breaker, GZIP 압축, Redis HA
 - **Service Modules**: V2/V4 모듈 구조, Facade/Decorator/Strategy 패턴, Transactional Outbox
 
 ### 개발 프로세스
@@ -41,7 +41,7 @@
 | **Clean Code** | GR-ARCH-040 | 3-Line Rule, Method Reference 우선, Optional Chaining, Checked Exception 구조적 분리 |
 | **Stateless** | GR-ARCH-005 | HttpSession/@SessionScope 금지, static mutable 상태 금지 |
 | **Hexagonal** | GR-ARCH-001 | 포트/어댑터 패턴, DIP 준수, 도메인 순수 자바 |
-| **System** | GR-ARCH-004 | TieredCache 필수, Single-flight, Circuit Breaker + Fallback |
+| **System** | GR-ARCH-004 | TieredCache 필수, SingleFlight, Circuit Breaker + Fallback |
 
 ### Warning (권장)
 
@@ -66,7 +66,7 @@
 - [docs/05_Reports/Architecture/2026-02-22-ddd-verification-report.md](../05_Reports/Architecture/2026-02-22-ddd-verification-report.md) - DDD 검증 리포트
 
 ### ADR 문서
-- [docs/adr/](../adr/) - 전체 ADR 목록
+- [docs/adr/](../01_ADR/) - 전체 ADR 목록
 
 ## Verification Skills
 

@@ -6,11 +6,11 @@
 
 4장에서 DB 저장을 비동기로 돌렸다. 이제 계산 자체가 병목이다:
 
-```java
+```kotlin
 // 순차 계산: 100ms × 3 = 300ms
-for (int presetNo = 1; presetNo <= 3; presetNo++) {
-    PresetExpectation preset = calculatePreset(equipmentData, presetNo);
-    results.add(preset);
+for (presetNo in 1..3) {
+    val preset = calculatePreset(equipmentData, presetNo)
+    results.add(preset)
 }
 ```
 
@@ -20,11 +20,11 @@ for (int presetNo = 1; presetNo <= 3; presetNo++) {
 
 병렬화는 간단해 보였지만, 한 가지 함정이 있었다. 기존 코드에 이미 발견된 Anti-pattern:
 
-```java
+```kotlin
 // 위험: 같은 Executor에서 부모-자식 실행
-CompletableFuture.supplyAsync(() -> {
-    return dataResolver.resolveAsync(...).join();  // ← 데드락!
-}, expectationComputeExecutor);
+CompletableFuture.supplyAsync({
+    dataResolver.resolveAsync(...).join()  // ← 데드락!
+}, expectationComputeExecutor)
 ```
 
 8개 스레드가 모두 `.join()`으로 대기하면, 새 작업을 스케줄링할 스레드가 없어진다. N03 Thread Pool Exhaustion 카오스 테스트에서 이미 증명된 문제다.
@@ -33,15 +33,15 @@ CompletableFuture.supplyAsync(() -> {
 
 프리셋 계산용 Executor를 별도로 만들었다:
 
-```java
+```kotlin
 // presetCalculationExecutor: 별도 스레드풀
 @Bean
-TaskExecutor presetCalculationExecutor() {
-    ThreadPoolTaskExecutor exec = new ThreadPoolTaskExecutor();
-    exec.setCorePoolSize(12);
-    exec.setMaxPoolSize(24);
-    exec.setQueueCapacity(100);
-    return exec;
+fun presetCalculationExecutor(): TaskExecutor {
+    val exec = ThreadPoolTaskExecutor()
+    exec.setCorePoolSize(12)
+    exec.setMaxPoolSize(24)
+    exec.setQueueCapacity(100)
+    return exec
 }
 ```
 
@@ -49,15 +49,17 @@ TaskExecutor presetCalculationExecutor() {
 
 ### 병렬 계산 구현
 
-```java
-private List<PresetExpectation> calculateAllPresets(byte[] equipmentData, GameCharacter character) {
-    List<CompletableFuture<PresetExpectation>> futures = IntStream.rangeClosed(1, 3)
-        .mapToObj(presetNo -> CompletableFuture.supplyAsync(
-            () -> calculatePreset(equipmentData, presetNo),
-            presetCalculationExecutor  // 전용 Executor
-        ))
-        .toList();
-    return futures.stream().map(this::joinPresetFuture).toList();
+```kotlin
+private fun calculateAllPresets(equipmentData: ByteArray, character: GameCharacter): List<PresetExpectation> {
+    val futures = IntStream.rangeClosed(1, 3)
+        .mapToObj { presetNo ->
+            CompletableFuture.supplyAsync(
+                { calculatePreset(equipmentData, presetNo) },
+                presetCalculationExecutor  // 전용 Executor
+            )
+        }
+        .toList()
+    return futures.stream().map { this.joinPresetFuture(it) }.toList()
 }
 ```
 
@@ -67,14 +69,14 @@ private List<PresetExpectation> calculateAllPresets(byte[] equipmentData, GameCh
 
 병렬화와 함께 보안 강화도 추가했다. 대형 JSON 페이로드로 인한 DoS를 방지:
 
-```java
-objectMapper.getFactory().setStreamReadConstraints(
+```kotlin
+objectMapper.factory.setStreamReadConstraints(
     StreamReadConstraints.builder()
         .maxNestingDepth(50)
         .maxStringLength(100_000)
         .maxNameLength(256)
         .build()
-);
+)
 ```
 
 ## 결과: 965 RPS (+43%)

@@ -609,11 +609,11 @@ private final ConcurrentHashMap<String, InFlightEntry<T>> inFlight = new Concurr
 **문제점:**
 - Scale-out 환경에서 각 인스턴스가 독립적인 inFlight 맵 보유
 - 인스턴스 A에서 Leader로 진행 중이어도 인스턴스 B는 인지하지 못함
-- **단, TieredCache는 Redis 분산 락으로 분산 Single-flight 구현 완료**
+- **단, TieredCache는 Redis 분산 락으로 분산 SingleFlight 구현 완료**
 
 **평가:**
 - `SingleFlightExecutor`는 로컬 최적화용으로 설계됨
-- 분산 Single-flight는 `TieredCache`의 Redis 분산 락으로 보장됨
+- 분산 SingleFlight는 `TieredCache`의 Redis 분산 락으로 보장됨
 - **리팩토링 필요 없음** - 의도된 설계
 
 ---
@@ -803,7 +803,7 @@ private final ConcurrentHashMap<String, InFlightEntry<T>> inFlight = new Concurr
 
 **의도된 설계로 리팩토링 불필요:**
 - `SingleFlightExecutor`의 인메모리 상태는 로컬 최적화
-- 분산 Single-flight는 `TieredCache`의 Redis 분산 락으로 이미 구현됨
+- 분산 SingleFlight는 `TieredCache`의 Redis 분산 락으로 이미 구현됨
 - Rate Limiting, 분산 락, 세션 모두 Redis 기반으로 Scale-out 준비 완료
 
 ---

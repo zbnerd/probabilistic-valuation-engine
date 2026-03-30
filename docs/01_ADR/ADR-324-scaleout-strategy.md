@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-10 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #554, #559, #560, #561, #564 |
 | 선행 ADR | ADR-003 PostgreSQL Advisory Lock, ADR-005 Single Flight + Hot Key |
@@ -17,7 +17,7 @@
 
 ### 이전 상태: 단일 인스턴스 only (Scale-out 불가)
 
-MapleExpectation은 **In-Memory 상태 컴포넌트**로 인해 다중 인스턴스 구성이 불가능했습니다.
+probabilistic-valuation-engine은 **In-Memory 상태 컴포넌트**로 인해 다중 인스턴스 구성이 불가능했습니다.
 
 **Scale-out Blockers 분석 결과** (docs/05_Reports/04_09_Scale_Out/scale-out-blockers-analysis.md):
 
@@ -695,8 +695,8 @@ groups:
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-10 | ADR 초안 작성 (수락됨) | MapleExpectation Team |
-| 2026-03-10 | Phase 1-4 완료 보고 | MapleExpectation Team |
+| 2026-03-10 | ADR 초안 작성 (수락됨) | probabilistic-valuation-engine Team |
+| 2026-03-10 | Phase 1-4 완료 보고 | probabilistic-valuation-engine Team |
 
 ---
 
@@ -728,4 +728,4 @@ groups:
 > - jsonb → 문서 저장
 > - LISTEN/NOTIFY → Pub/Sub
 
-**결론:** MapleExpectation은 이제 PostgreSQL만으로 완전한 Scale-out이 가능한 Stateless 시스템으로 진화했습니다.
+**결론:** probabilistic-valuation-engine은 이제 PostgreSQL만으로 완전한 Scale-out이 가능한 Stateless 시스템으로 진화했습니다.

@@ -511,7 +511,7 @@ public CompletableFuture<String> getValue(String key) {
 ## 19. Evidence IDs (증거 식별자)
 
 ### Code Evidence
-- **[C1]** `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/network/SlowLorisChaosTest.java`
+- **[C1]** `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/network/SlowLorisChaosTest.java`
   - Line 82-119: `shouldTimeout_whenNetworkLatencyInjected()` - 타임아웃 동작 검증 (T1)
   - Line 131-169: `shouldRecover_afterLatencyRemoved()` - 복구 테스트 (T2)
   - Line 176-233: `shouldMaintainLockSafety_underSlowNetwork()` - 분산 락 안전성 (T3)
@@ -592,7 +592,7 @@ java -version
 
 ### 1단계: 의존성 설치
 ```bash
-cd /home/maple/MapleExpectation
+cd /home/maple/probabilistic-valuation-engine
 ./gradlew dependencies
 ```
 

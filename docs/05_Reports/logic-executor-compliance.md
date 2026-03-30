@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-This report verifies compliance with CLAUDE.md Section 12 (Zero Try-Catch Policy) across the MapleExpectation codebase. The analysis found **664 LogicExecutor usages** but also identified **critical violations** that must be addressed.
+This report verifies compliance with CLAUDE.md Section 12 (Zero Try-Catch Policy) across the probabilistic-valuation-engine codebase. The analysis found **664 LogicExecutor usages** but also identified **critical violations** that must be addressed.
 
 ## 1. Compliance Overview
 

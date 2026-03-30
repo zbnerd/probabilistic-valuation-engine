@@ -548,5 +548,5 @@ jobs:
 - [jqwik User Guide](https://jqwik.net/docs/current/user-guide.html)
 - [Testcontainers Lifecycle](https://testcontainers.com/guides/testcontainers-container-lifecycle/)
 - [Spring Boot Test Slices](https://docs.spring.io/spring-boot/appendix/test-auto-configuration/slices.html)
-- [ADR-015: Test Rebuild Pyramid](../adr/ADR-015-test-reboot-pyramid.md)
-- [ADR-025: Chaos Test Module Separation](../adr/ADR-025-chaos-test-module-separation.md)
+- [ADR-015: Test Rebuild Pyramid](../01_ADR/ADR-015-test-reboot-pyramid.md)
+- [ADR-025: Chaos Test Module Separation](../01_ADR/ADR-025-chaos-test-module-separation.md)

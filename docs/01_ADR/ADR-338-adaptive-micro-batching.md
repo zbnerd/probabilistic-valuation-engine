@@ -6,10 +6,10 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-11 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #588 |
-| 선행 ADR | ADR-004 Collect/Compute/Serve, ADR-005 Single-flight Hot Key |
+| 선행 ADR | ADR-004 Collect/Compute/Serve, ADR-005 SingleFlight Hot Key |
 
 ---
 
@@ -508,7 +508,7 @@ log.error("[AdaptiveBatch] Batch failed: error={}", error.message)
 ## 11. 참고 자료
 
 - [ADR-004 Collect/Compute/Serve 파이프라인](004-collect-compute-serve-pipeline.md)
-- [ADR-005 Single-flight Hot Key](005-single-flight-hot-key.md)
+- [ADR-005 SingleFlight Hot Key](005-single-flight-hot-key.md)
 - [Kotlin Coroutines Channel](https://kotlinlang.org/docs/channels.html)
 - [Kotlin Coroutines Semaphore](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.sync/-semaphore/)
 
@@ -518,4 +518,4 @@ log.error("[AdaptiveBatch] Batch failed: error={}", error.message)
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-11 | ADR 초안 작성 | MapleExpectation Team |
+| 2026-03-11 | ADR 초안 작성 | probabilistic-valuation-engine Team |

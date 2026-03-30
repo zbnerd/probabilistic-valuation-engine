@@ -68,7 +68,7 @@ Return gzipped response
 | Component | File Path | Responsibility |
 |-----------|-----------|----------------|
 | Entry Point | `GameCharacterControllerV4.kt` | HTTP endpoint |
-| Cache Coordination | `ExpectationCacheCoordinator.java` | Single-flight, L1/L2 orchestration |
+| Cache Coordination | `ExpectationCacheCoordinator.java` | SingleFlight, L1/L2 orchestration |
 | Calculation Logic | `PresetCalculationHelper.java` | 3 preset calculation |
 | JSON Parsing | `EquipmentStreamingParser.java` | 200~300KB streaming parse |
 | External API | `NexonApiClient.kt` | Nexon API fetch (28s timeout) |
@@ -354,7 +354,7 @@ Distributed Lock (PostgreSQL Advisory Lock)
     ├─ Wait: 5 seconds (configurable)
     └─ Lease: Prevents thundering herd
     ↓
-Single-flight calculation
+SingleFlight calculation
     ├─ Only 1 thread calculates
     └─ Others wait for result
     ↓
@@ -374,7 +374,7 @@ public EquipmentExpectationResponseV4 getOrCalculate(
         return decompressCachedResponse(...);  // Cache HIT
     }
 
-    // Cache miss - Single-flight pattern
+    // Cache miss - SingleFlight pattern
     EquipmentExpectationResponseV4 response = executeCalculator(calculator);
     String compressedBase64 = compressAndSerialize(response, userIgn);
     expectationCache.put(userIgn, compressedBase64);
@@ -388,7 +388,7 @@ public EquipmentExpectationResponseV4 getOrCalculate(
 **Scenario**: 1000 users × 1000 different characters = 1M unique keys
 
 **Analysis**:
-1. **Single-flight ineffective**: Each key is unique (different OCID), no coalescing
+1. **SingleFlight ineffective**: Each key is unique (different OCID), no coalescing
 2. **CPU saturation**: 1000 concurrent calculations × 50ms CPU = 50,000ms CPU time
 3. **Nexon API rate limiting**: 50 concurrent limit (bulkhead config - `Resilience4j`)
 4. **PostgreSQL connection pool**: Exhausted by concurrent upserts
@@ -405,7 +405,7 @@ public EquipmentExpectationResponseV4 getOrCalculate(
 - `PopularCharacterWarmupScheduler`: Warms top 50 characters
 - **Missing**: Global admission control for concurrent unique cache misses
 
-**Conclusion**: Single-flight helps with same-key stampede, **NOT** with unique-key fan-out. **Fan-out explosion is a legitimate vulnerability.**
+**Conclusion**: SingleFlight helps with same-key stampede, **NOT** with unique-key fan-out. **Fan-out explosion is a legitimate vulnerability.**
 
 ---
 

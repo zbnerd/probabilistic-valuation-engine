@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-All 5 agents have completed their baseline analysis. The MapleExpectation project demonstrates **mature, production-grade architecture** with enterprise resilience patterns, but has opportunities for Clean Architecture refactoring.
+All 5 agents have completed their baseline analysis. The probabilistic-valuation-engine project demonstrates **mature, production-grade architecture** with enterprise resilience patterns, but has opportunities for Clean Architecture refactoring.
 
 ### Key Findings
 

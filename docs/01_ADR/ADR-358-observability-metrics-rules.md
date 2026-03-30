@@ -6,7 +6,7 @@
 
 ## 컨텍스트
 
-현재 MapleExpectation 시스템은 **Micrometer + Prometheus** 조합으로 메트릭 수집을 수행하고 있으며, `GoldenSignalsCollector`를 통해 Golden Signals를 계산하고 있습니다. 그러나 다음과 같은 표준화 문제가 존재합니다:
+현재 probabilistic-valuation-engine 시스템은 **Micrometer + Prometheus** 조합으로 메트릭 수집을 수행하고 있으며, `GoldenSignalsCollector`를 통해 Golden Signals를 계산하고 있습니다. 그러나 다음과 같은 표준화 문제가 존재합니다:
 
 ### 현재 상태
 

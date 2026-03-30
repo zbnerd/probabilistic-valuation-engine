@@ -157,6 +157,7 @@ public class PopularCharacterWarmupScheduler {
 
     private final PopularCharacterTracker tracker;
     private final V4ApiService v4Api;
+    // ⚠️ DEPRECATED: Use PostgresAdvisoryLockStrategy instead (ADR-022)
     private final RedisDistributedLockStrategy lockStrategy;
     private final LogicExecutor executor;
 

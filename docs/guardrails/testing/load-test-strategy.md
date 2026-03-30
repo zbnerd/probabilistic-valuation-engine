@@ -10,7 +10,7 @@ languages: [java, kotlin, python, yaml, bash]
 
 ## 개요
 
-MapleExpectation 프로젝트의 부하 테스트(Load Test) 전략과 실패 기준을 정의합니다. **성능 회귀**을 조기에 발견하고 **배포 차단** 기준을 명확히 합니다.
+probabilistic-valuation-engine 프로젝트의 부하 테스트(Load Test) 전략과 실패 기준을 정의합니다. **성능 회귀**을 조기에 발견하고 **배포 차단** 기준을 명확히 합니다.
 
 > **Evidence:** 5개 Phase 부하 테스트 (V4 L1 Fast Path, V4 Write-Behind, V4 ADR Refactoring, V5 Stateless, Multi-Instance Warmup)
 >

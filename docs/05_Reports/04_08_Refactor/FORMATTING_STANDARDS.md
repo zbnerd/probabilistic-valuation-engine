@@ -2,7 +2,7 @@
 
 ## Overview
 
-MapleExpectation uses **Spotless** with **Google Java Format** to maintain consistent code style across the codebase. This document documents the formatting standards and configuration.
+probabilistic-valuation-engine uses **Spotless** with **Google Java Format** to maintain consistent code style across the codebase. This document documents the formatting standards and configuration.
 
 ## Tooling
 

@@ -1,6 +1,6 @@
 # Stateless Design Verification Report
 
-**Project:** MapleExpectation
+**Project:** probabilistic-valuation-engine
 **Date:** 2026-02-16
 **Java Version:** 21 (Virtual Threads)
 **Evaluator:** Metis (Pre-Planning Consultant)
@@ -11,7 +11,7 @@
 
 **Status:** ✅ **PASS** - Stateless Design Compliant
 
-This report verifies that the MapleExpectation codebase follows stateless design principles required for horizontal scalability and Java 21 Virtual Thread compatibility. The analysis examined static mutable state, instance-level caches, thread-safety mechanisms, and Virtual Thread compatibility.
+This report verifies that the probabilistic-valuation-engine codebase follows stateless design principles required for horizontal scalability and Java 21 Virtual Thread compatibility. The analysis examined static mutable state, instance-level caches, thread-safety mechanisms, and Virtual Thread compatibility.
 
 ### Key Findings
 
@@ -338,7 +338,7 @@ L1: Caffeine (In-Memory, Instance-Local)
 
 ### 8.3 Final Verdict: ✅ **APPROVED FOR SCALE-OUT**
 
-The MapleExpectation codebase is **fully compliant** with stateless design principles and **Java 21 Virtual Thread compatible**. All identified stateful patterns are:
+The probabilistic-valuation-engine codebase is **fully compliant** with stateless design principles and **Java 21 Virtual Thread compatible**. All identified stateful patterns are:
 
 1. **Properly documented** with clear justifications
 2. **Thread-safe** using lock-free data structures

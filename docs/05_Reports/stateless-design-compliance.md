@@ -1,7 +1,7 @@
 # Stateless Design Compliance Report
 
 **Generated:** 2026-02-16
-**Scope:** MapleExpectation Application (module-app)
+**Scope:** probabilistic-valuation-engine Application (module-app)
 **Total Files Analyzed:** 342 Java files
 **Components:** 163 Spring-managed beans (@Component, @Service, @Repository, @Controller)
 
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-MapleExpectation demonstrates **strong stateless design compliance** with strategic use of in-memory state where appropriate. The codebase follows modern Java 21 patterns with Virtual Threads, ConcurrentHashMap for thread safety, and clear separation between distributed (Redis) and local state.
+probabilistic-valuation-engine demonstrates **strong stateless design compliance** with strategic use of in-memory state where appropriate. The codebase follows modern Java 21 patterns with Virtual Threads, ConcurrentHashMap for thread safety, and clear separation between distributed (Redis) and local state.
 
 **Key Findings:**
 - ✅ **Zero HttpSession usage** - No session-based state management
@@ -310,7 +310,7 @@ public void registerMetrics() {
 
 ## Conclusion
 
-MapleExpectation demonstrates **excellent stateless design compliance** with 94% stateless components and all remaining stateful components properly justified. The codebase is **production-ready for horizontal scaling** with clear documentation and strategic use of in-memory state where appropriate.
+probabilistic-valuation-engine demonstrates **excellent stateless design compliance** with 94% stateless components and all remaining stateful components properly justified. The codebase is **production-ready for horizontal scaling** with clear documentation and strategic use of in-memory state where appropriate.
 
 **Key Successes:**
 1. Zero critical scale-out blockers (P0)

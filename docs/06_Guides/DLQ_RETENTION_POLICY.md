@@ -2,7 +2,7 @@
 
 **버전**: 1.0
 **마지막 업데이트**: 2026-02-05
-**적용 범위**: MapleExpectation Production DLQ (NexonApiDlq, DonationOutboxDlq)
+**적용 범위**: probabilistic-valuation-engine Production DLQ (NexonApiDlq, DonationOutboxDlq)
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### 1.1 목적
 
-본 정책은 MapleExpectation 프로젝트의 Dead Letter Queue(DLQ) 데이터 보관, 삭제, 아카이빙에 대한 표준 절차를 정의합니다.
+본 정책은 probabilistic-valuation-engine 프로젝트의 Dead Letter Queue(DLQ) 데이터 보관, 삭제, 아카이빙에 대한 표준 절차를 정의합니다.
 
 **적용 대상**:
 - `nexon_api_dlq` (Nexon API 실패 이벤트)
@@ -236,7 +236,7 @@ aws s3 cp s3://maple-expectation-dlq-archive/year=2026/month=02/dlq_export_20260
 
 ### 5.1 데이터 보존 법규
 
-| 규정 | 요구사항 | MapleExpectation 준수 |
+| 규정 | 요구사항 | probabilistic-valuation-engine 준수 |
 |------|----------|---------------------|
 | **전자상거래법** | 3년 보안 점검 기록 | ✅ CloudTrail 3년 보관 |
 | **개인정보 보호법** | 1년 이용 기록 | ✅ 30일 DLQ + 1년 액세스 로그 |
@@ -438,5 +438,5 @@ CREATE TABLE dlq_retention_audit_log (
 
 ---
 
-*이 정책은 MapleExpectation 프로젝트의 데이터 보존 및 규정 준수를 위해 작성되었습니다.*
+*이 정책은 probabilistic-valuation-engine 프로젝트의 데이터 보존 및 규정 준수를 위해 작성되었습니다.*
 *모든 변경 사항은 Engineering Manager 승인 후 반영하세요.*

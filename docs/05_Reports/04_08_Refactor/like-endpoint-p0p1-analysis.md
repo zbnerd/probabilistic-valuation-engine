@@ -399,7 +399,7 @@ toggleLike()의 반환값에 likeCount를 포함하여 Controller 단순화.
 
 - [Scale-out 방해 요소 분석](scale-out-blockers-analysis.md)
 - [대규모 트래픽 성능 분석](high-traffic-performance-analysis.md)
-- [ADR-014 멀티 모듈 전환](../adr/ADR-014-multi-module-cross-cutting-concerns.md)
+- [ADR-014 멀티 모듈 전환](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
 
 ---
 

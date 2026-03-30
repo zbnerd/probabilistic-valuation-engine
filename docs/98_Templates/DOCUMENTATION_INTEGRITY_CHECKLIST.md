@@ -251,7 +251,7 @@ All documentation MUST include:
 
 ### 1단계: 환경 설정
 ```bash
-git clone https://github.com/zbnerd/MapleExpectation.git
+git clone https://github.com/zbnerd/probabilistic-valuation-engine.git
 git checkout <commit-hash>
 docker-compose up -d
 ./gradlew bootRun
@@ -375,4 +375,4 @@ print(f"p50: {mean:.2f} ± {confidence_interval:.2f} ms (95% CI)")
 *Template Version: 2.0.0*
 *Last Updated: 2026-02-05*
 *Document Integrity Check: 30/30 PASSED*
-*Created by: MapleExpectation Documentation Team*
+*Created by: probabilistic-valuation-engine Documentation Team*

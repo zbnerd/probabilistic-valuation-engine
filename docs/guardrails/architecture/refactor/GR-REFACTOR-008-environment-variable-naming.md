@@ -153,4 +153,4 @@ curl -s http://localhost:8080/actuator/env | jq '.propertySources[].properties |
 
 ## 출처
 - [Discord Webhook Root Cause Analysis](../../../../05_Reports/04_05_Incidents/discord-webhook-root-cause-analysis.md)
-- [ADR-0345: Stateless Alert System](../../../../adr/ADR-0345-stateless-alert-system.md)
+- [ADR-0345: Stateless Alert System](../../../../01_ADR/ADR-0345-stateless-alert-system.md)

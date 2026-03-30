@@ -7,7 +7,7 @@
 > **Documentation Version:** 1.0
 > **Production Status:** Active (Zero flaky tests in CI since 2025-12 implementation)
 
-이 문서는 MapleExpectation 프로젝트의 테스트 작성, 동시성 테스트, Flaky Test 방지 규칙을 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 테스트 작성, 동시성 테스트, Flaky Test 방지 규칙을 정의합니다.
 
 ## Documentation Integrity Statement
 
@@ -350,7 +350,7 @@ for i in {1..10}; do ./gradlew test --tests "TargetTest" || echo "Failed at $i";
 mvn -Dsurefire.rerunFailingTestsCount=3 test
 ```
 
-### MapleExpectation 프로젝트 특화 규칙
+### probabilistic-valuation-engine 프로젝트 특화 규칙
 
 | 컴포넌트 | Flaky 원인 | 해결책 |
 |----------|-----------|--------|

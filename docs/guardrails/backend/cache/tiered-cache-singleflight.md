@@ -10,7 +10,7 @@ keywords: [ADR-003, TieredCache, SingleFlight, Cache-Stampede, Thundering-Herd]
 
 Guardrails for multi-tier caching and SingleFlight pattern to prevent cache stampede and thundering herd problems.
 
-**Source:** ADR-003: Tiered Cache & SingleFlight Pattern
+**Source:** ADR-003: TieredCache & SingleFlight Pattern
 
 ---
 
@@ -306,7 +306,7 @@ redis-cli -c -h localhost -p 6379 cluster info
 
 ## Related Documents
 
-- **ADR-003:** Tiered Cache & SingleFlight Pattern
+- **ADR-003:** TieredCache & SingleFlight Pattern
 - **ADR-007:** AOP, Async, Cache Integration
 - **infrastructure.md** Section 8: Redis & Redisson Integration
 - **infrastructure.md** Section 8-1: Redis Lua Script & Cluster Hash Tag

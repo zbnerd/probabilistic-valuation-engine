@@ -25,7 +25,7 @@ The Chaos Engineering documentation structure (`docs/02_Chaos_Engineering/06_Nig
 
 ### Related Decisions
 
-- **ADR-003:** Tiered Cache with Singleflight Pattern - The architecture being tested
+- **ADR-003:** TieredCache with Singleflight Pattern - The architecture being tested
 - **docs/03_Technical_Guides/infrastructure.md (Section 17):** TieredCache & Cache Stampede Prevention
 - **docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md:** Overall testing approach
 
@@ -233,7 +233,7 @@ Error Rate: 0%                # No exceptions during failure
 ## Related Documentation
 
 ### ADR References
-- **ADR-003:** Tiered Cache with Singleflight Pattern - Architecture under test
+- **ADR-003:** TieredCache with Singleflight Pattern - Architecture under test
 - **ADR-039:** Current Architecture Assessment - Module structure context
 
 ### Technical Guides

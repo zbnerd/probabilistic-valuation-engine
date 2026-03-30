@@ -71,7 +71,7 @@ fun getExpectation(userIgn: String): ResponseEntity<ByteArray> {
 
 ### 캐시 설정 조정
 
-```java
+```kotlin
 // Before → After
 .expireAfterWrite(30, MINUTES) → .expireAfterWrite(60, MINUTES)
 .maximumSize(1000)             → .maximumSize(5000)

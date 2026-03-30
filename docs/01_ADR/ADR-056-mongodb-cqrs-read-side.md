@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-02-19
-**Author**: MapleExpectation Architecture Team
+**Author**: probabilistic-valuation-engine Architecture Team
 **Supersedes**: None
 **Related**: [ADR-038](ADR-038-v5-cqrs-implementation.md), [ADR-015](ADR-015-v5-cqrs-mongodb.md)
 **Category**: Technology Stack
@@ -242,7 +242,7 @@ public class CharacterValuationView {
 
 ### 인프라 구성: Docker Compose
 
-**파일**: `/home/maple/MapleExpectation/docker-compose.yml` (Lines 147-166)
+**파일**: `/home/maple/probabilistic-valuation-engine/docker-compose.yml` (Lines 147-166)
 
 ```yaml
 # MongoDB for V5 CQRS Read Side
@@ -273,7 +273,7 @@ mongodb:
 
 ### 데이터 모델: Character Valuation View
 
-**파일**: `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/mongodb/CharacterValuationView.java`
+**파일**: `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/mongodb/CharacterValuationView.java`
 
 ```java
 @Document(collection = "character_valuation_views")
@@ -301,7 +301,7 @@ public class CharacterValuationView {
 
 ### Query Service: Indexed Reads
 
-**파일**: `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/mongodb/CharacterViewQueryService.java`
+**파일**: `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/mongodb/CharacterViewQueryService.java`
 
 ```java
 @Service
@@ -331,7 +331,7 @@ public class CharacterViewQueryService {
 
 ### V4 Logic Reuse: Command Side
 
-**파일**: `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/service/v5/worker/ExpectationCalculationWorker.java`
+**파일**: `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/service/v5/worker/ExpectationCalculationWorker.java`
 
 ```java
 @Service
@@ -359,7 +359,7 @@ public class ExpectationCalculationWorker {
 
 ### Event Sync: Redis Stream
 
-**파일**: `/home/maple/MapleExpectation/module-app/src/main/java/maple/expectation/service/v5/event/MongoDBSyncWorker.java`
+**파일**: `/home/maple/probabilistic-valuation-engine/module-app/src/main/java/maple/expectation/service/v5/event/MongoDBSyncWorker.java`
 
 ```java
 @Component
@@ -402,7 +402,7 @@ public class MongoDBSyncWorker implements Runnable {
 
 ### Application Configuration
 
-**파일**: `/home/maple/MapleExpectation/src/main/resources/application.yml`
+**파일**: `/home/maple/probabilistic-valuation-engine/src/main/resources/application.yml`
 
 ```yaml
 # V5 CQRS Configuration
@@ -421,7 +421,7 @@ spring:
 
 ### Gradle Dependencies
 
-**파일**: `/home/maple/MapleExpectation/module-infra/build.gradle`
+**파일**: `/home/maple/probabilistic-valuation-engine/module-infra/build.gradle`
 
 ```gradle
 dependencies {
@@ -564,4 +564,4 @@ Eventual Consistency (1s lag)은 character view의 business requirement에 부�
 **Document Version**: 1.0
 **Last Updated**: 2026-02-19
 **Next Review**: Phase 2 완료 후 (MongoDB Replica Set 구성)
-**Owner**: MapleExpectation Architecture Team
+**Owner**: probabilistic-valuation-engine Architecture Team

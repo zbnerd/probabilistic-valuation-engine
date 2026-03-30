@@ -61,12 +61,12 @@
 ## 🔗 Evidence IDs (증거 식별자)
 
 ### 코드 증거 (Code Evidence)
-- [C1] **PoolExhaustionChaosTest**: `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/resource/PoolExhaustionChaosTest.java` (line 1-218)
+- [C1] **PoolExhaustionChaosTest**: `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/resource/PoolExhaustionChaosTest.java` (line 1-218)
   - `shouldTimeout_whenPoolExhausted()`: 풀 고갈 시 타임아웃 검증 (line 51-113)
   - `shouldRecover_afterConnectionsReleased()`: 복구 후 즉시 재사용 검증 (line 120-152)
   - `shouldAnalyze_poolContention()`: 동시 요청 시 풀 경합 분석 (line 159-217)
 
-- [C2] **HikariCP 설정**: `/home/maple/MapleExpectation/src/main/resources/application.yml` (line 17-22)
+- [C2] **HikariCP 설정**: `/home/maple/probabilistic-valuation-engine/src/main/resources/application.yml` (line 17-22)
   ```yaml
   spring:
     datasource:

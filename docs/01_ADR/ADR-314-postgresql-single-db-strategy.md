@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-09 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #547, #548, #551 |
 
@@ -16,7 +16,7 @@
 
 ### 현재 아키텍처
 
-MapleExpectation 프로젝트는 현재 3개의 데이터베이스를 사용:
+probabilistic-valuation-engine 프로젝트는 현재 3개의 데이터베이스를 사용:
 
 1. **MySQL 8.0**: 영구 데이터 저장 (사용자, 장비, 계산 결과)
 2. **MongoDB 7.0**: 비정형 장비 데이터 (V5 CQRS Read Side)
@@ -259,5 +259,5 @@ Phase 7-8: Performance & Deployment
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-09 | ADR 초안 작성 | MapleExpectation Team |
-| 2026-03-09 | 상태를 "수락됨"으로 변경 | MapleExpectation Team |
+| 2026-03-09 | ADR 초안 작성 | probabilistic-valuation-engine Team |
+| 2026-03-09 | 상태를 "수락됨"으로 변경 | probabilistic-valuation-engine Team |

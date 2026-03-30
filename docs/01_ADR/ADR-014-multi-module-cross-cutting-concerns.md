@@ -67,7 +67,7 @@ Accepted
 ---
 
 ## 선행 조건
-- 이 ADR은 [#126 Pragmatic CQRS](https://github.com/zbnerd/MapleExpectation/issues/126)의 **필수 선행 작업**이다.
+- 이 ADR은 [#126 Pragmatic CQRS](https://github.com/zbnerd/probabilistic-valuation-engine/issues/126)의 **필수 선행 작업**이다.
 - CQRS로 조회/처리 서버를 분리하기 전에, 두 서버가 공유할 **공통 인프라 모듈**이 먼저 추출되어야 한다.
 
 ---
@@ -76,7 +76,7 @@ Accepted
 
 ### 현재 구조의 문제
 
-현재 MapleExpectation은 **단일 모듈 모놀리식 구조**로, `global` 패키지에 약 130개 이상의 Java 파일이 **횡단 관심사(Cross-Cutting Concerns)**로 집중되어 있다.
+현재 probabilistic-valuation-engine은 **단일 모듈 모놀리식 구조**로, `global` 패키지에 약 130개 이상의 Java 파일이 **횡단 관심사(Cross-Cutting Concerns)**로 집중되어 있다.
 
 ```
 src/main/java/maple/expectation/
@@ -291,7 +291,7 @@ maple-api (Query Server)          maple-worker (Command Server)
 ---
 
 ## 관련 문서
-- [#126 Pragmatic CQRS: 조회/처리 서버 분리](https://github.com/zbnerd/MapleExpectation/issues/126)
+- [#126 Pragmatic CQRS: 조회/처리 서버 분리](https://github.com/zbnerd/probabilistic-valuation-engine/issues/126)
 - [ADR-012: Stateless 아키텍처 전환 로드맵](ADR-012-stateless-scalability-roadmap.md)
 - [ADR-013: 대규모 트래픽 처리를 위한 비동기 이벤트 파이프라인](ADR-013-high-throughput-event-pipeline.md)
 

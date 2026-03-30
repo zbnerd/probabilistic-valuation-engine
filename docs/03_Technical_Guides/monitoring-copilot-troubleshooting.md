@@ -8,7 +8,7 @@
 
 ## 📋 개요
 
-MapleExpectation 프로젝트에 **AI 기반 SRE 모니터링 시스템**을 구축하며 발생한 문제들을 해결한 과정입니다.
+probabilistic-valuation-engine 프로젝트에 **AI 기반 SRE 모니터링 시스템**을 구축하며 발생한 문제들을 해결한 과정입니다.
 
 ### 구성 요소
 - **LangChain4J**: Z.ai GLM-4.7 모델 연동

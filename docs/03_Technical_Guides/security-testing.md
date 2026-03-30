@@ -8,7 +8,7 @@
 > **Documentation Version:** 1.0
 > **Compliance:** OWASP ASVS v4.0, PCI DSS Requirements
 
-이 문서는 MapleExpectation 프로젝트의 보안 테스트 작성 규칙을 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 보안 테스트 작성 규칙을 정의합니다.
 
 ## Documentation Integrity Statement
 

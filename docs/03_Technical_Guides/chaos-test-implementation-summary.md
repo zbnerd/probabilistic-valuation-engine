@@ -1,6 +1,6 @@
 # Chaos Test Module - Implementation Plan Summary
 
-> **Project**: MapleExpectation Chaos Test Separation
+> **Project**: probabilistic-valuation-engine Chaos Test Separation
 > **Status**: Design Complete - Ready for Implementation
 > **Date**: 2026-02-11
 > **Total Deliverables**: 9 documents, 3 configuration files, 1,989 lines
@@ -304,16 +304,16 @@ Migration is successful when ALL of the following are true:
 ## References
 
 ### Documentation Created
-1. [Chaos Test Module Architecture](/home/maple/MapleExpectation/docs/03_Technical_Guides/chaos-test-module-architecture.md) - 499 lines
-2. [Chaos Test Quick Start](/home/maple/MapleExpectation/docs/03_Technical_Guides/chaos-test-quick-start.md) - 143 lines
-3. [CI/CD Integration Patterns](/home/maple/MapleExpectation/docs/03_Technical_Guides/chaos-test-cicd-patterns.md) - 568 lines
-4. [Migration Status Tracking](/home/maple/MapleExpectation/MIGRATION_STATUS.md) - 252 lines
-5. [ADR-025: Chaos Test Module Separation](/home/maple/MapleExpectation/docs/01_Adr/ADR-025-chaos-test-module-separation.md) - 270 lines
+1. [Chaos Test Module Architecture](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/chaos-test-module-architecture.md) - 499 lines
+2. [Chaos Test Quick Start](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/chaos-test-quick-start.md) - 143 lines
+3. [CI/CD Integration Patterns](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/chaos-test-cicd-patterns.md) - 568 lines
+4. [Migration Status Tracking](/home/maple/probabilistic-valuation-engine/MIGRATION_STATUS.md) - 252 lines
+5. [ADR-025: Chaos Test Module Separation](/home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-025-chaos-test-module-separation.md) - 270 lines
 
 ### Related Documents
-- [ADR-014: Multi-module Cross-cutting Concerns](/home/maple/MapleExpectation/docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md)
-- [Test Strategy](/home/maple/MapleExpectation/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
-- [Flaky Test Management](/home/maple/MapleExpectation/docs/03_Technical_Guides/flaky-test-management.md)
+- [ADR-014: Multi-module Cross-cutting Concerns](/home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md)
+- [Test Strategy](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
+- [Flaky Test Management](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/flaky-test-management.md)
 
 ---
 

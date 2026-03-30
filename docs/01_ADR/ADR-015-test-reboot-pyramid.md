@@ -38,7 +38,7 @@
 > **Decision Makers**: 5-Agent Council (Blue, Green, Yellow, Purple, Red)
 
 ## 문서 무결성 체크리스트
-✅ All 25 items verified (Date: 2026-02-11, Project: MapleExpectation)
+✅ All 25 items verified (Date: 2026-02-11, Project: probabilistic-valuation-engine)
 
 ---
 
@@ -65,7 +65,7 @@
 
 ## Context
 
-현재 MapleExpectation 프로젝트는 테스트 전략의 심각한 문제점을 겪고 있습니다:
+현재 probabilistic-valuation-engine 프로젝트는 테스트 전략의 심각한 문제점을 겪고 있습니다:
 
 ### 1. 테스트 문제 현황
 
@@ -455,6 +455,6 @@ time ./gradlew test
 ```
 
 ### 이슈
-- **[#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/MapleExpectation/issues/283)**
-- **[테스트 신뢰도 개방제안](https://github.com/zbnerd/MapleExpectation/issues/299)**
-- **[통합테스트 최적화 방안](https://github.com/zbnerd/MapleExpectation/issues/300)**
+- **[#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/probabilistic-valuation-engine/issues/283)**
+- **[테스트 신뢰도 개방제안](https://github.com/zbnerd/probabilistic-valuation-engine/issues/299)**
+- **[통합테스트 최적화 방안](https://github.com/zbnerd/probabilistic-valuation-engine/issues/300)**

@@ -26,14 +26,14 @@ Rate Limiting 위반.
 
 ### 원인 분석
 - Redis L2 캐시 만료 시점이 동기화되어 있음
-- Single-flight 패턴 미적용으로 중복 조회 발생
+- SingleFlight 패턴 미적용으로 중복 조회 발생
 - L1 로컬 캐시 부재로 Redis 부하 집중
 
 ### 해결 방안
-**TieredCache + Single-flight 패턴 도입**
+**TieredCache + SingleFlight 패턴 도입**
 
-1. **3계층 캐시 구축**: L1(Caffeine) → L2(Redis) → Single-flight Lock → DB
-2. **Single-flight 병합**: Leader만 DB 조회, Follower는 대기 후 결과 공유
+1. **3계층 캐시 구축**: L1(Caffeine) → L2(Redis) → SingleFlight Lock → DB
+2. **SingleFlight 병합**: Leader만 DB 조회, Follower는 대기 후 결과 공유
 3. **Two-Phase Cache**: LightSnapshot (빈번한 요청) + FullSnapshot (MISS 시만)
 
 ### 결과
@@ -44,7 +44,7 @@ Rate Limiting 위반.
 
 ### 배운 점
 > "캐시 스탬프드는 단순히 TTL을 랜덤화하는 것으로는 근본 해결이 불가능하다.
-> Single-flight 패턴으로 중복 요청을 병합하는 것이 핵심이다.
+> SingleFlight 패턴으로 중복 요청을 병합하는 것이 핵심이다.
 > 또한 L1/L2 무효화 순서(L2→L1→Pub/Sub)를 지키지 않으면 데이터 불일치가 발생한다."
 
 ---

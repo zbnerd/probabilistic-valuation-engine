@@ -55,7 +55,7 @@ We delivered: **Foundation + Analysis + 6 files**
 
 **Option 3: Review Progress**
 ```
-Read: /home/maple/MapleExpectation/ULTRAWORK-SESSION-COMPLETE.md
+Read: /home/maple/probabilistic-valuation-engine/ULTRAWORK-SESSION-COMPLETE.md
 ```
 
 ---

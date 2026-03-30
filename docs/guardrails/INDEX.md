@@ -6,7 +6,7 @@
 
 ## Overview
 
-이 문서는 MapleExpectation 프로젝트의 모든 가드레일(Guardrails) 패턴을 카테고리별로 정리한 인덱스입니다. 각 가드레일은 `DON'T` (안티패턴)와 `DO` (베스트 프랙티스) 형식으로 작성되었으며, Java와 Kotlin 코드 예시를 포함합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 모든 가드레일(Guardrails) 패턴을 카테고리별로 정리한 인덱스입니다. 각 가드레일은 `DON'T` (안티패턴)와 `DO` (베스트 프랙티스) 형식으로 작성되었으며, Java와 Kotlin 코드 예시를 포함합니다.
 
 **관련 문서:**
 - **INDEX.json:** `INDEX.json` - Hooks 연동용 패턴 인덱스 (regex, keywords, AI judgment)
@@ -39,7 +39,7 @@
 | ID | 제목 | 심각도 | 키워드 |
 |----|------|--------|--------|
 | GR-ARCH-001 | [TieredCache](architecture/system-design.md) | warning | TieredCache, Caffeine, Redis, L1, L2 |
-| GR-ARCH-002 | [Single-flight](architecture/system-design.md) | warning | Single-flight, cache, stampede |
+| GR-ARCH-002 | [SingleFlight](architecture/system-design.md) | warning | SingleFlight, cache, stampede |
 | GR-ARCH-003 | [Stateless](architecture/stateless.md) | critical | HttpSession, stateless, Redis |
 | GR-ARCH-003-2 | [Static Mutable](architecture/stateless.md) | critical | static, mutable, state |
 | GR-ARCH-005 | [FixedRate Scheduler](architecture/adr-decisions.md) | critical | @Scheduled, fixedRate, fixedDelay |
@@ -76,11 +76,11 @@
 | GR-RESILIENCE-001 | [Circuit Breaker](backend/resilience/circuit-breaker.md) | critical | CircuitBreaker, Resilience4j |
 | GR-RESILIENCE-002 | [Marker Interface](backend/resilience/marker-interface.md) | critical | Marker, CircuitBreakerIgnoreMarker |
 | GR-RESILIENCE-003 | [Fallback](backend/resilience/fallback.md) | warning | fallback, graceful degradation |
-| GR-RESILIENCE-004 | [Redis Sentinel](backend/resilience/redis-sentinel-readmode.md) | warning | Redis, Sentinel, ReadMode |
-| GR-RESILIENCE-005 | [Redis Failover](backend/resilience/redis-failover-topology.md) | warning | Redis, Failover, Topology |
+| GR-RESILIENCE-004 | [Redis Sentinel](../../_archive/redis-deprecated/redis-sentinel-readmode.md) | warning | Redis, Sentinel, ReadMode |
+| GR-RESILIENCE-005 | [Redis Failover](../../_archive/redis-deprecated/redis-failover-topology.md) | warning | Redis, Failover, Topology |
 | GR-RESILIENCE-006 | [Auto Warmup](backend/resilience/auto-warmup-strategy.md) | warning | Warmup, ColdCache, Scheduler |
 | GR-RESILIENCE-007 | [Distributed Lock](backend/resilience/distributed-lock-scheduler.md) | critical | Scheduler, DistributedLock, Redis |
-| GR-RESILIENCE-008 | [Redis ZSET TTL](backend/resilience/redis-zset-ttl.md) | warning | Redis, ZSET, TTL, MemoryLeak |
+| GR-RESILIENCE-008 | [Redis ZSET TTL](../../_archive/redis-deprecated/redis-zset-ttl.md) | warning | Redis, ZSET, TTL, MemoryLeak |
 
 ---
 

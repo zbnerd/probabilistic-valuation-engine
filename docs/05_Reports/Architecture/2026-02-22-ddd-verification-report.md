@@ -1,7 +1,7 @@
 # DDD 아키텍처 검증 리포트
 
 **검증일자**: 2026-02-22
-**프로젝트**: MapleExpectation
+**프로젝트**: probabilistic-valuation-engine
 **검증 범위**: DDD/클린 아키텍처 준수 여부, 코드 품질, 설계 패턴
 
 ---
@@ -303,7 +303,7 @@ throw new ProbabilityInvariantException(
 2. FQCN 사용에 대한 개발 가이드 문서화
 
 **총평**:
-> MapleExpectation 프로젝트는 **엔터프라이즈급 DDD 아키텍처**의 모범 사례입니다. 헥사고날 아키텍처, 포트/어댑터 패턴, 무상태 설계가 체계적으로 적용되어 있으며, SOLID 원칙과 클린 코드가 엄격히 준수되고 있습니다. 특히 Aggregate Root 간 순환 의존성이 없고 ID 참조만 사용하는 점은 DDD Best Practice를 완벽하게 따르고 있습니다.
+> probabilistic-valuation-engine 프로젝트는 **엔터프라이즈급 DDD 아키텍처**의 모범 사례입니다. 헥사고날 아키텍처, 포트/어댑터 패턴, 무상태 설계가 체계적으로 적용되어 있으며, SOLID 원칙과 클린 코드가 엄격히 준수되고 있습니다. 특히 Aggregate Root 간 순환 의존성이 없고 ID 참조만 사용하는 점은 DDD Best Practice를 완벽하게 따르고 있습니다.
 
 ---
 
@@ -332,4 +332,4 @@ throw new ProbabilityInvariantException(
 
 ---
 
-*이 리포트는 MapleExpectation 프로젝트의 아키텍처 품질을 보증합니다.*
+*이 리포트는 probabilistic-valuation-engine 프로젝트의 아키텍처 품질을 보증합니다.*

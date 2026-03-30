@@ -244,7 +244,7 @@ app:
 
 ---
 
-## Compliance with MapleExpectation Standards
+## Compliance with probabilistic-valuation-engine Standards
 
 ✅ **CLAUDE.md Section 12 (LogicExecutor)**
 - All exceptions handled via executor pattern
@@ -317,7 +317,7 @@ app:
 ## File Structure
 
 ```
-MapleExpectation/
+probabilistic-valuation-engine/
 ├── src/main/java/maple/expectation/monitoring/
 │   ├── ai/
 │   │   ├── AiSreService.java                    ✅ Existing

@@ -2,7 +2,7 @@
 id: GR-001
 category: backend/cache
 severity: critical
-keywords: [Redis, Caffeine, TieredCache, Cache Stampede, Single-flight, TTL]
+keywords: [Redis, Caffeine, TieredCache, Cache Stampede, SingleFlight, TTL]
 ---
 # TieredCache & Cache Stampede Prevention
 
@@ -79,7 +79,7 @@ boolean acquired = executor.executeOrDefault(
 );
 ```
 
-### 5. 분산 Single-flight 패턴
+### 5. 분산 SingleFlight 패턴
 ```java
 // Good (Leader: 락 획득 -> Double-check -> ValueLoader)
 if (lock.tryLock(30, TimeUnit.SECONDS)) {

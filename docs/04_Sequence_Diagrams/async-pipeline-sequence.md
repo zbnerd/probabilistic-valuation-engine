@@ -1,7 +1,7 @@
 # Async Pipeline 시퀀스 다이어그램
 
 > **Last Updated:** 2026-02-05
-> **Code Version:** MapleExpectation v1.x
+> **Code Version:** probabilistic-valuation-engine v1.x
 > **Diagram Version:** 1.0
 > **Related Issue:** #118
 
@@ -16,7 +16,7 @@
 | **Tomcat Thread** | http-nio-* 요청 처리 스레드 |
 | **Two-Phase Snapshot** | Light → Full 단계적 데이터 로드 |
 | **Write-Behind** | 응답 후 비동기 DB 저장 |
-| **Single-flight** | 동시 요청 1회만 계산 |
+| **SingleFlight** | 동시 요청 1회만 계산 |
 
 ## 전체 파이프라인 시퀀스
 

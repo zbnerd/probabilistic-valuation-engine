@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-10 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #547, #548, #551, #585 |
 | 선행 ADR | ADR-001 PostgreSQL 단일 DB 전략, ADR-003 Redis 기능 PostgreSQL 대체 |
@@ -17,7 +17,7 @@
 
 ### 현재 Redis Pub/Sub 사용 현황
 
-MapleExpectation은 **Redis Pub/Sub**을 활용하여 캐시 무효화 이벤트를 전파:
+probabilistic-valuation-engine은 **Redis Pub/Sub**을 활용하여 캐시 무효화 이벤트를 전파:
 
 | 사용 사례 | 채널 패턴 | 페이로드 |
 |----------|----------|----------|
@@ -606,4 +606,4 @@ GROUP BY channel;
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-10 | ADR 초안 작성 | MapleExpectation Team |
+| 2026-03-10 | ADR 초안 작성 | probabilistic-valuation-engine Team |

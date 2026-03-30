@@ -322,7 +322,7 @@ results.forEach(m -> log.info("Batch {}: {}ms ({} records/sec)",
 ## 관련 문서
 
 - **[ADR-017](ADR-017-domain-extraction-clean-architecture.md)**: Domain Extraction - Clean Architecture Migration
-- **[Issue #359](https://github.com/zbnerd/MapleExpectation/issues/359)**: JDBC Batch Migration
+- **[Issue #359](https://github.com/zbnerd/probabilistic-valuation-engine/issues/359)**: JDBC Batch Migration
 
 ---
 

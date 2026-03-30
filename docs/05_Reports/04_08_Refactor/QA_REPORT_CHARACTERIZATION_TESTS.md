@@ -4,7 +4,7 @@
 
 ### Environment
 - **Session:** Phase 3 Preparation - Characterization Tests
-- **Service:** Phase 3 Domain Extraction (MapleExpectation)
+- **Service:** Phase 3 Domain Extraction (probabilistic-valuation-engine)
 - **Test Level:** COMPREHENSIVE (High-Tier QA)
 - **Agent:** Yellow QA Master (5-Agent Council)
 

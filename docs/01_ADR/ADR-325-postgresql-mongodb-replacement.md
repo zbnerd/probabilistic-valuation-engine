@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-10 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #547, #548, #551, #583 |
 | 선행 ADR | ADR-001 PostgreSQL 단일 DB 전략 |
@@ -17,7 +17,7 @@
 
 ### 현재 아키텍처 (V5 CQRS)
 
-MapleExpectation은 MongoDB를 **CQRS Read Side**로 활용:
+probabilistic-valuation-engine은 MongoDB를 **CQRS Read Side**로 활용:
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -426,4 +426,4 @@ WHERE indexname = 'idx_character_view_presets_gin';
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-10 | ADR 초안 작성 | MapleExpectation Team |
+| 2026-03-10 | ADR 초안 작성 | probabilistic-valuation-engine Team |

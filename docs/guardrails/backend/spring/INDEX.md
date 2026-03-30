@@ -106,7 +106,7 @@ Spring Framework 관련 가드레일입니다. LogicExecutor, Exception Handling
 
 ### Backend
 - [../cache/tiered-cache.md](../cache/tiered-cache.md) - TieredCache & Cache Stampede Prevention
-- [../cache/tiered-cache-singleflight.md](../cache/tiered-cache-singleflight.md) - Single-flight Pattern
+- [../cache/tiered-cache-singleflight.md](../cache/tiered-cache-singleflight.md) - SingleFlight Pattern
 - [../resilience/circuit-breaker.md](../resilience/circuit-breaker.md) - Circuit Breaker Pattern
 - [../resilience/marker-interface.md](../resilience/marker-interface.md) - Marker Interface Pattern
 - [../concurrency/async-patterns.md](../concurrency/async-patterns.md) - Async Non-Blocking Pipeline

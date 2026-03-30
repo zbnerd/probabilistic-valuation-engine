@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-All Phase 1 objectives achieved. The MapleExpectation project now has **comprehensive guardrails** in place to enforce Clean Architecture refactoring.
+All Phase 1 objectives achieved. The probabilistic-valuation-engine project now has **comprehensive guardrails** in place to enforce Clean Architecture refactoring.
 
 ### Implementation Status
 

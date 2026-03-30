@@ -14,7 +14,7 @@
 
 ## Context
 
-MapleExpectation's multi-module architecture was established in ADR-035 (February 2025) to resolve circular dependencies and enable scale-out. While the dependency direction follows DIP principles correctly, **module-app remains bloated** with 342 files containing mixed concerns that violate the intended architectural boundaries.
+probabilistic-valuation-engine's multi-module architecture was established in ADR-035 (February 2025) to resolve circular dependencies and enable scale-out. While the dependency direction follows DIP principles correctly, **module-app remains bloated** with 342 files containing mixed concerns that violate the intended architectural boundaries.
 
 ### Problem Statement
 
@@ -95,7 +95,7 @@ module-chaos-test (test-only, depends on all)
 
 | Package | Description | Components |
 |---------|-------------|------------|
-| `infrastructure/concurrency/` | Single-flight executors | 3 |
+| `infrastructure/concurrency/` | SingleFlight executors | 3 |
 | `infrastructure/resilience/` | Resilience patterns | 7 |
 | `infrastructure/filter/` | MDC filter | 1 |
 | `infrastructure/external/` | External API infrastructure | - |

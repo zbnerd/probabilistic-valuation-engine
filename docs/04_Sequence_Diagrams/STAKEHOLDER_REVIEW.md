@@ -1,6 +1,6 @@
 # Stakeholder Review Preparation Document 📊
 
-**Purpose:** Comprehensive preparation for stakeholder review of MapleExpectation project improvements
+**Purpose:** Comprehensive preparation for stakeholder review of probabilistic-valuation-engine project improvements
 **Date:** 2026-02-06
 **Score Achievement:** 49/100 → 82/100 (+33 points, +67% improvement)
 
@@ -10,7 +10,7 @@
 
 ### Achievement Overview
 
-MapleExpectation project has successfully transformed from a **49/100 baseline** to an **82/100 achievement** through comprehensive strategic documentation and technical excellence enhancements. This represents a **67% improvement** in overall project evaluation score.
+probabilistic-valuation-engine project has successfully transformed from a **49/100 baseline** to an **82/100 achievement** through comprehensive strategic documentation and technical excellence enhancements. This represents a **67% improvement** in overall project evaluation score.
 
 **Key Achievement:** Target score of 80-90 **exceeded** with 82/100 final score ✅
 
@@ -111,7 +111,7 @@ MapleExpectation project has successfully transformed from a **49/100 baseline**
 **Differentiation:**
 - **"1 Request = 150 Standard Requests"** - Enterprise-grade throughput on budget hardware
 - Evidence-based operations with ADR-driven decisions
-- Zero failure rate through resilience patterns (Circuit Breaker, Singleflight, Tiered Cache)
+- Zero failure rate through resilience patterns (Circuit Breaker, Singleflight, TieredCache)
 - Comprehensive chaos testing methodology
 
 **Target Markets:**
@@ -238,7 +238,7 @@ long ttl = BASE_TTL + ThreadLocalRandom.current().nextLong(-30, 30);
 
 **References:**
 - [Chaos Test N21: Cache Stampede](../../docs/02_Chaos_Engineering/06_Nightmare/Results/N21-CACHE_STAMPEDE.md)
-- [Architecture: Tiered Cache](../../docs/03_Technical_Guides/infrastructure.md#section-17)
+- [Architecture: TieredCache](../../docs/03_Technical_Guides/infrastructure.md#section-17)
 
 ---
 
@@ -423,7 +423,7 @@ public void saveDonation(Donation donation) {
 
 ## 🎯 Conclusion
 
-MapleExpectation has successfully established itself as an **enterprise-grade resilience patterns demonstration** through:
+probabilistic-valuation-engine has successfully established itself as an **enterprise-grade resilience patterns demonstration** through:
 
 1. **Evidence-Based Operations:** All decisions backed by ADRs, load tests, and chaos tests
 2. **Strategic Documentation:** Business model, scenarios, KPIs, personas all documented

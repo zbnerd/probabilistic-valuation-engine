@@ -1,5 +1,5 @@
 # Zero Script QA Monitoring Guide
-## MapleExpectation Project
+## probabilistic-valuation-engine Project
 
 ---
 
@@ -39,7 +39,7 @@ docker compose logs -f 2>&1 | tee /tmp/qa_logs_$(date +%Y%m%d_%H%M%S).txt
 ### Step 5: Test API
 ```bash
 # Terminal 4: Execute test requests
-# Wait for "Started MapleExpectationApplication" in logs
+# Wait for "Started probabilistic-valuation-engineApplication" in logs
 
 # Example: Simple health check
 curl -X GET http://localhost:8080/api/health
@@ -756,7 +756,7 @@ docker compose version
 ## 문서 관리 (Document Management)
 
 ### 피드백 제출
-- **GitHub Issues**: https://github.com/your-org/MapleExpectation/issues
+- **GitHub Issues**: https://github.com/your-org/probabilistic-valuation-engine/issues
 - **라벨**: `documentation`, `qa`, `monitoring`
 
 ### 업데이트 절차

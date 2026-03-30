@@ -32,7 +32,7 @@
 - Discord incident `INC-29506523` (2026-02-06)
   - `hikaricp_connections_active` = 30 @ 16:22:20Z
   - `hikaricp_connections_pending` = 41 @ 16:22:20Z
-- GitHub issue [#312](https://github.com/zbnerd/MapleExpectation/issues/312): Dedup 구현
+- GitHub issue [#312](https://github.com/zbnerd/probabilistic-valuation-engine/issues/312): Dedup 구현
 
 **Status:** ⏳ In Progress
 
@@ -71,7 +71,7 @@ LLM 출력은 JSON 구조화되어 있으며, 과장/허위 사실이 포함되�
 
 **Evidence:**
 - Discord incident `INC-29506523` - JSON 파싱 성공
-- GitHub PR [#309](https://github.com/zbnerd/MapleExpectation/pull/309) - ChatGPT 통합
+- GitHub PR [#309](https://github.com/zbnerd/probabilistic-valuation-engine/pull/309) - ChatGPT 통합
 
 **Status:** ✅ Verified
 
@@ -93,7 +93,7 @@ AI가 제안하는 모든 액션은 위험도, 롤백 계획, 선행 조건을 �
   - Risk: MEDIUM
   - Preconditions: pending>TH for 2m AND p95>200ms
   - Rollback: revert to 30 if error-rate ↑ OR DB CPU > 80% for 5m
-- GitHub issue [#311](https://github.com/zbnerd/MapleExpectation/issues/311) - Auto-Mitigation safety rails
+- GitHub issue [#311](https://github.com/zbnerd/probabilistic-valuation-engine/issues/311) - Auto-Mitigation safety rails
 
 **Status:** ⏳ In Progress
 
@@ -112,7 +112,7 @@ Discord 버튼으로 실행되는 액션은 RBAC, 서명 검증, 화이트리스
   - `checkPreconditions()` - metric gating
 
 **Evidence:**
-- GitHub issue [#311](https://github.com/zbnerd/MapleExpectation/issues/311) - Security 섹션:
+- GitHub issue [#311](https://github.com/zbnerd/probabilistic-valuation-engine/issues/311) - Security 섹션:
   - Discord signature verification (replay window 5m)
   - RBAC: @sre role only
   - Action whitelist: lock pool size 20~50 범위만
@@ -134,7 +134,7 @@ Discord 버튼으로 실행되는 액션은 RBAC, 서명 검증, 화이트리스
   - `executeWithAudit()` - 감사 로그 기록
 
 **Evidence:**
-- GitHub issue [#311](https://github.com/zbnerd/MapleExpectation/issues/311) - Auditability 섹션
+- GitHub issue [#311](https://github.com/zbnerd/probabilistic-valuation-engine/issues/311) - Auditability 섹션
 - Audit log example:
   ```json
   {
@@ -161,7 +161,7 @@ Discord 버튼으로 실행되는 액션은 RBAC, 서명 검증, 화이트리스
   - `rollbackIfNeeded()` - SLO 미달 시 롤백
 
 **Evidence:**
-- GitHub issue [#311](https://github.com/zbnerd/MapleExpectation/issues/311) - Safety Rails:
+- GitHub issue [#311](https://github.com/zbnerd/probabilistic-valuation-engine/issues/311) - Safety Rails:
   - Auto verification: 2~5분 후 p95 < 200ms 확인
   - Rollback: error-rate ↑ OR DB CPU > 80% for 5m
 
@@ -185,8 +185,8 @@ Discord 버튼으로 실행되는 액션은 RBAC, 서명 검증, 화이트리스
   - Detection: `hikaricp_connections_active` = 30/30 (100% utilized)
   - AI Analysis (confidence: HIGH)
   - Proposed: A1 (pool 30→40), A2 (Redis migration)
-- GitHub issue [#310](https://github.com/zbnerd/MapleExpectation/issues/310) - Redis Lock migration
-- GitHub issue [#311](https://github.com/zbnerd/MapleExpectation/issues/311) - Discord Auto-Mitigation
+- GitHub issue [#310](https://github.com/zbnerd/probabilistic-valuation-engine/issues/310) - Redis Lock migration
+- GitHub issue [#311](https://github.com/zbnerd/probabilistic-valuation-engine/issues/311) - Discord Auto-Mitigation
 
 **Status:** ✅ Verified
 
@@ -218,12 +218,12 @@ Discord 버튼으로 실행되는 액션은 RBAC, 서명 검증, 화이트리스
 
 | Claim | 관련 이슈 | 상태 |
 |-------|---------|------|
-| C-OPS-01 | [#312](https://github.com/zbnerd/MapleExpectation/issues/312) | ⏳ |
-| C-OPS-04 | [#312](https://github.com/zbnerd/MapleExpectation/issues/312), [#311](https://github.com/zbnerd/MapleExpectation/issues/311) | ⏳ |
-| C-OPS-05 | [#311](https://github.com/zbnerd/MapleExpectation/issues/311) | ⏳ |
-| C-OPS-06 | [#311](https://github.com/zbnerd/MapleExpectation/issues/311) | ⏳ |
-| C-OPS-07 | [#311](https://github.com/zbnerd/MapleExpectation/issues/311) | ⏳ |
-| C-OPS-08 | [#310](https://github.com/zbnerd/MapleExpectation/issues/310), [#311](https://github.com/zbnerd/MapleExpectation/issues/311) | ✅ |
+| C-OPS-01 | [#312](https://github.com/zbnerd/probabilistic-valuation-engine/issues/312) | ⏳ |
+| C-OPS-04 | [#312](https://github.com/zbnerd/probabilistic-valuation-engine/issues/312), [#311](https://github.com/zbnerd/probabilistic-valuation-engine/issues/311) | ⏳ |
+| C-OPS-05 | [#311](https://github.com/zbnerd/probabilistic-valuation-engine/issues/311) | ⏳ |
+| C-OPS-06 | [#311](https://github.com/zbnerd/probabilistic-valuation-engine/issues/311) | ⏳ |
+| C-OPS-07 | [#311](https://github.com/zbnerd/probabilistic-valuation-engine/issues/311) | ⏳ |
+| C-OPS-08 | [#310](https://github.com/zbnerd/probabilistic-valuation-engine/issues/310), [#311](https://github.com/zbnerd/probabilistic-valuation-engine/issues/311) | ✅ |
 
 ## 업데이트 규칙
 

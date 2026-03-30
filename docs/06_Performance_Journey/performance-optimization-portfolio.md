@@ -81,13 +81,13 @@ Latency: ~500ms (평균)
 ### 1. 계산 병렬화 (1순위)
 
 **현재:**
-```java
+```kotlin
 // 3개 프리셋 순차 계산 (혹은 약한 병렬)
 CompletableFuture.allOf(f1, f2, f3)
 ```
 
 **개선안:**
-```java
+```kotlin
 // 완전 병렬 계산
 val f1 = supplyAsync { calcPreset(1) }
 val f2 = supplyAsync { calcPreset(2) }

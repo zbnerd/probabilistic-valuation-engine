@@ -13,7 +13,7 @@ Java 8/17의 **Platform Thread** 모델은 높은 동시성 처리 요구사항�
 
 ### 1.2 비즈니스 요구사항
 
-MapleExpectation 서비스는 **1,000+ concurrent users** 처리가 필요합니다:
+probabilistic-valuation-engine 서비스는 **1,000+ concurrent users** 처리가 필요합니다:
 - AWS t3.small (2 vCPU, 2GB RAM) 저사양 인프라에서 **240 RPS** 달성
 - 장비 강화 비용 계산 = CPU-Bound 작업 (GZIP 압축 해제 + JSON 파싱 + DP 계산)
 - Nexon Open API 연동 = I/O-Bound 작업 (5초 timeout)

@@ -1,7 +1,7 @@
 # Flaky Test Prevention Verification Report
 
 > **Report Date:** 2026-02-16
-> **Scope:** MapleExpectation Multi-Module Project
+> **Scope:** probabilistic-valuation-engine Multi-Module Project
 > **Verification Method:** Static analysis + Pattern matching against testing-guide.md Section 24
 > **Target Reliability Score:** 95%+
 
@@ -419,7 +419,7 @@ Thread.sleep(100); // Lock hold 시뮬레이션
 
 ### Summary
 
-The MapleExpectation project demonstrates a **strong foundation** in flaky test prevention with excellent Testcontainers integration and solid concurrency control patterns. However, **critical gaps** in time abstraction and test isolation prevent reaching the 95%+ reliability target.
+The probabilistic-valuation-engine project demonstrates a **strong foundation** in flaky test prevention with excellent Testcontainers integration and solid concurrency control patterns. However, **critical gaps** in time abstraction and test isolation prevent reaching the 95%+ reliability target.
 
 ### Key Strengths
 - ✅ **Testcontainers excellence** - 42 files using Docker isolation

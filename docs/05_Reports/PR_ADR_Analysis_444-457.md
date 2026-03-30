@@ -248,6 +248,6 @@
 
 ## 참조
 
-- [ADR-003: Hexagonal Architecture 채택](../adr/003-hexagonal-architecture-adoption.md)
-- [ADR-005: 모듈 의존성 그래프 및 이관 전략](../adr/ADR-005-module-dependency-strategy.md)
+- [ADR-003: Hexagonal Architecture 채택](../01_ADR/003-hexagonal-architecture-adoption.md)
+- [ADR-005: 모듈 의존성 그래프 및 이관 전략](../01_ADR/ADR-005-module-dependency-strategy.md)
 - [CLAUDE.md Section 12: Zero Try-Catch Policy](../../CLAUDE.md)

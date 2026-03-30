@@ -103,7 +103,7 @@ After rollback, verify:
 
 ## 🔗 Related Documents
 
-- [ADR-039](../adr/ADR-039-current-architecture-assessment.md) - Current architecture assessment
+- [ADR-039](../01_ADR/ADR-039-current-architecture-assessment.md) - Current architecture assessment
 - [Refactoring Analysis](../04_Reports/refactoring-analysis.md) - Pre-refactoring context
 - [Architecture Guide](../00_Start_Here/architecture.md) - System overview
 

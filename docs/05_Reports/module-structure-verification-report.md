@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The multi-module structure of MapleExpectation **fully complies** with DIP principles and ADR-014/ADR-017 requirements. All dependencies flow unidirectionally from Application → Infrastructure → Core → Common, with zero reverse dependencies or architectural violations.
+The multi-module structure of probabilistic-valuation-engine **fully complies** with DIP principles and ADR-014/ADR-017 requirements. All dependencies flow unidirectionally from Application → Infrastructure → Core → Common, with zero reverse dependencies or architectural violations.
 
 ### Key Findings
 
@@ -79,8 +79,8 @@ module-common
 | Hexagonal Architecture | ✅ PASS | 8 port interfaces defined |
 
 **Key Files:**
-- `/home/maple/MapleExpectation/module-core/build.gradle` - Only depends on `module-common`
-- `/home/maple/MapleExpectation/module-core/src/main/java/maple/expectation/application/port/` - Port interfaces for DIP
+- `/home/maple/probabilistic-valuation-engine/module-core/build.gradle` - Only depends on `module-common`
+- `/home/maple/probabilistic-valuation-engine/module-core/src/main/java/maple/expectation/application/port/` - Port interfaces for DIP
 
 **Port Interfaces (Hexagonal Architecture):**
 ```
@@ -305,7 +305,7 @@ tasks.register('verifyNoReverseDependencies') {
 
 **Status:** ✅ **PASS** - All modules comply with DIP principles
 
-The multi-module structure of MapleExpectation demonstrates excellent adherence to clean architecture principles:
+The multi-module structure of probabilistic-valuation-engine demonstrates excellent adherence to clean architecture principles:
 
 1. ✅ **Unidirectional dependencies** - All dependencies flow toward core/common
 2. ✅ **Spring-free core** - Domain logic is independent of framework

@@ -887,7 +887,7 @@ curl -s http://prometheus:9090/api/v1/query?query=prometheus_http_query_duration
 - **기존:** `src/main/java/maple/expectation/monitoring/copilot/model/EvidenceItem.java`
 
 ### 이슈 및 PR
-- **[Issue #312](https://github.com/zbnerd/MapleExpectation/issues/312)** - Monitoring Copilot Signal Deduplication & Evidence Evaluation
+- **[Issue #312](https://github.com/zbnerd/probabilistic-valuation-engine/issues/312)** - Monitoring Copilot Signal Deduplication & Evidence Evaluation
 
 ### 참고 자료
 - **Prometheus Query API:** https://prometheus.io/docs/prometheus/latest/querying/api/

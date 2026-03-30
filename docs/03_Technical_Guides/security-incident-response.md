@@ -8,7 +8,7 @@
 > **Documentation Version:** 1.0
 > **Compliance:** NIST SP 800-61 Rev. 2, GDPR Article 33 (Breach Notification)
 
-이 문서는 MapleExpectation 프로젝트의 보안 사고 대응 절차를 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트의 보안 사고 대응 절차를 정의합니다.
 
 ## Documentation Integrity Statement
 

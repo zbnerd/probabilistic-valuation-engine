@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-**This audit found ZERO SQL injection vulnerabilities.** The MapleExpectation codebase is immune to SQL injection attacks via query string concatenation because:
+**This audit found ZERO SQL injection vulnerabilities.** The probabilistic-valuation-engine codebase is immune to SQL injection attacks via query string concatenation because:
 
 1. ❌ **No @Query annotations** exist in the codebase
 2. ❌ **No custom JPQL/native SQL** with user input
@@ -158,7 +158,7 @@ curl "http://localhost:8080/api/character?id=1' OR '1'='1"
 
 ### Summary
 
-The MapleExpectation project is **NOT vulnerable** to SQL injection attacks via query string concatenation. The project's architecture follows security best practices by design:
+The probabilistic-valuation-engine project is **NOT vulnerable** to SQL injection attacks via query string concatenation. The project's architecture follows security best practices by design:
 
 - **No @Query annotations** with user input
 - **No native SQL** with string concatenation
@@ -201,6 +201,6 @@ No changes required. The codebase already follows OWASP SQL injection prevention
 
 ---
 
-*This audit confirms that the MapleExpectation project is not vulnerable to SQL injection attacks via query string concatenation. The hexagonal architecture and exclusive use of Spring Data JPA's built-in query methods provide inherent protection against the OWASP Top 1 security risk.*
+*This audit confirms that the probabilistic-valuation-engine project is not vulnerable to SQL injection attacks via query string concatenation. The hexagonal architecture and exclusive use of Spring Data JPA's built-in query methods provide inherent protection against the OWASP Top 1 security risk.*
 
 **Full Report**: See [SQL_INJECTION_AUDIT_REPORT.md](SQL_INJECTION_AUDIT_REPORT.md) for detailed analysis.

@@ -1,4 +1,4 @@
-# MapleExpectation SRE/Infrastructure Operations Guide
+# probabilistic-valuation-engine SRE/Infrastructure Operations Guide
 
 > **Document Purpose:** SRE 및 인프라 엔지니어를 위한 운영 노하우 및 모범 사례 정리
 >
@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-MapleExpectation은 **AWS t3.small (1 vCPU, 2GB RAM)** 사양에서 **719 RPS, 1,000+ 동시 사용자**를 처리하는 고성능 시스템입니다. 이 문서는 SRE 관점에서 핵심 인프라 구성요소의 운영 노하우를 정리합니다.
+probabilistic-valuation-engine은 **AWS t3.small (1 vCPU, 2GB RAM)** 사양에서 **719 RPS, 1,000+ 동시 사용자**를 처리하는 고성능 시스템입니다. 이 문서는 SRE 관점에서 핵심 인프라 구성요소의 운영 노하우를 정리합니다.
 
 ### Key Performance Metrics
 | Metric | Value | Target |
@@ -53,7 +53,7 @@ MapleExpectation은 **AWS t3.small (1 vCPU, 2GB RAM)** 사양에서 **719 RPS, 1
 
 ### 1.2 Redisson 설정 핵심 파라미터
 
-**파일:** `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/config/RedissonConfig.java`
+**파일:** `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/config/RedissonConfig.java`
 
 ```java
 // Sentinel 모드 설정
@@ -83,7 +83,7 @@ config.useSentinelServers()
 
 ### 1.4 Lua Script 활용 (원자적 연산)
 
-**파일:** `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/redis/script/RedissonLikeAtomicOperations.java`
+**파일:** `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/redis/script/RedissonLikeAtomicOperations.java`
 
 **특징:**
 - **SHA Caching:** `scriptLoad()` + `evalSha()`로 네트워크 오버헤드 최소화
@@ -220,7 +220,7 @@ public <T> T get(Object key, Callable<T> valueLoader) {
     T cached = getCachedValueFromLayers(key);
     if (cached != null) return cached;
 
-    // 2. 분산 락으로 Single-flight
+    // 2. 분산 락으로 SingleFlight
     RLock lock = redissonClient.getLock("cache:sf:" + key);
     if (lock.tryLock(5, TimeUnit.SECONDS)) {
         return executeAsLeader(key, valueLoader);  // Leader: 실제 계산
@@ -337,7 +337,7 @@ rate(cache_l2_failure_total[5m])
 
 ### 3.2 Thread Pool 설정
 
-**파일:** `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/config/ExecutorConfig.java`
+**파일:** `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/config/ExecutorConfig.java`
 
 | Executor | Core | Max | Queue | KeepAlive | Rejection Policy | 용도 |
 |----------|------|-----|-------|-----------|------------------|------|
@@ -479,7 +479,7 @@ executor_task_duration_seconds{executor="alert",quantile="p95"}
 
 ### 4.2 @Locked Annotation - 분산 락
 
-**파일:** `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/aop/aspect/LockAspect.java`
+**파일:** `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/aop/aspect/LockAspect.java`
 
 **사용 예:**
 ```java
@@ -576,7 +576,7 @@ public class TraceAspect { }
 
 ### 5.2 Prometheus 엔드포인트 보안
 
-**파일:** `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/security/filter/PrometheusSecurityFilter.java`
+**파일:** `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/security/filter/PrometheusSecurityFilter.java`
 
 **보안 계층:**
 1. **IP Whitelist** - 신뢰할 수 있는 프록시/내부 네트워크만 허용
@@ -1058,9 +1058,9 @@ lock.tryLock(waitTime, TimeUnit.SECONDS);  // Watchdog 자동 활성화
 - **N19:** Outbox Replay (Compound Failures)
 
 ### Configuration Files
-- `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/config/RedissonConfig.java`
-- `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/config/ExecutorConfig.java`
-- `/home/maple/MapleExpectation/module-infra/src/main/java/maple/expectation/infrastructure/cache/TieredCache.java`
+- `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/config/RedissonConfig.java`
+- `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/config/ExecutorConfig.java`
+- `/home/maple/probabilistic-valuation-engine/module-infra/src/main/java/maple/expectation/infrastructure/cache/TieredCache.java`
 
 ---
 

@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-Successfully implemented an **Anti-Corruption Layer (ACL)** using the **Strategy Pattern** to isolate external REST API constraints from internal high-speed pipelines. The implementation achieves **perfect SOLID compliance**, **100% test pass rate**, and sets a new architectural standard for the MapleExpectation project.
+Successfully implemented an **Anti-Corruption Layer (ACL)** using the **Strategy Pattern** to isolate external REST API constraints from internal high-speed pipelines. The implementation achieves **perfect SOLID compliance**, **100% test pass rate**, and sets a new architectural standard for the probabilistic-valuation-engine project.
 
 **Critical Fix Applied:** Discovered and fixed a broken pipeline connection where the producer (RedisEventPublisher) was using MessageTopic (Pub/Sub) while the consumer (BatchWriter) was using MessageQueue (RQueue). Unified both to use the same MessageQueue instance with JSON serialization/deserialization.
 

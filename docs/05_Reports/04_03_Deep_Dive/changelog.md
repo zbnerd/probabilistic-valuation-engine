@@ -1,4 +1,4 @@
-# MapleExpectation Changelog
+# probabilistic-valuation-engine Changelog
 
 > **Format**: [Semantic Versioning](https://semver.org/)
 >

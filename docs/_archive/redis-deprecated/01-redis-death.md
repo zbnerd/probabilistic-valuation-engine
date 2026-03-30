@@ -114,17 +114,17 @@
 
 | ID | 파일 경로 | 라인 | 설명 | 검증 상태 |
 |----|----------|------|------|----------|
-| [E1] | `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/cache/TieredCache.java` | 44-94 | L1/L2 2계층 캐시 구현 | ✅ 확인됨 |
-| [E2] | `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/executor/LogicExecutor.java` | 전체 | 예외 처리 및 작업 실행 템플릿 | ✅ 확인됨 |
-| [E3] | `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/lock/RedisDistributedLockStrategy.java` | 전체 | Redis 분산 락 구현 | ✅ 확인됨 |
-| [E4] | `/home/maple/MapleExpectation/src/main/resources/application.yml` | 249 | cache.singleflight.lock-wait-seconds=5 | ✅ 확인됨 |
-| [E5] | `/home/maple/MapleExpectation/src/main/java/maple/expectation/global/executor/strategy/ExceptionTranslator.java` | 45-49 | Error guard 구현 (OOM 등) | ✅ 확인됨 |
+| [E1] | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/cache/TieredCache.java` | 44-94 | L1/L2 2계층 캐시 구현 | ✅ 확인됨 |
+| [E2] | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/executor/LogicExecutor.java` | 전체 | 예외 처리 및 작업 실행 템플릿 | ✅ 확인됨 |
+| [E3] | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/lock/RedisDistributedLockStrategy.java` | 전체 | Redis 분산 락 구현 | ✅ 확인됨 |
+| [E4] | `/home/maple/probabilistic-valuation-engine/src/main/resources/application.yml` | 249 | cache.singleflight.lock-wait-seconds=5 | ✅ 확인됨 |
+| [E5] | `/home/maple/probabilistic-valuation-engine/src/main/java/maple/expectation/global/executor/strategy/ExceptionTranslator.java` | 45-49 | Error guard 구현 (OOM 등) | ✅ 확인됨 |
 
 ### 테스트 증거 (Test Evidence)
 
 | ID | 파일 경로 | 테스트 메서드 | 설명 | 검증 상태 |
 |----|----------|-------------|------|----------|
-| [T1] | `/home/maple/MapleExpectation/src/test/java/maple/expectation/chaos/core/RedisDeathChaosTest.java` | shouldFallbackToL1Cache_whenRedisDown | L1 Fallback 검증 | ✅ 확인됨 |
+| [T1] | `/home/maple/probabilistic-valuation-engine/src/test/java/maple/expectation/chaos/core/RedisDeathChaosTest.java` | shouldFallbackToL1Cache_whenRedisDown | L1 Fallback 검증 | ✅ 확인됨 |
 | [T2] | [T1] 동일 | shouldSkipL1Put_whenL2PutFails | L2 실패 시 L1 스킵 검증 | ✅ 구현됨 (TieredCache.java:154) |
 | [T3] | [T1] 동일 | shouldMaintainAvailability_underConcurrentLoad_whenRedisDown | 동시 요청 가용성 검증 | ✅ 확인됨 |
 | [T4] | [T1] 동일 | shouldResumeL2Operations_afterRedisRecovery | 복구 후 정상 동작 검증 | ✅ 확인됨 |
@@ -218,7 +218,7 @@ export AI_SRE_ENABLED="false"
 
 ```bash
 # 1. 프로젝트 클론
-cd /home/maple/MapleExpectation
+cd /home/maple/probabilistic-valuation-engine
 
 # 2. Docker Compose로 인프라 시작
 docker-compose up -d

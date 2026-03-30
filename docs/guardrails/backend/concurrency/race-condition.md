@@ -118,7 +118,7 @@ public class LuaScriptAtomicFetchStrategy {
 - `HGETALL` + `DEL`을 원자적으로 수행
 - EVAL 명령어 전체가 실행될 때까지 다른 명령어 차단
 
-### 3. Tiered Cache + 비동기 Flush (최종 일관성)
+### 3. TieredCache + 비동기 Flush (최종 일관성)
 ```java
 // Good (요청 시점은 락 없음, 스케줄러에서 동기화)
 @Service

@@ -6,7 +6,7 @@
 |------|-----|
 | 상태 | 수락됨 (Accepted) |
 | 결정일 | 2026-03-10 |
-| 결정자 | MapleExpectation Team |
+| 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #547, #548, #551, #582 |
 | 선행 ADR | ADR-001 PostgreSQL 단일 DB 전략 |
@@ -17,7 +17,7 @@
 
 ### 현재 Redis 사용 현황
 
-MapleExpectation 프로젝트는 Redis를 다음과 같은 목적으로 활용:
+probabilistic-valuation-engine 프로젝트는 Redis를 다음과 같은 목적으로 활용:
 
 | 기능 | 사용 패턴 | Redis 데이터 구조 |
 |------|----------|-------------------|
@@ -393,4 +393,4 @@ GROUP BY channel;
 
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
-| 2026-03-10 | ADR 초안 작성 | MapleExpectation Team |
+| 2026-03-10 | ADR 초안 작성 | probabilistic-valuation-engine Team |

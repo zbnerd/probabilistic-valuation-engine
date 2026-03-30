@@ -6,7 +6,7 @@
 
 ## 개요
 
-이 문서는 MapleExpectation 프로젝트에서 **Flaky Test(간헐적 실패 테스트)**를 식별, 격리, 관리하는 절차를 정의합니다.
+이 문서는 probabilistic-valuation-engine 프로젝트에서 **Flaky Test(간헐적 실패 테스트)**를 식별, 격리, 관리하는 절차를 정의합니다.
 
 ---
 
@@ -42,7 +42,7 @@
 ## 젯지 원칙
 
 > "Flaky Test는 엄밀히 말하면 버그입니다. 특히 동시성 부분에서 생긴다면 그건 진짜 Race Condition 버그입니다."
-> — MapleExpectation 프로젝트 정책
+> — probabilistic-valuation-engine 프로젝트 정책
 
 ### 원칙 1: 즉시 격리
 - Flaky 테스트 발견 즉시 `@Tag("flaky")`로 마킹
@@ -413,7 +413,7 @@ systemProperty 'flaky.log.dir', "${buildDir}/flaky"
 - [CLAUDE.md](../../CLAUDE.md) - 프로젝트 핵심 규칙
 - [ISSUE_TEMPLATE.md](../98_Templates/ISSUE_TEMPLATE.md) - 카오스 테스트 실패 보고서
 - [testing-guide.md](testing-guide.md) - 테스트 작성 가이드
-- [adr/ADR-014-multi-module-cross-cutting-concerns.md](../../adr/ADR-014-multi-module-cross-cutting-concerns.md) - ADR-014 멀티 모듈 전환
+- [adr/ADR-014-multi-module-cross-cutting-concerns.md](../../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md) - ADR-014 멀티 모듈 전환
 
 ---
 
@@ -427,4 +427,4 @@ systemProperty 'flaky.log.dir', "${buildDir}/flaky"
 
 *Template Version: 1.0.0*
 *Last Updated: 2026-02-08*
-*Created from MapleExpectation Flaky Test Management Project*
+*Created from probabilistic-valuation-engine Flaky Test Management Project*

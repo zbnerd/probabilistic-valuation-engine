@@ -438,7 +438,7 @@ echo "=== Verification Complete ==="
 - **Lock Config:** `src/main/java/maple/expectation/config/LockHikariConfig.java`
 
 ### 이슈
-- **[#310](https://github.com/zbnerd/MapleExpectation/issues/310)** - MySQL Named Lock → Redis 마이그레이션
+- **[#310](https://github.com/zbnerd/probabilistic-valuation-engine/issues/310)** - MySQL Named Lock → Redis 마이그레이션
 - **[N02](../02_Chaos_Engineering/)** - Deadlock Trap 시나리오 (Note: Directory structure may vary)
 - **[N18](../02_Chaos_Engineering/)** - Data Consistency 시나리오 (Note: Directory structure may vary)
 

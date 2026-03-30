@@ -21,7 +21,7 @@
 
 ```bash
 # 전체 ADR 파일 목록 생성
-find /home/maple/MapleExpectation/docs -type f -name "ADR*.md" | sort > /tmp/all_adr_files.txt
+find /home/maple/probabilistic-valuation-engine/docs -type f -name "ADR*.md" | sort > /tmp/all_adr_files.txt
 cat /tmp/all_adr_files.txt
 ```
 
@@ -43,7 +43,7 @@ Expected: ADR-035, ADR-036 등 중복 파일명 목록
 # 중복 파일들의 수정일자 비교
 for f in $(cat /tmp/duplicate_adr.txt); do
   echo "=== $f ==="
-  find /home/maple/MapleExpectation/docs -name "$f" -exec stat --format="%Y %n" {} \; | sort -rn
+  find /home/maple/probabilistic-valuation-engine/docs -name "$f" -exec stat --format="%Y %n" {} \; | sort -rn
 done
 ```
 
@@ -60,7 +60,7 @@ Expected: 각 파일의 최신 버전 식별
 
 ```bash
 # .backup 파일 제거
-find /home/maple/MapleExpectation/docs/01_Adr -name "*.backup" -type f -delete
+find /home/maple/probabilistic-valuation-engine/docs/01_Adr -name "*.backup" -type f -delete
 echo "Backup files deleted"
 ```
 
@@ -70,9 +70,9 @@ Expected: backup 파일 삭제 완료
 
 ```bash
 # 비표준 파일을 archive 디렉토리로 이동
-mkdir -p /home/maple/MapleExpectation/docs/01_ADR/_archive
-mv /home/maple/MapleExpectation/docs/01_Adr/ADR_ENHANCEMENT_*.md /home/maple/MapleExpectation/docs/01_ADR/_archive/ 2>/dev/null || true
-mv /home/maple/MapleExpectation/docs/01_Adr/README.md /home/maple/MapleExpectation/docs/01_ADR/_archive/README_01_Adr.md 2>/dev/null || true
+mkdir -p /home/maple/probabilistic-valuation-engine/docs/01_ADR/_archive
+mv /home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR_ENHANCEMENT_*.md /home/maple/probabilistic-valuation-engine/docs/01_ADR/_archive/ 2>/dev/null || true
+mv /home/maple/probabilistic-valuation-engine/docs/01_Adr/README.md /home/maple/probabilistic-valuation-engine/docs/01_ADR/_archive/README_01_Adr.md 2>/dev/null || true
 echo "Non-standard files archived"
 ```
 
@@ -90,7 +90,7 @@ Expected: 비표준 파일 이동 완료
 
 ```bash
 # 최신 ADR 파일 이동 (중복 시 최신 파일 우선)
-cp -u /home/maple/MapleExpectation/docs/adr/ADR-*.md /home/maple/MapleExpectation/docs/01_ADR/
+cp -u /home/maple/probabilistic-valuation-engine/docs/adr/ADR-*.md /home/maple/probabilistic-valuation-engine/docs/01_ADR/
 echo "docs/adr/ files copied"
 ```
 
@@ -100,7 +100,7 @@ Expected: ADR-035, 036 파일 복사
 
 ```bash
 # 01_Adr 파일들을 01_ADR로 이동 (최신 파일 우선)
-cp -u /home/maple/MapleExpectation/docs/01_Adr/ADR-*.md /home/maple/MapleExpectation/docs/01_ADR/
+cp -u /home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-*.md /home/maple/probabilistic-valuation-engine/docs/01_ADR/
 echo "docs/01_Adr/ files copied"
 ```
 
@@ -110,8 +110,8 @@ Expected: 모든 ADR 파일 복사
 
 ```bash
 # 통합된 파일 수 확인
-ls /home/maple/MapleExpectation/docs/01_ADR/ADR-*.md | wc -l
-ls /home/maple/MapleExpectation/docs/01_ADR/ADR-*.md | head -20
+ls /home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-*.md | wc -l
+ls /home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-*.md | head -20
 ```
 
 Expected: 70+ ADR 파일 존재
@@ -120,8 +120,8 @@ Expected: 70+ ADR 파일 존재
 
 ```bash
 # 원본 디렉토리 삭제 (파일 모두 이동된 경우)
-rm -rf /home/maple/MapleExpectation/docs/adr
-rm -rf /home/maple/MapleExpectation/docs/01_Adr
+rm -rf /home/maple/probabilistic-valuation-engine/docs/adr
+rm -rf /home/maple/probabilistic-valuation-engine/docs/01_Adr
 echo "Source directories cleaned"
 ```
 
@@ -157,7 +157,7 @@ Expected: Phase 1 완료 커밋
 
 ```bash
 # ADR 파일을 번호 기준으로 정렬하고 3개 그룹으로 분할
-ls /home/maple/MapleExpectation/docs/01_ADR/ADR-*.md | grep -v "_archive" | sort > /tmp/sorted_adr.txt
+ls /home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-*.md | grep -v "_archive" | sort > /tmp/sorted_adr.txt
 total=$(wc -l < /tmp/sorted_adr.txt)
 group_size=$((total / 3 + 1))
 echo "Total: $total, Group size: $group_size"

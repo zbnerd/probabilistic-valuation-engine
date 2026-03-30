@@ -73,6 +73,8 @@ when (result) {
 
 **158,428 rows**가 최종적으로 `equipment_expectation_summary` 테이블에 저장되었다. 중복 0건.
 
+> **Note**: 298,428개의 API 호출이 성공했지만, 모든 캐릭터가 장비 데이터를 보유한 것은 아니다. 장비가 없는 캐릭터는 계산 결과가 비어 upsert 대상에서 제외된다. 298,428 - 158,428 = 139,950건은 장비가 없거나 빈 결과를 반환한 캐릭터다.
+
 ### Write-Behind Buffer의 역할
 
 벌크 로딩 중 Write-Behind Buffer가 빛을 발했다. 계산 결과 158,428개가 개별 upsert가 아니라 **배치 upsert**로 처리되었다.
@@ -86,7 +88,7 @@ DB에 가해진 부하가 158,428회에서 317회로 줄었다.
 
 ## 현실의 검증: 7,347 RPS
 
-2026년 3월 20일, LISTEN/NOTIFY 버그 픽스 후 200k~300k rows 환경에서 측정한 수치.
+2026년 3월 24일, LISTEN/NOTIFY 버그 픽스 + 벌크 로딩 완료 후 200k~300k rows 환경에서 측정한 수치.
 
 ```
 ╔════════════════════════════════════════════════════════════╗
@@ -102,7 +104,7 @@ DB에 가해진 부하가 158,428회에서 317회로 줄었다.
 ╚════════════════════════════════════════════════════════════╝
 ```
 
-**7,347 RPS. 에러 0개. 수십만 실데이터 위에서.**
+**7,347 RPS. 에러 0개. 수십만 실데이터 위에서.** Admission Control은 아직 비활성화 상태였다. 즉, 이 수치는 **순수 캐시 성능**을 보여주는 것이며, Fan-Out 시나리오에서는 별도 보호가 필요하다.
 
 빈 DB에서의 10,994(500 연결)는 이상적 한계치였다. 실데이터 환경에서 200 연결로 잰 7,347이 **진짜 성과**다.
 
@@ -118,12 +120,13 @@ DB에 가해진 부하가 158,428회에서 317회로 줄었다.
 캐시 미스 시 요청 처리 (단일 요청):
 ┌─────────────────────────────────────────────────────────────┐
 │  Nexon API Fetch:  150~572ms     (I/O)                      │
-│  JSON 파싱:        200~300KB     (CPU 25-30%)               │
-│  3 프리셋 DP 계산: O(n³)×3      (CPU 15-20%)               │
-│  Gzip 압축:        10KB → 2KB   (CPU 8-12%)                │
-│  DB upsert:        ON CONFLICT  (I/O + CPU 5-10%)           │
+│  JSON 파싱:        200~300KB     (CPU, 가장 의심되는 병목)  │
+│  3 프리셋 DP 계산: O(n³)×3      (CPU, 프로파일링 미실시)   │
+│  Gzip 압축:        10KB → 2KB   (CPU, 경량)                │
+│  DB upsert:        ON CONFLICT  (I/O + CPU)                 │
 │                                                              │
-│  총 CPU 점유: ~60% (추정, 프로파일링 미실시)                │
+│  총 CPU 점유: ~50-60% (추정. async-profiler 미실시)        │
+│  ※ 정확한 비율은 프로파일링 후 업데이트 예정               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -186,14 +189,14 @@ P0 우선순위로 **Global Cold-Path Admission Control**을 구현했다.
 ```kotlin
 class GlobalAdmissionControl(maxInFlight: Int = 100) {
     private val semaphore = Semaphore(maxInFlight)
+    private val queue = ArrayBlockingQueue<AdmissionRequest<*>>(maxQueueSize)
 
-    fun <T> submitOrWait(task: Callable<T>): Future<T> {
-        if (!semaphore.tryAcquire(5, TimeUnit.SECONDS)) {
+    fun <T> submitOrWait(task: Callable<T>): CompletableFuture<T> {
+        val request = AdmissionRequest(task, CompletableFuture())
+        if (!queue.offer(request, queueOfferTimeoutMs, TimeUnit.MILLISECONDS)) {
             throw TooManyColdMissesException()
         }
-        return executor.submit {
-            try { task.call() } finally { semaphore.release() }
-        }
+        return request.future
     }
 }
 ```

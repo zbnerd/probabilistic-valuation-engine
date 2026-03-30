@@ -21,7 +21,7 @@ RPS Evolution (2026-01-20 ~ 2026-03-30)
   11,000 ┤                                          ╭─── 10,994 (빈 DB, 이상적)
    9,000 ┤                                      ╭───╯
    7,000 ┤                                  ╭───╯
-   7,000 ┤ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╯ ─ ─ ─ ─ ─ ─ 7,347 (실데이터, 현실) ◀
+   7,000 ┤ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╯ ─ ─ ─ ─ ─ ─ ─ ─ 7,347 (실데이터) ◀
    5,000 ┤
    3,000 ┤
    2,000 ┤
@@ -29,9 +29,9 @@ RPS Evolution (2026-01-20 ~ 2026-03-30)
        0 ┼───╭───╭───╯   │   │
      325 ┤   │   │   555  │   674
       97 ┤   │       │
-         └───┴───────┴──────────────────────────────────────────────
-          Jan 20  Jan 24  Jan 25  Jan 26  Jan 27   Mar 19   Mar 24
-          Chaos   Single  Fast    Write   ADR      NOTIFY   Real
+         └───┴───────┴────────────────────────────────────────────────────
+          Jan 20  Jan 24  Jan 25  Jan 26  Jan 27   Mar 19   Mar 24  Mar 30
+          Chaos   Single  Fast    Write   ADR      NOTIFY   Real    Epilogue
           Base    flight  Path    Behind  Refactor          Data
                   (regress)       Buffer
 ```
@@ -168,6 +168,7 @@ Client → Spring Boot (Java 21, Virtual Threads)
 
 > **최종 RPS: ~7,347 (200k~300k rows, LISTEN/NOTIFY Post-Fix, Scale-out 준비 완료)**
 > **여정 기간: 2026년 1월 20일 ~ 3월 30일 (10주)**
+> **관련 이슈**: #589 (Redis 제거), #590 (MongoDB 제거), #591 (MySQL 제거), #609 (LISTEN/NOTIFY), #611 (300k Bulk Load), #617 (Admission Control)
 > **기여자: 5-Agent Council, Claude Code**
 
 **처음으로 돌아가기**: [프롤로그 — 90 RPS에서 시작하다](./00_prologue.md)

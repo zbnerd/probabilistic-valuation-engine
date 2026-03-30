@@ -51,8 +51,7 @@ Redis Pub/Sub에는 없던 **원자성**이다. Redis에서는 데이터 쓰기�
 class PostgresNotifySubscriber(
     private val dataSource: DataSource,
 ) {
-    @PostConstruct
-    override fun subscribe() {
+    fun subscribe() {
         // 1. LISTEN용 전용 연결 생성 (Connection Pool에서 제외)
         val conn = dataSource.connection
         conn.autoCommit = false
@@ -129,28 +128,28 @@ jdbcTemplate.execute("NOTIFY \"cache_invalidation\", '$payload'")
 ╚════════════════════════════════════════════════════════════╝
 ```
 
-이전 최고 기록인 940 RPS에서 **7,347 RPS**. **681% 향상**.
+이전 최고 기록인 940 RPS에서 **7,347 RPS**. 940 대비 **681% 향상** (97 대비 **76배**).
 
 하지만 65개의 에러가 있었다. 그리고 이 에러의 패턴이 이상했다. NOTIFY가 정상적으로 전송되었는데도 일부 인스턴스에서 캐시 무효화가 누락되었다.
 
-## 버그: `doPublish()` 누락
+## 버그: `doPublish()` 호출 경로 누락
 
-추적해보니 `TransactionalCacheInvalidationListener`에서 `doPublish()` 호출이 빠져 있었다.
+추적해보니 `TransactionalCacheInvalidationListener`에서 이벤트 발행 호출 경로가 누락되어 있었다. `doPublish()` 메서드 자체는 존재했지만, 핸들러에서 호출하는 로직이 빠져 있었다.
 
 ```kotlin
-// 문제의 코드
+// 문제: 이벤트 핸들러에서 doPublish() 호출이 누락됨
 fun onCacheInvalidation(event: CacheInvalidationEvent) {
     val event = CacheInvalidationEvent(cacheName, key, type)
-    // doPublish(event) ← 이 줄이 없었다!
+    // ← doPublish(event) 호출이 없었음!
     afterCommit {
         localEvict(event)
     }
 }
 
-// 수정
+// 수정: 발행 경로 추가
 fun onCacheInvalidation(event: CacheInvalidationEvent) {
     val event = CacheInvalidationEvent(cacheName, key, type)
-    doPublish(event)  // ← 추가: PostgreSQL NOTIFY 발행
+    executor.executeOrDefault({ doPublish(event) }, false, context)  // ← 추가
     afterCommit {
         localEvict(event)
     }
@@ -194,8 +193,8 @@ Redis Pub/Sub을 쓸 때보다 빨랐던 이유를 분석했다.
 
 | 요소 | Redis Pub/Sub | PostgreSQL NOTIFY |
 |------|--------------|-------------------|
-| 발행 지연 | ~1ms | ~2-5ms |
-| 전파 지연 | ~5ms | ~10-20ms |
+| 발행 지연 | ~1ms (측정) | ~2-5ms (측정) |
+| 전파 지연 | ~5ms (측정) | ~10-20ms (측정) |
 | **네트워크 홉** | **App → Redis → App (2홉)** | **App → PG → App (1홉, 같은 연결)** |
 | **트랜잭션** | **별도 (비원자적)** | **동일 트랜잭션 (원자적)** |
 | **인프라** | **Redis 프로세스 필요** | **이미 연결된 PG 사용** |

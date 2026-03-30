@@ -52,7 +52,7 @@ PostgreSQL은 이미 L2 캐시용 UNLOGGED 테이블로 사용 중이었다. 분
 ```
 제거한 것:
 ├── RedisDistributedLockStrategy.kt     → PostgresAdvisoryLockStrategy
-├── RedisBufferStrategy.kt             → PGMQ
+├── RedisBufferStrategy.kt             → PGMQ (PostgreSQL Message Queue)
 ├── RedisMessageQueue.kt               → PGMQ
 ├── RedisStreamPublisher/Consumer.kt   → PgmqStreamPublisher
 ├── RedisCacheInvalidation*.kt         → PostgresNotifySubscriber
@@ -60,6 +60,8 @@ PostgreSQL은 이미 L2 캐시용 UNLOGGED 테이블로 사용 중이었다. 분
 ├── TwoBucketRateLimiter.kt            → Caffeine 전용
 └── RedissonConfig.kt                  → 삭제
 ```
+
+PGMQ(PostgreSQL Message Queue)는 PostgreSQL 익스텐션 기반 메시지 큐다. Redis Stream을 대체하여 Write-Behind Buffer의 비동기 쓰기 경로에 사용된다. 영속성이 보장되고, PostgreSQL 트랜잭션 내에서 큐 작업이 원자적으로 처리된다.
 
 `build.gradle`에서 `redisson-spring-boot-starter`, `bucket4j-redisson` 의존성을 제거했다. Redisson 관련 코드 파일 **28개**가 삭제되었다.
 
@@ -109,6 +111,23 @@ Client → Spring Boot
 ```
 
 docker-compose.yml이 절반 이하로 줄었다. 운영 포인트가 3개에서 1개로. 장애 대응 시나리오도 단순해졌다.
+
+### 커넥션 풀의 변화
+
+7장에서 HikariCP 커넥션 풀 고갈이 Scale-out 한계였다. 3개 DB → 1개 전환 후, 상황이 근본적으로 바뀌었다.
+
+```
+Before (3 databases):
+HikariCP Pool (MySQL):     max 20 connections
+Redis Pool (Redisson):     max 64 connections
+Mongo Pool (MongoClient):  max 20 connections
+→ 총 104개 커넥션, 3개 DB로 분산
+
+After (PostgreSQL only):
+HikariCP Pool (PostgreSQL): max 30 connections
+→ 단일 풀로 집중, Redis/MySQL/MongoDB 커넥션 불필요
+→ 7장의 병목이었던 "풀 고갈" 문제 해소
+```
 
 ### 제거된 의존성
 

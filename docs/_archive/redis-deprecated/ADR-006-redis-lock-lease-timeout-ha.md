@@ -1,3 +1,7 @@
+<!-- 
+<-- DEPRECATED --> This document references Redis/Redisson infrastructure completely removed. See ADR-022 (Redis removal), ADR-024 (MySQL removal). Redis replaced by PostgreSQL (advisory locks, UNLOGGED tables, NOTIFY/LISTEN).
+ -->
+
 # ADR-006: Redis 분산 락, Lease, Timeout 및 HA(Sentinel) 전략
 
 ## 상태

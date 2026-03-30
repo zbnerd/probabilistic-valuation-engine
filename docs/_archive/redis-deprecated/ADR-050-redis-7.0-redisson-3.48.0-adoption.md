@@ -1,3 +1,7 @@
+<!-- 
+<-- DEPRECATED --> This document references Redis/Redisson infrastructure completely removed. See ADR-022 (Redis removal), ADR-024 (MySQL removal). Redis replaced by PostgreSQL (advisory locks, UNLOGGED tables, NOTIFY/LISTEN).
+ -->
+
 # ADR-050: Redis 7.0 + Redisson 3.48.0 채택
 
 ## 제1장: 문제의 발견 (Problem)

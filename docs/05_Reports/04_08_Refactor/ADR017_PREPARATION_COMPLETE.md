@@ -438,8 +438,8 @@ If Slice 1 fails:
 
 ### Existing Documents Referenced
 
-- `docs/01_Adr/ADR-017-S1-equipment-slice.md` - Equipment slice ADR
-- `docs/01_Adr/ADR-017-domain-extraction-clean-architecture.md` - Parent ADR
+- `docs/01_ADR/ADR-017-S1-equipment-slice.md` - Equipment slice ADR
+- `docs/01_ADR/ADR-017-domain-extraction-clean-architecture.md` - Parent ADR
 - `docs/05_Reports/Refactor/v2_like_flow_analysis.md` - V2 like endpoint analysis
 - `src/test/java/maple/expectation/characterization/CharacterEquipmentCharacterizationTest.java` - Tests
 - `load-test/wrk-v4-expectation.lua` - Load test script

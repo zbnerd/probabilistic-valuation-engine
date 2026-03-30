@@ -308,10 +308,10 @@ Migration is successful when ALL of the following are true:
 2. [Chaos Test Quick Start](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/chaos-test-quick-start.md) - 143 lines
 3. [CI/CD Integration Patterns](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/chaos-test-cicd-patterns.md) - 568 lines
 4. [Migration Status Tracking](/home/maple/probabilistic-valuation-engine/MIGRATION_STATUS.md) - 252 lines
-5. [ADR-025: Chaos Test Module Separation](/home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-025-chaos-test-module-separation.md) - 270 lines
+5. [ADR-025: Chaos Test Module Separation](/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-025-chaos-test-module-separation.md) - 270 lines
 
 ### Related Documents
-- [ADR-014: Multi-module Cross-cutting Concerns](/home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md)
+- [ADR-014: Multi-module Cross-cutting Concerns](/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-014-multi-module-cross-cutting-concerns.md)
 - [Test Strategy](/home/maple/probabilistic-valuation-engine/docs/02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
 - [Flaky Test Management](/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/flaky-test-management.md)
 
@@ -332,7 +332,7 @@ Documentation (5):
 ├── docs/03_Technical_Guides/chaos-test-quick-start.md (143 lines)
 ├── docs/03_Technical_Guides/chaos-test-cicd-patterns.md (568 lines)
 ├── MIGRATION_STATUS.md (252 lines)
-└── docs/01_Adr/ADR-025-chaos-test-module-separation.md (270 lines)
+└── docs/01_ADR/ADR-025-chaos-test-module-separation.md (270 lines)
 
 Directories Created (5):
 ├── module-chaos-test/src/chaos-test/java/maple/expectation/chaos/network/

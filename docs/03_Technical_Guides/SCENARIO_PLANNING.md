@@ -676,8 +676,8 @@ changes(scenario_current_mode[24h])
 
 ### Documentation Evidence
 - **[D1]** P0 Report: `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md`
-- **[D2]** ADR-005: `docs/01_Adr/ADR-005-resilience4j-scenario-abc.md`
-- **[D3]** ADR-008: `docs/01_Adr/ADR-008-durability-graceful-shutdown.md`
+- **[D2]** ADR-005: `docs/01_ADR/ADR-005-resilience4j-scenario-abc.md`
+- **[D3]** ADR-008: `docs/01_ADR/ADR-008-durability-graceful-shutdown.md`
 
 ---
 

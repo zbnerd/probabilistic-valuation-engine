@@ -14,7 +14,7 @@
 This guide is based on **production experience** from operating probabilistic-valuation-engine under 1,000+ concurrent users on AWS t3.small infrastructure. All patterns have been validated through:
 - Production incidents (Evidence: [P0_Issues_Resolution_Report_2026-01-20.md](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
 - Chaos engineering tests N01-N18 (Evidence: [Chaos Engineering](../02_Chaos_Engineering/))
-- ADR decision records (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md), [ADR-010](../01_ADR/ADR-010-outbox-pattern.md))
+- ADR decision records (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md), [ADR-010](../01_ADR/ADR-010-outbox-pattern.md))
 
 ## Terminology
 
@@ -53,7 +53,7 @@ AOP 적용 시 프록시 메커니즘 한계 극복을 위해 반드시 **Facade
 ### Evidence Links
 - **Configuration:** `src/main/java/maple/expectation/config/RedissonConfig.java` (Evidence: [CODE-REDIS-CONFIG-001])
 - **Lock Strategy:** `src/main/java/maple/expectation/global/lock/RedisDistributedLockStrategy.java` (Evidence: [CODE-LOCK-001])
-- **HA Decision:** [ADR-006](../01_ADR/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md) - Watchdog vs leaseTime analysis
+- **HA Decision:** [ADR-006](../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md) - Watchdog vs leaseTime analysis
 - **Removal Decision:** [ADR-022](../01_ADR/022-redis-dependency-removal.md) - Redis dependency removal
 
 ---

@@ -877,7 +877,7 @@ curl -s http://prometheus:9090/api/v1/query?query=prometheus_http_query_duration
 
 ### 연결된 ADR
 - **[ADR-001](ADR-001-streaming-parser.md)** - Stateless design pattern
-- **[ADR-006](ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md)** - Redis fallback pattern
+- **[ADR-006](ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md)** - Redis fallback pattern
 - **[ADR-012](ADR-012-stateless-scalability-roadmap.md)** - Stateless scalability
 
 ### 코드 참조

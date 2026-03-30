@@ -16,7 +16,7 @@ probabilistic-valuation-engine은 **3-Tier Lock Architecture**를 채택하여 R
 
 This guide is based on **production lock contention analysis** and distributed systems best practices:
 - P1-P7-P8-P9 distributed lock resolution: 4 scheduler incidents analyzed (Evidence: [P1-7-8-9-scheduler-distributed-lock.md](../05_Reports/P1-7-8-9-scheduler-distributed-lock.md))
-- ADR-006 decision: Watchdog vs leaseTime with production metrics (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md))
+- ADR-006 decision: Watchdog vs leaseTime with production metrics (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md))
 - Hot row performance: Atomic Update 10x faster than Pessimistic Lock on likeCount (Evidence: internal load tests)
 
 ## Terminology
@@ -443,8 +443,8 @@ curl -s http://localhost:8080/actuator/metrics/lock.strategy | jq '.[] | select(
 - **ResilientLockStrategy:** `src/main/java/maple/expectation/global/lock/ResilientLockStrategy.java` (Evidence: [CODE-LOCK-RESILIENT-001])
 - **GameCharacterRepository:** `src/main/java/maple/expectation/repository/v2/GameCharacterRepository.java` (Evidence: [CODE-REPO-GC-001])
 - **DonationOutboxRepository:** `src/main/java/maple/expectation/repository/v2/DonationOutboxRepository.java` (Evidence: [CODE-REPO-OUTBOX-001])
-- **ADR-006:** `docs/01_Adr/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md` (Watchdog decision)
-- **ADR-010:** `docs/01_Adr/ADR-010-outbox-pattern.md` (Outbox pattern)
+- **ADR-006:** `docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md` (Watchdog decision)
+- **ADR-010:** `docs/01_ADR/ADR-010-outbox-pattern.md` (Outbox pattern)
 
 ## Technical Validity Check
 
@@ -478,5 +478,5 @@ curl -s http://localhost:8080/actuator/circuitbreakers | jq
 
 ### Related Evidence
 - P1-7-8-9 Report: `docs/05_Reports/P1-7-8-9-scheduler-distributed-lock.md`
-- ADR-006: `docs/01_Adr/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md`
-- ADR-010: `docs/01_Adr/ADR-010-outbox-pattern.md`
+- ADR-006: `docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md`
+- ADR-010: `docs/01_ADR/ADR-010-outbox-pattern.md`

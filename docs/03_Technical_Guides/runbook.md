@@ -200,4 +200,4 @@ curl -s http://localhost:8080/actuator/health | jq '.components.circuitBreakers'
 ### Related Evidence
 - P0 Report: `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md`
 - P1 Report: `docs/05_Reports/P1_Nightmare_Issues_Resolution_Report.md`
-- ADR-008: `docs/01_Adr/ADR-008-durability-graceful-shutdown.md`
+- ADR-008: `docs/01_ADR/ADR-008-durability-graceful-shutdown.md`

@@ -27,7 +27,7 @@
 ### Directory Structure
 - [ ] `src/main/resources/application-local.yml` exists
 - [ ] `docker-compose.yml` exists
-- [ ] `docs/03-analysis/` directory exists
+- [ ] `docs/05_Reports/` directory exists (zero-script QA reports)
 - [ ] Gradle wrapper: `./gradlew` executable
 
 ---
@@ -302,7 +302,7 @@ docker compose logs -f | grep -iE "(connection|timeout|refused|pool)"
 **Suggested Fix**:
 [Specific code location and suggested change]
 
-**File Location**: `docs/03-analysis/zero-script-qa-2026-01-30.md`
+**File Location**: `do../05_Reports/zero-script-qa-2026-01-30.md`
 
 ---
 
@@ -417,7 +417,7 @@ lsof -i :8080
 - [ ] All with root cause and suggested fix
 
 ### Report Generated
-- [ ] Main report: `docs/03-analysis/zero-script-qa-2026-01-30.md`
+- [ ] Main report: `do../05_Reports/zero-script-qa-2026-01-30.md`
 - [ ] Update with actual findings
 - [ ] Include all issue details
 - [ ] Add performance baseline

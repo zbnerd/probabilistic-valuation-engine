@@ -11,7 +11,7 @@
 ## 1. 완료된 작업 (Completed Tasks)
 
 ### 1.1 ADR 문서 작성
-- **파일:** `docs/01_Adr/ADR-015-test-reboot-pyramid.md`
+- **파일:** `docs/01_ADR/ADR-015-test-reboot-pyramid.md`
 - **내용:** 테스트 피라미드 재구축 전략, 모듈별 테스트 규칙, 실행 계획
 
 ### 1.2 5-Agent Council 검토
@@ -191,7 +191,7 @@ static {
 
 ## 8. 참고 자료
 
-- [ADR-015: Test Reboot Pyramid](docs/01_Adr/ADR-015-test-reboot-pyramid.md)
+- [ADR-015: Test Reboot Pyramid](docs/01_ADR/ADR-015-test-reboot-pyramid.md)
 - [Testcontainers Singleton Flaky Prevention](docs/03_Technical_Guides/testcontainers-singleton-flaky-prevention.md)
 - [Testing Guide](docs/03_Technical_Guides/testing-guide.md)
 - [Flaky Test Management](docs/03_Technical_Guides/flaky-test-management.md)

@@ -11,7 +11,7 @@
 ## 📊 완료된 작업 요약
 
 ### 1. ✅ ADR-015 문서 작성
-**파일:** `docs/01_Adr/ADR-015-test-reboot-pyramid.md`
+**파일:** `docs/01_ADR/ADR-015-test-reboot-pyramid.md`
 
 **내용:**
 - 테스트 피라미드 재구축 전략
@@ -195,7 +195,7 @@ M  module-app/build.gradle
 M  module-core/build.gradle
 M  module-infra/build.gradle
 
-A  docs/01_Adr/ADR-015-test-reboot-pyramid.md
+A  docs/01_ADR/ADR-015-test-reboot-pyramid.md
 A  docs/03_Technical_Guides/testcontainers-singleton-flaky-prevention.md
 A  docs/05_Reports/test-reboot-completion-report.md
 A  module-core/src/test/java/maple/expectation/properties/

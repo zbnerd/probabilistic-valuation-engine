@@ -221,7 +221,7 @@ public class DonationOutboxProcessor {
 
 ## 출처
 - lock-strategy.md Section 2 (후원 도메인)
-- ADR-010: `docs/01_Adr/ADR-010-outbox-pattern.md` (Transactional Outbox Pattern)
+- ADR-010: `docs/01_ADR/ADR-010-outbox-pattern.md` (Transactional Outbox Pattern)
 
 ## 검증 명령어
 ```bash

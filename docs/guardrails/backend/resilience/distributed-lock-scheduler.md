@@ -401,7 +401,7 @@ void schedulerShouldRunOnlyOnSingleInstance() throws InterruptedException {
 
 ### ADR
 - Issue #275: Auto Warmup 기능 구현 (분산 락 필수)
-- `docs/01_ADR/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md` - Redis Lock 설정
+- `docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md` - Redis Lock 설정
 
 ### 코드 (Evidence)
 - `src/main/kotlin/maple/expectation/global/lock/RedisDistributedLockStrategy.java`

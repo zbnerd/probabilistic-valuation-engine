@@ -101,7 +101,7 @@ BUILD SUCCESSFUL in 54s
 ## Documentation Created (35 files)
 
 ### ADR Documents
-- ✅ `docs/01_Adr/ADR-039-current-architecture-assessment.md`
+- ✅ `docs/01_ADR/ADR-039-current-architecture-assessment.md`
 
 ### Analysis Reports
 - ✅ `docs/05_Reports/Multi-Module-Refactoring-Analysis.md`

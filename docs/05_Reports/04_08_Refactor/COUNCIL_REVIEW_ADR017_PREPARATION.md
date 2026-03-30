@@ -582,8 +582,8 @@ This investment prevents weeks of potential rework and ensures the migration is 
 
 **Existing Deliverables:**
 - `docs/05_Reports/Refactor/v2_like_flow_analysis.md`
-- `docs/01_Adr/ADR-017-S1-equipment-slice.md`
-- `docs/01_Adr/ADR-017-domain-extraction-clean-architecture.md`
+- `docs/01_ADR/ADR-017-S1-equipment-slice.md`
+- `docs/01_ADR/ADR-017-domain-extraction-clean-architecture.md`
 - `src/test/java/maple/expectation/characterization/CharacterEquipmentCharacterizationTest.java`
 - `docs/05_Reports/Baseline/BASELINE_20260210.md`
 

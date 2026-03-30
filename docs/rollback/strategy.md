@@ -853,7 +853,7 @@ const dashboard = {
 
 | Document | Path | Purpose |
 |----------|------|---------|
-| [ADR-039](../01_ADR/ADR-039-current-architecture-assessment.md) | `docs/01_Adr/ADR-039-current-architecture-assessment.md` | Current architecture assessment |
+| [ADR-039](../01_ADR/ADR-039-current-architecture-assessment.md) | `docs/01_ADR/ADR-039-current-architecture-assessment.md` | Current architecture assessment |
 | [Refactoring Analysis](../05_Reports/refactoring-analysis.md) | `docs/05_Reports/refactoring-analysis.md` | Pre-refactoring context analysis |
 | [Refactoring Completion](../05_Reports/refactoring-completion.md) | `docs/05_Reports/refactoring-completion.md` | Refactoring results and lessons learned |
 | [Architecture Guide](../00_Start_Here/architecture.md) | `docs/00_Start_Here/architecture.md` | System architecture overview |

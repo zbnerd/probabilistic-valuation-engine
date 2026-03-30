@@ -135,12 +135,12 @@
 
 - [Load Test Report](../../docs/05_Reports/Load_Test_Report.md)
 - [Chaos Test Results](../../docs/02_Chaos_Engineering/06_Nightmare/Results/)
-- [ADR Documentation](../../docs/01_Adr/)
+- [ADR Documentation](../../docs/01_ADR/)
 ```
 
 **Output:**
 1. Create GitHub Issue with label `monthly-review`
-2. Update [balanced-scorecard-kpis.md](./balanced-scorecard-kpis.md) with new metrics
+2. Update [balanced-scorecard-kpis.md](../08_Design_Research/balanced-scorecard-kpis.md) with new metrics
 3. Post summary to [GitHub Discussions](https://github.com/zbnerd/probabilistic-valuation-engine/discussions)
 
 ---
@@ -1010,8 +1010,8 @@ This workflow integration guide ensures that all strategic documentation is **ac
 **Next Review:** 2026-05-06
 
 **Related Documents:**
-- [Balanced Scorecard KPIs](./balanced-scorecard-kpis.md)
-- [User Personas & Journeys](./user-personas-journeys.md)
+- [Balanced Scorecard KPIs](../08_Design_Research/balanced-scorecard-kpis.md)
+- [User Personas & Journeys](../08_Design_Research/user-personas-journeys.md)
 - [Scenario Planning Guide](./scenario-planning.md)
 - [MVP Roadmap](../00_Start_Here/MVP-ROADMAP.md)
 - [CONTRIBUTING.md](../../CONTRIBUTING.md)

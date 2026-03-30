@@ -22,7 +22,7 @@ Successfully completed **Phase 0-1** of the multi-module refactoring plan with *
 | Task | Status | Deliverable | Impact |
 |------|--------|------------|--------|
 | **Analyze codebase structure** | ✅ Complete | `/docs/05_Reports/Multi-Module-Refactoring-Analysis.md` | Baseline metrics established |
-| **Document current architecture** | ✅ Complete | `/docs/01_Adr/ADR-039-current-architecture-assessment.md` | ADR documenting baseline state |
+| **Document current architecture** | ✅ Complete | `/docs/01_ADR/ADR-039-current-architecture-assessment.md` | ADR documenting baseline state |
 | **Analyze circular dependencies** | ✅ Complete | `/docs/05_Reports/circular-dependency-resolution-report.md` | All 26+ violations resolved |
 | **Document stateless design** | ✅ Complete | `/docs/reports/stateless-design-verification.md` | 95/100 compliance score |
 | **Create rollback strategy** | ✅ Complete | `/docs/rollback/strategy.md` + scripts | Full rollback procedures |
@@ -110,7 +110,7 @@ BUILD SUCCESSFUL in 58s
 ## Documentation Created (33 files)
 
 ### ADR Documents
-- `docs/01_Adr/ADR-039-current-architecture-assessment.md`
+- `docs/01_ADR/ADR-039-current-architecture-assessment.md`
 
 ### Analysis Reports
 - `docs/05_Reports/Multi-Module-Refactoring-Analysis.md`
@@ -360,7 +360,7 @@ The ultrawork mode multi-agent approach successfully completed the foundational 
 
 ### Created Directories
 ```
-/home/maple/probabilistic-valuation-engine/docs/01_Adr/
+/home/maple/probabilistic-valuation-engine/docs/01_ADR/
 └── ADR-039-current-architecture-assessment.md
 
 /home/maple/probabilistic-valuation-engine/docs/05_Reports/

@@ -240,7 +240,7 @@ public void processWithRetry(String key) {
 
 ## 출처
 - lock-strategy.md - Section 2 (후원 도메인), Section 4 (분산 스케줄러)
-- ADR-006: `docs/01_Adr/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md` (Watchdog vs LeaseTime)
+- ADR-006: `docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md` (Watchdog vs LeaseTime)
 
 ## 검증 명령어
 ```bash

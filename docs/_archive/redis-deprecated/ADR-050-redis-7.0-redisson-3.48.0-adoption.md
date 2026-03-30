@@ -487,7 +487,7 @@ public void handleLikeEvent(LikeEvent event) {
 **ADR Status**: Accepted (2026-02-19)
 
 **Related Decisions**:
-- [ADR-006](ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md) - Redis Lock Watchdog vs leaseTime 분석
+- [ADR-006](ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md) - Redis Lock Watchdog vs leaseTime 분석
 - [ADR-007](ADR-007-aop-async-cache-integration.md) - AOP, Async, Cache 통합
 
 **Review Date**: 2027-02-19 (1년 후 Redis Cluster 모드 전환 여부 검토)

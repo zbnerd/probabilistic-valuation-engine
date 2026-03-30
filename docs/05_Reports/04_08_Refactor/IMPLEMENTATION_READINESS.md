@@ -68,7 +68,7 @@ java.lang.IllegalStateException: Failed to load ApplicationContext for [WebMerge
 ### 3. Documentation Status: ✅ COMPLETE
 
 **Available Documents**:
-- ✅ `docs/01_Adr/ADR-017-S1-equipment-slice.md` (1312 lines, comprehensive)
+- ✅ `docs/01_ADR/ADR-017-S1-equipment-slice.md` (1312 lines, comprehensive)
 - ✅ `docs/05_Reports/Refactor/monitoring_query_guide.md` (436 lines)
 - ❌ `docs/05_Reports/Refactor/v4_expectation_flow_analysis.md` (NOT FOUND)
 - ✅ `CLAUDE.md` (447 lines, complete)

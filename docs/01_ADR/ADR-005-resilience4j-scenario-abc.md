@@ -287,7 +287,7 @@ curl -s http://localhost:8080/actuator/metrics/resilience4j.circuitbreaker.calls
 ## 관련 문서
 
 ### 연결된 ADR
-- **[ADR-006](ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md)** - Redis 장애 시 CB 폴백
+- **[ADR-006](ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md)** - Redis 장애 시 CB 폴백
 - **[ADR-003](ADR-003-tiered-cache-singleflight.md)** - Cache Stampede 방지
 
 ### 코드 참조

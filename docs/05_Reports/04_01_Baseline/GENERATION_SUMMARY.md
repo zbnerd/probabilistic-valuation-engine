@@ -358,7 +358,7 @@ closed-issues-completion.report.md
 - **Main Report**: docs/04-report/closed-issues-completion.report.md
 - **Changelog**: docs/04-report/changelog.md
 - **Index**: docs/04-report/INDEX.md
-- **Gap Analysis**: docs/03-analysis/closed-issues-gap-analysis.md
+- **Gap Analysis**: docs/05_Reports/closed-issues-gap-analysis.md
 - **Roadmap**: docs/00_Start_Here/ROADMAP.md
 - **Architecture**: docs/00_Start_Here/architecture.md
 

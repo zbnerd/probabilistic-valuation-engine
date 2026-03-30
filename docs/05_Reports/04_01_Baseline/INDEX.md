@@ -37,7 +37,7 @@
 - [changelog.md](changelog.md): Version history and feature summary
 
 ### Analysis Documents
-- [closed-issues-gap-analysis.md](../03-analysis/closed-issues-gap-analysis.md): Gap analysis details (91% match rate)
+- [closed-issues-gap-analysis.md](../05_Reports/closed-issues-gap-analysis.md): Gap analysis details (91% match rate)
 - [scale-out-blockers-analysis.md](scale-out-blockers-analysis.md): Phase 7 prerequisites
 
 ### Architecture Documentation
@@ -135,7 +135,7 @@ docs/04-report/
 - Coverage: All 15 priority issues + supporting plans
 
 ### Design Documents
-- Location: `docs/01_Adr/` (ADR-003~009, ADR-013~014)
+- Location: `docs/01_ADR/` (ADR-003~009, ADR-013~014)
 - Type: Architectural Decision Records
 - Status: Approved by Architecture Council
 
@@ -145,7 +145,7 @@ docs/04-report/
 - Status: All 23 issues implemented and tested
 
 ### Analysis
-- Location: `docs/03-analysis/`
+- Location: `docs/05_Reports/ (zero-script QA reports moved)
 - Document: closed-issues-gap-analysis.md (91% match rate)
 - Status: 2-agent verification completed
 

@@ -317,4 +317,4 @@ curl -s http://localhost:8080/actuator/metrics/executor.active | jq
 ### Related Evidence
 - Load Test: `docs/05_Reports/Cost_Performance/N23_WRK_V4_RESULTS.md`
 - Performance Analysis: `docs/05_Reports/high-traffic-performance-analysis.md`
-- ADR-012: `docs/01_Adr/ADR-012-stateless-scalability-roadmap.md` (Async architecture decision)
+- ADR-012: `docs/01_ADR/ADR-012-stateless-scalability-roadmap.md` (Async architecture decision)

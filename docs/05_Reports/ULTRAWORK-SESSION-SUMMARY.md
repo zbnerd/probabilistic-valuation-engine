@@ -16,7 +16,7 @@ One sentence summary: All preparation tasks complete, ready for Phase 2-B
 ## Completed Deliverables (11)
 
 ### 1. ADR-039: Current Architecture Assessment
-- **Location:** `/docs/01_Adr/ADR-039-current-architecture-assessment.md`
+- **Location:** `/docs/01_ADR/ADR-039-current-architecture-assessment.md`
 - **Status:** Accepted (Baseline Documentation)
 - **Findings:**
   - 56 @Configuration classes in module-app (P0 violation)
@@ -85,7 +85,7 @@ One sentence summary: All preparation tasks complete, ready for Phase 2-B
 ## Files Created/Modified
 
 ### New Documents (11)
-- `docs/01_Adr/ADR-039-current-architecture-assessment.md` - 500 lines
+- `docs/01_ADR/ADR-039-current-architecture-assessment.md` - 500 lines
 - `docs/05_Reports/circular-dependency-analysis.md` - 518 lines
 - `docs/05_Reports/stateless-design-compliance.md` - 329 lines
 - `docs/05_Reports/solid-verification-tests.md` - 673 lines

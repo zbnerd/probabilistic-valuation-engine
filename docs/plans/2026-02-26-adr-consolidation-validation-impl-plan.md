@@ -15,7 +15,7 @@
 ### Task 1: ADR 파일 현황 분석
 
 **Files:**
-- Read: `docs/adr/`, `docs/01_Adr/`, `docs/01_ADR/`
+- Read: `docs/adr/`, `docs/01_ADR/`, `docs/01_ADR/`
 
 **Step 1: 모든 ADR 파일 목록 수집**
 
@@ -71,8 +71,8 @@ Expected: backup 파일 삭제 완료
 ```bash
 # 비표준 파일을 archive 디렉토리로 이동
 mkdir -p /home/maple/probabilistic-valuation-engine/docs/01_ADR/_archive
-mv /home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR_ENHANCEMENT_*.md /home/maple/probabilistic-valuation-engine/docs/01_ADR/_archive/ 2>/dev/null || true
-mv /home/maple/probabilistic-valuation-engine/docs/01_Adr/README.md /home/maple/probabilistic-valuation-engine/docs/01_ADR/_archive/README_01_Adr.md 2>/dev/null || true
+mv /home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR_ENHANCEMENT_*.md /home/maple/probabilistic-valuation-engine/docs/01_ADR/_archive/ 2>/dev/null || true
+mv /home/maple/probabilistic-valuation-engine/docs/01_ADR/README.md /home/maple/probabilistic-valuation-engine/docs/01_ADR/_archive/README_01_Adr.md 2>/dev/null || true
 echo "Non-standard files archived"
 ```
 
@@ -84,7 +84,7 @@ Expected: 비표준 파일 이동 완료
 
 **Files:**
 - Move: `docs/adr/*` → `docs/01_ADR/`
-- Move: `docs/01_Adr/*` → `docs/01_ADR/`
+- Move: `docs/01_ADR/*` → `docs/01_ADR/`
 
 **Step 1: docs/adr/ → docs/01_ADR/ 이동**
 
@@ -96,12 +96,12 @@ echo "docs/adr/ files copied"
 
 Expected: ADR-035, 036 파일 복사
 
-**Step 2: docs/01_Adr/ → docs/01_ADR/ 이동**
+**Step 2: docs/01_ADR/ → docs/01_ADR/ 이동**
 
 ```bash
 # 01_Adr 파일들을 01_ADR로 이동 (최신 파일 우선)
-cp -u /home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-*.md /home/maple/probabilistic-valuation-engine/docs/01_ADR/
-echo "docs/01_Adr/ files copied"
+cp -u /home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-*.md /home/maple/probabilistic-valuation-engine/docs/01_ADR/
+echo "docs/01_ADR/ files copied"
 ```
 
 Expected: 모든 ADR 파일 복사
@@ -131,11 +131,11 @@ Expected: 원본 디렉토리 삭제
 
 ```bash
 git add docs/01_ADR/
-git add docs/adr/ docs/01_Adr/ 2>/dev/null || true
+git add docs/adr/ docs/01_ADR/ 2>/dev/null || true
 git commit -m "refactor: consolidate all ADR documents to docs/01_ADR/
 
 - Move docs/adr/ADR-035,036 to docs/01_ADR/
-- Move docs/01_Adr/ contents to docs/01_ADR/
+- Move docs/01_ADR/ contents to docs/01_ADR/
 - Remove backup files
 - Archive non-standard files to _archive/
 

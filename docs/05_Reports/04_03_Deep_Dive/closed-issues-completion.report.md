@@ -870,9 +870,9 @@ Two independent agents conducted comprehensive analysis:
 ### PDCA Cycle Documents
 
 - **Plan Phase**: ~/.claude/plans/ (62 documents)
-- **Design Phase**: docs/01_Adr/ (ADR-003~009, ADR-013~014)
+- **Design Phase**: docs/01_ADR/ (ADR-003~009, ADR-013~014)
 - **Do Phase**: src/main/java/maple/expectation/ (60+ source files)
-- **Check Phase**: docs/03-analysis/closed-issues-gap-analysis.md (91% analysis)
+- **Check Phase**: docs/05_Reports/closed-issues-gap-analysis.md (91% analysis)
 - **This Report**: docs/04-report/closed-issues-completion.report.md
 
 ### Architectural References

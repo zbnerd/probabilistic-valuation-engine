@@ -103,7 +103,7 @@ public class TieredCache implements Cache {
 
 ### [E3] 예외 처리 정책 - LogicExecutor
 > **Design Decision:** Zero try-catch in business logic (Section 12 of CLAUDE.md).
-> **Validation:** All 47 flaky test incidents resolved through standardized exception handling (Evidence: [zero-script-qa](../03-analysis/zero-script-qa-2026-01-30.md)).
+> **Validation:** All 47 flaky test incidents resolved through standardized exception handling (Evidence: [zero-script-qa](../05_Reports/zero-script-qa-2026-01-30.md)).
 
 - **파일**: `src/main/java/maple/expectation/global/executor/LogicExecutor.java`
 - **증거**: 8가지 실행 패턴 표준화
@@ -496,14 +496,14 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 - **[P6]** P1-7-8-9 Report: `docs/05_Reports/P1-7-8-9-scheduler-distributed-lock.md`
 
 ### Test Evidence
-- **[T1]** Zero Script QA: `docs/03-analysis/zero-script-qa-2026-01-30.md`
+- **[T1]** Zero Script QA: `do../05_Reports/zero-script-qa-2026-01-30.md`
 - **[T2]** Testing Guide: `docs/03_Technical_Guides/testing-guide.md`
 - **[T3]** Chaos Engineering: `docs/02_Chaos_Engineering/06_Nightmare/`
 
 ### Architecture Evidence
-- **[A1]** ADR-005: `docs/01_Adr/ADR-005-resilience4j-scenario-abc.md`
-- **[A2]** ADR-008: `docs/01_Adr/ADR-008-durability-graceful-shutdown.md`
-- **[A3]** ADR-010: `docs/01_Adr/ADR-010-outbox-pattern.md`
+- **[A1]** ADR-005: `docs/01_ADR/ADR-005-resilience4j-scenario-abc.md`
+- **[A2]** ADR-008: `docs/01_ADR/ADR-008-durability-graceful-shutdown.md`
+- **[A3]** ADR-010: `docs/01_ADR/ADR-010-outbox-pattern.md`
 
 ### Documentation Evidence
 - **[D1]** Testing Guide Section 23: `docs/03_Technical_Guides/testing-guide.md`

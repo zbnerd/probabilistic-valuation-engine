@@ -439,7 +439,7 @@ dependencies {
 
 ## 9. 참조 문서
 
-- **ADR-014**: `/home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md`
+- **ADR-014**: `/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-014-multi-module-cross-cutting-concerns.md`
 - **ADR-017**: Equipment Domain Extraction (현재 진행 중)
 - **#126 Pragmatic CQRS**: https://github.com/zbnerd/probabilistic-valuation-engine/issues/126
 - **CLAUDE.md**: `/home/maple/probabilistic-valuation-engine/CLAUDE.md`

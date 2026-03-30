@@ -337,7 +337,7 @@ Red     (SRE)          ✅ APPROVED  → Observability + Resilience
 
 - **Roadmap**: docs/00_Start_Here/ROADMAP.md
 - **Architecture**: docs/00_Start_Here/architecture.md
-- **ADRs**: docs/01_Adr/ADR-*.md
+- **ADRs**: docs/01_ADR/ADR-*.md
 - **Reports**: docs/04-report/
 
 ---
@@ -349,7 +349,7 @@ Red     (SRE)          ✅ APPROVED  → Observability + Resilience
 | Main Report | docs/04-report/closed-issues-completion.report.md |
 | Changelog | docs/04-report/changelog.md |
 | Index | docs/04-report/INDEX.md |
-| Gap Analysis | docs/03-analysis/closed-issues-gap-analysis.md |
+| Gap Analysis | docs/05_Reports/closed-issues-gap-analysis.md |
 | Roadmap | docs/00_Start_Here/ROADMAP.md |
 | Architecture | docs/00_Start_Here/architecture.md |
 | This File | docs/04-report/QUICK_REFERENCE.md |

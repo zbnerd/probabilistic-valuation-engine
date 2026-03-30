@@ -209,7 +209,7 @@ probabilistic-valuation-engine project has successfully transformed from a **49/
 
 **References:**
 - [Load Test Report #266](../../docs/05_Reports/Load_Test_Report.md)
-- [ADR: Virtual Threads Adoption](../../docs/01_Adr/)
+- [ADR: Virtual Threads Adoption](../../docs/01_ADR/)
 
 ---
 
@@ -307,7 +307,7 @@ public void saveDonation(Donation donation) {
 
 **References:**
 - [Recovery Report](../../docs/05_Reports/Recovery_Report.md)
-- [ADR: Outbox Pattern](../../docs/01_Adr/)
+- [ADR: Outbox Pattern](../../docs/01_ADR/)
 
 ---
 

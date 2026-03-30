@@ -544,7 +544,7 @@ SELECT
 | Outbox Replay | `docs/03_Technical_Guides/infrastructure.md#section-8-2` | Outbox pattern 가이드 |
 | Redis Cache | `docs/03_Technical_Guides/infrastructure.md#section-17` | Tiered cache 가이드 |
 | Circuit Breaker | `docs/03_Technical_Guides/resilience.md` | Resilience patterns |
-| Graceful Shutdown | `docs/01_Adr/ADR-008-durability-graceful-shutdown.md` | Shutdown 절차 |
+| Graceful Shutdown | `docs/01_ADR/ADR-008-durability-graceful-shutdown.md` | Shutdown 절차 |
 | Scheduler | `docs/05_Reports/scale-out-blockers-analysis.md#p1-7-8-9` | Distributed lock 가이드 |
 
 ---

@@ -79,7 +79,7 @@
 
 ## 🔗 Related Files
 
-**ADR:** `/home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-0345-stateless-alert-system.md`
+**ADR:** `/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-0345-stateless-alert-system.md`
 **Implementation Progress:** `/home/maple/probabilistic-valuation-engine/docs/implementation-progress.md`
 
 **Package Structure:**

@@ -660,8 +660,8 @@ This document is invalidated if:
 - [Operations README](/home/maple/probabilistic-valuation-engine/docs/04_Operations/README.md) - Operations overview
 - [Security Considerations](/home/maple/probabilistic-valuation-engine/docs/04_Operations/security.md) - Security policies
 - [On-Call Checklist](/home/maple/probabilistic-valuation-engine/docs/05_Guides/ON_CALL_CHECKLIST.md) - Daily procedures
-- [ADR-005 Resilience4j](/home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-005-resilience4j-scenario-abc.md) - Circuit breaker configuration
-- [ADR-006 Redis Lock](/home/maple/probabilistic-valuation-engine/docs/01_Adr/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md) - Redis monitoring
+- [ADR-005 Resilience4j](/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-005-resilience4j-scenario-abc.md) - Circuit breaker configuration
+- [ADR-006 Redis Lock](/home/maple/probabilistic-valuation-engine/docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md) - Redis monitoring
 
 ## Verification Commands Summary (Evidence: EVD-OBS023)
 

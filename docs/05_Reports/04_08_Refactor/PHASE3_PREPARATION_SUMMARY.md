@@ -71,7 +71,7 @@ done
 
 ### 2. ADR-017: Domain Extraction ✅
 
-**Location:** `docs/01_Adr/ADR-017-domain-extraction-clean-architecture.md`
+**Location:** `docs/01_ADR/ADR-017-domain-extraction-clean-architecture.md`
 
 **Contents (975 lines):**
 - Complete ADR with all 10 sections
@@ -305,7 +305,7 @@ docs/05_Reports/04_08_Refactor/
 ├── PHASE3_PREPARATION_COMPLETE.md                 # Exec summary
 └── README.md                                      # Navigation hub
 
-docs/01_Adr/
+docs/01_ADR/
 ├── ADR-017-domain-extraction-clean-architecture.md  # Main ADR
 └── README.md                                      # ADR index
 

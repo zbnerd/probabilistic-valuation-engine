@@ -1181,8 +1181,8 @@ for file in \
   "docs/05_Reports/scale-out-blockers-analysis.md" \
   "docs/05_Reports/high-traffic-performance-analysis.md" \
   "docs/00_Start_Here/architecture.md" \
-  "docs/01_Adr/ADR-013-high-throughput-event-pipeline.md" \
-  "docs/01_Adr/ADR-014-multi-module-cross-cutting-concerns.md"
+  "docs/01_ADR/ADR-013-high-throughput-event-pipeline.md" \
+  "docs/01_ADR/ADR-014-multi-module-cross-cutting-concerns.md"
 do
   if [ -f "$file" ]; then
     echo "✓ $file exists"

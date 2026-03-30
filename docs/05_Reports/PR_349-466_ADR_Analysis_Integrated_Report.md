@@ -294,9 +294,9 @@ module-infra ───────────────────┘
 
 ### 6.3 Guardrails 문서
 
-- `docs/guardrails/INDEX.json` (v2.0.0, 88개 패턴)
-- `docs/guardrails/INDEX.md`
-- `docs/guardrails/HOOK_GUIDE.md`
+- `docs/16_Guardrails/INDEX.json` (v2.0.0, 88개 패턴)
+- `docs/16_Guardrails/INDEX.md`
+- `docs/16_Guardrails/HOOK_GUIDE.md`
 
 ---
 

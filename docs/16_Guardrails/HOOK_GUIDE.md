@@ -88,7 +88,7 @@ async function preToolUse(input) {
   const keywords = extractKeywords(content);
 
   // 4. INDEX.json 로드
-  const index = await loadGuardrailsIndex('docs/guardrails/INDEX.json');
+  const index = await loadGuardrailsIndex('docs/16_Guardrails/INDEX.json');
 
   // 5. Layer 1: Regex 매칭 (즉시 차단)
   for (const [patternId, pattern] of Object.entries(index.patterns)) {
@@ -102,7 +102,7 @@ async function preToolUse(input) {
           file: filePath,
           line: findMatchLine(content, matches[0]),
           severity: pattern.severity,
-          remediation: `See: docs/guardrails/${pattern.file}`
+          remediation: `See: docs/16_Guardrails/${pattern.file}`
         });
       }
     }
@@ -119,7 +119,7 @@ async function preToolUse(input) {
 
     if (keywordMatch && !isExempt(patternId, filePath)) {
       // 가드레일 md 파일에서 DON'T 섹션 추출
-      const guardrailContent = await readFile(`docs/guardrails/${pattern.file}`);
+      const guardrailContent = await readFile(`docs/16_Guardrails/${pattern.file}`);
       const dontSection = extractDontSection(guardrailContent);
 
       // AI에게 코드 + DON'T 섹션 전달
@@ -135,7 +135,7 @@ async function preToolUse(input) {
           message: pattern.description,
           file: filePath,
           severity: pattern.severity,
-          remediation: `See: docs/guardrails/${pattern.file}`
+          remediation: `See: docs/16_Guardrails/${pattern.file}`
         });
       }
     }
@@ -220,7 +220,7 @@ async function postToolUse(input) {
   if (!generatedCode) return;
 
   // 3. INDEX.json 로드
-  const index = await loadGuardrailsIndex('docs/guardrails/INDEX.json');
+  const index = await loadGuardrailsIndex('docs/16_Guardrails/INDEX.json');
 
   const violations = [];
   const improvements = [];
@@ -236,7 +236,7 @@ async function postToolUse(input) {
           severity: pattern.severity,
           message: pattern.description,
           matches: matches,
-          remediation: `docs/guardrails/${pattern.file}`
+          remediation: `docs/16_Guardrails/${pattern.file}`
         });
       }
     }
@@ -251,7 +251,7 @@ async function postToolUse(input) {
     const keywordMatch = pattern.keywords.some(kw => keywords.includes(kw));
 
     if (keywordMatch) {
-      const guardrailContent = await readFile(`docs/guardrails/${pattern.file}`);
+      const guardrailContent = await readFile(`docs/16_Guardrails/${pattern.file}`);
       const dontSection = extractDontSection(guardrailContent);
       const doSection = extractDoSection(guardrailContent);
 
@@ -268,7 +268,7 @@ async function postToolUse(input) {
           severity: pattern.severity,
           message: analysis.reason,
           line: analysis.line,
-          remediation: `docs/guardrails/${pattern.file}`
+          remediation: `docs/16_Guardrails/${pattern.file}`
         });
       }
 
@@ -277,7 +277,7 @@ async function postToolUse(input) {
           patternId,
           suggestion: analysis.suggestion,
           bestPractice: analysis.bestPractice,
-          reference: `docs/guardrails/${pattern.file}`
+          reference: `docs/16_Guardrails/${pattern.file}`
         });
       }
     }
@@ -419,7 +419,7 @@ try {
 \`\`\`
 
 ### Remediation
-See: docs/guardrails/backend/spring/logic-executor.md
+See: docs/16_Guardrails/backend/spring/logic-executor.md
 
 \`\`\`java
 // Good
@@ -460,7 +460,7 @@ return null
 return user?.let { process(it) }
 \`\`\`
 
-**Reference:** docs/guardrails/backend/spring/optional-chaining.md
+**Reference:** docs/16_Guardrails/backend/spring/optional-chaining.md
 
 ---
 
@@ -482,7 +482,7 @@ data class LoginRequest(val apiKey: String, val userIgn: String) {
 }
 \`\`\`
 
-**Reference:** docs/guardrails/backend/spring/aop-facade.md
+**Reference:** docs/16_Guardrails/backend/spring/aop-facade.md
 
 ### ✅ Verification Passed
 Code follows guardrails best practices.
@@ -506,21 +506,21 @@ echo "users.map { u -> u.name }.filter { it != null }" | claude-code-hook-test -
 
 ```bash
 # 모든 패턴에 필수 필드 있는지 확인
-cat docs/guardrails/INDEX.json | jq '.patterns | to_entries[] | select(.value.file == null)'
+cat docs/16_Guardrails/INDEX.json | jq '.patterns | to_entries[] | select(.value.file == null)'
 
 # AI 판단 패턴 4개 확인
-cat docs/guardrails/INDEX.json | jq '.patterns | to_entries[] | select(.value.aiJudgment == true) | .key'
+cat docs/16_Guardrails/INDEX.json | jq '.patterns | to_entries[] | select(.value.aiJudgment == true) | .key'
 
 # 중복 ID 검사
-cat docs/guardrails/INDEX.json | jq '.patterns | to_entries | map(.value.id) | group_by(.) | map(select(length > 1))'
+cat docs/16_Guardrails/INDEX.json | jq '.patterns | to_entries | map(.value.id) | group_by(.) | map(select(length > 1))'
 ```
 
 ---
 
 ## 관련 문서
 
-- **INDEX.json:** `docs/guardrails/INDEX.json` - 전체 패턴 인덱스
-- **INDEX.md:** `docs/guardrails/INDEX.md` - 카테고리별 파일 목록
+- **INDEX.json:** `docs/16_Guardrails/INDEX.json` - 전체 패턴 인덱스
+- **INDEX.md:** `docs/16_Guardrails/INDEX.md` - 카테고리별 파일 목록
 - **CLAUDE.md:** Section 11, 12, 15, 18, 20 - 코어 규칙
 
 ---

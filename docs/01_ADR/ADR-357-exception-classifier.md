@@ -131,8 +131,8 @@ val result = executor.execute({
 
 - [ADR-052: Resilience4j Circuit Breaker](../01_ADR/ADR-052-resilience4j-circuit-breaker.md)
 - [ADR-044: LogicExecutor Zero Try-Catch](../01_ADR/ADR-044-logicexecutor-zero-try-catch.md)
-- [Guardrails: Marker Interface](../guardrails/backend/resilience/marker-interface.md)
-- [Guardrails: Exception Handling](../guardrails/backend/spring/exception-handling.md)
+- [Guardrails: Marker Interface](../16_Guardrails/backend/resilience/marker-interface.md)
+- [Guardrails: Exception Handling](../16_Guardrails/backend/spring/exception-handling.md)
 
 ## 구현 파일
 

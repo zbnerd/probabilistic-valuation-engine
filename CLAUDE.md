@@ -236,4 +236,4 @@ application.yml          # 공통 설정 (592줄)
 | 서비스 모듈 | [docs/03_Technical_Guides/service-modules.md](docs/03_Technical_Guides/service-modules.md) |
 | Scale-out 분석 | [docs/05_Reports/](docs/05_Reports/) |
 | ADR | [docs/01_ADR/](docs/01_ADR/) |
-| 운영 가이드 | [docs/06_Guides/](docs/06_Guides/) |
+| 운영 가이드 | [docs/21_Operations/](docs/21_Operations/) |

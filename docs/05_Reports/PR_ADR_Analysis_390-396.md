@@ -80,7 +80,7 @@
 |------|------|
 | **제목** | docs: Add guardrails documentation with hook patterns |
 | **아키텍처 변경** | ✅ Yes (**새로운 Guardrails 시스템 도입**) |
-| **변경 규모** | 42개 파일 추가 (docs/guardrails/) |
+| **변경 규모** | 42개 파일 추가 (docs/16_Guardrails/) |
 | **관련 ADR** | **없음 - ADR-006 작성 필요** |
 | **조치** | **ADR-006 신규 작성 필요** |
 

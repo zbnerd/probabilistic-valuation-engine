@@ -28,4 +28,4 @@ Accepted (2026-02-27)
 
 ## Related
 - Issues: #409-#443
-- Design: docs/plans/2026-02-27-module-separation-design.md
+- Design: docs/09_Plans/2026-02-27-module-separation-design.md

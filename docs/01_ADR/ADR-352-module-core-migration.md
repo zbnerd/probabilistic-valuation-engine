@@ -278,7 +278,7 @@ class CoreMigrationVerificationTest {
 
 - ADR-003: Hexagonal Architecture (Ports & Adapters) 채택
 - CLAUDE.md: Section 4 (Implementation Logic & SOLID), Section 16 (Proactive Refactoring)
-- docs/plans/2026-02-27-module-separation-design.md: 전체 모듈 분리 계획
+- docs/09_Plans/2026-02-27-module-separation-design.md: 전체 모듈 분리 계획
 
 ## Phase 1: Facade 이관 분석 (2026-02-28)
 

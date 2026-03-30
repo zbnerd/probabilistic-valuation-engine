@@ -45,7 +45,7 @@ Split into 4 modules:
 
 ## Related
 - Issues: #409-#443
-- Design: docs/plans/2026-02-27-module-separation-design.md
+- Design: docs/09_Plans/2026-02-27-module-separation-design.md
 ```
 
 **Step 2: Commit ADR**
@@ -920,4 +920,4 @@ Closes #409
 
 *Plan Version: 1.0.0*
 *Created: 2026-02-27*
-*Related Design: docs/plans/2026-02-27-module-separation-design.md*
+*Related Design: docs/09_Plans/2026-02-27-module-separation-design.md*

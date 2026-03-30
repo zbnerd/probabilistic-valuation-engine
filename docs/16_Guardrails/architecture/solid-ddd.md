@@ -183,7 +183,7 @@ public class PocketItemCostStrategy implements CostStrategy {
 
 ### 출처
 - CLAUDE.md Section 4: Implementation Logic & SOLID
-- docs/guardrails/architecture/service-modules.md - Strategy 패턴
+- docs/16_Guardrails/architecture/service-modules.md - Strategy 패턴
 
 ---
 
@@ -415,7 +415,7 @@ public class GameCharacterService {
 
 ### 출처
 - CLAUDE.md Section 4: Implementation Logic & SOLID
-- docs/guardrails/architecture/adr-decisions.md - GR-ARCH-001: Hexagonal Architecture & DIP Compliance
+- docs/16_Guardrails/architecture/adr-decisions.md - GR-ARCH-001: Hexagonal Architecture & DIP Compliance
 
 ---
 
@@ -658,7 +658,7 @@ public record CharacterId(String value) {
 - **With-ers**: 상태 변경 시 새로운 인스턴스 반환
 
 ### 출처
-- docs/guardrails/architecture/adr-decisions.md - GR-ARCH-002: Rich Domain Model vs Anemic Domain Model
+- docs/16_Guardrails/architecture/adr-decisions.md - GR-ARCH-002: Rich Domain Model vs Anemic Domain Model
 - docs/05_Reports/Architecture/2026-02-22-ddd-verification-report.md
 
 ---
@@ -805,7 +805,7 @@ public class GameCharacterService {
 - **의존성 방향**: Adapter → Port → Domain (단방향)
 
 ### 출처
-- docs/guardrails/architecture/adr-decisions.md - GR-ARCH-001: Hexagonal Architecture & DIP Compliance
+- docs/16_Guardrails/architecture/adr-decisions.md - GR-ARCH-001: Hexagonal Architecture & DIP Compliance
 - docs/05_Reports/Architecture/2026-02-22-ddd-verification-report.md
 
 ---
@@ -859,7 +859,7 @@ grep -r "@Component\|@Service\|@Repository" module-core/src/main/kotlin/
 ```
 
 ### 출처
-- docs/guardrails/architecture/adr-decisions.md - GR-ARCH-001: Hexagonal Architecture & DIP Compliance
+- docs/16_Guardrails/architecture/adr-decisions.md - GR-ARCH-001: Hexagonal Architecture & DIP Compliance
 - docs/05_Reports/Architecture/2026-02-22-ddd-verification-report.md
 
 ---
@@ -907,6 +907,6 @@ find src/main/kotlin -name "*.java" -exec grep -l "^public record" {} \;
 ## Evidence Links
 
 - CLAUDE.md Section 4: Implementation Logic & SOLID
-- docs/guardrails/architecture/adr-decisions.md - ADR 아키텍처 결정
+- docs/16_Guardrails/architecture/adr-decisions.md - ADR 아키텍처 결정
 - docs/05_Reports/Architecture/2026-02-22-ddd-verification-report.md - DDD 검증 리포트
 - docs/00_Start_Here/architecture.md - 시스템 아키텍처 다이어그램

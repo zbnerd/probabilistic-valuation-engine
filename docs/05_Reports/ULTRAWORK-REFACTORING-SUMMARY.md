@@ -25,8 +25,8 @@ Successfully completed **Phase 0-1** of the multi-module refactoring plan with *
 | **Document current architecture** | ✅ Complete | `/docs/01_ADR/ADR-039-current-architecture-assessment.md` | ADR documenting baseline state |
 | **Analyze circular dependencies** | ✅ Complete | `/docs/05_Reports/circular-dependency-resolution-report.md` | All 26+ violations resolved |
 | **Document stateless design** | ✅ Complete | `/docs/reports/stateless-design-verification.md` | 95/100 compliance score |
-| **Create rollback strategy** | ✅ Complete | `/docs/rollback/strategy.md` + scripts | Full rollback procedures |
-| **Design metrics collection** | ✅ Complete | `/docs/metrics/verification-strategy.md` | Grafana dashboards designed |
+| **Create rollback strategy** | ✅ Complete | `/docs/20_Rollback/strategy.md` + scripts | Full rollback procedures |
+| **Design metrics collection** | ✅ Complete | `/docs/17_Metrics/verification-strategy.md` | Grafana dashboards designed |
 
 ### ✅ Phase 1: Module-Common Extraction
 
@@ -120,9 +120,9 @@ BUILD SUCCESSFUL in 58s
 - `docs/reports/api-compatibility-assessment.md`
 
 ### Strategy & Guides
-- `docs/rollback/strategy.md`
-- `docs/rollback/README.md`
-- `docs/metrics/verification-strategy.md`
+- `docs/20_Rollback/strategy.md`
+- `docs/20_Rollback/README.md`
+- `docs/17_Metrics/verification-strategy.md`
 
 ### Scripts
 - `scripts/verify-rollback.sh`
@@ -373,11 +373,11 @@ The ultrawork mode multi-agent approach successfully completed the foundational 
 ├── logic-executor-compliance.md
 └── api-compatibility-assessment.md
 
-/home/maple/probabilistic-valuation-engine/docs/rollback/
+/home/maple/probabilistic-valuation-engine/docs/20_Rollback/
 ├── strategy.md
 └── README.md
 
-/home/maple/probabilistic-valuation-engine/docs/metrics/
+/home/maple/probabilistic-valuation-engine/docs/17_Metrics/
 └── verification-strategy.md
 
 /home/maple/probabilistic-valuation-engine/scripts/

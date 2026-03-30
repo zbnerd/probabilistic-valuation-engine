@@ -128,7 +128,7 @@ fi
 ### 3.5 가드레일 버전 관리
 
 ```
-docs/guardrails/
+docs/16_Guardrails/
 ├── INDEX.json          # 가드레일 메타데이터 (버전, 개수)
 ├── INDEX.md            # 가드레일 목록 문서
 ├── HOOK_GUIDE.md       # Hook 구현 가이드
@@ -230,9 +230,9 @@ echo "org.springframework.stereotype.Service service = new Service();" | \
 
 ## 7. 참조 (References)
 
-- [Guardrails INDEX.md](../guardrails/INDEX.md)
-- [Guardrails HOOK_GUIDE.md](../guardrails/HOOK_GUIDE.md)
-- [Guardrails INDEX.json](../guardrails/INDEX.json)
+- [Guardrails INDEX.md](../16_Guardrails/INDEX.md)
+- [Guardrails HOOK_GUIDE.md](../16_Guardrails/HOOK_GUIDE.md)
+- [Guardrails INDEX.json](../16_Guardrails/INDEX.json)
 - PR #393: Guardrails 시스템 도입
 - PR #394: Kotlin 호환성 추가
 - PR #396: Layer 2 AI 판단 구현

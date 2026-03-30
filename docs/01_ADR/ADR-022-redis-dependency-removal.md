@@ -230,7 +230,7 @@ Redis/Redisson 의존성과 관련 코드가 여전히 존재하여 다음 문�
 - [ADR-003 Redis 기능 PostgreSQL 대체 전략](003-postgresql-redis-replacement.md)
 - [ADR-005 PostgreSQL Advisory Lock](005-postgresql-advisory-lock.md)
 - [ADR-006 PostgreSQL LISTEN/NOTIFY](006-postgresql-listen-notify.md)
-- [GitHub Issue #589](https://github.com/.../issues/589)
+- [GitHub Issue #589](https://github.com/zbnerd/probabilistic-valuation-engine/issues/589)
 
 ---
 

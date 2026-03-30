@@ -147,7 +147,7 @@ module-app/src/main/java/maple/expectation/service/v2/cube/
 ## 관련 문서
 - ADR-004: Module-Core 도메인 이관
 - CLAUDE.md: Section 4 (Implementation Logic & SOLID)
-- docs/plans/2026-02-27-module-separation-design.md
+- docs/09_Plans/2026-02-27-module-separation-design.md
 
 ---
 **문서 버전**: 1.0.0

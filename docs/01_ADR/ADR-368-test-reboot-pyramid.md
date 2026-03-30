@@ -30,7 +30,7 @@
 
 ---
 
-# ADR-015: 테스트 파산(Test Bankruptcy) 및 테스트 피라미드 재구축 전략
+# ADR-368: 테스트 파산(Test Bankruptcy) 및 테스트 피라미드 재구축 전략
 
 > **Status**: ACCEPTED
 > **Date**: 2026-02-11

@@ -1,4 +1,4 @@
-# ADR-005: PostgreSQL Advisory Lock 설계
+# ADR-321: PostgreSQL Advisory Lock 설계
 
 ## 메타데이터
 

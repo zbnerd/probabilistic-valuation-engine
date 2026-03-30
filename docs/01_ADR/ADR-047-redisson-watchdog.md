@@ -452,7 +452,7 @@ meterRegistry.timer("redis.lock.acquisition.time").record(() -> {
 | High Traffic Analysis | [docs/05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md](docs/05_Reports/05_02_Cost_Performance/high-traffic-performance-analysis.md) |
 | ADR-006: Redis Lock Lease Timeout | [docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md](docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md) |
 | ADR-007: AOP Async Cache Integration | [docs/01_ADR/ADR-007-aop-async-cache-integration.md](docs/01_ADR/ADR-007-aop-async-cache-integration.md) |
-| P0 Issues Resolution Report | [docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md](docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md) |
+| P0 Issues Resolution Report | [docs/05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md](docs/05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md) |
 
 ---
 

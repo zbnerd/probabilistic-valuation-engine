@@ -1,4 +1,4 @@
-# ADR-037: V5 CQRS Command Side Implementation
+# ADR-374: V5 CQRS Command Side Implementation
 
 **Status:** Implemented
 **Date:** 2025-02-15

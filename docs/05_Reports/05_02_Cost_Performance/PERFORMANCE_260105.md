@@ -344,7 +344,7 @@ curl -s http://localhost:8080/actuator/prometheus | grep -E "hikaricp|jvm"
 
 ## 15. Related Documents
 
-- [KPI_BSC_DASHBOARD.md](./KPI_BSC_DASHBOARD.md) - Overall KPI tracking
+- [KPI_BSC_DASHBOARD.md](../05_01_Baseline/KPI_BSC_DASHBOARD.md) - Overall KPI tracking
 - [Load_Tests/](./Load_Tests/) - Detailed wrk-based load test reports
 - [../02_Chaos_Engineering/](../02_Chaos_Engineering/) - Nightmare test scenarios
 

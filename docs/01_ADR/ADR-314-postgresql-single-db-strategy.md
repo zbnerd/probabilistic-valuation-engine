@@ -1,4 +1,4 @@
-# ADR-001: PostgreSQL 단일 DB 전략
+# ADR-314: PostgreSQL 단일 DB 전략
 
 ## 메타데이터
 

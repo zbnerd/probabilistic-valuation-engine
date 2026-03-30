@@ -1,4 +1,4 @@
-# ADR-011: Donation Outbox를 module-infra로 이관
+# ADR-329: Donation Outbox를 module-infra로 이관
 
 ## 상태
 Proposed (2026-03-02)

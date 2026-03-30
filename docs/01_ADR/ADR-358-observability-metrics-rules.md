@@ -1,4 +1,4 @@
-# ADR-025: Observability Metrics 명명 규칙 및 카디널리티 제한
+# ADR-358: Observability Metrics 명명 규칙 및 카디널리티 제한
 
 ## 상태
 

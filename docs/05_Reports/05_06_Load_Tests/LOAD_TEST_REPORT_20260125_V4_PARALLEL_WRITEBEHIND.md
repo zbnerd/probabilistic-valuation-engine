@@ -248,7 +248,7 @@ probabilistic-valuation-engine API는 **200-350KB** 응답을 처리합니다:
 
 - [#264 L1 Fast Path Report](./LOAD_TEST_REPORT_20260124_V4_PHASE2.md)
 - [#262 Singleflight Report](./LOAD_TEST_REPORT_20260124_V4_SINGLEFLIGHT.md)
-- [KPI Dashboard](../KPI_BSC_DASHBOARD.md)
+- [KPI Dashboard](../05_01_Baseline/KPI_BSC_DASHBOARD.md)
 
 ---
 

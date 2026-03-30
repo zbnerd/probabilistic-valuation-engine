@@ -1,4 +1,4 @@
-# ADR-039: Async Executor and Alert System Fixes - ThreadPool, Severity, Channel Providers
+# ADR-376: Async Executor and Alert System Fixes - ThreadPool, Severity, Channel Providers
 
 ## 상태 (Status)
 Accepted

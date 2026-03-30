@@ -1,4 +1,4 @@
-# ADR-024: MySQL Dependency Removal
+# ADR-341: MySQL Dependency Removal
 
 ## Status
 

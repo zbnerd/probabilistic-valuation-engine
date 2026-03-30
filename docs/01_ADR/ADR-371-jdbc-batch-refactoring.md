@@ -1,4 +1,4 @@
-# ADR-035: Command Side JPA → JDBC 배치 전환
+# ADR-371: Command Side JPA → JDBC 배치 전환
 
 ## 상태 (Status)
 **Accepted** - 2026-02-23

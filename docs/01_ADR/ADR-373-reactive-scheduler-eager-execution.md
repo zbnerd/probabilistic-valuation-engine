@@ -1,4 +1,4 @@
-# ADR-036: Reactive Scheduler Eager Execution Fix - NexonDataCollector Mono Laziness Issue
+# ADR-373: Reactive Scheduler Eager Execution Fix - NexonDataCollector Mono Laziness Issue
 
 ## 상태 (Status)
 Accepted

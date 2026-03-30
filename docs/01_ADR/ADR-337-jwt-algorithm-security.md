@@ -1,4 +1,4 @@
-# ADR 020: JWT Algorithm Confusion Attack Prevention
+# ADR-337: JWT Algorithm Confusion Attack Prevention
 
 ## Status
 **Accepted** - 2026-03-08

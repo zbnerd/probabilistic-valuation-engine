@@ -1530,7 +1530,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 ```
 
 ### Related Evidence
-- Zero Script QA: `do../05_Reports/zero-script-qa-2026-01-30.md`
+- Zero Script QA: `../05_Reports/zero-script-qa-2026-01-30.md`
 - CLAUDE.md Section 12: Zero Try-Catch Policy
 - ExecutionPipelineTest: `src/test/java/maple/expectation/global/executor/policy/ExecutionPipelineTest.java`
 
@@ -1701,7 +1701,7 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 ```
 
 ### Related Evidence
-- Zero Script QA: `do../05_Reports/zero-script-qa-2026-01-30.md`
+- Zero Script QA: `../05_Reports/zero-script-qa-2026-01-30.md`
 - CLAUDE.md Section 12: Zero Try-Catch Policy
 - ExecutionPipelineTest: `src/test/java/maple/expectation/global/executor/policy/ExecutionPipelineTest.java`
 

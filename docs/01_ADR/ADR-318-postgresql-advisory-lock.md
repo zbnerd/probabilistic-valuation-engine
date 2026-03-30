@@ -1,4 +1,4 @@
-# ADR-003: PostgreSQL Advisory Lock Strategy
+# ADR-318: PostgreSQL Advisory Lock Strategy
 
 ## 메타데이터
 

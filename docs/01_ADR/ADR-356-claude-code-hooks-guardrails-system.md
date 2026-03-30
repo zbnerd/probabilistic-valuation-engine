@@ -1,4 +1,4 @@
-# ADR-007: Claude Code Hooks Guardrails System
+# ADR-356: Claude Code Hooks Guardrails System
 
 **Status**: Accepted
 **Date**: 2026-02-28

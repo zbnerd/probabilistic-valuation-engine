@@ -1,4 +1,4 @@
-# ADR-019: N+1 Query Optimization
+# ADR-336: N+1 Query Optimization
 
 ## Status
 Accepted (2025-03-08)

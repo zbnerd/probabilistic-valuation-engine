@@ -1,4 +1,4 @@
-# ADR-082: Redis Refresh Token Atomic Check-and-Mark with Lua Script
+# ADR-378: Redis Refresh Token Atomic Check-and-Mark with Lua Script
 
 **Status:** Proposed
 **Date:** 2026-02-23

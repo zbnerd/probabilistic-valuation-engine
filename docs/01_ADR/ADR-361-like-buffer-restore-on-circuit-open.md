@@ -1,4 +1,4 @@
-# ADR-041: Like Buffer Restore on Circuit Breaker Open
+# ADR-361: Like Buffer Restore on Circuit Breaker Open
 
 ## 상태 (Status)
 

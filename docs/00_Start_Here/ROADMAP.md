@@ -572,7 +572,7 @@ P0/P1 Stateful 컴포넌트를 분산 환경에서 안전하게 동작하도록 
 | **Phase 7 Dependencies** | [ADR-014](../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md), [ADR-013](../01_ADR/ADR-013-high-throughput-event-pipeline.md) |
 | **Stateful Components** | [Scale-out Blockers Analysis](../05_Reports/scale-out-blockers-analysis.md) |
 | **Issue References** | [GitHub Issues](https://github.com/zbnerd/probabilistic-valuation-engine/issues) |
-| **P0/P1 Classifications** | [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md), [P1 Report](../05_Reports/P1_Nightmare_Issues_Resolution_Report.md) |
+| **P0/P1 Classifications** | [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md), [P1 Report](../05_Reports/P1_Nightmare_Issues_Resolution_Report.md) |
 
 ## Technical Validity Check
 

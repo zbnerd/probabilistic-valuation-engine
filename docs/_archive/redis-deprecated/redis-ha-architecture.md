@@ -31,7 +31,7 @@ This guide is based on **production Redis failover testing** and distributed sys
 
 ### 1.1 아키텍처
 
-> **Production Validated:** AWS t3.small deployment with 100% uptime during 3 failover events (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md)).
+> **Production Validated:** AWS t3.small deployment with 100% uptime during 3 failover events (Evidence: [P0 Report](../../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md)).
 > **Why NOT Cluster:** Cluster requires 3+ masters (6+ nodes); Sentinel sufficient for current read-after-write consistency needs.
 > **Rollback Plan:** Enable Redis Cluster if sharding becomes necessary (>10GB dataset).
 
@@ -444,5 +444,5 @@ curl -s http://localhost:8080/actuator/health | jq
 
 ### Related Evidence
 - ADR-006: `docs/01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md`
-- P0 Report: `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md`
+- P0 Report: `docs/05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md`
 - Chaos N01/N02: `docs/02_Chaos_Engineering/06_Nightmare/Results/`

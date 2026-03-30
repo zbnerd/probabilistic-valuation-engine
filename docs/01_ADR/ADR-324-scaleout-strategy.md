@@ -1,4 +1,4 @@
-# ADR-006: Scale-out Strategy
+# ADR-324: Scale-out Strategy
 
 ## 메타데이터
 

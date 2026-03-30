@@ -18,7 +18,7 @@
 ## Documentation Integrity Statement
 
 This runbook is based on **production incident response** from 2025-2026:
-- P0 incidents: 23 resolution procedures validated (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
+- P0 incidents: 23 resolution procedures validated (Evidence: [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md))
 - P1 nightmare issues: 7 distributed system problems resolved (Evidence: [P1 Report](../05_Reports/P1_Nightmare_Issues_Resolution_Report.md))
 - Graceful shutdown: 100% data preservation during deployments (Evidence: [ADR-008](../01_ADR/ADR-008-durability-graceful-shutdown.md))
 - **V5 Migration (2026-03)**: PostgreSQL, PGMQ, Advisory Lock adoption (Evidence: [ADR-027](../01_ADR/ADR-027-v5-postgresql-pgmq-migration.md))
@@ -171,7 +171,7 @@ kubectl rollout undo deployment/maple-expectation
 - **GlobalExceptionHandler:** `src/main/java/maple/expectation/global/error/GlobalExceptionHandler.java` (Evidence: [CODE-ERROR-001])
 - **DiscordAlertService:** `src/main/java/maple/expectation/service/v2/alert/DiscordAlertService.java` (Evidence: [CODE-ALERT-001])
 - **Actuator Config:** `src/main/resources/application.yml` (management 섹션) (Evidence: [CONF-ACTUATOR-001])
-- **P0 Report:** `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md` (Incident response validation)
+- **P0 Report:** `../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md` (Incident response validation)
 
 ## Technical Validity Check
 
@@ -198,6 +198,6 @@ curl -s http://localhost:8080/actuator/health | jq '.components.circuitBreakers'
 ```
 
 ### Related Evidence
-- P0 Report: `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md`
+- P0 Report: `../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md`
 - P1 Report: `docs/05_Reports/P1_Nightmare_Issues_Resolution_Report.md`
 - ADR-008: `docs/01_ADR/ADR-008-durability-graceful-shutdown.md`

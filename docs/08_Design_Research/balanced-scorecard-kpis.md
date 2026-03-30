@@ -556,7 +556,7 @@ TOTAL: 25/25 (100%)
 
 ## Related Documents
 
-- [KPI-BSC Dashboard](../../05_Reports/KPI_BSC_DASHBOARD.md) - Performance metrics dashboard
+- [KPI-BSC Dashboard](../../05_Reports/05_01_Baseline/KPI_BSC_DASHBOARD.md) - Performance metrics dashboard
 - [Monitoring Copilot Implementation](./monitoring-copilot-implementation.md) - AI-powered monitoring
 - [Business Model Canvas](../00_Start_Here/BUSINESS_MODEL.md) - Business strategy
 - [Cost Performance N23](../../05_Reports/Cost_Performance/COST_PERF_REPORT_N23.md) - Infrastructure cost analysis

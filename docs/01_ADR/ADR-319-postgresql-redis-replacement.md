@@ -1,4 +1,4 @@
-# ADR-003: Redis 기능 PostgreSQL 대체 전략
+# ADR-319: Redis 기능 PostgreSQL 대체 전략
 
 ## 메타데이터
 

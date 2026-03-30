@@ -1,4 +1,4 @@
-# ADR-006: Java-to-Kotlin Migration Strategy
+# ADR-355: Java-to-Kotlin Migration Strategy
 
 **Status**: Accepted
 **Date**: 2026-02-28

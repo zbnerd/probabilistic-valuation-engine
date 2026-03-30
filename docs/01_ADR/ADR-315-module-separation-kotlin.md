@@ -1,4 +1,4 @@
-# ADR-002: 4-Module Separation + Kotlin Migration
+# ADR-315: 4-Module Separation + Kotlin Migration
 
 ## Status
 Accepted (2026-02-27)

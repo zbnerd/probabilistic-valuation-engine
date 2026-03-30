@@ -13,7 +13,7 @@
 ## Documentation Integrity Statement
 
 This guide is based on **incident response experience** from 2025 P0 incidents:
-- P0 #238: Authentication bypass resolved in 2 hours (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
+- P0 #238: Authentication bypass resolved in 2 hours (Evidence: [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md))
 - P0 #241: Self-invocation security bypass resolved in 4 hours
 - P0 #287: Data loss incident resolved with DLQ implementation
 - Average MTTR: 2.5 hours for security incidents (Industry average: 48 hours)
@@ -520,7 +520,7 @@ RCA 작성 템플릿입니다.
 
 ## Evidence Links
 
-- **P0 Incidents:** `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md` (Evidence: [P0-REPORT-001])
+- **P0 Incidents:** `../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md` (Evidence: [P0-REPORT-001])
 - **Security Playbooks:** `docs/98_Templates/` (Evidence: [TEMPLATE-001])
 - **Incident Notifications:** Discord #security-incidents (Evidence: [COMM-001])
 

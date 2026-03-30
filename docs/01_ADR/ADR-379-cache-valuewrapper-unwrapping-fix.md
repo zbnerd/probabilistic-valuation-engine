@@ -1,4 +1,4 @@
-# ADR-083: Cache.ValueWrapper 명시적 언래핑으로 캐시 히트시 런타임 실패 수정
+# ADR-379: Cache.ValueWrapper 명시적 언래핑으로 캐시 히트시 런타임 실패 수정
 
 ## 제1장: 문제의 발견 (Problem)
 

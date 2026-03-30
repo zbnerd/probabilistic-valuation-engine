@@ -1,4 +1,4 @@
-# ADR-010: Service Layer 모듈화 전략 (Gradle Multi-Module vs Package 규칙)
+ # ADR-328: Service Layer 모듈화 전략 (Gradle Multi-Module vs Package 규칙)
 
 ## 상태
 Proposed (2026-03-01)

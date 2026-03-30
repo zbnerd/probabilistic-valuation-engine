@@ -160,11 +160,38 @@ PostgreSQL Advisory Lock은 Redis 분산락보다 느리지만, 트랜잭션 스
 
 MongoDB의 문서 지향 쿼리는 편했지만, PostgreSQL JSONB + 인덱스로도 충분했다. 오히려 ACID 트랜잭션을 무료로 얻었다.
 
-이 대이주가 없었다면 다음 장의 **PostgreSQL NOTIFY**도 없었을 것이다. Redis를 버리지 않았으면 영원히 Redis Pub/Sub에 종속되었을 것이다.
+## 성능의 숨은 공로자: Micro-Batching
+
+인프라 단일화 자체는 RPS를 높이지 않았다. 하지만 이 시기에 함께 적용한 **Micro-Batching**이 940→7,347 RPS 점프의 핵심 원인이었다.
+
+기존에는 L2 캐시 조회, GameCharacter 조회 등을 개별 쿼리로 실행했다. Micro-Batching은 짧은 시간 창(수 ms)에 들어온 요청을 모아 배치 쿼리로 처리한다.
+
+```
+Before (개별 쿼리):
+Request 1 → SELECT ... WHERE id = 1
+Request 2 → SELECT ... WHERE id = 2
+Request 3 → SELECT ... WHERE id = 3
+= DB 왕복 3회
+
+After (Micro-Batching):
+Request 1-3 → SELECT ... WHERE id IN (1, 2, 3)
+= DB 왕복 1회
+```
+
+- **PR #608**: GameCharacter, L2Cache 조회에 Micro-Batching 적용 (Issue #588, #599)
+- **PR #618**: Production-ready Admission Control + Micro-Batching 개선 (Issue #617)
+
+캐시 미스 시 DB 왕복이 3~5회에서 1회로 줄었다. 이 최적화가 PostgreSQL 단일화와 LISTEN/NOTIFY와 시너지를 내며 940→7,347 RPS의 **실제 성능 엔진** 역할을 했다.
+
+> **Note**: PostgreSQL 단일화는 Micro-Batching이 효과적으로 작동하기 위한 **전제조건**이었다. 단일 DB로 통합되지 않았으면 배치 쿼리의 이점이 제한적이었을 것이다.
 
 ---
 
-> **이 시점의 RPS: 변화 없음 (인프라 단순화에 집중)**
+> **이 시점의 RPS: Micro-Batching 적용 후 대폭 향상 (인프라 단순화 + Micro-Batching)**
+
+---
+
+> **이 시점의 RPS: Micro-Batching + 인프라 단순화로 대폭 향상**
 > **관련 이슈**: #589 (Redis 제거, 일부 CLOSED), #590 (MongoDB 제거), #591 (MySQL 제거)
 > **관련 ADR**: ADR-022, ADR-023, ADR-024
 

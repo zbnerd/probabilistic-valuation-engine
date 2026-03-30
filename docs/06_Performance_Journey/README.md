@@ -21,7 +21,7 @@
 | [5장](./05_parallel_presets.md) | 3개를 한 번에: 병렬 계산의 힘 | 965 RPS | 1월 26일 |
 | [6장](./06_stateless_tradeoff.md) | 정합성의 대가: 일관성 vs 속도 | 325 RPS | 1월 27일 |
 | [7장](./07_auto_warmup.md) | 차가운 시작: 캐시 웜업의 중요성 | 940 RPS | 1월 27일 |
-| [8장](./08_great_migration.md) | 대이주: Redis, MySQL, MongoDB를 버리다 | 인프라 단순화 | 2~3월 |
+| [8장](./08_great_migration.md) | 대이주: Redis, MySQL, MongoDB를 버리다 | Micro-Batching 대폭 향상 | 2~3월 |
 | [9장](./09_postgresql_notify.md) | 최후의 도약: PostgreSQL NOTIFY | 10,994 RPS* | 3월 19~20일 |
 | [10장](./10_real_data_challenge.md) | 현실의 벽: 수십만 데이터로 검증하다 | **~7,347 RPS** | 3월 22~24일 |
 | [에필로그](./11_epilogue.md) | 97에서 7,347, 그리고 그 너머 | - | - |

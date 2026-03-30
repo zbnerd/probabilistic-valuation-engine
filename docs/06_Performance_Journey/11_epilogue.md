@@ -68,11 +68,11 @@ Cold Start에서 20% 타임아웃. 해결은 Auto Warmup. 전날 인기 캐릭�
 
 ### 8장 — 더 적은 기술로 더 많은 것을
 
-Redis, MySQL, MongoDB를 버리고 PostgreSQL 하나로 통합. 이 결정이 없었으면 PostgreSQL NOTIFY도, 단일 인프라 운영도 불가능했다. **"복잡도를 줄이는 것이 성능을 높이는 가장 확실한 방법이다."**
+Redis, MySQL, MongoDB를 버리고 PostgreSQL 하나로 통합. 그리고 **Micro-Batching**(PR #608, #618)을 적용하여 캐시 미스 시 DB 왕복을 3~5회에서 1회로 줄였다. 이것이 940→7,347 RPS 점프의 **실제 원인**이었다. 인프라 단일화는 전제조건이었고, Micro-Batching이 성능 엔진이었다. **"복잡도를 줄이는 것이 성능을 높이는 가장 확실한 방법이다."**
 
 ### 9장 — 가까이에 답이 있을 수 있다
 
-PostgreSQL NOTIFY는 새로운 기술이 아니다. PostgreSQL 9.0(2010년)부터 있었다. 하지만 Redis에 익숙해져서 보지 못했다. **"도구를 바꾸기 전에, 이미 가진 도구를 다 썼는지 확인하라."**
+PostgreSQL NOTIFY는 새로운 기술이 아니다. PostgreSQL 9.0(2010년)부터 있었다. Micro-Batching이 성능을 끌어올렸다면, LISTEN/NOTIFY는 그 성능을 Scale-out 환경에서도 유지 가능하게 만들었다. **"도구를 바꾸기 전에, 이미 가진 도구를 다 썼는지 확인하라."**
 
 ### 10장 — 현실은 항상 벤치마크보다 느리다
 

@@ -130,6 +130,8 @@ jdbcTemplate.execute("NOTIFY \"cache_invalidation\", '$payload'")
 
 이전 최고 기록인 940 RPS에서 **7,347 RPS**. 940 대비 **681% 향상** (97 대비 **76배**).
 
+> **Note**: 이 향상은 LISTEN/NOTIFY 단독의 결과가 아니다. 8장에서 적용한 **Micro-Batching**(PR #608, #618)이 캐시 미스 시 DB 왕복을 3~5회에서 1회로 줄인 것이 핵심 성능 엔진이었다. LISTEN/NOTIFY는 다중 인스턴스 간 캐시 정합성을 보장하여 Micro-Batching의 이점이 Scale-out 환경에서도 유효하도록 만들었다.
+
 하지만 65개의 에러가 있었다. 그리고 이 에러의 패턴이 이상했다. NOTIFY가 정상적으로 전송되었는데도 일부 인스턴스에서 캐시 무효화가 누락되었다.
 
 ## 버그: `doPublish()` 호출 경로 누락
@@ -189,7 +191,7 @@ After:  cache_invalidation (통합 채널)
 
 ## 왜 이렇게 빠른가?
 
-Redis Pub/Sub을 쓸 때보다 빨랐던 이유를 분석했다.
+Redis Pub/Sub을 쓸 때보다 빨랐던 이유를 분석했다. 단, **LISTEN/NOTIFY는 캐시 정합성 해결책**이지 성능 엔진 자체는 아니다. 실제 성능 향상의 주된 원인은 8장의 Micro-Batching이었다.
 
 | 요소 | Redis Pub/Sub | PostgreSQL NOTIFY |
 |------|--------------|-------------------|

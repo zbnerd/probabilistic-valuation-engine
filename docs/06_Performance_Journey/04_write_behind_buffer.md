@@ -77,21 +77,21 @@ fun offer(tasks: List<ExpectationWriteTask>): Boolean {
 
 **CAS + Exponential Backoff** — lock-free로 pending count 관리:
 
-```java
-for (int attempt = 0; attempt < properties.casMaxRetries(); attempt++) {
+```kotlin
+for (attempt in 0 until properties.casMaxRetries()) {
     if (pendingCount.compareAndSet(current, current + required)) {
-        return true;  // 성공
+        return true  // 성공
     }
-    backoffStrategy.backoff(attempt);  // 1ns, 2ns, 4ns...
+    backoffStrategy.backoff(attempt)  // 1ns, 2ns, 4ns...
 }
 ```
 
 Backpressure도 구현했다. 버퍼가 10,000개 이상 쌓이면 신규 offer를 거부:
 
-```java
+```kotlin
 if (pendingCount.get() >= backpressureLimit) {
-    meterRegistry.counter("buffer.rejected.backpressure").increment();
-    return false;
+    meterRegistry.counter("buffer.rejected.backpressure").increment()
+    return false
 }
 ```
 

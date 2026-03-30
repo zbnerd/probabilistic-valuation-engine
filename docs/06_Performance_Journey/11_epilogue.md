@@ -171,4 +171,4 @@ Client → Spring Boot (Java 21, Virtual Threads)
 > **관련 이슈**: #589 (Redis 제거), #590 (MongoDB 제거), #591 (MySQL 제거), #609 (LISTEN/NOTIFY), #611 (300k Bulk Load), #617 (Admission Control)
 > **기여자: 5-Agent Council, Claude Code**
 
-**처음으로 돌아가기**: [프롤로그 — 90 RPS에서 시작하다](./00_prologue.md)
+**처음으로 돌아가기**: [프롤로그 — 97 RPS에서 시작하다](./00_prologue.md)

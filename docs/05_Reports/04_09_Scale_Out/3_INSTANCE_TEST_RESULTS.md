@@ -467,7 +467,7 @@ docker exec maple-mysql mysql -u root -p -e "SHOW PROCESSLIST;" | wc -l
 
 ## 14. Related Documents
 
-- **[infrastructure.md](../../02_Technical_Guides/infrastructure.md)** - DB Connection Pool 설정 가이드
+- **[infrastructure.md](../../03_Technical_Guides/infrastructure.md)** - DB Connection Pool 설정 가이드
 - **[ADR-012: Stateless Scalability](../../01_ADR/ADR-012-stateless-scalability-roadmap.md)** - 스케일아웃 로드맵
 - **[ROADMAP.md](../../00_Start_Here/ROADMAP.md)** - Phase 7 Scale-out 계획
 

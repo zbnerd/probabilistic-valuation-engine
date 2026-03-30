@@ -312,7 +312,7 @@ Tier 3: Direct Contact (Critical issues)
 | **p50 164ms Latency** | [Performance Report](../05_Reports/04_02_Cost_Performance/PERFORMANCE_260105.md) |
 | **AWS t3.small Cost** | [Cost Performance Report](../05_Reports/04_02_Cost_Performance/COST_PERF_REPORT_N23_ACTUAL.md) |
 | **0% Failure Rate** | [Load Test Results](../05_Reports/04_06_Load_Tests/LOAD_TEST_REPORT_20260120.md) |
-| **479 Test Cases** | [QA Monitoring Checklist](../04_Sequence_Diagrams/QA_MONITORING_CHECKLIST.md) |
+| **479 Test Cases** | [QA Monitoring Checklist](../03_Technical_Guides/QA_MONITORING_CHECKLIST.md) |
 
 ## Technical Validity Check
 
@@ -351,7 +351,7 @@ grep -A 20 "Deployment Architecture" docs/00_Start_Here/architecture.md
 ### Verification Commands
 ```bash
 # Load Test 결과 확인
-find docs/04_Reports -name "*load*test*"
+find docs/05_Reports -name "*load*test*"
 
 # 성능 메트릭 확인
 grep "RPS\|Latency\|Throughput" docs/05_Reports/*.md

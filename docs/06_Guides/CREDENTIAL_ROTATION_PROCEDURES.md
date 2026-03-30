@@ -1,6 +1,6 @@
 # Credential Rotation Procedures
 
-> **상위 문서:** [Security Hardening](../02_Technical_Guides/security-hardening.md) | [On-call Checklist](ON_CALL_CHECKLIST.md) | [Security Checklist](../02_Technical_Guides/security-checklist.md)
+> **상위 문서:** [Security Hardening](../03_Technical_Guides/security-hardening.md) | [On-call Checklist](ON_CALL_CHECKLIST.md) | [Security Checklist](../03_Technical_Guides/security-checklist.md)
 >
 > **Last Updated:** 2026-02-11
 > **Applicable Versions:** Java 21, Spring Boot 3.5.4, Docker Compose, GitHub Actions
@@ -12,9 +12,9 @@
 ## Documentation Integrity Statement
 
 This guide is based on **security best practices** and production incident history:
-- Credential leak incidents: P0 #238 (2025-12) - JWT secret exposure (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
-- Security audit findings: 25+ vulnerabilities addressed (Evidence: [Security Audit](../04_Reports/security-audit-report-2026-02-08.md))
-- Rotation testing: Validated in staging environment (Evidence: [Security Testing](../02_Technical_Guides/security-testing.md))
+- Credential leak incidents: P0 #238 (2025-12) - JWT secret exposure (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
+- Security audit findings: 25+ vulnerabilities addressed (Evidence: [Security Audit](../05_Reports/security-audit-report-2026-02-08.md))
+- Rotation testing: Validated in staging environment (Evidence: [Security Testing](../03_Technical_Guides/security-testing.md))
 
 ## Terminology
 

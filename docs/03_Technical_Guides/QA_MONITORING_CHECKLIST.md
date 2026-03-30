@@ -630,7 +630,7 @@ ls -la src/main/resources/application-*.yml
 - **[CLAUDE.md](../../CLAUDE.md)** - 프로젝트 코딩 규칙 및 가이드라인
 - **[docker-compose.yml](../../docker-compose.yml)** - 인프라 설정
 - **[ROADMAP.md](../00_Start_Here/ROADMAP.md)** - 프로젝트 로드맵
-- **[infrastructure.md](../02_Technical_Guides/infrastructure.md)** - 인프라 상세 가이드
+- **[infrastructure.md](../03_Technical_Guides/infrastructure.md)** - 인프라 상세 가이드
 - **[ZERO_SCRIPT_QA_GUIDE.md](./ZERO_SCRIPT_QA_GUIDE.md)** - QA 상세 가이드
 
 ---

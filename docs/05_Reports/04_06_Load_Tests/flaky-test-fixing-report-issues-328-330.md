@@ -263,7 +263,7 @@ histogram_quantile(0.95, junit_tests_duration_seconds)
 
 - [ADR-020: Flaky Test SOLID-Based Refactoring](../01_ADR/ADR-020-flaky-test-fixing-solid-refactoring.md)
 - [CLAUDE.md](../CLAUDE.md) - Section 24: Flaky Test Prevention
-- [Flaky Test Management Guide](../02_Technical_Guides/flaky-test-management.md)
+- [Flaky Test Management Guide](../03_Technical_Guides/flaky-test-management.md)
 
 ---
 

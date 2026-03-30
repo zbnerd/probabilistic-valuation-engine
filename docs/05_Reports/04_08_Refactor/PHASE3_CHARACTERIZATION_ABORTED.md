@@ -183,8 +183,8 @@ diff baseline-results.txt after-results.txt
 
 ### Created:
 - `src/test/java/maple/expectation/support/` (5 files)
-- `do../05_Reports/04_08_Refactor/PHASE3_BUILD_FIXES_SUMMARY.md`
-- `do../05_Reports/04_08_Refactor/PHASE3_CHARACTERIZATION_ABORTED.md` (this file)
+- `docs/05_Reports/04_08_Refactor/PHASE3_BUILD_FIXES_SUMMARY.md`
+- `docs/05_Reports/04_08_Refactor/PHASE3_CHARACTERIZATION_ABORTED.md` (this file)
 
 ### Disabled (.bak):
 - 8 chaos tests (ToxiProxy)

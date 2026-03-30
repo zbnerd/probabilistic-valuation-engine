@@ -710,7 +710,7 @@ ls module-app/src/main/java/maple/expectation/config/SchedulerConfig.java
 
 - [Spring Scheduling Documentation](https://docs.spring.io/spring-framework/reference/integration/scheduling.html)
 - [ThreadPoolTaskScheduler Javadoc](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/scheduling/concurrent/ThreadPoolTaskScheduler.html)
-- [CLAUDE.md Section 21-22: Async & Concurrency](../02_Technical_Guides/async-concurrency.md)
+- [CLAUDE.md Section 21-22: Async & Concurrency](../03_Technical_Guides/async-concurrency.md)
 
 ---
 

@@ -80,14 +80,14 @@
 |----|------|-------------|----------|
 | [S1] | Section | Executive Summary 목적 정의 | 라인 11-46 |
 | [S2] | Section | 5-Agent Council 역할 정의 | 라인 816-842 |
-| [E1] | Test Result | N01 Thundering Herd Test 결과 | [N01-thundering-herd.md](../01_Chaos_Engineering/06_Nightmare/Scenarios/N01-thundering-herd.md) |
-| [E2] | Test Result | N02 Deadlock Trap Test 결과 | [N02-deadlock-trap.md](../01_Chaos_Engineering/06_Nightmare/Scenarios/N02-deadlock-trap.md) |
+| [E1] | Test Result | N01 Thundering Herd Test 결과 | [N01-thundering-herd.md](../02_Chaos_Engineering/06_Nightmare/Scenarios/N01-thundering-herd.md) |
+| [E2] | Test Result | N02 Deadlock Trap Test 결과 | [N02-deadlock-trap.md](../02_Chaos_Engineering/06_Nightmare/Scenarios/N02-deadlock-trap.md) |
 | [E3] | Code Evidence | MySqlNamedLockStrategy.java 구현 | `src/main/java/maple/expectation/infrastructure/lock/MySqlNamedLockStrategy.java` |
 | [E4] | Code Evidence | LockOrderMetrics.java 메트릭 | `src/main/java/maple/expectation/infrastructure/lock/LockOrderMetrics.java` |
 | [E5] | Metric | Prometheus lock_order_violation_total | `http://localhost:9090/api/v1/query?query=lock_order_violation_total` |
 | [E6] | Config | HikariCP connection-init-sql 설정 | `src/main/resources/application.yml` |
-| [E7] | Test Result | N07 Metadata Lock Freeze 결과 | [N07-metadata-lock-freeze.md](../01_Chaos_Engineering/06_Nightmare/Scenarios/N07-metadata-lock-freeze.md) |
-| [E8] | Test Result | N09 Circular Lock Deadlock 결과 | [N09-circular-lock-deadlock.md](../01_Chaos_Engineering/06_Nightmare/Scenarios/N09-circular-lock-deadlock.md) |
+| [E7] | Test Result | N07 Metadata Lock Freeze 결과 | [N07-metadata-lock-freeze.md](../02_Chaos_Engineering/06_Nightmare/Scenarios/N07-metadata-lock-freeze.md) |
+| [E8] | Test Result | N09 Circular Lock Deadlock 결과 | [N09-circular-lock-deadlock.md](../02_Chaos_Engineering/06_Nightmare/Scenarios/N09-circular-lock-deadlock.md) |
 | [E9] | Issue | GitHub Issue #227 (MDL Freeze) | https://github.com/zbnerd/probabilistic-valuation-engine/issues/227 |
 | [E10] | Issue | GitHub Issue #228 (Circular Lock) | https://github.com/zbnerd/probabilistic-valuation-engine/issues/228 |
 | [E11] | Issue | GitHub Issue #221 (Lock Ordering) | https://github.com/zbnerd/probabilistic-valuation-engine/issues/221 |
@@ -103,15 +103,15 @@
 
 | 용어 | 정의 | 관련 링크 |
 |------|------|----------|
-| **Nightmare Test** | 시스템의 숨겨진 취약점을 노출하기 위한 극한 장애 주입 테스트 | [Nightmare Overview](../01_Chaos_Engineering/06_Nightmare/TEST_STRATEGY.md) |
+| **Nightmare Test** | 시스템의 숨겨진 취약점을 노출하기 위한 극한 장애 주입 테스트 | [Nightmare Overview](../02_Chaos_Engineering/06_Nightmare/TEST_STRATEGY.md) |
 | **P0/P1/P2** | 우선순위 등급 (Critical/High/Medium) | [Architecture](../00_Start_Here/architecture.md) |
 | **MTTD** | Mean Time To Detect (장애 감지까지의 평균 시간) | [Incident Report](Incidents/INCIDENT_REPORT_N21_ACTUAL.md) |
 | **MTTR** | Mean Time To Recover (복구까지의 평균 시간) | [Incident Report](Incidents/INCIDENT_REPORT_N21_ACTUAL.md) |
 | **MDL** | Metadata Lock (MySQL DDL 시 테이블 잠금) | Section 3.1 |
 | **Deadlock** | 두 개 이상의 프로세스가 서로가 보유한 리소스를 기다리며 교착 상태에 빠지는 현상 | Section 3.2 |
-| **Cache Stampede** | 캐시 만료 시 다수 요청이 동시에 DB를 조회하는 현상 | [N01](../01_Chaos_Engineering/06_Nightmare/Scenarios/N01-thundering-herd.md) |
+| **Cache Stampede** | 캐시 만료 시 다수 요청이 동시에 DB를 조회하는 현상 | [N01](../02_Chaos_Engineering/06_Nightmare/Scenarios/N01-thundering-herd.md) |
 | **Coffman Conditions** | Deadlock 발생의 4가지 필요조건 (상호 배제, 점유 대기, 비선점, 순환 대기) | Section 3.2 |
-| **Circuit Breaker** | 장애 전파를 방지하기 위한 Resilience 패턴 | [Infrastructure](../02_Technical_Guides/infrastructure.md) |
+| **Circuit Breaker** | 장애 전파를 방지하기 위한 Resilience 패턴 | [Infrastructure](../03_Technical_Guides/infrastructure.md) |
 | **Graceful Degradation** | 시스템 장애 시 기능을 단계적으로 축소하여 서비스 제공 | Section 2 |
 
 ---
@@ -122,7 +122,7 @@
 
 | 항목 | 문서 값 | 검증 명령어 | 검증 결과 |
 |------|---------|-------------|----------|
-| **Total Scenarios** | 35 (17 Chaos + 18 Nightmare) | `find docs/01_Chaos_Engineering -name "*.md" \| wc -l` | ✅ 검증 명령어 제공 |
+| **Total Scenarios** | 35 (17 Chaos + 18 Nightmare) | `find docs/02_Chaos_Engineering -name "*.md" \| wc -l` | ✅ 검증 명령어 제공 |
 | **P0 Issues** | 10개 | `grep -c "P0" docs/05_Reports/Deep_Dive/CHAOS_REPORT_DEEP_DIVE.md` | ✅ 검증 명령어 제공 |
 | **Pass Rate (P0)** | 61.1% (11/18) | `./gradlew test --tests "maple.expectation.chaos.nightmare.*"` | ✅ 검증 명령어 제공 |
 | **Lock Wait Timeout** | 10초 | `grep "lock_wait_timeout" src/main/resources/application.yml` | ✅ [E6] 확인 |

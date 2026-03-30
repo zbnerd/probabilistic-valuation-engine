@@ -242,13 +242,13 @@ ALERT ShutdownDataLossRisk
 
 ```bash
 # 1. In-Memory 상태 패턴 탐지
-grep -r "new ConcurrentHashMap\|new AtomicInteger\|volatile.*=" src/main/java/ | wc -l
+grep -r "new ConcurrentHashMap\|new AtomicInteger\|volatile.*=" src/main/kotlin/ | wc -l
 
 # 2. Feature Flag 기본값 확인
-grep -r "matchIfMissing" src/main/java/ | grep "false"
+grep -r "matchIfMissing" src/main/kotlin/ | grep "false"
 
 # 3. Scheduler 분산 락 확인
-grep -A5 "@Scheduled" src/main/java/ | grep -B1 "void " | grep -v "@Locked" | wc -l
+grep -A5 "@Scheduled" src/main/kotlin/ | grep -B1 "void " | grep -v "@Locked" | wc -l
 
 # 4. Scale-out 테스트
 docker-compose up -d --scale app=2

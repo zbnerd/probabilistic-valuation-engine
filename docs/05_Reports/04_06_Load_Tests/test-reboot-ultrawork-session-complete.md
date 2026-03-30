@@ -276,7 +276,7 @@ tasks.register('integrationTest', Test) {
 
 ## References
 
-- [Module-wise Test Guide](../02_Technical_Guides/module-wise-test-guide.md)
+- [Module-wise Test Guide](../03_Technical_Guides/module-wise-test-guide.md)
 - [Test Classification & Migration Plan](test-classification-migration-plan.md)
 - [ADR-015: Test Rebuild Pyramid](../01_ADR/ADR-015-test-reboot-pyramid.md)
 - [ADR-025: Chaos Test Module Separation](../01_ADR/ADR-025-chaos-test-module-separation.md)

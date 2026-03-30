@@ -310,7 +310,7 @@ void concurrentRefresh_onlyOneSucceeds() throws Exception {
 
 | ADR | Topic | Link |
 |-----|-------|------|
-| ADR-006 | Redis Lock Lease Time & HA | [Link](ADR-006-redis-lock-lease-timeout-ha.md) |
+| ADR-006 | Redis Lock Lease Time & HA | [Link](ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md) |
 | ADR-044 | LogicExecutor Zero Try-Catch | [Link](ADR-044-logicexecutor-zero-try-catch.md) |
 
 ### Code References

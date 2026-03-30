@@ -194,7 +194,7 @@ Deadlock 발생 조건 (Coffman Conditions) 분석:
 
 | ADR | Title | Relevance to P0 Issues |
 |-----|-------|------------------------|
-| [ADR-006](../../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md) | Redis Lock Lease Timeout HA | Lock timeout strategy for deadlock prevention |
+| [ADR-006](../../01_ADR/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md) | Redis Lock Lease Timeout HA | Lock timeout strategy for deadlock prevention |
 | [ADR-010](../../01_ADR/ADR-010-outbox-pattern.md) | Outbox Pattern | Write-Behind Buffer graceful shutdown |
 | ADR-006 Section 4 | Lock Ordering | `executeWithOrderedLocks` implementation reference |
 | ADR-006 Section 5 | Coffman Conditions | Deadlock prevention theoretical foundation |

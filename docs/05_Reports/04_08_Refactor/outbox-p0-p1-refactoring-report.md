@@ -1,7 +1,7 @@
 # Transactional Outbox P0/P1 리팩토링 리포트
 
 > **상위 문서:** [CLAUDE.md](../../CLAUDE.md)
-> **관련 가이드:** [infrastructure.md](../02_Technical_Guides/infrastructure.md)
+> **관련 가이드:** [infrastructure.md](../03_Technical_Guides/infrastructure.md)
 > **일자:** 2026-01-30
 > **5-Agent Council 합의 기반**
 

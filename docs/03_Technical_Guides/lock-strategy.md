@@ -15,8 +15,8 @@ probabilistic-valuation-engine은 **3-Tier Lock Architecture**를 채택하여 R
 ## Documentation Integrity Statement
 
 This guide is based on **production lock contention analysis** and distributed systems best practices:
-- P1-P7-P8-P9 distributed lock resolution: 4 scheduler incidents analyzed (Evidence: [P1-7-8-9-scheduler-distributed-lock.md](../04_Reports/P1-7-8-9-scheduler-distributed-lock.md))
-- ADR-006 decision: Watchdog vs leaseTime with production metrics (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md))
+- P1-P7-P8-P9 distributed lock resolution: 4 scheduler incidents analyzed (Evidence: [P1-7-8-9-scheduler-distributed-lock.md](../05_Reports/P1-7-8-9-scheduler-distributed-lock.md))
+- ADR-006 decision: Watchdog vs leaseTime with production metrics (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md))
 - Hot row performance: Atomic Update 10x faster than Pessimistic Lock on likeCount (Evidence: internal load tests)
 
 ## Terminology
@@ -98,7 +98,7 @@ feature:
 
 ### 1. 좋아요 도메인 (likeCount)
 
-> **Performance Evidence:** Atomic Update achieves 1,200 TPS vs 120 TPS with Pessimistic Lock (10x difference) (Evidence: [Load Test N23](../04_Reports/Cost_Performance/N23_WRK_V4_RESULTS.md)).
+> **Performance Evidence:** Atomic Update achieves 1,200 TPS vs 120 TPS with Pessimistic Lock (10x difference) (Evidence: [Load Test N23](../05_Reports/Cost_Performance/N23_WRK_V4_RESULTS.md)).
 > **Why NOT Pessimistic Lock:** Hot row contention causes queue buildup; each transaction waits for previous commit.
 > **Rollback Plan:** If likeCount accuracy issues exceed 0.1%, switch to Pessimistic Lock with sharding.
 
@@ -245,7 +245,7 @@ Optional<GameCharacter> findByUserIgnWithPessimisticLock(@Param("userIgn") Strin
 
 > **Production Incident:** P1-P7-P8-P9 (2025 Q4) - Scheduler executed multiple times during Redis failover.
 > **Root Cause:** No MySQL fallback; Redis lock timeout caused duplicate execution.
-> **Fix Validated:** 3-tier architecture with MySQL Named Lock fallback (Evidence: [P1-7-8-9 Report](../04_Reports/P1-7-8-9-scheduler-distributed-lock.md)).
+> **Fix Validated:** 3-tier architecture with MySQL Named Lock fallback (Evidence: [P1-7-8-9 Report](../05_Reports/P1-7-8-9-scheduler-distributed-lock.md)).
 > **Metrics:** Zero duplicate executions since 2025-12 implementation.
 
 **문제 정의**:
@@ -443,7 +443,7 @@ curl -s http://localhost:8080/actuator/metrics/lock.strategy | jq '.[] | select(
 - **ResilientLockStrategy:** `src/main/java/maple/expectation/global/lock/ResilientLockStrategy.java` (Evidence: [CODE-LOCK-RESILIENT-001])
 - **GameCharacterRepository:** `src/main/java/maple/expectation/repository/v2/GameCharacterRepository.java` (Evidence: [CODE-REPO-GC-001])
 - **DonationOutboxRepository:** `src/main/java/maple/expectation/repository/v2/DonationOutboxRepository.java` (Evidence: [CODE-REPO-OUTBOX-001])
-- **ADR-006:** `docs/01_Adr/ADR-006-redis-lock-lease-timeout-ha.md` (Watchdog decision)
+- **ADR-006:** `docs/01_Adr/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md` (Watchdog decision)
 - **ADR-010:** `docs/01_Adr/ADR-010-outbox-pattern.md` (Outbox pattern)
 
 ## Technical Validity Check
@@ -478,5 +478,5 @@ curl -s http://localhost:8080/actuator/circuitbreakers | jq
 
 ### Related Evidence
 - P1-7-8-9 Report: `docs/05_Reports/P1-7-8-9-scheduler-distributed-lock.md`
-- ADR-006: `docs/01_Adr/ADR-006-redis-lock-lease-timeout-ha.md`
+- ADR-006: `docs/01_Adr/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md`
 - ADR-010: `docs/01_Adr/ADR-010-outbox-pattern.md`

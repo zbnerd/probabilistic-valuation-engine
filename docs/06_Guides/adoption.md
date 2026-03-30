@@ -371,7 +371,7 @@ A: Circuit Breaker/Timeout은 거의 없음 (< 1ms). TieredCache는 L1 HIT 시 <
 - [ADR-001: Streaming Parser](../01_ADR/ADR-001-streaming-parser.md)
 - [ADR-002: Circuit Breaker](../01_ADR/ADR-052-resilience4j-circuit-breaker.md)
 - [ADR-003: TieredCache + SingleFlight](../01_ADR/ADR-003-tiered-cache-singleflight.md)
-- [Chaos Engineering](../01_Chaos_Engineering/)
+- [Chaos Engineering](../02_Chaos_Engineering/)
 
 ---
 

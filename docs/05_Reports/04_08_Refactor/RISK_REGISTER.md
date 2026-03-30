@@ -7,9 +7,9 @@
 > **Status:** Phase 0 - Test Strategy & Risk Assessment
 >
 > **Related:**
-> - [Testing Guide](../02_Technical_Guides/testing-guide.md)
+> - [Testing Guide](../03_Technical_Guides/testing-guide.md)
 > - [Multi-Agent Protocol](../00_Start_Here/multi-agent-protocol.md)
-> - [Chaos Engineering](../01_Chaos_Engineering/)
+> - [Chaos Engineering](../02_Chaos_Engineering/)
 
 ---
 

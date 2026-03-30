@@ -203,8 +203,8 @@ docs/04-report/
 | [ROADMAP.md](../00_Start_Here/ROADMAP.md) | 7-phase development plan |
 | [architecture.md](../00_Start_Here/architecture.md) | System design diagrams |
 | [CLAUDE.md](../../CLAUDE.md) | Coding standards (Sections 1-16) |
-| [infrastructure.md](../02_Technical_Guides/infrastructure.md) | Infrastructure details |
-| [testing-guide.md](../02_Technical_Guides/testing-guide.md) | Test patterns |
+| [infrastructure.md](../03_Technical_Guides/infrastructure.md) | Infrastructure details |
+| [testing-guide.md](../03_Technical_Guides/testing-guide.md) | Test patterns |
 | [multi-agent-protocol.md](../00_Start_Here/multi-agent-protocol.md) | 5-Agent Council |
 
 ---

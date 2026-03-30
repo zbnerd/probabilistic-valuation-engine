@@ -51,7 +51,7 @@ public interface CacheStrategy {
 }
 
 // ✅ PORT DEFINITION: Domain layer defines interface
-// module-core/src/main/java/maple/expectation/application/port/CacheStrategy.java
+// module-core/src/main/kotlin/maple/expectation/application/port/CacheStrategy.java
 package maple.expectation.application.port;
 
 public interface CacheStrategy {
@@ -60,7 +60,7 @@ public interface CacheStrategy {
 }
 
 // ✅ ADAPTER IMPLEMENTATION: Infrastructure layer implements port
-// module-infra/src/main/java/maple/expectation/infrastructure/cache/RedisCacheStrategy.java
+// module-infra/src/main/kotlin/maple/expectation/infrastructure/cache/RedisCacheStrategy.java
 @Component
 public class RedisCacheStrategy implements CacheStrategy {
     private final RedissonClient redisson;
@@ -102,7 +102,7 @@ public class GameCharacterService {
 
 ```bash
 # Check module-core has zero Spring dependencies
-grep -r "@Component\|@Service\|@Repository\|@Controller" module-core/src/main/java/ | wc -l
+grep -r "@Component\|@Service\|@Repository\|@Controller" module-core/src/main/kotlin/ | wc -l
 # Expected: 0
 
 # Verify dependency direction
@@ -413,7 +413,7 @@ public void globalSyncRelation() { }
 **Verification:**
 ```bash
 # Check no fixedRate remains
-grep -r "fixedRate" module-app/src/main/java/maple/expectation/scheduler/
+grep -r "fixedRate" module-app/src/main/kotlin/maple/expectation/scheduler/
 # Expected: No results
 
 # Monitor connection pool
@@ -509,7 +509,7 @@ public void handleDeadLetter(DonationOutbox entry, String reason) {
 ./gradlew module-app:dependencies --configuration runtimeClasspath
 
 # 2. Domain layer purity (no Spring annotations)
-grep -r "@Component\|@Service\|@Repository\|@Controller" module-core/src/main/java/ | wc -l
+grep -r "@Component\|@Service\|@Repository\|@Controller" module-core/src/main/kotlin/ | wc -l
 # Expected: 0
 
 # 3. ArchUnit rules
@@ -519,7 +519,7 @@ grep -r "@Component\|@Service\|@Repository\|@Controller" module-core/src/main/ja
 ./gradlew test --tests "*Exception*Test"
 
 # 5. Scheduler overlap prevention
-grep -r "fixedRate" module-app/src/main/java/maple/expectation/scheduler/
+grep -r "fixedRate" module-app/src/main/kotlin/maple/expectation/scheduler/
 # Expected: No results
 ```
 

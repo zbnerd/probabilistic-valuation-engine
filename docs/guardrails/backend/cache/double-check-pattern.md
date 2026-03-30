@@ -290,4 +290,4 @@ histogram_quantile(0.99, rate(cache_lock_wait_seconds_bucket[5m]))
 
 - [cache-sequence.md](../../../04_Sequence_Diagrams/cache-sequence.md) - Double-Check 시나리오
 - ADR-003: TieredCache & SingleFlight Pattern
-- SingleFlightExecutor 구현: `src/main/java/maple/expectation/global/cache/SingleFlightExecutor.java`
+- SingleFlightExecutor 구현: `src/main/kotlin/maple/expectation/global/cache/SingleFlightExecutor.java`

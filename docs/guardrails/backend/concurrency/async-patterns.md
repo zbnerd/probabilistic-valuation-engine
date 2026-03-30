@@ -145,8 +145,8 @@ public Executor expectationComputeExecutor() {
 ## 검증 명령어
 ```bash
 # .join() 사용 확인 (금지)
-grep -r "\.join()" src/main/java/maple/expectation --include="*.java"
+grep -r "\.join()" src/main/kotlin/maple/expectation --include="*.java"
 
 # Async thread pool 설정 확인
-grep -r "ThreadPoolTaskExecutor" src/main/java/maple/expectation/config/
+grep -r "ThreadPoolTaskExecutor" src/main/kotlin/maple/expectation/config/
 ```

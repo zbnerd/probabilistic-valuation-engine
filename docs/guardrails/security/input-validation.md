@@ -146,16 +146,16 @@ public class AdminProperties {
 
 ```bash
 # 1. Path Traversal 취약점 검색
-grep -r "@PathVariable.*String path" src/main/java/ | grep -v "@Pattern"
+grep -r "@PathVariable.*String path" src/main/kotlin/ | grep -v "@Pattern"
 
 # 2. SQL Injection 패턴 검색
-grep -r "Query.*\+.*'" src/main/java/
+grep -r "Query.*\+.*'" src/main/kotlin/
 
 # 3. 직접 문자열 연결 로깅
-grep -r "log.info.*+" src/main/java/ | grep -v "{}"
+grep -r "log.info.*+" src/main/kotlin/ | grep -v "{}"
 
 # 4. 정규식 검증 확인
-grep -r "@Pattern" src/main/java/
+grep -r "@Pattern" src/main/kotlin/
 ```
 
 ## 출처

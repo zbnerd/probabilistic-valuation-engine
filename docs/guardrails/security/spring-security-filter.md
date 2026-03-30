@@ -145,7 +145,7 @@ http.headers(headers -> headers
 
 **Root Cause:** `OncePerRequestFilter`를 상속한 필터에 `@Component`를 붙이면 CGLIB 프록시 생성 시 부모 클래스의 `logger` 필드가 초기화되지 않아 NPE 발생
 
-**Evidence:** [P0 Report](../../../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.2
+**Evidence:** [P0 Report](../../../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.2
 
 ```java
 // 문제 발생 경로:
@@ -171,13 +171,13 @@ logger.isDebugEnabled()              // NPE 발생
 
 ```bash
 # 1. @Component가 있는 Filter 확인
-grep -r "@Component" src/main/java/**/filter/ | grep "Filter"
+grep -r "@Component" src/main/kotlin/**/filter/ | grep "Filter"
 
 # 2. FilterRegistrationBean 확인
-grep -r "FilterRegistrationBean" src/main/java/
+grep -r "FilterRegistrationBean" src/main/kotlin/
 
 # 3. SecurityFilterChain addFilterBefore 확인
-grep -A5 "addFilterBefore" src/main/java/**/SecurityConfig.java
+grep -A5 "addFilterBefore" src/main/kotlin/**/SecurityConfig.java
 
 # 4. CGLIB 관련 NPE 로그 확인
 grep -i "NullPointerException.*logger" logs/

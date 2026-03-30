@@ -462,7 +462,7 @@ curl -s http://localhost:8080/actuator/prometheus | grep hikaricp_connections_pe
 
 ```bash
 # Check no fixedRate remains
-grep -r "fixedRate" src/main/java/maple/expectation/scheduler/
+grep -r "fixedRate" src/main/kotlin/maple/expectation/scheduler/
 # Expected: No results
 
 # Scheduler execution time

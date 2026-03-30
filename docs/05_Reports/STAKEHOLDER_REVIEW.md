@@ -36,28 +36,28 @@ probabilistic-valuation-engine project has successfully transformed from a **49/
    - 9 BMC elements fully documented
    - Added Channels, Customer Relationships, Revenue Streams, Key Partnerships
    - **Impact:** A3: 3/7 → 7/7 (+4 points)
-   - **File:** [business-model-canvas.md](../02_Technical_Guides/business-model-canvas.md)
+   - **File:** [business-model-canvas.md](../08_Design_Research/business-model-canvas.md)
 
 2. **Scenario Planning Guide** (8,500+ words)
    - 4 uncertainty axes, 4 alternative futures with probabilities
    - Early warning indicators with Prometheus queries
    - Strategic responses with code examples
    - **Impact:** B3: 2/6 → 6/6, B4: 2/6 → 6/6 (+8 points)
-   - **File:** [scenario-planning.md](../02_Technical_Guides/scenario-planning.md)
+   - **File:** [scenario-planning.md](../03_Technical_Guides/scenario-planning.md)
 
 3. **Balanced Scorecard KPI Framework** (570 lines, 43 sections)
    - 22 KPIs across 4 perspectives (Financial: 7, Customer: 6, Internal: 5, L&G: 4)
    - Strategy Map with cause-effect chains
    - Gap Analysis: 14/25 → 25/25
    - **Impact:** C1: 4/10 → 10/10, D1: 3/6 → 6/6 (+9 points)
-   - **File:** [balanced-scorecard-kpis.md](../02_Technical_Guides/balanced-scorecard-kpis.md)
+   - **File:** [balanced-scorecard-kpis.md](../08_Design_Research/balanced-scorecard-kpis.md)
 
 4. **User Personas & Journey Maps** (548 lines)
    - 3 detailed personas (Min-su, Ji-hoon, Dr. Kim)
    - 7-stage user journeys with emotional curves
    - Risk mitigation strategies per persona
    - **Impact:** C3: 2/5 → 5/5, A2: 4/5 → 5/5 (+4 points)
-   - **File:** [user-personas-journeys.md](../02_Technical_Guides/user-personas-journeys.md)
+   - **File:** [user-personas-journeys.md](../08_Design_Research/user-personas-journeys.md)
 
 5. **MVP Roadmap** (440 lines)
    - Must/Should/Could/Won't Have framework
@@ -442,5 +442,5 @@ probabilistic-valuation-engine has successfully established itself as an **enter
 
 **References:**
 - [Score Improvement Summary](../../SCORE_IMPROVEMENT_SUMMARY.md)
-- [Balanced Scorecard KPIs](../02_Technical_Guides/balanced-scorecard-kpis.md)
-- [Scenario Planning Guide](../02_Technical_Guides/scenario-planning.md)
+- [Balanced Scorecard KPIs](../08_Design_Research/balanced-scorecard-kpis.md)
+- [Scenario Planning Guide](../03_Technical_Guides/scenario-planning.md)

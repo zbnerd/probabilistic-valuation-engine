@@ -181,10 +181,10 @@ ALERT HTTPOriginInProduction
 
 ```bash
 # 1. 와일드카드 CORS 검색
-grep -r "setAllowedOriginPatterns" src/main/java/ | grep "\\\*"
+grep -r "setAllowedOriginPatterns" src/main/kotlin/ | grep "\\\*"
 
 # 2. Credentials와 와일드카드 조합 확인
-grep -A2 "setAllowedOriginPatterns.*\*" src/main/java/ | grep "setAllowCredentials.*true"
+grep -A2 "setAllowedOriginPatterns.*\*" src/main/kotlin/ | grep "setAllowCredentials.*true"
 
 # 3. HTTP 오리진 확인
 grep -r "http://.*\.com" src/main/resources/application*.yml

@@ -104,7 +104,7 @@ Successfully configured GitHub Actions CI/CD with **two-lane strategy** for fast
 ├── nightly.yml     # Existing: Full test suite
 └── gradle.yml      # Existing: Gradle wrapper validation
 
-do../05_Reports/04_08_Refactor/
+docs/05_Reports/04_08_Refactor/
 ├── CI_STRATEGY.md          # Created: Comprehensive CI/CD guide
 └── PHASE1_CI_COMPLETE.md   # Created: This completion report
 ```

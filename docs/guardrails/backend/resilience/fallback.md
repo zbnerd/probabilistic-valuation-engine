@@ -254,7 +254,7 @@ public CompletableFuture<NexonApiCharacterResponse> callNexonApiAsync(String ign
 
 ### 코드
 - `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/FallbackHandler.kt`
-- `module-app/src/main/java/maple/expectation/service/v4/fallback/NexonApiFallbackService.java`
+- `module-app/src/main/kotlin/maple/expectation/service/v4/fallback/NexonApiFallbackService.java`
 
 ### 설정
 - `module-app/src/main/resources/application.yml` (lines 111-131)

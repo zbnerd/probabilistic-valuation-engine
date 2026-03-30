@@ -407,8 +407,8 @@ for (String ign : topCharacters) {
 - Issue #275: Auto Warmup 기능 구현
 
 ### 코드 (Evidence)
-- `src/main/java/maple/expectation/service/v4/warmup/PopularCharacterTracker.java`
-- `src/main/java/maple/expectation/scheduler/PopularCharacterWarmupScheduler.java`
+- `src/main/kotlin/maple/expectation/service/v4/warmup/PopularCharacterTracker.java`
+- `src/main/kotlin/maple/expectation/scheduler/PopularCharacterWarmupScheduler.java`
 
 ### 테스트
 - `docs/05_Reports/Cost_Performance/N23_V4_API_RESULTS.md` - Cold vs Warm 성능 비교
@@ -417,13 +417,13 @@ for (String ign : topCharacters) {
 
 ```bash
 # 웜업 스케줄러 확인
-find src/main/java -name "*WarmupScheduler.java"
+find src/main/kotlin -name "*WarmupScheduler.java"
 
 # 웜업 설정 확인
 grep -A 5 "scheduler.warmup" src/main/resources/application.yml
 
 # ZSET 패턴 확인
-grep -r "popular:characters" src/main/java --include="*.java"
+grep -r "popular:characters" src/main/kotlin --include="*.java"
 
 # Warmup 메트릭 확인
 curl -s http://localhost:8080/actuator/metrics/warmup.execution | jq

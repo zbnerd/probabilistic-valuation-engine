@@ -402,7 +402,7 @@ function isAllowedPattern(content, pattern) {
 
 **Pattern ID:** GR-001
 **Severity:** Critical
-**File:** src/main/java/com/example/Service.java:42
+**File:** src/main/kotlin/com/example/Service.java:42
 
 ### Description
 Direct try-catch usage prohibited. Use LogicExecutor instead.

@@ -237,5 +237,5 @@ void testHighPriorityCalculation() {
 ## References
 
 - [ADR-036: V5 CQRS Architecture](ADR-036-v5-cqrs-mongodb.md)
-- [V4 Service Design](../04_Reports/04_09_Scale_Out/v5-cqrs-implementation-report.md)
+- [V4 Service Design](../05_Reports/04_09_Scale_Out/v5-cqrs-implementation-report.md)
 - [CLAUDE.md Section 12: LogicExecutor](../../CLAUDE.md)

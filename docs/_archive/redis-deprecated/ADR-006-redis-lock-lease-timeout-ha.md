@@ -344,5 +344,5 @@ curl -s http://localhost:8080/actuator/metrics | jq '.names[] | select(. | conta
 - **Ordered Lock:** `src/main/java/maple/expectation/global/lock/OrderedLockExecutor.java`
 
 ### 이슈
-- **[PERFORMANCE_260105](../04_Reports/)** - Redis Wait Strategy 부하테스트
-- **[N02 Chaos Test](../01_Chaos_Engineering/06_Nightmare/)** - Deadlock 시나리오
+- **[PERFORMANCE_260105](../05_Reports/)** - Redis Wait Strategy 부하테스트
+- **[N02 Chaos Test](../02_Chaos_Engineering/06_Nightmare/)** - Deadlock 시나리오

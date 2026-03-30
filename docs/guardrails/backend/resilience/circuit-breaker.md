@@ -474,8 +474,8 @@ public class ResilientCharacterService {
 - [ADR-052: Resilience4j Circuit Breaker](../../../../01_ADR/ADR-052-resilience4j-circuit-breaker.md)
 
 ### 증거 (Evidence)
-- **ResilientNexonApiClient:** `src/main/java/maple/expectation/external/impl/ResilientNexonApiClient.java`
-- **Marker Interfaces:** `src/main/java/maple/expectation/global/error/exception/marker/`
+- **ResilientNexonApiClient:** `src/main/kotlin/maple/expectation/external/impl/ResilientNexonApiClient.java`
+- **Marker Interfaces:** `src/main/kotlin/maple/expectation/global/error/exception/marker/`
 - **Configuration:** `src/main/resources/application.yml` (resilience4j 섹션)
 - **Tests:** `src/test/java/maple/expectation/external/ResilientNexonApiClientTest.java`
 
@@ -486,13 +486,13 @@ public class ResilientCharacterService {
 grep -A 30 "resilience4j:" src/main/resources/application.yml
 
 # Marker Interface 확인
-find src/main/java -name "*Marker.java"
+find src/main/kotlin -name "*Marker.java"
 
 # @CircuitBreaker 사용 확인
-grep -r "@CircuitBreaker" src/main/java --include="*.java"
+grep -r "@CircuitBreaker" src/main/kotlin --include="*.java"
 
 # fallbackMethod 구현 확인
-grep -r "fallbackMethod" src/main/java --include="*.java"
+grep -r "fallbackMethod" src/main/kotlin --include="*.java"
 
 # Circuit Breaker 상태 확인 (실행 중인 애플리케이션)
 curl -s http://localhost:8080/actuator/health | jq

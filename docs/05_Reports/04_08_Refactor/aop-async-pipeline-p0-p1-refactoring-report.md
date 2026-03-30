@@ -1,7 +1,7 @@
 # AOP+Async 비동기 파이프라인 P0/P1 리팩토링 리포트
 
 > **상위 문서:** [CLAUDE.md](../../CLAUDE.md)
-> **관련 가이드:** [async-concurrency.md](../02_Technical_Guides/async-concurrency.md)
+> **관련 가이드:** [async-concurrency.md](../03_Technical_Guides/async-concurrency.md)
 > **일자:** 2026-01-30
 > **5-Agent Council 합의 기반**
 

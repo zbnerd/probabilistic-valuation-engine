@@ -4,7 +4,7 @@
 **Status**: Implementation Complete (Compilation Errors Require Fix)
 **Author**: probabilistic-valuation-engine Architecture Team
 **Related ADR**: [ADR-036](../../01_ADR/ADR-036-v5-cqrs-mongodb.md)
-**Sequence Diagram**: [v5-cqrs-sequence.md](../../03_Sequence_Diagrams/v5-cqrs-sequence.md)
+**Sequence Diagram**: [v5-cqrs-sequence.md](../../04_Sequence_Diagrams/v5-cqrs-sequence.md)
 
 ---
 
@@ -625,7 +625,7 @@ dependencies {
 ### 10.1 Related Documents
 
 - **ADR-036**: [V5 CQRS Architecture with MongoDB](../../01_ADR/ADR-036-v5-cqrs-mongodb.md)
-- **Sequence Diagram**: [V5 CQRS Sequence](../../03_Sequence_Diagrams/v5-cqrs-sequence.md)
+- **Sequence Diagram**: [V5 CQRS Sequence](../../04_Sequence_Diagrams/v5-cqrs-sequence.md)
 - **Issue**: [#300 CQRS Architecture Update](../../../.omc/issue-300-cqrs-update.md)
 
 ### 10.2 Architecture Decisions
@@ -634,8 +634,8 @@ dependencies {
 |-----|-------|------|
 | ADR-036 | V5 CQRS Architecture | [Link](../../01_ADR/ADR-036-v5-cqrs-mongodb.md) |
 | ADR-014 | Multi-Module Architecture | [Link](../../01_ADR/ADR-014-multi-module-cross-cutting-concerns.md) |
-| ADR-013 | Redis Stream Design | [Link](../../01_ADR/ADR-013-redis-stream-design.md) |
-| ADR-003 | TieredCache Strategy | [Link](../../01_ADR/ADR-003-tiered-cache.md) |
+| ADR-013 | Redis Stream Design | [Link](../../01_ADR/ADR-013-high-throughput-event-pipeline.md) |
+| ADR-003 | TieredCache Strategy | [Link](../../01_ADR/ADR-003-tiered-cache-singleflight.md) |
 
 ### 10.3 External References
 
@@ -676,9 +676,9 @@ probabilistic-valuation-engine/
 └── docs/
     ├── adr/
     │   └── ADR-036-v5-cqrs-mongodb.md
-    ├── 03_Sequence_Diagrams/
+    ├── 04_Sequence_Diagrams/
     │   └── v5-cqrs-sequence.md
-    └── 04_Reports/
+    └── 05_Reports/
         └── 04_09_Scale_Out/
             └── v5-cqrs-implementation-report.md
 ```

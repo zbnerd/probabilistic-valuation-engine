@@ -244,7 +244,7 @@ public class RedisErrorMetrics {
 - `docs/03_Technical_Guides/redis-ha-architecture.md` Section 6.2.1: Redisson Sentinel 설정 강화
 
 ### ADR
-- `docs/01_ADR/ADR-006-redis-lock-lease-timeout-ha.md` - Redis Failover 안정성 개선
+- `docs/01_ADR/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md` - Redis Failover 안정성 개선
 
 ### 코드 (Evidence)
 - `src/main/java/maple/expectation/config/RedissonConfig.java` (lines 45-65)

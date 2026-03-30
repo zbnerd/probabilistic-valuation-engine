@@ -831,8 +831,8 @@ void test_getCharacter_returnsResponse() {
 
 | Document | Location | Purpose |
 |----------|----------|---------|
-| Architecture Map | `do../05_Reports/04_08_Refactor/ARCHITECTURE_MAP.md` | Current state analysis |
-| SOLID Violations | `do../05_Reports/04_08_Refactor/SOLID_VIOLATIONS.md` | Detailed violations |
+| Architecture Map | `docs/05_Reports/04_08_Refactor/ARCHITECTURE_MAP.md` | Current state analysis |
+| SOLID Violations | `docs/05_Reports/04_08_Refactor/SOLID_VIOLATIONS.md` | Detailed violations |
 | CLAUDE.md | Project root | Coding standards |
 | Service Modules | `docs/03_Technical_Guides/service-modules.md` | Current module details |
 

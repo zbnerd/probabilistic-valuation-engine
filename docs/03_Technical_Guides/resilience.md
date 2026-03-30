@@ -14,7 +14,7 @@
 This guide is based on **production incident response** to external API failures:
 - A/B/C Scenario validation: 100% uptime maintained during Nexon API outages (Evidence: [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md))
 - Circuit Breaker production data: 323 trips recorded without service disruption (2025-11 to 2026-01)
-- Graceful Degradation: 15-minute stale cache acceptable per product decision (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
+- Graceful Degradation: 15-minute stale cache acceptable per product decision (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
 
 ## Terminology
 

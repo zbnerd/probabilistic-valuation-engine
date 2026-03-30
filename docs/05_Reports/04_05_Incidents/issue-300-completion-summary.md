@@ -425,7 +425,7 @@ app:
 docs/
 ├── adr/
 │   └── ADR-018-acl-strategy-pattern.md                    (630 lines)
-└── 04_Reports/
+└── 05_Reports/
     └── 5-agent-council-review-acl-implementation.md       (500+ lines)
 
 src/main/java/maple/expectation/

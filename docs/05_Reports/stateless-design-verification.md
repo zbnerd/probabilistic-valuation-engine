@@ -382,7 +382,7 @@ grep -r "virtual.*thread\|VirtualThread\|newVirtualThreadPerTaskExecutor" \
 ## Appendix B: Related Documentation
 
 - [Architecture Overview](../00_Start_Here/architecture.md)
-- [Infrastructure Guide](../02_Technical_Guides/infrastructure.md) - Sections 17-20
-- [Async & Concurrency Guide](../02_Technical_Guides/async-concurrency.md) - Sections 21-22
+- [Infrastructure Guide](../03_Technical_Guides/infrastructure.md) - Sections 17-20
+- [Async & Concurrency Guide](../03_Technical_Guides/async-concurrency.md) - Sections 21-22
 - [Scale-out Blockers Analysis](scale-out-blockers-analysis.md)
 - [Multi-Agent Protocol](../00_Start_Here/multi-agent-protocol.md) - 5-Agent Council

@@ -847,7 +847,7 @@ module-app ──────→  module-infra  ──────→  module-co
 **검증 명령어:**
 ```bash
 # module-core에 Spring 의존성 없음 확인
-grep -r "@Component\|@Service\|@Repository" module-core/src/main/java/
+grep -r "@Component\|@Service\|@Repository" module-core/src/main/kotlin/
 # Expected: No results
 
 # 의존성 방향 확인
@@ -870,36 +870,36 @@ grep -r "@Component\|@Service\|@Repository" module-core/src/main/java/
 
 ```bash
 # SRP: 메서드 길이 확인 (20라인 초과 시 위반)
-find src/main/java -name "*.java" -exec wc -l {} \; | awk '$1 > 20 { print $0 }'
+find src/main/kotlin -name "*.java" -exec wc -l {} \; | awk '$1 > 20 { print $0 }'
 
 # OCP: switch/if-else 분기문 확인
-grep -r "switch.*Type" src/main/java/
-grep -r "if.*type.*==" src/main/java/
+grep -r "switch.*Type" src/main/kotlin/
+grep -r "if.*type.*==" src/main/kotlin/
 
 # LSP: null 반환 패턴 확인
-grep -r "return null;" src/main/java/ | grep -v "// "
+grep -r "return null;" src/main/kotlin/ | grep -v "// "
 
 # ISP: 구현하지 않는 메서드 확인
-grep -r "@Override" src/main/java/ | grep "throw new UnsupportedOperationException"
+grep -r "@Override" src/main/kotlin/ | grep "throw new UnsupportedOperationException"
 
 # DIP: 구체적 구현체 의존 확인
-grep -r "new RedisTemplate\|new RestTemplate\|new JdbcTemplate" src/main/java/
+grep -r "new RedisTemplate\|new RestTemplate\|new JdbcTemplate" src/main/kotlin/
 ```
 
 ### DDD 준수 검증
 
 ```bash
 # JPA 연관관계 사용 확인 (@OneToMany, @ManyToOne)
-grep -r "@OneToMany\|@ManyToOne" src/main/java/
+grep -r "@OneToMany\|@ManyToOne" src/main/kotlin/
 
 # 도메인 계층에 @Entity 존재 확인
-find module-core/src/main/java -name "*.java" -exec grep -l "@Entity" {} \;
+find module-core/src/main/kotlin -name "*.java" -exec grep -l "@Entity" {} \;
 
 # ID 참조 패턴 확인 (String 필드명 *Id)
-grep -r "private String.*Id;" src/main/java/
+grep -r "private String.*Id;" src/main/kotlin/
 
 # Record 사용 확인 (불변 도메인 모델)
-find src/main/java -name "*.java" -exec grep -l "^public record" {} \;
+find src/main/kotlin -name "*.java" -exec grep -l "^public record" {} \;
 ```
 
 ---

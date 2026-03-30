@@ -240,21 +240,21 @@ public void processWithRetry(String key) {
 
 ## 출처
 - lock-strategy.md - Section 2 (후원 도메인), Section 4 (분산 스케줄러)
-- ADR-006: `docs/01_Adr/ADR-006-redis-lock-lease-timeout-ha.md` (Watchdog vs LeaseTime)
+- ADR-006: `docs/01_Adr/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md` (Watchdog vs LeaseTime)
 
 ## 검증 명령어
 ```bash
 # SKIP LOCKED 사용 확인
-grep -r "SKIP LOCKED\|skipLocked\|lock.timeout.*-2" src/main/java --include="*.java"
+grep -r "SKIP LOCKED\|skipLocked\|lock.timeout.*-2" src/main/kotlin --include="*.java"
 
 # TryLock 사용 확인
-grep -r "tryLock(" src/main/java --include="*.java"
+grep -r "tryLock(" src/main/kotlin --include="*.java"
 
 # Lock Wrapper 사용 확인
-grep -r "executeWithLock" src/main/java --include="*.java"
+grep -r "executeWithLock" src/main/kotlin --include="*.java"
 
 # 무제한 lock() 사용 확인 (위험)
-grep -r "\.lock()" src/main/java --include="*.java" | grep -v tryLock
+grep -r "\.lock()" src/main/kotlin --include="*.java" | grep -v tryLock
 ```
 
 ## 롤백 계획

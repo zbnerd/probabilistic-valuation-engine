@@ -32,7 +32,7 @@ This directory contains Architecture Decision Records (ADRs) for the probabilist
 | ADR | Title | Status | Date | Impact |
 |-----|-------|--------|------|--------|
 | [ADR-005](ADR-005-resilience4j-scenario-abc.md) | Resilience4j 시나리오 A/B/C 전략 | Accepted | 2026-02-05 | 장애 격리 |
-| [ADR-006](ADR-006-redis-lock-lease-timeout-ha.md) | Redis Lock Lease & Timeout HA | Accepted | 2026-02-05 | 분산락 안정성 |
+| [ADR-006](ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md) | Redis Lock Lease & Timeout HA | Accepted | 2026-02-05 | 분산락 안정성 |
 | [ADR-008](ADR-008-durability-graceful-shutdown.md) | Durability & Graceful Shutdown | Accepted | 2026-02-05 | 안전 종료 4단계 |
 | [ADR-010](ADR-010-outbox-pattern.md) | Outbox Pattern (트리플 안전망) | Accepted | 2026-02-05 | 중복 전송 방지 |
 

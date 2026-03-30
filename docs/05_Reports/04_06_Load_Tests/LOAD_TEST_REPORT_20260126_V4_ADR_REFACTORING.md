@@ -468,7 +468,7 @@ e31c49c fix: wrk Lua 스크립트 한글 URL 인코딩 추가
 - **[E8]** Code snippet line 251 shows buffer offer operation (0.1ms vs 15-30ms sync)
 
 **ADR References:**
-- [ADR-006: Redis Lock Lease Timeout HA](../../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md) - Lock timeout strategy
+- [ADR-006: Redis Lock Lease Timeout HA](../../01_ADR/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md) - Lock timeout strategy
 - [ADR-007: AOP Async Cache Integration](../../01_ADR/ADR-007-aop-async-cache-integration.md) - Async caching patterns
 - [ADR-010: Outbox Pattern](../../01_ADR/ADR-010-outbox-pattern.md) - Write-Behind Buffer design
 - **P0 Shutdown Safety**: ADR-010 Section 4 (Graceful Shutdown)
@@ -481,7 +481,7 @@ e31c49c fix: wrk Lua 스크립트 한글 URL 인코딩 추가
 
 | ADR | Title | Relevance to This Report |
 |-----|-------|--------------------------|
-| [ADR-006](../../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md) | Redis Lock Lease Timeout HA | Lock lease timeout strategy (30s default) |
+| [ADR-006](../../01_ADR/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md) | Redis Lock Lease Timeout HA | Lock lease timeout strategy (30s default) |
 | [ADR-007](../../01_ADR/ADR-007-aop-async-cache-integration.md) | AOP Async Cache Integration | Async pipeline patterns used in preset calculation |
 | [ADR-010](../../01_ADR/ADR-010-outbox-pattern.md) | Outbox Pattern | Write-Behind Buffer implementation reference |
 | ADR-006 Section 3 | Lock Timeout Strategy | CAS retry exponential backoff (P1-1) |

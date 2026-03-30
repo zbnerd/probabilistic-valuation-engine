@@ -194,19 +194,19 @@ ALERT CSPHeaderMissing
 
 ```bash
 # 1. CSP 설정 확인
-grep -A 10 "contentSecurityPolicy" src/main/java/**/SecurityConfig.java
+grep -A 10 "contentSecurityPolicy" src/main/kotlin/**/SecurityConfig.java
 
 # 2. unsafe-inline 사용 확인
-grep -r "unsafe-inline\|unsafe-eval" src/main/java/**/SecurityConfig.java
+grep -r "unsafe-inline\|unsafe-eval" src/main/kotlin/**/SecurityConfig.java
 
 # 3. frame-ancestors 설정 확인
-grep -r "frame-ancestors" src/main/java/**/SecurityConfig.java
+grep -r "frame-ancestors" src/main/kotlin/**/SecurityConfig.java
 
 # 4. 와일드카드 소스 확인
-grep -r "default-src \*\|script-src \*" src/main/java/**/SecurityConfig.java
+grep -r "default-src \*\|script-src \*" src/main/kotlin/**/SecurityConfig.java
 
 # 5. CSP 리포트 엔드포인트 확인
-grep -r "csp-report\|/csp-report" src/main/java/
+grep -r "csp-report\|/csp-report" src/main/kotlin/
 ```
 
 ## CSP vs CORS

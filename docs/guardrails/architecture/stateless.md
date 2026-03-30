@@ -260,15 +260,15 @@ public class ExpectationBatchShutdownHandler
 
 ```bash
 # HttpSession 사용 검증
-grep -r "HttpSession" src/main/java/ | grep -v "import" | wc -l
+grep -r "HttpSession" src/main/kotlin/ | grep -v "import" | wc -l
 # Expected: 0
 
 # @SessionScope 사용 검증
-grep -r "@SessionScope" src/main/java/ | wc -l
+grep -r "@SessionScope" src/main/kotlin/ | wc -l
 # Expected: 0
 
 # static mutable 컬렉션 검증
-grep -r "static.*Map\|static.*Set\|static.*List" src/main/java/ | wc -l
+grep -r "static.*Map\|static.*Set\|static.*List" src/main/kotlin/ | wc -l
 # Expected: 0 (except constants)
 
 # Redis 상태 저장 확인

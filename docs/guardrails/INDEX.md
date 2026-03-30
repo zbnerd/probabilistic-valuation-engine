@@ -246,16 +246,16 @@
 
 ```bash
 # try-catch 사용 확인 (금지)
-grep -r "try {" src/main/java --include="*.java" | grep -v "DefaultLogicExecutor"
+grep -r "try {" src/main/kotlin --include="*.java" | grep -v "DefaultLogicExecutor"
 
 # RuntimeException 확인 (금지)
-grep -r "new RuntimeException" src/main/java --include="*.java"
+grep -r "new RuntimeException" src/main/kotlin --include="*.java"
 
 # Thread.sleep 확인 (금지)
 grep -r "Thread.sleep" src/test/java --include="*.java"
 
 # FQCN 확인
-grep -r "new [a-z]+\.[A-Z]" src/main/java --include="*.java"
+grep -r "new [a-z]+\.[A-Z]" src/main/kotlin --include="*.java"
 ```
 
 ---

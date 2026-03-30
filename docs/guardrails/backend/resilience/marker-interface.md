@@ -492,14 +492,14 @@ class CharacterService(
 
 ```bash
 # Marker Interface 정의 확인
-find src/main/java -name "CircuitBreakerIgnoreMarker.java" -o -name "CircuitBreakerRecordMarker.java"
+find src/main/kotlin -name "CircuitBreakerIgnoreMarker.java" -o -name "CircuitBreakerRecordMarker.java"
 
 # 기본 클래스 Marker 구현 확인
-grep -r "implements CircuitBreakerIgnoreMarker\|implements CircuitBreakerRecordMarker" src/main/java
+grep -r "implements CircuitBreakerIgnoreMarker\|implements CircuitBreakerRecordMarker" src/main/kotlin
 
 # application.yml에 Marker 등록 확인
 grep -A 10 "ignoreExceptions:" src/main/resources/application.yml
 
 # RuntimeException 직접 사용 확인 (금지)
-grep -r "throw new RuntimeException" src/main/java --include="*.java" --include="*.kt"
+grep -r "throw new RuntimeException" src/main/kotlin --include="*.java" --include="*.kt"
 ```

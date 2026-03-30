@@ -796,7 +796,7 @@ Best,
 - [ ] All links working?
   - [ ] [Architecture Overview](../00_Start_Here/architecture.md)
   - [ ] [Multi-Agent Protocol](../00_Start_Here/multi-agent-protocol.md)
-  - [ ] [Balanced Scorecard](../02_Technical_Guides/balanced-scorecard-kpis.md) ✅ (newly added)
+  - [ ] [Balanced Scorecard](../08_Design_Research/balanced-scorecard-kpis.md) ✅ (newly added)
   - [ ] [Contributing Guidelines](../../CONTRIBUTING.md) ✅ (newly added)
 
 #### Core Achievements

@@ -428,9 +428,9 @@ T+6h40m ~ T+6h47m  | 1,250       | 99.98%
 ## 10. 참조 문서
 
 - [ADR-016: Nexon API Outbox Pattern](../../01_ADR/ADR-016-nexon-api-outbox-pattern.md)
-- [N19 Sequence Diagram](../../03_Sequence_Diagrams/nexon-api-outbox-sequence.md)
-- [N19 Implementation Summary](../../01_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md)
-- [N19 Code Quality Review](../../01_Chaos_Engineering/06_Nightmare/Results/N19-code-quality-review.md)
+- [N19 Sequence Diagram](../../04_Sequence_Diagrams/nexon-api-outbox-sequence.md)
+- [N19 Implementation Summary](../../02_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md)
+- [N19 Code Quality Review](../../02_Chaos_Engineering/06_Nightmare/Results/N19-code-quality-review.md)
 
 ---
 

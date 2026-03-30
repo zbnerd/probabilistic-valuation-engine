@@ -700,8 +700,8 @@ If any claim in this report is disputed:
 - [#284 대규모 트래픽 P0/P1 해결](https://github.com/zbnerd/probabilistic-valuation-engine/issues/284)
 - [ADR-013: 대규모 트래픽 비동기 이벤트 파이프라인](../01_ADR/ADR-013-high-throughput-event-pipeline.md)
 - [#283 Scale-out 방해 요소 제거](https://github.com/zbnerd/probabilistic-valuation-engine/issues/283)
-- [N01 Thundering Herd Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md)
-- [N03 Thread Pool Exhaustion Test](../01_Chaos_Engineering/06_Nightmare/Results/N03-thread-pool-exhaustion-result.md)
+- [N01 Thundering Herd Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md)
+- [N03 Thread Pool Exhaustion Test](../02_Chaos_Engineering/06_Nightmare/Results/N03-thread-pool-exhaustion-result.md)
 
 ---
 

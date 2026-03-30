@@ -103,7 +103,7 @@ graph TD
 - **Gap Analysis**: Current configuration efficient, but scale-out has diminishing returns
 - **Action Plan**:
   - P0: Optimize JVM heap allocation (target: +10% RPS without cost increase)
-  - P1: Evaluate t3.large cost-performance (reference: [N23 Cost Performance](../../04_Reports/Cost_Performance/COST_PERF_REPORT_N23.md))
+  - P1: Evaluate t3.large cost-performance (reference: [N23 Cost Performance](../../05_Reports/Cost_Performance/COST_PERF_REPORT_N23.md))
   - P2: Multi-instance horizontal scaling analysis
 
 #### F3: Infrastructure Utilization
@@ -112,7 +112,7 @@ graph TD
 - **Target**: 85% (optimal efficiency)
 - **Gap Analysis**: 20% headroom unused → over-provisioned
 - **Action Plan**:
-  - P0: Profile CPU/memory bottlenecks (reference: [High Traffic Analysis](../../04_Reports/high-traffic-performance-analysis.md))
+  - P0: Profile CPU/memory bottlenecks (reference: [High Traffic Analysis](../../05_Reports/high-traffic-performance-analysis.md))
   - P1: Implement auto-scaling based on RPS metrics
   - P2: Right-size to t3.medium if utilization <50%
 
@@ -195,7 +195,7 @@ graph TD
 - **Current**: 0% (18 Nightmare tests verified)
 - **Target**: <0.01%
 - **Status**: ✅ Green - best-in-class
-- **Evidence**: [Load Test #266 ADR](../../04_Reports/Load_Tests/LOAD_TEST_REPORT_20260126_V4_ADR_REFACTORING.md)
+- **Evidence**: [Load Test #266 ADR](../../05_Reports/Load_Tests/LOAD_TEST_REPORT_20260126_V4_ADR_REFACTORING.md)
 
 #### C4: API Availability
 - **Formula**: `(Total time - downtime) / Total time × 100%`
@@ -256,11 +256,11 @@ graph TD
 
 #### I2: MTTR (Mean Time To Recover)
 - **Formula**: `Average time from alert to service restoration`
-- **Current**: 4 minutes ([N21 Auto Mitigation](../../04_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md))
+- **Current**: 4 minutes ([N21 Auto Mitigation](../../05_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md))
 - **Target**: 2 minutes (50% reduction)
 - **Gap Analysis**: Manual intervention required for complex incidents
 - **Action Plan**:
-  - P0: Implement auto-mitigation policies (reference: [N21 Auto Mitigation](../../04_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md))
+  - P0: Implement auto-mitigation policies (reference: [N21 Auto Mitigation](../../05_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md))
   - P1: Create runbook automation scripts
   - P2: Circuit Breaker auto-tuning based on traffic patterns
 
@@ -270,7 +270,7 @@ graph TD
 - **Target**: 600 tests (25% increase)
 - **Gap Analysis**: Missing edge case and integration tests
 - **Action Plan**:
-  - P0: Add tests for P2/P3 issues (reference: [P1 Nightmare Resolution](../../04_Reports/P1_Nightmare_Issues_Resolution_Report.md))
+  - P0: Add tests for P2/P3 issues (reference: [P1 Nightmare Resolution](../../05_Reports/P1_Nightmare_Issues_Resolution_Report.md))
   - P1: Increase integration test coverage (Testcontainers)
   - P2: Add performance regression tests
 
@@ -289,7 +289,7 @@ graph TD
 - **Current**: 24 scenarios (N01-N24)
 - **Target**: 30 scenarios (add N25-N30)
 - **Status**: ✅ Green - comprehensive coverage
-- **Evidence**: [Chaos Engineering Overview](../../01_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
+- **Evidence**: [Chaos Engineering Overview](../../02_Chaos_Engineering/00_Overview/TEST_STRATEGY.md)
 - **Action Plan**:
   - P1: Add N25: Multi-region failover
   - P2: Add N26: Database migration zero-downtime
@@ -556,11 +556,11 @@ TOTAL: 25/25 (100%)
 
 ## Related Documents
 
-- [KPI-BSC Dashboard](../../04_Reports/KPI_BSC_DASHBOARD.md) - Performance metrics dashboard
+- [KPI-BSC Dashboard](../../05_Reports/KPI_BSC_DASHBOARD.md) - Performance metrics dashboard
 - [Monitoring Copilot Implementation](./monitoring-copilot-implementation.md) - AI-powered monitoring
 - [Business Model Canvas](../00_Start_Here/BUSINESS_MODEL.md) - Business strategy
-- [Cost Performance N23](../../04_Reports/Cost_Performance/COST_PERF_REPORT_N23.md) - Infrastructure cost analysis
-- [N21 Auto Mitigation](../../04_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md) - Incident response
+- [Cost Performance N23](../../05_Reports/Cost_Performance/COST_PERF_REPORT_N23.md) - Infrastructure cost analysis
+- [N21 Auto Mitigation](../../05_Reports/Incidents/INCIDENT_REPORT_N21_AUTO_MITIGATION.md) - Incident response
 
 ---
 

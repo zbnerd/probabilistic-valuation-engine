@@ -84,4 +84,4 @@ default <T> T executeWithOrderedLocks(
 - 문서: [docs/05_Reports/04_05_Incidents/P0_Issues_Resolution_Report.md](../../../05_Reports/04_05_Incidents/P0_Issues_Resolution_Report.md)
 - 이슈: #228 (N09-Circular Lock), #221 (N02-Lock Ordering)
 - Nightmare: CircularLockDeadlockNightmareTest, DeadlockTrapNightmareTest
-- ADR: [ADR-006](../../../01_ADR/ADR-006-redis-lock-lease-timeout-ha.md)
+- ADR: [ADR-006](../../../01_ADR/ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md)

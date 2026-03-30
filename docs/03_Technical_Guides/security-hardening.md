@@ -13,9 +13,9 @@
 ## Documentation Integrity Statement
 
 This guide is based on **security audit findings** from 2025 Q4:
-- Security hardening: 25+ vulnerabilities addressed (Evidence: [Security Review](../04_Reports/security-audit-2025-Q4.md))
-- Production incidents resolved: P0 #238, #241, #287 (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
-- OWASP Top 10 alignment: All 10 categories addressed (Evidence: [OWASP Checklist](../04_Reports/owasp-compliance.md))
+- Security hardening: 25+ vulnerabilities addressed (Evidence: [Security Review](../05_Reports/security-audit-2025-Q4.md))
+- Production incidents resolved: P0 #238, #241, #287 (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
+- OWASP Top 10 alignment: All 10 categories addressed (Evidence: [OWASP Checklist](../05_Reports/owasp-compliance.md))
 
 ## Terminology
 
@@ -101,7 +101,7 @@ if (rateLimitExceeded(clientIp)) {
 ## 27. JWT Security Best Practices
 
 > **Production Incident:** P0 #238 (2025-12) - Weak JWT secret caused authentication bypass.
-> **Fix Validated:** Fail-fast validation prevents startup with weak secrets (Evidence: [P0 Report](../04_Reports/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.3).
+> **Fix Validated:** Fail-fast validation prevents startup with weak secrets (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.3).
 > **Algorithm Choice:** HS256 chosen over RS256 for simplicity; symmetric key sufficient for single-service architecture.
 
 JWT 토큰 생성, 검증, 관리를 위한 필수 규칙입니다.
@@ -395,7 +395,7 @@ log.info("User input: {}", sanitized);
 ## 31. Sensitive Data Logging Rules
 
 > **Compliance:** GDPR Article 32 - Security of Processing requires logging access control and data masking.
-> **Incident Evidence:** API key exposure in logs detected during security audit 2025-11 (Evidence: [Security Review](../04_Reports/security-audit-2025-Q4.md)).
+> **Incident Evidence:** API key exposure in logs detected during security audit 2025-11 (Evidence: [Security Review](../05_Reports/security-audit-2025-Q4.md)).
 
 민감 정보 로깅 규칙입니다.
 

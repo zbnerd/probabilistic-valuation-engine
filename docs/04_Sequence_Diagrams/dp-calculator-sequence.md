@@ -228,7 +228,7 @@ expectation:v3:{ocid}:{equipmentHash}:{tableVersionHash}:lv3
 |----|-------|-----------------|
 | EV-DP-001 | DP Algorithm: O(slots × target × K) | [ProbabilityConvolver.java](../../src/main/java/maple/expectation/service/v2/cube/component/ProbabilityConvolver.java) |
 | EV-DP-002 | Kahan Summation applied | [CubeDpCalculator.java](../../src/main/java/maple/expectation/service/v2/cube/component/CubeDpCalculator.java) |
-| EV-DP-003 | Cache hit rate >95% | [N01 Thundering Herd Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) |
+| EV-DP-003 | Cache hit rate >95% | [N01 Thundering Herd Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) |
 | EV-DP-004 | 34,488 probabilities loaded | [CubeProbabilityRepository.java](../../src/main/java/maple/expectation/repository/v2/CubeProbabilityRepository.java) |
 
 ---

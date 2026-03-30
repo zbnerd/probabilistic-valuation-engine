@@ -185,13 +185,13 @@ grep -r "secret.*=" --include="*.java" --include="*.yml" | grep -v "env\|placeho
 echo $JWT_SECRET | wc -c
 
 # 3. JWT에 API Key 포함 확인
-grep -r "claim.*apiKey" src/main/java/
+grep -r "claim.*apiKey" src/main/kotlin/
 
 # 4. Fingerprint 사용 확인
-grep -r "claim.*fgp" src/main/java/
+grep -r "claim.*fgp" src/main/kotlin/
 
 # 5. Deprecated API 사용 확인
-grep -r "parserBuilder\|parseClaimsJws" src/main/java/
+grep -r "parserBuilder\|parseClaimsJws" src/main/kotlin/
 ```
 
 ## 출처

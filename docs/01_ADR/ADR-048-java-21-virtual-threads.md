@@ -371,7 +371,7 @@ executor.setRejectedExecutionHandler((r, e) -> {
 
 - **ADR-012**: [Stateless Scalability Roadmap](ADR-012-stateless-scalability-roadmap.md)
 - **ADR-013**: [High Throughput Event Pipeline](ADR-013-high-throughput-event-pipeline.md)
-- **ADR-015**: [V5 CQRS Architecture](ADR-015-v5-cqrs-mongodb.md)
+- **ADR-015**: [V5 CQRS Architecture](ADR-036-v5-cqrs-mongodb.md)
 
 ### Technical Guides
 

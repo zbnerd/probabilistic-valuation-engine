@@ -427,7 +427,7 @@ echo "=== Verification Complete ==="
 ## 관련 문서
 
 ### 연결된 ADR
-- **[ADR-006](ADR-006-redis-lock-lease-timeout-ha.md)** - Redis Lock 기본 전략
+- **[ADR-006](ADR-006-redis-lock (ARCHIVED: docs/_archive/redis-deprecated/).md)** - Redis Lock 기본 전략
 - **[ADR-003](ADR-003-tiered-cache-singleflight.md)** - Cache Stampede 방지
 - **[ADR-014](ADR-014-multi-module-cross-cutting-concerns.md)** - 모듈 분리 전략
 

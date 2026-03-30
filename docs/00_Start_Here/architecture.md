@@ -13,10 +13,10 @@
 ## Documentation Integrity Statement
 
 This architecture document is based on **actual production implementation** validated through:
-- Load testing confirming 719 RPS throughput (Evidence: [WRK Final Summary](../04_Reports/Portfolio_Enhancement_WRK_Final_Summary.md))
-- Cache performance metrics from production monitoring (Evidence: [N01 Thundering Herd Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md))
+- Load testing confirming 719 RPS throughput (Evidence: [WRK Final Summary](../05_Reports/Portfolio_Enhancement_WRK_Final_Summary.md))
+- Cache performance metrics from production monitoring (Evidence: [N01 Thundering Herd Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md))
 - GZIP compression implementation verified (Evidence: [GzipUtils.java](../../src/main/java/maple/expectation/util/GzipUtils.java))
-- Outbox replay recovery validated (Evidence: [N19 Recovery Report](../04_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md))
+- Outbox replay recovery validated (Evidence: [N19 Recovery Report](../05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md))
 
 ---
 
@@ -661,13 +661,13 @@ flowchart TB
 
 | Claim | Value | Evidence Source | Verified Date |
 |-------|-------|-----------------|---------------|
-| **Max Throughput** | 719 RPS | [Load Test Report](../04_Reports/WRK_Final_Summary.md) | 2026-01-20 |
-| **Cache Hit Rate (L1)** | 85-95% | [N01 Thundering Herd Test](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) | 2026-01-15 |
+| **Max Throughput** | 719 RPS | [Load Test Report](../05_Reports/WRK_Final_Summary.md) | 2026-01-20 |
+| **Cache Hit Rate (L1)** | 85-95% | [N01 Thundering Herd Test](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) | 2026-01-15 |
 | **GZIP Compression** | 90% reduction | [GZIP Implementation](../../src/main/java/maple/expectation/util/GzipUtils.java) | 2026-01-10 |
-| **SingleFlight Effectiveness** | 99% duplicate reduction | [N01 Test Result](../01_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) | 2026-01-15 |
-| **Circuit Breaker Response** | <5s open | [N03 Thread Pool Test](../01_Chaos_Engineering/06_Nightmare/Results/N03-thread-pool-exhaustion-result.md) | 2026-01-16 |
-| **Recovery Time (N19)** | 47min for 2.1M events | [N19 Recovery Report](../04_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md) | 2026-02-05 |
-| **Concurrent Users** | 1,000+ | [Load Test Report](../04_Reports/WRK_Final_Summary.md) | 2026-01-20 |
+| **SingleFlight Effectiveness** | 99% duplicate reduction | [N01 Test Result](../02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md) | 2026-01-15 |
+| **Circuit Breaker Response** | <5s open | [N03 Thread Pool Test](../02_Chaos_Engineering/06_Nightmare/Results/N03-thread-pool-exhaustion-result.md) | 2026-01-16 |
+| **Recovery Time (N19)** | 47min for 2.1M events | [N19 Recovery Report](../05_Reports/Recovery/RECOVERY_REPORT_N19_OUTBOX_REPLAY.md) | 2026-02-05 |
+| **Concurrent Users** | 1,000+ | [Load Test Report](../05_Reports/WRK_Final_Summary.md) | 2026-01-20 |
 
 ### Trade-off Analysis
 
@@ -718,7 +718,7 @@ This architecture document is invalid if:
 | 1.1.0 | 2025-12-15 | TieredCache + SingleFlight added | [ADR-003](../01_ADR/ADR-003-tiered-cache-singleflight.md) |
 | 1.2.0 | 2026-01-10 | V4 Calculator with Decorator Chain | [ADR-011](../01_ADR/ADR-011-controller-v4-optimization.md) |
 | 1.3.0 | 2026-02-05 | Nexon API Outbox Pattern | [ADR-016](../01_ADR/ADR-016-nexon-api-outbox-pattern.md) |
-| 1.4.0 | 2026-02-15 | V5 CQRS Architecture (Read Side) | [ADR-015](../01_ADR/ADR-015-v5-cqrs-mongodb.md) |
+| 1.4.0 | 2026-02-15 | V5 CQRS Architecture (Read Side) | [ADR-015](../01_ADR/ADR-036-v5-cqrs-mongodb.md) |
 
 ---
 

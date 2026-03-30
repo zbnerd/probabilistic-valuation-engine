@@ -226,13 +226,13 @@ public class DonationOutboxProcessor {
 ## 검증 명령어
 ```bash
 # SKIP LOCKED 사용 확인
-grep -r "SKIP LOCKED\|skipLocked\|lock.timeout.*-2" src/main/java --include="*.java"
+grep -r "SKIP LOCKED\|skipLocked\|lock.timeout.*-2" src/main/kotlin --include="*.java"
 
 # Outbox Repository 확인
-find src/main/java -name "*OutboxRepository.java"
+find src/main/kotlin -name "*OutboxRepository.java"
 
 # 배치 스케줄러 확인
-find src/main/java -name "*Scheduler.java" | xargs grep -l "@Scheduled"
+find src/main/kotlin -name "*Scheduler.java" | xargs grep -l "@Scheduled"
 ```
 
 ## 롤백 계획

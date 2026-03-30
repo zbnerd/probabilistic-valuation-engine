@@ -164,12 +164,12 @@ executor.setRejectedExecutionHandler(new CallerRunsPolicy());  // 지연 > 유�
 - async-concurrency.md Section 22
 - Production Incident: P1 #168 (2025-11) - CallerRunsPolicy caused tomcat thread exhaustion
 - Fix Validated: AbortPolicy + 503 response prevented cascade failure
-- Evidence: [P1 Report](../04_Reports/P1_Nightmare_Issues_Resolution_Report.md) Section 3.4
+- Evidence: [P1 Report](../05_Reports/P1_Nightmare_Issues_Resolution_Report.md) Section 3.4
 
 ## 검증 명령어
 ```bash
 # CallerRunsPolicy 확인 (금지 - 조회용 Executor)
-grep -r "CallerRunsPolicy" src/main/java --include="*.java" | grep -v "writeExecutor"
+grep -r "CallerRunsPolicy" src/main/kotlin --include="*.java" | grep -v "writeExecutor"
 
 # Rejected metric 확인
 curl -s http://localhost:8080/actuator/metrics/executor.rejected | jq

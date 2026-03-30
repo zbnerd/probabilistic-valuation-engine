@@ -304,5 +304,5 @@ redis-cli --scan --pattern 'equipment:v2:*' | wc -l
 ## 출처
 
 - [expectation-cache-sequence.md](../../../04_Sequence_Diagrams/expectation-cache-sequence.md) - Phase 3: 기대값 캐시 조회
-- TotalExpectationCacheService: `src/main/java/maple/expectation/service/v2/cache/TotalExpectationCacheService.java`
+- TotalExpectationCacheService: `src/main/kotlin/maple/expectation/service/v2/cache/TotalExpectationCacheService.java`
 - infrastructure.md Section 17: TieredCache

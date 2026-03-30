@@ -480,17 +480,17 @@ public class GlobalExceptionHandler {
 
 ```bash
 # RuntimeException 사용 확인 (금지)
-grep -r "throw new RuntimeException" src/main/java --include="*.java"
+grep -r "throw new RuntimeException" src/main/kotlin --include="*.java"
 
 # Exception 사용 확인 (금지)
-grep -r "throw new Exception(" src/main/java --include="*.java"
+grep -r "throw new Exception(" src/main/kotlin --include="*.java"
 
 # ClientBaseException/ServerBaseException 사용 확인
-grep -r "extends ClientBaseException\|extends ServerBaseException" src/main/java --include="*.java"
+grep -r "extends ClientBaseException\|extends ServerBaseException" src/main/kotlin --include="*.java"
 
 # Dynamic Message 포함 확인
-grep -r "String.format" src/main/java --include="*.java" | grep Exception
+grep -r "String.format" src/main/kotlin --include="*.java" | grep Exception
 
 # Exception Chaining 확인 (cause 파라미터)
-grep -r "super(.*cause" src/main/java --include="*.java" | grep Exception
+grep -r "super(.*cause" src/main/kotlin --include="*.java" | grep Exception
 ```

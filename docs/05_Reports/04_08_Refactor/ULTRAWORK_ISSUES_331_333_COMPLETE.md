@@ -322,9 +322,9 @@ BUILD SUCCESSFUL in 41s
 - **ADR-016:** Nexon API Outbox Pattern (Auto Recovery)
 
 ### 시퀀스 다이어그램
-- `docs/03_Sequence_Diagrams/nexon-api-outbox-sequence.md`
-- `docs/03_Sequence_Diagrams/outbox-sequence.md`
-- `docs/03_Sequence_Diagrams/async-pipeline-sequence.md`
+- `docs/04_Sequence_Diagrams/nexon-api-outbox-sequence.md`
+- `docs/04_Sequence_Diagrams/outbox-sequence.md`
+- `docs/04_Sequence_Diagrams/async-pipeline-sequence.md`
 
 ### 기술 가이드
 - `docs/03_Technical_Guides/async-concurrency.md` (Section 21)

@@ -249,7 +249,7 @@ Successfully created three portfolio-enhancing documentation templates that demo
 
 ```
 docs/
-├── 01_Chaos_Engineering/
+├── 02_Chaos_Engineering/
 │   └── 06_Nightmare/
 │       ├── Scenarios/
 │       │   ├── N01-N18 (existing)
@@ -257,7 +257,7 @@ docs/
 │       └── Results/
 │           ├── N01-N18 (existing)
 │           └── N19-outbox-replay-result.md ⭐ NEW
-├── 04_Reports/
+├── 05_Reports/
 │   ├── Incidents/
 │   │   └── INCIDENT_REPORT_N21_AUTO_MITIGATION.md ⭐ NEW
 │   └── Cost_Performance/

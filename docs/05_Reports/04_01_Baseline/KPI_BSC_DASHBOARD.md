@@ -446,7 +446,7 @@ echo "scale=2; 965 / 15" | bc
 - [**V4 ADR Refactoring Report**](./Load_Tests/LOAD_TEST_REPORT_20260126_V4_ADR_REFACTORING.md) - **#266 ADR consistency refactoring (RPS 965)**
 - [Business Model](../00_Start_Here/BUSINESS_MODEL.md) - BMC document
 - [Architecture](../00_Start_Here/architecture.md) - System architecture
-- [Chaos Engineering](../01_Chaos_Engineering/06_Nightmare/) - Nightmare scenarios
+- [Chaos Engineering](../02_Chaos_Engineering/06_Nightmare/) - Nightmare scenarios
 
 ---
 

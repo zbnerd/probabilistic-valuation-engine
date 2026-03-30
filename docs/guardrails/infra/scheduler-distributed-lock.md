@@ -271,10 +271,10 @@ ALERT DistributedLockAcquisitionFailed
 
 ```bash
 # 1. @Scheduled 메서드 확인
-grep -A3 "@Scheduled" src/main/java/**/*Scheduler.java | grep -B1 "void " | grep -v "@Locked"
+grep -A3 "@Scheduled" src/main/kotlin/**/*Scheduler.java | grep -B1 "void " | grep -v "@Locked"
 
 # 2. 분산 락 확인
-grep -A5 "@Scheduled" src/main/java/**/*Scheduler.java | grep "@Locked"
+grep -A5 "@Scheduled" src/main/kotlin/**/*Scheduler.java | grep "@Locked"
 
 # 3. Scale-out 테스트
 docker-compose up -d --scale app=2

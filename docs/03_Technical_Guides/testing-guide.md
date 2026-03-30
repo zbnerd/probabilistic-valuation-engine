@@ -14,7 +14,7 @@
 This guide is based on **CI/CD production experience** from resolving 47 flaky test incidents:
 - Flaky test elimination: 47 incidents resolved to zero flaky rate (Evidence: [zero-script-qa-2026-01-30.md](../03-analysis/zero-script-qa-2026-01-30.md))
 - QA checklist: 30-question top-tier validation standard (Evidence: [QA_MONITORING_CHECKLIST.md](../03-analysis/QA_MONITORING_CHECKLIST.md))
-- Chaos test validation: N01-N18 scenarios with reproducible results (Evidence: [Chaos Engineering](../01_Chaos_Engineering/06_Nightmare/Results/))
+- Chaos test validation: N01-N18 scenarios with reproducible results (Evidence: [Chaos Engineering](../02_Chaos_Engineering/06_Nightmare/Results/))
 
 ## Terminology
 
@@ -31,7 +31,7 @@ This guide is based on **CI/CD production experience** from resolving 47 flaky t
 
 > **Production Issue:** P2 #207 - Flaky test caused 15% CI failure rate due to missing awaitTermination().
 > **Root Cause:** shutdown() returns immediately; assertion executed before tasks completed.
-> **Fix Validated:** awaitTermination() + CountDownLatch eliminated all race conditions (Evidence: [P2 Resolution](../04_Reports/P1-p2-performance-improvements-report.md)).
+> **Fix Validated:** awaitTermination() + CountDownLatch eliminated all race conditions (Evidence: [P2 Resolution](../05_Reports/P1-p2-performance-improvements-report.md)).
 > **Metrics Proof:** CI pass rate improved from 85% to 99.7% after implementation.
 
 동시성 테스트에서 Race Condition을 방지하기 위한 필수 패턴입니다.

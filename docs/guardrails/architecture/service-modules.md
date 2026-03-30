@@ -475,16 +475,16 @@ Controller → Facade → Service → Repository → Domain
 
 ```bash
 # V4 → V2 직접 호출 방지 검증
-grep -r "private.*v2Service" src/main/java/maple/expectation/service/v4/ || echo "✅ No direct V2 calls"
+grep -r "private.*v2Service" src/main/kotlin/maple/expectation/service/v4/ || echo "✅ No direct V2 calls"
 
 # 동기 드레인 방지 검증
-grep -r "drain()" src/main/java/maple/expectation/service/v4/ | grep -v "@Scheduled" || echo "✅ No synchronous drain"
+grep -r "drain()" src/main/kotlin/maple/expectation/service/v4/ | grep -v "@Scheduled" || echo "✅ No synchronous drain"
 
 # Decorator 패턴 확인
-find src/main/java -name "*Decorator*.java" | head -10
+find src/main/kotlin -name "*Decorator*.java" | head -10
 
 # Strategy 패턴 확인
-find src/main/java -name "*Strategy.java" | head -10
+find src/main/kotlin -name "*Strategy.java" | head -10
 
 # Outbox 테이블 확인
 mysql -u root -p -e "SHOW TABLES LIKE '%outbox%';"

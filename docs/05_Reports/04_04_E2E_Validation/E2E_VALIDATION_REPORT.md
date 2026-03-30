@@ -422,7 +422,7 @@ After:  127 threads (stable)
 | **MTTD** | Mean Time To Detect (장애 감지까지의 평균 시간) | Section 2 |
 | **MTTR** | Mean Time To Recover (복구까지의 평균 시간) | Section 2 |
 | **Circuit Breaker** | 장애 전파를 방지하기 위한 Resilience 패턴 | [ADR-005](../../01_ADR/ADR-005-resilience4j-scenario-abc.md) |
-| **Cache Stampede** | 캐시 만료 시 다수 요청이 동시에 DB를 조회하는 현상 | [N01](../../01_Chaos_Engineering/06_Nightmare/Scenarios/) |
+| **Cache Stampede** | 캐시 만료 시 다수 요청이 동시에 DB를 조회하는 현상 | [N01](../../02_Chaos_Engineering/06_Nightmare/Scenarios/) |
 | **HikariCP** | HikariCP Connection Pool (JDBC DataSource 구현체) | infrastructure.md |
 | **Metadata Lock (MDL)** | MySQL DDL 시 테이블 잠금 | Section 5.1 |
 | **Rate Limiter** | 과도한 요청을 차단하는 메커니즘 | Bucket4j |

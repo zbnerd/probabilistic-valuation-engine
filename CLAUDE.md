@@ -228,12 +228,19 @@ application.yml          # 공통 설정 (592줄)
 
 | 주제 | 위치 |
 |------|------|
-| 인프라 (Redis, Cache, Security) | [docs/03_Technical_Guides/infrastructure.md](docs/03_Technical_Guides/infrastructure.md) |
+| 인프라 (Cache, Security) | [docs/03_Technical_Guides/infrastructure.md](docs/03_Technical_Guides/infrastructure.md) |
 | 비동기 & 동시성 | [docs/03_Technical_Guides/async-concurrency.md](docs/03_Technical_Guides/async-concurrency.md) |
 | 테스트 가이드 | [docs/03_Technical_Guides/testing-guide.md](docs/03_Technical_Guides/testing-guide.md) |
 | 멀티 에이전트 프로토콜 | [docs/00_Start_Here/multi-agent-protocol.md](docs/00_Start_Here/multi-agent-protocol.md) |
 | 카오스 엔지니어링 | [docs/02_Chaos_Engineering/](docs/02_Chaos_Engineering/) |
 | 서비스 모듈 | [docs/03_Technical_Guides/service-modules.md](docs/03_Technical_Guides/service-modules.md) |
+| 퍼포먼스 저니 | [docs/06_Performance_Journey/](docs/06_Performance_Journey/) |
+| 심화 교재 | [docs/07_Deep_Dive_Textbook/](docs/07_Deep_Dive_Textbook/) |
 | Scale-out 분석 | [docs/05_Reports/](docs/05_Reports/) |
 | ADR | [docs/01_ADR/](docs/01_ADR/) |
+| 계획 | [docs/09_Plans/](docs/09_Plans/) |
+| 마이그레이션 | [docs/10_Migration/](docs/10_Migration/) |
+| 관측성 | [docs/11_Observability/](docs/11_Observability/) |
+| 이벤트 스키마 | [docs/12_Events/](docs/12_Events/) |
+| 가드레일 | [docs/16_Guardrails/](docs/16_Guardrails/) |
 | 운영 가이드 | [docs/21_Operations/](docs/21_Operations/) |

@@ -115,15 +115,10 @@ public class EquipmentApplicationService {
     Optional<CharacterEquipment> existing =
         Optional.ofNullable(equipmentRepository.findById(characterId));
 
-    if (existing.isPresent()) {
-      // Update existing equipment
-      CharacterEquipment updated = existing.get().withUpdatedData(equipmentData);
-      return equipmentRepository.save(updated);
-    } else {
-      // Create new equipment
-      CharacterEquipment newEquipment = CharacterEquipment.create(characterId, equipmentData);
-      return equipmentRepository.save(newEquipment);
-    }
+    // Update existing equipment or create new
+    return existing
+        .map(e -> equipmentRepository.save(e.withUpdatedData(equipmentData)))
+        .orElseGet(() -> equipmentRepository.save(CharacterEquipment.create(characterId, equipmentData)));
   }
 
   /**

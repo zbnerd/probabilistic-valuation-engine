@@ -3,6 +3,7 @@ package maple.expectation.application.service.character;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.domain.model.character.CharacterId;
 import maple.expectation.core.domain.model.character.GameCharacter;
 import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.error.exception.CharacterNotFoundException;
@@ -72,11 +73,9 @@ public class OcidResolver {
             TaskContext.of("Ocid", "DbLookup", cleanIgn));
 
     return Optional.ofNullable(dbResult)
-        .map(
-            gc -> {
-              String ocid = gc.getCharacterId() != null ? gc.getCharacterId().value() : null;
-              return ocid != null ? cacheAndReturn(cleanIgn, ocid) : null;
-            })
+        .map(gc -> gc.getCharacterId())
+        .map(CharacterId::value)
+        .map(ocid -> cacheAndReturn(cleanIgn, ocid))
         .orElseGet(() -> createAndGetOcid(cleanIgn));
   }
 

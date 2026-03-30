@@ -79,11 +79,21 @@ class AdmissionControlIntegrationTest {
         Mockito.`when`(mockCache.get(ArgumentMatchers.any())).thenReturn(null) // Always cache miss for testing
 
         // Create cache coordinator with admission control
+        // Note: New constructor signature for Issue #644 (God Object Decomposition)
+        val objectMapper = com.fasterxml.jackson.databind.ObjectMapper()
+        val executorPort = maple.expectation.application.usecase.ApplicationExecutionPort(executor)
+        val cacheManagerPort = maple.expectation.infrastructure.cache.CacheManagerPortAdapter(tieredCacheManager)
+        val compressionService = maple.expectation.application.service.expectation.cache.ExpectationCacheCompressionService(objectMapper)
+        val valueConverter = maple.expectation.application.service.expectation.cache.CacheValueConverter()
+        val responseBuilder = maple.expectation.application.service.expectation.cache.CachedResponseBuilder()
+
         cacheCoordinator = ExpectationCacheCoordinator(
-            executor,
-            com.fasterxml.jackson.databind.ObjectMapper(),
-            tieredCacheManager,
-            admissionControl // Inject admission control
+            executorPort,
+            cacheManagerPort,
+            admissionControl, // Inject admission control
+            compressionService,
+            valueConverter,
+            responseBuilder
         )
     }
 

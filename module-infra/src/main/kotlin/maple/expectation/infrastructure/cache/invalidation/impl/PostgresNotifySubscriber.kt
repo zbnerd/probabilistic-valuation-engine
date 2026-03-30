@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.sql.DataSource
@@ -75,6 +77,9 @@ class PostgresNotifySubscriber(
     private var pgConnection: PGConnection? = null
 
     private val running = AtomicBoolean(false)
+    private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { r ->
+        Thread(r, "postgres-notify-scheduler").apply { isDaemon = true }
+    }
 
     /** 이벤트 구독 시작 (애플리케이션 시작 시 자동 호출) */
     @PostConstruct
@@ -128,36 +133,35 @@ class PostgresNotifySubscriber(
 
     /** 알림 수신을 위한 백그라운드 스레드 시작 */
     private fun startNotificationListener() {
-        val thread = Thread(this::runNotificationListener, "postgres-notify-listener").apply {
-            isDaemon = true
-        }
-        thread.start()
+        // Use ScheduledExecutorService instead of Thread + Thread.sleep (#642)
+        scheduler.scheduleAtFixedRate(
+            {
+                try {
+                    pollNotifications()
+                } catch (e: Exception) {
+                    log.warn("[PostgresNotify] Error receiving notifications, reconnecting...", e)
+                    reconnectWithDelay()
+                }
+            },
+            0,
+            POLL_INTERVAL_MS,
+            TimeUnit.MILLISECONDS
+        )
     }
 
-    /** 알림 수신 루프 */
-    private fun runNotificationListener() {
-        while (running.get()) {
-            try {
-                val pgConn = pgConnection
-                if (pgConn != null) {
-                    // Poll for notifications (non-blocking)
-                    val notifications = pgConn.notifications
+    /** 알림 폴링 (called by ScheduledExecutorService) */
+    private fun pollNotifications() {
+        if (!running.get()) return
 
-                    if (notifications != null) {
-                        for (notification in notifications) {
-                            handleNotification(notification)
-                        }
-                    }
+        val pgConn = pgConnection
+        if (pgConn != null) {
+            // Poll for notifications (non-blocking)
+            val notifications = pgConn.notifications
+
+            if (notifications != null) {
+                for (notification in notifications) {
+                    handleNotification(notification)
                 }
-
-                // Short sleep to prevent busy waiting
-                Thread.sleep(POLL_INTERVAL_MS)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                break
-            } catch (e: Exception) {
-                log.warn("[PostgresNotify] Error receiving notifications, reconnecting...", e)
-                reconnectWithDelay()
             }
         }
     }
@@ -259,13 +263,16 @@ class PostgresNotifySubscriber(
     private fun reconnectWithDelay() {
         val context = TaskContext.of("CacheInvalidation", "Reconnect", instanceId)
 
-        executor.executeVoid({
-            closeConnectionInternal()
-            TimeUnit.MILLISECONDS.sleep(RECONNECT_DELAY_MS)
+        closeConnectionInternal()
+
+        // Use scheduler instead of Thread.sleep (#642)
+        scheduler.schedule({
             if (running.get()) {
-                establishConnection()
+                executor.executeVoid({
+                    establishConnection()
+                }, context)
             }
-        }, context)
+        }, RECONNECT_DELAY_MS, TimeUnit.MILLISECONDS)
     }
 
     /** 구독 해제 (애플리케이션 종료 시) */
@@ -275,6 +282,7 @@ class PostgresNotifySubscriber(
 
         executor.executeVoid({
             running.set(false)
+            scheduler.shutdown()
             closeConnectionInternal()
 
             log.info("[PostgresNotify] Unsubscribed from PostgreSQL NOTIFY: instanceId={}", instanceId)

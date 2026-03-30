@@ -1,6 +1,6 @@
 package maple.expectation.web.config
 
-import maple.expectation.infrastructure.filter.MDCFilter
+import maple.expectation.web.filter.MDCFilter
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration

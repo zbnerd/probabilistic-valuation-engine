@@ -1,4 +1,4 @@
-# ADR-012: Like 패키지 Core/Infra 분리
+# ADR-332: Like 패키지 Core/Infra 분리
 
 ## 상태
 Proposed (2026-03-02)

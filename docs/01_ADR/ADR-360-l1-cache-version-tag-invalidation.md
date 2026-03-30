@@ -1,4 +1,4 @@
-# ADR-040: L1 Cache Version Tag for Stale Detection
+# ADR-360: L1 Cache Version Tag for Stale Detection
 
 ## 상태 (Status)
 

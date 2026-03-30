@@ -1,4 +1,4 @@
-# ADR-004: Module-Core 도메인 이관
+# ADR-352: Module-Core 도메인 이관
 
 ## 상태
 Partially Implemented (2026-02-28)

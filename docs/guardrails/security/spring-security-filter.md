@@ -145,7 +145,7 @@ http.headers(headers -> headers
 
 **Root Cause:** `OncePerRequestFilter`를 상속한 필터에 `@Component`를 붙이면 CGLIB 프록시 생성 시 부모 클래스의 `logger` 필드가 초기화되지 않아 NPE 발생
 
-**Evidence:** [P0 Report](../../../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.2
+**Evidence:** [P0 Report](../../../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.2
 
 ```java
 // 문제 발생 경로:

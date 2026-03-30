@@ -1,4 +1,4 @@
-# ADR-004 Calculator Domain Migration Summary
+# ADR-349: Calculator Domain Migration Summary
 
 ## Date
 2026-02-28

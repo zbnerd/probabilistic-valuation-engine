@@ -1,4 +1,4 @@
-# ADR-042: EquipmentPersistenceTracker PostgreSQL Migration
+# ADR-362: EquipmentPersistenceTracker PostgreSQL Migration
 
 ## 상태 (Status)
 

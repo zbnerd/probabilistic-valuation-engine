@@ -1,4 +1,4 @@
-# ADR-026: Observability Tracing Rules
+# ADR-359: Observability Tracing Rules
 
 ## 상태 (Status)
 

@@ -1,4 +1,4 @@
-# ADR-031: Like Domain — Fingerprint Identity + DB Trigger 원자성
+# ADR-346: Like Domain — Fingerprint Identity + DB Trigger 원자성
 
 ## 메타데이터
 

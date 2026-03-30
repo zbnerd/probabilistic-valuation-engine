@@ -12,8 +12,8 @@
 ### 기술 스택
 - **Java 21**: Virtual Threads, Records, Pattern Matching, Switch Expressions
 - **Spring Boot 3.5.4**: 최신 안정 버전
-- **데이터 저장소**: MySQL 8.0 (GZIP 압축), Redis (Redisson 3.27.0)
-- **캐싱**: 3계층 캐시 (Caffeine L1 + Redis L2 + MySQL)
+- **데이터 저장소**: MySQL 8.0 (GZIP 압축), PostgreSQL (UNLOGGED 테이블)
+- **캐싱**: 3계층 캐시 (Caffeine L1 + PostgreSQL L2 + MySQL)
 - **회복탄력성**: Resilience4j 2.2.0 (서킷 브레이커)
 - **테스트**: Testcontainers + Docker
 

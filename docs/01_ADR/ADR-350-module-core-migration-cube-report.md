@@ -1,4 +1,4 @@
-# ADR-004 Cube 도메인 이관 분석 보고서
+# ADR-350: Cube 도메인 이관 분석 보고서
 
 ## 상태
 Analysis Complete - Migration Deferred (2026-02-28)

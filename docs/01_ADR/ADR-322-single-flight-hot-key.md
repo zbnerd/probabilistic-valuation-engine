@@ -1,4 +1,4 @@
-# ADR-005: Single Flight + Hot Key Strategy
+# ADR-322: Single Flight + Hot Key Strategy
 
 ## 메타데이터
 

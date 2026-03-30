@@ -1,4 +1,4 @@
-# ADR-004: MongoDB CQRS Read Model → PostgreSQL JSONB 마이그레이션
+# ADR-325: MongoDB CQRS Read Model → PostgreSQL JSONB 마이그레이션
 
 ## 메타데이터
 

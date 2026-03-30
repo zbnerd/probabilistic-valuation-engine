@@ -133,7 +133,7 @@ probabilistic-valuation-engine 시스템의 **회복 탄력성(Resilience)**을 
 
 ## P0 Issues Resolution Summary (2026-01-20)
 
-> **상세 문서**: [P0_Issues_Resolution_Report_2026-01-20.md](../P0_Issues_Resolution_Report_2026-01-20.md)
+> **상세 문서**: [P0_Issues_Resolution_Report_2026-01-20.md](../05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md)
 
 ### 해결된 이슈
 

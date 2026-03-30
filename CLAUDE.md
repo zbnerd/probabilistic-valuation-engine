@@ -83,11 +83,12 @@ echo $DB_SERVER_IP
 | 패턴 | 메서드 | 용도 |
 |------|--------|------|
 | 1 | `execute(task, context)` | 일반 실행. 예외 발생 시 로그 기록 후 상위 전파 |
-| 2 | `executeVoid(task, context)` | 반환값 없는 작업 |
+| 2 | `executeVoid(task, context)` | 반환값 없는 작업 (Kotlin), `executeVoidJava` (Java-friendly) |
 | 3 | `executeOrDefault(task, default, context)` | 예외 발생 시 기본값 반환 |
-| 4 | `executeWithRecovery(task, recovery, context)` | 예외 발생 시 복구 로직 실행 |
-| 5 | `executeWithFinally(task, finalizer, context)` | 자원 해제 등 finally 필요 시 |
-| 6 | `executeWithTranslation(task, translator, context)` | 기술적 예외를 도메인 예외로 변환 |
+| 4 | `executeOrCatch(task, recovery, context)` | 예외 발생 시 복구 로직 실행 (번역된 예외 전달) |
+| 5 | `executeWithFallback(task, fallback, context)` | 예외 발생 시 폴백 실행 (원본 예외 전달) |
+| 6 | `executeWithFinally(task, finalizer, context)` | 자원 해제 등 finally 필요 시 |
+| 7 | `executeWithTranslation(task, translator, context)` | 기술적 예외를 도메인 예외로 변환 |
 
 **허용 예외:** LogicExecutor 구현체 내부, AOP 순환참조 방지
 
@@ -235,3 +236,4 @@ application.yml          # 공통 설정 (592줄)
 | 서비스 모듈 | [docs/03_Technical_Guides/service-modules.md](docs/03_Technical_Guides/service-modules.md) |
 | Scale-out 분석 | [docs/05_Reports/](docs/05_Reports/) |
 | ADR | [docs/01_ADR/](docs/01_ADR/) |
+| 운영 가이드 | [docs/06_Guides/](docs/06_Guides/) |

@@ -1,4 +1,4 @@
-# ADR-038: V5 CQRS Architecture - Implementation Report
+# ADR-375: V5 CQRS Architecture - Implementation Report
 
 **Status**: Implemented
 **Date**: 2026-02-15

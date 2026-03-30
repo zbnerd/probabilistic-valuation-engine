@@ -1,4 +1,4 @@
-# ADR-006: PostgreSQL LISTEN/NOTIFY 캐시 무효화
+# ADR-323: PostgreSQL LISTEN/NOTIFY 캐시 무효화
 
 ## 메타데이터
 

@@ -1,4 +1,4 @@
-# ADR-009: Cache Service를 module-infra로 이관 (Port 추출 포함)
+ # ADR-327: Cache Service를 module-infra로 이관 (Port 추출 포함)
 
 ## 상태
 Proposed (2026-03-01)

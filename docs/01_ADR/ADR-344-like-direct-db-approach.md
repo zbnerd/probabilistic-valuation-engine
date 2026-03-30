@@ -1,4 +1,4 @@
-# ADR-029: Like Toggle Direct DB Approach
+# ADR-344: Like Toggle Direct DB Approach
 
 ## 메타데이터
 

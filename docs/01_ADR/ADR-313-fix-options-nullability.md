@@ -1,4 +1,4 @@
-# ADR-001: CubeCalculationInput options Nullability 수정
+# ADR-313: CubeCalculationInput options Nullability 수정
 
 ## 상태
 Accepted (2026-02-27)

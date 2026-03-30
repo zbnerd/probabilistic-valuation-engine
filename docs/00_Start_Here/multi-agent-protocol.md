@@ -11,7 +11,7 @@
 
 This protocol is based on **actual development practices** from the project:
 - Pentagonal Pipeline workflow used in production PR reviews (Evidence: [PR Template](../98_Templates/PR_TEMPLATE.md))
-- Agent roles derived from actual SOLID violations and performance issues (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
+- Agent roles derived from actual SOLID violations and performance issues (Evidence: [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md))
 - Trade-off decisions documented in actual ADRs (Evidence: [ADR Directory](../01_ADR/))
 
 이 문서는 probabilistic-valuation-engine 프로젝트의 5-Agent Council 프로토콜을 정의합니다.

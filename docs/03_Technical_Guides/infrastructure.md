@@ -12,7 +12,7 @@
 ## Documentation Integrity Statement
 
 This guide is based on **production experience** from operating probabilistic-valuation-engine under 1,000+ concurrent users on AWS t3.small infrastructure. All patterns have been validated through:
-- Production incidents (Evidence: [P0_Issues_Resolution_Report_2026-01-20.md](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md))
+- Production incidents (Evidence: [P0_Issues_Resolution_Report_2026-01-20.md](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md))
 - Chaos engineering tests N01-N18 (Evidence: [Chaos Engineering](../02_Chaos_Engineering/))
 - ADR decision records (Evidence: [ADR-006](../01_ADR/ADR-006-redis-lock (see docs/_archive/redis-deprecated/).md), [ADR-010](../01_ADR/ADR-010-outbox-pattern.md))
 
@@ -424,7 +424,7 @@ boolean acquired = executor.executeOrDefault(
 
 > **Production Incident:** P0 #238 (2025-12) - CGLIB proxy NPE in Filter caused authentication bypass.
 > **Root Cause:** `@Component` on `OncePerRequestFilter` creates CGLIB proxy with uninitialized logger field.
-> **Fix Validated:** Manual Bean registration eliminates NPE (Evidence: [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.2).
+> **Fix Validated:** Manual Bean registration eliminates NPE (Evidence: [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md) Section 4.2).
 
 Spring Security 6.x에서 커스텀 Filter 사용 시 반드시 준수해야 할 규칙입니다.
 

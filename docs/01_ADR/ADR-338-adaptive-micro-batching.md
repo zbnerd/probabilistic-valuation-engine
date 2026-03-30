@@ -1,4 +1,4 @@
-# ADR-021: 적응형 마이크로 배칭(Adaptive Micro-Batching) 조회 로직
+# ADR-338: 적응형 마이크로 배칭(Adaptive Micro-Batching) 조회 로직
 
 ## 메타데이터
 

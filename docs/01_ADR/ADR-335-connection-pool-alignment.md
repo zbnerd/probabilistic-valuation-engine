@@ -1,4 +1,4 @@
-# ADR-014: Connection Pool Alignment with Thread Pool
+# ADR-335: Connection Pool Alignment with Thread Pool
 
 **Status**: Accepted
 **Date**: 2025-03-08

@@ -1,4 +1,4 @@
-# ADR-011: Equipment Cache 및 Worker를 module-infra로 이관
+# ADR-330: Equipment Cache 및 Worker를 module-infra로 이관
 
 ## 상태
 Proposed (2026-03-01)

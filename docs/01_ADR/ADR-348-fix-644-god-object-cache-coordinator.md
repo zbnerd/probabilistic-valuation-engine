@@ -1,4 +1,4 @@
-# ADR: Fix Issue #644 - God Object: ExpectationCacheCoordinator Decomposition
+# ADR-348: Fix Issue #644 - God Object: ExpectationCacheCoordinator Decomposition
 
 ## Date
 2025-03-30

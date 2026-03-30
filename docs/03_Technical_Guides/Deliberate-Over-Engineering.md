@@ -492,11 +492,11 @@ grep -r "try {" src/main/java/maple/expectation/service --include="*.java" | wc 
 - **[P2]** N01 Thundering Herd: `docs/02_Chaos_Engineering/06_Nightmare/Results/N01-thundering-herd-result.md`
 - **[P3]** N19 Implementation: `docs/02_Chaos_Engineering/06_Nightmare/Results/N19-implementation-summary.md`
 - **[P4]** Chaos Results: `docs/02_Chaos_Engineering/06_Nightmare/Results/`
-- **[P5]** P0 Report: `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md`
+- **[P5]** P0 Report: `../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md`
 - **[P6]** P1-7-8-9 Report: `docs/05_Reports/P1-7-8-9-scheduler-distributed-lock.md`
 
 ### Test Evidence
-- **[T1]** Zero Script QA: `do../05_Reports/zero-script-qa-2026-01-30.md`
+- **[T1]** Zero Script QA: `../05_Reports/zero-script-qa-2026-01-30.md`
 - **[T2]** Testing Guide: `docs/03_Technical_Guides/testing-guide.md`
 - **[T3]** Chaos Engineering: `docs/02_Chaos_Engineering/06_Nightmare/`
 
@@ -594,7 +594,7 @@ redis-cli ping || echo "Redis 연결 실패"
 
 ## Related Evidence
 
-- [P0 Report](../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md)
+- [P0 Report](../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md)
 - [P1-7-8-9 Report](../05_Reports/P1-7-8-9-scheduler-distributed-lock.md)
 - [ADR-005](../01_ADR/ADR-005-resilience4j-scenario-abc.md)
 - [ADR-008](../01_ADR/ADR-008-durability-graceful-shutdown.md)

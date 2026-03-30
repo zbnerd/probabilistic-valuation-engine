@@ -1,4 +1,4 @@
-# ADR-004 Phase 1: Starforce Domain Migration Analysis
+# ADR-367 Phase 1: Starforce Domain Migration Analysis
 
 ## Date: 2026-02-28
 ## Status: Analysis Complete

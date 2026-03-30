@@ -1,4 +1,4 @@
-# ADR-003: Hexagonal Architecture (Ports & Adapters) 채택
+# ADR-317: Hexagonal Architecture (Ports # ADR-003: Hexagonal Architecture (Ports & Adapters) 채택 Adapters) 채택
 
 ## 상태
 Accepted (2026-02-28)

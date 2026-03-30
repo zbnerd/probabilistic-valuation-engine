@@ -1,4 +1,4 @@
-# ADR: Fix Issue #639 - DIP Violation: module-web → module-infra Direct Dependency
+# ADR-347: Fix Issue #639 - DIP Violation: module-web → module-infra Direct Dependency
 
 ## Date
 2025-03-30

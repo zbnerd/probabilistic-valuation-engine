@@ -1,4 +1,4 @@
-# ADR-023: MongoDB Dependency Removal
+# ADR-340: MongoDB Dependency Removal
 
 ## Status
 

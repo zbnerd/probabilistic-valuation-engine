@@ -34,8 +34,8 @@
   - 검증 명령어 (클래스, 설정값, 테이블, 복잡도)
   - Fail If Wrong 조건 8개 (F1-F8)
 
-### ✅ 3. SCENARIO_PLANNING.md
-- **경로**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/SCENARIO_PLANNING.md`
+### ✅ 3. scenario-planning.md
+- **경로**: `/home/maple/probabilistic-valuation-engine/docs/03_Technical_Guides/scenario-planning.md`
 - **주제**: 트래픽/외부 API 안정성 4분면 시나리오 매트릭스
 - **추가 섹션**:
   - 30문항 자가 평가표 (모두 통과 ✅)
@@ -92,7 +92,7 @@
 - [E4] FlameDpCalculator ✅
 - [E8] FlameScoreResolver ✅
 
-**SCENARIO_PLANNING.md**:
+**scenario-planning.md**:
 - [E1] TieredCache ✅
 - [E2] EquipmentExpectationServiceV4 ✅
 - [E4] ResilientLockStrategy ✅
@@ -132,7 +132,7 @@
 
 - **Deliberate-Over-Engineering**: 8개 용어 (TieredCache, ResilientLockStrategy, Cache Stampede 등)
 - **FLAME_LOGIC**: 10개 용어 (줄 수, 단계, 환산치, 캡핑 DP, PMF 등)
-- **SCENARIO_PLANNING**: 8개 용어 (RPS, p95 Latency, Circuit Breaker State 등)
+- **scenario-planning**: 8개 용어 (RPS, p95 Latency, Circuit Breaker State 등)
 - **logic_executor_policy_pipeline**: 기존 Glossary 유지 (Policy, Pipeline, entered, Primary Exception 등)
 
 ### ❌ 부정적 증거 (Negative Evidence)
@@ -169,7 +169,7 @@ wrk -t4 -c100 -d30s -s load-test/wrk-v4-expectance.lua http://localhost:8080/...
 
 - **Deliberate-Over-Engineering**: 7개 (F1-F7)
 - **FLAME_LOGIC**: 8개 (F1-F8)
-- **SCENARIO_PLANNING**: 8개 (F1-F8)
+- **scenario-planning**: 8개 (F1-F8)
 - **logic_executor_policy_pipeline**: 10개 (F1-F10)
 
 **예시**:
@@ -289,7 +289,7 @@ grep "timeout-per-shutdown-phase" src/main/resources/application.yml
 - **재현성**: 4개 재현 가이드, 4개 검증 명령어 ✅
 - **품질 보장**: 8개 Fail If Wrong 조건 ✅
 
-### SCENARIO_PLANNING.md
+### scenario-planning.md
 - **무결성**: 30/30 통과 ✅
 - **증거 기반**: 12개 코드 증거, 4개 설정 증거 ✅
 - **재현성**: 4개 시나리오 재현 가이드, 5개 검증 명령어 ✅

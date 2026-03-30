@@ -343,7 +343,7 @@ public class RedisFailoverMetrics {
 - `src/test/java/maple/expectation/chaos/nightmare/N02_Redis_Network_Partition_Test.java`
 
 ### 보고서
-- `docs/05_Reports/P0_Issues_Resolution_Report_2026-01-20.md` (P0 #77 해결)
+- `docs/05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md` (P0 #77 해결)
 
 ## 검증 명령어
 

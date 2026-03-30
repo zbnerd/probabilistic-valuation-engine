@@ -1,4 +1,4 @@
-# ADR-0345: Stateless Alert System Design
+# ADR-345: Stateless Alert System Design
 
 ## 상태 (Status)
 Proposed -> Accepted

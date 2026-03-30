@@ -1,4 +1,4 @@
-# ADR-085: JPA → JDBC 배치 마이그레이션 - 33배 성능 개선
+# ADR-380: JPA → JDBC 배치 마이그레이션 - 33배 성능 개선
 
 ## 상태
 Accepted

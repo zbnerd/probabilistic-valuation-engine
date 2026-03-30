@@ -1,4 +1,4 @@
-# ADR-004: Collect/Compute/Serve 파이프라인 분리 전략
+# ADR-320: Collect/Compute/Serve 파이프라인 분리 전략
 
 ## 메타데이터
 

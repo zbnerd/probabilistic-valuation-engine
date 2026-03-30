@@ -1,4 +1,4 @@
-# ADR-008: Discord Alert Service를 module-infra로 이관
+# ADR-326: Discord Alert Service를 module-infra로 이관
 
 ## 상태
 Proposed (2026-03-01)

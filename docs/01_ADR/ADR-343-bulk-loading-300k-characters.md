@@ -1,4 +1,4 @@
-# ADR-028: 300k 캐릭터 벌크 로딩 (Bulk Loading 300k Characters)
+# ADR-343: 300k 캐릭터 벌크 로딩 (Bulk Loading 300k Characters)
 
 ## 메타데이터
 

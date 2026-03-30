@@ -1,4 +1,4 @@
-# Facade Migration Analysis Report (ADR-004 Phase 1)
+# ADR-381: Facade Migration Analysis Report (ADR-004 Phase 1)
 
 **Date**: 2026-02-28
 **Status**: Analysis Complete - DEFERRED to Phase 2

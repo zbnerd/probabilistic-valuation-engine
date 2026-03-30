@@ -1,4 +1,4 @@
-# ADR-005: Monitoring-Infra 모듈 이관
+# ADR-354: Monitoring-Infra 모듈 이관
 
 ## 상태
 Proposed (2026-03-01)

@@ -1,4 +1,4 @@
-# ADR-008: ExceptionClassifier 도입 및 람다 경계 명확화
+# ADR-357: ExceptionClassifier 도입 및 람다 경계 명확화
 
 ## 상태
 

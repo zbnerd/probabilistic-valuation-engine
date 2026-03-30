@@ -1,4 +1,4 @@
-# ADR-030: Compute-Bound Fan-Out 최적화 + Admission Control 활성화
+# ADR-383: Compute-Bound Fan-Out 최적화 + Admission Control 활성화
 
 ## 메타데이터
 

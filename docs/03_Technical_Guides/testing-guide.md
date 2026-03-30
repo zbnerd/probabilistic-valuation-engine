@@ -448,7 +448,7 @@ junit.jupiter.execution.parallel.config.dynamic.factor=0.5
 - **Test Base Classes:** `src/test/java/maple/expectation/config/` (Evidence: [CODE-TEST-BASE-001])
 - **Example Tests:** `src/test/java/maple/expectation/service/v2/` (Evidence: [CODE-TEST-EXAMPLE-001])
 - **JUnit Config:** `src/test/resources/junit-platform.properties` (Evidence: [CONF-JUNIT-001])
-- **Flaky Test Analysis:** `do../05_Reports/zero-script-qa-2026-01-30.md` (Evidence: [ANALYSIS-FLAKY-001])
+- **Flaky Test Analysis:** `../05_Reports/zero-script-qa-2026-01-30.md` (Evidence: [ANALYSIS-FLAKY-001])
 
 ## Technical Validity Check
 
@@ -478,7 +478,7 @@ grep -r "@Testcontainers" src/test/java --include="*.java"
 
 ### Related Evidence
 - QA Checklist: `do./QA_MONITORING_CHECKLIST.md`
-- Zero Script QA: `do../05_Reports/zero-script-qa-2026-01-30.md`
+- Zero Script QA: `../05_Reports/zero-script-qa-2026-01-30.md`
 - Chaos Test Results: `docs/02_Chaos_Engineering/06_Nightmare/Results/`
 
 ---

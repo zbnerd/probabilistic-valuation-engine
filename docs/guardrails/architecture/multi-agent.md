@@ -406,5 +406,5 @@ public class ExpectationCalculatorFactory {
 - [multi-agent-protocol.md](../../00_Start_Here/multi-agent-protocol.md) - 전체 프로토콜
 - [PR_TEMPLATE.md](../../98_Templates/PR_TEMPLATE.md) - PR 템플릿
 - [ISSUE_TEMPLATE.md](../../98_Templates/ISSUE_TEMPLATE.md) - 이슈 템플릿
-- [P0 Report](../../05_Reports/P0_Issues_Resolution_Report_2026-01-20.md) - 에이전트 역할 검증
+- [P0 Report](../../05_Reports/05_05_Incidents/P0_Issues_Resolution_Report_2026-01-20.md) - 에이전트 역할 검증
 - [ADR Directory](../../01_ADR/) - Trade-off 결정 사례

@@ -20,7 +20,7 @@ This Business Model Canvas is based on **actual production metrics** from 2025-2
 | **P50 Latency** | 50백분위 응답 시간 |
 | **T3.small** | AWS 2 vCPU, 2GB RAM 인스턴스 |
 | **Circuit Breaker** | 장애 확산 방지 패턴 |
-| **TieredCache** | 2계층 캐시 (L1: Caffeine, L2: Redis) |
+| **TieredCache** | 2계층 캐시 (L1: Caffeine, L2: PostgreSQL UNLOGGED) |
 
 ---
 
@@ -141,7 +141,7 @@ External API:
 |----------|---------------|------|
 | **Compute** | AWS t3.small | ~$15/month |
 | **Database** | MySQL 8.0 | (included) |
-| **Cache** | Redis (Redisson) | (included) |
+| **Cache** | PostgreSQL (UNLOGGED) | (included) |
 | **Monitoring** | Prometheus + Grafana | (included) |
 
 ---
@@ -193,7 +193,7 @@ External API:
 
 2. TieredCache (L1/L2)
    - L1: Caffeine (<5ms)
-   - L2: Redis (<20ms)
+   - L2: PostgreSQL (10min TTL)
    - DB 쿼리 비율 ≤10%
 
 3. LogicExecutor Pipeline

@@ -1,4 +1,4 @@
-# ADR-036: monitoring/config 패키지 → module-infra 이관
+# ADR-372: monitoring/config 패키지 → module-infra 이관
 
 ## 상태 (Status)
 **Proposed** - 2026-02-26

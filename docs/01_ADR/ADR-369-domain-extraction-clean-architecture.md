@@ -1,4 +1,4 @@
-# ADR-017: Domain Extraction - Clean Architecture Migration
+# ADR-369: Domain Extraction - Clean Architecture Migration
 
 ## Status
 Proposed (2026-02-07)

@@ -25,6 +25,9 @@ import org.springframework.context.annotation.Configuration
 @ConfigurationProperties(prefix = "pgmq")
 class PgmqConfig {
 
+    /** TX 활성 검증 여부 (테스트 환경에서 false 설정 가능) */
+    var transactionCheckEnabled: Boolean = true
+
     /** 기본 Batch Size */
     var defaultBatchSize: Int = 10
 

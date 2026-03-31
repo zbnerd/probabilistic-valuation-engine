@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.TestPropertySource
+import org.springframework.transaction.annotation.Transactional
 
 /**
  * PGMQ Client 통합 테스트 (ADR-002)
@@ -57,6 +58,7 @@ import org.springframework.test.context.TestPropertySource
         "pgmq.circuitBreaker.failureRateThreshold=50",
         "pgmq.circuitBreaker.waitDurationInOpenStateMs=1000", // 1초
         "pgmq.circuitBreaker.permittedNumberOfCallsInHalfOpenState=2",
+        "pgmq.transaction-check.enabled=false",
         // Cache configuration for tests (use Caffeine-only mode)
         "cache.l2.enabled=false",
     ],

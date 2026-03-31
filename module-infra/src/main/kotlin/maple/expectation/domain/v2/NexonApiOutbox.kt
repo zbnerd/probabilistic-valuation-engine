@@ -8,6 +8,7 @@ import java.time.LocalDateTime
 import java.util.HexFormat
 import kotlin.math.min
 import kotlin.math.pow
+import maple.expectation.core.domain.nexon.NexonApiEventType
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.SystemException
 
@@ -78,14 +79,6 @@ class NexonApiOutbox {
     var createdAt: LocalDateTime? = null
 
     var updatedAt: LocalDateTime? = null
-
-    /** Nexon API 이벤트 타입 */
-    enum class NexonApiEventType {
-        GET_OCID,
-        GET_CHARACTER_BASIC,
-        GET_ITEM_DATA,
-        GET_CUBES,
-    }
 
     /** Outbox 상태 */
     enum class OutboxStatus {

@@ -5,6 +5,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import io.github.resilience4j.retry.annotation.Retry
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter
 import java.util.concurrent.CompletableFuture
+import maple.expectation.core.domain.nexon.NexonApiEventType
 import maple.expectation.domain.v2.NexonApiOutbox
 import maple.expectation.error.exception.ExternalServiceException
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction
@@ -174,7 +175,7 @@ class ResilientNexonApiClient(
         val requestId = outboxFallbackManager.generateRequestId("GET_OCID", name)
         outboxFallbackManager.saveToOutbox(
             requestId,
-            NexonApiOutbox.NexonApiEventType.GET_OCID,
+            NexonApiEventType.GET_OCID,
             name,
         )
 
@@ -207,7 +208,7 @@ class ResilientNexonApiClient(
         logger.error("[Resilience] Character basic 최종 조회 실패. ocid={}", ocid, t)
         return fallbackHandler.serverErrorFuture(
             ocid,
-            NexonApiOutbox.NexonApiEventType.GET_CHARACTER_BASIC,
+            NexonApiEventType.GET_CHARACTER_BASIC,
             t,
         )
     }
@@ -226,7 +227,7 @@ class ResilientNexonApiClient(
      */
     fun getItemDataFallback(ocid: String, t: Throwable): CompletableFuture<EquipmentResponse> = fallbackHandler.handleItemDataFallback(
         ocid,
-        NexonApiOutbox.NexonApiEventType.GET_ITEM_DATA,
+        NexonApiEventType.GET_ITEM_DATA,
         t,
     )
 
@@ -253,7 +254,7 @@ class ResilientNexonApiClient(
         logger.error("[Resilience] Cube History 최종 조회 실패. ocid={}", ocid, t)
         return fallbackHandler.serverErrorFuture(
             ocid,
-            NexonApiOutbox.NexonApiEventType.GET_CUBES,
+            NexonApiEventType.GET_CUBES,
             t,
         )
     }

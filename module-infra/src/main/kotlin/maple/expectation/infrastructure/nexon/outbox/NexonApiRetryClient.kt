@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.nexon.outbox
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.TimeUnit
+import maple.expectation.core.domain.nexon.NexonApiEventType
 import maple.expectation.domain.v2.NexonApiOutbox
 import maple.expectation.error.exception.ExternalServiceException
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
@@ -85,10 +86,10 @@ class NexonApiRetryClient(
         return executor.executeOrCatch(
             {
                 when (eventType) {
-                    NexonApiOutbox.NexonApiEventType.GET_OCID -> retryGetOcid(payload ?: "")
-                    NexonApiOutbox.NexonApiEventType.GET_CHARACTER_BASIC -> retryGetCharacterBasic(payload ?: "")
-                    NexonApiOutbox.NexonApiEventType.GET_ITEM_DATA -> retryGetItemData(payload ?: "")
-                    NexonApiOutbox.NexonApiEventType.GET_CUBES -> retryGetCubes(payload ?: "")
+                    NexonApiEventType.GET_OCID -> retryGetOcid(payload ?: "")
+                    NexonApiEventType.GET_CHARACTER_BASIC -> retryGetCharacterBasic(payload ?: "")
+                    NexonApiEventType.GET_ITEM_DATA -> retryGetItemData(payload ?: "")
+                    NexonApiEventType.GET_CUBES -> retryGetCubes(payload ?: "")
                     null -> {
                         log.error("[Retry] Event type is null: requestId={}", outbox.requestId)
                         false

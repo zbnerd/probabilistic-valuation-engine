@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.ResultSetExtractor
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 /**
  * PGMQ 클라이언트 (ADR-002)
@@ -57,6 +58,13 @@ class PgmqClient(
      */
     @CircuitBreaker(name = "pgmq", fallbackMethod = "sendFallback")
     fun <T : Any> send(queueName: String, message: T): Long {
+        // TX 활성 검증 — 반드시 send() 내부에서 수행 (AOP는 self-invocation/람다에서 우회 가능)
+        if (config.transactionCheckEnabled && !TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw PgmqPublishException(
+                "pgmqClient.send('$queueName') must be called within @Transactional. " +
+                    "Ensure the calling Service method has @Transactional annotation.",
+            )
+        }
         val context = TaskContext.of("PgmqClient", "Send", queueName)
         val translator = ExceptionTranslator { e, _ ->
             PgmqPublishException("Failed to send message to queue: $queueName", e)
@@ -145,6 +153,24 @@ class PgmqClient(
     fun queueLength(queueName: String): Long {
         val context = TaskContext.of("PgmqClient", "QueueLength", queueName)
         return executor.executeOrDefault({ performQueueLength(queueName) }, 0L, context)
+    }
+
+    /**
+     * Visibility Timeout 설정 (Exponential Backoff용)
+     *
+     * <p>지정된 메시지의 visibility timeout을 변경하여 재시도 간격을 제어.
+     * Nexon API 재시도의 Exponential Backoff 구현에 사용.
+     *
+     * @param queueName 큐 이름
+     * @param messageId 메시지 ID
+     * @param timeoutSeconds 새 visibility timeout (초). coerceIn(1, 86400) 적용
+     * @return 성공 여부
+     */
+    fun setVisibilityTimeout(queueName: String, messageId: Long, timeoutSeconds: Long): Boolean {
+        val context = TaskContext.of("PgmqClient", "SetVisibilityTimeout", "$queueName:$messageId")
+        return executor.executeOrDefault({
+            performSetVisibilityTimeout(queueName, messageId, timeoutSeconds)
+        }, false, context)
     }
 
     // ==================== Internal Implementation ====================
@@ -239,6 +265,17 @@ class PgmqClient(
             Long::class.java,
             queueName,
         ) ?: 0L
+    }
+
+    private fun performSetVisibilityTimeout(queueName: String, messageId: Long, timeoutSeconds: Long): Boolean {
+        val safeSeconds = timeoutSeconds.coerceIn(1, 86400) // 최대 1일
+        return jdbcTemplate.queryForObject(
+            "SELECT pgmq.set_visibility_timeout(?, ?, ? * interval '1 second')",
+            Boolean::class.java,
+            queueName,
+            messageId,
+            safeSeconds,
+        ) ?: false
     }
 
     // ==================== Fallback Methods ====================

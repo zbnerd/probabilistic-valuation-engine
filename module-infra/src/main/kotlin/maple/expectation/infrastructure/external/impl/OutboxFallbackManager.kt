@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.external.impl
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
+import maple.expectation.core.domain.nexon.NexonApiEventType
 import maple.expectation.domain.v2.NexonApiOutbox
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -65,7 +66,7 @@ class OutboxFallbackManager(
      */
     fun saveToOutbox(
         requestId: String,
-        eventType: NexonApiOutbox.NexonApiEventType,
+        eventType: NexonApiEventType,
         payload: String,
     ) {
         if (!isEnabled) {

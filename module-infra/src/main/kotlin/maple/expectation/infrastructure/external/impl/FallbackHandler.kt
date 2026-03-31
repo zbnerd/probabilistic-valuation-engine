@@ -120,7 +120,7 @@ class FallbackHandler(
      */
     fun handleItemDataFallback(
         ocid: String,
-        eventType: maple.expectation.domain.v2.NexonApiOutbox.NexonApiEventType,
+        eventType: maple.expectation.core.domain.nexon.NexonApiEventType,
         t: Throwable,
     ): CompletableFuture<EquipmentResponse> {
         // ★ P0-3: 일관된 root cause 사용 (CompletionException/ExecutionException unwrap)
@@ -200,7 +200,7 @@ class FallbackHandler(
      */
     fun <T> serverErrorFuture(
         ocid: String,
-        eventType: maple.expectation.domain.v2.NexonApiOutbox.NexonApiEventType,
+        eventType: maple.expectation.core.domain.nexon.NexonApiEventType,
         t: Throwable,
     ): CompletableFuture<T> {
         // Outbox Fallback: 5xx/장애 시에만 Outbox 적재 (4xx는 비즈니스 예외)

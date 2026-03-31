@@ -28,7 +28,7 @@ import org.springframework.transaction.support.TransactionTemplate
  * Lock Pool은 Micrometer 메트릭 비활성화 (주요 DataSource만 메트릭 수집)
  */
 @Configuration
-@Profile("!test & !chaos & !container & !pgtest & !local")
+@Profile("!test & !chaos & !container & !pgtest")
 class LockHikariConfig(
     @Value("\${spring.datasource.url}") private val jdbcUrl: String,
     @Value("\${spring.datasource.username}") private val username: String,

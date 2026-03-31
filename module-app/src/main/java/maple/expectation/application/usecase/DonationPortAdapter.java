@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.inbound.DonationCommand;
 import maple.expectation.core.port.inbound.DonationPort;
+import maple.expectation.infrastructure.queue.pgmq.DonationQueueProducer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -14,14 +15,15 @@ import org.springframework.stereotype.Component;
  *
  * <p>책임: 도네이션(커피 후원) 기능 구현
  *
- * <p>V5 Migration (Issue #589): Redis 기반 도네이션 큐 제거 후 PostgreSQL Outbox 패턴으로 대체 예정.
- *
- * <p>현재 상태: 로깅만 수행 (실제 도네이션 로직은 DonationOutboxRepository 사용 예정)
+ * <p>V5 Migration: DonationOutbox 제거 후 PGMQ 직접 발행.
+ * 같은 트랜잭션 내에서 비즈니스 로직과 메시지 발행을 처리합니다.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DonationPortAdapter implements DonationPort {
+
+  private final DonationQueueProducer donationQueueProducer;
 
   @Value("${spring.auth.admin.allowlist:}")
   private String adminAllowlist;
@@ -41,9 +43,15 @@ public class DonationPortAdapter implements DonationPort {
           "Invalid admin fingerprint: " + maskFingerprint(command.getAdminFingerprint()));
     }
 
-    // TODO: Implement actual donation logic with DonationOutboxRepository
-    // For now, just log the donation
-    log.info("[Donation] Coffee sent successfully: requestId={}", command.getRequestId());
+    // Publish notification to PGMQ directly (Outbox bridge removed)
+    long donationId = System.currentTimeMillis();
+    donationQueueProducer.publish(
+        donationId,
+        0L,
+        command.getAmount(),
+        command.getGuestUuid());
+
+    log.info("[Donation] Coffee sent successfully: requestId={}, donationId={}", command.getRequestId(), donationId);
   }
 
   @Override

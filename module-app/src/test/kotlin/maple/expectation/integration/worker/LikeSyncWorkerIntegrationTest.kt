@@ -10,7 +10,6 @@ import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.core.domain.model.character.UserIgn
 import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.infrastructure.cache.TieredCacheManager
-import maple.expectation.infrastructure.messaging.PgmqStreamPublisher
 import maple.expectation.infrastructure.pgmq.LikeSyncRequest
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
@@ -72,9 +71,7 @@ class LikeSyncWorkerIntegrationTest : IntegrationTestBase() {
     @MockBean
     lateinit var tieredCacheManager: TieredCacheManager
 
-    // Mock PgmqStreamPublisher to avoid event publishing infrastructure
-    @MockBean
-    lateinit var pgmqStreamPublisher: PgmqStreamPublisher
+
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate

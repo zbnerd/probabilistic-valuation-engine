@@ -16,10 +16,8 @@ import org.springframework.stereotype.Component
  * PGMQ-based EventPublisher adapter.
  *
  * <p>Implements EventPublisher interface using PGMQ as the backing store.
- * This bridges the gap between the domain EventPublisher interface and PgmqStreamPublisher.
  *
  * @see EventPublisher
- * @see PgmqStreamPublisher
  */
 @Component
 @ConditionalOnProperty(

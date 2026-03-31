@@ -12,28 +12,17 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *
  * <h3>Purpose</h3>
  *
- * <p>Intercepts CalculationCompletedEvent and saves it to EventOutbox within the SAME transaction
+ * <p>Intercepts CalculationCompletedEvent and publishes it to PGMQ within the SAME transaction
  * as the V4 calculation.
  *
  * <h3>Transaction Phase: BEFORE_COMMIT</h3>
  *
- * <p>Uses <b>BEFORE_COMMIT</b> instead of AFTER_COMMIT to ensure atomicity:
+ * <p>Uses <b>BEFORE_COMMIT</b> to ensure atomicity:
  *
  * <ul>
- *   <li>If V4 calculation fails → Transaction rolls back → Event is NOT saved to EventOutbox
- *   <li>If EventOutbox save fails → Transaction rolls back → V4 calculation is rolled back
+ *   <li>If V4 calculation fails → Transaction rolls back → Event is NOT published
+ *   <li>If PGMQ publish fails → Transaction rolls back → V4 calculation is rolled back
  *   <li>Only when BOTH succeed → Transaction commits
- * </ul>
- *
- * <h3>Why Not AFTER_COMMIT?</h3>
- *
- * <p><b>AFTER_COMMIT</b> runs in a NEW transaction after the original transaction commits. This
- * would reintroduce the dual-write problem:
- *
- * <ul>
- *   <li>V4 calculation commits → Transaction 1 completes
- *   <li>Server crashes BEFORE AFTER_COMMIT handler runs
- *   <li>Event is LOST → Read Model drift
  * </ul>
  *
  * <h3>Flow</h3>
@@ -43,9 +32,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *   → expectationService.calculateExpectation()
  *   → ApplicationEventPublisher.publishEvent(CalculationCompletedEvent)
  *   → @TransactionalEventListener(BEFORE_COMMIT) intercepts
- *   → TransactionalEventPublisher.saveToOutbox() [same TX]
- *   → TX Commit (both V4 result AND EventOutbox saved atomically)
- *   → EventOutboxProcessor (new TX) → PGMQ → PostgreSQL
+ *   → TransactionalEventPublisher.publishToPgmq() [same TX, shared DB]
+ *   → TX Commit (both V4 result AND PGMQ message committed atomically)
  * </pre>
  *
  * <h3>Section 12 Compliance</h3>
@@ -71,7 +59,7 @@ public class CalculationCompletedEventListener {
   /**
    * Handle calculation completed event BEFORE transaction commits.
    *
-   * <p>This ensures the event is saved to EventOutbox in the SAME transaction as V4 calculation.
+   * <p>This ensures the event is published to PGMQ in the SAME transaction as V4 calculation.
    *
    * <p><b>CRITICAL:</b> Using BEFORE_COMMIT instead of AFTER_COMMIT to prevent dual-write problem.
    *
@@ -85,11 +73,11 @@ public class CalculationCompletedEventListener {
         event.userIgn(),
         event.eventId());
 
-    // Delegate to TransactionalEventPublisher which runs in the same transaction
+    // Delegate to TransactionalEventPublisher which publishes to PGMQ in the same transaction
     transactionalPublisher.publishCalculationCompleted(event);
 
     log.info(
-        "[EventListener] Event saved to EventOutbox: taskId={}, userIgn={}",
+        "[EventListener] Event published to PGMQ: taskId={}, userIgn={}",
         event.taskId(),
         event.userIgn());
   }

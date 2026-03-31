@@ -62,8 +62,8 @@ probabilistic-valuation-engine/
 2월 17~18일, 프로젝트 전체의 Kotlin 마이그레이션이 진행되었다.
 
 ```
-350 refactor: Migrate module-common from Java to Kotlin
-352 docs: Chaos Engineering 문서 구조 개선
+#350 refactor: Migrate module-common from Java to Kotlin
+#352 docs: Chaos Engineering 문서 구조 개선
 ```
 
 ### Like 도메인에서 Kotlin으로 마이그레이션된 것들

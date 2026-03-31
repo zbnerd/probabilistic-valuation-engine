@@ -99,6 +99,8 @@ fc3f4d90 feat: V4 Expectation P0/P1 개선 및 좋아요 어뷰징 방지 (#288)
 
 ### 5-Agent Council 구성
 
+> *참고: 5-Agent Council은 이슈 #285 P0/P1 전수 분석을 위해 구성된 1회성 분석 프레임워크입니다. 현재 프로젝트의 일반 리뷰는 Architect + Critic + Code-Reviewer 3에이전트 합의 방식을 사용합니다.*
+
 | Agent | 역할 | 색상 |
 |-------|------|------|
 | Blue | Architect (아키텍처) | 🔵 |
@@ -184,9 +186,11 @@ After:  Service → calculateEffectiveLikeCount(ign, delta) → 메모리 계산
 
 ### Before/After 성능 비교
 
+> *출처: [Like Endpoint P0/P1 종합 분석 리포트](../05_Reports/05_08_Refactor/like-endpoint-p0p1-analysis.md) — 부하 테스트 기준*
+
 | 메트릭 | Before | After | 개선율 |
 |--------|--------|-------|--------|
-| DB QPS (like endpoint) | 2,500-3,500/s | <200/s | **17x 감소** |
+| DB QPS (like endpoint) | 2,500-3,500/s | <200/s | **12-17x 감소** |
 | P99 Latency (unlike) | 22-35ms | 8-12ms | **3x 개선** |
 | P99 Latency (like) | 10-15ms | 3-5ms | **3x 개선** |
 | Redis RTT per request | 3-4회 | 1회 | **3-4x 감소** |

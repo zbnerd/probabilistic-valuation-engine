@@ -33,7 +33,7 @@ efd37c69 fix: 장애 복구 프로세스 데이터 정합성 및 중복 결함 �
 1월 3~4일, 예외 처리 체계의 골격이 세워졌다.
 
 ```
-4dc4d0a4 [Release] v2.3.0 - Redis HA 가용성 강화 및 시스템 안정화 (#136)
+4dc6260a [Release] v2.3.0 - Redis HA 가용성 강화 및 시스템 안정화 (#136)
 c61e0fa0 [Refactor] LogicExecutor 기반 예외 처리 구조화 완료 (Tests 82/82 Passed) (#140)
 ```
 

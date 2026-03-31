@@ -274,4 +274,4 @@ After (분리):
 > **별도 챕터 예정**: Fan-Out / Admission Control (#617, #623)
 > **관련 ADR**: ADR-028, ADR-086, ADR-030
 
-**다음 장**: [11장 — 에필로그: 97에서 7,347, 그리고 그 너머](./11_epilogue.md)
+**다음 장**: [11장 — 보이지 않는 폭발: Fan-Out과 Admission Control](./11_fanout_admission_control.md)

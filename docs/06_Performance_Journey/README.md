@@ -24,7 +24,8 @@
 | [8장](./08_great_migration.md) | 대이주: Redis, MySQL, MongoDB를 버리다 | Micro-Batching 대폭 향상 | 2~3월 |
 | [9장](./09_postgresql_notify.md) | 최후의 도약: PostgreSQL NOTIFY | 10,994 RPS* | 3월 19~20일 |
 | [10장](./10_real_data_challenge.md) | 현실의 벽: 수십만 데이터로 검증하다 | **~7,347 RPS** | 3월 22~24일 |
-| [에필로그](./11_epilogue.md) | 97에서 7,347, 그리고 그 너머 | - | - |
+| [11장](./11_fanout_admission_control.md) | 보이지 않는 폭발: Fan-Out과 Admission Control | Fan-Out 보호 구현 | 3월 28일 |
+| [에필로그](./12_epilogue.md) | 97에서 7,347, 그리고 그 너머 | - | - |
 
 > \* 10,994 RPS는 빈 DB에서의 이상적 수치입니다. 실제 운영 환경(수십만 rows)에서는 ~7,347 RPS.
 

@@ -26,7 +26,7 @@
 | 날짜 | 해시 | 내용 | PR |
 |------|------|------|-----|
 | 2026-01-02 | `efd37c69` | 장애 복구 데이터 정합성 수정 | #124 |
-| 2026-01-03 | `4dc4d0a4` | v2.3.0 Redis HA 가용성 강화 | #136 |
+| 2026-01-03 | `4dc6260a` | v2.3.0 Redis HA 가용성 강화 | #136 |
 | 2026-01-04 | `c61e0fa0` | LogicExecutor 예외 처리 구조화 | #140 |
 | 2026-01-07 | `5a507294` | LogicExecutor Policy Pipeline | #144 |
 | 2026-01-07 | `baccd0a2` | v2.4.0 LogicExecutor Pipeline Architecture | #154 |
@@ -79,7 +79,7 @@
 |------|------|------|-----|
 | 2026-03-10 | `774b7595` | LikeSync scheduler timing 정렬 | #583 |
 | 2026-03-10 | `e45a208a` | PostgreSQL scale-out migration | #584 |
-| 2026-03-11 | `c42d00c5` | Redis/Redisson 의존성 제거 | #589 |
+| 2026-03-11 | `c42d00c5` | Redis/Redisson 의존성 제거 | #589* |
 | 2026-03-15 | — | Core Unit Test Template | #602 |
 | 2026-03-17 | `8066cd45` | PostgreSQL chaos tests | #606 |
 | 2026-03-18 | `04bd04fa` | PostgreSQL integration tests | #607 |
@@ -89,7 +89,7 @@
 
 | 날짜 | 해시 | 내용 | PR |
 |------|------|------|-----|
-| 2026-03-28 | `6756cb75` | Direct DB 토글 서비스 (ADR-029) | #622 |
+| 2026-03-28 | `6756cb75` | Direct DB 토글 서비스 (ADR-344) | #622 |
 | 2026-03-28 | `672d3690` | OCID cache bug + 401 auth | #661 |
 | 2026-03-29 | `06952c40` | Fingerprint identity + DB Trigger | #666 |
 | 2026-03-29 | `4c9b3652` | Nexon API validation on login | #668 |

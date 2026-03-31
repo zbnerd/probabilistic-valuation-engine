@@ -88,7 +88,9 @@ data class CharacterLike(
 )
 ```
 
-### 마이그레이션의 어려움
+> *참고: 마이그레이션은 점진적으로 진행되었다. Java-Kotlin interop 문제가 단계적으로 해결되며, 한 번에 전환된 것이 아니다.*
+
+### 4.3.1 마이그레이션의 어려움
 
 2월 24~25일, Java-Kotlin 상호 운용성 문제가 연달아 발생:
 
@@ -120,7 +122,7 @@ ca912a96 feat: Module separation Phase 2 - Gradual migration (#445)
 026c047a fix: Kotlin DTO nullability 및 생성자 이슈 수정 (#444)
 ```
 
-### DTO nullability 문제
+### 4.4.1 DTO nullability 문제
 
 Kotlin DTO에서 `null` 허용 여부가 Java 코드와 충돌:
 
@@ -176,5 +178,6 @@ module-app/
 - LikeSyncScheduler가 아직 module-app에 남아 있음
 - module-infra에 아직 Redis 의존성이 존재
 - 헥사고날 아키텍처의 Port/Adapter 패턴이 완전히 적용되지 않음
+- Java-Kotlin interop 경계에서 타입 안전성 미흡
 
 이 문제들은 5장에서 다룬다.

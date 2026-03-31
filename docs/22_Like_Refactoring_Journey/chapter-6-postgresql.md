@@ -227,3 +227,18 @@ Caffeine Cache → Integer (역직렬화 시 축소)
 | 새로운 통합 테스트 | Testcontainers 기반 추가 |
 
 Redis에서 PostgreSQL로의 전환은 **헥사고날 아키텍처의 결정적 증거**가 되었다.
+
+---
+
+## 6.8 Phase 6 요약
+
+| 항목 | 내용 |
+|------|------|
+| 기간 | 2026-03-10 ~ 2026-03-23 |
+| 핵심 변경 | Redis → PostgreSQL 전면 교체 |
+| 삭제된 의존성 | Redis, Redisson |
+| 새로운 인프라 | PGMQ, UNLOGGED TABLE, Advisory Lock |
+| module-core 변경 | 0줄 |
+| 핵심 PR | #583, #584, #589, #602, #606, #607, #614 |
+
+> *참고: PR #589(Redis/Redisson 의존성 제거)는 커밋 `c42d00c5`로 존재하나, GitHub PR 페이지는 비공개 상태일 수 있습니다.*

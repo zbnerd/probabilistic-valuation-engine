@@ -21,12 +21,12 @@
 
 ---
 
-## 7.2 ADR-029: Direct DB 토글 서비스
+## 7.2 ADR-344: Direct DB 토글 서비스
 
 2026년 3월 28일, Like 도메인의 **가장 최근의 아키텍처 결정**이 이루어졌다.
 
 ```
-6756cb75 feat(like): Direct DB 토글 서비스 (ADR-029) (#622)
+6756cb75 feat(like): Direct DB 토글 서비스 (ADR-344) (#622)
 ```
 
 ### 배경
@@ -239,10 +239,10 @@ Direct DB 방식에서는 캐시가 관여하지 않으므로, 이 이슈는 #66
 3월 29일, 보안 강화의 마지막 조각이 추가되었다.
 
 ```
-4c9b3652 fix(auth): validate API key via Nexon API on login (#667)
+4c9b3652 fix(auth): validate API key via Nexon API on login (#668)
 ```
 
-이슈 #667 (P0):
+이슈 #667 (P0), PR #668:
 > *"[P0][Auth] Login 시 Nexon API 계정 검증 누락 — API Key 무제한 수용으로 Like 시스템 무력화 가능"*
 
 **문제**: API Key를 아무나 생성할 수 있었다. 유효한 Nexon 계정인지 확인하지 않았기 때문에, 가짜 계정으로 self-like를 우회할 수 있었다.

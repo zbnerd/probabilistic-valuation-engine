@@ -160,48 +160,121 @@ Exponential Backoff 구현을 위해 `setVisibilityTimeout` 필수:
 
 ```kotlin
 // PgmqClient.kt에 추가
+// [P0-fix] SQL Injection 방지: 문자열 보간 대신 파라미터 바인딩 사용
+// [P0-fix] INTERVAL overflow 방지: coerceIn으로 상한선 설정
 fun setVisibilityTimeout(queueName: String, messageId: Long, timeoutSeconds: Long): Boolean {
+    val context = TaskContext.of("PgmqClient", "SetVisibilityTimeout", "$queueName:$messageId")
+    return executor.executeOrDefault({
+        performSetVisibilityTimeout(queueName, messageId, timeoutSeconds)
+    }, false, context)
+}
+
+private fun performSetVisibilityTimeout(queueName: String, messageId: Long, timeoutSeconds: Long): Boolean {
+    val safeSeconds = timeoutSeconds.coerceIn(1, 86400) // 최대 1일
     return jdbcTemplate.queryForObject(
-        "SELECT pgmq.set_visibility_timeout(\$1, \$2, interval '\$3 seconds')",
+        "SELECT pgmq.set_visibility_timeout(?, ?, ? * interval '1 second')",
         Boolean::class.java,
-        queueName, messageId, timeoutSeconds
+        queueName, messageId, safeSeconds
     ) ?: false
 }
 ```
 
-#### 0-2. [P0] TX 원자성 검증 테스트
+#### 0-2. [P0] TX 원자성 검증 테스트 (구체적 명세)
 
-```bash
-# 통합 테스트 (Testcontainers 필요하나 CI에서만 실행)
-# 1. BEGIN → pgmq.send() → ROLLBACK → 큐에 메시지 없어야 함
-# 2. BEGIN → pgmq.send() → COMMIT → 큐에 메시지 있어야 함
+**환경**: CI (Testcontainers), 로컬 (Docker Compose)
+**자동화 필수**: 수동 SQL 금지, 단위 테스트로 작성
+
+```kotlin
+// module-app/src/test/kotlin/.../pgmq/PgmqTransactionAtomicityTest.kt (신규)
+@SpringBootTest
+class PgmqTransactionAtomicityTest(
+    @Autowired private val pgmqClient: PgmqClient,
+    @Autowired private val transactionTemplate: TransactionTemplate,
+    @Autowired private val jdbcTemplate: JdbcTemplate,
+) {
+    @Test
+    fun `pgmq_send가_호출자_TX에_참여하여_ROLLBACK시_메시지가_사라짐`() {
+        // Given
+        pgmqClient.send("tx_test_queue", """{"test":"rollback"}""")
+        // 이 테스트 자체가 @Transactional이 아니므로 send는 auto-commit으로 실행됨
+        // 실제 검증: @Transactional 내에서 send 후 예외 발생 → 롤백
+
+        // When: TX 내에서 send 후 강제 롤백
+        try {
+            transactionTemplate.execute { status ->
+                pgmqClient.send("tx_test_queue", """{"test":"rollback_case"}""")
+                status.setRollbackOnly() // 강제 롤백
+                null
+            }
+        } catch (_: Exception) { /* expected */ }
+
+        // Then: 롤백된 메시지는 큐에 없어야 함
+        val messages = pgmqClient.read<String>("tx_test_queue", 10, 0)
+        assertThat(messages.none { it.payload?.contains("rollback_case") == true })
+            .withFailMessage("ROLLBACK된 메시지가 큐에 남아있음 → pgmq.send()가 TX에 미참여")
+            .isTrue
+    }
+
+    @Test
+    fun `pgmq_send가_COMMIT시_메시지가_큐에_존재함`() {
+        // When: TX 내에서 send 후 정상 커밋
+        transactionTemplate.execute {
+            pgmqClient.send("tx_test_queue", """{"test":"commit_case"}""")
+        }
+
+        // Then: 커밋된 메시지는 큐에 있어야 함
+        val messages = pgmqClient.read<String>("tx_test_queue", 10, 0)
+        assertThat(messages.any { it.payload?.contains("commit_case") == true })
+            .withFailMessage("COMMIT된 메시지가 큐에 없음")
+            .isTrue
+    }
+}
 ```
+
+**통과 기준 (Phase 1 진입 조건)**:
+- `ROLLBACK 테스트` → 큐에 메시지 없음 (TX 참여 확인)
+- `COMMIT 테스트` → 큐에 메시지 있음 (정상 동작)
+
+**[P0] TX 미참여 시 대안 아키텍처** (Phase 0 실패 시 즉시 전환):
+
+> ⚠️ PGMQ가 내부적으로 UNLOGGED 테이블을 사용하여 `pgmq.send()`가 호출자 TX에 참여하지 않을 수 있음.
+> 이 검증이 실패하면 **Outbox 제거 불가**. 다음 대안 중 선택:
+
+| 대안 | 설명 | 트레이드오프 |
+|------|------|-------------|
+| **A: Outbox 유지 + PGMQ 읽기 전용** | Outbox에 쓰고 PGMQ는 소비만 담당 | Outbox 유지 비용, PGMQ는 읽기 전용 |
+| **B: PGMQ 테이블을 LOGGED로 변환** | `ALTER TABLE pgmq.q_* SET LOGGED` | 성능 저하, WAL 부하 증가 |
+| **C: 마이그레이션 연기** | PGMQ 팀에서 TX 지원 추가 시까지 대기 | 기술 부채 지속 |
+
+**Phase 0 실패 시**: ADR-316 상태를 `Accepted → Superseded (Outbox Required)`로 변경.
 
 #### 0-3. [P1] NexonApiEventType core 이관
 
 `NexonApiEventType` enum을 `module-core`의 독립 파일로 추출.
 기존 Entity에서는 import하여 사용 (Phase 3에서 Entity 삭제 시 의존성 정리).
 
-#### 0-4. [P1] @Transactional 보장 전략 수립
+#### 0-4. [P0→P1] @Transactional 보장 전략 — 인라인 체크 (AOP 대체)
 
-PGMQ Producer가 반드시 활성 TX 내에서 호출되도록 보장:
+> **[P0-fix] AOP → 인라인 체크로 변경**: Spring AOP `@Before`는 self-invocation, 람다 캡처,
+> Kotlin inline 함수에서 우회 가능. `PgmqClient.send()` 내부에 직접 체크하는 것이 유일하게 신뢰 가능.
 
 ```kotlin
-// 옵션 A: AOP Guard (권장)
-@Aspect
-@Component
-class TransactionGuardAspect {
-    @Before("execution(* maple..*.pgmq.PgmqClient.send(..))")
-    fun verifyTransactionActive() {
-        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw IllegalStateException("pgmqClient.send() must be called within @Transactional")
-        }
+// [P0-fix] PgmqClient.send() 내부에 인라인 체크 삽입
+// AOP Aspect 대신 send() 메서드 진입점에서 직접 검증
+fun <T : Any> send(queueName: String, message: T): Long {
+    // TX 활성 검증 — 반드시 send() 내부에서 수행 (AOP는 우회 가능)
+    if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+        throw PgmqPublishException(
+            "pgmqClient.send('$queueName') must be called within @Transactional. " +
+            "Ensure the calling Service method has @Transactional annotation."
+        )
     }
+    // 기존 send 로직...
 }
-
-// 옵션 B: PgmqClient.send() 내부에서 TransactionSynchronizationManager 체크
-// 옵션 C: 호출부 주석 + 코드 리뷰 가드
 ```
+
+**필수**: `TransactionSynchronizationManager` import는 `org.springframework.transaction.support`에서.
+**테스트**: `PgmqClientSendWithoutTransactionTest` — TX 없이 send() 호출 시 예외 발생 확인.
 
 #### 0-5. [P1] PgmqWorkerMetrics 인프라 추가
 
@@ -269,19 +342,28 @@ Service → @Transactional { save BusinessData; pgmqClient.send("v5_event_queue"
 
 #### [P0] 컷오버 절차 (Event Outbox)
 
+> **[P0-fix] 레이스 컨디션 방지**: PENDING=0 확인 → Flag 전환 사이에 새 PENDING이 생기는
+> TOCTOU(Time-of-Check-to-Time-of-Use) 문제 해결. **Stop-The-World 배포**로 원자성 보장.
+
 ```
-1. 기존 Outbox PENDING 건 완전 소진 대기
+0. [준비] 배포 아티팩트 빌드 (PGMQ 직접 발행 코드 포함, Flag=off 상태)
+
+1. Stop-The-World: 새 배포 버전으로 교체 배포 (rolling restart)
+   - 동시에 모든 인스턴스가 Outbox 비활성 + PGMQ 직접 발행으로 전환
+   - 중복 구간 없음: 이전 버전은 Outbox, 새 버전은 PGMQ
+   - PENDING=0 확인은 배포 전에 수행 (이전 버전에서 완전 소진 후 배포)
+
+   사전 검증 (배포 직전):
    SQL: SELECT count(*) FROM event_outbox WHERE status = 'PENDING';
-   → count = 0 확인
+   → count = 0 확인 (아니면 대기)
 
-2. Feature Flag 전환 (application.yml)
-   event.outbox.enabled=false
-   event.pgmq.direct=true
-
-3. 배포 후 검증
+2. 배포 후 검증
    - PGMQ 큐에 메시지 적재 확인
    - Outbox 테이블 신규 INSERT 없는지 확인 (5분간 모니터링)
+   SQL: SELECT count(*) FROM event_outbox WHERE created_at > NOW() - INTERVAL '5 minutes';
+   → count = 0 이어야 함
 
+3. 롤백 시: 이전 버전으로 재배포 (Outbox 복원)
 4. 1주일 관찰 후 Outbox 코드/테이블 삭제
 ```
 
@@ -333,17 +415,25 @@ DonationWorker에 동등 검증 로직 추가:
 
 ```kotlin
 // DonationWorker.process() 내
+// [P1-fix] Content Hash 검증을 executor.executeOrDefault() 내부에 배치
+// (Zero Try-Catch 정책 준수 + 메트릭 수집 일관성)
 override fun process(message: PgmqMessage<DonationMessage>): Boolean {
-    // [P1] 무결성 검증: Content Hash 확인
-    val expectedHash = computeContentHash(message.payload)
-    if (message.payload.contentHash != null && message.payload.contentHash != expectedHash) {
-        log.error("[DonationWorker] Content hash mismatch: msgId={}", message.messageId)
-        // → File backup 후 Discord alert, 메시지 삭제
-        return false
-    }
-    // 기존 알림 처리 로직
-    alertPublisher.sendInfo(message.payload)
-    return true
+    val request = message.payload
+    val context = TaskContext.of("DonationWorker", "Process", "donation=${request.donationId}")
+
+    return executor.executeOrDefault({
+        // [P1] 무결성 검증: Content Hash 확인
+        val expectedHash = ContentHashUtil.computeV2(request.toString())
+        if (request.contentHash != null && request.contentHash != expectedHash) {
+            log.error("[DonationWorker] Content hash mismatch: msgId={}, expected={}, actual={}",
+                message.messageId, expectedHash, request.contentHash)
+            moveToDlq(message, "Content hash mismatch")
+            return@executeOrDefault false
+        }
+        // 기존 알림 처리 로직
+        alertPublisher.sendInfo(request)
+        true
+    }, false, context)
 }
 ```
 
@@ -364,21 +454,27 @@ override fun process(message: PgmqMessage<DonationMessage>): Boolean {
 
 #### [P0] 컷오버 절차 (Donation Outbox)
 
-```
-1. 기존 Outbox PENDING 건 완전 소진 대기
-   SQL: SELECT count(*) FROM donation_outbox WHERE status = 'PENDING';
-   → count = 0 확인
+> **[P0-fix] Stop-The-World 배포**: Event Outbox와 동일한 원자적 전환 전략.
 
-2. Feature Flag 전환
-   donation.outbox.enabled=false
-   donation.pgmq.direct=true
+```
+0. [준비] 배포 아티팩트 빌드 (PGMQ 직접 발행 코드 포함, Flag=off 상태)
+
+1. 사전 검증 (배포 직전):
+   SQL: SELECT count(*) FROM donation_outbox WHERE status = 'PENDING';
+   → count = 0 확인 (아니면 대기)
+
+2. Stop-The-World: 새 배포 버전으로 교체 배포
+   - 모든 인스턴스가 Outbox 비활성 + PGMQ 직접 발행으로 전환
 
 3. 배포 후 검증
    - DonationWorker가 donation_queue 소비 확인
    - Discord 알림 정상 발송 확인
    - Content Hash 검증 동작 확인
+   SQL: SELECT count(*) FROM donation_outbox WHERE created_at > NOW() - INTERVAL '5 minutes';
+   → count = 0 이어야 함
 
-4. 1주일 관찰 후 Outbox 코드/테이블 삭제
+4. 롤백 시: 이전 버전으로 재배포
+5. 1주일 관찰 후 Outbox 코드/테이블 삭제
 ```
 
 #### 검증
@@ -424,11 +520,30 @@ NexonApiOutboxScheduler → NexonApiOutboxProcessorPort  ← 변경 없음
                            └── NexonApiPgmqMetrics
 ```
 
-> **[P1] 주의**: `NexonApiPgmqProcessor`는 `PgmqWorker<T>`를 상속하지 않음.
-> 기존 `PgmqWorker`는 `@Scheduled` 기반 폴링 + 제네릭 타입 바인딩을 가짐.
-> `NexonApiPgmqProcessor`는 `NexonApiOutboxProcessorPort`를 구현하며,
-> 내부적으로 `PgmqClient`를 직접 호출하는 독립 `@Component`로 구현.
-> 재시도 로직(visibility timeout, backoff)은 Processor 내부에서 직접 관리.
+> **[P1→P0-fix] NexonApiPgmqProcessor 스케줄링 명세**:
+> 독립 `@Component`로 구현하되 `@Scheduled`를 직접 선언하여 PGMQ 큐를 폴링.
+> `PgmqWorker`를 상속하지 않는 이유: Port 인터페이스(`NexonApiOutboxProcessorPort`)를
+> 구현해야 하고, Kotlin은 단일 상속만 지원. 대신 내부적으로 `PgmqClient`를 직접 호출.
+>
+> ```kotlin
+> @Component
+> @ConditionalOnProperty(name = ["nexon.retry.backend"], havingValue = "pgmq", matchIfMissing = true)
+> class NexonApiPgmqProcessor(
+>     private val pgmqClient: PgmqClient,
+>     private val executor: LogicExecutor,
+>     private val nexonApiClient: NexonApiClient,
+>     private val metrics: NexonApiPgmqMetrics,
+> ) : NexonApiOutboxProcessorPort {
+>
+>     @Scheduled(fixedDelayString = "\${nexon.retry.polling-interval-ms:5000}")
+>     override fun pollAndProcess() {
+>         val context = TaskContext.of("NexonApiPgmqProcessor", "PollAndProcess", queueName)
+>         executor.executeVoid({ performPollAndProcess() }, context)
+>     }
+>
+>     override fun recoverStalled() { /* visibility timeout 만료 체크 */ }
+> }
+> ```
 
 #### NexonApiOutbox Entity 내부 로직 이관
 
@@ -453,27 +568,66 @@ Entity에 박혀 있는 로직을 Worker로 이관:
 
 ```kotlin
 // NexonApiPgmqProcessor 내 DLQ 처리
+// [P1-fix] 반드시 LogicExecutor 사용 (Zero Try-Catch 정책 준수)
 fun moveToDlq(message: PgmqMessage<NexonRetryMessage>, reason: String) {
-    // 1. File backup (반드시 먼저)
-    val backupPath = dlqBackupService.backupToFile(message, reason)
-    // 2. Discord alert
-    discordAlertService.sendDlqAlert(message, reason, backupPath)
-    // 3. PGMQ에서 삭제 (backup 성공 후)
-    pgmqClient.delete(queueName, message.messageId)
+    val context = TaskContext.of("NexonApiPgmqProcessor", "MoveToDlq", "msgId=${message.messageId}")
+
+    executor.executeVoid({
+        // 1. File backup (반드시 먼저 — backup 실패 시 delete 수행 불가)
+        val backupPath = dlqBackupService.backupToFile(message, reason)
+        log.warn("[DLQ] Backed up message: msgId={}, path={}", message.messageId, backupPath)
+
+        // 2. Discord alert (best-effort — alert 실패해도 DLQ 처리는 계속)
+        executor.executeOrCatch(
+            { discordAlertService.sendDlqAlert(message, reason, backupPath) },
+            { e -> log.warn("[DLQ] Failed to send Discord alert: {}", e.message) },
+            TaskContext.of("DLQ", "Alert", backupPath),
+        )
+
+        // 3. PGMQ에서 삭제 (backup 성공 확인 후에만)
+        pgmqClient.delete(queueName, message.messageId)
+        log.info("[DLQ] Moved message to DLQ: msgId={}, reason={}", message.messageId, reason)
+
+        metrics.incrementDlq()
+    }, context)
 }
 ```
 
-#### [P0] Content Hash 이관
+#### [P0→P1] Content Hash 이관 — 기존 포맷 호환성 유지
 
-기존 `NexonApiOutbox.verifyIntegrity()`에서 SHA-256 Content Hash 검증.
-Entity 없이도 검증 가능하도록 순수 유틸 + DTO 필드로 이관:
+> **[P0-fix] 기존 해시 알고리즘과의 호환성 필수**: 기존 `NexonApiOutbox.computeContentHash()`는
+> `"$requestId|$eventType|$payload"` 형식으로 해시를 계산. 새 유틸은 동일 포맷을 지원해야 함.
 
 ```kotlin
 // module-infra/.../nexon/util/ContentHashUtil.kt (신규)
 object ContentHashUtil {
-    fun compute(payload: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(payload.toByteArray()).joinToString("") { "%02x".format(it) }
+    private val digestCache = ThreadLocal.withInitial {
+        MessageDigest.getInstance("SHA-256")
+    }
+
+    /**
+     * 기존 NexonApiOutbox.computeContentHash()와 동일한 포맷.
+     * 마이그레이션 전환 중 기존 해시와의 호환성을 위해 반드시 동일해야 함.
+     * 포맷: "$requestId|$eventType|$payload"
+     */
+    fun computeV1(requestId: String, eventType: String, payload: String): String {
+        val digest = digestCache.get()
+        digest.reset()
+        val hash = digest.digest(
+            ("$requestId|$eventType|$payload").toByteArray(StandardCharsets.UTF_8),
+        )
+        return HexFormat.of().formatHex(hash) // 소문자 hex (기존과 동일)
+    }
+
+    /**
+     * V2: PGMQ 전용 포맷 (마이그레이션 완료 후 사용).
+     * 전환 기간 동안은 반드시 V1 사용.
+     */
+    fun computeV2(payload: String): String {
+        val digest = digestCache.get()
+        digest.reset()
+        val hash = digest.digest(payload.toByteArray(StandardCharsets.UTF_8))
+        return HexFormat.of().formatHex(hash)
     }
 }
 
@@ -482,9 +636,13 @@ data class NexonRetryMessage(
     val eventType: NexonApiEventType,  // Phase 0-3에서 core로 이관
     val payload: String,
     val retryCount: Int = 0,
-    val contentHash: String,           // 발행 시 계산하여 포함
+    val contentHash: String,           // 발행 시 computeV1()으로 계산하여 포함
+    val requestId: String,             // Content Hash 계산에 필요
 )
 ```
+
+> **주의**: 마이그레이션 전환 기간(~1주일) 동안은 반드시 `computeV1()` 사용.
+> 전환 완료 후 Outbox 테이블 삭제 시 `computeV2()`로 전환 가능.
 
 #### PGMQ에서 Exponential Backoff 구현
 
@@ -561,8 +719,12 @@ class NexonApiPgmqProcessor(...) : NexonApiOutboxProcessorPort { ... }
 
 #### [P0] 컷오버 절차 (Nexon API Outbox)
 
+> **[P0-fix] Stop-The-World 배포**: 동일한 원자적 전환 전략.
+
 ```
-1. 기존 Outbox PENDING 건 완전 소진 대기
+0. [준비] 배포 아티팩트 빌드 (nexon.retry.backend=pgmq, Flag 포함)
+
+1. 사전 검증 (배포 직전):
    SQL: SELECT count(*) FROM nexon_api_outbox WHERE status = 'PENDING';
    → count = 0 확인
 
@@ -571,21 +733,21 @@ class NexonApiPgmqProcessor(...) : NexonApiOutboxProcessorPort { ... }
         WHERE status = 'PENDING' AND next_retry_at < NOW() - INTERVAL '1 hour';
    → 오래된 건은 수동 처리 후 제거
 
-2. nexon_retry_queue 생성 (init.sql 이미 배포됨)
+2. nexon_retry_queue 생성 확인 (init.sql 이미 배포됨)
    SQL: SELECT pgmq.create('nexon_retry_queue');
 
-3. Feature Flag 전환
-   nexon.retry.backend=pgmq  # application.yml
+3. Stop-The-World: 새 배포 버전으로 교체 배포
+   - nexon.retry.backend=pgmq가 포함된 버전으로 전환
 
 4. 배포 후 검증
    - PGMQ 큐에 메시지 적재 확인
    - Exponential Backoff 동작 확인 (visibility timeout 증가)
    - DLQ 처리 순서 확인 (backup → alert → delete)
    - Content Hash 검증 동작 확인
+   SQL: SELECT count(*) FROM nexon_api_outbox WHERE created_at > NOW() - INTERVAL '5 minutes';
+   → count = 0 이어야 함
 
-5. 롤백 시 즉시 복귀
-   nexon.retry.backend=outbox  # 재배포 없이 설정만 변경
-
+5. 롤백 시: 이전 버전으로 재배포 (nexon.retry.backend=outbox 포함)
 6. 1주일 관찰 후 Outbox 코드/테이블 삭제
 ```
 
@@ -671,16 +833,33 @@ DROP TABLE IF EXISTS nexon_api_outbox;
 
 #### [P2] PGMQ Archive 보관 정책
 
-메시지 처리 후 `pgmq.archive()`된 메시지의 보관 기간 설정:
+메시지 처리 후 `pgmq.archive()`된 메시지의 보관 기간 설정.
 
-```sql
--- archive된 메시지는 pgmq.a_<queue_name> 테이블에 저장됨
--- 30일 후 자동 삭제 (pg_cron 또는 애플리케이션 스케줄러)
-SELECT cron.schedule(
-    'pgmq-archive-cleanup',
-    '0 3 * * *',
-    $$ SELECT pgmq.delete_all_archived('calculation_queue') $$
-);
+> **[P2-fix] pg_cron 대신 애플리케이션 스케줄러 사용**: 프로덕션 DB에 pg_cron 확장이
+> 설치되어 있지 않고, RDS 환경에서 superuser 권한이 필요하므로 사용 불가.
+
+```kotlin
+// module-infra/.../scheduler/PgmqArchiveCleanupScheduler.kt (신규)
+@Component
+@ConditionalOnProperty(name = ["pgmq.archive.cleanup.enabled"], havingValue = "true", matchIfMissing = true)
+class PgmqArchiveCleanupScheduler(
+    private val pgmqClient: PgmqClient,
+    private val executor: LogicExecutor,
+) {
+    companion object { private val log = LoggerFactory.getLogger(...) }
+
+    @Scheduled(cron = "\${pgmq.archive.cleanup.cron:0 0 3 * * *}")
+    fun cleanupArchived() {
+        val context = TaskContext.of("PgmqArchive", "Cleanup", "scheduled")
+        executor.executeVoid({
+            val queues = listOf("calculation_queue", "donation_queue", "nexon_retry_queue")
+            queues.forEach { queue ->
+                val deleted = pgmqClient.purgeArchived(queue) // custom method
+                log.info("[ArchiveCleanup] Purged {} archived messages from {}", deleted, queue)
+            }
+        }, context)
+    }
+}
 ```
 
 ---
@@ -704,6 +883,19 @@ return true
 - [ ] `like_sync_queue`에 신규 메시지가 들어오는지 1주일 모니터링
 - [ ] 들어온다면: Producer(`LikeSyncQueueProducer`) 호출부 확인 후 Producer도 함께 제거
 - [ ] 들어오지 않는다면: Worker + Producer + 큐 정의 모두 제거
+
+#### [P1] 제거 전 잔여 메시지 드레인 절차
+
+```bash
+# 제거 전 잔여 메시지 확인
+SQL: SELECT count(*) FROM pgmq.q_like_sync_queue;
+
+# 잔여 메시지가 있으면 모두 archive (Worker 제거 전에 수행)
+SQL: SELECT msg_id FROM pgmq.read('like_sync_queue', 100, 0);
+     → 각 msg_id에 대해: SELECT pgmq.archive('like_sync_queue', msg_id);
+
+# archive 완료 확인 후 Worker 코드 삭제
+```
 
 #### 삭제 후보 파일
 
@@ -761,15 +953,19 @@ return true
 
 | 리스크 | 영향 | 대응 |
 |--------|------|------|
-| [P0] pgmq.send() TX 미참여 | Same-TX 전제 무너짐 | Phase 0에서 검증. 실패 시 ADR-316 재검토 |
-| 기존 Outbox PENDING 데이터 | 마이그레이션 시점 미처리 건 | 전환 전 Outbox 완전 비운 후 스위치 (컷오버 절차) |
-| [P0] 컷오버 중 듀얼 라이트 | 양쪽에 메시지 중복 발행 | Feature Flag로 원자적 전환, PENDING=0 확인 후 스위치 |
+| [P0] pgmq.send() TX 미참여 | Same-TX 전제 무너짐 | Phase 0-2에서 자동화 테스트로 검증. 실패 시 대안 아키텍처로 전환 (Section 0-2) |
+| 기존 Outbox PENDING 데이터 | 마이그레이션 시점 미처리 건 | Stop-The-World 배포 전 PENDING=0 확인 |
+| [P0] 컷오버 중 듀얼 라이트 | 양쪽에 메시지 중복 발행 | Stop-The-World 교체 배포로 원자적 전환 (TOCTOU 방지) |
 | N19 재현 불가 | PGMQ 기반 카오스 테스트 필요 | N19 시나리오 PGMQ 버전으로 재작성 |
 | PGMQ visibility timeout 정밀도 | 기존 LocalDateTime vs PGMQ 초 단위 | 기능적 차이 없음 |
+| [P0→P1] TX 보장 | AOP 우회 가능 | PgmqClient.send() 내부 인라인 체크 (AOP 대체) |
+| [P0] SQL Injection | setVisibilityTimeout 문자열 보간 | `? * interval '1 second'` 파라미터 바인딩 + coerceIn(1,86400) |
 | [P1] 모니터링 갭 | Outbox Prometheus 메트릭 손실 | Phase 0-5에서 PgmqWorkerMetrics로 사전 대체 |
-| 롤백 | PGMQ 전환 후 장애 | Feature Flag로 즉시 Outbox 복귀 가능 |
+| 롤백 | PGMQ 전환 후 장애 | 이전 버전으로 재배포 (Outbox 복원) |
 | [P1] Bean 충돌 | 두 구현체 동시 로드 | 양쪽 모두 @ConditionalOnProperty, 한쪽만 matchIfMissing=true |
-| [P0] DLQ 순서 | backup 전 delete 시 메시지 영구 손실 | backup → alert → delete 순서 강제 |
+| [P0] DLQ 순서 | backup 전 delete 시 메시지 영구 손실 | backup → alert → delete 순서 강제 (LogicExecutor 래핑) |
+| [P1] Content Hash 비호환 | 기존 해시 포맷 불일치 → 전체 DLQ 이동 | V1/V2 분리, 전환 기간 동안 V1 사용 |
+| [P1] Scale-out 중복 | PGMQ visibility timeout 만료 후 재읽기 | 처리 반드시 VT 내 완료, 또는 idempotency key 추가 |
 
 ---
 
@@ -830,3 +1026,16 @@ return true
 | 2026-03-31 | P2 | Port 반환값 비일관성 | Phase 4 주석 추가 |
 | 2026-03-31 | P2 | PGMQ Archive 보관 정책 | Phase 4 보관 정책 추가 |
 | 2026-03-31 | P2 | Port 즉시 삭제 위험 | Phase 4 Deprecation으로 변경 |
+| **2nd Review** | | | |
+| 2026-03-31 | P0 | TransactionGuardAspect AOP 우회 가능 | Phase 0-4: AOP → PgmqClient.send() 인라인 체크로 변경 |
+| 2026-03-31 | P0 | setVisibilityTimeout() SQL Injection + overflow | Phase 0-1: `? * interval '1 second'` 바인딩 + coerceIn(1,86400) |
+| 2026-03-31 | P0 | TX 원자성 테스트 구체화 + 실패 시 대안 | Phase 0-2: 자동화 테스트 명세 + 대안 아키텍처 3옵션 |
+| 2026-03-31 | P0 | 컷오버 PENDING=0 → Flag TOCTOU 레이스 | Phase 1/2/3: Stop-The-World 교체 배포로 원자성 보장 |
+| 2026-03-31 | P1 | Content Hash 기존 포맷 비호환 | Phase 3: computeV1/V2 분리, 전환기 V1 강제 |
+| 2026-03-31 | P1 | NexonApiPgmqProcessor @Scheduled 누락 | Phase 3: @Scheduled 직접 선언 코드 명세 추가 |
+| 2026-03-31 | P1 | moveToDlq() LogicExecutor 누락 | Phase 3: executor.executeVoid() 래핑 |
+| 2026-03-31 | P1 | DonationWorker LogicExecutor 래핑 누락 | Phase 2: executor.executeOrDefault() 내부에 Hash 검증 |
+| 2026-03-31 | P1 | LikeSyncWorker 잔여 메시지 드레인 | Phase 5: 드레인 절차 추가 |
+| 2026-03-31 | P1 | Scale-out PGMQ read() 중복 처리 | Section 6: 리스크 테이블에 VT 내 완료/idempotency 추가 |
+| 2026-03-31 | P2 | pg_cron 미설치 → 앱 스케줄러로 | Phase 4: PgmqArchiveCleanupScheduler로 대체 |
+| 2026-03-31 | P2 | NexonRetryMessage Jackson 직렬화 | (구현 시 data class 기본 Jackson 지원 확인) |

@@ -10,7 +10,7 @@
 |------|----------|------|------|-----|
 | #146 | P0 | Admin/핵심 API 인증·인가 최소선 구축 | CLOSED | #165 |
 | #662 | P0 | fingerprint 컬럼 추가 — self-like 방지 | CLOSED | #666 |
-| #667 | P0 | Login 시 Nexon API 계정 검증 누락 | OPEN | #668* |
+| #667 | P0 | Login 시 Nexon API 계정 검증 누락 | CLOSED | #668 |
 
 ### Data Integrity (데이터 정합성)
 
@@ -77,7 +77,7 @@
 | #584 | PostgreSQL scale-out migration | 2026-03-10 | — | Redis-free operation |
 | #622 | Direct DB 토글 서비스 | 2026-03-28 | — | ADR-344, 단일 트랜잭션 |
 | #666 | Fingerprint + DB Trigger | 2026-03-29 | — | #662-#665 통합 해결 |
-| #668* | Nexon API validation on login | 2026-03-29 | — | API Key 검증 |
+| #668 | Nexon API validation on login | 2026-03-29 | — | API Key 검증 |
 
 ### 리팩토링
 
@@ -103,5 +103,3 @@
 ---
 
 > *이 목록은 Like 도메인과 직접 관련된 핵심 이슈/PR만 포함합니다. 전체 목록은 GitHub Issues/PR 페이지를 참조하세요.*
->
-> *PR #589, #668 등은 커밋으로 존재하나 GitHub PR 페이지 접근이 제한될 수 있습니다.*

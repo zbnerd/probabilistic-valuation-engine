@@ -79,7 +79,7 @@
 |------|------|------|-----|
 | 2026-03-10 | `774b7595` | LikeSync scheduler timing 정렬 | #583 |
 | 2026-03-10 | `e45a208a` | PostgreSQL scale-out migration | #584 |
-| 2026-03-11 | `c42d00c5` | Redis/Redisson 의존성 제거 | #589* |
+| 2026-03-11 | `c42d00c5` | Redis/Redisson 의존성 제거 | #589 |
 | 2026-03-15 | — | Core Unit Test Template | #602 |
 | 2026-03-17 | `8066cd45` | PostgreSQL chaos tests | #606 |
 | 2026-03-18 | `04bd04fa` | PostgreSQL integration tests | #607 |
@@ -95,7 +95,3 @@
 | 2026-03-29 | `4c9b3652` | Nexon API validation on login | #668 |
 | 2026-03-29 | `542f69b4` | Scale-out data integrity 4 P1 | #632-635 |
 | 2026-03-31 | `bd9641df` | Merge develop into master | #679 |
-
----
-
-> *\* 표시된 PR(#589)은 커밋으로 존재하나 GitHub PR 페이지 접근이 제한될 수 있습니다.*

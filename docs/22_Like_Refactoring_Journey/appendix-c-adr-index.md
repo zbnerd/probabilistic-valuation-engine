@@ -10,12 +10,13 @@
 | ADR-005 | LikeSyncScheduler 이관 | 2026-03-01 | Accepted | `docs/01_ADR/` |
 | ADR-012 | Like 패키지 core/infra 분리 완료 | 2026-03-02 | Accepted | `docs/01_ADR/` |
 | ADR-015 | Like Endpoint P1 Acceptance | 2026-01-29 | Accepted | `docs/01_ADR/ADR-015-like-endpoint-p1-acceptance.md` |
-| ADR-029 | Like Direct DB 토글 서비스 | 2026-03-28 | Accepted | `docs/01_ADR/ADR-344-like-direct-db-approach.md` |
 | ADR-331 | Like Infra Migration Build Plan | 2026-02 | Superseded | `docs/01_ADR/ADR-331-like-to-infra-migration-build-plan.md` |
 | ADR-332 | Like Infra Migration | 2026-02 | Superseded | `docs/01_ADR/ADR-332-like-to-infra-migration.md` |
 | ADR-344 | Like Direct DB Approach | 2026-03-28 | Accepted | `docs/01_ADR/ADR-344-like-direct-db-approach.md` |
 | ADR-346 | Like Fingerprint Account ID Trigger | 2026-03-29 | Accepted | `docs/01_ADR/ADR-346-like-fingerprint-account-id-trigger.md` |
 | ADR-361 | Like Buffer Restore on Circuit Open | 2026-03 | Accepted | `docs/01_ADR/ADR-361-like-buffer-restore-on-circuit-open.md` |
+
+> *참고: ADR-003, ADR-005, ADR-012는 커밋 메시지에서 참조된 번호입니다. 실제 ADR 파일은 `docs/01_ADR/` 디렉토리에서 확인하세요. ADR-029는 PR #622 커밋 메시지에 등장하나, 실제 파일은 ADR-344로 존재합니다.*
 
 ---
 

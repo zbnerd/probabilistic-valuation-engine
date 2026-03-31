@@ -95,3 +95,7 @@
 | 2026-03-29 | `4c9b3652` | Nexon API validation on login | #668 |
 | 2026-03-29 | `542f69b4` | Scale-out data integrity 4 P1 | #632-635 |
 | 2026-03-31 | `bd9641df` | Merge develop into master | #679 |
+
+---
+
+> *\* 표시된 PR(#589)은 커밋으로 존재하나 GitHub PR 페이지 접근이 제한될 수 있습니다.*

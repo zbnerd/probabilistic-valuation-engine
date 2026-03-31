@@ -104,7 +104,7 @@ DB에 가해진 부하가 158,428회에서 317회로 줄었다.
 ╚════════════════════════════════════════════════════════════╝
 ```
 
-**7,347 RPS. 에러 0개. 수십만 실데이터 위에서.** Admission Control은 아직 비활성화 상태였다. 즉, 이 수치는 **순수 캐시 성능**을 보여주는 것이며, Fan-Out 시나리오에서는 별도 보호가 필요하다.
+**7,347 RPS. 에러 0개. 수십만 실데이터 위에서.** 이 수치는 **순수 캐시 성능**을 보여주는 것이다.
 
 빈 DB에서의 10,994(500 연결)는 이상적 한계치였다. 실데이터 환경에서 200 연결로 잰 7,347이 **진짜 성과**다.
 
@@ -131,23 +131,35 @@ DB에 가해진 부하가 158,428회에서 317회로 줄었다.
 
 확률 DP(Dynamic Programming) 알고리즘이 O(n³)이다. 슬롯당 30~45회 호출. 3개 프리셋이 이미 병렬화되어 있지만, 개별 프리셋 내부의 연산은 여전히 무겁다.
 
-### 병목 2: Fan-Out Explosion
+### 병목 2: Cache Invalidation → DB Fallback
 
-가장 위험한 병목. 1000명의 사용자가 1000개의 **서로 다른** 캐릭터를 동시에 조회하는 시나리오.
+LISTEN/NOTIFY로 인해 캐시가 invalidation되고, 그 결과 DB로 fallback하는 요청이 늘어났다.
 
 ```
-Fan-Out Explosion:
-1000 users × 1000 different OCIDs = 1,000,000 unique keys
+UPDATE 발생
+→ NOTIFY 전파
+→ 다른 노드 캐시 삭제 (evict)
 
-Single-Flight가 보호하는 것: 같은 키에 대한 중복 요청
-Single-Flight가 보호 못 하는 것: 서로 다른 키의 동시 요청
-
-→ 1000개의 독립적인 cold miss가 동시에 실행
-→ 1000 × (API fetch + parse + calc + compress)
-→ CPU 즉시 포화
+다음 요청:
+→ 캐시 없음 (miss)
+→ DB 조회 (fallback)
+→ 느려짐
 ```
 
-Admission Control이 비활성화되어 있었다. `ratelimit.enabled: false`. 전역 동시 실행 제한이 없었다.
+빈 DB에서는 캐시 evict가 거의 일어나지 않았다. 업데이트가 적고 캐시 엔트리도 소수. 하지만 30만 개 데이터 환경에서는 업데이트가 빈번해지고, 그만큼 캐시 invalidation도 자주 발생한다.
+
+| 경로 | 시간 |
+|------|------|
+| 캐시 hit (fast path) | ~4ms |
+| DB 조회 (fallback) | 수십~수백 ms |
+
+캐시 hit ratio가 99.99%에서 조금만 떨어져도 DB fallback 요청이 급증한다. 이것이 33% 성능 감소의 핵심 원인이다.
+
+```
+LISTEN/NOTIFY → 캐시 invalidation → cache miss 증가 → DB fallback 증가 → RPS 감소
+```
+
+> UPDATE 자체가 느려진 것이 아니다. UPDATE로 인해 캐시가 깨져서 DB를 보게 된 것이 핵심이다.
 
 ### 병목 3: PostgreSQL Write Amplification
 
@@ -175,42 +187,13 @@ Write Amplification 원인:
 
 | 병목 유형 | 주요 원인 | 해결 방법 |
 |-----------|----------|----------|
-| **운영 Read Path** | Cold-path admission (fan-out) | 전역 in-flight 제한 |
+| **운영 Read Path** | Cache invalidation → DB fallback | 캐시 웜업, L2 최적화 |
 | **운영 Read Path** | CPU pipeline (parse/calc/compress) | 프로파일링 → 최적화 |
 | **백필 Write Path** | PostgreSQL upsert write amplification | Staging table + merge |
 
 운영 중의 읽기 병목과 대량 적재 시의 쓰기 병목은 **완전히 다른 문제**다. 같은 큐에 넣으면 서로를 방해한다.
 
-### 대책: Admission Control
-
-P0 우선순위로 **Global Cold-Path Admission Control**을 구현했다.
-
-```kotlin
-class GlobalAdmissionControl(maxInFlight: Int = 100) {
-    private val semaphore = Semaphore(maxInFlight)
-    private val queue = ArrayBlockingQueue<AdmissionRequest<*>>(maxQueueSize)
-
-    fun <T> submitOrWait(task: Callable<T>): CompletableFuture<T> {
-        val request = AdmissionRequest(task, CompletableFuture())
-        if (!queue.offer(request, queueOfferTimeoutMs, TimeUnit.MILLISECONDS)) {
-            throw TooManyColdMissesException()
-        }
-        return request.future
-    }
-}
-```
-
-```
-Before (Admission Control 없음):
-Request → L1 miss → 즉시 cold-path 진입 → CPU 포화 → 전체 지연
-
-After (Admission Control):
-Request → L1 miss → 전역 permit 획득 → cold-path 진입
-           │
-           └─ permit 초과 시 → 대기 큐 → 5초 타임아웃 → 503 + Retry-After
-```
-
-100개의 동시 cold miss만 허용. 초과하면 대기. CPU가 포화되지 않는다.
+> **Note**: Fan-Out 시나리오(서로 다른 키의 동시 대량 요청)와 이에 대한 Admission Control은 별도 챕터에서 다룬다. 이 장에서는 실데이터 환경에서 실제로 관측된 병목에 집중한다.
 
 ### 대책: Write Path 분리
 
@@ -287,7 +270,8 @@ After (분리):
 ---
 
 > **이 시점의 RPS: ~7,347 (200k~300k rows, LISTEN/NOTIFY Post-Fix)**
-> **관련 이슈**: #611 (Bulk Load), #617 (Admission Control), #623 (Fan-Out)
+> **관련 이슈**: #611 (Bulk Load)
+> **별도 챕터 예정**: Fan-Out / Admission Control (#617, #623)
 > **관련 ADR**: ADR-028, ADR-086, ADR-030
 
 **다음 장**: [11장 — 에필로그: 97에서 7,347, 그리고 그 너머](./11_epilogue.md)

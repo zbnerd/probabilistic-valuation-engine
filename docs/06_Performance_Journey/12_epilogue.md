@@ -78,6 +78,10 @@ PostgreSQL NOTIFY는 새로운 기술이 아니다. PostgreSQL 9.0(2010년)부�
 
 빈 DB에서 10,994 RPS. 200k~300k rows에서 7,347 RPS. 33% 하락. 하지만 이 7,347이 믿을 수 있는 수치다. **"낙관적인 측정에 기반한 계획은 항상 실패한다. 보수적인 측정에 기반한 계획은 성공한다."**
 
+### 11장 — 보이지 않는 폭발에 대비하라
+
+Fan-Out Explosion은 아직 발생하지 않았다. 하지만 1,000 users × 1,000 different keys 시나리오에서 CPU가 즉시 포화된다는 것을 분석으로 확인했다. GlobalAdmissionControl을 구현하고 비활성화 상태로 두었다. **"보호막은 폭풍이 오기 전에 설치해야 한다."**
+
 ## 아키텍처의 진화
 
 ```
@@ -145,7 +149,7 @@ Client → Spring Boot (Java 21, Virtual Threads)
 - [ ] **CPU 프로파일링** — async-profiler로 실제 핫스팟 측정. JSON 파싱이 정말 25-30%인지 확인
 - [ ] **JSON 부분 파싱** — 300KB 전체 파싱 → 필요 필드만 추출. CPU 25% → 10% 예상
 - [ ] **Changed-Only Upsert** — dirty tracking으로 불필요한 쓰기 제거. Write 30-50% 감소 예상
-- [ ] **Global Admission Control 활성화** — Fan-Out Explosion 방지. 설정 변경만으로 즉시 효과
+- [ ] **Global Admission Control 활성화** — Fan-Out Explosion 방지. 11장에서 설계 완료, 설정 변경만으로 즉시 효과
 - [ ] **다중 인스턴스 실증** — 2~4 인스턴스로 실제 선형 확장 검증
 
 ## 마지막 교훈
@@ -166,9 +170,9 @@ Client → Spring Boot (Java 21, Virtual Threads)
 
 ---
 
-> **최종 RPS: ~7,347 (200k~300k rows, LISTEN/NOTIFY Post-Fix, Scale-out 준비 완료)**
+> **최종 RPS: ~7,347 (200k~300k rows, Fan-Out 보호 구현 완료, Scale-out 준비 완료)**
 > **여정 기간: 2026년 1월 20일 ~ 3월 30일 (10주)**
-> **관련 이슈**: #589 (Redis 제거), #590 (MongoDB 제거), #591 (MySQL 제거), #609 (LISTEN/NOTIFY), #611 (300k Bulk Load), #617 (Admission Control)
+> **관련 이슈**: #589 (Redis 제거), #590 (MongoDB 제거), #591 (MySQL 제거), #609 (LISTEN/NOTIFY), #611 (300k Bulk Load), #617 (Admission Control), #623 (Fan-Out), #623 (Fan-Out)
 > **기여자: 5-Agent Council, Claude Code**
 
 **처음으로 돌아가기**: [프롤로그 — 97 RPS에서 시작하다](./00_prologue.md)

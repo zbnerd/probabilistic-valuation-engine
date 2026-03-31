@@ -10,7 +10,7 @@
 |------|----------|------|------|-----|
 | #146 | P0 | Admin/핵심 API 인증·인가 최소선 구축 | CLOSED | #165 |
 | #662 | P0 | fingerprint 컬럼 추가 — self-like 방지 | CLOSED | #666 |
-| #667 | P0 | Login 시 Nexon API 계정 검증 누락 | CLOSED | #668 |
+| #667 | P0 | Login 시 Nexon API 계정 검증 누락 | OPEN¹ | #668 |
 
 ### Data Integrity (데이터 정합성)
 

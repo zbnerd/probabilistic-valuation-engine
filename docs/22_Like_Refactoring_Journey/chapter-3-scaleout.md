@@ -8,7 +8,7 @@
 
 2026년 1월 27일, 이슈 #271이 해결되었다.
 
-```
+```text
 2026c579 feat: #271 V5 Stateless 아키텍처 전환 구현
 ```
 
@@ -19,7 +19,7 @@
 
 기존 Like 버퍼는 **인메모리(Caffeine)**에 저장되었다. Scale-out 환경에서:
 
-```
+```text
 [Instance A] 좋아요 +1 → A의 메모리 버퍼에만 존재
 [Instance B] 좋아요 수 조회 → B의 버퍼에는 없음 → DB에서 읽음 (부정확)
 ```
@@ -28,7 +28,7 @@
 
 ### 설계 결정: Redis External Buffer
 
-```
+```text
 Before:  Client → Instance A → [In-Memory Buffer A]
 After:   Client → Instance A → [Redis Shared Buffer] ← Instance B도 읽음
 ```
@@ -39,7 +39,7 @@ After:   Client → Instance A → [Redis Shared Buffer] ← Instance B도 읽�
 
 1월 27일, 쿼리 성능 개선도 함께 이루어졌다.
 
-```
+```text
 14d6103f feat: Repository 쿼리 패턴 분석 기반 DB 인덱스 최적화 (#276)
 ```
 
@@ -67,7 +67,7 @@ CREATE INDEX idx_character_like_target_liker
 
 1월 30일, 토글 기능이 완성되었다.
 
-```
+```text
 195cc551 feat: 좋아요 토글 기능 구현 (Like ↔ Unlike)
 ```
 
@@ -93,7 +93,7 @@ public ResponseEntity<ApiResponse<LikeToggleResponse>> toggleLike(
 
 1월 29일, Like 엔드포인트의 **전면 분석**이 이루어졌다. 이것은 이 프로젝트에서 가장 체계적인 리뷰 중 하나였다.
 
-```
+```text
 fc3f4d90 feat: V4 Expectation P0/P1 개선 및 좋아요 어뷰징 방지 (#288)
 ```
 
@@ -126,7 +126,7 @@ fc3f4d90 feat: V4 Expectation P0/P1 개선 및 좋아요 어뷰징 방지 (#288)
 
 이것은 Like 도메인의 **가장 심각한 버그**였다.
 
-```
+```text
 Thread A: checkLikeStatus(ocid) → false (아직 안 누름)
 Thread B: checkLikeStatus(ocid) → false (아직 안 누름)
 Thread A: addToBuffer(ocid)     → +1
@@ -170,7 +170,7 @@ end
 
 ### P0-5 해결: Unlike DB DELETE를 배치로 이관
 
-```
+```text
 Before: 좋아요 → Write-Behind (비동기) / 취소 → 동기 DB DELETE
 After:  좋아요 → Write-Behind (비동기) / 취소 → Write-Behind (비동기)
 ```
@@ -179,7 +179,7 @@ After:  좋아요 → Write-Behind (비동기) / 취소 → Write-Behind (비동
 
 ### P0-6 해결: JOIN FETCH 제거
 
-```
+```text
 Before: Controller → findByUserIgnWithEquipment(ign) → JOIN FETCH (3-8ms)
 After:  Service → calculateEffectiveLikeCount(ign, delta) → 메모리 계산 (0ms)
 ```
@@ -202,7 +202,7 @@ After:  Service → calculateEffectiveLikeCount(ign, delta) → 메모리 계산
 
 1월 28일, Scale-out 환경의 핵심 기능이 구현되었다.
 
-```
+```text
 69f87c60 feat: #278 Scale-out 환경 실시간 좋아요 동기화 (Pub/Sub)
 37137764 feat: #278 Scale-out 환경 실시간 좋아요 동기화
 ```
@@ -212,7 +212,7 @@ After:  Service → calculateEffectiveLikeCount(ign, delta) → 메모리 계산
 
 ### 아키텍처
 
-```
+```text
 [Instance A] 좋아요 토글
      │
      ├─1─→ HINCRBY {likes}:buffer → newDelta
@@ -230,7 +230,7 @@ After:  Service → calculateEffectiveLikeCount(ign, delta) → 메모리 계산
 
 Pub/Sub은 발행자 자신도 수신한다. 자신이 방금 변경한 캐시를 굳이 무효화할 필요가 없다.
 
-```
+```text
 Instance A → PUBLISH (sourceInstanceId=A)
 Instance A → 수신 → sourceInstanceId == myInstanceId → 무시 (Self-skip)
 Instance B → 수신 → sourceInstanceId != myInstanceId → L1 Cache Evict
@@ -241,7 +241,7 @@ Instance C → 수신 → sourceInstanceId != myInstanceId → L1 Cache Evict
 
 Pub/Sub은 at-most-once 전달이다. 메시지가 유실될 수 있다.
 
-```
+```text
 Redis 정상: 즉시 캐시 무효화 → 정확한 좋아요 수
 Redis 장애: 메시지 유실 → 캐시에 이전 값
                      → 5분 뒤 Caffeine TTL 만료 → 자연 복구
@@ -255,7 +255,7 @@ Redis 장애: 메시지 유실 → 캐시에 이전 값
 
 1월 29일, 어뷰징 방지가 추가되었다.
 
-```
+```text
 fc3f4d90 feat: V4 Expectation P0/P1 개선 및 좋아요 어뷰징 방지 (#288)
 ```
 
@@ -279,20 +279,20 @@ JWT 인증 시 사용자의 OCID 목록을 미리 로드하여, 토글 시 메�
 
 1월 29일, LogicExecutor가 Policy Pipeline 패턴으로 발전했다.
 
-```
+```text
 9aac41d1 refactor: LogicExecutor 파이프라인 아키텍처 개선 및 테스트 정비 (#290)
 8e4d86e1 feat: #284 Executor 강화 + #278 RReliableTopic + PDCA 보고서 (#298)
 ```
 
 이제 Like 도메인의 모든 연산이 Pipeline을 거친다:
 
-```
+```text
 Request → [Logging Policy] → [Metrics Policy] → [Circuit Breaker] → [Business Logic]
 ```
 
 ### 이 시점의 아키텍처 (Redis Mode)
 
-```
+```text
 ┌──────────────────────────────────────────────────┐
 │                    Controller                     │
 │               (JWT + HTTP only)                   │

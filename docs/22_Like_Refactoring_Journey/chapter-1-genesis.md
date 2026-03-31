@@ -8,7 +8,7 @@
 
 2025년 11월 28일, 첫 번째 동시성 테스트가 실패했다.
 
-```
+```text
 92707f08 perf: Concurrency test failure - Rejected Pessimistic Lock due to high latency
 ```
 
@@ -16,7 +16,7 @@
 
 다음 날인 11월 29일, 두 개의 커밋이 연달아 들어왔다:
 
-```
+```text
 054af475 feat(concurrency): Implement high-contention lock mechanism for like system
 5e4f003f feat(concurrency): Implement concurrency control for 'Like' feature & Optimize DB Lock performance
 ```
@@ -29,7 +29,7 @@
 
 12월 19일, 대규모 리팩토링이 이루어졌다.
 
-```
+```text
 ac1bf6d4 refactor: 디자인 패턴 도입 및 동시성 제어 엔진 고도화 (Proxy, Decorator)
 ```
 
@@ -43,7 +43,7 @@ Like 도메인에 **Proxy 패턴**과 **Decorator 패턴**이 도입되었다. �
 
 이 시점의 Like 흐름은:
 
-```
+```text
 Controller → Service → Lock → Cache Check → DB Read/Write → Response
 ```
 
@@ -57,7 +57,7 @@ Controller → Service → Lock → Cache Check → DB Read/Write → Response
 
 12월 23일, 첫 번째 모니터링 기능이 추가되었다.
 
-```
+```text
 f2323727 feat(monitoring): 시스템 관찰 가능성 확보 및 장애 자가 진단 알림 기능 구현 (#55)
 ```
 
@@ -78,7 +78,7 @@ f2323727 feat(monitoring): 시스템 관찰 가능성 확보 및 장애 자가 �
 
 같은 날, 중요한 문제가 하나 더 해결되었다.
 
-```
+```text
 d8840de8 feat: 좋아요 버퍼 동기화를 위한 Graceful Shutdown 구현 (#26) (#60)
 ```
 
@@ -86,7 +86,7 @@ d8840de8 feat: 좋아요 버퍼 동기화를 위한 Graceful Shutdown 구현 (#2
 
 Like 시스템은 **Write-Behind Buffer** 패턴을 사용하고 있었다:
 
-```
+```text
 사용자 요청 → In-Memory Buffer 적재 → 주기적 DB Flush
 ```
 
@@ -109,7 +109,7 @@ Spring의 `@PreDestroy` 훅을 활용해, 서버 종료 신호(SIGTERM)를 받�
 
 이 기능은 PR #60으로 시작되어 PR #89에서 완성되었다:
 
-```
+```text
 d8840de8 feat: 좋아요 버퍼 동기화를 위한 Graceful Shutdown 구현 (#26) (#60)
 52f576a2 Feature/27 graceful shutdown like buffer (#89)
 ```
@@ -123,7 +123,7 @@ d8840de8 feat: 좋아요 버퍼 동기화를 위한 Graceful Shutdown 구현 (#2
 
 12월 24일, 새로운 문제가 발견되었다.
 
-```
+```text
 09cf532d [Ops] 분산 환경에서의 스케줄러 중복 실행 방지 (Distributed Lock) (#47) (#61)
 ```
 
@@ -131,7 +131,7 @@ d8840de8 feat: 좋아요 버퍼 동기화를 위한 Graceful Shutdown 구현 (#2
 
 LikeSyncScheduler가 `@Scheduled`로 3초마다 실행된다. Scale-out 환경에서 **3대의 서버가 각각 스케줄러를 실행**하면:
 
-```
+```text
 [Instance A] 3초마다 syncCount() → DB UPDATE
 [Instance B] 3초마다 syncCount() → DB UPDATE  ← 중복!
 [Instance C] 3초마다 syncCount() → DB UPDATE  ← 중복!
@@ -165,14 +165,14 @@ public void globalSyncCount() {
 
 12월 26일, 캐싱과 예외 처리의 체계적 리팩토링이 이루어졌다.
 
-```
+```text
 57ba1eca refactor: AOP 기반 캐싱 전략 도입 및 예외 처리 체계 리팩토링 (#69)
 48aad9f3 refactor: 분산 락 AOP 가독성 개선 (#70)
 ```
 
 ### 등장한 패턴: TieredCache
 
-```
+```text
 L1 (Caffeine) → L2 (Redis) → SingleFlight → Loader
 ```
 
@@ -203,7 +203,7 @@ return executor.execute(
 
 12월 28일, Phase 1이 마무리되었다.
 
-```
+```text
 4b326926 release: 분산 환경 확장성(Scale-out) 대응 및 시스템 안정화 통합 릴리즈 (#97)
 ```
 
@@ -220,7 +220,7 @@ return executor.execute(
 
 ### 이 시점의 아키텍처
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │                  Controller                  │
 │              (HTTP Layer)                    │

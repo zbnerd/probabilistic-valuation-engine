@@ -26,13 +26,13 @@
 
 3월 10일, 첫 번째 단계로 스케줄러 타이밍이 재조정되었다.
 
-```
+```text
 774b7595 refactor: LikeSync Scheduler 타이밍 정렬 및 PostgreSQL Migration 문서화 (#583)
 ```
 
 ### 타이밍 재설계
 
-```
+```text
 Before (Redis):
   L1→L2 Flush:  1초
   Count Sync:   3초
@@ -51,7 +51,7 @@ After (PostgreSQL):
 
 3월 10일, 본격적인 마이그레이션이 진행되었다.
 
-```
+```text
 e45a208a feat: PostgreSQL scale-out migration for Redis-free operation (#584)
 ```
 
@@ -69,7 +69,7 @@ e45a208a feat: PostgreSQL scale-out migration for Redis-free operation (#584)
 
 이슈 #552에서 구현된 PGMQ:
 
-```
+```text
 LikeToggle → PGMQ.send('like_events', payload)
                 ↓
 LikeSyncConsumer → PGMQ.read('like_events')
@@ -97,7 +97,7 @@ UNLOGGED TABLE은 WAL(Write-Ahead Log)을 기록하지 않아 일반 테이블�
 
 3월 11일, 역사적인 커밋이 들어왔다.
 
-```
+```text
 c42d00c5 feat: remove Redis/Redisson dependencies for PostgreSQL migration (#589)
 ```
 
@@ -106,7 +106,7 @@ c42d00c5 feat: remove Redis/Redisson dependencies for PostgreSQL migration (#589
 
 ### 삭제된 것들
 
-```
+```text
 build.gradle.kts:
 - implementation("org.redisson:redisson-spring-boot-starter:...")
 
@@ -148,7 +148,7 @@ module-core와 module-app의 코드는 **단 한 줄도 변경하지 않고** �
 
 3월 17~18일, 새 인프라에 대한 테스트가 추가되었다.
 
-```
+```text
 8066cd45 feat(chaos): Add PostgreSQL chaos tests for PGMQ, Circuit Breaker, and Network (#567) (#606)
 04bd04fa feat(test): Add PostgreSQL integration tests with Testcontainers (#563) (#607)
 ```
@@ -168,7 +168,7 @@ module-core와 module-app의 코드는 **단 한 줄도 변경하지 않고** �
 
 3월 23일, PostgreSQL 마이그레이션 후 성능 튜닝이 이루어졌다.
 
-```
+```text
 e91501d6 perf(cache): fix ClassCastException and optimize bulk loading performance (#614)
 ```
 
@@ -176,7 +176,7 @@ e91501d6 perf(cache): fix ClassCastException and optimize bulk loading performan
 
 L2 Cache에서 `ClassCastException`이 발생했다. PostgreSQL UNLOGGED 테이블에서 읽은 데이터를 Caffeine L1에 넣을 때 타입 불일치.
 
-```
+```text
 UNLOGGED TABLE → Long
 Caffeine Cache → Integer (역직렬화 시 축소)
 → ClassCastException
@@ -188,7 +188,7 @@ Caffeine Cache → Integer (역직렬화 시 축소)
 
 ## 6.7 이 시점의 아키텍처 (PostgreSQL)
 
-```
+```text
 ┌──────────────────────────────────────────────────────────┐
 │                     module-app                            │
 │  ┌─────────────────────────────────────────────────────┐ │

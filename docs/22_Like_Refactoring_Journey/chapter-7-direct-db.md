@@ -1,6 +1,6 @@
 # 7장: Direct DB — 마지막 퍼즐
 
-> *2026년 3월 24일 ~ 2026년 3월 31일*
+> *2026년 3월 28일 ~ 2026년 3월 31일*
 
 ---
 
@@ -25,7 +25,7 @@
 
 2026년 3월 28일, Like 도메인의 **가장 최근의 아키텍처 결정**이 이루어졌다.
 
-```
+```text
 6756cb75 feat(like): Direct DB 토글 서비스 (ADR-344) (#622)
 ```
 
@@ -33,7 +33,7 @@
 
 Redis를 제거한 후, Like 토글은 더 이상 Lua Script를 사용하지 않았다. 대신 **In-Memory Buffer + PGMQ + DB 동기화**의 조합이었는데, 여전히 복잡했다:
 
-```
+```text
 Before (PostgreSQL with PGMQ):
   Toggle → InMemory Buffer → PGMQ Publish → Consumer → DB Write
            ↕                             ↕
@@ -42,7 +42,7 @@ Before (PostgreSQL with PGMQ):
 
 ### 새로운 접근: Direct DB Toggle
 
-```
+```text
 After (Direct DB):
   Toggle → 단일 DB 트랜잭션 → 완료
            │
@@ -116,7 +116,7 @@ public class DatabaseLikeProcessor implements LikeProcessor {
 
 3월 28일, OCID 캐시 버그와 인증 문제가 해결되었다.
 
-```
+```text
 672d3690 fix(like): OCID cache bug + 401 auth + E2E test (#661)
 ```
 
@@ -146,7 +146,7 @@ public class DatabaseLikeProcessor implements LikeProcessor {
 
 3월 29일, Like 도메인의 **가장 최신**이자 **가장 중요한** 보안/정합성 개선이 이루어졌다.
 
-```
+```text
 06952c40 feat(like): fingerprint identity + DB trigger for like_count atomicity (#662-#665) (#666)
 ```
 
@@ -238,7 +238,7 @@ Direct DB 방식에서는 캐시가 관여하지 않으므로, 이 이슈는 #66
 
 3월 29일, 보안 강화의 마지막 조각이 추가되었다.
 
-```
+```text
 4c9b3652 fix(auth): validate API key via Nexon API on login (#668)
 ```
 
@@ -255,7 +255,7 @@ Direct DB 방식에서는 캐시가 관여하지 않으므로, 이 이슈는 #66
 
 3월 29일, 4개의 P1 이슈가 해결되었다.
 
-```
+```text
 542f69b4 feat: scale-out data integrity for 4 P1 issues (#632-#635)
 ```
 
@@ -270,7 +270,7 @@ Direct DB 방식에서는 캐시가 관여하지 않으므로, 이 이슈는 #66
 
 ## 7.7 최종 아키텍처 (2026년 3월 31일)
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                       module-app                              │
 │  ┌──────────────────────────────────────────────────────────┐│
@@ -306,7 +306,7 @@ Direct DB 방식에서는 캐시가 관여하지 않으므로, 이 이슈는 #66
 
 ### Like 토글의 최종 흐름
 
-```
+```text
 POST /api/v2/characters/{userIgn}/like
   │
   ├─1─→ JWT Authentication (fingerprint + allMyOcids)
@@ -328,7 +328,7 @@ POST /api/v2/characters/{userIgn}/like
 
 ---
 
-## 7.8 133일의 여정 요약
+## 7.8 123일의 여정 요약
 
 | 단계 | 기간 | 아키텍처 | 인프라 |
 |------|------|----------|--------|
@@ -340,12 +340,14 @@ POST /api/v2/characters/{userIgn}/like
 | PostgreSQL | 2026.03 중 | Hexagonal | PostgreSQL + PGMQ + Kotlin |
 | Direct DB | 2026.03 말 | Hexagonal | PostgreSQL (Trigger) + Kotlin |
 
+> *참고: MySQL→PostgreSQL 전환은 2026년 3월 10일(PR #584)에 이루어졌다. 2026.03 초(헥사고날 단계)까지는 MySQL이었으며, 2026.03 중(PostgreSQL 단계)부터 PostgreSQL로 전면 교체되었다.*
+
 ### 근본적 변화
 
-```
+```text
 2025년 11월: Controller → DB (동기, 원자성 없음)
 2026년 1월:  Controller → Redis Lua Script → Scheduler → DB
 2026년 3월:  Controller → DB Transaction + Trigger → 완료
 ```
 
-**결국 가장 단순한 형태로 회귀했다.** 하지만 그 회귀는 가능했다 — 133일간의 학습, 실패, 그리고 아키텍처의 진화가 있었기에.
+**결국 가장 단순한 형태로 회귀했다.** 하지만 그 회귀는 가능했다 — 123일간의 학습, 실패, 그리고 아키텍처의 진화가 있었기에.

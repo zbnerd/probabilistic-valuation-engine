@@ -1,6 +1,6 @@
 # 2장: Redis 원자성 — Lua Script의 등장
 
-> *2026년 1월 2일 ~ 2026년 1월 16일*
+> *2026년 1월 2일 ~ 2026년 1월 17일*
 
 ---
 
@@ -8,7 +8,7 @@
 
 2026년 1월 2일, 새해 첫 업무일에 심각한 버그가 보고되었다.
 
-```
+```text
 efd37c69 fix: 장애 복구 프로세스 데이터 정합성 및 중복 결함 수정 (#124)
 ```
 
@@ -18,7 +18,7 @@ efd37c69 fix: 장애 복구 프로세스 데이터 정합성 및 중복 결함 �
 
 원인은 명확했다 — **비원자적 연산**:
 
-```
+```text
 1. Buffer에서 데이터 읽기 (fetch)
 2. Buffer에서 데이터 삭제 (clear)
 3. DB에 데이터 쓰기 (persist)
@@ -32,7 +32,7 @@ efd37c69 fix: 장애 복구 프로세스 데이터 정합성 및 중복 결함 �
 
 1월 3~4일, 예외 처리 체계의 골격이 세워졌다.
 
-```
+```text
 4dc6260a [Release] v2.3.0 - Redis HA 가용성 강화 및 시스템 안정화 (#136)
 c61e0fa0 [Refactor] LogicExecutor 기반 예외 처리 구조화 완료 (Tests 82/82 Passed) (#140)
 ```
@@ -57,7 +57,7 @@ c61e0fa0 [Refactor] LogicExecutor 기반 예외 처리 구조화 완료 (Tests 8
 
 1월 12일, Like 도메인의 가장 중요한 전환점 중 하나가 되는 커밋이 들어왔다.
 
-```
+```text
 18141cd9 feat(#147): LikeSyncService Redis 원자성 보장 - Lua Script 기반 데이터 유실 방지 (#164)
 ```
 
@@ -80,7 +80,7 @@ redis.opsForHash().delete("{likes}:buffer", entries.keySet().toArray(new String[
 
 **문제**: Step 1~3이 원자적이지 않다. Step 2와 3 사이에 서버가 크래시하면?
 
-```
+```text
 → DB에는 이미 반영됨
 → Redis에는 여전히 남아있음
 → 다음 sync 사이클에서 재실행 → 중복 카운트!
@@ -108,7 +108,7 @@ Redis의 Lua Script는 **단일 스레드에서 원자적으로 실행**된다. 
 
 같은 날, Lua Script에 이어 보상 트랜잭션이 추가되었다.
 
-```
+```text
 720ef598 feat(#147): LikeSyncService 원자성 및 보상 트랜잭션 구현 (#175)
 ```
 
@@ -116,7 +116,7 @@ Redis의 Lua Script는 **단일 스레드에서 원자적으로 실행**된다. 
 
 Lua Script는 Redis 내의 원자성은 보장하지만, **Redis→DB 간의 원자성**은 보장하지 않는다.
 
-```
+```text
 Lua Script: HGETALL + DEL (원자적) ✓
 DB Batch: UPDATE game_character SET like_count = like_count + ? ← 여기서 실패?
 ```
@@ -125,7 +125,7 @@ DB 배치 업데이트가 실패하면, Redis에서는 이미 삭제된 상태. 
 
 ### 보상 트랜잭션 패턴
 
-```
+```text
 ┌──────────────────────────────────────────────────┐
 │                LikeSyncExecutor                    │
 ├──────────────────────────────────────────────────┤
@@ -162,7 +162,7 @@ CREATE TABLE compensation_log (
 
 1월 12일, 인증 시스템이 추가되었다.
 
-```
+```text
 cdf6a716 feat(#146): BYOK 인증 시스템 및 Admin 관리 API 구현
 ```
 
@@ -177,13 +177,13 @@ Like 토글 API는 이제 인증된 사용자만 호출할 수 있다. 이것은
 
 1월 16일, LikeSync의 성능과 구조적 문제가 해결되었다.
 
-```
+```text
 ec32ac5a feat(#171-119-48): LikeSync 성능 최적화 및 순환 참조 제거 (#189)
 ```
 
 ### 순환 참조 문제
 
-```
+```text
 LikeSyncService → LikeBufferStorage → LikeSyncService
                       ↑___________________↓
 ```
@@ -192,7 +192,7 @@ Spring이 Bean을 생성할 때 순환 의존성으로 인해 `BeanCurrentlyInCr
 
 ### 해결: 인터페이스 분리
 
-```
+```text
 Before:
 LikeSyncService → LikeBufferStorage (구체 클래스)
 
@@ -216,7 +216,7 @@ LikeSyncService → LikeBufferStrategy (인터페이스)
 
 ## 2.7 이 시점의 아키텍처
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │                  Controller                  │
 │          (JWT Authentication)                │

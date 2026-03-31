@@ -1,6 +1,6 @@
 # 4장: 아키텍처 대전환 — 모듈의 분리
 
-> *2026년 2월 6일 ~ 2026년 2월 28일*
+> *2026년 2월 13일 ~ 2026년 2월 28일*
 
 ---
 
@@ -8,7 +8,7 @@
 
 2026년 2월 초, Like 도메인은 기능적으로는 안정되었지만, **구조적 부채**가 쌓여 있었다.
 
-```
+```text
 src/main/java/maple/expectation/
 ├── controller/     (HTTP)
 ├── service/v2/like/ (비즈니스 로직 + Redis + DB)
@@ -28,7 +28,7 @@ src/main/java/maple/expectation/
 
 2월 13일, 대대적인 모듈 분리가 시작되었다.
 
-```
+```text
 65f6c168 refactor: 멀티모듈 마이그레이션 및 코드 품질 개선 (Issue #282)
 ```
 
@@ -37,7 +37,7 @@ src/main/java/maple/expectation/
 
 ### 목표 모듈 구조
 
-```
+```text
 probabilistic-valuation-engine/
 ├── module-app/       (Application Layer — Controller, Scheduler)
 ├── module-core/      (Domain Layer — Entities, Ports, DTOs)
@@ -61,7 +61,7 @@ probabilistic-valuation-engine/
 
 2월 17~18일, 프로젝트 전체의 Kotlin 마이그레이션이 진행되었다.
 
-```
+```text
 #350 refactor: Migrate module-common from Java to Kotlin
 #352 docs: Chaos Engineering 문서 구조 개선
 ```
@@ -86,7 +86,7 @@ data class CharacterLike(
     val likerAccountId: String,
     val createdAt: LocalDateTime = LocalDateTime.now()
 )
-```
+```text
 
 > *참고: 마이그레이션은 점진적으로 진행되었다. Java-Kotlin interop 문제가 단계적으로 해결되며, 한 번에 전환된 것이 아니다.*
 
@@ -94,7 +94,7 @@ data class CharacterLike(
 
 2월 24~25일, Java-Kotlin 상호 운용성 문제가 연달아 발생:
 
-```
+```text
 f9456442 feat: Java-to-Kotlin 마이그레이션 Phase 1-1, 2-1, 2-2 완료 (#390)
 c241443d fix: Java-Kotlin interop 컴파일 에러 수정
 1e2f8d21 fix: Java-Kotlin interop - Add MemberRepository bean and fix Spring CGLIB proxying
@@ -116,7 +116,7 @@ b2075654 feat: Kotlin-Java Interop 타입 불일치 수정 및 모니터링 모�
 
 2월 28일, 점진적 마이그레이션이 계속되었다.
 
-```
+```text
 ca912a96 feat: Module separation Phase 2 - Gradual migration (#445)
 2b82a29c refactor: 기술부채 해결 - BatchScheduler 및 DTO 패키지 정리 (#447)
 026c047a fix: Kotlin DTO nullability 및 생성자 이슈 수정 (#444)
@@ -133,13 +133,13 @@ data class LikeEvent(
     val delta: Long,            // non-null
     val eventType: String       // non-null — Java에서 null 전달 시 컴파일 에러
 )
-```
+```text
 
 ---
 
 ## 4.5 이 시점의 모듈 구조 (2월 말)
 
-```
+```text
 module-core/
 ├── domain/model/like/
 │   ├── CharacterLike.kt

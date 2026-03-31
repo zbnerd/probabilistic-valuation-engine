@@ -8,7 +8,7 @@
 
 2026년 3월 1일, 세 개의 연속 커밋으로 Like 도메인이 헥사고날 아키텍처로 재편되었다.
 
-```
+```text
 9f8c2e32 refactor: ADR-003 LikeSyncScheduler 헥사고날 아키텍처 리팩토링 (#451)
 0979c84d feat: ADR-005 LikeSyncScheduler 이관 (#424) (#481)
 14a75004 refactor: module-infra 및 module-core 구조 정리 (#465)
@@ -18,7 +18,7 @@
 
 LikeSyncScheduler는 비즈니스 로직(동기화 정책)과 인프라 로직(Redis 접근, DB 쿼리)이 혼재되어 있었다. 이를 헥사고날 아키텍처로 분리:
 
-```
+```text
 Before:
 LikeSyncScheduler
 ├── @Scheduled 메서드
@@ -70,13 +70,13 @@ class InMemoryLikeBufferStorage(
 
 3월 2일, Like 패키지의 완전한 계층 분리가 이루어졌다.
 
-```
+```text
 c0b37b54 refactor: ADR-012 like 패키지 core/infra 분리 완료 (#535)
 ```
 
 ### 분리된 구조
 
-```
+```text
 module-core/src/main/kotlin/maple/expectation/core/
 ├── domain/model/like/
 │   ├── CharacterLike.kt          # 엔티티 (순수 도메인)
@@ -101,7 +101,7 @@ module-infra/src/main/kotlin/maple/expectation/infrastructure/
 
 ### 의존성 규칙
 
-```
+```text
 module-app → module-core ← module-infra
                     ↑
             (인터페이스/Port)
@@ -117,7 +117,7 @@ module-app → module-core ← module-infra
 
 3월 3~4일, Like 패키지가 application 계층으로 이관되었다.
 
-```
+```text
 2a1d5766 refactor: ADR-004 Phase 5 - 빈 패키지 제거 및 adapter/in → application/usecase 이관 (#538)
 6e8a05b2 refactor: ADR-004 Phase 5-E & 5-F - like/donation 패키지 application 계층 이관 (#539)
 04a5b505 refactor: ADR-004 Phase 5-G/H - facade/worker/flame/starforce 패키지 이관 (#540)
@@ -125,7 +125,7 @@ module-app → module-core ← module-infra
 
 ### Application 계층의 역할
 
-```
+```text
 module-app/src/main/java/maple/expectation/application/service/like/
 ├── LikeToggleService.java       # Use Case: 좋아요 토글
 ├── LikeProcessor.java           # Use Case: 좋아요 처리 (인터페이스)
@@ -147,7 +147,7 @@ module-app/src/main/java/maple/expectation/application/service/like/
 
 ## 5.4 이 시점의 완성된 아키텍처
 
-```
+```text
 ┌──────────────────────────────────────────────────────────┐
 │                     module-app                            │
 │  ┌─────────────────────────────────────────────────────┐ │

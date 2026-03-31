@@ -347,15 +347,22 @@ Service → @Transactional { save BusinessData; pgmqClient.send("v5_event_queue"
 
 ```
 0. [준비] 배포 아티팩트 빌드 (PGMQ 직접 발행 코드 포함, Flag=off 상태)
+   Graceful Shutdown 준비:
+   - application.yml: server.shutdown=graceful 설정 확인
+   - Load Balancer: health-check 준비 (배포 시작 시 트래픽 차단 가능)
 
-1. Stop-The-World: 새 배포 버전으로 교체 배포 (rolling restart)
-   - 동시에 모든 인스턴스가 Outbox 비활성 + PGMQ 직접 발행으로 전환
-   - 중복 구간 없음: 이전 버전은 Outbox, 새 버전은 PGMQ
-   - PENDING=0 확인은 배포 전에 수행 (이전 버전에서 완전 소진 후 배포)
+1. Stop-The-World 배포 (True STW — rolling restart 아님):
+   1a. Load Balancer에서 모든 인스턴스로 트래픽 차단 (health-check fail)
+   1b. 진행 중인 @Transactional 완료 대기 (Graceful Shutdown, 최대 30초)
+   1c. 모든 인스턴스 정지
 
-   사전 검증 (배포 직전):
+   사전 검증 (정지 직전, 구 버전에서):
    SQL: SELECT count(*) FROM event_outbox WHERE status = 'PENDING';
    → count = 0 확인 (아니면 대기)
+
+   1d. 새 배포 버전으로 모든 인스턴스 동시 기동 (PGMQ 직접 발행 활성)
+   1e. Health-check 복귀 후 트래픽 재개
+   - 중복 구간 없음: 이전 버전은 Outbox, 새 버전은 PGMQ
 
 2. 배포 후 검증
    - PGMQ 큐에 메시지 적재 확인
@@ -422,12 +429,17 @@ override fun process(message: PgmqMessage<DonationMessage>): Boolean {
     val context = TaskContext.of("DonationWorker", "Process", "donation=${request.donationId}")
 
     return executor.executeOrDefault({
-        // [P1] 무결성 검증: Content Hash 확인
-        val expectedHash = ContentHashUtil.computeV2(request.toString())
+        // [P1] 무결성 검증: Content Hash 확인 (V1 포맷 — canonical payload)
+        val canonicalPayload = "${request.donationId}|${request.userId}|${request.amount}"
+        val expectedHash = ContentHashUtil.computeV1(
+            request.donationId.toString(), "DONATION_ALERT", canonicalPayload
+        )
         if (request.contentHash != null && request.contentHash != expectedHash) {
             log.error("[DonationWorker] Content hash mismatch: msgId={}, expected={}, actual={}",
                 message.messageId, expectedHash, request.contentHash)
             moveToDlq(message, "Content hash mismatch")
+            // moveToDlq() 내부에서 pgmqClient.delete() 수행하므로
+            // false 반환은 메트릭용 (처리 실패 기록)
             return@executeOrDefault false
         }
         // 기존 알림 처리 로직
@@ -854,7 +866,9 @@ class PgmqArchiveCleanupScheduler(
         executor.executeVoid({
             val queues = listOf("calculation_queue", "donation_queue", "nexon_retry_queue")
             queues.forEach { queue ->
-                val deleted = pgmqClient.purgeArchived(queue) // custom method
+                // PGMQ에 내장 purge 함수가 없으므로 직접 DELETE 수행
+                // 또는 pgmq.read() 후 pgmq.delete() 반복 호출
+                val deleted = jdbcTemplate.update("DELETE FROM pgmq.a_${queue} WHERE created_at < NOW() - INTERVAL '30 days'")
                 log.info("[ArchiveCleanup] Purged {} archived messages from {}", deleted, queue)
             }
         }, context)
@@ -1039,3 +1053,7 @@ SQL: SELECT msg_id FROM pgmq.read('like_sync_queue', 100, 0);
 | 2026-03-31 | P1 | Scale-out PGMQ read() 중복 처리 | Section 6: 리스크 테이블에 VT 내 완료/idempotency 추가 |
 | 2026-03-31 | P2 | pg_cron 미설치 → 앱 스케줄러로 | Phase 4: PgmqArchiveCleanupScheduler로 대체 |
 | 2026-03-31 | P2 | NexonRetryMessage Jackson 직렬화 | (구현 시 data class 기본 Jackson 지원 확인) |
+| **3rd Review** | | | |
+| 2026-03-31 | P1 | DonationWorker computeV2 → V1 canonical payload | Phase 2: computeV1(donationId, "DONATION_ALERT", canonical) |
+| 2026-03-31 | P1 | Stop-The-World True STW + Graceful Shutdown | Phase 1: LB 트래픽 차단 → Graceful Shutdown → PENDING=0 → 배포 |
+| 2026-03-31 | P1 | purgeArchived() 구체적 명세 | Phase 4: `DELETE FROM pgmq.a_<queue> WHERE created_at < NOW() - 30d` |

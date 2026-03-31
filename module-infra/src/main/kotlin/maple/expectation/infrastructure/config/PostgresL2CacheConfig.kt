@@ -3,6 +3,8 @@ package maple.expectation.infrastructure.config
 import com.github.benmanes.caffeine.cache.Caffeine
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.TimeUnit
+import maple.expectation.core.port.inbound.CacheManagerPort
+import maple.expectation.infrastructure.cache.CacheManagerPortAdapter
 import maple.expectation.infrastructure.cache.TieredCacheManager
 import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
 import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheFactory
@@ -107,6 +109,10 @@ class PostgresL2CacheConfig {
         meterRegistry = meterRegistry,
         lockWaitSeconds = cacheProperties.singleflight.lockWaitSeconds,
     )
+
+    @Bean
+    fun cacheManagerPort(tieredCacheManager: TieredCacheManager): CacheManagerPort =
+        CacheManagerPortAdapter(tieredCacheManager)
 
     /**
      * Expectation 전용 L1 CacheManager (Caffeine)

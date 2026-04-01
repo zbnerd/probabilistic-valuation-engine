@@ -7,6 +7,7 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.infrastructure.fanout.NexonFanOutBatchLoader
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
+import jakarta.annotation.PostConstruct
 import org.springframework.cache.Cache
 import org.springframework.cache.concurrent.ConcurrentMapCache
 import org.springframework.stereotype.Service
@@ -55,6 +56,18 @@ class NexonEquipmentMicroBatchAdapter(
         singleLoader = { key -> fetchSingle(key) },
         batchLoader = { keys -> batchLoader.load(keys) },
     )
+
+    /**
+     * Batch Lane 코루틴 워커 시작
+     *
+     * <p>AdaptiveMicroBatchUserService는 Spring Bean이 아니므로 @PostConstruct가 자동 실행되지 않음.
+     * 따라서 이 어댑터의 @PostConstruct에서 명시적으로 호출 필요.
+     * (기존 GameCharacterMicroBatchAdapter, L2CacheMicroBatchAdapter에도 동일한 이슈 존재)
+     */
+    @PostConstruct
+    fun init() {
+        delegate.startBatchWorker()
+    }
 
     /**
      * OCID로 장비 데이터 조회 (Adaptive Micro-Batch)

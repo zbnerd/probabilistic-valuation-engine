@@ -2,13 +2,26 @@
 
 > 장비 기대비용 계산 API, 97 RPS → 7,347 RPS, 76배 향상
 > 2026년 1월 ~ 3월 | AWS t3.small (2 vCPU, 2GB RAM) | Spring Boot + Java 21 Virtual Threads
+>
+> **관련 문서:** [Like Domain Refactoring Portfolio](./like-refactoring-portfolio.md) — 좋아요 도메인의 123일 리팩토링 여정 (Redis → PostgreSQL 전환, Direct DB Transaction 회귀)
 
 ---
 
-## Project 1: 장비 기대비용 API(도메인) 응답 지연 문제(문제)를 체계적 병목 프로파일링(해결)으로 베이스라인 223 RPS, 4대 병목 식별(결과)
-
+## Project 1: 장비 기대비용 API(도메인) 응답 지연 문제를 체계적 병목 프로파일링으로 베이스라인 223 RPS, 4대 병목 식별
 **[1장] 문제:**
 로컬 개발 환경에서 장비 기대비용 API 응답이 2초씩 걸렸고, 동시 사용자 10명만 넘어도 타임아웃이 발생했다. 원인을 추측만 할 뿐, 측정된 데이터가 없었다. 비공식 측정에서 90~120 RPS 수준이었다.
+
+```
+요청 흐름도 (초기 병목 구간):
+Client → GameCharacterControllerV4
+  → ExpectationV4Port.calculateExpectation()
+    → Redis 왕복 3~5회 (1~2ms × 5 = 5~10ms)
+    → LogicExecutor.submit() (큐 대기 50~100ms)
+    → Nexon API 호출 (257ms)
+    → 동기 DB 저장 (150ms)
+    → JSON 직렬화 (50ms)
+→ Response (총 2초+)
+```
 
 **[2장] 선택지:**
 1) 인프라 확장: Redis 클러스터 + MySQL 읽기 복제본 추가 (월 $100+, 비용 문제)
@@ -37,12 +50,30 @@
 → 4대 병목 식별 완료, 다음 타겟: Cache Stampede
 ```
 
+**[배운 점]**
+1. **측정 없는 최적화는 도박이다:** 추측만으로 56% 성능 회귀(Project 2)를 경험했다. A/B 테스트와 메트릭 기반 의사결정이 필수적이다.
+2. **병목은 예상치 못한 곳에 있다:** Redis가 "빠르다"는 믿음이 네트워크 왕복 5회(1~2ms×5)를 놓치게 만들었다. 모든 레이어를 프로파일링해야 한다.
+3. **Locust vs wrk:** Python GIL 병목으로 Locust는 241 RPS만 측정했지만, wrk(C Native)는 555 RPS를 기록했다. 측정 도구 자체가 병목이 될 수 있다.
+
+**[다시 한다면]**
+1. **프로파일링 도구를 먼저 도입할 것:** JFR, Async Profiler, p99 지표 기반 APM을 초기부터 구축했다.
+2. **베이스라인부터 명확히 할 것:** "느리다"가 아니라 "p99가 4,100ms다"처럼 정량적 목표를 설정했다.
+
 ---
 
-## Project 2: 캐시 스탬피드(문제) 해결 위해 LocalSingleFlight 도입(해결)했으나 56% 성능 회귀 → 원인 규명 후 롤백(결과)
-
+## Project 2: 캐시 스탬피드 해결 위해 LocalSingleFlight 도입했으나 56% 성능 회귀 → 원인 규명 후 롤백
 **[1장] 문제:**
 캐시 미스 시 동일 키에 대한 요청이 각각 독립적으로 계산을 수행했다. 인기 캐릭터 "아델"에 100명이 동시 요청하면 Nexon API를 100번 호출하는 Cache Stampede가 발생했다.
+
+```
+Before (Cache Stampede):
+Request 1 → Cache MISS → Nexon API 호출 (257ms)
+Request 2 → Cache MISS → Nexon API 호출 (257ms)
+Request 3 → Cache MISS → Nexon API 호출 (257ms)
+...
+Request 100 → Cache MISS → Nexon API 호출 (257ms)
+→ 100번의 중복 API 호출!
+```
 
 **[2장] 선택지:**
 1) LocalSingleFlight: JVM 레벨에서 Semaphore로 요청 병합 (추가 인프라 없음)
@@ -55,20 +86,38 @@
 **[4장] 구현:**
 Semaphore 기반 LocalSingleFlight를 구현했다. tryAcquire() 성공 시 Leader로 계산 수행, 실패 시 Follower로 결과 대기. 캐시 히트 여부와 관계없이 모든 요청이 이 경로를 거치도록 설계했다.
 
+```
+After (LocalSingleFlight - 실패):
+Request 1 → Semaphore.acquire() → Leader → Nexon API (257ms)
+Request 2 → Semaphore.tryAcquire() 실패 → Follower → 대기
+Request 3 → Semaphore.tryAcquire() 실패 → Follower → 대기
+...
+Request 100 → Semaphore.tryAcquire() 실패 → Follower → 대기
+→ 문제: Cache HIT도 Semaphore blocking!
+```
+
 **[5장] 결과:**
 223 RPS → 97 RPS. **최적화를 했더니 56% 느려졌다.** 원인: Semaphore가 캐시 히트마저 blocking했다. 99%가 캐시 히트인 상황에서 7ms 응답이 490ms로 지연. 즉시 롤백했다.
 
 ```
 요청 경로 분석 (회귀 원인):
-Before: Cache HIT → 7ms 즉시 응답
-After:  Cache HIT → Semaphore 대기 → Leader 처리 → 490ms 지연
+Before: Cache HIT → TieredCache.get() → 7ms 즉시 응답
+After:  Cache HIT → Semaphore.acquire() 대기 → Leader 처리 → 490ms 지연
         ↑ 캐시에 이미 있는데도 blocking!
 ```
 
+**[배운 점]**
+1. **Fast Path와 Slow Path 분리:** 캐시 히트(99%)와 미스(1%)를 동일한 경로로 처리하면, minority optimization이 majority에 피해를 준다. Project 3에서 Fast Path 분리로 해결했다.
+2. **측정 없는 최적화의 위험성:** "이론적으로 완벽한 패턴"이라도 실제 워크로드(캐시 히트율 99%)에서는 재앙이 될 수 있다. A/B 테스트 없이 배포하면 56% 회귀를 경험한다.
+3. **AtomicBoolean CAS Lock vs Semaphore:** SingleFlight는 ConcurrentHashMap.computeIfAbsent() + CAS가 더 적합하다. Semaphore는 모든 요청을 직렬화해 병목을 만든다.
+
+**[다시 한다면]**
+1. **캐시 히트/미스 경로를 완전히 분리할 것:** Fast Path(Project 3)처럼 캐시 히트는 synchronization 없이 직접 반환한다.
+2. **Admission Control을 먼저 적용할 것:** cold miss 동시성 제어는 Project 11의 GlobalAdmissionControl이 적합하다. 모든 요청을 직렬화하는 것은 과잉 방어다.
+
 ---
 
-## Project 3: 캐시 히트 시 200ms 지연(문제)을 L1 Fast Path 제로카피 도입(해결)으로 응답 200ms→4ms, 97→555 RPS 개선(결과)
-
+## Project 3: 캐시 히트 시 200ms 지연을 L1 Fast Path 제로카피 도입으로 응답 200ms→4ms, 97→555 RPS 개선
 **[1장] 문제:**
 캐시 히트가 발생했는데도 응답에 200ms 이상 걸렸다. 원인을 추적하니, Executor.submit() 오버헤드(50~100ms 큐 대기) + 불필요한 직렬화/역직렬화(GZIP→JSON→Object→JSON→GZIP, 300KB 이중 변환)가 캐시 히트 응답을 느리게 만들고 있었다.
 
@@ -89,10 +138,21 @@ Client → Controller → Executor.submit() [50-100ms 대기]
 옵션 2를 선택했다. 캐시에 이미 GZIP 압축된 응답이 있는데 이를 풀었다가 다시 압축하는 것 자체가 비합리적이었다. 캐시 히트 시에는 Controller에서 Caffeine L1을 직접 조회해 byte[]를 그대로 반환하는 Fast Path를 만들면, 스레드풀도 직렬화도 우회할 수 있다.
 
 **[4장] 구현:**
-TieredCacheManager에 GZIP byte[] 직접 조회 메서드를 추가하고, Controller에서 먼저 Fast Path를 확인한 뒤 미스면 기존 비동기 경로(Slow Path)로 위임했다. 캐시 만료를 30분→60분, 최대 크기를 1,000→5,000으로 조정했다.
+TieredCacheManager.getL1CacheDirect()로 L1(Caffeine) 직접 조회 메서드를 추가. GameCharacterControllerV4에서 GZIP 요청 시 Fast Path를 먼저 확인하고, 미스 시에만 LogicExecutor 경로(Slow Path)로 위임했다.
 
 **[5장] 결과:**
-97 RPS → 555 RPS (+473%). 캐시 히트 응답 200ms → 4ms. L1 Hit Rate 99.99%. 에러율 1.4~3.3%. 추가 발견: Locust(Python GIL 병목)가 241 RPS로 측정한 반면, wrk(C Native)는 555 RPS로 측정. **측정 도구 자체가 병목**이었음을 확인하고 이후 wrk로 통일.
+97 RPS → 555 RPS (+473%, wrk -t4 -c100 -d30s). 캐시 히트 응답 200ms → 4ms. L1 Hit Rate 99.99%. 에러율 1.4~3.3%. 추가 발견: Locust(Python GIL 병목)가 241 RPS로 측정한 반면, wrk(C Native)는 555 RPS로 측정. **측정 도구 자체가 병목**이었음을 확인하고 이후 wrk로 통일.
+
+**참고:** L1 Fast Path와 캐시 만료 시간/크기 최적화가 동시에 적용되어, 개별 기여도 분리는 어렵다. Fast Path가 응답 지연 해소의 핵심이었고, 캐시 설정 조정이 히트율 향상에 기여했다.
+
+**[배운 점]**
+1. **직렬화 비용은 생각보다 크다:** 300KB GZIP→JSON→Object→JSON→GZIP 이중 변환이 200ms 지연의 주범이었다. "빠르다"는 JSON 직렬화도 빈도가 높으면 Critical Path가 된다.
+2. **TieredCache의 getL1CacheDirect() 분리:** Fast Path(Slow Path를 우회)와 Slow Path(Miss 시 완전 계산)를 물리적으로 분리하면, 99% Hit 경로에서 synchronization overhead를 완전히 제거할 수 있다.
+3. **Controller에서 캐시 전략 결정:** Port 인터페이스 뒤에 숨기지 말고, Controller에서 GZIP 여부를 보고 Fast/Slow Path를 선택하는 것이 pragmatic했다.
+
+**[다시 한다면]**
+1. **처음부터 Fast Path를 설계할 것:** TieredCache 구현 시 getL1CacheDirect()를 기본으로 포함했다.
+2. **Protobuf 직렬화 고려:** JSON 대신 Protobuf를 사용하면 직렬화 비용을 50% 이상 줄일 수 있다. (추후 개선 포인트)
 
 ```
 부하테스트 결과 (wrk -t4 -c100 -d30s, t3.small):
@@ -110,8 +170,7 @@ TieredCacheManager에 GZIP byte[] 직접 조회 메서드를 추가하고, Contr
 
 ---
 
-## Project 4: 동기 DB 저장 150ms 병목(문제)을 Write-Behind Buffer 비동기화(해결)로 555→674 RPS, 에러율 0% 달성(결과)
-
+## Project 4: 동기 DB 저장 150ms 병목을 Write-Behind Buffer 비동기화로 555→674 RPS, 에러율 0% 달성
 **[1장] 문제:**
 555 RPS를 달성했으나 p50이 871ms였다. 분석 결과, 캐시 미스 시 동기 DB 저장이 프리셋 3개×50ms = 150ms를 차지했다. 사용자는 DB 저장이 끝날 때까지 기다려야 했고, 전체 요청 시간의 30%를 DB 저장이 점유하고 있었다.
 
@@ -128,13 +187,27 @@ Request → Nexon API (257ms) → 파싱 (50ms) → 계산 (100ms) → DB 저장
 3) Kafka/RabbitMQ 메시지 큐: 가장 견고하지만 인프라 추가 비용
 
 **[3장] 결정:**
-옵션 2를 선택했다. 추가 인프라 없이 구현 가능하고, Phaser로 서버 종료 시에도 버퍼 데이터를 안전하게 flush할 수 있으며, CAS + Exponential Backoff로 lock-free 동시성 제어가 가능했다. Backpressure(10,000개 초과 시 신규 offer 거부)도 함께 구현했다.
+옵션 2를 선택했다. 추가 인프라 없이 구현 가능하고, Phaser로 서버 종료 시에도 버퍼 데이터를 안전하게 flush할 수 있으며, CAS + Exponential Backoff로 lock-free 동시성 제어가 가능했다. Backpressure(10,000개 초과 시 신규 offer 거부)도 함께 구현했다. **참고:** Graceful Shutdown(SIGTERM) 시에는 유실 방지가 보장되지만, 프로세스 크래시(OOM, kill -9) 시에는 인메모리 버퍼 데이터 유실 가능이 있다. Write-Behind 패턴의 특성상 일정 수준 손실은 허용 가능한 트레이드오프였다.
 
 **[4장] 구현:**
-Phaser 기반 Shutdown Safety: 서버 종료 신호 시 버퍼에 남은 데이터를 안전하게 flush. CAS + Exponential Backoff: pending count를 lock-free로 관리(1ns→2ns→4ns 백오프). 500개/5초 배치로 DB에 flush.
+ExpectationWriteBackBuffer 구현: ConcurrentLinkedQueue에 모았다가 500개/5초 배치로 DB에 flush. Phaser 기반 graceful shutdown(SIGTERM 시 버퍼 flush). CAS + Exponential Backoff로 lock-free 동시성 제어. Backpressure(10,000개 초과 시 offer 거부).
+
+```
+Before (동기 DB 저장):
+Request → Nexon API → 파싱 → 계산 → DB 저장 (150ms 동기)
+→ Response (사용자 대기)
+
+After (Write-Behind Buffer):
+Request → Nexon API → 파싱 → 계산 → Buffer.offer() (0.1ms)
+→ Response (즉시 반환)
+                                                ↓
+                              Background Thread (500개 배치)
+                                                ↓
+                                           DB INSERT (배치)
+```
 
 **[5장] 결과:**
-555 RPS → 674 RPS (+21%). DB Write Latency 150ms → 0.1ms (1,500배). 에러율 1.4~3.3% → **0%**. wrk 200연결에서는 719 RPS 기록.
+555 RPS → 674 RPS (+21%, wrk -t4 -c100 -d30s). DB Write Latency 150ms → 0.1ms (1,500배). 에러율 1.4~3.3% → **0%** (테스트 기간 30초, wrk 기준). wrk 200연결에서는 719 RPS 기록.
 
 ```
 부하테스트 결과 (wrk, t3.small):
@@ -155,12 +228,41 @@ Phaser 기반 Shutdown Safety: 서버 종료 신호 시 버퍼에 남은 데이�
 │ 에러율            │ 1.4~3.3%  │ 0%      │ 완전제거 │
 ```
 
+**[배운 점]**
+1. **Graceful Shutdown의 중요성:** SIGTERM 시에만 유실 방지가 보장된다. OOM/kill -9 시에는 인메모리 버퍼 데이터 유실 가능이 있다. 운영 환경에서는 SIGTERM + 오토스케일링 그룹의 graceful shutdown 정책이 필수적이다.
+2. **Phaser vs CountDownLatch:** Phaser는 동적 파티 등록/해제가 가능해 재사용 가능한 shutdown barrier에 적합하다. CountDownLatch는 1회용이라 재시작 시 재생성이 없다.
+3. **Batching 효과:** 개별 upsert(1회×158,428) → 배치 upsert(500개×317회)로 DB 왕복 500배 감소. 네트워크 왕복 비용이 지배적인 PostgreSQL에서는 특히 효과적이다.
+
+**[다시 한다면]**
+1. **Persistent Queue 도입 고려:** PGMQ(Project 8)를 처음부터 사용했다면 OOM 시에도 데이터 유실을 방지할 수 있었다.
+2. **Flush 주기 모니터링:** 버퍼 축적 속도 vs flush 속도를 모니터링해서, overflow가 예상될 때 스케일아웃을 먼저 할 것이다.
+
 ---
 
-## Project 5: 프리셋 순차 계산 300ms(문제)를 전용 Executor 분리+병렬 처리(해결)로 674→965 RPS, p50 95ms 달성(결과)
-
+## Project 5: 프리셋 순차 계산 300ms를 전용 Executor 분리+병렬 처리로 674→965 RPS, p50 95ms 달성
 **[1장] 문제:**
 프리셋 3개를 for 루프로 순차 계산하고 있었다. 각 프리셋은 독립적(프리셋 1의 결과가 프리셋 2에 영향 없음)인데도 100ms×3 = 300ms가 걸렸다. 동시에 계산하면 100ms면 되지만, 함정이 있었다: 같은 Executor에서 부모-자식 태스크를 실행하면 데드락이 발생한다.
+
+```
+Before (순차 계산):
+for (preset in presets) {
+    calculatePreset(preset) // 100ms
+}
+→ 총 300ms
+
+Deadlock Risk (같은 Executor 병렬):
+Parent(TaskExecutor) → CompletableFuture.supplyAsync(TaskExecutor) × 3
+    → Parent .join() 대기
+    → Children은 큐에서 Parent 스레드 대기 → Deadlock!
+```
+
+```
+After (전용 Executor + 병렬):
+presetCalculationExecutor (core 12/max 24/queue 100)
+    → CompletableFuture.supplyAsync(presetCalculationExecutor) × 3
+    → allOf().join() → 병렬 100ms
+→ 총 100ms (3배 향상)
+```
 
 **[2장] 선택지:**
 1) 기존 Executor에서 병렬 처리: 구현 간단하지만 8개 스레드가 모두 .join() 대기하면 새 작업 스케줄링 불가 → 데드락
@@ -171,10 +273,10 @@ Phaser 기반 Shutdown Safety: 서버 종료 신호 시 버퍼에 남은 데이�
 옵션 2를 선택했다. 카오스 엔지니어링 N03 Thread Pool Exhaustion 테스트에서 이미 같은 Executor 부모-자식 데드락이 증명된 바 있었다. 전용 Executor를 물리적으로 분리하면 데드락이 원천 불가능해진다.
 
 **[4장] 구현:**
-presetCalculationExecutor(core 12/max 24/queue 100)를 새로 생성. 3개 프리셋을 CompletableFuture.supplyAsync()로 동시에 제출하고 모두 완료될 때까지 대기. JSON DoS 방어(maxNestingDepth 50, maxStringLength 100,000)도 함께 적용.
+PresetCalculationExecutorConfig로 presetCalculationExecutor(core 12/max 24/queue 100)를 새로 생성. 3개 프리셋을 CompletableFuture.supplyAsync()로 동시에 제출하고 allOf().join()으로 모두 완료될 때까지 대기. JSON DoS 방어(maxNestingDepth 50, maxStringLength 100,000)도 함께 적용.
 
 **[5장] 결과:**
-674 RPS → 965 RPS (+43%). 목표 719 RPS 대비 +34% 초과 달성. p50: 95ms, p99: 214ms, Max: 332ms. 에러 0건. 5-Agent Council 만장일치 PASS.
+674 RPS → 965 RPS (+43%, 동일 조건 wrk -t4 -c100 -d30s). 목표 719 RPS 대비 +34% 초과 달성. p50: 95ms, p99: 214ms, Max: 332ms. 에러 0건 (테스트 기간 30초). 5-Agent Council 만장일치 PASS.
 
 ```
 부하테스트 결과 (wrk -t4 -c100 -d30s, AWS t3.small):
@@ -196,19 +298,39 @@ presetCalculationExecutor(core 12/max 24/queue 100)를 새로 생성. 3개 프�
 │ 전체 요청   │ ~450ms    │ ~100ms   │ 4.5배│
 ```
 
+**[배운 점]**
+1. **부모-자식 데드락은 Executor 분리로 해결:** 같은 스레드풀에서 부모가 자식 태스크를 .join() 대기하면, 자식들은 큐에서 부모 스레드를 기다리며 데드락이 발생한다. 물리적으로 분리된 Executor는 이를 원천 차단한다.
+2. **AbortPolicy vs CallerRunsPolicy:** AbortPolicy는 큐 포화 시 빠른 실패로 시스템을 보호하지만, CallerRunsPolicy는 호출 스레드에서 실행하여 Backpressure 신호를 손실한다. (CLAUDE.md Section 22 준수)
+3. **JSON DoS 방어의 중요성:** maxNestingDepth 50, maxStringLength 100,000 제한이 없으면, 악의적인 대용량 JSON으로 메모리 고갈을 유발할 수 있다.
+
+**[다시 한다면]**
+1. **Virtual Thread를 더 적극적으로 검토할 것:** Caffeine의 synchronized 블록에서 carrier thread pinning 위험이 있지만, 대부분의 경로에서 pinning 없이 사용 가능했다. (추후 개선 포인트)
+
 ---
 
-## Project 6: Scale-out 시 인스턴스 간 캐시 불일치(문제)를 V5 Stateless 전환(해결)으로 정합성 확보, 단일 688→325 RPS(-53%)이나 4인스턴스 선형 확장 가능(결과)
-
+## Project 6: Scale-out 시 인스턴스 간 캐시 불일치를 V5 Stateless 전환으로 정합성 확보, 단일 688→325 RPS(-53%)이나 4인스턴스 선형 확장 가능
 **[1장] 문제:**
 965 RPS를 달성했지만 단일 인스턴스의 한계였다. 서버를 늘려도 Write-Behind Buffer가 인메모리라 인스턴스마다 데이터가 달랐다. 인스턴스 A에서 아델의 기대비용을 343,523,928,885,098으로 계산했지만, B에서는 342,100,000,000(구버전). 사용자가 새로고침할 때마다 다른 결과가 보였다.
 
 ```
-Scale-out 시 데이터 불일치:
-Instance A: 아델 totalExpectedCost = 343,523,928,885,098 ← 최신
-Instance B: 아델 totalExpectedCost = 342,100,000,000,000 ← 구버전
-Instance C: 아델 totalExpectedCost = 343,523,928,885,098 ← 최신 (우연히)
+Before (V4 In-Memory - 불일치):
+Instance A: Write-Behind Buffer → {아델: 343,523,928,885,098}
+Instance B: Write-Behind Buffer → {아델: 342,100,000,000,000} ← 구버전
+Instance C: Write-Behind Buffer → {아델: 343,523,928,885,098}
 → 사용자가 새로고침할 때마다 다른 결과!
+```
+
+```
+After (V5 Stateless - 정합성):
+Instance A → Redis Shared Buffer → {아델: 343,523,928,885,098}
+Instance B → Redis Shared Buffer → {아델: 343,523,928,885,098}
+Instance C → Redis Shared Buffer → {아델: 343,523,928,885,098}
+→ 모든 인스턴스에서 동일한 결과
+
+Cache Invalidation (Redis Pub/Sub):
+Instance A: UPDATE → Redis PUBLISH "invalidate:아델"
+Instance B: SUBSCRIBE → L1 evict "아델"
+Instance C: SUBSCRIBE → L1 evict "아델"
 ```
 
 **[2장] 선택지:**
@@ -217,13 +339,13 @@ Instance C: 아델 totalExpectedCost = 343,523,928,885,098 ← 최신 (우연히
 3) 인메모리 유지 + Pub/Sub 동기화: 각 인스턴스 독립 L1 + 변경 시 Redis Pub/Sub로 무효화 전파. 최종 일관성(eventual consistency)
 
 **[3장] 결정:**
-옵션 3을 선택했다. Write-Behind Buffer를 인메모리에서 Redis로 옮기고, Redis Pub/Sub으로 캐시 무효화를 전파하는 V5 Stateless 아키텍처를 구축했다. 단일 인스턴스 성능은 희생하더라도 Scale-out 시 데이터 정합성을 확보하는 것이 우선이었다.
+옵션 3을 선택했다. Write-Behind Buffer를 인메모리에서 Redis로 옮기고, Redis Pub/Sub으로 캐시 무효화를 전파하는 V5 Stateless 아키텍처를 구축했다. 단일 인스턴스 성능은 희생하더라도 Scale-out 시 데이터 정합성을 확보하는 것이 우선이었다. **참고:** Redis Pub/Sub은 이후 Project 8~9에서 PostgreSQL LISTEN/NOTIFY로 완전 대체된 임시 조치였다.
 
 **[4장] 구현:**
-인메모리 Buffer → Redis Shared Buffer 전환. 인스턴스 A가 데이터 갱신 시 Redis Pub/Sub으로 무효화 이벤트 발행. Instance B/C가 수신해 L1 캐시에서 evict. 5개 인스턴스에서 MD5 해시로 정합성 검증.
+GameCharacterControllerV5 생성 (CQRS 패턴). 인메모리 Buffer → Redis Shared Buffer 전환. 인스턴스 A가 데이터 갱신 시 Redis Pub/Sub으로 무효화 이벤트 발행. Instance B/C가 수신해 L1 캐시에서 evict. 5개 인스턴스에서 MD5 해시로 정합성 검증.
 
 **[5장] 결과:**
-단일 인스턴스 688 → 325 RPS (-53%). 하지만 4인스턴스에서 510 RPS 달성. MD5 해시로 모든 인스턴스에서 동일값 확인. 정합성은 확보했지만 속도가 절반으로 줄었다. 결정: 단일은 V4(688 RPS), Scale-out 필요 시 V5(325 RPS) 사용.
+단일 인스턴스 688 → 325 RPS (-53%). 하지만 4인스턴스에서 510 RPS 달성. MD5 해시로 모든 인스턴스에서 동일값 확인. 정합성은 확보했지만 속도가 절반으로 줄었다. 결정: 단일은 V4(688 RPS), Scale-out 필요 시 V5(325 RPS) 사용. **참고:** V5의 Redis Pub/Sub은 Project 8~9에서 PostgreSQL LISTEN/NOTIFY로 대체되었다.
 
 ```
 V4 vs V5 트레이드오프:
@@ -234,12 +356,33 @@ V4 vs V5 트레이드오프:
 │ RPS/$        │ 45.9           │ 21.7        │
 ```
 
+**[배운 점]**
+1. **Stateful vs Stateless Trade-off:** V4(In-Memory)는 단일 성능이 뛰어나지만 Scale-out 시 데이터 불일치, V5(Stateless)는 단일 성능을 희생하지만 선형 확장이 가능하다. 워크로드에 따라 선택이 필요하다.
+2. **Redis Pub/Sub의 한계:** 와일드카드 패턴 무효화, 무제한 페이로드, 검증된 생태기술이라는 장점이 있지만, PostgreSQL NOTIFY의 트랜잭션 내 원자성이 더 중요했다. Project 8~9에서 완전 대체되었다.
+3. **CQRS 패턴의 유용성:** GameCharacterControllerV5에서 Query Side(PostgreSQL 조회)와 Command Side(큐잉)를 분리하면, 읽기 경로를 최적화하면서 쓰기 경로를 비동기화할 수 있다.
+
+**[다시 한다면]**
+1. **처음부터 PostgreSQL LISTEN/NOTIFY를 사용할 것:** Redis Pub/Sub은 임시 조치였고, 결국 PostgreSQL으로 완전 대체되었다. (Project 8~9)
+
 ---
 
-## Project 7: 콜드 스타트 시 20% 타임아웃(문제)을 Auto Warmup 스케줄러(해결)로 287→940 RPS, +227% 개선(결과)
-
+## Project 7: 콜드 스타트 시 20% 타임아웃을 Auto Warmup 스케줄러로 287→940 RPS, +227% 개선
 **[1장] 문제:**
 V5 Stateless의 325 RPS도 캐시가 따뜻해진 상태의 수치였다. 서버 재시작 직후 캐시가 비어있는 Cold Start 상태에서 테스트하니 287 RPS에 타임아웃 20%+, p50 760ms. 모든 요청이 캐시 미스라 Nexon API 호출+파싱+계산이 매번 발생했다.
+
+```
+Cold Start 문제:
+Server Restart → 캐시 초기화
+  → 첫 요청 100건 전부 Cache MISS
+  → Nexon API 100번 호출 (257ms × 100 = 25.7초)
+  → Thundering Herd 발생 → 타임아웃 20%+
+
+Auto Warmup 해결:
+@Scheduled(cron = "0 0 1 * * ?") // 매일 새벽 1시
+  → PopularCharacterTrackerPort.getTopCharacters(200)
+  → 50ms 간격으로 순차 캐시 적재
+  → 서버 재시작 시에도 Warm 상태 유지
+```
 
 **[2장] 선택지:**
 1) 캐시 TTL만 길게: Warm 상태 유지 시도 (재시작 시 결국 Cold)
@@ -250,7 +393,7 @@ V5 Stateless의 325 RPS도 캐시가 따뜻해진 상태의 수치였다. 서버
 옵션 2를 선택했다. 전날 가장 많이 조회된 캐릭터 Top 100을 미리 캐시에 채우면, 서버 재시작 직후에도 Warm 상태로 시작할 수 있다. Thundering Herd 방지를 위해 50ms 간격으로 순차 실행하고, 일부 웜업 실패해도 서버는 정상 기동하도록 설계했다.
 
 **[4장] 구현:**
-@Scheduled 기반 웜업 스케줄러 구현. 전날 인기 캐릭터 100명을 50ms 간격으로 순차 계산해 캐시에 적재. 이미 캐시된 캐릭터는 스킵.
+@Scheduled(fixedRate) 기반 웜업 스케줄러 구현. PopularCharacterTrackerPort가 전날 인기 캐릭터 100~200명을 추적. 50ms 간격으로 순차 계산해 캐시에 적재. 이미 캐시된 캐릭터는 스킵.
 
 **[5장] 결과:**
 Cold 287 RPS → Warm 940 RPS (+227%). 타임아웃 20%+ → 0.9%. 3인스턴스 + Auto Warmup에서 최적 성능 달성. 5인스턴스부터는 오히려 RPS 하락(833 RPS): HikariCP 커넥션 풀 고갈(5대×30커넥션=150커넥션이 MySQL에 몰림).
@@ -270,8 +413,7 @@ Scale-out 한계 발견:
 
 ---
 
-## Project 8: 3중 DB 인프라 병목(문제)을 PostgreSQL 단일화+Micro-Batching(해결)로 940→7,347 RPS, 3DB→1DB 달성(결과)
-
+## Project 8: 3중 DB 인프라 병목을 PostgreSQL 단일화+Micro-Batching로 940→7,347 RPS, 3DB→1DB 달성
 **[1장] 문제:**
 Redis(캐시+분산락+Pub/Sub+Rate Limiting), MySQL(영속성+Named Lock), MongoDB(이벤트 스토어+CQRS) 세 DB가 얽혀 있었다. 요청 하나당 Redis 3~5회 왕복 + MySQL 쓰기 + MongoDB 이벤트 발행 = DB 왕복만 20~40ms 누적. 5인스턴스 Scale-out 시 HikariCP 커넥션 풀(총 104개)이 고갈되는 것이 한계였다.
 
@@ -297,6 +439,8 @@ MongoClient:         max 20 connections
 
 **[3장] 결정:**
 옵션 2를 선택했다. 분석 결과 모든 Redis/MySQL/MongoDB 기능에 PostgreSQL 대안이 이미 존재했다(Advisory Lock, PGMQ, JSONB, UNLOGGED TABLE). 3일간 스프린트로 전면 전환을 결정. Redisson 관련 파일 28개, MySQL 관련 파일 6개를 삭제.
+
+**Trade-off 공정성:** Redis는 와일드카드 패턴 무효화, 무제한 페이로드, 검증된 Pub/Sub 생태기술이라는 장점이 있다. 하지만 PostgreSQL의 트랜잭션 내 NOTIFY 원자성, 단일 인프라 운영, 이미 연결된 커넥션 재활용이 현재 규모(t3.small, 5인스턴스 이하)에서 더 큰 이점이었다.
 
 **[4장] 구현:**
 Phase 1(Redis 제거): RedisDistributedLockStrategy→PostgresAdvisoryLockStrategy, RedisBuffer→PGMQ, RedisStream→PgmqStreamPublisher, RedissonConfig 삭제. Phase 2(MongoDB 제거): CQRS Read Side를 MongoDB Document→PostgreSQL JSONB로 교체. Phase 3(MySQL 제거): driver-class-name을 MySQL→PostgreSQL로 변경. 동시에 Micro-Batching 적용: 개별 쿼리(SELECT WHERE id=1, 2, 3)를 배치 쿼리(SELECT WHERE id IN(1,2,3))로 통합.
@@ -327,10 +471,17 @@ After:  Request 1,2→SELECT WHERE id IN(1,2)        = DB 왕복 1회
 → 캐시 미스 시 DB 왕복 3~5회 → 1회로 감소
 ```
 
+**[배운 점]**
+1. **인프라 단일화의 폭발적 효과:** 3개 DB→1개 PostgreSQL로 단순화하니, Connection Pool 고갈 문제가 해결되고 Micro-Batching이 효과적으로 작동했다. 940 RPS → 7,347 RPS (7.8배)는 인프라 단순화의 힘이다.
+2. **Micro-Batching이 핵심 엔진:** DB 왕복 3~5회→1회로 줄인 것이 7,347 RPS의 주범이다. 개별 쿼리를 배치 쿼리로 통합하는 것이 추가 인프라 없이 가장 강력한 최적화다.
+3. **PGMQ의 안정성:** Like Domain Refactoring Journey(PR #685-#690)에서 PGMQ를 도입했는데, Redis Pub/Sub보다 트랜잭션 내 원자성이 보장되어 안정적이다. Outbox 제거(PRM #688)로 코드가 더 단순해졌다.
+
+**[다시 한다면]**
+1. **처음부터 PostgreSQL을 단일 DB로 사용할 것:** Redis/MongoDB 도입 없이 PostgreSQL만으로 충분하다. Advisory Lock, PGMQ, JSONB, NOTIFY, UNLOGGED TABLE 조합으로 대부분의 기능을 구현할 수 있다.
+
 ---
 
-## Project 9: 다중 인스턴스 캐시 무효화 전파 불가(문제)를 PostgreSQL LISTEN/NOTIFY 원자적 전파(해결)로 7,347→10,994 RPS, 에러 0건 달성(결과)
-
+## Project 9: 다중 인스턴스 로컬 캐시 정합성 불가를 PostgreSQL LISTEN/NOTIFY 원자적 전파로 캐시 일관성 확보
 **[1장] 문제:**
 8장에서 Redis를 제거했다. 캐시, 락, 큐는 모두 PostgreSQL로 이전했지만, 캐시 무효화 전파만 Redis Pub/Sub에 남아 있었다. Redis가 없으니 인스턴스 A가 데이터를 갱신해도 B, C의 L1 캐시에 이전 값이 남아 Scale-out이 불가능했다.
 
@@ -360,7 +511,7 @@ Instance A (Writer)         Instance B (Reader)
 PostgresNotifySubscriber로 전용 LISTEN 연결을 생성(daemon 스레드). 100ms 간격으로 PGConnection.notifications 폴링. 캐시 무효화 이벤트를 수신하면 Caffeine L1에서 evict. 발행 쪽은 jdbcTemplate.execute("NOTIFY")로 트랜잭션 내에서 실행. 첫 테스트에서 doPublish() 호출 경로 누락 버그 발견→수정.
 
 **[5장] 결과:**
-7,347 RPS → 10,994 RPS(빈 DB, 500 conn). 에러 65건→**0건**. NOTIFY 전파 지연 <50ms. 97 RPS 대비 **113배 향상**. Redis Pub/Sub 대비 네트워크 홉이 2→1로 감소(App→Redis→App → App→PG→App, 같은 연결). 노드 추가 시 LISTEN 연결만 하나 더 맺으면 되어 선형 확장 가능.
+7,347 RPS → 10,994 RPS(빈 DB, wrk -t4 -c500 -d120s). 에러 65건→**0건** (120초 테스트, socket errors 0). NOTIFY 전파 지연 <50ms. 97 RPS 대비 **113배 향상**. Redis Pub/Sub 대비 네트워크 홉이 2→1로 감소(App→Redis→App → App→PG→App, 같은 연결). 노드 추가 시 LISTEN 연결만 하나 더 맺으면 되어 확장 가능(단, 대규모 50+ 인스턴스 시에는 커넥션 풀 분리 필요).
 
 ```
 부하테스트 결과 (wrk -t4 -c200 -d120s):
@@ -372,16 +523,26 @@ PostgresNotifySubscriber로 전용 LISTEN 연결을 생성(daemon 스레드). 10
 └─────────────────────────────────────────────┘
 
 Redis Pub/Sub vs PostgreSQL NOTIFY:
-│ 요소       │ Redis Pub/Sub   │ PostgreSQL NOTIFY │
-│ 트랜잭션   │ 별도 (비원자적)  │ 동일 tx (원자적)  │
-│ 네트워크   │ 2홉             │ 1홉 (같은 연결)   │
-│ 인프라     │ Redis 프로세스   │ 이미 연결된 PG    │
+│ 요소       │ Redis Pub/Sub   │ PostgreSQL NOTIFY │ 비고              │
+│ 트랜잭션   │ 별도 (비원자적)  │ 동일 tx (원자적)  │ PG 승             │
+│ 네트워크   │ 2홉             │ 1홉 (같은 연결)   │ PG 승             │
+│ 와일드카드 │ 지원            │ 미지원             │ Redis 승          │
+│ 페이로드   │ 무제한           │ 8KB 제한          │ Redis 승          │
+│ 인프라     │ Redis 프로세스   │ 이미 연결된 PG    │ PG 승 (단일화)   │
+결정: 원자성과 인프라 단순화가 와일드카드/페이로드 제한보다 중요했음
 ```
+
+**[배운 점]**
+1. **트랜잭션 내 원자성이 중요하다:** Redis Pub/Sub는 데이터 쓰기와 발행이 별도 작업이라 중간에 장애가 나면 무효화 이벤트가 유실된다. PostgreSQL NOTIFY는 트랜잭션 내에서 실행되어 커밋 시에만 알림이 전송된다.
+2. **전용 LISTEN 연결이 필요하다:** PostgresNotifySubscriber는 HikariCP Pool과 분리된 전용 연결(daemon 스레드)을 사용한다. Connection Pool에서 대여한 연결은 LISTEN이 유지되지 않는다.
+3. **Self-skip으로 루프 방지:** 자기 자신이 발행한 이벤트를 수신하면 무한 루프가 발생한다. instanceId로 sourceInstanceId를 비교해서 self-skip한다.
+
+**[다시 한다면]**
+1. **처음부터 PostgreSQL NOTIFY를 사용할 것:** Redis Pub/Sub은 임시 조치였고, 결국 PostgreSQL으로 완전 대체되었다. (Project 6 참고)
 
 ---
 
-## Project 10: 빈 DB 10,994 RPS(문제)를 30만 실데이터 검증(해결)으로 현실 7,347 RPS 확보, 158,428 rows 벌크 로딩 완료(결과)
-
+## Project 10: 빈 DB 10,994 RPS를 30만 실데이터 검증으로 현실 7,347 RPS 확보, 158,428 rows 벌크 로딩 완료
 **[1장] 문제:**
 10,994 RPS는 DB rows 약 500개, 캐시 엔트리 약 100개, 캐시 히트율 99.99%인 조건에서의 수치였다. 현실에서는 수십만 건의 데이터가 쌓이고, 사용자는 항상 같은 캐릭터만 조회하지 않는다. 실제 운영 환경에서는 몇 RPS가 나올지 알 수 없었다.
 
@@ -394,10 +555,10 @@ Redis Pub/Sub vs PostgreSQL NOTIFY:
 옵션 2를 선택했다. 적응형 벌크 로더(Semaphore(100) + 체크포인트 재개 + API Rate Limit 적응형 쓰로틀링)로 30만 개 캐릭터 데이터를 DB에 적재. API 상태에 따라 batchSize와 delay를 동적 조절(성공 시 속도↑, 429 시 지수 백오프).
 
 **[4장] 구현:**
-1시간 52분간 298,428개 API 호출. 장비 데이터 있는 캐릭터 158,428 rows를 equipment_expectation_summary에 upsert. Write-Behind Buffer가 빛을 발해 158,428회 개별 upsert를 500개 배치 317회로 축소. LISTEN/NOTIFY 버그(doPublish 호출 누락)도 함께 수정.
+1시간 52분간 298,428개 API 호출. 장비 데이터 있는 캐릭터 158,428 rows를 equipment_expectation_summary에 upsert. Write-Behind Buffer가 효과적으로 작동해 158,428회 개별 upsert를 500개 배치 317회로 축소. LISTEN/NOTIFY 버그(doPublish 호출 누락)도 함께 수정.
 
 **[5장] 결과:**
-10,994 RPS(이상) → 7,347 RPS(현실, 200k~300k rows, 200 conn). 33% 하락이지만 **수십만 실데이터 위에서의 진짜 성능**이다. 에러 0건. 97 RPS 대비 76배 향상. 빈 DB의 10,994를 믿고 운영에 들어갔으면 첫날 장애. 7,347을 알고 있으니 7,000 RPS 넘으면 인스턴스 추가하면 된다.
+10,994 RPS(이상) → 7,347 RPS(현실, wrk -t4 -c200 -d120s, 200k~300k rows). 33% 하락이지만 **수십만 실데이터 위에서의 진짜 성능**이다. 에러 0건 (120초 테스트 기간, socket errors 0). 97 RPS 대비 76배 향상. 빈 DB의 10,994를 믿고 운영에 들어갔으면 첫날 장애. 7,347을 알고 있으니 7,000 RPS 넘으면 인스턴스 추가하면 된다.
 
 ```
 실데이터 환경 부하테스트 (wrk -t4 -c200 -d120s, 200k~300k rows):
@@ -416,10 +577,18 @@ Redis Pub/Sub vs PostgreSQL NOTIFY:
 │ Write Amplification│ 10% │ 158k rows upsert 인덱스 갱신  │
 ```
 
+**[배운 점]**
+1. **빈 DB 성능은 거짓말이다:** 10,994 RPS는 캐시 100개, HIT 99.99%인 이상적인 조건이다. 실데이터 200k~300k rows에서는 7,347 RPS로 33% 하락했다. 실데이터 검증 없이 운영에 들어가면 첫날 장애다.
+2. **CPU가 병목이다:** JSON 300KB 파싱 + 동적 계획법(DP) O(n³)×3이 CPU 60%를 차지한다. Nexon API(257ms)보다 내부 계산(100ms)이 더 큰 병목이다.
+3. **적응형 쓰로틀링의 중요성:** BulkLoaderService가 API 429 응답 시 지수 백오프로 batchSize와 delay를 동적 조절했다. 298,428개 API 호출을 1시간 52분간 안정적으로 완료했다.
+
+**[다시 한다면]**
+1. **JSON 부분 파싱을 적용할 것:** 300KB 전체를 파싱하지 말고, 필요한 필드만 파싱하면 CPU 사용량을 25%→10%로 줄일 수 있다. (Project 11 Phase 2)
+2. **실데이터 벌크 로딩을 먼저 할 것:** 성능 최적화 완료 후 반드시 실데이터로 검증한다.
+
 ---
 
-## Project 11: Fan-Out 시 CPU 즉시 포화 위험(문제)을 Global Admission Control 설계(해결)로 1,000개 동시 cold miss 시스템 보호, 활성화 대기(결과)
-
+## Project 11: Fan-Out 시 CPU 즉시 포화 위험을 Global Admission Control 설계로 1,000개 동시 cold miss 시스템 보호, 활성화 대기
 **[1장] 문제:**
 1,000명이 1,000개 서로 다른 캐릭터를 동시에 조회하면 어떻게 되는가? SingleFlight는 같은 키의 중복만 막아준다. 서로 다른 키 1,000개의 동시 cold miss는 SingleFlight가 보호하지 못한다. Nexon API 한계 ~230 RPS(캐시 MISS 시)를 순식간에 초과해 CPU가 즉시 포화된다.
 
@@ -473,6 +642,17 @@ Phase 2: JSON 300KB→필요필드만 (CPU 25%→10% 예상)
 Phase 3: dirty tracking → Write 30-50% 감소 예상
 ```
 
+**[배운 점]**
+1. **Fan-Out은 SingleFlight로 막을 수 없다:** 1,000명이 1,000개 다른 캐릭터를 조회하면 SingleFlight는 무력하다. cold miss 1,000개가 동시에 발생해 CPU가 즉시 포화된다.
+2. **Non-Blocking이 핵심이다:** HTTP 스레드를 블로킹하면 스레드 풀 고갈로 이어진다. GlobalAdmissionControl은 HTTP 스레드에 즉시 CompletableFuture를 반환하고, Worker Pool이 큐를 비동기로 소비한다.
+3. **Early Rejection으로 타임아웃 폭풍 방지:** Queue >80% AND CPU >5.0 조건에서 선제 거부하면, 큐가 가득 차서 타임아웃이 폭발하는 것을 방지할 수 있다.
+
+**[다시 한다면]**
+1. **Admission Control을 처음부터 활성화할 것:** 현재 비활성화(ratelimit.enabled=false)인데, Fan-Out Explosion은 언제든 발생할 수 있다. Phase 1(활성화) → Phase 2(CPU 최적화) → Phase 3(Changed-only Upsert) 순서로 진행한다.
+2. **Semaphore=50이 최적임을 증명할 것:** 캐시 MISS 시 sustainable RPS = 50 / 0.4s ≈ 125 RPS. Nexon API 한계(~230 RPS)를 고려하면 Semaphore=50, 에러율 1%가 최적 설정이다.
+
+---
+
 ---
 
 ## 전체 여정 요약
@@ -496,4 +676,4 @@ RPS Evolution (2026-01-20 ~ 2026-03-30):
 | p99 지연 | 4,100ms | **36ms** | **99% 감소** |
 | 인프라 | Redis+MySQL+MongoDB | **PostgreSQL 단일** | **3→1** |
 | 에러율 | 59.7% | **0%** | **완전 제거** |
-| Scale-out | 불가 | **선형 확장 준비 완료** | - |
+| Scale-out | 불가 | **확장 가능 구조 완성** (3인스턴스까지 최적, 5+는 HikariCP 튜닝 필요) | - |

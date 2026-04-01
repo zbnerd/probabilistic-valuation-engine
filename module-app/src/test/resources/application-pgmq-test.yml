@@ -21,13 +21,6 @@ pgmq:
       batch-size: 1
       max-retries: 2
 
-    # LikeSync Worker 테스트 설정
-    like-sync:
-      enabled: true
-      polling-interval-ms: 100
-      batch-size: 1
-      max-retries: 2
-
     # Donation Worker 테스트 설정
     donation:
       enabled: true

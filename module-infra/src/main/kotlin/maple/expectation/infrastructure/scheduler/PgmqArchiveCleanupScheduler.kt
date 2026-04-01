@@ -29,7 +29,6 @@ class PgmqArchiveCleanupScheduler(
             "calculation_queue",
             "donation_queue",
             "nexon_retry_queue",
-            "like_sync_queue",
             "expectation_calc_high",
             "expectation_calc_low",
         )

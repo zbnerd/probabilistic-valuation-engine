@@ -3,11 +3,6 @@
 
 pgmq:
   worker:
-    like-sync:
-      enabled: true
-      polling-interval-ms: 500
-      batch-size: 20
-      max-retries: 5
     donation:
       enabled: true
       polling-interval-ms: 1000

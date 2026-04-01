@@ -168,7 +168,7 @@ groups:
       # PGMQ Queue Depth Alert (V5 Migration)
       # ============================================
       - alert: PgmqQueueDepthHigh
-        expr: pgmq_queue_depth{queue_name=~"calculation|like_sync|donation"} > 1000
+        expr: pgmq_queue_depth{queue_name=~"calculation|donation"} > 1000
         for: 5m
         labels:
           severity: warning

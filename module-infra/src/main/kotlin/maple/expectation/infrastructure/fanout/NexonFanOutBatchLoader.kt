@@ -51,6 +51,7 @@ class NexonFanOutBatchLoader(
      */
     @PreDestroy
     fun shutdown() {
+        semaphore.drainPermits()
         executorService.shutdown()
         if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
             executorService.shutdownNow()
@@ -71,7 +72,9 @@ class NexonFanOutBatchLoader(
             }, executorService)
         }
 
-        CompletableFuture.allOf(*futures.toTypedArray()).join()
+        CompletableFuture.allOf(*futures.toTypedArray())
+            .orTimeout(BATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .join()
 
         return futures.mapNotNull { it.join() }.associate { it }
     }
@@ -111,6 +114,7 @@ class NexonFanOutBatchLoader(
         private const val SEMAPHORE_PERMITS = 30
         private const val THREAD_POOL_SIZE = 10
         private const val API_TIMEOUT_SECONDS = 10L
+        private const val BATCH_TIMEOUT_SECONDS = 30L
         private const val BATCH_LANE_USER = "batch"
 
         /**

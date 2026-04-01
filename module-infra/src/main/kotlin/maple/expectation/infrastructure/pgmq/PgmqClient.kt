@@ -152,7 +152,7 @@ class PgmqClient(
      * @return 성공 여부
      */
     @CircuitBreaker(name = "pgmq", fallbackMethod = "setVisibilityTimeoutFallback")
-    fun setVisibilityTimeout(queueName: String, messageId: Long, visibilityTimeoutSec: Int): Boolean {
+    fun setVisibilityTimeout(queueName: String, messageId: Long, visibilityTimeoutSec: Long): Boolean {
         val context = TaskContext.of("PgmqClient", "SetVT", "$queueName:$messageId")
         return executor.executeOrDefault(
             { performSetVisibilityTimeout(queueName, messageId, visibilityTimeoutSec) },
@@ -173,24 +173,6 @@ class PgmqClient(
     fun queueLength(queueName: String): Long {
         val context = TaskContext.of("PgmqClient", "QueueLength", queueName)
         return executor.executeOrDefault({ performQueueLength(queueName) }, 0L, context)
-    }
-
-    /**
-     * Visibility Timeout 설정 (Exponential Backoff용)
-     *
-     * <p>지정된 메시지의 visibility timeout을 변경하여 재시도 간격을 제어.
-     * Nexon API 재시도의 Exponential Backoff 구현에 사용.
-     *
-     * @param queueName 큐 이름
-     * @param messageId 메시지 ID
-     * @param timeoutSeconds 새 visibility timeout (초). coerceIn(1, 86400) 적용
-     * @return 성공 여부
-     */
-    fun setVisibilityTimeout(queueName: String, messageId: Long, timeoutSeconds: Long): Boolean {
-        val context = TaskContext.of("PgmqClient", "SetVisibilityTimeout", "$queueName:$messageId")
-        return executor.executeOrDefault({
-            performSetVisibilityTimeout(queueName, messageId, timeoutSeconds)
-        }, false, context)
     }
 
     // ==================== Internal Implementation ====================
@@ -344,7 +326,7 @@ class PgmqClient(
     private fun setVisibilityTimeoutFallback(
         queueName: String,
         messageId: Long,
-        visibilityTimeoutSec: Int,
+        visibilityTimeoutSec: Long,
         e: Throwable,
     ): Boolean {
         log.error("⚡ [PGMQ] Circuit Breaker OPEN - setVT fallback: queue={}, msgId={}", queueName, messageId, e)

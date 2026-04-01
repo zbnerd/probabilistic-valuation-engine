@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.worker
 
+import kotlin.math.ceil
 import kotlin.random.Random
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -75,9 +76,9 @@ class NexonFanOutWorker(
      */
     override fun onProcessingFailed(message: PgmqMessage<FanOutRequest>) {
         val jitterSec = BASE_DELAY_SEC + (Random.nextDouble() * JITTER_FACTOR)
-        val jitterSecInt = jitterSec.toInt().coerceAtLeast(1)
+        val jitterSecInt = ceil(jitterSec).toInt().coerceAtLeast(1)
 
-        pgmqClient.setVisibilityTimeout(queueName, message.messageId, jitterSecInt)
+        pgmqClient.setVisibilityTimeout(queueName, message.messageId, jitterSecInt.toLong())
         log.warn(
             "[NexonFanOutWorker] 429 retry with VT={}s: ocid={}, readCount={}",
             jitterSecInt, message.payload.ocid, message.readCount,

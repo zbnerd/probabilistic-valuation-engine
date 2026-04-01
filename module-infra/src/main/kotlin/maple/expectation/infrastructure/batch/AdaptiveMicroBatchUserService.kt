@@ -5,6 +5,9 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import jakarta.annotation.PostConstruct
+import jakarta.annotation.PreDestroy
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -137,6 +140,12 @@ class AdaptiveMicroBatchUserService<T : Any>(
             log.info { "[AdaptiveMicroBatch] Batch worker started: permits=${properties.semaphorePermits}, batchSize=${properties.batchMaxSize}, waitMs=${properties.batchMaxWaitMs}" }
             batchWorkerLoop()
         }
+    }
+
+    @PreDestroy
+    fun stopBatchWorker() {
+        scope.cancel("AdaptiveMicroBatchUserService shutdown")
+        inFlightRequests.clear()
     }
 
     /**

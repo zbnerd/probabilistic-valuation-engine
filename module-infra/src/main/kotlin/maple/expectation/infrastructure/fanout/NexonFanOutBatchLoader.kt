@@ -5,6 +5,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+import jakarta.annotation.PreDestroy
 import maple.expectation.core.port.out.FanOutQueuePort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -48,6 +49,14 @@ class NexonFanOutBatchLoader(
      * @param ocids 조회할 OCID 목록
      * @return 성공한 OCID → EquipmentResponse 매핑 (429 건은 제외됨)
      */
+    @PreDestroy
+    fun shutdown() {
+        executorService.shutdown()
+        if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+            executorService.shutdownNow()
+        }
+    }
+
     fun load(ocids: List<String>): Map<String, EquipmentResponse> {
         if (ocids.isEmpty()) return emptyMap()
 
@@ -112,7 +121,6 @@ class NexonFanOutBatchLoader(
         fun is429(throwable: Throwable): Boolean {
             var current: Throwable? = throwable
             while (current != null) {
-                if (current.message?.contains("429") == true) return true
                 if (current is org.springframework.web.reactive.function.client.WebClientResponseException &&
                     current.statusCode.value() == 429
                 ) {

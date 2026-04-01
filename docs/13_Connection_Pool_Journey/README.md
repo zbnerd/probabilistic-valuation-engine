@@ -70,4 +70,4 @@ After (PostgreSQL Only, 단일 인스턴스):
 - [성능 여정기](../06_Performance_Journey/README.md) — RPS 관점의 자매 서적
 - [Outbox → PGMQ 마이그레이션 계획](../09_Plans/outbox-to-pgmq-migration.md)
 - [ADR-014: Connection Pool Alignment](../01_ADR/ADR-335-connection-pool-alignment.md)
-- [ADR-001: PostgreSQL 단일 DB 전략](../01_ADR/ADR-301-postgresql-single-db-strategy.md)
+- [ADR-314: PostgreSQL 단일 DB 전략](../01_ADR/ADR-314-postgresql-single-db-strategy.md)

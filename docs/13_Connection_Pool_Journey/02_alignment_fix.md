@@ -2,7 +2,7 @@
 
 > "측정 없이는 최적화할 수 없다. 공식 없이는 측정할 수 없다."
 
-## 2026년 3월 8일, PR #572
+## 2026년 3월 9일, PR #572
 
 1장의 문제를 해결하기 위해 **P2 Unit 7: Connection Pool Alignment with Thread Pool** 작업을 수행했다.
 

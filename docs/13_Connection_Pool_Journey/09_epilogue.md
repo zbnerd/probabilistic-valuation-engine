@@ -128,6 +128,8 @@ After:  HikariCP(PostgreSQL) = 1개 풀 모니터링
 | p99 Latency | 4,100ms | 36ms | **-99%** |
 | 에러율 | 59.7% | 0% | **-100%** |
 
+> **참고**: RPS 개선(97 → 7,347)은 커넥션 풀 최적화만의 결과가 아니다. Micro-Batching(ADR-338), LISTEN/NOTIFY 결합, 단일 스레드 PgmqWorker 통합 등 여러 최적화가 복합적으로 작용한 상관관계이다.
+
 ## 남은 과제
 
 완벽하지 않다. 아직 해결할 과제가 있다:
@@ -136,6 +138,10 @@ After:  HikariCP(PostgreSQL) = 1개 풀 모니터링
 2. **Scale-out 시 PGMQ 경합**: 다중 인스턴스에서 같은 큐를 읽을 때 visibility timeout 내 처리 완료 보장
 3. **커넥션 풀 동적 조정**: 트래픽 패턴에 따라 `maximum-pool-size`를 동적으로 조정하는 메커니즘
 4. **PostgreSQL 커넥션 한계**: 인스턴스가 늘어나면 여전히 `max_connections`에 도달. PgBouncer 도입 고려
+
+---
+
+**이전 장**: [8장 — 코드로 보는 여정: Before & After](./08_code_story.md)
 
 ## 마무리
 

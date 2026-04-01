@@ -93,19 +93,6 @@ data class CalculationRequest(
 )
 
 /**
- * 좋아요 동기화 메시지 페이로드
- *
- * @param characterName 캐릭터 이름
- * @param delta 증감량
- * @param requestedAt 요청 시점
- */
-data class LikeSyncRequest(
-    val characterName: String,
-    val delta: Long,
-    val requestedAt: String,
-)
-
-/**
  * 기부 알림 메시지 페이로드
  *
  * @param donationId 기부 ID

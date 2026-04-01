@@ -27,9 +27,6 @@ class PgmqWorkerConfig {
     /** Calculation Worker 설정 */
     var calculation: WorkerSettings = WorkerSettings()
 
-    /** LikeSync Worker 설정 */
-    var likeSync: WorkerSettings = WorkerSettings()
-
     /** Donation Worker 설정 */
     var donation: WorkerSettings = WorkerSettings()
 

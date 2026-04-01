@@ -44,7 +44,7 @@ class FallbackHandler(
     private val equipmentRepository: CharacterEquipmentRepository,
     private val objectMapper: ObjectMapper,
     private val checkedExecutor: CheckedLogicExecutor,
-    private val outboxFallbackManager: OutboxFallbackManager,
+    private val pgmqFallbackPublisher: PgmqFallbackPublisher,
     private val alertNotificationHelper: AlertNotificationHelper,
     private val exceptionClassifier: ExceptionClassifier,
 ) {
@@ -145,8 +145,8 @@ class FallbackHandler(
         log.error("[Scenario B] 캐시 부재. Outbox 적재 및 알림 발송 시도")
 
         // Outbox에 적재하여 나중에 재시도
-        val requestId = outboxFallbackManager.generateRequestId(eventType.name, ocid)
-        outboxFallbackManager.saveToOutbox(requestId, eventType, ocid)
+        val requestId = pgmqFallbackPublisher.generateRequestId(eventType.name, ocid)
+        pgmqFallbackPublisher.saveToOutbox(requestId, eventType, ocid)
 
         // 알림은 best-effort: 실패해도 fallback 반환 계약을 깨지 않음
         alertNotificationHelper.sendAlertBestEffort(ocid, alertCause)
@@ -204,8 +204,8 @@ class FallbackHandler(
         t: Throwable,
     ): CompletableFuture<T> {
         // Outbox Fallback: 5xx/장애 시에만 Outbox 적재 (4xx는 비즈니스 예외)
-        val requestId = outboxFallbackManager.generateRequestId(eventType.name, ocid)
-        outboxFallbackManager.saveToOutbox(requestId, eventType, ocid)
+        val requestId = pgmqFallbackPublisher.generateRequestId(eventType.name, ocid)
+        pgmqFallbackPublisher.saveToOutbox(requestId, eventType, ocid)
 
         return CompletableFuture.failedFuture(ExternalServiceException(SERVICE_NEXON, t))
     }
@@ -219,9 +219,9 @@ class FallbackHandler(
     fun <T> errorFuture(t: Throwable): CompletableFuture<T> = CompletableFuture.failedFuture(ExternalServiceException(SERVICE_NEXON, t))
 
     /**
-     * OutboxFallbackManager 노출 (ResilientNexonApiClient에서 설정 위임용)
+     * PgmqFallbackPublisher 노출 (ResilientNexonApiClient에서 설정 위임용)
      *
-     * @return OutboxFallbackManager 인스턴스
+     * @return PgmqFallbackPublisher 인스턴스
      */
-    fun getOutboxManager(): OutboxFallbackManager = outboxFallbackManager
+    fun getPgmqPublisher(): PgmqFallbackPublisher = pgmqFallbackPublisher
 }

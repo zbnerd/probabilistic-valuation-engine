@@ -216,6 +216,9 @@ nexon:
     cache-follower-timeout-seconds: 30  # Issue #225: 32s → 30s (TimeLimiter 28s + 여유 2s, Zombie Request 방지)
     latch-initial-ttl-seconds: 60    # 래치 초기 TTL (리더 크래시 대비)
     latch-finalize-ttl-seconds: 10   # 래치 정리 후 TTL (팔로워 조회 여유)
+  retry:
+    polling-interval-ms: 10000      # PGMQ 폴링 주기 (10초)
+    recover-stalled-interval-ms: 300000  # Stalled 복구 체크 주기 (5분)
 
 server:
   shutdown: graceful
@@ -585,23 +588,6 @@ cache-prefetch:
 micro-batch-writer:
   flush-size: 500           # Buffer size threshold for size-triggered flush
   flush-interval-ms: 50     # Time interval for time-triggered flush (ms)
-
-# Outbox 설정 (P1-8: 하드코딩 제거 → YAML 외부화)
-outbox:
-  batch-size: 100                   # SKIP LOCKED 배치 크기
-  stale-threshold: 5m               # Stalled 판정 기준 (5분)
-  max-backoff: 1h                   # Exponential Backoff 최대 대기 (1시간)
-  instance-id: ${app.instance-id}   # Scale-out 인스턴스 식별자
-  monitoring:
-    size-alert-threshold: 1000      # Outbox 크기 경고 임계값 (건)
-    monitor-interval: 30s           # 크기 모니터링 주기
-  scheduler:
-    nexon-api-outbox:
-      enabled: true
-      initial-delay: 10s
-      fixed-rate: 10s
-      recover-stalled:
-        fixed-rate: 5m
 
 # Graceful Shutdown 설정 (P1-1, P1-2, P1-3, P1-5: 하드코딩 제거 → YAML 외부화)
 shutdown:

@@ -561,7 +561,7 @@ After:  Request 1,2→SELECT WHERE id IN(1,2)        = DB 왕복 1회
 ```
 
 **[5장] 결과:**
-940 RPS → **7,347 RPS** (Micro-Batching만, 7.8배). RPS/$ = 489.8 (이전 45.9에서 10.7배 개선). 이후 Project 10(LISTEN/NOTIFY)에서 캐시 일관성 확보와 함께 **10,994 RPS**(빈 DB)까지 도달. 인프라 단일화(Project 8)가 전제조건이었고, Micro-Batching이 실제 RPS 폭발을 이끈 엔진.
+940 RPS → **10,994 RPS** (11.7배, 빈 DB). RPS/$ = 489.8 (이전 45.9에서 10.7배 개선). Micro-Batching(7,347 RPS) + LISTEN/NOTIFY(Project 10, 캐시 일관성 확보)가 결합하여 도달. 인프라 단일화(Project 8)가 전제조건이었고, Micro-Batching이 실제 RPS 폭발을 이끈 엔진.
 
 **[배운 점]**
 1. **Micro-Batching이 핵심 엔진:** DB 왕복 3~5회→1회로 줄인 것이 10,994 RPS의 주범이다. 개별 쿼리를 배치 쿼리로 통합하는 것이 추가 인프라 없이 가장 강력한 최적화다.

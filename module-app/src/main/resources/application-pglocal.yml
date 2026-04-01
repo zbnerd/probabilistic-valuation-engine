@@ -115,12 +115,6 @@ scheduler:
   popular-character-warmup:
     enabled: false
 
-# Disable outbox schedulers
-outbox:
-  scheduler:
-    nexon-api-outbox:
-      enabled: false
-
 # PGMQ Configuration (for future migration)
 pgmq:
   enabled: true

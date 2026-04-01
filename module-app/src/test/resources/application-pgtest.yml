@@ -64,12 +64,6 @@ scheduler:
   popular-character-warmup:
     enabled: false
 
-# Disable outbox schedulers
-outbox:
-  scheduler:
-    nexon-api-outbox:
-      enabled: false
-
 # Disable AI features in test
 langchain4j:
   glm-4:

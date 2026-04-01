@@ -6,7 +6,7 @@ import maple.expectation.domain.repository.CharacterEquipmentRepository
 import maple.expectation.infrastructure.alert.StatelessAlertService
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.classifier.ExceptionClassifier
-import maple.expectation.infrastructure.persistence.repository.NexonApiOutboxRepository
+import maple.expectation.infrastructure.pgmq.PgmqClient
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -18,7 +18,7 @@ import org.springframework.transaction.support.TransactionTemplate
  * <h4>책임</h4>
  *
  * <ul>
- *   <li>OutboxFallbackManager Bean 등록
+ *   <li>PgmqFallbackPublisher Bean 등록
  *   <li>AlertNotificationHelper Bean 등록
  *   <li>FallbackHandler Bean 등록
  * </ul>
@@ -27,7 +27,7 @@ import org.springframework.transaction.support.TransactionTemplate
  */
 @Configuration
 open class NexonApiClientConfig(
-    private val outboxRepository: NexonApiOutboxRepository,
+    private val pgmqClient: PgmqClient,
     private val checkedExecutor: CheckedLogicExecutor,
     @org.springframework.beans.factory.annotation.Qualifier("alertTaskExecutor") private val alertTaskExecutor: Executor,
     private val transactionTemplate: TransactionTemplate,
@@ -41,15 +41,15 @@ open class NexonApiClientConfig(
     }
 
     /**
-     * Outbox Fallback Manager Bean
+     * PGMQ Fallback Publisher Bean
      *
-     * <p>실패한 API 호출을 Outbox에 적재하는 전담 매니저
+     * <p>실패한 API 호출을 PGMQ 큐에 발행 (기존 OutboxFallbackManager 대체)
      *
-     * @return OutboxFallbackManager 인스턴스
+     * @return PgmqFallbackPublisher 인스턴스
      */
     @Bean
-    open fun outboxFallbackManager(): OutboxFallbackManager = OutboxFallbackManager(
-        outboxRepository,
+    open fun pgmqFallbackPublisher(): PgmqFallbackPublisher = PgmqFallbackPublisher(
+        pgmqClient,
         checkedExecutor,
         transactionTemplate,
         alertTaskExecutor,
@@ -79,13 +79,13 @@ open class NexonApiClientConfig(
     @Bean
     open fun fallbackHandler(
         exceptionClassifier: ExceptionClassifier,
-        outboxFallbackManager: OutboxFallbackManager,
+        pgmqFallbackPublisher: PgmqFallbackPublisher,
         alertNotificationHelper: AlertNotificationHelper,
     ): FallbackHandler = FallbackHandler(
         equipmentRepository,
         objectMapper,
         checkedExecutor,
-        outboxFallbackManager,
+        pgmqFallbackPublisher,
         alertNotificationHelper,
         exceptionClassifier,
     )

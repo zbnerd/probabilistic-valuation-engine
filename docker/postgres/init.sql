@@ -17,6 +17,9 @@ SELECT pgmq.create('v5_event_queue');
 -- Donation Outbox Queue: Donation transaction outbox
 SELECT pgmq.create('donation_outbox_queue');
 
+-- Nexon API Retry Queue: Failed API call retry via PGMQ (Phase 3)
+SELECT pgmq.create('nexon_retry_queue');
+
 -- Create UNLOGGED Tables for high-performance buffers
 -- These tables survive server restarts but are truncated on crash
 

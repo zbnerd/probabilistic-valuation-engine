@@ -88,11 +88,6 @@ scheduler:
   popular-character-warmup:
     enabled: false
 
-outbox:
-  scheduler:
-    nexon-api-outbox:
-      enabled: false
-
 # SpringDoc (Swagger) - enabled for testing
 springdoc:
   api-docs:

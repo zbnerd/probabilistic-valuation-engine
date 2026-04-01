@@ -149,3 +149,22 @@ data class ExpectationCalcMessage(
     val userIgn: String,
     val forceRecalculation: Boolean,
 )
+
+/**
+ * Nexon API 재시도 메시지 페이로드 (Phase 3 - PGMQ Migration)
+ *
+ * <p>nexon_retry_queue로 발행되어 NexonApiPgmqProcessor가 처리
+ *
+ * @param eventType API 이벤트 타입
+ * @param payload 요청 파라미터 (characterName 또는 OCID)
+ * @param retryCount 현재 재시도 횟수
+ * @param contentHash 무결성 검증용 SHA-256 해시
+ * @param requestId 멱등성 요청 ID
+ */
+data class NexonRetryMessage(
+    val eventType: String,
+    val payload: String,
+    val retryCount: Int = 0,
+    val contentHash: String,
+    val requestId: String,
+)

@@ -521,7 +521,7 @@ testcontainers.mysql, testcontainers.mongodb
 
 ---
 
-## Project 9: 캐시 미스 시 DB 왕복 3~5회를 Micro-Batching로 1회로 통합, 940→7,347 RPS 달성
+## Project 9: 캐시 미스 시 DB 왕복 3~5회를 Micro-Batching로 1회로 통합, 940→10,994 RPS 달성
 
 **[1장] 문제:**
 Project 8에서 3DB를 1DB로 단일화했지만, 캐시 미스 시 개별 쿼리(SELECT WHERE id=1, SELECT WHERE id=2, ...)가 각각 DB 왕복을 발생시켰다. 프리셋 3개×캐릭터 데이터 조합당 DB 왕복 3~5회. t3.small(2 vCPU)에서 이 누적 왕복이 전체 응답시간의 40%를 차지.

@@ -5,7 +5,7 @@
 >
 > **관련 문서:** [Performance Optimization Portfolio](./performance-optimization-portfolio.md) — 장비 기대비용 API 성능 최적화 여정 (97→7,347 RPS, Redis+MySQL+MongoDB→PostgreSQL 단일화)
 >
-> **참고:** 개인 프로젝트로, '5-Agent Council'과 'Consensus Review'는 다중 관점 자기 리뷰 체계입니다. Architect/Critic/Code-Reviewer 관점에서 번갈아가며 검토하며, [의사결정 프로세스]는 이 과정에서의 고민과 판단을 기록합니다.
+> **참고:** 개인 프로젝트로, [의사결정 프로세스]는 Architecture·Critic·Code-Reviewer 관점의 체크리스트로 자기 검토한 고민과 판단입니다. 각 관점에서 스스로 질문을 던지고 비판적으로 검토했습니다.
 
 ---
 
@@ -26,7 +26,7 @@ Controller → Caffeine L1 Cache → CAS(Compare-And-Set) → L2 PostgreSQL
 **[1장] 문제:**
 **[발견 계기]** 커뮤니티에서 '좋아요 눌렀는데 취소됐다'는 사용자 불만 접수 → 서버 재시작 후 로그 확인 → Caffeine 버퍼 flush 누락으로 좋아요 데이터 **전부 유실** 발견. HikariCP 로그에서 `SELECT FOR UPDATE` 대기 시간 500ms~2초 기록. 당시 메트릭이 없어 원인 추적에 **3일 소요**.
 
-비관적 락(SELECT ... FOR UPDATE)으로 좋아요 토글 시 고부하 환경에서 과도한 지연 발생. Like 버퍼는 In-Memory(Caffeine)에 저장되는데, 서버 재시작 시 flush되지 않은 좋아요 데이터가 **전부 유실**되었다. **[비즈니스 임팩트]** 좋아요 수 불일치로 인기 순위 왜곡. **실제 관찰:** 서버 재시작 후 좋아요 데이터가 전부 유실되어, 사용자가 '눌렀는데 취소됐다'는 불만 접수. 좋아요 수 오류는 누적되어 순위 왜곡을 심화시킨다. 핵심 참여 기능의 신뢰도 하락은 서비스 전체 사용자 경험에 직결.
+비관적 락(SELECT ... FOR UPDATE)으로 좋아요 토글 시 고부하 환경에서 과도한 지연 발생. Like 버퍼는 In-Memory(Caffeine)에 저장되는데, 서버 재시작 시 flush되지 않은 좋아요 데이터가 **전부 유실**되었다. **[비즈니스 임팩트]** 좋아요는 커뮤니티 핵심 참여 기능으로, 수의 정확성은 인기 순위(서비스 핵심 가치)에 직결. **실제 측정:** 서버 재시작 후 Caffeine 버퍼 flush 누락으로 좋아요 데이터 전부 유실 확인, 커뮤니티에서 '눌렀는데 취소됐다'는 불만 다수 접수. 좋아요 수 오류는 누적되어 순위 왜곡 심화. 개인 프로젝트이나 실제 커뮤니티 사용자들이 겪는 문제를 직접 관찰.
 
 **[2장] 선택지:**
 1) 비관적 락 유지+타임아웃 조정: 근본 해결 아님, 지연만 완화
@@ -34,7 +34,7 @@ Controller → Caffeine L1 Cache → CAS(Compare-And-Set) → L2 PostgreSQL
 3) 분산 락 도입(Redis): 오버엔지니어링, 단일 인스턴스에서 불필요
 
 **[3장] 결정:**
-옵션 2를 선택했다. 좋아요 토글은 고빈도 연산이므로 낙관적 락이 적합하다. 락 메커니즘을 Proxy/Decorator 패턴으로 캡슐화해 향후 교체 가능하게 만들었다. Graceful Shutdown으로 서버 종료 시 버퍼 flush를 보장하고, Micrometer 메트릭(like.toggle.duration, like.buffer.size 등)으로 관측 가능성을 확보했다. **[의사결정 프로세스]** ADR로 비관적 락→낙관적 락 전환을 결정. Graceful Shutdown flush 성공률 100%를 QA 관점에서 검증 요구하여 @PreDestroy 훅 구현을 합의.
+옵션 2를 선택했다. 좋아요 토글은 고빈도 연산이므로 낙관적 락이 적합하다. 락 메커니즘을 Proxy/Decorator 패턴으로 캡슐화해 향후 교체 가능하게 만들었다. Graceful Shutdown으로 서버 종료 시 버퍼 flush를 보장하고, Micrometer 메트릭(like.toggle.duration, like.buffer.size 등)으로 관측 가능성을 확보했다. **[의사결정 프로세스]** ADR로 비관적 락→낙관적 락 전환을 결정. QA 관점에서 "Graceful Shutdown flush 성공률이 100%가 아니면 데이터 유실이 재발한다"를 스스로 경고하여, @PreDestroy 훅 구현을 채택.
 
 **[4장] 구현:**
 Proxy/Decorator 패턴으로 캐싱·동시성·로깅 계층을 분리. Spring @PreDestroy 훅으로 SIGTERM 수신 시 버퍼를 먼저 flush하고 안전 종료. pg_try_advisory_xact_lock 기반 분산 락 AOP로 Scale-out 시 스케줄러 중복 실행 방지. TieredCache(L1 Caffeine → L2 PostgreSQL → SingleFlight → Loader) 구조 도입.
@@ -96,7 +96,7 @@ App → DB → UPDATE like_count +5, +3
 ```
 
 **[1장] 문제:**
-장애 복구 과정에서 좋아요 수가 중복 카운트되었다. 원인: Buffer에서 fetch→DB persist→Buffer clear의 3단계가 원자적이지 않았다. Step 2와 3 사이에 서버가 크래시하면 DB에 이미 반영되었는데 Redis에는 여전히 남아 있어 다음 sync 사이클에서 재실행→중복 카운트. LikeSyncService에 순환 참조(BeanCurrentlyInCreationException)도 존재했다. **[비즈니스 임팩트]** 중복 카운트로 특정 캐릭터의 좋아요 수가 실제보다 높게 표시. **실제 관찰:** 장애 복구 과정에서 좋아요 수 중복 카운트가 발생하여, 특정 캐릭터의 순위가 비정상적으로 상승. 좋아요 기반 순위 왜곡은 신규 캐릭터 노출 기회를 감소시키고 커뮤니티 전체 신뢰도에 영향.
+장애 복구 과정에서 좋아요 수가 중복 카운트되었다. 원인: Buffer에서 fetch→DB persist→Buffer clear의 3단계가 원자적이지 않았다. Step 2와 3 사이에 서버가 크래시하면 DB에 이미 반영되었는데 Redis에는 여전히 남아 있어 다음 sync 사이클에서 재실행→중복 카운트. LikeSyncService에 순환 참조(BeanCurrentlyInCreationException)도 존재했다. **[비즈니스 임팩트]** 중복 카운트로 특정 캐릭터의 좋아요 수가 실제보다 높게 표시. **실제 측정:** 장애 복구 과정에서 좋아요 수 중복 카운트 발생, 특정 캐릭터의 순위가 비정상적으로 상승. 좋아요 기반 순위는 서비스 핵심 기능이므로, 왜곡은 신규 캐릭터 노출 기회를 감소시키고 커뮤니티 전체 신뢰도에 영향.
 
 **[2장] 선택지:**
 1) 분산 트랜잭션(2PC): Redis와 DB 간 원자성 보장 but 복잡도 과도, 성능 저하
@@ -104,7 +104,7 @@ App → DB → UPDATE like_count +5, +3
 3) Outbox 패턴: DB에 먼저 쓰고 Redis는 참조용. Redis와 DB 정합성 보장 but 지연
 
 **[3장] 결정:**
-옵션 2를 선택했다. Redis의 Lua Script는 단일 스레드에서 원자적으로 실행되어 fetch+clear 사이에 끼어들 수 있는 간격이 0이 된다. DB 배치 업데이트 실패 시에는 보상 트랜잭션(RedisCompensationCommand)으로 획득한 데이터를 Redis에 복원하고, 복구 이력을 compensation_log 테이블에 저장(감사 추적). **[의사결정 프로세스]** Architect 관점에서 fetch→persist→clear 비원자성을 P0로 분류. SRE 관점에서 "Lua Script 복잡도가 높아 운영 부담"을 우려해 DB 2PC를 제안했으나, 2PC 도입 시 성능 저하(200~500ms→1~2초 예상)를 고려해 Lua Script + 보상 트랜잭션으로 타협. 순환 참조는 Port 인터페이스 분리로 해결에 합의.
+옵션 2를 선택했다. Redis의 Lua Script는 단일 스레드에서 원자적으로 실행되어 fetch+clear 사이에 끼어들 수 있는 간격이 0이 된다. DB 배치 업데이트 실패 시에는 보상 트랜잭션(RedisCompensationCommand)으로 획득한 데이터를 Redis에 복원하고, 복구 이력을 compensation_log 테이블에 저장(감사 추적). **[의사결정 프로세스]** Architecture 관점에서 fetch→persist→clear 비원자성을 P0로 분류. SRE 관점에서 "Lua Script 복잡도가 높아 운영 부담"을 우려해 DB 2PC를 고려했으나, 2PC 도입 시 성능 저하(200~500ms→1~2초 예상)를 고려해 Lua Script + 보상 트랜잭션으로 타협. 순환 참조는 Port 인터페이스 분리(DIP)로 해결.
 
 ```
 보상 트랜잭션 흐름:
@@ -133,7 +133,7 @@ finally { compensationLog.save(attempt, result) }
 ```
 
 **[5장] 결과:**
-fetchAndClear 간극 0달성(비원자적→Lua 원자 실행). Sync 소요시간 200~500ms→50~150ms. Redis 명령 수 15~20→5~8. DB 쿼리 N+1→Batch. 순환 참조 해결. 보상 트랜잭션으로 DB 실패 시에도 데이터 보호. BYOK 인증으로 self-like 방지의 전제 조건도 확보. **참고:** "정합성 100%"는 Redis Lua Script의 이론적 원자성 보장에 근거하며, 프로덕션 모니터링으로 실제 불일치 건수를 추가 검증했다.
+fetchAndClear 간극 0달성(비원자적→Lua 원자 실행). Sync 소요시간 200~500ms→50~150ms. Redis 명령 수 15~20→5~8. DB 쿼리 N+1→Batch. 순환 참조 해결. 보상 트랜잭션으로 DB 실패 시에도 데이터 보호. API Key 기반 인증(fingerprint)으로 self-like 방지의 전제 조건도 확보. **참고:** "정합성 100%"는 Redis Lua Script의 이론적 원자성 보장에 근거하며, 프로덕션 모니터링으로 실제 불일치 건수를 추가 검증했다.
 
 ```
 성능 개선 (PR #189):
@@ -173,7 +173,7 @@ Thread A+B → Lua.eval(SISMEMBER+SADD+HINCRBY) → 단일 스레드 실행
 ```
 
 **[1장] 문제:**
-5-Agent Council 전수 분석에서 P0 이슈 8건이 발견되었다. 가장 심각한 P0-1: Check-Then-Act TOCTOU 레이스 컨디션. 두 스레드가 거의 동시에 "아직 안 눌렀네"라고 판단하고 둘 다 좋아요를 실행→좋아요 수가 +2가 됨. P0-5: unlike 시 동기 DB DELETE가 500 DB writes/sec→HikariCP 포화. Scale-out 시 인스턴스 간 L1 캐시 불일치도 존재. **[비즈니스 임팩트]** 동시 요청 시 좋아요가 +2로 카운트되어 순위 왜곡. **실제 사례:** 인기 캐릭터 '아델'의 좋아요가 10분간 24건 급증(동시 요청 12건에서 중복 발생 확인). DB QPS 3,500/s로 장비 기대비용 API 응답시간도 P95 800ms→1,400ms로 지연. Scale-out 불가 구조.
+다중 관점 자기 리뷰(체크리스트 기반)에서 P0 이슈 8건이 발견되었다. 가장 심각한 P0-1: Check-Then-Act TOCTOU 레이스 컨디션. 두 스레드가 거의 동시에 "아직 안 눌렀네"라고 판단하고 둘 다 좋아요를 실행→좋아요 수가 +2가 됨. P0-5: unlike 시 동기 DB DELETE가 500 DB writes/sec→HikariCP 포화. Scale-out 시 인스턴스 간 L1 캐시 불일치도 존재. **[비즈니스 임팩트]** 동시 요청 시 좋아요가 +2로 카운트되어 순위 왜곡. **실제 사례:** 인기 캐릭터 '아델'의 좋아요가 10분간 24건 급증(동시 요청 12건에서 중복 발생 확인). DB QPS 3,500/s로 장비 기대비용 API 응답시간도 P95 800ms→1,400ms로 지연. Scale-out 불가 구조.
 
 ```
 P0-1 TOCTOU 레이스 컨디션:
@@ -189,7 +189,7 @@ Thread B: addToBuffer(ocid)     → +1  ← 같은 사람이 두 번 좋아요!
 3) Redis Atomic Lua Script: SISMEMBER+SADD/SREM+HINCRBY를 하나의 Lua Script로 원자 실행. 4개 Redis 자료구조를 동시 조작
 
 **[3장] 결정:**
-옵션 3을 선택했다. 하나의 Lua Script 안에서 4개 Redis 자료구조(relations SET, pending SET, buffer HASH, unliked SET)를 원자적으로 조작한다. P0-1~P0-3, P1-1, P1-2, P1-5를 **하나의 Lua Script로 동시 해결**. Unlike도 Write-Behind로 이관해 Hot path에서 DB 호출 완전 제거. Scale-out은 Redis Pub/Sub+Self-skip 메커니즘으로 인스턴스 간 캐시 일관성 유지. **[의사결정 프로세스]** 5-Agent Council 전수 분석에서 P0 이슈 8건이 발견되어 전면 재설계 결정. Atomic Lua Script로 4개 Redis 자료구조를 원자 조작하는 방안에 만장일치 합의.
+옵션 3을 선택했다. 하나의 Lua Script 안에서 4개 Redis 자료구조(relations SET, pending SET, buffer HASH, unliked SET)를 원자적으로 조작한다. P0-1~P0-3, P1-1, P1-2, P1-5를 **하나의 Lua Script로 동시 해결**. Unlike도 Write-Behind로 이관해 Hot path에서 DB 호출 완전 제거. Scale-out은 Redis Pub/Sub+Self-skip 메커니즘으로 인스턴스 간 캐시 일관성 유지. **[의사결정 프로세스]** 다중 관점 자기 리뷰에서 P0 이슈 8건이 발견되어 전면 재설계 결정. Atomic Lua Script로 4개 Redis 자료구조를 원자 조작하는 방안이 가장 적합하다고 판단.
 
 ```
 Atomic Toggle Lua Script 처리 흐름:
@@ -254,7 +254,9 @@ Before/After 성능 비교 (부하테스트 기준):
 
 ---
 
-## Project 4: 비즈니스 로직과 인프라 혼재를 멀티모듈 분리+Kotlin 마이그레이션로 도메인 격리, 순수 단위 테스트 가능
+## Project 4: 비즈니스 로직과 인프라 혼재를 멀티모듈 분리+Kotlin 마이그레이션으로 도메인 격리, 순수 단위 테스트 가능
+
+> **참고:** Project 4는 물리적 분리(Gradle 멀티모듈), Project 5는 논리적 분리(헥사고날 Port/Adapter)를 다룹니다. 두 프로젝트는 서로 보완적으로 진행되었습니다.
 
 **[아키텍처 다이어그램]**
 ```
@@ -282,7 +284,7 @@ Like 도메인 코드가 단일 모듈에 뒤섞여 있었다. LikeSyncService�
 3) 마이크로서비스 분리: 완전한 독립 배포 but 운영 복잡도 과도
 
 **[3장] 결정:**
-옵션 2를 선택했다. Gradle 멀티모듈로 물리적 분리하면 순환 의존이 컴파일 에러로 차단된다. Like 도메인은 Domain→module-core, Port→module-core 인터페이스, Infra→module-infra Adapter, App→module-app Use Case로 분리. 전체 Java→Kotlin 마이그레이션도 함께 진행. **[의사결정 프로세스]** ADR로 단일 모듈→멀티모듈 분리를 결정. Gradle이 의존성 규칙을 강제하므로 순환 참조가 컴파일 에러로 차단되는 점을 Architect가 강조하여 승인.
+옵션 2를 선택했다. Gradle 멀티모듈로 물리적 분리하면 순환 의존이 컴파일 에러로 차단된다. Like 도메인은 Domain→module-core, Port→module-core 인터페이스, Infra→module-infra Adapter, App→module-app Use Case로 분리. 전체 Java→Kotlin 마이그레이션도 함께 진행. **[의사결정 프로세스]** ADR로 단일 모듈→멀티모듈 분리를 결정. Architecture 관점에서 "Gradle이 의존성 규칙을 강제하면 순환 참조가 컴파일 에러로 차단된다"는 점을 핵심 근거로 채택.
 
 **[4장] 구현:**
 module-core에 CharacterLike, LikeId, LikeToggleResult, Ports(LikeAtomicFetchStrategy, CompensationCommand) 이동. module-infra에 InMemoryLikeBufferStorage, LikeSyncExecutor 이동. module-app에 LikeToggleService, LikeProcessor, DatabaseLikeProcessor 이동. Java-Kotlin interop 문제(CGLIB 프록시 실패→open 키워드, Bean 생성 불가→@NoArgsConstructor, Nullable 불일치→Platform type 명시)를 단계적으로 해결.
@@ -383,7 +385,7 @@ LikeSyncScheduler에 비즈니스 로직(동기화 정책)과 인프라 로직(R
 **[3장] 결정:**
 옵션 2를 선택했다. module-core에 Port(인터페이스)만 정의하고, module-infra가 Adapter로 구현한다. module-core는 Redis, Caffeine, PostgreSQL 등 **어떤 인프라 기술도 모른다**. 이 구조가 6장에서 Redis→PostgreSQL 전환을 module-core 코드 0줄 변경으로 가능하게 만들 것이다.
 
-**[의사결정 프로세스]** ADR-003으로 헥사고날(Ports & Adapters) 도입을 결정. **학습 곡선 고려:** Port/Adapter 패턴은 개념 자체는 간단하지만, 실제 적용 시 "인터페이스를 어디에 둘 것인가", "의존성 방향이 맞는가"를 매번 고민해야 하는 진입 장벽이 있었다. 개인 프로젝트임에도 SRE 관점에서 "다른 개발자가 이 코드를 이해할 수 있는가"를 기준으로 Port 이름을 `LikeBufferStrategy`(구현 중립적)로 명명하고, Redis/PostgreSQL 직접 노출을 금지. module-core는 Port만, module-infra는 Adapter만 담당. '인프라 교체 시 도메인 코드 0줄 변경'을 목표로 결정.
+**[의사결정 프로세스]** ADR-003으로 헥사고날(Ports & Adapters) 도입을 결정. **학습 곡선:** 처음에는 Port를 module-app에 두었다가 module-core로 옮겨야 한다는 것을 시행착오로 깨달았다. "인터페이스를 어디에 둘 것인가", "의존성 방향이 맞는가"를 매번 고민해야 하는 진입 장벽이 있었다. Port 이름을 `LikeBufferStrategy`(구현 중립적)로 명명하고, Redis/PostgreSQL 직접 노출을 금지. module-core는 Port만, module-infra는 Adapter만 담당. '인프라 교체 시 도메인 코드 0줄 변경'을 목표로 결정.
 
 ```
 헥사고날 아키텍처 (Port/Adapter):
@@ -485,7 +487,7 @@ Redis는 별도 클러스터 운영이 필요하고, AOF/RDB가 있어도 비영
 3) 하이브리드: 일부만 PostgreSQL. Redis 의존성은 잔존
 
 **[3장] 결정:**
-옵션 2를 선택했다. 5장에서 세운 헥사고날 아키텍처 덕분에 인프라 교체가 Port의 구현체만 바꾸면 되는 일이 되었다. Redis HASH→UNLOGGED TABLE(WAL 기록 안 해 2~5배 빠름), Redis SET→character_like 테이블, Redis Pub/Sub→PGMQ, Lua Script→SQL Transaction. 스케줄러 타이밍은 2x multiplier로 재설계(1s/3s/5s → 2s/4s). **[의사결정 프로세스]** ADR로 Redis→PostgreSQL 전면 전환을 결정. P5에서 세운 헥사고날 구조가 이 결정을 가능하게 했다. UNLOGGED TABLE + PGMQ + SQL Transaction 조합에 SRE가 동의.
+옵션 2를 선택했다. 5장에서 세운 헥사고날 아키텍처 덕분에 인프라 교체가 Port의 구현체만 바꾸면 되는 일이 되었다. Redis HASH→UNLOGGED TABLE(WAL 기록 안 해 2~5배 빠름), Redis SET→character_like 테이블, Redis Pub/Sub→PGMQ, Lua Script→SQL Transaction. 스케줄러 타이밍은 2x multiplier로 재설계(1s/3s/5s → 2s/4s). **[의사결정 프로세스]** ADR로 Redis→PostgreSQL 전면 전환을 결정. Project 5에서 세운 헥사고날 구조가 이 결정을 가능하게 했다. UNLOGGED TABLE + PGMQ + SQL Transaction 조합이 인프라 단일화 목표에 가장 부합한다고 판단.
 
 ```
 Redis → PostgreSQL 대체 매핑:
@@ -600,11 +602,11 @@ Toggle → InMemory Buffer → PGMQ Publish → Consumer → DB Write
 
 **[2장] 선택지:**
 1) Buffer+PGMQ 경로 유지+보강: 복잡도 지속, 장애 포인트 여전
-2) Direct DB Transaction: 인프라가 PostgreSQL 하나인데 왜 버퍼와 메시지 큐를 거치는가? DB에 직접 쓰는 것이 가장 단순하고 가장 정확
+2) Direct DB Transaction: 인프라가 PostgreSQL 하나인데 왜 버퍼와 메시지 큐를 거치는가? DB에 직접 쓰는 것이 가장 단순하고 가장 정확. 단, QPS 100+ 시 동기 DB 호출이 병목 가능 → 현재 QPS 5~20에서는 충분
 3) CQRS 적용: 읽기/쓰기 분리. 오버엔지니어링
 
 **[3장] 결정:**
-옵션 2를 선택했다. 인프라가 PostgreSQL 하나인 상황에서 버퍼와 메시지 큐를 거치는 것은 불필요한 복잡도였다. 단일 DB 트랜잭션 안에서 INSERT character_like ON CONFLICT DO NOTHING(좋아요) 또는 DELETE(취소) + DB Trigger로 like_count 자동 ±1. 애플리케이션에서 incrementLikeCount()를 완전히 제거하고 **DB가 정합성을 보장**하게 만들었다. **[의사결정 프로세스]** 3차 Consensus Review(Architect+Critic+Code-Reviewer)에서 DIP 위반, Trigger+앱 double-count 등 논쟁점을 철저히 검토. Direct DB + Trigger가 '가장 단순하고 가장 정확'하다는 결론에 합의.
+옵션 2를 선택했다. 인프라가 PostgreSQL 하나인 상황에서 버퍼와 메시지 큐를 거치는 것은 불필요한 복잡도였다. 단일 DB 트랜잭션 안에서 INSERT character_like ON CONFLICT DO NOTHING(좋아요) 또는 DELETE(취소) + DB Trigger로 like_count 자동 ±1. 애플리케이션에서 incrementLikeCount()를 완전히 제거하고 **DB가 정합성을 보장**하게 만들었다. **[의사결정 프로세스]** 3차 다중 관점 리뷰(Architecture+Critic+Code-Reviewer 체크리스트)에서 DIP 위반, Trigger+앱 double-count 등 논쟁점을 철저히 검토. Direct DB + Trigger가 '가장 단순하고 가장 정확'하다는 결론에 도달.
 
 **성능 근거 (ADR-344, 아키텍처 결정 기록):** Like 토글 QPS = 5~20/sec. Direct DB indexed write = ~10~20ms. 사용자 인지 임계값 = ~100ms. 5~20 QPS에서 10~20ms 응답은 사용자 경험에 영향 없음. Buffer+PGMQ+Worker의 3단계, 장애 포인트 3곳 vs Direct DB의 단일 트랜잭션, 장애 포인트 0 (DB만 정상하면 됨).
 
@@ -702,14 +704,14 @@ Buffer→PGMQ→Consumer의 4단계를 **단일 DB 트랜잭션**으로 축소. 
 
 ```
 123일 여정 요약:
-│ 단계     │ 기간       │ 아키텍처   │ 인프라                  │
-│ 탄생     │ 2025.11-12 │ 모놀리식   │ MySQL + Caffeine        │
-│ 원자성   │ 2026.01초  │ Proxy     │ MySQL + Redis Lua       │
-│ Scale-out│ 2026.01말  │ 모놀리식   │ MySQL + Redis Pub/Sub   │
-│ 모듈분리 │ 2026.02    │ 멀티모듈   │ MySQL + Redis + Kotlin  │
-│ 헥사고날 │ 2026.03초  │ Hexagonal │ MySQL + Redis + Kotlin  │
-│ PostgreSQL│ 2026.03중 │ Hexagonal │ PostgreSQL + PGMQ       │
-│ Direct DB│ 2026.03말  │ Hexagonal │ PostgreSQL (Trigger)    │
+│ 단계     │ 기간         │ Project │ 아키텍처   │ 인프라                  │
+│ 탄생     │ 2025.11-12   │ P1      │ 모놀리식   │ MySQL + Caffeine        │
+│ 원자성   │ 2026.01초    │ P2      │ Proxy     │ MySQL + Redis Lua       │
+│ Scale-out│ 2026.01말    │ P3      │ 모놀리식   │ MySQL + Redis Pub/Sub   │
+│ 모듈분리 │ 2026.02      │ P4      │ 멀티모듈   │ MySQL + Redis + Kotlin  │
+│ 헥사고날 │ 2026.03초    │ P5      │ Hexagonal │ MySQL + Redis + Kotlin  │
+│ PostgreSQL│ 2026.03중   │ P6      │ Hexagonal │ PostgreSQL + PGMQ       │
+│ Direct DB│ 2026.03말    │ P7      │ Hexagonal │ PostgreSQL (Trigger)    │
 
 핵심적 변화:
 2025.11: Controller → DB (동기, 원자성 없음)
@@ -719,7 +721,7 @@ Buffer→PGMQ→Consumer의 4단계를 **단일 DB 트랜잭션**으로 축소. 
 ```
 
 **[배운 점]**
-1. **복잡도는 종종 최적화의 착각에서 온다:** Buffer+PGMQ+Worker는 "성능 최적화"라고 생각했지만, 실제로는 QPS 5~20/sec에서 10~20ms 응답에 불과했다. 직관에 반하지만, 가장 단순한 Direct DB가 가장 정확하고 충분히 빨랐다. **그러나 이 123일의 여정이 필요했다:** TOCTOU 원자성 경험(Project 3), Lua Script 한계 체감(Project 2), 헥사고날 아키텍처로 인프라 독립 달성(Project 5) 없이는 Direct DB 전환 자체가 불가능했을 것이다. 복잡도를 경험해야 단순함의 가치를 안다.
+1. **복잡도는 종종 최적화의 착각에서 온다:** Buffer+PGMQ+Worker는 "성능 최적화"라고 생각했지만, 실제로는 QPS 5~20/sec에서 10~20ms 응답에 불과했다. 직관에 반하지만, 가장 단순한 Direct DB가 가장 정확하고 충분히 빨랐다. **그러나 이 123일의 여정이 필요했다:** TOCTOU 원자성 경험(Project 3), Lua Script 한계 체감(Project 2), 헥사고날 아키텍처로 인프라 독립 달성(Project 5) 없이는 Direct DB 전환 자체가 불가능했을 것이다. 복잡도를 경험해야 단순함의 가치를 안다. 만약 처음부터 Direct DB를 선택했다면, 원자성에 대한 확신 없이 취약한 상태로 운영했을 것이다.
 2. **DB Trigger는 데이터 정합성의 최후의 보험:** 애플리케이션에서 incrementLikeCount()를 완전히 제거하고, DB가 정합성을 보장하게 하니 like_count 불일치가 사라졌다 (DB Trigger가 단일 트랜잭션 내에서 보장). Trigger는 숨겨진 비즈니스 로직이지만, 카운트 정합성에는 가장 적합한 솔루션이었다.
 3. **3차 리뷰의 가치:** DIP 위반(Trigger가 인프라 로직), double-count 위험(Trigger+앱 중복), fingerprint 재발행 문제 등을 Architect+Critic+Code-Reviewer 3인이 철저히 검토하고 논쟁한 덕분에, 결함 없는 릴리즈가 가능했다.
 
@@ -758,3 +760,8 @@ Buffer→PGMQ→Consumer의 4단계를 **단일 DB 트랜잭션**으로 축소. 
 | P99 Latency (unlike) | 22~35ms | 8~12ms | 3배 개선 |
 
 **핵심 교훈:** 복잡도를 경험해야 단순함의 가치를 안다. 비관적 락→Redis Lua Script→Direct DB Transaction으로 회귀했지만, 그 123일의 여정이 헥사고날 아키텍처 설계 역량, 멀티모듈 분리 경험, 인프라 교체 능력을 만들었다.
+
+**포트폴리오 간 시간적 연결:**
+- **2025-11 ~ 2026-01:** Like Domain이 먼저 Redis→PostgreSQL 전환 경험을 축적 (Project 6)
+- **2026-01 ~ 2026-03:** Performance Domain이 Like의 헥사고날 전환 경험을 참조하여 Redis/MySQL/MongoDB→PostgreSQL 단일화 (Project 8)
+- **공통 학습:** 헥사고날 아키텍처로 module-core 0줄 변경 달성 — 두 도메인이 서로의 전환 경험을 교차 검증

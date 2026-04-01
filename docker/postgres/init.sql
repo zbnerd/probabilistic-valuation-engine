@@ -8,15 +8,6 @@
 CREATE EXTENSION IF NOT EXISTS pgmq CASCADE;
 
 -- Create PGMQ Queues
--- V4 Buffer Queue: Equipment expectation write-back buffer
-SELECT pgmq.create('v4_buffer_queue');
-
--- V5 Event Queue: Domain event stream
-SELECT pgmq.create('v5_event_queue');
-
--- Donation Outbox Queue: Donation transaction outbox
-SELECT pgmq.create('donation_outbox_queue');
-
 -- Nexon API Retry Queue: Failed API call retry via PGMQ (Phase 3)
 SELECT pgmq.create('nexon_retry_queue');
 
@@ -86,5 +77,5 @@ GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pgmq TO maple;
 DO $$
 BEGIN
     RAISE NOTICE 'PostgreSQL + PGMQ initialized successfully';
-    RAISE NOTICE 'Created queues: v4_buffer_queue, v5_event_queue, donation_outbox_queue';
+    RAISE NOTICE 'Created queues: nexon_retry_queue';
 END $$;

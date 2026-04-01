@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController
  * **CQRS Pattern**
  * - Query Side: PostgreSQL CharacterValuationViewEntity (fast read 1-10ms)
  * - Command Side: Priority Queue + Calculation Worker
- * - Sync: PGMQ v5_event_queue → PostgreSQL upsert
+ * - Sync: PGMQ event queue → PostgreSQL upsert
  *
  * **ADR-005 Hexagonal Architecture**
  * - CharacterViewQueryPort: PostgreSQL 조회

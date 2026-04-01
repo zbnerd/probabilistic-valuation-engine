@@ -115,20 +115,6 @@ scheduler:
   popular-character-warmup:
     enabled: false
 
-# PGMQ Configuration (for future migration)
-pgmq:
-  enabled: true
-  queues:
-    v4-buffer:
-      name: v4_buffer_queue
-      retention: 86400  # 24 hours
-    v5-event:
-      name: v5_event_queue
-      retention: 604800  # 7 days
-    donation-outbox:
-      name: donation_outbox_queue
-      retention: 86400
-
 # Z.ai LangChain4j Configuration
 langchain4j:
   glm-4:

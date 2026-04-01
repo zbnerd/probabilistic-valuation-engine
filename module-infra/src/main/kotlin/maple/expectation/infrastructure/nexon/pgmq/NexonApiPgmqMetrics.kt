@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component
  * </ul>
  */
 @Component
+@Suppress("DEPRECATION")
 class NexonApiPgmqMetrics(
     private val registry: MeterRegistry,
     private val pgmqClient: PgmqClient,

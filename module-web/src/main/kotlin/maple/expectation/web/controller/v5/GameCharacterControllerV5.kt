@@ -8,9 +8,12 @@ import maple.expectation.core.domain.model.character.CharacterView
 import maple.expectation.core.port.inbound.CalculationQueuePort
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExecutorPort
+import maple.expectation.core.port.out.CharacterOcidPort
+import maple.expectation.core.port.out.EquipmentFanOutPort
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.mapper.CharacterViewMapper
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -32,6 +35,12 @@ import org.springframework.web.bind.annotation.RestController
  * **ADR-005 Hexagonal Architecture**
  * - CharacterViewQueryPort: PostgreSQL 조회
  * - CalculationQueuePort: 큐 작업 추가
+ * - EquipmentFanOutPort: FanOut Micro-Batch 프리페치 (fanout.enabled=true)
+ *
+ * **FanOut Integration (fanout.enabled=true)**
+ * - PostgreSQL MISS 시 장비 데이터를 Micro-Batch Coalescing으로 프리페치
+ * - 프리페치 후 Calculation Worker가 캐시된 데이터를 활용 (빠른 계산)
+ * - Best-effort: 실패해도 큐잉은 정상 수행
  */
 @RestController
 @RequestMapping("/api/v5/characters")
@@ -40,6 +49,9 @@ class GameCharacterControllerV5(
     private val queryPort: CharacterViewQueryPort,
     private val queuePort: CalculationQueuePort,
     private val executorPort: ExecutorPort,
+    private val ocidPort: CharacterOcidPort,
+    @Value("\${fanout.enabled:false}") private val fanOutEnabled: Boolean,
+    private val fanOutPort: EquipmentFanOutPort,
 ) {
 
     /**
@@ -77,8 +89,36 @@ class GameCharacterControllerV5(
             return ResponseEntity.ok(cachedResult.get())
         }
 
-        // 3. MISS: Queue to Command Side via Port
+        // 3. MISS: Pre-warm equipment cache via FanOut (best-effort)
+        if (fanOutEnabled) {
+            preWarmEquipmentCache(userIgn, context)
+        }
+
+        // 4. Queue to Command Side via Port
         return queueCalculationTask(userIgn, false, context)
+    }
+
+    /**
+     * FanOut Micro-Batch로 장비 데이터 프리페치 (Best-Effort)
+     *
+     * <p>OCID 해석 → EquipmentFanOutPort.preFetchByOcid():
+     * <ul>
+     *   <li>L1 Cache HIT → 즉시 반환 (0ms)</li>
+     *   <li>In-Flight Coalescing → 기존 요청 대기</li>
+     *   <li>Fast Lane → EquipmentFetchProvider.fetchWithCache()</li>
+     *   <li>Batch Lane → NexonFanOutBatchLoader.load()</li>
+     * </ul>
+     *
+     * <p>실패해도 큐잉은 정상 수행 (Best-Effort)
+     */
+    private fun preWarmEquipmentCache(userIgn: String, context: TaskContext) {
+        executorPort.executeVoidJava({
+            val ocid = ocidPort.resolveOcid(userIgn)
+            if (ocid != null) {
+                fanOutPort.preFetchByOcid(ocid)
+                log.debug("[V5] FanOut pre-warm: ign={}, ocid={}", maskIgn(userIgn), ocid.take(8))
+            }
+        }, context)
     }
 
     /**

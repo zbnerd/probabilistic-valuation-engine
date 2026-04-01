@@ -53,6 +53,19 @@ abstract class PgmqWorker<T : Any>(
     protected abstract fun process(message: PgmqMessage<T>): Boolean
 
     /**
+     * 메시지 처리 실패 시 후처리 훅 (선택적 오버라이드)
+     *
+     * <p>process()가 false를 반환하거나 예외 발생 시 호출.
+     * 기본 구현은 no-op.
+     * 429 Rate Limit 시 setVisibilityTimeout()으로 짧은 지연 설정에 사용.
+     *
+     * @param message 처리 실패한 메시지
+     */
+    protected open fun onProcessingFailed(message: PgmqMessage<T>) {
+        // no-op by default
+    }
+
+    /**
      * 메시지 배치 처리
      *
      * <p>1. 큐에서 메시지 읽기
@@ -113,7 +126,8 @@ abstract class PgmqWorker<T : Any>(
                 log.debug("✅ [{}] Archived message: msgId={}", queueName, message.messageId)
             }
             message.isRetryable(maxRetries) -> {
-                // 재시도 가능: 다음 poll에서 다시 처리됨
+                // 재시도 가능: 후처리 훅 호출 후 다음 poll에서 다시 처리됨
+                onProcessingFailed(message)
                 log.warn("⚠️ [{}] Message will be retried: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
             }
             else -> {

@@ -115,6 +115,32 @@ scheduler:
   popular-character-warmup:
     enabled: false
 
+# Disable outbox schedulers
+outbox:
+  scheduler:
+    nexon-api-outbox:
+      enabled: false
+
+# PGMQ Configuration (for future migration)
+pgmq:
+  enabled: true
+  queues:
+    v4-buffer:
+      name: v4_buffer_queue
+      retention: 86400  # 24 hours
+    v5-event:
+      name: v5_event_queue
+      retention: 604800  # 7 days
+    donation-outbox:
+      name: donation_outbox_queue
+      retention: 86400
+  worker:
+    nexon-fanout:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 5
+
 # Z.ai LangChain4j Configuration
 langchain4j:
   glm-4:

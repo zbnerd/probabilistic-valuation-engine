@@ -1,0 +1,134 @@
+package maple.expectation.infrastructure.fanout
+
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
+import jakarta.annotation.PreDestroy
+import maple.expectation.core.port.out.FanOutQueuePort
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.external.NexonApiClient
+import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
+
+/**
+ * Nexon FanOut Batch Loader
+ *
+ * <h3>역할</h3>
+ * <p>Batch Lane에서 수집된 OCID 목록을 병렬로 Nexon API 호출.
+ * Semaphore(30)로 동시성 제한, 429 발생 시 PGMQ에 재시도 메시지 enqueue.
+ *
+ * <h3>동시성 제어</h3>
+ * <ul>
+ *   <li>Semaphore(30): Bulkhead(50)보다 작게 설정 → 실제 제한 = min(30, 50) = 30</li>
+ *   <li>ExecutorService(10): 전용 fixed thread pool</li>
+ * </ul>
+ *
+ * <h3>429 처리</h3>
+ * <p>429 Rate Limit 발생 시 FanOutQueuePort를 통해 PGMQ에 enqueue.
+ * NexonFanOutWorker가 1~1.3초 jitter 후 재시도.
+ *
+ * @see FanOutQueuePort PGMQ 재시도 발행
+ * @see NexonApiClient Nexon API 클라이언트
+ */
+@Component
+class NexonFanOutBatchLoader(
+    private val nexonApiClient: NexonApiClient,
+    private val fanOutQueuePort: FanOutQueuePort,
+    private val executor: LogicExecutor,
+) {
+    private val semaphore = Semaphore(SEMAPHORE_PERMITS)
+    private val executorService: ExecutorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE)
+
+    /**
+     * OCID 목록을 병렬로 조회
+     *
+     * @param ocids 조회할 OCID 목록
+     * @return 성공한 OCID → EquipmentResponse 매핑 (429 건은 제외됨)
+     */
+    @PreDestroy
+    fun shutdown() {
+        executorService.shutdown()
+        if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+            executorService.shutdownNow()
+        }
+    }
+
+    fun load(ocids: List<String>): Map<String, EquipmentResponse> {
+        if (ocids.isEmpty()) return emptyMap()
+
+        val futures = ocids.map { ocid ->
+            CompletableFuture.supplyAsync({
+                semaphore.acquire()
+                try {
+                    fetchOrEnqueueRetry(ocid)
+                } finally {
+                    semaphore.release()
+                }
+            }, executorService)
+        }
+
+        CompletableFuture.allOf(*futures.toTypedArray()).join()
+
+        return futures.mapNotNull { it.join() }.associate { it }
+    }
+
+    /**
+     * 단일 OCID 조회 또는 429 시 PGMQ enqueue
+     *
+     * @param ocid 캐릭터 OCID
+     * @return 성공 시 OCID-Response 쌍, 실패 시 null
+     */
+    private fun fetchOrEnqueueRetry(ocid: String): Pair<String, EquipmentResponse>? {
+        val context = TaskContext.of("FanOutBatchLoader", "Fetch", ocid)
+
+        return executor.executeOrCatch(
+            task = {
+                val response = nexonApiClient.getItemDataByOcid(ocid)
+                    .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    .join()
+                ocid to response
+            },
+            recovery = { e ->
+                if (is429(e)) {
+                    log.warn("[FanOutBatchLoader] 429 Rate Limit, enqueuing retry: ocid={}", ocid)
+                    fanOutQueuePort.enqueue(ocid, BATCH_LANE_USER)
+                } else {
+                    log.error("[FanOutBatchLoader] Failed: ocid={}", ocid, e)
+                }
+                null
+            },
+            context = context,
+        )
+    }
+
+    companion object {
+        private val log = LoggerFactory.getLogger(NexonFanOutBatchLoader::class.java)
+
+        private const val SEMAPHORE_PERMITS = 30
+        private const val THREAD_POOL_SIZE = 10
+        private const val API_TIMEOUT_SECONDS = 10L
+        private const val BATCH_LANE_USER = "batch"
+
+        /**
+         * 429 Rate Limit 에러 여부 확인
+         *
+         * <p>CompletionException으로 래핑될 수 있으므로 cause 체인까지 확인
+         */
+        fun is429(throwable: Throwable): Boolean {
+            var current: Throwable? = throwable
+            while (current != null) {
+                if (current is org.springframework.web.reactive.function.client.WebClientResponseException &&
+                    current.statusCode.value() == 429
+                ) {
+                    return true
+                }
+                current = current.cause
+            }
+            return false
+        }
+    }
+}

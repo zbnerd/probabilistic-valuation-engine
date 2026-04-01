@@ -134,6 +134,26 @@ class PgmqClient(
     }
 
     /**
+     * 메시지 Visibility Timeout 변경
+     *
+     * <p>이미 읽은 메시지의 VT를 변경. 429 Rate Limit 시 짧은 지연 후 재시도에 사용.
+     *
+     * @param queueName 큐 이름
+     * @param messageId 메시지 ID
+     * @param visibilityTimeoutSec 새 VT (초)
+     * @return 성공 여부
+     */
+    @CircuitBreaker(name = "pgmq", fallbackMethod = "setVisibilityTimeoutFallback")
+    fun setVisibilityTimeout(queueName: String, messageId: Long, visibilityTimeoutSec: Int): Boolean {
+        val context = TaskContext.of("PgmqClient", "SetVT", "$queueName:$messageId")
+        return executor.executeOrDefault(
+            { performSetVisibilityTimeout(queueName, messageId, visibilityTimeoutSec) },
+            false,
+            context,
+        )
+    }
+
+    /**
      * 큐 길이 조회
      *
      * <p>지정된 큐의 현재 대기 중인 메시지 수를 반환.
@@ -233,6 +253,21 @@ class PgmqClient(
         return result
     }
 
+    private fun performSetVisibilityTimeout(queueName: String, messageId: Long, visibilityTimeoutSec: Int): Boolean {
+        val result = jdbcTemplate.queryForObject(
+            "SELECT pgmq.set_visibility_timeout(?, ?, ?) as success",
+            Boolean::class.java,
+            queueName,
+            messageId,
+            visibilityTimeoutSec,
+        ) ?: false
+
+        if (result) {
+            log.debug("⏱️ [PGMQ] Set VT: queue={}, msgId={}, vt={}s", queueName, messageId, visibilityTimeoutSec)
+        }
+        return result
+    }
+
     private fun performQueueLength(queueName: String): Long {
         return jdbcTemplate.queryForObject(
             "SELECT pgmq.queue_length(?)",
@@ -266,6 +301,16 @@ class PgmqClient(
 
     private fun deleteFallback(queueName: String, messageId: Long, e: Throwable): Boolean {
         log.error("⚡ [PGMQ] Circuit Breaker OPEN - delete fallback: queue={}, msgId={}", queueName, messageId, e)
+        return false
+    }
+
+    private fun setVisibilityTimeoutFallback(
+        queueName: String,
+        messageId: Long,
+        visibilityTimeoutSec: Int,
+        e: Throwable,
+    ): Boolean {
+        log.error("⚡ [PGMQ] Circuit Breaker OPEN - setVT fallback: queue={}, msgId={}", queueName, messageId, e)
         return false
     }
 

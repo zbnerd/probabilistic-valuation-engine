@@ -134,6 +134,12 @@ pgmq:
     donation-outbox:
       name: donation_outbox_queue
       retention: 86400
+  worker:
+    nexon-fanout:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 5
 
 # Z.ai LangChain4j Configuration
 langchain4j:

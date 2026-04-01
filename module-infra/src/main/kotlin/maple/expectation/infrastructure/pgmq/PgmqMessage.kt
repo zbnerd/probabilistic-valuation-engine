@@ -149,3 +149,21 @@ data class ExpectationCalcMessage(
     val userIgn: String,
     val forceRecalculation: Boolean,
 )
+
+/**
+ * FanOut 배치 처리 재시도 메시지 페이로드
+ *
+ * <p>nexon_fanout_queue로 발행되어 NexonFanOutWorker가 처리.
+ * 429 Rate Limit 발생 시 Batch Lane에서 enqueue.
+ *
+ * @param ocid 캐릭터 OCID
+ * @param userIgn 사용자 IGN
+ * @param retryCount 현재 재시도 횟수
+ * @param requestedAt 요청 시점
+ */
+data class FanOutRequest(
+    val ocid: String,
+    val userIgn: String,
+    val retryCount: Int = 0,
+    val requestedAt: String,
+)

@@ -42,6 +42,9 @@ class PgmqWorkerConfig {
     /** Expectation Calc Low Priority Worker 설정 */
     var expectationCalcLow: WorkerSettings = WorkerSettings()
 
+    /** Nexon FanOut Worker 설정 (429 재시도 전용) */
+    var nexonFanout: WorkerSettings = WorkerSettings()
+
     data class CommonSettings(
         /** 폴링 간격 (ms) */
         var pollingIntervalMs: Long = 1000,

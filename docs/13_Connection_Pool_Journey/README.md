@@ -1,4 +1,4 @@
-# 커넥션 풀 여정기: 104개 커넥션에서 하나의 풀로
+# 커넥션 풀 여정기: 분산된 풀에서 하나로
 
 > **Probabilistic Valuation Engine**의 커넥션 풀 최적화 여정
 > 2026년 2월 ~ 4월, HikariCP 고갈에서 PGMQ 통합까지
@@ -7,7 +7,7 @@
 
 ## 왜 이 이야기를 하는가
 
-성능 최적화 여정(97→7,347 RPS)의 그림자에는 **커넥션 풀**이라는 숨은 주인공이 있었다. RPS가 오를 때마다 커넥션이 부족해졌고, 스케일아웃을 시도할 때마다 풀이 고갈되었다. 결국 3개의 데이터베이스와 3개의 아웃박스 스케줄러가 각각 물고 있던 커넥션을 **PGMQ 하나로 통합**하기까지의 과정을 기록한다.
+성능 최적화 여정(97→7,347 RPS)의 그림자에는 **커넥션 풀**이라는 숨은 주인공이 있었다. RPS가 오를 때마다 커넥션이 부족해졌고, 스케일아웃을 시도할 때마다 풀이 고갈되었다. 결국 3개의 데이터베이스와 3개의 아웃박스 스케줄러가 각각 물고 있던 커넥션을 **PostgreSQL 단일 풀로 통합**하기까지의 과정을 기록한다.
 
 이 책은 [성능 여정기](../06_Performance_Journey/README.md)의 자매서적이다. 성능 여정기가 "RPS"를 주인공으로 삼았다면, 이 책은 **"커넥션"**을 주인공으로 삼는다.
 
@@ -15,7 +15,7 @@
 
 | 장 | 제목 | 핵심 사건 | 기간 |
 |----|------|----------|------|
-| [프롤로그](./00_prologue.md) | 세 개의 데이터베이스, 104개의 커넥션 | 초기 인프라와 커넥션 구조 | 2026년 1월 |
+| [프롤로그](./00_prologue.md) | 세 개의 데이터베이스, 분산된 커넥션 풀 | 초기 인프라와 커넥션 구조 | 2026년 1월 |
 | [1장](./01_misalignment.md) | 첫 번째 경고: HikariCP 정렬 실패 | 풀 사이즈 10 vs 스레드 200 | 2026년 2월 |
 | [2장](./02_alignment_fix.md) | 정렬: 공식을 세우다 | `(CPU×2)+disk` 공식과 모니터링 | 2026년 3월 8일 |
 | [3장](./03_scale_out_wall.md) | Scale-out의 벽 | 5대 인스턴스에서 RPS 하락 | 2026년 3월 초 |
@@ -33,17 +33,17 @@ Connection Pool Evolution (2026-01 ~ 2026-04)
 
 Before (3 DBs, 단일 인스턴스):
 ┌─────────────────────────────────────────────┐
-│  HikariCP (MySQL):     max 20 connections   │
-│  Redisson (Redis):     max 64 connections   │
-│  MongoClient (Mongo):  max 20 connections   │
+│  [실측] HikariCP (MySQL):     max 25 conn   │
+│  [실측] Redisson (Redis):     max 64 conn   │
+│  [미확인] MongoClient (Mongo): pool size ?  │
 │─────────────────────────────────────────────│
-│  Total: 104 connections × 3 DBs             │
+│  Total: 89+ connections × 3 DBs             │
 │  + 3 Outbox Schedulers polling separately   │
 └─────────────────────────────────────────────┘
 
 After (PostgreSQL Only, 단일 인스턴스):
 ┌─────────────────────────────────────────────┐
-│  HikariCP (PostgreSQL): max 25 connections  │
+│  [실측] HikariCP (PostgreSQL): max 25 conn  │
 │    ├── Business queries                     │
 │    ├── PGMQ send/read/archive/delete        │
 │    ├── Advisory Lock (xact scope)           │
@@ -59,7 +59,7 @@ After (PostgreSQL Only, 단일 인스턴스):
 
 | 지표 | 변경 전 | 변경 후 | 개선 |
 |------|---------|---------|------|
-| 총 커넥션 수 (인스턴스당) | 104 | 25 | **76% 감소** |
+| 총 커넥션 수 (인스턴스당) | [실측] 89+ (25+64+?) | [실측] 25 | **72%+ 감소** |
 | 데이터베이스 수 | 3 | 1 | **3→1** |
 | Outbox 스케줄러 | 3개 (개별 폴링) | 0개 (PGMQ 통합) | **완전 제거** |
 | 락 커넥션 누수 위험 | Session-scope (수동 해제) | Xact-scope (자동 해제) | **원자적 해제** |

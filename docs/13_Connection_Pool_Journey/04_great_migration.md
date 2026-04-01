@@ -30,7 +30,7 @@ Scale-out의 벽(3장)을 마주한 후, PostgreSQL 단일 DB로의 통합을 �
 
 ```
 Before:
-  Redisson Pool: max 64 connections
+  [실측] Redisson Pool: max 64 connections
   ├── 캐시 조회/저장 (L2)
   ├── 분산락 (Redisson RLock)
   ├── Pub/Sub (캐시 무효화)
@@ -40,7 +40,7 @@ Before:
   └── Write-Behind Buffer
 
 After:
-  Redisson Pool: DELETED ← 64 connections 절약
+  [실측] Redisson Pool: DELETED ← 64 connections 절약
   ├── Caffeine L1 + PG UNLOGGED L2
   ├── pg_try_advisory_xact_lock
   ├── PG LISTEN/NOTIFY
@@ -58,11 +58,11 @@ CQRS Read Side로 사용하던 MongoDB를 PostgreSQL JSONB로 교체.
 
 ```
 Before:
-  MongoClient Pool: max 20 connections
+  [미확인] MongoClient Pool: pool size ?
   └── CharacterValuationView (MongoDB Document)
 
 After:
-  MongoClient Pool: DELETED ← 20 connections 절약
+  [미확인] MongoClient Pool: DELETED ← ? connections 절약
   └── CharacterValuationViewEntity (JPA + @Column jsonb)
 ```
 
@@ -74,11 +74,11 @@ MongoDB의 Stage & Swap 패턴은 PostgreSQL에서 불가능했지만, 트랜잭
 
 ```
 Before:
-  HikariCP → MySQL: max 20 connections
+  [실측] HikariCP → MySQL: max 25 connections
   └── Named Lock (GET_LOCK/RELEASE_LOCK)
 
 After:
-  HikariCP → PostgreSQL: max 25 connections
+  [실측] HikariCP → PostgreSQL: max 25 connections
   └── Advisory Lock (pg_try_advisory_xact_lock)
 ```
 
@@ -90,34 +90,34 @@ After:
 
 ```
 Before (3 databases):
-  HikariCP Pool (MySQL):     max 20 connections
-  Redisson Pool (Redis):     max 64 connections
-  Mongo Pool (MongoDB):      max 20 connections
+  [실측] HikariCP Pool (MySQL):     max 25 connections
+  [실측] Redisson Pool (Redis):     max 64 connections
+  [미확인] Mongo Pool (MongoDB):      pool size ?
   ────────────────────────────────────────────────
-  총 104 connections, 3개 DB로 분산
+  [추정] 총 89+ connections, 3개 DB로 분산
   각 풀이 독립적으로 동작 → 한 풀의 여유가 다른 풀의 고갈을 막지 못함
 
 After (PostgreSQL only):
-  HikariCP Pool (PostgreSQL): max 30 connections
+  [실측] HikariCP Pool (PostgreSQL): max 25 connections
   ────────────────────────────────────────────────
-  총 30 connections, 단일 풀
+  [실측] 총 25 connections, 단일 풀
   모든 작업이 동일 풀에서 → 유휴 커넥션을 다른 작업이 재사용
 ```
 
-### 왜 30인가
+### 왜 25인가
 
-PostgreSQL 하나에 모든 기능이 집중되므로, 기존 MySQL 풀(20)보다 약간 크게 설정:
+PostgreSQL 하나에 모든 기능이 집중되므로, 기존 MySQL 풀(25)과 동일하게 유지:
 
 ```
-Business queries:     ~15 connections (기존 MySQL 역할)
-PGMQ operations:      ~5 connections (기존 Redis Stream 역할)
-LISTEN/NOTIFY:        ~3 connections (기존 Redis Pub/Sub 역할)
-Advisory Lock:        ~2 connections (기존 Redis Lock 역할)
-Buffer operations:    ~5 connections (기존 Redis Buffer 역할)
+[추정] Business queries:     ~12 connections
+[추정] PGMQ operations:      ~5 connections
+[추정] LISTEN/NOTIFY:        ~2 connections
+[추정] Advisory Lock:        ~2 connections
+[추정] Worker polling:       ~4 connections
 ───────────────────────────────────────────────────
-합계:                 ~30 connections
+[실측] 합계:                 25 connections (Prod)
 
-Prod에서는 25로 운영 (메모리 절약)
+(이 분배는 추정치입니다. 실제 사용 패턴은 다를 수 있습니다)
 ```
 
 ## docker-compose의 변화
@@ -157,7 +157,7 @@ build.gradle에서 제거:
 
 | 항목 | 이점 | 대가 |
 |------|------|------|
-| **커넥션** | 104 → 30 (71% 절감) | PostgreSQL 장애 시 전체 영향 |
+| **커넥션** | [추정] 89+ → 25 (72%+ 절감) | PostgreSQL 장애 시 전체 영향 |
 | **운영** | DB 1개 관리 = 장애 포인트 1개 | PostgreSQL 메모리/디스크 요구 증가 |
 | **일관성** | 트랜잭션 내 원자적 처리 | Redis만큼의 sub-ms 응답 불가 |
 | **Scale-out** | 노드 추가만으로 확장 | PG 커넥션 수가 노드당 1세트 증가 |
@@ -166,12 +166,12 @@ build.gradle에서 제거:
 
 3개 DB를 1개로 통합하면서:
 
-- 커넥션 수 104 → 30으로 감소
-- Scale-out 시 인스턴스당 30 connections → 5대 × 30 = 150 (기존 545 대비 72% 절감)
+- [추정] 커넥션 수 89+ → 25로 감소
+- Scale-out 시 인스턴스당 25 connections → 5대 × 25 = 125 (기존 445+ 대비 72%+ 절감)
 - Redis SPOF 제거
 - 모니터링 단순화 (HikariCP 하나만 보면 됨)
 
-**하지만** 30 connections로 충분했을까? 아니었다. 새로운 병목이 기다리고 있었다.
+**하지만** 25 connections로 충분했을까? 아니었다. 새로운 병목이 기다리고 있었다.
 
 ---
 

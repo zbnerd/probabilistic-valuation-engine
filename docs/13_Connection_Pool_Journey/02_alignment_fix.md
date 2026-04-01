@@ -33,9 +33,9 @@ Result:            25
 
 | 프로필 | Tomcat Threads | HikariCP Pool | 변경 전 | 상태 |
 |--------|---------------|---------------|---------|------|
-| Local | 100 | 100 | 20 | **5배 증가** |
-| CI | 200 | 200 | 10 | **20배 증가** |
-| Production | 25 | 25 | 20 | 정렬 완료 |
+| Local | 100 | 100 | [미확인] | **[예시] 5배 증가** |
+| CI | 200 | 200 | [실측] 10 | **[실측] 20배 증가** |
+| Production | 25 | 25 | [실측] 25 | 정렬 완료 (이미 25였음) |
 
 ```yaml
 # application-ci.yml (수정 후)
@@ -94,13 +94,15 @@ leak-detection-threshold: 60000  # 60초
 풀 정렬 후 단일 인스턴스에서의 커넥션 대기가 사라졌다.
 
 ```
-Before (max-pool-size: 20):
-  connections.active:  ████████████████████ 20/20  POOL EXHAUSTED
-  connections.pending: ++++++++++ 47 threads waiting
+[예시] Before (CI: max-pool-size: 10):
+  connections.active:  ████████████████████ 10/10  POOL EXHAUSTED
+  connections.pending: ++++++++++++++++++ 100+ threads waiting
 
-After (max-pool-size: 25):
-  connections.active:  █████████████████    17/25  여유 있음
+[예시] After (CI: max-pool-size: 200):
+  connections.active:  ████████████████    45/200  여유 있음
   connections.pending: 0 threads waiting
+
+(이 메트릭은 설명을 위한 예시입니다. CI 환경의 개선 사례)
 ```
 
 ### 하지만 근본 문제는 남아 있었다
@@ -122,7 +124,7 @@ ADR-014: Connection Pool Alignment with Thread Pool
 상태: Accepted
 결정: HikariCP maximum-pool-size를 Tomcat threads.max와 정렬
 근거:
-  - 커넥션 대기 시간이 요청 latency의 97%를 차지
+  - [예시] 커넥션 대기 시간이 요청 latency의 97%를 차지
   - 공식: (CPU cores × 2) + effective_disk_count, I/O-bound 스케일링 적용
   - 모니터링: JMX + leak detection 활성화
 트레이드오프:

@@ -19,19 +19,19 @@
 문제는 **인스턴스마다 각 DB에 커넥션을 맺어야 한다는 것**이었다.
 
 ```
-인스턴스당 커넥션:
-  HikariCP (MySQL):      max 25
-  Redisson (Redis):      max 64
-  MongoClient (MongoDB): max 20
+[실측] 인스턴스당 커넥션:
+  [실측] HikariCP (MySQL):      max 25
+  [실측] Redisson (Redis):      max 64
+  [미확인] MongoClient (MongoDB): pool size ?
   ─────────────────────────────
-  합계: 109 connections/instance
+  [추정] 합계: 89+ connections/instance (MongoDB 제외)
 
-5대 인스턴스:
-  MySQL:     25 × 5 = 125 connections
-  Redis:     64 × 5 = 320 connections
-  MongoDB:   20 × 5 = 100 connections
+[추정] 5대 인스턴스:
+  [실측] MySQL:     25 × 5 = 125 connections
+  [실측] Redis:     64 × 5 = 320 connections
+  [미확인] MongoDB: ? × 5 = ? connections
   ────────────────────────────────
-  총합: 545 connections → DB 서버 과부하
+  [추정] 총합: 445+ connections → DB 서버 과부하
 ```
 
 ### PostgreSQL의 경우 (t3.small)
@@ -118,10 +118,10 @@ Redis 장애 → 캐시 미스 폭발 → MySQL 커넥션 고갈 → 서비스 �
 **모든 기능에 PostgreSQL 대안이 존재했다.**
 
 ```
-Before: 104 connections × 3 databases = 312 관리 포인트
-After:  25 connections × 1 database  = 25 관리 포인트
+Before: [실측] (25+64) + [미확인] MongoDB = 89+ connections × 3 databases
+After:  [실측] 25 connections × 1 database  = 25 관리 포인트
 
-절감: 92% 커넥션 감소
+[추정] 절감: 72%+ 커넥션 감소 (MongoDB 제외 추정)
 ```
 
 ## 배운 점

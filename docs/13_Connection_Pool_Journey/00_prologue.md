@@ -1,4 +1,4 @@
-# 프롤로그: 세 개의 데이터베이스, 104개의 커넥션
+# 프롤로그: 세 개의 데이터베이스, 분산된 커넥션 풀
 
 > "커넥션은 무한하지 않다. 이 진리를 깨닫는 데 3개월이 걸렸다."
 
@@ -35,21 +35,21 @@ Client → Spring Boot (Java 21, Virtual Threads)
 문제는 **커넥션**이었다. 각 데이터베이스마다 독립적인 커넥션 풀이 필요했다.
 
 ```
-HikariCP (MySQL):      max-pool-size: 20   → 20 connections
-Redisson (Redis):      connection-pool: 64  → 64 connections
-MongoClient (MongoDB): max-pool-size: 20   → 20 connections
+[실측] HikariCP (MySQL):      max-pool-size: 25   → 25 connections
+[실측] Redisson (Redis):      connection-pool: 64  → 64 connections
+[미확인] MongoClient (MongoDB): pool size 미확인    → ? connections
 ────────────────────────────────────────────────────────────
-총합: 104 connections (단일 인스턴스 기준)
+총합: 89+ connections (단일 인스턴스 기준, MongoDB 제외)
 ```
 
-단일 인스턴스에서는 문제가 없었다. 104개 커넥션쯤이야, 서버가 충분히 감당했다.
+단일 인스턴스에서는 문제가 없었다. 89+개 커넥션쯤이야, 서버가 충분히 감당했다.
 
 하지만 **Scale-out**을 시작하는 순간, 수학이 달라진다.
 
 ```
-1대 인스턴스:  104 connections → 총 104개
-3대 인스턴스:  104 × 3 = 312 connections
-5대 인스턴스:  104 × 5 = 520 connections → DB 서버 한계 도달
+[추정] 1대 인스턴스:  89+ connections → 총 89+개
+[추정] 3대 인스턴스:  (25+64) × 3 = 267+ connections (MongoDB 제외)
+[추정] 5대 인스턴스:  (25+64) × 5 = 445+ connections → DB 서버 한계 도달
 ```
 
 MySQL `max_connections`의 기본값은 151. Redis는 10,000개까지 가능하지만, 커넥션마다 메모리를 차지한다. MongoDB도 마찬가지.
@@ -63,10 +63,12 @@ MySQL `max_connections`의 기본값은 151. Redis는 10,000개까지 가능하�
 Grafana 대시보드에 새로운 패턴이 나타났다.
 
 ```
-HikariCP Metrics:
+[예시] HikariCP Metrics:
   connections.active: ████████████████████ 20/20  ← POOL EXHAUSTED
   connections.pending: ++++++++++ 47 threads waiting
   connections.timeout: 12 in last 5 minutes
+
+  (이 Grafana 출력은 설명을 위한 예시입니다)
 ```
 
 **커넥션 풀 고갈(Connection Pool Exhaustion).** HikariCP의 20개 커넥션이 모두 사용 중이었고, 47개의 스레드가 커넥션을 기다리고 있었다.
@@ -80,9 +82,9 @@ HikariCP Metrics:
 ### 1. 풀 사이즈 정렬 실패
 
 ```
-HikariCP:  maximum-pool-size = 20
+HikariCP:  maximum-pool-size = 25 (Production)
 Tomcat:    threads.max = 200
-비율:      20 / 200 = 10%
+비율:      25 / 200 = 12.5%
 ```
 
 200개의 스레드가 동시에 요청을 처리하는데, 커넥션은 20개뿐. 180개의 스레드가 커넥션을 기다려야 했다.
@@ -92,7 +94,7 @@ Tomcat:    threads.max = 200
 하나의 요청이 처리되는 동안:
 
 ```
-요청 하나의 커넥션 여정:
+[예시] 요청 하나의 커넥션 여정:
 1. Redis에서 캐시 조회         → Redisson 커넥션 1개
 2. Cache miss → MySQL 조회     → HikariCP 커넥션 1개
 3. 결과 MySQL 저장             → HikariCP 커넥션 (재사용)
@@ -100,7 +102,7 @@ Tomcat:    threads.max = 200
 5. Outbox에 이벤트 저장        → HikariCP 커넥션 1개
 6. MongoDB Read Model 업데이트  → MongoClient 커넥션 1개
 
-최대 6개 커넥션이 하나의 요청에 필요
+최대 6개 커넥션이 하나의 요청에 필요 (실제 패턴은 상이할 수 있음)
 ```
 
 ### 3. 스케줄러의 숨은 소비
@@ -108,11 +110,11 @@ Tomcat:    threads.max = 200
 3개의 Outbox 스케줄러가 각각 **개별 커넥션**으로 폴링:
 
 ```
-OutboxScheduler (15s):        → HikariCP 커넥션 점유
-EventOutboxScheduler (10s):   → HikariCP 커넥션 점유
-NexonApiOutboxScheduler (10s): → HikariCP 커넥션 점유
+[예시] OutboxScheduler (15s):        → HikariCP 커넥션 점유
+[예시] EventOutboxScheduler (10s):   → HikariCP 커넥션 점유
+[예시] NexonApiOutboxScheduler (10s): → HikariCP 커넥션 점유
 
-스케줄러만 3개 커넥션 상시 점유 → 실제 비즈니스 로직에 17개 남음
+[추정] 스케줄러만 3개 커넥션 상시 점유 → 실제 비즈니스 로직에 22개 남음
 ```
 
 ## 이 책이 묻는 질문

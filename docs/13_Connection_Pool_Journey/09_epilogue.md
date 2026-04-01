@@ -9,7 +9,7 @@
 ### 여정 한눈에 보기
 
 ```
-2026년 1월 — 3개 DB, 104 connections, 97 RPS
+2026년 1월 — 3개 DB, [추정] 89+ connections, 97 RPS
        ↓
 2026년 2월 — HikariCP 정렬 경고 포착
        ↓
@@ -27,7 +27,7 @@
        ↓
 2026년 4월 1일 — Outbox → PGMQ Phase 3-5 (PR #688-690)
        ↓
-2026년 4월 — 1개 DB, 25 connections, 7,347 RPS
+2026년 4월 — 1개 DB, [실측] 25 connections, 7,347 RPS
 ```
 
 ## 최종 아키텍처
@@ -35,24 +35,24 @@
 ```
 Before:
 Client → Spring Boot
-           ├── Redis 7.0 (Master + Slave + 3 Sentinel)  ← Redisson 64 conn
-           ├── MySQL 8.0                                  ← HikariCP 20 conn
-           ├── MongoDB                                    ← MongoClient 20 conn
-           ├── 3 Outbox Schedulers (개별 커넥션 폴링)     ← ~3-9 conn
+           ├── Redis 7.0 (Master + Slave + 3 Sentinel)     ← [실측] Redisson 64 conn
+           ├── MySQL 8.0                                  ← [실측] HikariCP 25 conn
+           ├── MongoDB                                    ← [미확인] MongoClient ? conn
+           ├── 3 Outbox Schedulers (개별 커넥션 폴링)     ← [추정] ~3-9 conn
            └── Nexon API
-           총 104+ connections, 3 DB, 42개 관리 파일
+           [추정] 총 89+ connections, 3 DB, 42개 관리 파일
 
 After:
 Client → Spring Boot
            ├── PostgreSQL (cache, lock, pub/sub, persistence, queue)
-           │     └── HikariCP max 25 connections
-           │           ├── Business queries          ~12 conn
-           │           ├── PGMQ send/read/archive     ~5 conn
-           │           ├── Advisory Lock (xact)       ~2 conn
-           │           ├── LISTEN/NOTIFY              ~2 conn
-           │           └── Worker polling             ~4 conn
+           │     └── [실측] HikariCP max 25 connections
+           │           ├── [추정] Business queries          ~12 conn
+           │           ├── [추정] PGMQ send/read/archive     ~5 conn
+           │           ├── [추정] Advisory Lock (xact)       ~2 conn
+           │           ├── [추정] LISTEN/NOTIFY              ~2 conn
+           │           └── [추정] Worker polling             ~4 conn
            └── Nexon API
-           총 25 connections, 1 DB, PgmqWorker 통합
+           [실측] 총 25 connections, 1 DB, PgmqWorker 통합
 ```
 
 ## 교훈
@@ -62,9 +62,11 @@ Client → Spring Boot
 커넥션 풀은 메모리, CPU와 같은 **공유 자원**이다. 한 곳에서 낭비하면 다른 곳이 굶주린다.
 
 ```
-잘못된 생각: "이 스케줄러는 커넥션 1개만 쓰니까 괜찮아"
-올바른 생각: "1개 커넥션 × 3 스케줄러 = 풀의 12%를 상시 점유.
-            다른 요청이 그 커넥션을 기다릴 수 있어."
+[예시] 잘못된 생각: "이 스케줄러는 커넥션 1개만 쓰니까 괜찮아"
+[예시] 올바른 생각: "1개 커넥션 × 3 스케줄러 = 풀의 12%를 상시 점유.
+               다른 요청이 그 커넥션을 기다릴 수 있어."
+
+(이 예시는 25개 풀 기준입니다. 실제 비율은 환경에 따라 다릅니다)
 ```
 
 ### 2. 풀 사이즈 정렬은 필요조건, 충분조건이 아니다
@@ -118,7 +120,7 @@ After:  HikariCP(PostgreSQL) = 1개 풀 모니터링
 
 | 지표 | 여정 시작 | 여정 끝 | 변화 |
 |------|----------|---------|------|
-| 커넥션 (인스턴스당) | 104 | 25 | **-76%** |
+| 커넥션 (인스턴스당) | [추정] 89+ | [실측] 25 | **-72%+** |
 | 데이터베이스 | 3 | 1 | **-67%** |
 | Outbox 스케줄러 | 3 | 0 | **-100%** |
 | 관리 파일 | ~42 | ~15 | **-64%** |
@@ -139,7 +141,7 @@ After:  HikariCP(PostgreSQL) = 1개 풀 모니터링
 
 이 여정은 "더 많은 기술을 도입해서" 해결한 것이 아니다. **더 적은 기술로** 해결했다.
 
-3개의 데이터베이스를 1개로, 3개의 아웃박스를 PGMQ로, 104개의 커넥션을 25개로.
+3개의 데이터베이스를 1개로, 3개의 아웃박스를 PGMQ로, [추정] 89+개의 커넥션을 [실측] 25개로.
 
 결국 소프트웨어 엔지니어링이란 **무엇을 추가하는 것이 아니라, 무엇을 제거하는 것**인지도 모른다.
 

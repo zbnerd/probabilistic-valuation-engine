@@ -45,6 +45,7 @@ import kotlin.math.pow
  * @see NexonApiPgmqMetrics
  */
 @Component
+@Suppress("DEPRECATION")
 class NexonApiPgmqProcessor(
     private val pgmqClient: PgmqClient,
     private val executor: LogicExecutor,

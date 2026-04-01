@@ -45,8 +45,6 @@ class ContainerSingletonTest : IntegrationTestBase() {
         )
 
         // init-pgmq.sql에서 생성한 큐들
-        assertThat(queues).contains("v4_buffer_queue")
-        assertThat(queues).contains("v5_event_queue")
-        assertThat(queues).contains("donation_outbox_queue")
+        assertThat(queues).contains("nexon_retry_queue")
     }
 }

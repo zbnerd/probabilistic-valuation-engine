@@ -84,11 +84,11 @@ T+24h: 모든 25개 커넥션이 유령 락 보유 → 새 락 획득 불가 →
 
 ```sql
 -- Before: 세션 스코프 (위험)
-SELECT pg_advisory_lock(12345);        -- 세션 단위 유지
-SELECT pg_advisory_unlock(12345);      -- 수동 해제 필요 (잊기 쉬움)
+SELECT pg_advisory_lock(hashtext('latch:char:아이유'));        -- 세션 단위 유지
+SELECT pg_advisory_unlock(hashtext('latch:char:아이유'));      -- 수동 해제 필요 (잊기 쉬움)
 
 -- After: 트랜잭션 스코프 (안전)
-SELECT pg_try_advisory_xact_lock(12345);  -- 트랜잭션 단위
+SELECT pg_try_advisory_xact_lock(hashtext('latch:char:아이유'));  -- 트랜잭션 단위
 -- 트랜잭션 커밋/롤백 시 자동 해제
 -- 커넥션 반환 시 락도 자동 해제 ✅
 ```

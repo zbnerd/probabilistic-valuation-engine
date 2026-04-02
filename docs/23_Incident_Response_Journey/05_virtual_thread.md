@@ -49,7 +49,7 @@ Carrier Thread 수: CPU 코어 수 (2-4)
 Virtual Thread의 약점은 **synchronized 블록**이었다.
 
 ```java
-// 문제의 코드
+// 이론적 예시 — synchronized가 blocking 작업을 포함할 때의 문제
 public class TieredCache {
     private final ConcurrentHashMap<String, ValueWrapper> cache = new ConcurrentHashMap<>();
 
@@ -66,7 +66,7 @@ public class TieredCache {
 }
 ```
 
-`synchronized` 블록 안에서 blocking 작업을 수행하면, Virtual Thread를 실행하던 **Carrier Thread가 고정(pinned)**된다. Carrier Thread는 다른 Virtual Thread를 실행할 수 없게 된다.
+`synchronized` 블록 안에서 blocking 작업(DB 쿼리, 네트워크 호출 등)을 수행하면, Virtual Thread를 실행하던 **Carrier Thread가 고정(pinned)**된다. Carrier Thread는 다른 Virtual Thread를 실행할 수 없게 된다.
 
 ```
 Carrier Thread 1: Virtual Thread A 실행 중

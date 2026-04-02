@@ -93,6 +93,8 @@ Retry Attempts: 45 (Exponential Backoff + Jitter)
 
 세 명의 시선이 모여야 비로소 전체 그림이 보였다. 나중에 이것은 5명의 **Agent Council**로 발전하지만, 그때는 세 명이면 충분했다.
 
+> **Note:** 장애대응 테스트는 Blue/Red/Purple 3명으로 시작했으나, 성능 최적화 여정(Performance Journey)에서 Green/Yellow가 합류하여 5-Agent Council로 발전했습니다.
+
 ---
 
 ## 이 책이 시작되는 곳

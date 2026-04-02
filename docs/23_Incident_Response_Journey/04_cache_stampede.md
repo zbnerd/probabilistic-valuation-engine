@@ -109,8 +109,10 @@ After LocalSingleFlight:  97 RPS ← -56% regression!
 
 **원인:** LocalSingleFlight가 **캐시 히트마저 블록**했다.
 
+> **Note:** 아래 Anti-Pattern은 이론적 예시입니다. 실제 `TieredCache` 구현에서는 L1/L2 캐시 조회를 SingleFlight 밖에서 수행하여 이 문제를 방지합니다.
+
 ```kotlin
-// Anti-Pattern: 캐시 히트도 SingleFlight 통과
+// Anti-Pattern: 캐시 히트도 SingleFlight 통과 (이론적 예시)
 fun get(key: String): Data {
     return singleFlight.execute(key) {
         // 이 블록 안에 캐시 조회도 포함됨

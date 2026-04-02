@@ -139,9 +139,9 @@ WebClient의 기술적 예외를 도메인 의미 있는 예외로 변환한다.
 
 ```kotlin
 data class TaskContext(
-    val module: String,    // "UserService"
-    val task: String,      // "findById"
-    val key: String,       // "abc123"
+    val module: String,       // "UserService"
+    val task: String,         // "findById"
+    val dynamicValue: String? = null,  // "abc123" (optional, 로그에만 기록)
 )
 ```
 
@@ -149,7 +149,7 @@ data class TaskContext(
 
 ```
 [ERROR] [UserService] findById 실패
-  key: abc123
+  dynamicValue: abc123
   exception: NoSuchElementException
   duration: 234ms
   thread: virtual-thread-123

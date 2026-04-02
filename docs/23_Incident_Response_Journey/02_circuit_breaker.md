@@ -29,13 +29,13 @@ resilience4j:
   circuitbreaker:
     instances:
       nexonApi:
-        slidingWindowSize: 10
+        slidingWindowSize: 100       # ADR-052: 통계적 유의성 확보
         failureRateThreshold: 50%
-        waitDurationInOpenState: 10s
+        waitDurationInOpenState: 5m  # ADR-052: 외부 API 복구 시간 반영
         minimumNumberOfCalls: 10
 ```
 
-10번의 호출 중 5번이 실패하면 서킷이 열린다. 10초 동안 모든 요청을 차단하고, 10초 후에 반열림 상태에서 테스트 요청을 보낸다.
+100번의 호출 중 50번이 실패하면 서킷이 열린다. 5분 동안 모든 요청을 차단하고, 5분 후에 반열림 상태에서 테스트 요청을 보낸다.
 
 초기에는 `minimumNumberOfCalls` 설정이 없었다. Red Agent가 장애대응 테스트에서 발견한 P1 버그다. **최소 호출 수가 없으면 첫 번째 실패만으로 서킷이 열린다.** 정상적인 간헐적 에러에 과도하게 반응하는 문제였다.
 
@@ -159,6 +159,7 @@ class CircuitBreakerMetricsCollector(
 
     override fun collect(): Map<String, Any> = buildMap {
         circuitBreakerRegistry.getAllCircuitBreakers().forEach { cb ->
+            val cbMetrics = cb.metrics  // 서킷 브레이커 메트릭
             val cbData = linkedMapOf<String, Any>(
                 "state" to cb.state.name,
                 "failure_rate" to formatDouble(cbMetrics.failureRate.toFloat()),

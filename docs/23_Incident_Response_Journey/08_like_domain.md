@@ -153,7 +153,7 @@ BEGIN
   ELSIF (TG_OP = 'DELETE') THEN
     UPDATE game_character SET like_count = like_count - 1 WHERE id = OLD.character_id;
   END IF;
-  RETURN NULL;
+  RETURN NULL;  -- 트리거 함수: 원본 행 변경 없이 트리거만 실행
 END;
 $$ LANGUAGE plpgsql;
 ```

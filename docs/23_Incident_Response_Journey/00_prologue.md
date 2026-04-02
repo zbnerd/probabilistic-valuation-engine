@@ -8,13 +8,13 @@
 
 probabilistic-valuation-engine은 세 개의 심장으로 돌아가고 있었다.
 
-**MySQL** — 사용자의 계정, 캐릭터 데이터, 좋아요 기록. 시스템의 진짜 심장.
+**MySQL** — 사용자의 계정, 캐릭터 데이터, 좋아요 기록. 시스템의 진짜 심장. (→ ADR-341로 PostgreSQL 통합)
 
-**Redis** — 캐시, 분산 락, 메시지 큐(Streams), 세션 데이터. 빠르지만 휘발성인 두 번째 심장.
+**Redis** — 캐시, 분산 락, 메시지 큐(Streams), 세션 데이터. 빠르지만 휘발성인 두 번째 심장. (→ ADR-319로 PostgreSQL 통합)
 
-**MongoDB** — 이벤트 로그, 감사 기록. 영원히 남아야 하는 것들을 담은 세 번째 심장.
+**MongoDB** — 이벤트 로그, 감사 기록. 영원히 남아야 하는 것들을 담은 세 번째 심장. (→ ADR-340로 PostgreSQL 통합)
 
-세 개의 데이터베이스는 각각 자신의 커넥션 풀을 가지고 있었다. HikariCP는 MySQL에 25개, Lettuce는 Redis에 50개, MongoDB 드라이버는 14개. 총 89개 이상의 커넥션이 늘 데이터베이스를 붙잡고 있었다.
+세 개의 데이터베이스는 각각 자신의 커넥션 풀을 가지고 있었다. HikariCP는 MySQL에 25개, Lettuce는 Redis에 50개, MongoDB 드라이버는 14개(기본값). 총 89개 이상의 커넥션이 늘 데이터베이스를 붙잡고 있었다.
 
 그리고 **Nexon API** — 외부 서비스. 우리가 제어할 수 없는 유일한 심장.
 
@@ -25,7 +25,7 @@ probabilistic-valuation-engine은 세 개의 심장으로 돌아가고 있었다
 그날 부하 테스트 결과는 충격적이었다.
 
 ```
-Throughput: 97 RPS
+Throughput: 97 RPS (빈 DB 기준, 캐시 미웜업)
 p99 Latency: 4,100ms
 Error Rate: 59.7%
 ```

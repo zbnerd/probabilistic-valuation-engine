@@ -203,6 +203,8 @@ grep -rn "try\s*{" --include="*.kt" --include="*.java" \
 
 0건이어야 한다. 0건이 아니면 CI가 실패한다.
 
+> **주의:** 이 스크립트는 `synchronized` 블록은 탐지하지 못합니다. `synchronized`는 Java 키워드로 별도 패턴 매칭이 필요합니다.
+
 ---
 
 ## 교훈

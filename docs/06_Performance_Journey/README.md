@@ -68,3 +68,22 @@ RPS Evolution (2026-01-20 ~ 2026-03-30)
 - [ADR-086: Performance Baseline Analysis](../01_ADR/ADR-364-performance-analysis-20260324.md)
 - [ADR-028: 300k Bulk Loading](../01_ADR/ADR-343-bulk-loading-300k-characters.md)
 - [부하 테스트 보고서 모음](../05_Reports/05_06_Load_Tests/)
+
+---
+
+## 용어집
+
+| 용어 | 설명 |
+|------|------|
+| **TieredCache** | L1(Caffeine) + L2(PostgreSQL UNLOGGED) 2계층 캐시 구조 |
+| **SingleFlight** | 동일 키에 대한 중복 계산을 방지하는 패턴. Leader가 계산하면 Follower는 결과 공유 |
+| **PGMQ** | PostgreSQL Message Queue. PostgreSQL 익스텐션 기반 메시지 큐 |
+| **LISTEN/NOTIFY** | PostgreSQL의 비동기 알림 메커니즘. 캐시 무효화 전파에 사용 |
+| **Advisory Lock** | PostgreSQL의 애플리케이션 레벨 분산 락. `pg_try_advisory_xact_lock` 사용 |
+| **Write-Behind Buffer** | 쓰기를 비동기로 버퍼링하여 DB 부하를 줄이는 패턴 |
+| **Micro-Batching** | 짧은 시간 창의 요청을 모아 배치 쿼리로 처리하는 최적화 |
+| **Fan-Out** | 서로 다른 키의 동시 요청이 발생하는 시나리오 |
+| **Admission Control** | 시스템 과부하를 방지하기 위해 요청을 제어하는 메커니즘 |
+| **Cache Stampede** | 캐시 만료 시 다수 요청이 동시에 DB를 조회하는 현상 |
+| **Cold Start** | 캐시가 비어있는 상태에서 시작하는 것 |
+| **Warm-up** | 캐시를 미리 채우는 작업 |

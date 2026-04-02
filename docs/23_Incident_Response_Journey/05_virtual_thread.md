@@ -87,29 +87,24 @@ CPU 코어가 2개면 Carrier Thread도 2개. 두 개가 모두 고정되면 아
 
 ---
 
-## 대응: ReentrantLock으로 전환
+## 대응: AsyncCache 사용 및 Blocking 최소화
 
-해결책은 간단했다. `synchronized`를 `ReentrantLock`으로 교체하는 것.
+해결책은 `synchronized`를 직접 `ReentrantLock`으로 교체하는 것이 아니라, **AsyncCache 사용과 blocking 최소화**였다.
 
-```java
-// Before: synchronized (Virtual Thread Pinning 발생)
-public synchronized ValueWrapper get(String key) { ... }
+```kotlin
+// Caffeine AsyncCache 사용
+private val cache: AsyncCache<String, ByteArray> = Caffeine.newBuilder()
+    .maximumSize(10_000)
+    .expireAfterWrite(5, TimeUnit.MINUTES)
+    .buildAsync()
 
-// After: ReentrantLock (Pinning 방지)
-private final ReentrantLock lock = new ReentrantLock();
-
-public ValueWrapper get(String key) {
-    lock.lock();
-    try {
-        ValueWrapper wrapper = cache.get(key);
-        // ...
-    } finally {
-        lock.unlock();
-    }
+// 비동기 접근
+fun get(key: String): CompletableFuture<ByteArray?> {
+    return cache.get(key) { k -> loadFromDb(k) }
 }
 ```
 
-`ReentrantLock`은 Virtual Thread 친화적이다. blocking 시 Carrier Thread를 해제하고 다른 Virtual Thread를 실행할 수 있게 한다.
+AsyncCache는 Virtual Thread 친화적이다. blocking 시 Carrier Thread를 해제하고 다른 Virtual Thread를 실행할 수 있게 한다.
 
 ### Caffeine Cache의 synchronized
 

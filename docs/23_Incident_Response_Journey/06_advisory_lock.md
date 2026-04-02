@@ -78,22 +78,34 @@ T+24h: 모든 25개 커넥션이 유령 락 보유 → 새 락 획득 불가 →
 
 ---
 
-## 대응: 트랜잭션 스코프로의 전환
+## 대응: 용도별 락 전략 분리
 
-해결책은 `pg_try_advisory_xact_lock`으로의 전환이었다.
+해결책은 용도에 따라 두 가지 락 전략을 분리하는 것이었다.
+
+### 전략 1: executeWithLock — 트랜잭션 스코프 (일반적인 경우)
+
+대부분의 락은 `pg_try_advisory_xact_lock`으로 트랜잭션 스코프에서 사용한다.
 
 ```sql
--- Before: 세션 스코프 (위험)
-SELECT pg_advisory_lock(hashtext('latch:char:아이유'));        -- 세션 단위 유지
-SELECT pg_advisory_unlock(hashtext('latch:char:아이유'));      -- 수동 해제 필요 (잊기 쉬움)
-
--- After: 트랜잭션 스코프 (안전)
-SELECT pg_try_advisory_xact_lock(hashtext('latch:char:아이유'));  -- 트랜잭션 단위
+-- executeWithLock: 트랜잭션 스코프 (안전)
+SELECT pg_try_advisory_xact_lock(hashtext('latch:char:아이유'));
 -- 트랜잭션 커밋/롤백 시 자동 해제
 -- 커넥션 반환 시 락도 자동 해제 ✅
 ```
 
 `xact_lock`은 트랜잭션이 끝나면 자동으로 해제된다. 커넥션이 반환되면 트랜잭션도 종료되고 락도 해제된다. 유령 락이 발생할 수 없다.
+
+### 전략 2: tryLockImmediately — 세션 스코프 (전용 커넥션 풀)
+
+일부 특수한 경우에는 세션 스코프 락이 필요하다. 이 경우 전용 커넥션 풀을 사용한다.
+
+```kotlin
+// tryLockImmediately: 세션 스코프 (전용 커넥션 풀 필수)
+// pg_try_advisory_lock을 사용하되, 전용 커넥션 풀에서만 실행
+// → 일반 요청과 커넥션 풀 분리로 유령 락 누적 방지
+```
+
+이 전략은 락 유지 시간이 트랜잭션보다 길어야 하는 특수한 경우에만 사용한다.
 
 ### ADR-318: Advisory Lock 원칙
 
@@ -102,8 +114,8 @@ SELECT pg_try_advisory_xact_lock(hashtext('latch:char:아이유'));  -- 트랜�
 ```
 Advisory Lock 규칙:
 
-1. pg_try_advisory_xact_lock만 사용 (트랜잭션 스코프)
-2. pg_advisory_lock 절대 금지 (세션 스코프)
+1. executeWithLock: pg_try_advisory_xact_lock 사용 (트랜잭션 스코프)
+2. tryLockImmediately: pg_try_advisory_lock 사용 (세션 스코프 + 전용 커넥션 풀)
 3. Leader/Follower 패턴 필수
 4. 락 키, 캐시 키, NOTIFY 페이로드는 동일한 생성 로직 사용
 ```
@@ -137,8 +149,8 @@ fun transfer(from: String, to: String) {
 
 // 해결: 항상 같은 순서
 fun transfer(from: String, to: String) {
-    val (first, second) = if (from < to) from to to else to to from
-    lock(first) { lock(second) { /* 이체 */ } }
+    val sorted = listOf(from, to).sorted()
+    lock(sorted[0]) { lock(sorted[1]) { /* 이체 */ } }
 }
 ```
 
@@ -180,7 +192,7 @@ fun get(key: String): Data {
 
 ---
 
-## Thundering Herd on Lock (N17)
+## Thundering Herd on Lock (S17)
 
 가장 극단적인 락 시나리오.
 
@@ -193,10 +205,12 @@ fun get(key: String): Data {
 최대 대기: 12,456ms ← 거의 12.5초!
 
 데이터 무결성: 5,000/5,000 (100%) ✅
-→ Fair Lock이 FIFO 순서를 보장
+→ Advisory Lock의 획득 순서가 대기 순서와 상관관계를 가짐
 ```
 
-100개의 스레드가 하나의 락을 요구하는 상황. 13개는 타임아웃되었지만, 87개는 순서대로 처리되었다. Fair Lock이 FIFO를 보장한 덕분이다.
+100개의 스레드가 하나의 락을 요구하는 상황. 13개는 타임아웃되었지만, 87개는 순서대로 처리되었다. Advisory Lock의 획득 순서가 대기 순서와 상관관계를 가진 덕분이다.
+
+> **※ PostgreSQL의 lock queue는 OS 수준에서 관리되며 엄격한 FIFO는 아닙니다.** 다만, 대기 순서와 락 획득 순서가 높은 상관관계를 가질 뿐입니다.
 
 최대 대기 12.5초는 길지만, 데이터 무결성은 100% 유지되었다. 빠르지만 데이터가 깨지는 것보다 느리지만 정확한 것이 낫다.
 

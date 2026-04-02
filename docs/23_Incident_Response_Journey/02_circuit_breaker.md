@@ -25,6 +25,7 @@
 ### 방패 1: nexonApi — 외부 API 호출용
 
 ```yaml
+# ADR-052 설정 예시:
 resilience4j:
   circuitbreaker:
     instances:
@@ -132,7 +133,7 @@ CircuitBreakerMetricsCollector 기록:
 
 nexonApi 서킷 브레이커:
   상태: OPEN → HALF_OPEN → CLOSED (자동 복구)
-  총 트립 횟수: 323회
+  총 트립 횟수: 323회 (2025년 11월 ~ 2026년 1월, 약 3개월 간)
   실패율: 52% (임계치 50% 초과로 트립)
   서비스 중단: 0건
 

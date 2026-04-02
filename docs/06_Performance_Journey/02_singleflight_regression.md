@@ -71,6 +71,8 @@ fun <T> execute(supplier: Supplier<T>): T {
 
 L1 캐시에 이미 결과가 있어도, Semaphore를 획득한 Leader가 처리할 때까지 Follower는 기다려야 했다. 99%가 캐시 히트인 상황에서 모든 요청이 불필요하게 직렬화되었다.
 
+> **※ 이 섹션은 검토했던 이론적 시나리오입니다.** 실제 구현에서는 L1/L2 캐시 조회를 SingleFlight 밖에서 수행하여 캐시 히트 시 blocking 없이 즉시 반환하도록 설계되었습니다.
+
 ```
 의도: Cache MISS만 병합
 현실: Cache HIT도 병합 → 7ms 응답이 490ms로 지연

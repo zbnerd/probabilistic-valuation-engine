@@ -15,6 +15,8 @@
 - PostgreSQL upsert 경합: 없음
 ```
 
+**빈 DB에서의 10,994 RPS와 실데이터 환경에서의 7,347 RPS 간의 33% 차이 원인:** 실제 데이터 환경에서는 캐시 미스, DB 쓰기 경합, 캐시 무효화가 빈번하게 발생합니다. LISTEN/NOTIFY로 인한 캐시 invalidation → DB fallback → CPU pipeline 병목 → Write amplification이 복합적으로 작용하여 자연스러운 성능 하락이 발생합니다.
+
 현실은 달랐다. 서비스가 성장하면 DB에는 수십만 개의 `equipment_expectation_summary` 로우가 쌓인다. 캐시도 수천 개의 엔트리를 유지해야 한다. 그리고 사용자는 항상 같은 캐릭터만 조회하지 않는다.
 
 **질문: 실제 운영 환경에서는 몇 RPS가 나올까?**

@@ -31,6 +31,8 @@ HikariCP 상태:
 
 **첫째, 장애 자체.** 원인은 스케줄러의 `@Scheduled(fixedRate = ...)` 설정이었다. `fixedRate`는 이전 실행이 끝났는지와 무관하게 고정 주기로 실행한다. DB가 느려지면 실행이 밀리고, 밀린 실행이 새 스레드를 차지하고, 새 스레드가 또 커넥션을 물고... 무한 루프.
 
+해결: `fixedRate`를 `fixedDelay`로 변경 (7장 참조). `fixedDelay`는 이전 실행이 완료된 후 지정된 시간을 기다린 후 실행한다.
+
 ```java
 // Anti-Pattern: fixedRate 사용
 @Scheduled(fixedRate = 5000)  // 5초마다 무조건 실행

@@ -49,7 +49,7 @@
 
 4. Multi-Instance 검증
    → 2+ 인스턴스에서 TieredCache 일관성 검증
-   → Caffeine 분기 문제 해결 필요
+   → Caffeine 분기 문제 해결 필요 (인스턴스별 독립적인 L1 캐시로 인한 불일치)
 
 5. 장애대응 테스트 확장
    → S16 Config Poisoning 테스트 구현

@@ -23,7 +23,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.BlockingQueue
 
 /**
- * 🔥 PRODUCTION-READY: Global Admission Control with Real Bounded Queue
+ * V4 Legacy Admission Control (ADR-355)
+ *
+ * <p>NOTE: This component is used ONLY by V4 controllers.
+ * V5 uses PGMQ-based Queue-Driven Pipeline instead.
+ * Do NOT add new consumers. New features should use PGMQ.
  *
  * <h3>Purpose</h3>
  * Prevents CPU saturation from unique-key fan-out by limiting concurrent cold misses.

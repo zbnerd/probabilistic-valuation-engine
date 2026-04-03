@@ -8,6 +8,7 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
@@ -37,8 +38,9 @@ class ExpectationCalcLowWorker(
     pgmqClient: PgmqClient,
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
+    meterRegistry: MeterRegistry,
     private val expectationPort: ExpectationV4Port,
-) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config) {
+) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry) {
 
     override val queueName: String = QUEUE_NAME
     override val payloadClass: Class<ExpectationCalcMessage> = ExpectationCalcMessage::class.java

@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.external.config
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.impl.MetricsNexonApiClientWrapper
 import maple.expectation.infrastructure.external.impl.RealNexonApiClient
+import maple.expectation.infrastructure.ratelimit.NexonRateLimiter
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -47,8 +48,9 @@ class NexonApiMetricsConfig {
     @Bean
     fun metricsNexonApiClientWrapper(
         realNexonApiClient: RealNexonApiClient,
-        meterRegistry: io.micrometer.core.instrument.MeterRegistry
+        meterRegistry: io.micrometer.core.instrument.MeterRegistry,
+        rateLimiter: NexonRateLimiter,
     ): NexonApiClient {
-        return MetricsNexonApiClientWrapper(realNexonApiClient, meterRegistry)
+        return MetricsNexonApiClientWrapper(realNexonApiClient, meterRegistry, rateLimiter)
     }
 }

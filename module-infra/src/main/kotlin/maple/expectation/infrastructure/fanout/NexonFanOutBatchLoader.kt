@@ -3,7 +3,6 @@ package maple.expectation.infrastructure.fanout
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import jakarta.annotation.PreDestroy
 import maple.expectation.core.port.out.FanOutQueuePort
@@ -11,20 +10,21 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
+import maple.expectation.infrastructure.ratelimit.NexonRateLimiter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 /**
- * Nexon FanOut Batch Loader
+ * Nexon FanOut Batch Loader (ADR-355)
  *
  * <h3>역할</h3>
  * <p>Batch Lane에서 수집된 OCID 목록을 병렬로 Nexon API 호출.
- * Semaphore(30)로 동시성 제한, 429 발생 시 PGMQ에 재시도 메시지 enqueue.
+ * NexonRateLimiter로 동시성 제한, 429 발생 시 PGMQ에 재시도 메시지 enqueue.
  *
  * <h3>동시성 제어</h3>
  * <ul>
- *   <li>Semaphore(30): Bulkhead(50)보다 작게 설정 → 실제 제한 = min(30, 50) = 30</li>
- *   <li>ExecutorService(10): 전용 fixed thread pool</li>
+ *   <li>NexonRateLimiter: 중앙 집중 ReentrantLock 기반 (ADR-355)</li>
+ *   <li>Virtual Thread: per-task virtual thread (ADR-355)</li>
  * </ul>
  *
  * <h3>429 처리</h3>
@@ -33,15 +33,16 @@ import org.springframework.stereotype.Component
  *
  * @see FanOutQueuePort PGMQ 재시도 발행
  * @see NexonApiClient Nexon API 클라이언트
+ * @see NexonRateLimiter 중앙 Rate Limiter
  */
 @Component
 class NexonFanOutBatchLoader(
     private val nexonApiClient: NexonApiClient,
     private val fanOutQueuePort: FanOutQueuePort,
     private val executor: LogicExecutor,
+    private val rateLimiter: NexonRateLimiter,
 ) {
-    private val semaphore = Semaphore(SEMAPHORE_PERMITS)
-    private val executorService: ExecutorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE)
+    private val executorService: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
     /**
      * OCID 목록을 병렬로 조회
@@ -51,7 +52,6 @@ class NexonFanOutBatchLoader(
      */
     @PreDestroy
     fun shutdown() {
-        semaphore.drainPermits()
         executorService.shutdown()
         if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
             executorService.shutdownNow()
@@ -63,11 +63,11 @@ class NexonFanOutBatchLoader(
 
         val futures = ocids.map { ocid ->
             CompletableFuture.supplyAsync({
-                semaphore.acquire()
+                rateLimiter.acquirePermit()
                 try {
                     fetchOrEnqueueRetry(ocid)
                 } finally {
-                    semaphore.release()
+                    rateLimiter.releasePermit()
                 }
             }, executorService)
         }
@@ -111,8 +111,6 @@ class NexonFanOutBatchLoader(
     companion object {
         private val log = LoggerFactory.getLogger(NexonFanOutBatchLoader::class.java)
 
-        private const val SEMAPHORE_PERMITS = 30
-        private const val THREAD_POOL_SIZE = 10
         private const val API_TIMEOUT_SECONDS = 10L
         private const val BATCH_TIMEOUT_SECONDS = 30L
         private const val BATCH_LANE_USER = "batch"

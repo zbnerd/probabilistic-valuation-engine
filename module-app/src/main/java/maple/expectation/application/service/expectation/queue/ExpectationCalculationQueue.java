@@ -1,6 +1,7 @@
 package maple.expectation.application.service.expectation.queue;
 
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.port.inbound.TaskReceipt;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.pgmq.ExpectationCalcMessage;
@@ -8,6 +9,8 @@ import maple.expectation.infrastructure.pgmq.PgmqClient;
 import maple.expectation.infrastructure.worker.ExpectationCalcLowWorker;
 import maple.expectation.infrastructure.worker.ExpectationCalcWorker;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * V5 CQRS: Priority Queue for Expectation Calculation (Issue #634 PGMQ migration)
@@ -57,18 +60,11 @@ public class ExpectationCalculationQueue {
 
     return executor.executeOrDefault(
         () -> {
-          String queueName = resolveQueueName(task.getPriority());
-          int maxSize = resolveMaxSize(task.getPriority());
-
-          long queueLength = pgmqClient.queueLength(queueName);
-          if (queueLength >= maxSize) {
-            log.warn(
-                "[Queue] Queue full, rejecting: priority={}, userIgn={}",
-                task.getPriority(),
-                task.getUserIgn());
+          if (isQueueFull(task.getPriority(), task.getUserIgn())) {
             return false;
           }
 
+          String queueName = resolveQueueName(task.getPriority());
           ExpectationCalcMessage message =
               new ExpectationCalcMessage(
                   task.getUserIgn(), task.isForceRecalculation());
@@ -81,6 +77,44 @@ public class ExpectationCalculationQueue {
           return true;
         },
         false,
+        context);
+  }
+
+  /**
+   * Offer task with receipt (ADR-355).
+   *
+   * <p>PGMQ messageId를 taskId로 반환.
+   * HTTP thread(비트랜잭션 컨텍스트)에서 호출 시
+   * PgmqClient.send()의 트랜잭션 체크를 통과하기 위해
+   * {@code REQUIRES_NEW}로 독립 트랜잭션 생성.
+   *
+   * @param task calculation task
+   * @return TaskReceipt with PGMQ messageId as taskId
+   */
+  @Transactional(value = "transactionManager", propagation = Propagation.REQUIRES_NEW)
+  public TaskReceipt offerWithReceipt(ExpectationCalculationTask task) {
+    TaskContext context = TaskContext.of("Queue", "OfferWithReceipt", task.getUserIgn());
+
+    return executor.executeOrDefault(
+        () -> {
+          if (isQueueFull(task.getPriority(), task.getUserIgn())) {
+            return TaskReceipt.rejected(task.getUserIgn());
+          }
+
+          String queueName = resolveQueueName(task.getPriority());
+          ExpectationCalcMessage message =
+              new ExpectationCalcMessage(
+                  task.getUserIgn(), task.isForceRecalculation());
+          long messageId = pgmqClient.send(queueName, message);
+
+          log.debug(
+              "[Queue] Task queued with receipt: priority={}, userIgn={}, taskId={}",
+              task.getPriority(),
+              task.getUserIgn(),
+              messageId);
+          return new TaskReceipt(String.valueOf(messageId), task.getUserIgn(), true);
+        },
+        TaskReceipt.rejected(task.getUserIgn()),
         context);
   }
 
@@ -172,5 +206,16 @@ public class ExpectationCalculationQueue {
       case HIGH -> HIGH_PRIORITY_CAPACITY;
       case LOW -> MAX_QUEUE_SIZE;
     };
+  }
+
+  private boolean isQueueFull(QueuePriority priority, String userIgn) {
+    String queueName = resolveQueueName(priority);
+    int maxSize = resolveMaxSize(priority);
+    long queueLength = pgmqClient.queueLength(queueName);
+    if (queueLength >= maxSize) {
+      log.warn("[Queue] Queue full, rejecting: priority={}, userIgn={}", priority, userIgn);
+      return true;
+    }
+    return false;
   }
 }

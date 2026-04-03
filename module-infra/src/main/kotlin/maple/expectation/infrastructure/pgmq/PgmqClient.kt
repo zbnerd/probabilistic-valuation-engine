@@ -175,6 +175,35 @@ class PgmqClient(
         return executor.executeOrDefault({ performQueueLength(queueName) }, 0L, context)
     }
 
+    /**
+     * 메시지 archive 존재 여부 확인 (ADR-355)
+     *
+     * <p>TaskStatusService에서 COMPLETED 판별에 사용.
+     *
+     * @param queueName 큐 이름
+     * @param messageId 메시지 ID
+     * @return archive 테이블에 존재하면 true
+     */
+    fun isArchived(queueName: String, messageId: Long): Boolean {
+        val context = TaskContext.of("PgmqClient", "IsArchived", "$queueName:$messageId")
+        return executor.executeOrDefault({ performIsArchived(queueName, messageId) }, false, context)
+    }
+
+    /**
+     * 메시지 read count 조회 (ADR-355)
+     *
+     * <p>TaskStatusService에서 PROCESSING 판별에 사용.
+     * read_ct > 0 → worker가 메시지를 소비한 적 있음 (PROCESSING).
+     *
+     * @param queueName 큐 이름
+     * @param messageId 메시지 ID
+     * @return read count (큐에 없으면 0)
+     */
+    fun getMessageReadCount(queueName: String, messageId: Long): Int {
+        val context = TaskContext.of("PgmqClient", "ReadCount", "$queueName:$messageId")
+        return executor.executeOrDefault({ performGetReadCount(queueName, messageId) }, 0, context)
+    }
+
     // ==================== Internal Implementation ====================
 
     private fun <T : Any> performSend(queueName: String, message: T): Long {
@@ -261,27 +290,38 @@ class PgmqClient(
         return result
     }
 
-    private fun performSetVisibilityTimeout(queueName: String, messageId: Long, visibilityTimeoutSec: Int): Boolean {
-        val result = jdbcTemplate.queryForObject(
-            "SELECT pgmq.set_visibility_timeout(?, ?, ?) as success",
-            Boolean::class.java,
-            queueName,
-            messageId,
-            visibilityTimeoutSec,
-        ) ?: false
-
-        if (result) {
-            log.debug("⏱️ [PGMQ] Set VT: queue={}, msgId={}, vt={}s", queueName, messageId, visibilityTimeoutSec)
-        }
-        return result
-    }
-
     private fun performQueueLength(queueName: String): Long {
         return jdbcTemplate.queryForObject(
             "SELECT pgmq.queue_length(?)",
             Long::class.java,
             queueName,
         ) ?: 0L
+    }
+
+    private fun performIsArchived(queueName: String, messageId: Long): Boolean {
+        validateQueueName(queueName)
+        val archiveTable = "pgmq.a_$queueName"
+        return jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM $archiveTable WHERE msg_id = ?",
+            Long::class.java,
+            messageId,
+        ) ?: 0L > 0
+    }
+
+    private fun performGetReadCount(queueName: String, messageId: Long): Int {
+        validateQueueName(queueName)
+        val queueTable = "pgmq.q_$queueName"
+        return jdbcTemplate.queryForObject(
+            "SELECT read_ct FROM $queueTable WHERE msg_id = ?",
+            Int::class.java,
+            messageId,
+        ) ?: 0
+    }
+
+    private fun validateQueueName(queueName: String) {
+        require(queueName.matches(QUEUE_NAME_PATTERN)) {
+            "Invalid PGMQ queue name: $queueName"
+        }
     }
 
     private fun performSetVisibilityTimeout(queueName: String, messageId: Long, timeoutSeconds: Long): Boolean {
@@ -335,6 +375,7 @@ class PgmqClient(
 
     companion object {
         private val log = LoggerFactory.getLogger(PgmqClient::class.java)
+        private val QUEUE_NAME_PATTERN = Regex("^[a-z_][a-z0-9_]{0,62}$")
     }
 }
 

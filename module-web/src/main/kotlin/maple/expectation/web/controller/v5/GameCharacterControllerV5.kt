@@ -10,6 +10,7 @@ import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExecutorPort
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
+import maple.expectation.core.port.inbound.TaskReceipt
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.mapper.CharacterViewMapper
 import org.slf4j.LoggerFactory
@@ -153,15 +154,17 @@ class GameCharacterControllerV5(
         forceRecalculation: Boolean,
         context: TaskContext,
     ): ResponseEntity<*> {
-        val queued = executorPort.executeOrDefault(
-            { queuePort.offerHighPriority(userIgn, forceRecalculation) },
-            false,
+        val receipt = executorPort.executeOrDefault(
+            { queuePort.offerHighPriorityWithReceipt(userIgn, forceRecalculation) },
+            TaskReceipt.rejected(userIgn),
             context,
         )
 
-        return if (queued) {
-            log.info("[V5] PostgreSQL MISS, queued calculation: {}", maskIgn(userIgn))
-            ResponseEntity.accepted().build<Unit>()
+        return if (receipt.queued) {
+            log.info("[V5] PostgreSQL MISS, queued calculation: {} (taskId={})", maskIgn(userIgn), receipt.taskId)
+            ResponseEntity.accepted()
+                .header("X-Task-Id", receipt.taskId)
+                .build<Unit>()
         } else {
             log.warn("[V5] Queue full, rejecting: {}", maskIgn(userIgn))
             ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)

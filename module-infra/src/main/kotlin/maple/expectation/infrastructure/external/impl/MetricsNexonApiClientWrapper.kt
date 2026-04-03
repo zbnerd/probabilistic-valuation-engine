@@ -8,6 +8,7 @@ import maple.expectation.infrastructure.external.dto.v2.CharacterBasicResponse
 import maple.expectation.infrastructure.external.dto.v2.CharacterOcidResponse
 import maple.expectation.infrastructure.external.dto.v2.CubeHistoryResponse
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
+import maple.expectation.infrastructure.ratelimit.NexonRateLimiter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.util.concurrent.CompletableFuture
@@ -45,16 +46,11 @@ import java.util.concurrent.CompletableFuture
  */
 class MetricsNexonApiClientWrapper(
     private val delegate: NexonApiClient,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
+    private val rateLimiter: NexonRateLimiter,
 ) : NexonApiClient {
 
     private val logger = LoggerFactory.getLogger(MetricsNexonApiClientWrapper::class.java)
-
-    // 🔥 Global semaphore to limit total concurrent Nexon API calls
-    // All endpoints share this to prevent Nexon API saturation
-    // Optimal value: 50 (sweet spot from sweep testing with 30k users)
-    // RPS: 118, Error: 1.0%, p99: 1.23s, Blocked: 1
-    private val nexonSemaphore = java.util.concurrent.Semaphore(50)
 
     // Counters
     private val successCounter: Counter
@@ -83,10 +79,10 @@ class MetricsNexonApiClientWrapper(
             .register(meterRegistry)
 
         semaphoreBlockedCounter = Counter.builder("nexon.api.semaphore.blocked")
-            .description("Requests blocked waiting for semaphore permit")
+            .description("Requests blocked waiting for rate limiter permit")
             .register(meterRegistry)
 
-        logger.info("[NexonMetrics] Metrics wrapper initialized with global semaphore (permits={})", nexonSemaphore.availablePermits())
+        logger.info("[NexonMetrics] Metrics wrapper initialized with NexonRateLimiter")
     }
 
     override fun getOcidByCharacterName(characterName: String): CompletableFuture<CharacterOcidResponse> {
@@ -135,25 +131,25 @@ class MetricsNexonApiClientWrapper(
     private fun <T> recordApiCall(endpoint: String, key: String, block: () -> CompletableFuture<T>): CompletableFuture<T> {
         val sample = Timer.start(meterRegistry)
 
-        // 🔥 Acquire semaphore permit (blocks if no permits available)
+        // ADR-355: NexonRateLimiter (ReentrantLock, VT-safe)
         val acquireStart = System.nanoTime()
-        nexonSemaphore.acquire()
+        rateLimiter.acquirePermit()
         val acquireTime = System.nanoTime() - acquireStart
 
         // Track if we had to wait for permit
         if (acquireTime > 1_000_000) {  // > 1ms
             semaphoreBlockedCounter.increment()
-            logger.debug("[NexonSemaphore] {} blocked for {}ms waiting for permit", endpoint, acquireTime / 1_000_000)
+            logger.debug("[NexonRateLimiter] {} blocked for {}ms waiting for permit", endpoint, acquireTime / 1_000_000)
         }
 
         return block()
             .whenComplete { result, ex ->
                 try {
-                    // 🔥 Always release permit after call completes
-                    nexonSemaphore.release()
+                    // Always release permit after call completes
+                    rateLimiter.releasePermit()
 
                     val timer = getTimer(endpoint, if (ex == null) "success" else "error")
-                    val duration = sample.stop(timer)  // Returns duration in nanos
+                    val duration = sample.stop(timer)
 
                     if (ex == null) {
                         successCounter.increment()

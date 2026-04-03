@@ -28,11 +28,11 @@ class PgmqConfig {
     /** TX 활성 검증 여부 (테스트 환경에서 false 설정 가능) */
     var transactionCheckEnabled: Boolean = true
 
-    /** 기본 Batch Size */
-    var defaultBatchSize: Int = 10
+    /** 기본 Batch Size (ADR-355) */
+    var defaultBatchSize: Int = 50
 
-    /** 기본 Visibility Timeout (초) - read 시 사용 */
-    var defaultVisibilityTimeout: Int = 30
+    /** 기본 Visibility Timeout (초) - read 시 사용 (ADR-355) */
+    var defaultVisibilityTimeout: Int = 120
 
     /** Circuit Breaker 설정 */
     var circuitBreaker: CircuitBreakerSettings = CircuitBreakerSettings()

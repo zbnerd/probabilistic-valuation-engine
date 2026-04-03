@@ -43,17 +43,17 @@ class PgmqWorkerConfig {
     var nexonFanout: WorkerSettings = WorkerSettings()
 
     data class CommonSettings(
-        /** 폴링 간격 (ms) */
-        var pollingIntervalMs: Long = 1000,
+        /** 폴링 간격 (ms) (ADR-355) */
+        var pollingIntervalMs: Long = 300,
 
-        /** 배치 사이즈 */
-        var batchSize: Int = 10,
+        /** 배치 사이즈 (ADR-355) */
+        var batchSize: Int = 50,
 
         /** 최대 재시도 횟수 */
         var maxRetries: Int = 3,
 
-        /** Visibility Timeout (초) */
-        var visibilityTimeoutSec: Int = 30,
+        /** Visibility Timeout (초) (ADR-355: batch × avg latency) */
+        var visibilityTimeoutSec: Int = 120,
     )
 
     data class WorkerSettings(

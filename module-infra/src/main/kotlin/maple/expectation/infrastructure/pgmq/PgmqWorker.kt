@@ -2,6 +2,8 @@ package maple.expectation.infrastructure.pgmq
 
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 
@@ -27,6 +29,7 @@ abstract class PgmqWorker<T : Any>(
     private val pgmqClient: PgmqClient,
     protected val executor: LogicExecutor,
     private val config: PgmqWorkerConfig,
+    private val meterRegistry: MeterRegistry,
 ) {
 
     /**
@@ -72,7 +75,7 @@ abstract class PgmqWorker<T : Any>(
      * <p>2. 각 메시지 처리
      * <p>3. 성공 시 archive, 실패 시 delete
      */
-    @Scheduled(fixedDelayString = "\${pgmq.worker.common.polling-interval-ms:1000}")
+    @Scheduled(fixedDelayString = "\${pgmq.worker.common.polling-interval-ms:300}")
     fun processMessages() {
         // Worker가 비활성화되어 있으면 스킵
         if (!workerSettings.enabled) {
@@ -93,9 +96,23 @@ abstract class PgmqWorker<T : Any>(
 
             log.debug("📥 [{}] Processing {} messages", queueName, messages.size)
 
+            // ADR-355: Batch-level aggregate metrics
+            val batchStart = System.nanoTime()
+            var successCount = 0
+            var failCount = 0
+
             messages.forEach { message ->
-                processSingleMessage(message)
+                val success = processSingleMessage(message)
+                if (success) successCount++ else failCount++
             }
+
+            val batchDuration = System.nanoTime() - batchStart
+            meterRegistry.counter("pgmq.worker.processed", "queue", queueName, "status", "success")
+                .increment(successCount.toDouble())
+            meterRegistry.counter("pgmq.worker.processed", "queue", queueName, "status", "failed")
+                .increment(failCount.toDouble())
+            meterRegistry.timer("pgmq.worker.batch.latency", "queue", queueName)
+                .record(batchDuration, TimeUnit.NANOSECONDS)
         }, context)
     }
 
@@ -109,7 +126,7 @@ abstract class PgmqWorker<T : Any>(
      *   <li>처리 실패 + 재시도 불가 -> delete (DLQ)
      * </ul>
      */
-    private fun processSingleMessage(message: PgmqMessage<T>) {
+    private fun processSingleMessage(message: PgmqMessage<T>): Boolean {
         val maxRetries = workerSettings.maxRetries ?: config.common.maxRetries
         val context = TaskContext.of("PgmqWorker", "ProcessMessage", "$queueName:${message.messageId}")
 
@@ -136,6 +153,8 @@ abstract class PgmqWorker<T : Any>(
                 log.error("❌ [{}] Deleted message after max retries: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
             }
         }
+
+        return success
     }
 
     companion object {

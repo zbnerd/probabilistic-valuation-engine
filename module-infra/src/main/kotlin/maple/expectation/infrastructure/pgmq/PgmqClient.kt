@@ -292,7 +292,7 @@ class PgmqClient(
 
     private fun performQueueLength(queueName: String): Long {
         return jdbcTemplate.queryForObject(
-            "SELECT pgmq.queue_length(?)",
+            "SELECT queue_length FROM pgmq.metrics(?)",
             Long::class.java,
             queueName,
         ) ?: 0L

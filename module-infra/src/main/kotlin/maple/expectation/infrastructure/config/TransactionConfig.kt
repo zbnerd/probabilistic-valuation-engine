@@ -1,8 +1,10 @@
 package maple.expectation.infrastructure.config
 
+import jakarta.persistence.EntityManagerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
+import org.springframework.orm.jpa.JpaTransactionManager
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -36,6 +38,18 @@ import org.springframework.transaction.support.TransactionTemplate
  */
 @Configuration
 class TransactionConfig {
+
+    /**
+     * Explicit JPA TransactionManager bean.
+     *
+     * Required because LockHikariConfig creates lockTransactionManager (PlatformTransactionManager),
+     * which triggers Spring Boot's @ConditionalOnMissingBean and prevents auto-configuration
+     * of the JPA transactionManager bean.
+     */
+    @Bean("transactionManager")
+    @Primary
+    fun transactionManager(entityManagerFactory: EntityManagerFactory): PlatformTransactionManager =
+        JpaTransactionManager(entityManagerFactory)
 
     /**
      * 기본 TransactionTemplate (읽기/쓰기 가능)

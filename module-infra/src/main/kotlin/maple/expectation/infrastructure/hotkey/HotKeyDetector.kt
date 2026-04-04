@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.hotkey
 
+import java.sql.Timestamp
 import java.time.Instant
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -51,7 +52,7 @@ class HotKeyDetector(
                     """,
                 Long::class.java,
                 key,
-                Instant.now().minusSeconds(windowSizeSeconds.toLong()),
+                Timestamp.from(Instant.now().minusSeconds(windowSizeSeconds.toLong())),
             ) ?: 0L
 
             count > threshold
@@ -76,7 +77,7 @@ class HotKeyDetector(
                     DO UPDATE SET count = hot_key_counter.count + 1
                     """,
                     key,
-                    Instant.now(),
+                    Timestamp.from(Instant.now()),
                 )
             },
             TaskContext.of("HotKey", "Record", key),
@@ -98,7 +99,7 @@ class HotKeyDetector(
                     """,
                 Long::class.java,
                 key,
-                Instant.now().minusSeconds(windowSizeSeconds.toLong()),
+                Timestamp.from(Instant.now().minusSeconds(windowSizeSeconds.toLong())),
             ) ?: 0L
         },
         0L,
@@ -117,7 +118,7 @@ class HotKeyDetector(
                     DELETE FROM hot_key_counter
                     WHERE window_start < ?
                     """,
-                    Instant.now().minusSeconds(windowSizeSeconds.toLong() * 2),
+                    Timestamp.from(Instant.now().minusSeconds(windowSizeSeconds.toLong() * 2)),
                 )
                 if (deleted > 0) {
                     log.debug("[HotKey] Cleaned up {} old entries", deleted)
@@ -145,7 +146,7 @@ class HotKeyDetector(
                 { rs, _ ->
                     rs.getString("key") to rs.getLong("total_count")
                 },
-                Instant.now().minusSeconds(windowSizeSeconds.toLong()),
+                Timestamp.from(Instant.now().minusSeconds(windowSizeSeconds.toLong())),
                 threshold,
             ).toMap()
         },

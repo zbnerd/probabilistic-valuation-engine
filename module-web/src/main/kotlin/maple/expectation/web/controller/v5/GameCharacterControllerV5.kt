@@ -3,6 +3,8 @@ package maple.expectation.web.controller.v5
 import jakarta.validation.constraints.NotBlank
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 import maple.expectation.common.executor.TaskContext
 import maple.expectation.core.domain.model.character.CharacterView
 import maple.expectation.core.port.inbound.CalculationQueuePort
@@ -13,7 +15,9 @@ import maple.expectation.core.port.out.EquipmentFanOutPort
 import maple.expectation.core.port.inbound.TaskReceipt
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.mapper.CharacterViewMapper
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.HttpStatus
@@ -53,7 +57,11 @@ class GameCharacterControllerV5(
     private val ocidPort: CharacterOcidPort,
     @Value("\${fanout.enabled:false}") private val fanOutEnabled: Boolean,
     private val fanOutPort: EquipmentFanOutPort,
+    @Qualifier("expectationComputeExecutor") private val computeExecutor: Executor,
+    meterRegistry: MeterRegistry,
 ) {
+    private val preWarmFailureCounter = meterRegistry.counter("v5.prewarm.failures", "type", "error")
+    private val preWarmRejectedCounter = meterRegistry.counter("v5.prewarm.failures", "type", "rejected")
 
     /**
      * V5: 캐릭터 기대값 조회 (CQRS - PostgreSQL Read First)
@@ -67,7 +75,7 @@ class GameCharacterControllerV5(
         @PathVariable @NotBlank userIgn: String,
     ): CompletableFuture<ResponseEntity<*>> {
         log.debug("[V5] Query expectation for: {}", maskIgn(userIgn))
-        return CompletableFuture.supplyAsync { processPostgreSQLCacheFirstLookup(userIgn) }
+        return CompletableFuture.supplyAsync({ processPostgreSQLCacheFirstLookup(userIgn) }, computeExecutor)
     }
 
     private fun processPostgreSQLCacheFirstLookup(userIgn: String): ResponseEntity<*> {
@@ -90,9 +98,21 @@ class GameCharacterControllerV5(
             return ResponseEntity.ok(cachedResult.get())
         }
 
-        // 3. MISS: Pre-warm equipment cache via FanOut (best-effort)
+        // 3. MISS: Pre-warm equipment cache via FanOut (best-effort, async)
         if (fanOutEnabled) {
-            preWarmEquipmentCache(userIgn, context)
+            CompletableFuture.runAsync(
+                { preWarmEquipmentCache(userIgn, context) },
+                computeExecutor,
+            ).exceptionally { e ->
+                if (e is RejectedExecutionException) {
+                    preWarmRejectedCounter.increment()
+                    log.warn("[V5] PreWarm rejected (executor full): ign={}", maskIgn(userIgn))
+                } else {
+                    preWarmFailureCounter.increment()
+                    log.warn("[V5] PreWarm failed (best-effort): ign={}", maskIgn(userIgn), e)
+                }
+                null
+            }
         }
 
         // 4. Queue to Command Side via Port
@@ -134,7 +154,7 @@ class GameCharacterControllerV5(
         @PathVariable userIgn: String,
     ): CompletableFuture<ResponseEntity<*>> {
         log.info("[V5] Force recalculation requested: {}", maskIgn(userIgn))
-        return CompletableFuture.supplyAsync { processCacheInvalidation(userIgn) }
+        return CompletableFuture.supplyAsync({ processCacheInvalidation(userIgn) }, computeExecutor)
     }
 
     private fun processCacheInvalidation(userIgn: String): ResponseEntity<*> {

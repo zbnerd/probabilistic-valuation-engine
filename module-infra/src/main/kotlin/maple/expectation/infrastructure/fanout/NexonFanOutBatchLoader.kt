@@ -10,7 +10,6 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
-import maple.expectation.infrastructure.ratelimit.NexonRateLimiter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
@@ -23,7 +22,7 @@ import org.springframework.stereotype.Component
  *
  * <h3>동시성 제어</h3>
  * <ul>
- *   <li>NexonRateLimiter: 중앙 집중 ReentrantLock 기반 (ADR-355)</li>
+ *   <li>MetricsNexonApiClientWrapper: 중앙 집중 NexonRateLimiter (ADR-355, ADR-384)</li>
  *   <li>Virtual Thread: per-task virtual thread (ADR-355)</li>
  * </ul>
  *
@@ -33,14 +32,12 @@ import org.springframework.stereotype.Component
  *
  * @see FanOutQueuePort PGMQ 재시도 발행
  * @see NexonApiClient Nexon API 클라이언트
- * @see NexonRateLimiter 중앙 Rate Limiter
  */
 @Component
 class NexonFanOutBatchLoader(
     private val nexonApiClient: NexonApiClient,
     private val fanOutQueuePort: FanOutQueuePort,
     private val executor: LogicExecutor,
-    private val rateLimiter: NexonRateLimiter,
 ) {
     private val executorService: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
@@ -63,12 +60,7 @@ class NexonFanOutBatchLoader(
 
         val futures = ocids.map { ocid ->
             CompletableFuture.supplyAsync({
-                rateLimiter.acquirePermit()
-                try {
-                    fetchOrEnqueueRetry(ocid)
-                } finally {
-                    rateLimiter.releasePermit()
-                }
+                fetchOrEnqueueRetry(ocid)
             }, executorService)
         }
 

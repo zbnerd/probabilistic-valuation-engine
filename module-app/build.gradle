@@ -142,7 +142,8 @@ bootRun {
 		'-Xms1g',
 		'-Xmx2g',
 		'-XX:+UseG1GC',
-		'-Dspring.devtools.restart.enabled=true'
+		'-Dspring.devtools.restart.enabled=true',
+		"-Dspring.profiles.active=${project.findProperty('springProfile') ?: 'local'}"
 	]
 }
 

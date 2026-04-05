@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component
  * @see maple.expectation.infrastructure.queue.like.RedisLikeBufferStorage Redis 구현
  */
 @Component
-@Profile("local")
+@Profile("local", "vultr")
 class InMemoryLikeBufferStorage(
     registry: MeterRegistry,
     @Value("\${like.buffer.local.max-size:10000}") maxSize: Int,

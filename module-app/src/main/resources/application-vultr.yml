@@ -71,6 +71,14 @@ app:
     enabled: true
     query-side-enabled: true
 
+# PGMQ Workers
+pgmq:
+  worker:
+    expectation-calc-high:
+      enabled: true
+    expectation-calc-low:
+      enabled: true
+
 # Rate Limiting
 ratelimit:
   enabled: false  # Disable for initial testing

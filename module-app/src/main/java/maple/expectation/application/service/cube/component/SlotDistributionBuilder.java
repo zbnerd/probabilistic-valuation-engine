@@ -163,7 +163,7 @@ public class SlotDistributionBuilder {
 
     double deviation = Math.abs(allTotal - 1.0);
     if (deviation <= MASS_TOLERANCE) {
-      return 1.0; // 정상 범위
+      return allTotal; // 정규화 보정 → 개별 확률 ≤ 1.0 보장
     }
 
     // 정책에 따라 분기 (내부 enum 참조)

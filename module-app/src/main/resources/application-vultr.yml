@@ -79,6 +79,21 @@ pgmq:
     expectation-calc-low:
       enabled: true
 
+# Retry Budget — tryAcquire가 모든 API 호출마다 카운트되어
+# 100/min 예산으로는 8 RPS × 3 calls = 1440/min 감당 불가 → death spiral
+resilience:
+  retry-budget:
+    enabled: false
+
+# Bulkhead — 기본 50 concurrent calls가 Worker 병렬 처리 병목
+# 91 msg/batch × 3 API calls = 273 동시 호출 필요
+resilience4j:
+  bulkhead:
+    instances:
+      nexonApi:
+        maxConcurrentCalls: 200
+        maxWaitDuration: 2s
+
 # Rate Limiting
 ratelimit:
   enabled: false  # Disable for initial testing

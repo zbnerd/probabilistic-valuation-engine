@@ -3,6 +3,8 @@ package maple.expectation.infrastructure.pgmq
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
@@ -31,6 +33,9 @@ abstract class PgmqWorker<T : Any>(
     private val config: PgmqWorkerConfig,
     private val meterRegistry: MeterRegistry,
 ) {
+
+    /** 메시지 병렬 처리용 Virtual Thread Executor */
+    private val workerPool = Executors.newVirtualThreadPerTaskExecutor()
 
     /**
      * 큐 이름
@@ -101,9 +106,14 @@ abstract class PgmqWorker<T : Any>(
             var successCount = 0
             var failCount = 0
 
-            messages.forEach { message ->
-                val success = processSingleMessage(message)
-                if (success) successCount++ else failCount++
+            val futures = messages.map { message ->
+                CompletableFuture.supplyAsync({
+                    processSingleMessage(message)
+                }, workerPool)
+            }
+            CompletableFuture.allOf(*futures.toTypedArray()).join()
+            futures.forEach { future ->
+                if (future.get()) successCount++ else failCount++
             }
 
             val batchDuration = System.nanoTime() - batchStart

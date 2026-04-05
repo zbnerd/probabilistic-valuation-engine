@@ -24,6 +24,10 @@ class CharacterValuationViewEntity(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
 
+    @Version
+    @Column(name = "jpa_version")
+    var jpaVersion: Long? = null,
+
     @Column(name = "user_ign", nullable = false, length = 100)
     var userIgn: String,
 

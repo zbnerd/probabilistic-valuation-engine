@@ -102,6 +102,7 @@ public class ViewTransformer {
 
     return new CharacterValuationViewEntity(
         null, // id (auto-generated)
+        null, // jpaVersion (auto-managed by JPA @Version)
         userIgn,
         null, // messageId (not applicable for inline write)
         character.getCharacterId() != null ? character.getCharacterId().value() : null,
@@ -125,6 +126,7 @@ public class ViewTransformer {
       String userIgn, GameCharacter character) {
     return new CharacterValuationViewEntity(
         null,
+        null, // jpaVersion
         userIgn,
         null,
         character.getCharacterId() != null ? character.getCharacterId().value() : null,
@@ -160,6 +162,7 @@ public class ViewTransformer {
 
     return new CharacterValuationViewEntity(
         null, // id (auto-generated)
+        null, // jpaVersion
         event.getUserIgn(),
         event.getMessageId(),
         event.getCharacterOcid(),
@@ -345,6 +348,7 @@ public class ViewTransformer {
   private CharacterValuationViewEntity createEmptyView(ExpectationCalculationCompletedEvent event) {
     return new CharacterValuationViewEntity(
         null, // id (auto-generated)
+        null, // jpaVersion
         event.getUserIgn(),
         event.getMessageId(),
         event.getCharacterOcid(),

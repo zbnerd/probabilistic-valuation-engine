@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.domain.model.character.GameCharacter;
 import maple.expectation.core.event.ExpectationCalculationCompletedEvent;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -67,6 +68,76 @@ public class ViewTransformer {
         () -> toDocumentInternal(event),
         createEmptyView(event),
         TaskContext.of("ViewTransformer", "ToDocument", event.getTaskId()));
+  }
+
+  /**
+   * Transform V4 response + GameCharacter directly to CharacterValuationViewEntity.
+   *
+   * <p>Inline View Write pattern: same TX as calculation, no queue needed.
+   *
+   * <p>TODO: Replace with async projection (event-driven) when scaling out
+   *
+   * @param userIgn User IGN
+   * @param character Game character domain object
+   * @param response V4 calculation response
+   * @return Entity for upsert
+   */
+  public CharacterValuationViewEntity toEntityFromResponse(
+      String userIgn, GameCharacter character, EquipmentExpectationResponseV4 response) {
+    return executor.executeOrDefault(
+        () -> toEntityFromResponseInternal(userIgn, character, response),
+        createEmptyViewFromResponse(userIgn, character),
+        TaskContext.of("ViewTransformer", "ToEntityFromResponse", userIgn));
+  }
+
+  private CharacterValuationViewEntity toEntityFromResponseInternal(
+      String userIgn, GameCharacter character, EquipmentExpectationResponseV4 response) {
+    long version = System.currentTimeMillis();
+    List<PresetView> presetViews =
+        response.getPresets() != null
+            ? response.getPresets().stream()
+                .map(this::toPresetView)
+                .collect(Collectors.toList())
+            : List.of();
+
+    return new CharacterValuationViewEntity(
+        null, // id (auto-generated)
+        userIgn,
+        null, // messageId (not applicable for inline write)
+        character.getCharacterId() != null ? character.getCharacterId().value() : null,
+        character.getCharacterClass(),
+        null, // characterLevel (not stored in GameCharacter)
+        parseInstantSafe(response.getCalculatedAt()),
+        java.time.Instant.now(),
+        version,
+        version,
+        toLong(response.getTotalExpectedCost()),
+        response.getMaxPresetNo(),
+        presetViews,
+        response.isFromCache());
+  }
+
+  private java.time.Instant parseInstantSafe(java.time.LocalDateTime ldt) {
+    return ldt != null ? ldt.atZone(java.time.ZoneId.systemDefault()).toInstant() : java.time.Instant.EPOCH;
+  }
+
+  private CharacterValuationViewEntity createEmptyViewFromResponse(
+      String userIgn, GameCharacter character) {
+    return new CharacterValuationViewEntity(
+        null,
+        userIgn,
+        null,
+        character.getCharacterId() != null ? character.getCharacterId().value() : null,
+        character.getCharacterClass(),
+        null,
+        java.time.Instant.EPOCH,
+        java.time.Instant.now(),
+        0L,
+        0L,
+        0L,
+        0,
+        List.of(),
+        false);
   }
 
   /**

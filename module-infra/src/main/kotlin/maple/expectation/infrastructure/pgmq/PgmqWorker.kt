@@ -74,11 +74,25 @@ abstract class PgmqWorker<T : Any>(
     }
 
     /**
+     * 배치 pre-warm 훅 (ADR-700)
+     *
+     * <p>병렬 메시지 처리 전 호출. 하위 클래스에서 override하여
+     * 배치 내 OCID 중복 제거, 장비 캐시 pre-warm 등 수행.
+     * 기본 구현은 no-op. Best-effort: 실패해도 메시지 처리에 영향 없음.
+     *
+     * @param messages 배치로 읽은 메시지 목록
+     */
+    protected open fun preWarmBatch(messages: List<PgmqMessage<T>>) {
+        // no-op by default
+    }
+
+    /**
      * 메시지 배치 처리
      *
      * <p>1. 큐에서 메시지 읽기
-     * <p>2. 각 메시지 처리
-     * <p>3. 성공 시 archive, 실패 시 delete
+     * <p>2. 배치 pre-warm (ADR-700: OCID dedup + equipment cache pre-warm)
+     * <p>3. 각 메시지 병렬 처리
+     * <p>4. 성공 시 archive, 실패 시 delete
      */
     @Scheduled(fixedDelayString = "\${pgmq.worker.common.polling-interval-ms:300}")
     fun processMessages() {
@@ -100,6 +114,9 @@ abstract class PgmqWorker<T : Any>(
             }
 
             log.debug("📥 [{}] Processing {} messages", queueName, messages.size)
+
+            // ADR-700: 배치 pre-warm (OCID dedup + equipment cache pre-warm)
+            preWarmBatch(messages)
 
             // ADR-355: Batch-level aggregate metrics
             val batchStart = System.nanoTime()

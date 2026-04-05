@@ -85,6 +85,15 @@ resilience:
   retry-budget:
     enabled: false
 
+# Bulkhead — 기본 50 concurrent calls가 Worker 병렬 처리 병목
+# 91 msg/batch × 3 API calls = 273 동시 호출 필요
+resilience4j:
+  bulkhead:
+    instances:
+      nexonApi:
+        maxConcurrentCalls: 200
+        maxWaitDuration: 2s
+
 # Rate Limiting
 ratelimit:
   enabled: false  # Disable for initial testing

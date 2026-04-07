@@ -3,14 +3,22 @@ package maple.expectation.web.controller.v5
 import jakarta.validation.constraints.NotBlank
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 import maple.expectation.common.executor.TaskContext
 import maple.expectation.core.domain.model.character.CharacterView
 import maple.expectation.core.port.inbound.CalculationQueuePort
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExecutorPort
+import maple.expectation.core.port.out.CharacterOcidPort
+import maple.expectation.core.port.out.EquipmentFanOutPort
+import maple.expectation.core.port.inbound.TaskReceipt
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.mapper.CharacterViewMapper
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -27,11 +35,17 @@ import org.springframework.web.bind.annotation.RestController
  * **CQRS Pattern**
  * - Query Side: PostgreSQL CharacterValuationViewEntity (fast read 1-10ms)
  * - Command Side: Priority Queue + Calculation Worker
- * - Sync: PGMQ v5_event_queue → PostgreSQL upsert
+ * - Sync: PGMQ event queue → PostgreSQL upsert
  *
  * **ADR-005 Hexagonal Architecture**
  * - CharacterViewQueryPort: PostgreSQL 조회
  * - CalculationQueuePort: 큐 작업 추가
+ * - EquipmentFanOutPort: FanOut Micro-Batch 프리페치 (fanout.enabled=true)
+ *
+ * **FanOut Integration (fanout.enabled=true)**
+ * - PostgreSQL MISS 시 장비 데이터를 Micro-Batch Coalescing으로 프리페치
+ * - 프리페치 후 Calculation Worker가 캐시된 데이터를 활용 (빠른 계산)
+ * - Best-effort: 실패해도 큐잉은 정상 수행
  */
 @RestController
 @RequestMapping("/api/v5/characters")
@@ -40,7 +54,14 @@ class GameCharacterControllerV5(
     private val queryPort: CharacterViewQueryPort,
     private val queuePort: CalculationQueuePort,
     private val executorPort: ExecutorPort,
+    private val ocidPort: CharacterOcidPort,
+    @Value("\${fanout.enabled:false}") private val fanOutEnabled: Boolean,
+    private val fanOutPort: EquipmentFanOutPort,
+    @Qualifier("expectationComputeExecutor") private val computeExecutor: Executor,
+    meterRegistry: MeterRegistry,
 ) {
+    private val preWarmFailureCounter = meterRegistry.counter("v5.prewarm.failures", "type", "error")
+    private val preWarmRejectedCounter = meterRegistry.counter("v5.prewarm.failures", "type", "rejected")
 
     /**
      * V5: 캐릭터 기대값 조회 (CQRS - PostgreSQL Read First)
@@ -54,7 +75,7 @@ class GameCharacterControllerV5(
         @PathVariable @NotBlank userIgn: String,
     ): CompletableFuture<ResponseEntity<*>> {
         log.debug("[V5] Query expectation for: {}", maskIgn(userIgn))
-        return CompletableFuture.supplyAsync { processPostgreSQLCacheFirstLookup(userIgn) }
+        return CompletableFuture.supplyAsync({ processPostgreSQLCacheFirstLookup(userIgn) }, computeExecutor)
     }
 
     private fun processPostgreSQLCacheFirstLookup(userIgn: String): ResponseEntity<*> {
@@ -77,8 +98,48 @@ class GameCharacterControllerV5(
             return ResponseEntity.ok(cachedResult.get())
         }
 
-        // 3. MISS: Queue to Command Side via Port
+        // 3. MISS: Pre-warm equipment cache via FanOut (best-effort, async)
+        if (fanOutEnabled) {
+            CompletableFuture.runAsync(
+                { preWarmEquipmentCache(userIgn, context) },
+                computeExecutor,
+            ).exceptionally { e ->
+                if (e is RejectedExecutionException) {
+                    preWarmRejectedCounter.increment()
+                    log.warn("[V5] PreWarm rejected (executor full): ign={}", maskIgn(userIgn))
+                } else {
+                    preWarmFailureCounter.increment()
+                    log.warn("[V5] PreWarm failed (best-effort): ign={}", maskIgn(userIgn), e)
+                }
+                null
+            }
+        }
+
+        // 4. Queue to Command Side via Port
         return queueCalculationTask(userIgn, false, context)
+    }
+
+    /**
+     * FanOut Micro-Batch로 장비 데이터 프리페치 (Best-Effort)
+     *
+     * <p>OCID 해석 → EquipmentFanOutPort.preFetchByOcid():
+     * <ul>
+     *   <li>L1 Cache HIT → 즉시 반환 (0ms)</li>
+     *   <li>In-Flight Coalescing → 기존 요청 대기</li>
+     *   <li>Fast Lane → EquipmentFetchProvider.fetchWithCache()</li>
+     *   <li>Batch Lane → NexonFanOutBatchLoader.load()</li>
+     * </ul>
+     *
+     * <p>실패해도 큐잉은 정상 수행 (Best-Effort)
+     */
+    private fun preWarmEquipmentCache(userIgn: String, context: TaskContext) {
+        executorPort.executeVoidJava({
+            val ocid = ocidPort.resolveOcid(userIgn)
+            if (ocid != null) {
+                fanOutPort.preFetchByOcid(ocid)
+                log.debug("[V5] FanOut pre-warm: ign={}, ocid={}", maskIgn(userIgn), ocid.take(8))
+            }
+        }, context)
     }
 
     /**
@@ -93,7 +154,7 @@ class GameCharacterControllerV5(
         @PathVariable userIgn: String,
     ): CompletableFuture<ResponseEntity<*>> {
         log.info("[V5] Force recalculation requested: {}", maskIgn(userIgn))
-        return CompletableFuture.supplyAsync { processCacheInvalidation(userIgn) }
+        return CompletableFuture.supplyAsync({ processCacheInvalidation(userIgn) }, computeExecutor)
     }
 
     private fun processCacheInvalidation(userIgn: String): ResponseEntity<*> {
@@ -113,15 +174,17 @@ class GameCharacterControllerV5(
         forceRecalculation: Boolean,
         context: TaskContext,
     ): ResponseEntity<*> {
-        val queued = executorPort.executeOrDefault(
-            { queuePort.offerHighPriority(userIgn, forceRecalculation) },
-            false,
+        val receipt = executorPort.executeOrDefault(
+            { queuePort.offerHighPriorityWithReceipt(userIgn, forceRecalculation) },
+            TaskReceipt.rejected(userIgn),
             context,
         )
 
-        return if (queued) {
-            log.info("[V5] PostgreSQL MISS, queued calculation: {}", maskIgn(userIgn))
-            ResponseEntity.accepted().build<Unit>()
+        return if (receipt.queued) {
+            log.info("[V5] PostgreSQL MISS, queued calculation: {} (taskId={})", maskIgn(userIgn), receipt.taskId)
+            ResponseEntity.accepted()
+                .header("X-Task-Id", receipt.taskId)
+                .build<Unit>()
         } else {
             log.warn("[V5] Queue full, rejecting: {}", maskIgn(userIgn))
             ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)

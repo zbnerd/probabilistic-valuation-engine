@@ -66,7 +66,7 @@ class L2CacheMicroBatchAdapter(
                 cache = cache,
                 singleLoader = { key -> l2Strategy.get(key, type) },
                 batchLoader = { keys -> l2Strategy.getAll(keys, type) },
-            )
+            ).also { it.startBatchWorker() }
         }
     }
 }

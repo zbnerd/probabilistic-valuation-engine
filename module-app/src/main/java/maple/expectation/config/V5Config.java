@@ -39,10 +39,10 @@ public class V5Config {
 
     checkedLogicExecutor.executeUncheckedVoid(
         () -> {
-          log.info("[V5-Config] Initializing V5 CQRS worker pool...");
-          executor.start();
-          // ADR-080 Fix 4: Workers log their own startup - removed misleading message
-          log.info("[V5-Config] Worker pool initialization submitted");
+          log.info("[V5-Config] V5 CQRS initialized (PGMQ workers handle consumption, polling workers disabled)");
+          // Legacy polling workers disabled — PGMQ workers (ExpectationCalcWorker, ExpectationCalcLowWorker)
+          // now handle message consumption via @Scheduled pgmqClient.read()
+          // executor.start();
         },
         context,
         e -> new IllegalStateException("V5 CQRS worker pool startup failed", e));

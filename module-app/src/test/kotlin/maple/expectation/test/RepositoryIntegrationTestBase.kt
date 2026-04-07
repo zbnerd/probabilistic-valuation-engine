@@ -4,7 +4,6 @@ import jakarta.persistence.EntityManager
 import maple.expectation.config.TestcontainersConfiguration.Companion.postgresContainer
 import maple.expectation.core.port.out.EventPublisher
 import maple.expectation.infrastructure.cache.TieredCacheManager
-import maple.expectation.infrastructure.messaging.PgmqStreamPublisher
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
@@ -74,10 +73,6 @@ abstract class RepositoryIntegrationTestBase {
     // Mock TieredCacheManager to avoid Spring context loading issues
     @MockBean
     lateinit var tieredCacheManager: TieredCacheManager
-
-    // Mock PgmqStreamPublisher to avoid dependency on PGMQ infrastructure
-    @MockBean
-    lateinit var pgmqStreamPublisher: PgmqStreamPublisher
 
     // Mock EventPublisher to avoid dependency on event publishing infrastructure
     @MockBean

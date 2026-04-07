@@ -22,7 +22,7 @@ Client → Spring Boot (Java 21, Virtual Threads)
            └── Nexon API — 외부 장비 데이터
 ```
 
-Redis, MySQL, MongoDB 세 개의 데이터베이스가 얽혀 있었다. Redis는 캐시와 분산락, MySQL은 영속성, MongoDB는 이벤트 스토어로 사용 중이었다.
+Redis, MySQL, MongoDB 세 개의 데이터베이스가 얽혀 있었다. Redis는 캐시와 분산락, MySQL은 영속성, MongoDB는 이벤트 스토어로 사용 중이었다. **네 번째인 Nexon API는 제어할 수 없는 외부 의존성으로, 시스템 경계 밖에 있는 "심장"이다.**
 
 ## 왜 느렸나 — 초기 진단
 

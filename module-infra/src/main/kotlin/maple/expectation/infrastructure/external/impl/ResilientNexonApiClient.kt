@@ -5,7 +5,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import io.github.resilience4j.retry.annotation.Retry
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter
 import java.util.concurrent.CompletableFuture
-import maple.expectation.domain.v2.NexonApiOutbox
+import maple.expectation.core.domain.nexon.NexonApiEventType
 import maple.expectation.error.exception.ExternalServiceException
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction
 import maple.expectation.infrastructure.external.NexonApiClient
@@ -34,7 +34,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
  * <h4>분리된 책임 (별도 클래스)</h4>
  *
  * <ul>
- *   <li>{@link OutboxFallbackManager}: Outbox 적재, 멱등성 ID 생성, PII 마스킹
+ *   <li>{@link PgmqFallbackPublisher}: PGMQ 발행, 멱등성 ID 생성, PII 마스킹
  *   <li>{@link AlertNotificationHelper}: Best-effort 알림 발송
  *   <li>{@link FallbackHandler}: Fallback 로직 (Scenario A/B, 4xx 분류, 캐시 degradation)
  * </ul>
@@ -56,7 +56,7 @@ class ResilientNexonApiClient(
     private val delegate: NexonApiClient,
     private val fallbackHandler: FallbackHandler,
     private val retryBudgetManager: RetryBudgetManager,
-    private val outboxFallbackManager: OutboxFallbackManager,
+    private val pgmqFallbackPublisher: PgmqFallbackPublisher,
 ) : NexonApiClient {
 
     private val logger = org.slf4j.LoggerFactory.getLogger(ResilientNexonApiClient::class.java)
@@ -171,10 +171,10 @@ class ResilientNexonApiClient(
         logger.error("[Resilience] OCID 최종 조회 실패. name={}", name, t)
 
         // Outbox Fallback: 멱등성 ID 생성 및 Outbox 적재
-        val requestId = outboxFallbackManager.generateRequestId("GET_OCID", name)
-        outboxFallbackManager.saveToOutbox(
+        val requestId = pgmqFallbackPublisher.generateRequestId("GET_OCID", name)
+        pgmqFallbackPublisher.saveToOutbox(
             requestId,
-            NexonApiOutbox.NexonApiEventType.GET_OCID,
+            NexonApiEventType.GET_OCID,
             name,
         )
 
@@ -207,7 +207,7 @@ class ResilientNexonApiClient(
         logger.error("[Resilience] Character basic 최종 조회 실패. ocid={}", ocid, t)
         return fallbackHandler.serverErrorFuture(
             ocid,
-            NexonApiOutbox.NexonApiEventType.GET_CHARACTER_BASIC,
+            NexonApiEventType.GET_CHARACTER_BASIC,
             t,
         )
     }
@@ -226,7 +226,7 @@ class ResilientNexonApiClient(
      */
     fun getItemDataFallback(ocid: String, t: Throwable): CompletableFuture<EquipmentResponse> = fallbackHandler.handleItemDataFallback(
         ocid,
-        NexonApiOutbox.NexonApiEventType.GET_ITEM_DATA,
+        NexonApiEventType.GET_ITEM_DATA,
         t,
     )
 
@@ -253,7 +253,7 @@ class ResilientNexonApiClient(
         logger.error("[Resilience] Cube History 최종 조회 실패. ocid={}", ocid, t)
         return fallbackHandler.serverErrorFuture(
             ocid,
-            NexonApiOutbox.NexonApiEventType.GET_CUBES,
+            NexonApiEventType.GET_CUBES,
             t,
         )
     }
@@ -266,7 +266,7 @@ class ResilientNexonApiClient(
      * @param enabled 활성화 여부
      */
     fun setOutboxFallbackEnabled(enabled: Boolean) {
-        outboxFallbackManager.isEnabled = enabled
+        pgmqFallbackPublisher.isEnabled = enabled
     }
 
     /**
@@ -274,5 +274,5 @@ class ResilientNexonApiClient(
      *
      * @return 활성화 여부
      */
-    fun isOutboxFallbackEnabled(): Boolean = outboxFallbackManager.isEnabled
+    fun isOutboxFallbackEnabled(): Boolean = pgmqFallbackPublisher.isEnabled
 }

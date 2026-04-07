@@ -26,6 +26,8 @@ import maple.expectation.parser.EquipmentStreamingParser;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.application.service.expectation.event.ViewTransformer;
+import maple.expectation.infrastructure.persistence.CharacterViewQueryServicePostgres;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.lang.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -70,6 +72,8 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   private final ExpectationPersistenceService persistenceService;
   private final ObjectProvider<EquipmentExpectationServiceV4> selfProvider;
   private final maple.expectation.infrastructure.config.NexonApiProperties nexonApiProperties;
+  private final ViewTransformer viewTransformer;
+  private final ObjectProvider<CharacterViewQueryServicePostgres> viewQueryServiceProvider;
 
   public EquipmentExpectationServiceV4(
       GameCharacterFacade gameCharacterFacade,
@@ -84,7 +88,9 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       ExpectationCacheCoordinator cacheCoordinator,
       ExpectationPersistenceService persistenceService,
       ObjectProvider<EquipmentExpectationServiceV4> selfProvider,
-      maple.expectation.infrastructure.config.NexonApiProperties nexonApiProperties) {
+      maple.expectation.infrastructure.config.NexonApiProperties nexonApiProperties,
+      ViewTransformer viewTransformer,
+      ObjectProvider<CharacterViewQueryServicePostgres> viewQueryServiceProvider) {
     this.gameCharacterFacade = gameCharacterFacade;
     this.gameCharacterService = gameCharacterService;
     this.equipmentProvider = equipmentProvider;
@@ -98,6 +104,8 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
     this.persistenceService = persistenceService;
     this.selfProvider = selfProvider;
     this.nexonApiProperties = nexonApiProperties;
+    this.viewTransformer = viewTransformer;
+    this.viewQueryServiceProvider = viewQueryServiceProvider;
   }
 
   // ==================== Public API ====================
@@ -180,9 +188,38 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
               calculateAllPresets(equipmentData, character.getCharacterClass());
           PresetExpectation maxPreset = findMaxPreset(presetResults);
           persistenceService.saveResults(character.getId(), presetResults);
-          return buildResponse(userIgn, maxPreset, presetResults, false);
+          EquipmentExpectationResponseV4 response =
+              buildResponse(userIgn, maxPreset, presetResults, false);
+
+          // V5: Inline View Write — same TX, no queue (Async Materialized View pattern)
+          // TODO: Replace with async projection (event-driven) when scaling out
+          syncToViewTable(userIgn, character, response);
+
+          return response;
         },
         context);
+  }
+
+  /**
+   * V5 CQRS: Inline view table write (best-effort).
+   *
+   * <p>Writes precomputed result to character_valuation_views within the same transaction.
+   * Skipped when V5 is not enabled (ObjectProvider → null).
+   *
+   * <p>Async Materialized View pattern: Worker → DB write → API read.
+   */
+  private void syncToViewTable(
+      String userIgn, GameCharacter character, EquipmentExpectationResponseV4 response) {
+    CharacterViewQueryServicePostgres viewService = viewQueryServiceProvider.getIfAvailable();
+    if (viewService == null) return; // V5 미활성화 시 skip
+
+    executor.executeVoidJava(
+        () -> {
+          var entity = viewTransformer.toEntityFromResponse(userIgn, character, response);
+          viewService.upsert(entity);
+          log.debug("[ExpectationV4] Synced to view table: userIgn={}", userIgn);
+        },
+        TaskContext.of("ExpectationV4", "SyncView", userIgn));
   }
 
   /**

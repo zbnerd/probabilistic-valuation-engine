@@ -8,6 +8,7 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import io.micrometer.core.instrument.MeterRegistry
 import maple.expectation.infrastructure.queue.pgmq.CalculationQueueProducer
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
@@ -38,8 +39,9 @@ class CalculationWorker(
     pgmqClient: PgmqClient,
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
+    meterRegistry: MeterRegistry,
     private val expectationPort: ExpectationV4Port,
-) : PgmqWorker<CalculationRequest>(pgmqClient, executor, config) {
+) : PgmqWorker<CalculationRequest>(pgmqClient, executor, config, meterRegistry) {
 
     override val queueName: String = CalculationQueueProducer.QUEUE_NAME
     override val payloadClass: Class<CalculationRequest> = CalculationRequest::class.java

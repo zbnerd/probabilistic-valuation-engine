@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.ResultSetExtractor
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 /**
  * PGMQ 클라이언트 (ADR-002)
@@ -57,6 +58,13 @@ class PgmqClient(
      */
     @CircuitBreaker(name = "pgmq", fallbackMethod = "sendFallback")
     fun <T : Any> send(queueName: String, message: T): Long {
+        // TX 활성 검증 — 반드시 send() 내부에서 수행 (AOP는 self-invocation/람다에서 우회 가능)
+        if (config.transactionCheckEnabled && !TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw PgmqPublishException(
+                "pgmqClient.send('$queueName') must be called within @Transactional. " +
+                    "Ensure the calling Service method has @Transactional annotation.",
+            )
+        }
         val context = TaskContext.of("PgmqClient", "Send", queueName)
         val translator = ExceptionTranslator { e, _ ->
             PgmqPublishException("Failed to send message to queue: $queueName", e)
@@ -134,6 +142,26 @@ class PgmqClient(
     }
 
     /**
+     * 메시지 Visibility Timeout 변경
+     *
+     * <p>이미 읽은 메시지의 VT를 변경. 429 Rate Limit 시 짧은 지연 후 재시도에 사용.
+     *
+     * @param queueName 큐 이름
+     * @param messageId 메시지 ID
+     * @param visibilityTimeoutSec 새 VT (초)
+     * @return 성공 여부
+     */
+    @CircuitBreaker(name = "pgmq", fallbackMethod = "setVisibilityTimeoutFallback")
+    fun setVisibilityTimeout(queueName: String, messageId: Long, visibilityTimeoutSec: Long): Boolean {
+        val context = TaskContext.of("PgmqClient", "SetVT", "$queueName:$messageId")
+        return executor.executeOrDefault(
+            { performSetVisibilityTimeout(queueName, messageId, visibilityTimeoutSec) },
+            false,
+            context,
+        )
+    }
+
+    /**
      * 큐 길이 조회
      *
      * <p>지정된 큐의 현재 대기 중인 메시지 수를 반환.
@@ -145,6 +173,35 @@ class PgmqClient(
     fun queueLength(queueName: String): Long {
         val context = TaskContext.of("PgmqClient", "QueueLength", queueName)
         return executor.executeOrDefault({ performQueueLength(queueName) }, 0L, context)
+    }
+
+    /**
+     * 메시지 archive 존재 여부 확인 (ADR-355)
+     *
+     * <p>TaskStatusService에서 COMPLETED 판별에 사용.
+     *
+     * @param queueName 큐 이름
+     * @param messageId 메시지 ID
+     * @return archive 테이블에 존재하면 true
+     */
+    fun isArchived(queueName: String, messageId: Long): Boolean {
+        val context = TaskContext.of("PgmqClient", "IsArchived", "$queueName:$messageId")
+        return executor.executeOrDefault({ performIsArchived(queueName, messageId) }, false, context)
+    }
+
+    /**
+     * 메시지 read count 조회 (ADR-355)
+     *
+     * <p>TaskStatusService에서 PROCESSING 판별에 사용.
+     * read_ct > 0 → worker가 메시지를 소비한 적 있음 (PROCESSING).
+     *
+     * @param queueName 큐 이름
+     * @param messageId 메시지 ID
+     * @return read count (큐에 없으면 0)
+     */
+    fun getMessageReadCount(queueName: String, messageId: Long): Int {
+        val context = TaskContext.of("PgmqClient", "ReadCount", "$queueName:$messageId")
+        return executor.executeOrDefault({ performGetReadCount(queueName, messageId) }, 0, context)
     }
 
     // ==================== Internal Implementation ====================
@@ -235,10 +292,47 @@ class PgmqClient(
 
     private fun performQueueLength(queueName: String): Long {
         return jdbcTemplate.queryForObject(
-            "SELECT pgmq.queue_length(?)",
+            "SELECT queue_length FROM pgmq.metrics(?)",
             Long::class.java,
             queueName,
         ) ?: 0L
+    }
+
+    private fun performIsArchived(queueName: String, messageId: Long): Boolean {
+        validateQueueName(queueName)
+        val archiveTable = "pgmq.a_$queueName"
+        return jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM $archiveTable WHERE msg_id = ?",
+            Long::class.java,
+            messageId,
+        ) ?: 0L > 0
+    }
+
+    private fun performGetReadCount(queueName: String, messageId: Long): Int {
+        validateQueueName(queueName)
+        val queueTable = "pgmq.q_$queueName"
+        return jdbcTemplate.queryForObject(
+            "SELECT read_ct FROM $queueTable WHERE msg_id = ?",
+            Int::class.java,
+            messageId,
+        ) ?: 0
+    }
+
+    private fun validateQueueName(queueName: String) {
+        require(queueName.matches(QUEUE_NAME_PATTERN)) {
+            "Invalid PGMQ queue name: $queueName"
+        }
+    }
+
+    private fun performSetVisibilityTimeout(queueName: String, messageId: Long, timeoutSeconds: Long): Boolean {
+        val safeSeconds = timeoutSeconds.coerceIn(1, 86400) // 최대 1일
+        return jdbcTemplate.queryForObject(
+            "SELECT pgmq.set_visibility_timeout(?, ?, ? * interval '1 second')",
+            Boolean::class.java,
+            queueName,
+            messageId,
+            safeSeconds,
+        ) ?: false
     }
 
     // ==================== Fallback Methods ====================
@@ -269,8 +363,19 @@ class PgmqClient(
         return false
     }
 
+    private fun setVisibilityTimeoutFallback(
+        queueName: String,
+        messageId: Long,
+        visibilityTimeoutSec: Long,
+        e: Throwable,
+    ): Boolean {
+        log.error("⚡ [PGMQ] Circuit Breaker OPEN - setVT fallback: queue={}, msgId={}", queueName, messageId, e)
+        return false
+    }
+
     companion object {
         private val log = LoggerFactory.getLogger(PgmqClient::class.java)
+        private val QUEUE_NAME_PATTERN = Regex("^[a-z_][a-z0-9_]{0,62}$")
     }
 }
 

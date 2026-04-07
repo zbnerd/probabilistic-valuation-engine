@@ -15,8 +15,8 @@ package maple.expectation.core.event
  *
  * ```
  * ExpectationCalculationWorker.calculate()
- *   → TransactionalEventPublisher.publish() (via EventOutbox)
- *   → Redis Stream (character-sync)
+ *   → TransactionalEventPublisher.publish() (direct to PGMQ)
+ *   → PGMQ (character-sync queue)
  *   → MongoDBSyncWorker.consume()
  *   → CharacterValuationView.upsert()
  * ```

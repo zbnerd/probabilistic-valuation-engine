@@ -8,11 +8,12 @@ package maple.expectation.core.port.out
  *
  * <h3>구현체</h3>
  * <ul>
- *   <li>module-app/service/v2/outbox/NexonApiOutboxProcessor
+ *   <li>module-infra/nexon/pgmq/NexonApiPgmqProcessor (PGMQ 기반)
  * </ul>
  *
  * @see NexonApiOutboxMetricsPort
  */
+@Deprecated("Outbox 제거 완료. PGMQ Worker로 대체됨. 다음 릴리즈에서 삭제 예정.")
 interface NexonApiOutboxProcessorPort {
     /**
      * Outbox 폴링 및 처리

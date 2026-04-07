@@ -170,6 +170,7 @@ class GameCharacterControllerV5Test {
 
     return new CharacterValuationViewEntity(
         1L, // id
+        null, // jpaVersion
         TEST_IGN, // userIgn
         null, // messageId
         "test-ocid", // characterOcid

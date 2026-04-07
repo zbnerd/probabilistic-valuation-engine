@@ -78,6 +78,7 @@ class CharacterViewQueryServicePostgres(
                         // Incoming update is newer - apply update
                         val updated = CharacterValuationViewEntity(
                             id = existing.id,
+                            jpaVersion = existing.jpaVersion,
                             userIgn = entity.userIgn,
                             messageId = entity.messageId,
                             characterOcid = entity.characterOcid,
@@ -114,6 +115,7 @@ class CharacterViewQueryServicePostgres(
                     // Insert new
                     val newEntity = CharacterValuationViewEntity(
                         id = null,
+                        jpaVersion = null,
                         userIgn = entity.userIgn,
                         messageId = entity.messageId,
                         characterOcid = entity.characterOcid,

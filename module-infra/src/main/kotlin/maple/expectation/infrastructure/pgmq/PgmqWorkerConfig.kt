@@ -27,9 +27,6 @@ class PgmqWorkerConfig {
     /** Calculation Worker 설정 */
     var calculation: WorkerSettings = WorkerSettings()
 
-    /** LikeSync Worker 설정 */
-    var likeSync: WorkerSettings = WorkerSettings()
-
     /** Donation Worker 설정 */
     var donation: WorkerSettings = WorkerSettings()
 
@@ -42,18 +39,21 @@ class PgmqWorkerConfig {
     /** Expectation Calc Low Priority Worker 설정 */
     var expectationCalcLow: WorkerSettings = WorkerSettings()
 
-    data class CommonSettings(
-        /** 폴링 간격 (ms) */
-        var pollingIntervalMs: Long = 1000,
+    /** Nexon FanOut Worker 설정 (429 재시도 전용) */
+    var nexonFanout: WorkerSettings = WorkerSettings()
 
-        /** 배치 사이즈 */
-        var batchSize: Int = 10,
+    data class CommonSettings(
+        /** 폴링 간격 (ms) (ADR-355) */
+        var pollingIntervalMs: Long = 300,
+
+        /** 배치 사이즈 (ADR-355) */
+        var batchSize: Int = 50,
 
         /** 최대 재시도 횟수 */
         var maxRetries: Int = 3,
 
-        /** Visibility Timeout (초) */
-        var visibilityTimeoutSec: Int = 30,
+        /** Visibility Timeout (초) (ADR-355: batch × avg latency) */
+        var visibilityTimeoutSec: Int = 120,
     )
 
     data class WorkerSettings(

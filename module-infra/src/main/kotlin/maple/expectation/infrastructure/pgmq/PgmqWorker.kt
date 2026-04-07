@@ -2,6 +2,10 @@ package maple.expectation.infrastructure.pgmq
 
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 
@@ -27,7 +31,11 @@ abstract class PgmqWorker<T : Any>(
     private val pgmqClient: PgmqClient,
     protected val executor: LogicExecutor,
     private val config: PgmqWorkerConfig,
+    private val meterRegistry: MeterRegistry,
 ) {
+
+    /** 메시지 병렬 처리용 Virtual Thread Executor */
+    private val workerPool = Executors.newVirtualThreadPerTaskExecutor()
 
     /**
      * 큐 이름
@@ -53,13 +61,40 @@ abstract class PgmqWorker<T : Any>(
     protected abstract fun process(message: PgmqMessage<T>): Boolean
 
     /**
+     * 메시지 처리 실패 시 후처리 훅 (선택적 오버라이드)
+     *
+     * <p>process()가 false를 반환하거나 예외 발생 시 호출.
+     * 기본 구현은 no-op.
+     * 429 Rate Limit 시 setVisibilityTimeout()으로 짧은 지연 설정에 사용.
+     *
+     * @param message 처리 실패한 메시지
+     */
+    protected open fun onProcessingFailed(message: PgmqMessage<T>) {
+        // no-op by default
+    }
+
+    /**
+     * 배치 pre-warm 훅 (ADR-700)
+     *
+     * <p>병렬 메시지 처리 전 호출. 하위 클래스에서 override하여
+     * 배치 내 OCID 중복 제거, 장비 캐시 pre-warm 등 수행.
+     * 기본 구현은 no-op. Best-effort: 실패해도 메시지 처리에 영향 없음.
+     *
+     * @param messages 배치로 읽은 메시지 목록
+     */
+    protected open fun preWarmBatch(messages: List<PgmqMessage<T>>) {
+        // no-op by default
+    }
+
+    /**
      * 메시지 배치 처리
      *
      * <p>1. 큐에서 메시지 읽기
-     * <p>2. 각 메시지 처리
-     * <p>3. 성공 시 archive, 실패 시 delete
+     * <p>2. 배치 pre-warm (ADR-700: OCID dedup + equipment cache pre-warm)
+     * <p>3. 각 메시지 병렬 처리
+     * <p>4. 성공 시 archive, 실패 시 delete
      */
-    @Scheduled(fixedDelayString = "\${pgmq.worker.common.polling-interval-ms:1000}")
+    @Scheduled(fixedDelayString = "\${pgmq.worker.common.polling-interval-ms:300}")
     fun processMessages() {
         // Worker가 비활성화되어 있으면 스킵
         if (!workerSettings.enabled) {
@@ -80,9 +115,31 @@ abstract class PgmqWorker<T : Any>(
 
             log.debug("📥 [{}] Processing {} messages", queueName, messages.size)
 
-            messages.forEach { message ->
-                processSingleMessage(message)
+            // ADR-700: 배치 pre-warm (OCID dedup + equipment cache pre-warm)
+            preWarmBatch(messages)
+
+            // ADR-355: Batch-level aggregate metrics
+            val batchStart = System.nanoTime()
+            var successCount = 0
+            var failCount = 0
+
+            val futures = messages.map { message ->
+                CompletableFuture.supplyAsync({
+                    processSingleMessage(message)
+                }, workerPool)
             }
+            CompletableFuture.allOf(*futures.toTypedArray()).join()
+            futures.forEach { future ->
+                if (future.get()) successCount++ else failCount++
+            }
+
+            val batchDuration = System.nanoTime() - batchStart
+            meterRegistry.counter("pgmq.worker.processed", "queue", queueName, "status", "success")
+                .increment(successCount.toDouble())
+            meterRegistry.counter("pgmq.worker.processed", "queue", queueName, "status", "failed")
+                .increment(failCount.toDouble())
+            meterRegistry.timer("pgmq.worker.batch.latency", "queue", queueName)
+                .record(batchDuration, TimeUnit.NANOSECONDS)
         }, context)
     }
 
@@ -96,7 +153,7 @@ abstract class PgmqWorker<T : Any>(
      *   <li>처리 실패 + 재시도 불가 -> delete (DLQ)
      * </ul>
      */
-    private fun processSingleMessage(message: PgmqMessage<T>) {
+    private fun processSingleMessage(message: PgmqMessage<T>): Boolean {
         val maxRetries = workerSettings.maxRetries ?: config.common.maxRetries
         val context = TaskContext.of("PgmqWorker", "ProcessMessage", "$queueName:${message.messageId}")
 
@@ -113,7 +170,8 @@ abstract class PgmqWorker<T : Any>(
                 log.debug("✅ [{}] Archived message: msgId={}", queueName, message.messageId)
             }
             message.isRetryable(maxRetries) -> {
-                // 재시도 가능: 다음 poll에서 다시 처리됨
+                // 재시도 가능: 후처리 훅 호출 후 다음 poll에서 다시 처리됨
+                onProcessingFailed(message)
                 log.warn("⚠️ [{}] Message will be retried: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
             }
             else -> {
@@ -122,6 +180,8 @@ abstract class PgmqWorker<T : Any>(
                 log.error("❌ [{}] Deleted message after max retries: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
             }
         }
+
+        return success
     }
 
     companion object {

@@ -216,6 +216,9 @@ nexon:
     cache-follower-timeout-seconds: 30  # Issue #225: 32s → 30s (TimeLimiter 28s + 여유 2s, Zombie Request 방지)
     latch-initial-ttl-seconds: 60    # 래치 초기 TTL (리더 크래시 대비)
     latch-finalize-ttl-seconds: 10   # 래치 정리 후 TTL (팔로워 조회 여유)
+  retry:
+    polling-interval-ms: 10000      # PGMQ 폴링 주기 (10초)
+    recover-stalled-interval-ms: 300000  # Stalled 복구 체크 주기 (5분)
 
 server:
   shutdown: graceful
@@ -586,23 +589,6 @@ micro-batch-writer:
   flush-size: 500           # Buffer size threshold for size-triggered flush
   flush-interval-ms: 50     # Time interval for time-triggered flush (ms)
 
-# Outbox 설정 (P1-8: 하드코딩 제거 → YAML 외부화)
-outbox:
-  batch-size: 100                   # SKIP LOCKED 배치 크기
-  stale-threshold: 5m               # Stalled 판정 기준 (5분)
-  max-backoff: 1h                   # Exponential Backoff 최대 대기 (1시간)
-  instance-id: ${app.instance-id}   # Scale-out 인스턴스 식별자
-  monitoring:
-    size-alert-threshold: 1000      # Outbox 크기 경고 임계값 (건)
-    monitor-interval: 30s           # 크기 모니터링 주기
-  scheduler:
-    nexon-api-outbox:
-      enabled: true
-      initial-delay: 10s
-      fixed-rate: 10s
-      recover-stalled:
-        fixed-rate: 5m
-
 # Graceful Shutdown 설정 (P1-1, P1-2, P1-3, P1-5: 하드코딩 제거 → YAML 외부화)
 shutdown:
   equipment-await-timeout: 20s      # Equipment 비동기 저장 대기 타임아웃
@@ -631,3 +617,14 @@ alert:
     capacity: 1000                   # Maximum alerts stored in memory (LRU eviction)
   file:
     path: /var/log/maple-alerts.log  # File-based alert log path
+
+# FanOut Micro-Batch Configuration (Issue #690)
+fanout:
+  enabled: false                     # Phase 1: false (검증 후 true)
+  semaphore-permits: 30              # Batch Lane 동시성 (Bulkhead(50)과 2중 제한, 실제=min(30,50)=30)
+  batch-size: 50                     # Batch Lane 최대 크기
+  max-retry-count: 5                 # 429 재시도 최대 횟수
+  retry-delay-base-ms: 1000          # 429 재시도 기본 지연 (ms)
+  jitter-factor: 0.3                 # 429 재시도 jitter (30%)
+  polling-interval-ms: 50            # PGMQ Worker 폴링 간격 (ms)
+  queue-name: nexon_fanout_queue     # PGMQ 큐 이름

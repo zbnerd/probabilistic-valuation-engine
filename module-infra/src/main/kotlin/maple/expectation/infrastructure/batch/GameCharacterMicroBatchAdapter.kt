@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.infrastructure.config.AdaptiveMicroBatchProperties
+import jakarta.annotation.PostConstruct
 import maple.expectation.infrastructure.executor.LogicExecutor
 import org.springframework.cache.Cache
 import org.springframework.cache.concurrent.ConcurrentMapCache
@@ -41,6 +42,11 @@ class GameCharacterMicroBatchAdapter(
         singleLoader = { key -> repository.findByUserIgn(key) },
         batchLoader = { keys -> repository.findByUserIgnIn(keys) },
     )
+
+    @PostConstruct
+    fun init() {
+        delegate.startBatchWorker()
+    }
 
     /**
      * Get character by user IGN with adaptive micro-batching

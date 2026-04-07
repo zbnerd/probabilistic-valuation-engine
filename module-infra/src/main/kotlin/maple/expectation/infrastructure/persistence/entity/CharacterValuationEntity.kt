@@ -19,7 +19,7 @@ import java.time.Instant
  * <ul>
  *   <li><b>Query Side:</b> This entity (PostgreSQL JSONB)
  *   <li><b>Command Side:</b> MySQL game_character, character_equipment
- *   <li><b>Sync:</b> PGMQ v5_event_queue topic
+ *   <li><b>Sync:</b> PGMQ event queue (direct publish)
  * </ul>
  *
  * <h3>JSONB Strategy</h3>

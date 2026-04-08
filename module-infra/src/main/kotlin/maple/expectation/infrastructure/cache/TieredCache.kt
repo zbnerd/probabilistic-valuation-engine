@@ -5,11 +5,14 @@ import io.micrometer.core.instrument.MeterRegistry
 import java.util.Optional
 import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.locks.LockSupport
 import java.util.function.Consumer
 import java.util.function.Supplier
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
+import maple.expectation.infrastructure.cache.tiered.CacheStampedeTimeoutException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
@@ -50,6 +53,7 @@ class TieredCache(
     private val missCounter: Counter
     private val lockFailureCounter: Counter
     private val l2FailureCounter: Counter
+    private val stampedeTimeoutCounter: Counter
 
     /** Issue #555: L2 disabled flag (Caffeine-only mode) */
     private val l2Enabled: Boolean
@@ -62,6 +66,7 @@ class TieredCache(
         missCounter = Counter.builder("cache.miss").tag("cache", cacheName).register(meterRegistry)
         lockFailureCounter = Counter.builder("cache.lock.failure").tag("cache", cacheName).register(meterRegistry)
         l2FailureCounter = Counter.builder("cache.l2.failure").tag("cache", cacheName).register(meterRegistry)
+        stampedeTimeoutCounter = Counter.builder("cache.stampede.timeout").tag("cache", cacheName).register(meterRegistry)
 
         if (!l2Enabled) {
             log.info("[TieredCache] Caffeine-only mode (L2 disabled): cache={}", cacheName)
@@ -221,8 +226,27 @@ class TieredCache(
             key = lockKey,
             waitTimeSeconds = lockWaitSeconds,
             leaderTask = ThrowingSupplier { executeDoubleCheckAndLoad(key, valueLoader) },
-            followerTask = ThrowingSupplier { executeDoubleCheckAndLoad(key, valueLoader) },
+            followerTask = ThrowingSupplier { pollL2OrThrow(key, keyStr) },
         )
+    }
+
+    /**
+     * Follower: L2만 폴링. 타임아웃 시 valueLoader 호출하지 않고 예외 throw → stampede 방지 (#647)
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> pollL2OrThrow(key: Any, keyStr: String): T {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(lockWaitSeconds.toLong())
+        while (System.nanoTime() < deadline) {
+            val value = executor.executeOrDefault({ l2.get(key) }, null, TaskContext.of("Cache", "PollL2", keyStr))
+            if (value != null) {
+                l1.put(key, value.get())
+                return value.get() as T
+            }
+            LockSupport.parkNanos(this, 50_000_000L)  // 50ms polling, Virtual Thread friendly
+        }
+        // 타임아웃: valueLoader 호출하지 않고 예외 throw → stampede 방지
+        stampedeTimeoutCounter.increment()
+        throw CacheStampedeTimeoutException(l2.name, keyStr)
     }
 
     @Suppress("UNCHECKED_CAST")

@@ -261,11 +261,13 @@ class PostgresL2CacheStrategy(
                 evictAllCounter.increment()
 
                 // Key format: {cacheName}:v1:{actualKey}
-                // Use LIKE pattern to match all keys with this cacheName prefix
+                // Range query using >= and < with COLLATE "C" for B-tree index scan
+                // '~' (0x7E) is the highest printable ASCII char, guaranteed > any valid actualKey
                 val keyPrefix = "$cacheName:$KEY_VERSION:"
-                val sql = "DELETE FROM cache_storage WHERE cache_key LIKE ?"
+                val upperBound = "$cacheName:$KEY_VERSION~"
+                val sql = "DELETE FROM cache_storage WHERE cache_key >= ? COLLATE \"C\" AND cache_key < ? COLLATE \"C\""
 
-                val deleted = jdbcTemplate.update(sql, "$keyPrefix%")
+                val deleted = jdbcTemplate.update(sql, keyPrefix, upperBound)
 
                 log.debug("[PostgresL2] EvictAll: cacheName={}, deleted={}", cacheName, deleted)
             },
@@ -311,5 +313,10 @@ class PostgresL2CacheStrategy(
      * @param actualKey Actual cache key (e.g., "character:123")
      * @return Full cache key with namespace
      */
-    fun generateKey(cacheName: String, actualKey: String): String = "$cacheName:$KEY_VERSION:$actualKey"
+    fun generateKey(cacheName: String, actualKey: String): String {
+        require('~' !in cacheName && '~' !in actualKey) {
+            "Cache key must not contain '~' (reserved for range query boundary): cacheName=$cacheName, actualKey=$actualKey"
+        }
+        return "$cacheName:$KEY_VERSION:$actualKey"
+    }
 }

@@ -10,6 +10,7 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
@@ -43,10 +44,11 @@ class ExpectationCalcWorker(
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
     meterRegistry: MeterRegistry,
+    lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val expectationPort: ExpectationV4Port,
     private val characterOcidPort: CharacterOcidPort,
     private val equipmentFanOutPort: EquipmentFanOutPort,
-) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry) {
+) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, lifecycleWrapper) {
 
     override val queueName: String = QUEUE_NAME
     override val payloadClass: Class<ExpectationCalcMessage> = ExpectationCalcMessage::class.java

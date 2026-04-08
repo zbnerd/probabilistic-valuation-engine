@@ -7,6 +7,7 @@ import maple.expectation.core.port.out.ShutdownDataPersistencePort
 import maple.expectation.infrastructure.alert.StatelessAlertService
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.nexon.util.ContentHashUtil
 import maple.expectation.infrastructure.pgmq.NexonRetryMessage
@@ -53,6 +54,7 @@ class NexonApiPgmqProcessor(
     private val metrics: NexonApiPgmqMetrics,
     private val statelessAlertService: StatelessAlertService,
     private val fileBackupService: ShutdownDataPersistencePort,
+    private val lifecycleWrapper: ScheduledTaskLifecycleWrapper,
 ) : NexonApiOutboxProcessorPort {
 
     companion object {
@@ -73,8 +75,10 @@ class NexonApiPgmqProcessor(
      */
     @Scheduled(fixedDelayString = "\${nexon.retry.polling-interval-ms:10000}")
     override fun pollAndProcess() {
+        if (!lifecycleWrapper.beforeTask()) return
         val context = TaskContext.of("NexonApiPgmqProcessor", "PollAndProcess", QUEUE_NAME)
         executor.executeVoid({ performPollAndProcess() }, context)
+        lifecycleWrapper.afterTask()
     }
 
     /**
@@ -211,15 +215,16 @@ class NexonApiPgmqProcessor(
     }
 
     /**
-     * DLQ 처리: File backup → Discord alert → PGMQ delete
+     * DLQ 처리: File backup → Discord alert → PGMQ archive
      *
-     * <p>순서 보장: backup 성공 후에만 delete 수행 (메시지 영구 손실 방지)
+     * <p>순서 보장: backup 성공 후에만 archive 수행 (메시지 영구 손실 방지)
+     * <p>Archive로 전환 (#646): DLQ replay worker가 재처리 가능
      */
     private fun moveToDlq(message: PgmqMessage<NexonRetryMessage>, reason: String) {
         val context = TaskContext.of("NexonApiPgmqProcessor", "MoveToDlq", "msgId=${message.messageId}")
 
         executor.executeVoid({
-            // 1. File backup (반드시 먼저)
+            // 1. File backup (반드시 먼저 — replay 실패 시 안전망)
             fileBackupService.appendOutboxEntry(
                 message.payload.requestId,
                 "eventType=${message.payload.eventType}, payload=${message.payload.payload}, reason=$reason",
@@ -233,9 +238,9 @@ class NexonApiPgmqProcessor(
             // 2. Discord alert (best-effort)
             sendDlqAlert(message, reason)
 
-            // 3. PGMQ에서 삭제 (backup 성공 확인 후)
-            pgmqClient.delete(QUEUE_NAME, message.messageId)
-            log.info("[DLQ] Deleted from queue: msgId={}, reason={}", message.messageId, reason)
+            // 3. PGMQ에서 아카이브 (backup 성공 확인 후 — replay 가능)
+            pgmqClient.archive(QUEUE_NAME, message.messageId)
+            log.info("[DLQ] Archived from queue: msgId={}, reason={}", message.messageId, reason)
             metrics.incrementDlq()
         }, context)
     }

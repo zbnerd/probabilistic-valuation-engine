@@ -55,6 +55,8 @@ class PostgresNotifyConfig(
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
     @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String,
+    @Value("\${app.cache.notify.poll-interval-ms:100}") private val pollIntervalMs: Long,
+    @Value("\${app.cache.notify.reconnect-delay-ms:5000}") private val reconnectDelayMs: Long,
 ) : SmartInitializingSingleton {
 
     private val log = LoggerFactory.getLogger(PostgresNotifyConfig::class.java)
@@ -94,10 +96,10 @@ class PostgresNotifyConfig(
                 "[PostgresNotifyConfig] CacheManager is not TieredCacheManager, " +
                     "cache invalidation subscriber will not work properly",
             )
-            return PostgresNotifySubscriber(dataSource, null, objectMapper, executor, meterRegistry, instanceId)
+            return PostgresNotifySubscriber(dataSource, null, objectMapper, executor, meterRegistry, instanceId, pollIntervalMs, reconnectDelayMs)
         }
 
-        return PostgresNotifySubscriber(dataSource, tieredManager, objectMapper, executor, meterRegistry, instanceId)
+        return PostgresNotifySubscriber(dataSource, tieredManager, objectMapper, executor, meterRegistry, instanceId, pollIntervalMs, reconnectDelayMs)
     }
 
     /**

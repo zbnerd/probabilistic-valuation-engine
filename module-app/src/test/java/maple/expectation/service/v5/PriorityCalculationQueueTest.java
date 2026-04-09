@@ -39,7 +39,7 @@ class ExpectationCalculationQueueTest {
     executor = new TestLogicExecutor();
     checkedExecutor = new TestCheckedLogicExecutor();
     pgmqClient = mock(PgmqClient.class);
-    queue = new ExpectationCalculationQueue(pgmqClient, executor);
+    queue = new ExpectationCalculationQueue(pgmqClient, executor, 10_000, 1_000);
   }
 
   @Test

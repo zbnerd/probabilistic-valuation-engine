@@ -91,6 +91,9 @@ class AdaptiveMicroBatchUserService<T : Any>(
     /** Request Coalescing: 진행 중인 요청 맵 (CompletableFuture 기반) */
     private val inFlightRequests = ConcurrentHashMap<String, CompletableFuture<T?>>()
 
+    /** Backpressure: in-flight 최대 개수 (초과 시 fail-fast) */
+    private val MAX_IN_FLIGHT = 1000
+
     /** Coroutine Scope: 백그라운드 워커 실행용 */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -101,6 +104,7 @@ class AdaptiveMicroBatchUserService<T : Any>(
     private val batchSizeTimer: Timer
     private val timeoutCounter: Counter
     private val errorCounter: Counter
+    private val rejectedCounter: Counter
 
     init {
         val cacheName = cache.name
@@ -127,6 +131,10 @@ class AdaptiveMicroBatchUserService<T : Any>(
             .register(meterRegistry)
 
         errorCounter = Counter.builder("adaptive_batch_error")
+            .tag("cache", cacheName)
+            .register(meterRegistry)
+
+        rejectedCounter = Counter.builder("adaptive_batch_rejected")
             .tag("cache", cacheName)
             .register(meterRegistry)
     }
@@ -173,6 +181,13 @@ class AdaptiveMicroBatchUserService<T : Any>(
             return cached
         }
 
+        // Step 1.5: Backpressure — in-flight 초과 시 fail-fast
+        if (inFlightRequests.size >= MAX_IN_FLIGHT) {
+            rejectedCounter.increment()
+            log.warn { "[AdaptiveMicroBatch] Rejected: inFlight=${inFlightRequests.size}, key=$key" }
+            throw IllegalStateException("In-flight requests limit reached (${inFlightRequests.size})")
+        }
+
         // Step 2: Request Coalescing
         val newFuture = CompletableFuture<T?>()
         val existingFuture = inFlightRequests.putIfAbsent(key, newFuture)
@@ -195,6 +210,13 @@ class AdaptiveMicroBatchUserService<T : Any>(
         if (cached != null) {
             cacheHitCounter.increment()
             return cached
+        }
+
+        // Step 1.5: Backpressure — in-flight 초과 시 fail-fast
+        if (inFlightRequests.size >= MAX_IN_FLIGHT) {
+            rejectedCounter.increment()
+            log.warn { "[AdaptiveMicroBatch] Rejected: inFlight=${inFlightRequests.size}, key=$key" }
+            throw IllegalStateException("In-flight requests limit reached (${inFlightRequests.size})")
         }
 
         // Step 2: Request Coalescing
@@ -395,21 +417,33 @@ class AdaptiveMicroBatchUserService<T : Any>(
     private fun processChunk(keys: List<String>, batch: List<BatchRequest<T>>) {
         val context = TaskContext.of("AdaptiveBatch", "ProcessChunk", "${keys.size}")
 
-        logicExecutor.executeVoid({
-            val results = batchLoader(keys)
-            val keyToFuture = batch.associateBy { it.key }
+        logicExecutor.executeOrCatch(
+            {
+                val results = batchLoader(keys)
+                val keyToFuture = batch.associateBy { it.key }
 
-            keys.forEach { key ->
-                val result = results[key]
-                val future = keyToFuture[key]?.future
+                keys.forEach { key ->
+                    val result = results[key]
+                    val future = keyToFuture[key]?.future
 
-                if (result != null) {
-                    cache.put(key, result)
+                    if (result != null) {
+                        cache.put(key, result)
+                    }
+                    future?.complete(result)
+                    cleanupInFlight(key)
                 }
-                future?.complete(result)
-                cleanupInFlight(key)
-            }
-        }, context)
+                null
+            },
+            { e ->
+                log.error(e) { "[AdaptiveMicroBatch] Batch failed: keys=${keys.size}, completing futures exceptionally" }
+                batch.forEach { request ->
+                    request.future.completeExceptionally(e)
+                    cleanupInFlight(request.key)
+                }
+                null
+            },
+            context,
+        )
     }
 
     /**

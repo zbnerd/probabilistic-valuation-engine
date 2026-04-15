@@ -14,8 +14,10 @@ import maple.expectation.infrastructure.ratelimit.config.RateLimitProperties
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 
+@Component
 open class RateLimitingFilter(
     private val rateLimitingFacade: RateLimitingFacade,
     private val properties: RateLimitProperties,
@@ -28,13 +30,17 @@ open class RateLimitingFilter(
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        val context = buildContext(request)
-
-        val result = executor.executeOrDefault(
-            { rateLimitingFacade.checkRateLimit(context) },
-            ConsumeResult.failOpen(),
-            TaskContext.of("RateLimit", "Filter", maskIp(context.clientIp)),
-        )
+        val result = try {
+            val context = buildContext(request)
+            executor.executeOrDefault(
+                { rateLimitingFacade.checkRateLimit(context) },
+                ConsumeResult.failOpen(),
+                TaskContext.of("RateLimit", "Filter", maskIp(context.clientIp)),
+            )
+        } catch (e: Exception) {
+            log.warn("[RateLimit] Error during rate limit check, failing open: {}", e.message)
+            ConsumeResult.failOpen()
+        }
 
         if (!result.allowed) {
             handleRateLimitExceeded(response, result)

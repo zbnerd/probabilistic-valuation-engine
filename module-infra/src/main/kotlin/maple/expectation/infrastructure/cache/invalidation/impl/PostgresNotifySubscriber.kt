@@ -8,6 +8,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.sql.DataSource
 import maple.expectation.infrastructure.cache.TieredCacheManager
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
@@ -63,18 +64,19 @@ class PostgresNotifySubscriber(
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
     @Value("\${app.instance-id:\${HOSTNAME:unknown}}") private val instanceId: String,
+    @Value("\${app.cache.notify.poll-interval-ms:100}") private val pollIntervalMs: Long,
+    @Value("\${app.cache.notify.reconnect-delay-ms:5000}") private val reconnectDelayMs: Long,
 ) : CacheInvalidationSubscriber {
     companion object {
         private val log = LoggerFactory.getLogger(PostgresNotifySubscriber::class.java)
-        private const val POLL_INTERVAL_MS = 100L
-        private const val RECONNECT_DELAY_MS = 5000L
     }
 
-    @Volatile
-    private var listenConnection: java.sql.Connection? = null
+    private data class PgConnections(
+        val listen: java.sql.Connection,
+        val pg: PGConnection,
+    )
 
-    @Volatile
-    private var pgConnection: PGConnection? = null
+    private val connections = AtomicReference<PgConnections>(null)
 
     private val running = AtomicBoolean(false)
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { r ->
@@ -114,11 +116,12 @@ class PostgresNotifySubscriber(
 
             // Create new dedicated connection
             val conn = dataSource.getConnection()
-            listenConnection = conn
 
             // Unwrap to PGConnection for LISTEN/NOTIFY support
             val pgConn = conn.unwrap(PGConnection::class.java)
-            pgConnection = pgConn
+
+            // Atomic publication of both references
+            connections.set(PgConnections(conn, pgConn))
 
             // LISTEN on all cache channels (wildcard not supported, listen on prefix)
             // PostgreSQL doesn't support wildcard LISTEN, so we listen to a base channel
@@ -144,7 +147,7 @@ class PostgresNotifySubscriber(
                 }
             },
             0,
-            POLL_INTERVAL_MS,
+            pollIntervalMs,
             TimeUnit.MILLISECONDS
         )
     }
@@ -153,7 +156,7 @@ class PostgresNotifySubscriber(
     private fun pollNotifications() {
         if (!running.get()) return
 
-        val pgConn = pgConnection
+        val pgConn = connections.get()?.pg
         if (pgConn != null) {
             // Poll for notifications (non-blocking)
             val notifications = pgConn.notifications
@@ -272,7 +275,7 @@ class PostgresNotifySubscriber(
                     establishConnection()
                 }, context)
             }
-        }, RECONNECT_DELAY_MS, TimeUnit.MILLISECONDS)
+        }, reconnectDelayMs, TimeUnit.MILLISECONDS)
     }
 
     /** 구독 해제 (애플리케이션 종료 시) */
@@ -283,26 +286,24 @@ class PostgresNotifySubscriber(
         executor.executeVoid({
             running.set(false)
             scheduler.shutdown()
+            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("[PostgresNotify] Scheduler did not terminate gracefully, forcing shutdown")
+                scheduler.shutdownNow()
+            }
             closeConnectionInternal()
 
             log.info("[PostgresNotify] Unsubscribed from PostgreSQL NOTIFY: instanceId={}", instanceId)
         }, context)
     }
 
-    /** Connection 정리 */
+    /** Connection 정리 (AtomicReference + LogicExecutor로 Zero Try-Catch 준수) */
     private fun closeConnectionInternal() {
-        try {
-            (pgConnection as? java.sql.Connection)?.close()
-        } catch (e: Exception) {
-            log.trace("[PostgresNotify] Error closing PGConnection", e)
+        val conns = connections.getAndSet(null)
+        if (conns != null) {
+            executor.executeVoid({
+                conns.listen.close()
+            }, TaskContext.of("CacheInvalidation", "CloseConnection", instanceId))
         }
-        try {
-            listenConnection?.close()
-        } catch (e: Exception) {
-            log.trace("[PostgresNotify] Error closing Connection", e)
-        }
-        pgConnection = null
-        listenConnection = null
     }
 
     // ==================== Metrics ====================

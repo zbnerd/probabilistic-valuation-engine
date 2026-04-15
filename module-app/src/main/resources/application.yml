@@ -229,6 +229,10 @@ server:
     max-http-post-size: 262144  # 256KB (#266 P1-4: JSON DoS 방어)
     uri-encoding: UTF-8  # 한글 URL 지원
 
+# Rate Limiting (Issue #652)
+ratelimit:
+  enabled: true
+
 app:
   instance-id: ${HOSTNAME:${random.uuid}}  # Issue #278: Scale-out Pub/Sub Self-skip용
   optimization:
@@ -242,6 +246,14 @@ app:
   buffer:
     redis:
       enabled: false  # Redis removed in Issue #589
+  cache:
+    notify:
+      poll-interval-ms: 100
+      reconnect-delay-ms: 5000
+  queue:
+    expectation:
+      max-queue-size: 10000
+      high-priority-capacity: 1000
   monitoring:
     grafana:
       dashboards-path: ./grafana/dashboards

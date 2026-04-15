@@ -8,6 +8,7 @@ import maple.expectation.infrastructure.pgmq.ExpectationCalcMessage;
 import maple.expectation.infrastructure.pgmq.PgmqClient;
 import maple.expectation.infrastructure.worker.ExpectationCalcLowWorker;
 import maple.expectation.infrastructure.worker.ExpectationCalcWorker;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,15 +37,21 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class ExpectationCalculationQueue {
 
-  private static final int MAX_QUEUE_SIZE = 10_000;
-  private static final int HIGH_PRIORITY_CAPACITY = 1_000;
+  private final int maxQueueSize;
+  private final int highPriorityCapacity;
 
   private final PgmqClient pgmqClient;
   private final LogicExecutor executor;
 
-  public ExpectationCalculationQueue(PgmqClient pgmqClient, LogicExecutor executor) {
+  public ExpectationCalculationQueue(
+      PgmqClient pgmqClient,
+      LogicExecutor executor,
+      @Value("${app.queue.expectation.max-queue-size:10000}") int maxQueueSize,
+      @Value("${app.queue.expectation.high-priority-capacity:1000}") int highPriorityCapacity) {
     this.pgmqClient = pgmqClient;
     this.executor = executor;
+    this.maxQueueSize = maxQueueSize;
+    this.highPriorityCapacity = highPriorityCapacity;
   }
 
   /**
@@ -203,8 +210,8 @@ public class ExpectationCalculationQueue {
 
   private int resolveMaxSize(QueuePriority priority) {
     return switch (priority) {
-      case HIGH -> HIGH_PRIORITY_CAPACITY;
-      case LOW -> MAX_QUEUE_SIZE;
+      case HIGH -> highPriorityCapacity;
+      case LOW -> maxQueueSize;
     };
   }
 

@@ -40,6 +40,7 @@ class PostgresAdvisoryLockStrategy(
     private val executor: LogicExecutor,
     @Qualifier("lockTransactionTemplate")
     private val lockTransactionTemplate: TransactionTemplate,
+    private val lockMetrics: LockMetrics,
 ) : LockStrategy,
     LeaderElectionStrategy {
 
@@ -59,16 +60,23 @@ class PostgresAdvisoryLockStrategy(
 
         // Poll until lock acquired or timeout
         while (System.currentTimeMillis() - startTime < timeoutMs) {
+            var acquired = false
             val result = lockTransactionTemplate.execute {
-                val acquired = tryAcquireXactLock(lockId)
-                if (acquired) {
+                val lockAcquired = tryAcquireXactLock(lockId)
+                acquired = lockAcquired
+                if (lockAcquired) {
                     log.debug("🔒 [AdvisoryLock] Acquired xact lock for key: {}", key)
+                    lockMetrics.recordLockAcquired("postgres")
                     executor.execute({ task.get() }, context)
                 } else {
                     null
                 }
             }
+            if (acquired) {
+                lockMetrics.recordWaitTime(System.currentTimeMillis() - startTime, "postgres")
+            }
             if (result != null) {
+                lockMetrics.recordLockReleased("postgres")
                 @Suppress("UNCHECKED_CAST")
                 return result as T
             }
@@ -80,6 +88,7 @@ class PostgresAdvisoryLockStrategy(
             }
         }
 
+        lockMetrics.recordFailure("postgres")
         throw DistributedLockException("Failed to acquire lock within timeout: $key")
     }
 
@@ -100,12 +109,14 @@ class PostgresAdvisoryLockStrategy(
     ): T {
         val lockId = generateLockId(key)
         val context = TaskContext.of("AdvisoryLock", "ElectLeader", key)
+        val startTime = System.currentTimeMillis()
 
         // Try to become leader in a single transaction
         val leaderResult = lockTransactionTemplate.execute {
             val acquired = tryAcquireXactLock(lockId)
             if (acquired) {
                 log.info("👑 [Leader] Acquired xact lock for key: {}", key)
+                lockMetrics.recordLockAcquired("postgres")
                 executor.execute({ leaderTask.get() }, context)
             } else {
                 null
@@ -113,13 +124,14 @@ class PostgresAdvisoryLockStrategy(
         }
 
         if (leaderResult != null) {
+            lockMetrics.recordWaitTime(System.currentTimeMillis() - startTime, "postgres")
+            lockMetrics.recordLockReleased("postgres")
             @Suppress("UNCHECKED_CAST")
             return leaderResult as T
         }
 
         // Follower: wait for leader's transaction to commit (lock auto-released)
         log.info("😴 [Follower] Waiting for leader completion: key={}, timeout={}s", key, waitTimeSeconds)
-        val startTime = System.currentTimeMillis()
         val timeoutMs = waitTimeSeconds * 1000L
 
         while (System.currentTimeMillis() - startTime < timeoutMs) {
@@ -151,11 +163,17 @@ class PostgresAdvisoryLockStrategy(
      */
     override fun tryLockImmediately(key: String, leaseTime: Long): Boolean {
         val lockId = generateLockId(key)
-        return jdbcTemplate.queryForObject(
+        val acquired = jdbcTemplate.queryForObject(
             "SELECT pg_try_advisory_lock(?)",
             Boolean::class.java,
             lockId,
         ) ?: false
+        if (acquired) {
+            lockMetrics.recordLockAcquired("postgres")
+        } else {
+            lockMetrics.recordFailure("postgres")
+        }
+        return acquired
     }
 
     /**
@@ -171,6 +189,7 @@ class PostgresAdvisoryLockStrategy(
             Boolean::class.java,
             lockId,
         )
+        lockMetrics.recordLockReleased("postgres")
         log.debug("🔓 [AdvisoryLock] Unlocked key: {}", key)
     }
 

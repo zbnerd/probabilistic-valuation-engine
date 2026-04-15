@@ -151,6 +151,17 @@ groups:
           summary: "Database connection acquire slow on {{ $labels.instance }}"
           description: "P99 connection acquire time is {{ $value }}s for more than 5 minutes"
 
+      # Warning: Idle connections critically low (pool thrashing / connection leak detection)
+      - alert: HikariCPIdleConnectionsLow
+        expr: hikaricp_connections_idle < 2
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "HikariCP idle connections critically low"
+          description: "Only {{ $value }} idle connections in pool {{ $labels.pool }}"
+
       # ============================================
       # PostgreSQL Advisory Lock Alert (V5 Migration)
       # ============================================

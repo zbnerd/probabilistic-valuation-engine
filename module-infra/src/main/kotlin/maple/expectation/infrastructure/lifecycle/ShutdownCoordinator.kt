@@ -7,6 +7,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component
+import java.util.concurrent.locks.LockSupport
 
 @Component
 class ShutdownCoordinator(
@@ -84,7 +85,7 @@ class ShutdownCoordinator(
 
                     val deadline = System.currentTimeMillis() + 5000
                     while (bean.isRunning && System.currentTimeMillis() < deadline) {
-                        Thread.sleep(100)
+                        LockSupport.parkNanos(this, 100_000_000L)  // 100ms, Virtual Thread friendly
                     }
 
                     if (bean.isRunning) {

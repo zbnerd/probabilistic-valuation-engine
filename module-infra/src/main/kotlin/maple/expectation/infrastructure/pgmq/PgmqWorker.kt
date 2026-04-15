@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.pgmq
 
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
@@ -32,6 +33,7 @@ abstract class PgmqWorker<T : Any>(
     protected val executor: LogicExecutor,
     private val config: PgmqWorkerConfig,
     private val meterRegistry: MeterRegistry,
+    private val lifecycleWrapper: ScheduledTaskLifecycleWrapper,
 ) {
 
     /** 메시지 병렬 처리용 Virtual Thread Executor */
@@ -96,8 +98,10 @@ abstract class PgmqWorker<T : Any>(
      */
     @Scheduled(fixedDelayString = "\${pgmq.worker.common.polling-interval-ms:300}")
     fun processMessages() {
+        if (!lifecycleWrapper.beforeTask()) return
         // Worker가 비활성화되어 있으면 스킵
         if (!workerSettings.enabled) {
+            lifecycleWrapper.afterTask()
             return
         }
 
@@ -141,6 +145,8 @@ abstract class PgmqWorker<T : Any>(
             meterRegistry.timer("pgmq.worker.batch.latency", "queue", queueName)
                 .record(batchDuration, TimeUnit.NANOSECONDS)
         }, context)
+
+        lifecycleWrapper.afterTask()
     }
 
     /**
@@ -175,9 +181,10 @@ abstract class PgmqWorker<T : Any>(
                 log.warn("⚠️ [{}] Message will be retried: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
             }
             else -> {
-                // 최종 실패: 삭제 (DLQ)
-                pgmqClient.delete(queueName, message.messageId)
-                log.error("❌ [{}] Deleted message after max retries: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
+                // 최종 실패: 아카이브 (DLQ 대체 — replay 가능)
+                pgmqClient.archive(queueName, message.messageId)
+                log.error("❌ [{}] Archived message after max retries: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
+                meterRegistry.counter("pgmq.worker.dlq", "queue", queueName).increment()
             }
         }
 

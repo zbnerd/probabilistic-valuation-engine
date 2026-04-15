@@ -1,11 +1,11 @@
-# Plan: Issues #645–#650 Resolution (Consensus Review v2)
+# Plan: Issues #645–#650 Resolution (Consensus Review v3)
 
 ## Context
 
 **Current situation**: 6개 P2 이슈가 오픈 상태. 대부분 Reliability/Performance 카테고리.
 **Problem**: L2 cache 풀테이블 스캔, DLQ replay 부재, cache stampede gap, shutdown 조율 미비, 기록 보상 트랜잭션 부재, 커넥션 풀 모니터링 부재.
 **Key discovery**: Issue #649 (LikeSyncExecutor)는 이미 #664에서 DB Trigger로 대체되어 **Deprecated** 상태. 이슈 클로즈 권장.
-**Review**: Architect + Critic + Code-Reviewer 3에이전트 Consensus Review 완료. P0 1개, P1 4개 반영.
+**Review**: Architect + Critic + Code-Reviewer 3에이전트 Consensus Review 완료. v2 P0 4개, P1 4개, P2 5개 반영 + v3 P0 2개, P1 2개, P2 1개 반영.
 
 ---
 
@@ -15,6 +15,9 @@
 
 **현황**: `PostgresL2CacheStrategy.kt:266`에서 `DELETE FROM cache_storage WHERE cache_key LIKE ?` 사용.
 Key format: `{cacheName}:v1:{actualKey}` (예: `character:v1:zbnerd`)
+**⚠️ Key Format Audit (Consensus P0-4)**: 실제 DB에 legacy format 존재 확인 필요 (예: `ADDITIONAL:100:반지1:레어:ATTACK_POWER:10:true:csv-v1.0` — `v1` prefix 없음).
+구현 전 전체 cache key format `SELECT DISTINCT split_part(cache_key, ':', 2) FROM cache_storage` 조사 필수.
+legacy key는 별도 삭제 path 또는 `generateKey()` format 통합 필요.
 
 **문제**: `LIKE 'prefix%'`는 B-tree 인덱스를 타지 못함.
 기존 partial index `idx_cache_storage_key_expires (cache_key, expires_at DESC) WHERE expires_at > NOW()`는 expired row를 제외하므로 evictAll에 부적합.
@@ -31,7 +34,7 @@ actualKey에 `:` 포함 시 (예: `character:v1:user:123`) `user` > `;`이므로
 **Path:** `module-infra/src/main/kotlin/maple/expectation/infrastructure/cache/tiered/PostgresL2CacheStrategy.kt`
 
 ```kotlin
-// Before (line 265-268):
+// Before (PostgresL2CacheStrategy.kt evictAll 메서드, ~line 256-273):
 val keyPrefix = "$cacheName:$KEY_VERSION:"
 val sql = "DELETE FROM cache_storage WHERE cache_key LIKE ?"
 val deleted = jdbcTemplate.update(sql, "$keyPrefix%")
@@ -39,13 +42,15 @@ val deleted = jdbcTemplate.update(sql, "$keyPrefix%")
 // After:
 val keyPrefix = "$cacheName:$KEY_VERSION:"
 val upperBound = "$cacheName:$KEY_VERSION~"
-val sql = "DELETE FROM cache_storage WHERE cache_key >= ? AND cache_key < ?"
+// COLLATE "C" 필수: default collation(en_US)에서 digit이 '~'보다 크게 정렬되어 range miss 발생
+val sql = "DELETE FROM cache_storage WHERE cache_key >= ? COLLATE \"C\" AND cache_key < ? COLLATE \"C\""
 val deleted = jdbcTemplate.update(sql, keyPrefix, upperBound)
 ```
 
 **Important**:
 - `~` (0x7E)는 모든 printable ASCII보다 크므로 `{cacheName}:v1:{모든 actualKey}` 범위 포함
 - actualKey에 `~` 포함 불가 규칙을 `generateKey()`에서 강제 (아래 validation 참조)
+- **`COLLATE "C"` 필수** (Consensus P0-3): PostgreSQL default collation(en_US)에서 `'123' > '~'`일 수 있어 digit 포함 key 누락. `COLLATE "C"`는 byte-level 비교 보장
 - B-tree 인덱스의 range scan 활용 보장
 
 #### 2. `PostgresL2CacheStrategy.kt` — generateKey() validation 추가
@@ -72,10 +77,17 @@ fun generateKey(cacheName: String, actualKey: String): String {
 -- expired row도 삭제해야 하므로, cache_key 단일 컬럼 인덱스 추가
 -- 기존 idx_cache_storage_key_expires는 partial index이므로 evictAll에 부적합
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cache_storage_key_prefix
-    ON cache_storage (cache_key);
+    ON cache_storage (cache_key COLLATE "C");
 
 COMMENT ON COLUMN cache_storage.cache_key IS 'Key format: {cacheName}:v1:{actualKey}. Range query: >= prefix AND < prefix~. Tilde (~) forbidden in key parts.';
-COMMENT ON INDEX idx_cache_storage_key_prefix IS 'Index for cache key prefix range scans (evictAll, pattern matching)';
+COMMENT ON INDEX idx_cache_storage_key_prefix IS 'Index for cache key prefix range scans with C collation (evictAll). Query must use COLLATE "C" to match index.';
+```
+
+**Pre-migration 검증 (Consensus P2-4)**:
+```sql
+-- 배포 전 기존 DB에 '~' 포함 key가 없는지 확인
+SELECT cache_key FROM cache_storage WHERE cache_key LIKE '%~%';
+-- 결과가 0 rows면 안전. 1 row 이상이면 마이그레이션으로 '~' 제거 후 배포.
 ```
 
 **검증 (구현 시 필수)**:
@@ -133,7 +145,9 @@ else -> {
 -- 주의: PGMQ archive 테이블은 pgmq 스키마에 자동 생성됨
 -- 큐별로 별도 ALTER 필요하거나 공통 메타데이터 테이블 사용
 
-CREATE TABLE IF NOT EXISTS pgmq.dlq_replay_meta (
+-- 애플리케이션 스키마에 생성 (Consensus P1-1 수정)
+-- pgmq 스키마에 생성 시 PGMQ 업그레이드 호환성 위험
+CREATE TABLE IF NOT EXISTS dlq_replay_meta (
     queue_name    TEXT NOT NULL,
     message_id    BIGINT NOT NULL,
     replay_count  INT DEFAULT 0,
@@ -143,16 +157,25 @@ CREATE TABLE IF NOT EXISTS pgmq.dlq_replay_meta (
 );
 
 CREATE INDEX idx_dlq_replay_candidates
-    ON pgmq.dlq_replay_meta (queue_name, replay_count, last_replayed_at)
+    ON dlq_replay_meta (queue_name, replay_count, last_replayed_at)
     WHERE replay_count < 3;
 
-COMMENT ON TABLE pgmq.dlq_replay_meta IS 'DLQ replay tracking metadata. Prevents infinite replay loops.';
+COMMENT ON TABLE dlq_replay_meta IS 'DLQ replay tracking metadata. Prevents infinite replay loops.';
 ```
 
 #### 3. `DlqReplayWorker.kt` — 신규: DLQ Replay 스케줄러
 **Path:** `module-infra/src/main/kotlin/maple/expectation/infrastructure/pgmq/DlqReplayWorker.kt`
 
 ```kotlin
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import io.micrometer.core.instrument.MeterRegistry
+import org.slf4j.LoggerFactory
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.stereotype.Component
+import java.time.Instant
+
 @Component
 class DlqReplayWorker(
     private val pgmqClient: PgmqClient,
@@ -170,27 +193,22 @@ class DlqReplayWorker(
     fun replayDeadLetters() {
         val context = TaskContext.of("DlqReplayWorker", "Replay")
 
-        executor.executeVoid({
-            // 1. dlq_replay_meta에서 replay_count < MAX인 후보 조회
-            val candidates = findReplayCandidates()
+        executor.executeVoid({ replayEligibleDeadLetters() }, context)
+    }
 
-            if (candidates.isEmpty()) return@executeVoid
+    // Lambda Hell 방지: 람다 3줄 초과 시 private method 추출 (Consensus P2-3)
+    private fun replayEligibleDeadLetters() {
+        val candidates = findReplayCandidates()
+        if (candidates.isEmpty()) return
 
-            // 2. Exponential backoff: last_replayed_at + 2^replay_count * BASE_HOURS 이후만 대상
-            val eligible = candidates.filter { isBackoffElapsed(it) }
+        val eligible = candidates.filter { isBackoffElapsed(it) }
+        eligible.forEach { candidate -> replaySingleMessage(candidate) }
 
-            // 3. Archive에서 원본 메시지 읽어서 원본 큐로 재발행
-            eligible.forEach { candidate ->
-                replayMessage(candidate)
-            }
-
-            // 4. MAX_REPLAY_ATTEMPTS 초과 메시지 알림
-            notifyPermanentFailures()
-        }, context)
+        notifyPermanentFailures()
     }
 
     private fun findReplayCandidates(): List<ReplayCandidate> {
-        // SELECT FROM pgmq.dlq_replay_meta WHERE replay_count < MAX
+        // SELECT FROM dlq_replay_meta WHERE replay_count < MAX
         // ORDER BY first_failed_at ASC (FIFO 보장)
     }
 
@@ -198,12 +216,16 @@ class DlqReplayWorker(
         // last_replayed_at + 2^replay_count * BACKOFF_BASE_HOURS < NOW()
     }
 
-    private fun replayMessage(candidate: ReplayCandidate) {
+    private fun replaySingleMessage(candidate: ReplayCandidate) {
         // 1. pgmq.a_{queue_name}에서 원본 payload 조회
         // 2. pgmq.send(queue_name, payload)로 재발행 (새 messageId)
         // 3. dlq_replay_meta의 replay_count 증분, last_replayed_at 갱신
         // 4. metric: pgmq.worker.replay counter increment
     }
+
+    // **멱등성 주의 (Consensus P1-2)**: 재발행 시 새 messageId가 생성됨.
+    // consumer가 messageId 기반 dedup을 사용하면 중복 처리 발생 가능.
+    // 구현 전 consumer의 멱등성 키(payload vs messageId) 사전 조사 필수.
 
     private fun notifyPermanentFailures() {
         // replay_count >= MAX_REPLAY_ATTEMPTS인 메시지 조회
@@ -212,7 +234,15 @@ class DlqReplayWorker(
 }
 ```
 
-#### 4. `application.yml` — DLQ replay 설정 추가
+#### 4. `NexonApiPgmqProcessor.kt` — 동일 패턴 적용 (Consensus P1-3)
+**Path:** `module-infra/src/main/kotlin/maple/expectation/infrastructure/pgmq/NexonApiPgmqProcessor.kt`
+```
+// NexonApiPgmqProcessor.kt:237 — 현재 DLQ 처리: file backup → Discord alert → delete
+// DLQ replay 기능(#646) 활용을 위해 delete → archive 전환 필요
+// 단, 기존 file backup은 replay 실패 시 안전망으로 유지 권장
+```
+
+#### 5. `application.yml` — DLQ replay 설정 추가
 ```yaml
 pgmq:
   dlq:
@@ -254,29 +284,59 @@ class CacheStampedeTimeoutException(
 ) : RuntimeException("Cache stampede timeout: follower could not retrieve value within wait time. cacheName=$cacheName, key=$key")
 ```
 
-#### 2. `TieredCache.kt` — Follower fallback 수정
+#### 2. `TieredCache.kt` — Follower fallback 수정 (Consensus v3 P0-1 최종 설계)
 **Path:** `module-infra/src/main/kotlin/maple/expectation/infrastructure/cache/tiered/TieredCache.kt`
 
-```kotlin
-// Before: followerTask = ThrowingSupplier { executeDoubleCheckAndLoad(key, valueLoader) }
+> **설계 변경 이력**:
+> - v2: `pollL2UntilAvailable()` (미존재 메서드) → **불가**
+> - v3 초안: `PostgresAdvisoryLockStrategy.pollL2ForValue()` → **순환 의존성** (A+C+CR 3/3 동의)
+> - **v3 최종**: TieredCache 레벨에서 L2 폴링 + 타임아웃 예외 throw. PostgresAdvisoryLockStrategy 변경 없음.
+>
+> **근거**: TieredCache는 이미 `l2CacheStrategy`를 알고 있으므로 순환 의존성 없음.
+> Lock strategy는 lock에만 집중 (SRP/DIP 준수).
 
-// After: Follower는 L2만 폴링. 타임아웃 시 계산 수행하지 않고 예외 throw
-followerTask = ThrowingSupplier {
-    val result = pollL2UntilAvailable(keyStr, lockWaitSeconds)
-    if (result != null) {
-        result
-    } else {
-        // 다음 요청이 Leader 역할 수행
-        // metric: stampede timeout counter increment
-        throw CacheStampedeTimeoutException(l2.name, keyStr)
+```kotlin
+// Before (TieredCache.kt ~line 220-225):
+return leaderElectionStrategy.executeWithLeaderElection(
+    key = lockKey,
+    waitTimeSeconds = lockWaitSeconds,
+    leaderTask = ThrowingSupplier { executeDoubleCheckAndLoad(key, valueLoader) },
+    followerTask = ThrowingSupplier { executeDoubleCheckAndLoad(key, valueLoader) },
+)
+
+// After: follower는 L2만 폴링. 타임아웃 시 valueLoader 호출하지 않고 예외 throw
+return leaderElectionStrategy.executeWithLeaderElection(
+    key = lockKey,
+    waitTimeSeconds = lockWaitSeconds,
+    leaderTask = ThrowingSupplier { executeDoubleCheckAndLoad(key, valueLoader) },
+    followerTask = ThrowingSupplier { pollL2OrThrow(key, valueLoader) },
+)
+```
+
+**새 메서드 — `pollL2OrThrow()` (TieredCache에 추가):**
+```kotlin
+// TieredCache 내부에 추가 — l2에 이미 접근 가능하므로 순환 의존성 없음
+private fun pollL2OrThrow(key: Any, valueLoader: ValueLoader<*>): Any {
+    val keyStr = generateKey(key)
+    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(lockWaitSeconds.toLong())
+    while (System.nanoTime() < deadline) {
+        val value = l2.get(key)  // L2 조회
+        if (value != null) return value
+        LockSupport.parkNanos(this, 50_000_000L)  // 50ms polling, Virtual Thread friendly
     }
+    // 타임아웃: valueLoader 호출하지 않고 예외 throw → stampede 방지
+    meterRegistry.counter("cache.stampede.timeout", "cache", l2.name).increment()
+    throw CacheStampedeTimeoutException(l2.name, keyStr)
 }
 ```
 
 **Important**:
 - `CacheStampedeTimeoutException`은 `RuntimeException`이므로 호출부 catch 가능
-- 호출부 패턴: `catch (CacheStampedeTimeoutException) { valueLoader.call() }` 또는 재시도
-- TieredCache 외부에서는 `@Retryable` 또는 fallback으로 처리
+- **@Cacheable 호출부 패턴 (Consensus P1-4)**:
+  - Spring Cache interceptor는 `RuntimeException`을 그대로 propagate하므로 비즈니스 로직에서 catch 필요
+  - 패턴 1: `@Retryable(value = [CacheStampedeTimeoutException::class])` — 간단한 재시도
+  - 패턴 2: Fallback 메서드: `@Recover`에서 `valueLoader` 직접 호출
+  - 패턴 3: 호출 서비스에서 `executeOrDefault()`로 wrapping
 - metric (`cache.stampede.timeout`, tag: cacheName) 추가로 프로덕션 발생 빈도 모니터링
 
 ---
@@ -315,14 +375,16 @@ class ScheduledTaskLifecycleWrapper : SmartLifecycle {
     private val completionLatch = CountDownLatch(1)
 
     fun beforeTask(): Boolean {
-        // CAS로 atomic check-and-increment
-        while (true) {
-            if (state.get() == 0) return false  // stopping
-            if (state.compareAndSet(1, 1)) {
-                activeTasks.incrementAndGet()
-                return true
-            }
+        // Double-check 패턴으로 race condition 방지 (Consensus P0-1 수정)
+        // CAS compareAndSet(1,1)은 no-op이므로 increment → double-check로 변경
+        if (state.get() == 0) return false  // fast path: stopping
+        activeTasks.incrementAndGet()
+        // increment 후 stop()이 호출되었는지 재확인
+        if (state.get() == 0) {
+            activeTasks.decrementAndGet()  // 롤백
+            return false
         }
+        return true
     }
 
     fun afterTask() {
@@ -393,6 +455,8 @@ import java.util.concurrent.locks.LockSupport
 
 while (bean.isRunning && System.currentTimeMillis() < deadline) {
     LockSupport.parkNanos(this, 100_000_000L)  // 100ms, Virtual Thread friendly
+    // 주의 (Consensus P2-6): VT에서 parkNanos 후 unpark 스케줄링이 즉시 보장되지 않음.
+    // drain timeout(10s)이 실제 대기시간보다 길어질 수 있으나, 안전한 shutdown을 위해 허용.
 }
 ```
 
@@ -443,6 +507,9 @@ Compensating transaction은 DB Trigger의 atomicity로 보장됨.
     runbook_url: "https://github.com/zbnerd/probabilistic-valuation-engine/blob/master/docs/11_Observability/runbooks/hikaricp-pool.md"
 ```
 
+**Note (Consensus P2-5)**: 이미 5개 HikariCP alert 존재. 본 rule은 "pool thrashing"(connection 빈번한 생성/파괴) 감지 목적.
+운영 시나리오: connection leak 또는 pool misconfiguration 탐지. threshold 조정으로 alert 피로도 관리.
+
 **Note**: Near-exhaustion (85%), Exhaustion (100%), Timeout rule은 기존 rule로 커버됨.
 `HikariCPIdleConnectionsLow`만 새로 추가. 중복 경고 방지.
 
@@ -465,24 +532,37 @@ Compensating transaction은 DB Trigger의 atomicity로 보장됨.
 - [ ] Unit 테스트 통과 (`./gradlew test`)
 - [ ] CLAUDE.md 원칙 준수 (Zero Try-Catch, LogicExecutor 위임, LockSupport 대체 Thread.sleep)
 - [ ] #649 GitHub issue close
-- [ ] #645 EXPLAIN ANALYZE로 Index Scan 확인
-- [ ] #646 replay_count 스키마 마이그레이션
+- [ ] #645 EXPLAIN ANALYZE로 Index Scan 확인 (COLLATE "C" 포함)
+- [ ] #645 전체 cache key format audit (legacy key 확인)
+- [ ] #645 pre-migration: 기존 DB에 `~` 포함 key 없음 확인
+- [ ] #646 consumer 멱등성 키 조사 (messageId vs payload)
+- [ ] #646 replay_count 스키마 마이그레이션 (application schema)
+- [ ] #647 PostgresAdvisoryLockStrategy follower 타임아웃 수정
+- [ ] #648 ScheduledTaskLifecycleWrapper double-check 패턴 검증
 - [ ] 브랜치 생성 후 PR (develop base)
 
 ## 검증 명령어
 
 ```bash
 # #645: Range query 인덱스 사용 확인 (Index Scan이어야 함)
-EXPLAIN ANALYZE DELETE FROM cache_storage WHERE cache_key >= 'character:v1:' AND cache_key < 'character:v1~';
+EXPLAIN ANALYZE DELETE FROM cache_storage
+WHERE cache_key >= 'character:v1:' COLLATE "C" AND cache_key < 'character:v1~' COLLATE "C";
+
+# #645: Key format audit
+SELECT DISTINCT split_part(cache_key, ':', 2) FROM cache_storage;
 
 # #645: generateKey validation 확인
 # actualKey에 '~' 포함 시 IllegalArgumentException 발생 테스트
+
+# #645: Pre-migration 검증
+SELECT cache_key FROM cache_storage WHERE cache_key LIKE '%~%';
 
 # #646: DLQ archive → replay 플로우
 # Unit test: archive → replay_count 증분 → MAX 초과 시 알림
 
 # #647: Stampede 시나리오
 # Multi-thread 동시 cache miss → CacheStampedeTimeoutException 발생 테스트
+# @Cacheable 호출부에서 @Retryable로 복구 테스트
 
 # #648: Shutdown 조율
 # SIGTERM → Scheduled 태스크 drain + race condition 없음 확인
@@ -491,15 +571,41 @@ EXPLAIN ANALYZE DELETE FROM cache_storage WHERE cache_key >= 'character:v1:' AND
 promtool check rules docker/prometheus/rules/alert_rules.yml
 ```
 
-## Consensus Review 참조
+## Consensus Review 참조 (v3)
+
+### v2 Review (1차)
 
 | 심각도 | 이슈 | 동의 에이전트 | 반영 |
 |--------|------|-------------|------|
 | P0 | #645 range query 경계값 (`;` → `~`) | A+C+CR | 반영 |
+| P0 | #648 CAS `compareAndSet(1,1)` NO-OP | A+C+CR | double-check 패턴으로 수정 |
+| P0 | #647 `pollL2UntilAvailable()` 미존재 | A+CR | → v3에서 TieredCache 레벨로 재수정 |
+| P0 | #645 COLLATE "C" 누락 | C | SQL + 인덱스에 COLLATE "C" 추가 |
+| P0 | #645 실제 DB key format 불일치 | C | Key format audit 항목 추가 |
 | P1 | #645 partial index로 expired row 누락 | A+CR | V106 신규 인덱스 추가 |
 | P1 | #646 DLQ 멱등성/무한루프 방지 | A+C+CR | dlq_replay_meta 테이블 추가 |
+| P1 | #646 pgmq 스키마 → application 스키마 | A+C | public 스키마로 변경 |
+| P1 | #646 DLQ replay messageId 멱등성 | C | consumer 조사 항목 추가 |
+| P1 | #646 NexonApiPgmqProcessor 누락 | CR | 수정 대상에 추가 |
 | P1 | #647 null → CacheStampedeTimeoutException | A+C+CR | 반영 |
-| P1 | #648 TOCTOU race → CAS 기반 수정 | A+C+CR | 반영 |
+| P1 | #647 @Cacheable 예외 처리 명세 | A+C | 호출부 패턴 예시 추가 |
+| P1 | #648 TOCTOU race → double-check 패턴 | A+C+CR | CAS → double-check로 수정 |
 | P1 | #648 전체 @Scheduled 조사 (16개) | C | 반영 |
+| P2 | #645 플랜 line number 불일치 | CR | 수정 |
+| P2 | #646 DlqReplayWorker import 누락 | CR | import 추가 (경로 수정) |
+| P2 | #646 Lambda Hell 방지 | CR | private method 분리 |
+| P2 | #645 `~` 포함 key pre-migration 검증 | C | 검증 스크립트 추가 |
 | P2 | #650 기존 alert_rules.yml 중복 | CR | 기존 파일에 누락 rule만 추가 |
+| P2 | #650 Alert 피로도 | C | 운영 시나리오 명시 |
 | P2 | #648 Thread.sleep → LockSupport | CR | 반영 |
+| P2 | #648 LockSupport.parkNanos VT wakeup | C | 주석 추가 |
+
+### v3 Review (2차)
+
+| 심각도 | 이슈 | 동의 에이전트 | 반영 |
+|--------|------|-------------|------|
+| P0 | #647 pollL2ForValue 순환 의존성 | A+C+CR | TieredCache.pollL2OrThrow()로 변경 |
+| P0 | V106 인덱스에 COLLATE "C" 누락 | C | 인덱스에 COLLATE "C" 추가 |
+| P1 | DlqReplayWorker import 경로 오류 | CR | `common` → `infrastructure`로 수정 |
+| P1 | NexonApiPgmqProcessor DLQ 정책 불일치 | CR | file backup 유지 + archive 전환 명시 |
+| P2 | 제목 버전 v2 → v3 | CR | 수정 |

@@ -4,8 +4,11 @@ import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.sql.DataSource
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -41,14 +44,18 @@ class CharacterCreationListener(
         private const val CHANNEL_PREFIX = "character_creation"
     }
 
-    @Volatile
-    private var listenConnection: java.sql.Connection? = null
+    private data class PgConnections(
+        val listen: java.sql.Connection,
+        val pg: PGConnection,
+    )
 
-    @Volatile
-    private var pgConnection: PGConnection? = null
+    private val connections = AtomicReference<PgConnections>(null)
 
     private val running = AtomicBoolean(false)
     private val waitingFutures = ConcurrentHashMap<String, CompletableFuture<String>>()
+    private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { r ->
+        Thread(r, "character-creation-poller").apply { isDaemon = true }
+    }
 
     @PostConstruct
     fun startListening() {
@@ -67,43 +74,42 @@ class CharacterCreationListener(
             closeConnectionInternal()
 
             val conn = dataSource.getConnection()
-            listenConnection = conn
-            pgConnection = conn.unwrap(PGConnection::class.java)
+            val pgConn = conn.unwrap(PGConnection::class.java)
+            connections.set(PgConnections(conn, pgConn))
 
             log.debug("[CharacterCreationListener] Connection established")
         }, context)
     }
 
-    /** 알림 수신을 위한 백그라운드 스레드 시작 */
+    /** 알림 수신을 위한 ScheduledExecutorService 시작 */
     private fun startNotificationListener() {
-        val thread = Thread(this::runNotificationListener, "character-creation-listener").apply {
-            isDaemon = true
-        }
-        thread.start()
+        scheduler.scheduleAtFixedRate(
+            {
+                try {
+                    pollNotifications()
+                } catch (e: Exception) {
+                    log.warn("[CharacterCreationListener] Error receiving notifications, reconnecting...", e)
+                    reconnectWithDelay()
+                }
+            },
+            0,
+            POLL_INTERVAL_MS,
+            TimeUnit.MILLISECONDS,
+        )
     }
 
-    /** 알림 수신 루프 */
-    private fun runNotificationListener() {
-        while (running.get()) {
-            try {
-                val pgConn = pgConnection
-                if (pgConn != null) {
-                    val notifications = pgConn.notifications
+    /** 알림 폴링 (ScheduledExecutorService에서 호출) */
+    private fun pollNotifications() {
+        if (!running.get()) return
 
-                    if (notifications != null) {
-                        for (notification in notifications) {
-                            handleNotification(notification)
-                        }
-                    }
+        val pgConn = connections.get()?.pg
+        if (pgConn != null) {
+            val notifications = pgConn.notifications
+
+            if (notifications != null) {
+                for (notification in notifications) {
+                    handleNotification(notification)
                 }
-
-                Thread.sleep(POLL_INTERVAL_MS)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                break
-            } catch (e: Exception) {
-                log.warn("[CharacterCreationListener] Error receiving notifications", e)
-                reconnectWithDelay()
             }
         }
     }
@@ -138,7 +144,7 @@ class CharacterCreationListener(
 
         // LISTEN on the specific channel
         val channel = "$CHANNEL_PREFIX:$userIgn"
-        listenConnection?.createStatement()?.use { stmt ->
+        connections.get()?.listen?.createStatement()?.use { stmt ->
             stmt.execute("LISTEN \"$channel\"")
         }
 
@@ -155,34 +161,35 @@ class CharacterCreationListener(
     private fun reconnectWithDelay() {
         val context = TaskContext.of("CharacterCreation", "Reconnect")
 
-        executor.executeVoid({
-            closeConnectionInternal()
-            TimeUnit.MILLISECONDS.sleep(1000)
+        closeConnectionInternal()
+
+        scheduler.schedule({
             if (running.get()) {
-                establishConnection()
+                executor.executeVoid({
+                    establishConnection()
+                }, context)
             }
-        }, context)
+        }, 1000, TimeUnit.MILLISECONDS)
     }
 
     @PreDestroy
     fun stopListening() {
         running.set(false)
+        scheduler.shutdown()
+        if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+            log.warn("[CharacterCreationListener] Scheduler did not terminate gracefully, forcing shutdown")
+            scheduler.shutdownNow()
+        }
         closeConnectionInternal()
         log.info("[CharacterCreationListener] Stopped listening")
     }
 
     private fun closeConnectionInternal() {
-        try {
-            (pgConnection as? java.sql.Connection)?.close()
-        } catch (e: Exception) {
-            log.trace("[CharacterCreationListener] Error closing PGConnection", e)
+        val conns = connections.getAndSet(null)
+        if (conns != null) {
+            executor.executeVoid({
+                conns.listen.close()
+            }, TaskContext.of("CharacterCreation", "CloseConnection"))
         }
-        try {
-            listenConnection?.close()
-        } catch (e: Exception) {
-            log.trace("[CharacterCreationListener] Error closing Connection", e)
-        }
-        pgConnection = null
-        listenConnection = null
     }
 }

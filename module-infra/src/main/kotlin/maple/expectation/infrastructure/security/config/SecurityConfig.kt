@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.security.config
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.servlet.http.HttpServletResponse
+import maple.expectation.infrastructure.ratelimit.filter.RateLimitingFilter
 import maple.expectation.infrastructure.security.filter.JwtAuthenticationFilter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -26,6 +27,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity(prePostEnabled = true)
 class SecurityConfig(
     private val jwtAuthenticationFilter: JwtAuthenticationFilter,
+    private val rateLimitingFilter: RateLimitingFilter,
 ) {
 
     @Bean
@@ -65,6 +67,7 @@ class SecurityConfig(
                 entrypointCounter.increment()
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
             } }
+            .addFilterBefore(rateLimitingFilter, JwtAuthenticationFilter::class.java)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
             .build()
     }

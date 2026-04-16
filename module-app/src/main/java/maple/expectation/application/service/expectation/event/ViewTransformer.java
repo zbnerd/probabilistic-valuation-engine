@@ -19,6 +19,7 @@ import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -84,14 +85,25 @@ public class ViewTransformer {
    */
   public CharacterValuationViewEntity toEntityFromResponse(
       String userIgn, GameCharacter character, EquipmentExpectationResponseV4 response) {
+    return toEntityFromResponse(userIgn, character, response, null);
+  }
+
+  public CharacterValuationViewEntity toEntityFromResponse(
+      String userIgn,
+      GameCharacter character,
+      EquipmentExpectationResponseV4 response,
+      @Nullable String messageId) {
     return executor.executeOrDefault(
-        () -> toEntityFromResponseInternal(userIgn, character, response),
-        createEmptyViewFromResponse(userIgn, character),
+        () -> toEntityFromResponseInternal(userIgn, character, response, messageId),
+        createEmptyViewFromResponse(userIgn, character, messageId),
         TaskContext.of("ViewTransformer", "ToEntityFromResponse", userIgn));
   }
 
   private CharacterValuationViewEntity toEntityFromResponseInternal(
-      String userIgn, GameCharacter character, EquipmentExpectationResponseV4 response) {
+      String userIgn,
+      GameCharacter character,
+      EquipmentExpectationResponseV4 response,
+      @Nullable String messageId) {
     long version = System.currentTimeMillis();
     List<PresetView> presetViews =
         response.getPresets() != null
@@ -104,7 +116,7 @@ public class ViewTransformer {
         null, // id (auto-generated)
         null, // jpaVersion (auto-managed by JPA @Version)
         userIgn,
-        null, // messageId (not applicable for inline write)
+        messageId,
         character.getCharacterId() != null ? character.getCharacterId().value() : null,
         character.getCharacterClass(),
         null, // characterLevel (not stored in GameCharacter)
@@ -123,12 +135,12 @@ public class ViewTransformer {
   }
 
   private CharacterValuationViewEntity createEmptyViewFromResponse(
-      String userIgn, GameCharacter character) {
+      String userIgn, GameCharacter character, @Nullable String messageId) {
     return new CharacterValuationViewEntity(
         null,
         null, // jpaVersion
         userIgn,
-        null,
+        messageId,
         character.getCharacterId() != null ? character.getCharacterId().value() : null,
         character.getCharacterClass(),
         null,

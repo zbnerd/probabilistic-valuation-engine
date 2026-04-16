@@ -60,6 +60,7 @@ class CalculationWorker(
             val future = expectationPort.calculateExpectationAsync(
                 request.userIgn,
                 request.forceRecalculation,
+                message.messageId.toString(),
             )
             future.join()
 

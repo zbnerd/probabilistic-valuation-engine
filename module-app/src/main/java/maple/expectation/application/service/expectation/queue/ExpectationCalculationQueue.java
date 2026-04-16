@@ -66,23 +66,7 @@ public class ExpectationCalculationQueue {
     TaskContext context = TaskContext.of("Queue", "Offer", task.getUserIgn());
 
     return executor.executeOrDefault(
-        () -> {
-          if (isQueueFull(task.getPriority(), task.getUserIgn())) {
-            return false;
-          }
-
-          String queueName = resolveQueueName(task.getPriority());
-          ExpectationCalcMessage message =
-              new ExpectationCalcMessage(
-                  task.getUserIgn(), task.isForceRecalculation());
-          pgmqClient.send(queueName, message);
-
-          log.debug(
-              "[Queue] Task queued: priority={}, userIgn={}",
-              task.getPriority(),
-              task.getUserIgn());
-          return true;
-        },
+        () -> enqueue(task).getQueued(),
         false,
         context);
   }
@@ -103,24 +87,7 @@ public class ExpectationCalculationQueue {
     TaskContext context = TaskContext.of("Queue", "OfferWithReceipt", task.getUserIgn());
 
     return executor.executeOrDefault(
-        () -> {
-          if (isQueueFull(task.getPriority(), task.getUserIgn())) {
-            return TaskReceipt.rejected(task.getUserIgn());
-          }
-
-          String queueName = resolveQueueName(task.getPriority());
-          ExpectationCalcMessage message =
-              new ExpectationCalcMessage(
-                  task.getUserIgn(), task.isForceRecalculation());
-          long messageId = pgmqClient.send(queueName, message);
-
-          log.debug(
-              "[Queue] Task queued with receipt: priority={}, userIgn={}, taskId={}",
-              task.getPriority(),
-              task.getUserIgn(),
-              messageId);
-          return new TaskReceipt(String.valueOf(messageId), task.getUserIgn(), true);
-        },
+        () -> enqueue(task),
         TaskReceipt.rejected(task.getUserIgn()),
         context);
   }
@@ -224,5 +191,35 @@ public class ExpectationCalculationQueue {
       return true;
     }
     return false;
+  }
+
+  private TaskReceipt enqueue(ExpectationCalculationTask task) {
+    if (isQueueFull(task.getPriority(), task.getUserIgn())) {
+      return TaskReceipt.rejected(task.getUserIgn());
+    }
+
+    String queueName = resolveQueueName(task.getPriority());
+    if (!task.isForceRecalculation()) {
+      Long existingMessageId = pgmqClient.findActiveMessageIdByUserIgn(queueName, task.getUserIgn());
+      if (existingMessageId != null) {
+        log.debug(
+            "[Queue] Reusing active task: priority={}, userIgn={}, taskId={}",
+            task.getPriority(),
+            task.getUserIgn(),
+            existingMessageId);
+        return new TaskReceipt(String.valueOf(existingMessageId), task.getUserIgn(), true);
+      }
+    }
+
+    ExpectationCalcMessage message =
+        new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation());
+    long messageId = pgmqClient.send(queueName, message);
+
+    log.debug(
+        "[Queue] Task queued: priority={}, userIgn={}, taskId={}",
+        task.getPriority(),
+        task.getUserIgn(),
+        messageId);
+    return new TaskReceipt(String.valueOf(messageId), task.getUserIgn(), true);
   }
 }

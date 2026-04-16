@@ -24,6 +24,11 @@ interface ExpectationV4Port {
     fun calculateExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<Any>
 
     /**
+     * V5 queue/worker aware async calculation.
+     */
+    fun calculateExpectationAsync(userIgn: String, force: Boolean, taskId: String?): CompletableFuture<Any>
+
+    /**
      * 🔥 기대값 동기 계산 (Admission Control용)
      *
      * <p>NOTE: Admission control은 sync 작업만 관리합니다.
@@ -34,6 +39,11 @@ interface ExpectationV4Port {
      * @return 기대값 응답 (Any = EquipmentExpectationResponseV4)
      */
     fun calculateExpectation(userIgn: String, force: Boolean): Any
+
+    /**
+     * V5 queue/worker aware sync calculation.
+     */
+    fun calculateExpectation(userIgn: String, force: Boolean, taskId: String?): Any
 
     /**
      * GZIP 기대값 비동기 조회

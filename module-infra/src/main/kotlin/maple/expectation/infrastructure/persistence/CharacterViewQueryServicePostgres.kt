@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.persistence
 
 import io.micrometer.core.instrument.MeterRegistry
-import java.time.Duration
+import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional
  * </ul>
  */
 @Service
-@ConditionalOnProperty(name = ["app.v5.enabled"], havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = ["v5.enabled"], havingValue = "true", matchIfMissing = false)
 class CharacterViewQueryServicePostgres(
     private val repository: CharacterValuationViewJpaRepository,
     private val executor: LogicExecutor,
@@ -38,18 +38,12 @@ class CharacterViewQueryServicePostgres(
 
         return executor.executeOrDefault(
             {
-                val result = repository.findByUserIgn(userIgn)
-                if (result != null) {
-                    meterRegistry
-                        .timer("postgres.query.latency", "operation", "hit")
-                        .record(Duration.ofMillis(1))
-                    result
-                } else {
-                    meterRegistry
-                        .timer("postgres.query.latency", "operation", "miss")
-                        .record(Duration.ofMillis(1))
-                    null
-                }
+                val startNanos = System.nanoTime()
+                val result = repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn)
+                meterRegistry
+                    .timer("postgres.query.latency", "operation", if (result != null) "hit" else "miss")
+                    .record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS)
+                result
             },
             null,
             context,
@@ -67,42 +61,22 @@ class CharacterViewQueryServicePostgres(
 
         executor.executeVoid(
             {
-                val existing = repository.findByUserIgn(entity.userIgn)
+                val existing = findExistingEntity(entity)
 
                 if (existing != null) {
-                    // Update existing
                     val incomingVersion = entity.version ?: 0L
-                    val currentVersion = existing.version ?: 0L
+                    val currentVersion = existing.lastAppliedVersion ?: existing.version ?: 0L
 
                     if (incomingVersion > currentVersion) {
-                        // Incoming update is newer - apply update
-                        val updated = CharacterValuationViewEntity(
-                            id = existing.id,
-                            jpaVersion = existing.jpaVersion,
-                            userIgn = entity.userIgn,
-                            messageId = entity.messageId,
-                            characterOcid = entity.characterOcid,
-                            characterClass = entity.characterClass,
-                            characterLevel = entity.characterLevel,
-                            calculatedAt = entity.calculatedAt,
-                            lastApiSyncAt = entity.lastApiSyncAt,
-                            version = incomingVersion + 1,
-                            lastAppliedVersion = incomingVersion,
-                            totalExpectedCost = entity.totalExpectedCost,
-                            maxPresetNo = entity.maxPresetNo,
-                            presets = entity.presets,
-                            fromCache = entity.fromCache,
-                        )
-                        repository.save(updated)
+                        repository.save(buildUpdatedEntity(existing, entity, incomingVersion))
                         meterRegistry.counter("postgres.optimistic_lock.updated").increment()
                         log.debug(
                             "[OptimisticLock] Updated: userIgn={}, version={}->{}",
                             entity.userIgn,
                             currentVersion,
-                            incomingVersion + 1,
+                            incomingVersion,
                         )
                     } else {
-                        // Incoming update is older or same - skip
                         meterRegistry.counter("postgres.optimistic_lock.skipped").increment()
                         log.debug(
                             "[OptimisticLock] Skipped: userIgn={}, incoming={}, current={}",
@@ -112,25 +86,7 @@ class CharacterViewQueryServicePostgres(
                         )
                     }
                 } else {
-                    // Insert new
-                    val newEntity = CharacterValuationViewEntity(
-                        id = null,
-                        jpaVersion = null,
-                        userIgn = entity.userIgn,
-                        messageId = entity.messageId,
-                        characterOcid = entity.characterOcid,
-                        characterClass = entity.characterClass,
-                        characterLevel = entity.characterLevel,
-                        calculatedAt = entity.calculatedAt,
-                        lastApiSyncAt = entity.lastApiSyncAt,
-                        version = 1L,
-                        lastAppliedVersion = entity.version ?: 1L,
-                        totalExpectedCost = entity.totalExpectedCost,
-                        maxPresetNo = entity.maxPresetNo,
-                        presets = entity.presets,
-                        fromCache = entity.fromCache,
-                    )
-                    repository.save(newEntity)
+                    repository.save(buildNewEntity(entity))
                     meterRegistry.counter("postgres.optimistic_lock.inserted").increment()
                     log.debug("[OptimisticLock] Inserted: userIgn={}, version=1", entity.userIgn)
                 }
@@ -138,6 +94,50 @@ class CharacterViewQueryServicePostgres(
             context,
         )
     }
+
+    private fun findExistingEntity(entity: CharacterValuationViewEntity): CharacterValuationViewEntity? =
+        entity.messageId?.let(repository::findByMessageId)
+            ?: repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(entity.userIgn)
+
+    private fun buildUpdatedEntity(
+        existing: CharacterValuationViewEntity,
+        incoming: CharacterValuationViewEntity,
+        incomingVersion: Long,
+    ): CharacterValuationViewEntity = CharacterValuationViewEntity(
+        id = existing.id,
+        jpaVersion = existing.jpaVersion,
+        userIgn = incoming.userIgn,
+        messageId = incoming.messageId ?: existing.messageId,
+        characterOcid = incoming.characterOcid ?: existing.characterOcid,
+        characterClass = incoming.characterClass ?: existing.characterClass,
+        characterLevel = incoming.characterLevel ?: existing.characterLevel,
+        calculatedAt = incoming.calculatedAt ?: existing.calculatedAt,
+        lastApiSyncAt = incoming.lastApiSyncAt ?: existing.lastApiSyncAt,
+        version = maxOf(existing.version ?: 0L, incomingVersion) + 1,
+        lastAppliedVersion = incomingVersion,
+        totalExpectedCost = incoming.totalExpectedCost,
+        maxPresetNo = incoming.maxPresetNo,
+        presets = incoming.presets,
+        fromCache = incoming.fromCache,
+    )
+
+    private fun buildNewEntity(entity: CharacterValuationViewEntity): CharacterValuationViewEntity = CharacterValuationViewEntity(
+        id = null,
+        jpaVersion = null,
+        userIgn = entity.userIgn,
+        messageId = entity.messageId,
+        characterOcid = entity.characterOcid,
+        characterClass = entity.characterClass,
+        characterLevel = entity.characterLevel,
+        calculatedAt = entity.calculatedAt,
+        lastApiSyncAt = entity.lastApiSyncAt,
+        version = 1L,
+        lastAppliedVersion = entity.version ?: 1L,
+        totalExpectedCost = entity.totalExpectedCost,
+        maxPresetNo = entity.maxPresetNo,
+        presets = entity.presets,
+        fromCache = entity.fromCache,
+    )
 
     /** Delete by user IGN (for invalidation) */
     @Transactional("transactionManager")
@@ -166,7 +166,7 @@ class CharacterViewQueryServicePostgres(
         val context = TaskContext.of("PostgresQuery", "Count", userIgn)
 
         return executor.executeOrDefault(
-            { if (repository.findByUserIgn(userIgn) != null) 1L else 0L },
+            { if (repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn) != null) 1L else 0L },
             0L,
             context,
         )
@@ -183,7 +183,7 @@ class CharacterViewQueryServicePostgres(
 
         return executor.executeOrDefault(
             {
-                val entity = repository.findByUserIgn(userIgn)
+                val entity = repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn)
                 entity?.lastAppliedVersion ?: 0L
             },
             0L,

@@ -20,7 +20,7 @@ import java.util.Optional
  * </ul>
  */
 @Service
-@ConditionalOnProperty(name = ["app.v5.enabled"], havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = ["v5.enabled"], havingValue = "true", matchIfMissing = false)
 class CharacterViewQueryPortAdapter(
     private val queryService: CharacterViewQueryServicePostgres,
 ) : CharacterViewQueryPort {
@@ -47,6 +47,8 @@ class CharacterViewQueryPortAdapter(
     ) : CharacterView {
         override val userIgn: String
             get() = entity.userIgn
+        override val messageId: String?
+            get() = entity.messageId
         override val calculatedAt: java.time.Instant?
             get() = entity.calculatedAt
         override val fromCache: Boolean?

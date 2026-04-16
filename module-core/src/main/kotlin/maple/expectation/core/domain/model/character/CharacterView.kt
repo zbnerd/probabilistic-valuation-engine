@@ -15,6 +15,9 @@ interface CharacterView {
     /** 캐릭터 IGN */
     val userIgn: String
 
+    /** V5 queue message ID */
+    val messageId: String?
+
     /** 계산 시간 */
     val calculatedAt: Instant?
 

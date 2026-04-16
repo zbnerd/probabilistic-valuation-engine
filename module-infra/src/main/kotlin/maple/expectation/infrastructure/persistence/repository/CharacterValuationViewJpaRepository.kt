@@ -21,6 +21,8 @@ interface CharacterValuationViewJpaRepository : JpaRepository<CharacterValuation
      */
     fun findByUserIgn(userIgn: String): CharacterValuationViewEntity?
 
+    fun findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn: String): CharacterValuationViewEntity?
+
     /**
      * messageId으로 조회
      */

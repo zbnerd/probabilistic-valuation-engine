@@ -121,8 +121,15 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   @TraceLog
   public CompletableFuture<EquipmentExpectationResponseV4> calculateExpectationAsync(
       String userIgn, boolean force) {
+    return calculateExpectationAsync(userIgn, force, null);
+  }
+
+  @TraceLog
+  public CompletableFuture<EquipmentExpectationResponseV4> calculateExpectationAsync(
+      String userIgn, boolean force, @Nullable String taskId) {
     return CompletableFuture.supplyAsync(
-            () -> selfProvider.getObject().calculateExpectation(userIgn, force), equipmentExecutor)
+            () -> selfProvider.getObject().calculateExpectation(userIgn, force, taskId),
+            equipmentExecutor)
         .orTimeout(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
   }
 
@@ -137,8 +144,21 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   /** 캐릭터 기대값 계산 (동기, force 옵션) */
   @Transactional("transactionManager")
   public EquipmentExpectationResponseV4 calculateExpectation(String userIgn, boolean force) {
+    return calculateExpectation(userIgn, force, null);
+  }
+
+  @Transactional("transactionManager")
+  public EquipmentExpectationResponseV4 calculateExpectation(
+      String userIgn, boolean force, @Nullable String taskId) {
     validateInitialized();
-    return cacheCoordinator.getOrCalculate(userIgn, force, () -> doCalculateExpectation(userIgn));
+    EquipmentExpectationResponseV4 response =
+        cacheCoordinator.getOrCalculate(userIgn, force, () -> doCalculateExpectation(userIgn, taskId));
+
+    if (taskId != null && response.isFromCache()) {
+      syncCachedResponseToViewTable(userIgn, response, taskId);
+    }
+
+    return response;
   }
 
   /** 캐시 웜업 (CacheWarmupPort 구현) */
@@ -151,7 +171,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   public byte[] getGzipExpectation(String userIgn, boolean force) {
     validateInitialized();
     return cacheCoordinator.getGzipOrCalculate(
-        userIgn, force, () -> doCalculateExpectation(userIgn));
+        userIgn, force, () -> doCalculateExpectation(userIgn, null));
   }
 
   /** L1 캐시 직접 조회 - Fast Path (#264 성능 최적화) */
@@ -176,7 +196,8 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
    * <p>loadEquipmentDataAsync로 API 대기 시간 분리. TieredCache Callable 내에서는 .join() 사용 (분산 락 내부이므로 스레드
    * 점유 제한적)
    */
-  private EquipmentExpectationResponseV4 doCalculateExpectation(String userIgn) {
+  private EquipmentExpectationResponseV4 doCalculateExpectation(
+      String userIgn, @Nullable String taskId) {
     TaskContext context = TaskContext.of("ExpectationV4", "Calculate", userIgn);
 
     return executor.execute(
@@ -193,7 +214,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
           // V5: Inline View Write — same TX, no queue (Async Materialized View pattern)
           // TODO: Replace with async projection (event-driven) when scaling out
-          syncToViewTable(userIgn, character, response);
+          syncToViewTable(userIgn, character, response, taskId);
 
           return response;
         },
@@ -209,13 +230,16 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
    * <p>Async Materialized View pattern: Worker → DB write → API read.
    */
   private void syncToViewTable(
-      String userIgn, GameCharacter character, EquipmentExpectationResponseV4 response) {
+      String userIgn,
+      GameCharacter character,
+      EquipmentExpectationResponseV4 response,
+      @Nullable String taskId) {
     CharacterViewQueryServicePostgres viewService = viewQueryServiceProvider.getIfAvailable();
     if (viewService == null) return; // V5 미활성화 시 skip
 
     executor.executeVoidJava(
         () -> {
-          var entity = viewTransformer.toEntityFromResponse(userIgn, character, response);
+          var entity = viewTransformer.toEntityFromResponse(userIgn, character, response, taskId);
           viewService.upsert(entity);
           log.debug("[ExpectationV4] Synced to view table: userIgn={}", userIgn);
         },
@@ -227,6 +251,12 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
    *
    * <p>V5 워커가 V2 워커 풀에 의존하지 않도록 V2 Service를 직접 호출
    */
+  private void syncCachedResponseToViewTable(
+      String userIgn, EquipmentExpectationResponseV4 response, String taskId) {
+    GameCharacter character = findCharacterBypassingWorker(userIgn);
+    syncToViewTable(userIgn, character, response, taskId);
+  }
+
   private GameCharacter findCharacterBypassingWorker(String userIgn) {
     return executor.execute(
         () -> {

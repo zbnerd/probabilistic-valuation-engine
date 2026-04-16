@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -12,6 +15,7 @@ import maple.expectation.application.service.expectation.queue.ExpectationCalcul
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
 import maple.expectation.application.service.expectation.queue.QueuePriority;
 import maple.expectation.common.function.ThrowingSupplier;
+import maple.expectation.core.port.inbound.TaskReceipt;
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -63,6 +67,33 @@ class ExpectationCalculationQueueTest {
 
     assertThat(queue.offer(highTask)).isTrue();
     assertThat(queue.offer(lowTask)).isTrue();
+  }
+
+  @Test
+  @DisplayName("이미 활성 task가 있으면 non-force 요청은 기존 taskId를 재사용")
+  void offerWithReceiptReusesExistingTaskForNonForceRequests() {
+    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
+    when(pgmqClient.findActiveMessageIdByUserIgn("expectation_calc_high", "user1")).thenReturn(99L);
+
+    TaskReceipt receipt = queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", false));
+
+    assertThat(receipt.getQueued()).isTrue();
+    assertThat(receipt.getTaskId()).isEqualTo("99");
+    verify(pgmqClient, never()).send(anyString(), any());
+  }
+
+  @Test
+  @DisplayName("force 요청은 기존 task가 있어도 새 메시지를 enqueue")
+  void offerWithReceiptEnqueuesFreshTaskForForceRequests() {
+    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
+    when(pgmqClient.findActiveMessageIdByUserIgn("expectation_calc_high", "user1")).thenReturn(99L);
+    when(pgmqClient.send(anyString(), any())).thenReturn(100L);
+
+    TaskReceipt receipt = queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", true));
+
+    assertThat(receipt.getQueued()).isTrue();
+    assertThat(receipt.getTaskId()).isEqualTo("100");
+    verify(pgmqClient).send(eq("expectation_calc_high"), any());
   }
 
   @Test

@@ -52,24 +52,26 @@ public class TaskStatusService implements TaskStatusPort {
     }
 
     private TaskStatus resolveStatus(String userIgn, String taskId) {
+        long messageId = parseMessageId(taskId);
+        if (messageId <= 0) {
+            return TaskStatus.NOT_FOUND;
+        }
+
         // 1. PostgreSQL (source of truth)
         Optional<CharacterView> cached = queryPort.findByUserIgn(userIgn);
-        if (cached.isPresent()) {
+        if (cached.filter(view -> taskId.equals(view.getMessageId())).isPresent()) {
             return TaskStatus.COMPLETED;
         }
 
         // 2. PGMQ archive check (보조)
-        long messageId = parseMessageId(taskId);
-        if (messageId > 0) {
-            if (isArchivedInAnyQueue(messageId)) {
-                return TaskStatus.COMPLETED;
-            }
+        if (isArchivedInAnyQueue(messageId)) {
+            return TaskStatus.COMPLETED;
+        }
 
             // 3. 활성 큐에서 read_ct 확인 → PROCESSING 판별
-            int readCount = getMaxReadCount(messageId);
-            if (readCount > 0) {
-                return TaskStatus.PROCESSING;
-            }
+        int readCount = getMaxReadCount(messageId);
+        if (readCount > 0) {
+            return TaskStatus.PROCESSING;
         }
 
         // 4. 기본값: PENDING

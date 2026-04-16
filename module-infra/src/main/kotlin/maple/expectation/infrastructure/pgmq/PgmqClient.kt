@@ -204,6 +204,21 @@ class PgmqClient(
         return executor.executeOrDefault({ performGetReadCount(queueName, messageId) }, 0, context)
     }
 
+    /**
+     * Find the latest active message for a user in the target queue.
+     *
+     * <p>Used to deduplicate repeated V5 MISS requests so the API can return the
+     * currently active task instead of enqueueing duplicate work.
+     */
+    fun findActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long? {
+        val context = TaskContext.of("PgmqClient", "FindActiveMessage", "$queueName:$userIgn")
+        return executor.executeOrDefault(
+            { performFindActiveMessageIdByUserIgn(queueName, userIgn) },
+            null,
+            context,
+        )
+    }
+
     // ==================== Internal Implementation ====================
 
     private fun <T : Any> performSend(queueName: String, message: T): Long {
@@ -316,6 +331,22 @@ class PgmqClient(
             Int::class.java,
             messageId,
         ) ?: 0
+    }
+
+    private fun performFindActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long? {
+        validateQueueName(queueName)
+        val queueTable = "pgmq.q_$queueName"
+        return jdbcTemplate.queryForObject(
+            """
+            SELECT msg_id
+            FROM $queueTable
+            WHERE message ->> 'userIgn' = ?
+            ORDER BY msg_id DESC
+            LIMIT 1
+            """.trimIndent(),
+            Long::class.java,
+            userIgn,
+        )
     }
 
     private fun validateQueueName(queueName: String) {

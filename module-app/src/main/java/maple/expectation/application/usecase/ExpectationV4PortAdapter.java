@@ -21,9 +21,13 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
 
   @Override
   public CompletableFuture<Object> calculateExpectationAsync(String userIgn, boolean force) {
-    return expectationService
-        .calculateExpectationAsync(userIgn, force)
-        .thenApply(response -> response);
+    return calculateExpectationAsync(userIgn, force, null);
+  }
+
+  @Override
+  public CompletableFuture<Object> calculateExpectationAsync(
+      String userIgn, boolean force, String taskId) {
+    return expectationService.calculateExpectationAsync(userIgn, force, taskId).thenApply(response -> response);
   }
 
   @Override
@@ -46,7 +50,12 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
    */
   @Override
   public Object calculateExpectation(String userIgn, boolean force) {
-    return expectationService.calculateExpectation(userIgn, force);
+    return calculateExpectation(userIgn, force, null);
+  }
+
+  @Override
+  public Object calculateExpectation(String userIgn, boolean force, String taskId) {
+    return expectationService.calculateExpectation(userIgn, force, taskId);
   }
 
   @Override

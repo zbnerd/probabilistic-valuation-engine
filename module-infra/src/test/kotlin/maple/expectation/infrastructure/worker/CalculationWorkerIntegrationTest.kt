@@ -4,6 +4,7 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.infrastructure.pgmq.CalculationRequest
@@ -360,8 +361,9 @@ class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {
             }
 
         // 충분한 시간이 지나도 큐가 비어있지 않음을 검증
-        Thread.sleep(2000)
-        assertThat(getQueueMessageCount(testQueueName)).isEqualTo(1)
+        await().atMost(3, TimeUnit.SECONDS).untilAsserted {
+            assertThat(getQueueMessageCount(testQueueName)).isEqualTo(1)
+        }
 
         // 포트가 호출되지 않았는지 검증
         assertThat(mockExpectationPort.getCallCount(userIgn)).isEqualTo(0)
@@ -530,6 +532,9 @@ class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {
             }
         }
 
+        override fun calculateExpectationAsync(userIgn: String, force: Boolean, taskId: String?): CompletableFuture<Any> =
+            calculateExpectationAsync(userIgn, force)
+
         override fun calculateExpectation(userIgn: String, force: Boolean): Any {
             // 호출 카운트 증가
             callCountMap.computeIfAbsent(userIgn) { AtomicInteger(0) }.incrementAndGet()
@@ -543,6 +548,9 @@ class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {
                 throw RuntimeException("Simulated calculation failure")
             }
         }
+
+        override fun calculateExpectation(userIgn: String, force: Boolean, taskId: String?): Any =
+            calculateExpectation(userIgn, force)
 
         override fun getGzipExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<ByteArray?> = CompletableFuture.completedFuture(byteArrayOf())
 

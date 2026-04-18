@@ -26,6 +26,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito
 
@@ -125,7 +126,10 @@ class AdmissionControlIntegrationTest {
             cacheCoordinator.getOrCalculate("test-user", false, calculator)
         }
 
-        Thread.sleep(100) // Let admission control acquire permit
+        // Let admission control acquire permit
+        await().atMost(500, TimeUnit.MILLISECONDS).until {
+            executionCount.get() > 0 || testLatch.count == 0L
+        }
         testLatch.countDown()
 
         val result = future.get(5, TimeUnit.SECONDS)
@@ -152,7 +156,10 @@ class AdmissionControlIntegrationTest {
             }
         }
 
-        Thread.sleep(100) // Let first request acquire admission permit
+        // Let first request acquire admission permit
+        await().atMost(500, TimeUnit.MILLISECONDS).until {
+            calculationCount.get() > 0 || testLatch.count == 0L
+        }
         testLatch.countDown()
 
         // Wait for all to complete
@@ -181,7 +188,12 @@ class AdmissionControlIntegrationTest {
             }
         }
 
-        Thread.sleep(200) // Let first maxInFlight requests acquire permits
+        // Let first maxInFlight requests acquire permits
+        await().atMost(1, TimeUnit.SECONDS).until {
+            val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
+            val currentInFlight = inFlightGauge?.value() ?: 0.0
+            currentInFlight > 0
+        }
 
         // Verify in-flight doesn't exceed maxInFlight
         val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
@@ -220,7 +232,12 @@ class AdmissionControlIntegrationTest {
             }
         }
 
-        Thread.sleep(500) // Let admission control stabilize
+        // Let admission control stabilize
+        await().atMost(2, TimeUnit.SECONDS).until {
+            val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
+            val currentInFlight = inFlightGauge?.value()?.toInt() ?: 0
+            currentInFlight > 0
+        }
 
         // Verify in-flight never exceeds maxInFlight
         val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()

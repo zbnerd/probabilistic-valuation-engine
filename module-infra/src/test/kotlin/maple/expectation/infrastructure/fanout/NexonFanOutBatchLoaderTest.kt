@@ -14,11 +14,9 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.Mock
-import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
@@ -26,15 +24,11 @@ import org.mockito.kotlin.whenever
 import org.springframework.http.HttpHeaders
 import org.springframework.web.reactive.function.client.WebClientResponseException
 
-@ExtendWith(MockitoExtension::class)
 @DisplayName("NexonFanOutBatchLoader Tests")
 class NexonFanOutBatchLoaderTest {
 
-    @Mock
-    private lateinit var nexonApiClient: NexonApiClient
-
-    @Mock
-    private lateinit var fanOutQueuePort: FanOutQueuePort
+    private val nexonApiClient: NexonApiClient = mock()
+    private val fanOutQueuePort: FanOutQueuePort = mock()
 
     private val executor: LogicExecutor = ImmediateLogicExecutor()
 
@@ -58,7 +52,7 @@ class NexonFanOutBatchLoaderTest {
 
         assertThat(result).isEmpty()
         verify(nexonApiClient, never()).getItemDataByOcid(any())
-        verify(fanOutQueuePort, never()).enqueue(any(), any())
+        verify(fanOutQueuePort, never()).enqueue(any(), any(), any())
     }
 
     @Test
@@ -70,7 +64,7 @@ class NexonFanOutBatchLoaderTest {
         val result = sut.load(listOf("ocid-1"))
 
         assertThat(result).containsEntry("ocid-1", sampleResponse)
-        verify(fanOutQueuePort, never()).enqueue(any(), any())
+        verify(fanOutQueuePort, never()).enqueue(any(), any(), any())
     }
 
     @Test
@@ -89,7 +83,7 @@ class NexonFanOutBatchLoaderTest {
         val result = sut.load(listOf("ocid-429"))
 
         assertThat(result).isEmpty()
-        verify(fanOutQueuePort, times(1)).enqueue(eq("ocid-429"), eq("batch"))
+        verify(fanOutQueuePort, times(1)).enqueue(eq("ocid-429"), eq("batch"), any())
     }
 
     @Test
@@ -102,7 +96,7 @@ class NexonFanOutBatchLoaderTest {
         val result = sut.load(listOf("ocid-500"))
 
         assertThat(result).isEmpty()
-        verify(fanOutQueuePort, never()).enqueue(any(), any())
+        verify(fanOutQueuePort, never()).enqueue(any(), any(), any())
     }
 
     @Test
@@ -112,7 +106,7 @@ class NexonFanOutBatchLoaderTest {
             429,
             "Too Many Requests",
             HttpHeaders.EMPTY,
-            null,
+            byteArrayOf(),
             null,
         )
         val wrapped = RuntimeException("outer", RuntimeException("middle", tooManyRequests))

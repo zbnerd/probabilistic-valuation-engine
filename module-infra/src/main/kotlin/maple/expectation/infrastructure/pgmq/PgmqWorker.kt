@@ -107,46 +107,48 @@ abstract class PgmqWorker<T : Any>(
 
         val context = TaskContext.of("PgmqWorker", "ProcessBatch", queueName)
 
-        executor.executeVoid({
-            val batchSize = workerSettings.batchSize ?: config.common.batchSize
-            val visibilityTimeout = config.common.visibilityTimeoutSec
+        try {
+            executor.executeVoid({
+                val batchSize = workerSettings.batchSize ?: config.common.batchSize
+                val visibilityTimeout = config.common.visibilityTimeoutSec
 
-            val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
+                val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
 
-            if (messages.isEmpty()) {
-                return@executeVoid
-            }
+                if (messages.isEmpty()) {
+                    return@executeVoid
+                }
 
-            log.debug("📥 [{}] Processing {} messages", queueName, messages.size)
+                log.debug("📥 [{}] Processing {} messages", queueName, messages.size)
 
-            // ADR-700: 배치 pre-warm (OCID dedup + equipment cache pre-warm)
-            preWarmBatch(messages)
+                // ADR-700: 배치 pre-warm (OCID dedup + equipment cache pre-warm)
+                preWarmBatch(messages)
 
-            // ADR-355: Batch-level aggregate metrics
-            val batchStart = System.nanoTime()
-            var successCount = 0
-            var failCount = 0
+                // ADR-355: Batch-level aggregate metrics
+                val batchStart = System.nanoTime()
+                var successCount = 0
+                var failCount = 0
 
-            val futures = messages.map { message ->
-                CompletableFuture.supplyAsync({
-                    processSingleMessage(message)
-                }, workerPool)
-            }
-            CompletableFuture.allOf(*futures.toTypedArray()).join()
-            futures.forEach { future ->
-                if (future.get()) successCount++ else failCount++
-            }
+                val futures = messages.map { message ->
+                    CompletableFuture.supplyAsync({
+                        processSingleMessage(message)
+                    }, workerPool)
+                }
+                CompletableFuture.allOf(*futures.toTypedArray()).join()
+                futures.forEach { future ->
+                    if (future.get()) successCount++ else failCount++
+                }
 
-            val batchDuration = System.nanoTime() - batchStart
-            meterRegistry.counter("pgmq.worker.processed", "queue", queueName, "status", "success")
-                .increment(successCount.toDouble())
-            meterRegistry.counter("pgmq.worker.processed", "queue", queueName, "status", "failed")
-                .increment(failCount.toDouble())
-            meterRegistry.timer("pgmq.worker.batch.latency", "queue", queueName)
-                .record(batchDuration, TimeUnit.NANOSECONDS)
-        }, context)
-
-        lifecycleWrapper.afterTask()
+                val batchDuration = System.nanoTime() - batchStart
+                meterRegistry.counter("pgmq.worker.processed", "queue", queueName, "status", "success")
+                    .increment(successCount.toDouble())
+                meterRegistry.counter("pgmq.worker.processed", "queue", queueName, "status", "failed")
+                    .increment(failCount.toDouble())
+                meterRegistry.timer("pgmq.worker.batch.latency", "queue", queueName)
+                    .record(batchDuration, TimeUnit.NANOSECONDS)
+            }, context)
+        } finally {
+            lifecycleWrapper.afterTask()
+        }
     }
 
     /**

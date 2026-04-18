@@ -73,6 +73,30 @@ class PgmqClient(
     }
 
     /**
+     * Raw JSON 메시지 발행 (DLQ Replay 전용)
+     *
+     * <p>이미 직렬화된 JSON 문자열을 그대로 JSONB로 전송.
+     * Jackson 재직렬화로 인한 double-encoding 방지.
+     *
+     * @param queueName 큐 이름
+     * @param json 직렬화된 JSON 문자열
+     * @return 메시지 ID
+     */
+    @CircuitBreaker(name = "pgmq", fallbackMethod = "sendRawJsonFallback")
+    fun sendRawJson(queueName: String, json: String): Long {
+        if (config.transactionCheckEnabled && !TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw PgmqPublishException(
+                "pgmqClient.sendRawJson('$queueName') must be called within @Transactional.",
+            )
+        }
+        val context = TaskContext.of("PgmqClient", "SendRaw", queueName)
+        val translator = ExceptionTranslator { e, _ ->
+            PgmqPublishException("Failed to send raw JSON to queue: $queueName", e)
+        }
+        return executor.executeWithTranslation({ performSendRawJson(queueName, json) }, translator, context)
+    }
+
+    /**
      * 메시지 소비
      *
      * <p>SKIP LOCKED 기반으로 여러 Worker가 동시에 안전하게 소비.
@@ -237,6 +261,20 @@ class PgmqClient(
         return messageId
     }
 
+    private fun performSendRawJson(queueName: String, json: String): Long {
+        val result = jdbcTemplate.queryForMap(
+            "SELECT pgmq.send(?, ?::jsonb) as msg_id",
+            queueName,
+            json,
+        )
+
+        val messageId = (result["msg_id"] as Number?)?.toLong()
+            ?: throw PgmqPublishException("Failed to get message ID from send result")
+
+        log.debug("📤 [PGMQ] Sent raw JSON: queue={}, msgId={}", queueName, messageId)
+        return messageId
+    }
+
     private fun <T : Any> performRead(
         queueName: String,
         clazz: Class<T>,
@@ -371,6 +409,11 @@ class PgmqClient(
     private fun <T : Any> sendFallback(queueName: String, message: T, e: Throwable): Long {
         log.error("⚡ [PGMQ] Circuit Breaker OPEN - send fallback: queue={}", queueName, e)
         throw PgmqPublishException("Circuit Breaker is OPEN for send operation", e)
+    }
+
+    private fun sendRawJsonFallback(queueName: String, json: String, e: Throwable): Long {
+        log.error("⚡ [PGMQ] Circuit Breaker OPEN - sendRawJson fallback: queue={}", queueName, e)
+        throw PgmqPublishException("Circuit Breaker is OPEN for sendRawJson operation", e)
     }
 
     private fun <T : Any> readFallback(

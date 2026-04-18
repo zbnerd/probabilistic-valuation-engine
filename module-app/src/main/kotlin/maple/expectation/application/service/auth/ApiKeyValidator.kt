@@ -89,11 +89,17 @@ class ApiKeyValidator(
             throw InvalidApiKeyException("No valid character OCIDs found for API key")
         }
 
-        // 5. #667: Nexon account_id 추출 (동일 계정 = 동일 ID, API Key 무관)
-        val accountId = characterList.accountList
-            ?.asSequence()
-            ?.mapNotNull { it.accountId?.trim()?.takeIf(String::isNotBlank) }
-            ?.firstOrNull()
+        // 5. #667: 소유권을 인증한 계정에서 account_id 추출
+        val normalizedUserIgn = userIgn.trim()
+        val owningAccount = characterList.accountList
+            ?.firstOrNull { account ->
+                account.characterList.orEmpty().any { char ->
+                    char.characterName?.trim()?.equals(normalizedUserIgn, ignoreCase = true) == true
+                }
+            }
+            ?: throw InvalidApiKeyException("No matching account found for character: $userIgn")
+
+        val accountId = owningAccount.accountId?.trim()?.takeIf(String::isNotBlank)
             ?: throw InvalidApiKeyException("Nexon account_id is missing in character/list response")
 
         log.info("API key validation successful: userIgn={}, ocids={}, accountId={}", userIgn, myOcids.size, accountId)

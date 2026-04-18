@@ -232,7 +232,7 @@ class PostgresNotifySubscriber(
         when (event.type) {
             InvalidationType.EVICT -> {
                 val currentVersion = tieredCacheManager.getKeyVersion(event.cacheName, event.key ?: "")
-                if (currentVersion != null && event.version <= currentVersion) {
+                if (currentVersion != null && event.version < currentVersion) {
                     log.debug(
                         "[PostgresNotify] Stale evict skipped: cache={}, key={}, eventVersion={}, currentVersion={}",
                         event.cacheName,
@@ -243,11 +243,14 @@ class PostgresNotifySubscriber(
                     return
                 }
                 event.key?.let { l1Cache.evict(it) }
+                tieredCacheManager.clearKeyVersion(event.cacheName, event.key ?: "")
                 log.debug(
-                    "[PostgresNotify] L1 evicted: cache={}, key={}, source={}",
+                    "[PostgresNotify] L1 evicted: cache={}, key={}, source={}, eventVersion={}, currentVersion={}",
                     event.cacheName,
                     event.key,
                     event.sourceInstanceId,
+                    event.version,
+                    currentVersion,
                 )
             }
             InvalidationType.CLEAR_ALL -> {

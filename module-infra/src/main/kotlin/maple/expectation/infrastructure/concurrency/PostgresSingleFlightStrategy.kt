@@ -130,11 +130,19 @@ class PostgresSingleFlightStrategy(
 
         log.debug("👑 [SingleFlight Leader] Claimed for key: {}", maskKey(key))
 
-        return asyncSupplier.get().whenComplete { result, error ->
+        asyncSupplier.get().whenComplete { result, error ->
             if (error == null && result != null) {
                 @Suppress("UNCHECKED_CAST")
                 resultCache[key] = CompletableFuture.completedFuture(result as Any)
                 log.debug("💾 [SingleFlight Leader] Cached result: {}", maskKey(key))
+            }
+
+            // Propagate to leaderFuture so followers waiting on it get unblocked
+            if (error != null) {
+                leaderFuture.completeExceptionally(error)
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                (leaderFuture as CompletableFuture<Any?>).complete(result)
             }
 
             CompletableFuture.delayedExecutor(CACHE_TTL_SECONDS, TimeUnit.SECONDS)
@@ -146,6 +154,8 @@ class PostgresSingleFlightStrategy(
             lockMetrics.recordLockReleased("postgres")
             log.debug("🔓 [SingleFlight Leader] Completed: {}", maskKey(key))
         }
+
+        return leaderFuture
     }
 
     /**

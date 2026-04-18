@@ -135,7 +135,7 @@ class TieredCache(
         }
         executor.executeVoid({ l1.evict(key) }, context)
         keyVersions.remove(key)
-        publishEvictEvent(key, versionCounter.get())
+        publishEvictEvent(key, versionCounter.incrementAndGet())
     }
 
     override fun clear() {
@@ -154,6 +154,7 @@ class TieredCache(
             l2FailureCounter.increment()
         }
         executor.executeVoid({ l1.clear() }, context)
+        keyVersions.clear()
         publishClearAllEvent()
     }
 
@@ -167,6 +168,10 @@ class TieredCache(
 
     fun clearKeyVersions() {
         keyVersions.clear()
+    }
+
+    fun clearKeyVersion(key: Any) {
+        keyVersions.remove(key)
     }
 
     fun getKeyVersion(key: Any): Long? = keyVersions[key]

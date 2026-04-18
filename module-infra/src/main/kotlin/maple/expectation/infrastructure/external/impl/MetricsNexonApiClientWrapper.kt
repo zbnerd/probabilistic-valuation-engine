@@ -142,7 +142,15 @@ class MetricsNexonApiClientWrapper(
             logger.debug("[NexonRateLimiter] {} blocked for {}ms waiting for permit", endpoint, acquireTime / 1_000_000)
         }
 
-        return block()
+        val future = runCatching { block() }
+            .getOrElse { throwable ->
+                rateLimiter.releasePermit()
+                recordError(endpoint, throwable)
+                sample.stop(getTimer(endpoint, "error"))
+                return CompletableFuture.failedFuture(throwable)
+            }
+
+        return future
             .whenComplete { result, ex ->
                 try {
                     // Always release permit after call completes

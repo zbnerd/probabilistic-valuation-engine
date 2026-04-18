@@ -10,6 +10,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import maple.expectation.infrastructure.persistence.repository.ExpectationBatchRepository
+import org.awaitility.Awaitility.await
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import java.time.LocalDateTime
+import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 /**
@@ -123,8 +125,9 @@ class DedupeMicroBatchWriterTest {
         val dedupeCount = meterRegistry.counter("micro_batch_dedupe").count()
         assertThat(dedupeCount).isGreaterThan(0.0)
 
-        // Wait a bit for any async operations
-        Thread.sleep(200)
+        await().atMost(Duration.ofSeconds(2)).untilAsserted {
+            assertThat(meterRegistry.counter("micro_batch_dedupe").count()).isGreaterThan(0.0)
+        }
     }
 
     @Test
@@ -139,10 +142,9 @@ class DedupeMicroBatchWriterTest {
         tasks.forEach { writer.offer(it) }
 
         // Then: Flush should be triggered (size-trigger)
-        Thread.sleep(200)
-
-        val flushCount = meterRegistry.counter("micro_batch_flush").count()
-        assertThat(flushCount).isGreaterThan(0.0)
+        await().atMost(Duration.ofSeconds(2)).untilAsserted {
+            assertThat(meterRegistry.counter("micro_batch_flush").count()).isGreaterThan(0.0)
+        }
 
         val sizeTriggerCount = meterRegistry
             .counter("micro_batch_flush_trigger", "trigger", "size")
@@ -160,10 +162,9 @@ class DedupeMicroBatchWriterTest {
         writer.offer(task)
 
         // Then: Wait for time-triggered flush (flushIntervalMs = 100ms)
-        Thread.sleep(300)  // Wait longer than flushIntervalMs
-
-        val flushCount = meterRegistry.counter("micro_batch_flush").count()
-        assertThat(flushCount).isGreaterThan(0.0)
+        await().atMost(Duration.ofSeconds(2)).untilAsserted {
+            assertThat(meterRegistry.counter("micro_batch_flush").count()).isGreaterThan(0.0)
+        }
 
         val timeTriggerCount = meterRegistry
             .counter("micro_batch_flush_trigger", "trigger", "time")
@@ -183,10 +184,9 @@ class DedupeMicroBatchWriterTest {
         tasks.forEach { writer.offer(it) }
 
         // Then: Buffer size gauge should reflect current size
-        Thread.sleep(50)  // Small delay to ensure metrics are updated
-
-        val bufferSize = meterRegistry.get("micro_batch_buffer_size").gauge()
-        assertThat(bufferSize).isNotNull
+        await().atMost(Duration.ofSeconds(2)).untilAsserted {
+            assertThat(meterRegistry.get("micro_batch_buffer_size").gauge()).isNotNull
+        }
     }
 
     @Test
@@ -199,7 +199,9 @@ class DedupeMicroBatchWriterTest {
 
         // When: Trigger flush
         tasks.forEach { writer.offer(it) }
-        Thread.sleep(200)
+        await().atMost(Duration.ofSeconds(2)).untilAsserted {
+            assertThat(meterRegistry.counter("micro_batch_flush").count()).isGreaterThan(0.0)
+        }
 
         // Then: Flush duration timer should exist
         val timer = meterRegistry.get("micro_batch_flush_duration").timer()
@@ -220,7 +222,9 @@ class DedupeMicroBatchWriterTest {
         writer.flushNow()
 
         // Then: Wait for flush to complete
-        Thread.sleep(200)
+        await().atMost(Duration.ofSeconds(2)).untilAsserted {
+            assertThat(meterRegistry.counter("micro_batch_flush").count()).isGreaterThan(0.0)
+        }
 
         val flushCount = meterRegistry.counter("micro_batch_flush").count()
         assertThat(flushCount).isGreaterThan(0.0)

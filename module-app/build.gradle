@@ -125,6 +125,7 @@ dependencies {
 	testImplementation(libs.testcontainers.toxiproxy)
 	testImplementation(libs.mockito.core)
 	testImplementation(libs.mockito.junit.jupiter)
+	testImplementation(libs.mockito.kotlin)
 
 	// Jackson Kotlin module for testing Kotlin data classes deserialization
 	testImplementation(libs.jackson.module.kotlin)

@@ -120,7 +120,8 @@ data class CubeCalculationInput(
         // P0: minTotal 범위 검증 (>=0 허용, 상한 제거)
         // target=0은 수학적으로 잘 정의됨 (항상 성공 = 확률 1.0)
         // 상한 제거: HP%, 보공 등 미래 확장 대응
-        require(minTotal!! >= 0) { "minTotal은 음수일 수 없습니다: $minTotal" }
+        val total = requireNotNull(minTotal) { "minTotal은 DP 모드 필수입니다" }
+        require(total >= 0) { "minTotal은 음수일 수 없습니다: $total" }
     }
 
     /** 기존 방식 유효성 검사 (옵션이 3줄 다 모였는지 등) */

@@ -31,6 +31,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 
 /**
  * End-to-End Integration Test for Issue #617: Global Admission Control + Micro-Batching
@@ -247,7 +248,12 @@ class EndToEndAdmissionControlTest {
             }
         }
 
-        Thread.sleep(200)  // Let admission control acquire permits
+        // Let admission control acquire permits
+        await().atMost(500, TimeUnit.MILLISECONDS).until {
+            val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
+            val currentInFlight = inFlightGauge?.value() ?: 0.0
+            currentInFlight > 0
+        }
         testLatch.countDown()  // Release all requests
 
         // Wait for all to complete
@@ -283,7 +289,7 @@ class EndToEndAdmissionControlTest {
                 val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
                 val currentInFlight = inFlightGauge?.value()?.toInt() ?: 0
                 maxObservedInFlight.updateAndGet { maxOf(it, currentInFlight) }
-                Thread.sleep(10)
+                Thread.sleep(10) // Simulate monitoring interval (KEEP)
             }
         }
         monitorThread.start()
@@ -301,7 +307,12 @@ class EndToEndAdmissionControlTest {
             }
         }
 
-        Thread.sleep(500)  // Let admission control stabilize
+        // Let admission control stabilize
+        await().atMost(2, TimeUnit.SECONDS).until {
+            val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
+            val currentInFlight = inFlightGauge?.value()?.toInt() ?: 0
+            currentInFlight > 0
+        }
         testLatch.countDown()  // Release all
 
         // Wait for all to complete
@@ -417,7 +428,11 @@ class EndToEndAdmissionControlTest {
         microBatchWriter.offer(task1)
         microBatchWriter.offer(task2)
 
-        Thread.sleep(200)  // Wait for potential flush
+        // Wait for potential flush
+        await().atMost(1, TimeUnit.SECONDS).until {
+            val dedupeCounter = meterRegistry.find("micro_batch_dedupe").counter()
+            (dedupeCounter?.count() ?: 0.0) > 0.0
+        }
 
         // Verify dedupe metric
         val dedupeCounter = meterRegistry.find("micro_batch_dedupe").counter()
@@ -485,7 +500,12 @@ class EndToEndAdmissionControlTest {
             }
         }
 
-        Thread.sleep(300)  // Let admission control stabilize
+        // Let admission control stabilize
+        await().atMost(1, TimeUnit.SECONDS).until {
+            val queueDepthGauge = meterRegistry.get("admission_control.queue_depth").gauge()
+            val queueDepth = queueDepthGauge?.value()?.toInt() ?: 0
+            queueDepth > 0
+        }
 
         // Verify queue depth is non-zero (requests waiting)
         val queueDepthGauge = meterRegistry.get("admission_control.queue_depth").gauge()

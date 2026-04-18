@@ -328,21 +328,11 @@ class BulkLoaderService(
         startIndex: Int,
         index: Int,
     ) {
-        // Early exit if stop requested
-        if (stopRequested.get()) {
-            return
-        }
-
-        // Check backpressure
-        checkBackpressure()
-
-        // Skip already completed
-        if (completedSet.contains(ign)) {
+        if (shouldSkipProcessing(ign, completedSet)) {
             skipped.incrementAndGet()
             return
         }
 
-        // Load character with L2 writes disabled (worker thread needs its own ThreadLocal)
         val singleStart = System.currentTimeMillis()
         val result: Unit? = PostgresL2CacheStrategy.withL2WritesDisabled {
             executor.executeOrCatch(
@@ -365,14 +355,30 @@ class BulkLoaderService(
         val singleElapsed = System.currentTimeMillis() - singleStart
         log.info("[BulkLoaderService] Single character load: ign={} took {}ms", ign, singleElapsed)
 
-        // Progress logging
         val currentLoaded = loaded.get()
-        if (currentLoaded % PROGRESS_LOG_INTERVAL == 0) {
-            logProgress(currentLoaded, total, failed.get(), start)
-        }
+        logCharacterProgress(currentLoaded, total, failed.get(), start)
+        saveCheckpointIfNeeded(currentLoaded, startIndex, index, total, completedSet)
 
-        // Checkpoint
-        if (currentLoaded % CHECKPOINT_INTERVAL == 0) {
+        val decision = throttler.onSuccess()
+        Thread.sleep(decision.delayMs)
+    }
+
+    private fun shouldSkipProcessing(ign: String, completedSet: MutableSet<String>): Boolean {
+        if (stopRequested.get()) {
+            return true
+        }
+        checkBackpressure()
+        return completedSet.contains(ign)
+    }
+
+    private fun logCharacterProgress(loaded: Int, total: Int, failed: Int, start: Instant) {
+        if (loaded % PROGRESS_LOG_INTERVAL == 0) {
+            logProgress(loaded, total, failed, start)
+        }
+    }
+
+    private fun saveCheckpointIfNeeded(loaded: Int, startIndex: Int, index: Int, total: Int, completedSet: MutableSet<String>) {
+        if (loaded % CHECKPOINT_INTERVAL == 0) {
             val lastIndex = startIndex + index
             checkpointManager.save(
                 completedSet.toSet(),
@@ -380,20 +386,10 @@ class BulkLoaderService(
                 total,
             )
         }
-
-        // Throttle
-        val decision = throttler.onSuccess()
-        Thread.sleep(decision.delayMs)
     }
 
     private fun recordFailure(userIgn: String, error: Throwable) {
-        val errorType = when {
-            error.message?.contains("429", ignoreCase = true) == true -> "RATE_LIMIT"
-            error.message?.contains("timeout", ignoreCase = true) == true -> "TIMEOUT"
-            error.message?.contains("not found", ignoreCase = true) == true -> "NOT_FOUND"
-            else -> "UNKNOWN"
-        }
-
+        val errorType = classifyError(error)
         failedTracker.record(
             FailedCharactersTracker.FailedEntry(
                 userIgn = userIgn,
@@ -402,6 +398,13 @@ class BulkLoaderService(
                 retryCount = 0,
             ),
         )
+    }
+
+    private fun classifyError(error: Throwable): String = when {
+        error.message?.contains("429", ignoreCase = true) == true -> "RATE_LIMIT"
+        error.message?.contains("timeout", ignoreCase = true) == true -> "TIMEOUT"
+        error.message?.contains("not found", ignoreCase = true) == true -> "NOT_FOUND"
+        else -> "UNKNOWN"
     }
 
     private fun logProgress(

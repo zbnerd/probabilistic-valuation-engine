@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import org.awaitility.Awaitility.await
 
 @Tag("integration")
 @DisplayName("GlobalAdmissionControl Tests")
@@ -216,7 +217,12 @@ class GlobalAdmissionControlTest {
             }
         }
 
-        Thread.sleep(100)
+        // Wait for in-flight to stabilize
+        await().atMost(500, TimeUnit.MILLISECONDS).until {
+            val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
+            val currentInFlight = inFlightGauge?.value() ?: 0.0
+            currentInFlight > 0
+        }
 
         val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
         val currentInFlight = inFlightGauge?.value() ?: 0.0
@@ -242,7 +248,12 @@ class GlobalAdmissionControlTest {
             "result1"
         }
 
-        Thread.sleep(50)
+        // Wait for first task to start
+        await().atMost(200, TimeUnit.MILLISECONDS).until {
+            val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
+            val currentInFlight = inFlightGauge?.value() ?: 0.0
+            currentInFlight > 0
+        }
 
         val f2 = testControl.submitOrWait("key2") {
             "result2"

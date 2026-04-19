@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import java.sql.Timestamp
 import java.time.Instant
+import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
@@ -58,11 +59,12 @@ class PostgresL2CacheStrategy(
     private val executor: LogicExecutor,
     private val objectMapper: ObjectMapper,
     private val meterRegistry: MeterRegistry,
+    private val cacheProperties: CacheProperties,
 ) : L2CacheStrategy {
 
     companion object {
         private val log = LoggerFactory.getLogger(PostgresL2CacheStrategy::class.java)
-        private const val KEY_VERSION = "v1"
+        private const val DEFAULT_KEY_VERSION = "v1"
 
         /**
          * ThreadLocal flag to disable L2 cache writes during bulk loading.
@@ -263,8 +265,8 @@ class PostgresL2CacheStrategy(
                 // Key format: {cacheName}:v1:{actualKey}
                 // Range query using >= and < with COLLATE "C" for B-tree index scan
                 // '~' (0x7E) is the highest printable ASCII char, guaranteed > any valid actualKey
-                val keyPrefix = "$cacheName:$KEY_VERSION:"
-                val upperBound = "$cacheName:$KEY_VERSION~"
+                val keyPrefix = "$cacheName:${cacheProperties.keyVersion}:"
+                val upperBound = "$cacheName:${cacheProperties.keyVersion}~"
                 val sql = "DELETE FROM cache_storage WHERE cache_key >= ? COLLATE \"C\" AND cache_key < ? COLLATE \"C\""
 
                 val deleted = jdbcTemplate.update(sql, keyPrefix, upperBound)
@@ -317,6 +319,6 @@ class PostgresL2CacheStrategy(
         require('~' !in cacheName && '~' !in actualKey) {
             "Cache key must not contain '~' (reserved for range query boundary): cacheName=$cacheName, actualKey=$actualKey"
         }
-        return "$cacheName:$KEY_VERSION:$actualKey"
+        return "$cacheName:${cacheProperties.keyVersion}:$actualKey"
     }
 }

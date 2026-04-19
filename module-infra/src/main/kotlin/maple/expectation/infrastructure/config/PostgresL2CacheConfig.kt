@@ -84,7 +84,8 @@ class PostgresL2CacheConfig {
         l2Strategy: L2CacheStrategy,
         executor: LogicExecutor,
         meterRegistry: MeterRegistry,
-    ): CacheManager = PostgresL2CacheFactory(l2Strategy, executor, meterRegistry)
+        cacheProperties: CacheProperties,
+    ): CacheManager = PostgresL2CacheFactory(l2Strategy, executor, meterRegistry, cacheProperties)
 
     /**
      * TieredCacheManager with PostgreSQL L2 backend (Primary CacheManager)
@@ -161,7 +162,8 @@ class PostgresL2CacheConfig {
         l2Strategy: L2CacheStrategy,
         executor: LogicExecutor,
         meterRegistry: MeterRegistry,
-    ): CacheManager = PostgresL2CacheFactory(l2Strategy, executor, meterRegistry)
+        cacheProperties: CacheProperties,
+    ): CacheManager = PostgresL2CacheFactory(l2Strategy, executor, meterRegistry, cacheProperties)
 
     /**
      * Expectation 전용 ObjectMapper

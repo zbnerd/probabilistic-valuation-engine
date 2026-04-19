@@ -42,6 +42,10 @@ data class CacheProperties(
     /** L2 캐시 설정 (Issue #555: Caffeine-only mode 지원) */
     @field:NotNull @field:Valid
     var l2: L2 = L2(),
+
+    /** Cache key version for cache_storage key format: {cacheName}:{keyVersion}:{actualKey} */
+    @field:NotNull
+    var keyVersion: String = "v1",
 ) {
     /**
      * 캐시별 L1/L2 스펙

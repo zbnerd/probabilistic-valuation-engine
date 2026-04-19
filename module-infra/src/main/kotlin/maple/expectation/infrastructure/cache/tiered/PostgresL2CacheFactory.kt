@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.cache.tiered
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
+import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
@@ -31,8 +32,9 @@ import org.springframework.cache.CacheManager
  * fun postgresL2CacheManager(
  *     l2Strategy: L2CacheStrategy,
  *     executor: LogicExecutor,
- *     meterRegistry: MeterRegistry
- * ): CacheManager = PostgresL2CacheFactory(l2Strategy, executor, meterRegistry)
+ *     meterRegistry: MeterRegistry,
+ *     cacheProperties: CacheProperties
+ * ): CacheManager = PostgresL2CacheFactory(l2Strategy, executor, meterRegistry, cacheProperties)
  * </pre>
  *
  * @see L2CacheStrategy
@@ -42,10 +44,12 @@ class PostgresL2CacheFactory(
     private val l2Strategy: L2CacheStrategy,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
+    private val cacheProperties: CacheProperties,
 ) : CacheManager {
 
     companion object {
         private val log = LoggerFactory.getLogger(PostgresL2CacheFactory::class.java)
+        private const val DEFAULT_L2_TTL_SECONDS = 15L
     }
 
     private val cacheMap = ConcurrentHashMap<String, Cache>()
@@ -55,11 +59,21 @@ class PostgresL2CacheFactory(
     override fun getCacheNames(): MutableCollection<String> = cacheMap.keys
 
     /**
-     * Create a new PostgresL2CacheAdapter instance
+     * Create a new PostgresL2CacheAdapter instance with cache-specific TTL from YAML config.
      */
     private fun createPostgresL2CacheAdapter(name: String): Cache {
-        log.debug("[PostgresL2Factory] Creating cache: {}", name)
-        return PostgresL2CacheAdapter(name, l2Strategy, executor, meterRegistry)
+        val ttlSeconds = resolveTtlSeconds(name)
+        log.debug("[PostgresL2Factory] Creating cache: {} with TTL: {}s", name, ttlSeconds)
+        return PostgresL2CacheAdapter(name, l2Strategy, executor, meterRegistry, ttlSeconds)
+    }
+
+    private fun resolveTtlSeconds(cacheName: String): Long {
+        val spec = cacheProperties.specs[cacheName]
+        if (spec == null) {
+            log.warn("[PostgresL2Factory] Cache '{}' not found in specs, using default TTL={}s. Define it in cache.specs.", cacheName, DEFAULT_L2_TTL_SECONDS)
+            return DEFAULT_L2_TTL_SECONDS
+        }
+        return spec.l2TtlMinutes.toLong() * 60
     }
 }
 
@@ -78,11 +92,11 @@ class PostgresL2CacheAdapter(
     private val l2Strategy: L2CacheStrategy,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
+    private val ttlSeconds: Long,
 ) : org.springframework.cache.support.AbstractValueAdaptingCache(true) {
 
     companion object {
         private val log = LoggerFactory.getLogger(PostgresL2CacheAdapter::class.java)
-        private const val L2_TTL_SECONDS = 15L
     }
 
     // Metrics
@@ -124,7 +138,7 @@ class PostgresL2CacheAdapter(
                 putCounter.increment()
                 // Fix: Ensure String values are properly serialized through TypedValue wrapper
                 // The L2Strategy will wrap the value in TypedValue for type-safe deserialization
-                l2Strategy.put(key.toString(), value, L2_TTL_SECONDS)
+                l2Strategy.put(key.toString(), value, ttlSeconds)
             },
             context,
         )

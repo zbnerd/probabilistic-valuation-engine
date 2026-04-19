@@ -6,6 +6,7 @@ import com.zaxxer.hikari.HikariDataSource
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import maple.expectation.config.TestcontainersConfiguration
 import maple.expectation.infrastructure.cache.TieredCacheManager
+import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationPublisher
 import maple.expectation.infrastructure.cache.invalidation.impl.PostgresNotifyPublisher
@@ -88,8 +89,8 @@ class MultiInstanceCacheInvalidationTest {
         )
 
         // 3. Shared L2
-        val l2Strategy = PostgresL2CacheStrategy(jdbcTemplate, executor, objectMapper, meterRegistry)
-        l2CacheFactory = PostgresL2CacheFactory(l2Strategy, executor, meterRegistry)
+        val l2Strategy = PostgresL2CacheStrategy(jdbcTemplate, executor, objectMapper, meterRegistry, CacheProperties())
+        l2CacheFactory = PostgresL2CacheFactory(l2Strategy, executor, meterRegistry, CacheProperties())
 
         // 4. Shared publisher
         publisher = PostgresNotifyPublisher(jdbcTemplate, objectMapper, executor, meterRegistry)

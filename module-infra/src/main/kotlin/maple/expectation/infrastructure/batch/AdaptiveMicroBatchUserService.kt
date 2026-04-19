@@ -180,6 +180,13 @@ class AdaptiveMicroBatchUserService<T : Any>(
             return cached
         }
 
+        // Step 1.5: Backpressure — in-flight 초과 시 fail-fast
+        if (inFlightRequests.size >= MAX_IN_FLIGHT) {
+            rejectedCounter.increment()
+            log.warn { "[AdaptiveMicroBatch] Rejected: inFlight=${inFlightRequests.size}, key=$key" }
+            throw IllegalStateException("In-flight requests limit reached (${inFlightRequests.size})")
+        }
+
         // Step 2: Request Coalescing
         val newFuture = CompletableFuture<T?>()
         val existingFuture = inFlightRequests.putIfAbsent(key, newFuture)
@@ -210,6 +217,13 @@ class AdaptiveMicroBatchUserService<T : Any>(
         if (cached != null) {
             cacheHitCounter.increment()
             return cached
+        }
+
+        // Step 1.5: Backpressure — in-flight 초과 시 fail-fast
+        if (inFlightRequests.size >= MAX_IN_FLIGHT) {
+            rejectedCounter.increment()
+            log.warn { "[AdaptiveMicroBatch] Rejected: inFlight=${inFlightRequests.size}, key=$key" }
+            throw IllegalStateException("In-flight requests limit reached (${inFlightRequests.size})")
         }
 
         // Step 2: Request Coalescing

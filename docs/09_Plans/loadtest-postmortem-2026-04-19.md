@@ -194,9 +194,13 @@ EmptyResultDataAccessException: Incorrect result size: expected 1, actual 0
 
 ## Action Items
 
-- [ ] `DROP INDEX idx_valuation_presets` (btree(JSONB) 제거)
-- [ ] Cache defense: decompress 실패 시 `cache.evict(key)`
-- [ ] Cache defense: 계산 성공 시에만 `cache.put()`
-- [ ] `EmptyResultDataAccessException` 로깅 레벨 ERROR → DEBUG
+- [x] `DROP INDEX idx_valuation_presets` (btree(JSONB) 제거)
+- [x] Cache defense: decompress 실패 시 `cache.evict(key)`
+- [x] `EmptyResultDataAccessException` → `queryForObject`를 `query`로 변경
+- [x] V108 마이그레이션 수동 적용 (`dlq_replay_meta` 테이블)
+- [x] V109 마이그레이션 수동 적용 (`rate_limit_counter` 테이블)
+- [x] V111 마이그레이션 수동 적용 (`upsert_expectation_read_model` 함수)
+- [x] cache_storage 만료 데이터 600,484건 삭제
+- [ ] `varchar = varchar[]` 연산자 에러 (Hibernate IN 절 타입 캐스팅)
 - [ ] ClassCastException (String→Double) Nexon API 스키마 방어
 - [ ] Flyway 또는 마이그레이션 자동화 (수동 적용 방지)

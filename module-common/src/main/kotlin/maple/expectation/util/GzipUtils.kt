@@ -57,6 +57,24 @@ object GzipUtils {
         return String(gzip.readAllBytes(), StandardCharsets.UTF_8)
     }
 
+    /**
+     * 문자열을 GZIP 압축합니다 (IOException을 IllegalStateException로 래핑).
+     *
+     * LogicExecutor 패턴과 함께 사용하기 위해 IOException을 unchecked exception으로 변환합니다.
+     *
+     * @param str 압축할 문자열
+     * @return 압축된 바이트 배열
+     * @throws IllegalStateException 압축 중 I/O 오류 발생 시 (IOException 래핑)
+     */
+    @JvmStatic
+    fun compressUnchecked(str: String?): ByteArray {
+        return try {
+            compress(str)
+        } catch (e: IOException) {
+            throw IllegalStateException("GZIP compression failed", e)
+        }
+    }
+
     private fun isGzipped(data: ByteArray): Boolean = data.size >= 2 &&
         data[0] == GZIPInputStream.GZIP_MAGIC.toByte() &&
         data[1] == (GZIPInputStream.GZIP_MAGIC shr 8).toByte()

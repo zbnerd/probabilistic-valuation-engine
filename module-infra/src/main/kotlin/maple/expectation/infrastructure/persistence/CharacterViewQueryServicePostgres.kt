@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.persistence
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -27,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional
 @ConditionalOnProperty(name = ["v5.enabled"], havingValue = "true", matchIfMissing = false)
 class CharacterViewQueryServicePostgres(
     private val repository: CharacterValuationViewJpaRepository,
+    private val readModelWriteService: ExpectationReadModelWriteService,
+    private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
 ) {
@@ -51,49 +54,62 @@ class CharacterViewQueryServicePostgres(
     }
 
     /**
-     * Upsert character valuation view
+     * Upsert character valuation view and propagate to read model.
+     *
+     * Transaction: Single @Transactional with REQUIRED propagation.
+     * character_valuation_views is always written. character_expectation_read_model
+     * is written on best-effort basis — failure is logged and does not roll back
+     * the main entity save. Data self-heals on next calculation cycle.
+     *
+     * Caution: If called from @Async method, the transaction boundary
+     * is the async method's caller. Use REQUIRES_NEW if isolation needed.
      *
      * @param entity The entity to upsert
      */
     @Transactional("transactionManager")
     fun upsert(entity: CharacterValuationViewEntity) {
         val context = TaskContext.of("PostgresQuery", "Upsert", entity.userIgn)
-
-        executor.executeVoid(
-            {
-                val existing = findExistingEntity(entity)
-
-                if (existing != null) {
-                    val incomingVersion = entity.version ?: 0L
-                    val currentVersion = existing.lastAppliedVersion ?: existing.version ?: 0L
-
-                    if (incomingVersion > currentVersion) {
-                        repository.save(buildUpdatedEntity(existing, entity, incomingVersion))
-                        meterRegistry.counter("postgres.optimistic_lock.updated").increment()
-                        log.debug(
-                            "[OptimisticLock] Updated: userIgn={}, version={}->{}",
-                            entity.userIgn,
-                            currentVersion,
-                            incomingVersion,
-                        )
-                    } else {
-                        meterRegistry.counter("postgres.optimistic_lock.skipped").increment()
-                        log.debug(
-                            "[OptimisticLock] Skipped: userIgn={}, incoming={}, current={}",
-                            entity.userIgn,
-                            incomingVersion,
-                            currentVersion,
-                        )
-                    }
-                } else {
-                    repository.save(buildNewEntity(entity))
-                    meterRegistry.counter("postgres.optimistic_lock.inserted").increment()
-                    log.debug("[OptimisticLock] Inserted: userIgn={}, version=1", entity.userIgn)
-                }
-            },
-            context,
-        )
+        executor.executeVoid({ performUpsert(entity) }, context)
     }
+
+    private fun performUpsert(entity: CharacterValuationViewEntity) {
+        val existing = findExistingEntity(entity)
+        val saved = if (existing != null) {
+            updateOrSkipExisting(existing, entity)
+        } else {
+            insertNew(entity)
+        }
+        // Always write to read model with latest available data
+        val readModelSource = saved ?: existing
+        if (readModelSource != null) {
+            saveToReadModel(readModelSource)
+        }
+    }
+
+    private fun updateOrSkipExisting(
+        existing: CharacterValuationViewEntity,
+        incoming: CharacterValuationViewEntity,
+    ): CharacterValuationViewEntity? {
+        val incomingVersion = incoming.version ?: 0L
+        val currentVersion = existing.lastAppliedVersion ?: existing.version ?: 0L
+
+        return if (incomingVersion > currentVersion) {
+            repository.save(buildUpdatedEntity(existing, incoming, incomingVersion)).also {
+                meterRegistry.counter("postgres.optimistic_lock.updated").increment()
+                log.debug("[OptimisticLock] Updated: userIgn={}, version={}->{}", incoming.userIgn, currentVersion, incomingVersion)
+            }
+        } else {
+            meterRegistry.counter("postgres.optimistic_lock.skipped").increment()
+            log.debug("[Optgres] Skipping stale update: userIgn={}, version={}", existing.userIgn, incomingVersion)
+            null
+        }
+    }
+
+    private fun insertNew(entity: CharacterValuationViewEntity): CharacterValuationViewEntity =
+        repository.save(buildNewEntity(entity)).also {
+            meterRegistry.counter("postgres.optimistic_lock.inserted").increment()
+            log.debug("[OptimisticLock] Inserted: userIgn={}, version=1", entity.userIgn)
+        }
 
     private fun findExistingEntity(entity: CharacterValuationViewEntity): CharacterValuationViewEntity? =
         entity.messageId?.let(repository::findByMessageId)
@@ -189,5 +205,24 @@ class CharacterViewQueryServicePostgres(
             0L,
             context,
         )
+    }
+
+    private fun saveToReadModel(entity: CharacterValuationViewEntity) {
+        // calculated_at uses application time (Instant.now() at calculation).
+        // TTL check in Next.js uses DB NOW(). MAX_STALE_SECONDS (5s) absorbs NTP drift.
+        val calculatedAt = entity.calculatedAt
+            ?: throw IllegalStateException("calculatedAt must be set before writing to read model: userIgn=${entity.userIgn}")
+        val json = serializeEntityToJson(entity)
+        executor.executeOrCatch(
+            { readModelWriteService.writeToReadModelRaw(entity.userIgn, json, calculatedAt) },
+            { e ->
+                log.warn("[ReadModel] Non-fatal write failure (will retry on next calculation): userIgn={}", entity.userIgn, e)
+            },
+            TaskContext.of("ReadModel", "BestEffortWrite", entity.userIgn),
+        )
+    }
+
+    private fun serializeEntityToJson(entity: CharacterValuationViewEntity): String {
+        return objectMapper.writeValueAsString(entity)
     }
 }

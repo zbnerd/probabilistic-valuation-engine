@@ -93,3 +93,4 @@ valid-users-*.txt
 
 # Load test scripts (experimental)
 load-test-scripts/wrk-*.lua
+.worktrees/

@@ -67,6 +67,15 @@ interface ExpectationV4Port {
     fun getGzipExpectation(userIgn: String, force: Boolean): ByteArray?
 
     /**
+     * Write-only calculation for Phase 1 (BS2) batch UPSERT.
+     *
+     * <p>Calculates expectation without DB writes (no persistence, cache, or view writes).
+     * Returns Any to avoid module-core → module-web dependency.
+     * Caller must cast: `as? EquipmentExpectationResponseV4`
+     */
+    fun calculateExpectationWriteOnly(userIgn: String, force: Boolean, taskId: String?): Any
+
+    /**
      * L1 캐시에서 GZIP 직접 조회 (Fast Path)
      *
      * @param userIgn 캐릭터 IGN

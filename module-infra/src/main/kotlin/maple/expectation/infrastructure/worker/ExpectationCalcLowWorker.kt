@@ -5,6 +5,9 @@ import java.util.concurrent.Executor
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
+import maple.expectation.core.port.out.GameCharacterPort
+import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
+import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.pgmq.PgmqClient
@@ -15,6 +18,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionTemplate
 
 @Component
 @Profile("!test")
@@ -29,6 +33,10 @@ class ExpectationCalcLowWorker(
     characterOcidPort: CharacterOcidPort,
     equipmentFanOutPort: EquipmentFanOutPort,
     @Qualifier("asyncExecutor") preWarmExecutor: Executor,
+    gameCharacterPort: GameCharacterPort,
+    l2CacheStrategy: L2CacheStrategy,
+    cacheProperties: CacheProperties,
+    transactionTemplate: TransactionTemplate,
 ) : AbstractExpectationCalcWorker(
     pgmqClient,
     executor,
@@ -40,6 +48,10 @@ class ExpectationCalcLowWorker(
     characterOcidPort,
     equipmentFanOutPort,
     preWarmExecutor,
+    gameCharacterPort,
+    l2CacheStrategy,
+    cacheProperties,
+    transactionTemplate,
 ) {
 
     override val queueName: String = QUEUE_NAME

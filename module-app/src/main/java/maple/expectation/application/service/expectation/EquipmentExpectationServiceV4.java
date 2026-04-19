@@ -167,6 +167,13 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
     calculateExpectation(userIgn, force);
   }
 
+  /** Write-only calculation — no persistence, cache, or view writes (BS2 Phase 1) */
+  public EquipmentExpectationResponseV4 calculateExpectationWriteOnly(
+      String userIgn, boolean force, @Nullable String taskId) {
+    validateInitialized();
+    return doCalculateExpectationWriteOnly(userIgn);
+  }
+
   /** GZIP 압축된 기대값 응답 반환 (동기) */
   public byte[] getGzipExpectation(String userIgn, boolean force) {
     validateInitialized();
@@ -216,6 +223,26 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
           syncToViewTable(userIgn, character, response, taskId);
 
           return response;
+        },
+        context);
+  }
+
+  /**
+   * Write-only calculation — reuses existing private methods but skips persistence and view sync.
+   *
+   * <p>Used by BS2 Phase 1 batch UPSERT worker for pure calculation.
+   */
+  private EquipmentExpectationResponseV4 doCalculateExpectationWriteOnly(String userIgn) {
+    TaskContext context = TaskContext.of("ExpectationV4", "CalculateWriteOnly", userIgn);
+
+    return executor.execute(
+        () -> {
+          GameCharacter character = findCharacterBypassingWorker(userIgn);
+          byte[] equipmentData = loadEquipmentDataAsync(character).join();
+          List<PresetExpectation> presetResults =
+              calculateAllPresets(equipmentData, character.getCharacterClass());
+          PresetExpectation maxPreset = findMaxPreset(presetResults);
+          return buildResponse(userIgn, maxPreset, presetResults, false);
         },
         context);
   }

@@ -147,6 +147,28 @@ class PgmqClient(
     }
 
     /**
+     * 배치 메시지 보관 (BS4)
+     *
+     * <p>처리 완료된 메시지를 배치로 아카이브 테이블로 이동.
+     * 개별 archive() 대비 단일 쿼리로 N개 메시지를 처리하여 DB 왕복 감소.
+     *
+     * @param queueName 큐 이름
+     * @param messageIds 메시지 ID 목록
+     * @return 아카이브된 메시지 수
+     */
+    @CircuitBreaker(name = "pgmq", fallbackMethod = "archiveBatchFallback")
+    fun archiveBatch(queueName: String, messageIds: List<Long>): Int {
+        if (messageIds.isEmpty()) return 0
+        validateQueueName(queueName)
+        val context = TaskContext.of("PgmqClient", "ArchiveBatch", "$queueName:${messageIds.size}")
+        return executor.executeOrDefault(
+            { performArchiveBatch(queueName, messageIds) },
+            0,
+            context,
+        )
+    }
+
+    /**
      * 메시지 삭제
      *
      * <p>메시지를 완전히 삭제 (DLQ 이동용).
@@ -315,6 +337,23 @@ class PgmqClient(
         return messages
     }
 
+    private fun performArchiveBatch(queueName: String, messageIds: List<Long>): Int {
+        val queueTable = "pgmq.q_$queueName"
+        val archiveTable = "pgmq.a_$queueName"
+        val placeholders = messageIds.map { "?" }.joinToString(",")
+        return jdbcTemplate.queryForObject(
+            """
+            WITH deleted AS (
+                DELETE FROM $queueTable WHERE msg_id IN ($placeholders)
+                RETURNING *
+            )
+            SELECT COUNT(*) FROM $archiveTable
+            """.trimIndent(),
+            Int::class.java,
+            *messageIds.toTypedArray(),
+        ) ?: 0
+    }
+
     private fun performArchive(queueName: String, messageId: Long): Boolean {
         val result = jdbcTemplate.queryForObject(
             "SELECT pgmq.archive(?, ?) as success",
@@ -423,6 +462,11 @@ class PgmqClient(
     ): List<PgmqMessage<T>> {
         log.warn("⚡ [PGMQ] Circuit Breaker OPEN - read fallback: queue={}", queueName, e)
         return emptyList() // 빈 리스트 반환으로 처리 건너뜀
+    }
+
+    private fun archiveBatchFallback(queueName: String, messageIds: List<Long>, e: Throwable): Int {
+        log.error("[PGMQ] Circuit Breaker OPEN - archiveBatch fallback: queue={}, count={}", queueName, messageIds.size, e)
+        return 0
     }
 
     private fun archiveFallback(queueName: String, messageId: Long, e: Throwable): Boolean {

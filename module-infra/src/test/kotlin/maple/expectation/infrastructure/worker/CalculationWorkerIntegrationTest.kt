@@ -550,6 +550,8 @@ class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {
 
         override fun calculateExpectation(userIgn: String, force: Boolean, taskId: String?): Any = calculateExpectation(userIgn, force)
 
+        override fun calculateExpectationWriteOnly(userIgn: String, force: Boolean, taskId: String?): Any = calculateExpectation(userIgn, force)
+
         override fun getGzipExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<ByteArray?> = CompletableFuture.completedFuture(byteArrayOf())
 
         override fun getGzipExpectation(userIgn: String, force: Boolean): ByteArray? = byteArrayOf()

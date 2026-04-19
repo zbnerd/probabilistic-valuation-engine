@@ -239,6 +239,38 @@ class PostgresL2CacheStrategy(
         )
     }
 
+    override fun putAll(entries: List<Pair<String, Any>>, ttlMinutes: Long) {
+        if (disableL2Writes.get() == true) return
+        if (entries.isEmpty()) return
+
+        val context = TaskContext.of("PostgresL2Strategy", "PutAll", "${entries.size}")
+
+        executor.executeVoidJava({
+            putCounter.increment()
+
+            val expiresAt = Timestamp.from(Instant.now().plusSeconds(ttlMinutes * 60))
+
+            val sql = """
+                INSERT INTO cache_storage (cache_key, cache_value, expires_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT (cache_key)
+                DO UPDATE SET
+                    cache_value = EXCLUDED.cache_value,
+                    expires_at = EXCLUDED.expires_at
+            """.trimIndent()
+
+            val batchArgs = entries.map { (key, value) ->
+                val typedValue = TypedValue(value)
+                val valueBytes: ByteArray = objectMapper.writeValueAsBytes(typedValue)
+                arrayOf(key, valueBytes, expiresAt)
+            }.toList()
+
+            jdbcTemplate.batchUpdate(sql, batchArgs)
+
+            log.debug("[PostgresL2] PutAll: {} entries, ttl={}min", entries.size, ttlMinutes)
+        }, context)
+    }
+
     override fun evict(key: String) {
         val context = TaskContext.of("PostgresL2Strategy", "Evict", key)
 

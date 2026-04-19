@@ -9,6 +9,8 @@ import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 
+private typealias PhaseOneResult<T> = Pair<Any?, PgmqMessage<T>>
+
 /**
  * PGMQ Worker 추상 클래스 (ADR-002)
  *
@@ -28,7 +30,7 @@ import org.springframework.scheduling.annotation.Scheduled
  * @param T 메시지 페이로드 타입
  */
 abstract class PgmqWorker<T : Any>(
-    private val pgmqClient: PgmqClient,
+    protected val pgmqClient: PgmqClient,
     protected val executor: LogicExecutor,
     private val config: PgmqWorkerConfig,
     private val meterRegistry: MeterRegistry,
@@ -92,6 +94,28 @@ abstract class PgmqWorker<T : Any>(
     }
 
     /**
+     * Whether this worker supports two-phase batch processing.
+     * P1-9 FIX: Explicit opt-in via property instead of runtime probe.
+     */
+    protected open val supportsTwoPhase: Boolean = false
+
+    /**
+     * Phase 1: Calculate without DB writes (BS2)
+     *
+     * Override in subclasses to enable two-phase batch processing.
+     * Default: returns null -> falls back to single-phase process() per message.
+     */
+    protected open fun calculateOnly(message: PgmqMessage<T>): Any? = null
+
+    /**
+     * Phase 2: Batch write calculated results (BS4/BS5)
+     *
+     * Override in subclasses to batch persist results from Phase 1.
+     * Default: no-op -> single-phase fallback.
+     */
+    protected open fun batchWrite(results: List<CalculationResult>) {}
+
+    /**
      * 메시지 배치 처리
      *
      * <p>1. 큐에서 메시지 읽기
@@ -102,7 +126,6 @@ abstract class PgmqWorker<T : Any>(
     @Scheduled(fixedDelayString = "\${pgmq.worker.common.polling-interval-ms:300}")
     fun processMessages() {
         if (!lifecycleWrapper.beforeTask()) return
-        // Worker가 비활성화되어 있으면 스킵
         if (!workerSettings.enabled) {
             lifecycleWrapper.afterTask()
             return
@@ -116,7 +139,6 @@ abstract class PgmqWorker<T : Any>(
 
             val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
 
-            // 큐 깊이 업데이트 (폴링 사이클마다)
             metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
 
             if (messages.isEmpty()) {
@@ -124,32 +146,103 @@ abstract class PgmqWorker<T : Any>(
                 return@executeVoid
             }
 
-            log.debug("📥 [{}] Processing {} messages", queueName, messages.size)
+            log.debug("[{}] Processing {} messages", queueName, messages.size)
 
-            // In-flight + 큐 대기 시간 기록
             messages.forEach { message ->
                 metrics.inflightIncrement()
                 metrics.recordWaitDuration(message.enqueuedAt)
             }
 
-            // ADR-700: 배치 pre-warm (OCID dedup + equipment cache pre-warm)
             preWarmBatch(messages)
 
-            val futures = messages.map { message ->
-                CompletableFuture.supplyAsync({
-                    processSingleMessage(message)
-                }, workerPool)
+            // P1-9 FIX: Use explicit property instead of runtime probe
+            if (supportsTwoPhase) {
+                processBatchTwoPhase(messages)
+            } else {
+                processBatchSinglePhase(messages)
             }
-            // Non-blocking: return immediately so next poll can start.
-            // Head-of-line blocking removed — Virtual Threads handle concurrency,
-            // visibility timeout prevents double-read while processing.
-            CompletableFuture.allOf(*futures.toTypedArray())
-                .exceptionally { ex ->
-                    log.warn("[{}] Batch completion error: {}", queueName, ex.message)
-                    null
-                }
-                .thenRun { lifecycleWrapper.afterTask() }
         }, context)
+    }
+
+    /**
+     * P0-2 FIX: Thread-safe result collection.
+     * P1-5 FIX: No try-catch — LogicExecutor handles exceptions.
+     * P1-7 FIX: Lambda extracted to private method.
+     */
+    private fun processBatchTwoPhase(messages: List<PgmqMessage<T>>) {
+        val futures = messages.map { message ->
+            CompletableFuture.supplyAsync(
+                { executePhaseOne(message) },
+                workerPool,
+            )
+        }
+
+        CompletableFuture.allOf(*futures.toTypedArray())
+            .thenRun { handlePhaseTwoCompletion(futures) }
+            .exceptionally { ex ->
+                log.warn("[{}] Batch completion error: {}", queueName, ex.message)
+                lifecycleWrapper.afterTask()
+                null
+            }
+    }
+
+    private fun handlePhaseTwoCompletion(
+        futures: List<CompletableFuture<PhaseOneResult<T>>>,
+    ) {
+        val (successes, failures) = futures
+            .map { it.join() }
+            .partition { it.first != null }
+
+        val successResults = successes.mapNotNull { it.first as? CalculationResult }
+        val failedMessages = failures.map { it.second }
+
+        if (successResults.isNotEmpty()) {
+            batchWrite(successResults)
+            successResults.forEach {
+                metrics.success.increment()
+                metrics.inflightDecrement()
+            }
+        }
+
+        failedMessages.forEach { message -> processSingleMessage(message) }
+
+        lifecycleWrapper.afterTask()
+    }
+
+    /**
+     * P1-5 FIX: LogicExecutor wraps calculation.
+     * P1-7 FIX: Extracted private method.
+     * P0-1 FIX(R3): executeWithFinally for concurrentDecrement (Zero Try-Catch compliance).
+     */
+    private fun executePhaseOne(message: PgmqMessage<T>): PhaseOneResult<T> {
+        val context = TaskContext.of("PgmqWorker", "CalculateOnly", "$queueName:${message.messageId}")
+        return executor.executeWithFinally(
+            task = {
+                metrics.concurrentIncrement()
+                val result = executor.executeOrDefault(
+                    { calculateOnly(message) },
+                    null,
+                    context,
+                )
+                result to message
+            },
+            finallyBlock = { metrics.concurrentDecrement() },
+            context = context,
+        )
+    }
+
+    private fun processBatchSinglePhase(messages: List<PgmqMessage<T>>) {
+        val futures = messages.map { message ->
+            CompletableFuture.supplyAsync({
+                processSingleMessage(message)
+            }, workerPool)
+        }
+        CompletableFuture.allOf(*futures.toTypedArray())
+            .exceptionally { ex ->
+                log.warn("[{}] Batch completion error: {}", queueName, ex.message)
+                null
+            }
+            .thenRun { lifecycleWrapper.afterTask() }
     }
 
     /**

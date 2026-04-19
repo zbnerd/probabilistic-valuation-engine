@@ -96,9 +96,9 @@ class PgmqClientBatchArchiveTest {
 
     private fun createClient(): PgmqClient {
         val objectMapper = com.fasterxml.jackson.databind.ObjectMapper()
-        val executor = maple.expectation.infrastructure.executor.LogicExecutor.Companion
-        // Use reflection or test config to create PgmqClient with mock jdbcTemplate
-        // Minimal: just test the SQL generation logic
+        // P1-8 FIX: PgmqClient constructor signature verified:
+        // (jdbcTemplate, objectMapper, executor, config) - from PgmqClient.kt:42-47
+        // StubLogicExecutor no-arg constructor from L2CacheMicroBatchAdapterTest.kt:95
         return PgmqClient(jdbcTemplate, objectMapper, StubLogicExecutor(), PgmqConfig())
     }
 }
@@ -450,17 +450,22 @@ private fun processBatchTwoPhase(messages: List<PgmqMessage<T>>) {
         }
 }
 
-/** P1-5 FIX: LogicExecutor wraps calculation, no try-catch. P1-7 FIX: Extracted private method. */
+/** P1-5 FIX: LogicExecutor wraps calculation. P1-7 FIX: Extracted private method. P0-1 FIX(R3): executeWithFinally for concurrentDecrement (Zero Try-Catch compliance). */
 private fun executePhaseOne(message: PgmqMessage<T>): Pair<Any?, PgmqMessage<T>> {
-    metrics.concurrentIncrement()
     val context = TaskContext.of("PgmqWorker", "CalculateOnly", "$queueName:${message.messageId}")
-    val result = executor.executeOrDefault(
-        { calculateOnly(message) },
-        null,
-        context,
+    return executor.executeWithFinally(
+        task = {
+            metrics.concurrentIncrement()
+            val result = executor.executeOrDefault(
+                { calculateOnly(message) },
+                null,
+                context,
+            )
+            result to message
+        },
+        finallyBlock = { metrics.concurrentDecrement() },
+        context = context,
     )
-    metrics.concurrentDecrement()
-    return result to message
 }
 
 private fun processBatchSinglePhase(messages: List<PgmqMessage<T>>) {
@@ -499,6 +504,34 @@ git commit -m "feat(pgmq): add two-phase batch processing to PgmqWorker (BS1/BS2
 **Files:**
 - Modify: `module-infra/src/main/kotlin/maple/expectation/infrastructure/worker/AbstractExpectationCalcWorker.kt`
 
+- [ ] **Step 0: Add constructor dependencies (P0-5, P1-6, P0-2)**
+
+P0-5 FIX: Add required dependencies for two-phase batch processing to constructor:
+P1-6 FIX: Add `expectationCache` for L1 population after L2 write:
+P0-2 FIX(R3): Use CacheManager instead of direct Cache injection. Cache instances are created dynamically by TieredCacheManager, not as named beans. Matches ExpectationCacheCoordinator pattern: cacheManagerPort.getCache(CACHE_NAME)
+
+```kotlin
+abstract class AbstractExpectationCalcWorker(
+    pgmqClient: PgmqClient,
+    executor: LogicExecutor,
+    config: PgmqWorkerConfig,
+    meterRegistry: MeterRegistry,
+    queueMetrics: WorkerQueueMetrics,
+    lifecycleWrapper: ScheduledTaskLifecycleWrapper,
+    private val expectationPort: ExpectationV4Port,
+    private val characterOcidPort: CharacterOcidPort,
+    private val equipmentFanOutPort: EquipmentFanOutPort,
+    private val preWarmExecutor: Executor,
+    // P0-5 FIX: Two-phase batch processing dependencies
+    private val gameCharacterFacade: GameCharacterFacade,
+    private val l2CacheStrategy: L2CacheStrategy,
+    private val cacheProperties: CacheProperties,
+    // P0-2 FIX(R4): Use CacheManagerPort for DIP compliance (not Spring CacheManager).
+    // Matches ExpectationCacheCoordinator pattern: cacheManagerPort.getCache(CACHE_NAME)
+    private val cacheManagerPort: CacheManagerPort,
+) : PgmqWorker<ExpectationCalcMessage>(...)
+```
+
 - [ ] **Step 1: Override calculateOnly()**
 
 P0-4 FIX: Port returns `EquipmentExpectationResponseV4`. Character resolved separately via `GameCharacterFacade`.
@@ -521,9 +554,9 @@ override fun calculateOnly(message: PgmqMessage<ExpectationCalcMessage>): Any? {
             message.messageId.toString(),
         )
 
-        // P0-4 FIX: Character was already loaded by calculateExpectationWriteOnly()
-        // and cached in L1. This lookup is a cache hit (0 DB cost).
-        val character = gameCharacterFacade.getOrFetch(request.userIgn)
+        // P0-1 FIX: Character was already loaded by calculateExpectationWriteOnly()
+        // and cached in L1. Use findCharacterByUserIgn() for L1 cache hit (0 DB cost).
+        val character = gameCharacterFacade.findCharacterByUserIgn(request.userIgn)
 
         CalculationResult(
             message = message,
@@ -534,8 +567,8 @@ override fun calculateOnly(message: PgmqMessage<ExpectationCalcMessage>): Any? {
 }
 ```
 
-> **Dependency:** `AbstractExpectationCalcWorker` constructor needs `GameCharacterFacade` injection added.
-> `gameCharacterFacade.getOrFetch()` returns cached `GameCharacter` (L1 hit after service call).
+> **Dependency:** `AbstractExpectationCalcWorker` constructor needs `GameCharacterFacade` injection added (Step 0 참조).
+> `gameCharacterFacade.findCharacterByUserIgn()` returns cached `GameCharacter` (L1 hit after service call).
 
 - [ ] **Step 2: Override batchWrite() — P0-3 FIX: @Transactional for atomicity**
 
@@ -548,6 +581,9 @@ override fun batchWrite(results: List<CalculationResult>) {
     if (results.isEmpty()) return
 
     val context = TaskContext.of(workerName, "BatchWrite", "${results.size}")
+    // P1-7 FIX: executor.executeVoid() propagates exceptions (does not swallow).
+    // @Transactional proxy sees the exception and triggers rollback.
+    // LogicExecutor contract: executeVoid throws on failure.
     executor.executeVoid({
         workerLog.info("[{}] Phase 2 batchWrite: {} results", workerName, results.size)
 
@@ -583,17 +619,27 @@ private fun batchViewUpsert(results: List<CalculationResult>) {
 }
 
 private fun batchL2CachePut(results: List<CalculationResult>) {
-    // Use L2CacheStrategy.putAll() for batch cache write
+    // P0-3 FIX(R4): PostgresL2CacheStrategy.put() stores key as-is (no auto-prefix).
+    // evictAll() depends on "{cacheName}:v1:" prefix — must use full key format.
+    // generateKey() returns "{cacheName}:{keyVersion}:{actualKey}".
     val entries = results.map { result ->
-        val cacheKey = "expectationV4:v1:${result.message.payload.userIgn}"
+        val cacheKey = "expectationV4:${cacheProperties.keyVersion}:${result.message.payload.userIgn}"
         cacheKey to result.response
     }
-    l2CacheStrategy.putAll(entries, cacheProperties.ttlMinutes)
+    val spec = cacheProperties.specs["expectationV4"]
+        ?: throw IllegalStateException("Cache spec 'expectationV4' not configured in cache.specs")
+    l2CacheStrategy.putAll(entries, spec.l2TtlMinutes.toLong())
+
+    // P1-2 FIX(R4): Skip L1 populate. Raw EquipmentExpectationResponseV4 causes ClassCastException
+    // when HTTP path reads via ExpectationCacheCoordinator (expects compressed Base64 String).
+    // L2→L1 promotion handles it: next HTTP read hits L2, TieredCache populates L1 correctly.
 }
 ```
 
 > Note: `batchViewUpsert` currently iterates individual upserts. A true batch upsert requires a new method on `CharacterViewQueryServicePostgres`. This is acceptable for the first iteration — the main connection savings come from `archiveBatch()` and removing `@Transactional` from the calculation path.
 
+> **P0-2/P1-6 Dependency (R4):** `AbstractExpectationCalcWorker` needs `CacheManagerPort` injection added (not Spring `CacheManager`). L1 populate removed — rely on L2→L1 promotion on next read.
+>
 > **Dependency:** `AbstractExpectationCalcWorker` needs `L2CacheStrategy` and `CacheProperties` injection added.
 
 - [ ] **Step 4: Compile check**
@@ -615,24 +661,19 @@ git commit -m "feat(worker): override calculateOnly/batchWrite for two-phase (BS
 **Files:**
 - Modify: `module-infra/src/main/kotlin/maple/expectation/infrastructure/pgmq/PgmqWorker.kt` (metrics in processBatchTwoPhase)
 
-- [ ] **Step 1: Adjust metrics timing in processBatchTwoPhase()**
+- [ ] **Step 1: Verify metrics timing in processBatchTwoPhase()**
 
-Already partially handled in Task 5. Verify:
-- `concurrent` incremented/decremented in Phase 1 (calculation scope)
-- `inflight` decremented in Phase 2 (after batch write)
-- `success` incremented in Phase 2 (after batch write)
+P0-4 FIX: Already handled in Task 5 Step 2. Verify:
+- `concurrent` incremented/decremented in Phase 1 (calculation scope) via try-finally
+- `inflight` decremented in Phase 2 (after batch write) in processBatchTwoPhase()
+- `success` incremented in Phase 2 (after batch write) in processBatchTwoPhase()
 
-The implementation in Task 5 already handles this:
-- Phase 1: `concurrentIncrement()` / `concurrentDecrement()` in the try/finally
-- Phase 2: `success.increment()` after batch write
+The implementation in Task 5 already handles all metrics correctly:
+- Phase 1: `concurrentIncrement()` / `concurrentDecrement()` in the try-finally
+- Phase 2: `success.increment()` and `inflightDecrement()` after batch write
 - Failed messages: `inflightDecrement()` happens in `processSingleMessage()`
-- Successful messages: need explicit `inflightDecrement()` after Phase 2
 
-Add after `successes.forEach { metrics.success.increment() }`:
-
-```kotlin
-successes.forEach { metrics.inflightDecrement() }
-```
+No additional changes needed.
 
 - [ ] **Step 2: Compile + existing test check**
 
@@ -642,8 +683,7 @@ Expected: SUCCESS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add module-infra/src/main/kotlin/maple/expectation/infrastructure/pgmq/PgmqWorker.kt
-git commit -m "fix(pgmq): add inflight decrement for successful batch results (BS7)"
+# No commit needed — Task 5 already handles metrics timing correctly
 ```
 
 ---
@@ -689,24 +729,42 @@ Expected: SUCCESS (if fails, run `./gradlew spotlessApply`)
 
 Architect, Critic, Code-Reviewer 3-agent review. 15 issues identified.
 
-### P0 Fixes Applied
+### P0 Fixes Applied (Round 2)
 
 | ID | Issue | Fix |
 |----|-------|-----|
 | P0-1 | SQL injection in archiveBatch | Parameterized `IN (?, ?, ...)` with spread args |
 | P0-2 | MutableList ConcurrentModification | `allOf().join()` + `partition` — no shared mutable state |
+| P0-2 | Missing try-finally in executePhaseOne() | Added `try { ... } finally { concurrentDecrement() }` |
 | P0-3 | Phase 2 partial write | `@Transactional` on `batchWrite()`, archive last |
-| P0-4 | Missing `resolveCharacter()` | Port returns typed response; worker uses `GameCharacterFacade` (L1 cache hit) |
+| P0-3 | Cache key format confusion | Documented: `put()` expects full key format `{cacheName}:v1:{actualKey}` from `generateKey()` |
+| P0-4 | Wrong facade method call | Changed `getOrFetch()` to `findCharacterByUserIgn()` for L1 cache hit |
+| P0-4 | Duplicate inflightDecrement in Task 7 | Removed — already handled in Task 5 `processBatchTwoPhase()` |
+| P0-5 | Missing constructor dependencies | Added `GameCharacterFacade`, `L2CacheStrategy`, `CacheProperties` to constructor |
+
+### P0 Fixes Applied (Round 3)
+
+| ID | Issue | Fix |
+|----|-------|-----|
+| P0-1(R3) | try-finally violates Zero Try-Catch Policy | Changed to `executor.executeWithFinally()` for proper LogicExecutor pattern |
+| P0-2(R3) | Direct Cache bean injection (@Qualifier) | Changed to `CacheManager` injection; caches created dynamically by TieredCacheManager |
+| P0-3(R3) | Cache key prefix duplication | Changed to bare `userIgn`; CacheManager handles namespacing via cache name |
+| P0-4(R3) | L1 cache raw object ClassCastException risk | Documented: validate during implementation; may skip L1 populate and rely on L2→L1 promotion |
 
 ### P1 Fixes Applied
 
 | ID | Issue | Fix |
 |----|-------|-----|
 | P1-5 | Try-catch in lambda | LogicExecutor `executeOrDefault()` wraps calculation |
-| P1-6 | DIP violation (unsafe cast) | `supportsTwoPhase` property + `as? CalculationResult` safe cast |
-| P1-7 | Lambda Hell (20-line lambda) | Extracted to `executePhaseOne()` private method |
-| P1-8 | putAll() uses update() | Changed to `jdbcTemplate.batchUpdate()` with single-row INSERT |
-| P1-9 | supportsTwoPhase detection | Explicit `supportsTwoPhase: Boolean` property |
+| P1-6 | L1 cache 미기록 → 다음 HTTP 요청 cache miss | Added `expectationCache.put()` to populate L1 after L2 write |
+| P1-7 | @Transactional + executor.executeVoid() 상호작용 검증 | Added comment: executeVoid propagates exceptions, @Transactional sees them |
+| P1-8 | StubLogicExecutor 테스트 생성자 수정 | Verified PgmqClient constructor: (jdbcTemplate, objectMapper, executor, config) |
+| P1-9 | TTL 출처 명확화 | Changed `cacheProperties.ttlMinutes` to `cacheProperties.specs["expectationV4"]!!.l2TtlMinutes.toLong()` |
+| P1-10 | DIP violation (unsafe cast) | `supportsTwoPhase` property + `as? CalculationResult` safe cast |
+| P1-11 | Lambda Hell (20-line lambda) | Extracted to `executePhaseOne()` private method |
+| P1-12 | putAll() uses update() | Changed to `jdbcTemplate.batchUpdate()` with single-row INSERT |
+| P1-13(R3) | !! assertion on cache spec | Changed to safe check with `IllegalStateException` |
+| P1-13 | supportsTwoPhase detection | Explicit `supportsTwoPhase: Boolean` property |
 
 ### P2 Deferred
 

@@ -46,7 +46,7 @@ import org.springframework.stereotype.Component
 @Component
 @Profile("!test")
 class NexonFanOutWorker(
-    private val pgmqClient: PgmqClient,
+    pgmqClient: PgmqClient,
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
     meterRegistry: MeterRegistry,

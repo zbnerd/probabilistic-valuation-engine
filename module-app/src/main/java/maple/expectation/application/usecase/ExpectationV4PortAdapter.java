@@ -58,6 +58,11 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
   }
 
   @Override
+  public Object calculateExpectationWriteOnly(String userIgn, boolean force, String taskId) {
+    return expectationService.calculateExpectationWriteOnly(userIgn, force, taskId);
+  }
+
+  @Override
   public byte[] getGzipFromL1CacheDirect(String userIgn) {
     return expectationService.getGzipFromL1CacheDirect(userIgn);
   }

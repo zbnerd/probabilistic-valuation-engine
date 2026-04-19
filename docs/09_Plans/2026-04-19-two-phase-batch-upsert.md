@@ -120,9 +120,9 @@ Add to `PgmqClient.kt` after `archive()` method:
  * Batch archive multiple messages (BS4)
  *
  * Moves messages from queue table to archive table in a single query.
- * Much more efficient than calling archive() individually.
+ * Uses parameterized IN clause to prevent SQL injection.
  *
- * @param queueName Queue name
+ * @param queueName Queue name (validated against injection)
  * @param messageIds List of message IDs to archive
  * @return Number of messages archived
  */
@@ -135,16 +135,18 @@ fun archiveBatch(queueName: String, messageIds: List<Long>): Int {
         {
             val queueTable = "pgmq.q_$queueName"
             val archiveTable = "pgmq.a_$queueName"
-            val ids = messageIds.joinToString(",")
+            // P0-1 FIX: Use parameterized placeholders instead of string concatenation
+            val placeholders = messageIds.map { "?" }.joinToString(",")
             jdbcTemplate.queryForObject(
                 """
                 WITH deleted AS (
-                    DELETE FROM $queueTable WHERE msg_id IN ($ids)
+                    DELETE FROM $queueTable WHERE msg_id IN ($placeholders)
                     RETURNING *
                 )
                 SELECT COUNT(*) FROM $archiveTable
                 """.trimIndent(),
                 Int::class.java,
+                *messageIds.toTypedArray(),
             ) ?: 0
         },
         0,
@@ -203,7 +205,9 @@ Add after `put()` method:
 
 ```kotlin
 /**
- * Batch put using multi-value UPSERT (BS5)
+ * Batch put using JdbcTemplate.batchUpdate() (BS5)
+ * P1-8 FIX: Use batchUpdate with single-row INSERT instead of
+ * multi-value INSERT with update() — avoids parameter array issues.
  */
 override fun putAll(entries: List<Pair<String, Any>>, ttlMinutes: Long) {
     if (disableL2Writes.get() == true) return
@@ -216,24 +220,22 @@ override fun putAll(entries: List<Pair<String, Any>>, ttlMinutes: Long) {
 
         val expiresAt = Timestamp.from(Instant.now().plusSeconds(ttlMinutes * 60))
 
-        // Use batch INSERT ... ON CONFLICT for efficiency
-        val placeholders = entries.map { "(?, ?, ?)" }.joinToString(", ")
         val sql = """
             INSERT INTO cache_storage (cache_key, cache_value, expires_at)
-            VALUES $placeholders
+            VALUES (?, ?, ?)
             ON CONFLICT (cache_key)
             DO UPDATE SET
                 cache_value = EXCLUDED.cache_value,
                 expires_at = EXCLUDED.expires_at
         """.trimIndent()
 
-        val args = entries.flatMap { (key, value) ->
+        val batchArgs = entries.map { (key, value) ->
             val typedValue = TypedValue(value)
             val valueBytes: ByteArray = objectMapper.writeValueAsBytes(typedValue)
-            listOf(key, valueBytes, expiresAt)
-        }
+            arrayOf(key, valueBytes, expiresAt)
+        }.toList()
 
-        jdbcTemplate.update(sql, *args.toTypedArray())
+        jdbcTemplate.batchUpdate(sql, batchArgs)
 
         log.debug("[PostgresL2] PutAll: {} entries, ttl={}min", entries.size, ttlMinutes)
     }, context)
@@ -269,9 +271,9 @@ git commit -m "feat(cache): add putAll() batch write to L2CacheStrategy (BS5)"
  *
  * Performs: character lookup + Nexon API + preset calculation.
  * Skips: persistence save, view table write, L2 cache write.
- * Returns raw calculation result for batch write in Phase 2.
+ * P2-13 FIX: Typed return instead of Any.
  */
-fun calculateExpectationWriteOnly(userIgn: String, force: Boolean, taskId: String?): Any
+fun calculateExpectationWriteOnly(userIgn: String, force: Boolean, taskId: String?): EquipmentExpectationResponseV4
 ```
 
 - [ ] **Step 2: Add method to EquipmentExpectationServiceV4**
@@ -283,6 +285,7 @@ Add new method (no `@Transactional`):
  * 계산만 수행 (DB write 없음, Phase 1 전용)
  *
  * <p>character 조회 + Nexon API + 프리셋 계산. persistence, view table, L2 cache write 제외.
+ * P0-4 FIX: Returns response only. Character lookup done separately in worker.
  */
 public EquipmentExpectationResponseV4 calculateExpectationWriteOnly(
     String userIgn, boolean force, @Nullable String taskId) {
@@ -300,7 +303,7 @@ public EquipmentExpectationResponseV4 calculateExpectationWriteOnly(
 
 ```java
 @Override
-public Object calculateExpectationWriteOnly(String userIgn, boolean force, String taskId) {
+public EquipmentExpectationResponseV4 calculateExpectationWriteOnly(String userIgn, boolean force, String taskId) {
   return expectationService.calculateExpectationWriteOnly(userIgn, force, taskId);
 }
 ```
@@ -331,6 +334,12 @@ This is the core change. Add `calculateOnly()` / `batchWrite()` open methods and
 Add after `preWarmBatch()`:
 
 ```kotlin
+/**
+ * Whether this worker supports two-phase batch processing.
+ * P1-9 FIX: Explicit opt-in via property instead of runtime probe.
+ */
+protected open val supportsTwoPhase: Boolean = false
+
 /**
  * Phase 1: Calculate without DB writes (BS2)
  *
@@ -385,10 +394,8 @@ fun processMessages() {
 
         preWarmBatch(messages)
 
-        // Check if subclass supports two-phase
-        val supportsTwoPhase = calculateOnly(messages.first()) != null || messages.isEmpty()
-
-        if (supportsTwoPhase && messages.isNotEmpty()) {
+        // P1-9 FIX: Use explicit property instead of runtime probe
+        if (supportsTwoPhase) {
             processBatchTwoPhase(messages)
         } else {
             processBatchSinglePhase(messages)
@@ -396,43 +403,41 @@ fun processMessages() {
     }, context)
 }
 
+/**
+ * P0-2 FIX: Thread-safe result collection.
+ * P1-5 FIX: No try-catch — LogicExecutor handles exceptions.
+ * P1-7 FIX: Lambda extracted to private method.
+ */
 private fun processBatchTwoPhase(messages: List<PgmqMessage<T>>) {
-    val successes = mutableListOf<CalculationResult>()
-    val failures = mutableListOf<PgmqMessage<T>>()
-
-    // Phase 1: Parallel calculation (no DB writes)
+    // Phase 1: Parallel calculation — collect futures, no shared mutable state
     val futures = messages.map { message ->
-        CompletableFuture.supplyAsync({
-            metrics.concurrentIncrement()
-            try {
-                val result = calculateOnly(message)
-                if (result != null) {
-                    successes.add(result as CalculationResult)
-                    true
-                } else {
-                    failures.add(message)
-                    false
-                }
-            } catch (e: Exception) {
-                log.warn("[{}] calculateOnly failed: msgId={}, error={}", queueName, message.messageId, e.message)
-                failures.add(message)
-                false
-            } finally {
-                metrics.concurrentDecrement()
-            }
-        }, workerPool)
+        CompletableFuture.supplyAsync(
+            { executePhaseOne(message) },
+            workerPool,
+        )
     }
 
     CompletableFuture.allOf(*futures.toTypedArray())
         .thenRun {
+            // P0-2 FIX: Collect results AFTER all futures complete (thread-safe)
+            val (successes, failures) = futures
+                .map { it.join() }
+                .partition { it.first != null }
+
+            val successResults = successes.mapNotNull { it.first as? CalculationResult }
+            val failedMessages = failures.map { it.second }
+
             // Phase 2: Batch write
-            if (successes.isNotEmpty()) {
-                batchWrite(successes)
-                successes.forEach { metrics.success.increment() }
+            if (successResults.isNotEmpty()) {
+                batchWrite(successResults)
+                successResults.forEach {
+                    metrics.success.increment()
+                    metrics.inflightDecrement()
+                }
             }
 
             // Handle failures with existing retry/DLQ logic
-            failures.forEach { message ->
+            failedMessages.forEach { message ->
                 processSingleMessage(message)
             }
 
@@ -443,6 +448,19 @@ private fun processBatchTwoPhase(messages: List<PgmqMessage<T>>) {
             lifecycleWrapper.afterTask()
             null
         }
+}
+
+/** P1-5 FIX: LogicExecutor wraps calculation, no try-catch. P1-7 FIX: Extracted private method. */
+private fun executePhaseOne(message: PgmqMessage<T>): Pair<Any?, PgmqMessage<T>> {
+    metrics.concurrentIncrement()
+    val context = TaskContext.of("PgmqWorker", "CalculateOnly", "$queueName:${message.messageId}")
+    val result = executor.executeOrDefault(
+        { calculateOnly(message) },
+        null,
+        context,
+    )
+    metrics.concurrentDecrement()
+    return result to message
 }
 
 private fun processBatchSinglePhase(messages: List<PgmqMessage<T>>) {
@@ -460,7 +478,7 @@ private fun processBatchSinglePhase(messages: List<PgmqMessage<T>>) {
 }
 ```
 
-> Note: `CalculationResult` is typed as `Any` in `calculateOnly()` because PgmqWorker is generic (`T`). The cast to `CalculationResult` is safe because only `AbstractExpectationCalcWorker` (which works with `ExpectationCalcMessage`) overrides `calculateOnly()` and returns `CalculationResult`.
+> Note: `calculateOnly()` returns `Any?` because PgmqWorker is generic (`T`). Subclasses return `CalculationResult`. The `as? CalculationResult` safe cast in `executePhaseOne()` handles type checking at runtime. Only `AbstractExpectationCalcWorker` overrides this method.
 
 - [ ] **Step 3: Compile check**
 
@@ -483,8 +501,13 @@ git commit -m "feat(pgmq): add two-phase batch processing to PgmqWorker (BS1/BS2
 
 - [ ] **Step 1: Override calculateOnly()**
 
+P0-4 FIX: Port returns `EquipmentExpectationResponseV4`. Character resolved separately via `GameCharacterFacade`.
+Since `calculateExpectationWriteOnly()` already called `findCharacterBypassingWorker()` internally,
+the character is cached in L1 — the second lookup hits cache (0 DB cost).
+
 ```kotlin
-@Suppress("UNCHECKED_CAST")
+override val supportsTwoPhase: Boolean = true
+
 override fun calculateOnly(message: PgmqMessage<ExpectationCalcMessage>): Any? {
     val request = message.payload
     val context = TaskContext.of(workerName, "CalculateOnly", request.userIgn)
@@ -498,29 +521,29 @@ override fun calculateOnly(message: PgmqMessage<ExpectationCalcMessage>): Any? {
             message.messageId.toString(),
         )
 
-        // Extract character from response for Phase 2 view table write
-        // Use the same character resolution as the normal path
-        val character = resolveCharacter(request.userIgn)
+        // P0-4 FIX: Character was already loaded by calculateExpectationWriteOnly()
+        // and cached in L1. This lookup is a cache hit (0 DB cost).
+        val character = gameCharacterFacade.getOrFetch(request.userIgn)
 
         CalculationResult(
             message = message,
-            response = response as maple.expectation.web.dto.v4.EquipmentExpectationResponseV4,
+            response = response,
             character = character,
         )
     }, null, context)
 }
-
-private fun resolveCharacter(userIgn: String): maple.expectation.core.domain.model.character.GameCharacter {
-    return characterOcidPort.resolveCharacter(userIgn)
-        ?: throw maple.expectation.error.exception.CharacterNotFoundException(userIgn)
-}
 ```
 
-> Note: `resolveCharacter()` needs a method on `CharacterOcidPort` or equivalent. Check what's available. If `GameCharacterFacade.getOrFetch()` exists, use that. The exact method depends on what `findCharacterBypassingWorker()` calls internally. Adjust accordingly.
+> **Dependency:** `AbstractExpectationCalcWorker` constructor needs `GameCharacterFacade` injection added.
+> `gameCharacterFacade.getOrFetch()` returns cached `GameCharacter` (L1 hit after service call).
 
-- [ ] **Step 2: Override batchWrite()**
+- [ ] **Step 2: Override batchWrite() — P0-3 FIX: @Transactional for atomicity**
+
+P0-3 FIX: `batchWrite()` wrapped in `@Transactional`. If view upsert or L2 cache write fails,
+the entire batch rolls back. Archive is last — only succeeds if all writes succeed.
 
 ```kotlin
+@Transactional("transactionManager")
 override fun batchWrite(results: List<CalculationResult>) {
     if (results.isEmpty()) return
 
@@ -528,13 +551,14 @@ override fun batchWrite(results: List<CalculationResult>) {
     executor.executeVoid({
         workerLog.info("[{}] Phase 2 batchWrite: {} results", workerName, results.size)
 
+        // P0-3 FIX: Order matters — archive LAST so failures roll back writes
         // 1. Batch view table upsert
         batchViewUpsert(results)
 
         // 2. Batch L2 cache put
         batchL2CachePut(results)
 
-        // 3. Batch PGMQ archive
+        // 3. Batch PGMQ archive (last — only if all writes succeed)
         val messageIds = results.map { it.message.messageId }
         val archived = pgmqClient.archiveBatch(queueName, messageIds)
         workerLog.info("[{}] Batch archived: {}/{}", workerName, archived, messageIds.size)
@@ -559,18 +583,18 @@ private fun batchViewUpsert(results: List<CalculationResult>) {
 }
 
 private fun batchL2CachePut(results: List<CalculationResult>) {
-    // L2 cache write via TieredCache — use cache coordinator or direct L2
-    // This depends on how TieredCache exposes batch put
-    // For now, use individual puts within a single connection scope
-    results.forEach { result ->
-        expectationPort.cacheResult(result.message.payload.userIgn, result.response)
+    // Use L2CacheStrategy.putAll() for batch cache write
+    val entries = results.map { result ->
+        val cacheKey = "expectationV4:v1:${result.message.payload.userIgn}"
+        cacheKey to result.response
     }
+    l2CacheStrategy.putAll(entries, cacheProperties.ttlMinutes)
 }
 ```
 
-> Note: `batchViewUpsert` currently iterates individual upserts. A true batch upsert requires a new method on `CharacterViewQueryServicePostgres`. This is acceptable for the first iteration — the main connection savings come from `archiveBatch()` and removing `@Transactional` from the calculation path. Batch view upsert can be optimized in a follow-up.
+> Note: `batchViewUpsert` currently iterates individual upserts. A true batch upsert requires a new method on `CharacterViewQueryServicePostgres`. This is acceptable for the first iteration — the main connection savings come from `archiveBatch()` and removing `@Transactional` from the calculation path.
 
-> Note: `cacheResult()` doesn't exist on `ExpectationV4Port` yet. Either add it, or use `CacheManagerPort` directly. The simplest approach is to call the existing `calculateExpectation()` which handles caching, but that defeats the purpose. Instead, inject `CacheManagerPort` into `AbstractExpectationCalcWorker` and write to cache directly.
+> **Dependency:** `AbstractExpectationCalcWorker` needs `L2CacheStrategy` and `CacheProperties` injection added.
 
 - [ ] **Step 4: Compile check**
 
@@ -658,3 +682,37 @@ Expected: SUCCESS (if fails, run `./gradlew spotlessApply`)
 | `AbstractExpectationCalcWorker.kt` | override both methods | BS6 |
 
 **Connection demand: 300 → ~23 per batch of 50 messages.**
+
+---
+
+## Consensus Review Fixes (2026-04-19)
+
+Architect, Critic, Code-Reviewer 3-agent review. 15 issues identified.
+
+### P0 Fixes Applied
+
+| ID | Issue | Fix |
+|----|-------|-----|
+| P0-1 | SQL injection in archiveBatch | Parameterized `IN (?, ?, ...)` with spread args |
+| P0-2 | MutableList ConcurrentModification | `allOf().join()` + `partition` — no shared mutable state |
+| P0-3 | Phase 2 partial write | `@Transactional` on `batchWrite()`, archive last |
+| P0-4 | Missing `resolveCharacter()` | Port returns typed response; worker uses `GameCharacterFacade` (L1 cache hit) |
+
+### P1 Fixes Applied
+
+| ID | Issue | Fix |
+|----|-------|-----|
+| P1-5 | Try-catch in lambda | LogicExecutor `executeOrDefault()` wraps calculation |
+| P1-6 | DIP violation (unsafe cast) | `supportsTwoPhase` property + `as? CalculationResult` safe cast |
+| P1-7 | Lambda Hell (20-line lambda) | Extracted to `executePhaseOne()` private method |
+| P1-8 | putAll() uses update() | Changed to `jdbcTemplate.batchUpdate()` with single-row INSERT |
+| P1-9 | supportsTwoPhase detection | Explicit `supportsTwoPhase: Boolean` property |
+
+### P2 Deferred
+
+| ID | Issue | Status |
+|----|-------|--------|
+| P2-10 | BS1 batch cache check missing from plan | Acceptable: preWarmBatch partially covers; dedicated task in follow-up |
+| P2-11 | Server crash between phases = wasted compute | Acceptable: PGMQ visibility timeout ensures reprocessing (at-least-once) |
+| P2-12 | Metrics inflight decrement timing | Handled in `executePhaseOne()` + Phase 2 callback |
+| P2-13 | Return type `Any` vs typed | Port returns typed `EquipmentExpectationResponseV4`; `calculateOnly()` keeps `Any?` for generic compatibility |

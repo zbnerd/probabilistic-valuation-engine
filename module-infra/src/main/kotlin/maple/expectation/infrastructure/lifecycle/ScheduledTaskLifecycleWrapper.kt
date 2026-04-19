@@ -1,12 +1,11 @@
 package maple.expectation.infrastructure.lifecycle
 
-import org.slf4j.LoggerFactory
-import org.springframework.context.SmartLifecycle
-import org.springframework.stereotype.Component
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.LockSupport
+import org.slf4j.LoggerFactory
+import org.springframework.context.SmartLifecycle
+import org.springframework.stereotype.Component
 
 /**
  * Scheduled Task Lifecycle Wrapper (#648)
@@ -32,7 +31,7 @@ class ScheduledTaskLifecycleWrapper : SmartLifecycle {
     companion object {
         private val log = LoggerFactory.getLogger(ScheduledTaskLifecycleWrapper::class.java)
         private const val DRAIN_TIMEOUT_MS = 10_000L
-        private const val POLL_INTERVAL_NS = 50_000_000L  // 50ms
+        private const val POLL_INTERVAL_NS = 50_000_000L // 50ms
     }
 
     // 1 = running, 0 = stopping
@@ -45,11 +44,11 @@ class ScheduledTaskLifecycleWrapper : SmartLifecycle {
      * Returns true if the task should proceed, false if shutdown is in progress.
      */
     fun beforeTask(): Boolean {
-        if (state.get() == 0) return false  // fast path: stopping
+        if (state.get() == 0) return false // fast path: stopping
         activeTasks.incrementAndGet()
         // Double-check: increment 후 stop()이 호출되었는지 재확인
         if (state.get() == 0) {
-            activeTasks.decrementAndGet()  // rollback
+            activeTasks.decrementAndGet() // rollback
             return false
         }
         return true

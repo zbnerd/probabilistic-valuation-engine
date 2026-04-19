@@ -6,8 +6,6 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.cancel
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -16,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
@@ -192,9 +191,17 @@ class AdaptiveMicroBatchUserService<T : Any>(
         val newFuture = CompletableFuture<T?>()
         val existingFuture = inFlightRequests.putIfAbsent(key, newFuture)
 
-        // 이미 진행 중인 요청이 있으면 대기
+        // 이미 진행 중인 요청이 있으면 대기 (coalesced)
         if (existingFuture != null) {
             return awaitWithTimeout(existingFuture, key)
+        }
+
+        // Step 2.5: Backpressure — 새 요청만 검사 (coalesced 요청은 통과)
+        if (inFlightRequests.size > MAX_IN_FLIGHT) {
+            inFlightRequests.remove(key, newFuture)
+            rejectedCounter.increment()
+            log.warn { "[AdaptiveMicroBatch] Rejected: inFlight=${inFlightRequests.size}, key=$key" }
+            throw IllegalStateException("In-flight requests limit reached (${inFlightRequests.size})")
         }
 
         // Step 3: Adaptive Routing
@@ -223,9 +230,17 @@ class AdaptiveMicroBatchUserService<T : Any>(
         val newFuture = CompletableFuture<T?>()
         val existingFuture = inFlightRequests.putIfAbsent(key, newFuture)
 
-        // 이미 진행 중인 요청이 있으면 대기
+        // 이미 진행 중인 요청이 있으면 대기 (coalesced)
         if (existingFuture != null) {
             return awaitWithTimeoutSuspend(existingFuture, key)
+        }
+
+        // Step 2.5: Backpressure — 새 요청만 검사 (coalesced 요청은 통과)
+        if (inFlightRequests.size > MAX_IN_FLIGHT) {
+            inFlightRequests.remove(key, newFuture)
+            rejectedCounter.increment()
+            log.warn { "[AdaptiveMicroBatch] Rejected: inFlight=${inFlightRequests.size}, key=$key" }
+            throw IllegalStateException("In-flight requests limit reached (${inFlightRequests.size})")
         }
 
         // Step 3: Adaptive Routing

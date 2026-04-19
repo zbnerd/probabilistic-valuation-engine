@@ -1,42 +1,25 @@
 package maple.expectation.infrastructure.worker
 
+import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.Executor
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
+import maple.expectation.core.port.out.GameCharacterPort
+import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
+import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.pgmq.ExpectationCalcMessage
-import maple.expectation.infrastructure.pgmq.PgmqClient
-import maple.expectation.infrastructure.pgmq.PgmqMessage
-import maple.expectation.infrastructure.pgmq.PgmqWorker
-import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
-import io.micrometer.core.instrument.MeterRegistry
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
+import maple.expectation.infrastructure.pgmq.PgmqClient
+import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionTemplate
 
-/**
- * 기대값 계산 Worker - HIGH Priority (Issue #634)
- *
- * <h3>역할</h3>
- * <p>expectation_calc_high 큐에서 메시지를 소비하고 장비 기대값 계산 수행
- *
- * <h3>처리 흐름</h3>
- * <ol>
- *   <li>expectation_calc_high 큐에서 메시지 읽기</li>
- *   <li>ExpectationV4Port를 통해 비동기 계산 수행</li>
- *   <li>성공 시 아카이브, 실패 시 재시도 또는 삭제</li>
- * </ol>
- *
- * <h3>Feature Flag</h3>
- * <p>pgmq.worker.expectation-calc-high.enabled=true로 활성화
- *
- * @see ExpectationCalcMessage 메시지 페이로드
- * @see ExpectationV4Port 계산 포트
- */
 @Component
 @Profile("!test")
 class ExpectationCalcWorker(
@@ -44,75 +27,40 @@ class ExpectationCalcWorker(
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
     meterRegistry: MeterRegistry,
+    queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
-    private val expectationPort: ExpectationV4Port,
-    private val characterOcidPort: CharacterOcidPort,
-    private val equipmentFanOutPort: EquipmentFanOutPort,
-) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, lifecycleWrapper) {
+    expectationPort: ExpectationV4Port,
+    characterOcidPort: CharacterOcidPort,
+    equipmentFanOutPort: EquipmentFanOutPort,
+    @Qualifier("asyncExecutor") preWarmExecutor: Executor,
+    gameCharacterPort: GameCharacterPort,
+    l2CacheStrategy: L2CacheStrategy,
+    cacheProperties: CacheProperties,
+    transactionTemplate: TransactionTemplate,
+) : AbstractExpectationCalcWorker(
+    pgmqClient,
+    executor,
+    config,
+    meterRegistry,
+    queueMetrics,
+    lifecycleWrapper,
+    expectationPort,
+    characterOcidPort,
+    equipmentFanOutPort,
+    preWarmExecutor,
+    gameCharacterPort,
+    l2CacheStrategy,
+    cacheProperties,
+    transactionTemplate,
+) {
 
     override val queueName: String = QUEUE_NAME
-    override val payloadClass: Class<ExpectationCalcMessage> = ExpectationCalcMessage::class.java
     override val workerSettings: PgmqWorkerConfig.WorkerSettings = config.expectationCalcHigh
-
-    /**
-     * 배치 pre-warm (ADR-700)
-     *
-     * <p>병렬 메시지 처리 전 배치 내 OCID 중복 제거 + 장비 캐시 pre-warm.
-     * Best-effort: 실패해도 메시지 처리에 영향 없음.
-     *
-     * <h3>동시 submit 이유</h3>
-     * <p>AdaptiveMicroBatchUserService는 semaphore(10)로 Fast/Batch Lane 분기.
-     * 순차 호출 시 전부 Fast Lane → coalescing 미발생.
-     * 동시 submit 시 초과분이 Batch Lane → NexonFanOutBatchLoader.load() batch fetch.
-     */
-    override fun preWarmBatch(messages: List<PgmqMessage<ExpectationCalcMessage>>) {
-        val context = TaskContext.of("ExpectationCalcWorker", "PreWarm", queueName)
-
-        executor.executeVoid({
-            // 1. 배치 내 unique IGN 추출
-            val igns = messages.map { it.payload.userIgn }.toSet()
-
-            // 2. Batch OCID resolve (재사용: CharacterOcidPort.resolveOcids)
-            val ignToOcid = characterOcidPort.resolveOcids(igns)
-
-            if (ignToOcid.isEmpty()) return@executeVoid
-
-            // 3. Equipment cache pre-warm — CONCURRENT submission 필수
-            val warmupFutures = ignToOcid.values.map { ocid ->
-                CompletableFuture.supplyAsync {
-                    equipmentFanOutPort.preFetchByOcid(ocid)
-                }
-            }
-            CompletableFuture.allOf(*warmupFutures.toTypedArray())
-                .orTimeout(15, TimeUnit.SECONDS)
-                .handle { _, _ -> }  // best-effort: 실패해도 진행
-
-            log.info("[ExpectationCalcWorker] Pre-warm: {} igns → {} ocids", igns.size, ignToOcid.size)
-        }, context)
-    }
-
-    override fun process(message: PgmqMessage<ExpectationCalcMessage>): Boolean {
-        val request = message.payload
-        val context = TaskContext.of("ExpectationCalcWorker", "Process", request.userIgn)
-
-        return executor.executeOrDefault({
-            log.info("[ExpectationCalcWorker] Processing: userIgn={}", request.userIgn)
-
-            val future = expectationPort.calculateExpectationAsync(
-                request.userIgn,
-                request.forceRecalculation,
-            )
-            future.join()
-
-            log.info("[ExpectationCalcWorker] Completed: userIgn={}", request.userIgn)
-            true
-        }, false, context)
-    }
+    override val workerName: String = "ExpectationCalcWorker"
+    override val workerLog: Logger = log
 
     companion object {
         private val log = LoggerFactory.getLogger(ExpectationCalcWorker::class.java)
-
-        /** 큐 이름 */
         const val QUEUE_NAME = "expectation_calc_high"
     }
 }

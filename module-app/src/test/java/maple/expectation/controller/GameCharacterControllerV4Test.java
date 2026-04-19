@@ -59,15 +59,18 @@ class GameCharacterControllerV4Test {
     trackerPort = mock(PopularCharacterTrackerPort.class);
     admissionPort = mock(AdmissionPort.class);
     taskExecutor = Runnable::run;
-    controller = new GameCharacterControllerV4(expectationPort, trackerPort, admissionPort, mock(LikeTogglePort.class), taskExecutor);
+    controller =
+        new GameCharacterControllerV4(
+            expectationPort, trackerPort, admissionPort, mock(LikeTogglePort.class), taskExecutor);
 
     // admissionPort.submitOrWait() executes the callable synchronously
     lenient()
         .when(admissionPort.submitOrWait(anyString(), any(Callable.class)))
-        .thenAnswer(invocation -> {
-          Callable<?> callable = invocation.getArgument(1);
-          return CompletableFuture.completedFuture(callable.call());
-        });
+        .thenAnswer(
+            invocation -> {
+              Callable<?> callable = invocation.getArgument(1);
+              return CompletableFuture.completedFuture(callable.call());
+            });
   }
 
   @Nested
@@ -101,8 +104,7 @@ class GameCharacterControllerV4Test {
       String userIgn = "FallbackUser";
       byte[] gzipData = new byte[] {0x1f, (byte) 0x8b};
       given(expectationPort.getGzipFromL1CacheDirect(userIgn)).willReturn(null);
-      given(expectationPort.getGzipExpectation(eq(userIgn), eq(false)))
-          .willReturn(gzipData);
+      given(expectationPort.getGzipExpectation(eq(userIgn), eq(false))).willReturn(gzipData);
 
       // when
       CompletableFuture<ResponseEntity<?>> future =
@@ -121,8 +123,7 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "ForceUser";
       byte[] gzipData = new byte[] {0x1f, (byte) 0x8b};
-      given(expectationPort.getGzipExpectation(eq(userIgn), eq(true)))
-          .willReturn(gzipData);
+      given(expectationPort.getGzipExpectation(eq(userIgn), eq(true))).willReturn(gzipData);
 
       // when
       CompletableFuture<ResponseEntity<?>> future =
@@ -140,8 +141,7 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "JsonUser";
       EquipmentExpectationResponseV4 mockResponse = createMockResponse(userIgn);
-      given(expectationPort.calculateExpectation(eq(userIgn), eq(false)))
-          .willReturn(mockResponse);
+      given(expectationPort.calculateExpectation(eq(userIgn), eq(false))).willReturn(mockResponse);
 
       // when
       CompletableFuture<ResponseEntity<?>> future = controller.getExpectation(userIgn, false, null);

@@ -48,8 +48,7 @@ class TransactionConfig {
      */
     @Bean("transactionManager")
     @Primary
-    fun transactionManager(entityManagerFactory: EntityManagerFactory): PlatformTransactionManager =
-        JpaTransactionManager(entityManagerFactory)
+    fun transactionManager(entityManagerFactory: EntityManagerFactory): PlatformTransactionManager = JpaTransactionManager(entityManagerFactory)
 
     /**
      * 기본 TransactionTemplate (읽기/쓰기 가능)

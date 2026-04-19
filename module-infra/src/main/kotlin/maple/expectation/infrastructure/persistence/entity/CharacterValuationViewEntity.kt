@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.persistence.entity
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import java.time.Instant
 import org.hibernate.annotations.JdbcTypeCode
@@ -22,10 +23,12 @@ import org.hibernate.type.SqlTypes
 class CharacterValuationViewEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @JsonIgnore // Internal JPA field — excluded from read model JSON
     var id: Long? = null,
 
     @Version
     @Column(name = "jpa_version")
+    @JsonIgnore // Internal JPA field — excluded from read model JSON
     var jpaVersion: Long? = null,
 
     @Column(name = "user_ign", nullable = false, length = 100)
@@ -53,12 +56,14 @@ class CharacterValuationViewEntity(
      * Event version for causal consistency
      */
     @Column(name = "version")
+    @JsonIgnore // Internal field — excluded from read model JSON
     var version: Long? = null,
 
     /**
      * Last applied event version for ordering validation
      */
     @Column(name = "last_applied_version")
+    @JsonIgnore // Internal field — excluded from read model JSON
     var lastAppliedVersion: Long? = null,
 
     @Column(name = "total_expected_cost")

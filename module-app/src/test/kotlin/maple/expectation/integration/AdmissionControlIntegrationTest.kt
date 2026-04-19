@@ -1,6 +1,11 @@
 package maple.expectation.integration
 
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import maple.expectation.application.service.expectation.cache.ExpectationCacheCoordinator
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl
 import maple.expectation.infrastructure.cache.TieredCacheManager
@@ -8,11 +13,15 @@ import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4
+import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers
+import org.mockito.Mockito
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
@@ -20,14 +29,6 @@ import org.springframework.cache.Cache
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
-import java.util.concurrent.Callable
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import org.assertj.core.api.Assertions.assertThat
-import org.mockito.ArgumentMatchers
-import org.mockito.Mockito
 
 /**
  * Integration Test for US-002: Global Admission Control in Cache Service (Issue #617)
@@ -93,7 +94,7 @@ class AdmissionControlIntegrationTest {
             admissionControl, // Inject admission control
             compressionService,
             valueConverter,
-            responseBuilder
+            responseBuilder,
         )
     }
 
@@ -125,7 +126,10 @@ class AdmissionControlIntegrationTest {
             cacheCoordinator.getOrCalculate("test-user", false, calculator)
         }
 
-        Thread.sleep(100) // Let admission control acquire permit
+        // Let admission control acquire permit
+        await().atMost(500, TimeUnit.MILLISECONDS).until {
+            executionCount.get() > 0 || testLatch.count == 0L
+        }
         testLatch.countDown()
 
         val result = future.get(5, TimeUnit.SECONDS)
@@ -152,7 +156,10 @@ class AdmissionControlIntegrationTest {
             }
         }
 
-        Thread.sleep(100) // Let first request acquire admission permit
+        // Let first request acquire admission permit
+        await().atMost(500, TimeUnit.MILLISECONDS).until {
+            calculationCount.get() > 0 || testLatch.count == 0L
+        }
         testLatch.countDown()
 
         // Wait for all to complete
@@ -181,7 +188,12 @@ class AdmissionControlIntegrationTest {
             }
         }
 
-        Thread.sleep(200) // Let first maxInFlight requests acquire permits
+        // Let first maxInFlight requests acquire permits
+        await().atMost(1, TimeUnit.SECONDS).until {
+            val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
+            val currentInFlight = inFlightGauge?.value() ?: 0.0
+            currentInFlight > 0
+        }
 
         // Verify in-flight doesn't exceed maxInFlight
         val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
@@ -220,7 +232,12 @@ class AdmissionControlIntegrationTest {
             }
         }
 
-        Thread.sleep(500) // Let admission control stabilize
+        // Let admission control stabilize
+        await().atMost(2, TimeUnit.SECONDS).until {
+            val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
+            val currentInFlight = inFlightGauge?.value()?.toInt() ?: 0
+            currentInFlight > 0
+        }
 
         // Verify in-flight never exceeds maxInFlight
         val inFlightGauge = meterRegistry.get("admission_control.in_flight").gauge()
@@ -319,12 +336,12 @@ class AdmissionControlIntegrationTest {
         fun globalAdmissionControl(
             meterRegistry: MeterRegistry,
             executor: LogicExecutor,
-            testExecutor: java.util.concurrent.Executor
+            testExecutor: java.util.concurrent.Executor,
         ): GlobalAdmissionControl {
             val properties = GlobalAdmissionProperties(
                 maxInFlight = 100,
                 queueTimeoutMs = 5000,
-                maxQueueSize = 1000
+                maxQueueSize = 1000,
             )
             return GlobalAdmissionControl(properties, meterRegistry, executor, testExecutor)
         }
@@ -333,33 +350,31 @@ class AdmissionControlIntegrationTest {
         fun logicExecutor(): LogicExecutor {
             val testExecutor = Executors.newFixedThreadPool(10)
             return object : LogicExecutor {
-                override fun <T> execute(task: maple.expectation.common.function.ThrowingSupplier<T>, context: TaskContext): T {
-                    return testExecutor.submit(task::get).get()
+                override fun <T> execute(task: maple.expectation.common.function.ThrowingSupplier<T>, context: TaskContext): T = testExecutor.submit(task::get).get()
+
+                override fun <T> executeOrDefault(task: maple.expectation.common.function.ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = try {
+                    execute(task, context)
+                } catch (e: Exception) {
+                    defaultValue
                 }
 
-                override fun <T> executeOrDefault(task: maple.expectation.common.function.ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T {
-                    return try { execute(task, context) } catch (e: Exception) { defaultValue }
+                override fun <T> executeWithTranslation(task: maple.expectation.common.function.ThrowingSupplier<T>, customTranslator: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T = execute(task, context)
+
+                override fun <T> executeWithFallback(task: maple.expectation.common.function.ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T = try {
+                    execute(task, context)
+                } catch (e: Throwable) {
+                    fallback(e)
                 }
 
-                override fun <T> executeWithTranslation(task: maple.expectation.common.function.ThrowingSupplier<T>, customTranslator: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T {
-                    return execute(task, context)
+                override fun <T> executeWithFallback(task: maple.expectation.common.function.ThrowingSupplier<T>, fallback: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T = execute(task, context)
+
+                override fun <T> executeOrCatch(task: maple.expectation.common.function.ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T = try {
+                    execute(task, context)
+                } catch (e: Throwable) {
+                    recovery(e)
                 }
 
-                override fun <T> executeWithFallback(task: maple.expectation.common.function.ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T {
-                    return try { execute(task, context) } catch (e: Throwable) { fallback(e) }
-                }
-
-                override fun <T> executeWithFallback(task: maple.expectation.common.function.ThrowingSupplier<T>, fallback: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T {
-                    return execute(task, context)
-                }
-
-                override fun <T> executeOrCatch(task: maple.expectation.common.function.ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T {
-                    return try { execute(task, context) } catch (e: Throwable) { recovery(e) }
-                }
-
-                override fun <T> executeOrCatch(task: maple.expectation.common.function.ThrowingSupplier<T>, recovery: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T {
-                    return execute(task, context)
-                }
+                override fun <T> executeOrCatch(task: maple.expectation.common.function.ThrowingSupplier<T>, recovery: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T = execute(task, context)
 
                 override fun executeVoid(task: maple.expectation.infrastructure.executor.function.ThrowingRunnable, context: TaskContext) {
                     testExecutor.submit { task.run() }.get()
@@ -369,8 +384,10 @@ class AdmissionControlIntegrationTest {
                     testExecutor.submit(task).get()
                 }
 
-                override fun <T> executeWithFinally(task: maple.expectation.common.function.ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T {
-                    return try { execute(task, context) } finally { finallyBlock.run() }
+                override fun <T> executeWithFinally(task: maple.expectation.common.function.ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T = try {
+                    execute(task, context)
+                } finally {
+                    finallyBlock.run()
                 }
             }
         }

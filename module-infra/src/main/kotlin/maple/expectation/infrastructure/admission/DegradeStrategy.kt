@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component
  */
 @Component
 class DegradeStrategy(
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(DegradeStrategy::class.java)
 
@@ -61,7 +61,7 @@ class DegradeStrategy(
      */
     fun <T> handleRejection(
         key: String,
-        cacheService: CacheService<T>? = null
+        cacheService: CacheService<T>? = null,
     ): DegradeResponse<T> {
         degradeTotalCounter.increment()
 
@@ -114,7 +114,6 @@ class DegradeStrategy(
         data class Stale<T>(val data: T) : DegradeResponse<T>()
         class Fallback<T> : DegradeResponse<T>()
     }
-
 }
 
 /**

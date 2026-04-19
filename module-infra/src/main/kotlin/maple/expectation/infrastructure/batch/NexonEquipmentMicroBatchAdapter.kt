@@ -1,13 +1,13 @@
 package maple.expectation.infrastructure.batch
 
 import io.micrometer.core.instrument.MeterRegistry
+import jakarta.annotation.PostConstruct
 import maple.expectation.core.port.out.EquipmentFanOutPort
 import maple.expectation.infrastructure.config.AdaptiveMicroBatchProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.infrastructure.fanout.NexonFanOutBatchLoader
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
-import jakarta.annotation.PostConstruct
 import org.springframework.cache.Cache
 import org.springframework.cache.concurrent.ConcurrentMapCache
 import org.springframework.stereotype.Service

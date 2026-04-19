@@ -1,15 +1,16 @@
 package maple.expectation.infrastructure.worker
 
+import io.micrometer.core.instrument.MeterRegistry
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.pgmq.CalculationRequest
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
-import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
-import io.micrometer.core.instrument.MeterRegistry
+import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.queue.pgmq.CalculationQueueProducer
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
@@ -41,9 +42,10 @@ class CalculationWorker(
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
     meterRegistry: MeterRegistry,
+    queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val expectationPort: ExpectationV4Port,
-) : PgmqWorker<CalculationRequest>(pgmqClient, executor, config, meterRegistry, lifecycleWrapper) {
+) : PgmqWorker<CalculationRequest>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val queueName: String = CalculationQueueProducer.QUEUE_NAME
     override val payloadClass: Class<CalculationRequest> = CalculationRequest::class.java
@@ -60,6 +62,7 @@ class CalculationWorker(
             val future = expectationPort.calculateExpectationAsync(
                 request.userIgn,
                 request.forceRecalculation,
+                message.messageId.toString(),
             )
             future.join()
 

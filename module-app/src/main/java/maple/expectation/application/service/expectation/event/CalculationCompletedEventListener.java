@@ -12,8 +12,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *
  * <h3>Purpose</h3>
  *
- * <p>Intercepts CalculationCompletedEvent and publishes it to PGMQ within the SAME transaction
- * as the V4 calculation.
+ * <p>Intercepts CalculationCompletedEvent and publishes it to PGMQ within the SAME transaction as
+ * the V4 calculation.
  *
  * <h3>Transaction Phase: BEFORE_COMMIT</h3>
  *

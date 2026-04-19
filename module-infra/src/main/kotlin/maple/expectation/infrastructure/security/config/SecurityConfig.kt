@@ -27,7 +27,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity(prePostEnabled = true)
 class SecurityConfig(
     private val jwtAuthenticationFilter: JwtAuthenticationFilter,
-    private val rateLimitingFilter: RateLimitingFilter,
+    private val rateLimitingFilter: RateLimitingFilter?,
 ) {
 
     @Bean
@@ -38,7 +38,7 @@ class SecurityConfig(
             .register(meterRegistry)
 
         return http
-            // CSRF 비활성화: stateless JWT API, 세션 쿠키 미사용
+            // CSRF 비활성화: stateless JWT API, 세션 쿠기 미사용
             .csrf { it.disable() }
             .cors { it.disable() }
             .formLogin { it.disable() }
@@ -63,11 +63,17 @@ class SecurityConfig(
                     // Everything else - deny by default (explicit allow list above)
                     .anyRequest().denyAll()
             }
-            .exceptionHandling { it.authenticationEntryPoint { _, response, _ ->
-                entrypointCounter.increment()
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
-            } }
-            .addFilterBefore(rateLimitingFilter, JwtAuthenticationFilter::class.java)
+            .exceptionHandling {
+                it.authenticationEntryPoint { _, response, _ ->
+                    entrypointCounter.increment()
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
+                }
+            }
+            .also {
+                if (rateLimitingFilter != null) {
+                    it.addFilterBefore(rateLimitingFilter, JwtAuthenticationFilter::class.java)
+                }
+            }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
             .build()
     }

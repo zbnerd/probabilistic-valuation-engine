@@ -28,7 +28,7 @@ spring:
   jpa:
     open-in-view: false  # P2-24: 명시적 비활성화 - 트랜잭션 경계 외부에서 지연 로딩 방지, N+1 쿼리 감지
     hibernate:
-      ddl-auto: none  # Disable DDL auto-management for local dev
+      ddl-auto: update  # Clean DB: let Hibernate create tables from JPA entities
     properties:
       hibernate:
         default_batch_fetch_size: 100
@@ -122,6 +122,9 @@ app:
     high-priority-worker-ratio: 0.5
     enabled: true
     query-side-enabled: true
+  queue:
+    expectation:
+      high-priority-capacity: 10000
 
 # ACL Phase 2: Scheduler Configuration
 scheduler:
@@ -170,6 +173,19 @@ resilience4j:
     instances:
       discordWebhook:
         timeoutDuration: 5s
+
+# Admission Control (throughput tuning)
+admission-control:
+  max-in-flight: 100
+  max-queue-size: 2000
+
+# PGMQ Worker Configuration
+pgmq:
+  worker:
+    expectation-calc-high:
+      enabled: true
+    expectation-calc-low:
+      enabled: true
 
 # Bulk Loading Configuration (Issue #611)
 bulk:

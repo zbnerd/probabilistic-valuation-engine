@@ -22,8 +22,8 @@ import org.springframework.stereotype.Component;
  *
  * <h3>Issue #633: In-Memory → PostgreSQL</h3>
  *
- * <p>PersistenceTrackerStrategy 인터페이스 구현체 (PostgreSQL 모드).
- * 비동기 작업을 PostgreSQL regular table에 기록하여 인스턴스 장애 시 복구 가능.
+ * <p>PersistenceTrackerStrategy 인터페이스 구현체 (PostgreSQL 모드). 비동기 작업을 PostgreSQL regular table에 기록하여
+ * 인스턴스 장애 시 복구 가능.
  *
  * <ul>
  *   <li>{@code shutdownInProgress}: AtomicBoolean - 인스턴스 로컬 shutdown 상태.
@@ -156,7 +156,8 @@ public class EquipmentPersistenceTracker implements PersistenceTrackerStrategy {
   void recoverPendingOperations() {
     List<String> pending = port.findPendingOperations();
     if (pending.isEmpty()) return;
-    log.warn("[Persistence] Found {} pending operations from previous run: {}", pending.size(), pending);
+    log.warn(
+        "[Persistence] Found {} pending operations from previous run: {}", pending.size(), pending);
     pending.forEach(ocid -> log.warn("[Persistence] Unrecovered pending: ocid={}", ocid));
   }
 }

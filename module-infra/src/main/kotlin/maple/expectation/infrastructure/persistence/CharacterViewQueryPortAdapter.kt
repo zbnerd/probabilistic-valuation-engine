@@ -1,12 +1,12 @@
 package maple.expectation.infrastructure.persistence
 
+import java.util.Optional
 import maple.expectation.core.domain.model.character.CharacterView
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
-import java.util.Optional
 
 /**
  * CharacterViewQueryPort 구현체 (ADR-005, Issue #639)
@@ -20,7 +20,7 @@ import java.util.Optional
  * </ul>
  */
 @Service
-@ConditionalOnProperty(name = ["app.v5.enabled"], havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = ["v5.enabled"], havingValue = "true", matchIfMissing = false)
 class CharacterViewQueryPortAdapter(
     private val queryService: CharacterViewQueryServicePostgres,
 ) : CharacterViewQueryPort {
@@ -47,6 +47,8 @@ class CharacterViewQueryPortAdapter(
     ) : CharacterView {
         override val userIgn: String
             get() = entity.userIgn
+        override val messageId: String?
+            get() = entity.messageId
         override val calculatedAt: java.time.Instant?
             get() = entity.calculatedAt
         override val fromCache: Boolean?

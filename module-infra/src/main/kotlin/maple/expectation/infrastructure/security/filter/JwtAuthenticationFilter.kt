@@ -7,17 +7,17 @@ import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import java.io.IOException
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.infrastructure.security.AuthenticatedUser
-import org.springframework.dao.DuplicateKeyException
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
-import java.io.IOException
 
 /**
  * JWT Authentication Filter (ADR-005, ADR-029, ADR-030)
@@ -195,7 +195,7 @@ class JwtAuthenticationFilter(
         val errorResponse = mapOf(
             "error" to "Unauthorized",
             "message" to message,
-            "status" to 401
+            "status" to 401,
         )
 
         try {

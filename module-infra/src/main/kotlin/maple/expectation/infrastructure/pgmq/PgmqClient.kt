@@ -73,6 +73,30 @@ class PgmqClient(
     }
 
     /**
+     * Raw JSON 메시지 발행 (DLQ Replay 전용)
+     *
+     * <p>이미 직렬화된 JSON 문자열을 그대로 JSONB로 전송.
+     * Jackson 재직렬화로 인한 double-encoding 방지.
+     *
+     * @param queueName 큐 이름
+     * @param json 직렬화된 JSON 문자열
+     * @return 메시지 ID
+     */
+    @CircuitBreaker(name = "pgmq", fallbackMethod = "sendRawJsonFallback")
+    fun sendRawJson(queueName: String, json: String): Long {
+        if (config.transactionCheckEnabled && !TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw PgmqPublishException(
+                "pgmqClient.sendRawJson('$queueName') must be called within @Transactional.",
+            )
+        }
+        val context = TaskContext.of("PgmqClient", "SendRaw", queueName)
+        val translator = ExceptionTranslator { e, _ ->
+            PgmqPublishException("Failed to send raw JSON to queue: $queueName", e)
+        }
+        return executor.executeWithTranslation({ performSendRawJson(queueName, json) }, translator, context)
+    }
+
+    /**
      * 메시지 소비
      *
      * <p>SKIP LOCKED 기반으로 여러 Worker가 동시에 안전하게 소비.
@@ -120,6 +144,28 @@ class PgmqClient(
             PgmqArchiveException("Failed to archive message: $messageId", e)
         }
         return executor.executeWithTranslation({ performArchive(queueName, messageId) }, translator, context)
+    }
+
+    /**
+     * 배치 메시지 보관 (BS4)
+     *
+     * <p>처리 완료된 메시지를 배치로 아카이브 테이블로 이동.
+     * 개별 archive() 대비 단일 쿼리로 N개 메시지를 처리하여 DB 왕복 감소.
+     *
+     * @param queueName 큐 이름
+     * @param messageIds 메시지 ID 목록
+     * @return 아카이브된 메시지 수
+     */
+    @CircuitBreaker(name = "pgmq", fallbackMethod = "archiveBatchFallback")
+    fun archiveBatch(queueName: String, messageIds: List<Long>): Int {
+        if (messageIds.isEmpty()) return 0
+        validateQueueName(queueName)
+        val context = TaskContext.of("PgmqClient", "ArchiveBatch", "$queueName:${messageIds.size}")
+        return executor.executeOrDefault(
+            { performArchiveBatch(queueName, messageIds) },
+            0,
+            context,
+        )
     }
 
     /**
@@ -204,6 +250,21 @@ class PgmqClient(
         return executor.executeOrDefault({ performGetReadCount(queueName, messageId) }, 0, context)
     }
 
+    /**
+     * Find the latest active message for a user in the target queue.
+     *
+     * <p>Used to deduplicate repeated V5 MISS requests so the API can return the
+     * currently active task instead of enqueueing duplicate work.
+     */
+    fun findActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long? {
+        val context = TaskContext.of("PgmqClient", "FindActiveMessage", "$queueName:$userIgn")
+        return executor.executeOrDefault(
+            { performFindActiveMessageIdByUserIgn(queueName, userIgn) },
+            null,
+            context,
+        )
+    }
+
     // ==================== Internal Implementation ====================
 
     private fun <T : Any> performSend(queueName: String, message: T): Long {
@@ -219,6 +280,20 @@ class PgmqClient(
             ?: throw PgmqPublishException("Failed to get message ID from send result")
 
         log.debug("📤 [PGMQ] Sent message: queue={}, msgId={}", queueName, messageId)
+        return messageId
+    }
+
+    private fun performSendRawJson(queueName: String, json: String): Long {
+        val result = jdbcTemplate.queryForMap(
+            "SELECT pgmq.send(?, ?::jsonb) as msg_id",
+            queueName,
+            json,
+        )
+
+        val messageId = (result["msg_id"] as Number?)?.toLong()
+            ?: throw PgmqPublishException("Failed to get message ID from send result")
+
+        log.debug("📤 [PGMQ] Sent raw JSON: queue={}, msgId={}", queueName, messageId)
         return messageId
     }
 
@@ -262,6 +337,23 @@ class PgmqClient(
         return messages
     }
 
+    private fun performArchiveBatch(queueName: String, messageIds: List<Long>): Int {
+        val queueTable = "pgmq.q_$queueName"
+        val archiveTable = "pgmq.a_$queueName"
+        val placeholders = messageIds.map { "?" }.joinToString(",")
+        return jdbcTemplate.queryForObject(
+            """
+            WITH deleted AS (
+                DELETE FROM $queueTable WHERE msg_id IN ($placeholders)
+                RETURNING *
+            )
+            SELECT COUNT(*) FROM $archiveTable
+            """.trimIndent(),
+            Int::class.java,
+            *messageIds.toTypedArray(),
+        ) ?: 0
+    }
+
     private fun performArchive(queueName: String, messageId: Long): Boolean {
         val result = jdbcTemplate.queryForObject(
             "SELECT pgmq.archive(?, ?) as success",
@@ -290,13 +382,11 @@ class PgmqClient(
         return result
     }
 
-    private fun performQueueLength(queueName: String): Long {
-        return jdbcTemplate.queryForObject(
-            "SELECT queue_length FROM pgmq.metrics(?)",
-            Long::class.java,
-            queueName,
-        ) ?: 0L
-    }
+    private fun performQueueLength(queueName: String): Long = jdbcTemplate.queryForObject(
+        "SELECT queue_length FROM pgmq.metrics(?)",
+        Long::class.java,
+        queueName,
+    ) ?: 0L
 
     private fun performIsArchived(queueName: String, messageId: Long): Boolean {
         validateQueueName(queueName)
@@ -316,6 +406,22 @@ class PgmqClient(
             Int::class.java,
             messageId,
         ) ?: 0
+    }
+
+    private fun performFindActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long? {
+        validateQueueName(queueName)
+        val queueTable = "pgmq.q_$queueName"
+        return jdbcTemplate.queryForObject(
+            """
+            SELECT msg_id
+            FROM $queueTable
+            WHERE message ->> 'userIgn' = ?
+            ORDER BY msg_id DESC
+            LIMIT 1
+            """.trimIndent(),
+            Long::class.java,
+            userIgn,
+        )
     }
 
     private fun validateQueueName(queueName: String) {
@@ -342,6 +448,11 @@ class PgmqClient(
         throw PgmqPublishException("Circuit Breaker is OPEN for send operation", e)
     }
 
+    private fun sendRawJsonFallback(queueName: String, json: String, e: Throwable): Long {
+        log.error("⚡ [PGMQ] Circuit Breaker OPEN - sendRawJson fallback: queue={}", queueName, e)
+        throw PgmqPublishException("Circuit Breaker is OPEN for sendRawJson operation", e)
+    }
+
     private fun <T : Any> readFallback(
         queueName: String,
         clazz: Class<T>,
@@ -351,6 +462,11 @@ class PgmqClient(
     ): List<PgmqMessage<T>> {
         log.warn("⚡ [PGMQ] Circuit Breaker OPEN - read fallback: queue={}", queueName, e)
         return emptyList() // 빈 리스트 반환으로 처리 건너뜀
+    }
+
+    private fun archiveBatchFallback(queueName: String, messageIds: List<Long>, e: Throwable): Int {
+        log.error("[PGMQ] Circuit Breaker OPEN - archiveBatch fallback: queue={}, count={}", queueName, messageIds.size, e)
+        return 0
     }
 
     private fun archiveFallback(queueName: String, messageId: Long, e: Throwable): Boolean {

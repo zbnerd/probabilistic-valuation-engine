@@ -15,8 +15,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>책임: 도네이션(커피 후원) 기능 구현
  *
- * <p>V5 Migration: DonationOutbox 제거 후 PGMQ 직접 발행.
- * 같은 트랜잭션 내에서 비즈니스 로직과 메시지 발행을 처리합니다.
+ * <p>V5 Migration: DonationOutbox 제거 후 PGMQ 직접 발행. 같은 트랜잭션 내에서 비즈니스 로직과 메시지 발행을 처리합니다.
  */
 @Slf4j
 @Component
@@ -45,13 +44,12 @@ public class DonationPortAdapter implements DonationPort {
 
     // Publish notification to PGMQ directly (Outbox bridge removed)
     long donationId = System.currentTimeMillis();
-    donationQueueProducer.publish(
-        donationId,
-        0L,
-        command.getAmount(),
-        command.getGuestUuid());
+    donationQueueProducer.publish(donationId, 0L, command.getAmount(), command.getGuestUuid());
 
-    log.info("[Donation] Coffee sent successfully: requestId={}, donationId={}", command.getRequestId(), donationId);
+    log.info(
+        "[Donation] Coffee sent successfully: requestId={}, donationId={}",
+        command.getRequestId(),
+        donationId);
   }
 
   @Override

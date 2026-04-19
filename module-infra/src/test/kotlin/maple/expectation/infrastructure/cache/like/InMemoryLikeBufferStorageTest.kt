@@ -1,14 +1,13 @@
 package maple.expectation.infrastructure.cache.like
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
 
 class InMemoryLikeBufferStorageTest {
 
@@ -63,7 +62,7 @@ class InMemoryLikeBufferStorageTest {
     @DisplayName("fetchAndClear는 값이 0인 카운터를 건너뛴다")
     fun fetchAndClearSkipsZeroCounters() {
         storage.increment("user1", 5)
-        storage.getCounter("user2")  // counter만 생성, 값은 0
+        storage.getCounter("user2") // counter만 생성, 값은 0
 
         val result = storage.fetchAndClear(10)
 

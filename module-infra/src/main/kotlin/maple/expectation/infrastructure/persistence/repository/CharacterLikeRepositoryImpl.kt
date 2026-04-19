@@ -55,8 +55,7 @@ open class CharacterLikeRepositoryImpl(
         likerAccountId: String,
     ): Long = jpaRepo.deleteByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
 
-    override fun insertIfAbsent(targetOcid: String, likerAccountId: String): Int =
-        jpaRepo.insertIfAbsent(targetOcid, likerAccountId)
+    override fun insertIfAbsent(targetOcid: String, likerAccountId: String): Int = jpaRepo.insertIfAbsent(targetOcid, likerAccountId)
 
     override fun countByTargetOcid(targetOcid: String): Long = jpaRepo.countByTargetOcid(targetOcid)
 

@@ -57,15 +57,33 @@ class NexonApiPgmqMetrics(
         registry.gauge("nexon_api_outbox.pending.count", pendingCount)
     }
 
-    fun incrementProcessed() { processedCounter.increment() }
-    fun incrementFailed() { failedCounter.increment() }
-    fun incrementDlq() { dlqCounter.increment() }
-    fun incrementDlqFileBackup() { dlqFileBackupCounter.increment() }
-    fun incrementDlqCriticalFailure() { dlqCriticalFailureCounter.increment() }
-    fun incrementIntegrityFailure() { integrityFailureCounter.increment() }
-    fun incrementPollFailure() { pollFailureCounter.increment() }
-    fun incrementApiCallSuccess() { apiCallSuccessCounter.increment() }
-    fun incrementApiCallRetry() { apiCallRetryCounter.increment() }
+    fun incrementProcessed() {
+        processedCounter.increment()
+    }
+    fun incrementFailed() {
+        failedCounter.increment()
+    }
+    fun incrementDlq() {
+        dlqCounter.increment()
+    }
+    fun incrementDlqFileBackup() {
+        dlqFileBackupCounter.increment()
+    }
+    fun incrementDlqCriticalFailure() {
+        dlqCriticalFailureCounter.increment()
+    }
+    fun incrementIntegrityFailure() {
+        integrityFailureCounter.increment()
+    }
+    fun incrementPollFailure() {
+        pollFailureCounter.increment()
+    }
+    fun incrementApiCallSuccess() {
+        apiCallSuccessCounter.increment()
+    }
+    fun incrementApiCallRetry() {
+        apiCallRetryCounter.increment()
+    }
 
     override fun updatePendingCount() {
         val count = pgmqClient.queueLength(QUEUE_NAME)

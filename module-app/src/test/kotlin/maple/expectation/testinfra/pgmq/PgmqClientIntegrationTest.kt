@@ -3,6 +3,7 @@ package maple.expectation.testinfra.pgmq
 import io.github.resilience4j.circuitbreaker.CircuitBreaker
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.inbound.CacheManagerPort
 import maple.expectation.core.port.out.LikeBufferStrategy
 import maple.expectation.infrastructure.cache.TieredCacheManager
@@ -16,6 +17,7 @@ import maple.expectation.infrastructure.pgmq.PgmqReadException
 import maple.expectation.support.IntegrationTestBase
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Disabled
@@ -27,7 +29,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.TestPropertySource
-import org.springframework.transaction.annotation.Transactional
 
 /**
  * PGMQ Client 통합 테스트 (ADR-002)
@@ -534,7 +535,10 @@ class PgmqClientIntegrationTest : IntegrationTestBase() {
     fun `Circuit Breaker HALF_OPEN 상태에서 복구`() {
         // Given - OPEN 후 HALF_OPEN으로 전이
         circuitBreaker.transitionToOpenState()
-        Thread.sleep(1100) // waitDurationInOpenStateMs (1000ms) 대기
+        // Wait for HALF_OPEN state transition
+        await().atMost(2, TimeUnit.SECONDS).until {
+            circuitBreaker.state == CircuitBreaker.State.HALF_OPEN
+        }
         // 첫 호출로 HALF_OPEN으로 전이
 
         val request = CalculationRequest(

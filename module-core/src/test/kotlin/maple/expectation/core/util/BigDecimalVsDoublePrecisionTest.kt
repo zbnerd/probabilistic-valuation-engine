@@ -1,12 +1,12 @@
 package maple.expectation.core.util
 
+import java.math.BigDecimal
+import java.math.MathContext
+import java.math.RoundingMode
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import java.math.BigDecimal
-import java.math.MathContext
-import java.math.RoundingMode
 
 /**
  * 🔥 P0 FIX #3: Precision Regression Tests for BigDecimal → Double Migration
@@ -174,13 +174,11 @@ class BigDecimalVsDoublePrecisionTest {
     /**
      * Calculate sum using BigDecimal (baseline for precision comparison)
      */
-    private fun calculateBigDecimalSum(values: List<Double>): Double {
-        return values
-            .fold(BigDecimal.ZERO) { acc, value ->
-                acc.add(BigDecimal.valueOf(value), MATH_CONTEXT)
-            }
-            .toDouble()
-    }
+    private fun calculateBigDecimalSum(values: List<Double>): Double = values
+        .fold(BigDecimal.ZERO) { acc, value ->
+            acc.add(BigDecimal.valueOf(value), MATH_CONTEXT)
+        }
+        .toDouble()
 
     /**
      * Calculate expected cost using BigDecimal
@@ -188,7 +186,7 @@ class BigDecimalVsDoublePrecisionTest {
      */
     private fun calculateBigDecimalExpectedCost(
         probabilities: List<Double>,
-        costs: List<Double>
+        costs: List<Double>,
     ): Double {
         require(probabilities.size == costs.size) {
             "Probabilities and costs must have the same size"
@@ -207,7 +205,7 @@ class BigDecimalVsDoublePrecisionTest {
      */
     private fun calculateKahanExpectedCost(
         probabilities: List<Double>,
-        costs: List<Double>
+        costs: List<Double>,
     ): Double {
         require(probabilities.size == costs.size) {
             "Probabilities and costs must have the same size"

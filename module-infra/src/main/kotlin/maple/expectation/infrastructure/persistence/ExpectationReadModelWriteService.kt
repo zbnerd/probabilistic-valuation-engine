@@ -1,0 +1,63 @@
+package maple.expectation.infrastructure.persistence
+
+import java.time.Instant
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.persistence.repository.ExpectationReadModelRepository
+import maple.expectation.util.GzipUtils
+import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.stereotype.Service
+
+/**
+ * V5 Query Server: Write service for Character Expectation Read Model
+ *
+ * <p>Serializes V5 response JSON to GZIP-compressed BYTEA and writes to
+ * `character_expectation_read_model` via atomic UPSERT function.
+ *
+ * <p><strong>Exception Handling:</strong> Uses [LogicExecutor] pattern per Zero Try-Catch policy.
+ * IOException from GZIP compression is wrapped in IllegalStateException for proper propagation.
+ *
+ * @see ExpectationReadModelRepository
+ * @see GzipUtils
+ */
+@Service
+@ConditionalOnProperty(name = ["v5.enabled"], havingValue = "true", matchIfMissing = false)
+class ExpectationReadModelWriteService(
+    private val repository: ExpectationReadModelRepository,
+    private val executor: LogicExecutor,
+) {
+    private val log = LoggerFactory.getLogger(ExpectationReadModelWriteService::class.java)
+
+    /**
+     * Writes JSON response to read model table with GZIP compression
+     *
+     * @param userIgn Character name (primary key)
+     * @param json JSON string to compress and store
+     * @param calculatedAt Timestamp of expectation calculation
+     */
+    fun writeToReadModel(userIgn: String, json: String, calculatedAt: Instant) {
+        val context = TaskContext.of("ReadModel", "Write", userIgn)
+        executor.executeVoid({ performWrite(userIgn, json, calculatedAt) }, context)
+    }
+
+    private fun performWrite(userIgn: String, json: String, calculatedAt: Instant) {
+        val compressed = GzipUtils.compressUnchecked(json)
+        repository.upsertNative(userIgn, compressed, calculatedAt)
+        log.debug("[ReadModel] Saved: userIgn={}, compressedSize={}", userIgn, compressed.size)
+    }
+
+    /**
+     * Raw write method without executor wrapping.
+     * Used internally by services that already have executor wrapping.
+     *
+     * @param userIgn Character name (primary key)
+     * @param json JSON string to compress and store
+     * @param calculatedAt Timestamp of expectation calculation
+     */
+    fun writeToReadModelRaw(userIgn: String, json: String, calculatedAt: Instant) {
+        val compressed = GzipUtils.compressUnchecked(json)
+        repository.upsertNative(userIgn, compressed, calculatedAt)
+        log.debug("[ReadModel] Saved: userIgn={}, compressedSize={}", userIgn, compressed.size)
+    }
+}

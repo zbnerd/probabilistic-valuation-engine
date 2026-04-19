@@ -2,11 +2,11 @@ package maple.expectation.web.controller
 
 import jakarta.validation.Valid
 import java.util.concurrent.CompletableFuture
+import maple.expectation.core.domain.model.security.AuthenticatedUser
 import maple.expectation.core.port.inbound.AuthCommand
 import maple.expectation.core.port.inbound.AuthPort
 import maple.expectation.core.port.inbound.AuthResult
 import maple.expectation.core.port.inbound.TokenResult
-import maple.expectation.core.domain.model.security.AuthenticatedUser
 import maple.expectation.response.ApiResponse
 import maple.expectation.web.dto.LoginRequest
 import maple.expectation.web.dto.LoginResponse

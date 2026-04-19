@@ -43,7 +43,8 @@ class ApiKeyValidator(
         userIgn: String,
         characters: List<CharacterListResponse.CharacterInfo>,
     ): Boolean {
-        val ownsCharacter = characters.any { it.characterName.equals(userIgn, ignoreCase = true) }
+        val normalizedUserIgn = userIgn.trim()
+        val ownsCharacter = characters.any { it.characterName?.trim()?.equals(normalizedUserIgn, ignoreCase = true) == true }
 
         if (!ownsCharacter) {
             log.warn("Character ownership verification failed: userIgn={}", userIgn)
@@ -79,13 +80,27 @@ class ApiKeyValidator(
         }
 
         // 4. 모든 캐릭터 OCID 수집
-        val myOcids = characters.mapNotNull { it.ocid }.toSet()
+        val myOcids = characters
+            .mapNotNull { it.ocid?.trim()?.takeIf(String::isNotBlank) }
+            .toSet()
 
-        // 5. #667: Nexon account_id 추출 (동일 계정 = 동일 ID, API Key 무관)
-        val accountId = characterList.accountList
-            ?.firstOrNull()
-            ?.accountId
-            ?: throw InvalidApiKeyException()
+        if (myOcids.isEmpty()) {
+            log.warn("API key validation failed: no valid OCIDs found for userIgn={}", userIgn)
+            throw InvalidApiKeyException("No valid character OCIDs found for API key")
+        }
+
+        // 5. #667: 소유권을 인증한 계정에서 account_id 추출
+        val normalizedUserIgn = userIgn.trim()
+        val owningAccount = characterList.accountList
+            ?.firstOrNull { account ->
+                account.characterList.orEmpty().any { char ->
+                    char.characterName?.trim()?.equals(normalizedUserIgn, ignoreCase = true) == true
+                }
+            }
+            ?: throw InvalidApiKeyException("No matching account found for character: $userIgn")
+
+        val accountId = owningAccount.accountId?.trim()?.takeIf(String::isNotBlank)
+            ?: throw InvalidApiKeyException("Nexon account_id is missing in character/list response")
 
         log.info("API key validation successful: userIgn={}, ocids={}, accountId={}", userIgn, myOcids.size, accountId)
 

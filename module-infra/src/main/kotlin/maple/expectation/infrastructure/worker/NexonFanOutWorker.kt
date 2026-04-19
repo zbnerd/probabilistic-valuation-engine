@@ -1,17 +1,18 @@
 package maple.expectation.infrastructure.worker
 
+import io.micrometer.core.instrument.MeterRegistry
 import kotlin.math.ceil
 import kotlin.random.Random
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.fanout.NexonFanOutBatchLoader
+import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.pgmq.FanOutRequest
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
-import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
-import io.micrometer.core.instrument.MeterRegistry
+import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
 import maple.expectation.infrastructure.queue.pgmq.FanOutQueueProducer
 import org.slf4j.LoggerFactory
@@ -45,13 +46,14 @@ import org.springframework.stereotype.Component
 @Component
 @Profile("!test")
 class NexonFanOutWorker(
-    private val pgmqClient: PgmqClient,
+    pgmqClient: PgmqClient,
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
     meterRegistry: MeterRegistry,
+    queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val fetchProvider: EquipmentFetchProvider,
-) : PgmqWorker<FanOutRequest>(pgmqClient, executor, config, meterRegistry, lifecycleWrapper) {
+) : PgmqWorker<FanOutRequest>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val queueName: String = FanOutQueueProducer.QUEUE_NAME
     override val payloadClass: Class<FanOutRequest> = FanOutRequest::class.java
@@ -85,7 +87,9 @@ class NexonFanOutWorker(
         pgmqClient.setVisibilityTimeout(queueName, message.messageId, jitterSecInt.toLong())
         log.warn(
             "[NexonFanOutWorker] 429 retry with VT={}s: ocid={}, readCount={}",
-            jitterSecInt, message.payload.ocid, message.readCount,
+            jitterSecInt,
+            message.payload.ocid,
+            message.readCount,
         )
     }
 

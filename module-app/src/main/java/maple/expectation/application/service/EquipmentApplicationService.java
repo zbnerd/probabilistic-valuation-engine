@@ -118,7 +118,8 @@ public class EquipmentApplicationService {
     // Update existing equipment or create new
     return existing
         .map(e -> equipmentRepository.save(e.withUpdatedData(equipmentData)))
-        .orElseGet(() -> equipmentRepository.save(CharacterEquipment.create(characterId, equipmentData)));
+        .orElseGet(
+            () -> equipmentRepository.save(CharacterEquipment.create(characterId, equipmentData)));
   }
 
   /**

@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import java.sql.Timestamp
 import java.time.Instant
+import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
@@ -58,11 +59,12 @@ class PostgresL2CacheStrategy(
     private val executor: LogicExecutor,
     private val objectMapper: ObjectMapper,
     private val meterRegistry: MeterRegistry,
+    private val cacheProperties: CacheProperties,
 ) : L2CacheStrategy {
 
     companion object {
         private val log = LoggerFactory.getLogger(PostgresL2CacheStrategy::class.java)
-        private const val KEY_VERSION = "v1"
+        private const val DEFAULT_KEY_VERSION = "v1"
 
         /**
          * ThreadLocal flag to disable L2 cache writes during bulk loading.
@@ -108,19 +110,19 @@ class PostgresL2CacheStrategy(
                       AND expires_at > NOW()
                 """.trimIndent()
 
-                val result = jdbcTemplate.queryForObject(
+                // Use query() instead of queryForObject() to avoid EmptyResultDataAccessException
+                // being logged as ERROR by executor on normal cache misses
+                val results = jdbcTemplate.query(
                     sql,
-                    arrayOf(key),
-                    ByteArray::class.java,
+                    { rs, _ -> rs.getBytes("cache_value") },
+                    key,
                 )
+
+                val result = results.firstOrNull()
 
                 result?.let { bytes ->
                     try {
-                        // Deserialize as TypedValue wrapper to preserve type information
                         val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
-                        // Fix: Ensure proper type casting for String values
-                        // When the cached value is a String, return it directly
-                        // to avoid type erasure issues when T = Any
                         @Suppress("UNCHECKED_CAST")
                         when {
                             type == String::class.java || type == Any::class.java -> typedValue.value as? T
@@ -171,6 +173,7 @@ class PostgresL2CacheStrategy(
                         val key = rs.getString("cache_key")
                         val bytes = rs.getBytes("cache_value")
                         val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
+
                         // Apply same type safety as get() method
                         @Suppress("UNCHECKED_CAST")
                         val value: T? = when {
@@ -236,6 +239,38 @@ class PostgresL2CacheStrategy(
         )
     }
 
+    override fun putAll(entries: List<Pair<String, Any>>, ttlMinutes: Long) {
+        if (disableL2Writes.get() == true) return
+        if (entries.isEmpty()) return
+
+        val context = TaskContext.of("PostgresL2Strategy", "PutAll", "${entries.size}")
+
+        executor.executeVoidJava({
+            putCounter.increment()
+
+            val expiresAt = Timestamp.from(Instant.now().plusSeconds(ttlMinutes * 60))
+
+            val sql = """
+                INSERT INTO cache_storage (cache_key, cache_value, expires_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT (cache_key)
+                DO UPDATE SET
+                    cache_value = EXCLUDED.cache_value,
+                    expires_at = EXCLUDED.expires_at
+            """.trimIndent()
+
+            val batchArgs = entries.map { (key, value) ->
+                val typedValue = TypedValue(value)
+                val valueBytes: ByteArray = objectMapper.writeValueAsBytes(typedValue)
+                arrayOf(key, valueBytes, expiresAt)
+            }.toList()
+
+            jdbcTemplate.batchUpdate(sql, batchArgs)
+
+            log.debug("[PostgresL2] PutAll: {} entries, ttl={}min", entries.size, ttlMinutes)
+        }, context)
+    }
+
     override fun evict(key: String) {
         val context = TaskContext.of("PostgresL2Strategy", "Evict", key)
 
@@ -263,8 +298,8 @@ class PostgresL2CacheStrategy(
                 // Key format: {cacheName}:v1:{actualKey}
                 // Range query using >= and < with COLLATE "C" for B-tree index scan
                 // '~' (0x7E) is the highest printable ASCII char, guaranteed > any valid actualKey
-                val keyPrefix = "$cacheName:$KEY_VERSION:"
-                val upperBound = "$cacheName:$KEY_VERSION~"
+                val keyPrefix = "$cacheName:${cacheProperties.keyVersion}:"
+                val upperBound = "$cacheName:${cacheProperties.keyVersion}~"
                 val sql = "DELETE FROM cache_storage WHERE cache_key >= ? COLLATE \"C\" AND cache_key < ? COLLATE \"C\""
 
                 val deleted = jdbcTemplate.update(sql, keyPrefix, upperBound)
@@ -317,6 +352,6 @@ class PostgresL2CacheStrategy(
         require('~' !in cacheName && '~' !in actualKey) {
             "Cache key must not contain '~' (reserved for range query boundary): cacheName=$cacheName, actualKey=$actualKey"
         }
-        return "$cacheName:$KEY_VERSION:$actualKey"
+        return "$cacheName:${cacheProperties.keyVersion}:$actualKey"
     }
 }

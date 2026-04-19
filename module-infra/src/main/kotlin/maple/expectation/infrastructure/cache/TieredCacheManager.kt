@@ -177,4 +177,8 @@ class TieredCacheManager(
     fun clearKeyVersions(cacheName: String) {
         (getCache(cacheName) as? TieredCache)?.clearKeyVersions()
     }
+
+    fun clearKeyVersion(cacheName: String, key: Any) {
+        (getCache(cacheName) as? TieredCache)?.clearKeyVersion(key)
+    }
 }

@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.config
 
 import io.netty.channel.ChannelOption
+import maple.expectation.infrastructure.external.config.ExternalApiMetricsFilter
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -24,6 +25,7 @@ import reactor.netty.http.client.HttpClient
 @EnableConfigurationProperties(NexonApiProperties::class)
 class MaplestoryApiConfig(
     private val properties: NexonApiProperties,
+    private val apiMetricsFilter: ExternalApiMetricsFilter,
 ) {
 
     @Bean("mapleWebClient")
@@ -46,6 +48,7 @@ class MaplestoryApiConfig(
             .baseUrl("https://open.api.nexon.com")
             .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
             .clientConnector(ReactorClientHttpConnector(httpClient))
+            .filter(apiMetricsFilter)
             .build()
     }
 }

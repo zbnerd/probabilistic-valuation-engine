@@ -37,12 +37,10 @@ class CharacterOcidAdapter(
     }
 
     @Cacheable(value = ["ocidCache"], key = "#userIgn", unless = "#result == null")
-    override fun resolveOcid(userIgn: String): String? {
-        return executor.execute(
-            { resolveFromDb(userIgn) },
-            TaskContext.of("CharacterOcidAdapter", "ResolveOcid", userIgn),
-        )
-    }
+    override fun resolveOcid(userIgn: String): String? = executor.execute(
+        { resolveFromDb(userIgn) },
+        TaskContext.of("CharacterOcidAdapter", "ResolveOcid", userIgn),
+    )
 
     override fun resolveOcids(userIgns: Set<String>): Map<String, String> {
         if (userIgns.isEmpty()) {
@@ -62,12 +60,10 @@ class CharacterOcidAdapter(
     }
 
     @Cacheable(value = ["allOcidsCache"], key = "'all'")
-    override fun resolveAllOcids(): Map<String, String> {
-        return executor.execute(
-            { loadAllOcidsFromDb() },
-            TaskContext.of("CharacterOcidAdapter", "ResolveAllOcids"),
-        )
-    }
+    override fun resolveAllOcids(): Map<String, String> = executor.execute(
+        { loadAllOcidsFromDb() },
+        TaskContext.of("CharacterOcidAdapter", "ResolveAllOcids"),
+    )
 
     @Cacheable(value = ["fingerprintOcidsCache"], key = "#fingerprint", unless = "#result.isEmpty()")
     override fun resolveOcidsByFingerprint(fingerprint: String): Set<String> {
@@ -80,12 +76,10 @@ class CharacterOcidAdapter(
 
     @CacheEvict(value = ["fingerprintOcidsCache"], key = "#fingerprint")
     @Transactional("transactionManager")
-    override fun updateFingerprint(ocid: String, fingerprint: String, accountId: String): Int {
-        return executor.execute(
-            { jpaRepository.updateFingerprintByOcid(ocid, fingerprint, accountId) },
-            TaskContext.of("CharacterOcidAdapter", "UpdateFingerprint", ocid),
-        )
-    }
+    override fun updateFingerprint(ocid: String, fingerprint: String, accountId: String): Int = executor.execute(
+        { jpaRepository.updateFingerprintByOcid(ocid, fingerprint, accountId) },
+        TaskContext.of("CharacterOcidAdapter", "UpdateFingerprint", ocid),
+    )
 
     private fun resolveFromDb(userIgn: String): String? {
         val entity = jpaRepository.findByUserIgn(userIgn)

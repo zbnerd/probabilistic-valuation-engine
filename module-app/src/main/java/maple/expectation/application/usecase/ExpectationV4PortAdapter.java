@@ -21,8 +21,14 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
 
   @Override
   public CompletableFuture<Object> calculateExpectationAsync(String userIgn, boolean force) {
+    return calculateExpectationAsync(userIgn, force, null);
+  }
+
+  @Override
+  public CompletableFuture<Object> calculateExpectationAsync(
+      String userIgn, boolean force, String taskId) {
     return expectationService
-        .calculateExpectationAsync(userIgn, force)
+        .calculateExpectationAsync(userIgn, force, taskId)
         .thenApply(response -> response);
   }
 
@@ -32,21 +38,28 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
   }
 
   /**
-   * 🔥 Sync implementation for admission control
-   * Delegates to service's sync method (returns byte[] directly, not Optional)
+   * 🔥 Sync implementation for admission control Delegates to service's sync method (returns byte[]
+   * directly, not Optional)
    */
   @Override
   public byte[] getGzipExpectation(String userIgn, boolean force) {
     return expectationService.getGzipExpectation(userIgn, force);
   }
 
-  /**
-   * 🔥 Sync implementation for admission control
-   * Delegates to service's sync method
-   */
+  /** 🔥 Sync implementation for admission control Delegates to service's sync method */
   @Override
   public Object calculateExpectation(String userIgn, boolean force) {
-    return expectationService.calculateExpectation(userIgn, force);
+    return calculateExpectation(userIgn, force, null);
+  }
+
+  @Override
+  public Object calculateExpectation(String userIgn, boolean force, String taskId) {
+    return expectationService.calculateExpectation(userIgn, force, taskId);
+  }
+
+  @Override
+  public Object calculateExpectationWriteOnly(String userIgn, boolean force, String taskId) {
+    return expectationService.calculateExpectationWriteOnly(userIgn, force, taskId);
   }
 
   @Override

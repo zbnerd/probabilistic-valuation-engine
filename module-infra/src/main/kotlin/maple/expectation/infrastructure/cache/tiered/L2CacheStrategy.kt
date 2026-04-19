@@ -47,6 +47,19 @@ interface L2CacheStrategy {
     fun put(key: String, value: Any, ttlMinutes: Long)
 
     /**
+     * Store multiple values in L2 cache (batch write)
+     *
+     * <p>Default implementation iterates single puts for backward compatibility.
+     * Implementations should override for optimized batch writes.
+     *
+     * @param entries List of key-value pairs to store
+     * @param ttlMinutes Time-to-live in minutes (applied to all entries)
+     */
+    fun putAll(entries: List<Pair<String, Any>>, ttlMinutes: Long) {
+        entries.forEach { (key, value) -> put(key, value, ttlMinutes) }
+    }
+
+    /**
      * Remove a specific entry from L2 cache
      *
      * @param key Cache key to evict

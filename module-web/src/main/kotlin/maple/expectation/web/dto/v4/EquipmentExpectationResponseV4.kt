@@ -23,6 +23,8 @@ data class EquipmentExpectationResponseV4(
     companion object {
         @JvmStatic
         fun builder() = Builder()
+
+        private fun <T : Any> required(value: T?, fieldName: String): T = requireNotNull(value) { "Missing required field: $fieldName" }
     }
 
     class Builder {
@@ -44,14 +46,14 @@ data class EquipmentExpectationResponseV4(
         fun maxPresetNo(v: Int) = apply { maxPresetNo = v }
         fun presets(v: List<PresetExpectation>) = apply { presets = v }
         fun build() = EquipmentExpectationResponseV4(
-            userIgn = userIgn!!,
-            calculatedAt = calculatedAt!!,
+            userIgn = required(userIgn, "userIgn"),
+            calculatedAt = required(calculatedAt, "calculatedAt"),
             fromCache = fromCache,
-            totalExpectedCost = totalExpectedCost!!,
-            totalCostText = totalCostText!!,
-            totalCostBreakdown = totalCostBreakdown!!,
+            totalExpectedCost = required(totalExpectedCost, "totalExpectedCost"),
+            totalCostText = required(totalCostText, "totalCostText"),
+            totalCostBreakdown = required(totalCostBreakdown, "totalCostBreakdown"),
             maxPresetNo = maxPresetNo,
-            presets = presets!!,
+            presets = required(presets, "presets"),
         )
     }
 
@@ -127,24 +129,24 @@ data class EquipmentExpectationResponseV4(
             fun starforceExpectation(v: StarforceExpectationDto) = apply { starforceExpectation = v }
             fun flameExpectation(v: FlameExpectationDto) = apply { flameExpectation = v }
             fun build() = ItemExpectationV4(
-                itemName = itemName!!,
-                itemIcon = itemIcon!!,
-                itemPart = itemPart!!,
+                itemName = required(itemName, "itemName"),
+                itemIcon = required(itemIcon, "itemIcon"),
+                itemPart = required(itemPart, "itemPart"),
                 itemLevel = itemLevel,
-                expectedCost = expectedCost!!,
-                expectedCostText = expectedCostText!!,
-                costBreakdown = costBreakdown!!,
-                enhancePath = enhancePath!!,
+                expectedCost = required(expectedCost, "expectedCost"),
+                expectedCostText = required(expectedCostText, "expectedCostText"),
+                costBreakdown = required(costBreakdown, "costBreakdown"),
+                enhancePath = required(enhancePath, "enhancePath"),
                 potentialGrade = potentialGrade,
                 additionalPotentialGrade = additionalPotentialGrade,
                 currentStar = currentStar,
                 targetStar = targetStar,
                 isNoljang = isNoljang,
                 specialRingLevel = specialRingLevel,
-                blackCubeExpectation = blackCubeExpectation!!,
-                additionalCubeExpectation = additionalCubeExpectation!!,
-                starforceExpectation = starforceExpectation!!,
-                flameExpectation = flameExpectation!!,
+                blackCubeExpectation = required(blackCubeExpectation, "blackCubeExpectation"),
+                additionalCubeExpectation = required(additionalCubeExpectation, "additionalCubeExpectation"),
+                starforceExpectation = required(starforceExpectation, "starforceExpectation"),
+                flameExpectation = required(flameExpectation, "flameExpectation"),
             )
         }
     }
@@ -187,12 +189,12 @@ data class EquipmentExpectationResponseV4(
             fun targetGrade(v: String) = apply { targetGrade = v }
             fun potential(v: String) = apply { potential = v }
             fun build() = CubeExpectationDto(
-                expectedCost = expectedCost!!,
-                expectedCostText = expectedCostText!!,
-                expectedTrials = expectedTrials!!,
-                currentGrade = currentGrade!!,
-                targetGrade = targetGrade!!,
-                potential = potential!!,
+                expectedCost = required(expectedCost, "expectedCost"),
+                expectedCostText = required(expectedCostText, "expectedCostText"),
+                expectedTrials = required(expectedTrials, "expectedTrials"),
+                currentGrade = required(currentGrade, "currentGrade"),
+                targetGrade = required(targetGrade, "targetGrade"),
+                potential = required(potential, "potential"),
             )
         }
     }
@@ -250,12 +252,12 @@ data class EquipmentExpectationResponseV4(
                 currentStar = currentStar,
                 targetStar = targetStar,
                 isNoljang = isNoljang,
-                costWithoutDestroyPrevention = costWithoutDestroyPrevention!!,
-                costWithoutDestroyPreventionText = costWithoutDestroyPreventionText!!,
-                expectedDestroyCountWithout = expectedDestroyCountWithout!!,
-                costWithDestroyPrevention = costWithDestroyPrevention!!,
-                costWithDestroyPreventionText = costWithDestroyPreventionText!!,
-                expectedDestroyCountWith = expectedDestroyCountWith!!,
+                costWithoutDestroyPrevention = required(costWithoutDestroyPrevention, "costWithoutDestroyPrevention"),
+                costWithoutDestroyPreventionText = required(costWithoutDestroyPreventionText, "costWithoutDestroyPreventionText"),
+                expectedDestroyCountWithout = required(expectedDestroyCountWithout, "expectedDestroyCountWithout"),
+                costWithDestroyPrevention = required(costWithDestroyPrevention, "costWithDestroyPrevention"),
+                costWithDestroyPreventionText = required(costWithDestroyPreventionText, "costWithDestroyPreventionText"),
+                expectedDestroyCountWith = required(expectedDestroyCountWith, "expectedDestroyCountWith"),
             )
         }
     }
@@ -286,9 +288,9 @@ data class EquipmentExpectationResponseV4(
             fun eternalFlameTrials(v: Double) = apply { eternalFlameTrials = v }
             fun abyssFlameTrials(v: Double) = apply { abyssFlameTrials = v }
             fun build() = FlameExpectationDto(
-                powerfulFlameTrials = powerfulFlameTrials!!,
-                eternalFlameTrials = eternalFlameTrials!!,
-                abyssFlameTrials = abyssFlameTrials!!,
+                powerfulFlameTrials = required(powerfulFlameTrials, "powerfulFlameTrials"),
+                eternalFlameTrials = required(eternalFlameTrials, "eternalFlameTrials"),
+                abyssFlameTrials = required(abyssFlameTrials, "abyssFlameTrials"),
             )
         }
     }

@@ -3,15 +3,12 @@ package maple.expectation.application.service.like;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Set;
-import maple.expectation.core.domain.model.character.CharacterId;
-import maple.expectation.core.domain.model.character.GameCharacter;
 import maple.expectation.core.domain.model.like.LikeToggleResult;
 import maple.expectation.core.domain.model.like.LikeToggleWithCount;
 import maple.expectation.error.exception.CharacterNotFoundException;
@@ -64,14 +61,14 @@ class LikeToggleServiceTest {
   void setUp() {
     executor = TestLogicExecutors.passThrough();
 
-    likeToggleService =
-        new LikeToggleService(
-            characterLikeRepository, characterOcidPort, executor);
+    likeToggleService = new LikeToggleService(characterLikeRepository, characterOcidPort, executor);
 
     // Default mock behaviors
     lenient().when(characterOcidPort.resolveOcid(TARGET_IGN)).thenReturn(TARGET_OCID);
     lenient()
-        .when(characterLikeRepository.existsByTargetOcidAndLikerAccountId(TARGET_OCID, LIKER_ACCOUNT_ID))
+        .when(
+            characterLikeRepository.existsByTargetOcidAndLikerAccountId(
+                TARGET_OCID, LIKER_ACCOUNT_ID))
         .thenReturn(false);
     lenient()
         .when(characterLikeRepository.insertIfAbsent(TARGET_OCID, LIKER_ACCOUNT_ID))
@@ -86,7 +83,8 @@ class LikeToggleServiceTest {
     Set<String> myOcidsWithTarget = Set.of("ocid001", "ocid002", TARGET_OCID);
 
     // when & then
-    assertThatThrownBy(() -> likeToggleService.toggleLike(TARGET_IGN, LIKER_ACCOUNT_ID, myOcidsWithTarget))
+    assertThatThrownBy(
+            () -> likeToggleService.toggleLike(TARGET_IGN, LIKER_ACCOUNT_ID, myOcidsWithTarget))
         .isInstanceOf(SelfLikeNotAllowedException.class);
 
     // Verify no database operations were attempted
@@ -136,7 +134,8 @@ class LikeToggleServiceTest {
 
     // then
     assertThat(result).isEqualTo(LikeToggleResult.UNLIKED);
-    verify(characterLikeRepository).deleteByTargetOcidAndLikerAccountId(TARGET_OCID, LIKER_ACCOUNT_ID);
+    verify(characterLikeRepository)
+        .deleteByTargetOcidAndLikerAccountId(TARGET_OCID, LIKER_ACCOUNT_ID);
   }
 
   @Test
@@ -169,7 +168,8 @@ class LikeToggleServiceTest {
   }
 
   @Test
-  @DisplayName("GIVEN: concurrent like insert WHEN: toggleLike THEN: handles ON CONFLICT DO NOTHING")
+  @DisplayName(
+      "GIVEN: concurrent like insert WHEN: toggleLike THEN: handles ON CONFLICT DO NOTHING")
   void given_concurrentLikeInsert_when_toggleLike_then_handlesConflict() {
     // given: insertIfAbsent returns 0 (already inserted by concurrent request)
     when(characterLikeRepository.insertIfAbsent(TARGET_OCID, LIKER_ACCOUNT_ID)).thenReturn(0);
@@ -186,8 +186,7 @@ class LikeToggleServiceTest {
   @DisplayName("GIVEN: non-existent IGN WHEN: toggleLike THEN: throws CharacterNotFoundException")
   void given_nonExistentIgn_when_toggleLike_then_throwsCharacterNotFoundException() {
     // given: OCID resolution returns null (character not found)
-    when(characterOcidPort.resolveOcid(TARGET_IGN))
-        .thenReturn(null);
+    when(characterOcidPort.resolveOcid(TARGET_IGN)).thenReturn(null);
 
     // when & then
     assertThatThrownBy(() -> likeToggleService.toggleLike(TARGET_IGN, LIKER_ACCOUNT_ID, MY_OCIDS))

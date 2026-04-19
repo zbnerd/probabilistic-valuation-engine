@@ -1,10 +1,10 @@
 package maple.expectation.application.admission
 
+import java.util.concurrent.Callable
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.port.inbound.AdmissionPort
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl
 import org.springframework.stereotype.Component
-import java.util.concurrent.Callable
-import java.util.concurrent.CompletableFuture
 
 /**
  * AdmissionPort 구현체 (ADR-005, Issue #639)
@@ -22,7 +22,5 @@ class AdmissionPortAdapter(
     private val globalAdmissionControl: GlobalAdmissionControl,
 ) : AdmissionPort {
 
-    override fun <T> submitOrWait(key: String, task: Callable<T>): CompletableFuture<T> {
-        return globalAdmissionControl.submitOrWait(key, task)
-    }
+    override fun <T> submitOrWait(key: String, task: Callable<T>): CompletableFuture<T> = globalAdmissionControl.submitOrWait(key, task)
 }

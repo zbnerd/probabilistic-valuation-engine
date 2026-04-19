@@ -5,9 +5,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.model.character.GameCharacter;
 import maple.expectation.error.exception.CharacterNotFoundException;
+import maple.expectation.infrastructure.character.notify.CharacterCreationListener;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.character.notify.CharacterCreationListener;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -53,9 +53,9 @@ public class GameCharacterFacade {
   /**
    * Character Creation Event-driven Wait (replaces Thread.sleep polling)
    *
-   * <p>Uses PostgreSQL LISTEN/NOTIFY via CharacterCreationListener.
-   * When a character is created, CharacterCreationService sends NOTIFY
-   * and this method returns immediately via CompletableFuture.
+   * <p>Uses PostgreSQL LISTEN/NOTIFY via CharacterCreationListener. When a character is created,
+   * CharacterCreationService sends NOTIFY and this method returns immediately via
+   * CompletableFuture.
    *
    * @see CharacterCreationNotifier
    * @see CharacterCreationListener

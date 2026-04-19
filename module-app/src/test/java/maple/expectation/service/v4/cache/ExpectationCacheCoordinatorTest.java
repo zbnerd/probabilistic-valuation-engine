@@ -62,19 +62,24 @@ class ExpectationCacheCoordinatorTest {
 
     // Issue #644: New constructor signature for God Object Decomposition
     var executorPort = new maple.expectation.application.usecase.ApplicationExecutionPort(executor);
-    var cacheManagerPort = new maple.expectation.infrastructure.cache.CacheManagerPortAdapter(tieredCacheManager);
-    var compressionService = new maple.expectation.application.service.expectation.cache.ExpectationCacheCompressionService(objectMapper);
-    var valueConverter = new maple.expectation.application.service.expectation.cache.CacheValueConverter();
-    var responseBuilder = new maple.expectation.application.service.expectation.cache.CachedResponseBuilder();
+    var cacheManagerPort =
+        new maple.expectation.infrastructure.cache.CacheManagerPortAdapter(tieredCacheManager);
+    var compressionService =
+        new maple.expectation.application.service.expectation.cache
+            .ExpectationCacheCompressionService(objectMapper);
+    var valueConverter =
+        new maple.expectation.application.service.expectation.cache.CacheValueConverter();
+    var responseBuilder =
+        new maple.expectation.application.service.expectation.cache.CachedResponseBuilder();
 
-    coordinator = new ExpectationCacheCoordinator(
-        executorPort,
-        cacheManagerPort,
-        null, // admissionControl - optional for backward compatibility
-        compressionService,
-        valueConverter,
-        responseBuilder
-    );
+    coordinator =
+        new ExpectationCacheCoordinator(
+            executorPort,
+            cacheManagerPort,
+            null, // admissionControl - optional for backward compatibility
+            compressionService,
+            valueConverter,
+            responseBuilder);
 
     mockResponse = createMockResponse();
     String json = objectMapper.writeValueAsString(mockResponse);

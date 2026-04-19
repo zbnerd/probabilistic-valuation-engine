@@ -18,9 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <h3>PGMQ Migration</h3>
  *
- * <p>Replaced in-memory {@code LinkedBlockingQueue} with PGMQ-backed durable queues.
- * Message consumption is handled by {@link ExpectationCalcWorker} (HIGH) and
- * {@link ExpectationCalcLowWorker} (LOW) via the {@code PgmqWorker} abstraction.
+ * <p>Replaced in-memory {@code LinkedBlockingQueue} with PGMQ-backed durable queues. Message
+ * consumption is handled by {@link ExpectationCalcWorker} (HIGH) and {@link
+ * ExpectationCalcLowWorker} (LOW) via the {@code PgmqWorker} abstraction.
  *
  * <h3>Priority Strategy</h3>
  *
@@ -57,43 +57,22 @@ public class ExpectationCalculationQueue {
   /**
    * Offer task to appropriate PGMQ queue with backpressure control.
    *
-   * <p>Routes tasks to separate PGMQ queues based on priority. Backpressure is applied
-   * when the queue exceeds its capacity limit.
+   * <p>Routes tasks to separate PGMQ queues based on priority. Backpressure is applied when the
+   * queue exceeds its capacity limit.
    *
    * @return true if queued, false if rejected (backpressure)
    */
   public boolean offer(ExpectationCalculationTask task) {
     TaskContext context = TaskContext.of("Queue", "Offer", task.getUserIgn());
 
-    return executor.executeOrDefault(
-        () -> {
-          if (isQueueFull(task.getPriority(), task.getUserIgn())) {
-            return false;
-          }
-
-          String queueName = resolveQueueName(task.getPriority());
-          ExpectationCalcMessage message =
-              new ExpectationCalcMessage(
-                  task.getUserIgn(), task.isForceRecalculation());
-          pgmqClient.send(queueName, message);
-
-          log.debug(
-              "[Queue] Task queued: priority={}, userIgn={}",
-              task.getPriority(),
-              task.getUserIgn());
-          return true;
-        },
-        false,
-        context);
+    return executor.executeOrDefault(() -> enqueue(task).getQueued(), false, context);
   }
 
   /**
    * Offer task with receipt (ADR-355).
    *
-   * <p>PGMQ messageId를 taskId로 반환.
-   * HTTP thread(비트랜잭션 컨텍스트)에서 호출 시
-   * PgmqClient.send()의 트랜잭션 체크를 통과하기 위해
-   * {@code REQUIRES_NEW}로 독립 트랜잭션 생성.
+   * <p>PGMQ messageId를 taskId로 반환. HTTP thread(비트랜잭션 컨텍스트)에서 호출 시 PgmqClient.send()의 트랜잭션 체크를 통과하기
+   * 위해 {@code REQUIRES_NEW}로 독립 트랜잭션 생성.
    *
    * @param task calculation task
    * @return TaskReceipt with PGMQ messageId as taskId
@@ -103,26 +82,7 @@ public class ExpectationCalculationQueue {
     TaskContext context = TaskContext.of("Queue", "OfferWithReceipt", task.getUserIgn());
 
     return executor.executeOrDefault(
-        () -> {
-          if (isQueueFull(task.getPriority(), task.getUserIgn())) {
-            return TaskReceipt.rejected(task.getUserIgn());
-          }
-
-          String queueName = resolveQueueName(task.getPriority());
-          ExpectationCalcMessage message =
-              new ExpectationCalcMessage(
-                  task.getUserIgn(), task.isForceRecalculation());
-          long messageId = pgmqClient.send(queueName, message);
-
-          log.debug(
-              "[Queue] Task queued with receipt: priority={}, userIgn={}, taskId={}",
-              task.getPriority(),
-              task.getUserIgn(),
-              messageId);
-          return new TaskReceipt(String.valueOf(messageId), task.getUserIgn(), true);
-        },
-        TaskReceipt.rejected(task.getUserIgn()),
-        context);
+        () -> enqueue(task), TaskReceipt.rejected(task.getUserIgn()), context);
   }
 
   /**
@@ -176,7 +136,8 @@ public class ExpectationCalculationQueue {
 
   /** Get high priority queue size from PGMQ. */
   public int getHighPriorityCount() {
-    TaskContext context = TaskContext.of("Queue", "HighPriorityCount", ExpectationCalcWorker.QUEUE_NAME);
+    TaskContext context =
+        TaskContext.of("Queue", "HighPriorityCount", ExpectationCalcWorker.QUEUE_NAME);
     return executor.executeOrDefault(
         () -> Math.toIntExact(pgmqClient.queueLength(ExpectationCalcWorker.QUEUE_NAME)),
         0,
@@ -185,7 +146,8 @@ public class ExpectationCalculationQueue {
 
   /** Get low priority queue size from PGMQ. */
   public int getLowPriorityCount() {
-    TaskContext context = TaskContext.of("Queue", "LowPriorityCount", ExpectationCalcLowWorker.QUEUE_NAME);
+    TaskContext context =
+        TaskContext.of("Queue", "LowPriorityCount", ExpectationCalcLowWorker.QUEUE_NAME);
     return executor.executeOrDefault(
         () -> Math.toIntExact(pgmqClient.queueLength(ExpectationCalcLowWorker.QUEUE_NAME)),
         0,
@@ -224,5 +186,36 @@ public class ExpectationCalculationQueue {
       return true;
     }
     return false;
+  }
+
+  private TaskReceipt enqueue(ExpectationCalculationTask task) {
+    if (isQueueFull(task.getPriority(), task.getUserIgn())) {
+      return TaskReceipt.rejected(task.getUserIgn());
+    }
+
+    String queueName = resolveQueueName(task.getPriority());
+    if (!task.isForceRecalculation()) {
+      Long existingMessageId =
+          pgmqClient.findActiveMessageIdByUserIgn(queueName, task.getUserIgn());
+      if (existingMessageId != null) {
+        log.debug(
+            "[Queue] Reusing active task: priority={}, userIgn={}, taskId={}",
+            task.getPriority(),
+            task.getUserIgn(),
+            existingMessageId);
+        return new TaskReceipt(String.valueOf(existingMessageId), task.getUserIgn(), true);
+      }
+    }
+
+    ExpectationCalcMessage message =
+        new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation());
+    long messageId = pgmqClient.send(queueName, message);
+
+    log.debug(
+        "[Queue] Task queued: priority={}, userIgn={}, taskId={}",
+        task.getPriority(),
+        task.getUserIgn(),
+        messageId);
+    return new TaskReceipt(String.valueOf(messageId), task.getUserIgn(), true);
   }
 }

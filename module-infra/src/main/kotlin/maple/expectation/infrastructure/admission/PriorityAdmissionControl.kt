@@ -4,19 +4,18 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import java.util.concurrent.Callable
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.PriorityBlockingQueue
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.util.concurrent.Callable
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Semaphore
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.PriorityBlockingQueue
-import java.util.concurrent.BlockingQueue
 
 /**
  * 🔥 ADVANCED: Priority-based Admission Control
@@ -49,7 +48,7 @@ class PriorityAdmissionControl(
     private val admissionQueue: PriorityBlockingQueue<PriorityAdmissionRequest<*>> =
         PriorityBlockingQueue(
             properties.maxQueueSize,
-            compareByDescending<PriorityAdmissionRequest<*>> { it.priority }
+            compareByDescending<PriorityAdmissionRequest<*>> { it.priority },
         )
 
     // Semaphore limits IN-FLIGHT (executing) requests
@@ -94,7 +93,7 @@ class PriorityAdmissionControl(
             100 to createPriorityCounter(100, "cache_hit_expected"),
             80 to createPriorityCounter(80, "hot_character"),
             50 to createPriorityCounter(50, "normal"),
-            10 to createPriorityCounter(10, "cold_heavy")
+            10 to createPriorityCounter(10, "cold_heavy"),
         )
 
         // 🔥 FIXED: Start worker pool
@@ -104,17 +103,15 @@ class PriorityAdmissionControl(
             "[PriorityAdmissionControl] Initialized with PRIORITY QUEUE: maxInFlight={}, maxQueueSize={}, workerPoolSize={}",
             properties.maxInFlight,
             properties.maxQueueSize,
-            properties.workerPoolSize
+            properties.workerPoolSize,
         )
     }
 
-    private fun createPriorityCounter(priority: Int, label: String): Counter {
-        return Counter.builder("admission_control.priority")
-            .description("Requests by priority level")
-            .tag("level", label)
-            .tag("value", priority.toString())
-            .register(meterRegistry)
-    }
+    private fun createPriorityCounter(priority: Int, label: String): Counter = Counter.builder("admission_control.priority")
+        .description("Requests by priority level")
+        .tag("level", label)
+        .tag("value", priority.toString())
+        .register(meterRegistry)
 
     /**
      * 🔥 ADVANCED: Submit with automatic priority detection
@@ -127,7 +124,7 @@ class PriorityAdmissionControl(
     fun <T> submitOrWait(
         key: String,
         task: Callable<T>,
-        priority: Int? = null
+        priority: Int? = null,
     ): CompletableFuture<T> {
         val future = CompletableFuture<T>()
 
@@ -142,7 +139,7 @@ class PriorityAdmissionControl(
             task = task,
             future = future,
             enqueuedAtNanos = System.nanoTime(),
-            priority = detectedPriority
+            priority = detectedPriority,
         )
 
         // Fast path: try immediate execution
@@ -158,7 +155,7 @@ class PriorityAdmissionControl(
             queueFullCounter.increment()
             admissionRejectedCounter.increment()
             future.completeExceptionally(
-                AdmissionRejectedException("Queue full (max=${properties.maxQueueSize})")
+                AdmissionRejectedException("Queue full (max=${properties.maxQueueSize})"),
             )
             log.warn("[PriorityAdmissionControl] Queue full - rejecting request: key={}, queueSize={}", key, admissionQueue.size)
             return future
@@ -218,7 +215,7 @@ class PriorityAdmissionControl(
 
                 // 🔥 P0 FIX #1: Priority aging - boost priority if waiting too long
                 val waitTimeMs = waitTimeNanos / 1_000_000
-                if (waitTimeMs > 1000) {  // 1 second threshold
+                if (waitTimeMs > 1000) { // 1 second threshold
                     val oldPriority = request.boostedPriority
                     request.boostedPriority = minOf(request.boostedPriority + 10, 100)
                     if (oldPriority != request.boostedPriority) {
@@ -227,7 +224,7 @@ class PriorityAdmissionControl(
                             request.key,
                             oldPriority,
                             request.boostedPriority,
-                            waitTimeMs
+                            waitTimeMs,
                         )
                     }
                 }
@@ -237,7 +234,7 @@ class PriorityAdmissionControl(
                     workerIndex,
                     request.priority,
                     request.boostedPriority,
-                    request.key
+                    request.key,
                 )
 
                 // Acquire semaphore (in-flight limit)
@@ -247,7 +244,7 @@ class PriorityAdmissionControl(
                     // Waited too long in queue
                     queueTimeoutCounter.increment()
                     request.future.completeExceptionally(
-                        AdmissionTimeoutException("Queue timeout after ${properties.queueTimeoutMs}ms")
+                        AdmissionTimeoutException("Queue timeout after ${properties.queueTimeoutMs}ms"),
                     )
                     log.debug("[PriorityAdmissionControl] Worker {}: Request timed out in queue: key={}", workerIndex, request.key)
                     continue
@@ -267,7 +264,6 @@ class PriorityAdmissionControl(
                     semaphore.release()
                     inFlightCount.decrementAndGet()
                 }
-
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 log.info("[PriorityAdmissionControl] Worker {} interrupted", workerIndex)
@@ -297,8 +293,8 @@ class PriorityAdmissionControl(
         val task: Callable<T>,
         val future: CompletableFuture<T>,
         val enqueuedAtNanos: Long,
-        val priority: Int,  // 🔥 PRIORITY FIELD
-        @Volatile var boostedPriority: Int = priority  // 🔥 P0 FIX #1: Priority aging
+        val priority: Int, // 🔥 PRIORITY FIELD
+        @Volatile var boostedPriority: Int = priority, // 🔥 P0 FIX #1: Priority aging
     ) : Comparable<PriorityAdmissionRequest<*>> {
         override fun compareTo(other: PriorityAdmissionRequest<*>): Int {
             // 🔥 P0 FIX #1: Use boosted priority for comparison (prevents starvation)
@@ -306,4 +302,3 @@ class PriorityAdmissionControl(
         }
     }
 }
-

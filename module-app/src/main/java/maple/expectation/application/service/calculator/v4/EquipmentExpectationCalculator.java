@@ -72,8 +72,7 @@ public interface EquipmentExpectationCalculator {
       double additionalCubeTrials // #240 V4: 에디셔널큐브 기대 시도 횟수
       ) {
     public static CostBreakdown empty() {
-      return new CostBreakdown(
-          0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+      return new CostBreakdown(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     }
 
     public double total() {

@@ -1,21 +1,21 @@
 package maple.expectation.web.controller.v5
 
+import io.micrometer.core.instrument.MeterRegistry
 import jakarta.validation.constraints.NotBlank
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
 import maple.expectation.common.executor.TaskContext
-import maple.expectation.core.domain.model.character.CharacterView
 import maple.expectation.core.port.inbound.CalculationQueuePort
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExecutorPort
+import maple.expectation.core.port.inbound.TaskReceipt
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
-import maple.expectation.core.port.inbound.TaskReceipt
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.mapper.CharacterViewMapper
-import io.micrometer.core.instrument.MeterRegistry
+import maple.expectation.web.validation.ValidIgn
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -23,6 +23,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -47,6 +48,7 @@ import org.springframework.web.bind.annotation.RestController
  * - 프리페치 후 Calculation Worker가 캐시된 데이터를 활용 (빠른 계산)
  * - Best-effort: 실패해도 큐잉은 정상 수행
  */
+@Validated
 @RestController
 @RequestMapping("/api/v5/characters")
 @ConditionalOnProperty(name = ["v5.enabled"], havingValue = "true", matchIfMissing = false)
@@ -58,6 +60,7 @@ class GameCharacterControllerV5(
     @Value("\${fanout.enabled:false}") private val fanOutEnabled: Boolean,
     private val fanOutPort: EquipmentFanOutPort,
     @Qualifier("expectationComputeExecutor") private val computeExecutor: Executor,
+    @Qualifier("asyncExecutor") private val preWarmExecutor: Executor,
     meterRegistry: MeterRegistry,
 ) {
     private val preWarmFailureCounter = meterRegistry.counter("v5.prewarm.failures", "type", "error")
@@ -72,10 +75,11 @@ class GameCharacterControllerV5(
     @GetMapping("/{userIgn}/expectation")
     @PreAuthorize("permitAll()")
     fun getExpectationV5(
-        @PathVariable @NotBlank userIgn: String,
+        @PathVariable @NotBlank @ValidIgn userIgn: String,
     ): CompletableFuture<ResponseEntity<*>> {
-        log.debug("[V5] Query expectation for: {}", maskIgn(userIgn))
-        return CompletableFuture.supplyAsync({ processPostgreSQLCacheFirstLookup(userIgn) }, computeExecutor)
+        val normalizedIgn = userIgn.trim()
+        log.debug("[V5] Query expectation for: {}", maskIgn(normalizedIgn))
+        return CompletableFuture.supplyAsync({ processPostgreSQLCacheFirstLookup(normalizedIgn) }, computeExecutor)
     }
 
     private fun processPostgreSQLCacheFirstLookup(userIgn: String): ResponseEntity<*> {
@@ -102,7 +106,7 @@ class GameCharacterControllerV5(
         if (fanOutEnabled) {
             CompletableFuture.runAsync(
                 { preWarmEquipmentCache(userIgn, context) },
-                computeExecutor,
+                preWarmExecutor,
             ).exceptionally { e ->
                 if (e is RejectedExecutionException) {
                     preWarmRejectedCounter.increment()
@@ -151,10 +155,11 @@ class GameCharacterControllerV5(
     @PostMapping("/{userIgn}/expectation/recalculate")
     @PreAuthorize("permitAll()")
     fun recalculateExpectationV5(
-        @PathVariable userIgn: String,
+        @PathVariable @NotBlank @ValidIgn userIgn: String,
     ): CompletableFuture<ResponseEntity<*>> {
-        log.info("[V5] Force recalculation requested: {}", maskIgn(userIgn))
-        return CompletableFuture.supplyAsync({ processCacheInvalidation(userIgn) }, computeExecutor)
+        val normalizedIgn = userIgn.trim()
+        log.info("[V5] Force recalculation requested: {}", maskIgn(normalizedIgn))
+        return CompletableFuture.supplyAsync({ processCacheInvalidation(normalizedIgn) }, computeExecutor)
     }
 
     private fun processCacheInvalidation(userIgn: String): ResponseEntity<*> {

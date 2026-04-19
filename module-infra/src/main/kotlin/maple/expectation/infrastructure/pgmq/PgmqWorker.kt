@@ -111,8 +111,7 @@ abstract class PgmqWorker<T : Any>(
 
         val context = TaskContext.of("PgmqWorker", "ProcessBatch", queueName)
 
-        try {
-            executor.executeVoid({
+        executor.executeVoid({
                 val batchSize = workerSettings.batchSize ?: config.common.batchSize
                 val visibilityTimeout = config.common.visibilityTimeoutSec
 
@@ -122,6 +121,7 @@ abstract class PgmqWorker<T : Any>(
                 metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
 
                 if (messages.isEmpty()) {
+                    lifecycleWrapper.afterTask()
                     return@executeVoid
                 }
 
@@ -141,14 +141,16 @@ abstract class PgmqWorker<T : Any>(
                         processSingleMessage(message)
                     }, workerPool)
                 }
-                CompletableFuture.allOf(*futures.toTypedArray()).join()
-                futures.forEach { future ->
-                    future.get()
-                }
+                // Non-blocking: return immediately so next poll can start.
+                // Head-of-line blocking removed — Virtual Threads handle concurrency,
+                // visibility timeout prevents double-read while processing.
+                CompletableFuture.allOf(*futures.toTypedArray())
+                    .exceptionally { ex ->
+                        log.warn("[{}] Batch completion error: {}", queueName, ex.message)
+                        null
+                    }
+                    .thenRun { lifecycleWrapper.afterTask() }
             }, context)
-        } finally {
-            lifecycleWrapper.afterTask()
-        }
     }
 
     /**

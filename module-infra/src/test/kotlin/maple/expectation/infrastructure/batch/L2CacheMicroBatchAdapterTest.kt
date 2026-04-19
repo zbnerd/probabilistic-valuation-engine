@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheStrategy
 import maple.expectation.infrastructure.config.AdaptiveMicroBatchProperties
+import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
@@ -57,6 +58,7 @@ class L2CacheMicroBatchAdapterTest {
             executor = logicExecutor,
             objectMapper = objectMapper,
             meterRegistry = meterRegistry,
+            cacheProperties = CacheProperties(),
         )
 
         adapter = L2CacheMicroBatchAdapter(

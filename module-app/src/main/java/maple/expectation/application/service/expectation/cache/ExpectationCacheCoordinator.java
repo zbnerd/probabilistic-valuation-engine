@@ -334,19 +334,26 @@ public class ExpectationCacheCoordinator {
   /** Base64 → GZIP byte[] → JSON → Response 압축 해제 (#262 Fix) */
   private EquipmentExpectationResponseV4 decompressCachedResponse(
       String compressedBase64, String userIgn) {
-    return executorPort.executeWithTranslation(
-        () -> {
-          try {
-            EquipmentExpectationResponseV4 response = compressionService.decompress(compressedBase64, userIgn);
-            return responseBuilder.buildWithCacheFlag(response);
-          } catch (Exception ex) {
-            throw new RuntimeException(ex);
-          }
-        },
-        (e, context) ->
-            new EquipmentDataProcessingException(
-                String.format("GZIP 압축 해제 실패 [%s]: %s", context.toTaskName(), userIgn), e),
-        TaskContext.of("CacheCoordinator", "Decompress", userIgn));
+    try {
+      return executorPort.executeWithTranslation(
+          () -> {
+            try {
+              EquipmentExpectationResponseV4 response = compressionService.decompress(compressedBase64, userIgn);
+              return responseBuilder.buildWithCacheFlag(response);
+            } catch (Exception ex) {
+              throw new RuntimeException(ex);
+            }
+          },
+          (e, context) ->
+              new EquipmentDataProcessingException(
+                  String.format("GZIP 압축 해제 실패 [%s]: %s", context.toTaskName(), userIgn), e),
+          TaskContext.of("CacheCoordinator", "Decompress", userIgn));
+    } catch (EquipmentDataProcessingException e) {
+      // Cache defense: evict corrupt data on decompress failure
+      log.warn("[V4] Evicting corrupt cache entry after decompress failure: {}", userIgn);
+      expectationCache.evict(userIgn);
+      throw e;
+    }
   }
 
   // ==================== Metrics ====================

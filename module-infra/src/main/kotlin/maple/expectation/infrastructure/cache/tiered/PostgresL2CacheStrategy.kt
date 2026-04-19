@@ -110,19 +110,19 @@ class PostgresL2CacheStrategy(
                       AND expires_at > NOW()
                 """.trimIndent()
 
-                val result = jdbcTemplate.queryForObject(
+                // Use query() instead of queryForObject() to avoid EmptyResultDataAccessException
+                // being logged as ERROR by executor on normal cache misses
+                val results = jdbcTemplate.query(
                     sql,
+                    { rs, _ -> rs.getBytes("cache_value") },
                     arrayOf(key),
-                    ByteArray::class.java,
                 )
+
+                val result = results.firstOrNull()
 
                 result?.let { bytes ->
                     try {
-                        // Deserialize as TypedValue wrapper to preserve type information
                         val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
-                        // Fix: Ensure proper type casting for String values
-                        // When the cached value is a String, return it directly
-                        // to avoid type erasure issues when T = Any
                         @Suppress("UNCHECKED_CAST")
                         when {
                             type == String::class.java || type == Any::class.java -> typedValue.value as? T

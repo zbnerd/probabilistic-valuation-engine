@@ -122,6 +122,9 @@ app:
     high-priority-worker-ratio: 0.5
     enabled: true
     query-side-enabled: true
+  queue:
+    expectation:
+      high-priority-capacity: 10000
 
 # ACL Phase 2: Scheduler Configuration
 scheduler:
@@ -171,7 +174,11 @@ resilience4j:
       discordWebhook:
         timeoutDuration: 5s
 
-# Bulk Loading Configuration (Issue #611)
+# Admission Control (throughput tuning)
+admission-control:
+  max-in-flight: 100
+  max-queue-size: 2000
+
 # PGMQ Worker Configuration
 pgmq:
   worker:

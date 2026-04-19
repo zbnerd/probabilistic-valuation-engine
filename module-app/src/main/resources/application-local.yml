@@ -172,6 +172,15 @@ resilience4j:
         timeoutDuration: 5s
 
 # Bulk Loading Configuration (Issue #611)
+# PGMQ Worker Configuration
+pgmq:
+  worker:
+    expectation-calc-high:
+      enabled: true
+    expectation-calc-low:
+      enabled: true
+
+# Bulk Loading Configuration (Issue #611)
 bulk:
   enabled: true
   csv-path: classpath:data/userIgn_List.csv

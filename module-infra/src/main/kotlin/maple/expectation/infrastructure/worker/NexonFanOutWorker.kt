@@ -10,6 +10,7 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import io.micrometer.core.instrument.MeterRegistry
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
@@ -49,9 +50,10 @@ class NexonFanOutWorker(
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
     meterRegistry: MeterRegistry,
+    queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val fetchProvider: EquipmentFetchProvider,
-) : PgmqWorker<FanOutRequest>(pgmqClient, executor, config, meterRegistry, lifecycleWrapper) {
+) : PgmqWorker<FanOutRequest>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val queueName: String = FanOutQueueProducer.QUEUE_NAME
     override val payloadClass: Class<FanOutRequest> = FanOutRequest::class.java

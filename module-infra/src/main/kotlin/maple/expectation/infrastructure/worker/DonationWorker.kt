@@ -8,6 +8,7 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import io.micrometer.core.instrument.MeterRegistry
 import maple.expectation.infrastructure.queue.pgmq.DonationQueueProducer
@@ -41,9 +42,10 @@ class DonationWorker(
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
     meterRegistry: MeterRegistry,
+    queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val alertPublisher: AlertPublisher,
-) : PgmqWorker<DonationRequest>(pgmqClient, executor, config, meterRegistry, lifecycleWrapper) {
+) : PgmqWorker<DonationRequest>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val queueName: String = DonationQueueProducer.QUEUE_NAME
     override val payloadClass: Class<DonationRequest> = DonationRequest::class.java

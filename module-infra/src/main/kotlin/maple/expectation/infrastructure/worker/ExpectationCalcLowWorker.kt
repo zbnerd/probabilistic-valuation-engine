@@ -9,6 +9,7 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -22,6 +23,7 @@ class ExpectationCalcLowWorker(
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
     meterRegistry: MeterRegistry,
+    queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     expectationPort: ExpectationV4Port,
     characterOcidPort: CharacterOcidPort,
@@ -32,6 +34,7 @@ class ExpectationCalcLowWorker(
     executor,
     config,
     meterRegistry,
+    queueMetrics,
     lifecycleWrapper,
     expectationPort,
     characterOcidPort,

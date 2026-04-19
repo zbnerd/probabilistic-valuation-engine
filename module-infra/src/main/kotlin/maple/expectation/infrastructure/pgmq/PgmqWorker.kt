@@ -6,7 +6,7 @@ import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 
@@ -33,11 +33,15 @@ abstract class PgmqWorker<T : Any>(
     protected val executor: LogicExecutor,
     private val config: PgmqWorkerConfig,
     private val meterRegistry: MeterRegistry,
+    private val queueMetrics: WorkerQueueMetrics,
     private val lifecycleWrapper: ScheduledTaskLifecycleWrapper,
 ) {
 
     /** 메시지 병렬 처리용 Virtual Thread Executor */
     private val workerPool = Executors.newVirtualThreadPerTaskExecutor()
+
+    /** 큐별 종합 메트릭 (lazy init — 하위 클래스의 queueName 초기화 이후 접근 시 생성) */
+    protected val metrics: WorkerQueueMetrics.Binder by lazy { queueMetrics.forQueue(queueName) }
 
     /**
      * 큐 이름
@@ -107,48 +111,46 @@ abstract class PgmqWorker<T : Any>(
 
         val context = TaskContext.of("PgmqWorker", "ProcessBatch", queueName)
 
-        try {
-            executor.executeVoid({
+        executor.executeVoid({
                 val batchSize = workerSettings.batchSize ?: config.common.batchSize
                 val visibilityTimeout = config.common.visibilityTimeoutSec
 
                 val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
 
+                // 큐 깊이 업데이트 (폴링 사이클마다)
+                metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
+
                 if (messages.isEmpty()) {
+                    lifecycleWrapper.afterTask()
                     return@executeVoid
                 }
 
                 log.debug("📥 [{}] Processing {} messages", queueName, messages.size)
 
+                // In-flight + 큐 대기 시간 기록
+                messages.forEach { message ->
+                    metrics.inflightIncrement()
+                    metrics.recordWaitDuration(message.enqueuedAt)
+                }
+
                 // ADR-700: 배치 pre-warm (OCID dedup + equipment cache pre-warm)
                 preWarmBatch(messages)
-
-                // ADR-355: Batch-level aggregate metrics
-                val batchStart = System.nanoTime()
-                var successCount = 0
-                var failCount = 0
 
                 val futures = messages.map { message ->
                     CompletableFuture.supplyAsync({
                         processSingleMessage(message)
                     }, workerPool)
                 }
-                CompletableFuture.allOf(*futures.toTypedArray()).join()
-                futures.forEach { future ->
-                    if (future.get()) successCount++ else failCount++
-                }
-
-                val batchDuration = System.nanoTime() - batchStart
-                meterRegistry.counter("pgmq.worker.processed", "queue", queueName, "status", "success")
-                    .increment(successCount.toDouble())
-                meterRegistry.counter("pgmq.worker.processed", "queue", queueName, "status", "failed")
-                    .increment(failCount.toDouble())
-                meterRegistry.timer("pgmq.worker.batch.latency", "queue", queueName)
-                    .record(batchDuration, TimeUnit.NANOSECONDS)
+                // Non-blocking: return immediately so next poll can start.
+                // Head-of-line blocking removed — Virtual Threads handle concurrency,
+                // visibility timeout prevents double-read while processing.
+                CompletableFuture.allOf(*futures.toTypedArray())
+                    .exceptionally { ex ->
+                        log.warn("[{}] Batch completion error: {}", queueName, ex.message)
+                        null
+                    }
+                    .thenRun { lifecycleWrapper.afterTask() }
             }, context)
-        } finally {
-            lifecycleWrapper.afterTask()
-        }
     }
 
     /**
@@ -165,32 +167,43 @@ abstract class PgmqWorker<T : Any>(
         val maxRetries = workerSettings.maxRetries ?: config.common.maxRetries
         val context = TaskContext.of("PgmqWorker", "ProcessMessage", "$queueName:${message.messageId}")
 
-        val success = executor.executeOrDefault(
-            { process(message) },
-            false,
-            context,
-        )
-
-        when {
-            success -> {
-                // 성공: 아카이브
-                pgmqClient.archive(queueName, message.messageId)
-                log.debug("✅ [{}] Archived message: msgId={}", queueName, message.messageId)
-            }
-            message.isRetryable(maxRetries) -> {
-                // 재시도 가능: 후처리 훅 호출 후 다음 poll에서 다시 처리됨
-                onProcessingFailed(message)
-                log.warn("⚠️ [{}] Message will be retried: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
-            }
-            else -> {
-                // 최종 실패: 아카이브 (DLQ 대체 — replay 가능)
-                pgmqClient.archive(queueName, message.messageId)
-                log.error("❌ [{}] Archived message after max retries: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
-                meterRegistry.counter("pgmq.worker.dlq", "queue", queueName).increment()
-            }
+        // 재시도 메시지 추적
+        if (message.readCount > 1) {
+            metrics.retry.increment()
         }
 
-        return success
+        metrics.concurrentIncrement()
+        try {
+            val success = executor.executeOrDefault(
+                { process(message) },
+                false,
+                context,
+            )
+
+            when {
+                success -> {
+                    pgmqClient.archive(queueName, message.messageId)
+                    metrics.success.increment()
+                    log.debug("✅ [{}] Archived message: msgId={}", queueName, message.messageId)
+                }
+                message.isRetryable(maxRetries) -> {
+                    onProcessingFailed(message)
+                    metrics.failure.increment()
+                    log.warn("⚠️ [{}] Message will be retried: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
+                }
+                else -> {
+                    pgmqClient.archive(queueName, message.messageId)
+                    metrics.failure.increment()
+                    metrics.dlq.increment()
+                    log.error("❌ [{}] Archived message after max retries: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
+                }
+            }
+
+            return success
+        } finally {
+            metrics.concurrentDecrement()
+            metrics.inflightDecrement()
+        }
     }
 
     companion object {

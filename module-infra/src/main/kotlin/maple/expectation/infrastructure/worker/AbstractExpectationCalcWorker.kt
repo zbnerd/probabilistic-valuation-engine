@@ -15,6 +15,7 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import org.slf4j.Logger
 
 abstract class AbstractExpectationCalcWorker(
@@ -22,12 +23,13 @@ abstract class AbstractExpectationCalcWorker(
     executor: LogicExecutor,
     config: PgmqWorkerConfig,
     meterRegistry: MeterRegistry,
+    queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val expectationPort: ExpectationV4Port,
     private val characterOcidPort: CharacterOcidPort,
     private val equipmentFanOutPort: EquipmentFanOutPort,
     private val preWarmExecutor: Executor,
-) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, lifecycleWrapper) {
+) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val payloadClass: Class<ExpectationCalcMessage> = ExpectationCalcMessage::class.java
 

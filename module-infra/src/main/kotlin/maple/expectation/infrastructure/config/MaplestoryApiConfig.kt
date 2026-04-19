@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.client.reactive.ReactorClientHttpConnector
 import org.springframework.web.reactive.function.client.WebClient
+import maple.expectation.infrastructure.external.config.ExternalApiMetricsFilter
 import org.springframework.web.util.DefaultUriBuilderFactory
 import reactor.netty.http.client.HttpClient
 
@@ -24,6 +25,7 @@ import reactor.netty.http.client.HttpClient
 @EnableConfigurationProperties(NexonApiProperties::class)
 class MaplestoryApiConfig(
     private val properties: NexonApiProperties,
+    private val apiMetricsFilter: ExternalApiMetricsFilter,
 ) {
 
     @Bean("mapleWebClient")
@@ -46,6 +48,7 @@ class MaplestoryApiConfig(
             .baseUrl("https://open.api.nexon.com")
             .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
             .clientConnector(ReactorClientHttpConnector(httpClient))
+            .filter(apiMetricsFilter)
             .build()
     }
 }

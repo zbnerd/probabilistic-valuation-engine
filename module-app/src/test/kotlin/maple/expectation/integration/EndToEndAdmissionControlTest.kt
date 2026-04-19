@@ -2,6 +2,12 @@ package maple.expectation.integration
 
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import java.time.LocalDateTime
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import maple.expectation.application.service.expectation.cache.ExpectationCacheCoordinator
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl
 import maple.expectation.infrastructure.batch.DedupeMicroBatchWriter
@@ -13,6 +19,8 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.ExpectationBatchRepository
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4
+import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -24,14 +32,6 @@ import org.mockito.MockitoAnnotations
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.cache.Cache
 import org.springframework.test.context.ActiveProfiles
-import java.time.LocalDateTime
-import java.util.concurrent.Callable
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import org.assertj.core.api.Assertions.assertThat
-import org.awaitility.Awaitility.await
 
 /**
  * End-to-End Integration Test for Issue #617: Global Admission Control + Micro-Batching
@@ -79,7 +79,7 @@ class EndToEndAdmissionControlTest {
     private val closables = AutoCloseableList()
 
     // Test configuration
-    private val maxInFlight = 100  // Production-like setting
+    private val maxInFlight = 100 // Production-like setting
     private val operationalExecutorPool = Executors.newFixedThreadPool(16)
     private val backfillExecutorPool = Executors.newFixedThreadPool(8)
 
@@ -92,7 +92,7 @@ class EndToEndAdmissionControlTest {
         // Mock cache behavior
         Mockito.`when`(tieredCacheManager.getCache(Mockito.anyString())).thenReturn(mockCache)
         Mockito.`when`(tieredCacheManager.meterRegistry).thenReturn(meterRegistry)
-        Mockito.`when`(mockCache.get(Mockito.any())).thenReturn(null)  // Always cache miss for testing
+        Mockito.`when`(mockCache.get(Mockito.any())).thenReturn(null) // Always cache miss for testing
 
         // Mock executor behavior
         val testExecutor = Executors.newFixedThreadPool(20)
@@ -102,62 +102,60 @@ class EndToEndAdmissionControlTest {
         executor = object : LogicExecutor {
             override fun <T> execute(
                 task: maple.expectation.common.function.ThrowingSupplier<T>,
-                context: TaskContext
-            ): T {
-                return testExecutor.submit(task::get).get()
-            }
+                context: TaskContext,
+            ): T = testExecutor.submit(task::get).get()
 
             override fun <T> executeOrDefault(
                 task: maple.expectation.common.function.ThrowingSupplier<T>,
                 defaultValue: T,
-                context: TaskContext
-            ): T {
-                return try { execute(task, context) } catch (e: Exception) { defaultValue }
+                context: TaskContext,
+            ): T = try {
+                execute(task, context)
+            } catch (e: Exception) {
+                defaultValue
             }
 
             override fun <T> executeWithTranslation(
                 task: maple.expectation.common.function.ThrowingSupplier<T>,
                 customTranslator: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator,
-                context: TaskContext
-            ): T {
-                return execute(task, context)
-            }
+                context: TaskContext,
+            ): T = execute(task, context)
 
             override fun <T> executeWithFallback(
                 task: maple.expectation.common.function.ThrowingSupplier<T>,
                 fallback: (Throwable) -> T,
-                context: TaskContext
-            ): T {
-                return try { execute(task, context) } catch (e: Throwable) { fallback(e) }
+                context: TaskContext,
+            ): T = try {
+                execute(task, context)
+            } catch (e: Throwable) {
+                fallback(e)
             }
 
             override fun <T> executeWithFallback(
                 task: maple.expectation.common.function.ThrowingSupplier<T>,
                 fallback: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator,
-                context: TaskContext
-            ): T {
-                return execute(task, context)
-            }
+                context: TaskContext,
+            ): T = execute(task, context)
 
             override fun <T> executeOrCatch(
                 task: maple.expectation.common.function.ThrowingSupplier<T>,
                 recovery: (Throwable) -> T,
-                context: TaskContext
-            ): T {
-                return try { execute(task, context) } catch (e: Throwable) { recovery(e) }
+                context: TaskContext,
+            ): T = try {
+                execute(task, context)
+            } catch (e: Throwable) {
+                recovery(e)
             }
 
             override fun <T> executeOrCatch(
                 task: maple.expectation.common.function.ThrowingSupplier<T>,
                 recovery: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator,
-                context: TaskContext
-            ): T {
-                return execute(task, context)
-            }
+                context: TaskContext,
+            ): T = execute(task, context)
 
             override fun executeVoid(
                 task: maple.expectation.infrastructure.executor.function.ThrowingRunnable,
-                context: TaskContext
+                context: TaskContext,
             ) {
                 testExecutor.submit { task.run() }.get()
             }
@@ -169,9 +167,11 @@ class EndToEndAdmissionControlTest {
             override fun <T> executeWithFinally(
                 task: maple.expectation.common.function.ThrowingSupplier<T>,
                 finallyBlock: Runnable,
-                context: TaskContext
-            ): T {
-                return try { execute(task, context) } finally { finallyBlock.run() }
+                context: TaskContext,
+            ): T = try {
+                execute(task, context)
+            } finally {
+                finallyBlock.run()
             }
         }
 
@@ -179,20 +179,20 @@ class EndToEndAdmissionControlTest {
         val admissionProperties = GlobalAdmissionProperties(
             maxInFlight = maxInFlight,
             queueTimeoutMs = 5000,
-            maxQueueSize = 1000
+            maxQueueSize = 1000,
         )
         admissionControl = GlobalAdmissionControl(admissionProperties, meterRegistry, executor, testExecutor)
 
         // Create DedupeMicroBatchWriter
         val batchProperties = MicroBatchWriterProperties(
             flushSize = 500,
-            flushIntervalMs = 50
+            flushIntervalMs = 50,
         )
         microBatchWriter = DedupeMicroBatchWriter(
             batchProperties,
             batchRepository,
             meterRegistry,
-            executor
+            executor,
         )
         closables.add { microBatchWriter.shutdown() }
 
@@ -211,7 +211,7 @@ class EndToEndAdmissionControlTest {
             admissionControl,
             compressionService,
             valueConverter,
-            responseBuilder
+            responseBuilder,
         )
     }
 
@@ -235,8 +235,8 @@ class EndToEndAdmissionControlTest {
             Executors.newCachedThreadPool().submit<EquipmentExpectationResponseV4> {
                 try {
                     val calculator = Callable<EquipmentExpectationResponseV4> {
-                        testLatch.await()  // All wait at same barrier
-                        Thread.sleep(10)  // Simulate quick calculation
+                        testLatch.await() // All wait at same barrier
+                        Thread.sleep(10) // Simulate quick calculation
                         completedCount.incrementAndGet()
                         createMockResponse("user-$i")
                     }
@@ -254,7 +254,7 @@ class EndToEndAdmissionControlTest {
             val currentInFlight = inFlightGauge?.value() ?: 0.0
             currentInFlight > 0
         }
-        testLatch.countDown()  // Release all requests
+        testLatch.countDown() // Release all requests
 
         // Wait for all to complete
         futures.forEach { future ->
@@ -298,7 +298,7 @@ class EndToEndAdmissionControlTest {
         val futures = (1..requestCount).map { i ->
             Executors.newCachedThreadPool().submit<EquipmentExpectationResponseV4> {
                 val calculator = Callable<EquipmentExpectationResponseV4> {
-                    testLatch.await()  // All wait at same barrier
+                    testLatch.await() // All wait at same barrier
                     Thread.sleep(10)
                     processedCount.incrementAndGet()
                     createMockResponse("user-$i")
@@ -313,7 +313,7 @@ class EndToEndAdmissionControlTest {
             val currentInFlight = inFlightGauge?.value()?.toInt() ?: 0
             currentInFlight > 0
         }
-        testLatch.countDown()  // Release all
+        testLatch.countDown() // Release all
 
         // Wait for all to complete
         futures.forEach { it.get(60, TimeUnit.SECONDS) }
@@ -343,7 +343,7 @@ class EndToEndAdmissionControlTest {
             operationalExecutorPool.submit<EquipmentExpectationResponseV4> {
                 val startTime = System.nanoTime()
                 val calculator = Callable<EquipmentExpectationResponseV4> {
-                    Thread.sleep(5)  // Fast calculation (5ms)
+                    Thread.sleep(5) // Fast calculation (5ms)
                     createMockResponse("operational-user-$i")
                 }
                 val result = cacheCoordinator.getOrCalculate("operational-$i", false, calculator)
@@ -361,7 +361,7 @@ class EndToEndAdmissionControlTest {
             backfillExecutorPool.submit<Unit> {
                 val task = createWriteTask(characterId = i.toLong(), presetNo = 1)
                 microBatchWriter.offer(task)
-                Thread.sleep(10)  // Simulate backfill pacing
+                Thread.sleep(10) // Simulate backfill pacing
             }
         }
 
@@ -374,7 +374,7 @@ class EndToEndAdmissionControlTest {
         val p99Index = (sortedLatencies.size * 0.99).toInt()
         val p99Latency = sortedLatencies[p99Index]
 
-        assertThat(p99Latency).isLessThan(500)  // P99 must be < 500ms
+        assertThat(p99Latency).isLessThan(500) // P99 must be < 500ms
 
         // Wait for backfill to complete
         backfillFutures.forEach { it.get(60, TimeUnit.SECONDS) }
@@ -423,7 +423,7 @@ class EndToEndAdmissionControlTest {
     @DisplayName("AC-5: Micro-batch dedupe metrics are tracked correctly")
     fun `AC5 - micro batch dedupe metrics tracked`() {
         val task1 = createWriteTask(characterId = 1L, presetNo = 1, totalCost = 1000.0)
-        val task2 = createWriteTask(characterId = 1L, presetNo = 1, totalCost = 2000.0)  // Same key
+        val task2 = createWriteTask(characterId = 1L, presetNo = 1, totalCost = 2000.0) // Same key
 
         microBatchWriter.offer(task1)
         microBatchWriter.offer(task2)
@@ -459,7 +459,7 @@ class EndToEndAdmissionControlTest {
         val futures = (1..requestCount).map {
             Executors.newCachedThreadPool().submit<EquipmentExpectationResponseV4> {
                 val calculator = Callable<EquipmentExpectationResponseV4> {
-                    Thread.sleep(50)  // Slow calculation
+                    Thread.sleep(50) // Slow calculation
                     calculationCount.incrementAndGet()
                     createMockResponse(sameKey)
                 }
@@ -473,7 +473,7 @@ class EndToEndAdmissionControlTest {
 
         // Single-flight: should only calculate once (cache hit for rest)
         // Note: Due to admission control + single-flight, only 1 calculation should occur
-        assertThat(calculationCount.get()).isLessThanOrEqualTo(2)  // Allow small race window
+        assertThat(calculationCount.get()).isLessThanOrEqualTo(2) // Allow small race window
         assertThat(responseCount.get()).isEqualTo(requestCount)
 
         // Verify no rejections
@@ -486,7 +486,7 @@ class EndToEndAdmissionControlTest {
     @DisplayName("AC-7: Queue depth metric reflects waiting requests")
     fun `AC7 - queue depth metric reflects waiting requests`() {
         val testLatch = CountDownLatch(1)
-        val requestCount = 200  // More than maxInFlight=100
+        val requestCount = 200 // More than maxInFlight=100
 
         // Submit requests that will wait
         val futures = (1..requestCount).map { i ->
@@ -534,21 +534,21 @@ class EndToEndAdmissionControlTest {
     private fun createWriteTask(
         characterId: Long,
         presetNo: Int,
-        totalCost: Double = 1000.0
-    ): ExpectationWriteTask {
-        return ExpectationWriteTask(
-            characterId = characterId,
-            presetNo = presetNo,
-            totalExpectedCost = totalCost,
-            blackCubeCost = totalCost * 0.3,
-            redCubeCost = totalCost * 0.2,
-            additionalCubeCost = totalCost * 0.1,
-            starforceCost = totalCost * 0.4,
-            createdAt = LocalDateTime.now()
-        )
-    }
+        totalCost: Double = 1000.0,
+    ): ExpectationWriteTask = ExpectationWriteTask(
+        characterId = characterId,
+        presetNo = presetNo,
+        totalExpectedCost = totalCost,
+        blackCubeCost = totalCost * 0.3,
+        redCubeCost = totalCost * 0.2,
+        additionalCubeCost = totalCost * 0.1,
+        starforceCost = totalCost * 0.4,
+        createdAt = LocalDateTime.now(),
+    )
 
-    private class AutoCloseableList : ArrayList<AutoCloseable>(), AutoCloseable {
+    private class AutoCloseableList :
+        ArrayList<AutoCloseable>(),
+        AutoCloseable {
         override fun close() {
             forEach { it.close() }
         }

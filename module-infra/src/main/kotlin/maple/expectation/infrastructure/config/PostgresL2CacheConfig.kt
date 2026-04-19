@@ -112,8 +112,7 @@ class PostgresL2CacheConfig {
     )
 
     @Bean
-    fun cacheManagerPort(tieredCacheManager: TieredCacheManager): CacheManagerPort =
-        CacheManagerPortAdapter(tieredCacheManager)
+    fun cacheManagerPort(tieredCacheManager: TieredCacheManager): CacheManagerPort = CacheManagerPortAdapter(tieredCacheManager)
 
     /**
      * Expectation 전용 L1 CacheManager (Caffeine)

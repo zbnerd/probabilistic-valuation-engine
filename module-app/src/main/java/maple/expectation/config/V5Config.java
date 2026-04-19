@@ -39,8 +39,10 @@ public class V5Config {
 
     checkedLogicExecutor.executeUncheckedVoid(
         () -> {
-          log.info("[V5-Config] V5 CQRS initialized (PGMQ workers handle consumption, polling workers disabled)");
-          // Legacy polling workers disabled — PGMQ workers (ExpectationCalcWorker, ExpectationCalcLowWorker)
+          log.info(
+              "[V5-Config] V5 CQRS initialized (PGMQ workers handle consumption, polling workers disabled)");
+          // Legacy polling workers disabled — PGMQ workers (ExpectationCalcWorker,
+          // ExpectationCalcLowWorker)
           // now handle message consumption via @Scheduled pgmqClient.read()
           // executor.start();
         },

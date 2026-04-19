@@ -119,8 +119,7 @@ class NexonFanOutBatchLoaderTest {
     private class ImmediateLogicExecutor : LogicExecutor {
         override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T = task.get()
 
-        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T =
-            runCatching { task.get() ?: defaultValue }.getOrElse { defaultValue }
+        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = runCatching { task.get() ?: defaultValue }.getOrElse { defaultValue }
 
         override fun executeVoid(task: ThrowingRunnable, context: TaskContext) {
             task.run()
@@ -130,12 +129,11 @@ class NexonFanOutBatchLoaderTest {
             task.run()
         }
 
-        override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T =
-            try {
-                task.get()
-            } finally {
-                finallyBlock.run()
-            }
+        override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T = try {
+            task.get()
+        } finally {
+            finallyBlock.run()
+        }
 
         override fun <T> executeWithTranslation(
             task: ThrowingSupplier<T>,
@@ -147,24 +145,20 @@ class NexonFanOutBatchLoaderTest {
             throw customTranslator.translate(e, context)
         }
 
-        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T =
-            runCatching { task.get() }.getOrElse { fallback(it) }
+        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T = runCatching { task.get() }.getOrElse { fallback(it) }
 
-        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: ExceptionTranslator, context: TaskContext): T =
-            try {
-                task.get()
-            } catch (e: Exception) {
-                throw fallback.translate(e, context)
-            }
+        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: ExceptionTranslator, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            throw fallback.translate(e, context)
+        }
 
-        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T =
-            runCatching { task.get() }.getOrElse { recovery(it) }
+        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T = runCatching { task.get() }.getOrElse { recovery(it) }
 
-        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: ExceptionTranslator, context: TaskContext): T =
-            try {
-                task.get()
-            } catch (e: Exception) {
-                throw recovery.translate(e, context)
-            }
+        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: ExceptionTranslator, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            throw recovery.translate(e, context)
+        }
     }
 }

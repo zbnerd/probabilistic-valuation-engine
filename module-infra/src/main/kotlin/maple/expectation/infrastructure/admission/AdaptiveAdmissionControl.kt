@@ -4,21 +4,20 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
-import maple.expectation.infrastructure.config.GlobalAdmissionProperties
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import org.slf4j.LoggerFactory
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.context.annotation.Profile
-import org.springframework.stereotype.Component
 import java.lang.management.ManagementFactory
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.BlockingQueue
 import java.util.concurrent.Callable
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.BlockingQueue
+import maple.expectation.infrastructure.config.GlobalAdmissionProperties
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.stereotype.Component
 
 /**
  * 🔥 ADVANCED: CPU-based Adaptive Admission Control
@@ -111,7 +110,7 @@ class AdaptiveAdmissionControl(
             "[AdaptiveAdmissionControl] Initialized with CPU-BASED ADAPTIVE CONTROL: maxInFlight={}, maxQueueSize={}, workerPoolSize={}",
             properties.maxInFlight,
             properties.maxQueueSize,
-            properties.workerPoolSize
+            properties.workerPoolSize,
         )
     }
 
@@ -132,13 +131,13 @@ class AdaptiveAdmissionControl(
             queueFullCounter.increment()
             admissionRejectedCounter.increment()
             future.completeExceptionally(
-                AdmissionRejectedException("CPU limit reached (max=${maxPermits.get()})")
+                AdmissionRejectedException("CPU limit reached (max=${maxPermits.get()})"),
             )
             log.warn(
                 "[AdaptiveAdmissionControl] CPU limit reached - rejecting: key={}, inFlight={}, maxPermits={}",
                 key,
                 inFlightCount.get(),
-                maxPermits.get()
+                maxPermits.get(),
             )
             return future
         }
@@ -156,7 +155,7 @@ class AdaptiveAdmissionControl(
             queueFullCounter.increment()
             admissionRejectedCounter.increment()
             future.completeExceptionally(
-                AdmissionRejectedException("Queue full (max=${properties.maxQueueSize})")
+                AdmissionRejectedException("Queue full (max=${properties.maxQueueSize})"),
             )
             log.warn("[AdaptiveAdmissionControl] Queue full - rejecting request: key={}, queueSize={}", key, admissionQueue.size)
             return future
@@ -190,9 +189,9 @@ class AdaptiveAdmissionControl(
                     log.error("[AdaptiveAdmissionControl] CPU monitor error", e)
                 }
             },
-            5,  // Initial delay
-            5,  // Check every 5 seconds
-            TimeUnit.SECONDS
+            5, // Initial delay
+            5, // Check every 5 seconds
+            TimeUnit.SECONDS,
         )
 
         log.info("[AdaptiveAdmissionControl] CPU monitor started")
@@ -220,7 +219,7 @@ class AdaptiveAdmissionControl(
                     "[AdaptiveAdmissionControl] ✅ Increased permits: {} → {} (CPU load: {})",
                     currentMax,
                     newMax,
-                    String.format("%.2f", cpuLoad)
+                    String.format("%.2f", cpuLoad),
                 )
             } else if (permitDiff < 0) {
                 // Decrease permits (wait for current permits to be released)
@@ -228,7 +227,7 @@ class AdaptiveAdmissionControl(
                     "[AdaptiveAdmissionControl] 🔴 Decreasing permits: {} → {} (CPU load: {})",
                     currentMax,
                     newMax,
-                    String.format("%.2f", cpuLoad)
+                    String.format("%.2f", cpuLoad),
                 )
                 cpuLimitCounter.increment()
             }
@@ -239,7 +238,7 @@ class AdaptiveAdmissionControl(
             String.format("%.2f", cpuLoad),
             maxPermits.get(),
             inFlightCount.get(),
-            admissionQueue.size
+            admissionQueue.size,
         )
     }
 
@@ -250,22 +249,20 @@ class AdaptiveAdmissionControl(
      * @param baseLimit Base limit from configuration
      * @return Dynamic limit
      */
-    private fun calculateDynamicLimit(cpuLoad: Double, baseLimit: Int): Int {
-        return when {
-            cpuLoad > 7.0 -> {
-                // 🔴 CRITICAL: Reduce to 50%
-                log.warn("[AdaptiveAdmissionControl] 🔴 CPU load CRITICAL: {}", String.format("%.2f", cpuLoad))
-                (baseLimit * 0.5).toInt()
-            }
-            cpuLoad > 5.0 -> {
-                // 🟡 WARNING: Reduce to 80%
-                log.warn("[AdaptiveAdmissionControl] 🟡 CPU load HIGH: {}", String.format("%.2f", cpuLoad))
-                (baseLimit * 0.8).toInt()
-            }
-            else -> {
-                // 🟢 NORMAL: Full capacity
-                baseLimit
-            }
+    private fun calculateDynamicLimit(cpuLoad: Double, baseLimit: Int): Int = when {
+        cpuLoad > 7.0 -> {
+            // 🔴 CRITICAL: Reduce to 50%
+            log.warn("[AdaptiveAdmissionControl] 🔴 CPU load CRITICAL: {}", String.format("%.2f", cpuLoad))
+            (baseLimit * 0.5).toInt()
+        }
+        cpuLoad > 5.0 -> {
+            // 🟡 WARNING: Reduce to 80%
+            log.warn("[AdaptiveAdmissionControl] 🟡 CPU load HIGH: {}", String.format("%.2f", cpuLoad))
+            (baseLimit * 0.8).toInt()
+        }
+        else -> {
+            // 🟢 NORMAL: Full capacity
+            baseLimit
         }
     }
 
@@ -298,7 +295,7 @@ class AdaptiveAdmissionControl(
                     // Waited too long in queue
                     queueTimeoutCounter.increment()
                     request.future.completeExceptionally(
-                        AdmissionTimeoutException("Queue timeout after ${properties.queueTimeoutMs}ms")
+                        AdmissionTimeoutException("Queue timeout after ${properties.queueTimeoutMs}ms"),
                     )
                     log.debug("[AdaptiveAdmissionControl] Worker {}: Request timed out in queue: key={}", workerIndex, request.key)
                     continue
@@ -318,7 +315,6 @@ class AdaptiveAdmissionControl(
                     semaphore.release()
                     inFlightCount.decrementAndGet()
                 }
-
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 log.info("[AdaptiveAdmissionControl] Worker {} interrupted", workerIndex)
@@ -350,4 +346,3 @@ class AdaptiveAdmissionControl(
         val enqueuedAtNanos: Long,
     )
 }
-

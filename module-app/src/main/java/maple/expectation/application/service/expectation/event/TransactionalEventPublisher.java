@@ -25,7 +25,8 @@ import org.springframework.stereotype.Component;
  * <h3>Dual-Write Prevention</h3>
  *
  * <p>Since PGMQ shares the same PostgreSQL database, {@code pgmqClient.send()} participates in the
- * caller's {@code @Transactional}. If V4 calculation rolls back, the PGMQ message is also rolled back.
+ * caller's {@code @Transactional}. If V4 calculation rolls back, the PGMQ message is also rolled
+ * back.
  *
  * <h3>Section 12 Compliance</h3>
  *
@@ -67,8 +68,7 @@ public class TransactionalEventPublisher {
         () -> {
           String payload = serializePayload(event.response());
           EventMessage message =
-              new EventMessage(
-                  event.eventId(), EVENT_TYPE, payload, Instant.now().toEpochMilli());
+              new EventMessage(event.eventId(), EVENT_TYPE, payload, Instant.now().toEpochMilli());
 
           pgmqClient.send(QUEUE_NAME, message);
 

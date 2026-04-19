@@ -39,7 +39,7 @@ class PgmqArchiveCleanupScheduler(
         val context = TaskContext.of("PgmqArchive", "Cleanup", "scheduled")
         executor.executeVoid({
             QUEUES.forEach { queue ->
-                val sql = "DELETE FROM pgmq.a_${queue} WHERE created_at < NOW() - INTERVAL '$RETENTION_DAYS days'"
+                val sql = "DELETE FROM pgmq.a_$queue WHERE created_at < NOW() - INTERVAL '$RETENTION_DAYS days'"
                 val deleted = jdbcTemplate.update(sql)
                 if (deleted > 0) {
                     log.info("[ArchiveCleanup] Purged {} archived messages from {}", deleted, queue)

@@ -89,8 +89,10 @@ class JpaNPlusOneRegressionTest {
     @DisplayName("활성 Entity에 JPA 연관관계가 없어야 함 (CQRS invariant)")
     fun `active entities have no JPA relationships`() {
         val relationshipAnnotations = setOf(
-            OneToMany::class.java, ManyToOne::class.java,
-            ManyToMany::class.java, OneToOne::class.java,
+            OneToMany::class.java,
+            ManyToOne::class.java,
+            ManyToMany::class.java,
+            OneToOne::class.java,
         )
 
         val violations = activeEntities.flatMap { clazz ->
@@ -100,7 +102,8 @@ class JpaNPlusOneRegressionTest {
         }
 
         assertEquals(
-            0, violations.size,
+            0,
+            violations.size,
             "활성 Entity는 CQRS + JSONB로 JPA 연관관계가 없어야 합니다.\n" +
                 "발견: $violations\n" +
                 "연관관계 추가 시 이 테스트를 업데이트하고 @BatchSize/@EntityGraph를 적용하세요.",

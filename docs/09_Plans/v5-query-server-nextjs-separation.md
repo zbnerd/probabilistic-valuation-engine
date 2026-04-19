@@ -1,265 +1,259 @@
-# V5 Query Server 분리: Phase 접근 (cache_storage → LOGGED Read Model)
+# V5 Query Server 분리: LOGGED Read Model + Next.js Query Server
 
-**Status**: Phase 1 Java 완료 (PR #722 머지) | **Date**: 2026-04-19
-**Review**: 2차 Consensus Review 통과 (P0 4건 해결, FP 1건 판명)
+**Status**: 계획 수립 (ADR 기반) | **Date**: 2026-04-19
+**ADR**: [ADR-V5-query-server-nextjs-phase1](../01_ADR/ADR-V5-query-server-nextjs-phase1.md)
+**Review**: Brainstorming gap analysis 완료 (GAP 7건 식별, 아키텍처 전면 수정)
 
 ---
 
 ## Context
 
-V5 Query Server를 Next.js로 분리하려면 계산 결과를 읽을 수 있어야 함. `cache_storage` UNLOGGED 테이블에 이미 GZIP 압축된 전체 응답이 저장되어 있음.
+V5 Query Server를 Next.js로 분리한다. Java V5 CQRS가 계산 결과를 LOGGED read model에 GZIP BYTEA로 저장하고, Next.js는 Read Replica에서 decompress하여 응답한다.
 
-**Phase 접근**:
-- **Phase 1 (단기)**: cache_storage 직접 읽기 + 완화 조치 — Java 변경 완료 (PR #722), Next.js 구현 대기
-- **Phase 2 (장기)**: LOGGED read model 테이블 마이그레이션
+**핵심 원칙**: 조회 전용 경로를 Next.js로 완전히 분리. cache_storage (UNLOGGED)는 V4 전용으로 유지.
+
+### 아키텍처
+
+```
+[V4 경로 — 기존 유지]
+  Java → L1 (Caffeine) → L2 (cache_storage UNLOGGED, GZIP BYTEA)
+
+[V5 경로 — 신규]
+  Java V5 CQRS (Write)
+    ↓ GZIP 압축 V5 JSON → BYTEA
+    ↓ UPSERT
+  character_expectation_read_model (LOGGED)
+    ↓ WAL replication
+  PostgreSQL Read Replica
+    ↓ SELECT payload WHERE user_ign = $1
+  Next.js Query Server (Vercel)
+    ↓ gunzipSync(payload) → JSON
+  Client
+```
+
+### 기각한 이전 접근
+
+| 접근 | 기각 이유 |
+|------|-----------|
+| cache_storage (UNLOGGED) 직접 읽기 | WAL 미기록. Read replica 불가. crash 시 데이터 손실 |
+| V4→V5 온더플라이 변환 | 필드 매핑 복잡. Double→BigDecimal 정밀도 손실. 타임존 가정 위험 |
+| TypedValue 파싱 | cache_value가 BYTEA. JSON parse 불가. Jackson 직렬화 포맷 의존 |
+| Phase 1/Phase 2 분리 | 애초에 LOGGED read model로 가는 게 정답. 굳이 UNLOGGED 경유 불필요 |
 
 ---
 
-## Consensus Review 결과 (2차 — 3 에이전트 × 2라운드)
+## 구축 항목
 
-### 해결된 P0 이슈
+### Step 1: LOGGED Read Model 테이블 (Java)
 
-| ID | 이슈 | 해결책 |
-|----|------|--------|
-| P0-1 | V4→V5 필드 매핑 오류 | 정확한 필드명 사용 (`blackCubeCost` etc), `flameCost=0` 기본값 |
-| P0-2 | TypedValue/GZIP 파싱 에러 핸들링 누락 | null 체크, GZIP magic number 검증, try-catch + 503 |
-| P0-3 | Double→BigDecimal 정밀도 손실 | `toPrecision(17)` 사용 (IEEE 754 full precision) |
-| P0-4 | LocalDateTime→Instant 타임존 가정 | UTC 가정 명시 (`+ 'Z'` suffix) |
-
-### P1 이슈 (완화)
-
-| ID | 이슈 | 완화 |
-|----|------|------|
-| P1-1 | Thundering herd (UNLOGGED crash) | CB + stale-while-revalidate + 기존 admission control |
-| P1-2 | TTL 연장 | `PostgresL2CacheFactory.kt:85` 상수 대신 YAML 설정 사용 (**PR #722에서 완료**) |
-| P1-3 | Key format 결합도 | 양쪽 환경변수화 (Java CacheProperties + Next.js env) (**PR #722에서 Java 완료**) |
-
-### False Positive
-
-| ID | 이슈 | 판명 |
-|----|------|------|
-| FP | Cache key format 불일치 (`expectation:v3:...`) | **FALSE** — Critic이 V2/V3 `TotalExpectationCacheService`를 V5 경로로 혼동. 실제 V5 키 = `expectationV4:v1:{userIgn}` |
-
----
-
-## Phase 1: cache_storage 직접 읽기 (단기)
-
-### Java 변경사항 (완료 — PR #722)
-
-1. **TTL 설정 오버라이드**: `PostgresL2CacheFactory` — `L2_TTL_SECONDS` 상수 제거 → YAML `l2-ttl-minutes` 설정값 사용. expectationV4 TTL 15분→60분 연장
-2. **Key format 환경변수화**: `CacheProperties.keyVersion` 추가, `PostgresL2CacheStrategy`에서 YAML 설정 사용
-3. **Lambda Hell 해결**: TTL 계산 로직 `resolveTtlSeconds()` private method 추출 + 미등록 캐시 warning 로그
-
-### Next.js 구현 (대기)
-
-#### 데이터 흐름
-
-```
-cache_storage (UNLOGGED)
-  cache_key: "expectationV4:v1:{userIgn}"   ← PostgresL2CacheStrategy.generateKey()
-  cache_value: TypedValue JSON { "@type": "...", "value": Base64(GZIP(V4 JSON)) }
-  expires_at: TTL (YAML l2-ttl-minutes 설정값, 현재 60분)
-
-Next.js Query Server
-  1. SELECT cache_value, expires_at FROM cache_storage WHERE cache_key = $1
-  2. Safe TypedValue 파싱 (null/type 체크)
-  3. Base64 decode → GZIP magic number (0x1f 0x8b) 검증 → gunzip
-  4. V4 JSON → V5 변환 (정확한 필드 매핑)
-  5. JSON 응답 반환
-```
-
-#### V4→V5 필드 매핑 (검증 완료)
-
-```
-V4 CostBreakdownDto (4 fields, Double)     V5 CostBreakdownDto (5 fields, BigDecimal)
-  blackCubeCost: Double        →           blackCubeCost: BigDecimal
-  redCubeCost: Double          →           redCubeCost: BigDecimal
-  additionalCubeCost: Double   →           additionalCubeCost: BigDecimal
-  starforceCost: Double        →           starforceCost: BigDecimal
-  (없음)                       →           flameCost: BigDecimal = "0"  (V5 추가)
-
-V4 Response                                V5 Response
-  totalExpectedCost: Double    →           totalExpectedCost: BigDecimal
-  calculatedAt: LocalDateTime  →           calculatedAt: Instant  (UTC 가정)
-  items[].expectedCost: Double →           items[].expectedCost: BigDecimal
-```
-
-소스: `EquipmentExpectationResponseV4.kt:299-303`, `EquipmentExpectationResponseV5.kt:111-116`
-
-#### Step 1: 환경 설정
-
-```env
-DATABASE_URL=postgresql://...
-CACHE_KEY_PREFIX=expectationV4
-CACHE_KEY_VERSION=v1
-```
-
-#### Step 2: Safe Cache 읽기 + 파싱
-
-```typescript
-// GET /api/v5/characters/{userIgn}/expectation
-const key = `${process.env.CACHE_KEY_PREFIX}:${process.env.CACHE_KEY_VERSION}:${userIgn}`;
-
-let row;
-try {
-  row = await db.query(
-    'SELECT cache_value, expires_at FROM cache_storage WHERE cache_key = $1',
-    [key]
-  );
-} catch (dbError) {
-  // Circuit Breaker: DB 장애 시 503
-  return Response.json(
-    { status: 'error', message: 'Query service unavailable' },
-    { status: 503 },
-  );
-}
-
-if (!row || row.expires_at < new Date()) {
-  return Response.json({ status: 'pending' }, { status: 202 });
-}
-
-// Safe TypedValue 파싱 (P0-2 해결)
-const typedValue = safeParseTypedValue(row.cache_value);
-if (!typedValue) {
-  return Response.json({ status: 'error' }, { status: 503 });
-}
-
-// Safe GZIP 파싱 (P0-2 해결)
-const v4Response = safeGunzipAndParse(typedValue.value);
-if (!v4Response) {
-  return Response.json({ status: 'error' }, { status: 503 });
-}
-
-const v5Response = convertV4ToV5(v4Response);
-return Response.json(v5Response);
-```
-
-#### Step 3: Safe 파싱 유틸리티
-
-```typescript
-// TypedValue JSON 파싱 (null/type 체크)
-function safeParseTypedValue(cacheValue: Buffer): { value: string } | null {
-  try {
-    const parsed = JSON.parse(cacheValue.toString('utf-8'));
-    if (!parsed || typeof parsed.value !== 'string' || !parsed.value) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-// GZIP 파싱 (magic number 검증 + 에러 핸들링)
-function safeGunzipAndParse(base64Value: string): V4Response | null {
-  try {
-    const gzipBytes = Buffer.from(base64Value, 'base64');
-    // GZIP magic number 검증: 0x1f 0x8b
-    if (gzipBytes[0] !== 0x1f || gzipBytes[1] !== 0x8b) {
-      return null;
-    }
-    const decompressed = gunzipSync(gzipBytes);
-    return JSON.parse(decompressed.toString('utf-8'));
-  } catch {
-    return null;
-  }
-}
-```
-
-#### Step 4: V4→V5 변환 (정확한 필드 매핑)
-
-```typescript
-function convertV4ToV5(v4: V4Response): V5Response {
-  return {
-    ...v4,
-    totalExpectedCost: toBigDecimal(v4.totalExpectedCost),
-    calculatedAt: toISOInstant(v4.calculatedAt),  // Asia/Seoul 가정
-    items: v4.items.map(convertItemV4ToV5),
-  };
-}
-
-function convertItemV4ToV5(item: V4Item): V5Item {
-  return {
-    ...item,
-    expectedCost: toBigDecimal(item.expectedCost),
-    costBreakdown: {
-      blackCubeCost: toBigDecimal(item.costBreakdown.blackCubeCost),
-      redCubeCost: toBigDecimal(item.costBreakdown.redCubeCost),
-      additionalCubeCost: toBigDecimal(item.costBreakdown.additionalCubeCost),
-      starforceCost: toBigDecimal(item.costBreakdown.starforceCost),
-      flameCost: "0",  // V4에 없음, 기본값
-    },
-  };
-}
-
-// P0-3 해결: IEEE 754 full precision 유지
-function toBigDecimal(doubleVal: number): string {
-  return doubleVal.toPrecision(17);
-}
-
-// P0-4 해결: LocalDateTime → Instant (Asia/Seoul 가정)
-function toISOInstant(localDateTime: string): string {
-  // V4의 LocalDateTime은 타임존 없음. 서버가 Asia/Seoul이므로 +09:00 가정
-  // Phase 2에서는 LOGGED 테이블에 Instant로 저장되어 이 변환 불필요
-  return localDateTime + '+09:00';
-}
-```
-
-#### Step 5: Task Status 폴링
-
-```
-GET /api/v5/characters/{userIgn}/task/{taskId}
-```
-
-cache_storage 존재 여부로 COMPLETED 판단.
-
-### 고려사항
-
-- **UNLOGGED**: PostgreSQL 크래시 시 데이터 손실 → 재계산으로 복구 (캐시 의미론)
-- **Read replica 불가**: WAL 미기록 → Primary DB 직접 연결
-- **Stale-while-revalidate**: 만료 직전 캐시는 허용하되 백그라운드에서 재계산 트리거
-
----
-
-## Phase 2: LOGGED Read Model 마이그레이션 (장기)
-
-### 목표
-
-cache_storage 구조적 한계 근본 해결 (UNLOGGED, TypedValue 래퍼, key 결합도, V4 스펙, 타임존 가정).
-
-### 신규 테이블: `character_read_model` (LOGGED)
+**Flyway migration**:
 
 ```sql
-CREATE TABLE character_read_model (
-    id              BIGSERIAL PRIMARY KEY,
-    user_ign        VARCHAR(100) NOT NULL,
-    message_id      VARCHAR(100),
-    response_json   JSONB NOT NULL,
-    calculated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- VXXX__create_character_expectation_read_model.sql
+CREATE TABLE character_expectation_read_model (
+    user_ign       VARCHAR(100) PRIMARY KEY,
+    payload        BYTEA NOT NULL,        -- GZIP 압축된 V5 JSON 응답
+    calculated_at  TIMESTAMPTZ NOT NULL,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+COMMENT ON TABLE character_expectation_read_model
+  IS 'V5 Query Server read model. GZIP compressed V5 response payload.';
 ```
 
-### Phase 2 변경사항
+**검증**:
+- LOGGED 테이블 (UNLOGGED 아님)
+- WAL 기록 → Read Replica 복제 가능
+- `payload BYTEA`: GZIP 압축된 V5 JSON. decompress만 하면 최종 응답
 
-1. **Flyway migration**: `character_read_model` LOGGED 테이블 생성
-2. **Java dual-write**: `EquipmentExpectationServiceV4.syncToViewTable()`에 V5 JSON 저장 추가
-3. **Next.js 전환**: `character_read_model.response_json` 직접 읽기 (zero transformation)
-4. **Cleanup**: cache_storage 의존 제거, TypedValue 래퍼 불필요, V4→V5 변환 불필요
+### Step 2: Java V5 CQRS 쓰기 로직 (Java)
 
-Phase 2 상세 계획은 별도 플랜으로 진행.
+Java V5 CQRS (이미 구현됨, `v5.enabled=true` 활성화)에 read model 쓰기 추가.
+
+**기존 흐름**:
+```
+V5 계산 완료 → EquipmentExpectationResponseV5 생성 → 응답
+```
+
+**변경 후**:
+```
+V5 계산 완료 → EquipmentExpectationResponseV5 생성
+  → JSON 직렬화 → GZIP 압축
+  → UPSERT character_expectation_read_model (user_ign, payload, calculated_at)
+  → 응답
+```
+
+**주의사항**:
+- UPSERT는 계산 트랜잭션 내에서 수행 (같은 트랜잭션 보장)
+- `payload`는 V5 응답 전체를 GZIP 압축한 BYTEA
+- `cache_storage`와 독립. V4 L2 캐시에 영향 없음
+
+**검증**:
+- [ ] Java V5 활성화 (`v5.enabled=true`)
+- [ ] read model UPSERT 동작 확인
+- [ ] GZIP 압축 → BYTEA 저장 확인
+- [ ] 기존 cache_storage V4 경로에 영향 없음
+
+### Step 3: Vultr PostgreSQL Read Replica 구축 (Infra)
+
+Vultr에 Primary DB의 Read Replica 설정.
+
+**필수 작업**:
+1. `postgresql.conf`: `wal_level = replica`, `max_wal_senders` 설정
+2. Replication slot 생성
+3. Replica 인스턴스 구축 (동일 Vultr 리전)
+4. Replica 연결 정보 (`REPLICA_DATABASE_URL`) 확보
+
+**검증**:
+- [ ] Replica에서 `SELECT * FROM character_expectation_read_model` 동작
+- [ ] Replica lag < 1초 확인
+- [ ] SSL 연결 설정 (Vercel → Replica)
+
+### Step 4: Next.js Query Server 프로젝트 초기화
+
+```
+query-server/
+├── app/
+│   └── api/v5/characters/[userIgn]/
+│       ├── expectation/route.ts     ← 메인 조회 엔드포인트
+│       └── task/[taskId]/route.ts   ← Task Status 폴링
+├── lib/
+│   ├── db.ts                       ← Read Replica 연결
+│   └── decompress.ts               ← GZIP BYTEA → JSON
+├── package.json
+├── next.config.ts
+└── .env.local                      ← REPLICA_DATABASE_URL
+```
+
+**환경 변수**:
+```env
+REPLICA_DATABASE_URL=postgresql://...  # Read Replica 연결
+```
+
+### Step 5: Next.js → Read Replica 연결 + Decompress
+
+**db.ts** (Read Replica 연결):
+```typescript
+import { Pool } from 'pg';
+
+const pool = new Pool({
+  connectionString: process.env.REPLICA_DATABASE_URL,
+  max: 10,  // Serverless: 연결 수 제한
+});
+
+export async function query(text: string, params: unknown[]) {
+  return pool.query(text, params);
+}
+```
+
+**decompress.ts**:
+```typescript
+import { gunzipSync } from 'zlib';
+
+export function decompressPayload(payload: Buffer): string {
+  // GZIP magic number 검증
+  if (payload[0] !== 0x1f || payload[1] !== 0x8b) {
+    throw new Error('Invalid GZIP payload');
+  }
+  return gunzipSync(payload).toString('utf-8');
+}
+```
+
+**route.ts** (메인 엔드포인트):
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { query } from '@/lib/db';
+import { decompressPayload } from '@/lib/decompress';
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: { userIgn: string } }
+) {
+  const { userIgn } = params;
+
+  try {
+    const result = await query(
+      'SELECT payload, calculated_at FROM character_expectation_read_model WHERE user_ign = $1',
+      [userIgn]
+    );
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ status: 'pending' }, { status: 202 });
+    }
+
+    const row = result.rows[0];
+
+    // TTL 만료 확인
+    const ttlMinutes = parseInt(process.env.CACHE_TTL_MINUTES ?? '60', 10);
+    const expiresAt = new Date(row.calculated_at.getTime() + ttlMinutes * 60_000);
+    if (new Date() > expiresAt) {
+      return NextResponse.json({ status: 'pending' }, { status: 202 });
+    }
+
+    // GZIP decompress → JSON 응답
+    const json = decompressPayload(row.payload);
+
+    return new NextResponse(json, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    // GZIP 손상 또는 DB 장애
+    return NextResponse.json(
+      { status: 'error', message: 'Query service unavailable' },
+      { status: 503 },
+    );
+  }
+}
+```
+
+**검증**:
+- [ ] Read Replica에서 데이터 읽기
+- [ ] GZIP decompress 동작
+- [ ] TTL 만료 시 202 응답
+- [ ] 존재하지 않는 userIgn → 202
+- [ ] 손상된 payload → 503
+- [ ] DB 장애 → 503
+
+### Step 6: Vercel 배포 설정
+
+1. Vercel 프로젝트 생성 (`query-server/` 루트)
+2. 환경 변수 설정: `REPLICA_DATABASE_URL`, `CACHE_TTL_MINUTES`
+3. Serverless Function 메모리 1024MB
+4. Vercel 리전: Replica와 동일 리전
 
 ---
 
-## Verification (Phase 1 Next.js)
+## 에러 응답 체계
 
-1. Next.js에서 `cache_storage` SELECT → 데이터 읽기 확인
-2. TypedValue 파싱 → Base64 디코드 → GZIP magic number 검증 → V4 JSON 확인
-3. V4→V5 변환: `blackCubeCost`/`redCubeCost`/`additionalCubeCost`/`starforceCost` → BigDecimal, `flameCost="0"` 확인
-4. Double→BigDecimal: `toPrecision(17)` 정밀도 유지 확인
-5. LocalDateTime→Instant: `+09:00` suffix로 Asia/Seoul 가정 확인
-6. 손상된 TypedValue/Base64/GZIP → 503 반환 확인
-7. TTL 만료 후 202 응답 확인
-8. DB 장애 시 503 (circuit breaker) 확인
-9. 존재하지 않는 userIgn → 404 또는 202 확인
+| 상황 | HTTP Status | 응답 |
+|------|-------------|------|
+| 데이터 있음 + 유효 | 200 | V5 JSON (decompressed) |
+| 데이터 없음 / 계산 중 | 202 | `{ status: "pending" }` |
+| GZIP 손상 | 503 | `{ status: "error" }` |
+| DB 장애 | 503 | `{ status: "error", message: "Query service unavailable" }` |
+| TTL 만료 | 202 | `{ status: "pending" }` |
+
+---
+
+## Verification Checklist
+
+1. [ ] LOGGED read model 테이블 생성 (Flyway migration)
+2. [ ] Java V5 CQRS에 read model UPSERT 추가
+3. [ ] Java V5 활성화 (`v5.enabled=true`)
+4. [ ] Read Replica 구축 + 복제 동작 확인
+5. [ ] Next.js에서 Replica 조회 → decompress → 응답
+6. [ ] TTL 만료 후 202 응답
+7. [ ] 손상된 payload → 503
+8. [ ] DB 장애 시 503
+9. [ ] 존재하지 않는 userIgn → 202
+10. [ ] Vercel 배포 + SSL 연결
+
+---
+
+## References
+
+- [ADR-V5-QueryServer](../01_ADR/ADR-V5-query-server-nextjs-phase1.md)
+- [ADR-V5 CQRS](../01_ADR/ADR-V5-cqrs-mongodb-readside.md)
+- [GameCharacterControllerV5.kt](../../module-web/src/main/kotlin/maple/expectation/web/controller/v5/GameCharacterControllerV5.kt)
+- [PostgresL2CacheStrategy.kt](../../module-infra/src/main/kotlin/maple/expectation/infrastructure/cache/tiered/PostgresL2CacheStrategy.kt)

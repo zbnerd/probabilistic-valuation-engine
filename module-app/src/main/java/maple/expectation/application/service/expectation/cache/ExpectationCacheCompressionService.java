@@ -79,8 +79,8 @@ public class ExpectationCacheCompressionService {
    * @return Decompressed response
    * @throws Exception If decompression or deserialization fails
    */
-  public EquipmentExpectationResponseV4 decompress(
-      String compressedBase64, String userIgn) throws Exception {
+  public EquipmentExpectationResponseV4 decompress(String compressedBase64, String userIgn)
+      throws Exception {
     if (compressedBase64 == null || compressedBase64.isEmpty()) {
       throw new maple.expectation.error.exception.CacheDataNotFoundException(userIgn);
     }

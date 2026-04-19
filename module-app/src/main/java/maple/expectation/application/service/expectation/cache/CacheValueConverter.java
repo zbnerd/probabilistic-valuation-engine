@@ -33,8 +33,7 @@ public class CacheValueConverter {
    * @param expectationCache Cache instance for migration updates
    * @return Base64 String or null if value is null
    */
-  @Nullable
-  public String convertToBase64(Object cachedValue, String userIgn, Cache expectationCache) {
+  @Nullable public String convertToBase64(Object cachedValue, String userIgn, Cache expectationCache) {
     // Unwrap SimpleValueWrapper (Spring Cache wrapper)
     Object unwrappedValue = unwrapValueWrapper(cachedValue);
     if (unwrappedValue == null) {
@@ -75,8 +74,7 @@ public class CacheValueConverter {
    * @param userIgn Character IGN (for logging)
    * @return GZIP bytes or null if conversion fails
    */
-  @Nullable
-  public byte[] convertToGzipBytes(Object cachedValue, String userIgn) {
+  @Nullable public byte[] convertToGzipBytes(Object cachedValue, String userIgn) {
     if (cachedValue instanceof String base64) {
       return java.util.Base64.getDecoder().decode(base64);
     }
@@ -88,9 +86,7 @@ public class CacheValueConverter {
     }
 
     log.error(
-        "[V4] L1 Unknown cache value type: {} for userIgn={}",
-        cachedValue.getClass(),
-        userIgn);
+        "[V4] L1 Unknown cache value type: {} for userIgn={}", cachedValue.getClass(), userIgn);
     return null;
   }
 
@@ -100,8 +96,7 @@ public class CacheValueConverter {
    * @param cachedValue Potentially wrapped cache value
    * @return Unwrapped value or original value if not wrapped
    */
-  @Nullable
-  private Object unwrapValueWrapper(Object cachedValue) {
+  @Nullable private Object unwrapValueWrapper(Object cachedValue) {
     Object unwrappedValue = cachedValue;
     if (cachedValue instanceof org.springframework.cache.support.SimpleValueWrapper wrapper) {
       unwrappedValue = wrapper.get();
@@ -116,8 +111,7 @@ public class CacheValueConverter {
    * @param wrapper Spring Cache ValueWrapper
    * @return Wrapped value or null if wrapper is null
    */
-  @Nullable
-  public Object extractValue(Cache.ValueWrapper wrapper) {
+  @Nullable public Object extractValue(Cache.ValueWrapper wrapper) {
     return wrapper != null ? wrapper.get() : null;
   }
 }

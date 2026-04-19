@@ -3,15 +3,15 @@ package maple.expectation.infrastructure.admission
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
-import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Callable
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
-import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.atomic.AtomicInteger
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Component
 
 /**
  * 🔥 PRODUCTION-READY: Simple Global Admission Control
@@ -94,7 +94,7 @@ class SimpleAdmissionControl(
             "[SimpleAdmissionControl] Initialized: maxInFlight={}, maxQueueSize={}, workerSize={}",
             maxInFlight,
             maxQueueSize,
-            workerSize
+            workerSize,
         )
     }
 
@@ -116,7 +116,7 @@ class SimpleAdmissionControl(
             // 🔥 FAST REJECT: Queue full
             queueFullCounter.increment()
             future.completeExceptionally(
-                AdmissionRejectedException("Admission queue full (max=$maxQueueSize)")
+                AdmissionRejectedException("Admission queue full (max=$maxQueueSize)"),
             )
             log.warn("[SimpleAdmissionControl] Queue full - rejecting request, queueSize={}", queue.size)
             return future
@@ -151,7 +151,6 @@ class SimpleAdmissionControl(
                     semaphore.release()
                     inFlight.decrementAndGet()
                 }
-
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 log.info("[SimpleAdmissionControl] Worker interrupted")
@@ -186,7 +185,6 @@ class SimpleAdmissionControl(
      */
     data class AdmissionTask<T>(
         val callable: Callable<T>,
-        val future: CompletableFuture<T>
+        val future: CompletableFuture<T>,
     )
 }
-

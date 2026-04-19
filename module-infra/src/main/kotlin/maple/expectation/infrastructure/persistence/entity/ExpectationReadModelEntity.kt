@@ -3,7 +3,6 @@ package maple.expectation.infrastructure.persistence.entity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
-import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.Table
 import java.time.Instant
 
@@ -30,8 +29,7 @@ class ExpectationReadModelEntity(
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Instant = Instant.now(),
 ) {
-    override fun equals(other: Any?): Boolean =
-        other is ExpectationReadModelEntity && userIgn == other.userIgn
+    override fun equals(other: Any?): Boolean = other is ExpectationReadModelEntity && userIgn == other.userIgn
 
     override fun hashCode(): Int = userIgn.hashCode()
 

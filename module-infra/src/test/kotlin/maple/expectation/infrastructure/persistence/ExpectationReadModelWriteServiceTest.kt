@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.persistence
 
+import java.time.Instant
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -18,7 +19,6 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import java.time.Instant
 
 /**
  * Unit tests for [ExpectationReadModelWriteService].
@@ -111,36 +111,64 @@ class ExpectationReadModelWriteServiceTest {
      * Simple pass-through LogicExecutor that directly invokes lambdas.
      */
     private val executor: LogicExecutor = object : LogicExecutor {
-        override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T =
-            try { task.get() } catch (e: Throwable) { throw e as RuntimeException }
+        override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Throwable) {
+            throw e as RuntimeException
+        }
 
-        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T =
-            try { task.get() } catch (_: Throwable) { defaultValue }
+        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = try {
+            task.get()
+        } catch (_: Throwable) {
+            defaultValue
+        }
 
-        override fun <T> executeWithTranslation(task: ThrowingSupplier<T>, customTranslator: ExceptionTranslator, context: TaskContext): T =
-            try { task.get() } catch (e: Throwable) { throw customTranslator.translate(e, context) as RuntimeException }
+        override fun <T> executeWithTranslation(task: ThrowingSupplier<T>, customTranslator: ExceptionTranslator, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Throwable) {
+            throw customTranslator.translate(e, context) as RuntimeException
+        }
 
-        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T =
-            try { task.get() } catch (e: Throwable) { fallback(e) }
+        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Throwable) {
+            fallback(e)
+        }
 
-        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: ExceptionTranslator, context: TaskContext): T =
-            try { task.get() } catch (e: Throwable) { throw fallback.translate(e, context) as RuntimeException }
+        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: ExceptionTranslator, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Throwable) {
+            throw fallback.translate(e, context) as RuntimeException
+        }
 
-        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T =
-            try { task.get() } catch (e: Throwable) { recovery(e) }
+        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Throwable) {
+            recovery(e)
+        }
 
-        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: ExceptionTranslator, context: TaskContext): T =
-            try { task.get() } catch (e: Throwable) { throw recovery.translate(e, context) as RuntimeException }
+        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: ExceptionTranslator, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Throwable) {
+            throw recovery.translate(e, context) as RuntimeException
+        }
 
         override fun executeVoid(task: ThrowingRunnable, context: TaskContext) {
-            try { task.run() } catch (e: Throwable) { throw e as RuntimeException }
+            try {
+                task.run()
+            } catch (e: Throwable) {
+                throw e as RuntimeException
+            }
         }
 
         override fun executeVoidJava(task: Runnable, context: TaskContext) {
             task.run()
         }
 
-        override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T =
-            try { task.get() } finally { finallyBlock.run() }
+        override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T = try {
+            task.get()
+        } finally {
+            finallyBlock.run()
+        }
     }
 }

@@ -532,8 +532,7 @@ class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {
             }
         }
 
-        override fun calculateExpectationAsync(userIgn: String, force: Boolean, taskId: String?): CompletableFuture<Any> =
-            calculateExpectationAsync(userIgn, force)
+        override fun calculateExpectationAsync(userIgn: String, force: Boolean, taskId: String?): CompletableFuture<Any> = calculateExpectationAsync(userIgn, force)
 
         override fun calculateExpectation(userIgn: String, force: Boolean): Any {
             // 호출 카운트 증가
@@ -549,8 +548,7 @@ class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {
             }
         }
 
-        override fun calculateExpectation(userIgn: String, force: Boolean, taskId: String?): Any =
-            calculateExpectation(userIgn, force)
+        override fun calculateExpectation(userIgn: String, force: Boolean, taskId: String?): Any = calculateExpectation(userIgn, force)
 
         override fun getGzipExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<ByteArray?> = CompletableFuture.completedFuture(byteArrayOf())
 

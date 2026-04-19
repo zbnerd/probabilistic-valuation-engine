@@ -107,9 +107,8 @@ class ApiKeyValidatorTest {
             .isInstanceOf(CharacterNotOwnedException::class.java)
     }
 
-    private fun character(name: String, ocid: String): CharacterListResponse.CharacterInfo =
-        CharacterListResponse.CharacterInfo(
-            characterName = name,
-            ocid = ocid,
-        )
+    private fun character(name: String, ocid: String): CharacterListResponse.CharacterInfo = CharacterListResponse.CharacterInfo(
+        characterName = name,
+        ocid = ocid,
+    )
 }

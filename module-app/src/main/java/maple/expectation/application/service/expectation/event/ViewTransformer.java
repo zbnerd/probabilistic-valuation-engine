@@ -1,7 +1,6 @@
 package maple.expectation.application.service.expectation.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -107,9 +106,7 @@ public class ViewTransformer {
     long version = System.currentTimeMillis();
     List<PresetView> presetViews =
         response.getPresets() != null
-            ? response.getPresets().stream()
-                .map(this::toPresetView)
-                .collect(Collectors.toList())
+            ? response.getPresets().stream().map(this::toPresetView).collect(Collectors.toList())
             : List.of();
 
     return new CharacterValuationViewEntity(
@@ -131,7 +128,9 @@ public class ViewTransformer {
   }
 
   private java.time.Instant parseInstantSafe(java.time.LocalDateTime ldt) {
-    return ldt != null ? ldt.atZone(java.time.ZoneId.systemDefault()).toInstant() : java.time.Instant.EPOCH;
+    return ldt != null
+        ? ldt.atZone(java.time.ZoneId.systemDefault()).toInstant()
+        : java.time.Instant.EPOCH;
   }
 
   private CharacterValuationViewEntity createEmptyViewFromResponse(

@@ -1,6 +1,5 @@
 package maple.expectation.application.service.expectation;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.character.GameCharacterFacade;
 import maple.expectation.application.service.character.GameCharacterService;
 import maple.expectation.application.service.expectation.cache.ExpectationCacheCoordinator;
+import maple.expectation.application.service.expectation.event.ViewTransformer;
 import maple.expectation.application.service.expectation.persistence.ExpectationPersistenceService;
 import maple.expectation.core.calculator.port.StarforceLookupPort;
 import maple.expectation.core.domain.cost.CostFormatter;
@@ -21,16 +21,15 @@ import maple.expectation.error.exception.StarforceNotInitializedException;
 import maple.expectation.infrastructure.aop.annotation.TraceLog;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import maple.expectation.infrastructure.persistence.CharacterViewQueryServicePostgres;
 import maple.expectation.infrastructure.provider.EquipmentDataProvider;
 import maple.expectation.parser.EquipmentStreamingParser;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
-import maple.expectation.application.service.expectation.event.ViewTransformer;
-import maple.expectation.infrastructure.persistence.CharacterViewQueryServicePostgres;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.lang.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -152,7 +151,8 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       String userIgn, boolean force, @Nullable String taskId) {
     validateInitialized();
     EquipmentExpectationResponseV4 response =
-        cacheCoordinator.getOrCalculate(userIgn, force, () -> doCalculateExpectation(userIgn, taskId));
+        cacheCoordinator.getOrCalculate(
+            userIgn, force, () -> doCalculateExpectation(userIgn, taskId));
 
     if (taskId != null && response.isFromCache()) {
       syncCachedResponseToViewTable(userIgn, response, taskId);
@@ -175,8 +175,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   }
 
   /** L1 캐시 직접 조회 - Fast Path (#264 성능 최적화) */
-  @Nullable
-  public byte[] getGzipFromL1CacheDirect(String userIgn) {
+  @Nullable public byte[] getGzipFromL1CacheDirect(String userIgn) {
     return cacheCoordinator.getGzipFromL1CacheDirect(userIgn);
   }
 
@@ -224,8 +223,8 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   /**
    * V5 CQRS: Inline view table write (best-effort).
    *
-   * <p>Writes precomputed result to character_valuation_views within the same transaction.
-   * Skipped when V5 is not enabled (ObjectProvider → null).
+   * <p>Writes precomputed result to character_valuation_views within the same transaction. Skipped
+   * when V5 is not enabled (ObjectProvider → null).
    *
    * <p>Async Materialized View pattern: Worker → DB write → API read.
    */
@@ -319,7 +318,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       return CompletableFuture.completedFuture(character.getEquipment().jsonContent().getBytes());
     }
     return equipmentProvider
-        .getRawEquipmentDataWithFanout(character.getCharacterId().value())  // 🔥 fan-out 메서드 호출
+        .getRawEquipmentDataWithFanout(character.getCharacterId().value()) // 🔥 fan-out 메서드 호출
         .orTimeout(nexonApiProperties.getDataLoadTimeoutSeconds(), TimeUnit.SECONDS);
   }
 

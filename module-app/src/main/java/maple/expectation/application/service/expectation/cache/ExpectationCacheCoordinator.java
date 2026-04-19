@@ -3,17 +3,17 @@ package maple.expectation.application.service.expectation.cache;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.lang.Nullable;
-import maple.expectation.error.exception.CacheDataNotFoundException;
-import maple.expectation.error.exception.EquipmentDataProcessingException;
+import maple.expectation.common.executor.TaskContext;
 import maple.expectation.core.port.inbound.CacheManagerPort;
 import maple.expectation.core.port.inbound.ExecutorPort;
-import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
-import maple.expectation.infrastructure.admission.AdmissionTimeoutException;
+import maple.expectation.error.exception.CacheDataNotFoundException;
+import maple.expectation.error.exception.EquipmentDataProcessingException;
 import maple.expectation.infrastructure.admission.AdmissionRejectedException;
-import maple.expectation.common.executor.TaskContext;
+import maple.expectation.infrastructure.admission.AdmissionTimeoutException;
+import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import org.springframework.cache.Cache;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -50,9 +50,7 @@ public class ExpectationCacheCoordinator {
   private final CacheValueConverter valueConverter;
   private final CachedResponseBuilder responseBuilder;
 
-  /**
-   * Constructor with admission control (US-002: Issue #617)
-   */
+  /** Constructor with admission control (US-002: Issue #617) */
   @org.springframework.beans.factory.annotation.Autowired
   public ExpectationCacheCoordinator(
       ExecutorPort executorPort,
@@ -74,8 +72,10 @@ public class ExpectationCacheCoordinator {
   /**
    * Constructor without admission control (backward compatibility)
    *
-   * @deprecated Use {@link #ExpectationCacheCoordinator(ExecutorPort, CacheManagerPort, GlobalAdmissionControl, ExpectationCacheCompressionService, CacheValueConverter, CachedResponseBuilder)} instead.
-   *             This constructor will be removed in v2.0.0. Please provide admission control explicitly.
+   * @deprecated Use {@link #ExpectationCacheCoordinator(ExecutorPort, CacheManagerPort,
+   *     GlobalAdmissionControl, ExpectationCacheCompressionService, CacheValueConverter,
+   *     CachedResponseBuilder)} instead. This constructor will be removed in v2.0.0. Please provide
+   *     admission control explicitly.
    */
   @Deprecated
   public ExpectationCacheCoordinator(
@@ -130,7 +130,8 @@ public class ExpectationCacheCoordinator {
     Cache.ValueWrapper wrapper = expectationCache.get(userIgn);
     if (wrapper != null) {
       Object cachedValue = valueConverter.extractValue(wrapper);
-      String compressedBase64 = valueConverter.convertToBase64(cachedValue, userIgn, expectationCache);
+      String compressedBase64 =
+          valueConverter.convertToBase64(cachedValue, userIgn, expectationCache);
       if (compressedBase64 != null) {
         return decompressCachedResponse(compressedBase64, userIgn);
       }
@@ -193,7 +194,8 @@ public class ExpectationCacheCoordinator {
     Cache.ValueWrapper wrapper = expectationCache.get(userIgn);
     if (wrapper != null) {
       Object cachedValue = valueConverter.extractValue(wrapper);
-      String compressedBase64 = valueConverter.convertToBase64(cachedValue, userIgn, expectationCache);
+      String compressedBase64 =
+          valueConverter.convertToBase64(cachedValue, userIgn, expectationCache);
       if (compressedBase64 == null || compressedBase64.isEmpty()) {
         throw new CacheDataNotFoundException(userIgn);
       }
@@ -229,8 +231,7 @@ public class ExpectationCacheCoordinator {
    * @param userIgn 캐릭터 IGN
    * @return GZIP 바이트 (L1 히트 시), null (L1 미스 시)
    */
-  @Nullable
-  public byte[] getGzipFromL1CacheDirect(String userIgn) {
+  @Nullable public byte[] getGzipFromL1CacheDirect(String userIgn) {
     Cache l1Cache = (Cache) cacheManagerPort.getL1CacheDirect(CACHE_NAME);
     if (l1Cache == null) {
       recordFastPathMiss();
@@ -278,10 +279,11 @@ public class ExpectationCacheCoordinator {
    * Execute calculator with global admission control (US-002: Issue #617)
    *
    * <h3>Admission Control Integration</h3>
+   *
    * <ul>
-   *   <li>If admissionControl is available: wrap with submitOrWait() for global concurrency limit</li>
-   *   <li>If admissionControl is null: execute directly (backward compatibility)</li>
-   *   <li>Preserves single-key single-flight behavior (handled by caller via cache check)</li>
+   *   <li>If admissionControl is available: wrap with submitOrWait() for global concurrency limit
+   *   <li>If admissionControl is null: execute directly (backward compatibility)
+   *   <li>Preserves single-key single-flight behavior (handled by caller via cache check)
    * </ul>
    *
    * @param userIgn Request key for admission control
@@ -338,7 +340,8 @@ public class ExpectationCacheCoordinator {
       return executorPort.executeWithTranslation(
           () -> {
             try {
-              EquipmentExpectationResponseV4 response = compressionService.decompress(compressedBase64, userIgn);
+              EquipmentExpectationResponseV4 response =
+                  compressionService.decompress(compressedBase64, userIgn);
               return responseBuilder.buildWithCacheFlag(response);
             } catch (Exception ex) {
               throw new RuntimeException(ex);

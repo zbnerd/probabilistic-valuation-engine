@@ -82,10 +82,8 @@ class LockHikariConfig(
     fun lockJdbcTemplate(): JdbcTemplate = JdbcTemplate(lockDataSource())
 
     @Bean(name = ["lockTransactionManager"])
-    fun lockTransactionManager(): PlatformTransactionManager =
-        DataSourceTransactionManager(lockDataSource())
+    fun lockTransactionManager(): PlatformTransactionManager = DataSourceTransactionManager(lockDataSource())
 
     @Bean(name = ["lockTransactionTemplate"])
-    fun lockTransactionTemplate(): TransactionTemplate =
-        TransactionTemplate(lockTransactionManager())
+    fun lockTransactionTemplate(): TransactionTemplate = TransactionTemplate(lockTransactionManager())
 }

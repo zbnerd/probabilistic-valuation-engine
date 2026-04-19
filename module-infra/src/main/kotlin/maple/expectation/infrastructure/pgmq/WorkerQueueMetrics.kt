@@ -61,8 +61,7 @@ class WorkerQueueMetrics(private val registry: MeterRegistry) {
     private val binders = ConcurrentHashMap<String, Binder>()
 
     /** 큐별 메트릭 바인더 반환 (최초 호출 시 생성 및 등록) */
-    fun forQueue(queueName: String): Binder =
-        binders.computeIfAbsent(queueName) { Binder(registry, queueName) }
+    fun forQueue(queueName: String): Binder = binders.computeIfAbsent(queueName) { Binder(registry, queueName) }
 
     /**
      * 큐별 메트릭 바인딩
@@ -72,9 +71,9 @@ class WorkerQueueMetrics(private val registry: MeterRegistry) {
      */
     class Binder(registry: MeterRegistry, queueName: String) {
 
-        private val _queueDepth = AtomicLong(0)
-        private val _inflight = AtomicLong(0)
-        private val _concurrent = AtomicLong(0)
+        private val queueDepthValue = AtomicLong(0)
+        private val inflightValue = AtomicLong(0)
+        private val concurrentValue = AtomicLong(0)
 
         val success: Counter
         val failure: Counter
@@ -83,17 +82,17 @@ class WorkerQueueMetrics(private val registry: MeterRegistry) {
         val waitDuration: Timer
 
         init {
-            Gauge.builder("pgmq.queue.depth") { _queueDepth.get().toDouble() }
+            Gauge.builder("pgmq.queue.depth") { queueDepthValue.get().toDouble() }
                 .description("Current PGMQ queue depth (updated per poll cycle)")
                 .tag("queue", queueName)
                 .register(registry)
 
-            Gauge.builder("pgmq.worker.inflight") { _inflight.get().toDouble() }
+            Gauge.builder("pgmq.worker.inflight") { inflightValue.get().toDouble() }
                 .description("Messages in-flight: read but not yet completed")
                 .tag("queue", queueName)
                 .register(registry)
 
-            Gauge.builder("pgmq.worker.concurrent") { _concurrent.get().toDouble() }
+            Gauge.builder("pgmq.worker.concurrent") { concurrentValue.get().toDouble() }
                 .description("Messages currently being processed (= active virtual thread count)")
                 .tag("queue", queueName)
                 .register(registry)
@@ -126,19 +125,29 @@ class WorkerQueueMetrics(private val registry: MeterRegistry) {
         }
 
         /** 폴링 사이클에서 큐 깊이 업데이트 */
-        fun updateQueueDepth(depth: Long) { _queueDepth.set(depth) }
+        fun updateQueueDepth(depth: Long) {
+            queueDepthValue.set(depth)
+        }
 
         /** 메시지 읽음 → in-flight 증가 */
-        fun inflightIncrement() { _inflight.incrementAndGet() }
+        fun inflightIncrement() {
+            inflightValue.incrementAndGet()
+        }
 
         /** 메시지 처리 완료 → in-flight 감소 */
-        fun inflightDecrement() { _inflight.decrementAndGet() }
+        fun inflightDecrement() {
+            inflightValue.decrementAndGet()
+        }
 
         /** 처리 시작 → concurrent 증가 */
-        fun concurrentIncrement() { _concurrent.incrementAndGet() }
+        fun concurrentIncrement() {
+            concurrentValue.incrementAndGet()
+        }
 
         /** 처리 종료 → concurrent 감소 */
-        fun concurrentDecrement() { _concurrent.decrementAndGet() }
+        fun concurrentDecrement() {
+            concurrentValue.decrementAndGet()
+        }
 
         /** 큐 대기 시간 기록 (enqueuedAt ~ now). 음수면 무시. */
         fun recordWaitDuration(enqueuedAt: Instant) {
@@ -147,9 +156,9 @@ class WorkerQueueMetrics(private val registry: MeterRegistry) {
         }
 
         /** 현재 in-flight 수 (테스트/디버깅용) */
-        fun getInflight(): Long = _inflight.get()
+        fun getInflight(): Long = inflightValue.get()
 
         /** 현재 concurrent 수 (테스트/디버깅용) */
-        fun getConcurrent(): Long = _concurrent.get()
+        fun getConcurrent(): Long = concurrentValue.get()
     }
 }

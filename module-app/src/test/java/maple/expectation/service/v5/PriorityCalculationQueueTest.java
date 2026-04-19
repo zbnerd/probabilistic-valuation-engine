@@ -75,7 +75,8 @@ class ExpectationCalculationQueueTest {
     when(pgmqClient.queueLength(anyString())).thenReturn(0L);
     when(pgmqClient.findActiveMessageIdByUserIgn("expectation_calc_high", "user1")).thenReturn(99L);
 
-    TaskReceipt receipt = queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", false));
+    TaskReceipt receipt =
+        queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", false));
 
     assertThat(receipt.getQueued()).isTrue();
     assertThat(receipt.getTaskId()).isEqualTo("99");
@@ -89,7 +90,8 @@ class ExpectationCalculationQueueTest {
     when(pgmqClient.findActiveMessageIdByUserIgn("expectation_calc_high", "user1")).thenReturn(99L);
     when(pgmqClient.send(anyString(), any())).thenReturn(100L);
 
-    TaskReceipt receipt = queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", true));
+    TaskReceipt receipt =
+        queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", true));
 
     assertThat(receipt.getQueued()).isTrue();
     assertThat(receipt.getTaskId()).isEqualTo("100");

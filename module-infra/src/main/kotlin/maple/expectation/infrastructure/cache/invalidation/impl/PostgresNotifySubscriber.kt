@@ -148,7 +148,7 @@ class PostgresNotifySubscriber(
             },
             0,
             pollIntervalMs,
-            TimeUnit.MILLISECONDS
+            TimeUnit.MILLISECONDS,
         )
     }
 

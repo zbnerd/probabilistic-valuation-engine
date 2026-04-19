@@ -4,20 +4,22 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.zaxxer.hikari.HikariDataSource
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import java.util.concurrent.TimeUnit
+import java.util.function.Consumer
+import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.config.TestcontainersConfiguration
 import maple.expectation.infrastructure.cache.TieredCacheManager
-import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationPublisher
 import maple.expectation.infrastructure.cache.invalidation.impl.PostgresNotifyPublisher
 import maple.expectation.infrastructure.cache.invalidation.impl.PostgresNotifySubscriber
 import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheFactory
 import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheStrategy
+import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
-import maple.expectation.common.function.ThrowingSupplier
 import org.assertj.core.api.Assertions.assertThat
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterAll
@@ -30,8 +32,6 @@ import org.junit.jupiter.api.TestInstance
 import org.springframework.cache.Cache
 import org.springframework.cache.caffeine.CaffeineCacheManager
 import org.springframework.jdbc.core.JdbcTemplate
-import java.util.concurrent.TimeUnit
-import java.util.function.Consumer
 
 /**
  * Multi-Instance Cache Invalidation Consistency Test (Issue #704)
@@ -202,7 +202,10 @@ class MultiInstanceCacheInvalidationTest {
 
         // A publishes a stale event (version 0, which is <= current version)
         val staleEvent = CacheInvalidationEvent.evict(
-            CACHE_NAME, "stale-key", "test-A", version = 0L,
+            CACHE_NAME,
+            "stale-key",
+            "test-A",
+            version = 0L,
         )
         (publisher as PostgresNotifyPublisher).publish(staleEvent)
 
@@ -311,8 +314,14 @@ class MultiInstanceCacheInvalidationTest {
 
         // Subscriber with unique instanceId
         val subscriber = PostgresNotifySubscriber(
-            dataSource, tcm, objectMapper, executor, meterRegistry,
-            instanceId, 50L, 1000L,
+            dataSource,
+            tcm,
+            objectMapper,
+            executor,
+            meterRegistry,
+            instanceId,
+            50L,
+            1000L,
         )
 
         return CacheInstance(instanceId, tcm, publisher, subscriber)
@@ -328,8 +337,7 @@ class MultiInstanceCacheInvalidationTest {
     private class ImmediateLogicExecutor : LogicExecutor {
         override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T = task.get()
 
-        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T =
-            runCatching { task.get() ?: defaultValue }.getOrElse { defaultValue }
+        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = runCatching { task.get() ?: defaultValue }.getOrElse { defaultValue }
 
         override fun executeVoid(task: ThrowingRunnable, context: TaskContext) {
             task.run()
@@ -339,12 +347,11 @@ class MultiInstanceCacheInvalidationTest {
             task.run()
         }
 
-        override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T =
-            try {
-                task.get()
-            } finally {
-                finallyBlock.run()
-            }
+        override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T = try {
+            task.get()
+        } finally {
+            finallyBlock.run()
+        }
 
         override fun <T> executeWithTranslation(
             task: ThrowingSupplier<T>,

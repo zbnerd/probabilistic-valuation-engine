@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.persistence
 
+import java.time.Instant
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.ExpectationReadModelRepository
@@ -7,7 +8,6 @@ import maple.expectation.util.GzipUtils
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
-import java.time.Instant
 
 /**
  * V5 Query Server: Write service for Character Expectation Read Model

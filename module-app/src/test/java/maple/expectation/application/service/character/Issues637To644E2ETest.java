@@ -2,14 +2,12 @@ package maple.expectation.application.service.character;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.anyString;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -25,10 +23,8 @@ import maple.expectation.core.domain.model.character.GameCharacter;
 import maple.expectation.core.domain.model.character.UserIgn;
 import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.error.exception.CharacterNotFoundException;
-import maple.expectation.infrastructure.cache.CaffeineOnlyCacheManager;
 import maple.expectation.infrastructure.character.notify.CharacterCreationListener;
 import maple.expectation.infrastructure.executor.LogicExecutor;
-import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.security.jwt.JwtPayload;
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider;
 import maple.expectation.support.TestLogicExecutors;
@@ -105,11 +101,11 @@ class Issues637To644E2ETest {
             characterCreationService,
             null); // CharacterAsyncService
 
-    gameCharacterFacade = new GameCharacterFacade(gameCharacterService, executor, characterCreationListener);
+    gameCharacterFacade =
+        new GameCharacterFacade(gameCharacterService, executor, characterCreationListener);
 
     ocidResolver =
-        new OcidResolver(
-            gameCharacterRepository, characterCreationService, cacheManager, executor);
+        new OcidResolver(gameCharacterRepository, characterCreationService, cacheManager, executor);
 
     jwtTokenProvider =
         new JwtTokenProvider(VALID_SECRET, EXPIRATION_SECONDS, environment, executor);
@@ -204,8 +200,7 @@ class Issues637To644E2ETest {
     @DisplayName("resolve: null input should throw NPE")
     void whenNullUserIgn_shouldThrowNPE() {
       // when & then
-      assertThatThrownBy(() -> ocidResolver.resolve(null))
-          .isInstanceOf(NullPointerException.class);
+      assertThatThrownBy(() -> ocidResolver.resolve(null)).isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -391,8 +386,11 @@ class Issues637To644E2ETest {
     @DisplayName("parseToken: token with only header should return empty")
     void whenTokenWithOnlyHeader_shouldReturnEmpty() {
       // given - only header part
-      String header = Base64.getUrlEncoder().withoutPadding().encodeToString(
-          "{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+      String header =
+          Base64.getUrlEncoder()
+              .withoutPadding()
+              .encodeToString(
+                  "{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
       String invalidToken = header + "..";
 
       // when
@@ -535,7 +533,8 @@ class Issues637To644E2ETest {
     void facadeShouldDelegateToService() {
       // given - Create a mocked service for this test
       GameCharacterService mockService = mock(GameCharacterService.class);
-      GameCharacterFacade testFacade = new GameCharacterFacade(mockService, executor, characterCreationListener);
+      GameCharacterFacade testFacade =
+          new GameCharacterFacade(mockService, executor, characterCreationListener);
 
       String userIgn = "testCharacter";
       given(mockService.isNonExistent(userIgn)).willReturn(false);
@@ -580,18 +579,16 @@ class Issues637To644E2ETest {
   /**
    * Creates a mock GameCharacter for testing.
    *
-   * <p>Note: This method cannot create characters with null ocid or blank userIgn
-   * because the Kotlin constructors have proper validation that throws exceptions.
-   * For null-safety testing, the tests verify that appropriate exceptions are thrown
-   * rather than NPE occurring in production paths.
+   * <p>Note: This method cannot create characters with null ocid or blank userIgn because the
+   * Kotlin constructors have proper validation that throws exceptions. For null-safety testing, the
+   * tests verify that appropriate exceptions are thrown rather than NPE occurring in production
+   * paths.
    *
    * @param userIgn the character name (must not be blank)
    * @param ocid the character ID (must not be null)
    * @return a GameCharacter instance
    */
   private GameCharacter createMockGameCharacter(String userIgn, String ocid) {
-    return GameCharacter.create(
-        UserIgn.of(userIgn),
-        CharacterId.of(ocid));
+    return GameCharacter.create(UserIgn.of(userIgn), CharacterId.of(ocid));
   }
 }

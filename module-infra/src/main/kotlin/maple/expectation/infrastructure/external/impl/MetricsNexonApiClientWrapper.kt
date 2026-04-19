@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.external.impl
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import java.util.concurrent.CompletableFuture
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.CharacterBasicResponse
 import maple.expectation.infrastructure.external.dto.v2.CharacterOcidResponse
@@ -10,8 +11,6 @@ import maple.expectation.infrastructure.external.dto.v2.CubeHistoryResponse
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.infrastructure.ratelimit.NexonRateLimiter
 import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
-import java.util.concurrent.CompletableFuture
 
 /**
  * 🔥 Metrics Wrapper for NexonApiClient
@@ -85,28 +84,20 @@ class MetricsNexonApiClientWrapper(
         logger.info("[NexonMetrics] Metrics wrapper initialized with NexonRateLimiter")
     }
 
-    override fun getOcidByCharacterName(characterName: String): CompletableFuture<CharacterOcidResponse> {
-        return recordApiCall("getOcid", characterName) {
-            delegate.getOcidByCharacterName(characterName)
-        }
+    override fun getOcidByCharacterName(characterName: String): CompletableFuture<CharacterOcidResponse> = recordApiCall("getOcid", characterName) {
+        delegate.getOcidByCharacterName(characterName)
     }
 
-    override fun getCharacterBasic(ocid: String): CompletableFuture<CharacterBasicResponse> {
-        return recordApiCall("getCharacterBasic", ocid) {
-            delegate.getCharacterBasic(ocid)
-        }
+    override fun getCharacterBasic(ocid: String): CompletableFuture<CharacterBasicResponse> = recordApiCall("getCharacterBasic", ocid) {
+        delegate.getCharacterBasic(ocid)
     }
 
-    override fun getItemDataByOcid(ocid: String): CompletableFuture<EquipmentResponse> {
-        return recordApiCall("getItemData", ocid) {
-            delegate.getItemDataByOcid(ocid)
-        }
+    override fun getItemDataByOcid(ocid: String): CompletableFuture<EquipmentResponse> = recordApiCall("getItemData", ocid) {
+        delegate.getItemDataByOcid(ocid)
     }
 
-    override fun getCubeHistory(ocid: String): CompletableFuture<CubeHistoryResponse> {
-        return recordApiCall("getCubeHistory", ocid) {
-            delegate.getCubeHistory(ocid)
-        }
+    override fun getCubeHistory(ocid: String): CompletableFuture<CubeHistoryResponse> = recordApiCall("getCubeHistory", ocid) {
+        delegate.getCubeHistory(ocid)
     }
 
     /**
@@ -137,7 +128,7 @@ class MetricsNexonApiClientWrapper(
         val acquireTime = System.nanoTime() - acquireStart
 
         // Track if we had to wait for permit
-        if (acquireTime > 1_000_000) {  // > 1ms
+        if (acquireTime > 1_000_000) { // > 1ms
             semaphoreBlockedCounter.increment()
             logger.debug("[NexonRateLimiter] {} blocked for {}ms waiting for permit", endpoint, acquireTime / 1_000_000)
         }
@@ -161,16 +152,20 @@ class MetricsNexonApiClientWrapper(
 
                     if (ex == null) {
                         successCounter.increment()
-                        logger.debug("[NexonMetrics] {} success: {}ms (acquire: {}ms)",
+                        logger.debug(
+                            "[NexonMetrics] {} success: {}ms (acquire: {}ms)",
                             endpoint,
                             java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(duration),
-                            acquireTime / 1_000_000)
+                            acquireTime / 1_000_000,
+                        )
                     } else {
                         recordError(endpoint, ex)
-                        logger.warn("[NexonMetrics] {} failed: {} (acquire: {}ms)",
+                        logger.warn(
+                            "[NexonMetrics] {} failed: {} (acquire: {}ms)",
                             endpoint,
                             ex.javaClass.simpleName,
-                            acquireTime / 1_000_000)
+                            acquireTime / 1_000_000,
+                        )
                     }
                 } catch (e: Exception) {
                     logger.error("[NexonMetrics] Metric recording failed", e)
@@ -199,11 +194,9 @@ class MetricsNexonApiClientWrapper(
             .increment()
     }
 
-    private fun getTimer(endpoint: String, status: String): Timer {
-        return Timer.builder("nexon.api.latency")
-            .description("Nexon API call latency")
-            .tag("endpoint", endpoint)
-            .tag("status", status)
-            .register(meterRegistry)
-    }
+    private fun getTimer(endpoint: String, status: String): Timer = Timer.builder("nexon.api.latency")
+        .description("Nexon API call latency")
+        .tag("endpoint", endpoint)
+        .tag("status", status)
+        .register(meterRegistry)
 }

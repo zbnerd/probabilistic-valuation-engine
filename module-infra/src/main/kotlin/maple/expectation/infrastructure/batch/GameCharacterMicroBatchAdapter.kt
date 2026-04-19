@@ -1,10 +1,10 @@
 package maple.expectation.infrastructure.batch
 
 import io.micrometer.core.instrument.MeterRegistry
+import jakarta.annotation.PostConstruct
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.infrastructure.config.AdaptiveMicroBatchProperties
-import jakarta.annotation.PostConstruct
 import maple.expectation.infrastructure.executor.LogicExecutor
 import org.springframework.cache.Cache
 import org.springframework.cache.concurrent.ConcurrentMapCache

@@ -17,11 +17,11 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.core.port.out.CacheWarmupPort
 import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer
+import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheStrategy
 import maple.expectation.infrastructure.config.BulkLoadProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lock.LockStrategy
-import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheStrategy
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 

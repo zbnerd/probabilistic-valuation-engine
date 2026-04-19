@@ -1,10 +1,10 @@
 package maple.expectation.infrastructure.fanout
 
+import jakarta.annotation.PreDestroy
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import jakarta.annotation.PreDestroy
 import maple.expectation.core.port.out.FanOutQueuePort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext

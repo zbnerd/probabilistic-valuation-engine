@@ -199,13 +199,11 @@ class PostgresAdvisoryLockStrategy(
      * Try to acquire transaction-scoped advisory lock.
      * Must be called within an active transaction.
      */
-    private fun tryAcquireXactLock(lockId: Long): Boolean {
-        return jdbcTemplate.queryForObject(
-            "SELECT pg_try_advisory_xact_lock(?)",
-            Boolean::class.java,
-            lockId,
-        ) ?: false
-    }
+    private fun tryAcquireXactLock(lockId: Long): Boolean = jdbcTemplate.queryForObject(
+        "SELECT pg_try_advisory_xact_lock(?)",
+        Boolean::class.java,
+        lockId,
+    ) ?: false
 
     /**
      * Generate consistent lock ID from string key.

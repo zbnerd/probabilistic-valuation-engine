@@ -173,6 +173,7 @@ class PostgresL2CacheStrategy(
                         val key = rs.getString("cache_key")
                         val bytes = rs.getBytes("cache_value")
                         val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
+
                         // Apply same type safety as get() method
                         @Suppress("UNCHECKED_CAST")
                         val value: T? = when {

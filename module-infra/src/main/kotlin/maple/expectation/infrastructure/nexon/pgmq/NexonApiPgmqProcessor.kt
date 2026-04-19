@@ -1,14 +1,16 @@
 package maple.expectation.infrastructure.nexon.pgmq
 
 import java.util.concurrent.TimeUnit
+import kotlin.math.min
+import kotlin.math.pow
 import maple.expectation.core.domain.nexon.NexonApiEventType
 import maple.expectation.core.port.out.NexonApiOutboxProcessorPort
 import maple.expectation.core.port.out.ShutdownDataPersistencePort
 import maple.expectation.infrastructure.alert.StatelessAlertService
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.external.NexonApiClient
+import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.nexon.util.ContentHashUtil
 import maple.expectation.infrastructure.pgmq.NexonRetryMessage
 import maple.expectation.infrastructure.pgmq.PgmqClient
@@ -20,8 +22,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClientResponseException
-import kotlin.math.min
-import kotlin.math.pow
 
 /**
  * Nexon API PGMQ 기반 재시도 프로세서 (Phase 3 - Outbox to PGMQ Migration)
@@ -111,12 +111,15 @@ class NexonApiPgmqProcessor(
         executor.executeVoid({
             // 1. Content hash 검증
             val expectedHash = ContentHashUtil.computeV1(
-                payload.requestId, payload.eventType, payload.payload,
+                payload.requestId,
+                payload.eventType,
+                payload.payload,
             )
             if (payload.contentHash != expectedHash) {
                 log.error(
                     "[NexonApiPgmqProcessor] Content hash mismatch: msgId={}, requestId={}",
-                    message.messageId, payload.requestId,
+                    message.messageId,
+                    payload.requestId,
                 )
                 moveToDlq(message, "Content hash mismatch")
                 metrics.incrementIntegrityFailure()
@@ -130,7 +133,8 @@ class NexonApiPgmqProcessor(
                 pgmqClient.archive(QUEUE_NAME, message.messageId)
                 log.info(
                     "[NexonApiPgmqProcessor] Archived: msgId={}, requestId={}",
-                    message.messageId, payload.requestId,
+                    message.messageId,
+                    payload.requestId,
                 )
                 metrics.incrementApiCallSuccess()
                 metrics.incrementProcessed()
@@ -179,14 +183,16 @@ class NexonApiPgmqProcessor(
             if (root is WebClientResponseException && root.statusCode.is4xxClientError) {
                 log.warn(
                     "[NexonApiPgmqProcessor] 4xx 오류 (재시도 불가): eventType={}, status={}",
-                    eventType, root.statusCode,
+                    eventType,
+                    root.statusCode,
                 )
                 return false
             }
 
             log.warn(
                 "[NexonApiPgmqProcessor] 일시적 장애: eventType={}, error={}",
-                eventType, root?.message,
+                eventType,
+                root?.message,
             )
             metrics.incrementApiCallRetry()
             false
@@ -209,7 +215,9 @@ class NexonApiPgmqProcessor(
         pgmqClient.setVisibilityTimeout(QUEUE_NAME, message.messageId, backoffSeconds)
         log.info(
             "[NexonApiPgmqProcessor] Set VT: msgId={}, retry={}, backoff={}s",
-            message.messageId, retryCount, backoffSeconds,
+            message.messageId,
+            retryCount,
+            backoffSeconds,
         )
         metrics.incrementFailed()
     }
@@ -231,7 +239,8 @@ class NexonApiPgmqProcessor(
             )
             log.warn(
                 "[DLQ] Backed up message: msgId={}, requestId={}",
-                message.messageId, message.payload.requestId,
+                message.messageId,
+                message.payload.requestId,
             )
             metrics.incrementDlqFileBackup()
 

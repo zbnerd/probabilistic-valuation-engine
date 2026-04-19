@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.external.config
 
-import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
@@ -9,12 +8,12 @@ import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicLong
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.ClientRequest
 import org.springframework.web.reactive.function.client.ClientResponse
 import org.springframework.web.reactive.function.client.ExchangeFilterFunction
 import org.springframework.web.reactive.function.client.ExchangeFunction
 import org.springframework.web.reactive.function.client.WebClientResponseException
-import org.springframework.stereotype.Component
 import reactor.core.publisher.Mono
 
 /**
@@ -131,8 +130,7 @@ class ExternalApiMetricsFilter(
 
     // ==================== Status Classification ====================
 
-    private fun statusGroupOf(statusCode: org.springframework.http.HttpStatusCode): String =
-        statusGroupOf(statusCode.value())
+    private fun statusGroupOf(statusCode: org.springframework.http.HttpStatusCode): String = statusGroupOf(statusCode.value())
 
     private fun statusGroupOf(code: Int): String = when (code) {
         in 200..299 -> "2xx"
@@ -162,14 +160,13 @@ class ExternalApiMetricsFilter(
 
     // ==================== Metric Recording ====================
 
-    private fun timer(apiName: String, statusGroup: String, outcome: String): Timer =
-        Timer.builder("external.api.duration")
-            .description("External API call duration")
-            .tag("apiName", apiName)
-            .tag("statusGroup", statusGroup)
-            .tag("outcome", outcome)
-            .publishPercentileHistogram()
-            .register(registry)
+    private fun timer(apiName: String, statusGroup: String, outcome: String): Timer = Timer.builder("external.api.duration")
+        .description("External API call duration")
+        .tag("apiName", apiName)
+        .tag("statusGroup", statusGroup)
+        .tag("outcome", outcome)
+        .publishPercentileHistogram()
+        .register(registry)
 
     private fun recordResponseSize(apiName: String, response: ClientResponse) {
         val contentLength = response.headers().contentLength().orElse(-1L)
@@ -188,8 +185,11 @@ class ExternalApiMetricsFilter(
         if (log.isDebugEnabled) {
             log.debug(
                 "[ApiTimer] api={} status={} outcome={} durationMs={} traceId={}",
-                apiName, statusGroup, outcome, "<measured>",
-                MDC.get("requestId") ?: "-"
+                apiName,
+                statusGroup,
+                outcome,
+                "<measured>",
+                MDC.get("requestId") ?: "-",
             )
         }
     }
@@ -197,8 +197,10 @@ class ExternalApiMetricsFilter(
     private fun logError(apiName: String, outcome: String, error: Throwable) {
         log.warn(
             "[ApiTimer] api={} status=error outcome={} error={} traceId={}",
-            apiName, outcome, error.javaClass.simpleName,
-            MDC.get("requestId") ?: "-"
+            apiName,
+            outcome,
+            error.javaClass.simpleName,
+            MDC.get("requestId") ?: "-",
         )
     }
 

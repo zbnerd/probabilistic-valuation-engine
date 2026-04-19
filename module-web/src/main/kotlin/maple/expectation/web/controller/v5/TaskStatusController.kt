@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
 import maple.expectation.core.port.inbound.TaskStatus
 import maple.expectation.core.port.inbound.TaskStatusPort
+import maple.expectation.web.validation.ValidIgn
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -13,7 +14,6 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import maple.expectation.web.validation.ValidIgn
 
 /**
  * V5 Task 상태 조회 Controller (ADR-355)

@@ -1,10 +1,10 @@
 package maple.expectation.application.usecase
 
+import maple.expectation.application.service.auth.ApiKeyValidator
 import maple.expectation.core.port.inbound.AuthCommand
 import maple.expectation.core.port.inbound.AuthPort
 import maple.expectation.core.port.inbound.AuthResult
 import maple.expectation.core.port.inbound.TokenResult
-import maple.expectation.application.service.auth.ApiKeyValidator
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -32,7 +32,8 @@ class AuthPortAdapter(
 
         // #667: Nexon API 검증 → account_id + 소유 캐릭터 OCID 확보
         val validationResult = apiKeyValidator.validateAndVerifyOwnership(
-            command.apiKey, command.userIgn,
+            command.apiKey,
+            command.userIgn,
         )
         val accountId = validationResult.accountId
 
@@ -66,8 +67,7 @@ class AuthPortAdapter(
         )
     }
 
-    private fun generateSessionId(accountId: String): String =
-        "session-${kotlin.math.abs(accountId.hashCode())}-${System.currentTimeMillis()}"
+    private fun generateSessionId(accountId: String): String = "session-${kotlin.math.abs(accountId.hashCode())}-${System.currentTimeMillis()}"
 
     private fun determineRole(accountId: String): String {
         // TODO: Check against admin allowlist

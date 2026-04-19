@@ -1,7 +1,5 @@
 package maple.expectation.application.service.starforce;
 
-import java.math.RoundingMode;
-
 /**
  * 놀장(스타포스 스크롤) 확률 테이블 (#240 V4)
  *

@@ -3,6 +3,7 @@ package maple.expectation.testinfra.pgmq
 import io.github.resilience4j.circuitbreaker.CircuitBreaker
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.inbound.CacheManagerPort
 import maple.expectation.core.port.out.LikeBufferStrategy
 import maple.expectation.infrastructure.cache.TieredCacheManager
@@ -28,8 +29,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.TestPropertySource
-import org.springframework.transaction.annotation.Transactional
-import java.util.concurrent.TimeUnit
 
 /**
  * PGMQ Client 통합 테스트 (ADR-002)

@@ -24,7 +24,8 @@ class PostgresPersistenceTrackerAdapter(
             jdbcTemplate.update(
                 "INSERT INTO equipment_persistence_tracker (ocid, instance_id, status) VALUES (?, ?, 'PENDING') " +
                     "ON CONFLICT (ocid) DO UPDATE SET status = 'PENDING', instance_id = EXCLUDED.instance_id, created_at = NOW(), completed_at = NULL",
-                ocid, instanceId,
+                ocid,
+                instanceId,
             )
         }, context)
     }

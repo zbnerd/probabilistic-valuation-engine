@@ -1,12 +1,12 @@
 package maple.expectation.infrastructure.persistence
 
+import java.util.Optional
 import maple.expectation.core.domain.model.character.CharacterView
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
-import java.util.Optional
 
 /**
  * CharacterViewQueryPort 구현체 (ADR-005, Issue #639)

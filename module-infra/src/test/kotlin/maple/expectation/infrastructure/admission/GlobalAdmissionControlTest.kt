@@ -2,25 +2,23 @@ package maple.expectation.infrastructure.admission
 
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executor
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import org.awaitility.Awaitility.await
 
 @Tag("integration")
 @DisplayName("GlobalAdmissionControl Tests")
@@ -41,51 +39,37 @@ class GlobalAdmissionControlTest {
         properties = GlobalAdmissionProperties(
             maxInFlight = 100,
             queueTimeoutMs = 5000,
-            maxQueueSize = 1000
+            maxQueueSize = 1000,
         )
 
         testExecutor = Executors.newSingleThreadExecutor()
         workerExecutor = Executors.newFixedThreadPool(4)
         executor = object : LogicExecutor {
-            override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T {
-                return testExecutor!!.submit(task::get).get()
+            override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T = testExecutor!!.submit(task::get).get()
+
+            override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = try {
+                execute(task, context)
+            } catch (e: Exception) {
+                defaultValue
             }
 
-            override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T {
-                return try {
-                    execute(task, context)
-                } catch (e: Exception) {
-                    defaultValue
-                }
+            override fun <T> executeWithTranslation(task: ThrowingSupplier<T>, customTranslator: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T = execute(task, context)
+
+            override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T = try {
+                execute(task, context)
+            } catch (e: Throwable) {
+                fallback(e)
             }
 
-            override fun <T> executeWithTranslation(task: ThrowingSupplier<T>, customTranslator: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T {
-                return execute(task, context)
+            override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T = execute(task, context)
+
+            override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T = try {
+                execute(task, context)
+            } catch (e: Throwable) {
+                recovery(e)
             }
 
-            override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T {
-                return try {
-                    execute(task, context)
-                } catch (e: Throwable) {
-                    fallback(e)
-                }
-            }
-
-            override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T {
-                return execute(task, context)
-            }
-
-            override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T {
-                return try {
-                    execute(task, context)
-                } catch (e: Throwable) {
-                    recovery(e)
-                }
-            }
-
-            override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T {
-                return execute(task, context)
-            }
+            override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T = execute(task, context)
 
             override fun executeVoid(task: ThrowingRunnable, context: TaskContext) {
                 testExecutor!!.submit { task.run() }
@@ -95,12 +79,10 @@ class GlobalAdmissionControlTest {
                 testExecutor!!.submit(task).get()
             }
 
-            override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T {
-                return try {
-                    execute(task, context)
-                } finally {
-                    finallyBlock.run()
-                }
+            override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T = try {
+                execute(task, context)
+            } finally {
+                finallyBlock.run()
             }
         }
 
@@ -127,45 +109,31 @@ class GlobalAdmissionControlTest {
         val exec = Executors.newSingleThreadExecutor()
         extraExecutors.add(exec)
         return object : LogicExecutor {
-            override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T {
-                return exec.submit(task::get).get()
+            override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T = exec.submit(task::get).get()
+
+            override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = try {
+                execute(task, context)
+            } catch (e: Exception) {
+                defaultValue
             }
 
-            override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T {
-                return try {
-                    execute(task, context)
-                } catch (e: Exception) {
-                    defaultValue
-                }
+            override fun <T> executeWithTranslation(task: ThrowingSupplier<T>, customTranslator: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T = execute(task, context)
+
+            override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T = try {
+                execute(task, context)
+            } catch (e: Throwable) {
+                fallback(e)
             }
 
-            override fun <T> executeWithTranslation(task: ThrowingSupplier<T>, customTranslator: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T {
-                return execute(task, context)
+            override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T = execute(task, context)
+
+            override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T = try {
+                execute(task, context)
+            } catch (e: Throwable) {
+                recovery(e)
             }
 
-            override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T {
-                return try {
-                    execute(task, context)
-                } catch (e: Throwable) {
-                    fallback(e)
-                }
-            }
-
-            override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T {
-                return execute(task, context)
-            }
-
-            override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T {
-                return try {
-                    execute(task, context)
-                } catch (e: Throwable) {
-                    recovery(e)
-                }
-            }
-
-            override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T {
-                return execute(task, context)
-            }
+            override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: maple.expectation.infrastructure.executor.strategy.ExceptionTranslator, context: TaskContext): T = execute(task, context)
 
             override fun executeVoid(task: ThrowingRunnable, context: TaskContext) {
                 exec.submit { task.run() }
@@ -175,12 +143,10 @@ class GlobalAdmissionControlTest {
                 exec.submit(task).get()
             }
 
-            override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T {
-                return try {
-                    execute(task, context)
-                } finally {
-                    finallyBlock.run()
-                }
+            override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T = try {
+                execute(task, context)
+            } finally {
+                finallyBlock.run()
             }
         }
     }
@@ -189,7 +155,7 @@ class GlobalAdmissionControlTest {
         val testProperties = GlobalAdmissionProperties(
             maxInFlight = maxInFlight,
             queueTimeoutMs = queueTimeoutMs,
-            maxQueueSize = maxQueueSize
+            maxQueueSize = maxQueueSize,
         )
 
         val testExec = createTestExecutor()
@@ -303,7 +269,7 @@ class GlobalAdmissionControlTest {
             "admission_control.queue_depth",
             "admission_control.queue.timeout",
             "admission_control.queue.full",
-            "admission_control.rejected"
+            "admission_control.rejected",
         )
 
         requiredMetrics.forEach { metricName ->

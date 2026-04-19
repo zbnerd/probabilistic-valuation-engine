@@ -1,7 +1,7 @@
 package maple.expectation.core.port.inbound
 
-import maple.expectation.core.domain.model.character.CharacterView
 import java.util.Optional
+import maple.expectation.core.domain.model.character.CharacterView
 
 /**
  * V5 CQRS Query Side Port (ADR-005, Issue #639)

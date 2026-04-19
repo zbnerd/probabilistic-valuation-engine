@@ -349,7 +349,8 @@ public class CoreDependencyRuleTest {
      * <p><strong>Rationale:</strong> External API integration is an infrastructure concern. Core
      * should define port interfaces, not concrete client implementations.
      *
-     * <p><strong>Allowed:</strong> Port interfaces (e.g., @Deprecated NexonApiOutboxProcessorPort — pending removal).
+     * <p><strong>Allowed:</strong> Port interfaces (e.g., @Deprecated NexonApiOutboxProcessorPort —
+     * pending removal).
      *
      * <p><strong>Forbidden:</strong> WebClient, RestTemplate, HttpClient, external client impls.
      */

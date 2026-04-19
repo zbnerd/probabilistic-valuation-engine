@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.pgmq
 
 import io.micrometer.core.instrument.MeterRegistry
+import java.time.Instant
 import maple.expectation.infrastructure.alert.StatelessAlertService
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -11,7 +12,6 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionTemplate
-import java.time.Instant
 
 /**
  * DLQ Replay Worker (#646)
@@ -136,27 +136,25 @@ class DlqReplayWorker(
         return eligible.size
     }
 
-    private fun findReplayCandidates(queueName: String): List<ReplayCandidate> {
-        return jdbcTemplate.query(
-            """
+    private fun findReplayCandidates(queueName: String): List<ReplayCandidate> = jdbcTemplate.query(
+        """
             SELECT queue_name, message_id, replay_count, first_failed_at, last_replayed_at
             FROM dlq_replay_meta
             WHERE queue_name = ? AND replay_count < ?
             ORDER BY first_failed_at ASC
-            """.trimIndent(),
-            { rs, _ ->
-                ReplayCandidate(
-                    queueName = rs.getString("queue_name"),
-                    messageId = rs.getLong("message_id"),
-                    replayCount = rs.getInt("replay_count"),
-                    firstFailedAt = rs.getTimestamp("first_failed_at")?.toInstant(),
-                    lastReplayedAt = rs.getTimestamp("last_replayed_at")?.toInstant(),
-                )
-            },
-            queueName,
-            maxReplayAttempts,
-        )
-    }
+        """.trimIndent(),
+        { rs, _ ->
+            ReplayCandidate(
+                queueName = rs.getString("queue_name"),
+                messageId = rs.getLong("message_id"),
+                replayCount = rs.getInt("replay_count"),
+                firstFailedAt = rs.getTimestamp("first_failed_at")?.toInstant(),
+                lastReplayedAt = rs.getTimestamp("last_replayed_at")?.toInstant(),
+            )
+        },
+        queueName,
+        maxReplayAttempts,
+    )
 
     private fun isBackoffElapsed(candidate: ReplayCandidate): Boolean {
         val lastAttempt = candidate.lastReplayedAt ?: candidate.firstFailedAt ?: return true
@@ -194,7 +192,9 @@ class DlqReplayWorker(
         meterRegistry.counter("pgmq.worker.replay", "queue", candidate.queueName).increment()
         log.info(
             "[DlqReplayWorker] Replayed: queue={}, msgId={}, replayCount={}",
-            candidate.queueName, candidate.messageId, candidate.replayCount + 1,
+            candidate.queueName,
+            candidate.messageId,
+            candidate.replayCount + 1,
         )
     }
 

@@ -63,10 +63,12 @@ class SecurityConfig(
                     // Everything else - deny by default (explicit allow list above)
                     .anyRequest().denyAll()
             }
-            .exceptionHandling { it.authenticationEntryPoint { _, response, _ ->
-                entrypointCounter.increment()
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
-            } }
+            .exceptionHandling {
+                it.authenticationEntryPoint { _, response, _ ->
+                    entrypointCounter.increment()
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
+                }
+            }
             .also {
                 if (rateLimitingFilter != null) {
                     it.addFilterBefore(rateLimitingFilter, JwtAuthenticationFilter::class.java)

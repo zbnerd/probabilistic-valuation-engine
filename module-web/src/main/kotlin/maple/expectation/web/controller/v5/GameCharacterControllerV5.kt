@@ -1,21 +1,21 @@
 package maple.expectation.web.controller.v5
 
+import io.micrometer.core.instrument.MeterRegistry
 import jakarta.validation.constraints.NotBlank
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
 import maple.expectation.common.executor.TaskContext
-import maple.expectation.core.domain.model.character.CharacterView
 import maple.expectation.core.port.inbound.CalculationQueuePort
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExecutorPort
+import maple.expectation.core.port.inbound.TaskReceipt
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
-import maple.expectation.core.port.inbound.TaskReceipt
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.mapper.CharacterViewMapper
-import io.micrometer.core.instrument.MeterRegistry
+import maple.expectation.web.validation.ValidIgn
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -29,7 +29,6 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import maple.expectation.web.validation.ValidIgn
 
 /**
  * V5 CQRS 캐릭터 컨트롤러 (ADR-005 이관)

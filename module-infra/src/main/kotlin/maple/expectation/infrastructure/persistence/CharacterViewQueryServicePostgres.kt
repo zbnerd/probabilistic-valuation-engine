@@ -105,15 +105,13 @@ class CharacterViewQueryServicePostgres(
         }
     }
 
-    private fun insertNew(entity: CharacterValuationViewEntity): CharacterValuationViewEntity =
-        repository.save(buildNewEntity(entity)).also {
-            meterRegistry.counter("postgres.optimistic_lock.inserted").increment()
-            log.debug("[OptimisticLock] Inserted: userIgn={}, version=1", entity.userIgn)
-        }
+    private fun insertNew(entity: CharacterValuationViewEntity): CharacterValuationViewEntity = repository.save(buildNewEntity(entity)).also {
+        meterRegistry.counter("postgres.optimistic_lock.inserted").increment()
+        log.debug("[OptimisticLock] Inserted: userIgn={}, version=1", entity.userIgn)
+    }
 
-    private fun findExistingEntity(entity: CharacterValuationViewEntity): CharacterValuationViewEntity? =
-        entity.messageId?.let(repository::findByMessageId)
-            ?: repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(entity.userIgn)
+    private fun findExistingEntity(entity: CharacterValuationViewEntity): CharacterValuationViewEntity? = entity.messageId?.let(repository::findByMessageId)
+        ?: repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(entity.userIgn)
 
     private fun buildUpdatedEntity(
         existing: CharacterValuationViewEntity,
@@ -222,7 +220,5 @@ class CharacterViewQueryServicePostgres(
         )
     }
 
-    private fun serializeEntityToJson(entity: CharacterValuationViewEntity): String {
-        return objectMapper.writeValueAsString(entity)
-    }
+    private fun serializeEntityToJson(entity: CharacterValuationViewEntity): String = objectMapper.writeValueAsString(entity)
 }

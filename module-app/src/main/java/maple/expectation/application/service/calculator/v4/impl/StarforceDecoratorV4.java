@@ -85,9 +85,7 @@ public class StarforceDecoratorV4 extends EquipmentEnhanceDecorator {
         starforceCost = 0.0;
       } else {
         // Lookup Table에서 기대값 조회 (이미 Double 반환)
-        starforceCost =
-            lookupPort
-                .getExpectedCost(currentStar, targetStar, itemLevel);
+        starforceCost = lookupPort.getExpectedCost(currentStar, targetStar, itemLevel);
       }
     }
     return starforceCost;

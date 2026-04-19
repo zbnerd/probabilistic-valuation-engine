@@ -1,12 +1,11 @@
 package maple.expectation.infrastructure.pgmq
 
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
-
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 
@@ -112,45 +111,45 @@ abstract class PgmqWorker<T : Any>(
         val context = TaskContext.of("PgmqWorker", "ProcessBatch", queueName)
 
         executor.executeVoid({
-                val batchSize = workerSettings.batchSize ?: config.common.batchSize
-                val visibilityTimeout = config.common.visibilityTimeoutSec
+            val batchSize = workerSettings.batchSize ?: config.common.batchSize
+            val visibilityTimeout = config.common.visibilityTimeoutSec
 
-                val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
+            val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
 
-                // 큐 깊이 업데이트 (폴링 사이클마다)
-                metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
+            // 큐 깊이 업데이트 (폴링 사이클마다)
+            metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
 
-                if (messages.isEmpty()) {
-                    lifecycleWrapper.afterTask()
-                    return@executeVoid
+            if (messages.isEmpty()) {
+                lifecycleWrapper.afterTask()
+                return@executeVoid
+            }
+
+            log.debug("📥 [{}] Processing {} messages", queueName, messages.size)
+
+            // In-flight + 큐 대기 시간 기록
+            messages.forEach { message ->
+                metrics.inflightIncrement()
+                metrics.recordWaitDuration(message.enqueuedAt)
+            }
+
+            // ADR-700: 배치 pre-warm (OCID dedup + equipment cache pre-warm)
+            preWarmBatch(messages)
+
+            val futures = messages.map { message ->
+                CompletableFuture.supplyAsync({
+                    processSingleMessage(message)
+                }, workerPool)
+            }
+            // Non-blocking: return immediately so next poll can start.
+            // Head-of-line blocking removed — Virtual Threads handle concurrency,
+            // visibility timeout prevents double-read while processing.
+            CompletableFuture.allOf(*futures.toTypedArray())
+                .exceptionally { ex ->
+                    log.warn("[{}] Batch completion error: {}", queueName, ex.message)
+                    null
                 }
-
-                log.debug("📥 [{}] Processing {} messages", queueName, messages.size)
-
-                // In-flight + 큐 대기 시간 기록
-                messages.forEach { message ->
-                    metrics.inflightIncrement()
-                    metrics.recordWaitDuration(message.enqueuedAt)
-                }
-
-                // ADR-700: 배치 pre-warm (OCID dedup + equipment cache pre-warm)
-                preWarmBatch(messages)
-
-                val futures = messages.map { message ->
-                    CompletableFuture.supplyAsync({
-                        processSingleMessage(message)
-                    }, workerPool)
-                }
-                // Non-blocking: return immediately so next poll can start.
-                // Head-of-line blocking removed — Virtual Threads handle concurrency,
-                // visibility timeout prevents double-read while processing.
-                CompletableFuture.allOf(*futures.toTypedArray())
-                    .exceptionally { ex ->
-                        log.warn("[{}] Batch completion error: {}", queueName, ex.message)
-                        null
-                    }
-                    .thenRun { lifecycleWrapper.afterTask() }
-            }, context)
+                .thenRun { lifecycleWrapper.afterTask() }
+        }, context)
     }
 
     /**

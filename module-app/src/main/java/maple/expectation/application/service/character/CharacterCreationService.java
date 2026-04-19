@@ -11,6 +11,7 @@ import maple.expectation.error.exception.ApiTimeoutException;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.exception.InternalSystemException;
 import maple.expectation.error.exception.base.BaseException;
+import maple.expectation.infrastructure.character.notify.CharacterCreationNotifier;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.external.NexonApiClient;
@@ -19,7 +20,6 @@ import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import maple.expectation.infrastructure.character.notify.CharacterCreationNotifier;
 
 /**
  * 캐릭터 생성 공통 서비스 (OcidResolver + GameCharacterService 중복 제거)

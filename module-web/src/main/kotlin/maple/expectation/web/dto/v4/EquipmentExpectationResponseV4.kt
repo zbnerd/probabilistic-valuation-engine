@@ -24,8 +24,7 @@ data class EquipmentExpectationResponseV4(
         @JvmStatic
         fun builder() = Builder()
 
-        private fun <T : Any> required(value: T?, fieldName: String): T =
-            requireNotNull(value) { "Missing required field: $fieldName" }
+        private fun <T : Any> required(value: T?, fieldName: String): T = requireNotNull(value) { "Missing required field: $fieldName" }
     }
 
     class Builder {

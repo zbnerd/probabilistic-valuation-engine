@@ -49,19 +49,18 @@ class LockMetrics(private val registry: MeterRegistry) {
         )
     }
 
-    private fun getOrCreate(name: String): ImplMetrics =
-        implementations.computeIfAbsent(name.lowercase()) {
-            val activeLocks = AtomicLong(0)
-            val counter = io.micrometer.core.instrument.Counter.builder("lock.acquisition.failure.total")
-                .description("Total lock acquisition failures")
-                .tag("implementation", it)
-                .register(registry)
-            Gauge.builder("lock.active.current", activeLocks) { obj: AtomicLong -> obj.get().toDouble() }
-                .description("Currently active locks")
-                .tag("implementation", it)
-                .register(registry)
-            ImplMetrics(activeLocks, counter)
-        }
+    private fun getOrCreate(name: String): ImplMetrics = implementations.computeIfAbsent(name.lowercase()) {
+        val activeLocks = AtomicLong(0)
+        val counter = io.micrometer.core.instrument.Counter.builder("lock.acquisition.failure.total")
+            .description("Total lock acquisition failures")
+            .tag("implementation", it)
+            .register(registry)
+        Gauge.builder("lock.active.current", activeLocks) { obj: AtomicLong -> obj.get().toDouble() }
+            .description("Currently active locks")
+            .tag("implementation", it)
+            .register(registry)
+        ImplMetrics(activeLocks, counter)
+    }
 
     /**
      * 락 대기 시간 기록
@@ -96,6 +95,5 @@ class LockMetrics(private val registry: MeterRegistry) {
     }
 
     /** 현재 활성 락 수 조회 (테스트용) */
-    fun getActiveLocks(implementation: String): Long =
-        implementations[implementation.lowercase()]?.activeLocks?.get() ?: 0L
+    fun getActiveLocks(implementation: String): Long = implementations[implementation.lowercase()]?.activeLocks?.get() ?: 0L
 }

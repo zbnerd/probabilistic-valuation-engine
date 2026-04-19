@@ -25,9 +25,16 @@ class EquipmentPersistenceTrackerTest {
   /** No-op stub for PersistenceTrackerPort in unit tests. */
   private static final PersistenceTrackerPort STUB_PORT =
       new PersistenceTrackerPort() {
-        @Override public void insertPending(String ocid, String instanceId) {}
-        @Override public void markCompleted(String ocid) {}
-        @Override public List<String> findPendingOperations() { return Collections.emptyList(); }
+        @Override
+        public void insertPending(String ocid, String instanceId) {}
+
+        @Override
+        public void markCompleted(String ocid) {}
+
+        @Override
+        public List<String> findPendingOperations() {
+          return Collections.emptyList();
+        }
       };
 
   @BeforeEach

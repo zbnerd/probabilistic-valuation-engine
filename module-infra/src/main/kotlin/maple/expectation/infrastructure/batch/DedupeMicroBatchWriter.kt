@@ -1,10 +1,16 @@
 package maple.expectation.infrastructure.batch
 
 import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
-import io.micrometer.core.instrument.DistributionSummary
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import maple.expectation.infrastructure.buffer.ExpectationWriteTask
 import maple.expectation.infrastructure.config.MicroBatchWriterProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -12,13 +18,6 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.ExpectationBatchRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.ScheduledThreadPoolExecutor
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 🔥 PRODUCTION-READY: Dedupe Micro-Batch Writer with Bounded Buffer
@@ -178,7 +177,7 @@ class DedupeMicroBatchWriter(
             bufferLimitCounter.increment()
             log.warn(
                 "[MicroBatchWriter] 🔴 Buffer limit reached: size={}, triggering ASYNC flush",
-                buffer.size
+                buffer.size,
             )
 
             // 🔥 P0 FIX #3: ASYNC FLUSH - Don't block caller thread (prevents worker deadlock)
@@ -255,7 +254,7 @@ class DedupeMicroBatchWriter(
             log.info(
                 "[MicroBatchWriter] 🔥 Flushing: trigger={}, size={}",
                 trigger,
-                flushSize
+                flushSize,
             )
 
             // Clear buffer BEFORE flush (prevent double-add during flush)
@@ -270,7 +269,7 @@ class DedupeMicroBatchWriter(
                     "[MicroBatchWriter] 🔥 Flush completed: trigger={}, size={}, duration={}ms",
                     trigger,
                     flushSize,
-                    durationMs
+                    durationMs,
                 )
 
                 // Metrics
@@ -290,7 +289,6 @@ class DedupeMicroBatchWriter(
                     .increment(flushSize.toDouble())
 
                 future.complete(null)
-
             } catch (e: Exception) {
                 log.error("[MicroBatchWriter] 🔥 Flush failed: trigger={}, size={}", trigger, flushSize, e)
                 future.completeExceptionally(e)
@@ -321,7 +319,7 @@ class DedupeMicroBatchWriter(
         log.warn(
             "[MicroBatchWriter] 🔴 Synchronous flush: trigger={}, size={}",
             trigger,
-            flushSize
+            flushSize,
         )
 
         // Clear buffer
@@ -339,7 +337,6 @@ class DedupeMicroBatchWriter(
 
             meterRegistry.counter("micro_batch_flush_size", "trigger", trigger)
                 .increment(flushSize.toDouble())
-
         } catch (e: Exception) {
             log.error("[MicroBatchWriter] Synchronous flush failed: size={}", flushSize, e)
             // Re-add failed tasks

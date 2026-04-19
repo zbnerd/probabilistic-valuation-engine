@@ -41,7 +41,5 @@ object ContentHashUtil {
      *
      * @return hash 일치 여부
      */
-    fun verify(requestId: String, eventType: String, payload: String, expectedHash: String): Boolean {
-        return computeV1(requestId, eventType, payload) == expectedHash
-    }
+    fun verify(requestId: String, eventType: String, payload: String, expectedHash: String): Boolean = computeV1(requestId, eventType, payload) == expectedHash
 }

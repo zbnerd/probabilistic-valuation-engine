@@ -67,12 +67,10 @@ object GzipUtils {
      * @throws IllegalStateException 압축 중 I/O 오류 발생 시 (IOException 래핑)
      */
     @JvmStatic
-    fun compressUnchecked(str: String?): ByteArray {
-        return try {
-            compress(str)
-        } catch (e: IOException) {
-            throw IllegalStateException("GZIP compression failed", e)
-        }
+    fun compressUnchecked(str: String?): ByteArray = try {
+        compress(str)
+    } catch (e: IOException) {
+        throw IllegalStateException("GZIP compression failed", e)
     }
 
     private fun isGzipped(data: ByteArray): Boolean = data.size >= 2 &&

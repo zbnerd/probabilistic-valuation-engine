@@ -343,13 +343,11 @@ class PgmqClient(
         return result
     }
 
-    private fun performQueueLength(queueName: String): Long {
-        return jdbcTemplate.queryForObject(
-            "SELECT queue_length FROM pgmq.metrics(?)",
-            Long::class.java,
-            queueName,
-        ) ?: 0L
-    }
+    private fun performQueueLength(queueName: String): Long = jdbcTemplate.queryForObject(
+        "SELECT queue_length FROM pgmq.metrics(?)",
+        Long::class.java,
+        queueName,
+    ) ?: 0L
 
     private fun performIsArchived(queueName: String, messageId: Long): Boolean {
         validateQueueName(queueName)

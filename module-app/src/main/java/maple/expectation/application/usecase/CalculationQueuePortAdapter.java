@@ -2,10 +2,10 @@ package maple.expectation.application.usecase;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.core.port.inbound.CalculationQueuePort;
-import maple.expectation.core.port.inbound.TaskReceipt;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
+import maple.expectation.core.port.inbound.CalculationQueuePort;
+import maple.expectation.core.port.inbound.TaskReceipt;
 import org.springframework.stereotype.Component;
 
 /**

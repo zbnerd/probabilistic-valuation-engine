@@ -30,22 +30,18 @@ class ApplicationExecutionPort(
     /**
      * Convert common TaskContext to infra TaskContext.
      */
-    private fun toInfraContext(context: CommonTaskContext): InfraTaskContext {
-        return InfraTaskContext.of(
-            context.component(),
-            context.operation(),
-            context.dynamicValue(),
-        )
-    }
+    private fun toInfraContext(context: CommonTaskContext): InfraTaskContext = InfraTaskContext.of(
+        context.component(),
+        context.operation(),
+        context.dynamicValue(),
+    )
 
-    private fun toInfraTranslator(translator: (Throwable, CommonTaskContext) -> Exception, ctx: CommonTaskContext): ExceptionTranslator {
-        return ExceptionTranslator { e, _ ->
-            val translated = translator(e, ctx)
-            if (translated is RuntimeException) {
-                translated as RuntimeException
-            } else {
-                RuntimeException(translated)
-            }
+    private fun toInfraTranslator(translator: (Throwable, CommonTaskContext) -> Exception, ctx: CommonTaskContext): ExceptionTranslator = ExceptionTranslator { e, _ ->
+        val translated = translator(e, ctx)
+        if (translated is RuntimeException) {
+            translated as RuntimeException
+        } else {
+            RuntimeException(translated)
         }
     }
 
@@ -57,13 +53,11 @@ class ApplicationExecutionPort(
         task: () -> T,
         defaultValue: T,
         context: CommonTaskContext,
-    ): T {
-        return logicExecutor.executeOrDefault(
-            ThrowingSupplier { task() },
-            defaultValue,
-            toInfraContext(context),
-        )
-    }
+    ): T = logicExecutor.executeOrDefault(
+        ThrowingSupplier { task() },
+        defaultValue,
+        toInfraContext(context),
+    )
 
     override fun executeVoidJava(task: Runnable, context: CommonTaskContext) {
         logicExecutor.executeVoidJava(task, toInfraContext(context))
@@ -73,30 +67,24 @@ class ApplicationExecutionPort(
         task: ExecutorPort.ThrowingSupplier<T>,
         defaultValue: T,
         context: CommonTaskContext,
-    ): T {
-        return logicExecutor.executeOrDefault(
-            ThrowingSupplier { task.get() },
-            defaultValue,
-            toInfraContext(context),
-        )
-    }
+    ): T = logicExecutor.executeOrDefault(
+        ThrowingSupplier { task.get() },
+        defaultValue,
+        toInfraContext(context),
+    )
 
-    override fun <T> execute(task: () -> T, context: CommonTaskContext): T {
-        return logicExecutor.execute(
-            ThrowingSupplier { task() },
-            toInfraContext(context),
-        )
-    }
+    override fun <T> execute(task: () -> T, context: CommonTaskContext): T = logicExecutor.execute(
+        ThrowingSupplier { task() },
+        toInfraContext(context),
+    )
 
     override fun <T> executeWithTranslation(
         task: () -> T,
         translator: (Throwable, CommonTaskContext) -> Exception,
         context: CommonTaskContext,
-    ): T {
-        return logicExecutor.executeWithTranslation(
-            ThrowingSupplier { task() },
-            toInfraTranslator(translator, context),
-            toInfraContext(context),
-        )
-    }
+    ): T = logicExecutor.executeWithTranslation(
+        ThrowingSupplier { task() },
+        toInfraTranslator(translator, context),
+        toInfraContext(context),
+    )
 }

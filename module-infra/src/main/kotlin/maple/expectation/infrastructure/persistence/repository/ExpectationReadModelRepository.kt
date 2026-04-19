@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.persistence.repository
 
+import java.time.Instant
 import maple.expectation.infrastructure.persistence.entity.ExpectationReadModelEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
-import java.time.Instant
 
 /**
  * V5 Query Server: Repository for Character Expectation Read Model

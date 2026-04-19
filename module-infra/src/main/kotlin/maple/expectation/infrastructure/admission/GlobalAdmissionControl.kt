@@ -4,23 +4,21 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import java.lang.management.ManagementFactory
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.BlockingQueue
+import java.util.concurrent.Callable
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.lang.management.ManagementFactory
-import java.util.concurrent.Callable
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
-import java.util.concurrent.Executors
-import java.util.concurrent.Semaphore
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.BlockingQueue
 
 /**
  * V4 Legacy Admission Control (ADR-355)
@@ -74,9 +72,10 @@ class GlobalAdmissionControl(
     private val queueFullCounter: Counter
     private val admissionRejectedCounter: Counter
     private val queueWaitTimeTimer: Timer
+
     // 🔥 P2 FIX #1: Split early rejection metrics for better observability
-    private val earlyRejectionQueueFullCounter: Counter  // Queue near capacity
-    private val earlyRejectionCpuHighCounter: Counter     // CPU load high
+    private val earlyRejectionQueueFullCounter: Counter // Queue near capacity
+    private val earlyRejectionCpuHighCounter: Counter // CPU load high
 
     // 🔥 P0 FIX #2: Use AtomicBoolean for thread-safe lazy initialization
     private val workerPoolStarted = AtomicBoolean(false)
@@ -123,7 +122,7 @@ class GlobalAdmissionControl(
             "[AdmissionControl] Initialized: maxInFlight={}, maxQueueSize={}, workerPoolSize={} (lazy)",
             properties.maxInFlight,
             properties.maxQueueSize,
-            properties.workerPoolSize
+            properties.workerPoolSize,
         )
     }
 
@@ -166,19 +165,19 @@ class GlobalAdmissionControl(
         // Only apply CPU check on Linux systems
         if (currentQueueDepth > properties.maxQueueSize * 0.8 && isLinux && cpuLoad > 5.0) {
             // 🔥 P2 FIX #1: Split metrics for better observability
-            earlyRejectionQueueFullCounter.increment()  // Queue near capacity
-            earlyRejectionCpuHighCounter.increment()      // CPU load high
+            earlyRejectionQueueFullCounter.increment() // Queue near capacity
+            earlyRejectionCpuHighCounter.increment() // CPU load high
             admissionRejectedCounter.increment()
             future.completeExceptionally(
                 AdmissionRejectedException(
-                    "System under heavy load (queue=${currentQueueDepth}/${properties.maxQueueSize}, CPU=${String.format("%.2f", cpuLoad)})"
-                )
+                    "System under heavy load (queue=$currentQueueDepth/${properties.maxQueueSize}, CPU=${String.format("%.2f", cpuLoad)})",
+                ),
             )
             log.warn(
                 "[AdmissionControl] 🔥 P0 FIX #1: Early rejection - key={}, queueSize={}, CPU={}",
                 key,
                 currentQueueDepth,
-                String.format("%.2f", cpuLoad)
+                String.format("%.2f", cpuLoad),
             )
             return future
         }
@@ -196,7 +195,7 @@ class GlobalAdmissionControl(
             queueFullCounter.increment()
             admissionRejectedCounter.increment()
             future.completeExceptionally(
-                AdmissionRejectedException("Queue full (max=${properties.maxQueueSize})")
+                AdmissionRejectedException("Queue full (max=${properties.maxQueueSize})"),
             )
             log.warn("[AdmissionControl] Queue full - rejecting request: key={}, queueSize={}", key, admissionQueue.size)
             return future
@@ -208,9 +207,7 @@ class GlobalAdmissionControl(
     /**
      * 🔥 P0 FIX #2: Get current CPU load for early rejection
      */
-    private fun getCurrentCpuLoad(): Double {
-        return osBean.systemLoadAverage
-    }
+    private fun getCurrentCpuLoad(): Double = osBean.systemLoadAverage
 
     private fun <T> tryAcquireImmediately(request: AdmissionRequest<T>): Boolean {
         if (semaphore.tryAcquire()) {
@@ -252,7 +249,7 @@ class GlobalAdmissionControl(
                     // Waited too long in queue
                     queueTimeoutCounter.increment()
                     request.future.completeExceptionally(
-                        AdmissionTimeoutException("Queue timeout after ${properties.queueTimeoutMs}ms")
+                        AdmissionTimeoutException("Queue timeout after ${properties.queueTimeoutMs}ms"),
                     )
                     log.debug("[AdmissionControl] Worker {}: Request timed out in queue: key={}", workerIndex, request.key)
                     continue
@@ -272,7 +269,6 @@ class GlobalAdmissionControl(
                     semaphore.release()
                     inFlightCount.decrementAndGet()
                 }
-
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 log.info("[AdmissionControl] Worker {} interrupted", workerIndex)
@@ -311,8 +307,8 @@ class GlobalAdmissionControl(
                     key = "__shutdown__",
                     task = Callable { null },
                     future = CompletableFuture(),
-                    enqueuedAtNanos = 0
-                )
+                    enqueuedAtNanos = 0,
+                ),
             )
         }
     }
@@ -324,4 +320,3 @@ class GlobalAdmissionControl(
         val enqueuedAtNanos: Long,
     )
 }
-

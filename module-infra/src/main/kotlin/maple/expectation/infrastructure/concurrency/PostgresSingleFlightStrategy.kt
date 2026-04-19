@@ -69,8 +69,7 @@ class PostgresSingleFlightStrategy(
     /** Completed result cache for followers (short-lived, ~30s). */
     private val resultCache = ConcurrentHashMap<String, CompletableFuture<Any>>()
 
-    override fun <T> execute(key: String, supplier: Supplier<T>): T =
-        executeAsync(key) { CompletableFuture.supplyAsync(supplier, taskExecutor) }.join()
+    override fun <T> execute(key: String, supplier: Supplier<T>): T = executeAsync(key) { CompletableFuture.supplyAsync(supplier, taskExecutor) }.join()
 
     override fun <T> executeAsync(key: String, asyncSupplier: Supplier<CompletableFuture<T>>): CompletableFuture<T> {
         val context = TaskContext.of("SingleFlight", "Execute", key)
@@ -117,6 +116,7 @@ class PostgresSingleFlightStrategy(
         asyncSupplier: Supplier<CompletableFuture<T>>,
     ): CompletableFuture<T> {
         val leaderFuture = CompletableFuture<T>()
+
         @Suppress("UNCHECKED_CAST")
         val entry = leaderFuture as CompletableFuture<Any>
 

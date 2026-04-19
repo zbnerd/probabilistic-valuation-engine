@@ -1,17 +1,16 @@
 package maple.expectation.integration.repository
 
+import java.time.Duration
+import java.time.temporal.ChronoUnit
 import maple.expectation.core.domain.model.like.CharacterLike
 import maple.expectation.domain.repository.CharacterLikeRepository
 import maple.expectation.test.RepositoryIntegrationTestBase
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import java.time.Instant
-import org.awaitility.Awaitility.await
-import java.time.Duration
-import java.time.temporal.ChronoUnit
 
 /**
  * CharacterLikeRepository 통합 테스트

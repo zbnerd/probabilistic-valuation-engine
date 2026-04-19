@@ -115,12 +115,23 @@ class WorkerTimingAspect(
         if (success) {
             log.info(
                 "[TaskTimer] event=task.complete type={} durationMs={} queue={} priority={} result={} taskId={}",
-                taskType, durationMs, queue, priority, resultTag, taskId,
+                taskType,
+                durationMs,
+                queue,
+                priority,
+                resultTag,
+                taskId,
             )
         } else {
             log.error(
                 "[TaskTimer] event=task.failure type={} durationMs={} queue={} priority={} result={} taskId={} error={}",
-                taskType, durationMs, queue, priority, resultTag, taskId, error?.message,
+                taskType,
+                durationMs,
+                queue,
+                priority,
+                resultTag,
+                taskId,
+                error?.message,
             )
         }
     }
@@ -147,19 +158,32 @@ class WorkerTimingAspect(
         if (thresholdMs > 0 && durationMs > thresholdMs) {
             log.warn(
                 "[StageTimer] event=stage.slow stage={} durationMs={} thresholdMs={} taskId={} traceId={}",
-                stageName, durationMs, thresholdMs, taskId, traceId,
+                stageName,
+                durationMs,
+                thresholdMs,
+                taskId,
+                traceId,
             )
         }
 
         if (success) {
             log.info(
                 "[StageTimer] event=stage.complete stage={} durationMs={} result={} taskId={} traceId={}",
-                stageName, durationMs, resultTag, taskId, traceId,
+                stageName,
+                durationMs,
+                resultTag,
+                taskId,
+                traceId,
             )
         } else {
             log.error(
                 "[StageTimer] event=stage.failure stage={} durationMs={} result={} taskId={} traceId={} error={}",
-                stageName, durationMs, resultTag, taskId, traceId, error?.message,
+                stageName,
+                durationMs,
+                resultTag,
+                taskId,
+                traceId,
+                error?.message,
             )
         }
     }

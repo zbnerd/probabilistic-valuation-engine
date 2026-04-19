@@ -21,11 +21,11 @@ class AdmissionRejectedException(message: String) : RuntimeException(message)
  */
 class DegradedException(
     message: String,
-    val level: DegradationLevel
+    val level: DegradationLevel,
 ) : RuntimeException(message) {
     enum class DegradationLevel {
         FRESH_CACHE,
         STALE_CACHE,
-        FALLBACK
+        FALLBACK,
     }
 }

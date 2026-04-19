@@ -68,7 +68,13 @@ class ExpectationBatchWriteSchedulerTest {
 
     scheduler =
         new ExpectationBatchWriteScheduler(
-            buffer, repository, batchRepository, lockStrategy, executor, meterRegistry, batchProperties);
+            buffer,
+            repository,
+            batchRepository,
+            lockStrategy,
+            executor,
+            meterRegistry,
+            batchProperties);
   }
 
   @Nested

@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.persistence.repository
 
-import maple.expectation.domain.v2.EquipmentExpectationSummary
 import maple.expectation.infrastructure.buffer.ExpectationWriteTask
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.LogicExecutor

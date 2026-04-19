@@ -70,7 +70,7 @@ public class PresetCalculationHelper {
   public PresetExpectation calculatePreset(
       List<CubeCalculationInput> cubeInputs, int presetNo, String characterClass) {
     List<ItemExpectationV4> itemResults = new ArrayList<>();
-    KahanSummation totalCostAcc = new KahanSummation();  // Double + Kahan for performance
+    KahanSummation totalCostAcc = new KahanSummation(); // Double + Kahan for performance
     CostBreakdownDto totalBreakdown = CostBreakdownDto.empty();
 
     for (var cubeInput : cubeInputs) {
@@ -221,11 +221,7 @@ public class PresetCalculationHelper {
 
   /** 큐브 기대값 DTO 빌드 */
   CubeExpectationDto buildCubeExpectation(
-      double cost,
-      double trials,
-      String currentGrade,
-      String targetGrade,
-      String potentialText) {
+      double cost, double trials, String currentGrade, String targetGrade, String potentialText) {
     if (cost == 0.0) {
       return CubeExpectationDto.empty();
     }

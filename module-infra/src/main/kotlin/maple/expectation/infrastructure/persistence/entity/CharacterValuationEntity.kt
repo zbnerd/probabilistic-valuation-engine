@@ -42,7 +42,6 @@ import java.time.Instant
     indexes = [
         Index(name = "idx_valuation_user_ign", columnList = "user_ign"),
         Index(name = "idx_valuation_calculated", columnList = "calculated_at DESC"),
-        Index(name = "idx_valuation_presets", columnList = "presets"),
     ],
 )
 open class CharacterValuationEntity {

@@ -115,7 +115,7 @@ class PostgresL2CacheStrategy(
                 val results = jdbcTemplate.query(
                     sql,
                     { rs, _ -> rs.getBytes("cache_value") },
-                    arrayOf(key),
+                    key,
                 )
 
                 val result = results.firstOrNull()

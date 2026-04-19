@@ -133,35 +133,38 @@ abstract class PgmqWorker<T : Any>(
 
         val context = TaskContext.of("PgmqWorker", "ProcessBatch", queueName)
 
-        executor.executeVoid({
-            val batchSize = workerSettings.batchSize ?: config.common.batchSize
-            val visibilityTimeout = config.common.visibilityTimeoutSec
+        // P1-10 FIX: executeWithFinally guarantees afterTask() runs even when
+        // pgmqClient.read() or setup throws, preventing counter leak.
+        executor.executeWithFinally(
+            task = {
+                val batchSize = workerSettings.batchSize ?: config.common.batchSize
+                val visibilityTimeout = config.common.visibilityTimeoutSec
 
-            val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
+                val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
 
-            metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
+                metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
 
-            if (messages.isEmpty()) {
-                lifecycleWrapper.afterTask()
-                return@executeVoid
-            }
+                if (messages.isEmpty()) return@executeWithFinally
 
-            log.debug("[{}] Processing {} messages", queueName, messages.size)
+                log.debug("[{}] Processing {} messages", queueName, messages.size)
 
-            messages.forEach { message ->
-                metrics.inflightIncrement()
-                metrics.recordWaitDuration(message.enqueuedAt)
-            }
+                messages.forEach { message ->
+                    metrics.inflightIncrement()
+                    metrics.recordWaitDuration(message.enqueuedAt)
+                }
 
-            preWarmBatch(messages)
+                preWarmBatch(messages)
 
-            // P1-9 FIX: Use explicit property instead of runtime probe
-            if (supportsTwoPhase) {
-                processBatchTwoPhase(messages)
-            } else {
-                processBatchSinglePhase(messages)
-            }
-        }, context)
+                // P1-9 FIX: Use explicit property instead of runtime probe
+                if (supportsTwoPhase) {
+                    processBatchTwoPhase(messages)
+                } else {
+                    processBatchSinglePhase(messages)
+                }
+            },
+            finallyBlock = { lifecycleWrapper.afterTask() },
+            context = context,
+        )
     }
 
     /**
@@ -177,13 +180,10 @@ abstract class PgmqWorker<T : Any>(
             )
         }
 
-        CompletableFuture.allOf(*futures.toTypedArray())
-            .thenRun { handlePhaseTwoCompletion(futures) }
-            .exceptionally { ex ->
-                log.warn("[{}] Batch completion error: {}", queueName, ex.message)
-                lifecycleWrapper.afterTask()
-                null
-            }
+        // Join all phase-1 futures first
+        CompletableFuture.allOf(*futures.toTypedArray()).join()
+
+        handlePhaseTwoCompletion(futures)
     }
 
     private fun handlePhaseTwoCompletion(
@@ -205,8 +205,6 @@ abstract class PgmqWorker<T : Any>(
         }
 
         failedMessages.forEach { message -> processSingleMessage(message) }
-
-        lifecycleWrapper.afterTask()
     }
 
     /**
@@ -242,7 +240,7 @@ abstract class PgmqWorker<T : Any>(
                 log.warn("[{}] Batch completion error: {}", queueName, ex.message)
                 null
             }
-            .thenRun { lifecycleWrapper.afterTask() }
+            .join()
     }
 
     /**
@@ -264,38 +262,42 @@ abstract class PgmqWorker<T : Any>(
             metrics.retry.increment()
         }
 
-        metrics.concurrentIncrement()
-        try {
-            val success = executor.executeOrDefault(
-                { process(message) },
-                false,
-                context,
-            )
+        return executor.executeWithFinally(
+            task = {
+                metrics.concurrentIncrement()
+                val success = executor.executeOrDefault(
+                    { process(message) },
+                    false,
+                    context,
+                )
 
-            when {
-                success -> {
-                    pgmqClient.archive(queueName, message.messageId)
-                    metrics.success.increment()
-                    log.debug("✅ [{}] Archived message: msgId={}", queueName, message.messageId)
+                when {
+                    success -> {
+                        pgmqClient.archive(queueName, message.messageId)
+                        metrics.success.increment()
+                        log.debug("[{}] Archived message: msgId={}", queueName, message.messageId)
+                    }
+                    message.isRetryable(maxRetries) -> {
+                        onProcessingFailed(message)
+                        metrics.failure.increment()
+                        log.warn("[{}] Message will be retried: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
+                    }
+                    else -> {
+                        pgmqClient.archive(queueName, message.messageId)
+                        metrics.failure.increment()
+                        metrics.dlq.increment()
+                        log.error("[{}] Archived message after max retries: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
+                    }
                 }
-                message.isRetryable(maxRetries) -> {
-                    onProcessingFailed(message)
-                    metrics.failure.increment()
-                    log.warn("⚠️ [{}] Message will be retried: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
-                }
-                else -> {
-                    pgmqClient.archive(queueName, message.messageId)
-                    metrics.failure.increment()
-                    metrics.dlq.increment()
-                    log.error("❌ [{}] Archived message after max retries: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
-                }
-            }
 
-            return success
-        } finally {
-            metrics.concurrentDecrement()
-            metrics.inflightDecrement()
-        }
+                success
+            },
+            finallyBlock = {
+                metrics.concurrentDecrement()
+                metrics.inflightDecrement()
+            },
+            context = context,
+        )
     }
 
     companion object {

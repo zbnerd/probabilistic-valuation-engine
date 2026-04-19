@@ -220,5 +220,16 @@ class CharacterViewQueryServicePostgres(
         )
     }
 
+    /**
+     * Serialize entity to JSON for read model storage.
+     *
+     * TODO(#727): Currently serializes the JPA entity which diverges from the V4/V5 API DTO
+     * contract (e.g., totalExpectedCost is Long in entity vs Double in DTO, presets use
+     * PresetView vs PresetExpectation shape). The entity uses @JsonIgnore on internal fields
+     * (id, jpaVersion, version) so those are excluded, but the remaining field types and
+     * structures may not match the API response shape that the Next.js query server expects.
+     * Proper fix requires introducing a port/interface in module-core for DTO-accurate
+     * serialization, allowing module-web to provide the correct mapping implementation.
+     */
     private fun serializeEntityToJson(entity: CharacterValuationViewEntity): String = objectMapper.writeValueAsString(entity)
 }

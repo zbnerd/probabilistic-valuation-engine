@@ -48,7 +48,7 @@ class TaskStatusServiceTest {
   }
 
   @Test
-  @DisplayName("mismatched view messageId does not complete unrelated task")
+  @DisplayName("mismatched view messageId does not complete unrelated task — returns NOT_FOUND when no queue/archive signal exists")
   void mismatchedViewMessageIdDoesNotCompleteTask() {
     CharacterView view = mock(CharacterView.class);
     when(view.getMessageId()).thenReturn("999");
@@ -60,7 +60,9 @@ class TaskStatusServiceTest {
 
     TaskStatus status = service.getStatus("user1", "123");
 
-    assertThat(status).isEqualTo(TaskStatus.PENDING);
+    // Returns NOT_FOUND (terminal) instead of PENDING to prevent infinite polling
+    // when task record has disappeared from all queues and archives
+    assertThat(status).isEqualTo(TaskStatus.NOT_FOUND);
   }
 
   @Test

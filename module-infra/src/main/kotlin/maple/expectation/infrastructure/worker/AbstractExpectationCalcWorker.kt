@@ -132,6 +132,13 @@ abstract class AbstractExpectationCalcWorker(
         }, context)
     }
 
+    // TODO(#727): Two-phase batch path writes L2 cache + archives messages but does not
+    // upsert the view table (character_valuation_views) or the read model. This means V5
+    // reads served from the read model will remain stale until the next single-phase
+    // calculation cycle. Full view upsert requires a module-core port for clean DIP —
+    // tracked as architectural debt. The single-phase path (process()) correctly writes
+    // the view table via ExpectationV4Port.calculateExpectationAsync -> event handler.
+
     private fun batchL2CachePut(results: List<CalculationResult>) {
         val entries = results.map { result ->
             val cacheKey = "expectationV4:${cacheProperties.keyVersion}:${result.message.payload.userIgn}"

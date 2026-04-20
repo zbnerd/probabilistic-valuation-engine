@@ -143,6 +143,7 @@ bootRun {
 		'-Xms1g',
 		'-Xmx2g',
 		'-XX:+UseG1GC',
+		'-XX:G1HeapRegionSize=4m',
 		'-Dspring.devtools.restart.enabled=true',
 		"-Dspring.profiles.active=${project.findProperty('springProfile') ?: 'local'}"
 	]

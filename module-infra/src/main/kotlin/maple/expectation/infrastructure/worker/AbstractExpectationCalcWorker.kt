@@ -143,6 +143,7 @@ abstract class AbstractExpectationCalcWorker(
 
     private fun batchViewUpsert(results: List<CalculationResult>) {
         val objectMapper = com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
         for (result in results) {
             executor.executeOrCatch({
                 val tree = objectMapper.valueToTree<com.fasterxml.jackson.databind.JsonNode>(result.response)

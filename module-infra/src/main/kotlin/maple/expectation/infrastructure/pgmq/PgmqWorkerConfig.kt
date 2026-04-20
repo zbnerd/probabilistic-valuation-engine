@@ -54,6 +54,13 @@ class PgmqWorkerConfig {
 
         /** Visibility Timeout (초) (ADR-355: batch × avg latency) */
         var visibilityTimeoutSec: Int = 120,
+
+        /** Pipeline micro-batch size for drain */
+        var pipelineMicroBatchSize: Int = 10,
+        /** Pipeline drain interval (ms) */
+        var pipelineDrainIntervalMs: Long = 100,
+        /** Pipeline max buffer size (backpressure threshold) */
+        var pipelineMaxBufferSize: Int = 500,
     )
 
     data class WorkerSettings(

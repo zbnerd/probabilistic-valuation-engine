@@ -360,17 +360,15 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
     Map<Integer, List<CubeCalculationInput>> allPresetInputs =
         streamingParser.parseAllPresets(decompressedData);
 
-    // Parallel calculation (CPU-bound, parsing eliminated)
+    // Parallel preset + parallel equipment (thenCombine, no join inside)
     List<CompletableFuture<PresetExpectation>> futures =
         IntStream.rangeClosed(1, 3)
             .mapToObj(
                 presetNo ->
-                    CompletableFuture.supplyAsync(
-                        () ->
-                            presetHelper.calculatePreset(
-                                allPresetInputs.getOrDefault(presetNo, List.of()),
-                                presetNo,
-                                characterClass),
+                    presetHelper.calculatePresetAsync(
+                        allPresetInputs.getOrDefault(presetNo, List.of()),
+                        presetNo,
+                        characterClass,
                         presetExecutor))
             .toList();
 

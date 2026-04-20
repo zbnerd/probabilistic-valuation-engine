@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Semaphore;
 import lombok.RequiredArgsConstructor;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory;
@@ -91,7 +92,8 @@ public class PresetCalculationHelper {
   public CompletableFuture<PresetExpectation> calculatePresetAsync(
       List<CubeCalculationInput> cubeInputs,
       int presetNo,
-      String characterClass) {
+      String characterClass,
+      Semaphore itemPermits) {
 
     List<CompletableFuture<ItemExpectationV4>> itemFutures = new ArrayList<>();
 
@@ -104,9 +106,11 @@ public class PresetCalculationHelper {
       }
 
       EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
+      itemPermits.acquireUninterruptibly();
       itemFutures.add(
           CompletableFuture.supplyAsync(
-              () -> calculateSingleItem(input, cubeInput, characterClass), itemExecutor));
+                  () -> calculateSingleItem(input, cubeInput, characterClass), itemExecutor)
+              .whenComplete((r, e) -> itemPermits.release()));
     }
 
     if (itemFutures.isEmpty()) {

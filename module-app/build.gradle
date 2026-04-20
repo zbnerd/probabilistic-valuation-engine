@@ -140,8 +140,8 @@ tasks.named("jar") {
 
 bootRun {
 	jvmArgs = [
-		'-Xms1g',
-		'-Xmx2g',
+		'-Xms16g',
+		'-Xmx16g',
 		'-XX:+UseG1GC',
 		'-XX:G1HeapRegionSize=4m',
 		'-Dspring.devtools.restart.enabled=true',

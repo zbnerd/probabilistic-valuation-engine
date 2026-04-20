@@ -1,109 +1,136 @@
 # Load Test Report #2 — PGMQ Pipeline (2026-04-20)
 
-## 변경사항 (vs 이전 테스트)
-- 1-pass JSON 파싱 최적화
-- `G1HeapRegionSize=4m` 추가
-- View table write (batchViewUpsert) 추가
+## 3단계 개선 결과 비교
+
+| 항목 | R1 (2GB) | R2 (2GB+G1Region) | **R3 (16GB)** | R3 vs R1 |
+|------|----------|--------------------|---------------|----------|
+| API Throughput | 111.0 req/s | 75.2 req/s | **133.1 req/s** | +20% |
+| Request phase | 90.1s | 133.0s | **75.1s** | -17% |
+| p50 응답시간 | 395ms | 449ms | **362ms** | -8% |
+| p95 응답시간 | 938ms | 1,988ms | **606ms** | **-35%** |
+| p99 응답시간 | 1,776ms | 3,641ms | **778ms** | **-56%** |
+| Max 응답시간 | 2,621ms | 5,258ms | **1,128ms** | **-57%** |
+| 워커 드레인 평균 | ~77/s | 7.3/s | **15.4/s** | -80%* |
+| 180s 드레인 처리량 | ~3,900건 | 2,435건 | **5,557건** | +43% |
+| View 기록 | 0 | 0 | **5,557건** | ✅ |
+| Major GC | 957회/322s | 1,193회/391s | **15회/10.4s** | **-97%** |
+| BulkheadFull | ~10,888 | 66,928 | **63,476** | 여전히 병목 |
+
+> *R1은 드레인 모니터링이 없어 정확 비교 어려움
 
 ---
 
-## 1. 요청 페이즈 (API Acceptance)
-
-| 항목 | 이전 | 이번 | 변화 |
-|------|------|------|------|
-| Throughput | 111.0 req/s | 75.2 req/s | **-32%** |
-| Request phase | 90.1s | 133.0s | **+48%** |
-| p50 응답시간 | 395.4ms | 448.7ms | +13% |
-| p95 응답시간 | 938.3ms | 1,987.6ms | **+112%** |
-| p99 응답시간 | 1,776.3ms | 3,640.6ms | **+105%** |
-| Max 응답시간 | 2,620.9ms | 5,258.2ms | +101% |
-
-> API throughput 하락은 워커 처리 지연이 피드백으로 영향. 원인: BulkheadFullException 폭증.
-
----
-
-## 2. 워커 처리 성능
+## 1. 요청 페이즈 (API Acceptance) — 16GB
 
 | 항목 | 값 |
 |------|-----|
-| 180초 드레인 처리량 | 2,435건 |
-| 드레인 속도 평균 | 7.3 items/s |
-| 드레인 속도 최대 | 24.0 items/s |
-| 큐 잔여 | 7,565건 (미처리) |
+| Total requests | 10,000 |
+| Request phase | 75.1s |
+| Throughput | **133.1 req/s** |
+| Status 202 (QUEUE) | 10,000 |
+| Errors | 0 |
+
+### 응답시간 분포
+| percentile | 시간 |
+|-----------|------|
+| Min | 72ms |
+| p50 | 362ms |
+| p95 | 606ms |
+| p99 | 778ms |
+| Max | 1,128ms |
 
 ---
 
-## 3. GC 개선 효과 (`G1HeapRegionSize=4m`)
+## 2. 워커 처리 성능 — 16GB
 
-| 항목 | 이전 | 이번 | 변화 |
-|------|------|------|------|
-| Young GC 총 시간 | 322.5s (957회 Major GC) | **0.26s** | **-99.9%** |
-| Old Gen 평균 | 98.5% | 76.2% | **-22%p** |
-| Old Gen 최대 | 98.5% | 98.0% | 유사 |
-| Heap 평균 | ~90%+ | 82.2% | 개선 |
+| 항목 | 값 |
+|------|-----|
+| 180초 드레인 처리량 | 5,557건 |
+| 드레인 속도 평균 | **15.4 items/s** |
+| 드레인 속도 최대 | **30.6 items/s** |
+| 큐 잔여 | 4,443건 |
+| View 기록 | 5,557건 (archive와 1:1 매치) |
 
-> G1HeapRegionSize=4m이 Humongous Object 문제를 해결. Young GC 시간이 322초→0.26초로 **99.9% 감소**.
+---
+
+## 3. GC 개선 — 16GB vs 2GB
+
+### GC 타입별 통계
+| GC 타입 | 2GB Heap | **16GB Heap** | 변화 |
+|---------|----------|---------------|------|
+| Young GC | 9,354회 / 34.3s | 715회 / **19.7s** | -43% |
+| Major GC | 1,193회 / 391s | **15회 / 10.4s** | **-97%** |
+| Major GC max | 652ms | **879ms** | 유사 |
+| Major GC avg | 327ms | **691ms** | 증가 (빈도 극감으로 영향 미미) |
+
+### Old Gen 시계열 (16GB)
+```
+  Time | OldGen% | Heap%  | HeapMB | OldMB | Note
+  ------+---------+--------+--------+-------+--------
+    0s  |   1.1%  |  3.3%  |    547 |   188 | 시작
+   39s  |   3.1%  |  6.7%  |  1,102 |   504 | 요청 진행
+   81s  |  55.3%  | 91.6%  | 15,000 | 9,060 | 피크
+  164s  |  19.3%  | 36.4%  |  5,963 | 3,163 | Major GC 해소
+  290s  |  80.8%  | 85.2%  | 13,964 | 13,240 | 재상승
+  373s  |  87.7%  | 85.2%  | 13,955 | 14,375 | 최종
+```
+
+### 최종 메모리 상태 (16GB)
+| 영역 | Used | Max | 사용률 |
+|------|------|-----|--------|
+| Heap | 13,955MB | 16,384MB | 85.2% |
+| G1 Old Gen | 14,375MB | 16,384MB | 87.8% |
+| G1 Eden | 448MB | - | - |
 
 ---
 
 ## 4. HikariCP 커넥션 풀
 
-| 항목 | 값 |
-|------|-----|
-| Pending 최대 | 121 |
-| Pending 평균 | 7.5 |
-| Active 평균 | ~16 |
-| Max pool | 30 |
-
-> 이전 테스트 pending 최대 73 → 121로 증가. BulkheadFullException으로 인한 재시도가 DB 커넥션 경합 가중.
+| 항목 | 2GB | **16GB** | 변화 |
+|------|-----|----------|------|
+| Pending 최대 | 121 | **55** | **-55%** |
+| Pending 평균 | 7.5 | **1.0** | **-87%** |
+| Active 평균 | 16 | **9.3** | -42% |
+| Active 최대 | 30 | 30 | 동일 |
 
 ---
 
 ## 5. Exception 통계
 
-### 발생 횟수
-| Exception | 횟수 | 영향 |
-|-----------|------|------|
-| BulkheadFullException | **66,928** | Nexon API 동시 호출 제한 (50) |
-| LoggingPolicy (task failed) | 35,724 | 전체 실패 태스크 |
-| ResilientNexonApiClient ERROR | 7,516 | API 호출 실패 |
-| FallbackHandler ERROR | 4,633 | 폴백 처리 |
-| NexonFanOutBatchLoader ERROR | 2,776 | 장비 데이터 로드 실패 |
-| SqlExceptionHelper (DB) | 2,069 | DB 관련 오류 |
-| ViewUpsert 실패 | 2,395 | JSR310 미등록 (ObjectMapper) |
+### 발생 횟수 비교
+| Exception | 2GB | **16GB** | 변화 |
+|-----------|-----|----------|------|
+| BulkheadFullException | 66,928 | **63,476** | -5% |
+| LoggingPolicy (task failed) | 35,724 | **45,537** | +28%* |
+| ResilientNexonApiClient | 7,516 | **9,437** | +26%* |
+| SqlExceptionHelper (DB) | 2,069 | **3,502** | +69%* |
+| FallbackHandler | 4,633 | **2,241** | -52% |
+| NexonFanOutBatchLoader | 2,776 | **1,130** | -59% |
+| ViewUpsert 실패 | 2,395 | **0** | ✅ 해결 |
 
-### 주요 병목 체인
-```
-BulkheadFullException (66,928회)
-  → CalculateOnly avg=5,895ms, p95=18,263ms
-  → CalculateWriteOnly avg=5,704ms, p95=17,936ms
-  → FanOutBatchLoader avg=1,423ms, p95=2,816ms
-  → AdvisoryLock avg=989ms, p95=1,624ms
-  → PostgresL2 Get/Put avg=5,600ms (GC STW 영향)
-```
+> *워커가 더 많이 돌아서 총 실패 수는 증가. 하지만 FanOut/Bulkhead per-request 영향은 감소.
 
-### 태스크별 처리시간 분포
+### 태스크별 처리시간 — 16GB
 | 태스크 | n | avg | p50 | p95 | p99 | max |
 |--------|---|-----|-----|-----|-----|-----|
-| CalculateOnly | 12,699 | 5.9s | 3.7s | 18.3s | 35.8s | 52.7s |
-| CalculateWriteOnly | 12,713 | 5.7s | 3.6s | 17.9s | 31.3s | 48.5s |
-| FanOutBatchLoader:Fetch | 2,879 | 1.4s | 0.8s | 2.8s | 19.9s | 23.8s |
-| AdvisoryLock:ElectLeader | 143 | 1.0s | 0.6s | 1.6s | 10.9s | 11.0s |
-| PostgresL2Strategy:Get | 37 | 5.6s | 5.5s | 6.7s | 8.9s | 8.9s |
-| ViewUpsert | 2,435 | 5ms | 0ms | 13ms | 52ms | 2.0s |
+| CalculateOnly | 19,938 | 10.5s | 7.3s | 28.6s | 28.8s | 30.1s |
+| CalculateWriteOnly | 19,994 | 10.5s | 7.3s | 28.6s | 28.7s | 30.0s |
+| FanOutBatchLoader | 1,152 | 663ms | 635ms | 906ms | 1,017ms | 1.6s |
+| AdvisoryLock | 139 | 655ms | 588ms | 1,399ms | 1,411ms | 1.4s |
+| CubeService:CalculateDP | 589 | 1ms | 0ms | 5ms | 20ms | 51ms |
+| ViewUpsert | 0 failures | - | - | - | - | - |
+
+> CalculateOnly p95=28.6s는 BulkheadFullException 타임아웃 (30s) 근접.
+> 실제 계산은 정상이지만 API 호출 대기 시간이 대부분.
 
 ---
 
 ## 6. View Table (character_valuation_views)
 
-| 항목 | 값 |
-|------|-----|
-| 기록 건수 | **0** |
-| 원인 | ObjectMapper에 JSR310 모듈 미등록 |
-| 에러 메시지 | `Java 8 date/time type LocalDateTime not supported by default` |
-
-> batchViewUpsert 로직은 정상 진입하지만, Jackson ObjectMapper에 JavaTimeModule 미등록으로
-> `valueToTree()` 직렬화 실패. 수정 필요.
+| 항목 | 2GB | **16GB** |
+|------|-----|----------|
+| 기록 건수 | 0 (JSR310 오류) | **5,557건** ✅ |
+| Archive 대비 | - | **100% 매치** |
 
 ---
 
@@ -112,82 +139,32 @@ BulkheadFullException (66,928회)
 | # | 병목 | 상태 | 비고 |
 |---|------|------|------|
 | 1 | 파싱 3회 중복 | ✅ 해결 | 1-pass 최적화 |
-| 2 | GC Humongous | ✅ 해결 | Young GC 322s→0.26s (-99.9%) |
-| 3 | Nexon API Bulkhead | 🔴 **1순위** | 66,928회 실패, 모든 지연의 근원 |
-| 4 | View table 미기록 | 🟡 JSR310 수정 필요 | ObjectMapper에 JavaTimeModule 등록 |
-| 5 | HikariCP pending | 🟡 2차 개선 | Bulkhead 해결 후 자연 완화 예상 |
+| 2 | GC Humongous | ✅ 해결 | G1HeapRegionSize=4m + Xmx16g |
+| 3 | Heap 부족 | ✅ 해결 | Major GC 97% 감소 |
+| 4 | View table 미기록 | ✅ 해결 | JavaTimeModule 등록 |
+| 5 | Nexon API Bulkhead | 🔴 **1순위** | 63,476회 실패, 다음 타겟 |
+| 6 | HikariCP pending | ✅ 완화 | 121→55 (-55%) |
 
 ---
 
 ## 8. 다음 단계
 
-### 즉시 수정
-1. **ViewUpsert ObjectMapper**: `JavaTimeModule()` 등록
-2. **Bulkhead 임계값 조정**: nexonApi maxConcurrentCalls 50 → 100 또는 maxWaitDuration 증가
-
-### 근원 분석
+### 1순위: Bulkhead 용량 튜닝
 ```
-BulkheadFullException 66,928회의 의미:
-- 워커가 Nexon API를 50 TPS로 제한
-- 10,000개 요청이 동시에 워커에서 처리 시도
-- 각 요청이 3개 preset × 장비 API 호출 필요
-- 50 TPS 제한이 병목 → CalculateOnly avg 5.9s
-- 해결: Bulkhead 용량 증설 또는 배치 API 호출 패턴 변경
+현재: maxConcurrentCalls=50, maxWaitDuration=500ms
+→ 워커가 15/s 처리 중인데 Bulkhead가 50 TPS 제한
+→ CalculateOnly p95=28.6s (거의 타임아웃)
+
+옵션:
+A. maxConcurrentCalls 50→100~200
+B. maxWaitDuration 500ms→2000ms
+C. 워커 동시성 제한 (pipeline buffer size 조절)
 ```
 
----
-
-## 9. JVM 상세 분석
-
-### GC 타입별 통계
-| GC 타입 | 횟수 | 총 시간 | 평균 | 최대 |
-|---------|------|---------|------|------|
-| Young GC (minor) | 9,354 | 34.3s | 3.7ms | 22ms |
-| Major GC (compaction) | 1,193 | **391.0s** | 327ms | **652ms** |
-
-### GC 원인
-- G1 Evacuation Pause (일반)
-- G1 Humongous Allocation (여전히 발생)
-- GCLocker Initiated GC
-- G1 Compaction Pause
-- CodeCache GC Threshold
-
-### Old Gen 시계열
+### 2순위: Old Gen 87% 지속 상승
 ```
-  Time | OldGen% | Heap% | Note
-  ------+---------+-------+--------
-    0s  |   8.8%  | 26.9% | 시작
-   51s  |  49.9%  | 69.9% | 급상승
-  136s  |  80.9%  | 82.3% | 요청 페이즈 종료
-  243s  |  93.2%  | 94.6% | 드레인 진행
-  345s  |  85.1%  | 94.6% | Major GC로 일시 해소
-  521s  |  91.6%  | 93.1% | 다시 상승
-  604s  |  93.9%  | 96.7% | 최종
-```
-
-### Thread 현황
-| 항목 | 값 |
-|------|-----|
-| Live threads | 188 |
-| Daemon threads | 133 |
-| Loaded classes | 29,451 |
-
-### 메모리 최종 상태
-| 영역 | Used | Max | 사용률 |
-|------|------|-----|--------|
-| Heap | 1,988MB | 2,048MB | 97.1% |
-| G1 Old Gen | 1,963MB | 2,048MB | 95.9% |
-| G1 Eden | 8MB | - | - |
-
-### JVM 결론
-```
-G1HeapRegionSize=4m 효과:
-  ✅ Humongous → Young GC 처리율 개선 (Young GC 총 34s만 소요)
-  ❌ Old Gen 포화 문제 미해결 (2GB 힙으로 10K 동시 처리 불가)
-  ❌ Major GC 1,193회 × 327ms = 391초 STW 발생
-
-해결 옵션 (우선순위):
-  1. -Xmx4g 증설 → Old Gen 여유 확보
-  2. Bulkhead 해결 → 동시 메모리 할당 감소 → Old Gen 압력 완화
-  3. 둘 다 적용 (권장)
+16GB에서도 Old Gen이 87.8%까지 상승.
+10K 처리 중 장시간 객체 보유가 원인.
+드레인 후 GC로 19%까지 회복되므로 긴급하지 않음.
+ Bulkhead 해결 후 동시 처리 감소 → 자연 완화 예상.
 ```

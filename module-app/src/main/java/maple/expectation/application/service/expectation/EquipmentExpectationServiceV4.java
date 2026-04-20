@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import lombok.extern.slf4j.Slf4j;
@@ -58,6 +59,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private static final long ASYNC_TIMEOUT_SECONDS = 30L;
+  private static final int MAX_CONCURRENT_ITEMS = 8;
 
   private final GameCharacterFacade gameCharacterFacade;
   private final GameCharacterService gameCharacterService;
@@ -68,7 +70,6 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   private final StarforceLookupPort starforceLookupPort;
   private final LogicExecutor executor;
   private final Executor equipmentExecutor;
-  private final Executor presetExecutor;
   private final ExpectationCacheCoordinator cacheCoordinator;
   private final ExpectationPersistenceService persistenceService;
   private final ObjectProvider<EquipmentExpectationServiceV4> selfProvider;
@@ -85,7 +86,6 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       StarforceLookupPort starforceLookupPort,
       LogicExecutor executor,
       @Qualifier("equipmentProcessingExecutor") Executor equipmentExecutor,
-      @Qualifier("presetCalculationExecutor") Executor presetExecutor,
       ExpectationCacheCoordinator cacheCoordinator,
       ExpectationPersistenceService persistenceService,
       ObjectProvider<EquipmentExpectationServiceV4> selfProvider,
@@ -100,7 +100,6 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
     this.starforceLookupPort = starforceLookupPort;
     this.executor = executor;
     this.equipmentExecutor = equipmentExecutor;
-    this.presetExecutor = presetExecutor;
     this.cacheCoordinator = cacheCoordinator;
     this.persistenceService = persistenceService;
     this.selfProvider = selfProvider;
@@ -356,22 +355,20 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   private List<PresetExpectation> calculateAllPresets(byte[] equipmentData, String characterClass) {
     byte[] decompressedData = streamingParser.decompressIfNeeded(equipmentData);
 
-    // 1-pass: parse all 3 presets from single JSON scan
     Map<Integer, List<CubeCalculationInput>> allPresetInputs =
         streamingParser.parseAllPresets(decompressedData);
 
-    // Parallel calculation (CPU-bound, parsing eliminated)
+    Semaphore itemPermits = new Semaphore(MAX_CONCURRENT_ITEMS);
+
     List<CompletableFuture<PresetExpectation>> futures =
         IntStream.rangeClosed(1, 3)
             .mapToObj(
                 presetNo ->
-                    CompletableFuture.supplyAsync(
-                        () ->
-                            presetHelper.calculatePreset(
-                                allPresetInputs.getOrDefault(presetNo, List.of()),
-                                presetNo,
-                                characterClass),
-                        presetExecutor))
+                    presetHelper.calculatePresetAsync(
+                        allPresetInputs.getOrDefault(presetNo, List.of()),
+                        presetNo,
+                        characterClass,
+                        itemPermits))
             .toList();
 
     return futures.stream()

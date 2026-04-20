@@ -2,6 +2,9 @@ package maple.expectation.application.service.expectation;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Semaphore;
 import lombok.RequiredArgsConstructor;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory;
@@ -24,6 +27,7 @@ import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.FlameExpectat
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.StarforceExpectationDto;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -47,52 +51,128 @@ import org.springframework.stereotype.Component;
  *
  * <h3>분해 근거</h3>
  *
- * <p>EquipmentExpectationServiceV4의 calculatePreset() 87줄을 각 20줄 이내의 6개 메서드로 분해하여 SRP 준수 (CLAUDE.md
+ * <p>EquipmentExpectationServiceV4의 calculatePresetAsync() — 장비별 병렬 계산 (thenCombine)
  * Section 4)
  */
 @Component
-@RequiredArgsConstructor
 public class PresetCalculationHelper {
 
   private final EquipmentExpectationCalculatorFactory calculatorFactory;
   private final StarforceLookupPort starforceLookupPort;
   private final FlameTrialsPort flameTrialsProvider;
   private final FlameInputResolver flameInputResolver;
+  private final Executor itemExecutor;
+
+  public PresetCalculationHelper(
+      EquipmentExpectationCalculatorFactory calculatorFactory,
+      StarforceLookupPort starforceLookupPort,
+      FlameTrialsPort flameTrialsProvider,
+      FlameInputResolver flameInputResolver,
+      @Qualifier("itemCalculationExecutor") Executor itemExecutor) {
+    this.calculatorFactory = calculatorFactory;
+    this.starforceLookupPort = starforceLookupPort;
+    this.flameTrialsProvider = flameTrialsProvider;
+    this.flameInputResolver = flameInputResolver;
+    this.itemExecutor = itemExecutor;
+  }
 
   /**
-   * 프리셋 기대값 계산
+   * 프리셋 기대값 비동기 계산 — 장비별 병렬 처리 (thenCombine, join/get 없음)
+   *
+   * <p>각 장비의 계산이 서로 독립이므로 CompletableFuture.supplyAsync로 동시 시작,
+   * thenCombine으로 결과를 누적하여 최종 PresetExpectation을 생성.
+   *
+   * <p>장비 계산은 itemCalculationExecutor에서 실행하여 presetCalculationExecutor와 격리.
    *
    * @param cubeInputs 프리셋의 큐브 입력 목록
    * @param presetNo 프리셋 번호 (1~3)
    * @param characterClass 직업명 (환생의 불꽃 동적 계산용)
-   * @return 프리셋 기대값 결과
+   * @return 프리셋 기대값 CompletableFuture
    */
-  public PresetExpectation calculatePreset(
-      List<CubeCalculationInput> cubeInputs, int presetNo, String characterClass) {
-    List<ItemExpectationV4> itemResults = new ArrayList<>();
-    KahanSummation totalCostAcc = new KahanSummation(); // Double + Kahan for performance
-    CostBreakdownDto totalBreakdown = CostBreakdownDto.empty();
+  public CompletableFuture<PresetExpectation> calculatePresetAsync(
+      List<CubeCalculationInput> cubeInputs,
+      int presetNo,
+      String characterClass,
+      Semaphore itemPermits) {
+
+    List<CompletableFuture<ItemExpectationV4>> itemFutures = new ArrayList<>();
 
     for (var cubeInput : cubeInputs) {
       if (!cubeInput.isReady()) {
-        itemResults.add(buildNoPotentialItem(cubeInput, presetNo, characterClass));
+        itemFutures.add(
+            CompletableFuture.completedFuture(
+                buildNoPotentialItem(cubeInput, presetNo, characterClass)));
         continue;
       }
 
       EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
-      ItemExpectationV4 itemResult = calculateSingleItem(input, cubeInput, characterClass);
-
-      itemResults.add(itemResult);
-      // Performance: Use double + Kahan instead of BigDecimal
-      totalCostAcc.add(itemResult.getExpectedCost());
-      totalBreakdown = totalBreakdown.add(itemResult.getCostBreakdown());
+      itemPermits.acquireUninterruptibly();
+      itemFutures.add(
+          CompletableFuture.supplyAsync(
+                  () -> calculateSingleItem(input, cubeInput, characterClass), itemExecutor)
+              .whenComplete((r, e) -> itemPermits.release()));
     }
 
-    // Keep as double - no BigDecimal conversion needed
-    double totalCost = totalCostAcc.sum();
+    if (itemFutures.isEmpty()) {
+      return CompletableFuture.completedFuture(
+          new PresetExpectation(
+              presetNo, 0.0, CostFormatter.format(0.0), CostBreakdownDto.empty(), List.of()));
+    }
 
-    return new PresetExpectation(
-        presetNo, totalCost, CostFormatter.format(totalCost), totalBreakdown, itemResults);
+    // thenCombine accumulation — no join/get
+    CompletableFuture<List<ItemExpectationV4>> resultsFuture =
+        CompletableFuture.completedFuture(new ArrayList<>());
+    CompletableFuture<KahanSummation> costFuture =
+        CompletableFuture.completedFuture(new KahanSummation());
+    CompletableFuture<CostBreakdownDto> breakdownFuture =
+        CompletableFuture.completedFuture(CostBreakdownDto.empty());
+
+    for (CompletableFuture<ItemExpectationV4> itemFuture : itemFutures) {
+      resultsFuture =
+          resultsFuture.thenCombine(
+              itemFuture,
+              (list, item) -> {
+                list.add(item);
+                return list;
+              });
+      costFuture =
+          costFuture.thenCombine(
+              itemFuture.thenApply(ItemExpectationV4::getExpectedCost),
+              (acc, cost) -> {
+                acc.add(cost);
+                return acc;
+              });
+      breakdownFuture =
+          breakdownFuture.thenCombine(
+              itemFuture.thenApply(ItemExpectationV4::getCostBreakdown),
+              CostBreakdownDto::add);
+    }
+
+    return resultsFuture
+        .thenCombine(costFuture, (results, costAcc) -> new PresetAggregation(results, costAcc))
+        .thenCombine(breakdownFuture, (agg, breakdown) -> agg.withBreakdown(breakdown))
+        .thenApply(
+            agg -> {
+              double totalCost = agg.costAcc.sum();
+              return new PresetExpectation(
+                  presetNo,
+                  totalCost,
+                  CostFormatter.format(totalCost),
+                  agg.breakdown,
+                  agg.results);
+            });
+  }
+
+  /** Accumulation helper for async preset calculation */
+  private record PresetAggregation(
+      List<ItemExpectationV4> results, KahanSummation costAcc, CostBreakdownDto breakdown) {
+    PresetAggregation(List<ItemExpectationV4> results, KahanSummation costAcc) {
+      this(results, costAcc, CostBreakdownDto.empty());
+    }
+
+    PresetAggregation withBreakdown(CostBreakdownDto breakdown) {
+      return new PresetAggregation(results, costAcc, breakdown);
+    }
   }
 
   /** 큐브 입력 → 계산 입력 변환 */

@@ -151,8 +151,8 @@ resilience4j:
   bulkhead:
     instances:
       nexonApi:
-        maxConcurrentCalls: 50          # 동시 Nexon API 호출 최대 50개
-        maxWaitDuration: 500ms          # 대기 최대 500ms
+        maxConcurrentCalls: 50          # Nexon API 안정 한계 (100+시 타임아웃 폭증)
+        maxWaitDuration: 500ms          # 빠른 거부→PGMQ 재시도 (5s시 타임아웃 예산 잠식)
 
   retry:
     retry-aspect-order: 399 # Retry가 CircuitBreaker를 감싸도록 설정

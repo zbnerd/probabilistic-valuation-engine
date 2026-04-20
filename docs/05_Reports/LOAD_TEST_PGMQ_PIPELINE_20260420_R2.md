@@ -174,7 +174,28 @@
 
 ---
 
-## 8. 병목 해결 현황
+## 8. Bulkhead 튜닝 결과 (8GB Heap)
+
+### 테스트 매트릭스
+| 설정 | BulkheadFull | SocketTimeout | 드레인 | 180s 처리량 |
+|------|-------------|---------------|--------|-------------|
+| **50/500ms** | 75,678 | **0** | **12.2/s** | **3,811** |
+| 50/5s | 0 | 23,058 | 8.3/s | 3,771 |
+| 100/1s | 2,790 | 22,850 | 8.0/s | 3,683 |
+| 200/2s | 0 | 3,435 | 8.0/s | 2,462 |
+
+### 결론: **50/500ms 채택**
+```
+Nexon API 안정 한계: 50 동시 호출
+- 50 초과 시 SocketTimeout 폭증 (API 과부하)
+- maxWaitDuration 증가 시 Timeout 예산(28s) 잠식 → 역효과
+- BulkheadFullException은 "빠른 거부" → PGMQ 큐 재시도 → 정상 동작
+- 50/500ms에서 실제 드레인 속도 최고 (12.2/s), SocketTimeout 0
+```
+
+---
+
+## 9. 병목 해결 현황
 
 | # | 병목 | 상태 | 비고 |
 |---|------|------|------|
@@ -182,28 +203,24 @@
 | 2 | GC Humongous | ✅ 해결 | G1HeapRegionSize=4m + Xmx8g |
 | 3 | Heap 부족 | ✅ 해결 | Major GC 1,193→38회 (-97%) |
 | 4 | View table 미기록 | ✅ 해결 | JavaTimeModule 등록 |
-| 5 | Nexon API Bulkhead | 🔴 **1순위** | 75,678회 실패, 다음 타겟 |
+| 5 | Nexon API Bulkhead | ✅ 튜닝 완료 | 50/500ms 최적 (테스트 검증) |
 | 6 | HikariCP pending | ✅ 완화 | 121→60 (-50%) |
 
 ---
 
-## 9. 다음 단계
+## 10. 다음 단계
 
-### 1순위: Bulkhead 용량 튜닝
+### BulkheadFullException 75,678회 완화 방안
 ```
-현재: maxConcurrentCalls=50, maxWaitDuration=500ms
-→ 워커가 12/s 처리 중인데 Bulkhead가 50 TPS 제한
-→ CalculateOnly p95=28.6s (거의 타임아웃)
-
-옵션:
-A. maxConcurrentCalls 50→100~200
-B. maxWaitDuration 500ms→2000ms
-C. 워커 동시성 제한 (pipeline buffer size 조절)
+현재: 50/500ms는 Nexon API 한계로 최적. BulkheadFull은 정상 동작.
+완화 옵션:
+A. 워커 동시성 제한 — pipeline buffer size↓ → 동시 API 호출 감소
+B. Nexon API 캐시 적중률 향상 → API 호출 자체 감소
+C. 배치 프리페치 최적화 — FanOutBatchLoader 효율 개선
 ```
 
 ### Old Gen 90% (8GB 기준)
 ```
 8GB에서 Old Gen이 90%까지 상승하나 Major GC 38회로 양호.
 드레인 후 GC로 회복되므로 운영에 지장 없음.
-Bulkhead 해결 후 동시 처리 감소 → 자연 완화 예상.
 ```

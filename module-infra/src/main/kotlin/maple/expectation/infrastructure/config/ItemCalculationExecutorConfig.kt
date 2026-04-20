@@ -6,99 +6,107 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
 import java.util.Collections
 import java.util.concurrent.Executor
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.Semaphore
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.ThreadPoolExecutor
 import org.slf4j.LoggerFactory
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.task.TaskDecorator
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 
 /**
- * 장비 개별 계산 전용 Virtual Thread Executor
+ * 장비 개별 계산 전용 Executor (ThreadPool)
  *
- * ## Phase 1 → Phase 2 전환
+ * ## Phase 1→2→3 전환 이력
  *
  * ```
- * Phase 1 (ThreadPool): core=4, max=8, queue=200
- *   → 8/8 active + 200/200 queue = 완전 포화 → 새로운 병목
- *
- * Phase 2 (Virtual Thread): unbounded + Semaphore(64)
- *   → 큐 대기 없음, Semaphore로 동시성 제한만
- *   → Bulkhead 50 × ~20 items = 1000 VT 동시 생성 가능하지만
- *     Semaphore로 CPU 보호
+ * Phase 1: presetExecutor 공유 → 큐 밀림 (baseline)
+ * Phase 2: itemExecutor 분리 (ThreadPool 4/8/200) → 포화 (8/8 + 200/200)
+ * Phase 2.5: Virtual Thread + Semaphore(64) → CPU-bound에서 3.5× 회귀
+ * Phase 3: ThreadPool 16/32/500 → 현재
  * ```
  *
- * ## Virtual Thread 선택 근거
+ * ## 설정 근거
  *
- * - 장비 계산은 CPU-bound이지만 CompletableFuture 체인 내에서 실행되어
- *   스레드 점유 시간이 김. VT는 메모리 오버헤드가 극히 낮아
- *   수천 개 동시 생성해도 안정적
- * - Platform thread 8개로는 fan-out(60 items/request)을 감당 불가
- * - Semaphore로 실제 CPU 활용도 제어 (64 = 8코어 × 8배수)
+ * - Core 16: Bulkhead 50 × ~0.3 (모든 요청이 20개 장비를 계산하지 않음)
+ * - Max 32: 피크 시 여유
+ * - Queue 500: fan-out 스파이크 흡수
+ * - AbortPolicy: 큐 포화 시 빠른 실패
+ *
+ * ## Virtual Thread 기각 사유
+ *
+ * 장비 계산은 CPU-bound (순수 수학 연산). VT는 I/O 대기에 최적화되어
+ * CPU-bound에서 스케줄링 오버헤드만 증가. 부하테스트에서 3.5× latency 회귀 확인.
  *
  * @see PresetCalculationExecutorConfig 프리셋 orchestration용 Executor
  */
 @Configuration
+@EnableConfigurationProperties(ExecutorProperties::class)
 class ItemCalculationExecutorConfig(
     private val meterRegistry: MeterRegistry,
+    private val executorProperties: ExecutorProperties,
 ) {
     private val log = LoggerFactory.getLogger(ItemCalculationExecutorConfig::class.java)
 
-    companion object {
-        private const val MAX_CONCURRENT = 64
-    }
-
     @Bean("itemCalculationExecutor")
-    fun itemCalculationExecutor(): Executor {
-        val semaphore = Semaphore(MAX_CONCURRENT)
-        val vtExecutor: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
-        val activeCount = AtomicInteger(0)
-        val completedCount = AtomicLong(0)
+    fun itemCalculationExecutor(contextPropagatingDecorator: TaskDecorator): Executor {
         val rejectedCounter = Counter.builder("executor.rejected")
             .tag("name", "item.calculation")
-            .description("Number of tasks rejected due to semaphore timeout")
+            .description("Number of tasks rejected due to queue full")
             .register(meterRegistry)
 
-        // Micrometer standard metrics
+        val executor = ThreadPoolTaskExecutor()
+        val config = executorProperties.item
+        executor.setCorePoolSize(config.corePoolSize)
+        executor.setMaxPoolSize(config.maxPoolSize)
+        executor.setQueueCapacity(config.queueCapacity)
+        executor.setThreadNamePrefix("item-calc-")
+        executor.setTaskDecorator(contextPropagatingDecorator)
+
+        executor.setRejectedExecutionHandler { r, e ->
+            rejectedCounter.increment()
+            log.warn(
+                "[ItemCalculationExecutor] Task rejected: active={}, poolSize={}, queueSize={}",
+                e.activeCount, e.poolSize, e.queue.size,
+            )
+            ThreadPoolExecutor.AbortPolicy().rejectedExecution(r, e)
+        }
+
+        executor.setWaitForTasksToCompleteOnShutdown(true)
+        executor.setAwaitTerminationSeconds(30)
+        executor.initialize()
+
         ExecutorServiceMetrics(
-            vtExecutor,
+            executor.threadPoolExecutor,
             "item.calculation",
             Collections.emptyList(),
         ).bindTo(meterRegistry)
 
-        // Custom metrics for VT observability
-        Gauge.builder("item.calculation.active.count", activeCount) { it.get().toDouble() }
-            .description("장비 계산 활성 Virtual Thread 수")
-            .register(meterRegistry)
-        Gauge.builder("item.calculation.completed.tasks", completedCount) { it.get().toDouble() }
-            .description("장비 계산 완료된 작업 수")
-            .register(meterRegistry)
-        Gauge.builder("item.calculation.semaphore.available", semaphore) { it.availablePermits().toDouble() }
-            .description("장비 계산 Semaphore 잔여 permit")
-            .register(meterRegistry)
+        registerMetrics(executor)
 
-        log.info("[ItemCalculationExecutor] Virtual Thread executor initialized: semaphore={}", MAX_CONCURRENT)
+        log.info(
+            "[ItemCalculationExecutor] Initialized: core={}, max={}, queue={}",
+            config.corePoolSize, config.maxPoolSize, config.queueCapacity,
+        )
 
-        return Executor { runnable ->
-            vtExecutor.execute {
-                val acquired = semaphore.tryAcquire(30, TimeUnit.SECONDS)
-                if (!acquired) {
-                    log.warn("[ItemCalculationExecutor] Semaphore timeout - 동시성 한도 초과 (limit={})", MAX_CONCURRENT)
-                    rejectedCounter.increment()
-                    return@execute
-                }
-                activeCount.incrementAndGet()
-                try {
-                    runnable.run()
-                } finally {
-                    activeCount.decrementAndGet()
-                    completedCount.incrementAndGet()
-                    semaphore.release()
-                }
-            }
-        }
+        return executor
+    }
+
+    private fun registerMetrics(executor: ThreadPoolTaskExecutor) {
+        Gauge.builder("item.calculation.queue.size", executor) { e ->
+            e.threadPoolExecutor.queue.size.toDouble()
+        }.description("장비 계산 대기 큐 크기").register(meterRegistry)
+
+        Gauge.builder("item.calculation.active.count", executor) { obj ->
+            obj.activeCount.toDouble()
+        }.description("장비 계산 활성 스레드 수").register(meterRegistry)
+
+        Gauge.builder("item.calculation.pool.size", executor) { obj ->
+            obj.poolSize.toDouble()
+        }.description("장비 계산 현재 풀 크기").register(meterRegistry)
+
+        Gauge.builder("item.calculation.completed.tasks", executor) { e ->
+            e.threadPoolExecutor.completedTaskCount.toDouble()
+        }.description("장비 계산 완료된 작업 수").register(meterRegistry)
     }
 }

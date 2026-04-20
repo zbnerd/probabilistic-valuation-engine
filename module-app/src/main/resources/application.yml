@@ -151,7 +151,7 @@ resilience4j:
   bulkhead:
     instances:
       nexonApi:
-        maxConcurrentCalls: 50          # Nexon API 안정 한계 (100+시 타임아웃 폭증)
+        maxConcurrentCalls: 100         # Nexon API 안정 한계 (기존 50→100 확대 테스트)
         maxWaitDuration: 500ms          # 빠른 거부→PGMQ 재시도 (5s시 타임아웃 예산 잠식)
 
   retry:
@@ -217,6 +217,8 @@ observability:
 nexon:
   api:
     key: ${NEXON_API_KEY}
+    rate-limit:
+      max-concurrent: 100           # Nexon API 동시 호출 한계 (기존 50→100 확대 테스트)
     # 타임아웃 설정 (기본값 - 필요 시 환경별로 오버라이드)
     connect-timeout: 3s              # TCP 연결 타임아웃
     response-timeout: 5s             # HTTP 응답 타임아웃

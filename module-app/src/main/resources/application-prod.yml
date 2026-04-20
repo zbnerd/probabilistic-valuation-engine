@@ -102,7 +102,7 @@ executor:
     max-pool-size: 8
     queue-capacity: 500
   item:
-    core-pool-size: 4     # Per-item calc: CPU-bound, caps fan-out
+    core-pool-size: 4     # Per-item calc: CPU-bound, optimal for core count
     max-pool-size: 8
     queue-capacity: 200
 

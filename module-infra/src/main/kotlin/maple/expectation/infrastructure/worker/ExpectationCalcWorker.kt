@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.worker
 
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.Executor
+import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
@@ -37,6 +38,7 @@ class ExpectationCalcWorker(
     l2CacheStrategy: L2CacheStrategy,
     cacheProperties: CacheProperties,
     transactionTemplate: TransactionTemplate,
+    viewQueryPort: CharacterViewQueryPort,
 ) : AbstractExpectationCalcWorker(
     pgmqClient,
     executor,
@@ -52,6 +54,7 @@ class ExpectationCalcWorker(
     l2CacheStrategy,
     cacheProperties,
     transactionTemplate,
+    viewQueryPort,
 ) {
 
     override val queueName: String = QUEUE_NAME

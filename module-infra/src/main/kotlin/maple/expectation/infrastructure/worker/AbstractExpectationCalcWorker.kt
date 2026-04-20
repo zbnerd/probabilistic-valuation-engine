@@ -121,13 +121,19 @@ abstract class AbstractExpectationCalcWorker(
         val context = TaskContext.of(workerName, "BatchWrite", "${results.size}")
         executor.executeVoid({
             transactionTemplate.executeWithoutResult {
-                workerLog.info("[{}] Phase 2 batchWrite: {} results", workerName, results.size)
+                if (results.size >= 10) {
+                    workerLog.info("[{}] Phase 2 batchWrite: {} results", workerName, results.size)
+                } else {
+                    workerLog.debug("[{}] Phase 2 batchWrite: {} results", workerName, results.size)
+                }
 
                 batchL2CachePut(results)
 
                 val messageIds = results.map { it.message.messageId }
                 val archived = pgmqClient.archiveBatch(queueName, messageIds)
-                workerLog.info("[{}] Batch archived: {}/{}", workerName, archived, messageIds.size)
+                if (results.size >= 10) {
+                    workerLog.info("[{}] Batch archived: {}/{}", workerName, archived, messageIds.size)
+                }
             }
         }, context)
     }

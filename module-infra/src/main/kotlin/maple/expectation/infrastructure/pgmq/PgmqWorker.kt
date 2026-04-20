@@ -41,6 +41,12 @@ abstract class PgmqWorker<T : Any>(
     /** 메시지 병렬 처리용 Virtual Thread Executor */
     private val workerPool = Executors.newVirtualThreadPerTaskExecutor()
 
+    /** Pipeline buffer for two-phase workers — Phase 1 results queue here before drain */
+    private val pipelineBuffer = PipelineBuffer<CalculationResult>(
+        microBatchSize = config.common.pipelineMicroBatchSize,
+        maxBufferSize = config.common.pipelineMaxBufferSize,
+    )
+
     /** 큐별 종합 메트릭 (lazy init — 하위 클래스의 queueName 초기화 이후 접근 시 생성) */
     protected val metrics: WorkerQueueMetrics.Binder by lazy { queueMetrics.forQueue(queueName) }
 
@@ -157,7 +163,12 @@ abstract class PgmqWorker<T : Any>(
 
                 // P1-9 FIX: Use explicit property instead of runtime probe
                 if (supportsTwoPhase) {
-                    processBatchTwoPhase(messages)
+                    if (pipelineBuffer.isFull()) {
+                        log.warn("[{}] Pipeline buffer full ({}), skipping poll", queueName, pipelineBuffer.size())
+                        messages.forEach { metrics.inflightDecrement() }
+                    } else {
+                        processBatchPipelined(messages)
+                    }
                 } else {
                     processBatchSinglePhase(messages)
                 }
@@ -167,44 +178,61 @@ abstract class PgmqWorker<T : Any>(
         )
     }
 
+    @Scheduled(fixedDelayString = "\${pgmq.worker.common.pipeline-drain-interval-ms:100}")
+    fun drainBuffer() {
+        if (!supportsTwoPhase) return
+        if (!lifecycleWrapper.beforeTask()) return
+
+        val context = TaskContext.of("PgmqWorker", "DrainBuffer", queueName)
+
+        executor.executeWithFinally(
+            task = {
+                drainMicroBatch()
+            },
+            finallyBlock = { lifecycleWrapper.afterTask() },
+            context = context,
+        )
+    }
+
+    private fun drainMicroBatch() {
+        val microBatchSize = config.common.pipelineMicroBatchSize
+        val batch = pipelineBuffer.drain(microBatchSize)
+        if (batch.isEmpty()) return
+
+        batchWrite(batch)
+
+        batch.forEach {
+            metrics.success.increment()
+            metrics.inflightDecrement()
+        }
+
+        log.debug("[{}] Drained {} results", queueName, batch.size)
+    }
+
     /**
-     * P0-2 FIX: Thread-safe result collection.
-     * P1-5 FIX: No try-catch — LogicExecutor handles exceptions.
-     * P1-7 FIX: Lambda extracted to private method.
+     * Pipeline-based two-phase processing.
+     * Phase 1 runs asynchronously per-message; results flow into PipelineBuffer.
+     * Phase 2 is handled separately by [drainBuffer].
      */
-    private fun processBatchTwoPhase(messages: List<PgmqMessage<T>>) {
-        val futures = messages.map { message ->
+    private fun processBatchPipelined(messages: List<PgmqMessage<T>>) {
+        messages.forEach { message ->
             CompletableFuture.supplyAsync(
                 { executePhaseOne(message) },
                 workerPool,
-            )
-        }
-
-        // Join all phase-1 futures first
-        CompletableFuture.allOf(*futures.toTypedArray()).join()
-
-        handlePhaseTwoCompletion(futures)
-    }
-
-    private fun handlePhaseTwoCompletion(
-        futures: List<CompletableFuture<PhaseOneResult<T>>>,
-    ) {
-        val (successes, failures) = futures
-            .map { it.join() }
-            .partition { it.first != null }
-
-        val successResults = successes.mapNotNull { it.first as? CalculationResult }
-        val failedMessages = failures.map { it.second }
-
-        if (successResults.isNotEmpty()) {
-            batchWrite(successResults)
-            successResults.forEach {
-                metrics.success.increment()
+            ).exceptionally { error ->
+                log.warn("[{}] Phase 1 failed for msgId={}: {}", queueName, message.messageId, error.message)
                 metrics.inflightDecrement()
+                null to message
+            }.thenAccept { result ->
+                val calcResult = result.first as? CalculationResult
+                if (calcResult != null) {
+                    pipelineBuffer.offer(calcResult)
+                } else {
+                    log.warn("[{}] Phase 1 returned non-CalculationResult for msgId={}, dropping", queueName, result.second.messageId)
+                    metrics.inflightDecrement()
+                }
             }
         }
-
-        failedMessages.forEach { message -> processSingleMessage(message) }
     }
 
     /**

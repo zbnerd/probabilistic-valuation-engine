@@ -192,6 +192,13 @@ resilience4j:
         cancelRunningFuture: true   # 타임아웃 시 실행 중인 Future 취소
 
 logging:
+  file:
+    name: logs/app.log
+  logback:
+    rollingpolicy:
+      max-file-size: 1GB
+      max-history: 7
+      total-size-cap: 5GB
   level:
     org.springframework.cache: INFO
     maple.expectation.aop.aspect: INFO

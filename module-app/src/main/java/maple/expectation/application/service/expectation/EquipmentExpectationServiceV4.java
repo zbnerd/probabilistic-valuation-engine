@@ -2,6 +2,7 @@ package maple.expectation.application.service.expectation;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -24,6 +25,7 @@ import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.persistence.CharacterViewQueryServicePostgres;
 import maple.expectation.infrastructure.provider.EquipmentDataProvider;
 import maple.expectation.parser.EquipmentStreamingParser;
+import maple.expectation.web.dto.CubeCalculationInput;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
@@ -354,16 +356,21 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   private List<PresetExpectation> calculateAllPresets(byte[] equipmentData, String characterClass) {
     byte[] decompressedData = streamingParser.decompressIfNeeded(equipmentData);
 
+    // 1-pass: parse all 3 presets from single JSON scan
+    Map<Integer, List<CubeCalculationInput>> allPresetInputs =
+        streamingParser.parseAllPresets(decompressedData);
+
+    // Parallel calculation (CPU-bound, parsing eliminated)
     List<CompletableFuture<PresetExpectation>> futures =
         IntStream.rangeClosed(1, 3)
             .mapToObj(
                 presetNo ->
                     CompletableFuture.supplyAsync(
-                        () -> {
-                          var cubeInputs =
-                              streamingParser.parseCubeInputsForPreset(decompressedData, presetNo);
-                          return presetHelper.calculatePreset(cubeInputs, presetNo, characterClass);
-                        },
+                        () ->
+                            presetHelper.calculatePreset(
+                                allPresetInputs.getOrDefault(presetNo, List.of()),
+                                presetNo,
+                                characterClass),
                         presetExecutor))
             .toList();
 

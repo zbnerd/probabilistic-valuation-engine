@@ -5,6 +5,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.inbound.ExpectationV4Port
+import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
 import maple.expectation.core.port.out.GameCharacterPort
@@ -39,6 +40,7 @@ abstract class AbstractExpectationCalcWorker(
     private val l2CacheStrategy: L2CacheStrategy,
     private val cacheProperties: CacheProperties,
     private val transactionTemplate: TransactionTemplate,
+    private val viewQueryPort: CharacterViewQueryPort,
 ) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val payloadClass: Class<ExpectationCalcMessage> = ExpectationCalcMessage::class.java
@@ -128,6 +130,7 @@ abstract class AbstractExpectationCalcWorker(
                 }
 
                 batchL2CachePut(results)
+                batchViewUpsert(results)
 
                 val messageIds = results.map { it.message.messageId }
                 val archived = pgmqClient.archiveBatch(queueName, messageIds)
@@ -138,12 +141,33 @@ abstract class AbstractExpectationCalcWorker(
         }, context)
     }
 
-    // TODO(#727): Two-phase batch path writes L2 cache + archives messages but does not
-    // upsert the view table (character_valuation_views) or the read model. This means V5
-    // reads served from the read model will remain stale until the next single-phase
-    // calculation cycle. Full view upsert requires a module-core port for clean DIP —
-    // tracked as architectural debt. The single-phase path (process()) correctly writes
-    // the view table via ExpectationV4Port.calculateExpectationAsync -> event handler.
+    private fun batchViewUpsert(results: List<CalculationResult>) {
+        val objectMapper = com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+        for (result in results) {
+            executor.executeOrCatch({
+                val tree = objectMapper.valueToTree<com.fasterxml.jackson.databind.JsonNode>(result.response)
+                val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return@executeOrCatch null
+                val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return@executeOrCatch null
+                val presetsNode = tree.get("presets") ?: return@executeOrCatch null
+                val char = result.character
+                viewQueryPort.upsertFromCalculation(
+                    userIgn = char.userIgn.value,
+                    messageId = result.message.messageId.toString(),
+                    characterOcid = char.characterId.value,
+                    characterClass = char.characterClass,
+                    characterLevel = null,
+                    totalExpectedCost = totalExpectedCost,
+                    maxPresetNo = maxPresetNo,
+                    presetsJson = objectMapper.writeValueAsString(presetsNode),
+                )
+                null
+            }, { e ->
+                workerLog.warn("[{}] View upsert failed for {}: {}", workerName, result.message.payload.userIgn, e.message)
+                null
+            }, TaskContext.of(workerName, "ViewUpsert", result.message.payload.userIgn))
+        }
+    }
 
     private fun batchL2CachePut(results: List<CalculationResult>) {
         val entries = results.map { result ->

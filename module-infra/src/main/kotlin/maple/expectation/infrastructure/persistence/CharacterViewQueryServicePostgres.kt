@@ -35,8 +35,50 @@ class CharacterViewQueryServicePostgres(
 ) {
     private val log = LoggerFactory.getLogger(CharacterViewQueryServicePostgres::class.java)
 
-    /** Find character valuation view by user IGN (O(1) indexed lookup) */
+    // ==================== CharacterViewQueryPort Implementation ====================
+
     fun findByUserIgn(userIgn: String): CharacterValuationViewEntity? {
+        return findByUserIgnEntity(userIgn)
+    }
+
+    fun upsertFromCalculation(
+        userIgn: String,
+        messageId: String?,
+        characterOcid: String?,
+        characterClass: String?,
+        characterLevel: Int?,
+        totalExpectedCost: Long,
+        maxPresetNo: Int,
+        presetsJson: String,
+    ) {
+        val context = TaskContext.of("PostgresQuery", "UpsertFromCalculation", userIgn)
+        executor.executeVoid({
+            val presets: List<CharacterValuationViewEntity.PresetView>? = try {
+                objectMapper.readValue(presetsJson, objectMapper.typeFactory.constructCollectionType(List::class.java, CharacterValuationViewEntity.PresetView::class.java))
+            } catch (_: Exception) {
+                null
+            }
+            val entity = CharacterValuationViewEntity(
+                userIgn = userIgn,
+                messageId = messageId,
+                characterOcid = characterOcid,
+                characterClass = characterClass,
+                characterLevel = characterLevel,
+                totalExpectedCost = totalExpectedCost,
+                maxPresetNo = maxPresetNo,
+                presets = presets,
+                calculatedAt = java.time.Instant.now(),
+                fromCache = false,
+                version = System.currentTimeMillis(),
+            )
+            upsert(entity)
+        }, context)
+    }
+
+    // ==================== Internal Methods ====================
+
+    /** Find character valuation view by user IGN (O(1) indexed lookup) */
+    private fun findByUserIgnEntity(userIgn: String): CharacterValuationViewEntity? {
         val context = TaskContext.of("PostgresQuery", "FindByUserIgn", userIgn)
 
         return executor.executeOrDefault(

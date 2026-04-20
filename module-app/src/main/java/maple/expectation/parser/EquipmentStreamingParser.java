@@ -467,6 +467,85 @@ public class EquipmentStreamingParser {
     return is;
   }
 
+  /**
+   * 1-pass 파싱: preset 1/2/3을 한 번의 JSON 순회로 모두 파싱.
+   *
+   * <p>기존 parseCubeInputsForPreset 3회 호출과 동일한 결과를 보장합니다.
+   * 동일한 mapField/FieldMapper 로직을 사용하며, END_ARRAY에서만 중단하는 차이가 있습니다.
+   */
+  public Map<Integer, List<CubeCalculationInput>> parseAllPresets(byte[] rawJsonData) {
+    if (rawJsonData == null || rawJsonData.length == 0) return Map.of();
+
+    TaskContext context = TaskContext.of("Parser", "StreamingParse", "allPresets");
+
+    return executor.executeWithTranslation(
+        () -> this.executeParseAllPresets(rawJsonData, context),
+        ExceptionTranslator.forMaple(),
+        context);
+  }
+
+  private Map<Integer, List<CubeCalculationInput>> executeParseAllPresets(
+      byte[] rawJsonData, TaskContext context) throws IOException {
+    InputStream inputStream = createInputStream(rawJsonData);
+    JsonParser parser = factory.createParser(inputStream);
+
+    return executor.executeWithFinally(
+        () -> this.doStreamParseAllPresets(parser),
+        () -> closeResources(inputStream, parser),
+        context);
+  }
+
+  /** 1-pass로 preset 1/2/3 배열을 순차 파싱 */
+  private Map<Integer, List<CubeCalculationInput>> doStreamParseAllPresets(JsonParser parser)
+      throws IOException {
+    Map<String, Integer> fieldToPreset = new HashMap<>();
+    fieldToPreset.put("item_equipment_preset_1", 1);
+    fieldToPreset.put("item_equipment_preset_2", 2);
+    fieldToPreset.put("item_equipment_preset_3", 3);
+
+    Map<Integer, List<CubeCalculationInput>> result = new HashMap<>();
+
+    while (parser.nextToken() != null) {
+      if (parser.currentToken() == JsonToken.FIELD_NAME) {
+        Integer presetNo = fieldToPreset.get(parser.currentName());
+        if (presetNo != null) {
+          parser.nextToken(); // advance to START_ARRAY
+          if (parser.currentToken() == JsonToken.START_ARRAY) {
+            List<CubeCalculationInput> items = new ArrayList<>();
+            parseItemArrayBounded(parser, items);
+            result.put(presetNo, items);
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * parseItemArray와 동일한 로직이지만 END_ARRAY에서 중단합니다.
+   * 이를 통해 하나의 JsonParser로 여러 preset 배열을 순차 파싱할 수 있습니다.
+   */
+  private void parseItemArrayBounded(JsonParser parser, List<CubeCalculationInput> resultList)
+      throws IOException {
+    int depth = 0;
+    CubeCalculationInput currentItem = null;
+
+    while (parser.nextToken() != null) {
+      JsonToken token = parser.currentToken();
+      if (token == JsonToken.START_OBJECT) {
+        if (++depth == 1) currentItem = new CubeCalculationInput();
+      } else if (token == JsonToken.END_OBJECT) {
+        if (depth-- == 1 && currentItem != null && currentItem.hasBasicInfo())
+          resultList.add(currentItem);
+      } else if (token == JsonToken.END_ARRAY && depth == 0) {
+        return; // preset array boundary
+      } else if (token == JsonToken.FIELD_NAME) {
+        mapField(parser, currentItem);
+      }
+    }
+  }
+
   /** ✅ 박멸: close() 시 발생하는 IOException 노이즈 제거 */
   private void closeResources(InputStream is, JsonParser parser) {
     executor.executeVoidJava(

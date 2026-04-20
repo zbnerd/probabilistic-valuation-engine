@@ -572,9 +572,9 @@ executor:
     max-pool-size: 8
     queue-capacity: 500
   item:
-    core-pool-size: 4
-    max-pool-size: 8
-    queue-capacity: 200
+    core-pool-size: 16    # Experiment C: capacity tuning (was 4→8→16)
+    max-pool-size: 32     # Experiment C: capacity tuning (was 8→16→32)
+    queue-capacity: 500
 
 # Global Admission Control (Issue #617) - PRODUCTION READY
 admission-control:

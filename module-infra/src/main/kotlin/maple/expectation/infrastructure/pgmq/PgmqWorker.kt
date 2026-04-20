@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.pgmq
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
+import java.util.concurrent.Semaphore
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
@@ -40,6 +41,10 @@ abstract class PgmqWorker<T : Any>(
 
     /** 메시지 병렬 처리용 Virtual Thread Executor */
     private val workerPool = Executors.newVirtualThreadPerTaskExecutor()
+
+    protected open val maxInflight: Int = 100
+
+    private val inflightPermits by lazy { Semaphore(maxInflight) }
 
     /** Pipeline buffer for two-phase workers — Phase 1 results queue here before drain */
     private val pipelineBuffer = PipelineBuffer<CalculationResult>(
@@ -143,14 +148,27 @@ abstract class PgmqWorker<T : Any>(
         // pgmqClient.read() or setup throws, preventing counter leak.
         executor.executeWithFinally(
             task = {
-                val batchSize = workerSettings.batchSize ?: config.common.batchSize
+                val permits = inflightPermits.drainPermits()
+                if (permits <= 0) return@executeWithFinally
+
+                val batchSize = minOf(
+                    workerSettings.batchSize ?: config.common.batchSize,
+                    permits,
+                )
                 val visibilityTimeout = config.common.visibilityTimeoutSec
 
                 val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
 
                 metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
 
-                if (messages.isEmpty()) return@executeWithFinally
+                if (messages.isEmpty()) {
+                    inflightPermits.release(permits)
+                    return@executeWithFinally
+                }
+
+                // Return unused permits
+                val unused = permits - messages.size
+                if (unused > 0) inflightPermits.release(unused)
 
                 log.debug("[{}] Processing {} messages", queueName, messages.size)
 
@@ -166,6 +184,7 @@ abstract class PgmqWorker<T : Any>(
                     if (pipelineBuffer.isFull()) {
                         log.warn("[{}] Pipeline buffer full ({}), skipping poll", queueName, pipelineBuffer.size())
                         messages.forEach { metrics.inflightDecrement() }
+                        inflightPermits.release(messages.size)
                     } else {
                         processBatchPipelined(messages)
                     }
@@ -204,6 +223,7 @@ abstract class PgmqWorker<T : Any>(
         batch.forEach {
             metrics.success.increment()
             metrics.inflightDecrement()
+            inflightPermits.release()
         }
 
         log.debug("[{}] Drained {} results", queueName, batch.size)
@@ -222,6 +242,7 @@ abstract class PgmqWorker<T : Any>(
             ).exceptionally { error ->
                 log.warn("[{}] Phase 1 failed for msgId={}: {}", queueName, message.messageId, error.message)
                 metrics.inflightDecrement()
+                inflightPermits.release()
                 null to message
             }.thenAccept { result ->
                 val calcResult = result.first as? CalculationResult
@@ -230,6 +251,7 @@ abstract class PgmqWorker<T : Any>(
                 } else {
                     log.warn("[{}] Phase 1 returned non-CalculationResult for msgId={}, dropping", queueName, result.second.messageId)
                     metrics.inflightDecrement()
+                    inflightPermits.release()
                 }
             }
         }

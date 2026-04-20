@@ -26,6 +26,7 @@ import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.FlameExpectat
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.StarforceExpectationDto;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -53,13 +54,26 @@ import org.springframework.stereotype.Component;
  * Section 4)
  */
 @Component
-@RequiredArgsConstructor
 public class PresetCalculationHelper {
 
   private final EquipmentExpectationCalculatorFactory calculatorFactory;
   private final StarforceLookupPort starforceLookupPort;
   private final FlameTrialsPort flameTrialsProvider;
   private final FlameInputResolver flameInputResolver;
+  private final Executor itemExecutor;
+
+  public PresetCalculationHelper(
+      EquipmentExpectationCalculatorFactory calculatorFactory,
+      StarforceLookupPort starforceLookupPort,
+      FlameTrialsPort flameTrialsProvider,
+      FlameInputResolver flameInputResolver,
+      @Qualifier("itemCalculationExecutor") Executor itemExecutor) {
+    this.calculatorFactory = calculatorFactory;
+    this.starforceLookupPort = starforceLookupPort;
+    this.flameTrialsProvider = flameTrialsProvider;
+    this.flameInputResolver = flameInputResolver;
+    this.itemExecutor = itemExecutor;
+  }
 
   /**
    * 프리셋 기대값 비동기 계산 — 장비별 병렬 처리 (thenCombine, join/get 없음)
@@ -67,17 +81,17 @@ public class PresetCalculationHelper {
    * <p>각 장비의 계산이 서로 독립이므로 CompletableFuture.supplyAsync로 동시 시작,
    * thenCombine으로 결과를 누적하여 최종 PresetExpectation을 생성.
    *
+   * <p>장비 계산은 itemCalculationExecutor에서 실행하여 presetCalculationExecutor와 격리.
+   *
    * @param cubeInputs 프리셋의 큐브 입력 목록
    * @param presetNo 프리셋 번호 (1~3)
    * @param characterClass 직업명 (환생의 불꽃 동적 계산용)
-   * @param executor 장비 병렬 계산용 Executor
    * @return 프리셋 기대값 CompletableFuture
    */
   public CompletableFuture<PresetExpectation> calculatePresetAsync(
       List<CubeCalculationInput> cubeInputs,
       int presetNo,
-      String characterClass,
-      Executor executor) {
+      String characterClass) {
 
     List<CompletableFuture<ItemExpectationV4>> itemFutures = new ArrayList<>();
 
@@ -92,7 +106,7 @@ public class PresetCalculationHelper {
       EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
       itemFutures.add(
           CompletableFuture.supplyAsync(
-              () -> calculateSingleItem(input, cubeInput, characterClass), executor));
+              () -> calculateSingleItem(input, cubeInput, characterClass), itemExecutor));
     }
 
     if (itemFutures.isEmpty()) {

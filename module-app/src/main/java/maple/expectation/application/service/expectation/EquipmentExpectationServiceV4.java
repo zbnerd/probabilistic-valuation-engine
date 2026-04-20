@@ -68,7 +68,6 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   private final StarforceLookupPort starforceLookupPort;
   private final LogicExecutor executor;
   private final Executor equipmentExecutor;
-  private final Executor presetExecutor;
   private final ExpectationCacheCoordinator cacheCoordinator;
   private final ExpectationPersistenceService persistenceService;
   private final ObjectProvider<EquipmentExpectationServiceV4> selfProvider;
@@ -85,7 +84,6 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       StarforceLookupPort starforceLookupPort,
       LogicExecutor executor,
       @Qualifier("equipmentProcessingExecutor") Executor equipmentExecutor,
-      @Qualifier("presetCalculationExecutor") Executor presetExecutor,
       ExpectationCacheCoordinator cacheCoordinator,
       ExpectationPersistenceService persistenceService,
       ObjectProvider<EquipmentExpectationServiceV4> selfProvider,
@@ -100,7 +98,6 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
     this.starforceLookupPort = starforceLookupPort;
     this.executor = executor;
     this.equipmentExecutor = equipmentExecutor;
-    this.presetExecutor = presetExecutor;
     this.cacheCoordinator = cacheCoordinator;
     this.persistenceService = persistenceService;
     this.selfProvider = selfProvider;
@@ -368,8 +365,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
                     presetHelper.calculatePresetAsync(
                         allPresetInputs.getOrDefault(presetNo, List.of()),
                         presetNo,
-                        characterClass,
-                        presetExecutor))
+                        characterClass))
             .toList();
 
     return futures.stream()

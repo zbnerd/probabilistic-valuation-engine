@@ -569,6 +569,10 @@ executor:
     core-pool-size: 4
     max-pool-size: 8
     queue-capacity: 500
+  item:
+    core-pool-size: 4
+    max-pool-size: 8
+    queue-capacity: 200
 
 # Global Admission Control (Issue #617) - PRODUCTION READY
 admission-control:

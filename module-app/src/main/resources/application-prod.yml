@@ -101,6 +101,10 @@ executor:
     core-pool-size: 4     # Batch/background: smaller pool, larger queue
     max-pool-size: 8
     queue-capacity: 500
+  item:
+    core-pool-size: 4     # Per-item calc: CPU-bound, caps fan-out
+    max-pool-size: 8
+    queue-capacity: 200
 
 # Issue #278: Scale-out 환경 실시간 좋아요 동기화 (prod)
 like:

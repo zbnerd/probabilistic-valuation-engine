@@ -5,7 +5,7 @@ import maple.expectation.core.flame.component.FlameScoreResolver;
 import maple.expectation.core.flame.config.BossEquipmentRegistry;
 import maple.expectation.core.flame.config.JobStatMapping;
 import maple.expectation.core.probability.FlameScoreCalculator.JobWeights;
-import maple.expectation.web.dto.CubeCalculationInput;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
 import org.springframework.stereotype.Component;
 
 /**

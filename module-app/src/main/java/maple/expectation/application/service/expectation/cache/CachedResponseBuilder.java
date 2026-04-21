@@ -1,6 +1,6 @@
 package maple.expectation.application.service.expectation.cache;
 
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 import org.springframework.stereotype.Component;
 
 /**

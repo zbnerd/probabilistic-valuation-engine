@@ -8,8 +8,8 @@ import maple.expectation.application.service.calculator.v4.impl.StarforceDecorat
 import maple.expectation.application.service.cube.CubeTrialsProvider;
 import maple.expectation.application.service.cube.policy.CubeCostPolicy;
 import maple.expectation.core.calculator.port.StarforceLookupPort;
-import maple.expectation.web.dto.CubeCalculationInput;
-import maple.expectation.web.dto.v4.EquipmentCalculationInput;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
+import maple.expectation.core.dto.v4.EquipmentCalculationInput;
 import org.springframework.stereotype.Component;
 
 /**

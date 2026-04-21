@@ -1,14 +1,15 @@
 package maple.expectation.application.service.expectation;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.IntStream;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.IntStream;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.character.GameCharacterFacade;
 import maple.expectation.application.service.character.GameCharacterService;
@@ -26,10 +27,10 @@ import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.persistence.CharacterViewQueryServicePostgres;
 import maple.expectation.infrastructure.provider.EquipmentDataProvider;
 import maple.expectation.parser.EquipmentStreamingParser;
-import maple.expectation.web.dto.CubeCalculationInput;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.lang.Nullable;
@@ -59,7 +60,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private static final long ASYNC_TIMEOUT_SECONDS = 30L;
-  private static final int MAX_CONCURRENT_ITEMS = 8;
 
   private final GameCharacterFacade gameCharacterFacade;
   private final GameCharacterService gameCharacterService;
@@ -358,8 +358,6 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
     Map<Integer, List<CubeCalculationInput>> allPresetInputs =
         streamingParser.parseAllPresets(decompressedData);
 
-    Semaphore itemPermits = new Semaphore(MAX_CONCURRENT_ITEMS);
-
     List<CompletableFuture<PresetExpectation>> futures =
         IntStream.rangeClosed(1, 3)
             .mapToObj(
@@ -367,8 +365,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
                     presetHelper.calculatePresetAsync(
                         allPresetInputs.getOrDefault(presetNo, List.of()),
                         presetNo,
-                        characterClass,
-                        itemPermits))
+                        characterClass))
             .toList();
 
     return futures.stream()

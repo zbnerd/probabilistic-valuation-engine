@@ -1,5 +1,7 @@
 package maple.expectation.infrastructure.persistence.repository
 
+import maple.expectation.core.domain.model.Page
+import maple.expectation.core.domain.model.PageRequest
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.domain.repository.GameCharacterRepository as DomainGameCharacterRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -7,6 +9,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity
 import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepository
 import maple.expectation.infrastructure.persistence.jpa.GameCharacterJpaRepositoryCustom
+import org.springframework.data.domain.PageRequest as SpringPageRequest
 import org.springframework.lang.Nullable
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
@@ -36,7 +39,17 @@ open class GameCharacterRepositoryImpl(
 
     override fun findAll(): List<GameCharacter> = jpaRepo.findAll().stream().map { it.toDomain() }.toList()
 
-    override fun findAll(pageable: org.springframework.data.domain.Pageable): org.springframework.data.domain.Page<GameCharacter> = jpaRepo.findAll(pageable).map { it.toDomain() }
+    override fun findAll(pageRequest: PageRequest): Page<GameCharacter> {
+        val springPageable = SpringPageRequest.of(pageRequest.page, pageRequest.size)
+        val springPage = jpaRepo.findAll(springPageable)
+        return Page(
+            content = springPage.content.map { it.toDomain() },
+            pageNumber = springPage.number,
+            pageSize = springPage.size,
+            totalElements = springPage.totalElements,
+            hasNext = springPage.hasNext(),
+        )
+    }
 
     override fun findActiveCharacters(): List<GameCharacter> = jpaCustomRepo.findActiveCharacters().stream().map { it.toDomain() }.toList()
 

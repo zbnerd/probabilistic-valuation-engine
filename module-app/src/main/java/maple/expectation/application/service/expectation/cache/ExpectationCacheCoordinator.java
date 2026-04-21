@@ -11,7 +11,7 @@ import maple.expectation.error.exception.EquipmentDataProcessingException;
 import maple.expectation.infrastructure.admission.AdmissionRejectedException;
 import maple.expectation.infrastructure.admission.AdmissionTimeoutException;
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 import org.springframework.cache.Cache;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;

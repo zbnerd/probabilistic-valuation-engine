@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.stat.StatType;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.web.dto.CubeCalculationInput;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
 import org.springframework.stereotype.Component;
 
 /**

@@ -16,7 +16,7 @@ import maple.expectation.core.port.inbound.ExpectationV4Port;
 import maple.expectation.core.port.inbound.LikeTogglePort;
 import maple.expectation.core.port.out.PopularCharacterTrackerPort;
 import maple.expectation.web.controller.v4.GameCharacterControllerV4;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

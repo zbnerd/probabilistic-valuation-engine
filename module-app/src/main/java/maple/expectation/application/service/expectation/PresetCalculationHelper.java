@@ -6,6 +6,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Semaphore;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory;
 import maple.expectation.application.service.flame.FlameInputResolver;
@@ -19,15 +20,16 @@ import maple.expectation.core.domain.flame.FlameType;
 import maple.expectation.core.flame.port.FlameTrialsPort;
 import maple.expectation.core.probability.FlameScoreCalculator;
 import maple.expectation.core.util.KahanSummation;
-import maple.expectation.web.dto.CubeCalculationInput;
-import maple.expectation.web.dto.v4.EquipmentCalculationInput;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CubeExpectationDto;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.FlameExpectationDto;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.StarforceExpectationDto;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
+import maple.expectation.core.dto.v4.EquipmentCalculationInput;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.CubeExpectationDto;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.FlameExpectationDto;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.StarforceExpectationDto;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -54,6 +56,7 @@ import org.springframework.stereotype.Component;
  * <p>EquipmentExpectationServiceV4의 calculatePresetAsync() — 장비별 병렬 계산 (thenCombine)
  * Section 4)
  */
+@Slf4j
 @Component
 public class PresetCalculationHelper {
 
@@ -62,18 +65,22 @@ public class PresetCalculationHelper {
   private final FlameTrialsPort flameTrialsProvider;
   private final FlameInputResolver flameInputResolver;
   private final Executor itemExecutor;
+  private final Semaphore globalItemPermits;
 
   public PresetCalculationHelper(
       EquipmentExpectationCalculatorFactory calculatorFactory,
       StarforceLookupPort starforceLookupPort,
       FlameTrialsPort flameTrialsProvider,
       FlameInputResolver flameInputResolver,
-      @Qualifier("itemCalculationExecutor") Executor itemExecutor) {
+      @Qualifier("itemCalculationExecutor") Executor itemExecutor,
+      @Value("${executor.item.max-pool-size:32}") int maxItemThreads,
+      @Value("${executor.item.semaphore-permits:64}") int semaphorePermits) {
     this.calculatorFactory = calculatorFactory;
     this.starforceLookupPort = starforceLookupPort;
     this.flameTrialsProvider = flameTrialsProvider;
     this.flameInputResolver = flameInputResolver;
     this.itemExecutor = itemExecutor;
+    this.globalItemPermits = new Semaphore(semaphorePermits);  // Gate concurrency; executor threads are the hard limit
   }
 
   /**
@@ -92,8 +99,7 @@ public class PresetCalculationHelper {
   public CompletableFuture<PresetExpectation> calculatePresetAsync(
       List<CubeCalculationInput> cubeInputs,
       int presetNo,
-      String characterClass,
-      Semaphore itemPermits) {
+      String characterClass) {
 
     List<CompletableFuture<ItemExpectationV4>> itemFutures = new ArrayList<>();
 
@@ -106,11 +112,18 @@ public class PresetCalculationHelper {
       }
 
       EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
-      itemPermits.acquireUninterruptibly();
+
       itemFutures.add(
           CompletableFuture.supplyAsync(
-                  () -> calculateSingleItem(input, cubeInput, characterClass), itemExecutor)
-              .whenComplete((r, e) -> itemPermits.release()));
+                  () -> {
+                    globalItemPermits.acquireUninterruptibly();
+                    try {
+                      return calculateSingleItem(input, cubeInput, characterClass);
+                    } finally {
+                      globalItemPermits.release();
+                    }
+                  },
+                  itemExecutor));
     }
 
     if (itemFutures.isEmpty()) {

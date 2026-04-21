@@ -14,7 +14,7 @@ dependencies {
 	// Controller는 Port 인터페이스만 사용, 런타임에 module-app의 Adapter가 DI됨
 	implementation project(':module-core')
 	implementation project(':module-common')
-	implementation project(':module-infra')
+	// module-infra removed: web layer must not depend on infrastructure
 
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
 	implementation(libs.kotlin.stdlib)

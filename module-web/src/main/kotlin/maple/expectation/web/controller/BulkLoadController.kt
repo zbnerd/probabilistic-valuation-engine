@@ -1,8 +1,8 @@
 package maple.expectation.web.controller
 
-import maple.expectation.infrastructure.bulk.BulkLoaderService
-import maple.expectation.infrastructure.bulk.BulkLoaderService.BulkLoadStatus
-import maple.expectation.infrastructure.bulk.BulkLoaderService.LoadResult
+import maple.expectation.core.port.inbound.BulkLoadPort
+import maple.expectation.core.port.inbound.BulkLoadResult
+import maple.expectation.core.port.inbound.BulkLoadStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
@@ -16,10 +16,10 @@ import org.springframework.web.bind.annotation.RestController
  * <h3>Endpoints:</h3>
  * <ul>
  *   <li>POST /api/admin/bulk/load - Start bulk load from CSV</li>
-*   <li>POST /api/admin/bulk/resume - Resume from checkpoint</li>
-*   <li>POST /api/admin/bulk/retry-failed - Retry failed characters</li>
-*   <li>GET /api/admin/bulk/status - Get current status</li>
-* </ul>
+ *   <li>POST /api/admin/bulk/resume - Resume from checkpoint</li>
+ *   <li>POST /api/admin/bulk/retry-failed - Retry failed characters</li>
+ *   <li>GET /api/admin/bulk/status - Get current status</li>
+ * </ul>
  *
  * <h3>Security:</h3>
  * <p>Requires ADMIN role for access.
@@ -27,42 +27,42 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/admin/bulk")
 class BulkLoadController(
-    private val bulkLoaderService: BulkLoaderService,
+    private val bulkLoadPort: BulkLoadPort,
 ) {
 
     /**
      * Start bulk load from CSV
      *
      * @param force 캐시 무시 여부
-     * @return LoadResult with statistics
+     * @return BulkLoadResult with statistics
      */
     @PostMapping("/load")
     fun startLoad(
         @RequestParam(name = "force", defaultValue = "false") force: Boolean,
-    ): ResponseEntity<LoadResult> {
-        val result = bulkLoaderService.loadAll(force = force).join()
+    ): ResponseEntity<BulkLoadResult> {
+        val result = bulkLoadPort.loadAll(force = force).join()
         return ResponseEntity.ok(result)
     }
 
     /**
      * Resume bulk load from checkpoint
      *
-     * @return LoadResult with statistics
+     * @return BulkLoadResult with statistics
      */
     @PostMapping("/resume")
-    fun resume(): ResponseEntity<LoadResult> {
-        val result = bulkLoaderService.resume().join()
+    fun resume(): ResponseEntity<BulkLoadResult> {
+        val result = bulkLoadPort.resume().join()
         return ResponseEntity.ok(result)
     }
 
     /**
      * Retry failed characters
      *
-     * @return LoadResult with statistics
+     * @return BulkLoadResult with statistics
      */
     @PostMapping("/retry-failed")
-    fun retryFailed(): ResponseEntity<LoadResult> {
-        val result = bulkLoaderService.retryFailed().join()
+    fun retryFailed(): ResponseEntity<BulkLoadResult> {
+        val result = bulkLoadPort.retryFailed().join()
         return ResponseEntity.ok(result)
     }
 
@@ -73,7 +73,7 @@ class BulkLoadController(
      */
     @GetMapping("/status")
     fun getStatus(): ResponseEntity<BulkLoadStatus> {
-        val status = bulkLoaderService.getStatus()
+        val status = bulkLoadPort.getStatus()
         return ResponseEntity.ok(status)
     }
 
@@ -84,7 +84,7 @@ class BulkLoadController(
      */
     @PostMapping("/stop")
     fun stop(): ResponseEntity<Map<String, String>> {
-        bulkLoaderService.stop()
+        bulkLoadPort.stop()
         return ResponseEntity.ok(mapOf("message" to "Bulk load stopped"))
     }
 }

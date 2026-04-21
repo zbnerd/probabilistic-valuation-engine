@@ -1,6 +1,6 @@
-package maple.expectation.web.dto.v4
+package maple.expectation.core.dto.v4
 
-import maple.expectation.web.dto.CubeCalculationInput
+import maple.expectation.core.dto.cube.CubeCalculationInput
 
 /**
  * V4 장비 기대값 계산 입력 DTO (#240)

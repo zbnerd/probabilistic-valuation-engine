@@ -1,4 +1,4 @@
-package maple.expectation.web.dto.v4
+package maple.expectation.core.dto.v4
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import java.time.LocalDateTime

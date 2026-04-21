@@ -92,7 +92,7 @@ public class TransactionalEventPublisher {
   }
 
   private String serializePayload(
-      maple.expectation.web.dto.v4.EquipmentExpectationResponseV4 response) {
+      maple.expectation.core.dto.v4.EquipmentExpectationResponseV4 response) {
     return executor.executeOrDefault(
         () -> objectMapper.writeValueAsString(response),
         "{}",

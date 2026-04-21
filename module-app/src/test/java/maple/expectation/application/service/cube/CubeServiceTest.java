@@ -22,7 +22,7 @@ import maple.expectation.error.exception.UnsupportedCalculationEngineException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.support.TestLogicExecutors;
-import maple.expectation.web.dto.CubeCalculationInput;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;

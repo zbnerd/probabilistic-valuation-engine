@@ -1,5 +1,6 @@
 package maple.expectation.integration.repository
 
+import maple.expectation.core.domain.model.PageRequest
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.core.domain.model.character.UserIgn
@@ -10,7 +11,6 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.data.domain.PageRequest
 
 /**
  * GameCharacterRepository 통합 테스트
@@ -242,7 +242,7 @@ class GameCharacterRepositoryIntegrationTest : RepositoryIntegrationTestBase() {
         // Assert
         assertThat(secondPage.content).hasSize(5)
         assertThat(secondPage.isFirst).isFalse
-        assertThat(secondPage.hasNext()).isTrue
+        assertThat(secondPage.hasNext).isTrue
     }
 
     @Test

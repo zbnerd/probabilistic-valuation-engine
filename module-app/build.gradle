@@ -52,7 +52,7 @@ dependencies {
 	implementation project(':module-core')
 	implementation project(':module-infra')
 	implementation project(':module-common')
-	implementation project(':module-web')
+	testImplementation project(':module-web')
 
 	// Spring Web
 	implementation(libs.spring.boot.starter.web)

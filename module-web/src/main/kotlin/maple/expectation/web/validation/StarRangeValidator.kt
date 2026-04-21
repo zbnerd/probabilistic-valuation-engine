@@ -2,7 +2,7 @@ package maple.expectation.web.validation
 
 import jakarta.validation.ConstraintValidator
 import jakarta.validation.ConstraintValidatorContext
-import maple.expectation.web.dto.v4.EquipmentCalculationInput
+import maple.expectation.core.dto.v4.EquipmentCalculationInput
 
 /**
  * 스타포스 범위 검증 validator

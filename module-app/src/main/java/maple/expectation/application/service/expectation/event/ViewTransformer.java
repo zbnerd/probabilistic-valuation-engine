@@ -14,10 +14,10 @@ import maple.expectation.infrastructure.persistence.entity.CharacterValuationVie
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.CostBreakdownView;
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.ItemExpectationView;
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.PresetView;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 

@@ -1,13 +1,13 @@
 package maple.expectation.application.service.expectation;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.IntStream;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.character.GameCharacterFacade;
 import maple.expectation.application.service.character.GameCharacterService;
@@ -25,10 +25,10 @@ import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.persistence.CharacterViewQueryServicePostgres;
 import maple.expectation.infrastructure.provider.EquipmentDataProvider;
 import maple.expectation.parser.EquipmentStreamingParser;
-import maple.expectation.web.dto.CubeCalculationInput;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.lang.Nullable;
@@ -68,7 +68,6 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   private final StarforceLookupPort starforceLookupPort;
   private final LogicExecutor executor;
   private final Executor equipmentExecutor;
-  private final Executor presetExecutor;
   private final ExpectationCacheCoordinator cacheCoordinator;
   private final ExpectationPersistenceService persistenceService;
   private final ObjectProvider<EquipmentExpectationServiceV4> selfProvider;
@@ -85,7 +84,6 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       StarforceLookupPort starforceLookupPort,
       LogicExecutor executor,
       @Qualifier("equipmentProcessingExecutor") Executor equipmentExecutor,
-      @Qualifier("presetCalculationExecutor") Executor presetExecutor,
       ExpectationCacheCoordinator cacheCoordinator,
       ExpectationPersistenceService persistenceService,
       ObjectProvider<EquipmentExpectationServiceV4> selfProvider,
@@ -100,7 +98,6 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
     this.starforceLookupPort = starforceLookupPort;
     this.executor = executor;
     this.equipmentExecutor = equipmentExecutor;
-    this.presetExecutor = presetExecutor;
     this.cacheCoordinator = cacheCoordinator;
     this.persistenceService = persistenceService;
     this.selfProvider = selfProvider;
@@ -355,24 +352,16 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private List<PresetExpectation> calculateAllPresets(byte[] equipmentData, String characterClass) {
     byte[] decompressedData = streamingParser.decompressIfNeeded(equipmentData);
-
-    // 1-pass: parse all 3 presets from single JSON scan
     Map<Integer, List<CubeCalculationInput>> allPresetInputs =
         streamingParser.parseAllPresets(decompressedData);
 
-    // Parallel calculation (CPU-bound, parsing eliminated)
-    List<CompletableFuture<PresetExpectation>> futures =
-        IntStream.rangeClosed(1, 3)
-            .mapToObj(
-                presetNo ->
-                    CompletableFuture.supplyAsync(
-                        () ->
-                            presetHelper.calculatePreset(
-                                allPresetInputs.getOrDefault(presetNo, List.of()),
-                                presetNo,
-                                characterClass),
-                        presetExecutor))
-            .toList();
+    List<CompletableFuture<PresetExpectation>> futures = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      futures.add(presetHelper.calculatePresetAsync(
+          allPresetInputs.getOrDefault(i + 1, List.of()),
+          i + 1,
+          characterClass));
+    }
 
     return futures.stream()
         .map(this::joinPresetFuture)

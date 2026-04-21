@@ -2,12 +2,11 @@ package maple.expectation.application.service.expectation.queue;
 
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.port.inbound.TaskReceipt;
+import maple.expectation.core.port.out.ExpectationCalcMessage;
+import maple.expectation.core.port.out.PgmqPort;
+import maple.expectation.core.port.out.QueueNames;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.pgmq.ExpectationCalcMessage;
-import maple.expectation.infrastructure.pgmq.PgmqClient;
-import maple.expectation.infrastructure.worker.ExpectationCalcLowWorker;
-import maple.expectation.infrastructure.worker.ExpectationCalcWorker;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -40,15 +39,15 @@ public class ExpectationCalculationQueue {
   private final int maxQueueSize;
   private final int highPriorityCapacity;
 
-  private final PgmqClient pgmqClient;
+  private final PgmqPort pgmqPort;
   private final LogicExecutor executor;
 
   public ExpectationCalculationQueue(
-      PgmqClient pgmqClient,
+      PgmqPort pgmqPort,
       LogicExecutor executor,
       @Value("${app.queue.expectation.max-queue-size:10000}") int maxQueueSize,
       @Value("${app.queue.expectation.high-priority-capacity:1000}") int highPriorityCapacity) {
-    this.pgmqClient = pgmqClient;
+    this.pgmqPort = pgmqPort;
     this.executor = executor;
     this.maxQueueSize = maxQueueSize;
     this.highPriorityCapacity = highPriorityCapacity;
@@ -137,9 +136,9 @@ public class ExpectationCalculationQueue {
   /** Get high priority queue size from PGMQ. */
   public int getHighPriorityCount() {
     TaskContext context =
-        TaskContext.of("Queue", "HighPriorityCount", ExpectationCalcWorker.QUEUE_NAME);
+        TaskContext.of("Queue", "HighPriorityCount", QueueNames.EXPECTATION_CALC_HIGH);
     return executor.executeOrDefault(
-        () -> Math.toIntExact(pgmqClient.queueLength(ExpectationCalcWorker.QUEUE_NAME)),
+        () -> Math.toIntExact(pgmqPort.queueLength(QueueNames.EXPECTATION_CALC_HIGH)),
         0,
         context);
   }
@@ -147,9 +146,9 @@ public class ExpectationCalculationQueue {
   /** Get low priority queue size from PGMQ. */
   public int getLowPriorityCount() {
     TaskContext context =
-        TaskContext.of("Queue", "LowPriorityCount", ExpectationCalcLowWorker.QUEUE_NAME);
+        TaskContext.of("Queue", "LowPriorityCount", QueueNames.EXPECTATION_CALC_LOW);
     return executor.executeOrDefault(
-        () -> Math.toIntExact(pgmqClient.queueLength(ExpectationCalcLowWorker.QUEUE_NAME)),
+        () -> Math.toIntExact(pgmqPort.queueLength(QueueNames.EXPECTATION_CALC_LOW)),
         0,
         context);
   }
@@ -165,8 +164,8 @@ public class ExpectationCalculationQueue {
 
   private String resolveQueueName(QueuePriority priority) {
     return switch (priority) {
-      case HIGH -> ExpectationCalcWorker.QUEUE_NAME;
-      case LOW -> ExpectationCalcLowWorker.QUEUE_NAME;
+      case HIGH -> QueueNames.EXPECTATION_CALC_HIGH;
+      case LOW -> QueueNames.EXPECTATION_CALC_LOW;
     };
   }
 
@@ -180,7 +179,7 @@ public class ExpectationCalculationQueue {
   private boolean isQueueFull(QueuePriority priority, String userIgn) {
     String queueName = resolveQueueName(priority);
     int maxSize = resolveMaxSize(priority);
-    long queueLength = pgmqClient.queueLength(queueName);
+    long queueLength = pgmqPort.queueLength(queueName);
     if (queueLength >= maxSize) {
       log.warn("[Queue] Queue full, rejecting: priority={}, userIgn={}", priority, userIgn);
       return true;
@@ -196,7 +195,7 @@ public class ExpectationCalculationQueue {
     String queueName = resolveQueueName(task.getPriority());
     if (!task.isForceRecalculation()) {
       Long existingMessageId =
-          pgmqClient.findActiveMessageIdByUserIgn(queueName, task.getUserIgn());
+          pgmqPort.findActiveMessageIdByUserIgn(queueName, task.getUserIgn());
       if (existingMessageId != null) {
         log.debug(
             "[Queue] Reusing active task: priority={}, userIgn={}, taskId={}",
@@ -209,7 +208,7 @@ public class ExpectationCalculationQueue {
 
     ExpectationCalcMessage message =
         new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation());
-    long messageId = pgmqClient.send(queueName, message);
+    long messageId = pgmqPort.send(queueName, message);
 
     log.debug(
         "[Queue] Task queued: priority={}, userIgn={}, taskId={}",

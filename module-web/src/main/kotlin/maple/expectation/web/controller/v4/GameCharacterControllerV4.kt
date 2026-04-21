@@ -1,5 +1,6 @@
 package maple.expectation.web.controller.v4
 
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
@@ -13,6 +14,7 @@ import maple.expectation.response.ApiResponse
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4
 import maple.expectation.web.dto.v4.LikeStatusResponse
 import maple.expectation.web.dto.v4.LikeToggleResponse
+import maple.expectation.web.validation.ValidIgn
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.HttpHeaders
@@ -109,8 +111,8 @@ class GameCharacterControllerV4(
     @GetMapping("/{userIgn}/expectation/preset/{presetNo}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
     fun getExpectationByPreset(
-        @PathVariable userIgn: String,
-        @PathVariable presetNo: Int,
+        @PathVariable @NotBlank @ValidIgn userIgn: String,
+        @PathVariable @Min(1) presetNo: Int,
     ): CompletableFuture<ResponseEntity<EquipmentExpectationResponseV4>> {
         log.info("[V4] Expectation for {} preset {}", maskIgn(userIgn), presetNo)
 
@@ -123,7 +125,7 @@ class GameCharacterControllerV4(
     @PostMapping("/{userIgn}/expectation/recalculate")
     @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
     fun recalculateExpectation(
-        @PathVariable userIgn: String,
+        @PathVariable @NotBlank @ValidIgn userIgn: String,
     ): CompletableFuture<ResponseEntity<EquipmentExpectationResponseV4>> {
         log.info("[V4] Force recalculating expectation for: {}", maskIgn(userIgn))
 

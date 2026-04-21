@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional
  * @see <a href="../../../../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
  */
 @Repository
-@Transactional("transactionManager")
+@Transactional(value = "transactionManager", readOnly = true)
 open class GameCharacterRepositoryImpl(
     private val jpaRepo: GameCharacterJpaRepository,
     private val jpaCustomRepo: GameCharacterJpaRepositoryCustom,
@@ -53,6 +53,7 @@ open class GameCharacterRepositoryImpl(
 
     override fun findActiveCharacters(): List<GameCharacter> = jpaCustomRepo.findActiveCharacters().stream().map { it.toDomain() }.toList()
 
+    @Transactional("transactionManager")
     override fun save(character: GameCharacter): GameCharacter {
         requireNotNull(character) { "Character cannot be null" }
         val jpaEntity = GameCharacterJpaEntity.fromDomain(character)
@@ -60,12 +61,14 @@ open class GameCharacterRepositoryImpl(
         return saved.toDomain()
     }
 
+    @Transactional("transactionManager")
     override fun deleteByOcid(ocid: String) {
         jpaRepo.deleteByOcid(ocid)
     }
 
     override fun existsByOcid(ocid: String): Boolean = jpaRepo.existsByOcid(ocid)
 
+    @Transactional("transactionManager")
     override fun incrementLikeCount(userIgn: String, count: Long) {
         jpaRepo.incrementLikeCount(userIgn, count)
     }

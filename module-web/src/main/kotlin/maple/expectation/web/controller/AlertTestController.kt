@@ -3,7 +3,9 @@ package maple.expectation.web.controller
 import maple.expectation.common.executor.TaskContext
 import maple.expectation.core.port.inbound.AlertPort
 import maple.expectation.core.port.inbound.ExecutorPort
+import maple.expectation.response.ApiResponse
 import org.springframework.context.annotation.Profile
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RestController
 
@@ -15,7 +17,7 @@ class AlertTestController(
 ) {
 
     @PostMapping("/api/admin/test/alert")
-    fun triggerTestAlert(): String {
+    fun triggerTestAlert(): ResponseEntity<ApiResponse<String>> {
         val context = TaskContext.of("Admin", "TestAlert")
 
         executor.executeVoidJava({
@@ -30,6 +32,6 @@ class AlertTestController(
             )
         }, context)
 
-        return "알림 발송 요청 완료 (Discord 및 서버 로그를 확인하세요)"
+        return ResponseEntity.ok(ApiResponse.success("알림 발송 요청 완료 (Discord 및 서버 로그를 확인하세요)"))
     }
 }

@@ -37,6 +37,7 @@ class CharacterViewQueryServicePostgres(
 
     // ==================== CharacterViewQueryPort Implementation ====================
 
+    @Transactional(value = "transactionManager", readOnly = true)
     fun findByUserIgn(userIgn: String): CharacterValuationViewEntity? {
         return findByUserIgnEntity(userIgn)
     }
@@ -218,6 +219,7 @@ class CharacterViewQueryServicePostgres(
     }
 
     /** Count all documents for a specific user IGN */
+    @Transactional(value = "transactionManager", readOnly = true)
     fun countByUserIgn(userIgn: String): Long {
         val context = TaskContext.of("PostgresQuery", "Count", userIgn)
 
@@ -234,6 +236,7 @@ class CharacterViewQueryServicePostgres(
      * @param userIgn User in-game name
      * @return Last applied version, or 0L if no document exists
      */
+    @Transactional(value = "transactionManager", readOnly = true)
     fun getLastAppliedVersion(userIgn: String): Long {
         val context = TaskContext.of("PostgresQuery", "GetLastAppliedVersion", userIgn)
 

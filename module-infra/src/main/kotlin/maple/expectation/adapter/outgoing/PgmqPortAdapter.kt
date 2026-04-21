@@ -1,7 +1,9 @@
 package maple.expectation.adapter.outgoing
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.core.port.out.PgmqPort
 import maple.expectation.infrastructure.pgmq.PgmqClient
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 
 /**
@@ -17,6 +19,8 @@ import org.springframework.stereotype.Component
 @Component
 class PgmqPortAdapter(
     private val pgmqClient: PgmqClient,
+    private val jdbcTemplate: JdbcTemplate,
+    private val objectMapper: ObjectMapper,
 ) : PgmqPort {
 
     /**
@@ -49,5 +53,18 @@ class PgmqPortAdapter(
      */
     override fun findActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long? {
         return pgmqClient.findActiveMessageIdByUserIgn(queueName, userIgn)
+    }
+
+    /**
+     * Atomically send message or return existing message ID if active message found for userIgn.
+     * Returns positive ID for new message, negative ID for reused existing message.
+     */
+    override fun sendIfAbsent(queueName: String, userIgn: String, payload: Any): Long {
+        val json = objectMapper.writeValueAsString(payload)
+        return jdbcTemplate.queryForObject(
+            "SELECT pgmq_send_if_absent(?, ?, ?::jsonb)",
+            Long::class.java,
+            queueName, userIgn, json
+        ) ?: throw IllegalStateException("Failed to execute sendIfAbsent for queue: $queueName")
     }
 }

@@ -65,6 +65,7 @@ class GameCharacterControllerV5(
     @Qualifier("asyncExecutor") private val preWarmExecutor: Executor,
     meterRegistry: MeterRegistry,
 ) {
+    private val preWarmSemaphore = java.util.concurrent.Semaphore(10)
     private val preWarmFailureCounter = meterRegistry.counter("v5.prewarm.failures", "type", "error")
     private val preWarmRejectedCounter = meterRegistry.counter("v5.prewarm.failures", "type", "rejected")
 
@@ -139,13 +140,21 @@ class GameCharacterControllerV5(
      * <p>실패해도 큐잉은 정상 수행 (Best-Effort)
      */
     private fun preWarmEquipmentCache(userIgn: String, context: TaskContext) {
-        executorPort.executeVoidJava({
-            val ocid = ocidPort.resolveOcid(userIgn)
-            if (ocid != null) {
-                fanOutPort.preFetchByOcid(ocid)
-                log.debug("[V5] FanOut pre-warm: ign={}, ocid={}", maskIgn(userIgn), ocid.take(8))
-            }
-        }, context)
+        if (!preWarmSemaphore.tryAcquire()) {
+            log.warn("[V5] Prewarm semaphore full, skipping: ign={}", maskIgn(userIgn))
+            return
+        }
+        try {
+            executorPort.executeVoidJava({
+                val ocid = ocidPort.resolveOcid(userIgn)
+                if (ocid != null) {
+                    fanOutPort.preFetchByOcid(ocid)
+                    log.debug("[V5] FanOut pre-warm: ign={}, ocid={}", maskIgn(userIgn), ocid.take(8))
+                }
+            }, context)
+        } finally {
+            preWarmSemaphore.release()
+        }
     }
 
     /**

@@ -1,9 +1,11 @@
 package maple.expectation.web.controller.v1
 
+import jakarta.validation.constraints.NotBlank
 import java.util.concurrent.CompletableFuture
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.core.port.out.GameCharacterPort
 import maple.expectation.web.dto.response.CharacterResponse
+import maple.expectation.web.validation.ValidIgn
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.validation.annotation.Validated
@@ -34,7 +36,7 @@ class GameCharacterControllerV1(
     @GetMapping("/{userIgn}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
     fun findCharacterByUserIgn(
-        @PathVariable userIgn: String,
+        @PathVariable @NotBlank @ValidIgn userIgn: String,
     ): CompletableFuture<ResponseEntity<CharacterResponse>> = CompletableFuture.supplyAsync {
         val character: GameCharacter = gameCharacterPort.getCharacterOrThrow(userIgn)
         ResponseEntity.ok(CharacterResponse.from(character))

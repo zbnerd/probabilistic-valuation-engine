@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import static org.mockito.Mockito.mock;
+
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
 import maple.expectation.application.usecase.CalculationQueuePortAdapter;
@@ -14,9 +16,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 /**
  * Unit tests for CalculationQueuePortAdapter.
@@ -27,15 +26,15 @@ import org.mockito.MockitoAnnotations;
 @DisplayName("CalculationQueuePortAdapter: Delegation Tests")
 class CalculationQueuePortAdapterTest {
 
-  @Mock private ExpectationCalculationQueue queue;
-
-  @InjectMocks private CalculationQueuePortAdapter adapter;
+  private ExpectationCalculationQueue queue;
+  private CalculationQueuePortAdapter adapter;
 
   private static final String TEST_USER_IGN = "TestUser";
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
+    queue = mock(ExpectationCalculationQueue.class);
+    adapter = new CalculationQueuePortAdapter(queue);
   }
 
   @Test

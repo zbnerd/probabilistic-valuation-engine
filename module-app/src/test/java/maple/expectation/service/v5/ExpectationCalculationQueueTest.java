@@ -73,7 +73,8 @@ class ExpectationCalculationQueueTest {
   @DisplayName("이미 활성 task가 있으면 non-force 요청은 기존 taskId를 재사용")
   void offerWithReceiptReusesExistingTaskForNonForceRequests() {
     when(pgmqPort.queueLength(anyString())).thenReturn(0L);
-    when(pgmqPort.findActiveMessageIdByUserIgn("expectation_calc_high", "user1")).thenReturn(99L);
+    when(pgmqPort.sendIfAbsent(eq("expectation_calc_high"), eq("user1"), any()))
+        .thenReturn(-99L);
 
     TaskReceipt receipt =
         queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", false));

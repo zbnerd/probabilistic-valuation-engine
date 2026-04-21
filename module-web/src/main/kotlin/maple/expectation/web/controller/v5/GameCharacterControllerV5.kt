@@ -13,6 +13,8 @@ import maple.expectation.core.port.inbound.ExecutorPort
 import maple.expectation.core.port.inbound.TaskReceipt
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
+import maple.expectation.error.dto.ErrorResponse
+import maple.expectation.error.CommonErrorCode
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
 import maple.expectation.web.mapper.CharacterViewMapper
 import maple.expectation.web.validation.ValidIgn
@@ -193,7 +195,7 @@ class GameCharacterControllerV5(
         } else {
             log.warn("[V5] Queue full, rejecting: {}", maskIgn(userIgn))
             ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body("Queue full, try again later")
+                .body(ErrorResponse.from(CommonErrorCode.SERVICE_UNAVAILABLE))
         }
     }
 

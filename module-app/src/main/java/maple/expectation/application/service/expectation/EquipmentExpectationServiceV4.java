@@ -6,7 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.IntStream;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.character.GameCharacterFacade;
@@ -352,16 +354,19 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private List<PresetExpectation> calculateAllPresets(byte[] equipmentData, String characterClass) {
     byte[] decompressedData = streamingParser.decompressIfNeeded(equipmentData);
+
     Map<Integer, List<CubeCalculationInput>> allPresetInputs =
         streamingParser.parseAllPresets(decompressedData);
 
-    List<CompletableFuture<PresetExpectation>> futures = new ArrayList<>();
-    for (int i = 0; i < 3; i++) {
-      futures.add(presetHelper.calculatePresetAsync(
-          allPresetInputs.getOrDefault(i + 1, List.of()),
-          i + 1,
-          characterClass));
-    }
+    List<CompletableFuture<PresetExpectation>> futures =
+        IntStream.rangeClosed(1, 3)
+            .mapToObj(
+                presetNo ->
+                    presetHelper.calculatePresetAsync(
+                        allPresetInputs.getOrDefault(presetNo, List.of()),
+                        presetNo,
+                        characterClass))
+            .toList();
 
     return futures.stream()
         .map(this::joinPresetFuture)

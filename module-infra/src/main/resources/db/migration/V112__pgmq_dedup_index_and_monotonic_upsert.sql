@@ -15,9 +15,9 @@ DECLARE
     v_new_msg_id BIGINT;
     v_queue_table TEXT;
 BEGIN
-    v_queue_table := 'pgmq.q_' || p_queue_name;
+    v_queue_table := 'q_' || p_queue_name;
 
-    EXECUTE format('SELECT msg_id FROM %I WHERE message ->> ''userIgn'' = $1 ORDER BY msg_id DESC LIMIT 1', v_queue_table)
+    EXECUTE format('SELECT msg_id FROM pgmq.%I WHERE message ->> ''userIgn'' = $1 ORDER BY msg_id DESC LIMIT 1', v_queue_table)
         INTO v_existing_msg_id
         USING p_user_ign;
 

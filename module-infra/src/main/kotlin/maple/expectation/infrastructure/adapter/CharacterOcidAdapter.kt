@@ -86,6 +86,13 @@ class CharacterOcidAdapter(
         return entity?.ocid
     }
 
+    /**
+     * Full load of all OCIDs from database for cache warming.
+     *
+     * This is an intentional full-table scan executed at startup to warm the L2 cache.
+     * Results are cached via @Cacheable("allOcidsCache") on resolveAllOcids().
+     * Subsequent calls hit the cache instead of hitting the database.
+     */
     private fun loadAllOcidsFromDb(): Map<String, String> {
         val entities = jpaRepository.findAll()
         return entities

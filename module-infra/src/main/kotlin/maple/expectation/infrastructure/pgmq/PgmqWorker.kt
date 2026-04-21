@@ -248,7 +248,9 @@ abstract class PgmqWorker<T : Any>(
                 val calcResult = result.first as? CalculationResult
                 if (calcResult != null) {
                     if (!pipelineBuffer.offer(calcResult)) {
-                        log.warn("[Worker] Pipeline buffer full, dropping result: queue={}, userIgn={}", queueName, calcResult.message.payload.userIgn)
+                        log.warn("[{}] Pipeline buffer full, dropping result: userIgn={}", queueName, calcResult.message.payload.userIgn)
+                        metrics.inflightDecrement()
+                        inflightPermits.release()
                     }
                 } else {
                     log.warn("[{}] Phase 1 returned non-CalculationResult for msgId={}, dropping", queueName, result.second.messageId)

@@ -193,28 +193,25 @@ public class ExpectationCalculationQueue {
     }
 
     String queueName = resolveQueueName(task.getPriority());
-    if (!task.isForceRecalculation()) {
-      Long existingMessageId =
-          pgmqPort.findActiveMessageIdByUserIgn(queueName, task.getUserIgn());
-      if (existingMessageId != null) {
+    if (task.isForceRecalculation()) {
+      ExpectationCalcMessage message =
+          new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation());
+      long messageId = pgmqPort.send(queueName, message);
+      return new TaskReceipt(String.valueOf(messageId), task.getUserIgn(), true);
+    } else {
+      ExpectationCalcMessage message =
+          new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation());
+      long result = pgmqPort.sendIfAbsent(queueName, task.getUserIgn(), message);
+      if (result < 0) {
+        long existingId = -result;
         log.debug(
             "[Queue] Reusing active task: priority={}, userIgn={}, taskId={}",
             task.getPriority(),
             task.getUserIgn(),
-            existingMessageId);
-        return new TaskReceipt(String.valueOf(existingMessageId), task.getUserIgn(), true);
+            existingId);
+        return new TaskReceipt(String.valueOf(existingId), task.getUserIgn(), true);
       }
+      return new TaskReceipt(String.valueOf(result), task.getUserIgn(), true);
     }
-
-    ExpectationCalcMessage message =
-        new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation());
-    long messageId = pgmqPort.send(queueName, message);
-
-    log.debug(
-        "[Queue] Task queued: priority={}, userIgn={}, taskId={}",
-        task.getPriority(),
-        task.getUserIgn(),
-        messageId);
-    return new TaskReceipt(String.valueOf(messageId), task.getUserIgn(), true);
   }
 }

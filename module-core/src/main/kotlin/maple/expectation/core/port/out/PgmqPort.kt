@@ -35,4 +35,10 @@ interface PgmqPort {
      * @return message ID if found, null otherwise
      */
     fun findActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long?
+
+    /**
+     * Atomically send message or return existing message ID if active message found for userIgn.
+     * Returns positive ID for new message, negative ID for reused existing message.
+     */
+    fun sendIfAbsent(queueName: String, userIgn: String, payload: Any): Long
 }

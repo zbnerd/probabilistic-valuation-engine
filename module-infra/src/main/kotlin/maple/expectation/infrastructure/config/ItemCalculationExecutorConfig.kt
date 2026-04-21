@@ -1,0 +1,113 @@
+package maple.expectation.infrastructure.config
+
+import io.micrometer.core.instrument.Gauge
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
+import java.util.Collections
+import java.util.concurrent.Executor
+import maple.expectation.infrastructure.executor.BlockingSubmitExecutor
+import org.slf4j.LoggerFactory
+import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.core.task.TaskDecorator
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
+
+/**
+ * 장비 개별 계산 전용 Executor (ThreadPool)
+ *
+ * ## Phase 1→2→3 전환 이력
+ *
+ * ```
+ * Phase 1: presetExecutor 공유 → 큐 밀림 (baseline)
+ * Phase 2: itemExecutor 분리 (ThreadPool 4/8/200) → 포화 (8/8 + 200/200)
+ * Phase 2.5: Virtual Thread + Semaphore(64) → CPU-bound에서 3.5× 회귀
+ * Phase 3: ThreadPool 16/32/500 → 현재
+ * ```
+ *
+ * ## 설정 근거
+ *
+ * - Core 16: Bulkhead 50 × ~0.3 (모든 요청이 20개 장비를 계산하지 않음)
+ * - Max 32: 피크 시 여유
+ * - Queue 5000: fan-out 스파이크 흡수
+ * - BlockingSubmitExecutor: 큐 포화 시 submit 블록 후 재시도 (배압, task 손실 방지)
+ *
+ * ## Virtual Thread 기각 사유
+ *
+ * 장비 계산은 CPU-bound (순수 수학 연산). VT는 I/O 대기에 최적화되어
+ * CPU-bound에서 스케줄링 오버헤드만 증가. 부하테스트에서 3.5× latency 회귀 확인.
+ *
+ * @see PresetCalculationExecutorConfig 프리셋 orchestration용 Executor
+ */
+@Configuration
+@EnableConfigurationProperties(ExecutorProperties::class)
+class ItemCalculationExecutorConfig(
+    private val meterRegistry: MeterRegistry,
+    private val executorProperties: ExecutorProperties,
+) {
+    private val log = LoggerFactory.getLogger(ItemCalculationExecutorConfig::class.java)
+
+    @Bean("itemCalculationExecutor")
+    fun itemCalculationExecutor(contextPropagatingDecorator: TaskDecorator): Executor {
+        val executor = ThreadPoolTaskExecutor()
+        val config = executorProperties.equipment
+        executor.setCorePoolSize(config.corePoolSize)
+        executor.setMaxPoolSize(config.maxPoolSize)
+        executor.setQueueCapacity(config.queueCapacity)
+        executor.setThreadNamePrefix("item-calc-")
+        executor.setTaskDecorator(contextPropagatingDecorator)
+        // Default AbortPolicy — BlockingSubmitExecutor catches rejection and retries.
+
+        executor.setWaitForTasksToCompleteOnShutdown(true)
+        executor.setAwaitTerminationSeconds(30)
+        executor.initialize()
+
+        ExecutorServiceMetrics(
+            executor.threadPoolExecutor,
+            "item.calculation",
+            Collections.emptyList(),
+        ).bindTo(meterRegistry)
+
+        registerMetrics(executor)
+
+        val wrapper = BlockingSubmitExecutor(executor, 1_000_000L) {
+            executor.threadPoolExecutor.isShutdown
+        }
+        registerWrapperMetrics(wrapper)
+
+        log.info(
+            "[ItemCalculationExecutor] Initialized: core={}, max={}, queue={}, wrapper=BlockingSubmit(backoff=1ms)",
+            config.corePoolSize, config.maxPoolSize, config.queueCapacity,
+        )
+
+        return wrapper
+    }
+
+    private fun registerMetrics(executor: ThreadPoolTaskExecutor) {
+        Gauge.builder("item.calculation.queue.size", executor) { e ->
+            e.threadPoolExecutor.queue.size.toDouble()
+        }.description("장비 계산 대기 큐 크기").register(meterRegistry)
+
+        Gauge.builder("item.calculation.active.count", executor) { obj ->
+            obj.activeCount.toDouble()
+        }.description("장비 계산 활성 스레드 수").register(meterRegistry)
+
+        Gauge.builder("item.calculation.pool.size", executor) { obj ->
+            obj.poolSize.toDouble()
+        }.description("장비 계산 현재 풀 크기").register(meterRegistry)
+
+        Gauge.builder("item.calculation.completed.tasks", executor) { e ->
+            e.threadPoolExecutor.completedTaskCount.toDouble()
+        }.description("장비 계산 완료된 작업 수").register(meterRegistry)
+    }
+
+    private fun registerWrapperMetrics(wrapper: BlockingSubmitExecutor) {
+        Gauge.builder("item.calculation.submit.retry.count", wrapper) {
+            it.submitRetryCount.toDouble()
+        }.description("Number of submit retries due to queue full").register(meterRegistry)
+
+        Gauge.builder("item.calculation.submit.retry.wait.ms", wrapper) {
+            it.submitRetryWaitNs.toDouble() / 1_000_000.0
+        }.description("Total time spent waiting for submit retries (ms)").register(meterRegistry)
+    }
+}

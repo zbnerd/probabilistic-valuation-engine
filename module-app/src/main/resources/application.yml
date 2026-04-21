@@ -148,12 +148,6 @@ resilience4j:
         permittedNumberOfCallsInHalfOpenState: 3
         registerHealthIndicator: true
 
-  bulkhead:
-    instances:
-      nexonApi:
-        maxConcurrentCalls: 50          # Nexon API 안정 한계 (100+시 타임아웃 폭증)
-        maxWaitDuration: 500ms          # 빠른 거부→PGMQ 재시도 (5s시 타임아웃 예산 잠식)
-
   retry:
     retry-aspect-order: 399 # Retry가 CircuitBreaker를 감싸도록 설정
     instances:
@@ -217,6 +211,8 @@ observability:
 nexon:
   api:
     key: ${NEXON_API_KEY}
+    rate-limit:
+      max-concurrent: 200           # inflight(100) × API_calls(2) = 200, 단일 입구 제어
     # 타임아웃 설정 (기본값 - 필요 시 환경별로 오버라이드)
     connect-timeout: 3s              # TCP 연결 타임아웃
     response-timeout: 5s             # HTTP 응답 타임아웃
@@ -569,6 +565,10 @@ executor:
     core-pool-size: 4
     max-pool-size: 8
     queue-capacity: 500
+  item:
+    core-pool-size: 16    # 1:2 ratio enforced
+    max-pool-size: 32     # Semaphore(32) matches thread count for 1:1 fair gating
+    queue-capacity: 5000  # 2× burst headroom: inflight(40) × items(60) = 2400
 
 # Global Admission Control (Issue #617) - PRODUCTION READY
 admission-control:

@@ -62,6 +62,8 @@ pgmq:
       sequential-batch-ms: 500  # Buffer 500ms before sequential batch processing
       # Only affects workers with supportsTwoPhase=true (expectation-calc).
       # donation/nexon-fanout have supportsTwoPhase=false → sequential mode ignored.
+      # worker-pool-size uses default (availableProcessors*2). Sequential mode works
+      # with any pool size — cache locality benefit is highest at 2 threads per CPU.
     donation:
       enabled: true
       polling-interval-ms: 1000

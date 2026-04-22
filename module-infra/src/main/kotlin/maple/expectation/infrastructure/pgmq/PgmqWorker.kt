@@ -322,6 +322,10 @@ abstract class PgmqWorker<T : Any>(
     /**
      * Flush the accumulation buffer: drain all messages, pre-warm, submit sequential processing.
      * On failure (preWarm or submit), re-adds messages to buffer for next cycle.
+     *
+     * Zero Try-Catch Exception: Direct try-catch for permit leak prevention.
+     * If preWarmBatch or workerPool.submit fails, messages MUST be re-added to buffer
+     * or inflightPermits will never be released.
      */
     private fun flushSequentialBatch() {
         val batch = accumulationBuffer.drain()
@@ -360,12 +364,17 @@ abstract class PgmqWorker<T : Any>(
             }
         }
 
-        if (results.isNotEmpty()) {
-            batchWrite(results)
+        try {
+            if (results.isNotEmpty()) {
+                batchWrite(results)
+            }
+            repeat(successCount) { metrics.success.increment() }
+        } catch (e: Exception) {
+            log.error("[{}] Sequential batchWrite failed, {} results lost", queueName, results.size, e)
+            repeat(successCount) { metrics.failure.increment() }
         }
 
-        repeat(successCount) { metrics.success.increment() }
-        repeat(messages.size - successCount) { metrics.failure.increment() }
+        // Always release permits and inflight metrics — prevent resource leak
         messages.forEach {
             metrics.inflightDecrement()
             inflightPermits.release()

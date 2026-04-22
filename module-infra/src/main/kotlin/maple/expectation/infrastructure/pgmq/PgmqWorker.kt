@@ -320,11 +320,12 @@ abstract class PgmqWorker<T : Any>(
     }
 
     /**
-     * Flush the accumulation buffer: drain all messages, pre-warm, submit sequential processing.
-     * On failure (preWarm or submit), re-adds messages to buffer for next cycle.
+     * Flush the accumulation buffer: drain all messages, pre-warm, split into chunks,
+     * submit each chunk as an independent task. Each chunk is processed sequentially
+     * on its own thread — no context switching within, parallel across chunks.
      *
      * Zero Try-Catch Exception: Direct try-catch for permit leak prevention.
-     * If preWarmBatch or workerPool.submit fails, messages MUST be re-added to buffer
+     * If preWarmBatch or submit fails, messages MUST be re-added to buffer
      * or inflightPermits will never be released.
      */
     private fun flushSequentialBatch() {
@@ -332,18 +333,23 @@ abstract class PgmqWorker<T : Any>(
         if (batch.isEmpty()) return
         try {
             preWarmBatch(batch)
-            log.info("[{}] Sequential flush: {} messages after {}ms buffer", queueName, batch.size, sequentialBatchMs)
-            workerPool.submit { processSequentialBatch(batch) }
+            val poolSize = config.common.workerPoolSize
+            val chunkSize = maxOf(1, batch.size / poolSize)
+            val chunks = batch.chunked(chunkSize)
+            log.info("[{}] Batch flush: {} messages → {} chunks after {}ms buffer", queueName, batch.size, chunks.size, sequentialBatchMs)
+            chunks.forEach { chunk ->
+                workerPool.submit { processSequentialBatch(chunk) }
+            }
         } catch (e: Exception) {
-            log.error("[{}] Sequential flush failed, re-queueing {} messages", queueName, batch.size, e)
+            log.error("[{}] Batch flush failed, re-queueing {} messages", queueName, batch.size, e)
             accumulationBuffer.addAll(batch)
         }
     }
 
     /**
-     * Sequential batch processing: Phase 1 (calculateOnly) + immediate batchWrite.
-     * Runs on workerPool thread. Processes all messages in a for-loop on a single thread
-     * to maximize CPU cache locality.
+     * Sequential chunk processing: for-loop Phase 1 (calculateOnly) + immediate batchWrite.
+     * Runs on a single workerPool thread. No context switching — sequential for-loop.
+     * Multiple chunks run in parallel across workerPoolSize threads.
      */
     private fun processSequentialBatch(messages: List<PgmqMessage<T>>) {
         val results = mutableListOf<CalculationResult>()
@@ -380,7 +386,7 @@ abstract class PgmqWorker<T : Any>(
             inflightPermits.release()
         }
 
-        log.debug("[{}] Sequential batch done: {}/{} succeeded", queueName, successCount, messages.size)
+        log.debug("[{}] Sequential chunk done: {}/{} succeeded", queueName, successCount, messages.size)
     }
 
     /**

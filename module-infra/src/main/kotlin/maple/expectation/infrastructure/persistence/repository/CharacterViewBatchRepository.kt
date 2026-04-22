@@ -29,7 +29,7 @@ class CharacterViewBatchRepository(
                 message_id = ?, character_ocid = ?, character_class = ?,
                 calculated_at = ?, jpa_version = COALESCE(jpa_version, 0) + 1,
                 version = version + 1, last_applied_version = ?,
-                total_expected_cost = ?, max_preset_no = ?,
+                total_expected_cost = ?, max_preset_no = ?, preset_no = ?,
                 presets = ?::jsonb, from_cache = ?
             WHERE id = ? AND COALESCE(last_applied_version, version, 0) < ?
         """.trimIndent()
@@ -38,8 +38,8 @@ class CharacterViewBatchRepository(
             INSERT INTO character_valuation_views (
                 user_ign, message_id, character_ocid, character_class,
                 calculated_at, version, last_applied_version,
-                total_expected_cost, max_preset_no, presets, from_cache, jpa_version
-            ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?::jsonb, ?, 0)
+                total_expected_cost, max_preset_no, preset_no, presets, from_cache, jpa_version
+            ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?::jsonb, ?, 0)
         """.trimIndent()
     }
 
@@ -50,6 +50,7 @@ class CharacterViewBatchRepository(
         val characterClass: String,
         val totalExpectedCost: Long,
         val maxPresetNo: Int,
+        val presetNo: Int,
         val presetsJson: String,
         val version: Long,
     )
@@ -124,6 +125,7 @@ class CharacterViewBatchRepository(
                 e.result.version,
                 e.result.totalExpectedCost,
                 e.result.maxPresetNo,
+                e.result.presetNo,
                 e.result.presetsJson,
                 false,
                 e.existingId,
@@ -145,6 +147,7 @@ class CharacterViewBatchRepository(
                 r.version,
                 r.totalExpectedCost,
                 r.maxPresetNo,
+                r.presetNo,
                 r.presetsJson,
                 false,
             )

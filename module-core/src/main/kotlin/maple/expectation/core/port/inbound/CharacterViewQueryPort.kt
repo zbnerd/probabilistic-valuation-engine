@@ -42,6 +42,7 @@ interface CharacterViewQueryPort {
      * @param characterLevel 캐릭터 레벨
      * @param totalExpectedCost 총 기대값
      * @param maxPresetNo 최대 프리셋 번호
+     * @param presetNo 프리셋 번호
      * @param presetsJson 프리셋 데이터 JSON
      */
     fun upsertFromCalculation(
@@ -52,6 +53,7 @@ interface CharacterViewQueryPort {
         characterLevel: Int?,
         totalExpectedCost: Long,
         maxPresetNo: Int,
+        presetNo: Int,
         presetsJson: String,
     )
 }

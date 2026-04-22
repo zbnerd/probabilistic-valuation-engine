@@ -1,6 +1,8 @@
 package maple.expectation.web.controller.v5
 
 import io.micrometer.core.instrument.MeterRegistry
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 /**
@@ -77,15 +80,17 @@ class GameCharacterControllerV5(
      */
     @GetMapping("/{userIgn}/expectation")
     @PreAuthorize("permitAll()")
+    @JvmOverloads
     fun getExpectationV5(
         @PathVariable @NotBlank @ValidIgn userIgn: String,
+        @RequestParam(defaultValue = "1") @Min(1) @Max(3) presetNo: Int = 1,
     ): CompletableFuture<ResponseEntity<*>> {
         val normalizedIgn = userIgn.trim()
         log.debug("[V5] Query expectation for: {}", maskIgn(normalizedIgn))
-        return CompletableFuture.supplyAsync({ processPostgreSQLCacheFirstLookup(normalizedIgn) }, computeExecutor)
+        return CompletableFuture.supplyAsync({ processPostgreSQLCacheFirstLookup(normalizedIgn, presetNo) }, computeExecutor)
     }
 
-    private fun processPostgreSQLCacheFirstLookup(userIgn: String): ResponseEntity<*> {
+    private fun processPostgreSQLCacheFirstLookup(userIgn: String, presetNo: Int): ResponseEntity<*> {
         val context = TaskContext.of("V5Query", "CacheFirstLookup", userIgn)
 
         // 1. Query Side: Check PostgreSQL first via Port
@@ -123,7 +128,7 @@ class GameCharacterControllerV5(
         }
 
         // 4. Queue to Command Side via Port
-        return queueCalculationTask(userIgn, false, context)
+        return queueCalculationTask(userIgn, false, presetNo, context)
     }
 
     /**
@@ -180,7 +185,7 @@ class GameCharacterControllerV5(
         executorPort.executeVoidJava({ queryPort.deleteByUserIgn(userIgn) }, context)
 
         // 2. Queue with force=true via Port
-        return queueCalculationTask(userIgn, true, context)
+        return queueCalculationTask(userIgn, true, 1, context)
     }
 
     // ==================== Private Helper Methods ====================
@@ -188,10 +193,11 @@ class GameCharacterControllerV5(
     private fun queueCalculationTask(
         userIgn: String,
         forceRecalculation: Boolean,
+        presetNo: Int,
         context: TaskContext,
     ): ResponseEntity<*> {
         val receipt = executorPort.executeOrDefault(
-            { queuePort.offerHighPriorityWithReceipt(userIgn, forceRecalculation) },
+            { queuePort.offerHighPriorityWithReceipt(userIgn, forceRecalculation, presetNo) },
             TaskReceipt.rejected(userIgn),
             context,
         )

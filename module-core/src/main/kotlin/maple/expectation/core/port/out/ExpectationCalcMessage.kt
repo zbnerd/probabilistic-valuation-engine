@@ -8,8 +8,10 @@ package maple.expectation.core.port.out
  *
  * @param userIgn character IGN (identifier)
  * @param forceRecalculation true to bypass cache and force recalculation
+ * @param presetNo equipment preset number (default: 1)
  */
 data class ExpectationCalcMessage(
     val userIgn: String,
     val forceRecalculation: Boolean,
+    val presetNo: Int = 1,
 )

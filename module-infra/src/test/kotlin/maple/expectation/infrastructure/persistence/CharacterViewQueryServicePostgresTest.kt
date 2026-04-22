@@ -241,6 +241,7 @@ class CharacterViewQueryServicePostgresTest {
             characterLevel,
             totalExpectedCost,
             maxPresetNo,
+            1, // presetNo default
             presetsJson,
         )
 
@@ -254,6 +255,7 @@ class CharacterViewQueryServicePostgresTest {
         assertThat(saved.characterLevel).isEqualTo(characterLevel)
         assertThat(saved.totalExpectedCost).isEqualTo(totalExpectedCost)
         assertThat(saved.maxPresetNo).isEqualTo(maxPresetNo)
+        assertThat(saved.presetNo).isEqualTo(1)
     }
 
     private fun createTestEntity(

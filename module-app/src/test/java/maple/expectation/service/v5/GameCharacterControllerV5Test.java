@@ -182,6 +182,7 @@ class GameCharacterControllerV5Test {
         null, // lastAppliedVersion
         200000L, // totalExpectedCost
         1, // maxPresetNo
+        1, // presetNo
         List.of(preset), // presets
         true // fromCache
         );

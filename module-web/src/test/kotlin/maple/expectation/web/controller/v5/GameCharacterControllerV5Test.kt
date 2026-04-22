@@ -267,6 +267,7 @@ class GameCharacterControllerV5Test {
             characterLevel: Int?,
             totalExpectedCost: Long,
             maxPresetNo: Int,
+            presetNo: Int,
             presetsJson: String,
         ) {
             // Not used in tests
@@ -282,7 +283,7 @@ class GameCharacterControllerV5Test {
             return receipt.queued
         }
 
-        override fun offerHighPriorityWithReceipt(userIgn: String, forceRecalculation: Boolean): TaskReceipt {
+        override fun offerHighPriorityWithReceipt(userIgn: String, forceRecalculation: Boolean, presetNo: Int): TaskReceipt {
             lastForceRecalculation = forceRecalculation
             return receipt
         }

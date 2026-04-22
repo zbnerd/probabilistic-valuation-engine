@@ -195,19 +195,22 @@ public class ExpectationCalculationQueue {
     String queueName = resolveQueueName(task.getPriority());
     if (task.isForceRecalculation()) {
       ExpectationCalcMessage message =
-          new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation());
+          new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation(), task.getPresetNo());
       long messageId = pgmqPort.send(queueName, message);
       return new TaskReceipt(String.valueOf(messageId), task.getUserIgn(), true);
     } else {
       ExpectationCalcMessage message =
-          new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation());
-      long result = pgmqPort.sendIfAbsent(queueName, task.getUserIgn(), message);
+          new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation(), task.getPresetNo());
+      // P0-3 FIX: Dedup key must include presetNo to avoid conflicts between different presets
+      String dedupKey = task.getUserIgn() + ":" + task.getPresetNo();
+      long result = pgmqPort.sendIfAbsent(queueName, dedupKey, message);
       if (result < 0) {
         long existingId = -result;
         log.debug(
-            "[Queue] Reusing active task: priority={}, userIgn={}, taskId={}",
+            "[Queue] Reusing active task: priority={}, userIgn={}, presetNo={}, taskId={}",
             task.getPriority(),
             task.getUserIgn(),
+            task.getPresetNo(),
             existingId);
         return new TaskReceipt(String.valueOf(existingId), task.getUserIgn(), true);
       }

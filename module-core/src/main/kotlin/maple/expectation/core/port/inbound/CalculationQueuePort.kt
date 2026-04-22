@@ -27,7 +27,8 @@ interface CalculationQueuePort {
      *
      * @param userIgn 캐릭터 IGN
      * @param forceRecalculation 강제 재계산 여부
+     * @param presetNo 프리셋 번호 (default: 1)
      * @return TaskReceipt with taskId
      */
-    fun offerHighPriorityWithReceipt(userIgn: String, forceRecalculation: Boolean): TaskReceipt
+    fun offerHighPriorityWithReceipt(userIgn: String, forceRecalculation: Boolean, presetNo: Int = 1): TaskReceipt
 }

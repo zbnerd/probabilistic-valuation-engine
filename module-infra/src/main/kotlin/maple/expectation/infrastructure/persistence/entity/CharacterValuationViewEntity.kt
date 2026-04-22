@@ -72,6 +72,9 @@ class CharacterValuationViewEntity(
     @Column(name = "max_preset_no")
     var maxPresetNo: Int? = null,
 
+    @Column(name = "preset_no", nullable = false)
+    var presetNo: Int = 1,
+
     /**
      * Preset data stored as JSONB
      */

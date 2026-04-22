@@ -201,6 +201,7 @@ class CharacterViewQueryPortAdapterTest {
             characterLevel,
             totalExpectedCost,
             maxPresetNo,
+            1, // presetNo default
             presetsJson,
         )
 
@@ -212,6 +213,7 @@ class CharacterViewQueryPortAdapterTest {
             eq(characterLevel),
             eq(totalExpectedCost),
             eq(maxPresetNo),
+            eq(1), // presetNo default
             eq(presetsJson),
         )
     }

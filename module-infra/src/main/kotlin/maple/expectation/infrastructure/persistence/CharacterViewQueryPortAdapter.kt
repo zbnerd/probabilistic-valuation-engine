@@ -47,11 +47,12 @@ class CharacterViewQueryPortAdapter(
         characterLevel: Int?,
         totalExpectedCost: Long,
         maxPresetNo: Int,
+        presetNo: Int,
         presetsJson: String,
     ) {
         queryService.upsertFromCalculation(
             userIgn, messageId, characterOcid, characterClass, characterLevel,
-            totalExpectedCost, maxPresetNo, presetsJson,
+            totalExpectedCost, maxPresetNo, presetNo, presetsJson,
         )
     }
 

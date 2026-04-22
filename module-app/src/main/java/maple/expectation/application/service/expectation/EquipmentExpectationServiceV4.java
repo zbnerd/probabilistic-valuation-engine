@@ -114,49 +114,49 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   @TraceLog
   public CompletableFuture<EquipmentExpectationResponseV4> calculateExpectationAsync(
       String userIgn) {
-    return calculateExpectationAsync(userIgn, false);
+    return calculateExpectationAsync(userIgn, false, null, 1);
   }
 
   /** 캐릭터 기대값 계산 (비동기, force 옵션) */
   @TraceLog
   public CompletableFuture<EquipmentExpectationResponseV4> calculateExpectationAsync(
       String userIgn, boolean force) {
-    return calculateExpectationAsync(userIgn, force, null);
+    return calculateExpectationAsync(userIgn, force, null, 1);
   }
 
   @TraceLog
   public CompletableFuture<EquipmentExpectationResponseV4> calculateExpectationAsync(
-      String userIgn, boolean force, @Nullable String taskId) {
+      String userIgn, boolean force, @Nullable String taskId, int presetNo) {
     return CompletableFuture.supplyAsync(
-            () -> selfProvider.getObject().calculateExpectation(userIgn, force, taskId),
+            () -> selfProvider.getObject().calculateExpectation(userIgn, force, taskId, presetNo),
             equipmentExecutor)
         .orTimeout(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
   }
 
   /** GZIP 압축된 기대값 응답 반환 (비동기) (#262 성능 최적화) */
   @TraceLog
-  public CompletableFuture<byte[]> getGzipExpectationAsync(String userIgn, boolean force) {
+  public CompletableFuture<byte[]> getGzipExpectationAsync(String userIgn, boolean force, int presetNo) {
     return CompletableFuture.supplyAsync(
-            () -> getGzipExpectation(userIgn, force), equipmentExecutor)
+            () -> getGzipExpectation(userIgn, force, presetNo), equipmentExecutor)
         .orTimeout(ASYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
   }
 
   /** 캐릭터 기대값 계산 (동기, force 옵션) */
   @Transactional("transactionManager")
   public EquipmentExpectationResponseV4 calculateExpectation(String userIgn, boolean force) {
-    return calculateExpectation(userIgn, force, null);
+    return calculateExpectation(userIgn, force, null, 1);
   }
 
   @Transactional("transactionManager")
   public EquipmentExpectationResponseV4 calculateExpectation(
-      String userIgn, boolean force, @Nullable String taskId) {
+      String userIgn, boolean force, @Nullable String taskId, int presetNo) {
     validateInitialized();
     EquipmentExpectationResponseV4 response =
         cacheCoordinator.getOrCalculate(
-            userIgn, force, () -> doCalculateExpectation(userIgn, taskId));
+            userIgn, force, () -> doCalculateExpectation(userIgn, taskId, presetNo), presetNo);
 
     if (taskId != null && response.isFromCache()) {
-      syncCachedResponseToViewTable(userIgn, response, taskId);
+      syncCachedResponseToViewTable(userIgn, response, taskId, presetNo);
     }
 
     return response;
@@ -170,16 +170,16 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   /** Write-only calculation — no persistence, cache, or view writes (BS2 Phase 1) */
   public EquipmentExpectationResponseV4 calculateExpectationWriteOnly(
-      String userIgn, boolean force, @Nullable String taskId) {
+      String userIgn, boolean force, @Nullable String taskId, int presetNo) {
     validateInitialized();
-    return doCalculateExpectationWriteOnly(userIgn);
+    return doCalculateExpectationWriteOnly(userIgn, presetNo);
   }
 
   /** GZIP 압축된 기대값 응답 반환 (동기) */
-  public byte[] getGzipExpectation(String userIgn, boolean force) {
+  public byte[] getGzipExpectation(String userIgn, boolean force, int presetNo) {
     validateInitialized();
     return cacheCoordinator.getGzipOrCalculate(
-        userIgn, force, () -> doCalculateExpectation(userIgn, null));
+        userIgn, force, () -> doCalculateExpectation(userIgn, null, presetNo), presetNo);
   }
 
   /** L1 캐시 직접 조회 - Fast Path (#264 성능 최적화) */
@@ -204,7 +204,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
    * 점유 제한적)
    */
   private EquipmentExpectationResponseV4 doCalculateExpectation(
-      String userIgn, @Nullable String taskId) {
+      String userIgn, @Nullable String taskId, int presetNo) {
     TaskContext context = TaskContext.of("ExpectationV4", "Calculate", userIgn);
 
     return executor.execute(
@@ -213,15 +213,18 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
           byte[] equipmentData =
               loadEquipmentDataAsync(character).join(); // TieredCache Callable 내부 → 동기 필요
           List<PresetExpectation> presetResults =
-              calculateAllPresets(equipmentData, character.getCharacterClass());
+              calculatePresets(equipmentData, character.getCharacterClass(), presetNo);
           PresetExpectation maxPreset = findMaxPreset(presetResults);
+          if (maxPreset == null) {
+            return buildEmptyResponse(userIgn);
+          }
           persistenceService.saveResults(character.getId(), presetResults);
           EquipmentExpectationResponseV4 response =
-              buildResponse(userIgn, maxPreset, presetResults, false);
+              buildResponse(userIgn, maxPreset, presetResults, false, presetNo);
 
           // V5: Inline View Write — same TX, no queue (Async Materialized View pattern)
           // TODO: Replace with async projection (event-driven) when scaling out
-          syncToViewTable(userIgn, character, response, taskId);
+          syncToViewTable(userIgn, character, response, taskId, presetNo);
 
           return response;
         },
@@ -233,7 +236,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
    *
    * <p>Used by BS2 Phase 1 batch UPSERT worker for pure calculation.
    */
-  private EquipmentExpectationResponseV4 doCalculateExpectationWriteOnly(String userIgn) {
+  private EquipmentExpectationResponseV4 doCalculateExpectationWriteOnly(String userIgn, int presetNo) {
     TaskContext context = TaskContext.of("ExpectationV4", "CalculateWriteOnly", userIgn);
 
     return executor.execute(
@@ -241,9 +244,12 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
           GameCharacter character = findCharacterBypassingWorker(userIgn);
           byte[] equipmentData = loadEquipmentDataAsync(character).join();
           List<PresetExpectation> presetResults =
-              calculateAllPresets(equipmentData, character.getCharacterClass());
+              calculatePresets(equipmentData, character.getCharacterClass(), presetNo);
           PresetExpectation maxPreset = findMaxPreset(presetResults);
-          return buildResponse(userIgn, maxPreset, presetResults, false);
+          if (maxPreset == null) {
+            return buildEmptyResponse(userIgn);
+          }
+          return buildResponse(userIgn, maxPreset, presetResults, false, presetNo);
         },
         context);
   }
@@ -260,15 +266,16 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
       String userIgn,
       GameCharacter character,
       EquipmentExpectationResponseV4 response,
-      @Nullable String taskId) {
+      @Nullable String taskId,
+      int presetNo) {
     CharacterViewQueryServicePostgres viewService = viewQueryServiceProvider.getIfAvailable();
     if (viewService == null) return; // V5 미활성화 시 skip
 
     executor.executeVoidJava(
         () -> {
-          var entity = viewTransformer.toEntityFromResponse(userIgn, character, response, taskId);
+          var entity = viewTransformer.toEntityFromResponse(userIgn, character, response, taskId, presetNo);
           viewService.upsert(entity);
-          log.debug("[ExpectationV4] Synced to view table: userIgn={}", userIgn);
+          log.debug("[ExpectationV4] Synced to view table: userIgn={}, presetNo={}", userIgn, presetNo);
         },
         TaskContext.of("ExpectationV4", "SyncView", userIgn));
   }
@@ -279,9 +286,9 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
    * <p>V5 워커가 V2 워커 풀에 의존하지 않도록 V2 Service를 직접 호출
    */
   private void syncCachedResponseToViewTable(
-      String userIgn, EquipmentExpectationResponseV4 response, String taskId) {
+      String userIgn, EquipmentExpectationResponseV4 response, String taskId, int presetNo) {
     GameCharacter character = findCharacterBypassingWorker(userIgn);
-    syncToViewTable(userIgn, character, response, taskId);
+    syncToViewTable(userIgn, character, response, taskId, presetNo);
   }
 
   private GameCharacter findCharacterBypassingWorker(String userIgn) {
@@ -310,15 +317,29 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
         .orElse(null);
   }
 
+  private EquipmentExpectationResponseV4 buildEmptyResponse(String userIgn) {
+    return EquipmentExpectationResponseV4.builder()
+        .userIgn(userIgn)
+        .calculatedAt(LocalDateTime.now())
+        .fromCache(false)
+        .totalExpectedCost(0.0)
+        .totalCostText(CostFormatter.format(0.0))
+        .totalCostBreakdown(CostBreakdownDto.empty())
+        .maxPresetNo(0)
+        .presets(List.of())
+        .build();
+  }
+
   private EquipmentExpectationResponseV4 buildResponse(
       String userIgn,
       PresetExpectation maxPreset,
       List<PresetExpectation> presetResults,
-      boolean fromCache) {
+      boolean fromCache,
+      int presetNo) {
     double totalCost = maxPreset != null ? maxPreset.getTotalExpectedCost() : 0.0;
     CostBreakdownDto totalBreakdown =
         maxPreset != null ? maxPreset.getCostBreakdown() : CostBreakdownDto.empty();
-    int maxPresetNo = maxPreset != null ? maxPreset.getPresetNo() : 0;
+    int maxPresetNo = presetNo;
 
     return EquipmentExpectationResponseV4.builder()
         .userIgn(userIgn)
@@ -352,26 +373,16 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   // ==================== Preset Calculation ====================
 
-  private List<PresetExpectation> calculateAllPresets(byte[] equipmentData, String characterClass) {
+  private List<PresetExpectation> calculatePresets(byte[] equipmentData, String characterClass, int presetNo) {
     byte[] decompressedData = streamingParser.decompressIfNeeded(equipmentData);
-
     Map<Integer, List<CubeCalculationInput>> allPresetInputs =
         streamingParser.parseAllPresets(decompressedData);
-
-    List<CompletableFuture<PresetExpectation>> futures =
-        IntStream.rangeClosed(1, 3)
-            .mapToObj(
-                presetNo ->
-                    presetHelper.calculatePresetAsync(
-                        allPresetInputs.getOrDefault(presetNo, List.of()),
-                        presetNo,
-                        characterClass))
-            .toList();
-
-    return futures.stream()
-        .map(this::joinPresetFuture)
-        .filter(preset -> !preset.getItems().isEmpty())
-        .toList();
+    List<CubeCalculationInput> inputs = allPresetInputs.getOrDefault(presetNo, List.of());
+    if (inputs.isEmpty()) return List.of();
+    PresetExpectation result = joinPresetFuture(
+        presetHelper.calculatePresetAsync(inputs, presetNo, characterClass));
+    if (result.getItems().isEmpty()) return List.of();
+    return List.of(result);
   }
 
   private PresetExpectation joinPresetFuture(CompletableFuture<PresetExpectation> future) {

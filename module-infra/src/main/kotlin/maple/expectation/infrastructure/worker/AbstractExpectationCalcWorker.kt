@@ -100,6 +100,7 @@ abstract class AbstractExpectationCalcWorker(
                 request.userIgn,
                 request.forceRecalculation,
                 message.messageId.toString(),
+                request.presetNo,
             ).join()
 
             workerLog.info("[{}] Completed: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
@@ -170,6 +171,7 @@ abstract class AbstractExpectationCalcWorker(
                 val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return@mapNotNull null
                 val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return@mapNotNull null
                 val presetsNode = tree.get("presets") ?: return@mapNotNull null
+                val presetNo = result.message.payload.presetNo
                 val char = result.character
                 ParsedViewResult(
                     userIgn = char.userIgn.value,
@@ -178,6 +180,7 @@ abstract class AbstractExpectationCalcWorker(
                     characterClass = char.characterClass ?: "",
                     totalExpectedCost = totalExpectedCost,
                     maxPresetNo = maxPresetNo,
+                    presetNo = presetNo,
                     presetsJson = objectMapper.writeValueAsString(presetsNode),
                     version = System.currentTimeMillis(),
                 )
@@ -194,7 +197,12 @@ abstract class AbstractExpectationCalcWorker(
 
     private fun batchL2CachePut(results: List<CalculationResult>) {
         val entries = results.map { result ->
-            val cacheKey = "expectationV4:${cacheProperties.keyVersion}:${result.message.payload.userIgn}"
+            val presetNo = result.message.payload.presetNo
+            val cacheKey = if (presetNo == 1) {
+                "expectationV4:${cacheProperties.keyVersion}:${result.message.payload.userIgn}"
+            } else {
+                "expectationV4:${cacheProperties.keyVersion}:${result.message.payload.userIgn}:p$presetNo"
+            }
             cacheKey to result.response
         }
         val spec = cacheProperties.specs["expectationV4"]

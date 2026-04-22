@@ -47,7 +47,7 @@ class CalculationQueuePortAdapterTest {
         .thenReturn(expectedReceipt);
 
     // When
-    TaskReceipt result = adapter.offerHighPriorityWithReceipt(TEST_USER_IGN, false);
+    TaskReceipt result = adapter.offerHighPriorityWithReceipt(TEST_USER_IGN, false, 1);
 
     // Then
     assertThat(result).isEqualTo(expectedReceipt);
@@ -147,7 +147,7 @@ class CalculationQueuePortAdapterTest {
         .thenReturn(rejectedReceipt);
 
     // When
-    TaskReceipt result = adapter.offerHighPriorityWithReceipt(TEST_USER_IGN, false);
+    TaskReceipt result = adapter.offerHighPriorityWithReceipt(TEST_USER_IGN, false, 1);
 
     // Then
     assertThat(result.getQueued()).isFalse();

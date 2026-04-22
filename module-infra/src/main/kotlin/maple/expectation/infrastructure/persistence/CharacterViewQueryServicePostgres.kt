@@ -50,6 +50,7 @@ class CharacterViewQueryServicePostgres(
         characterLevel: Int?,
         totalExpectedCost: Long,
         maxPresetNo: Int,
+        presetNo: Int,
         presetsJson: String,
     ) {
         val context = TaskContext.of("PostgresQuery", "UpsertFromCalculation", userIgn)
@@ -67,6 +68,7 @@ class CharacterViewQueryServicePostgres(
                 characterLevel = characterLevel,
                 totalExpectedCost = totalExpectedCost,
                 maxPresetNo = maxPresetNo,
+                presetNo = presetNo,
                 presets = presets,
                 calculatedAt = java.time.Instant.now(),
                 fromCache = false,
@@ -174,6 +176,7 @@ class CharacterViewQueryServicePostgres(
         lastAppliedVersion = incomingVersion,
         totalExpectedCost = incoming.totalExpectedCost,
         maxPresetNo = incoming.maxPresetNo,
+        presetNo = incoming.presetNo,
         presets = incoming.presets,
         fromCache = incoming.fromCache,
     )
@@ -192,6 +195,7 @@ class CharacterViewQueryServicePostgres(
         lastAppliedVersion = entity.version ?: 1L,
         totalExpectedCost = entity.totalExpectedCost,
         maxPresetNo = entity.maxPresetNo,
+        presetNo = entity.presetNo,
         presets = entity.presets,
         fromCache = entity.fromCache,
     )

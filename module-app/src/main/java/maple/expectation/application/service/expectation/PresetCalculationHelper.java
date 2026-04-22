@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Semaphore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator;
@@ -65,22 +64,18 @@ public class PresetCalculationHelper {
   private final FlameTrialsPort flameTrialsProvider;
   private final FlameInputResolver flameInputResolver;
   private final Executor itemExecutor;
-  private final Semaphore globalItemPermits;
 
   public PresetCalculationHelper(
       EquipmentExpectationCalculatorFactory calculatorFactory,
       StarforceLookupPort starforceLookupPort,
       FlameTrialsPort flameTrialsProvider,
       FlameInputResolver flameInputResolver,
-      @Qualifier("itemCalculationExecutor") Executor itemExecutor,
-      @Value("${executor.item.max-pool-size:32}") int maxItemThreads,
-      @Value("${executor.item.semaphore-permits:64}") int semaphorePermits) {
+      @Qualifier("itemCalculationExecutor") Executor itemExecutor) {
     this.calculatorFactory = calculatorFactory;
     this.starforceLookupPort = starforceLookupPort;
     this.flameTrialsProvider = flameTrialsProvider;
     this.flameInputResolver = flameInputResolver;
     this.itemExecutor = itemExecutor;
-    this.globalItemPermits = new Semaphore(semaphorePermits);  // Gate concurrency; executor threads are the hard limit
   }
 
   /**
@@ -115,14 +110,7 @@ public class PresetCalculationHelper {
 
       itemFutures.add(
           CompletableFuture.supplyAsync(
-                  () -> {
-                    globalItemPermits.acquireUninterruptibly();
-                    try {
-                      return calculateSingleItem(input, cubeInput, characterClass);
-                    } finally {
-                      globalItemPermits.release();
-                    }
-                  },
+                  () -> calculateSingleItem(input, cubeInput, characterClass),
                   itemExecutor));
     }
 

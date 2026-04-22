@@ -19,14 +19,32 @@ import org.springframework.stereotype.Component;
 public class CubeComputeBuffer implements BatchComputeBuffer {
 
     private final ConcurrentHashMap<CubeComputeKey, Double> cache = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicInteger hits = new java.util.concurrent.atomic.AtomicInteger(0);
+    private final java.util.concurrent.atomic.AtomicInteger misses = new java.util.concurrent.atomic.AtomicInteger(0);
 
     public Double getOrCompute(CubeComputeKey key, Supplier<Double> compute) {
-        return cache.computeIfAbsent(key, k -> compute.get());
+        Double existing = cache.get(key);
+        if (existing != null) {
+            hits.incrementAndGet();
+            return existing;
+        }
+        Double result = cache.computeIfAbsent(key, k -> {
+            misses.incrementAndGet();
+            return compute.get();
+        });
+        return result;
     }
 
     @Override
     public void clear() {
         cache.clear();
+        hits.set(0);
+        misses.set(0);
+    }
+
+    @Override
+    public BatchComputeBuffer.BufferStats stats() {
+        return BatchComputeBuffer.BufferStats.of(hits.get(), misses.get(), cache.size());
     }
 
     public int size() {

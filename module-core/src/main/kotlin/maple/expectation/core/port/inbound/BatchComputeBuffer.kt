@@ -20,4 +20,15 @@ package maple.expectation.core.port.inbound
  */
 interface BatchComputeBuffer {
     fun clear()
+    fun stats(): BufferStats
+
+    data class BufferStats(val hits: Int, val misses: Int, val size: Int) {
+        val total: Int get() = hits + misses
+        val dedupPercent: Double get() = if (total > 0) hits * 100.0 / total else 0.0
+
+        companion object {
+            @JvmStatic
+            fun of(hits: Int, misses: Int, size: Int) = BufferStats(hits, misses, size)
+        }
+    }
 }

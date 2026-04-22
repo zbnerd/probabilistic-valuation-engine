@@ -101,7 +101,6 @@ class AccumulationBufferTest {
     fun `firstMessageTime set only on first addAll`() {
         val buffer = AccumulationBuffer<ExpectationCalcMessage>(bufferMs = 1000)
         buffer.addAll(listOf(testMessage(1)))
-        Thread.sleep(10)
         buffer.addAll(listOf(testMessage(2)))
         assertThat(buffer.shouldFlush()).isFalse()
     }

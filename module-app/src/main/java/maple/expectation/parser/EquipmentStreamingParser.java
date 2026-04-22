@@ -468,6 +468,49 @@ public class EquipmentStreamingParser {
   }
 
   /**
+   * 단일 프리셋 파싱: 지정된 presetNo에 해당하는 장비 배열만 파싱.
+   * parseAllPresets() 대비 ~1/3 파싱 시간.
+   */
+  public List<CubeCalculationInput> parseSinglePreset(byte[] rawJsonData, int presetNo) {
+    if (rawJsonData == null || rawJsonData.length == 0) return List.of();
+
+    String fieldName = "item_equipment_preset_" + presetNo;
+    TaskContext context = TaskContext.of("Parser", "StreamingParse", "preset" + presetNo);
+
+    return executor.executeWithTranslation(
+        () -> this.executeParseSinglePreset(rawJsonData, fieldName, context),
+        ExceptionTranslator.forMaple(),
+        context);
+  }
+
+  private List<CubeCalculationInput> executeParseSinglePreset(
+      byte[] rawJsonData, String fieldName, TaskContext context) throws IOException {
+    InputStream inputStream = createInputStream(rawJsonData);
+    JsonParser parser = factory.createParser(inputStream);
+
+    return executor.executeWithFinally(
+        () -> this.doStreamParseSinglePreset(parser, fieldName),
+        () -> closeResources(inputStream, parser),
+        context);
+  }
+
+  private List<CubeCalculationInput> doStreamParseSinglePreset(JsonParser parser, String targetField)
+      throws IOException {
+    while (parser.nextToken() != null) {
+      if (parser.currentToken() == JsonToken.FIELD_NAME
+          && targetField.equals(parser.currentName())) {
+        parser.nextToken();
+        if (parser.currentToken() == JsonToken.START_ARRAY) {
+          List<CubeCalculationInput> items = new ArrayList<>();
+          parseItemArrayBounded(parser, items);
+          return items;
+        }
+      }
+    }
+    return List.of();
+  }
+
+  /**
    * 1-pass 파싱: preset 1/2/3을 한 번의 JSON 순회로 모두 파싱.
    *
    * <p>기존 parseCubeInputsForPreset 3회 호출과 동일한 결과를 보장합니다.

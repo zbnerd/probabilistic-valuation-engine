@@ -375,9 +375,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
 
   private List<PresetExpectation> calculatePresets(byte[] equipmentData, String characterClass, int presetNo) {
     byte[] decompressedData = streamingParser.decompressIfNeeded(equipmentData);
-    Map<Integer, List<CubeCalculationInput>> allPresetInputs =
-        streamingParser.parseAllPresets(decompressedData);
-    List<CubeCalculationInput> inputs = allPresetInputs.getOrDefault(presetNo, List.of());
+    List<CubeCalculationInput> inputs = streamingParser.parseSinglePreset(decompressedData, presetNo);
     if (inputs.isEmpty()) return List.of();
     PresetExpectation result = joinPresetFuture(
         presetHelper.calculatePresetAsync(inputs, presetNo, characterClass));

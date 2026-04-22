@@ -572,7 +572,7 @@ executor:
     queue-capacity: 500
   item:
     core-pool-size: 16    # 1:2 ratio enforced
-    max-pool-size: 32     # Semaphore(32) matches thread count for 1:1 fair gating
+    max-pool-size: 32     # Thread count is the hard concurrency limit (no Semaphore needed)
     queue-capacity: 5000  # 2× burst headroom: inflight(40) × items(60) = 2400
 
 # Global Admission Control (Issue #617) - PRODUCTION READY

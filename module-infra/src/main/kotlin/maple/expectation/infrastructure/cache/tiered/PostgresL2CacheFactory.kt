@@ -99,7 +99,7 @@ class PostgresL2CacheAdapter(
     private val l2Strategy: L2CacheStrategy,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
-    private val ttlMinutes: Long,
+    val ttlMinutes: Long,
 ) : org.springframework.cache.support.AbstractValueAdaptingCache(true) {
 
     companion object {

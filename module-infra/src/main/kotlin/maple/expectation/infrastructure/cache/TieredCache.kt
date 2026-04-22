@@ -13,6 +13,7 @@ import java.util.function.Supplier
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.cache.tiered.BatchL2LookupBuffer
+import maple.expectation.infrastructure.cache.tiered.BatchL2WriteBuffer
 import maple.expectation.infrastructure.cache.tiered.CacheStampedeTimeoutException
 import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
 import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheAdapter
@@ -68,12 +69,19 @@ class TieredCache(
     /** Time-window batching buffer for L2 lookups (null if L2 disabled) */
     private val batchBuffer: BatchL2LookupBuffer?
 
+    /** Time-window batching buffer for L2 writes (null if L2 disabled) */
+    private val writeBuffer: BatchL2WriteBuffer?
+
     init {
         val cacheName = l2.name
         l2Enabled = !isL2Disabled(l2)
         batchBuffer = if (l2Enabled && l2Strategy != null) {
             log.info("[TieredCache] Batch L2 enabled: cache={}", cacheName)
             BatchL2LookupBuffer(l2Strategy, l1, meterRegistry)
+        } else null
+        writeBuffer = if (l2Enabled && l2Strategy != null) {
+            val ttl = (l2 as? PostgresL2CacheAdapter)?.ttlMinutes ?: 15L
+            BatchL2WriteBuffer(l2Strategy, l1, ttl, meterRegistry)
         } else null
         l1HitCounter = Counter.builder("cache.hit").tag("layer", "L1").tag("cache", cacheName).register(meterRegistry)
         l2HitCounter = Counter.builder("cache.hit").tag("layer", "L2").tag("cache", cacheName).register(meterRegistry)
@@ -126,6 +134,14 @@ class TieredCache(
         // Issue #555: In L1-only mode, skip L2 and put directly to L1
         if (!l2Enabled) {
             executor.executeVoid({ l1.put(key, value) }, context)
+            return
+        }
+        val buffer = writeBuffer
+        if (buffer != null) {
+            buffer.submit(key, value)
+            val ver = versionCounter.incrementAndGet()
+            keyVersions[key] = ver
+            publishEvictEvent(key, ver)
             return
         }
         val l2Success = executor.executeOrDefault({
@@ -355,6 +371,11 @@ class TieredCache(
         // Issue #555: In L1-only mode, skip L2 put
         if (!l2Enabled) {
             l1.put(key, value)
+            return value
+        }
+        val buffer = writeBuffer
+        if (buffer != null) {
+            buffer.submit(key, value)
             return value
         }
         val l2Success = executor.executeOrDefault({

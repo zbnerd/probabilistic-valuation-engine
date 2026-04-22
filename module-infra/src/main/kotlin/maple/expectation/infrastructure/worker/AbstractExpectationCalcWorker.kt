@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.worker
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
@@ -21,6 +22,8 @@ import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
+import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository
+import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository.ParsedViewResult
 import org.slf4j.Logger
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -41,6 +44,8 @@ abstract class AbstractExpectationCalcWorker(
     private val cacheProperties: CacheProperties,
     private val transactionTemplate: TransactionTemplate,
     private val viewQueryPort: CharacterViewQueryPort,
+    private val batchRepo: CharacterViewBatchRepository,
+    private val objectMapper: ObjectMapper,
 ) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val payloadClass: Class<ExpectationCalcMessage> = ExpectationCalcMessage::class.java
@@ -142,31 +147,41 @@ abstract class AbstractExpectationCalcWorker(
     }
 
     private fun batchViewUpsert(results: List<CalculationResult>) {
-        val objectMapper = com.fasterxml.jackson.databind.ObjectMapper()
-            .registerModule(com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-        for (result in results) {
-            executor.executeOrCatch({
+        // 1. Dedup by userIgn — keep latest result per character
+        val grouped = results.groupBy { it.character.userIgn.value }
+        if (grouped.any { it.value.size > 1 }) {
+            workerLog.warn("[{}] Duplicate userIgn in batch: {}", workerName,
+                grouped.filter { it.value.size > 1 }.keys)
+        }
+        val deduped = grouped.mapValues { it.value.last() }.values.toList()
+
+        // 2. Parse all results in one pass
+        val parsed = deduped.mapNotNull { result ->
+            try {
                 val tree = objectMapper.valueToTree<com.fasterxml.jackson.databind.JsonNode>(result.response)
-                val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return@executeOrCatch null
-                val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return@executeOrCatch null
-                val presetsNode = tree.get("presets") ?: return@executeOrCatch null
+                val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return@mapNotNull null
+                val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return@mapNotNull null
+                val presetsNode = tree.get("presets") ?: return@mapNotNull null
                 val char = result.character
-                viewQueryPort.upsertFromCalculation(
+                ParsedViewResult(
                     userIgn = char.userIgn.value,
                     messageId = result.message.messageId.toString(),
                     characterOcid = char.characterId.value,
-                    characterClass = char.characterClass,
-                    characterLevel = null,
+                    characterClass = char.characterClass ?: "",
                     totalExpectedCost = totalExpectedCost,
                     maxPresetNo = maxPresetNo,
                     presetsJson = objectMapper.writeValueAsString(presetsNode),
+                    version = System.currentTimeMillis(),
                 )
+            } catch (e: Exception) {
+                workerLog.warn("[{}] Parse failed for {}: {}", workerName, result.character.userIgn.value, e.message)
                 null
-            }, { e ->
-                workerLog.warn("[{}] View upsert failed for {}: {}", workerName, result.message.payload.userIgn, e.message)
-                null
-            }, TaskContext.of(workerName, "ViewUpsert", result.message.payload.userIgn))
+            }
         }
+        if (parsed.isEmpty()) return
+
+        // 3. Bulk upsert — 3 queries total (SELECT + batch UPDATE/INSERT)
+        batchRepo.bulkUpsert(parsed)
     }
 
     private fun batchL2CachePut(results: List<CalculationResult>) {

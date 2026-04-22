@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.worker
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.Executor
+import maple.expectation.core.port.inbound.BatchComputeBuffer
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CharacterOcidPort
@@ -43,6 +44,7 @@ class ExpectationCalcWorker(
     viewQueryPort: CharacterViewQueryPort,
     batchRepo: CharacterViewBatchRepository,
     objectMapper: ObjectMapper,
+    computeBuffer: BatchComputeBuffer,
 ) : AbstractExpectationCalcWorker(
     pgmqClient,
     executor,
@@ -61,6 +63,7 @@ class ExpectationCalcWorker(
     viewQueryPort,
     batchRepo,
     objectMapper,
+    computeBuffer,
 ) {
 
     override val queueName: String = QUEUE_NAME

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.application.service.cube.component.CubeComputeBuffer;
 import maple.expectation.application.service.cube.component.CubeDpCalculator;
 import maple.expectation.application.service.cube.component.DpModeInferrer;
 import maple.expectation.config.CubeEngineFeatureFlag;
@@ -18,6 +19,7 @@ import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.util.PermutationUtil;
 import maple.expectation.core.dto.cube.CubeCalculationInput;
+import maple.expectation.core.dto.cube.CubeComputeKey;
 import org.springframework.stereotype.Service;
 
 /**
@@ -48,6 +50,7 @@ public class CubeServiceImpl implements CubeTrialsProvider {
   private final CubeEngineFeatureFlag featureFlag;
   private final LogicExecutor executor;
   private final DpModeInferrer dpModeInferrer;
+  private final CubeComputeBuffer computeBuffer;
 
   @Override
   public Double calculateExpectedTrials(CubeCalculationInput input, CubeType type) {
@@ -82,10 +85,11 @@ public class CubeServiceImpl implements CubeTrialsProvider {
   private Double calculateWithDpEngine(CubeCalculationInput input, CubeType type) {
     String tableVersion = repository.getCurrentTableVersion();
 
-    Double v2Result =
+    CubeComputeKey key = CubeComputeKey.from(input, type.name(), tableVersion);
+    Double v2Result = computeBuffer.getOrCompute(key, () ->
         executor.execute(
             () -> dpCalculator.calculateWithCache(input, type, tableVersion),
-            TaskContext.of("CubeService", "CalculateDP", input.getTargetStatType().name()));
+            TaskContext.of("CubeService", "CalculateDP", input.getTargetStatType().name())));
 
     if (featureFlag.isShadowEnabled()) {
       Double v1Result = calculateWithV1Engine(input, type);

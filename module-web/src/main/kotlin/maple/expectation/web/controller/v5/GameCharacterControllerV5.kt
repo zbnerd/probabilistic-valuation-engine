@@ -80,7 +80,6 @@ class GameCharacterControllerV5(
      */
     @GetMapping("/{userIgn}/expectation")
     @PreAuthorize("permitAll()")
-    @JvmOverloads
     fun getExpectationV5(
         @PathVariable @NotBlank @ValidIgn userIgn: String,
         @RequestParam(defaultValue = "1") @Min(1) @Max(3) presetNo: Int = 1,

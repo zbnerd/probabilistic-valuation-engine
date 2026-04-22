@@ -183,7 +183,11 @@ admission-control:
 pgmq:
   worker:
     common:
-      worker-pool-size: 8  # t3.small: 2 vCPU × 4 = 8 platform threads (replaces virtual threads)
+      worker-pool-size: 2   # t3.small: 2 vCPU = 2 threads (sequential processing, #743)
+      sequential-batch-ms: 500  # Buffer 500ms before sequential batch processing (#743)
+      # Only affects workers with supportsTwoPhase=true (expectation-calc).
+      # donation/nexon-fanout have supportsTwoPhase=false → sequential mode ignored.
+      visibility-timeout-sec: 300  # 120→300: sequential batch may take longer than parallel
     expectation-calc-high:
       enabled: true
     expectation-calc-low:

@@ -146,6 +146,40 @@ p99:                   191ms
 
 ---
 
+## 7.5 #739 PipelineBuffer Backpressure 정렬
+
+PipelineBuffer capacity를 독립 설정(500)에서 `maxInflight * 2`로 자동 정렬. buffer full 시 poll 스킵 대신 drain 우선 실행.
+
+**변경 파일**: `PgmqWorker.kt`, `PgmqWorkerConfig.kt` (pipelineMaxBufferSize 제거)
+
+### #739 포함 전체 통합 부하테스트
+
+```
+Status 202 (Accepted): 10,000
+Status 503 (Queue Full): 0
+Errors:                0
+Throughput:            379.5 req/s
+Avg response time:     131ms
+p50:                   115ms
+p95:                   216ms
+p99:                   515ms
+```
+
+### Worker Processing (200s 경과)
+
+| Metric | Value |
+|--------|-------|
+| Views 완료 | 4,000건 (20 tasks/s) |
+| 큐 잔여 | 7,289건 |
+| **Pipeline buffer full** | **0건** |
+| **결과 드랍** | **0건** |
+
+### HikariCP
+
+- Active: 3/30, Pending: 0, Timeout: 0
+
+---
+
 ## 8. 남은 병목
 
 개별 태스크 처리시간이 여전히 김 (~8s/task). 원인:
@@ -163,4 +197,5 @@ p99:                   191ms
 | #736 | Fan-out → flat queue | Closed (#743 대체) |
 | #737 | Error isolation | Closed (#743 흡수) |
 | #738 | BlockingSubmitExecutor 제거 | Merged |
+| #739 | PipelineBuffer backpressure 정렬 | Merged |
 | #743 | Compute key dedup | Open |

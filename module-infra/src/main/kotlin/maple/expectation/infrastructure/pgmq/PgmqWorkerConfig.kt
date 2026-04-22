@@ -61,6 +61,9 @@ class PgmqWorkerConfig {
         var pipelineDrainIntervalMs: Long = 100,
         /** Pipeline max buffer size (backpressure threshold) */
         var pipelineMaxBufferSize: Int = 500,
+
+        /** Worker pool size (replaces Virtual Thread). Default: availableProcessors * 2 */
+        var workerPoolSize: Int = Runtime.getRuntime().availableProcessors() * 2,
     )
 
     data class WorkerSettings(

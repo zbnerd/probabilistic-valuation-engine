@@ -1,9 +1,13 @@
 package maple.expectation.infrastructure.pgmq
 
 import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
+import jakarta.annotation.PreDestroy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
@@ -39,8 +43,14 @@ abstract class PgmqWorker<T : Any>(
     private val lifecycleWrapper: ScheduledTaskLifecycleWrapper,
 ) {
 
-    /** 메시지 병렬 처리용 Virtual Thread Executor */
-    private val workerPool = Executors.newVirtualThreadPerTaskExecutor()
+    /** 메시지 병렬 처리용 Fixed Thread Pool (replaces Virtual Thread for CPU-bound stability) */
+    private val workerPool: ExecutorService by lazy {
+        val pool = Executors.newFixedThreadPool(config.common.workerPoolSize) { runnable ->
+            Thread(runnable, "$queueName-worker").apply { isDaemon = true }
+        }
+        ExecutorServiceMetrics.monitor(meterRegistry, pool, "$queueName-worker-pool", "pgmq.worker")
+        pool
+    }
 
     protected open val maxInflight: Int = 100
 
@@ -352,6 +362,16 @@ abstract class PgmqWorker<T : Any>(
             },
             context = context,
         )
+    }
+
+    @PreDestroy
+    fun shutdownWorkerPool() {
+        log.info("[{}] Shutting down worker pool", queueName)
+        workerPool.shutdown()
+        if (!workerPool.awaitTermination(5, TimeUnit.SECONDS)) {
+            log.warn("[{}] Worker pool did not terminate in 5s, forcing", queueName)
+            workerPool.shutdownNow()
+        }
     }
 
     companion object {

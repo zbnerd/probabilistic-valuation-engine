@@ -5,7 +5,6 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
 import java.util.Collections
 import java.util.concurrent.Executor
-import maple.expectation.infrastructure.executor.BlockingSubmitExecutor
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -30,7 +29,6 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
  * - Core 16: Bulkhead 50 × ~0.3 (모든 요청이 20개 장비를 계산하지 않음)
  * - Max 32: 피크 시 여유
  * - Queue 5000: fan-out 스파이크 흡수
- * - BlockingSubmitExecutor: 큐 포화 시 submit 블록 후 재시도 (배압, task 손실 방지)
  *
  * ## Virtual Thread 기각 사유
  *
@@ -56,7 +54,6 @@ class ItemCalculationExecutorConfig(
         executor.setQueueCapacity(config.queueCapacity)
         executor.setThreadNamePrefix("item-calc-")
         executor.setTaskDecorator(contextPropagatingDecorator)
-        // Default AbortPolicy — BlockingSubmitExecutor catches rejection and retries.
 
         executor.setWaitForTasksToCompleteOnShutdown(true)
         executor.setAwaitTerminationSeconds(30)
@@ -70,17 +67,12 @@ class ItemCalculationExecutorConfig(
 
         registerMetrics(executor)
 
-        val wrapper = BlockingSubmitExecutor(executor, 1_000_000L) {
-            executor.threadPoolExecutor.isShutdown
-        }
-        registerWrapperMetrics(wrapper)
-
         log.info(
-            "[ItemCalculationExecutor] Initialized: core={}, max={}, queue={}, wrapper=BlockingSubmit(backoff=1ms)",
+            "[ItemCalculationExecutor] Initialized: core={}, max={}, queue={}",
             config.corePoolSize, config.maxPoolSize, config.queueCapacity,
         )
 
-        return wrapper
+        return executor
     }
 
     private fun registerMetrics(executor: ThreadPoolTaskExecutor) {
@@ -99,15 +91,5 @@ class ItemCalculationExecutorConfig(
         Gauge.builder("item.calculation.completed.tasks", executor) { e ->
             e.threadPoolExecutor.completedTaskCount.toDouble()
         }.description("장비 계산 완료된 작업 수").register(meterRegistry)
-    }
-
-    private fun registerWrapperMetrics(wrapper: BlockingSubmitExecutor) {
-        Gauge.builder("item.calculation.submit.retry.count", wrapper) {
-            it.submitRetryCount.toDouble()
-        }.description("Number of submit retries due to queue full").register(meterRegistry)
-
-        Gauge.builder("item.calculation.submit.retry.wait.ms", wrapper) {
-            it.submitRetryWaitNs.toDouble() / 1_000_000.0
-        }.description("Total time spent waiting for submit retries (ms)").register(meterRegistry)
     }
 }

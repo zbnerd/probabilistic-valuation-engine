@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
+import maple.expectation.core.port.inbound.BatchComputeBuffer
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.out.CharacterOcidPort
@@ -46,6 +47,7 @@ abstract class AbstractExpectationCalcWorker(
     private val viewQueryPort: CharacterViewQueryPort,
     private val batchRepo: CharacterViewBatchRepository,
     private val objectMapper: ObjectMapper,
+    private val computeBuffer: BatchComputeBuffer,
 ) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val payloadClass: Class<ExpectationCalcMessage> = ExpectationCalcMessage::class.java
@@ -56,6 +58,12 @@ abstract class AbstractExpectationCalcWorker(
     override val supportsTwoPhase: Boolean = true
 
     override fun preWarmBatch(messages: List<PgmqMessage<ExpectationCalcMessage>>) {
+        val stats = computeBuffer.stats()
+        if (stats.total > 0) {
+            workerLog.info("[{}] ComputeBuffer: hits={}, total={}, dedup={}%",
+                workerName, stats.hits, stats.total, "%.1f".format(stats.dedupPercent))
+        }
+        computeBuffer.clear()
         val context = TaskContext.of(workerName, "PreWarm", queueName)
 
         executor.executeVoid({

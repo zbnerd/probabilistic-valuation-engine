@@ -59,7 +59,7 @@ abstract class PgmqWorker<T : Any>(
     /** Pipeline buffer for two-phase workers — Phase 1 results queue here before drain */
     private val pipelineBuffer = PipelineBuffer<CalculationResult>(
         microBatchSize = config.common.pipelineMicroBatchSize,
-        maxBufferSize = config.common.pipelineMaxBufferSize,
+        maxBufferSize = maxInflight * 2,
     )
 
     /** 큐별 종합 메트릭 (lazy init — 하위 클래스의 queueName 초기화 이후 접근 시 생성) */
@@ -192,12 +192,10 @@ abstract class PgmqWorker<T : Any>(
                 // P1-9 FIX: Use explicit property instead of runtime probe
                 if (supportsTwoPhase) {
                     if (pipelineBuffer.isFull()) {
-                        log.warn("[{}] Pipeline buffer full ({}), skipping poll", queueName, pipelineBuffer.size())
-                        messages.forEach { metrics.inflightDecrement() }
-                        inflightPermits.release(messages.size)
-                    } else {
-                        processBatchPipelined(messages)
+                        log.warn("[{}] Pipeline buffer full ({}), draining before poll", queueName, pipelineBuffer.size())
+                        drainMicroBatch()
                     }
+                    processBatchPipelined(messages)
                 } else {
                     processBatchSinglePhase(messages)
                 }

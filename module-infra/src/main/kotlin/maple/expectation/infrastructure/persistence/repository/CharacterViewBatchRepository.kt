@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.persistence.repository
 
+import java.sql.Timestamp
 import java.time.Instant
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -113,7 +114,7 @@ class CharacterViewBatchRepository(
     }
 
     private fun batchUpdate(entries: List<UpdateEntry>): Int {
-        val now = Instant.now()
+        val now = Timestamp.from(Instant.now())
         val args = entries.map { e ->
             arrayOf<Any?>(
                 e.result.messageId,
@@ -133,7 +134,7 @@ class CharacterViewBatchRepository(
     }
 
     private fun batchInsert(rows: List<ParsedViewResult>): Int {
-        val now = Instant.now()
+        val now = Timestamp.from(Instant.now())
         val args = rows.map { r ->
             arrayOf<Any?>(
                 r.userIgn,

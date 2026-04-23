@@ -22,7 +22,7 @@ PROMETHEUS_URL = "http://localhost:8080/actuator/prometheus"
 COUNT = 10000
 CONCURRENCY = 50
 METRICS_INTERVAL = 3  # seconds
-MAX_DRAIN_WAIT = 200  # 200s max wait for queue drain
+MAX_DRAIN_WAIT = 180  # 3 min max wait for queue drain
 
 # Shared state
 results_lock = threading.Lock()

@@ -14,10 +14,10 @@ import maple.expectation.infrastructure.persistence.entity.CharacterValuationVie
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.CostBreakdownView;
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.ItemExpectationView;
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.PresetView;
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
@@ -84,7 +84,7 @@ public class ViewTransformer {
    */
   public CharacterValuationViewEntity toEntityFromResponse(
       String userIgn, GameCharacter character, EquipmentExpectationResponseV4 response) {
-    return toEntityFromResponse(userIgn, character, response, null, 1);
+    return toEntityFromResponse(userIgn, character, response, null);
   }
 
   public CharacterValuationViewEntity toEntityFromResponse(
@@ -92,17 +92,8 @@ public class ViewTransformer {
       GameCharacter character,
       EquipmentExpectationResponseV4 response,
       @Nullable String messageId) {
-    return toEntityFromResponse(userIgn, character, response, messageId, 1);
-  }
-
-  public CharacterValuationViewEntity toEntityFromResponse(
-      String userIgn,
-      GameCharacter character,
-      EquipmentExpectationResponseV4 response,
-      @Nullable String messageId,
-      int presetNo) {
     return executor.executeOrDefault(
-        () -> toEntityFromResponseInternal(userIgn, character, response, messageId, presetNo),
+        () -> toEntityFromResponseInternal(userIgn, character, response, messageId),
         createEmptyViewFromResponse(userIgn, character, messageId),
         TaskContext.of("ViewTransformer", "ToEntityFromResponse", userIgn));
   }
@@ -111,8 +102,7 @@ public class ViewTransformer {
       String userIgn,
       GameCharacter character,
       EquipmentExpectationResponseV4 response,
-      @Nullable String messageId,
-      int presetNo) {
+      @Nullable String messageId) {
     long version = System.currentTimeMillis();
     List<PresetView> presetViews =
         response.getPresets() != null
@@ -133,7 +123,6 @@ public class ViewTransformer {
         version,
         toLong(response.getTotalExpectedCost()),
         response.getMaxPresetNo(),
-        presetNo,
         presetViews,
         response.isFromCache());
   }
@@ -160,7 +149,6 @@ public class ViewTransformer {
         0L,
         0L,
         0,
-        1, // presetNo default
         List.of(),
         false);
   }
@@ -197,7 +185,6 @@ public class ViewTransformer {
         eventVersion, // lastAppliedVersion: initialize with event version for ordering
         parseCostToLong(event.getTotalExpectedCost()),
         event.getMaxPresetNo(),
-        1, // presetNo default (event-based views are always preset 1)
         presetViews,
         false);
   }
@@ -384,7 +371,6 @@ public class ViewTransformer {
         0L, // lastAppliedVersion
         0L, // totalExpectedCost
         event.getMaxPresetNo(),
-        1, // presetNo default
         List.of(),
         false);
   }

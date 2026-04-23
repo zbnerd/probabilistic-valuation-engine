@@ -12,7 +12,7 @@ import maple.expectation.infrastructure.cache.TieredCacheManager
 import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4
+import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4
 import org.assertj.core.api.Assertions.assertThat
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach

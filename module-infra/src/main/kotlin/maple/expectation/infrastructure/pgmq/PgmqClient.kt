@@ -340,21 +340,18 @@ class PgmqClient(
     private fun performArchiveBatch(queueName: String, messageIds: List<Long>): Int {
         val queueTable = "pgmq.q_$queueName"
         val archiveTable = "pgmq.a_$queueName"
-        validateQueueName(queueName)
         val placeholders = messageIds.map { "?" }.joinToString(",")
-        // Move rows from queue to archive table (INSERT + DELETE), not just DELETE.
-        // This preserves message history for audit and status lookups.
-        return jdbcTemplate.update(
+        return jdbcTemplate.queryForObject(
             """
             WITH deleted AS (
                 DELETE FROM $queueTable WHERE msg_id IN ($placeholders)
-                RETURNING msg_id, read_ct, enqueued_at, vt, message
+                RETURNING *
             )
-            INSERT INTO $archiveTable (msg_id, read_ct, enqueued_at, vt, message)
-                SELECT msg_id, read_ct, enqueued_at, vt, message FROM deleted
+            SELECT COUNT(*) FROM $archiveTable
             """.trimIndent(),
+            Int::class.java,
             *messageIds.toTypedArray(),
-        )
+        ) ?: 0
     }
 
     private fun performArchive(queueName: String, messageId: Long): Boolean {
@@ -414,7 +411,7 @@ class PgmqClient(
     private fun performFindActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long? {
         validateQueueName(queueName)
         val queueTable = "pgmq.q_$queueName"
-        val results = jdbcTemplate.queryForList(
+        return jdbcTemplate.queryForObject(
             """
             SELECT msg_id
             FROM $queueTable
@@ -425,7 +422,6 @@ class PgmqClient(
             Long::class.java,
             userIgn,
         )
-        return results.firstOrNull()
     }
 
     private fun validateQueueName(queueName: String) {

@@ -19,45 +19,47 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
 
   private final EquipmentExpectationServiceV4 expectationService;
 
-  // Implement interface methods with presetNo parameter (Kotlin default params)
   @Override
-  public CompletableFuture<Object> calculateExpectationAsync(String userIgn, boolean force, int presetNo) {
-    return expectationService
-        .calculateExpectationAsync(userIgn, force, null, presetNo)
-        .thenApply(response -> response);
+  public CompletableFuture<Object> calculateExpectationAsync(String userIgn, boolean force) {
+    return calculateExpectationAsync(userIgn, force, null);
   }
 
   @Override
   public CompletableFuture<Object> calculateExpectationAsync(
-      String userIgn, boolean force, String taskId, int presetNo) {
+      String userIgn, boolean force, String taskId) {
     return expectationService
-        .calculateExpectationAsync(userIgn, force, taskId, presetNo)
+        .calculateExpectationAsync(userIgn, force, taskId)
         .thenApply(response -> response);
   }
 
   @Override
-  public CompletableFuture<byte[]> getGzipExpectationAsync(String userIgn, boolean force, int presetNo) {
-    return expectationService.getGzipExpectationAsync(userIgn, force, presetNo);
+  public CompletableFuture<byte[]> getGzipExpectationAsync(String userIgn, boolean force) {
+    return expectationService.getGzipExpectationAsync(userIgn, force);
+  }
+
+  /**
+   * 🔥 Sync implementation for admission control Delegates to service's sync method (returns byte[]
+   * directly, not Optional)
+   */
+  @Override
+  public byte[] getGzipExpectation(String userIgn, boolean force) {
+    return expectationService.getGzipExpectation(userIgn, force);
+  }
+
+  /** 🔥 Sync implementation for admission control Delegates to service's sync method */
+  @Override
+  public Object calculateExpectation(String userIgn, boolean force) {
+    return calculateExpectation(userIgn, force, null);
   }
 
   @Override
-  public byte[] getGzipExpectation(String userIgn, boolean force, int presetNo) {
-    return expectationService.getGzipExpectation(userIgn, force, presetNo);
+  public Object calculateExpectation(String userIgn, boolean force, String taskId) {
+    return expectationService.calculateExpectation(userIgn, force, taskId);
   }
 
   @Override
-  public Object calculateExpectation(String userIgn, boolean force, int presetNo) {
-    return expectationService.calculateExpectation(userIgn, force, null, presetNo);
-  }
-
-  @Override
-  public Object calculateExpectation(String userIgn, boolean force, String taskId, int presetNo) {
-    return expectationService.calculateExpectation(userIgn, force, taskId, presetNo);
-  }
-
-  @Override
-  public Object calculateExpectationWriteOnly(String userIgn, boolean force, String taskId, int presetNo) {
-    return expectationService.calculateExpectationWriteOnly(userIgn, force, taskId, presetNo);
+  public Object calculateExpectationWriteOnly(String userIgn, boolean force, String taskId) {
+    return expectationService.calculateExpectationWriteOnly(userIgn, force, taskId);
   }
 
   @Override

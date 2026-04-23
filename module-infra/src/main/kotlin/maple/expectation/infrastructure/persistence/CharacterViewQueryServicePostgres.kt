@@ -35,53 +35,8 @@ class CharacterViewQueryServicePostgres(
 ) {
     private val log = LoggerFactory.getLogger(CharacterViewQueryServicePostgres::class.java)
 
-    // ==================== CharacterViewQueryPort Implementation ====================
-
-    @Transactional(value = "transactionManager", readOnly = true)
-    fun findByUserIgn(userIgn: String): CharacterValuationViewEntity? {
-        return findByUserIgnEntity(userIgn)
-    }
-
-    fun upsertFromCalculation(
-        userIgn: String,
-        messageId: String?,
-        characterOcid: String?,
-        characterClass: String?,
-        characterLevel: Int?,
-        totalExpectedCost: Long,
-        maxPresetNo: Int,
-        presetNo: Int,
-        presetsJson: String,
-    ) {
-        val context = TaskContext.of("PostgresQuery", "UpsertFromCalculation", userIgn)
-        executor.executeVoid({
-            val presets: List<CharacterValuationViewEntity.PresetView>? = try {
-                objectMapper.readValue(presetsJson, objectMapper.typeFactory.constructCollectionType(List::class.java, CharacterValuationViewEntity.PresetView::class.java))
-            } catch (_: Exception) {
-                null
-            }
-            val entity = CharacterValuationViewEntity(
-                userIgn = userIgn,
-                messageId = messageId,
-                characterOcid = characterOcid,
-                characterClass = characterClass,
-                characterLevel = characterLevel,
-                totalExpectedCost = totalExpectedCost,
-                maxPresetNo = maxPresetNo,
-                presetNo = presetNo,
-                presets = presets,
-                calculatedAt = java.time.Instant.now(),
-                fromCache = false,
-                version = System.currentTimeMillis(),
-            )
-            upsert(entity)
-        }, context)
-    }
-
-    // ==================== Internal Methods ====================
-
     /** Find character valuation view by user IGN (O(1) indexed lookup) */
-    private fun findByUserIgnEntity(userIgn: String): CharacterValuationViewEntity? {
+    fun findByUserIgn(userIgn: String): CharacterValuationViewEntity? {
         val context = TaskContext.of("PostgresQuery", "FindByUserIgn", userIgn)
 
         return executor.executeOrDefault(
@@ -176,7 +131,6 @@ class CharacterViewQueryServicePostgres(
         lastAppliedVersion = incomingVersion,
         totalExpectedCost = incoming.totalExpectedCost,
         maxPresetNo = incoming.maxPresetNo,
-        presetNo = incoming.presetNo,
         presets = incoming.presets,
         fromCache = incoming.fromCache,
     )
@@ -195,7 +149,6 @@ class CharacterViewQueryServicePostgres(
         lastAppliedVersion = entity.version ?: 1L,
         totalExpectedCost = entity.totalExpectedCost,
         maxPresetNo = entity.maxPresetNo,
-        presetNo = entity.presetNo,
         presets = entity.presets,
         fromCache = entity.fromCache,
     )
@@ -223,7 +176,6 @@ class CharacterViewQueryServicePostgres(
     }
 
     /** Count all documents for a specific user IGN */
-    @Transactional(value = "transactionManager", readOnly = true)
     fun countByUserIgn(userIgn: String): Long {
         val context = TaskContext.of("PostgresQuery", "Count", userIgn)
 
@@ -240,7 +192,6 @@ class CharacterViewQueryServicePostgres(
      * @param userIgn User in-game name
      * @return Last applied version, or 0L if no document exists
      */
-    @Transactional(value = "transactionManager", readOnly = true)
     fun getLastAppliedVersion(userIgn: String): Long {
         val context = TaskContext.of("PostgresQuery", "GetLastAppliedVersion", userIgn)
 
@@ -269,16 +220,5 @@ class CharacterViewQueryServicePostgres(
         )
     }
 
-    /**
-     * Serialize entity to JSON for read model storage.
-     *
-     * TODO(#727): Currently serializes the JPA entity which diverges from the V4/V5 API DTO
-     * contract (e.g., totalExpectedCost is Long in entity vs Double in DTO, presets use
-     * PresetView vs PresetExpectation shape). The entity uses @JsonIgnore on internal fields
-     * (id, jpaVersion, version) so those are excluded, but the remaining field types and
-     * structures may not match the API response shape that the Next.js query server expects.
-     * Proper fix requires introducing a port/interface in module-core for DTO-accurate
-     * serialization, allowing module-web to provide the correct mapping implementation.
-     */
     private fun serializeEntityToJson(entity: CharacterValuationViewEntity): String = objectMapper.writeValueAsString(entity)
 }

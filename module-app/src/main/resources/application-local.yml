@@ -76,10 +76,11 @@ cube:
   table-mass:
     policy: LENIENT  # 로컬 환경: 확률 테이블 정규화 허용 (Σp ≈ 1.0)
 
-# L2 캐시 비활성화 → Caffeine L1만 사용
-cache:
-  l2:
-    enabled: false
+# Issue #555: Caffeine-only 캐시 모드 (로컬 개발용 예시)
+# Redis 없이 Caffeine L1만 사용하려면 아래 설정 활성화
+# cache:
+#   l2:
+#     enabled: false  # L2 비활성화 → Caffeine-only 모드
 
 # Rate Limiting 비활성화 (부하 테스트용)
 ratelimit:
@@ -181,12 +182,6 @@ admission-control:
 # PGMQ Worker Configuration
 pgmq:
   worker:
-    common:
-      worker-pool-size: 6   # t3.small: 2vCPU × 3 = 6 threads (batch dedup + parallel throughput, #743)
-      sequential-batch-ms: 500  # Buffer 500ms for batch dedup (90% compute reduction)
-      # Only affects workers with supportsTwoPhase=true (expectation-calc).
-      # donation/nexon-fanout have supportsTwoPhase=false → sequential mode ignored.
-      visibility-timeout-sec: 300  # 120→300: sequential batch may take longer than parallel
     expectation-calc-high:
       enabled: true
     expectation-calc-low:

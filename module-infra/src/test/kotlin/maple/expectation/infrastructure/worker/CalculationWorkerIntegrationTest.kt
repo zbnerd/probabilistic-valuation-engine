@@ -518,7 +518,7 @@ class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {
             currentFailCount = 0
         }
 
-        override fun calculateExpectationAsync(userIgn: String, force: Boolean, presetNo: Int): CompletableFuture<Any> {
+        override fun calculateExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<Any> {
             // 호출 카운트 증가
             callCountMap.computeIfAbsent(userIgn) { AtomicInteger(0) }.incrementAndGet()
 
@@ -532,9 +532,9 @@ class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {
             }
         }
 
-        override fun calculateExpectationAsync(userIgn: String, force: Boolean, taskId: String?, presetNo: Int): CompletableFuture<Any> = calculateExpectationAsync(userIgn, force, presetNo)
+        override fun calculateExpectationAsync(userIgn: String, force: Boolean, taskId: String?): CompletableFuture<Any> = calculateExpectationAsync(userIgn, force)
 
-        override fun calculateExpectation(userIgn: String, force: Boolean, presetNo: Int): Any {
+        override fun calculateExpectation(userIgn: String, force: Boolean): Any {
             // 호출 카운트 증가
             callCountMap.computeIfAbsent(userIgn) { AtomicInteger(0) }.incrementAndGet()
 
@@ -548,13 +548,13 @@ class CalculationWorkerIntegrationTest : ServiceIntegrationTestBase() {
             }
         }
 
-        override fun calculateExpectation(userIgn: String, force: Boolean, taskId: String?, presetNo: Int): Any = calculateExpectation(userIgn, force, presetNo)
+        override fun calculateExpectation(userIgn: String, force: Boolean, taskId: String?): Any = calculateExpectation(userIgn, force)
 
-        override fun calculateExpectationWriteOnly(userIgn: String, force: Boolean, taskId: String?, presetNo: Int): Any = calculateExpectation(userIgn, force, presetNo)
+        override fun calculateExpectationWriteOnly(userIgn: String, force: Boolean, taskId: String?): Any = calculateExpectation(userIgn, force)
 
-        override fun getGzipExpectationAsync(userIgn: String, force: Boolean, presetNo: Int): CompletableFuture<ByteArray?> = CompletableFuture.completedFuture(byteArrayOf())
+        override fun getGzipExpectationAsync(userIgn: String, force: Boolean): CompletableFuture<ByteArray?> = CompletableFuture.completedFuture(byteArrayOf())
 
-        override fun getGzipExpectation(userIgn: String, force: Boolean, presetNo: Int): ByteArray? = byteArrayOf()
+        override fun getGzipExpectation(userIgn: String, force: Boolean): ByteArray? = byteArrayOf()
 
         override fun getGzipFromL1CacheDirect(userIgn: String): ByteArray? = null
 

@@ -1,6 +1,5 @@
 package maple.expectation.web.dto.v4
 
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.DisplayName

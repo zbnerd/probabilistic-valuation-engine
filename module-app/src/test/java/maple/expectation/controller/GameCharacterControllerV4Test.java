@@ -16,7 +16,7 @@ import maple.expectation.core.port.inbound.ExpectationV4Port;
 import maple.expectation.core.port.inbound.LikeTogglePort;
 import maple.expectation.core.port.out.PopularCharacterTrackerPort;
 import maple.expectation.web.controller.v4.GameCharacterControllerV4;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -104,7 +104,7 @@ class GameCharacterControllerV4Test {
       String userIgn = "FallbackUser";
       byte[] gzipData = new byte[] {0x1f, (byte) 0x8b};
       given(expectationPort.getGzipFromL1CacheDirect(userIgn)).willReturn(null);
-      given(expectationPort.getGzipExpectation(eq(userIgn), eq(false))).willReturn(gzipData);
+      given(expectationPort.getGzipExpectation(eq(userIgn), eq(false), eq(1))).willReturn(gzipData);
 
       // when
       CompletableFuture<ResponseEntity<?>> future =
@@ -114,7 +114,7 @@ class GameCharacterControllerV4Test {
       // then
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_ENCODING)).isEqualTo("gzip");
-      verify(expectationPort).getGzipExpectation(userIgn, false);
+      verify(expectationPort).getGzipExpectation(userIgn, false, 1);
     }
 
     @Test
@@ -123,7 +123,7 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "ForceUser";
       byte[] gzipData = new byte[] {0x1f, (byte) 0x8b};
-      given(expectationPort.getGzipExpectation(eq(userIgn), eq(true))).willReturn(gzipData);
+      given(expectationPort.getGzipExpectation(eq(userIgn), eq(true), eq(1))).willReturn(gzipData);
 
       // when
       CompletableFuture<ResponseEntity<?>> future =
@@ -132,7 +132,7 @@ class GameCharacterControllerV4Test {
 
       // then - L1 캐시 조회하지 않음
       verify(expectationPort, never()).getGzipFromL1CacheDirect(anyString());
-      verify(expectationPort).getGzipExpectation(userIgn, true);
+      verify(expectationPort).getGzipExpectation(userIgn, true, 1);
     }
 
     @Test
@@ -141,7 +141,7 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "JsonUser";
       EquipmentExpectationResponseV4 mockResponse = createMockResponse(userIgn);
-      given(expectationPort.calculateExpectation(eq(userIgn), eq(false))).willReturn(mockResponse);
+      given(expectationPort.calculateExpectation(eq(userIgn), eq(false), eq(1))).willReturn(mockResponse);
 
       // when
       CompletableFuture<ResponseEntity<?>> future = controller.getExpectation(userIgn, false, null);
@@ -158,7 +158,7 @@ class GameCharacterControllerV4Test {
     void shouldRecordAccessToTracker() {
       // given
       String userIgn = "TrackedUser";
-      given(expectationPort.calculateExpectation(anyString(), anyBoolean()))
+      given(expectationPort.calculateExpectation(anyString(), anyBoolean(), eq(1)))
           .willReturn(createMockResponse(userIgn));
 
       // when
@@ -180,7 +180,7 @@ class GameCharacterControllerV4Test {
       String userIgn = "PresetUser";
       Integer presetNo = 1;
       EquipmentExpectationResponseV4 fullResponse = createMockResponseWithPresets(userIgn);
-      given(expectationPort.calculateExpectationAsync(userIgn, false))
+      given(expectationPort.calculateExpectationAsync(userIgn, false, 1))
           .willReturn(CompletableFuture.completedFuture(fullResponse));
 
       // when
@@ -201,7 +201,7 @@ class GameCharacterControllerV4Test {
       String userIgn = "NoPresetUser";
       Integer presetNo = 99; // 존재하지 않는 프리셋
       EquipmentExpectationResponseV4 fullResponse = createMockResponseWithPresets(userIgn);
-      given(expectationPort.calculateExpectationAsync(userIgn, false))
+      given(expectationPort.calculateExpectationAsync(userIgn, false, 1))
           .willReturn(CompletableFuture.completedFuture(fullResponse));
 
       // when
@@ -227,7 +227,7 @@ class GameCharacterControllerV4Test {
       // given
       String userIgn = "RecalcUser";
       EquipmentExpectationResponseV4 mockResponse = createMockResponse(userIgn);
-      given(expectationPort.calculateExpectationAsync(userIgn, true))
+      given(expectationPort.calculateExpectationAsync(userIgn, true, 1))
           .willReturn(CompletableFuture.completedFuture(mockResponse));
 
       // when
@@ -238,7 +238,7 @@ class GameCharacterControllerV4Test {
       // then
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(response.getBody()).isNotNull();
-      verify(expectationPort).calculateExpectationAsync(userIgn, true);
+      verify(expectationPort).calculateExpectationAsync(userIgn, true, 1);
     }
   }
 

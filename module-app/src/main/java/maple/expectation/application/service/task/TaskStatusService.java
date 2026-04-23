@@ -70,8 +70,10 @@ public class TaskStatusService implements TaskStatusPort {
       return TaskStatus.PROCESSING;
     }
 
-    // 4. 기본값: PENDING
-    return TaskStatus.PENDING;
+    // 4. Task record deleted and no signal in any queue or archive.
+    // Return NOT_FOUND (terminal) instead of PENDING to prevent infinite polling
+    // when the task record has been cleaned up.
+    return TaskStatus.NOT_FOUND;
   }
 
   private boolean isArchivedInAnyQueue(long messageId) {
@@ -86,11 +88,9 @@ public class TaskStatusService implements TaskStatusPort {
   }
 
   private long parseMessageId(String taskId) {
-    try {
-      return Long.parseLong(taskId);
-    } catch (NumberFormatException e) {
-      log.warn("[TaskStatus] Invalid taskId format: {}", taskId);
-      return -1;
-    }
+    return executor.executeOrDefault(
+        () -> Long.parseLong(taskId),
+        -1L,
+        TaskContext.of("TaskStatus", "ParseId", taskId));
   }
 }

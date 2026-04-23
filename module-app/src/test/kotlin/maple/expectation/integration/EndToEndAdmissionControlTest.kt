@@ -18,7 +18,7 @@ import maple.expectation.infrastructure.config.MicroBatchWriterProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.repository.ExpectationBatchRepository
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4
 import org.assertj.core.api.Assertions.assertThat
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach

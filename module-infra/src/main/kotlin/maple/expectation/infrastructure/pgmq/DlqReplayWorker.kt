@@ -61,11 +61,11 @@ class DlqReplayWorker(
         if (!lifecycleWrapper.beforeTask()) return
         val context = TaskContext.of("DlqReplayWorker", "Replay")
 
-        try {
-            executor.executeVoid({ doReplay() }, context)
-        } finally {
-            lifecycleWrapper.afterTask()
-        }
+        executor.executeWithFinally(
+            task = { doReplay() },
+            finallyBlock = { lifecycleWrapper.afterTask() },
+            context = context,
+        )
     }
 
     private fun doReplay() {

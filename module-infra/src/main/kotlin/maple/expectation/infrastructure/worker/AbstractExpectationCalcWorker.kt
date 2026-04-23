@@ -1,10 +1,13 @@
 package maple.expectation.infrastructure.worker
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
+import maple.expectation.core.port.inbound.BatchComputeBuffer
 import maple.expectation.core.port.inbound.ExpectationV4Port
+import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
 import maple.expectation.core.port.out.GameCharacterPort
@@ -20,6 +23,8 @@ import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
+import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository
+import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository.ParsedViewResult
 import org.slf4j.Logger
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -39,6 +44,10 @@ abstract class AbstractExpectationCalcWorker(
     private val l2CacheStrategy: L2CacheStrategy,
     private val cacheProperties: CacheProperties,
     private val transactionTemplate: TransactionTemplate,
+    private val viewQueryPort: CharacterViewQueryPort,
+    private val batchRepo: CharacterViewBatchRepository,
+    private val objectMapper: ObjectMapper,
+    private val computeBuffer: BatchComputeBuffer,
 ) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val payloadClass: Class<ExpectationCalcMessage> = ExpectationCalcMessage::class.java
@@ -49,6 +58,12 @@ abstract class AbstractExpectationCalcWorker(
     override val supportsTwoPhase: Boolean = true
 
     override fun preWarmBatch(messages: List<PgmqMessage<ExpectationCalcMessage>>) {
+        val stats = computeBuffer.stats()
+        if (stats.total > 0) {
+            workerLog.info("[{}] ComputeBuffer: hits={}, total={}, dedup={}%",
+                workerName, stats.hits, stats.total, "%.1f".format(stats.dedupPercent))
+        }
+        computeBuffer.clear()
         val context = TaskContext.of(workerName, "PreWarm", queueName)
 
         executor.executeVoid({
@@ -85,6 +100,7 @@ abstract class AbstractExpectationCalcWorker(
                 request.userIgn,
                 request.forceRecalculation,
                 message.messageId.toString(),
+                request.presetNo,
             ).join()
 
             workerLog.info("[{}] Completed: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
@@ -121,20 +137,72 @@ abstract class AbstractExpectationCalcWorker(
         val context = TaskContext.of(workerName, "BatchWrite", "${results.size}")
         executor.executeVoid({
             transactionTemplate.executeWithoutResult {
-                workerLog.info("[{}] Phase 2 batchWrite: {} results", workerName, results.size)
+                if (results.size >= 10) {
+                    workerLog.info("[{}] Phase 2 batchWrite: {} results", workerName, results.size)
+                } else {
+                    workerLog.debug("[{}] Phase 2 batchWrite: {} results", workerName, results.size)
+                }
 
                 batchL2CachePut(results)
+                batchViewUpsert(results)
 
                 val messageIds = results.map { it.message.messageId }
                 val archived = pgmqClient.archiveBatch(queueName, messageIds)
-                workerLog.info("[{}] Batch archived: {}/{}", workerName, archived, messageIds.size)
+                if (results.size >= 10) {
+                    workerLog.info("[{}] Batch archived: {}/{}", workerName, archived, messageIds.size)
+                }
             }
         }, context)
     }
 
+    private fun batchViewUpsert(results: List<CalculationResult>) {
+        // 1. Dedup by userIgn — keep latest result per character
+        val grouped = results.groupBy { it.character.userIgn.value }
+        if (grouped.any { it.value.size > 1 }) {
+            workerLog.warn("[{}] Duplicate userIgn in batch: {}", workerName,
+                grouped.filter { it.value.size > 1 }.keys)
+        }
+        val deduped = grouped.mapValues { it.value.last() }.values.toList()
+
+        // 2. Parse all results in one pass
+        val parsed = deduped.mapNotNull { result ->
+            try {
+                val tree = objectMapper.valueToTree<com.fasterxml.jackson.databind.JsonNode>(result.response)
+                val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return@mapNotNull null
+                val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return@mapNotNull null
+                val presetsNode = tree.get("presets") ?: return@mapNotNull null
+                val presetNo = result.message.payload.presetNo
+                val char = result.character
+                ParsedViewResult(
+                    userIgn = char.userIgn.value,
+                    messageId = result.message.messageId.toString(),
+                    characterOcid = char.characterId.value,
+                    characterClass = char.characterClass ?: "",
+                    totalExpectedCost = totalExpectedCost,
+                    maxPresetNo = maxPresetNo,
+                    presetNo = presetNo,
+                    presetsJson = objectMapper.writeValueAsString(presetsNode),
+                    version = System.currentTimeMillis(),
+                )
+            } catch (e: Exception) {
+                workerLog.warn("[{}] Parse failed for {}: {}", workerName, result.character.userIgn.value, e.message)
+                null
+            }
+        }
+        if (parsed.isEmpty()) return
+
+        // 3. Bulk upsert — 3 queries total (SELECT + batch UPDATE/INSERT)
+        batchRepo.bulkUpsert(parsed)
+    }
+
     private fun batchL2CachePut(results: List<CalculationResult>) {
         val entries = results.map { result ->
-            val cacheKey = "expectationV4:${cacheProperties.keyVersion}:${result.message.payload.userIgn}"
+            val presetNo = result.message.payload.presetNo
+            val cacheKey = if (presetNo == 1) {
+                "expectationV4:${cacheProperties.keyVersion}:${result.message.payload.userIgn}"
+            } else {
+                "expectationV4:${cacheProperties.keyVersion}:${result.message.payload.userIgn}:p$presetNo"
+            }
             cacheKey to result.response
         }
         val spec = cacheProperties.specs["expectationV4"]

@@ -180,23 +180,16 @@ class AdaptiveMicroBatchUserService<T : Any>(
             return cached
         }
 
-        // Step 1.5: Backpressure — in-flight 초과 시 fail-fast
-        if (inFlightRequests.size >= MAX_IN_FLIGHT) {
-            rejectedCounter.increment()
-            log.warn { "[AdaptiveMicroBatch] Rejected: inFlight=${inFlightRequests.size}, key=$key" }
-            throw IllegalStateException("In-flight requests limit reached (${inFlightRequests.size})")
-        }
-
-        // Step 2: Request Coalescing
+        // Step 2: Request Coalescing — putIfAbsent first to allow coalesced requests through
         val newFuture = CompletableFuture<T?>()
         val existingFuture = inFlightRequests.putIfAbsent(key, newFuture)
 
-        // 이미 진행 중인 요청이 있으면 대기 (coalesced)
+        // 이미 진행 중인 요청이 있으면 대기 (coalesced) — backpressure does NOT reject coalesced requests
         if (existingFuture != null) {
             return awaitWithTimeout(existingFuture, key)
         }
 
-        // Step 2.5: Backpressure — 새 요청만 검사 (coalesced 요청은 통과)
+        // Step 2.5: Backpressure — only reject NEW keys after coalescing check
         if (inFlightRequests.size > MAX_IN_FLIGHT) {
             inFlightRequests.remove(key, newFuture)
             rejectedCounter.increment()
@@ -219,23 +212,16 @@ class AdaptiveMicroBatchUserService<T : Any>(
             return cached
         }
 
-        // Step 1.5: Backpressure — in-flight 초과 시 fail-fast
-        if (inFlightRequests.size >= MAX_IN_FLIGHT) {
-            rejectedCounter.increment()
-            log.warn { "[AdaptiveMicroBatch] Rejected: inFlight=${inFlightRequests.size}, key=$key" }
-            throw IllegalStateException("In-flight requests limit reached (${inFlightRequests.size})")
-        }
-
-        // Step 2: Request Coalescing
+        // Step 2: Request Coalescing — putIfAbsent first to allow coalesced requests through
         val newFuture = CompletableFuture<T?>()
         val existingFuture = inFlightRequests.putIfAbsent(key, newFuture)
 
-        // 이미 진행 중인 요청이 있으면 대기 (coalesced)
+        // 이미 진행 중인 요청이 있으면 대기 (coalesced) — backpressure does NOT reject coalesced requests
         if (existingFuture != null) {
             return awaitWithTimeoutSuspend(existingFuture, key)
         }
 
-        // Step 2.5: Backpressure — 새 요청만 검사 (coalesced 요청은 통과)
+        // Step 2.5: Backpressure — only reject NEW keys after coalescing check
         if (inFlightRequests.size > MAX_IN_FLIGHT) {
             inFlightRequests.remove(key, newFuture)
             rejectedCounter.increment()

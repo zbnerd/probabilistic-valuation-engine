@@ -23,7 +23,7 @@ import maple.expectation.infrastructure.executor.function.CheckedRunnable;
 import maple.expectation.infrastructure.executor.function.CheckedSupplier;
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
-import maple.expectation.infrastructure.pgmq.PgmqClient;
+import maple.expectation.core.port.out.PgmqPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -35,22 +35,22 @@ class ExpectationCalculationQueueTest {
 
   private LogicExecutor executor;
   private CheckedLogicExecutor checkedExecutor;
-  private PgmqClient pgmqClient;
+  private PgmqPort pgmqPort;
   private ExpectationCalculationQueue queue;
 
   @BeforeEach
   void setUp() {
     executor = new TestLogicExecutor();
     checkedExecutor = new TestCheckedLogicExecutor();
-    pgmqClient = mock(PgmqClient.class);
-    queue = new ExpectationCalculationQueue(pgmqClient, executor, 10_000, 1_000);
+    pgmqPort = mock(PgmqPort.class);
+    queue = new ExpectationCalculationQueue(pgmqPort, executor, 10_000, 1_000);
   }
 
   @Test
   @DisplayName("offer()는 PGMQ 큐에 메시지를 발행함")
   void offerSendsToPgmq() {
-    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
-    when(pgmqClient.send(anyString(), any())).thenReturn(1L);
+    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
+    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
 
     ExpectationCalculationTask highTask = ExpectationCalculationTask.highPriority("user1", false);
     assertThat(queue.offer(highTask)).isTrue();
@@ -59,8 +59,8 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("HIGH 우선순위와 LOW 우선순위 모두 offer 가능")
   void offerBothPriorities() {
-    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
-    when(pgmqClient.send(anyString(), any())).thenReturn(1L);
+    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
+    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
 
     ExpectationCalculationTask highTask = ExpectationCalculationTask.highPriority("user1", false);
     ExpectationCalculationTask lowTask = ExpectationCalculationTask.lowPriority("user2");
@@ -72,36 +72,37 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("이미 활성 task가 있으면 non-force 요청은 기존 taskId를 재사용")
   void offerWithReceiptReusesExistingTaskForNonForceRequests() {
-    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
-    when(pgmqClient.findActiveMessageIdByUserIgn("expectation_calc_high", "user1")).thenReturn(99L);
+    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
+    when(pgmqPort.sendIfAbsent(eq("expectation_calc_high"), eq("user1:1"), any()))
+        .thenReturn(-99L);
 
     TaskReceipt receipt =
         queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", false));
 
     assertThat(receipt.getQueued()).isTrue();
     assertThat(receipt.getTaskId()).isEqualTo("99");
-    verify(pgmqClient, never()).send(anyString(), any());
+    verify(pgmqPort, never()).send(anyString(), any());
   }
 
   @Test
   @DisplayName("force 요청은 기존 task가 있어도 새 메시지를 enqueue")
   void offerWithReceiptEnqueuesFreshTaskForForceRequests() {
-    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
-    when(pgmqClient.findActiveMessageIdByUserIgn("expectation_calc_high", "user1")).thenReturn(99L);
-    when(pgmqClient.send(anyString(), any())).thenReturn(100L);
+    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
+    when(pgmqPort.findActiveMessageIdByUserIgn("expectation_calc_high", "user1")).thenReturn(99L);
+    when(pgmqPort.send(anyString(), any())).thenReturn(100L);
 
     TaskReceipt receipt =
         queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", true));
 
     assertThat(receipt.getQueued()).isTrue();
     assertThat(receipt.getTaskId()).isEqualTo("100");
-    verify(pgmqClient).send(eq("expectation_calc_high"), any());
+    verify(pgmqPort).send(eq("expectation_calc_high"), any());
   }
 
   @Test
   @DisplayName("큐가 가득 차면 백프레셔로 reject")
   void backpressureWhenQueueFull() {
-    when(pgmqClient.queueLength(anyString())).thenReturn(1000L);
+    when(pgmqPort.queueLength(anyString())).thenReturn(1000L);
 
     ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user1", false);
     boolean accepted = queue.offer(task);
@@ -112,8 +113,8 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("큐가 가득 차지 않으면 수락")
   void acceptedWhenQueueNotFull() {
-    when(pgmqClient.queueLength(anyString())).thenReturn(500L);
-    when(pgmqClient.send(anyString(), any())).thenReturn(1L);
+    when(pgmqPort.queueLength(anyString())).thenReturn(500L);
+    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
 
     ExpectationCalculationTask task = ExpectationCalculationTask.lowPriority("user1");
     boolean accepted = queue.offer(task);
@@ -146,8 +147,8 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("addHighPriorityTask 편의 메서드 동작")
   void addHighPriorityTaskConvenienceMethod() {
-    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
-    when(pgmqClient.send(anyString(), any())).thenReturn(1L);
+    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
+    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
 
     boolean added = queue.addHighPriorityTask("user1", true);
 
@@ -157,8 +158,8 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("addLowPriorityTask 편의 메서드 동작")
   void addLowPriorityTaskConvenienceMethod() {
-    when(pgmqClient.queueLength(anyString())).thenReturn(0L);
-    when(pgmqClient.send(anyString(), any())).thenReturn(1L);
+    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
+    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
 
     boolean added = queue.addLowPriorityTask("user1");
 
@@ -168,8 +169,8 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("size()는 PGMQ 큐 길이 합 반환")
   void sizeReturnsPgmqQueueLengthSum() {
-    when(pgmqClient.queueLength("expectation_calc_high")).thenReturn(5L);
-    when(pgmqClient.queueLength("expectation_calc_low")).thenReturn(3L);
+    when(pgmqPort.queueLength("expectation_calc_high")).thenReturn(5L);
+    when(pgmqPort.queueLength("expectation_calc_low")).thenReturn(3L);
 
     assertThat(queue.size()).isEqualTo(8);
   }
@@ -177,7 +178,7 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("getHighPriorityCount()는 HIGH 큐 길이 반환")
   void highPriorityCountReturnsHighQueueLength() {
-    when(pgmqClient.queueLength("expectation_calc_high")).thenReturn(5L);
+    when(pgmqPort.queueLength("expectation_calc_high")).thenReturn(5L);
 
     assertThat(queue.getHighPriorityCount()).isEqualTo(5);
   }
@@ -185,7 +186,7 @@ class ExpectationCalculationQueueTest {
   @Test
   @DisplayName("getLowPriorityCount()는 LOW 큐 길이 반환")
   void lowPriorityCountReturnsLowQueueLength() {
-    when(pgmqClient.queueLength("expectation_calc_low")).thenReturn(3L);
+    when(pgmqPort.queueLength("expectation_calc_low")).thenReturn(3L);
 
     assertThat(queue.getLowPriorityCount()).isEqualTo(3);
   }

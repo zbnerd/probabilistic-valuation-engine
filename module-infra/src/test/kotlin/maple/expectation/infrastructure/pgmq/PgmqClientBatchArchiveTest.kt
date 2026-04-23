@@ -45,18 +45,18 @@ class PgmqClientBatchArchiveTest {
     @Test
     @DisplayName("archiveBatch executes batch DELETE and returns archived count")
     fun `archiveBatch deletes messages and returns count`() {
-        whenever(jdbcTemplate.queryForObject(any<String>(), eq(Int::class.java), any<Array<Any>>())).thenReturn(3)
+        whenever(jdbcTemplate.update(any<String>(), any<Array<Any>>())).thenReturn(3)
 
         val result = client.archiveBatch("test_queue", listOf(1L, 2L, 3L))
 
         assertThat(result).isEqualTo(3)
-        verify(jdbcTemplate).queryForObject(any<String>(), eq(Int::class.java), any<Array<Any>>())
+        verify(jdbcTemplate).update(any<String>(), any<Array<Any>>())
     }
 
     @Test
-    @DisplayName("archiveBatch returns 0 when jdbcTemplate returns null")
-    fun `archiveBatch returns 0 when result is null`() {
-        whenever(jdbcTemplate.queryForObject(any<String>(), eq(Int::class.java), any<Array<Any>>())).thenReturn(null)
+    @DisplayName("archiveBatch returns 0 when no rows matched")
+    fun `archiveBatch returns 0 when result is zero`() {
+        whenever(jdbcTemplate.update(any<String>(), any<Array<Any>>())).thenReturn(0)
 
         val result = client.archiveBatch("test_queue", listOf(1L, 2L))
 
@@ -66,7 +66,7 @@ class PgmqClientBatchArchiveTest {
     @Test
     @DisplayName("archiveBatch returns 0 on exception via LogicExecutor")
     fun `archiveBatch returns 0 on exception`() {
-        whenever(jdbcTemplate.queryForObject(any<String>(), eq(Int::class.java), any<Array<Any>>()))
+        whenever(jdbcTemplate.update(any<String>(), any<Array<Any>>()))
             .thenThrow(RuntimeException("DB error"))
 
         val result = client.archiveBatch("test_queue", listOf(1L, 2L))

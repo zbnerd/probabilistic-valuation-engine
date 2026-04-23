@@ -63,6 +63,7 @@ class CalculationWorker(
                 request.userIgn,
                 request.forceRecalculation,
                 message.messageId.toString(),
+                request.presetNo,
             )
             future.join()
 

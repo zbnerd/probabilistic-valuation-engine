@@ -30,11 +30,6 @@ interface ExpectationV4Port {
     fun calculateExpectationAsync(userIgn: String, force: Boolean, taskId: String?, presetNo: Int = 1): CompletableFuture<Any>
 
     /**
-     * V5 queue/worker aware async calculation.
-     */
-    fun calculateExpectationAsync(userIgn: String, force: Boolean, taskId: String?): CompletableFuture<Any>
-
-    /**
      * 🔥 기대값 동기 계산 (Admission Control용)
      *
      * <p>NOTE: Admission control은 sync 작업만 관리합니다.
@@ -51,11 +46,6 @@ interface ExpectationV4Port {
      * V5 queue/worker aware sync calculation.
      */
     fun calculateExpectation(userIgn: String, force: Boolean, taskId: String?, presetNo: Int = 1): Any
-
-    /**
-     * V5 queue/worker aware sync calculation.
-     */
-    fun calculateExpectation(userIgn: String, force: Boolean, taskId: String?): Any
 
     /**
      * GZIP 기대값 비동기 조회
@@ -88,15 +78,6 @@ interface ExpectationV4Port {
      * Caller must cast: `as? EquipmentExpectationResponseV4`
      */
     fun calculateExpectationWriteOnly(userIgn: String, force: Boolean, taskId: String?, presetNo: Int = 1): Any
-
-    /**
-     * Write-only calculation for Phase 1 (BS2) batch UPSERT.
-     *
-     * <p>Calculates expectation without DB writes (no persistence, cache, or view writes).
-     * Returns Any to avoid module-core → module-web dependency.
-     * Caller must cast: `as? EquipmentExpectationResponseV4`
-     */
-    fun calculateExpectationWriteOnly(userIgn: String, force: Boolean, taskId: String?): Any
 
     /**
      * L1 캐시에서 GZIP 직접 조회 (Fast Path)

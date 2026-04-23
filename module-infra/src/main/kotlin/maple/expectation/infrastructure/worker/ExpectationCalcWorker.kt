@@ -1,7 +1,10 @@
 package maple.expectation.infrastructure.worker
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.Executor
+import maple.expectation.core.port.inbound.BatchComputeBuffer
+import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
@@ -10,6 +13,7 @@ import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
 import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
+import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
@@ -37,6 +41,10 @@ class ExpectationCalcWorker(
     l2CacheStrategy: L2CacheStrategy,
     cacheProperties: CacheProperties,
     transactionTemplate: TransactionTemplate,
+    viewQueryPort: CharacterViewQueryPort,
+    batchRepo: CharacterViewBatchRepository,
+    objectMapper: ObjectMapper,
+    computeBuffer: BatchComputeBuffer,
 ) : AbstractExpectationCalcWorker(
     pgmqClient,
     executor,
@@ -52,6 +60,10 @@ class ExpectationCalcWorker(
     l2CacheStrategy,
     cacheProperties,
     transactionTemplate,
+    viewQueryPort,
+    batchRepo,
+    objectMapper,
+    computeBuffer,
 ) {
 
     override val queueName: String = QUEUE_NAME

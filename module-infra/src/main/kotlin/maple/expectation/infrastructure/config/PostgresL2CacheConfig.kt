@@ -46,6 +46,10 @@ import org.springframework.context.annotation.Primary
 @EnableCaching
 @EnableConfigurationProperties(CacheProperties::class)
 @ConditionalOnProperty(
+    name = ["cache.l2.enabled"],
+    havingValue = "true",
+)
+@ConditionalOnProperty(
     name = ["cache.l2.impl"],
     havingValue = "postgres",
 )

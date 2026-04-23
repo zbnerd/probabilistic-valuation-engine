@@ -30,7 +30,7 @@ resilience4j = "2.2.0"
 bucket4j = "8.14.0"
 
 # Jackson
-jackson = "2.17.0"
+jackson = "2.19.2"
 
 # Google Libraries
 guava = "33.5.0-jre"

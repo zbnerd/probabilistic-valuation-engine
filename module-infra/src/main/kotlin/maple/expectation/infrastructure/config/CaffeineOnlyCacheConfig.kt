@@ -3,6 +3,8 @@ package maple.expectation.infrastructure.config
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Caffeine
 import java.util.concurrent.TimeUnit
+import maple.expectation.core.port.inbound.CacheManagerPort
+import io.micrometer.core.instrument.MeterRegistry
 import maple.expectation.infrastructure.cache.CaffeineOnlyCacheManager
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -112,4 +114,14 @@ class CaffeineOnlyCacheConfig {
      */
     @Bean(name = ["expectationL2CacheManager"])
     fun expectationL2CacheManager(): CacheManager = CaffeineOnlyCacheManager()
+
+    @Bean
+    fun cacheManagerPort(
+        cacheManager: CacheManager,
+        meterRegistry: MeterRegistry,
+    ): CacheManagerPort = object : CacheManagerPort {
+        override fun getCache(name: String): Any? = cacheManager.getCache(name)
+        override fun getMeterRegistry(): Any = meterRegistry
+        override fun getL1CacheDirect(name: String): Any? = cacheManager.getCache(name)
+    }
 }

@@ -88,6 +88,7 @@ class CharacterValuationViewEntity(
     /**
      * Preset view data (embedded in JSONB)
      */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     data class PresetView(
         val presetNo: Int? = null,
         val totalExpectedCost: Long? = null,
@@ -104,6 +105,7 @@ class CharacterValuationViewEntity(
         val flameCost: Long? = null,
     )
 
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     data class ItemExpectationView(
         val itemName: String? = null,
         val expectedCost: Long? = null,

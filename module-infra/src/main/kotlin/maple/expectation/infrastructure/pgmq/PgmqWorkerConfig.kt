@@ -54,6 +54,17 @@ class PgmqWorkerConfig {
 
         /** Visibility Timeout (초) (ADR-355: batch × avg latency) */
         var visibilityTimeoutSec: Int = 120,
+
+        /** Pipeline micro-batch size for drain */
+        var pipelineMicroBatchSize: Int = 10,
+        /** Pipeline drain interval (ms) */
+        var pipelineDrainIntervalMs: Long = 100,
+
+        /** Worker pool size (replaces Virtual Thread). Default: availableProcessors * 2 */
+        var workerPoolSize: Int = Runtime.getRuntime().availableProcessors() * 2,
+
+        /** Sequential batch accumulation window (ms). 0 = parallel mode (default), >0 = sequential mode (#743) */
+        var sequentialBatchMs: Long = 0,
     )
 
     data class WorkerSettings(

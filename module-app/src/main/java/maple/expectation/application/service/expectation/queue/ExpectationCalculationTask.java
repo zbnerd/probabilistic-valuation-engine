@@ -30,6 +30,8 @@ public class ExpectationCalculationTask {
 
   private String requesterInstanceId;
 
+  private int presetNo;
+
   public static ExpectationCalculationTask highPriority(String userIgn, boolean force) {
     return ExpectationCalculationTask.builder()
         .taskId(UUID.randomUUID().toString())
@@ -37,6 +39,18 @@ public class ExpectationCalculationTask {
         .priority(QueuePriority.HIGH)
         .createdAt(Instant.now())
         .forceRecalculation(force)
+        .presetNo(1)
+        .build();
+  }
+
+  public static ExpectationCalculationTask highPriority(String userIgn, boolean force, int presetNo) {
+    return ExpectationCalculationTask.builder()
+        .taskId(UUID.randomUUID().toString())
+        .userIgn(userIgn)
+        .priority(QueuePriority.HIGH)
+        .createdAt(Instant.now())
+        .forceRecalculation(force)
+        .presetNo(presetNo)
         .build();
   }
 
@@ -47,6 +61,7 @@ public class ExpectationCalculationTask {
         .priority(QueuePriority.LOW)
         .createdAt(Instant.now())
         .forceRecalculation(false)
+        .presetNo(1)
         .build();
   }
 }

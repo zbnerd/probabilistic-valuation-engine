@@ -12,7 +12,11 @@ import java.util.function.Consumer
 import java.util.function.Supplier
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
+import maple.expectation.infrastructure.cache.tiered.BatchL2LookupBuffer
+import maple.expectation.infrastructure.cache.tiered.BatchL2WriteBuffer
 import maple.expectation.infrastructure.cache.tiered.CacheStampedeTimeoutException
+import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
+import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheAdapter
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
@@ -20,6 +24,7 @@ import maple.expectation.infrastructure.lock.LeaderElectionStrategy
 import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
 import org.springframework.cache.Cache.ValueWrapper
+import org.springframework.cache.support.SimpleValueWrapper
 
 /**
  * Issue #555: Check if L2 cache is in Caffeine-only (no-op) mode
@@ -58,9 +63,26 @@ class TieredCache(
     /** Issue #555: L2 disabled flag (Caffeine-only mode) */
     private val l2Enabled: Boolean
 
+    /** Access underlying L2CacheStrategy for batch operations */
+    private val l2Strategy: L2CacheStrategy? = (l2 as? PostgresL2CacheAdapter)?.nativeCache as? L2CacheStrategy
+
+    /** Time-window batching buffer for L2 lookups (null if L2 disabled) */
+    private val batchBuffer: BatchL2LookupBuffer?
+
+    /** Time-window batching buffer for L2 writes (null if L2 disabled) */
+    private val writeBuffer: BatchL2WriteBuffer?
+
     init {
         val cacheName = l2.name
         l2Enabled = !isL2Disabled(l2)
+        batchBuffer = if (l2Enabled && l2Strategy != null) {
+            log.info("[TieredCache] Batch L2 enabled: cache={}", cacheName)
+            BatchL2LookupBuffer(l2Strategy, l1, meterRegistry)
+        } else null
+        writeBuffer = if (l2Enabled && l2Strategy != null) {
+            val ttl = (l2 as? PostgresL2CacheAdapter)?.ttlMinutes ?: 15L
+            BatchL2WriteBuffer(l2Strategy, l1, ttl, meterRegistry)
+        } else null
         l1HitCounter = Counter.builder("cache.hit").tag("layer", "L1").tag("cache", cacheName).register(meterRegistry)
         l2HitCounter = Counter.builder("cache.hit").tag("layer", "L2").tag("cache", cacheName).register(meterRegistry)
         missCounter = Counter.builder("cache.miss").tag("cache", cacheName).register(meterRegistry)
@@ -88,19 +110,38 @@ class TieredCache(
             if (l2Enabled) getFromL2WithBackfill(key) else null
         }
 
-    private fun getFromL2WithBackfill(key: Any): ValueWrapper? = Optional.ofNullable(l2.get(key))
-        .map { w ->
-            l1.put(key, w.get())
-            keyVersions[key] = versionCounter.incrementAndGet()
-            tapCacheHit(w, "L2")
+    private fun getFromL2WithBackfill(key: Any): ValueWrapper? {
+        val buffer = batchBuffer
+        if (buffer != null) {
+            val value = buffer.submit(key).join()
+            return if (value != null) {
+                keyVersions[key] = versionCounter.incrementAndGet()
+                l2HitCounter.increment()
+                SimpleValueWrapper(value)
+            } else null
         }
-        .orElse(null)
+        return Optional.ofNullable(l2.get(key))
+            .map { w ->
+                l1.put(key, w.get())
+                keyVersions[key] = versionCounter.incrementAndGet()
+                tapCacheHit(w, "L2")
+            }
+            .orElse(null)
+    }
 
     override fun put(key: Any, value: Any?) {
         val context = TaskContext.of("Cache", "Put", key.toString())
         // Issue #555: In L1-only mode, skip L2 and put directly to L1
         if (!l2Enabled) {
             executor.executeVoid({ l1.put(key, value) }, context)
+            return
+        }
+        val buffer = writeBuffer
+        if (buffer != null) {
+            buffer.submit(key, value)
+            val ver = versionCounter.incrementAndGet()
+            keyVersions[key] = ver
+            publishEvictEvent(key, ver)
             return
         }
         val l2Success = executor.executeOrDefault({
@@ -156,6 +197,66 @@ class TieredCache(
         executor.executeVoid({ l1.clear() }, context)
         keyVersions.clear()
         publishClearAllEvent()
+    }
+
+    /**
+     * Batch retrieval: L1 bulk check → L2 WHERE IN batch fetch → L1 backfill
+     *
+     * Replaces N individual L2 SELECT queries with chunked WHERE IN queries.
+     * Used by BatchL2LookupBuffer and explicit batch pre-fetch callers.
+     */
+    fun getAll(keys: Collection<Any>): Map<Any, Any> {
+        if (keys.isEmpty()) return emptyMap()
+
+        val result = mutableMapOf<Any, Any>()
+        val missKeys = mutableListOf<Any>()
+
+        // 1. L1 bulk check
+        for (key in keys) {
+            val l1Value = l1.get(key)
+            if (l1Value != null) {
+                val value = l1Value.get()
+                if (value != null) result[key] = value
+                l1HitCounter.increment()
+            } else {
+                missKeys.add(key)
+            }
+        }
+
+        if (missKeys.isEmpty() || !l2Enabled) return result
+
+        // 2. L2 batch fetch via L2CacheStrategy.getAll()
+        val strategy = l2Strategy
+        if (strategy == null) {
+            // Fallback: individual L2 lookups
+            for (key in missKeys) {
+                val l2Value = getFromL2WithBackfill(key)
+                if (l2Value != null) {
+                    val value = l2Value.get()
+                    if (value != null) result[key] = value
+                }
+            }
+            return result
+        }
+
+        val context = TaskContext.of("Cache", "GetAll", "${missKeys.size}")
+        val l2Results = executor.executeOrDefault({
+            val keyStrings = missKeys.map { it.toString() }
+            strategy.getAll(keyStrings, Any::class.java)
+        }, emptyMap(), context)
+
+        // 3. L1 backfill + merge
+        for ((keyStr, value) in l2Results) {
+            val originalKey = missKeys.find { it.toString() == keyStr } ?: continue
+            l1.put(originalKey, value)
+            result[originalKey] = value
+            l2HitCounter.increment()
+        }
+
+        val missCount = missKeys.size - l2Results.size
+        repeat(missCount) { missCounter.increment() }
+
+        return result
     }
 
     private fun publishEvictEvent(key: Any, version: Long) {
@@ -270,6 +371,11 @@ class TieredCache(
         // Issue #555: In L1-only mode, skip L2 put
         if (!l2Enabled) {
             l1.put(key, value)
+            return value
+        }
+        val buffer = writeBuffer
+        if (buffer != null) {
+            buffer.submit(key, value)
             return value
         }
         val l2Success = executor.executeOrDefault({

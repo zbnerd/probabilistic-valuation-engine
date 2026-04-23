@@ -2,7 +2,7 @@ package maple.expectation.application.service.expectation.event;
 
 import java.time.Instant;
 import java.util.UUID;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 
 /**
  * V5 CQRS: Event fired when V4 calculation completes

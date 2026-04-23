@@ -1,5 +1,7 @@
 package maple.expectation.infrastructure.scheduler
 
+import maple.expectation.core.domain.model.Page
+import maple.expectation.core.domain.model.PageRequest
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.core.port.out.QueueWriterPort
 import maple.expectation.domain.repository.GameCharacterRepository
@@ -8,8 +10,6 @@ import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.data.domain.Page
-import org.springframework.data.domain.PageRequest
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
@@ -58,7 +58,7 @@ class ExpectationCalculationScheduler(
                                 addTaskForUser(character.userIgn.value)
                             }
 
-                            characterPage.hasNext()
+                            characterPage.hasNext
                         },
                         false,
                         context,

@@ -5,7 +5,7 @@ import maple.expectation.application.service.calculator.impl.BaseItem;
 import maple.expectation.application.service.calculator.impl.BlackCubeDecorator;
 import maple.expectation.application.service.cube.CubeTrialsProvider;
 import maple.expectation.application.service.cube.policy.CubeCostPolicy;
-import maple.expectation.web.dto.CubeCalculationInput;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
 import org.springframework.stereotype.Component;
 
 @Component

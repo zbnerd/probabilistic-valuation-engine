@@ -98,9 +98,9 @@ class AuthController(
      */
     @DeleteMapping("/logout")
     @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
-    fun logout(@AuthenticationPrincipal user: AuthenticatedUser): ResponseEntity<ApiResponse<Void?>> {
+    fun logout(@AuthenticationPrincipal user: AuthenticatedUser): ResponseEntity<Void> {
         authPort.logout(user.sessionId)
-        return ResponseEntity.ok(ApiResponse.success(null))
+        return ResponseEntity.noContent().build()
     }
 
     /**

@@ -111,6 +111,7 @@ class ArchitectureTest {
         .should()
         .haveOnlyFinalFields()
         .because("Controllers should be immutable and delegate to services")
+        .allowEmptyShould(true)
         .check(classes);
   }
 

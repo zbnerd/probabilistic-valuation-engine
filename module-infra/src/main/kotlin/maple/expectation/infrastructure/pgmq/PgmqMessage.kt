@@ -131,10 +131,12 @@ data class NexonCollectionRequest(
  *
  * @param userIgn 캐릭터 IGN
  * @param forceRecalculation 강제 재계산 여부
+ * @param presetNo 프리셋 번호 (1-3)
  */
 data class ExpectationCalcMessage(
     val userIgn: String,
     val forceRecalculation: Boolean,
+    val presetNo: Int = 1,
 )
 
 /**

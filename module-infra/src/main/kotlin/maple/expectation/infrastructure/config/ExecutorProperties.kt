@@ -73,6 +73,7 @@ data class ExecutorProperties(
     @DefaultValue val async: PoolConfig = PoolConfig(),
     @DefaultValue val operational: PoolConfig = PoolConfig(),
     @DefaultValue val backfill: PoolConfig = PoolConfig(),
+    @DefaultValue val item: PoolConfig = PoolConfig(corePoolSize = 4, maxPoolSize = 8, queueCapacity = 200),
 ) {
     /**
      * 개별 Thread Pool 설정
@@ -114,5 +115,6 @@ data class ExecutorProperties(
         async.validateRatio("async")
         operational.validateRatio("operational")
         backfill.validateRatio("backfill")
+        item.validateRatio("item")
     }
 }

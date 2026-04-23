@@ -42,9 +42,7 @@ class NexonDataCollectionScheduler(
     private fun processAllCharacters() {
         log.info("[NexonDataCollectionScheduler] Starting scheduled data collection")
 
-        val allCharacters: List<GameCharacter> = gameCharacterRepository.findAll()
-
-        val charactersToProcess = allCharacters.stream()
+        val charactersToProcess = gameCharacterRepository.findActiveCharacters().stream()
             .limit(100)
             .toList()
 

@@ -16,7 +16,7 @@ import maple.expectation.core.domain.model.equipment.CharacterEquipment;
 import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.parser.EquipmentStreamingParser;
 import maple.expectation.support.IntegrationTestSupport;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;

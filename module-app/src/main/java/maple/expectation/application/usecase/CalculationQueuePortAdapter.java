@@ -34,11 +34,13 @@ public class CalculationQueuePortAdapter implements CalculationQueuePort {
    *
    * @param userIgn 캐릭터 IGN
    * @param forceRecalculation 강제 재계산 여부
+   * @param presetNo 프리셋 번호 (default: 1)
    * @return TaskReceipt with taskId
    */
-  public TaskReceipt offerHighPriorityWithReceipt(String userIgn, boolean forceRecalculation) {
+  @Override
+  public TaskReceipt offerHighPriorityWithReceipt(String userIgn, boolean forceRecalculation, int presetNo) {
     ExpectationCalculationTask task =
-        ExpectationCalculationTask.highPriority(userIgn, forceRecalculation);
+        ExpectationCalculationTask.highPriority(userIgn, forceRecalculation, presetNo);
     return queue.offerWithReceipt(task);
   }
 }

@@ -1,5 +1,7 @@
 package maple.expectation.domain.repository
 
+import maple.expectation.core.domain.model.Page
+import maple.expectation.core.domain.model.PageRequest
 import maple.expectation.core.domain.model.character.GameCharacter
 
 /**
@@ -81,10 +83,10 @@ interface GameCharacterRepository {
      *
      * <p>This method is preferred over {@code findAll()} for large datasets to avoid memory issues.
      *
-     * @param pageable pagination parameters (page, size, sort)
+     * @param pageRequest pagination parameters (page, size)
      * @return Page of characters matching the pagination criteria
      */
-    fun findAll(pageable: org.springframework.data.domain.Pageable): org.springframework.data.domain.Page<GameCharacter>
+    fun findAll(pageRequest: PageRequest): Page<GameCharacter>
 
     /**
      * Find all active characters (updated within the last 30 days)

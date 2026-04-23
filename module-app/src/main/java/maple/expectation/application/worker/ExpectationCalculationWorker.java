@@ -11,7 +11,7 @@ import maple.expectation.application.service.expectation.queue.QueuePriority;
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 

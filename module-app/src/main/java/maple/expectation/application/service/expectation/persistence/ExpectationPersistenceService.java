@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer;
 import maple.expectation.infrastructure.persistence.repository.EquipmentExpectationSummaryRepository;
-import maple.expectation.web.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import org.springframework.stereotype.Component;
 
 /**

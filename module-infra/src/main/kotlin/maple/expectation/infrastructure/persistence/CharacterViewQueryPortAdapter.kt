@@ -39,6 +39,23 @@ class CharacterViewQueryPortAdapter(
         queryService.deleteByUserIgn(userIgn)
     }
 
+    override fun upsertFromCalculation(
+        userIgn: String,
+        messageId: String?,
+        characterOcid: String?,
+        characterClass: String?,
+        characterLevel: Int?,
+        totalExpectedCost: Long,
+        maxPresetNo: Int,
+        presetNo: Int,
+        presetsJson: String,
+    ) {
+        queryService.upsertFromCalculation(
+            userIgn, messageId, characterOcid, characterClass, characterLevel,
+            totalExpectedCost, maxPresetNo, presetNo, presetsJson,
+        )
+    }
+
     /**
      * JPA Entity를 CharacterView 인터페이스로 어댑트
      */

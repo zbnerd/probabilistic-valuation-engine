@@ -29,4 +29,31 @@ interface CharacterViewQueryPort {
      * @param userIgn 캐릭터 IGN
      */
     fun deleteByUserIgn(userIgn: String)
+
+    /**
+     * V5 CQRS Write: 워커 계산 결과를 뷰 테이블에 upsert
+     *
+     * <p>Two-phase batch path에서 뷰 테이블 동기화용 (TODO #727 해결)
+     *
+     * @param userIgn 캐릭터 IGN
+     * @param messageId PGMQ 메시지 ID
+     * @param characterOcid 캐릭터 OCID
+     * @param characterClass 캐릭터 직업
+     * @param characterLevel 캐릭터 레벨
+     * @param totalExpectedCost 총 기대값
+     * @param maxPresetNo 최대 프리셋 번호
+     * @param presetNo 프리셋 번호
+     * @param presetsJson 프리셋 데이터 JSON
+     */
+    fun upsertFromCalculation(
+        userIgn: String,
+        messageId: String?,
+        characterOcid: String?,
+        characterClass: String?,
+        characterLevel: Int?,
+        totalExpectedCost: Long,
+        maxPresetNo: Int,
+        presetNo: Int,
+        presetsJson: String,
+    )
 }

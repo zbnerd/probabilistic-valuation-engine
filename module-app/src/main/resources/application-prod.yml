@@ -55,6 +55,36 @@ cube:
   table-mass:
     policy: LENIENT
 
+# PGMQ Worker Configuration (#743)
+pgmq:
+  worker:
+    common:
+      sequential-batch-ms: 500  # Buffer 500ms before sequential batch processing
+      # Only affects workers with supportsTwoPhase=true (expectation-calc).
+      # donation/nexon-fanout have supportsTwoPhase=false → sequential mode ignored.
+      # worker-pool-size uses default (availableProcessors*2). Sequential mode works
+      # with any pool size — cache locality benefit is highest at 2 threads per CPU.
+    donation:
+      enabled: true
+      polling-interval-ms: 1000
+      batch-size: 10
+      max-retries: 3
+    expectation-calc-high:
+      enabled: true
+      polling-interval-ms: 100
+      batch-size: 10
+      max-retries: 3
+    expectation-calc-low:
+      enabled: true
+      polling-interval-ms: 500
+      batch-size: 50
+      max-retries: 3
+    nexon-fanout:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 5
+
 # V5 Stateless Architecture (#271)
 # V5 Migration (Issue #589): Redis removed, PostgreSQL-only
 app:
@@ -100,6 +130,10 @@ executor:
   backfill:
     core-pool-size: 4     # Batch/background: smaller pool, larger queue
     max-pool-size: 8
+    queue-capacity: 500
+  item:
+    core-pool-size: 16    # Capacity tuning: 3× throughput vs 4/8 (load test verified)
+    max-pool-size: 32
     queue-capacity: 500
 
 # Issue #278: Scale-out 환경 실시간 좋아요 동기화 (prod)

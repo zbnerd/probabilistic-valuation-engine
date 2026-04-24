@@ -1,6 +1,6 @@
 # ADR: Three-Path Independence — MQ-Only Boundary
 
-**Status**: Proposed
+**Status**: Approved with Changes (review 2026-04-24)
 **Date**: 2026-04-24
 **Context**: V5 CQRS Architecture
 
@@ -55,11 +55,12 @@ EquipmentExpectationServiceV4: 7가지 역할 (God Class)
 
 ## Core Principles
 
-1. **Read Path**: HTTP + 조회 + enqueue only. 외부 API 직접 호출 금지.
+1. **Read Path**: HTTP + 조회 + enqueue only. 외부 API 직접 호출 금지. business data write를 금지하되 `calculation_jobs` 생성과 `calculation_queue` enqueue는 허용한다.
 2. **Write Path**: 비동기 상태머신 + 저장 + View Sync. 외부 API 직접 호출 금지. API 응답을 **기다리지 않는다**.
 3. **External API Path**: 외부 API 호출 + Rate Limit + Retry only. 비즈니스 로직 없음.
 4. **Path 간 통신**: MQ only. 동기 대기 금지.
 5. **Write는 External API 응답을 기다리지 않는다.** 응답 메시지를 받아 계산을 재개한다.
+6. **상태 전이는 원자적이어야 한다.** 모든 상태 변경은 conditional UPDATE로 수행하여 중복 응답, 지연 응답, 재시도 충돌을 방지한다.
 
 ---
 
@@ -127,7 +128,11 @@ CREATE TABLE calculation_jobs (
     api_request_id  UUID,                    -- nexon_api_request와 correlation
     retry_count     INT DEFAULT 0,
     max_retries     INT DEFAULT 3,
-    equipment_data  JSONB,                   -- API 응답 캐시 (data_ref 대체)
+    next_retry_at   TIMESTAMPTZ,             -- 다음 재시도 시각 (exponential backoff)
+    locked_by       VARCHAR(128),            -- 처리 중인 worker 식별자
+    locked_until    TIMESTAMPTZ,             -- 잠금 만료 시각 (worker 장애 대비)
+    last_error_code VARCHAR(64),             -- 가장 최근 에러 코드
+    equipment_data  JSONB,                   -- API 응답 (data_ref로 조회 후 캐시)
     character_class VARCHAR(64),
     calculation_result JSONB,                -- 최종 계산 결과
     error_message   TEXT,
@@ -136,8 +141,50 @@ CREATE TABLE calculation_jobs (
     completed_at    TIMESTAMPTZ
 );
 
-CREATE INDEX idx_calc_jobs_status ON calculation_jobs (status);
+CREATE INDEX idx_calc_jobs_status ON calculation_jobs (status) WHERE status NOT IN ('COMPLETED');
 CREATE INDEX idx_calc_jobs_ocid ON calculation_jobs (ocid, preset_no);
+CREATE INDEX idx_calc_jobs_stale ON calculation_jobs (locked_until) WHERE locked_until IS NOT NULL AND status NOT IN ('COMPLETED', 'FAILED');
+```
+
+### 원자적 상태 전이 (Atomic State Transitions)
+
+모든 상태 변경은 conditional UPDATE로 수행한다. 예상 상태가 아니면 0 row 업데이트 → 중복/지연/충돌 자동 방지.
+
+```sql
+-- 예: API 응답 수신 시 — 반드시 API_REQUESTED 상태에서만 전이
+UPDATE calculation_jobs
+SET status = 'API_RESPONDED',
+    locked_by = NULL,
+    locked_until = NULL,
+    updated_at = now()
+WHERE job_id = :jobId
+  AND api_request_id = :requestId   -- correlation 보장
+  AND status = 'API_REQUESTED';     -- 예상 상태 일치해야 함
+-- affected rows = 0 이면 중복/지연 응답 → 무시
+
+-- 예: Job 잠금 — 동시에 두 worker가 같은 job을 잡지 않도록
+UPDATE calculation_jobs
+SET locked_by = :workerId,
+    locked_until = now() + INTERVAL '5 minutes',
+    status = 'CALCULATING',
+    updated_at = now()
+WHERE job_id = :jobId
+  AND status = 'API_RESPONDED'
+  AND (locked_until IS NULL OR locked_until < now());
+-- affected rows = 0 이면 이미 다른 worker가 처리 중
+
+-- 예: 재시도 스케줄링
+UPDATE calculation_jobs
+SET status = 'API_REQUESTED',
+    retry_count = retry_count + 1,
+    next_retry_at = now() + :backoffInterval,
+    last_error_code = :errorCode,
+    locked_by = NULL,
+    locked_until = NULL,
+    updated_at = now()
+WHERE job_id = :jobId
+  AND status IN ('API_REQUESTED', 'RETRYING')
+  AND retry_count < max_retries;
 ```
 
 ---
@@ -179,7 +226,7 @@ Payload:
   "job_id": "uuid",               -- calculation_jobs FK
   "event_type": "FETCH_EQUIPMENT", -- FETCH_BASIC | FETCH_OCID
   "ocid": "abc123",
-  "idempotency_key": "ocid:event_type",
+  "idempotency_key": "job_id:event_type:attempt",
   "attempt": 1,
   "requested_at": "..."
 }
@@ -211,6 +258,80 @@ Payload (data_ref 방식):
 - MQ에는 `data_ref`만 전달
 - Write Path는 `data_ref`로 DB에서 조회
 
+### Raw Data TTL & Cleanup Policy
+
+250KB × 90 TPS = ~22MB/s. 관리 없이 쌓이면 DB bloat 발생.
+
+| 항목 | 정책 |
+|------|------|
+| 보관 기간 | 24시간 (계산 재시도에 충분한 여유) |
+| 중복 저장 기준 | `request_id` UNIQUE 제약 (동일 요청은 한 번만 저장) |
+| 삭제 방식 | `pg_cron` 또는 application scheduled task로 `DELETE FROM nexon_raw_data WHERE created_at < now() - INTERVAL '24 hours'` 매시간 실행 |
+| 용량 추정 | 250KB × 90/s × 86400s = ~1.9TB/day. TTL 없이는 불가 → 24h 유지 시 ~1.9TB 중 최신 24h만 = 약 1.9TB (과도). 실제로는 캐시 적중률을 고려하면 API MISS 건만 raw 저장 → 예상 ~10-20GB/day |
+
+**최적화**: External API Path에서 이미 캐시된 데이터(`@NexonDataCache` HIT)는 raw data에 다시 저장하지 않는다. `data_ref`에 캐시 히트 여부를 포함하여 Write Path가 L2 캐시에서 직접 조회하도록 한다.
+
+---
+
+## Idempotency Guarantees
+
+MQ는 at-least-once 전달을 기본으로 한다. 메시지 중복은 정상 케이스이며, Consumer/DB 레벨에서 멱등성을 보장해야 한다.
+
+### 원칙
+
+1. **모든 메시지는 `request_id` / `job_id` 포함** — 중복 감지의 기준
+2. **모든 Consumer는 중복 메시지를 정상 케이스로 처리** — 실패가 아니라 ack
+3. **DB write는 unique key + conditional update** — 이미 처리된 건은 0 row update → 무시
+4. **외부 API 호출 결과 저장은 upsert** — `request_id` UNIQUE 제약
+5. **이미 처리된 메시지는 실패가 아니라 ack** — PGMQ archive 처리
+
+### 큐별 멱등성 전략
+
+#### `calculation_queue` (Read → Write)
+
+```
+위험: 같은 캐릭터 계산 요청이 중복 enqueue
+방어: calculation_jobs UNIQUE(ocid, preset_no, force_recalculation, created_at_bucket)
+      → INSERT ON CONFLICT DO NOTHING → 기존 job_id 재사용
+```
+
+#### `nexon_api_request_queue` (Write → External API)
+
+```
+위험: API 요청이 중복 소비 → Nexon API 두 번 호출
+방어: nexon_raw_data에 request_id UNIQUE 제약
+      → INSERT ON CONFLICT DO NOTHING → 기존 결과 재사용
+      → 응답만 response_queue에 다시 발행
+```
+
+#### `nexon_api_response_queue` (External API → Write)
+
+```
+위험: 응답 메시지 중복 → 계산 두 번 실행
+방어: conditional UPDATE (가장 중요)
+
+UPDATE calculation_jobs
+SET status = 'API_RESPONDED',
+    locked_by = NULL,
+    locked_until = NULL,
+    updated_at = now()
+WHERE job_id = :jobId
+  AND api_request_id = :requestId
+  AND status = 'API_REQUESTED';
+
+affected rows = 0 → 이미 처리됨 → ack (archive)
+affected rows = 1 → 최초 처리 → 계산 재개
+```
+
+### 결과 저장 멱등성
+
+```
+위험: COMPLETED 상태에서 같은 job 재처리
+방어: calculation_jobs에 UNIQUE(ocid, preset_no, status)
+      → COMPLETED인 job은 재계산 불가
+      → force_recalculation=true인 경우에만 기존 COMPLETED 무시
+```
+
 ---
 
 ## Path Boundary Definitions
@@ -233,11 +354,15 @@ OUT:
   - Auth/JWT
   - OCID Resolution (cached only — DB/L2 조회만, API 호출 없음)
 
+허용 WRITE:
+  - calculation_jobs INSERT (REQUESTED 상태로 생성)
+  - calculation_queue enqueue (같은 트랜잭션)
+
 금지:
   ❌ NexonApiClient 직접/간접 호출
   ❌ 계산 로직
   ❌ EquipmentDataProvider / EquipmentFetchProvider
-  ❌ @Transactional WRITE
+  ❌ business data WRITE (결과, View 등)
 ```
 
 ### Write Path (Calculation Worker)

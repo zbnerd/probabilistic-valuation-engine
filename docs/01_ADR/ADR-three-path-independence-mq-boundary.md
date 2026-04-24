@@ -1,6 +1,6 @@
 # ADR: Three-Path Independence — MQ-Only Boundary
 
-**Status**: Approved with Changes (review 2026-04-24)
+**Status**: Approved (review 2026-04-24, operational hardening complete)
 **Date**: 2026-04-24
 **Context**: V5 CQRS Architecture
 
@@ -511,6 +511,206 @@ Consumer 규칙:
 - [ ] MDC에 job_id, request_id, ocid 자동 주입
 - [ ] Job coalescing (같은 ocid 중복 job 방지)
 - [ ] 배포 순서 무관하게 동작하는지 검증 (schema_version 기반)
+
+---
+
+## Production Readiness
+
+> 지금 설계에서 실무 핵심은 PGMQ/PostgreSQL이 새로운 공유 병목이 되지 않게 하는 것, 그리고 재처리·관측성·backpressure를 처음부터 넣는 것이다.
+
+### 1. DB Shared Bottleneck 방지
+
+Path를 3개로 나눠도 PostgreSQL/PGMQ를 같이 쓰면 External API 폭주 → PGMQ/Raw table 증가 → PostgreSQL 부하 → Read도 영향이 가능하다.
+
+**필수 격리:**
+
+| 리소스 | 격리 방법 |
+|--------|----------|
+| Read query table/index | 전용 인덱스, `shared_buffers` 분리 불가하므로 connection pool 격리로 대체 |
+| Write result table | Write 전용 pool |
+| PGMQ table | Queue 전용 pool, `autovacuum` 개별 튜닝 |
+| raw_data table | 별도 파티셔닝, TTL cleanup |
+
+**Autovacuum 개별 튜닝 필수:**
+```sql
+-- PGMQ 큐 테이블: 잦은 insert/delete로 bloat 위험
+ALTER TABLE pgmq.q_calculation_queue SET (autovacuum_vacuum_scale_factor = 0.05);
+ALTER TABLE pgmq.q_nexon_api_request_queue SET (autovacuum_vacuum_scale_factor = 0.05);
+
+-- raw_data: 대량 insert 후 일괄 delete
+ALTER TABLE nexon_raw_data SET (autovacuum_vacuum_scale_factor = 0.1);
+```
+
+### 2. PGMQ DB 부하 모니터링
+
+PGMQ는 편하지만 큐가 PostgreSQL 위에 있어서 메시지가 쌓이면 DB 부하가 된다.
+
+```
+필수 모니터링:
+- queue depth per queue (alert: > 200)
+- oldest message age per queue (alert: > 60s)
+- visibility timeout 초과 건수
+- dead letter count
+- pg table bloat (pg_stat_user_tables.n_dead_tup)
+- autovacuum lag (pg_stat_user_tables.last_autovacuum)
+- PGMQ message table size
+```
+
+data_ref만 넣어도 메시지 처리량이 많으면 큐 테이블 bloat는 생긴다. 주기적 `pgmq.archive()` 필수.
+
+### 3. Connection Pool 분리
+
+모든 path가 같은 DB를 쓰더라도 HikariCP 공유는 피한다. Worker가 커넥션을 다 먹으면 Read API가 같이 죽는다.
+
+```
+read-datasource pool:     max=20  (Tomcat 요청용, 가벼운 SELECT)
+write-datasource pool:    max=30  (Worker 계산/저장용)
+pgmq-datasource pool:     max=10  (큐 send/consume용)
+external-datasource pool: max=10  (raw data 저장용)
+```
+
+최소 read/write/queue는 분리. DB max_connections 초과하지 않도록 합산 관리.
+
+### 4. Schema 호환성 (배포 순서 무관)
+
+3개 path가 따로 배포되면 메시지/DB schema가 동시에 안 바뀐다.
+
+**원칙:**
+- Additive change only (필드 추가만, 제거 금지)
+- Old consumer는 모르는 필드 무시 (`schema_version` 기반)
+- 필드 제거는 2~3배포 후
+- DB migration은 3단계로:
+
+```
+1차 배포: nullable column 추가
+2차 배포: 코드에서 새 column 사용
+3차 배포: NOT NULL / constraint 적용
+```
+
+### 5. Job Coalescing 강화
+
+같은 ocid + preset_no에 cache miss가 동시에 몰리면 job이 수십 개 생긴다.
+
+```sql
+-- Active job unique constraint
+CREATE UNIQUE INDEX idx_calc_jobs_active_dedup
+  ON calculation_jobs (ocid, preset_no)
+  WHERE status IN ('REQUESTED', 'API_REQUESTED', 'RETRYING', 'CALCULATING');
+
+-- Read Path에서 job 생성 시
+INSERT INTO calculation_jobs (ocid, user_ign, preset_no, status)
+VALUES (:ocid, :userIgn, :presetNo, 'REQUESTED')
+ON CONFLICT (ocid, preset_no) WHERE status IN ('REQUESTED', 'API_REQUESTED', 'RETRYING', 'CALCULATING')
+DO UPDATE SET updated_at = now()
+RETURNING job_id;
+-- → 기존 active job이 있으면 재사용, 없으면 새로 생성
+```
+
+### 6. Backpressure 정책 구체화
+
+큐가 쌓였을 때 Read가 계속 enqueue하면 DB/큐가 죽는다.
+
+| 조건 | 동작 |
+|------|------|
+| queue depth > 200 | Warning 로그 |
+| queue depth > 500 | Read에서 503 Service Unavailable |
+| oldest message > 60s | 신규 enqueue 제한 |
+| External API rate limited | enqueue throttle (같은 ocid 재시도 지연) |
+| 같은 ocid 중복 요청 | 기존 active job 반환 (coalescing) |
+
+장애 시 "천천히 실패"가 아니라 "크게 터지는" 것을 방지.
+
+### 7. 운영자용 재처리 도구
+
+이 구조는 반드시 운영 툴이 필요하다. 없으면 장애 때 DB 콘솔에서 수술하게 된다.
+
+```
+최소 기능 (Admin API 또는 CLI):
+GET  /admin/jobs/{jobId}           — job 상태 조회
+POST /admin/jobs/{jobId}/retry     — FAILED job 재시도
+POST /admin/jobs/{jobId}/unlock    — stuck job 강제 unlock
+POST /admin/dlq/replay             — DLQ 메시지 재주입
+POST /admin/jobs/recalculate       — 특정 ocid 강제 재계산
+GET  /admin/jobs?status=STUCK      — 상태별 job 목록
+GET  /admin/raw-data/{dataRef}     — raw data 조회
+```
+
+### 8. 관측성: 처음부터 넣기
+
+로그만으로는 부족하다.
+
+**필수 메트릭:**
+
+```
+Queue Metrics:
+  calculation_queue.depth / .oldest_age
+  nexon_api_request_queue.depth / .oldest_age
+  nexon_api_response_queue.depth / .oldest_age
+
+Job Metrics:
+  calculation_jobs.status_count (gauge per status)
+  calculation_jobs.total_duration (timer: p50/p95/p99)
+  calculation_jobs.retry_count (histogram)
+
+External API Metrics:
+  nexon.api.latency (timer per endpoint)
+  nexon.rate_limit.permits.available
+
+DB Metrics:
+  raw_data.table_size_bytes
+  pgmq.queue_table_bloat_ratio
+  hikaricp.connections.active (per pool)
+
+Error Metrics:
+  dlq.count
+  stuck_job.count
+  backpressure.rejection.count
+```
+
+**MDC 고정 필드 (모든 로그에 자동 포함):**
+```
+job_id, request_id, correlation_id, ocid, path=[read|write|external]
+```
+
+### 9. 장애 모드별 정책
+
+미리 정해야 하는 질문들:
+
+| 장애 시나리오 | 정책 |
+|--------------|------|
+| Nexon API 429 (Rate Limited) | job → RETRYING, backoff 1~3s jitter, 기존 NexonFanOutWorker 로직 재사용 |
+| Nexon API 5xx | 재시도 최대 3회, exponential backoff (30s → 60s → 120s) |
+| raw_data 저장 성공, response_queue 발행 실패 | Timeout Scanner가 30초 후 RETRYING 전환 → 재시도 |
+| response_queue 수신했으나 raw_data 없음 | job → FAILED, error_code=DATA_REF_MISSING, 운영 툴로 재시도 |
+| Write 계산 중 프로세스 죽음 | locked_until 만료 후 Timeout Scanner가 unlock → CALCULATING에서 재시작 |
+| COMPLETED 후 중복 response 수신 | conditional UPDATE로 0 rows → ack and discard (정상 케이스) |
+| External API Path 전체 장애 | 모든 job이 API_REQUESTED에서 대기, Timeout Scanner가 RETRYING 전환, Read는 기존 stale View 반환 |
+
+### 10. Kill Switches (Path별 비상 정지)
+
+각 path에 꺼버릴 수 있는 스위치가 있어야 한다. 특히 외부 API 장애 때 External API Path만 멈추고 Read는 살아있게 하는 게 핵심.
+
+```yaml
+# application.yml (feature flags)
+path:
+  external-api:
+    enabled: true            # false: request_queue 소비 중지
+    pause-on-error-rate: 0.5 # 5xx 비율 50% 이상 시 자동 pause
+  write:
+    enabled: true            # false: calculation_queue + response_queue 소비 중지
+    enqueue:
+      enabled: true          # false: 신규 job 생성 금지 (202만 반환)
+  read:
+    force-202-mode: false    # true: View HIT여도 무조건 202 반환
+    stale-cache-mode: false  # true: COMPLETED job의 결과를 TTL 무시하고 반환
+```
+
+**동적 제어:** Actuator endpoint 또는 Admin API에서 런타임 toggle 가능.
+```
+POST /admin/switches/external-api/pause
+POST /admin/switches/write/enqueue/disable
+POST /admin/switches/read/stale-cache/enable
+```
 
 ---
 

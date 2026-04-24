@@ -334,6 +334,186 @@ affected rows = 1 → 최초 처리 → 계산 재개
 
 ---
 
+## Operational Considerations
+
+> MQ 분리는 장애 격리는 해주지만, 상태·순서·중복·재시도·관측성을 직접 설계해야 안전하다.
+
+### 1. 메시지 순서 보장
+
+같은 `job_id`에 대해 늦은 응답이 먼저 처리될 수 있다. `api_request_id`, `attempt`로 오래된 메시지를 무시한다.
+
+```sql
+-- 응답 처리 시 attempt 확인
+UPDATE calculation_jobs
+SET status = 'API_RESPONDED', ...
+WHERE job_id = :jobId
+  AND api_request_id = :requestId
+  AND status = 'API_REQUESTED';
+-- 0 rows = stale/duplicate response → ack and discard
+```
+
+### 2. Poison Message / DLQ
+
+계속 실패하는 메시지가 큐를 막는 것을 방지. `max_retries` 초과 시 DLQ로 이동하고 job은 `FAILED` 처리.
+
+```
+NexonApiWorker: API 호출 실패 → retry_count++
+retry_count >= max_retries → nexon_retry_queue(기존 DLQ)로 archive
+CalculationWorker: job retry_count >= max_retries → status = FAILED
+```
+
+### 3. Backpressure
+
+External API가 느려지면 `nexon_api_request_queue`가 계속 쌓인다. 큐 깊이 기준으로 Read Path에서 신규 enqueue 제한.
+
+```
+backpressure 기준:
+- nexon_api_request_queue depth > 500 → Read Path에서 503 Service Unavailable
+- nexon_api_request_queue depth > 200 → 202 응답은 유지하되 warning 로그
+- calculation_queue depth > 1000 → enqueue 거부 ( 이미 유사 로직 있음: TaskReceipt.rejected)
+```
+
+### 4. Timeout Job Scanner
+
+응답 메시지가 영원히 안 올 수 있다. `API_REQUESTED` 상태에서 `updated_at + timeout`이 지난 job을 자동으로 `RETRYING`/`FAILED`로 전환.
+
+```sql
+-- Scheduled task (30초 간격)
+UPDATE calculation_jobs
+SET status = 'RETRYING',
+    retry_count = retry_count + 1,
+    next_retry_at = now() + :backoffInterval,
+    last_error_code = 'API_TIMEOUT',
+    locked_by = NULL,
+    locked_until = NULL,
+    updated_at = now()
+WHERE status = 'API_REQUESTED'
+  AND updated_at < now() - INTERVAL '30 seconds'
+  AND retry_count < max_retries;
+
+-- max_retries 초과 건은 FAILED로 전환
+UPDATE calculation_jobs
+SET status = 'FAILED',
+    error_message = 'API response timeout after max retries',
+    completed_at = now(),
+    updated_at = now()
+WHERE status IN ('API_REQUESTED', 'RETRYING')
+  AND updated_at < now() - INTERVAL '30 seconds'
+  AND retry_count >= max_retries;
+```
+
+### 5. Transaction Boundary
+
+DB 상태 변경과 MQ 발행이 따로 놀면 유실된다. 가능하면 같은 DB 트랜잭션에서 job INSERT/UPDATE + PGMQ send.
+
+```
+Read Path (cache miss):
+  BEGIN;
+    INSERT INTO calculation_jobs (...) VALUES (...);  -- job 생성
+    SELECT pgmq.send('calculation_queue', ...);       -- 같은 TX에서 enqueue
+  COMMIT;
+  → job_id를 202 응답에 포함
+
+Write Path (API 요청):
+  BEGIN;
+    UPDATE calculation_jobs SET status = 'API_REQUESTED' WHERE ...;
+    SELECT pgmq.send('nexon_api_request_queue', ...);  -- 같은 TX에서 발행
+  COMMIT;
+```
+
+PGMQ는 PostgreSQL extension이므로 같은 트랜잭션에서 send가 가능하다. 이게 PGMQ를 선택한 핵심 이유.
+
+### 6. Observability
+
+분리 후 디버깅이 어려워지므로 `job_id`, `request_id`, `ocid`를 모든 로그/메트릭/메시지에 포함.
+
+```
+로그: [job_id=abc][request_id=def][ocid=ghi] API request sent
+메트릭: nexon.api.latency{job_id=abc, endpoint=equipment, attempt=1}
+MDC: job_id, request_id, ocid → 모든 로그에 자동 포함
+```
+
+### 7. Queue SLO Metrics
+
+단순 API latency보다 큐 대기 시간이 중요해진다.
+
+```
+측정 항목:
+- queue_wait_time: 메시지 enqueue → consume 시간
+- job_total_duration: job REQUESTED → COMPLETED 시간
+- retry_count_histogram: 재시도 횟수 분포
+- dlq_count: DLQ 이동 건수 (alert 임계치 필요)
+- queue_depth: 각 큐별 현재 깊이 (backpressure 판단)
+- job_status_distribution: 상태별 job 수 (stuck 탐지)
+```
+
+### 8. Raw Data 비용 관리
+
+250KB 응답을 raw table에 저장 시 용량 급증.
+
+```
+전략:
+- TTL: 24시간 후 자동 삭제 (scheduled cleanup)
+- 압축: 저장 전 GZIP 압축 (250KB → ~30KB)
+- 파티셔닝: created_at 기준 daily partition (cleanup 성능)
+- 중복 제거: request_id UNIQUE 제약
+- 캐시 히트 시 스킵: @NexonDataCache HIT이면 raw 저장 안 함
+```
+
+### 9. 중복 Job 폭증 방지 (Coalescing)
+
+cache miss가 몰리면 같은 ocid 계산 job이 여러 개 생긴다.
+
+```sql
+-- Read Path에서 job 생성 시 중복 방지
+INSERT INTO calculation_jobs (ocid, user_ign, preset_no, status)
+VALUES (:ocid, :userIgn, :presetNo, 'REQUESTED')
+ON CONFLICT (ocid, preset_no)  -- unique constraint
+  WHERE status NOT IN ('COMPLETED', 'FAILED')
+DO UPDATE SET updated_at = now()
+RETURNING job_id;
+-- 기존 job이 있으면 재사용, 없으면 새로 생성
+```
+
+### 10. 배포 호환성 (Schema Versioning)
+
+세 프로세스가 동시에 배포되지 않을 수 있으므로 메시지 schema 버전 필드 추가.
+
+```
+모든 MQ 메시지 공통 필드:
+{
+  "schema_version": 1,
+  "job_id": "uuid",
+  "request_id": "uuid",
+  "correlation_id": "uuid",
+  "attempt": 1,
+  "created_at": "2026-04-24T10:00:00Z"
+}
+
+Consumer 규칙:
+- schema_version이 예상보다 높으면 ack + warning 로그
+- schema_version이 예상보다 낮으면 호환성 유지 (optional 필드 무시)
+```
+
+---
+
+## Cross-Cutting Checklist
+
+구현 시 각 Phase에서 반드시 확인해야 할 항목:
+
+- [ ] 모든 상태 전이가 conditional UPDATE인지 확인
+- [ ] 모든 MQ 메시지에 `schema_version`, `job_id`, `request_id` 포함
+- [ ] Timeout Job Scanner 구현 (30초 간경)
+- [ ] Backpressure 기준 설정 및 Read Path 503 반환 로직
+- [ ] DLQ 이동 시 `calculation_jobs.status = FAILED` 동기화
+- [ ] Raw data cleanup scheduled task 구현
+- [ ] Queue SLO 메트릭 수집 (wait_time, duration, depth)
+- [ ] MDC에 job_id, request_id, ocid 자동 주입
+- [ ] Job coalescing (같은 ocid 중복 job 방지)
+- [ ] 배포 순서 무관하게 동작하는지 검증 (schema_version 기반)
+
+---
+
 ## Path Boundary Definitions
 
 ### Read Path (API Server)

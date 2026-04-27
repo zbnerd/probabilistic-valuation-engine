@@ -5,7 +5,6 @@ import maple.expectation.core.port.out.QueueNames
 import maple.expectation.core.port.out.SnapshotObjectStore
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.pgmq.PgmqClient

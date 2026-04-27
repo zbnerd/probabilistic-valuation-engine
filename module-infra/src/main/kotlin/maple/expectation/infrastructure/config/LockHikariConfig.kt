@@ -31,8 +31,6 @@ import org.springframework.transaction.support.TransactionTemplate
 @Profile("!test & !chaos & !container & !pgtest")
 class LockHikariConfig(
     @Value("\${spring.datasource.url}") private val jdbcUrl: String,
-    @Value("\${spring.datasource.username}") private val username: String,
-    @Value("\${spring.datasource.password}") private val password: String,
     @Value("\${lock.datasource.pool-size:40}") private val poolSize: Int,
 ) {
 
@@ -46,10 +44,8 @@ class LockHikariConfig(
         log.info("[Lock Pool] JDBC URL: {}", jdbcUrl)
         val config = HikariConfig()
 
-        // 기본 연결 정보
+        // 기본 연결 정보 (credentials are embedded in DB_URL)
         config.jdbcUrl = jdbcUrl
-        config.username = username
-        config.password = password
         config.driverClassName = "org.postgresql.Driver"
 
         // [핵심 수정 1] Pool Size 증설 (10 -> 30) 및 고정 (Fixed Pool)

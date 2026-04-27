@@ -38,14 +38,27 @@ class PostgresLockHikariConfig(
 
     private val log = LoggerFactory.getLogger(PostgresLockHikariConfig::class.java)
 
+    private fun parseCredentialsFromUrl(url: String): Pair<String?, String?> {
+        val query = url.substringAfter("?", "")
+        if (query.isEmpty()) return null to null
+        val params = query.split("&").associate {
+            val (k, v) = it.split("=", limit = 2)
+            k to v
+        }
+        return params["user"] to params["password"]
+    }
+
     @Bean(name = ["lockDataSource"])
     fun lockDataSource(): DataSource {
         log.info("[PostgresLockPool] JDBC URL: {}", jdbcUrl)
         val config = HikariConfig()
 
-        // 기본 연결 정보 (credentials are embedded in DB_URL)
+        // 기본 연결 정보
         config.jdbcUrl = jdbcUrl
         config.driverClassName = "org.postgresql.Driver"
+        val (user, pass) = parseCredentialsFromUrl(jdbcUrl)
+        if (user != null) config.username = user
+        if (pass != null) config.password = pass
 
         // Fixed Pool Size: 연결 비용 제거
         config.maximumPoolSize = poolSize

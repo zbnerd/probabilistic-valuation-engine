@@ -36,6 +36,16 @@ class LockHikariConfig(
 
     private val log = LoggerFactory.getLogger(LockHikariConfig::class.java)
 
+    private fun parseCredentialsFromUrl(url: String): Pair<String?, String?> {
+        val query = url.substringAfter("?", "")
+        if (query.isEmpty()) return null to null
+        val params = query.split("&").associate {
+            val (k, v) = it.split("=", limit = 2)
+            k to v
+        }
+        return params["user"] to params["password"]
+    }
+
     // Issue #284 DoD: Pool Size 외부화 (기본 40, prod에서 150으로 오버라이드)
     // AI SRE 제안 (INC-29506518): Lock Pool 병목 방지를 위해 최댓값 증가
 
@@ -44,9 +54,12 @@ class LockHikariConfig(
         log.info("[Lock Pool] JDBC URL: {}", jdbcUrl)
         val config = HikariConfig()
 
-        // 기본 연결 정보 (credentials are embedded in DB_URL)
+        // 기본 연결 정보
         config.jdbcUrl = jdbcUrl
         config.driverClassName = "org.postgresql.Driver"
+        val (user, pass) = parseCredentialsFromUrl(jdbcUrl)
+        if (user != null) config.username = user
+        if (pass != null) config.password = pass
 
         // [핵심 수정 1] Pool Size 증설 (10 -> 30) 및 고정 (Fixed Pool)
         // Redis가 죽으면 트래픽이 몰리므로 10개로는 부족함.

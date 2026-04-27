@@ -82,6 +82,12 @@ pgmq:
       polling-interval-ms: 50
       batch-size: 50
       max-retries: 5
+    nexon-api:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 20
+      max-retries: 5
+      visibility-timeout-sec: 120
 
 # V5 Stateless Architecture (#271)
 # V5 Migration (Issue #589): Redis removed, PostgreSQL-only
@@ -211,3 +217,8 @@ resilience4j:
     instances:
       discordWebhook:
         timeoutDuration: 5s
+
+snapshot:
+  store:
+    local:
+      base-path: /data/snapshots

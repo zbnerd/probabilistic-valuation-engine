@@ -654,3 +654,21 @@ fanout:
   jitter-factor: 0.3                 # 429 재시도 jitter (30%)
   polling-interval-ms: 50            # PGMQ Worker 폴링 간격 (ms)
   queue-name: nexon_fanout_queue     # PGMQ 큐 이름
+
+pgmq:
+  worker:
+    nexon-api:
+      enabled: true
+      polling-interval-ms: 100
+      batch-size: 10
+      max-retries: 3
+      visibility-timeout-sec: 120
+
+snapshot:
+  store:
+    local:
+      base-path: /data/snapshots
+
+job:
+  scanner:
+    timeout-interval-ms: 30000

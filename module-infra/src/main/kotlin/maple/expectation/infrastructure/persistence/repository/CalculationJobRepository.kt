@@ -79,6 +79,37 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
     @Modifying
     @Query("""
         UPDATE CalculationJobEntity j
+        SET j.retryCount = j.retryCount + 1,
+            j.status = 'OCID_RESOLVING',
+            j.nextRetryAt = :nextRetryAt,
+            j.lastErrorCode = :errorCode,
+            j.lockedBy = NULL, j.lockedUntil = NULL,
+            j.updatedAt = CURRENT_TIMESTAMP
+        WHERE j.jobId = :jobId
+          AND j.status = 'OCID_RESOLVING'
+          AND j.retryCount < j.maxRetries
+    """)
+    fun incrementRetryForOcid(
+        @Param("jobId") jobId: UUID,
+        @Param("errorCode") errorCode: String,
+        @Param("nextRetryAt") nextRetryAt: Instant
+    ): Int
+
+    @Modifying
+    @Query("""
+        UPDATE CalculationJobEntity j
+        SET j.ocid = :ocid, j.status = 'API_REQUESTED',
+            j.updatedAt = CURRENT_TIMESTAMP
+        WHERE j.jobId = :jobId AND j.status = 'OCID_RESOLVING'
+    """)
+    fun resolveOcidAndTransition(
+        @Param("jobId") jobId: UUID,
+        @Param("ocid") ocid: String
+    ): Int
+
+    @Modifying
+    @Query("""
+        UPDATE CalculationJobEntity j
         SET j.lockedBy = :workerId,
             j.lockedUntil = :lockedUntil,
             j.updatedAt = CURRENT_TIMESTAMP
@@ -108,17 +139,4 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
         @Param("status") status: String,
         @Param("cutoff") cutoff: Instant
     ): List<CalculationJobEntity>
-
-    @Modifying
-    @Query("""
-        UPDATE CalculationJobEntity j
-        SET j.ocid = :ocid, j.status = :to, j.updatedAt = CURRENT_TIMESTAMP
-        WHERE j.jobId = :jobId AND j.status = :from
-    """)
-    fun resolveOcid(
-        @Param("jobId") jobId: UUID,
-        @Param("ocid") ocid: String,
-        @Param("from") from: String,
-        @Param("to") to: String
-    ): Int
 }

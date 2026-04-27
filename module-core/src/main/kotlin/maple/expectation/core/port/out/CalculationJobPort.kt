@@ -11,9 +11,10 @@ interface CalculationJobPort {
     fun markSnapshotReady(jobId: UUID, snapshotId: UUID, from: CalculationJobStatus): Boolean
     fun markFailed(jobId: UUID, errorCode: String, errorMessage: String): Boolean
     fun incrementRetry(jobId: UUID, errorCode: String): Boolean
+    fun incrementRetryForOcid(jobId: UUID, errorCode: String): Boolean
     fun lockForProcessing(jobId: UUID, workerId: String, from: CalculationJobStatus): Boolean
     fun unlock(jobId: UUID): Boolean
     fun findStaleJobs(status: CalculationJobStatus, olderThanSeconds: Long): List<CalculationJob>
     fun findActiveJobByUserIgn(userIgn: String, presetNo: Int): CalculationJob?
-    fun resolveOcid(jobId: UUID, ocid: String, from: CalculationJobStatus): Boolean
+    fun resolveOcidAndTransition(jobId: UUID, ocid: String): Boolean
 }

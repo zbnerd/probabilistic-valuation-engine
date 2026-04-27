@@ -60,35 +60,7 @@ abstract class AbstractExpectationCalcWorker(
     override val supportsTwoPhase: Boolean = false
 
     override fun preWarmBatch(messages: List<PgmqMessage<ExpectationCalcMessage>>) {
-        val stats = computeBuffer.stats()
-        if (stats.total > 0) {
-            workerLog.info("[{}] ComputeBuffer: hits={}, total={}, dedup={}%",
-                workerName, stats.hits, stats.total, "%.1f".format(stats.dedupPercent))
-        }
-        computeBuffer.clear()
-        val context = TaskContext.of(workerName, "PreWarm", queueName)
-
-        executor.executeVoid({
-            val igns = messages.asSequence().map { it.payload.userIgn }.toSet()
-            if (igns.isEmpty()) return@executeVoid
-
-            val ignToOcid = characterOcidPort.resolveOcids(igns)
-            if (ignToOcid.isEmpty()) return@executeVoid
-
-            val warmupFutures = ignToOcid.values.map { ocid ->
-                CompletableFuture.supplyAsync(
-                    { equipmentFanOutPort.preFetchByOcid(ocid) },
-                    preWarmExecutor,
-                )
-            }
-
-            CompletableFuture.allOf(*warmupFutures.toTypedArray())
-                .orTimeout(15, TimeUnit.SECONDS)
-                .handle { _, _ -> null }
-                .join()
-
-            workerLog.info("[{}] Pre-warm: {} igns -> {} ocids", workerName, igns.size, ignToOcid.size)
-        }, context)
+        // No-op: equipment pre-warm moved to async pipeline (NexonApiWorker + Cache Bridge)
     }
 
     override fun process(message: PgmqMessage<ExpectationCalcMessage>): Boolean {

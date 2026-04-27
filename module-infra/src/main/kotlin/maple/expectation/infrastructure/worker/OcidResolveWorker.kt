@@ -44,7 +44,7 @@ class OcidResolveWorker(
         val jobId = request.jobId
         val context = TaskContext.of("OcidResolveWorker", "Resolve", request.userIgn)
 
-        val success = executor.executeOrDefault({
+        executor.executeVoid({
             log.info("[jobId={}] Resolving OCID for userIgn={}", jobId, request.userIgn)
 
             val ocidResponse = nexonApiClient.getOcidByCharacterName(request.userIgn).join()
@@ -54,23 +54,17 @@ class OcidResolveWorker(
                 log.warn("[jobId={}] Nexon API returned empty OCID for userIgn={}", jobId, request.userIgn)
                 jobService.handleOcidFailure(jobId, "EMPTY_OCID", "Nexon API returned empty OCID")
                 pgmqClient.archive(QueueNames.OCID_RESOLVE, message.messageId)
-                return@executeOrDefault false
+                return@executeVoid
             }
 
             val resolved = jobService.resolveOcidAndEnqueueApiData(jobId, ocid)
             if (resolved) {
-                pgmqClient.archive(QueueNames.OCID_RESOLVE, message.messageId)
                 log.info("[jobId={}] OCID resolved successfully: {}", jobId, ocid)
             } else {
                 log.warn("[jobId={}] OCID resolve transition failed", jobId)
-                pgmqClient.archive(QueueNames.OCID_RESOLVE, message.messageId)
+                jobService.handleOcidFailure(jobId, "TRANSITION_FAILED", "Status transition failed after OCID resolve")
             }
-            resolved
-        }, false, context)
-
-        if (!success) {
-            jobService.handleOcidFailure(jobId, "OCID_API_ERROR", "Failed to resolve OCID")
             pgmqClient.archive(QueueNames.OCID_RESOLVE, message.messageId)
-        }
+        }, context)
     }
 }

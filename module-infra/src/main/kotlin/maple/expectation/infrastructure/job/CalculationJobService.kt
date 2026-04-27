@@ -54,19 +54,9 @@ class CalculationJobService(
 
     @Transactional
     fun resolveOcidAndEnqueueApiData(jobId: UUID, ocid: String): Boolean {
-        val resolved = jobPort.resolveOcid(jobId, ocid, CalculationJobStatus.OCID_RESOLVING)
-        if (!resolved) {
-            log.warn("[jobId={}] Cannot resolve OCID — not in OCID_RESOLVING state", jobId)
-            return false
-        }
-
-        val transitioned = jobPort.transitionStatus(
-            jobId,
-            CalculationJobStatus.OCID_RESOLVED,
-            CalculationJobStatus.API_REQUESTED
-        )
+        val transitioned = jobPort.resolveOcidAndTransition(jobId, ocid)
         if (!transitioned) {
-            log.warn("[jobId={}] Cannot transition to API_REQUESTED after OCID resolve", jobId)
+            log.warn("[jobId={}] Cannot resolve OCID + transition to API_REQUESTED", jobId)
             return false
         }
 
@@ -199,7 +189,7 @@ class CalculationJobService(
             jobPort.markFailed(jobId, errorCode, errorMessage)
             log.warn("[jobId={}] OCID resolve failed after {} retries: {}", jobId, job.retryCount, errorMessage)
         } else {
-            val retried = jobPort.incrementRetry(jobId, errorCode)
+            val retried = jobPort.incrementRetryForOcid(jobId, errorCode)
             if (retried) {
                 val message = OcidResolveMessage(
                     jobId = job.jobId,

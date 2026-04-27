@@ -10,6 +10,7 @@ import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
+import maple.expectation.infrastructure.provider.EquipmentFetchProvider
 import maple.expectation.infrastructure.queue.pgmq.NexonApiRequestMessage
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
@@ -22,11 +23,11 @@ import java.util.UUID
 @Component
 class NexonApiWorker(
     private val pgmqClient: PgmqClient,
-    private val nexonApiClient: NexonApiClient,
     private val snapshotStore: SnapshotObjectStore,
     private val jobService: CalculationJobService,
     private val objectMapper: ObjectMapper,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
+    private val equipmentFetchProvider: EquipmentFetchProvider
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -56,7 +57,7 @@ class NexonApiWorker(
         val success = executor.executeOrDefault({
             log.info("[jobId={}] Processing API request: eventType={}", jobId, request.eventType)
 
-            val equipmentResponse = nexonApiClient.getItemDataByOcid(request.ocid).join()
+            val equipmentResponse = equipmentFetchProvider.fetchWithCache(request.ocid)
             val snapshotData = objectMapper.writeValueAsBytes(equipmentResponse)
 
             val objectKey = generateObjectKey(jobId)

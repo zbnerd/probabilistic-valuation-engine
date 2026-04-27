@@ -31,8 +31,7 @@ class ApiResponseWorker(
     private val log = LoggerFactory.getLogger(javaClass)
     private val terminalStatuses = setOf(
         CalculationJobStatus.COMPLETED,
-        CalculationJobStatus.FAILED,
-        CalculationJobStatus.CALCULATING
+        CalculationJobStatus.FAILED
     )
 
     @Scheduled(fixedDelayString = "\${pgmq.worker.api-response.polling-interval-ms:100}")
@@ -71,6 +70,13 @@ class ApiResponseWorker(
                 return@executeVoid
             }
 
+            if (job.status == CalculationJobStatus.CALCULATING) {
+                log.warn("[jobId={}] Stuck in CALCULATING on redelivery, marking as failed", response.jobId)
+                jobPort.markFailed(response.jobId, "CALCULATION_STUCK", "Calculation stuck after redelivery")
+                pgmqClient.archive(QueueNames.NEXON_API_RESPONSE, message.messageId)
+                return@executeVoid
+            }
+
             val started = jobService.startCalculation(response.jobId, "ApiResponseWorker")
             if (!started) {
                 log.warn("[jobId={}] Could not start calculation, archiving", response.jobId)
@@ -96,17 +102,12 @@ class ApiResponseWorker(
     }
 
     private fun populateEquipmentCacheFromSnapshot(response: NexonApiResponseMessage) {
-        try {
-            val snapshotData = snapshotStore.get(response.objectKey)
-            val equipmentResponse = objectMapper.readValue(snapshotData, maple.expectation.infrastructure.external.dto.v2.EquipmentResponse::class.java)
-            val cache = cacheManager.getCache("equipment")
-            if (cache != null) {
-                cache.put(response.characterId, equipmentResponse)
-                log.debug("[jobId={}] Equipment cache populated from snapshot", response.jobId)
-            }
-        } catch (e: Exception) {
-            log.warn("[jobId={}] Snapshot read for cache bridge failed, calculation will fetch via normal path: {}",
-                response.jobId, e.message)
+        val snapshotData = snapshotStore.get(response.objectKey)
+        val equipmentResponse = objectMapper.readValue(snapshotData, maple.expectation.infrastructure.external.dto.v2.EquipmentResponse::class.java)
+        val cache = cacheManager.getCache("equipment")
+        if (cache != null) {
+            cache.put(response.characterId, equipmentResponse)
+            log.debug("[jobId={}] Equipment cache populated from snapshot", response.jobId)
         }
     }
 }

@@ -27,10 +27,10 @@ class CalculationJobTimeoutScanner(
                 log.warn("[jobId={}] Timeout detected: OCID_RESOLVING stale for >30s", job.jobId)
             }
 
-            val staleApiRequested = jobPort.findStaleJobs(CalculationJobStatus.API_REQUESTED, 30)
+            val staleApiRequested = jobPort.findStaleJobs(CalculationJobStatus.API_REQUESTED, 180)
             for (job in staleApiRequested) {
-                jobService.handleApiFailure(job.jobId, "API_TIMEOUT", "API response timeout after 30 seconds")
-                log.warn("[jobId={}] Timeout detected: API_REQUESTED stale for >30s", job.jobId)
+                jobService.handleApiFailure(job.jobId, "API_TIMEOUT", "API response timeout after 180 seconds")
+                log.warn("[jobId={}] Timeout detected: API_REQUESTED stale for >180s", job.jobId)
             }
 
             val staleRetrying = jobPort.findStaleJobs(CalculationJobStatus.RETRYING, 60)

@@ -12,10 +12,10 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
 
     @Query("""
         SELECT j FROM CalculationJobEntity j
-        WHERE j.ocid = :ocid AND j.presetNo = :presetNo
-          AND j.status IN ('REQUESTED', 'API_REQUESTED', 'SNAPSHOT_READY', 'CALCULATING', 'RETRYING')
+        WHERE j.userIgn = :userIgn AND j.presetNo = :presetNo
+          AND j.status IN ('REQUESTED', 'OCID_RESOLVING', 'OCID_RESOLVED', 'API_REQUESTED', 'SNAPSHOT_READY', 'CALCULATING', 'RETRYING')
     """)
-    fun findActiveByOcidAndPreset(@Param("ocid") ocid: String, @Param("presetNo") presetNo: Int): CalculationJobEntity?
+    fun findActiveByUserIgnAndPreset(@Param("userIgn") userIgn: String, @Param("presetNo") presetNo: Int): CalculationJobEntity?
 
     @Modifying
     @Query("""
@@ -108,4 +108,17 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
         @Param("status") status: String,
         @Param("cutoff") cutoff: Instant
     ): List<CalculationJobEntity>
+
+    @Modifying
+    @Query("""
+        UPDATE CalculationJobEntity j
+        SET j.ocid = :ocid, j.status = :to, j.updatedAt = CURRENT_TIMESTAMP
+        WHERE j.jobId = :jobId AND j.status = :from
+    """)
+    fun resolveOcid(
+        @Param("jobId") jobId: UUID,
+        @Param("ocid") ocid: String,
+        @Param("from") from: String,
+        @Param("to") to: String
+    ): Int
 }

@@ -667,6 +667,10 @@ pgmq:
       enabled: true
       polling-interval-ms: 100
       batch-size: 10
+    ocid-resolve:
+      enabled: true
+      polling-interval-ms: 100
+      batch-size: 10
 
 snapshot:
   store:

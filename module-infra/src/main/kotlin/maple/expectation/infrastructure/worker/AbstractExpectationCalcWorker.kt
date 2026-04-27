@@ -97,14 +97,9 @@ abstract class AbstractExpectationCalcWorker(
 
         return executor.executeOrDefault({
             workerLog.info("[{}] Creating job: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
-
-            val ocid = characterOcidPort.resolveOcid(request.userIgn)
-                ?: return@executeOrDefault false
-
-            val job = jobService.createJob(ocid, request.userIgn, request.presetNo)
-            jobService.requestApiData(job.jobId)
-
-            workerLog.info("[{}] Job created: jobId={}", workerName, job.jobId)
+            val job = jobService.createJob(null, request.userIgn, request.presetNo)
+            jobService.requestOcidResolve(job.jobId, request.userIgn, request.presetNo)
+            workerLog.info("[{}] Job created with async OCID resolve: jobId={}", workerName, job.jobId)
             true
         }, false, context)
     }

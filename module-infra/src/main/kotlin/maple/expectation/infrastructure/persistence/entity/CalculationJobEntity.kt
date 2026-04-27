@@ -12,8 +12,8 @@ open class CalculationJobEntity(
     @Column(updatable = false, nullable = false)
     val jobId: UUID = UUID.randomUUID(),
 
-    @Column(nullable = false, length = 64)
-    val ocid: String,
+    @Column(length = 64)
+    val ocid: String? = null,
 
     @Column(nullable = false, length = 64)
     val userIgn: String,

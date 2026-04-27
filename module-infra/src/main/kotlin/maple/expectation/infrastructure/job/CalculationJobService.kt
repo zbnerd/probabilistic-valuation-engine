@@ -9,6 +9,7 @@ import maple.expectation.infrastructure.persistence.repository.CalculationSnapsh
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.queue.pgmq.NexonApiRequestMessage
 import maple.expectation.infrastructure.queue.pgmq.NexonApiResponseMessage
+import maple.expectation.infrastructure.queue.pgmq.OcidResolveMessage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -24,10 +25,64 @@ class CalculationJobService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Transactional
-    fun createJob(ocid: String, userIgn: String, presetNo: Int): CalculationJob {
+    fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob {
         val job = jobPort.createJob(ocid, userIgn, presetNo)
         log.info("[jobId={}] Job created in REQUESTED state", job.jobId)
         return job
+    }
+
+    @Transactional
+    fun requestOcidResolve(jobId: UUID, userIgn: String, presetNo: Int) {
+        val transitioned = jobPort.transitionStatus(
+            jobId,
+            CalculationJobStatus.REQUESTED,
+            CalculationJobStatus.OCID_RESOLVING
+        )
+        if (!transitioned) {
+            log.warn("[jobId={}] Cannot transition to OCID_RESOLVING", jobId)
+            return
+        }
+
+        val message = OcidResolveMessage(
+            jobId = jobId,
+            userIgn = userIgn,
+            presetNo = presetNo
+        )
+        pgmqClient.send(QueueNames.OCID_RESOLVE, message)
+        log.info("[jobId={}] Transitioned to OCID_RESOLVING, resolve enqueued", jobId)
+    }
+
+    @Transactional
+    fun resolveOcidAndEnqueueApiData(jobId: UUID, ocid: String): Boolean {
+        val resolved = jobPort.resolveOcid(jobId, ocid, CalculationJobStatus.OCID_RESOLVING)
+        if (!resolved) {
+            log.warn("[jobId={}] Cannot resolve OCID — not in OCID_RESOLVING state", jobId)
+            return false
+        }
+
+        val transitioned = jobPort.transitionStatus(
+            jobId,
+            CalculationJobStatus.OCID_RESOLVED,
+            CalculationJobStatus.API_REQUESTED
+        )
+        if (!transitioned) {
+            log.warn("[jobId={}] Cannot transition to API_REQUESTED after OCID resolve", jobId)
+            return false
+        }
+
+        val job = jobPort.findJobById(jobId) ?: return false
+
+        val request = NexonApiRequestMessage(
+            jobId = job.jobId,
+            ocid = ocid,
+            userIgn = job.userIgn,
+            presetNo = job.presetNo,
+            eventType = "FETCH_EQUIPMENT",
+            requestedAt = Instant.now().toString()
+        )
+        pgmqClient.send(QueueNames.NEXON_API_REQUEST, request)
+        log.info("[jobId={}] OCID resolved, API request enqueued", jobId)
+        return true
     }
 
     @Transactional
@@ -46,7 +101,7 @@ class CalculationJobService(
 
         val request = NexonApiRequestMessage(
             jobId = job.jobId,
-            ocid = job.ocid,
+            ocid = job.ocid ?: return,
             userIgn = job.userIgn,
             presetNo = job.presetNo,
             eventType = "FETCH_EQUIPMENT",
@@ -81,7 +136,7 @@ class CalculationJobService(
                     jobId = jobId,
                     snapshotId = snapshotId,
                     objectKey = objectKey,
-                    characterId = job.ocid,
+                    characterId = job.ocid ?: return false,
                     userIgn = job.userIgn,
                     presetNo = job.presetNo
                 )
@@ -124,7 +179,7 @@ class CalculationJobService(
             if (retried) {
                 val request = NexonApiRequestMessage(
                     jobId = job.jobId,
-                    ocid = job.ocid,
+                    ocid = job.ocid ?: return,
                     userIgn = job.userIgn,
                     presetNo = job.presetNo,
                     eventType = "RETRY_FETCH",
@@ -132,6 +187,27 @@ class CalculationJobService(
                 )
                 pgmqClient.send(QueueNames.NEXON_API_REQUEST, request)
                 log.info("[jobId={}] Retrying (attempt {}): {}", jobId, job.retryCount + 1, errorCode)
+            }
+        }
+    }
+
+    @Transactional
+    fun handleOcidFailure(jobId: UUID, errorCode: String, errorMessage: String) {
+        val job = jobPort.findJobById(jobId) ?: return
+
+        if (job.retryCount >= job.maxRetries) {
+            jobPort.markFailed(jobId, errorCode, errorMessage)
+            log.warn("[jobId={}] OCID resolve failed after {} retries: {}", jobId, job.retryCount, errorMessage)
+        } else {
+            val retried = jobPort.incrementRetry(jobId, errorCode)
+            if (retried) {
+                val message = OcidResolveMessage(
+                    jobId = job.jobId,
+                    userIgn = job.userIgn,
+                    presetNo = job.presetNo
+                )
+                pgmqClient.send(QueueNames.OCID_RESOLVE, message)
+                log.info("[jobId={}] OCID resolve retry (attempt {}): {}", jobId, job.retryCount + 1, errorCode)
             }
         }
     }

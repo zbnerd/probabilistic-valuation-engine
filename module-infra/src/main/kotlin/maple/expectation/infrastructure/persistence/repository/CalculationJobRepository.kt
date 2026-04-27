@@ -13,7 +13,7 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
     @Query("""
         SELECT j FROM CalculationJobEntity j
         WHERE j.userIgn = :userIgn AND j.presetNo = :presetNo
-          AND j.status IN ('REQUESTED', 'OCID_RESOLVING', 'OCID_RESOLVED', 'API_REQUESTED', 'SNAPSHOT_READY', 'CALCULATING', 'RETRYING')
+          AND j.status IN ('REQUESTED', 'OCID_RESOLVING', 'API_REQUESTED', 'SNAPSHOT_READY', 'CALCULATING', 'RETRYING')
     """)
     fun findActiveByUserIgnAndPreset(@Param("userIgn") userIgn: String, @Param("presetNo") presetNo: Int): CalculationJobEntity?
 

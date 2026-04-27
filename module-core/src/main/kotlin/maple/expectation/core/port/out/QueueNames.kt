@@ -11,4 +11,7 @@ object QueueNames {
 
     /** Low priority expectation calculation queue (batch/scheduled updates) */
     const val EXPECTATION_CALC_LOW = "expectation_calc_low"
+
+    const val NEXON_API_REQUEST = "nexon_api_request_queue"
+    const val NEXON_API_RESPONSE = "nexon_api_response_queue"
 }

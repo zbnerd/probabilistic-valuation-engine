@@ -205,3 +205,8 @@ bulk:
     initial-ms: 100  # Increased delay between requests
     min-ms: 50
     max-ms: 1000
+
+snapshot:
+  store:
+    local:
+      base-path: ./snapshots

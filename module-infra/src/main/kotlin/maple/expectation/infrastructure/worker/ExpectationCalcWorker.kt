@@ -12,6 +12,7 @@ import maple.expectation.core.port.out.GameCharacterPort
 import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
 import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository
 import maple.expectation.infrastructure.pgmq.PgmqClient
@@ -45,6 +46,7 @@ class ExpectationCalcWorker(
     batchRepo: CharacterViewBatchRepository,
     objectMapper: ObjectMapper,
     computeBuffer: BatchComputeBuffer,
+    jobService: CalculationJobService,
 ) : AbstractExpectationCalcWorker(
     pgmqClient,
     executor,
@@ -64,6 +66,7 @@ class ExpectationCalcWorker(
     batchRepo,
     objectMapper,
     computeBuffer,
+    jobService,
 ) {
 
     override val queueName: String = QUEUE_NAME

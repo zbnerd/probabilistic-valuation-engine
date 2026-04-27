@@ -33,12 +33,20 @@ import org.springframework.jdbc.core.JdbcTemplate
 @Conditional(PostgresLockHikariConfig.PostgresDatasourceCondition::class)
 class PostgresLockHikariConfig(
     @Value("\${spring.datasource.url}") private val jdbcUrl: String,
-    @Value("\${spring.datasource.username}") private val username: String,
-    @Value("\${spring.datasource.password}") private val password: String,
     @Value("\${lock.datasource.pool-size:40}") private val poolSize: Int,
 ) {
 
     private val log = LoggerFactory.getLogger(PostgresLockHikariConfig::class.java)
+
+    private fun parseCredentialsFromUrl(url: String): Pair<String?, String?> {
+        val query = url.substringAfter("?", "")
+        if (query.isEmpty()) return null to null
+        val params = query.split("&").associate {
+            val (k, v) = it.split("=", limit = 2)
+            k to v
+        }
+        return params["user"] to params["password"]
+    }
 
     @Bean(name = ["lockDataSource"])
     fun lockDataSource(): DataSource {
@@ -47,9 +55,10 @@ class PostgresLockHikariConfig(
 
         // 기본 연결 정보
         config.jdbcUrl = jdbcUrl
-        config.username = username
-        config.password = password
         config.driverClassName = "org.postgresql.Driver"
+        val (user, pass) = parseCredentialsFromUrl(jdbcUrl)
+        if (user != null) config.username = user
+        if (pass != null) config.password = pass
 
         // Fixed Pool Size: 연결 비용 제거
         config.maximumPoolSize = poolSize

@@ -5,7 +5,7 @@ import java.util.UUID
 
 data class CalculationJob(
     val jobId: UUID,
-    val ocid: String,
+    val ocid: String?,
     val userIgn: String,
     val presetNo: Int = 1,
     val status: CalculationJobStatus = CalculationJobStatus.REQUESTED,

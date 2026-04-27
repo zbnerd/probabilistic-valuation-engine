@@ -14,8 +14,8 @@ class CalculationJobPortAdapter(
     private val jobRepository: CalculationJobRepository
 ) : CalculationJobPort {
 
-    override fun createJob(ocid: String, userIgn: String, presetNo: Int): CalculationJob {
-        val existing = jobRepository.findActiveByOcidAndPreset(ocid, presetNo)
+    override fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob {
+        val existing = jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)
         if (existing != null) {
             return existing.toDomain()
         }
@@ -50,6 +50,12 @@ class CalculationJobPortAdapter(
         return jobRepository.incrementRetry(jobId, errorCode, nextRetry) > 0
     }
 
+    override fun incrementRetryForOcid(jobId: UUID, errorCode: String): Boolean {
+        val backoffSeconds = 30L
+        val nextRetry = Instant.now().plusSeconds(backoffSeconds)
+        return jobRepository.incrementRetryForOcid(jobId, errorCode, nextRetry) > 0
+    }
+
     override fun lockForProcessing(jobId: UUID, workerId: String, from: CalculationJobStatus): Boolean {
         val lockedUntil = Instant.now().plusSeconds(300)
         return jobRepository.lockForProcessing(jobId, workerId, lockedUntil, from.name) > 0
@@ -64,8 +70,12 @@ class CalculationJobPortAdapter(
         return jobRepository.findStaleJobs(status.name, cutoff).map { it.toDomain() }
     }
 
-    override fun findActiveJobByOcid(ocid: String, presetNo: Int): CalculationJob? {
-        return jobRepository.findActiveByOcidAndPreset(ocid, presetNo)?.toDomain()
+    override fun findActiveJobByUserIgn(userIgn: String, presetNo: Int): CalculationJob? {
+        return jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)?.toDomain()
+    }
+
+    override fun resolveOcidAndTransition(jobId: UUID, ocid: String): Boolean {
+        return jobRepository.resolveOcidAndTransition(jobId, ocid) > 0
     }
 
     private fun CalculationJobEntity.toDomain() = CalculationJob(

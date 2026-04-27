@@ -1,6 +1,8 @@
 package maple.expectation.infrastructure.persistence.entity
 
 import jakarta.persistence.*
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.time.Instant
 import java.util.UUID
 
@@ -12,8 +14,8 @@ open class CalculationJobEntity(
     @Column(updatable = false, nullable = false)
     val jobId: UUID = UUID.randomUUID(),
 
-    @Column(nullable = false, length = 64)
-    val ocid: String,
+    @Column(length = 64)
+    val ocid: String? = null,
 
     @Column(nullable = false, length = 64)
     val userIgn: String,
@@ -41,6 +43,7 @@ open class CalculationJobEntity(
 
     var errorMessage: String? = null,
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "JSONB")
     var calculationResult: String? = null,
 

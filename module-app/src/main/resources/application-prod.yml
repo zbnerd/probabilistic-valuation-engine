@@ -88,6 +88,14 @@ pgmq:
       batch-size: 20
       max-retries: 5
       visibility-timeout-sec: 120
+    api-response:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 20
+    ocid-resolve:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 20
 
 # V5 Stateless Architecture (#271)
 # V5 Migration (Issue #589): Redis removed, PostgreSQL-only

@@ -7,13 +7,15 @@ import maple.expectation.infrastructure.persistence.repository.CalculationSnapsh
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 
 @Component
 class SnapshotCleanupWorker(
     private val snapshotRepository: CalculationSnapshotRepository,
     private val snapshotStore: SnapshotObjectStore,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
+    private val transactionTemplate: TransactionTemplate
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -26,13 +28,20 @@ class SnapshotCleanupWorker(
             val expired = snapshotRepository.findByExpiresAtBefore(cutoff)
             if (expired.isEmpty()) return@executeVoid
 
-            var deleted = 0
+            // Delete files first (outside TX — file ops are not transactional)
             for (snapshot in expired) {
-                snapshotStore.delete(snapshot.objectKey)
-                snapshotRepository.delete(snapshot)
-                deleted++
+                try {
+                    snapshotStore.delete(snapshot.objectKey)
+                } catch (e: Exception) {
+                    log.warn("Failed to delete snapshot file {}: {}", snapshot.objectKey, e.message)
+                }
             }
-            log.info("Cleaned up {} expired snapshots", deleted)
+
+            // Batch delete metadata in TX
+            transactionTemplate.executeWithoutResult {
+                snapshotRepository.deleteAll(expired)
+            }
+            log.info("Cleaned up {} expired snapshots", expired.size)
         }, context)
     }
 }

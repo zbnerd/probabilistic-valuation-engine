@@ -12,10 +12,10 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
 
     @Query("""
         SELECT j FROM CalculationJobEntity j
-        WHERE j.ocid = :ocid AND j.presetNo = :presetNo
-          AND j.status IN ('REQUESTED', 'API_REQUESTED', 'SNAPSHOT_READY', 'CALCULATING', 'RETRYING')
+        WHERE j.userIgn = :userIgn AND j.presetNo = :presetNo
+          AND j.status IN ('REQUESTED', 'OCID_RESOLVING', 'OCID_RESOLVED', 'API_REQUESTED', 'SNAPSHOT_READY', 'CALCULATING', 'RETRYING')
     """)
-    fun findActiveByOcidAndPreset(@Param("ocid") ocid: String, @Param("presetNo") presetNo: Int): CalculationJobEntity?
+    fun findActiveByUserIgnAndPreset(@Param("userIgn") userIgn: String, @Param("presetNo") presetNo: Int): CalculationJobEntity?
 
     @Modifying
     @Query("""
@@ -74,6 +74,37 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
         @Param("jobId") jobId: UUID,
         @Param("errorCode") errorCode: String,
         @Param("nextRetryAt") nextRetryAt: Instant
+    ): Int
+
+    @Modifying
+    @Query("""
+        UPDATE CalculationJobEntity j
+        SET j.retryCount = j.retryCount + 1,
+            j.status = 'OCID_RESOLVING',
+            j.nextRetryAt = :nextRetryAt,
+            j.lastErrorCode = :errorCode,
+            j.lockedBy = NULL, j.lockedUntil = NULL,
+            j.updatedAt = CURRENT_TIMESTAMP
+        WHERE j.jobId = :jobId
+          AND j.status = 'OCID_RESOLVING'
+          AND j.retryCount < j.maxRetries
+    """)
+    fun incrementRetryForOcid(
+        @Param("jobId") jobId: UUID,
+        @Param("errorCode") errorCode: String,
+        @Param("nextRetryAt") nextRetryAt: Instant
+    ): Int
+
+    @Modifying
+    @Query("""
+        UPDATE CalculationJobEntity j
+        SET j.ocid = :ocid, j.status = 'API_REQUESTED',
+            j.updatedAt = CURRENT_TIMESTAMP
+        WHERE j.jobId = :jobId AND j.status = 'OCID_RESOLVING'
+    """)
+    fun resolveOcidAndTransition(
+        @Param("jobId") jobId: UUID,
+        @Param("ocid") ocid: String
     ): Int
 
     @Modifying

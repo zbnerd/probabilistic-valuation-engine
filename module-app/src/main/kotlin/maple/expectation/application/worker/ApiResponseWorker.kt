@@ -1,9 +1,11 @@
 package maple.expectation.application.worker
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.QueueNames
+import maple.expectation.core.port.out.SnapshotObjectStore
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationJobService
@@ -11,6 +13,7 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.queue.pgmq.NexonApiResponseMessage
 import org.slf4j.LoggerFactory
+import org.springframework.cache.CacheManager
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
@@ -20,13 +23,15 @@ class ApiResponseWorker(
     private val expectationPort: ExpectationV4Port,
     private val jobPort: CalculationJobPort,
     private val jobService: CalculationJobService,
+    private val snapshotStore: SnapshotObjectStore,
+    private val objectMapper: ObjectMapper,
+    private val cacheManager: CacheManager,
     private val executor: LogicExecutor
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val terminalStatuses = setOf(
         CalculationJobStatus.COMPLETED,
-        CalculationJobStatus.FAILED,
-        CalculationJobStatus.CALCULATING
+        CalculationJobStatus.FAILED
     )
 
     @Scheduled(fixedDelayString = "\${pgmq.worker.api-response.polling-interval-ms:100}")
@@ -65,6 +70,13 @@ class ApiResponseWorker(
                 return@executeVoid
             }
 
+            if (job.status == CalculationJobStatus.CALCULATING) {
+                log.warn("[jobId={}] Stuck in CALCULATING on redelivery, marking as failed", response.jobId)
+                jobPort.markFailed(response.jobId, "CALCULATION_STUCK", "Calculation stuck after redelivery")
+                pgmqClient.archive(QueueNames.NEXON_API_RESPONSE, message.messageId)
+                return@executeVoid
+            }
+
             val started = jobService.startCalculation(response.jobId, "ApiResponseWorker")
             if (!started) {
                 log.warn("[jobId={}] Could not start calculation, archiving", response.jobId)
@@ -73,6 +85,8 @@ class ApiResponseWorker(
             }
 
             log.info("[jobId={}] Processing API response: eventType={}", response.jobId, response.eventType)
+
+            populateEquipmentCacheFromSnapshot(response)
 
             expectationPort.calculateExpectationAsync(
                 response.userIgn,
@@ -85,5 +99,15 @@ class ApiResponseWorker(
             pgmqClient.archive(QueueNames.NEXON_API_RESPONSE, message.messageId)
             log.info("[jobId={}] Calculation completed from snapshot", response.jobId)
         }, context)
+    }
+
+    private fun populateEquipmentCacheFromSnapshot(response: NexonApiResponseMessage) {
+        val snapshotData = snapshotStore.get(response.objectKey)
+        val equipmentResponse = objectMapper.readValue(snapshotData, maple.expectation.infrastructure.external.dto.v2.EquipmentResponse::class.java)
+        val cache = cacheManager.getCache("equipment")
+        if (cache != null) {
+            cache.put(response.characterId, equipmentResponse)
+            log.debug("[jobId={}] Equipment cache populated from snapshot", response.jobId)
+        }
     }
 }

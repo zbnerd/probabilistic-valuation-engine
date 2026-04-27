@@ -42,9 +42,11 @@ class LocalSnapshotObjectStore(
 
         fullPath.parent.toFile().mkdirs()
 
-        FileOutputStream(fullPath.toFile()).use { fos ->
+        val tempFile = fullPath.resolveSibling(fullPath.fileName.toString() + ".tmp")
+        FileOutputStream(tempFile.toFile()).use { fos ->
             fos.write(compressed)
         }
+        java.nio.file.Files.move(tempFile, fullPath, java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
 
         return SnapshotObjectStoreResult(
             objectKey = snapshot.objectKey,

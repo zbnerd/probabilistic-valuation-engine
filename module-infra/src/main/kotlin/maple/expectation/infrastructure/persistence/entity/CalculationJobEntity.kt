@@ -1,6 +1,8 @@
 package maple.expectation.infrastructure.persistence.entity
 
 import jakarta.persistence.*
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.time.Instant
 import java.util.UUID
 
@@ -41,6 +43,7 @@ open class CalculationJobEntity(
 
     var errorMessage: String? = null,
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "JSONB")
     var calculationResult: String? = null,
 

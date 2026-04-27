@@ -122,6 +122,15 @@ class CalculationJobService(
         } else {
             val retried = jobPort.incrementRetry(jobId, errorCode)
             if (retried) {
+                val request = NexonApiRequestMessage(
+                    jobId = job.jobId,
+                    ocid = job.ocid,
+                    userIgn = job.userIgn,
+                    presetNo = job.presetNo,
+                    eventType = "RETRY_FETCH",
+                    requestedAt = Instant.now().toString()
+                )
+                pgmqClient.send(QueueNames.NEXON_API_REQUEST, request)
                 log.info("[jobId={}] Retrying (attempt {}): {}", jobId, job.retryCount + 1, errorCode)
             }
         }

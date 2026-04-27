@@ -49,6 +49,7 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
             j.errorMessage = :errorMessage, j.completedAt = CURRENT_TIMESTAMP,
             j.updatedAt = CURRENT_TIMESTAMP
         WHERE j.jobId = :jobId
+          AND j.status NOT IN ('COMPLETED', 'FAILED')
     """)
     fun markFailed(
         @Param("jobId") jobId: UUID,

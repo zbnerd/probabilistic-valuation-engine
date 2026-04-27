@@ -6,6 +6,7 @@ import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.QueueNames
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.queue.pgmq.NexonApiResponseMessage
@@ -18,6 +19,7 @@ class ApiResponseWorker(
     private val pgmqClient: PgmqClient,
     private val expectationPort: ExpectationV4Port,
     private val jobPort: CalculationJobPort,
+    private val jobService: CalculationJobService,
     private val executor: LogicExecutor
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -27,7 +29,7 @@ class ApiResponseWorker(
         CalculationJobStatus.CALCULATING
     )
 
-    @Scheduled(fixedDelayString = "\${pgmq.worker.nexon-api.polling-interval-ms:100}")
+    @Scheduled(fixedDelayString = "\${pgmq.worker.api-response.polling-interval-ms:100}")
     fun processMessages() {
         val context = TaskContext.of("ApiResponseWorker", "Poll", "response_queue")
 
@@ -63,6 +65,13 @@ class ApiResponseWorker(
                 return@executeVoid
             }
 
+            val started = jobService.startCalculation(response.jobId, "ApiResponseWorker")
+            if (!started) {
+                log.warn("[jobId={}] Could not start calculation, archiving", response.jobId)
+                pgmqClient.archive(QueueNames.NEXON_API_RESPONSE, message.messageId)
+                return@executeVoid
+            }
+
             log.info("[jobId={}] Processing API response: eventType={}", response.jobId, response.eventType)
 
             expectationPort.calculateExpectationAsync(
@@ -72,6 +81,7 @@ class ApiResponseWorker(
                 response.presetNo
             ).join()
 
+            jobService.completeCalculation(response.jobId)
             pgmqClient.archive(QueueNames.NEXON_API_RESPONSE, message.messageId)
             log.info("[jobId={}] Calculation completed from snapshot", response.jobId)
         }, context)

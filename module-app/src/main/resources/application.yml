@@ -663,6 +663,10 @@ pgmq:
       batch-size: 10
       max-retries: 3
       visibility-timeout-sec: 120
+    api-response:
+      enabled: true
+      polling-interval-ms: 100
+      batch-size: 10
 
 snapshot:
   store:

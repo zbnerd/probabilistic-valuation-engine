@@ -15,9 +15,7 @@ spring:
       on-profile: pglocal
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/maple_expectation?currentSchema=public
-    username: ${DB_USERNAME:-maple}
-    password: ${DB_PASSWORD:-maple123}
+    url: ${DB_URL}
     driver-class-name: org.postgresql.Driver
 
     hikari:

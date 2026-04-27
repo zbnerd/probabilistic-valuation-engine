@@ -6,5 +6,6 @@ data class NexonApiResponseMessage(
     val snapshotId: java.util.UUID,
     val objectKey: String,
     val characterId: String,
+    val userIgn: String,
     val presetNo: Int = 1
 )

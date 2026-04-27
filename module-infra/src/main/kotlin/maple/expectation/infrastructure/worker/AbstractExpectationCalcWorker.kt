@@ -15,6 +15,7 @@ import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
 import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.pgmq.CalculationResult
 import maple.expectation.infrastructure.pgmq.ExpectationCalcMessage
@@ -48,6 +49,7 @@ abstract class AbstractExpectationCalcWorker(
     private val batchRepo: CharacterViewBatchRepository,
     private val objectMapper: ObjectMapper,
     private val computeBuffer: BatchComputeBuffer,
+    private val jobService: CalculationJobService,
 ) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val payloadClass: Class<ExpectationCalcMessage> = ExpectationCalcMessage::class.java
@@ -55,7 +57,7 @@ abstract class AbstractExpectationCalcWorker(
     protected abstract val workerName: String
     protected abstract val workerLog: Logger
 
-    override val supportsTwoPhase: Boolean = true
+    override val supportsTwoPhase: Boolean = false
 
     override fun preWarmBatch(messages: List<PgmqMessage<ExpectationCalcMessage>>) {
         val stats = computeBuffer.stats()
@@ -94,16 +96,15 @@ abstract class AbstractExpectationCalcWorker(
         val context = TaskContext.of(workerName, "Process", request.userIgn)
 
         return executor.executeOrDefault({
-            workerLog.info("[{}] Processing: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
+            workerLog.info("[{}] Creating job: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
 
-            expectationPort.calculateExpectationAsync(
-                request.userIgn,
-                request.forceRecalculation,
-                message.messageId.toString(),
-                request.presetNo,
-            ).join()
+            val ocid = characterOcidPort.resolveOcid(request.userIgn)
+                ?: return@executeOrDefault false
 
-            workerLog.info("[{}] Completed: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
+            val job = jobService.createJob(ocid, request.userIgn, request.presetNo)
+            jobService.requestApiData(job.jobId)
+
+            workerLog.info("[{}] Job created: jobId={}", workerName, job.jobId)
             true
         }, false, context)
     }

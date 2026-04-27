@@ -65,6 +65,7 @@ class CalculationJobService(
                     snapshotId = snapshotId,
                     objectKey = objectKey,
                     characterId = job.ocid,
+                    userIgn = job.userIgn,
                     presetNo = job.presetNo
                 )
                 pgmqClient.send(QueueNames.NEXON_API_RESPONSE, response)

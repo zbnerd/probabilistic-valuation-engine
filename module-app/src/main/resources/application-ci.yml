@@ -4,10 +4,7 @@ spring:
       on-profile: ci
 
   datasource:
-    # PostgreSQL Configuration (Issue #591: MySQL migration complete)
-    url: jdbc:postgresql://localhost:5432/${DB_SCHEMA_NAME:maple_test}
-    username: maple
-    password: ${DB_ROOT_PASSWORD:testpassword}
+    url: ${DB_URL}
     driver-class-name: org.postgresql.Driver
 
     hikari:

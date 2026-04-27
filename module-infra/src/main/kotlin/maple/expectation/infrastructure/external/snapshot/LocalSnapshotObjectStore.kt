@@ -3,6 +3,8 @@ package maple.expectation.infrastructure.external.snapshot
 import maple.expectation.core.model.snapshot.CalculationSnapshot
 import maple.expectation.core.port.out.SnapshotObjectStore
 import maple.expectation.core.port.out.SnapshotObjectStoreResult
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.io.FileOutputStream
@@ -10,16 +12,30 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.security.MessageDigest
+import java.util.concurrent.Semaphore
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
 @Component
 class LocalSnapshotObjectStore(
     @Value("\${snapshot.store.local.base-path:/data/snapshots}")
-    private val basePath: String
+    private val basePath: String,
+    private val executor: LogicExecutor
 ) : SnapshotObjectStore {
 
+    private val writePermits = Semaphore(10)
+
     override fun put(snapshot: CalculationSnapshot, data: ByteArray): SnapshotObjectStoreResult {
+        val context = TaskContext.of("SnapshotStore", "Put", snapshot.objectKey)
+        return executor.executeWithFinally({
+            writePermits.acquire()
+            doPut(snapshot, data)
+        }, {
+            writePermits.release()
+        }, context)
+    }
+
+    private fun doPut(snapshot: CalculationSnapshot, data: ByteArray): SnapshotObjectStoreResult {
         val compressed = gzipCompress(data)
         val hash = sha256(compressed)
         val fullPath = resolveFullPath(snapshot.objectKey)

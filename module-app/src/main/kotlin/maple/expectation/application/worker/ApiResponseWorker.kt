@@ -1,6 +1,8 @@
 package maple.expectation.application.worker
 
+import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.inbound.ExpectationV4Port
+import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.QueueNames
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -15,9 +17,15 @@ import org.springframework.stereotype.Component
 class ApiResponseWorker(
     private val pgmqClient: PgmqClient,
     private val expectationPort: ExpectationV4Port,
+    private val jobPort: CalculationJobPort,
     private val executor: LogicExecutor
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+    private val terminalStatuses = setOf(
+        CalculationJobStatus.COMPLETED,
+        CalculationJobStatus.FAILED,
+        CalculationJobStatus.CALCULATING
+    )
 
     @Scheduled(fixedDelayString = "\${pgmq.worker.nexon-api.polling-interval-ms:100}")
     fun processMessages() {
@@ -42,6 +50,19 @@ class ApiResponseWorker(
         val context = TaskContext.of("ApiResponseWorker", "Process", response.userIgn)
 
         executor.executeVoid({
+            val job = jobPort.findJobById(response.jobId)
+            if (job == null) {
+                log.warn("[jobId={}] Job not found, archiving", response.jobId)
+                pgmqClient.archive(QueueNames.NEXON_API_RESPONSE, message.messageId)
+                return@executeVoid
+            }
+
+            if (job.status in terminalStatuses) {
+                log.info("[jobId={}] Already in terminal state: {}, skipping", response.jobId, job.status)
+                pgmqClient.archive(QueueNames.NEXON_API_RESPONSE, message.messageId)
+                return@executeVoid
+            }
+
             log.info("[jobId={}] Processing API response: eventType={}", response.jobId, response.eventType)
 
             expectationPort.calculateExpectationAsync(

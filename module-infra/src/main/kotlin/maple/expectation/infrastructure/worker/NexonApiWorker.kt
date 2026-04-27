@@ -8,7 +8,6 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
-import maple.expectation.infrastructure.persistence.repository.CalculationSnapshotRepository
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.queue.pgmq.NexonApiRequestMessage
@@ -25,7 +24,6 @@ class NexonApiWorker(
     private val pgmqClient: PgmqClient,
     private val nexonApiClient: NexonApiClient,
     private val snapshotStore: SnapshotObjectStore,
-    private val snapshotRepository: CalculationSnapshotRepository,
     private val jobService: CalculationJobService,
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor
@@ -86,9 +84,8 @@ class NexonApiWorker(
                 hash = result.hash,
                 expiresAt = snapshot.expiresAt
             )
-            snapshotRepository.save(snapshotEntity)
 
-            jobService.markSnapshotReady(jobId, snapshot.snapshotId, objectKey)
+            jobService.saveSnapshotAndMarkReady(snapshotEntity, jobId, objectKey)
 
             pgmqClient.archive(QueueNames.NEXON_API_REQUEST, message.messageId)
             log.info("[jobId={}] API request processed, snapshot saved: {}", jobId, objectKey)

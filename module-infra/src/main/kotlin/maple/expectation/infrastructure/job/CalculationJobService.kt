@@ -4,6 +4,8 @@ import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.QueueNames
+import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
+import maple.expectation.infrastructure.persistence.repository.CalculationSnapshotRepository
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.queue.pgmq.NexonApiRequestMessage
 import maple.expectation.infrastructure.queue.pgmq.NexonApiResponseMessage
@@ -16,7 +18,8 @@ import java.util.UUID
 @Service
 class CalculationJobService(
     private val jobPort: CalculationJobPort,
-    private val pgmqClient: PgmqClient
+    private val pgmqClient: PgmqClient,
+    private val snapshotRepository: CalculationSnapshotRepository
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -54,7 +57,21 @@ class CalculationJobService(
     }
 
     @Transactional
+    fun saveSnapshotAndMarkReady(
+        snapshotEntity: CalculationSnapshotEntity,
+        jobId: UUID,
+        objectKey: String
+    ): Boolean {
+        snapshotRepository.save(snapshotEntity)
+        return markSnapshotReadyInternal(jobId, snapshotEntity.snapshotId, objectKey)
+    }
+
+    @Transactional
     fun markSnapshotReady(jobId: UUID, snapshotId: UUID, objectKey: String): Boolean {
+        return markSnapshotReadyInternal(jobId, snapshotId, objectKey)
+    }
+
+    private fun markSnapshotReadyInternal(jobId: UUID, snapshotId: UUID, objectKey: String): Boolean {
         val ready = jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)
         if (ready) {
             val job = jobPort.findJobById(jobId)

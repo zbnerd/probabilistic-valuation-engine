@@ -689,8 +689,9 @@ interface OutboxEventRepository : JpaRepository<OutboxEventEntity, UUID> {
     @Query("UPDATE OutboxEventEntity e SET e.publishAttempts = e.publishAttempts + 1 WHERE e.eventId = :eventId")
     fun incrementPublishAttempts(@Param("eventId") eventId: UUID)
 
-    @Query("SELECT COUNT(e) > 0 FROM OutboxEventEntity e WHERE e.jobId = :jobId AND e.eventType = :eventType")
-    fun existsByJobIdAndEventType(@Param("jobId") jobId: UUID, @Param("eventType") eventType: String): Boolean
+    @Modifying
+    @Query(value = "INSERT INTO outbox_events (event_id, event_type, job_id, payload) VALUES (:eventId, :eventType, :jobId, CAST(:payload AS jsonb)) ON CONFLICT (job_id, event_type) DO NOTHING", nativeQuery = true)
+    fun insertIfAbsent(@Param("eventId") eventId: UUID, @Param("eventType") eventType: String, @Param("jobId") jobId: UUID, @Param("payload") payload: String?): Int
 }
 ```
 
@@ -740,13 +741,13 @@ class OutboxEventPortAdapterTest {
     @InjectMocks lateinit var adapter: OutboxEventPortAdapter
 
     @Test
-    fun `insertIfAbsent returns false when event already exists`() {
+    fun `insertIfAbsent delegates to ON CONFLICT DO NOTHING`() {
         val jobId = UUID.randomUUID()
-        whenever(repo.existsByJobIdAndEventType(jobId, "CALCULATION_COMPLETED")).thenReturn(true)
+        whenever(repo.insertIfAbsent(any(), eq("CALCULATION_COMPLETED"), eq(jobId), any())).thenReturn(1)
 
         val result = adapter.insertIfAbsent("CALCULATION_COMPLETED", jobId, "{}")
 
-        assertThat(result).isFalse()
+        assertThat(result).isTrue()
     }
 }
 ```
@@ -770,11 +771,7 @@ class OutboxEventPortAdapter(
 ) : OutboxEventPort {
 
     override fun insertIfAbsent(eventType: String, jobId: UUID, payload: String?): Boolean {
-        if (repo.existsByJobIdAndEventType(jobId, eventType)) {
-            return false
-        }
-        repo.save(OutboxEventEntity(eventType = eventType, jobId = jobId, payload = payload))
-        return true
+        return repo.insertIfAbsent(UUID.randomUUID(), eventType, jobId, payload) > 0
     }
 
     override fun findUnpublished(limit: Int): List<OutboxEvent> {
@@ -957,9 +954,8 @@ class ResultReadyTopic(
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     queueMetrics: WorkerQueueMetrics
 ) : PgmqTopicGroup(
-    pgmqClient, objectMapper, executor, lifecycleWrapper,
-    PgmqTopicConfig(batchSize = 10, visibilityTimeoutSec = 30),
-    queueMetrics
+    pgmqClient, objectMapper, executor, lifecycleWrapper, queueMetrics,
+    PgmqTopicConfig(batchSize = 10, visibilityTimeoutSec = 30)
 ) {
     override val name: String = QueueNames.RESULT_READY
 }
@@ -1020,9 +1016,11 @@ git commit -m "feat(mq): add ResultReadyTopic and CALCULATION_COMPLETED event fa
 
 This is the conversion logic that runs in External API Path.
 
+**Important:** Nexon API DTO fields (`starforce`, `ItemOption.str/dex/etc`) are all `String?`, not `Int`. The converter must parse Strings.
+
 - [ ] **Step 1: Write converter test**
 
-Read the existing `EquipmentStreamingParser.java` fields to construct test fixtures. The converter must map Nexon API `ItemEquipment` fields to typed `EquipmentItem` values.
+Read the existing `EquipmentStreamingParser.java` fields to construct test fixtures. The converter must map Nexon API `ItemEquipment` fields to typed `EquipmentItem` values. **Note: all numeric fields in Nexon API are `String?`.**
 
 ```kotlin
 package maple.expectation.infrastructure.converter
@@ -1043,9 +1041,9 @@ class EquipmentResponseToCalculationInputConverterTest {
             "item_equipment_part" to "무기",
             "item_name" to "아케인셰이드 소드",
             "item_base_option" to mapOf(
-                "base_equipment_level" to 200,
-                "attack_power" to 293,
-                "magic_power" to 0
+                "base_equipment_level" to "200",
+                "attack_power" to "293",
+                "magic_power" to "0"
             ),
             "potential_option_grade" to "레전드리",
             "potential_option_1" to "공격력 +12%",
@@ -1055,13 +1053,13 @@ class EquipmentResponseToCalculationInputConverterTest {
             "additional_potential_option_1" to "크리티컬 확률 +12%",
             "additional_potential_option_2" to null,
             "additional_potential_option_3" to null,
-            "starforce" to 22,
+            "starforce" to "22",
             "starforce_scroll_flag" to "사용",
             "item_add_option" to mapOf(
-                "str" to 10, "dex" to 20, "int" to 0, "luk" to 0,
-                "max_hp" to 0, "all_stat" to 5,
-                "attack_power" to 50, "magic_power" to 0,
-                "boss_damage" to 30, "damage" to 0
+                "str" to "10", "dex" to "20", "int" to "0", "luk" to "0",
+                "max_hp" to "0", "all_stat" to "5",
+                "attack_power" to "50", "magic_power" to "0",
+                "boss_damage" to "30", "damage" to "0"
             )
         )
 
@@ -1086,7 +1084,7 @@ class EquipmentResponseToCalculationInputConverterTest {
             "item_equipment_slot" to "모자",
             "item_equipment_part" to "방어구",
             "item_name" to "테스트 모자",
-            "item_base_option" to mapOf("base_equipment_level" to 150, "attack_power" to 0, "magic_power" to 0),
+            "item_base_option" to mapOf("base_equipment_level" to "150", "attack_power" to "0", "magic_power" to "0"),
             "potential_option_grade" to null,
             "potential_option_1" to null,
             "potential_option_2" to null,
@@ -1095,13 +1093,13 @@ class EquipmentResponseToCalculationInputConverterTest {
             "additional_potential_option_1" to null,
             "additional_potential_option_2" to null,
             "additional_potential_option_3" to null,
-            "starforce" to 0,
+            "starforce" to "0",
             "starforce_scroll_flag" to null,
             "item_add_option" to mapOf(
-                "str" to 0, "dex" to 0, "int" to 0, "luk" to 0,
-                "max_hp" to 0, "all_stat" to 0,
-                "attack_power" to 0, "magic_power" to 0,
-                "boss_damage" to 0, "damage" to 0
+                "str" to "0", "dex" to "0", "int" to "0", "luk" to "0",
+                "max_hp" to "0", "all_stat" to "0",
+                "attack_power" to "0", "magic_power" to "0",
+                "boss_damage" to "0", "damage" to "0"
             )
         )
 
@@ -1113,6 +1111,8 @@ class EquipmentResponseToCalculationInputConverterTest {
 ```
 
 - [ ] **Step 2: Write converter implementation**
+
+**Note:** `PotentialGrade.fromKorean()` returns non-null and throws on invalid input. We use `entries.find{}` for safe nullable lookup instead.
 
 ```kotlin
 package maple.expectation.infrastructure.converter
@@ -1132,31 +1132,33 @@ class EquipmentResponseToCalculationInputConverter {
             part = EquipmentSlot.fromKorean(item["item_equipment_slot"] as? String ?: ""),
             equipmentPart = EquipmentPart.fromKorean(item["item_equipment_part"] as? String ?: ""),
             itemName = item["item_name"] as? String ?: "",
-            level = (baseOption?.get("base_equipment_level") as? Number)?.toInt() ?: 0,
+            level = intStr(baseOption?.get("base_equipment_level")),
             potential = buildPotentialLines(item, "potential_option_grade", "potential_option_"),
             additionalPotential = buildPotentialLines(item, "additional_potential_option_grade", "additional_potential_option_"),
-            starforce = (item["starforce"] as? Number)?.toInt() ?: 0,
+            starforce = intStr(item["starforce"]),
             starforceScrollFlag = StarforceScrollFlag.fromKorean(item["starforce_scroll_flag"] as? String),
             addOption = AddOption(
-                str = (addOption?.get("str") as? Number)?.toInt() ?: 0,
-                dex = (addOption?.get("dex") as? Number)?.toInt() ?: 0,
-                int = (addOption?.get("int") as? Number)?.toInt() ?: 0,
-                luk = (addOption?.get("luk") as? Number)?.toInt() ?: 0,
-                maxHp = (addOption?.get("max_hp") as? Number)?.toInt() ?: 0,
-                allStat = (addOption?.get("all_stat") as? Number)?.toInt() ?: 0,
-                attackPower = (addOption?.get("attack_power") as? Number)?.toInt() ?: 0,
-                magicPower = (addOption?.get("magic_power") as? Number)?.toInt() ?: 0,
-                bossDamage = (addOption?.get("boss_damage") as? Number)?.toInt() ?: 0,
-                damage = (addOption?.get("damage") as? Number)?.toInt() ?: 0
+                str = intStr(addOption?.get("str")),
+                dex = intStr(addOption?.get("dex")),
+                int = intStr(addOption?.get("int")),
+                luk = intStr(addOption?.get("luk")),
+                maxHp = intStr(addOption?.get("max_hp")),
+                allStat = intStr(addOption?.get("all_stat")),
+                attackPower = intStr(addOption?.get("attack_power")),
+                magicPower = intStr(addOption?.get("magic_power")),
+                bossDamage = intStr(addOption?.get("boss_damage")),
+                damage = intStr(addOption?.get("damage"))
             ),
-            baseAttackPower = (baseOption?.get("attack_power") as? Number)?.toInt() ?: 0,
-            baseMagicPower = (baseOption?.get("magic_power") as? Number)?.toInt() ?: 0
+            baseAttackPower = intStr(baseOption?.get("attack_power")),
+            baseMagicPower = intStr(baseOption?.get("magic_power"))
         )
     }
 
+    private fun intStr(value: Any?): Int = value?.toString()?.toIntOrNull() ?: 0
+
     private fun buildPotentialLines(item: Map<*, *>, gradeKey: String, optionPrefix: String): PotentialLines? {
         val gradeStr = item[gradeKey] as? String ?: return null
-        val grade = PotentialGrade.fromKorean(gradeStr) ?: return null
+        val grade = PotentialGrade.entries.find { it.koreanName == gradeStr } ?: return null
         return PotentialLines(
             grade = grade,
             line1 = item["${optionPrefix}1"] as? String,
@@ -1380,6 +1382,8 @@ git commit -m "feat(write-path): add completeCalculationWithResult with gzip + o
 
 This is the critical change. ApiResponseWorker stops reading `EquipmentResponse` from snapshot and instead reads `CalculationInput` from DB.
 
+**Phase 1 Limitation:** The calculation still uses `expectationPort.calculateExpectationAsync(userIgn, ...)` which depends on the equipment cache. This is step 2 of the 4-step gradual migration to pure function. Until `calculate(input: CalculationInput)` is implemented (Phase 2), the equipment cache population via `NexonApiWorker` must remain in place. The `CalculationInput` is read here to validate it exists and to extract metadata for the result record.
+
 - [ ] **Step 1: Modify ApiResponseWorker**
 
 Replace `populateEquipmentCacheFromSnapshot()` with `CalculationInput` consumption:
@@ -1556,11 +1560,16 @@ git commit -m "feat(external-api): NexonApiWorker converts and saves Calculation
 
 - [ ] **Step 1: Write OutboxRelayWorker**
 
+Uses `LogicExecutor` to comply with Zero Try-Catch Policy. Publishes `IntegrationEvent` objects (not raw strings) to `ResultReadyTopic`. The outbox payload must store enough metadata to reconstruct the event.
+
 ```kotlin
 package maple.expectation.infrastructure.worker
 
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.port.out.OutboxEventPort
-import maple.expectation.core.port.out.mq.DomainEventAppender
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.mq.event.ResultReadyEventFactory
 import maple.expectation.infrastructure.mq.pgmq.topic.ResultReadyTopic
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
@@ -1570,7 +1579,7 @@ import org.springframework.stereotype.Component
 class OutboxRelayWorker(
     private val outboxPort: OutboxEventPort,
     private val resultReadyTopic: ResultReadyTopic,
-    private val eventAppender: DomainEventAppender
+    private val executor: LogicExecutor
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -1584,13 +1593,24 @@ class OutboxRelayWorker(
         }
 
         for (event in events) {
-            try {
-                resultReadyTopic.publish(event.jobId.toString(), event.payload ?: "{}")
-                outboxPort.markPublished(event.eventId)
-            } catch (e: Exception) {
-                log.warn("[eventId={}] Publish failed: {}", event.eventId, e.message)
-                outboxPort.incrementPublishAttempts(event.eventId)
-            }
+            val context = TaskContext.of("OutboxRelayWorker", "Relay", event.eventId.toString())
+            executor.executeOrCatch(
+                {
+                    val integrationEvent = ResultReadyEventFactory.create(
+                        jobId = event.jobId.toString(),
+                        resultId = event.eventId.toString(),
+                        characterId = "",
+                        presetNo = 1
+                    )
+                    resultReadyTopic.publish(integrationEvent)
+                    outboxPort.markPublished(event.eventId)
+                },
+                { e ->
+                    log.warn("[eventId={}] Publish failed: {}", event.eventId, e.message)
+                    outboxPort.incrementPublishAttempts(event.eventId)
+                },
+                context
+            )
         }
     }
 }
@@ -1617,45 +1637,65 @@ git commit -m "feat(write-path): add OutboxRelayWorker for event publishing"
 
 - [ ] **Step 1: Write OutboxCompensatingScanner**
 
+Uses `LogicExecutor` for all operations. Queries via `CalculationJobPort` (add `findCompletedJobsMissingOutboxEvents` method) to respect hexagonal architecture.
+
+First, add to `CalculationJobPort`:
+```kotlin
+fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID>
+```
+
+Then implement in the adapter using native SQL:
+```kotlin
+// In CalculationJobPortAdapter:
+override fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID> {
+    val sql = """
+        SELECT j.job_id FROM calculation_jobs j
+        WHERE j.status = 'COMPLETED'
+          AND j.completed_at < now() - INTERVAL '1 minute'
+          AND NOT EXISTS (
+            SELECT 1 FROM outbox_events o
+            WHERE o.job_id = j.job_id AND o.event_type = 'CALCULATION_COMPLETED'
+          )
+        LIMIT :limit
+    """.trimIndent()
+    return jdbc.queryForList(sql, mapOf("limit" to limit), UUID::class.java)
+}
+```
+
+Then the scanner:
 ```kotlin
 package maple.expectation.infrastructure.job
 
+import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.OutboxEventPort
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 @Component
 class OutboxCompensatingScanner(
-    private val jdbc: NamedParameterJdbcTemplate,
-    private val outboxPort: OutboxEventPort
+    private val jobPort: CalculationJobPort,
+    private val outboxPort: OutboxEventPort,
+    private val executor: LogicExecutor
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Scheduled(fixedDelay = 60000, initialDelay = 30000)
     fun scan() {
-        val sql = """
-            SELECT j.job_id
-            FROM calculation_jobs j
-            WHERE j.status = 'COMPLETED'
-              AND j.completed_at < now() - INTERVAL '1 minute'
-              AND NOT EXISTS (
-                SELECT 1 FROM outbox_events o
-                WHERE o.job_id = j.job_id AND o.event_type = 'CALCULATION_COMPLETED'
-              )
-            LIMIT 50
-        """.trimIndent()
+        val context = TaskContext.of("OutboxCompensatingScanner", "Scan", "system")
+        executor.executeVoid({
+            val orphaned = jobPort.findCompletedJobsMissingOutboxEvents(50)
+            if (orphaned.isEmpty()) return@executeVoid
 
-        val orphaned = jdbc.queryForList(sql, emptyMap<String, Any>(), java.util.UUID::class.java)
-        if (orphaned.isEmpty()) return
-
-        log.warn("Found {} orphaned completed jobs without outbox events", orphaned.size)
-        for (jobId in orphaned) {
-            val payload = """{"jobId":"$jobId","orphanRecovery":true}"""
-            outboxPort.insertIfAbsent("CALCULATION_COMPLETED", jobId, payload)
-            log.info("[jobId={}] Compensating: created outbox event", jobId)
-        }
+            log.warn("Found {} orphaned completed jobs without outbox events", orphaned.size)
+            for (jobId in orphaned) {
+                val payload = """{"jobId":"$jobId","orphanRecovery":true}"""
+                outboxPort.insertIfAbsent("CALCULATION_COMPLETED", jobId, payload)
+                log.info("[jobId={}] Compensating: created outbox event", jobId)
+            }
+        }, context)
     }
 }
 ```

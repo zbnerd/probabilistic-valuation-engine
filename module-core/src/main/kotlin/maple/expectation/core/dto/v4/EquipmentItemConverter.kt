@@ -10,6 +10,7 @@ object EquipmentItemConverter {
         grade = item.potential?.grade?.koreanName,
         options = item.potential?.asList()?.toMutableList() ?: mutableListOf(),
         itemName = item.itemName,
+        itemIcon = "",
         itemEquipmentPart = item.equipmentPart.koreanName,
         additionalGrade = item.additionalPotential?.grade?.koreanName,
         additionalOptions = item.additionalPotential?.asList()?.filterNotNull()?.toMutableList() ?: mutableListOf(),

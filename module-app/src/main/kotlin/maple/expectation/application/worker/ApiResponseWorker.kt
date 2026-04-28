@@ -1,19 +1,17 @@
 package maple.expectation.application.worker
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import jakarta.annotation.PostConstruct
-import maple.expectation.core.domain.event.IntegrationEvent
+import maple.expectation.core.dto.v4.CalculationInput
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.inbound.ExpectationV4Port
+import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.mq.ConsumeResult
-import maple.expectation.core.port.out.SnapshotObjectStore
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import org.slf4j.LoggerFactory
-import org.springframework.cache.CacheManager
 import org.springframework.stereotype.Component
 import java.util.UUID
 
@@ -23,9 +21,7 @@ class ApiResponseWorker(
     private val expectationPort: ExpectationV4Port,
     private val jobPort: CalculationJobPort,
     private val jobService: CalculationJobService,
-    private val snapshotStore: SnapshotObjectStore,
-    private val objectMapper: ObjectMapper,
-    private val cacheManager: CacheManager,
+    private val calculationInputPort: CalculationInputPort,
     private val executor: LogicExecutor
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -34,8 +30,7 @@ class ApiResponseWorker(
         CalculationJobStatus.FAILED
     )
 
-    @PostConstruct
-    fun init() {
+    init {
         nexonApiResponseTopic.subscribe { envelope, _ -> handleApiResponse(envelope) }
     }
 
@@ -73,39 +68,31 @@ class ApiResponseWorker(
             return ConsumeResult.Ack
         }
 
-        val eventType = payload["eventType"].toString()
         val presetNo = (payload["presetNo"] as Number).toInt()
+        val characterId = payload["characterId"]?.toString() ?: ""
 
-        log.info("[jobId={}] Processing API response: eventType={}", jobId, eventType)
+        val input = calculationInputPort.findByJobId(jobId)
+        if (input == null) {
+            log.error("[jobId={}] CalculationInput not found, cannot proceed", jobId)
+            jobPort.markFailed(jobId, "INPUT_NOT_FOUND", "CalculationInput not found for job")
+            return ConsumeResult.Ack
+        }
 
-        populateEquipmentCacheFromSnapshot(payload)
-
-        expectationPort.calculateExpectationAsync(
-            userIgn,
-            false,
-            jobId.toString(),
-            presetNo
+        val result = expectationPort.calculateExpectationAsync(
+            userIgn, false, jobId.toString(), presetNo
         ).join()
 
-        jobService.completeCalculation(jobId)
-        log.info("[jobId={}] Calculation completed from snapshot", jobId)
-        return ConsumeResult.Ack
-    }
+        val resultJson = com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(result)
 
-    private fun populateEquipmentCacheFromSnapshot(payload: Map<*, *>) {
-        val objectKey = payload["objectKey"].toString()
-        val characterId = payload["characterId"].toString()
-        val jobId = payload["jobId"].toString()
-
-        val snapshotData = snapshotStore.get(objectKey)
-        val equipmentResponse = objectMapper.readValue(
-            snapshotData,
-            maple.expectation.infrastructure.external.dto.v2.EquipmentResponse::class.java
+        jobService.completeCalculationWithResult(
+            jobId = jobId,
+            resultJson = resultJson,
+            characterClass = input.characterClass,
+            presetNo = presetNo,
+            characterId = characterId
         )
-        val cache = cacheManager.getCache("equipment")
-        if (cache != null) {
-            cache.put(characterId, equipmentResponse)
-            log.debug("[jobId={}] Equipment cache populated from snapshot", jobId)
-        }
+
+        log.info("[jobId={}] Calculation completed from CalculationInput", jobId)
+        return ConsumeResult.Ack
     }
 }

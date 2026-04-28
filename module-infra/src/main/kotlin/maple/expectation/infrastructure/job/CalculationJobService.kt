@@ -15,6 +15,7 @@ import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.persistence.repository.CalculationSnapshotRepository
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -29,7 +30,8 @@ class CalculationJobService(
     private val nexonApiResponseTopic: NexonApiResponseTopic,
     private val snapshotRepository: CalculationSnapshotRepository,
     private val resultPort: CalculationResultPort,
-    private val outboxPort: OutboxEventPort
+    private val outboxPort: OutboxEventPort,
+    private val objectMapper: ObjectMapper
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -197,7 +199,7 @@ class CalculationJobService(
             status = "SUCCESS"
         ))
 
-        val eventPayload = com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(mapOf(
+        val eventPayload = objectMapper.writeValueAsString(mapOf(
             "jobId" to jobId.toString(),
             "characterId" to characterId,
             "presetNo" to presetNo,

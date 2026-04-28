@@ -8,6 +8,7 @@ import maple.expectation.infrastructure.mq.pgmq.topic.ResultReadyTopic
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 
 @Component
 class OutboxRelayWorker(
@@ -18,6 +19,7 @@ class OutboxRelayWorker(
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Scheduled(fixedDelay = 1000, initialDelay = 5000)
+    @Transactional
     fun relay() {
         val events = outboxPort.findUnpublished(50)
         if (events.isEmpty()) return

@@ -11,6 +11,7 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.util.UUID
@@ -22,6 +23,7 @@ class ApiResponseWorker(
     private val jobPort: CalculationJobPort,
     private val jobService: CalculationJobService,
     private val calculationInputPort: CalculationInputPort,
+    private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -39,9 +41,16 @@ class ApiResponseWorker(
         val jobId = UUID.fromString(payload["jobId"].toString())
         val userIgn = payload["userIgn"].toString()
         val context = TaskContext.of("ApiResponseWorker", "Process", userIgn)
-        return executor.executeOrDefault({
-            processApiResponse(payload, jobId, userIgn)
-        }, ConsumeResult.Ack, context)
+        return executor.executeOrCatch(
+            { processApiResponse(payload, jobId, userIgn) },
+            { e ->
+                log.error("[jobId={}] Calculation failed: {}", jobId, e.message)
+                val msg = (e.message ?: "Unknown error").take(200)
+                executor.executeVoid({ jobPort.markFailed(jobId, "CALCULATION_ERROR", msg) }, context)
+                ConsumeResult.Ack
+            },
+            context
+        )
     }
 
     private fun processApiResponse(payload: Map<*, *>, jobId: UUID, userIgn: String): ConsumeResult {
@@ -82,7 +91,7 @@ class ApiResponseWorker(
             userIgn, false, jobId.toString(), presetNo
         ).join()
 
-        val resultJson = com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(result)
+        val resultJson = objectMapper.writeValueAsString(result)
 
         jobService.completeCalculationWithResult(
             jobId = jobId,

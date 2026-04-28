@@ -7,6 +7,7 @@ import maple.expectation.infrastructure.persistence.entity.CalculationJobEntity
 import maple.expectation.infrastructure.persistence.repository.CalculationJobRepository
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.UUID
 
@@ -19,7 +20,11 @@ class CalculationJobPortAdapter(
     override fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob {
         val existing = jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)
         if (existing != null) {
-            return existing.toDomain()
+            if (existing.status == CalculationJobStatus.CALCULATING.name) {
+                jobRepository.markFailed(existing.jobId, "SUPERSEDED", "Superseded by new calculation request")
+            } else {
+                return existing.toDomain()
+            }
         }
 
         val entity = CalculationJobEntity(
@@ -42,6 +47,7 @@ class CalculationJobPortAdapter(
         return jobRepository.markSnapshotReady(jobId, snapshotId, from.name) > 0
     }
 
+    @Transactional
     override fun markFailed(jobId: UUID, errorCode: String, errorMessage: String): Boolean {
         return jobRepository.markFailed(jobId, errorCode, errorMessage) > 0
     }

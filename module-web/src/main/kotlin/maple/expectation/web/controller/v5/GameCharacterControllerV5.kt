@@ -171,20 +171,21 @@ class GameCharacterControllerV5(
     @PreAuthorize("permitAll()")
     fun recalculateExpectationV5(
         @PathVariable @NotBlank @ValidIgn userIgn: String,
+        @RequestParam(defaultValue = "1") @Min(1) @Max(3) presetNo: Int = 1,
     ): CompletableFuture<ResponseEntity<*>> {
         val normalizedIgn = userIgn.trim()
-        log.info("[V5] Force recalculation requested: {}", maskIgn(normalizedIgn))
-        return CompletableFuture.supplyAsync({ processCacheInvalidation(normalizedIgn) }, computeExecutor)
+        log.info("[V5] Force recalculation requested: {} (presetNo={})", maskIgn(normalizedIgn), presetNo)
+        return CompletableFuture.supplyAsync({ processCacheInvalidation(normalizedIgn, presetNo) }, computeExecutor)
     }
 
-    private fun processCacheInvalidation(userIgn: String): ResponseEntity<*> {
+    private fun processCacheInvalidation(userIgn: String, presetNo: Int): ResponseEntity<*> {
         val context = TaskContext.of("V5Query", "InvalidateAndRecalculate", userIgn)
 
         // 1. Invalidate PostgreSQL cache via Port
         executorPort.executeVoidJava({ queryPort.deleteByUserIgn(userIgn) }, context)
 
         // 2. Queue with force=true via Port
-        return queueCalculationTask(userIgn, true, 1, context)
+        return queueCalculationTask(userIgn, true, presetNo, context)
     }
 
     // ==================== Private Helper Methods ====================

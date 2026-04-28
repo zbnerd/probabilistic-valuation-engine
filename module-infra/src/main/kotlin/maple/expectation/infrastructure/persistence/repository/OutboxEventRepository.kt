@@ -22,6 +22,6 @@ interface OutboxEventRepository : JpaRepository<OutboxEventEntity, UUID> {
     fun incrementPublishAttempts(@Param("eventId") eventId: UUID)
 
     @Modifying
-    @Query(value = "INSERT INTO outbox_events (event_id, event_type, job_id, payload) VALUES (:eventId, :eventType, :jobId, CAST(:payload AS jsonb)) ON CONFLICT (job_id, event_type) DO NOTHING", nativeQuery = true)
+    @Query(value = "INSERT INTO outbox_events (event_id, event_type, job_id, payload, published, publish_attempts, created_at) VALUES (:eventId, :eventType, :jobId, CAST(:payload AS jsonb), false, 0, now()) ON CONFLICT (job_id, event_type) DO NOTHING", nativeQuery = true)
     fun insertIfAbsent(@Param("eventId") eventId: UUID, @Param("eventType") eventType: String, @Param("jobId") jobId: UUID, @Param("payload") payload: String?): Int
 }

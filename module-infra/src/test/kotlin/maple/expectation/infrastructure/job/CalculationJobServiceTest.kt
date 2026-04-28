@@ -9,6 +9,7 @@ import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiRequestTopic
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import maple.expectation.infrastructure.persistence.repository.CalculationSnapshotRepository
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -33,6 +34,7 @@ class CalculationJobServiceTest {
     @Mock lateinit var ocidResolveTopic: OcidResolveTopic
     @Mock lateinit var nexonApiRequestTopic: NexonApiRequestTopic
     @Mock lateinit var nexonApiResponseTopic: NexonApiResponseTopic
+    private val objectMapper = ObjectMapper()
 
     private lateinit var service: CalculationJobService
 
@@ -46,7 +48,8 @@ class CalculationJobServiceTest {
             nexonApiResponseTopic = nexonApiResponseTopic,
             snapshotRepository = snapshotRepository,
             resultPort = resultPort,
-            outboxPort = outboxPort
+            outboxPort = outboxPort,
+            objectMapper = objectMapper
         )
     }
 

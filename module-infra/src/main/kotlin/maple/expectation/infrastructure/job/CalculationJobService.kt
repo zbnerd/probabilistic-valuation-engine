@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import java.util.UUID
 
 @Service
@@ -181,7 +182,7 @@ class CalculationJobService(
         }
 
         val backoffSeconds = calculateBackoff(job.retryCount)
-        val nextRetry = java.time.Instant.now().plusSeconds(backoffSeconds)
+        val nextRetry = Instant.now().plusSeconds(backoffSeconds)
         val retried = jobPort.retryCalculation(jobId, errorCode, nextRetry)
         if (retried) {
             val event = NexonApiResponseEventFactory.create(

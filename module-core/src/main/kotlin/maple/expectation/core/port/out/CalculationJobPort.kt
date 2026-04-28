@@ -2,6 +2,7 @@ package maple.expectation.core.port.out
 
 import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.model.job.CalculationJobStatus
+import java.time.Instant
 import java.util.UUID
 
 interface CalculationJobPort {
@@ -12,6 +13,7 @@ interface CalculationJobPort {
     fun markFailed(jobId: UUID, errorCode: String, errorMessage: String): Boolean
     fun incrementRetry(jobId: UUID, errorCode: String): Boolean
     fun incrementRetryForOcid(jobId: UUID, errorCode: String): Boolean
+    fun retryCalculation(jobId: UUID, errorCode: String, nextRetryAt: Instant): Boolean
     fun lockForProcessing(jobId: UUID, workerId: String, from: CalculationJobStatus): Boolean
     fun unlock(jobId: UUID): Boolean
     fun findStaleJobs(status: CalculationJobStatus, olderThanSeconds: Long): List<CalculationJob>

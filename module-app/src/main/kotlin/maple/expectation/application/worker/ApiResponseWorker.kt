@@ -1,8 +1,7 @@
 package maple.expectation.application.worker
 
-import maple.expectation.core.dto.v4.CalculationInput
+import maple.expectation.application.service.expectation.PureExpectationCalculator
 import maple.expectation.core.model.job.CalculationJobStatus
-import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.mq.ConsumeResult
@@ -19,7 +18,7 @@ import java.util.UUID
 @Component
 class ApiResponseWorker(
     private val nexonApiResponseTopic: NexonApiResponseTopic,
-    private val expectationPort: ExpectationV4Port,
+    private val pureCalculator: PureExpectationCalculator,
     private val jobPort: CalculationJobPort,
     private val jobService: CalculationJobService,
     private val calculationInputPort: CalculationInputPort,
@@ -46,7 +45,7 @@ class ApiResponseWorker(
             { e ->
                 log.error("[jobId={}] Calculation failed: {}", jobId, e.message)
                 val msg = (e.message ?: "Unknown error").take(200)
-                executor.executeVoid({ jobPort.markFailed(jobId, "CALCULATION_ERROR", msg) }, context)
+                executor.executeVoid({ jobService.handleCalculationFailure(jobId, "CALCULATION_ERROR", msg) }, context)
                 ConsumeResult.Ack
             },
             context
@@ -87,9 +86,7 @@ class ApiResponseWorker(
             return ConsumeResult.Ack
         }
 
-        val result = expectationPort.calculateExpectationAsync(
-            userIgn, false, jobId.toString(), presetNo
-        ).join()
+        val result = pureCalculator.calculate(input)
 
         val resultJson = objectMapper.writeValueAsString(result)
 
@@ -101,7 +98,7 @@ class ApiResponseWorker(
             characterId = characterId
         )
 
-        log.info("[jobId={}] Calculation completed from CalculationInput", jobId)
+        log.info("[jobId={}] Calculation completed from CalculationInput (pure)", jobId)
         return ConsumeResult.Ack
     }
 }

@@ -5,19 +5,26 @@ import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.infrastructure.persistence.entity.CalculationJobEntity
 import maple.expectation.infrastructure.persistence.repository.CalculationJobRepository
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.UUID
 
 @Component
 class CalculationJobPortAdapter(
-    private val jobRepository: CalculationJobRepository
+    private val jobRepository: CalculationJobRepository,
+    private val jdbc: NamedParameterJdbcTemplate
 ) : CalculationJobPort {
 
     override fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob {
         val existing = jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)
         if (existing != null) {
-            return existing.toDomain()
+            if (existing.status == CalculationJobStatus.CALCULATING.name) {
+                jobRepository.markFailed(existing.jobId, "SUPERSEDED", "Superseded by new calculation request")
+            } else {
+                return existing.toDomain()
+            }
         }
 
         val entity = CalculationJobEntity(
@@ -40,6 +47,7 @@ class CalculationJobPortAdapter(
         return jobRepository.markSnapshotReady(jobId, snapshotId, from.name) > 0
     }
 
+    @Transactional
     override fun markFailed(jobId: UUID, errorCode: String, errorMessage: String): Boolean {
         return jobRepository.markFailed(jobId, errorCode, errorMessage) > 0
     }
@@ -76,6 +84,20 @@ class CalculationJobPortAdapter(
 
     override fun resolveOcidAndTransition(jobId: UUID, ocid: String): Boolean {
         return jobRepository.resolveOcidAndTransition(jobId, ocid) > 0
+    }
+
+    override fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID> {
+        val sql = """
+            SELECT j.job_id FROM calculation_jobs j
+            WHERE j.status = 'COMPLETED'
+              AND j.completed_at < now() - INTERVAL '1 minute'
+              AND NOT EXISTS (
+                SELECT 1 FROM outbox_events o
+                WHERE o.job_id = j.job_id AND o.event_type = 'CALCULATION_COMPLETED'
+              )
+            LIMIT :limit
+        """.trimIndent()
+        return jdbc.queryForList(sql, mapOf("limit" to limit), UUID::class.java)
     }
 
     private fun CalculationJobEntity.toDomain() = CalculationJob(

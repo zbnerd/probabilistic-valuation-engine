@@ -15,4 +15,5 @@ object QueueNames {
     const val NEXON_API_REQUEST = "nexon_api_request_queue"
     const val NEXON_API_RESPONSE = "nexon_api_response_queue"
     const val OCID_RESOLVE = "ocid_resolve_queue"
+    const val RESULT_READY = "result_ready_queue"
 }

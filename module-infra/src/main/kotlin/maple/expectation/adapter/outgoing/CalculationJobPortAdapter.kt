@@ -64,6 +64,10 @@ class CalculationJobPortAdapter(
         return jobRepository.incrementRetryForOcid(jobId, errorCode, nextRetry) > 0
     }
 
+    override fun retryCalculation(jobId: UUID, errorCode: String, nextRetryAt: Instant): Boolean {
+        return jobRepository.retryCalculation(jobId, errorCode, nextRetryAt) > 0
+    }
+
     override fun lockForProcessing(jobId: UUID, workerId: String, from: CalculationJobStatus): Boolean {
         val lockedUntil = Instant.now().plusSeconds(300)
         return jobRepository.lockForProcessing(jobId, workerId, lockedUntil, from.name) > 0

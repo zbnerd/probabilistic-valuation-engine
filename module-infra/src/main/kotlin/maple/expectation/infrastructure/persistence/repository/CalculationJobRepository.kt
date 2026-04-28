@@ -110,6 +110,25 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
     @Modifying
     @Query("""
         UPDATE CalculationJobEntity j
+        SET j.retryCount = j.retryCount + 1,
+            j.status = 'SNAPSHOT_READY',
+            j.nextRetryAt = :nextRetryAt,
+            j.lastErrorCode = :errorCode,
+            j.lockedBy = NULL, j.lockedUntil = NULL,
+            j.updatedAt = CURRENT_TIMESTAMP
+        WHERE j.jobId = :jobId
+          AND j.status = 'CALCULATING'
+          AND j.retryCount < j.maxRetries
+    """)
+    fun retryCalculation(
+        @Param("jobId") jobId: UUID,
+        @Param("errorCode") errorCode: String,
+        @Param("nextRetryAt") nextRetryAt: Instant
+    ): Int
+
+    @Modifying
+    @Query("""
+        UPDATE CalculationJobEntity j
         SET j.lockedBy = :workerId,
             j.lockedUntil = :lockedUntil,
             j.updatedAt = CURRENT_TIMESTAMP

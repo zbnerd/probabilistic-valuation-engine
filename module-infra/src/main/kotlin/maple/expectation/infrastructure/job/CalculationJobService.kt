@@ -171,6 +171,40 @@ class CalculationJobService(
     }
 
     @Transactional
+    fun handleCalculationFailure(jobId: UUID, errorCode: String, errorMessage: String) {
+        val job = jobPort.findJobById(jobId) ?: return
+
+        if (job.retryCount >= job.maxRetries) {
+            jobPort.markFailed(jobId, errorCode, errorMessage)
+            log.warn("[jobId={}] Calculation failed after {} retries: {}", jobId, job.retryCount, errorMessage)
+            return
+        }
+
+        val backoffSeconds = calculateBackoff(job.retryCount)
+        val nextRetry = java.time.Instant.now().plusSeconds(backoffSeconds)
+        val retried = jobPort.retryCalculation(jobId, errorCode, nextRetry)
+        if (retried) {
+            val event = NexonApiResponseEventFactory.create(
+                jobId.toString(),
+                job.snapshotId?.toString() ?: return,
+                "",
+                job.ocid ?: return,
+                job.userIgn,
+                job.presetNo
+            )
+            eventAppender.append(nexonApiResponseTopic, event)
+            log.info("[jobId={}] Calculation retry scheduled (attempt {}, backoff={}s)", jobId, job.retryCount + 1, backoffSeconds)
+        } else {
+            jobPort.markFailed(jobId, errorCode, errorMessage)
+        }
+    }
+
+    private fun calculateBackoff(retryCount: Int): Long {
+        val baseSeconds = 30L
+        return minOf(baseSeconds * (1L shl retryCount), 600L)
+    }
+
+    @Transactional
     fun completeCalculationWithResult(
         jobId: UUID,
         resultJson: String,

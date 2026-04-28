@@ -3,7 +3,6 @@ package maple.expectation.infrastructure.worker
 import jakarta.annotation.PostConstruct
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.port.out.mq.ConsumeResult
-import maple.expectation.core.port.out.mq.MessageHandle
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
@@ -31,25 +30,27 @@ class OcidResolveWorker(
         val payload = envelope.payload as Map<*, *>
         val userIgn = payload["userIgn"].toString()
         val context = TaskContext.of("OcidResolveWorker", "Resolve", userIgn)
-        return executor.executeOrDefault({
-            val jobId = UUID.fromString(payload["jobId"].toString())
+        return executor.executeOrDefault({ resolveOcid(payload, userIgn) }, ConsumeResult.Ack, context)
+    }
 
-            log.info("[jobId={}] Resolving OCID for userIgn={}", jobId, userIgn)
+    private fun resolveOcid(payload: Map<*, *>, userIgn: String): ConsumeResult {
+        val jobId = UUID.fromString(payload["jobId"].toString())
 
-            val ocidResponse = nexonApiClient.getOcidByCharacterName(userIgn).join()
-            val ocid = ocidResponse.ocid
+        log.info("[jobId={}] Resolving OCID for userIgn={}", jobId, userIgn)
 
-            if (ocid.isBlank()) {
-                jobService.handleOcidFailure(jobId, "EMPTY_OCID", "Nexon API returned empty OCID")
-                return@executeOrDefault ConsumeResult.Ack
-            }
+        val ocidResponse = nexonApiClient.getOcidByCharacterName(userIgn).join()
+        val ocid = ocidResponse.ocid
 
-            val resolved = jobService.resolveOcidAndEnqueueApiData(jobId, ocid)
-            if (!resolved) {
-                jobService.handleOcidFailure(jobId, "TRANSITION_FAILED", "Status transition failed after OCID resolve")
-            }
-            log.info("[jobId={}] OCID resolved: {}", jobId, ocid)
-            ConsumeResult.Ack
-        }, ConsumeResult.Ack, context)
+        if (ocid.isBlank()) {
+            jobService.handleOcidFailure(jobId, "EMPTY_OCID", "Nexon API returned empty OCID")
+            return ConsumeResult.Ack
+        }
+
+        val resolved = jobService.resolveOcidAndEnqueueApiData(jobId, ocid)
+        if (!resolved) {
+            jobService.handleOcidFailure(jobId, "TRANSITION_FAILED", "Status transition failed after OCID resolve")
+        }
+        log.info("[jobId={}] OCID resolved: {}", jobId, ocid)
+        return ConsumeResult.Ack
     }
 }

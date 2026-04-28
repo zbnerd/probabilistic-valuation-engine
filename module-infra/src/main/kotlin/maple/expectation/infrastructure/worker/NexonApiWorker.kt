@@ -4,7 +4,6 @@ import jakarta.annotation.PostConstruct
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.model.snapshot.CalculationSnapshot
 import maple.expectation.core.port.out.mq.ConsumeResult
-import maple.expectation.core.port.out.mq.MessageHandle
 import maple.expectation.core.port.out.SnapshotObjectStore
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext

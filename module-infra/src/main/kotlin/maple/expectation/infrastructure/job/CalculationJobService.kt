@@ -3,23 +3,27 @@ package maple.expectation.infrastructure.job
 import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
-import maple.expectation.core.port.out.QueueNames
+import maple.expectation.core.port.out.mq.DomainEventAppender
+import maple.expectation.infrastructure.mq.event.NexonApiRequestEventFactory
+import maple.expectation.infrastructure.mq.event.NexonApiResponseEventFactory
+import maple.expectation.infrastructure.mq.event.OcidResolveEventFactory
+import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiRequestTopic
+import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
+import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.persistence.repository.CalculationSnapshotRepository
-import maple.expectation.infrastructure.pgmq.PgmqClient
-import maple.expectation.infrastructure.queue.pgmq.NexonApiRequestMessage
-import maple.expectation.infrastructure.queue.pgmq.NexonApiResponseMessage
-import maple.expectation.infrastructure.queue.pgmq.OcidResolveMessage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
 import java.util.UUID
 
 @Service
 class CalculationJobService(
     private val jobPort: CalculationJobPort,
-    private val pgmqClient: PgmqClient,
+    private val eventAppender: DomainEventAppender,
+    private val ocidResolveTopic: OcidResolveTopic,
+    private val nexonApiRequestTopic: NexonApiRequestTopic,
+    private val nexonApiResponseTopic: NexonApiResponseTopic,
     private val snapshotRepository: CalculationSnapshotRepository
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -43,12 +47,7 @@ class CalculationJobService(
             return
         }
 
-        val message = OcidResolveMessage(
-            jobId = jobId,
-            userIgn = userIgn,
-            presetNo = presetNo
-        )
-        pgmqClient.send(QueueNames.OCID_RESOLVE, message)
+        eventAppender.append(ocidResolveTopic, OcidResolveEventFactory.create(jobId.toString(), userIgn, presetNo))
         log.info("[jobId={}] Transitioned to OCID_RESOLVING, resolve enqueued", jobId)
     }
 
@@ -62,15 +61,7 @@ class CalculationJobService(
 
         val job = jobPort.findJobById(jobId) ?: return false
 
-        val request = NexonApiRequestMessage(
-            jobId = job.jobId,
-            ocid = ocid,
-            userIgn = job.userIgn,
-            presetNo = job.presetNo,
-            eventType = "FETCH_EQUIPMENT",
-            requestedAt = Instant.now().toString()
-        )
-        pgmqClient.send(QueueNames.NEXON_API_REQUEST, request)
+        eventAppender.append(nexonApiRequestTopic, NexonApiRequestEventFactory.create(job.jobId.toString(), ocid, job.userIgn, job.presetNo))
         log.info("[jobId={}] OCID resolved, API request enqueued", jobId)
         return true
     }
@@ -89,15 +80,7 @@ class CalculationJobService(
 
         val job = jobPort.findJobById(jobId) ?: return
 
-        val request = NexonApiRequestMessage(
-            jobId = job.jobId,
-            ocid = job.ocid ?: return,
-            userIgn = job.userIgn,
-            presetNo = job.presetNo,
-            eventType = "FETCH_EQUIPMENT",
-            requestedAt = Instant.now().toString()
-        )
-        pgmqClient.send(QueueNames.NEXON_API_REQUEST, request)
+        eventAppender.append(nexonApiRequestTopic, NexonApiRequestEventFactory.create(job.jobId.toString(), job.ocid ?: return, job.userIgn, job.presetNo))
         log.info("[jobId={}] Transitioned to API_REQUESTED, request enqueued", jobId)
     }
 
@@ -121,16 +104,7 @@ class CalculationJobService(
         if (ready) {
             val job = jobPort.findJobById(jobId)
             if (job != null) {
-                val response = NexonApiResponseMessage(
-                    eventType = "SNAPSHOT_READY",
-                    jobId = jobId,
-                    snapshotId = snapshotId,
-                    objectKey = objectKey,
-                    characterId = job.ocid ?: return false,
-                    userIgn = job.userIgn,
-                    presetNo = job.presetNo
-                )
-                pgmqClient.send(QueueNames.NEXON_API_RESPONSE, response)
+                eventAppender.append(nexonApiResponseTopic, NexonApiResponseEventFactory.create(jobId.toString(), snapshotId.toString(), objectKey, job.ocid ?: return false, job.userIgn, job.presetNo))
                 log.info("[jobId={}] Snapshot ready, response enqueued", jobId)
             }
         }
@@ -167,15 +141,7 @@ class CalculationJobService(
         } else {
             val retried = jobPort.incrementRetry(jobId, errorCode)
             if (retried) {
-                val request = NexonApiRequestMessage(
-                    jobId = job.jobId,
-                    ocid = job.ocid ?: return,
-                    userIgn = job.userIgn,
-                    presetNo = job.presetNo,
-                    eventType = "RETRY_FETCH",
-                    requestedAt = Instant.now().toString()
-                )
-                pgmqClient.send(QueueNames.NEXON_API_REQUEST, request)
+                eventAppender.append(nexonApiRequestTopic, NexonApiRequestEventFactory.create(job.jobId.toString(), job.ocid ?: return, job.userIgn, job.presetNo, eventType = "RETRY_FETCH"))
                 log.info("[jobId={}] Retrying (attempt {}): {}", jobId, job.retryCount + 1, errorCode)
             }
         }
@@ -191,12 +157,7 @@ class CalculationJobService(
         } else {
             val retried = jobPort.incrementRetryForOcid(jobId, errorCode)
             if (retried) {
-                val message = OcidResolveMessage(
-                    jobId = job.jobId,
-                    userIgn = job.userIgn,
-                    presetNo = job.presetNo
-                )
-                pgmqClient.send(QueueNames.OCID_RESOLVE, message)
+                eventAppender.append(ocidResolveTopic, OcidResolveEventFactory.create(job.jobId.toString(), job.userIgn, job.presetNo))
                 log.info("[jobId={}] OCID resolve retry (attempt {}): {}", jobId, job.retryCount + 1, errorCode)
             }
         }

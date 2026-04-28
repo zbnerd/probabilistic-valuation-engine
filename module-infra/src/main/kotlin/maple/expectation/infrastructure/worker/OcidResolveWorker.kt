@@ -1,70 +1,56 @@
 package maple.expectation.infrastructure.worker
 
-import maple.expectation.core.port.out.QueueNames
+import jakarta.annotation.PostConstruct
+import maple.expectation.core.domain.event.IntegrationEvent
+import maple.expectation.core.port.out.mq.ConsumeResult
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.job.CalculationJobService
-import maple.expectation.infrastructure.pgmq.PgmqClient
-import maple.expectation.infrastructure.pgmq.PgmqMessage
-import maple.expectation.infrastructure.queue.pgmq.OcidResolveMessage
+import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
 import org.slf4j.LoggerFactory
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.util.UUID
 
 @Component
 class OcidResolveWorker(
-    private val pgmqClient: PgmqClient,
+    private val ocidResolveTopic: OcidResolveTopic,
     private val nexonApiClient: NexonApiClient,
     private val jobService: CalculationJobService,
     private val executor: LogicExecutor
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @Scheduled(fixedDelayString = "\${pgmq.worker.ocid-resolve.polling-interval-ms:100}")
-    fun processMessages() {
-        val context = TaskContext.of("OcidResolveWorker", "Poll", "ocid_resolve_queue")
-
-        executor.executeVoid({
-            val messages = pgmqClient.read(
-                QueueNames.OCID_RESOLVE,
-                OcidResolveMessage::class.java,
-                10,
-                120
-            )
-
-            for (message in messages) {
-                processSingle(message)
-            }
-        }, context)
+    @PostConstruct
+    fun init() {
+        ocidResolveTopic.subscribe { envelope, _ -> handleResolve(envelope) }
     }
 
-    private fun processSingle(message: PgmqMessage<OcidResolveMessage>) {
-        val request = message.payload
-        val jobId = request.jobId
-        val context = TaskContext.of("OcidResolveWorker", "Resolve", request.userIgn)
+    private fun handleResolve(envelope: IntegrationEvent<*>): ConsumeResult {
+        val payload = envelope.payload as Map<*, *>
+        val userIgn = payload["userIgn"].toString()
+        val context = TaskContext.of("OcidResolveWorker", "Resolve", userIgn)
+        return executor.executeOrDefault({ resolveOcid(payload, userIgn) }, ConsumeResult.Ack, context)
+    }
 
-        executor.executeVoid({
-            log.info("[jobId={}] Resolving OCID for userIgn={}", jobId, request.userIgn)
+    private fun resolveOcid(payload: Map<*, *>, userIgn: String): ConsumeResult {
+        val jobId = UUID.fromString(payload["jobId"].toString())
 
-            val ocidResponse = nexonApiClient.getOcidByCharacterName(request.userIgn).join()
-            val ocid = ocidResponse.ocid
+        log.info("[jobId={}] Resolving OCID for userIgn={}", jobId, userIgn)
 
-            if (ocid.isBlank()) {
-                log.warn("[jobId={}] Nexon API returned empty OCID for userIgn={}", jobId, request.userIgn)
-                jobService.handleOcidFailure(jobId, "EMPTY_OCID", "Nexon API returned empty OCID")
-                pgmqClient.archive(QueueNames.OCID_RESOLVE, message.messageId)
-                return@executeVoid
-            }
+        val ocidResponse = nexonApiClient.getOcidByCharacterName(userIgn).join()
+        val ocid = ocidResponse.ocid
 
-            val resolved = jobService.resolveOcidAndEnqueueApiData(jobId, ocid)
-            if (resolved) {
-                log.info("[jobId={}] OCID resolved successfully: {}", jobId, ocid)
-            } else {
-                log.warn("[jobId={}] OCID resolve transition failed", jobId)
-                jobService.handleOcidFailure(jobId, "TRANSITION_FAILED", "Status transition failed after OCID resolve")
-            }
-            pgmqClient.archive(QueueNames.OCID_RESOLVE, message.messageId)
-        }, context)
+        if (ocid.isBlank()) {
+            jobService.handleOcidFailure(jobId, "EMPTY_OCID", "Nexon API returned empty OCID")
+            return ConsumeResult.Ack
+        }
+
+        val resolved = jobService.resolveOcidAndEnqueueApiData(jobId, ocid)
+        if (!resolved) {
+            jobService.handleOcidFailure(jobId, "TRANSITION_FAILED", "Status transition failed after OCID resolve")
+        }
+        log.info("[jobId={}] OCID resolved: {}", jobId, ocid)
+        return ConsumeResult.Ack
     }
 }

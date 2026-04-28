@@ -1,19 +1,18 @@
 package maple.expectation.infrastructure.worker
 
+import jakarta.annotation.PostConstruct
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.model.snapshot.CalculationSnapshot
-import maple.expectation.core.port.out.QueueNames
+import maple.expectation.core.port.out.mq.ConsumeResult
 import maple.expectation.core.port.out.SnapshotObjectStore
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationJobService
+import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiRequestTopic
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
-import maple.expectation.infrastructure.pgmq.PgmqClient
-import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
-import maple.expectation.infrastructure.queue.pgmq.NexonApiRequestMessage
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.ZoneOffset
@@ -21,7 +20,7 @@ import java.util.UUID
 
 @Component
 class NexonApiWorker(
-    private val pgmqClient: PgmqClient,
+    private val nexonApiRequestTopic: NexonApiRequestTopic,
     private val snapshotStore: SnapshotObjectStore,
     private val jobService: CalculationJobService,
     private val objectMapper: ObjectMapper,
@@ -30,72 +29,60 @@ class NexonApiWorker(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @Scheduled(fixedDelayString = "\${pgmq.worker.nexon-api.polling-interval-ms:100}")
-    fun processMessages() {
-        val context = TaskContext.of("NexonApiWorker", "Poll", "request_queue")
-
-        executor.executeVoid({
-            val messages = pgmqClient.read(
-                QueueNames.NEXON_API_REQUEST,
-                NexonApiRequestMessage::class.java,
-                10,
-                120
-            )
-
-            for (message in messages) {
-                processSingle(message)
-            }
-        }, context)
+    @PostConstruct
+    fun init() {
+        nexonApiRequestTopic.subscribe { envelope, _ -> handleApiRequest(envelope) }
     }
 
-    private fun processSingle(message: PgmqMessage<NexonApiRequestMessage>) {
-        val request = message.payload
-        val jobId = request.jobId
+    private fun handleApiRequest(envelope: IntegrationEvent<*>): ConsumeResult {
+        val payload = envelope.payload as Map<*, *>
+        val jobId = UUID.fromString(payload["jobId"].toString())
         val context = TaskContext.of("NexonApiWorker", "Process", jobId.toString())
+        return executor.executeOrDefault({
+            processApiRequest(payload, jobId)
+        }, ConsumeResult.Ack, context)
+    }
 
-        val success = executor.executeOrDefault({
-            log.info("[jobId={}] Processing API request: eventType={}", jobId, request.eventType)
+    private fun processApiRequest(payload: Map<*, *>, jobId: UUID): ConsumeResult {
+        val ocid = payload["ocid"].toString()
+        val eventType = payload["eventType"].toString()
+        val presetNo = (payload["presetNo"] as Number).toInt()
 
-            val equipmentResponse = equipmentFetchProvider.fetchWithCache(request.ocid)
-            val snapshotData = objectMapper.writeValueAsBytes(equipmentResponse)
+        log.info("[jobId={}] Processing API request: eventType={}", jobId, eventType)
 
-            val objectKey = generateObjectKey(jobId)
-            val snapshot = CalculationSnapshot(
-                snapshotId = UUID.randomUUID(),
-                jobId = jobId,
-                objectKey = objectKey,
-                storageType = "LOCAL",
-                characterId = request.ocid,
-                presetNo = request.presetNo,
-                expiresAt = Instant.now().plusSeconds(86400)
-            )
+        val equipmentResponse = equipmentFetchProvider.fetchWithCache(ocid)
+        val snapshotData = objectMapper.writeValueAsBytes(equipmentResponse)
 
-            val result = snapshotStore.put(snapshot, snapshotData)
+        val objectKey = generateObjectKey(jobId)
+        val snapshot = CalculationSnapshot(
+            snapshotId = UUID.randomUUID(),
+            jobId = jobId,
+            objectKey = objectKey,
+            storageType = "LOCAL",
+            characterId = ocid,
+            presetNo = presetNo,
+            expiresAt = Instant.now().plusSeconds(86400)
+        )
 
-            val snapshotEntity = CalculationSnapshotEntity(
-                snapshotId = snapshot.snapshotId,
-                jobId = jobId,
-                objectKey = objectKey,
-                storageType = "LOCAL",
-                characterId = request.ocid,
-                presetNo = request.presetNo,
-                compressedSize = result.compressedSize,
-                originalSize = snapshotData.size.toLong(),
-                hash = result.hash,
-                expiresAt = snapshot.expiresAt
-            )
+        val result = snapshotStore.put(snapshot, snapshotData)
 
-            jobService.saveSnapshotAndMarkReady(snapshotEntity, jobId, objectKey)
+        val snapshotEntity = CalculationSnapshotEntity(
+            snapshotId = snapshot.snapshotId,
+            jobId = jobId,
+            objectKey = objectKey,
+            storageType = "LOCAL",
+            characterId = ocid,
+            presetNo = presetNo,
+            compressedSize = result.compressedSize,
+            originalSize = snapshotData.size.toLong(),
+            hash = result.hash,
+            expiresAt = snapshot.expiresAt
+        )
 
-            pgmqClient.archive(QueueNames.NEXON_API_REQUEST, message.messageId)
-            log.info("[jobId={}] API request processed, snapshot saved: {}", jobId, objectKey)
-            true
-        }, false, context)
+        jobService.saveSnapshotAndMarkReady(snapshotEntity, jobId, objectKey)
 
-        if (!success) {
-            jobService.handleApiFailure(jobId, "API_ERROR", "Failed to process API request")
-            pgmqClient.archive(QueueNames.NEXON_API_REQUEST, message.messageId)
-        }
+        log.info("[jobId={}] API request processed, snapshot saved: {}", jobId, objectKey)
+        return ConsumeResult.Ack
     }
 
     private fun generateObjectKey(jobId: UUID): String {

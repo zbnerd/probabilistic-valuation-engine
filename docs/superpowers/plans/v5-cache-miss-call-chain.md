@@ -54,25 +54,18 @@ private fun processPostgreSQLCacheFirstLookup(userIgn: String, presetNo: Int): R
 }
 ```
 
-### 3. CharacterViewQueryPort.findByUserIgn (interface)
+### 3. CharacterViewQueryPortAdapter.findByUserIgn
 
 ```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/inbound/CharacterViewQueryPort.kt
+// module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/CharacterViewQueryPortAdapter.kt
 
-interface CharacterViewQueryPort {
-    fun findByUserIgn(userIgn: String): Optional<CharacterView>
-
-    fun upsertFromCalculation(
-        userIgn: String,
-        messageId: String?,
-        characterOcid: String?,
-        characterClass: String?,
-        characterLevel: Int?,
-        totalExpectedCost: Long,
-        maxPresetNo: Int,
-        presetNo: Int,
-        presetsJson: String,
-    )
+override fun findByUserIgn(userIgn: String): Optional<CharacterView> {
+    val entity = queryService.findByUserIgn(userIgn)
+    return if (entity != null) {
+        Optional.of(CharacterViewEntityAdapter(entity))
+    } else {
+        Optional.empty()
+    }
 }
 ```
 
@@ -117,41 +110,26 @@ private fun findByUserIgnEntity(userIgn: String): CharacterValuationViewEntity? 
 }
 ```
 
-### 6. ExecutorPort.executeOrDefault (interface)
+### 6. ApplicationExecutionPort.executeOrDefault
 
 ```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/inbound/ExecutorPort.kt
+// module-app/src/main/kotlin/maple/expectation/application/usecase/ApplicationExecutionPort.kt
 
-interface ExecutorPort {
-    fun executeVoid(task: () -> Unit, context: TaskContext)
+override fun <T> executeOrDefault(
+    task: () -> T,
+    defaultValue: T,
+    context: CommonTaskContext,
+): T = logicExecutor.executeOrDefault(
+    ThrowingSupplier { task() },
+    defaultValue,
+    toInfraContext(context),
+)
 
-    fun <T> executeOrDefault(
-        task: () -> T,
-        defaultValue: T,
-        context: TaskContext,
-    ): T
-
-    fun executeVoidJava(task: Runnable, context: TaskContext)
-
-    fun <T> executeOrDefaultJava(
-        task: ThrowingSupplier<T>,
-        defaultValue: T,
-        context: TaskContext,
-    ): T
-
-    fun <T> execute(task: () -> T, context: TaskContext): T
-
-    fun <T> executeWithTranslation(
-        task: () -> T,
-        translator: (Throwable, TaskContext) -> Exception,
-        context: TaskContext,
-    ): T
-
-    fun interface ThrowingSupplier<T> {
-        @Throws(Throwable::class)
-        fun get(): T
-    }
-}
+private fun toInfraContext(context: CommonTaskContext): InfraTaskContext = InfraTaskContext.of(
+    context.component(),
+    context.operation(),
+    context.dynamicValue(),
+)
 ```
 
 ### 7. ApplicationExecutionPort.executeOrDefault
@@ -200,13 +178,17 @@ private fun queueCalculationTask(
 }
 ```
 
-### 9. CalculationQueuePort.offerHighPriorityWithReceipt (interface)
+### 9. CalculationQueuePortAdapter.offerHighPriorityWithReceipt
 
-```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/inbound/CalculationQueuePort.kt
+```java
+// module-app/src/main/java/maple/expectation/application/usecase/CalculationQueuePortAdapter.java
 
-interface CalculationQueuePort {
-    fun offerHighPriorityWithReceipt(userIgn: String, forceRecalculation: Boolean, presetNo: Int = 1): TaskReceipt
+@Override
+public TaskReceipt offerHighPriorityWithReceipt(
+    String userIgn, boolean forceRecalculation, int presetNo) {
+  ExpectationCalculationTask task =
+      ExpectationCalculationTask.highPriority(userIgn, forceRecalculation, presetNo);
+  return queue.offerWithReceipt(task);
 }
 ```
 
@@ -272,28 +254,53 @@ private TaskReceipt enqueue(ExpectationCalculationTask task) {
 }
 ```
 
-### 13. CalculationJobPort.createJob (interface)
+### 13. CalculationJobPortAdapter.createJob
 
 ```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/out/CalculationJobPort.kt
+// module-infra/src/main/kotlin/maple/expectation/adapter/outgoing/CalculationJobPortAdapter.kt
 
-interface CalculationJobPort {
-    fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob
-    fun findJobById(jobId: UUID): CalculationJob?
-    fun transitionStatus(jobId: UUID, from: CalculationJobStatus, to: CalculationJobStatus): Boolean
-    fun markSnapshotReady(jobId: UUID, snapshotId: UUID, from: CalculationJobStatus): Boolean
-    fun markFailed(jobId: UUID, errorCode: String, errorMessage: String): Boolean
-    fun incrementRetry(jobId: UUID, errorCode: String): Boolean
-    fun incrementRetryForOcid(jobId: UUID, errorCode: String): Boolean
-    fun retryCalculation(jobId: UUID, errorCode: String, nextRetryAt: Instant): Boolean
-    fun lockForProcessing(jobId: UUID, workerId: String, from: CalculationJobStatus): Boolean
-    fun unlock(jobId: UUID): Boolean
-    fun findStaleJobs(status: CalculationJobStatus, olderThanSeconds: Long): List<CalculationJob>
-    fun findJobsByIds(ids: List<UUID>): List<CalculationJob>
-    fun findActiveJobByUserIgn(userIgn: String, presetNo: Int): CalculationJob?
-    fun resolveOcidAndTransition(jobId: UUID, ocid: String): Boolean
-    fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID>
+override fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob {
+    val existing = jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)
+    if (existing != null) {
+        if (existing.status == CalculationJobStatus.CALCULATING.name) {
+            jobRepository.markFailed(existing.jobId, "SUPERSEDED", "Superseded by new calculation request")
+        } else {
+            return existing.toDomain()
+        }
+    }
+
+    return try {
+        val entity = CalculationJobEntity(
+            ocid = ocid,
+            userIgn = userIgn,
+            presetNo = presetNo,
+        )
+        jobRepository.save(entity).toDomain()
+    } catch (ex: DataIntegrityViolationException) {
+        log.info("[createJob] Constraint violation on dedup index, returning existing job: userIgn={}, presetNo={}", userIgn, presetNo)
+        jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)?.toDomain()
+            ?: throw ex
+    }
 }
+
+private fun CalculationJobEntity.toDomain() = CalculationJob(
+    jobId = jobId,
+    ocid = ocid,
+    userIgn = userIgn,
+    presetNo = presetNo,
+    status = CalculationJobStatus.valueOf(status),
+    snapshotId = snapshotId,
+    retryCount = retryCount,
+    maxRetries = maxRetries,
+    nextRetryAt = nextRetryAt,
+    lockedBy = lockedBy,
+    lockedUntil = lockedUntil,
+    lastErrorCode = lastErrorCode,
+    errorMessage = errorMessage,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+    completedAt = completedAt,
+)
 ```
 
 ### 14. CalculationJobPortAdapter.createJob
@@ -335,17 +342,12 @@ override fun transitionStatus(jobId: UUID, from: CalculationJobStatus, to: Calcu
     jobRepository.transitionStatus(jobId, from.name, to.name) > 0
 ```
 
-### 16. PgmqPort.send (interface)
+### 16. PgmqPortAdapter.send
 
 ```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/out/PgmqPort.kt
+// module-infra/src/main/kotlin/maple/expectation/adapter/outgoing/PgmqPortAdapter.kt
 
-interface PgmqPort {
-    fun send(queueName: String, message: Any): Long
-    fun queueLength(queueName: String): Long
-    fun findActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long?
-    fun sendIfAbsent(queueName: String, userIgn: String, payload: Any): Long
-}
+override fun send(queueName: String, message: Any): Long = pgmqClient.send(queueName, message)
 ```
 
 ### 17. ExternalApiJobPayload
@@ -686,21 +688,20 @@ private fun resolveOcid(jobId: UUID, userIgn: String): String {
 }
 ```
 
-### 24. CharacterOcidPort.resolveOcid (interface)
+### 24. CharacterOcidAdapter.resolveOcid
 
 ```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/out/CharacterOcidPort.kt
+// module-infra/src/main/kotlin/maple/expectation/infrastructure/adapter/CharacterOcidAdapter.kt
 
-interface CharacterOcidPort {
-    fun resolveOcid(userIgn: String): String?
+@Cacheable(value = ["ocidCache"], key = "#userIgn", unless = "#result == null")
+override fun resolveOcid(userIgn: String): String? = executor.execute(
+    { resolveFromDb(userIgn) },
+    TaskContext.of("CharacterOcidAdapter", "ResolveOcid", userIgn),
+)
 
-    fun resolveOcids(userIgns: Set<String>): Map<String, String>
-
-    fun resolveAllOcids(): Map<String, String>
-
-    fun resolveOcidsByFingerprint(fingerprint: String): Set<String>
-
-    fun updateFingerprint(ocid: String, fingerprint: String, accountId: String): Int
+private fun resolveFromDb(userIgn: String): String? {
+    val entity = jpaRepository.findByUserIgn(userIgn)
+    return entity?.ocid
 }
 ```
 
@@ -743,26 +744,80 @@ fun fetchWithCache(ocid: String): EquipmentResponse {
 }
 ```
 
-### 28. SnapshotObjectStore.put (interface)
+### 28. LocalSnapshotObjectStore.put
 
 ```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/out/SnapshotObjectStore.kt
+// module-infra/src/main/kotlin/maple/expectation/infrastructure/external/snapshot/LocalSnapshotObjectStore.kt
 
-interface SnapshotObjectStore {
-    fun put(snapshot: CalculationSnapshot, data: ByteArray): SnapshotObjectStoreResult
-    fun get(objectKey: String): ByteArray
-    fun delete(objectKey: String)
+private val writePermits = Semaphore(10)
+
+override fun put(snapshot: CalculationSnapshot, data: ByteArray): SnapshotObjectStoreResult {
+    val context = TaskContext.of("SnapshotStore", "Put", snapshot.objectKey)
+    return executor.executeWithFinally({
+        writePermits.acquire()
+        doPut(snapshot, data)
+    }, {
+        writePermits.release()
+    }, context)
+}
+
+private fun doPut(snapshot: CalculationSnapshot, data: ByteArray): SnapshotObjectStoreResult {
+    val compressed = gzipCompress(data)
+    val hash = sha256(compressed)
+    val fullPath = resolveFullPath(snapshot.objectKey)
+
+    fullPath.parent.toFile().mkdirs()
+
+    val tempFile = fullPath.resolveSibling(fullPath.fileName.toString() + ".tmp")
+    FileOutputStream(tempFile.toFile()).use { fos ->
+        fos.write(compressed)
+    }
+    java.nio.file.Files.move(tempFile, fullPath, java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+
+    return SnapshotObjectStoreResult(
+        objectKey = snapshot.objectKey,
+        compressedSize = compressed.size.toLong(),
+        hash = hash,
+    )
+}
+
+private fun resolveFullPath(objectKey: String): Path {
+    val logicalKey = objectKey.removePrefix("/")
+    return Paths.get(basePath, logicalKey)
+}
+
+private fun gzipCompress(data: ByteArray): ByteArray {
+    val bos = java.io.ByteArrayOutputStream()
+    GZIPOutputStream(bos).use { it.write(data) }
+    return bos.toByteArray()
+}
+
+private fun sha256(data: ByteArray): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    return digest.digest(data).joinToString("") { "%02x".format(it) }
 }
 ```
 
-### 29. CalculationInputPort.save (interface)
+### 29. CalculationInputPortAdapter.save
 
 ```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/out/CalculationInputPort.kt
+// module-infra/src/main/kotlin/maple/expectation/adapter/outgoing/CalculationInputPortAdapter.kt
 
-interface CalculationInputPort {
-    fun save(input: CalculationInput): CalculationInput
-    fun findByJobId(jobId: UUID): CalculationInput?
+override fun save(input: CalculationInput): CalculationInput {
+    val payload = objectMapper.writeValueAsString(input)
+    repo.save(
+        CalculationSnapshotInputEntity(
+            jobId = UUID.fromString(input.jobId),
+            schemaVersion = input.schemaVersion,
+            payload = payload,
+        ),
+    )
+    return input
+}
+
+override fun findByJobId(jobId: UUID): CalculationInput? {
+    val entity = repo.findByJobId(jobId) ?: return null
+    return objectMapper.readValue(entity.payload, CalculationInput::class.java)
 }
 ```
 
@@ -791,14 +846,13 @@ override fun markSnapshotReady(jobId: UUID, snapshotId: UUID, from: CalculationJ
     jobRepository.markSnapshotReady(jobId, snapshotId, from.name) > 0
 ```
 
-### 32. PureCalculationPort.calculate (interface)
+### 32. PureCalculationAdapter.calculate
 
 ```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/out/PureCalculationPort.kt
+// module-app/src/main/kotlin/maple/expectation/application/adapter/PureCalculationAdapter.kt
 
-interface PureCalculationPort {
-    fun calculate(input: CalculationInput): EquipmentExpectationResponseV4
-}
+override fun calculate(input: CalculationInput): EquipmentExpectationResponseV4 =
+    calculator.calculate(input)
 ```
 
 ### 33. PureCalculationAdapter.calculate
@@ -901,44 +955,57 @@ fun startAndCompleteCalculation(
 }
 ```
 
-### 36. CalculationResultPort.save (interface)
+### 36. CalculationResultPortAdapter.save
 
 ```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/out/CalculationResultPort.kt
+// module-infra/src/main/kotlin/maple/expectation/adapter/outgoing/CalculationResultPortAdapter.kt
 
-data class CalculationResultData(
-    val resultId: UUID,
-    val jobId: UUID,
-    val characterClass: String?,
-    val presetNo: Int,
-    val schemaVersion: Int,
-    val contentType: String,
-    val contentEncoding: String,
-    val responseBody: ByteArray,
-    val originalSize: Int,
-    val compressedSize: Int,
-    val hash: String,
-    val status: String,
-)
-
-interface CalculationResultPort {
-    fun save(result: CalculationResultData): CalculationResultData
-    fun findByJobId(jobId: UUID): CalculationResultData?
-    fun existsByJobId(jobId: UUID): Boolean
+override fun save(result: CalculationResultData): CalculationResultData {
+    val existing = repo.findByJobId(result.jobId)
+    val entity = if (existing != null && existing.hash == result.hash) {
+        existing
+    } else {
+        repo.save(
+            CalculationResultEntity(
+                resultId = result.resultId,
+                jobId = result.jobId,
+                characterClass = result.characterClass,
+                presetNo = result.presetNo,
+                schemaVersion = result.schemaVersion,
+                contentType = result.contentType,
+                contentEncoding = result.contentEncoding,
+                responseBody = result.responseBody,
+                originalSize = result.originalSize,
+                compressedSize = result.compressedSize,
+                hash = result.hash,
+                status = result.status,
+            ),
+        )
+    }
+    return CalculationResultData(
+        resultId = entity.resultId,
+        jobId = entity.jobId,
+        characterClass = entity.characterClass,
+        presetNo = entity.presetNo,
+        schemaVersion = entity.schemaVersion,
+        contentType = entity.contentType,
+        contentEncoding = entity.contentEncoding,
+        responseBody = entity.responseBody,
+        originalSize = entity.originalSize,
+        compressedSize = entity.compressedSize,
+        hash = entity.hash ?: "",
+        status = entity.status,
+    )
 }
 ```
 
-### 37. OutboxEventPort.insertIfAbsent (interface)
+### 37. OutboxEventPortAdapter.insertIfAbsent
 
 ```kotlin
-// module-core/src/main/kotlin/maple/expectation/core/port/out/OutboxEventPort.kt
+// module-infra/src/main/kotlin/maple/expectation/adapter/outgoing/OutboxEventPortAdapter.kt
 
-interface OutboxEventPort {
-    fun insertIfAbsent(eventType: String, jobId: UUID, payload: String?): Boolean
-    fun findUnpublished(limit: Int): List<OutboxEvent>
-    fun markPublished(eventId: UUID)
-    fun incrementPublishAttempts(eventId: UUID)
-}
+override fun insertIfAbsent(eventType: String, jobId: UUID, payload: String?): Boolean =
+    repo.insertIfAbsent(UUID.randomUUID(), eventType, jobId, payload) > 0
 ```
 
 ### 38. CharacterViewQueryPortAdapter.upsertFromCalculation

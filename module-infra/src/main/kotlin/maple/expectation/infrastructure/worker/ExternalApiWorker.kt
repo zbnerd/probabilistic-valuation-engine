@@ -6,7 +6,9 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
 import maple.expectation.core.dto.v4.CalculationInput
+import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.model.snapshot.CalculationSnapshot
+import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.PureCalculationPort
@@ -60,6 +62,7 @@ class ExternalApiWorker(
     private val calculationInputPort: CalculationInputPort,
     private val pureCalculationPort: PureCalculationPort,
     private val jobPort: CalculationJobPort,
+    private val viewQueryPort: CharacterViewQueryPort,
     private val executionService: CalculationExecutionService,
 ) : PgmqWorker<ExternalApiJobPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
 
@@ -100,6 +103,13 @@ class ExternalApiWorker(
     private fun processPipeline(payload: ExternalApiJobPayload) {
         val jobId = UUID.fromString(payload.jobId)
 
+        // Early exit: skip expensive API calls if job already completed/processing
+        val existingJob = jobPort.findJobById(jobId)
+        if (existingJob != null && existingJob.status != CalculationJobStatus.OCID_RESOLVING && existingJob.status != CalculationJobStatus.REQUESTED) {
+            log.debug("[jobId={}] Skipping — already in state {}", jobId, existingJob.status)
+            return
+        }
+
         // Step 1: Resolve OCID (Nexon API ~200ms)
         val ocid = resolveOcid(jobId, payload.userIgn)
 
@@ -132,7 +142,9 @@ class ExternalApiWorker(
             presetNo = payload.presetNo,
             items = inputItems,
         )
-        calculationInputPort.save(calcInput)
+        if (calculationInputPort.findByJobId(jobId) == null) {
+            calculationInputPort.save(calcInput)
+        }
 
         val snapshotEntity = CalculationSnapshotEntity(
             snapshotId = snapshotId,
@@ -172,6 +184,20 @@ class ExternalApiWorker(
             characterClass = input.characterClass,
             presetNo = payload.presetNo,
             characterId = ocid,
+        )
+
+        // Step 5: Inline view projection (skip outbox → relay → topic → projection chain)
+        val presetsJson = objectMapper.writeValueAsString(calcResult.presets)
+        viewQueryPort.upsertFromCalculation(
+            userIgn = payload.userIgn,
+            messageId = jobId.toString(),
+            characterOcid = ocid,
+            characterClass = input.characterClass,
+            characterLevel = null,
+            totalExpectedCost = calcResult.totalExpectedCost.toLong(),
+            maxPresetNo = calcResult.maxPresetNo,
+            presetNo = payload.presetNo,
+            presetsJson = presetsJson,
         )
 
         log.info("[jobId={}] Pipeline completed", jobId)

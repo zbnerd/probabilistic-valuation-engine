@@ -42,6 +42,9 @@ class PgmqWorkerConfig {
     /** Nexon FanOut Worker 설정 (429 재시도 전용) */
     var nexonFanout: WorkerSettings = WorkerSettings()
 
+    /** External API Consolidated Worker 설정 (OCID + Equipment + Calculation) */
+    var externalApi: WorkerSettings = WorkerSettings()
+
     data class CommonSettings(
         /** 폴링 간격 (ms) (ADR-355) */
         var pollingIntervalMs: Long = 300,

@@ -20,7 +20,6 @@ import org.postgresql.PGConnection
 import org.postgresql.PGNotification
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
 
 /**
  * PostgreSQL LISTEN/NOTIFY 기반 캐시 무효화 이벤트 구독자
@@ -56,7 +55,6 @@ import org.springframework.stereotype.Component
  *
  * @see PostgresNotifyPublisher 발행자 구현
  */
-@Component
 class PostgresNotifySubscriber(
     private val dataSource: DataSource,
     private val tieredCacheManager: TieredCacheManager?,

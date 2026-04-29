@@ -10,6 +10,7 @@ import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
 /**
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Component
  * requires a synchronous return. This runs on the MQ consumer thread, not Tomcat.
  */
 @Component
+@ConditionalOnProperty(name = ["app.worker.legacy-pipeline.enabled"], havingValue = "true", matchIfMissing = false)
 class OcidResolveWorker(
     private val ocidResolveTopic: OcidResolveTopic,
     private val nexonApiClient: NexonApiClient,

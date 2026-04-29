@@ -13,9 +13,11 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationExecutionService
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
 @Component
+@ConditionalOnProperty(name = ["app.worker.legacy-pipeline.enabled"], havingValue = "true", matchIfMissing = false)
 class ApiResponseWorker(
     private val nexonApiResponseTopic: NexonApiResponseTopic,
     private val pureCalculator: PureExpectationCalculator,

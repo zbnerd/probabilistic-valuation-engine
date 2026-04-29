@@ -9,6 +9,8 @@ import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.infrastructure.character.notify.CharacterCreationListener;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -18,7 +20,9 @@ public class GameCharacterFacade {
 
   private final GameCharacterService gameCharacterService;
   private final LogicExecutor executor;
-  private final CharacterCreationListener characterCreationListener;
+
+  @Nullable @Autowired(required = false)
+  private CharacterCreationListener characterCreationListener;
 
   /**
    * 캐릭터 조회 + 기본 정보 보강
@@ -80,7 +84,10 @@ public class GameCharacterFacade {
       return existing.orElseThrow();
     }
 
-    // waitForCharacterCreation이 null이면 (리스너 미설정 등) 바로 실패
+    // waitForCharacterCreation이 null이면 (리스너 미설정, pgBouncer 환경 등) 바로 실패
+    if (characterCreationListener == null) {
+      throw new CharacterNotFoundException(userIgn);
+    }
     CompletableFuture<GameCharacter> resultFuture =
         Optional.ofNullable(characterCreationListener.waitForCharacterCreation(userIgn))
             .orElseGet(

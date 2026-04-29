@@ -68,6 +68,7 @@ abstract class PgmqWorker<T : Any>(
 
     /** Sequential batch buffer — accumulates messages for [sequentialBatchMs] before processing */
     private val accumulationBuffer = AccumulationBuffer<T>(config.common.sequentialBatchMs)
+    private val pollCounter = java.util.concurrent.atomic.AtomicInteger(0)
 
     /** Convenience: sequential batch window from config */
     private val sequentialBatchMs: Long
@@ -184,7 +185,9 @@ abstract class PgmqWorker<T : Any>(
 
                 val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
 
-                metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
+                if (pollCounter.incrementAndGet() % 20 == 0) {
+                    metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
+                }
 
                 if (messages.isEmpty()) {
                     inflightPermits.release(permits)

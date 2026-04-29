@@ -105,6 +105,10 @@ class TraceAspect(@Value("\${app.aop.trace.enabled:false}") private val isTraceE
 
         val state = prepareTrace(joinPoint, className, methodName)
 
+        // [AOP Intrinsic Exception] try-catch-finally required here because:
+        // 1. AOP aspects are infrastructure that wraps LogicExecutor calls — injecting LogicExecutor would cause circular dependency
+        // 2. Tracing requires logging exception AND rethrowing — LogicExecutor methods either swallow or translate exceptions
+        // 3. MDC cleanup must always run regardless of success/failure
         try {
             // [핵심] LogicExecutor 대신 직접 proceed 호출
             val result = joinPoint.proceed()
@@ -173,6 +177,8 @@ class TraceAspect(@Value("\${app.aop.trace.enabled:false}") private val isTraceE
      */
     private fun getMdcDepth(): Int {
         val depthStr = MDC.get(MDC_DEPTH_KEY) ?: return 0
+        // [AOP Intrinsic Exception] NumberFormatException parsing in executor infrastructure —
+        // cannot use LogicExecutor (circular dependency). Fallback to 0 is safe.
         return try {
             depthStr.toInt()
         } catch (e: NumberFormatException) {

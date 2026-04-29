@@ -133,8 +133,10 @@ class GameCharacter {
      *
      * @return 활성 상태면 true
      */
-    fun isActive(): Boolean = this.updatedAt != null &&
-        this.updatedAt!!.isAfter(LocalDateTime.now().minusDays(ACTIVE_DAYS_THRESHOLD.toLong()))
+    fun isActive(): Boolean {
+        val updatedAt = this.updatedAt ?: return false
+        return updatedAt.isAfter(LocalDateTime.now().minusDays(ACTIVE_DAYS_THRESHOLD.toLong()))
+    }
 
     /**
      * OCID 유효성 검증
@@ -158,8 +160,9 @@ class GameCharacter {
             return true
         }
         // 마지막 업데이트 시각이 없거나 15분 이상 경과했으면 갱신 필요
-        return this.basicInfoUpdatedAt == null ||
-            this.basicInfoUpdatedAt!!.isBefore(
+        val lastUpdate = this.basicInfoUpdatedAt
+        return lastUpdate == null ||
+            lastUpdate.isBefore(
                 LocalDateTime.now().minusMinutes(BASIC_INFO_REFRESH_MINUTES.toLong()),
             )
     }

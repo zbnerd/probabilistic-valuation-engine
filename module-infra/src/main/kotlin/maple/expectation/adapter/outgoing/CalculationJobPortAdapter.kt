@@ -35,7 +35,7 @@ class CalculationJobPortAdapter(
         return jobRepository.save(entity).toDomain()
     }
 
-    override fun findJobById(jobId: UUID): CalculationJob? = jobRepository.findById(jobId).orElse(null)?.toDomain()
+    override fun findJobById(jobId: UUID): CalculationJob? = jobRepository.findById(jobId).map { it.toDomain() }.orElseGet { null }
 
     override fun transitionStatus(jobId: UUID, from: CalculationJobStatus, to: CalculationJobStatus): Boolean = jobRepository.transitionStatus(jobId, from.name, to.name) > 0
 

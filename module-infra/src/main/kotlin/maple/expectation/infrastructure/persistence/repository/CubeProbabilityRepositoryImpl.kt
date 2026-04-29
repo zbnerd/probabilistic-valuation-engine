@@ -7,6 +7,8 @@ import maple.expectation.domain.repository.CubeProbabilityRepository
 import maple.expectation.domain.v2.CubeProbability
 import maple.expectation.domain.v2.CubeType
 import maple.expectation.error.exception.CubeDataInitializationException
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.core.io.ClassPathResource
 import org.springframework.stereotype.Repository
@@ -18,7 +20,9 @@ import org.springframework.stereotype.Repository
  * CubeType 구분하여 캐시 키를 생성합니다.
  */
 @Repository("cubeProbabilityRepositoryV1")
-class CubeProbabilityRepositoryImpl : CubeProbabilityRepository {
+class CubeProbabilityRepositoryImpl(
+    private val executor: LogicExecutor,
+) : CubeProbabilityRepository {
 
     companion object {
         private val log = LoggerFactory.getLogger(CubeProbabilityRepositoryImpl::class.java)
@@ -36,7 +40,7 @@ class CubeProbabilityRepositoryImpl : CubeProbabilityRepository {
             throw CubeDataInitializationException("필수 데이터 파일이 없습니다: data/cube_probability.csv")
         }
 
-        try {
+        executor.executeVoid({
             resource.inputStream.use { inputStream ->
                 val mapper = CsvMapper()
                 val schema = CsvSchema.emptySchema().withHeader()
@@ -62,10 +66,7 @@ class CubeProbabilityRepositoryImpl : CubeProbabilityRepository {
 
                 log.info("[v1] 로딩 완료! 총 {}건의 데이터를 적재했습니다. (Key 개수: {})", count, probabilityCache.size)
             }
-        } catch (e: Exception) {
-            log.error("확률 데이터 로딩 중 치명적 오류 발생", e)
-            throw CubeDataInitializationException("확률 데이터 파싱 중 I/O 오류 발생")
-        }
+        }, TaskContext.of("CubeProbability", "InitCsvLoad"))
     }
 
     /**

@@ -8,7 +8,10 @@ import java.util.concurrent.Callable
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -48,6 +51,7 @@ class SimpleAdmissionControl(
     private val workerSize: Int,
 
     private val meterRegistry: MeterRegistry,
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(SimpleAdmissionControl::class.java)
 
@@ -58,7 +62,7 @@ class SimpleAdmissionControl(
     private val semaphore = Semaphore(maxInFlight)
 
     // 🔥 WORKER POOL
-    private val executor = Executors.newFixedThreadPool(workerSize) { runnable ->
+    private val workerPool = Executors.newFixedThreadPool(workerSize) { runnable ->
         Thread.ofVirtual().name("admission-worker").unstarted(runnable)
     }
 
@@ -87,7 +91,7 @@ class SimpleAdmissionControl(
 
         // 🔥 Start worker pool
         repeat(workerSize) {
-            executor.submit { workerLoop() }
+            workerPool.submit { workerLoop() }
         }
 
         log.info(
@@ -129,8 +133,8 @@ class SimpleAdmissionControl(
      * 🔥 WORKER LOOP: Blocks here (in worker thread, not HTTP thread)
      */
     private fun workerLoop() {
-        while (true) {
-            try {
+        while (!Thread.currentThread().isInterrupted) {
+            executor.executeVoid({
                 // 🔥 BLOCKING: Wait for task (only worker thread blocks)
                 @Suppress("UNCHECKED_CAST")
                 val task = queue.take() as AdmissionTask<*>
@@ -140,25 +144,25 @@ class SimpleAdmissionControl(
                 semaphore.acquire()
                 inFlight.incrementAndGet()
 
-                try {
-                    @Suppress("UNCHECKED_CAST")
-                    val result = task.callable.call() as Any
-                    @Suppress("UNCHECKED_CAST")
-                    (task.future as CompletableFuture<Any>).complete(result)
-                } catch (e: Exception) {
-                    task.future.completeExceptionally(e)
-                } finally {
-                    semaphore.release()
-                    inFlight.decrementAndGet()
-                }
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                log.info("[SimpleAdmissionControl] Worker interrupted")
-                break
-            } catch (e: Exception) {
-                log.error("[SimpleAdmissionControl] Worker error", e)
-            }
+                executeTask(task)
+            }, TaskContext.of("SimpleAdmissionControl", "Worker"))
         }
+    }
+
+    private fun <T> executeTask(task: AdmissionTask<T>) {
+        executor.executeWithFinally(
+            {
+                @Suppress("UNCHECKED_CAST")
+                val result = task.callable.call() as Any
+                @Suppress("UNCHECKED_CAST")
+                (task.future as CompletableFuture<Any>).complete(result)
+            },
+            {
+                semaphore.release()
+                inFlight.decrementAndGet()
+            },
+            TaskContext.of("SimpleAdmissionControl", "ExecuteTask"),
+        )
     }
 
     /**
@@ -166,17 +170,18 @@ class SimpleAdmissionControl(
      */
     fun shutdown() {
         log.info("[SimpleAdmissionControl] Shutting down...")
-        executor.shutdown()
-        try {
-            if (!executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
-                log.warn("[SimpleAdmissionControl] Executor did not terminate in time")
-                executor.shutdownNow()
-            }
-        } catch (e: InterruptedException) {
-            log.error("[SimpleAdmissionControl] Shutdown interrupted", e)
-            executor.shutdownNow()
-            Thread.currentThread().interrupt()
-        }
+        workerPool.shutdown()
+        executor.executeOrDefault(
+            {
+                if (!workerPool.awaitTermination(5, TimeUnit.SECONDS)) {
+                    log.warn("[SimpleAdmissionControl] Executor did not terminate in time")
+                    workerPool.shutdownNow()
+                }
+                true
+            },
+            false,
+            TaskContext.of("SimpleAdmissionControl", "Shutdown"),
+        )
         log.info("[SimpleAdmissionControl] Shutdown complete")
     }
 

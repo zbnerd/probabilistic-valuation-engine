@@ -2,7 +2,6 @@ package maple.expectation.util.converter
 
 import jakarta.persistence.AttributeConverter
 import jakarta.persistence.Converter
-import java.io.IOException
 import maple.expectation.error.exception.CompressionException
 import maple.expectation.util.GzipUtils
 
@@ -25,11 +24,10 @@ class GzipStringConverter : AttributeConverter<String, ByteArray> {
      */
     override fun convertToDatabaseColumn(attribute: String?): ByteArray? {
         if (attribute == null) return null
-        return try {
-            GzipUtils.compress(attribute)
-        } catch (e: IOException) {
-            throw CompressionException("GZIP 압축 오류: ${e.message}", e)
-        }
+        return runCatching { GzipUtils.compress(attribute) }
+            .getOrElse { e ->
+                throw CompressionException("GZIP 압축 오류: ${e.message}", e)
+            }
     }
 
     /**
@@ -41,10 +39,9 @@ class GzipStringConverter : AttributeConverter<String, ByteArray> {
      */
     override fun convertToEntityAttribute(dbData: ByteArray?): String? {
         if (dbData == null) return null
-        return try {
-            GzipUtils.decompress(dbData)
-        } catch (e: IOException) {
-            throw CompressionException("GZIP 압축 해제 오류: ${e.message}", e)
-        }
+        return runCatching { GzipUtils.decompress(dbData) }
+            .getOrElse { e ->
+                throw CompressionException("GZIP 압축 해제 오류: ${e.message}", e)
+            }
     }
 }

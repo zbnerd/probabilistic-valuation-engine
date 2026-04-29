@@ -58,7 +58,7 @@ class DiscordAlertService(
     }
 
     /** AI 분석 수행 (타임아웃 처리 포함) */
-    private fun getAiAnalysis(e: Throwable): AiAnalysisResult? = aiSreService.flatMap { it.analyzeError(e) }.orElse(null)
+    private fun getAiAnalysis(e: Throwable): AiAnalysisResult? = aiSreService.flatMap { it.analyzeError(e) }.orElseGet { null }
 
     /** 시스템 컨텍스트 요약 수집 */
     private fun getSystemSummary(): String = contextProvider.map { it.buildSummary() }.orElse("")

@@ -45,7 +45,7 @@ class FingerprintGenerator(
      */
     fun generate(apiKey: String?): String {
         validateApiKey(apiKey)
-        val hash = computeHmac(apiKey!!)
+        val hash = computeHmac(requireNotNull(apiKey) { "apiKey must not be null after validation" })
         return Base64.getUrlEncoder().withoutPadding().encodeToString(hash)
     }
 

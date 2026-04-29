@@ -77,6 +77,10 @@ class PostgresL2CacheStrategy(
 
         /**
          * Execute a block with L2 writes disabled, ensuring ThreadLocal cleanup.
+         *
+         * Static entry point — delegates to the instance method [PostgresL2CacheStrategy.executeWithL2WritesDisabled]
+         * when a strategy instance is available. For callers without an instance, prefer injecting
+         * PostgresL2CacheStrategy and calling the instance method directly.
          */
         fun <T> withL2WritesDisabled(block: () -> T): T {
             disableL2Writes.set(true)
@@ -121,18 +125,22 @@ class PostgresL2CacheStrategy(
                 val result = results.firstOrNull()
 
                 result?.let { bytes ->
-                    try {
-                        val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
-                        @Suppress("UNCHECKED_CAST")
-                        when {
-                            type == String::class.java || type == Any::class.java -> typedValue.value as? T
-                            typedValue.value != null && type.isInstance(typedValue.value) -> typedValue.value as T
-                            else -> null
+                    executor.executeOrDefault(
+                        {
+                            val typedValue = objectMapper.readValue(bytes, TypedValue::class.java)
+                            @Suppress("UNCHECKED_CAST")
+                            when {
+                                type == String::class.java || type == Any::class.java -> typedValue.value as? T
+                                typedValue.value != null && type.isInstance(typedValue.value) -> typedValue.value as T
+                                else -> null
+                            }
+                        },
+                        null,
+                        TaskContext.of("PostgresL2Strategy", "Deserialize", key),
+                    ).also {
+                        if (it == null) {
+                            errorCounter.increment()
                         }
-                    } catch (e: Exception) {
-                        log.error("[PostgresL2] Deserialization failed for key={}", key, e)
-                        errorCounter.increment()
-                        null
                     }
                 }
             },
@@ -315,14 +323,9 @@ class PostgresL2CacheStrategy(
 
         return executor.executeOrDefault(
             {
-                try {
-                    // Lightweight health check: query pg_stat_activity
-                    val sql = "SELECT 1"
-                    jdbcTemplate.queryForObject(sql, Int::class.java) == 1
-                } catch (e: Exception) {
-                    log.error("[PostgresL2] Health check failed", e)
-                    false
-                }
+                // Lightweight health check: query pg_stat_activity
+                val sql = "SELECT 1"
+                jdbcTemplate.queryForObject(sql, Int::class.java) == 1
             },
             false,
             context,

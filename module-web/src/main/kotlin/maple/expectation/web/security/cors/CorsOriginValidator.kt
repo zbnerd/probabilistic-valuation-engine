@@ -69,25 +69,26 @@ class CorsOriginValidator(
         val errors = mutableListOf<String>()
 
         for (origin in origins) {
-            try {
-                validateSingleOrigin(origin)
-                validOrigins.add(origin)
+            runCatching { validateSingleOrigin(origin) }
+                .onSuccess {
+                    validOrigins.add(origin)
 
-                // 보안 경고 체크
-                if (isProductionProfile()) {
-                    if (isLocalhost(origin)) {
-                        warnings.add("[SECURITY] '$origin' - 프로덕션 환경에서 localhost 오리진은 권장하지 않습니다.")
-                    }
-                    if (isPrivateIp(origin)) {
-                        warnings.add("[SECURITY] '$origin' - 프로덕션 환경에서 사설 IP 오리진은 권장하지 않습니다.")
-                    }
-                    if (isHttp(origin)) {
-                        warnings.add("[SECURITY] '$origin' - 프로덕션 환경에서는 HTTPS 사용을 권장합니다.")
+                    // 보안 경고 체크
+                    if (isProductionProfile()) {
+                        if (isLocalhost(origin)) {
+                            warnings.add("[SECURITY] '$origin' - 프로덕션 환경에서 localhost 오리진은 권장하지 않습니다.")
+                        }
+                        if (isPrivateIp(origin)) {
+                            warnings.add("[SECURITY] '$origin' - 프로덕션 환경에서 사설 IP 오리진은 권장하지 않습니다.")
+                        }
+                        if (isHttp(origin)) {
+                            warnings.add("[SECURITY] '$origin' - 프로덕션 환경에서는 HTTPS 사용을 권장합니다.")
+                        }
                     }
                 }
-            } catch (e: IllegalArgumentException) {
-                errors.add("[ERROR] '$origin': ${e.message}")
-            }
+                .onFailure { e ->
+                    errors.add("[ERROR] '$origin': ${e.message}")
+                }
         }
 
         return ValidationResult(validOrigins, warnings, errors)
@@ -109,11 +110,8 @@ class CorsOriginValidator(
         }
 
         // URL 파싱
-        val uri: URI = try {
-            URI(origin)
-        } catch (e: Exception) {
-            throw IllegalArgumentException("유효하지 않은 URL 형식입니다: $origin", e)
-        }
+        val uri: URI = runCatching { URI(origin) }
+            .getOrElse { e -> throw IllegalArgumentException("유효하지 않은 URL 형식입니다: $origin", e) }
 
         // 스킴(프로토콜) 검증
         val scheme = uri.scheme

@@ -24,6 +24,10 @@ class LowPriorityEventConsumer(
     private val semaphore = Semaphore(maxConcurrent)
 
     fun <T> processAsync(event: IntegrationEvent<T>, handler: EventHandler<T>) {
+        // [Semaphore Lifecycle Exception] try-catch-finally required for semaphore acquire/release:
+        // 1. Semaphore.tryAcquire() throws InterruptedException — must restore interrupt flag
+        // 2. Semaphore.release() must run in finally regardless of success/failure
+        // 3. LogicExecutor cannot manage this because the semaphore is acquired *before* delegation
         var acquired = false
         try {
             acquired = semaphore.tryAcquire(5, TimeUnit.SECONDS)
@@ -37,17 +41,17 @@ class LowPriorityEventConsumer(
             }
 
             executor.execute {
-                logicExecutor.executeVoid(
+                val start = System.nanoTime()
+                logicExecutor.executeWithFinally(
                     {
-                        val start = System.nanoTime()
-                        try {
-                            handler.handle(event.payload)
-                            meterRegistry.counter("event.consumer.low.processed").increment()
-                        } finally {
-                            val durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
-                            meterRegistry.timer("event.consumer.low.duration")
-                                .record(durationMs, TimeUnit.MILLISECONDS)
-                        }
+                        handler.handle(event.payload)
+                        meterRegistry.counter("event.consumer.low.processed").increment()
+                        null
+                    },
+                    Runnable {
+                        val durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
+                        meterRegistry.timer("event.consumer.low.duration")
+                            .record(durationMs, TimeUnit.MILLISECONDS)
                     },
                     TaskContext.of("LowPriorityEvent", event.eventType, event.eventId),
                 )

@@ -246,12 +246,16 @@ class AdaptiveMicroBatchUserService<T : Any>(
      * 적응형 라우팅 (Fast Lane vs Batch Lane) - 동기 버전
      */
     private fun routeRequest(key: String, future: CompletableFuture<T?>): T? = if (semaphore.tryAcquire()) {
-        try {
-            executeFastLane(key, future)
-        } finally {
-            semaphore.release()
-            cleanupInFlight(key)
-        }
+        logicExecutor.executeWithFinally(
+            {
+                executeFastLane(key, future)
+            },
+            {
+                semaphore.release()
+                cleanupInFlight(key)
+            },
+            TaskContext.of("AdaptiveBatch", "RouteRequest", key),
+        )
     } else {
         executeBatchLane(key, future)
     }
@@ -260,12 +264,16 @@ class AdaptiveMicroBatchUserService<T : Any>(
      * 적응형 라우팅 (Fast Lane vs Batch Lane) - suspend 버전
      */
     private suspend fun routeRequestSuspend(key: String, future: CompletableFuture<T?>): T? = if (semaphore.tryAcquire()) {
-        try {
-            executeFastLane(key, future)
-        } finally {
-            semaphore.release()
-            cleanupInFlight(key)
-        }
+        logicExecutor.executeWithFinally(
+            {
+                executeFastLane(key, future)
+            },
+            {
+                semaphore.release()
+                cleanupInFlight(key)
+            },
+            TaskContext.of("AdaptiveBatch", "RouteRequestSuspend", key),
+        )
     } else {
         executeBatchLaneSuspend(key, future)
     }
@@ -320,33 +328,47 @@ class AdaptiveMicroBatchUserService<T : Any>(
     /**
      * 타임아웃과 함께 결과 대기 - 동기 버전
      */
-    private fun awaitWithTimeout(future: CompletableFuture<T?>, key: String): T? = try {
-        future.get(properties.requestTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-    } catch (e: java.util.concurrent.TimeoutException) {
-        timeoutCounter.increment()
-        log.warn { "[AdaptiveMicroBatch] Request timeout: key=$key, timeoutMs=${properties.requestTimeoutMs}" }
-        cleanupInFlight(key)
-        throw TimeoutException("Request timeout after ${properties.requestTimeoutMs}ms for key: $key")
-    } catch (e: Exception) {
-        errorCounter.increment()
-        log.error(e) { "[AdaptiveMicroBatch] Request failed: key=$key" }
-        cleanupInFlight(key)
-        throw e
-    }
+    private fun awaitWithTimeout(future: CompletableFuture<T?>, key: String): T? = logicExecutor.executeOrCatch(
+        {
+            future.get(properties.requestTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        },
+        { e ->
+            val unwrapped = when (e) {
+                is java.util.concurrent.TimeoutException -> {
+                    timeoutCounter.increment()
+                    log.warn { "[AdaptiveMicroBatch] Request timeout: key=$key, timeoutMs=${properties.requestTimeoutMs}" }
+                    cleanupInFlight(key)
+                    throw TimeoutException("Request timeout after ${properties.requestTimeoutMs}ms for key: $key")
+                }
+                else -> {
+                    errorCounter.increment()
+                    log.error(e) { "[AdaptiveMicroBatch] Request failed: key=$key" }
+                    cleanupInFlight(key)
+                    throw e
+                }
+            }
+            @Suppress("UNREACHABLE_CODE")
+            unwrapped
+        },
+        TaskContext.of("AdaptiveBatch", "AwaitWithTimeout", key),
+    )
 
     /**
      * 타임아웃과 함께 결과 대기 - suspend 버전
      */
-    private suspend fun awaitWithTimeoutSuspend(future: CompletableFuture<T?>, key: String): T? = try {
-        withTimeout(properties.requestTimeoutMs) {
-            future.await()
+    private suspend fun awaitWithTimeoutSuspend(future: CompletableFuture<T?>, key: String): T? = // [Coroutine Intrinsic Exception] Cannot use LogicExecutor here — this is a suspend function
+        // that catches TimeoutCancellationException (subclass of CancellationException).
+        // Wrapping in LogicExecutor would break structured coroutine cancellation propagation.
+        try {
+            withTimeout(properties.requestTimeoutMs) {
+                future.await()
+            }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            timeoutCounter.increment()
+            log.warn { "[AdaptiveMicroBatch] Request timeout (suspend): key=$key, timeoutMs=${properties.requestTimeoutMs}" }
+            cleanupInFlight(key)
+            throw TimeoutException("Request timeout after ${properties.requestTimeoutMs}ms for key: $key")
         }
-    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-        timeoutCounter.increment()
-        log.warn { "[AdaptiveMicroBatch] Request timeout (suspend): key=$key, timeoutMs=${properties.requestTimeoutMs}" }
-        cleanupInFlight(key)
-        throw TimeoutException("Request timeout after ${properties.requestTimeoutMs}ms for key: $key")
-    }
 
     /**
      * 백그라운드 배치 워커 루프

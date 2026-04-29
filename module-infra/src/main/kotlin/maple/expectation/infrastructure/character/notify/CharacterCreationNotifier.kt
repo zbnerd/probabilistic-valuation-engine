@@ -40,14 +40,15 @@ class CharacterCreationNotifier(
         val context = TaskContext.of("CharacterCreation", "Notify", userIgn)
         val channel = "$CHANNEL_PREFIX:$userIgn"
 
-        executor.executeVoid({
-            try {
+        executor.executeOrDefault(
+            {
                 // PostgreSQL NOTIFY with userIgn as payload
                 jdbcTemplate.execute("NOTIFY \"$channel\"")
                 log.debug("[CharacterCreation] Notified: {}", userIgn)
-            } catch (e: Exception) {
-                log.warn("[CharacterCreation] Notify failed for: {}", userIgn, e)
-            }
-        }, context)
+                null
+            },
+            null,
+            context,
+        )
     }
 }

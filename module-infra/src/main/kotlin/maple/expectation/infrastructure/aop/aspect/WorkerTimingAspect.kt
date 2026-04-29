@@ -56,6 +56,10 @@ class WorkerTimingAspect(
         var success = true
         var error: Throwable? = null
 
+        // [AOP Intrinsic Exception] try-catch-finally required here because:
+        // 1. AOP aspects are infrastructure that wraps LogicExecutor calls — injecting LogicExecutor would cause circular dependency
+        // 2. Timing requires recording success/failure AND rethrowing — LogicExecutor methods either swallow or translate exceptions
+        // 3. All state is local (no shared mutable state), so this is safe
         try {
             return joinPoint.proceed()
         } catch (t: Throwable) {
@@ -80,6 +84,7 @@ class WorkerTimingAspect(
         var success = true
         var error: Throwable? = null
 
+        // [AOP Intrinsic Exception] Same rationale as aroundTimedTask — see comment above
         try {
             return joinPoint.proceed()
         } catch (t: Throwable) {

@@ -51,16 +51,18 @@ class OcidReader(
      * @return next OCID or null if exhausted
      */
     private fun readNextOcid(): String? {
-        if (ocidIterator == null || !ocidIterator!!.hasNext()) {
+        val iter = ocidIterator
+        if (iter == null || !iter.hasNext()) {
             fetchNextChunk()
         }
 
         // Iterator 소진을 먼저 체크하여 마지막 페이지의 OCID 반환
-        if (ocidIterator != null && !ocidIterator!!.hasNext()) {
+        val currentIter = ocidIterator
+        if (currentIter != null && !currentIter.hasNext()) {
             return null
         }
 
-        return ocidIterator?.next()
+        return currentIter?.next()
     }
 
     /**

@@ -52,7 +52,7 @@ class CharacterOcidAdapter(
                 val entities = jpaRepository.findAllByUserIgnIn(userIgns.toList())
                 entities
                     .filter { it.userIgn != null && it.ocid != null }
-                    .associateBy({ it.userIgn!! }, { it.ocid!! })
+                    .associate { requireNotNull(it.userIgn) to requireNotNull(it.ocid) }
                     .filterKeys { it in userIgns }
             },
             TaskContext.of("CharacterOcidAdapter", "ResolveOcids", "count=${userIgns.size}"),
@@ -97,7 +97,7 @@ class CharacterOcidAdapter(
         val entities = jpaRepository.findAll()
         return entities
             .filter { it.userIgn != null && it.ocid != null }
-            .associateBy({ it.userIgn!! }, { it.ocid!! })
+            .associate { requireNotNull(it.userIgn) to requireNotNull(it.ocid) }
     }
 
     companion object {

@@ -25,7 +25,7 @@ open class MemberRepositoryImpl(
 
     override fun findById(id: Long?): Member? {
         if (id == null) return null
-        return jpaRepository.findById(id).orElse(null)
+        return jpaRepository.findById(id).orElseGet { null }
     }
 
     override fun save(member: Member): Member = jpaRepository.save(member)

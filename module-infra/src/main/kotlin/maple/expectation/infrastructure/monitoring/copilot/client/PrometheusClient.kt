@@ -24,7 +24,7 @@ import org.springframework.http.HttpStatus
 class PrometheusClient(
     private val httpClient: HttpClient,
     private val objectMapper: ObjectMapper,
-    private val executor: LogicExecutor?,
+    private val executor: LogicExecutor,
     private val prometheusUrl: String,
 ) {
     companion object {
@@ -34,14 +34,10 @@ class PrometheusClient(
         private val log = LoggerFactory.getLogger(PrometheusClient::class.java)
     }
 
-    fun queryRange(promql: String, start: Instant, end: Instant, step: String): List<TimeSeries> = if (executor != null) {
-        executor.execute(
-            { queryRangeInternal(promql, start, end, step) },
-            TaskContext.of("PrometheusClient", "QueryRange", promql),
-        )
-    } else {
-        queryRangeInternal(promql, start, end, step)
-    }
+    fun queryRange(promql: String, start: Instant, end: Instant, step: String): List<TimeSeries> = executor.execute(
+        { queryRangeInternal(promql, start, end, step) },
+        TaskContext.of("PrometheusClient", "QueryRange", promql),
+    )
 
     private fun queryRangeInternal(promql: String, start: Instant, end: Instant, step: String): List<TimeSeries> {
         val url = buildQueryRangeUrl(promql, start, end, step)
@@ -62,20 +58,26 @@ class PrometheusClient(
         return prometheusResponse.data.result
     }
 
-    private fun sendHttpRequest(request: HttpRequest): HttpResponse<String> = try {
-        httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-    } catch (e: InterruptedException) {
-        Thread.currentThread().interrupt()
-        throw InternalSystemException("Prometheus query interrupted", e)
-    } catch (e: IOException) {
-        throw InternalSystemException("Prometheus HTTP request failed: ${e.message}", e)
-    }
+    private fun sendHttpRequest(request: HttpRequest): HttpResponse<String> = executor.executeWithTranslation(
+        { httpClient.send(request, HttpResponse.BodyHandlers.ofString()) },
+        { e, _ ->
+            when (e) {
+                is InterruptedException -> {
+                    Thread.currentThread().interrupt()
+                    InternalSystemException("Prometheus query interrupted", e)
+                }
+                is IOException -> InternalSystemException("Prometheus HTTP request failed: ${e.message}", e)
+                else -> InternalSystemException("Prometheus request failed: ${e.message}", e)
+            }
+        },
+        TaskContext.of("PrometheusClient", "SendRequest"),
+    )
 
-    private fun parseResponse(body: String): PrometheusResponse? = try {
-        objectMapper.readValue(body, PrometheusResponse::class.java)
-    } catch (e: IOException) {
-        throw InternalSystemException("Failed to parse Prometheus response: ${e.message}", e)
-    }
+    private fun parseResponse(body: String): PrometheusResponse? = executor.executeWithTranslation(
+        { objectMapper.readValue(body, PrometheusResponse::class.java) },
+        { e, _ -> InternalSystemException("Failed to parse Prometheus response: ${e.message}", e) },
+        TaskContext.of("PrometheusClient", "ParseResponse"),
+    )
 
     private fun buildQueryRangeUrl(promql: String, start: Instant, end: Instant, step: String): String {
         val formatter = DateTimeFormatter.ISO_INSTANT
@@ -139,9 +141,7 @@ class PrometheusClient(
         val timestamp: Long,
         val value: String,
     ) {
-        fun getValueAsDouble(): Double = try {
-            value.toDouble()
-        } catch (e: NumberFormatException) {
+        fun getValueAsDouble(): Double = value.toDoubleOrNull() ?: run {
             log.warn("Failed to parse value as double: {}", value)
             0.0
         }

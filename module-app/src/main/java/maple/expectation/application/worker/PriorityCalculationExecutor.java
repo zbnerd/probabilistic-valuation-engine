@@ -153,22 +153,30 @@ public class PriorityCalculationExecutor {
   /** Wait for pool termination with interrupt recovery (Section 12 compliant) */
   private void awaitTerminationWithRecovery() {
     checkedExecutor.executeUncheckedVoid(
-        () -> {
-          try {
-            if (!awaitTermination(highPriorityPool, lowPriorityPool)) {
-              log.warn("[V5-Executor] Shutdown timeout, forcing termination");
-              highPriorityPool.shutdownNow();
-              lowPriorityPool.shutdownNow();
-            }
-            log.info("[V5-Executor] Stopped gracefully");
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            highPriorityPool.shutdownNow();
-            lowPriorityPool.shutdownNow();
-            log.warn("[V5-Executor] Shutdown interrupted");
-            throw new ShutdownInterruptedException(e);
-          }
-        },
+        () ->
+            executor.executeWithFallback(
+                () -> {
+                  if (!awaitTermination(highPriorityPool, lowPriorityPool)) {
+                    log.warn("[V5-Executor] Shutdown timeout, forcing termination");
+                    highPriorityPool.shutdownNow();
+                    lowPriorityPool.shutdownNow();
+                  }
+                  log.info("[V5-Executor] Stopped gracefully");
+                  return null;
+                },
+                ex -> {
+                  if (ex instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    highPriorityPool.shutdownNow();
+                    lowPriorityPool.shutdownNow();
+                    log.warn("[V5-Executor] Shutdown interrupted");
+                    throw new ShutdownInterruptedException((InterruptedException) ex);
+                  }
+                  highPriorityPool.shutdownNow();
+                  lowPriorityPool.shutdownNow();
+                  throw new IllegalStateException("Unexpected exception during shutdown", ex);
+                },
+                TaskContext.of("V5-Executor", "AwaitTermination")),
         TaskContext.of("V5-Executor", "AwaitTermination"),
         ex -> new IllegalStateException("Unexpected exception during shutdown", ex));
   }
@@ -284,25 +292,25 @@ public class PriorityCalculationExecutor {
    */
   private void verifyWorkersStarted(int expectedCount) {
     executor.executeVoidJava(
-        () -> {
-          // ADR-080: Configurable delay to allow workers to enter run loop
-          try {
-            TimeUnit.MILLISECONDS.sleep(verifyDelayMs);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return;
-          }
+        () ->
+            executor.executeOrDefault(
+                () -> {
+                  // ADR-080: Configurable delay to allow workers to enter run loop
+                  TimeUnit.MILLISECONDS.sleep(verifyDelayMs);
 
-          int activeWorkers = getActiveWorkerCount();
-          if (activeWorkers < expectedCount) {
-            log.warn(
-                "[V5-Executor] Only {}/{} workers active after startup (some may still be starting)",
-                activeWorkers,
-                expectedCount);
-          } else {
-            log.info("[V5-Executor] All {} workers verified active", activeWorkers);
-          }
-        },
+                  int activeWorkers = getActiveWorkerCount();
+                  if (activeWorkers < expectedCount) {
+                    log.warn(
+                        "[V5-Executor] Only {}/{} workers active after startup (some may still be starting)",
+                        activeWorkers,
+                        expectedCount);
+                  } else {
+                    log.info("[V5-Executor] All {} workers verified active", activeWorkers);
+                  }
+                  return null;
+                },
+                null,
+                TaskContext.of("V5-Executor", "VerifyWorkersStarted")),
         TaskContext.of("V5-Executor", "VerifyWorkersStarted"));
   }
 }

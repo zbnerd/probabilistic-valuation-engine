@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.LockSupport
 import maple.expectation.domain.v2.EquipmentExpectationSummary
 import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer
 import maple.expectation.infrastructure.buffer.ExpectationWriteTask
@@ -120,14 +121,7 @@ class ExpectationBatchShutdownHandler(
     }
 
     private fun sleepSafely(millis: Long) {
-        executor.executeOrDefault(
-            {
-                Thread.sleep(millis)
-                null
-            },
-            null,
-            TaskContext.of("ExpectationShutdown", "SleepSafely"),
-        )
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(millis))
     }
 
     private fun flushBatch(batch: List<ExpectationWriteTask>): Int {

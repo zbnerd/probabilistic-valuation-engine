@@ -1,5 +1,7 @@
 package maple.expectation.infrastructure.lock
 
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.LockSupport
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -80,12 +82,7 @@ class PostgresAdvisoryLockStrategy(
                 @Suppress("UNCHECKED_CAST")
                 return result as T
             }
-            try {
-                Thread.sleep(POLL_INTERVAL_MS)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                throw DistributedLockException("Interrupted while waiting for lock: $key", e)
-            }
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(POLL_INTERVAL_MS))
         }
 
         lockMetrics.recordFailure("postgres")
@@ -140,13 +137,7 @@ class PostgresAdvisoryLockStrategy(
                 log.info("✅ [Follower] Leader completed, proceeding: key={}", key)
                 break
             }
-            try {
-                Thread.sleep(POLL_INTERVAL_MS)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                log.warn("⏰ [Follower] Interrupted while waiting: key={}", key)
-                break
-            }
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(POLL_INTERVAL_MS))
         }
 
         return executor.execute({ followerTask.get() }, context)

@@ -37,17 +37,12 @@ open class RateLimitingFilter(
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        val result = try {
-            val context = buildContext(request)
-            executor.executeOrDefault(
-                { rateLimitingFacade.checkRateLimit(context) },
-                ConsumeResult.failOpen(),
-                TaskContext.of("RateLimit", "Filter", maskIp(context.clientIp)),
-            )
-        } catch (e: Exception) {
-            log.warn("[RateLimit] Error during rate limit check, failing open: {}", e.message)
-            ConsumeResult.failOpen()
-        }
+        val context = buildContext(request)
+        val result = executor.executeOrDefault(
+            { rateLimitingFacade.checkRateLimit(context) },
+            ConsumeResult.failOpen(),
+            TaskContext.of("RateLimit", "Filter", maskIp(context.clientIp)),
+        )
 
         if (!result.allowed) {
             handleRateLimitExceeded(response, result)

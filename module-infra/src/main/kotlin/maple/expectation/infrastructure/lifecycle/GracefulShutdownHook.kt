@@ -83,37 +83,37 @@ class GracefulShutdownHook(
             val coordinatorThread = Thread.ofVirtual()
                 .name("shutdown-coordinator")
                 .unstarted {
-                    try {
-                        coordinator.executeShutdown()
-                    } catch (e: Exception) {
-                        logger.error("[GracefulShutdownHook] Coordinator 실행 실패", e)
-                    }
+                    executor.executeOrDefault(
+                        { coordinator.executeShutdown() },
+                        Unit,
+                        TaskContext.of("GracefulShutdownHook", "CoordinatorRun"),
+                    )
                 }
 
             coordinatorThread.start()
 
             var remainingNs: Long
             while ((System.nanoTime() - deadlineNs).also { remainingNs = deadlineNs - System.nanoTime() } > 0) {
-                try {
-                    TimeUnit.NANOSECONDS.timedJoin(coordinatorThread, remainingNs)
-                    if (!coordinatorThread.isAlive) {
-                        true // 완료
-                    }
-                } catch (e: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    logger.warn("[GracefulShutdownHook] 대기 중 인터럽트")
-                    false
+                executor.executeOrDefault(
+                    {
+                        TimeUnit.NANOSECONDS.timedJoin(coordinatorThread, remainingNs)
+                    },
+                    Unit,
+                    TaskContext.of("GracefulShutdownHook", "TimedJoin"),
+                )
+                if (!coordinatorThread.isAlive) {
+                    return@executeOrDefault true
                 }
             }
 
             // 타임아웃 발생
             if (coordinatorThread.isAlive) {
-                logger.error("[GracefulShutdownHook] Coordinator 타임아웃 - 강제 종료 예정")
+                logger.error("[GracefulShutdownHook] Coordinator timeout - forcing shutdown")
                 coordinatorThread.interrupt()
                 false
+            } else {
+                true
             }
-
-            true
         },
         false,
         TaskContext.of("GracefulShutdownHook", "ExecuteWithTimeout"),

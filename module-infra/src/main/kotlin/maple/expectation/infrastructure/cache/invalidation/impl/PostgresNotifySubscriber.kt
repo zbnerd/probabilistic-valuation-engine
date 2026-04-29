@@ -139,12 +139,18 @@ class PostgresNotifySubscriber(
         // Use ScheduledExecutorService instead of Thread + Thread.sleep (#642)
         scheduler.scheduleAtFixedRate(
             {
-                try {
-                    pollNotifications()
-                } catch (e: Exception) {
-                    log.warn("[PostgresNotify] Error receiving notifications, reconnecting...", e)
-                    reconnectWithDelay()
-                }
+                executor.executeOrCatch(
+                    {
+                        pollNotifications()
+                        null
+                    },
+                    { e ->
+                        log.warn("[PostgresNotify] Error receiving notifications, reconnecting...", e)
+                        reconnectWithDelay()
+                        null
+                    },
+                    TaskContext.of("CacheInvalidation", "PollNotifications", instanceId),
+                )
             },
             0,
             pollIntervalMs,
@@ -181,10 +187,14 @@ class PostgresNotifySubscriber(
             }
 
             // Deserialize event
-            val event = try {
-                objectMapper.readValue(payload, CacheInvalidationEvent::class.java)
-            } catch (e: Exception) {
-                log.warn("[PostgresNotify] Failed to deserialize event: payload={}", payload, e)
+            val event = executor.executeOrDefault(
+                { objectMapper.readValue(payload, CacheInvalidationEvent::class.java) },
+                null,
+                TaskContext.of("CacheInvalidation", "DeserializeEvent", notification.name),
+            )
+
+            if (event == null) {
+                log.warn("[PostgresNotify] Failed to deserialize event: payload={}", payload)
                 return@executeVoid
             }
 

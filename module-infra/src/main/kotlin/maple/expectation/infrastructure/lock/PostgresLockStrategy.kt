@@ -87,39 +87,38 @@ class PostgresLockStrategy(
 
         // 폴링 방식으로 락 획득 시도 (PostgreSQL은 대기 시간 지원 안 함)
         while (System.currentTimeMillis() < deadline) {
-            var lockAcquired = false
-            try {
-                if (tryAcquireAdvisoryLock(advisoryLockId)) {
-                    lockAcquired = true
-                    // 락 획득 성공 - lease time 등록 (원자적 등록)
-                    val leaseDeadline = if (leaseTime > 0) System.currentTimeMillis() + (leaseTime * 1000) else Long.MAX_VALUE
+            executor.executeOrCatch(
+                {
+                    if (tryAcquireAdvisoryLock(advisoryLockId)) {
+                        // 락 획득 성공 - lease time 등록 (원자적 등록)
+                        val leaseDeadline = if (leaseTime > 0) System.currentTimeMillis() + (leaseTime * 1000) else Long.MAX_VALUE
 
-                    // Register lease BEFORE any other operations
-                    acquiredLocks.get()[advisoryLockId] = leaseDeadline
+                        // Register lease BEFORE any other operations
+                        acquiredLocks.get()[advisoryLockId] = leaseDeadline
 
-                    // Track lock order for deadlock prevention
-                    lockOrder.get().add(advisoryLockId)
+                        // Track lock order for deadlock prevention
+                        lockOrder.get().add(advisoryLockId)
 
-                    // [Issue #310] 락 대기 시간 기록
-                    val waitTimeMs = System.currentTimeMillis() - startTime
-                    lockMetrics.recordWaitTime(waitTimeMs, "postgres")
+                        // [Issue #310] 락 대기 시간 기록
+                        val waitTimeMs = System.currentTimeMillis() - startTime
+                        lockMetrics.recordWaitTime(waitTimeMs, "postgres")
 
-                    log.debug("🔓 [Postgres Lock] Acquired lock for key='{}' (id={}, lease={}s)", lockKey, advisoryLockId, leaseTime)
-                    return true
-                }
-            } catch (e: Exception) {
-                // Ensure no stale state on failure - release lock if acquired but registration failed
-                if (lockAcquired) {
-                    try {
-                        releaseAdvisoryLock(advisoryLockId)
-                    } catch (releaseError: Exception) {
-                        log.warn("⚠️ [Postgres Lock] Failed to release lock during error recovery: {}", releaseError.message)
+                        log.debug("[Postgres Lock] Acquired lock for key='{}' (id={}, lease={}s)", lockKey, advisoryLockId, leaseTime)
                     }
-                }
-                // Clean up ThreadLocal state
-                acquiredLocks.get().remove(advisoryLockId)
-                lockOrder.get().remove(advisoryLockId)
-                throw e
+                },
+                { e ->
+                    // Ensure no stale state on failure - release lock if acquired but registration failed
+                    releaseAdvisoryLockSafely(advisoryLockId)
+                    // Clean up ThreadLocal state
+                    acquiredLocks.get().remove(advisoryLockId)
+                    lockOrder.get().remove(advisoryLockId)
+                    throw e
+                },
+                TaskContext.of("PostgresLock", "TryAcquire", lockKey),
+            )
+
+            if (acquiredLocks.get().containsKey(advisoryLockId)) {
+                return true
             }
 
             // Park 최소 1ms ~ 최대 100ms (지수 백오프)
@@ -329,36 +328,48 @@ class PostgresLockStrategy(
 
         // Acquire locks in order
         val acquiredLockIds = mutableListOf<Long>()
-        try {
-            for (lockId in sortedLockIds) {
-                if (!tryAcquireAdvisoryLock(lockId)) {
-                    throw IllegalStateException("Failed to acquire lock $lockId")
+        return executor.executeWithFinally(
+            {
+                for (lockId in sortedLockIds) {
+                    if (!tryAcquireAdvisoryLock(lockId)) {
+                        throw IllegalStateException("Failed to acquire lock $lockId")
+                    }
+                    acquiredLockIds.add(lockId)
+                    lockOrder.get().add(lockId)
+
+                    // Register lease
+                    val leaseDeadline = if (leaseTime > 0) System.currentTimeMillis() + (leaseTime * 1000) else Long.MAX_VALUE
+                    acquiredLocks.get()[lockId] = leaseDeadline
                 }
-                acquiredLockIds.add(lockId)
-                lockOrder.get().add(lockId)
 
-                // Register lease
-                val leaseDeadline = if (leaseTime > 0) System.currentTimeMillis() + (leaseTime * 1000) else Long.MAX_VALUE
-                acquiredLocks.get()[lockId] = leaseDeadline
-            }
+                task()
+            },
+            {
+                // Release locks in reverse order
+                acquiredLockIds.reversed().forEach { lockId ->
+                    releaseAdvisoryLockSafely(lockId)
+                    acquiredLocks.get().remove(lockId)
+                    lockOrder.get().remove(lockId)
+                }
 
-            return task()
-        } finally {
-            // Release locks in reverse order
-            acquiredLockIds.reversed().forEach { lockId ->
-                releaseAdvisoryLock(lockId)
-                acquiredLocks.get().remove(lockId)
-                lockOrder.get().remove(lockId)
-            }
+                // Clean up empty ThreadLocals
+                if (lockOrder.get().isEmpty()) {
+                    lockOrder.remove()
+                }
+                if (acquiredLocks.get().isEmpty()) {
+                    acquiredLocks.remove()
+                }
+            },
+            TaskContext.of("PostgresLock", "OrderedLocks"),
+        )
+    }
 
-            // Clean up empty ThreadLocals
-            if (lockOrder.get().isEmpty()) {
-                lockOrder.remove()
-            }
-            if (acquiredLocks.get().isEmpty()) {
-                acquiredLocks.remove()
-            }
-        }
+    /**
+     * Safely release advisory lock, suppressing errors during error recovery.
+     */
+    private fun releaseAdvisoryLockSafely(advisoryLockId: Long) {
+        runCatching { releaseAdvisoryLock(advisoryLockId) }
+            .onFailure { log.warn("[Postgres Lock] Failed to release lock during error recovery: {}", it.message) }
     }
 
     companion object {

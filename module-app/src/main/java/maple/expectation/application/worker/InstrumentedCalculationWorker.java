@@ -79,17 +79,21 @@ public class InstrumentedCalculationWorker {
       ExpectationCalculationTask task = pollTask(priority);
       if (task == null) continue;
 
-      try {
-        WorkerMdcKeys.putTaskContext(task.getTaskId(), queueName, priority.name());
-        task.setStartedAt(Instant.now());
+      WorkerMdcKeys.putTaskContext(task.getTaskId(), queueName, priority.name());
+      task.setStartedAt(Instant.now());
 
-        // self 참조로 프록시 통과 → @TimedTask 동작
-        self.processTask(task);
-      } catch (Exception e) {
-        log.error("[Worker] Task failed: userIgn={}", task.getUserIgn(), e);
-      } finally {
-        WorkerMdcKeys.clearTaskContext();
-      }
+      executor.executeWithFinally(
+          () ->
+              executor.executeOrDefault(
+                  () -> {
+                    // self 참조로 프록시 통과 → @TimedTask 동작
+                    self.processTask(task);
+                    return null;
+                  },
+                  null,
+                  TaskContext.of("Worker", "ProcessTask", task.getUserIgn())),
+          () -> WorkerMdcKeys.clearTaskContext(),
+          TaskContext.of("Worker", "RunForPriority", task.getUserIgn()));
     }
   }
 

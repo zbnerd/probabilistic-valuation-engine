@@ -44,7 +44,7 @@ open class CharacterValuationRepositoryImpl(
      */
     @Nullable
     open fun findByUserIgn(userIgn: String?): CharacterValuationEntity? = jpaRepo.findByUserIgn(userIgn)
-        .orElse(null)
+        .orElseGet { null }
 
     /**
      * Find character valuation view by message ID.
@@ -56,7 +56,7 @@ open class CharacterValuationRepositoryImpl(
      */
     @Nullable
     open fun findByMessageId(messageId: String?): CharacterValuationEntity? = jpaRepo.findByMessageId(messageId)
-        .orElse(null)
+        .orElseGet { null }
 
     /**
      * Find all valuation views for a user, ordered by calculation time (newest first).
@@ -123,7 +123,7 @@ open class CharacterValuationRepositoryImpl(
      */
     @Nullable
     open fun findById(id: Long?): CharacterValuationEntity? = if (id != null) {
-        jpaRepo.findById(id).orElse(null)
+        jpaRepo.findById(id).orElseGet { null }
     } else {
         null
     }

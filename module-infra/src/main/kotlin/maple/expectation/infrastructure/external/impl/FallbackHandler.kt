@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.external.impl
 
-import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.CompletableFuture
 import maple.expectation.core.domain.model.character.CharacterId
@@ -165,14 +164,7 @@ class FallbackHandler(
      */
     private fun convertToResponse(entity: CharacterEquipment): EquipmentResponse = checkedExecutor.executeUnchecked(
         {
-            try {
-                objectMapper.readValue(entity.jsonContent(), EquipmentResponse::class.java)
-            } catch (e: JsonProcessingException) {
-                throw EquipmentDataProcessingException(
-                    "JSON 역직렬화 실패 [ocid=${entity.ocid()}]: ${e.message}",
-                    e,
-                )
-            }
+            objectMapper.readValue(entity.jsonContent(), EquipmentResponse::class.java)
         },
         TaskContext.of("NexonApi", "DeserializeCache", entity.ocid()),
     ) { e: Exception ->

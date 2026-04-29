@@ -160,30 +160,17 @@ class ExternalApiWorker(
             hash = putResult.hash,
             expiresAt = snapshot.expiresAt,
         )
-        jobService.saveSnapshotInPlace(snapshotEntity)
-        jobService.markSnapshotReadyInPlace(jobId, snapshotId)
+        jobService.saveInputSnapshotAndMarkReady(snapshotEntity, jobId, snapshotId)
 
-        // Step 4: Calculate (pure CPU, ~ms)
-        val started = executionService.startCalculation(jobId, "ExternalApiWorker")
-        if (!started) {
-            log.warn("[jobId={}] Could not start calculation", jobId)
-            return
-        }
-
-        val input = calculationInputPort.findByJobId(jobId)
-        if (input == null) {
-            log.error("[jobId={}] CalculationInput not found after save", jobId)
-            jobPort.markFailed(jobId, "INPUT_NOT_FOUND", "CalculationInput not found for job")
-            return
-        }
-
-        val calcResult = pureCalculationPort.calculate(input)
+        // Step 4: Calculate (pure CPU, ~ms) + complete in one transaction
+        val calcResult = pureCalculationPort.calculate(calcInput)
         val resultJson = objectMapper.writeValueAsString(calcResult)
 
-        executionService.completeCalculationWithResult(
+        executionService.startAndCompleteCalculation(
             jobId = jobId,
+            workerId = "ExternalApiWorker",
             resultJson = resultJson,
-            characterClass = input.characterClass,
+            characterClass = calcInput.characterClass,
             presetNo = payload.presetNo,
             characterId = ocid,
         )
@@ -196,7 +183,7 @@ class ExternalApiWorker(
                     userIgn = payload.userIgn,
                     messageId = jobId.toString(),
                     characterOcid = ocid,
-                    characterClass = input.characterClass,
+                    characterClass = calcInput.characterClass,
                     characterLevel = null,
                     totalExpectedCost = calcResult.totalExpectedCost.toLong(),
                     maxPresetNo = calcResult.maxPresetNo,

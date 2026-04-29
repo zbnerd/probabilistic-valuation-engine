@@ -37,6 +37,58 @@ class CalculationExecutionService(
     }
 
     @Transactional
+    fun startAndCompleteCalculation(
+        jobId: UUID,
+        workerId: String,
+        resultJson: String,
+        characterClass: String,
+        presetNo: Int,
+        characterId: String,
+    ): Boolean {
+        val locked = jobPort.lockForProcessing(jobId, workerId, CalculationJobStatus.SNAPSHOT_READY)
+        if (!locked) return false
+        jobPort.transitionStatus(jobId, CalculationJobStatus.SNAPSHOT_READY, CalculationJobStatus.CALCULATING)
+
+        val completed = jobPort.transitionStatus(jobId, CalculationJobStatus.CALCULATING, CalculationJobStatus.COMPLETED)
+        if (!completed) return false
+
+        val gzipData = gzipCompress(resultJson.toByteArray())
+        val hash = sha256Hex(resultJson.toByteArray())
+
+        resultPort.save(
+            CalculationResultData(
+                resultId = UUID.randomUUID(),
+                jobId = jobId,
+                characterClass = characterClass,
+                presetNo = presetNo,
+                schemaVersion = 1,
+                contentType = "application/json",
+                contentEncoding = "gzip",
+                responseBody = gzipData,
+                originalSize = resultJson.toByteArray().size,
+                compressedSize = gzipData.size,
+                hash = hash,
+                status = "SUCCESS",
+            ),
+        )
+
+        val eventPayload = objectMapper.writeValueAsString(
+            mapOf(
+                "jobId" to jobId.toString(),
+                "characterId" to characterId,
+                "presetNo" to presetNo,
+                "contentEncoding" to "gzip",
+                "schemaVersion" to 1,
+            ),
+        )
+        outboxPort.insertIfAbsent("CALCULATION_COMPLETED", jobId, eventPayload)
+
+        jobPort.unlock(jobId)
+        log.info("[jobId={}] Calculation completed with result saved", jobId)
+        return true
+    }
+
+    @Transactional
     fun handleCalculationFailure(jobId: UUID, errorCode: String, errorMessage: String) {
         val job = jobPort.findJobById(jobId) ?: return
 

@@ -4,6 +4,7 @@ import java.util.UUID
 import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
+import maple.expectation.core.port.out.QueueNames
 import maple.expectation.core.port.out.mq.DomainEventAppender
 import maple.expectation.infrastructure.mq.event.NexonApiRequestEventFactory
 import maple.expectation.infrastructure.mq.event.NexonApiResponseEventFactory
@@ -13,6 +14,8 @@ import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.persistence.repository.CalculationSnapshotRepository
+import maple.expectation.infrastructure.pgmq.ExternalApiJobPayload
+import maple.expectation.infrastructure.pgmq.PgmqClient
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -21,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional
 class CalculationJobService(
     private val jobPort: CalculationJobPort,
     private val eventAppender: DomainEventAppender,
+    private val pgmqClient: PgmqClient,
     private val ocidResolveTopic: OcidResolveTopic,
     private val nexonApiRequestTopic: NexonApiRequestTopic,
     private val nexonApiResponseTopic: NexonApiResponseTopic,
@@ -121,5 +125,45 @@ class CalculationJobService(
                 log.info("[jobId={}] OCID resolve retry (attempt {}): {}", jobId, job.retryCount + 1, errorCode)
             }
         }
+    }
+
+    // ===== Consolidated Pipeline Methods (ExternalApiWorker) =====
+
+    @Transactional
+    fun dispatchToExternalApi(jobId: UUID, userIgn: String, presetNo: Int) {
+        val transitioned = jobPort.transitionStatus(
+            jobId,
+            CalculationJobStatus.REQUESTED,
+            CalculationJobStatus.OCID_RESOLVING,
+        )
+        if (!transitioned) {
+            log.warn("[jobId={}] Cannot transition to OCID_RESOLVING", jobId)
+            return
+        }
+
+        pgmqClient.send(QueueNames.EXTERNAL_API, ExternalApiJobPayload(jobId.toString(), userIgn, presetNo))
+        log.info("[jobId={}] Dispatched to consolidated external API pipeline", jobId)
+    }
+
+    @Transactional
+    fun resolveOcidInPlace(jobId: UUID, ocid: String): Boolean = jobPort.resolveOcidAndTransition(jobId, ocid)
+
+    @Transactional
+    fun saveSnapshotInPlace(snapshotEntity: CalculationSnapshotEntity): CalculationSnapshotEntity = snapshotRepository.save(snapshotEntity)
+
+    @Transactional
+    fun markSnapshotReadyInPlace(jobId: UUID, snapshotId: UUID): Boolean = jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)
+
+    @Transactional
+    fun retryExternalApiJob(jobId: UUID) {
+        val job = jobPort.findJobById(jobId) ?: return
+        if (job.retryCount >= job.maxRetries) {
+            jobPort.markFailed(jobId, "EXTERNAL_API_ERROR", "Max retries exceeded")
+            log.warn("[jobId={}] External API failed after {} retries", jobId, job.retryCount)
+            return
+        }
+        jobPort.incrementRetry(jobId, "EXTERNAL_API_ERROR")
+        pgmqClient.send(QueueNames.EXTERNAL_API, ExternalApiJobPayload(job.jobId.toString(), job.userIgn, job.presetNo))
+        log.info("[jobId={}] External API retry scheduled (attempt {})", jobId, job.retryCount + 1)
     }
 }

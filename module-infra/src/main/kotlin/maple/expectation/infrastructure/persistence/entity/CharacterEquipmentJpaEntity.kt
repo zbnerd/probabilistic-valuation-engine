@@ -26,7 +26,6 @@ open class CharacterEquipmentJpaEntity {
     open var ocid: String? = null
 
     @Convert(converter = GzipStringConverter::class)
-    @Lob
     @Column(columnDefinition = "BYTEA", nullable = false)
     open var jsonContent: String? = null
 

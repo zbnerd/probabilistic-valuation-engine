@@ -12,6 +12,9 @@ object QueueNames {
     /** Low priority expectation calculation queue (batch/scheduled updates) */
     const val EXPECTATION_CALC_LOW = "expectation_calc_low"
 
+    /** Consolidated external API pipeline (OCID resolve + equipment fetch + calculation) */
+    const val EXTERNAL_API = "external_api_queue"
+
     const val NEXON_API_REQUEST = "nexon_api_request_queue"
     const val NEXON_API_RESPONSE = "nexon_api_response_queue"
     const val OCID_RESOLVE = "ocid_resolve_queue"

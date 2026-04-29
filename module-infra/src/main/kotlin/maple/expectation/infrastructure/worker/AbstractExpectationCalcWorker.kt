@@ -60,8 +60,8 @@ abstract class AbstractExpectationCalcWorker(
         return executor.executeOrDefault({
             workerLog.info("[{}] Creating job: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
             val job = jobService.createJob(null, request.userIgn, request.presetNo)
-            jobService.requestOcidResolve(job.jobId, request.userIgn, request.presetNo)
-            workerLog.info("[{}] Job created with async OCID resolve: jobId={}", workerName, job.jobId)
+            jobService.dispatchToExternalApi(job.jobId, request.userIgn, request.presetNo)
+            workerLog.info("[{}] Job dispatched to external API pipeline: jobId={}", workerName, job.jobId)
             true
         }, false, context)
     }

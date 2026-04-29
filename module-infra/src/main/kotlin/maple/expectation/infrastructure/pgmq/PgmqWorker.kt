@@ -454,6 +454,7 @@ abstract class PgmqWorker<T : Any>(
             finallyBlock = {
                 metrics.concurrentDecrement()
                 metrics.inflightDecrement()
+                inflightPermits.release()
             },
             context = context,
         )

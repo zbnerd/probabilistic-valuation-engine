@@ -101,8 +101,9 @@ class Issues637To644E2ETest {
             characterCreationService,
             null); // CharacterAsyncService
 
-    gameCharacterFacade =
-        new GameCharacterFacade(gameCharacterService, executor, characterCreationListener);
+    gameCharacterFacade = new GameCharacterFacade(gameCharacterService, executor);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        gameCharacterFacade, "characterCreationListener", characterCreationListener);
 
     ocidResolver =
         new OcidResolver(gameCharacterRepository, characterCreationService, cacheManager, executor);
@@ -533,8 +534,7 @@ class Issues637To644E2ETest {
     void facadeShouldDelegateToService() {
       // given - Create a mocked service for this test
       GameCharacterService mockService = mock(GameCharacterService.class);
-      GameCharacterFacade testFacade =
-          new GameCharacterFacade(mockService, executor, characterCreationListener);
+      GameCharacterFacade testFacade = new GameCharacterFacade(mockService, executor);
 
       String userIgn = "testCharacter";
       given(mockService.isNonExistent(userIgn)).willReturn(false);

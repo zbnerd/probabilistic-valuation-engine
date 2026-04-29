@@ -18,9 +18,11 @@ import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiRequestTopic
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
 @Component
+@ConditionalOnProperty(name = ["app.worker.legacy-pipeline.enabled"], havingValue = "true", matchIfMissing = false)
 class NexonApiWorker(
     private val nexonApiRequestTopic: NexonApiRequestTopic,
     private val snapshotStore: SnapshotObjectStore,

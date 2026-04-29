@@ -16,6 +16,7 @@ import org.postgresql.PGConnection
 import org.postgresql.PGNotification
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
 /**
@@ -30,9 +31,13 @@ import org.springframework.stereotype.Component
  * GameCharacterFacade에서 waitForCharacterCreation(userIgn) 호출하여
  * 비동기 대기 (Thread.sleep 제거)
  *
+ * <p>pgBouncer(Supabase)에서는 LISTEN/NOTIFY 미지원으로 인해 비활성화 필요.
+ * PGMQ 기반으로 전환 예정.
+ *
  * @see CharacterCreationNotifier
  */
 @Component
+@ConditionalOnProperty(name = ["app.character.creation.listen-enabled"], havingValue = "true", matchIfMissing = false)
 class CharacterCreationListener(
     private val dataSource: DataSource,
     private val executor: LogicExecutor,

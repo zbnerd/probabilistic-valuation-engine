@@ -14,8 +14,8 @@ spring:
     driver-class-name: org.postgresql.Driver
 
     hikari:
-      maximum-pool-size: 100
-      minimum-idle: 50
+      maximum-pool-size: 15
+      minimum-idle: 5
       # P2 Unit 5: Connection leak detection - log warning if connection held > 60s
       leak-detection-threshold: 60000
       # P2 Unit 7: JMX monitoring for HikariCP metrics (connections, pending, latency)
@@ -77,6 +77,11 @@ cube:
 cache:
   l2:
     enabled: false
+
+# Supabase pooler 호환: Lock pool 축소
+lock:
+  datasource:
+    pool-size: 5
 
 # Rate Limiting 비활성화 (부하 테스트용)
 ratelimit:
@@ -187,6 +192,8 @@ pgmq:
     expectation-calc-high:
       enabled: true
     expectation-calc-low:
+      enabled: true
+    external-api:
       enabled: true
 
 # Bulk Loading Configuration (Issue #611)

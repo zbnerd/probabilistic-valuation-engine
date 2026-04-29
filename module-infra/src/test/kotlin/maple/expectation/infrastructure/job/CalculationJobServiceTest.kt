@@ -5,10 +5,7 @@ import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CalculationResultPort
 import maple.expectation.core.port.out.OutboxEventPort
 import maple.expectation.core.port.out.mq.DomainEventAppender
-import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
-import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiRequestTopic
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
-import maple.expectation.infrastructure.persistence.repository.CalculationSnapshotRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -24,29 +21,23 @@ import org.mockito.Mock
 import java.util.UUID
 
 @ExtendWith(MockitoExtension::class)
-class CalculationJobServiceTest {
+class CalculationExecutionServiceTest {
 
     @Mock lateinit var jobPort: CalculationJobPort
     @Mock lateinit var eventAppender: DomainEventAppender
+    @Mock lateinit var nexonApiResponseTopic: NexonApiResponseTopic
     @Mock lateinit var resultPort: CalculationResultPort
     @Mock lateinit var outboxPort: OutboxEventPort
-    @Mock lateinit var snapshotRepository: CalculationSnapshotRepository
-    @Mock lateinit var ocidResolveTopic: OcidResolveTopic
-    @Mock lateinit var nexonApiRequestTopic: NexonApiRequestTopic
-    @Mock lateinit var nexonApiResponseTopic: NexonApiResponseTopic
     private val objectMapper = ObjectMapper()
 
-    private lateinit var service: CalculationJobService
+    private lateinit var service: CalculationExecutionService
 
     @BeforeEach
     fun setUp() {
-        service = CalculationJobService(
+        service = CalculationExecutionService(
             jobPort = jobPort,
             eventAppender = eventAppender,
-            ocidResolveTopic = ocidResolveTopic,
-            nexonApiRequestTopic = nexonApiRequestTopic,
             nexonApiResponseTopic = nexonApiResponseTopic,
-            snapshotRepository = snapshotRepository,
             resultPort = resultPort,
             outboxPort = outboxPort,
             objectMapper = objectMapper

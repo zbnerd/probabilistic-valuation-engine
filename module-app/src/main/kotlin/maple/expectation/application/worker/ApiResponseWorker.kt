@@ -8,7 +8,7 @@ import maple.expectation.core.port.out.mq.ConsumeResult
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.job.CalculationJobService
+import maple.expectation.infrastructure.job.CalculationExecutionService
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
@@ -20,7 +20,7 @@ class ApiResponseWorker(
     private val nexonApiResponseTopic: NexonApiResponseTopic,
     private val pureCalculator: PureExpectationCalculator,
     private val jobPort: CalculationJobPort,
-    private val jobService: CalculationJobService,
+    private val executionService: CalculationExecutionService,
     private val calculationInputPort: CalculationInputPort,
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor
@@ -45,7 +45,7 @@ class ApiResponseWorker(
             { e ->
                 log.error("[jobId={}] Calculation failed: {}", jobId, e.message)
                 val msg = (e.message ?: "Unknown error").take(200)
-                executor.executeVoid({ jobService.handleCalculationFailure(jobId, "CALCULATION_ERROR", msg) }, context)
+                executor.executeVoid({ executionService.handleCalculationFailure(jobId, "CALCULATION_ERROR", msg) }, context)
                 ConsumeResult.Ack
             },
             context
@@ -70,7 +70,7 @@ class ApiResponseWorker(
             return ConsumeResult.Ack
         }
 
-        val started = jobService.startCalculation(jobId, "ApiResponseWorker")
+        val started = executionService.startCalculation(jobId, "ApiResponseWorker")
         if (!started) {
             log.warn("[jobId={}] Could not start calculation, archiving", jobId)
             return ConsumeResult.Ack
@@ -90,7 +90,7 @@ class ApiResponseWorker(
 
         val resultJson = objectMapper.writeValueAsString(result)
 
-        jobService.completeCalculationWithResult(
+        executionService.completeCalculationWithResult(
             jobId = jobId,
             resultJson = resultJson,
             characterClass = input.characterClass,

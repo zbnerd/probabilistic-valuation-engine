@@ -203,17 +203,6 @@ class CharacterViewQueryServicePostgres(
         fromCache = entity.fromCache,
     )
 
-    /** Delete by user IGN (for invalidation) */
-    @Transactional("transactionManager")
-    fun deleteByUserIgn(userIgn: String) {
-        val context = TaskContext.of("PostgresQuery", "Delete", userIgn)
-
-        executor.executeVoid(
-            { repository.deleteByUserIgn(userIgn) },
-            context,
-        )
-    }
-
     /** Delete all documents (for testing) */
     @Transactional("transactionManager")
     fun deleteAll() {

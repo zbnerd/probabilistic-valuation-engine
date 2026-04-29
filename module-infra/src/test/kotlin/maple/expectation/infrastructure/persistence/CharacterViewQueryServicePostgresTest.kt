@@ -205,16 +205,6 @@ class CharacterViewQueryServicePostgresTest {
     }
 
     @Test
-    @DisplayName("deleteByUserIgn은 repository에 위임한다")
-    fun deleteByUserIgn_delegatesToRepository() {
-        val userIgn = "testUser"
-
-        service.deleteByUserIgn(userIgn)
-
-        verify(repository).deleteByUserIgn(userIgn)
-    }
-
-    @Test
     @DisplayName("upsertFromCalculation은 JSON을 파싱하여 entity를 저장한다")
     fun upsertFromCalculation_parsesJsonAndSaves() {
         val userIgn = "testUser"

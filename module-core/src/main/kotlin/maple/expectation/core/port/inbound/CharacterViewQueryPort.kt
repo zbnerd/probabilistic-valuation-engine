@@ -24,13 +24,6 @@ interface CharacterViewQueryPort {
     fun findByUserIgn(userIgn: String): Optional<CharacterView>
 
     /**
-     * 캐릭터 삭제 (Cache Invalidation)
-     *
-     * @param userIgn 캐릭터 IGN
-     */
-    fun deleteByUserIgn(userIgn: String)
-
-    /**
      * V5 CQRS Write: 워커 계산 결과를 뷰 테이블에 upsert
      *
      * <p>Two-phase batch path에서 뷰 테이블 동기화용 (TODO #727 해결)

@@ -2,12 +2,10 @@ package maple.expectation.infrastructure.worker
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
-import java.util.concurrent.Executor
 import maple.expectation.core.port.inbound.BatchComputeBuffer
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CharacterOcidPort
-import maple.expectation.core.port.out.EquipmentFanOutPort
 import maple.expectation.core.port.out.GameCharacterPort
 import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
 import maple.expectation.infrastructure.config.CacheProperties
@@ -36,8 +34,6 @@ abstract class AbstractExpectationCalcWorker(
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val expectationPort: ExpectationV4Port,
     private val characterOcidPort: CharacterOcidPort,
-    private val equipmentFanOutPort: EquipmentFanOutPort,
-    private val preWarmExecutor: Executor,
     // Two-phase batch processing dependencies
     private val gameCharacterPort: GameCharacterPort,
     private val l2CacheStrategy: L2CacheStrategy,
@@ -56,10 +52,6 @@ abstract class AbstractExpectationCalcWorker(
     protected abstract val workerLog: Logger
 
     override val supportsTwoPhase: Boolean = false
-
-    override fun preWarmBatch(messages: List<PgmqMessage<ExpectationCalcMessage>>) {
-        // No-op: equipment pre-warm moved to async pipeline (NexonApiWorker + Cache Bridge)
-    }
 
     override fun process(message: PgmqMessage<ExpectationCalcMessage>): Boolean {
         val request = message.payload

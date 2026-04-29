@@ -68,7 +68,6 @@ abstract class PgmqWorker<T : Any>(
 
     /** Sequential batch buffer — accumulates messages for [sequentialBatchMs] before processing */
     private val accumulationBuffer = AccumulationBuffer<T>(config.common.sequentialBatchMs)
-
     private val pollCounter = java.util.concurrent.atomic.AtomicInteger(0)
 
     /** Convenience: sequential batch window from config */

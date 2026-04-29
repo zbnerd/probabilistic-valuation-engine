@@ -8,6 +8,7 @@ import java.util.UUID
 import maple.expectation.core.dto.v4.CalculationInput
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.model.snapshot.CalculationSnapshot
+import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.PureCalculationPort
@@ -61,6 +62,7 @@ class ExternalApiWorker(
     private val calculationInputPort: CalculationInputPort,
     private val pureCalculationPort: PureCalculationPort,
     private val jobPort: CalculationJobPort,
+    private val viewQueryPort: CharacterViewQueryPort,
     private val executionService: CalculationExecutionService,
 ) : PgmqWorker<ExternalApiJobPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
 
@@ -182,6 +184,20 @@ class ExternalApiWorker(
             characterClass = input.characterClass,
             presetNo = payload.presetNo,
             characterId = ocid,
+        )
+
+        // Step 5: Inline view projection (skip outbox → relay → topic → projection chain)
+        val presetsJson = objectMapper.writeValueAsString(calcResult.presets)
+        viewQueryPort.upsertFromCalculation(
+            userIgn = payload.userIgn,
+            messageId = jobId.toString(),
+            characterOcid = ocid,
+            characterClass = input.characterClass,
+            characterLevel = null,
+            totalExpectedCost = calcResult.totalExpectedCost.toLong(),
+            maxPresetNo = calcResult.maxPresetNo,
+            presetNo = payload.presetNo,
+            presetsJson = presetsJson,
         )
 
         log.info("[jobId={}] Pipeline completed", jobId)

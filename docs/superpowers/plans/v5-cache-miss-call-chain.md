@@ -61,7 +61,18 @@ private fun processPostgreSQLCacheFirstLookup(userIgn: String, presetNo: Int): R
 
 interface CharacterViewQueryPort {
     fun findByUserIgn(userIgn: String): Optional<CharacterView>
-    // ...
+
+    fun upsertFromCalculation(
+        userIgn: String,
+        messageId: String?,
+        characterOcid: String?,
+        characterClass: String?,
+        characterLevel: Int?,
+        totalExpectedCost: Long,
+        maxPresetNo: Int,
+        presetNo: Int,
+        presetsJson: String,
+    )
 }
 ```
 
@@ -112,12 +123,34 @@ private fun findByUserIgnEntity(userIgn: String): CharacterValuationViewEntity? 
 // module-core/src/main/kotlin/maple/expectation/core/port/inbound/ExecutorPort.kt
 
 interface ExecutorPort {
+    fun executeVoid(task: () -> Unit, context: TaskContext)
+
     fun <T> executeOrDefault(
         task: () -> T,
         defaultValue: T,
         context: TaskContext,
     ): T
-    // ...
+
+    fun executeVoidJava(task: Runnable, context: TaskContext)
+
+    fun <T> executeOrDefaultJava(
+        task: ThrowingSupplier<T>,
+        defaultValue: T,
+        context: TaskContext,
+    ): T
+
+    fun <T> execute(task: () -> T, context: TaskContext): T
+
+    fun <T> executeWithTranslation(
+        task: () -> T,
+        translator: (Throwable, TaskContext) -> Exception,
+        context: TaskContext,
+    ): T
+
+    fun interface ThrowingSupplier<T> {
+        @Throws(Throwable::class)
+        fun get(): T
+    }
 }
 ```
 
@@ -246,7 +279,20 @@ private TaskReceipt enqueue(ExpectationCalculationTask task) {
 
 interface CalculationJobPort {
     fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob
-    // ...
+    fun findJobById(jobId: UUID): CalculationJob?
+    fun transitionStatus(jobId: UUID, from: CalculationJobStatus, to: CalculationJobStatus): Boolean
+    fun markSnapshotReady(jobId: UUID, snapshotId: UUID, from: CalculationJobStatus): Boolean
+    fun markFailed(jobId: UUID, errorCode: String, errorMessage: String): Boolean
+    fun incrementRetry(jobId: UUID, errorCode: String): Boolean
+    fun incrementRetryForOcid(jobId: UUID, errorCode: String): Boolean
+    fun retryCalculation(jobId: UUID, errorCode: String, nextRetryAt: Instant): Boolean
+    fun lockForProcessing(jobId: UUID, workerId: String, from: CalculationJobStatus): Boolean
+    fun unlock(jobId: UUID): Boolean
+    fun findStaleJobs(status: CalculationJobStatus, olderThanSeconds: Long): List<CalculationJob>
+    fun findJobsByIds(ids: List<UUID>): List<CalculationJob>
+    fun findActiveJobByUserIgn(userIgn: String, presetNo: Int): CalculationJob?
+    fun resolveOcidAndTransition(jobId: UUID, ocid: String): Boolean
+    fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID>
 }
 ```
 
@@ -296,7 +342,9 @@ override fun transitionStatus(jobId: UUID, from: CalculationJobStatus, to: Calcu
 
 interface PgmqPort {
     fun send(queueName: String, message: Any): Long
-    // ...
+    fun queueLength(queueName: String): Long
+    fun findActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long?
+    fun sendIfAbsent(queueName: String, userIgn: String, payload: Any): Long
 }
 ```
 
@@ -645,7 +693,14 @@ private fun resolveOcid(jobId: UUID, userIgn: String): String {
 
 interface CharacterOcidPort {
     fun resolveOcid(userIgn: String): String?
-    // ...
+
+    fun resolveOcids(userIgns: Set<String>): Map<String, String>
+
+    fun resolveAllOcids(): Map<String, String>
+
+    fun resolveOcidsByFingerprint(fingerprint: String): Set<String>
+
+    fun updateFingerprint(ocid: String, fingerprint: String, accountId: String): Int
 }
 ```
 

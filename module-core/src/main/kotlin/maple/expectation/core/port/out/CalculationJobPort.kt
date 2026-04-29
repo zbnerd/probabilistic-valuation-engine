@@ -17,6 +17,7 @@ interface CalculationJobPort {
     fun lockForProcessing(jobId: UUID, workerId: String, from: CalculationJobStatus): Boolean
     fun unlock(jobId: UUID): Boolean
     fun findStaleJobs(status: CalculationJobStatus, olderThanSeconds: Long): List<CalculationJob>
+    fun findJobsByIds(ids: List<UUID>): List<CalculationJob>
     fun findActiveJobByUserIgn(userIgn: String, presetNo: Int): CalculationJob?
     fun resolveOcidAndTransition(jobId: UUID, ocid: String): Boolean
     fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID>

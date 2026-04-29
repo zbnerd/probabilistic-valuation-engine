@@ -7,6 +7,8 @@ import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.infrastructure.persistence.entity.CalculationJobEntity
 import maple.expectation.infrastructure.persistence.repository.CalculationJobRepository
+import org.slf4j.LoggerFactory
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -16,6 +18,8 @@ class CalculationJobPortAdapter(
     private val jobRepository: CalculationJobRepository,
     private val jdbc: NamedParameterJdbcTemplate,
 ) : CalculationJobPort {
+
+    private val log = LoggerFactory.getLogger(CalculationJobPortAdapter::class.java)
 
     override fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob {
         val existing = jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)
@@ -27,12 +31,18 @@ class CalculationJobPortAdapter(
             }
         }
 
-        val entity = CalculationJobEntity(
-            ocid = ocid,
-            userIgn = userIgn,
-            presetNo = presetNo,
-        )
-        return jobRepository.save(entity).toDomain()
+        return try {
+            val entity = CalculationJobEntity(
+                ocid = ocid,
+                userIgn = userIgn,
+                presetNo = presetNo,
+            )
+            jobRepository.save(entity).toDomain()
+        } catch (ex: DataIntegrityViolationException) {
+            log.info("[createJob] Constraint violation on dedup index, returning existing job: userIgn={}, presetNo={}", userIgn, presetNo)
+            jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)?.toDomain()
+                ?: throw ex
+        }
     }
 
     override fun findJobById(jobId: UUID): CalculationJob? = jobRepository.findById(jobId).map { it.toDomain() }.orElseGet { null }
@@ -69,6 +79,8 @@ class CalculationJobPortAdapter(
         val cutoff = Instant.now().minusSeconds(olderThanSeconds)
         return jobRepository.findStaleJobs(status.name, cutoff).map { it.toDomain() }
     }
+
+    override fun findJobsByIds(ids: List<UUID>): List<CalculationJob> = jobRepository.findAllById(ids).map { it.toDomain() }
 
     override fun findActiveJobByUserIgn(userIgn: String, presetNo: Int): CalculationJob? = jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)?.toDomain()
 

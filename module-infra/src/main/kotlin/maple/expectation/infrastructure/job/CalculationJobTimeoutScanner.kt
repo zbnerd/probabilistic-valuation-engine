@@ -23,35 +23,69 @@ class CalculationJobTimeoutScanner(
         val context = TaskContext.of("TimeoutScanner", "Scan", "stale_jobs")
 
         executor.executeVoid({
-            val staleOcidResolving = jobPort.findStaleJobs(CalculationJobStatus.OCID_RESOLVING, 120)
-                .take(maxBatchSize)
-            for (job in staleOcidResolving) {
-                val current = jobPort.findJobById(job.jobId)
-                if (current != null && current.status == CalculationJobStatus.OCID_RESOLVING) {
-                    jobService.retryExternalApiJob(job.jobId)
-                    log.warn("[jobId={}] Timeout: OCID_RESOLVING stale >120s, retried via consolidated queue", job.jobId)
-                }
-            }
-
-            val staleApiRequested = jobPort.findStaleJobs(CalculationJobStatus.API_REQUESTED, 300)
-                .take(maxBatchSize)
-            for (job in staleApiRequested) {
-                val current = jobPort.findJobById(job.jobId)
-                if (current != null && current.status == CalculationJobStatus.API_REQUESTED) {
-                    jobService.retryExternalApiJob(job.jobId)
-                    log.warn("[jobId={}] Timeout: API_REQUESTED stale >300s, retried via consolidated queue", job.jobId)
-                }
-            }
-
-            val staleRetrying = jobPort.findStaleJobs(CalculationJobStatus.RETRYING, 180)
-                .take(maxBatchSize)
-            for (job in staleRetrying) {
-                val current = jobPort.findJobById(job.jobId)
-                if (current != null && current.status == CalculationJobStatus.RETRYING) {
-                    jobService.retryExternalApiJob(job.jobId)
-                    log.warn("[jobId={}] Timeout: RETRYING stale >180s, retried via consolidated queue", job.jobId)
-                }
-            }
+            scanOcidResolving()
+            scanApiRequested()
+            scanRetrying()
         }, context)
+    }
+
+    private fun scanOcidResolving() {
+        val candidates = jobPort.findStaleJobs(CalculationJobStatus.OCID_RESOLVING, 120)
+            .take(maxBatchSize)
+        if (candidates.isEmpty()) return
+
+        val currentJobs = jobPort.findJobsByIds(candidates.map { it.jobId })
+        for (job in currentJobs) {
+            if (job.status != CalculationJobStatus.OCID_RESOLVING) continue
+            if (job.retryCount >= job.maxRetries) {
+                jobPort.markFailed(job.jobId, "OCID_RESOLVE_TIMEOUT", "Max retries exceeded")
+                log.warn("[jobId={}] Marked failed: OCID_RESOLVING max retries ({}) exhausted", job.jobId, job.maxRetries)
+                continue
+            }
+            val retried = jobService.retryOcidResolvingJob(job.jobId, job.userIgn, job.presetNo)
+            if (retried) {
+                log.warn("[jobId={}] OCID_RESOLVING stale >120s, retried (attempt {})", job.jobId, job.retryCount + 1)
+            }
+        }
+    }
+
+    private fun scanApiRequested() {
+        val candidates = jobPort.findStaleJobs(CalculationJobStatus.API_REQUESTED, 300)
+            .take(maxBatchSize)
+        if (candidates.isEmpty()) return
+
+        val currentJobs = jobPort.findJobsByIds(candidates.map { it.jobId })
+        for (job in currentJobs) {
+            if (job.status != CalculationJobStatus.API_REQUESTED) continue
+            if (job.retryCount >= job.maxRetries) {
+                jobPort.markFailed(job.jobId, "API_TIMEOUT", "Max retries exceeded")
+                log.warn("[jobId={}] Marked failed: API_REQUESTED max retries ({}) exhausted", job.jobId, job.maxRetries)
+                continue
+            }
+            val retried = jobService.retryApiRequestedJob(job.jobId, job.userIgn, job.presetNo)
+            if (retried) {
+                log.warn("[jobId={}] API_REQUESTED stale >300s, retried (attempt {})", job.jobId, job.retryCount + 1)
+            }
+        }
+    }
+
+    private fun scanRetrying() {
+        val candidates = jobPort.findStaleJobs(CalculationJobStatus.RETRYING, 180)
+            .take(maxBatchSize)
+        if (candidates.isEmpty()) return
+
+        val currentJobs = jobPort.findJobsByIds(candidates.map { it.jobId })
+        for (job in currentJobs) {
+            if (job.status != CalculationJobStatus.RETRYING) continue
+            if (job.retryCount >= job.maxRetries) {
+                jobPort.markFailed(job.jobId, "RETRY_TIMEOUT", "Max retries exceeded")
+                log.warn("[jobId={}] Marked failed: RETRYING max retries ({}) exhausted", job.jobId, job.maxRetries)
+                continue
+            }
+            val retried = jobService.retryApiRequestedJob(job.jobId, job.userIgn, job.presetNo)
+            if (retried) {
+                log.warn("[jobId={}] RETRYING stale >180s, retried (attempt {})", job.jobId, job.retryCount + 1)
+            }
+        }
     }
 }

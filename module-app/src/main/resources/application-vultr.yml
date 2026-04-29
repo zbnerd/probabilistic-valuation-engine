@@ -72,7 +72,7 @@ app:
 pgmq:
   worker:
     expectation-calc-high:
-      enabled: true
+      enabled: false  # bypassed: Controller dispatches directly to external_api_queue
     expectation-calc-low:
       enabled: true
 

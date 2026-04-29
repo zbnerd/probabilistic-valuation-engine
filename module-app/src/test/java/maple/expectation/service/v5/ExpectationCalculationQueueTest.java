@@ -10,18 +10,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Instant;
+import java.util.UUID;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
 import maple.expectation.application.service.expectation.queue.QueuePriority;
 import maple.expectation.common.function.ThrowingSupplier;
+import maple.expectation.core.model.job.CalculationJob;
+import maple.expectation.core.model.job.CalculationJobStatus;
 import maple.expectation.core.port.inbound.TaskReceipt;
+import maple.expectation.core.port.out.CalculationJobPort;
 import maple.expectation.core.port.out.PgmqPort;
-import maple.expectation.infrastructure.executor.CheckedLogicExecutor;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.executor.function.CheckedRunnable;
-import maple.expectation.infrastructure.executor.function.CheckedSupplier;
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,168 +30,123 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("unit")
-@DisplayName("V5 CQRS: Priority Queue Tests (PGMQ)")
+@DisplayName("V5: Direct Dispatch Queue Tests")
 class ExpectationCalculationQueueTest {
 
   private LogicExecutor executor;
-  private CheckedLogicExecutor checkedExecutor;
   private PgmqPort pgmqPort;
+  private CalculationJobPort jobPort;
   private ExpectationCalculationQueue queue;
 
   @BeforeEach
   void setUp() {
     executor = new TestLogicExecutor();
-    checkedExecutor = new TestCheckedLogicExecutor();
     pgmqPort = mock(PgmqPort.class);
-    queue = new ExpectationCalculationQueue(pgmqPort, executor, 10_000, 1_000);
+    jobPort = mock(CalculationJobPort.class);
+    queue = new ExpectationCalculationQueue(pgmqPort, jobPort, executor);
   }
 
   @Test
-  @DisplayName("offer()는 PGMQ 큐에 메시지를 발행함")
-  void offerSendsToPgmq() {
-    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
-    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
+  @DisplayName("offer() creates job and dispatches to external_api_queue")
+  void offerCreatesJobAndDispatches() {
+    UUID jobId = UUID.randomUUID();
+    CalculationJob job = mockJob(jobId, CalculationJobStatus.REQUESTED);
+    when(jobPort.createJob(null, "user1", 1)).thenReturn(job);
+    when(jobPort.transitionStatus(
+            jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
+        .thenReturn(true);
+    when(pgmqPort.send(eq("external_api_queue"), any())).thenReturn(1L);
 
     ExpectationCalculationTask highTask = ExpectationCalculationTask.highPriority("user1", false);
     assertThat(queue.offer(highTask)).isTrue();
+
+    verify(jobPort).createJob(null, "user1", 1);
+    verify(pgmqPort).send(eq("external_api_queue"), any());
   }
 
   @Test
-  @DisplayName("HIGH 우선순위와 LOW 우선순위 모두 offer 가능")
-  void offerBothPriorities() {
-    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
-    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
+  @DisplayName("existing active job is returned without re-dispatching")
+  void existingActiveJobReturnedWithoutDispatch() {
+    UUID jobId = UUID.randomUUID();
+    CalculationJob job = mockJob(jobId, CalculationJobStatus.OCID_RESOLVING);
+    when(jobPort.createJob(null, "user1", 1)).thenReturn(job);
 
-    ExpectationCalculationTask highTask = ExpectationCalculationTask.highPriority("user1", false);
-    ExpectationCalculationTask lowTask = ExpectationCalculationTask.lowPriority("user2");
+    ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user1", false);
+    assertThat(queue.offer(task)).isTrue();
 
-    assertThat(queue.offer(highTask)).isTrue();
-    assertThat(queue.offer(lowTask)).isTrue();
+    verify(jobPort).createJob(null, "user1", 1);
+    verify(jobPort, never()).transitionStatus(any(), any(), any());
+    verify(pgmqPort, never()).send(anyString(), any());
   }
 
   @Test
-  @DisplayName("이미 활성 task가 있으면 non-force 요청은 기존 taskId를 재사용")
-  void offerWithReceiptReusesExistingTaskForNonForceRequests() {
-    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
-    when(pgmqPort.sendIfAbsent(eq("expectation_calc_high"), eq("user1:1"), any())).thenReturn(-99L);
+  @DisplayName("offerWithReceipt returns job ID as taskId")
+  void offerWithReceiptReturnsJobId() {
+    UUID jobId = UUID.randomUUID();
+    CalculationJob job = mockJob(jobId, CalculationJobStatus.REQUESTED);
+    when(jobPort.createJob(null, "user1", 1)).thenReturn(job);
+    when(jobPort.transitionStatus(
+            jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
+        .thenReturn(true);
+    when(pgmqPort.send(eq("external_api_queue"), any())).thenReturn(1L);
 
     TaskReceipt receipt =
         queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", false));
 
     assertThat(receipt.getQueued()).isTrue();
-    assertThat(receipt.getTaskId()).isEqualTo("99");
-    verify(pgmqPort, never()).send(anyString(), any());
+    assertThat(receipt.getTaskId()).isEqualTo(jobId.toString());
   }
 
   @Test
-  @DisplayName("force 요청은 기존 task가 있어도 새 메시지를 enqueue")
-  void offerWithReceiptEnqueuesFreshTaskForForceRequests() {
-    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
-    when(pgmqPort.findActiveMessageIdByUserIgn("expectation_calc_high", "user1")).thenReturn(99L);
-    when(pgmqPort.send(anyString(), any())).thenReturn(100L);
-
-    TaskReceipt receipt =
-        queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", true));
-
-    assertThat(receipt.getQueued()).isTrue();
-    assertThat(receipt.getTaskId()).isEqualTo("100");
-    verify(pgmqPort).send(eq("expectation_calc_high"), any());
-  }
-
-  @Test
-  @DisplayName("큐가 가득 차면 백프레셔로 reject")
-  void backpressureWhenQueueFull() {
-    when(pgmqPort.queueLength(anyString())).thenReturn(1000L);
-
-    ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user1", false);
-    boolean accepted = queue.offer(task);
-
-    assertThat(accepted).isFalse();
-  }
-
-  @Test
-  @DisplayName("큐가 가득 차지 않으면 수락")
-  void acceptedWhenQueueNotFull() {
-    when(pgmqPort.queueLength(anyString())).thenReturn(500L);
+  @DisplayName("addHighPriorityTask convenience method works")
+  void addHighPriorityTaskWorks() {
+    UUID jobId = UUID.randomUUID();
+    CalculationJob job = mockJob(jobId, CalculationJobStatus.REQUESTED);
+    when(jobPort.createJob(null, "user1", 1)).thenReturn(job);
+    when(jobPort.transitionStatus(
+            jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
+        .thenReturn(true);
     when(pgmqPort.send(anyString(), any())).thenReturn(1L);
 
-    ExpectationCalculationTask task = ExpectationCalculationTask.lowPriority("user1");
-    boolean accepted = queue.offer(task);
-
-    assertThat(accepted).isTrue();
+    assertThat(queue.addHighPriorityTask("user1", true)).isTrue();
   }
 
   @Test
-  @DisplayName("poll()은 UnsupportedOperationException 발생")
+  @DisplayName("addLowPriorityTask convenience method works")
+  void addLowPriorityTaskWorks() {
+    UUID jobId = UUID.randomUUID();
+    CalculationJob job = mockJob(jobId, CalculationJobStatus.REQUESTED);
+    when(jobPort.createJob(null, "user1", 1)).thenReturn(job);
+    when(jobPort.transitionStatus(
+            jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
+        .thenReturn(true);
+    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
+
+    assertThat(queue.addLowPriorityTask("user1")).isTrue();
+  }
+
+  @Test
+  @DisplayName("poll() throws UnsupportedOperationException")
   void pollThrowsUnsupportedOperation() {
     assertThatThrownBy(() -> queue.poll(QueuePriority.HIGH))
         .isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
-  @DisplayName("poll(timeout)은 UnsupportedOperationException 발생")
-  void pollWithTimeoutThrowsUnsupportedOperation() {
-    assertThatThrownBy(() -> queue.poll(QueuePriority.HIGH, 100))
-        .isInstanceOf(UnsupportedOperationException.class);
-  }
-
-  @Test
-  @DisplayName("complete()은 no-op으로 동작 (예외 없음)")
+  @DisplayName("complete() is no-op")
   void completeIsNoOp() {
     ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user1", false);
-    // Should not throw
     queue.complete(task);
   }
 
   @Test
-  @DisplayName("addHighPriorityTask 편의 메서드 동작")
-  void addHighPriorityTaskConvenienceMethod() {
-    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
-    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
-
-    boolean added = queue.addHighPriorityTask("user1", true);
-
-    assertThat(added).isTrue();
+  @DisplayName("size() returns 0 (deprecated)")
+  void sizeReturnsZero() {
+    assertThat(queue.size()).isEqualTo(0);
   }
 
   @Test
-  @DisplayName("addLowPriorityTask 편의 메서드 동작")
-  void addLowPriorityTaskConvenienceMethod() {
-    when(pgmqPort.queueLength(anyString())).thenReturn(0L);
-    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
-
-    boolean added = queue.addLowPriorityTask("user1");
-
-    assertThat(added).isTrue();
-  }
-
-  @Test
-  @DisplayName("size()는 PGMQ 큐 길이 합 반환")
-  void sizeReturnsPgmqQueueLengthSum() {
-    when(pgmqPort.queueLength("expectation_calc_high")).thenReturn(5L);
-    when(pgmqPort.queueLength("expectation_calc_low")).thenReturn(3L);
-
-    assertThat(queue.size()).isEqualTo(8);
-  }
-
-  @Test
-  @DisplayName("getHighPriorityCount()는 HIGH 큐 길이 반환")
-  void highPriorityCountReturnsHighQueueLength() {
-    when(pgmqPort.queueLength("expectation_calc_high")).thenReturn(5L);
-
-    assertThat(queue.getHighPriorityCount()).isEqualTo(5);
-  }
-
-  @Test
-  @DisplayName("getLowPriorityCount()는 LOW 큐 길이 반환")
-  void lowPriorityCountReturnsLowQueueLength() {
-    when(pgmqPort.queueLength("expectation_calc_low")).thenReturn(3L);
-
-    assertThat(queue.getLowPriorityCount()).isEqualTo(3);
-  }
-
-  @Test
-  @DisplayName("forceRecalculation 플래그 유지")
+  @DisplayName("forceRecalculation flag preserved")
   void forceRecalculationFlagPreserved() {
     ExpectationCalculationTask task1 = ExpectationCalculationTask.highPriority("user1", true);
     ExpectationCalculationTask task2 = ExpectationCalculationTask.highPriority("user2", false);
@@ -203,18 +158,7 @@ class ExpectationCalculationQueueTest {
   }
 
   @Test
-  @DisplayName("작업 생성 시간 설정 확인")
-  void taskCreatedAtSet() {
-    Instant beforeCreation = Instant.now();
-    ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user1", false);
-    Instant afterCreation = Instant.now();
-
-    assertThat(task.getCreatedAt()).isNotNull();
-    assertThat(task.getCreatedAt()).isBetween(beforeCreation, afterCreation);
-  }
-
-  @Test
-  @DisplayName("UUID 기반 taskId 생성 확인")
+  @DisplayName("UUID-based taskId generation")
   void taskIdIsUUID() {
     ExpectationCalculationTask task1 = ExpectationCalculationTask.highPriority("user1", false);
     ExpectationCalculationTask task2 = ExpectationCalculationTask.highPriority("user1", false);
@@ -225,7 +169,7 @@ class ExpectationCalculationQueueTest {
   }
 
   @Test
-  @DisplayName("Priority 순서: HIGH(0) < LOW(1)")
+  @DisplayName("Priority ordering: HIGH(0) < LOW(1)")
   void priorityOrdering() {
     ExpectationCalculationTask highTask = ExpectationCalculationTask.highPriority("user1", false);
     ExpectationCalculationTask lowTask = ExpectationCalculationTask.lowPriority("user2");
@@ -235,7 +179,15 @@ class ExpectationCalculationQueueTest {
     assertThat(lowTask.getPriority()).isEqualTo(QueuePriority.LOW);
   }
 
-  /** 테스트용 간단한 LogicExecutor 구현 */
+  private CalculationJob mockJob(UUID jobId, CalculationJobStatus status) {
+    CalculationJob job = mock(CalculationJob.class);
+    when(job.getJobId()).thenReturn(jobId);
+    when(job.getStatus()).thenReturn(status);
+    when(job.getUserIgn()).thenReturn("user1");
+    when(job.getPresetNo()).thenReturn(1);
+    return job;
+  }
+
   private static class TestLogicExecutor implements LogicExecutor {
     @Override
     public <T> T execute(ThrowingSupplier<T> task, TaskContext context) {
@@ -352,81 +304,6 @@ class ExpectationCalculationQueueTest {
     @Override
     public void executeVoidJava(Runnable task, String taskName) {
       executeVoidJava(task, TaskContext.of("Legacy", taskName));
-    }
-  }
-
-  /** 테스트용 간단한 CheckedLogicExecutor 구현 */
-  private static class TestCheckedLogicExecutor implements CheckedLogicExecutor {
-    @Override
-    public <T> T execute(CheckedSupplier<T> task, TaskContext context) throws Exception {
-      return task.get();
-    }
-
-    @Override
-    public void executeVoid(CheckedRunnable task, TaskContext context) throws Exception {
-      task.run();
-    }
-
-    @Override
-    public <T> T executeUnchecked(
-        CheckedSupplier<T> task,
-        TaskContext context,
-        java.util.function.Function<Exception, RuntimeException> mapper) {
-      try {
-        return task.get();
-      } catch (Exception e) {
-        throw mapper.apply(e);
-      }
-    }
-
-    @Override
-    public void executeUncheckedVoid(
-        CheckedRunnable task,
-        TaskContext context,
-        java.util.function.Function<Exception, RuntimeException> mapper) {
-      try {
-        task.run();
-      } catch (Exception e) {
-        throw mapper.apply(e);
-      }
-    }
-
-    @Override
-    public <T> T executeWithFinallyUnchecked(
-        CheckedSupplier<T> task,
-        CheckedRunnable finalizer,
-        TaskContext context,
-        java.util.function.Function<Exception, RuntimeException> mapper) {
-      try {
-        return task.get();
-      } catch (Exception e) {
-        throw mapper.apply(e);
-      } finally {
-        try {
-          finalizer.run();
-        } catch (Exception e) {
-          // ignore finalizer exception in test
-        }
-      }
-    }
-
-    @Override
-    public void executeWithFinallyUncheckedVoid(
-        CheckedRunnable task,
-        CheckedRunnable finalizer,
-        TaskContext context,
-        java.util.function.Function<Exception, RuntimeException> mapper) {
-      try {
-        task.run();
-      } catch (Exception e) {
-        throw mapper.apply(e);
-      } finally {
-        try {
-          finalizer.run();
-        } catch (Exception e) {
-          // ignore finalizer exception in test
-        }
-      }
     }
   }
 }

@@ -9,7 +9,7 @@ pgmq:
       batch-size: 10
       max-retries: 3
     expectation-calc-high:
-      enabled: true
+      enabled: false  # bypassed: Controller dispatches directly to external_api_queue
       polling-interval-ms: 100
       batch-size: 10
       max-retries: 3

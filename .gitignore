@@ -46,7 +46,6 @@ mysql_data/
 /redis_data/
 /logs/
 *.http
-/.claude/agents/
 /locust*.*
 
 # Python cache
@@ -67,8 +66,12 @@ scripts/*
 /docker/logs/mysql/slow.log
 /.claude/ralph-loop.local.md
 
+# Claude Code - ignore everything except rules and hooks
+.claude/*
+!.claude/rules/
+!.claude/hooks/
+
 # Claude Code OMC state files
-.claude/
 .omc/
 
 # Patch/build artifacts

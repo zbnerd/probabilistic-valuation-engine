@@ -130,6 +130,24 @@ class CalculationJobService(
     // ===== Consolidated Pipeline Methods (ExternalApiWorker) =====
 
     @Transactional
+    fun retryOcidResolvingJob(jobId: UUID, userIgn: String, presetNo: Int): Boolean {
+        val incremented = jobPort.incrementRetryForOcid(jobId, "OCID_RESOLVE_TIMEOUT")
+        if (incremented) {
+            pgmqClient.send(QueueNames.EXTERNAL_API, ExternalApiJobPayload(jobId.toString(), userIgn, presetNo))
+        }
+        return incremented
+    }
+
+    @Transactional
+    fun retryApiRequestedJob(jobId: UUID, userIgn: String, presetNo: Int): Boolean {
+        val incremented = jobPort.incrementRetry(jobId, "EXTERNAL_API_TIMEOUT")
+        if (incremented) {
+            pgmqClient.send(QueueNames.EXTERNAL_API, ExternalApiJobPayload(jobId.toString(), userIgn, presetNo))
+        }
+        return incremented
+    }
+
+    @Transactional
     fun dispatchToExternalApi(jobId: UUID, userIgn: String, presetNo: Int) {
         val transitioned = jobPort.transitionStatus(
             jobId,

@@ -11,6 +11,7 @@ import maple.expectation.core.model.snapshot.CalculationSnapshot
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
+import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.PureCalculationPort
 import maple.expectation.core.port.out.QueueNames
 import maple.expectation.core.port.out.SnapshotObjectStore
@@ -62,6 +63,7 @@ class ExternalApiWorker(
     private val calculationInputPort: CalculationInputPort,
     private val pureCalculationPort: PureCalculationPort,
     private val jobPort: CalculationJobPort,
+    private val ocidPort: CharacterOcidPort,
     private val viewQueryPort: CharacterViewQueryPort,
     private val executionService: CalculationExecutionService,
 ) : PgmqWorker<ExternalApiJobPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
@@ -186,24 +188,36 @@ class ExternalApiWorker(
             characterId = ocid,
         )
 
-        // Step 5: Inline view projection (skip outbox → relay → topic → projection chain)
-        val presetsJson = objectMapper.writeValueAsString(calcResult.presets)
-        viewQueryPort.upsertFromCalculation(
-            userIgn = payload.userIgn,
-            messageId = jobId.toString(),
-            characterOcid = ocid,
-            characterClass = input.characterClass,
-            characterLevel = null,
-            totalExpectedCost = calcResult.totalExpectedCost.toLong(),
-            maxPresetNo = calcResult.maxPresetNo,
-            presetNo = payload.presetNo,
-            presetsJson = presetsJson,
-        )
+        // Step 5: View projection — virtual thread fire-and-forget (outbox backstop guarantees eventual consistency)
+        Thread.ofVirtual().name("view-projection-$jobId").start {
+            try {
+                val presetsJson = objectMapper.writeValueAsString(calcResult.presets)
+                viewQueryPort.upsertFromCalculation(
+                    userIgn = payload.userIgn,
+                    messageId = jobId.toString(),
+                    characterOcid = ocid,
+                    characterClass = input.characterClass,
+                    characterLevel = null,
+                    totalExpectedCost = calcResult.totalExpectedCost.toLong(),
+                    maxPresetNo = calcResult.maxPresetNo,
+                    presetNo = payload.presetNo,
+                    presetsJson = presetsJson,
+                )
+            } catch (e: Exception) {
+                log.warn("[jobId={}] View projection failed (outbox backstop will retry): {}", jobId, e.message)
+            }
+        }
 
         log.info("[jobId={}] Pipeline completed", jobId)
     }
 
     private fun resolveOcid(jobId: UUID, userIgn: String): String {
+        val cached = ocidPort.resolveOcid(userIgn)
+        if (cached != null) {
+            jobService.resolveOcidInPlace(jobId, cached)
+            return cached
+        }
+
         val ocidResponse = nexonApiClient.getOcidByCharacterName(userIgn)
             .handle { result, ex ->
                 if (ex != null) {

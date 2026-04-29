@@ -1,218 +1,149 @@
 package maple.expectation.application.service.expectation.queue;
 
 import lombok.extern.slf4j.Slf4j;
+import maple.expectation.core.model.job.CalculationJob;
+import maple.expectation.core.model.job.CalculationJobStatus;
 import maple.expectation.core.port.inbound.TaskReceipt;
-import maple.expectation.core.port.out.ExpectationCalcMessage;
+import maple.expectation.core.port.out.CalculationJobPort;
 import maple.expectation.core.port.out.PgmqPort;
 import maple.expectation.core.port.out.QueueNames;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import org.springframework.beans.factory.annotation.Value;
+import maple.expectation.infrastructure.pgmq.ExternalApiJobPayload;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * V5 CQRS: Priority Queue for Expectation Calculation (Issue #634 PGMQ migration)
+ * V5 Direct Dispatch Queue — bypasses expectation_calc_high routing hop.
  *
- * <h3>PGMQ Migration</h3>
+ * <p>Controller directly creates a job and publishes ExternalApiJobPayload to external_api_queue,
+ * eliminating the routing-only ExpectationCalcWorker.
  *
- * <p>Replaced in-memory {@code LinkedBlockingQueue} with PGMQ-backed durable queues. Message
- * consumption is handled by {@link ExpectationCalcWorker} (HIGH) and {@link
- * ExpectationCalcLowWorker} (LOW) via the {@code PgmqWorker} abstraction.
+ * <p>Before: Controller → expectation_calc_high → ExpectationCalcWorker → external_api_queue After:
+ * Controller → job creation + external_api_queue publish
  *
- * <h3>Priority Strategy</h3>
- *
- * <ul>
- *   <li>HIGH: User-initiated requests (immediate processing)
- *   <li>LOW: Batch/scheduled updates (background processing)
- * </ul>
- *
- * <h3>Backpressure</h3>
- *
- * <p>When a queue exceeds its capacity limit, new tasks are rejected.
+ * <p>Job-level dedup is handled by {@link CalculationJobPort#createJob}.
  */
 @Slf4j
 @Component
 public class ExpectationCalculationQueue {
 
-  private final int maxQueueSize;
-  private final int highPriorityCapacity;
-
   private final PgmqPort pgmqPort;
+  private final CalculationJobPort jobPort;
   private final LogicExecutor executor;
 
   public ExpectationCalculationQueue(
-      PgmqPort pgmqPort,
-      LogicExecutor executor,
-      @Value("${app.queue.expectation.max-queue-size:10000}") int maxQueueSize,
-      @Value("${app.queue.expectation.high-priority-capacity:1000}") int highPriorityCapacity) {
+      PgmqPort pgmqPort, CalculationJobPort jobPort, LogicExecutor executor) {
     this.pgmqPort = pgmqPort;
+    this.jobPort = jobPort;
     this.executor = executor;
-    this.maxQueueSize = maxQueueSize;
-    this.highPriorityCapacity = highPriorityCapacity;
   }
 
-  /**
-   * Offer task to appropriate PGMQ queue with backpressure control.
-   *
-   * <p>Routes tasks to separate PGMQ queues based on priority. Backpressure is applied when the
-   * queue exceeds its capacity limit.
-   *
-   * @return true if queued, false if rejected (backpressure)
-   */
   public boolean offer(ExpectationCalculationTask task) {
     TaskContext context = TaskContext.of("Queue", "Offer", task.getUserIgn());
-
     return executor.executeOrDefault(() -> enqueue(task).getQueued(), false, context);
   }
 
-  /**
-   * Offer task with receipt (ADR-355).
-   *
-   * <p>PGMQ messageId를 taskId로 반환. HTTP thread(비트랜잭션 컨텍스트)에서 호출 시 PgmqClient.send()의 트랜잭션 체크를 통과하기
-   * 위해 {@code REQUIRES_NEW}로 독립 트랜잭션 생성.
-   *
-   * @param task calculation task
-   * @return TaskReceipt with PGMQ messageId as taskId
-   */
   @Transactional(value = "transactionManager", propagation = Propagation.REQUIRES_NEW)
   public TaskReceipt offerWithReceipt(ExpectationCalculationTask task) {
     TaskContext context = TaskContext.of("Queue", "OfferWithReceipt", task.getUserIgn());
-
     return executor.executeOrDefault(
         () -> enqueue(task), TaskReceipt.rejected(task.getUserIgn()), context);
   }
 
-  /**
-   * Add HIGH priority task (user-initiated request).
-   *
-   * @return true if queued, false if rejected (backpressure)
-   */
   public boolean addHighPriorityTask(String userIgn, boolean forceRecalculation) {
     return offer(ExpectationCalculationTask.highPriority(userIgn, forceRecalculation));
   }
 
-  /**
-   * Add LOW priority task (batch/scheduled update).
-   *
-   * @return true if queued, false if rejected (backpressure)
-   */
   public boolean addLowPriorityTask(String userIgn) {
     return offer(ExpectationCalculationTask.lowPriority(userIgn));
   }
 
+  // Legacy stubs — kept for backward compatibility with PriorityCalculationExecutor
+
   /**
-   * Poll next task from the specified priority queue.
-   *
-   * <p>DEPRECATED: PGMQ workers handle message consumption. This method throws
-   * UnsupportedOperationException.
-   *
-   * @throws UnsupportedOperationException always - PGMQ workers handle consumption
+   * @deprecated PGMQ workers handle message consumption
    */
+  @Deprecated
   public ExpectationCalculationTask poll(QueuePriority priority) throws InterruptedException {
     throw new UnsupportedOperationException(
-        "poll() is no longer supported. PGMQ workers (ExpectationCalcWorker, ExpectationCalcLowWorker) handle message consumption.");
+        "poll() no longer supported. Direct dispatch to external_api_queue.");
   }
 
   /**
-   * Poll next task with timeout.
-   *
-   * <p>DEPRECATED: PGMQ workers handle message consumption. This method throws
-   * UnsupportedOperationException.
-   *
-   * @throws UnsupportedOperationException always - PGMQ workers handle consumption
+   * @deprecated PGMQ workers handle message consumption
    */
+  @Deprecated
   public ExpectationCalculationTask poll(QueuePriority priority, long timeoutMs) {
     throw new UnsupportedOperationException(
-        "poll() is no longer supported. PGMQ workers (ExpectationCalcWorker, ExpectationCalcLowWorker) handle message consumption.");
-  }
-
-  /** Get total queue size (both priorities) from PGMQ. */
-  public int size() {
-    return getHighPriorityCount() + getLowPriorityCount();
-  }
-
-  /** Get high priority queue size from PGMQ. */
-  public int getHighPriorityCount() {
-    TaskContext context =
-        TaskContext.of("Queue", "HighPriorityCount", QueueNames.EXPECTATION_CALC_HIGH);
-    return executor.executeOrDefault(
-        () -> Math.toIntExact(pgmqPort.queueLength(QueueNames.EXPECTATION_CALC_HIGH)), 0, context);
-  }
-
-  /** Get low priority queue size from PGMQ. */
-  public int getLowPriorityCount() {
-    TaskContext context =
-        TaskContext.of("Queue", "LowPriorityCount", QueueNames.EXPECTATION_CALC_LOW);
-    return executor.executeOrDefault(
-        () -> Math.toIntExact(pgmqPort.queueLength(QueueNames.EXPECTATION_CALC_LOW)), 0, context);
+        "poll() no longer supported. Direct dispatch to external_api_queue.");
   }
 
   /**
-   * Mark task as completed.
-   *
-   * <p>DEPRECATED: PGMQ workers handle archiving on success. This method is a no-op.
+   * @deprecated Queue no longer uses separate PGMQ queues for metrics
    */
+  @Deprecated
+  public int size() {
+    return 0;
+  }
+
+  /**
+   * @deprecated Queue no longer uses separate PGMQ queues for metrics
+   */
+  @Deprecated
+  public int getHighPriorityCount() {
+    return 0;
+  }
+
+  /**
+   * @deprecated Queue no longer uses separate PGMQ queues for metrics
+   */
+  @Deprecated
+  public int getLowPriorityCount() {
+    return 0;
+  }
+
+  /**
+   * @deprecated PGMQ workers handle archiving
+   */
+  @Deprecated
   public void complete(ExpectationCalculationTask task) {
-    // No-op: PGMQ workers handle archiving on successful processing
+    // No-op
   }
 
-  private String resolveQueueName(QueuePriority priority) {
-    return switch (priority) {
-      case HIGH -> QueueNames.EXPECTATION_CALC_HIGH;
-      case LOW -> QueueNames.EXPECTATION_CALC_LOW;
-    };
-  }
-
-  private int resolveMaxSize(QueuePriority priority) {
-    return switch (priority) {
-      case HIGH -> highPriorityCapacity;
-      case LOW -> maxQueueSize;
-    };
-  }
-
-  private boolean isQueueFull(QueuePriority priority, String userIgn) {
-    String queueName = resolveQueueName(priority);
-    int maxSize = resolveMaxSize(priority);
-    long queueLength = pgmqPort.queueLength(queueName);
-    if (queueLength >= maxSize) {
-      log.warn("[Queue] Queue full, rejecting: priority={}, userIgn={}", priority, userIgn);
-      return true;
-    }
-    return false;
-  }
-
+  /**
+   * Direct dispatch: create job + publish to external_api_queue in one transaction.
+   *
+   * <p>Job-level dedup: {@link CalculationJobPort#createJob} returns existing active job if one
+   * exists for the same userIgn+presetNo. Only dispatches if job is still in REQUESTED.
+   */
   private TaskReceipt enqueue(ExpectationCalculationTask task) {
-    if (isQueueFull(task.getPriority(), task.getUserIgn())) {
-      return TaskReceipt.rejected(task.getUserIgn());
+    CalculationJob job = jobPort.createJob(null, task.getUserIgn(), task.getPresetNo());
+
+    if (job.getStatus() == CalculationJobStatus.REQUESTED) {
+      boolean transitioned =
+          jobPort.transitionStatus(
+              job.getJobId(), CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING);
+      if (transitioned) {
+        pgmqPort.send(
+            QueueNames.EXTERNAL_API,
+            new ExternalApiJobPayload(
+                job.getJobId().toString(), task.getUserIgn(), task.getPresetNo()));
+        log.debug(
+            "[Queue] Job dispatched: jobId={}, userIgn={}, presetNo={}",
+            job.getJobId(),
+            task.getUserIgn(),
+            task.getPresetNo());
+      }
+    } else {
+      log.debug(
+          "[Queue] Existing active job returned: jobId={}, status={}, userIgn={}",
+          job.getJobId(),
+          job.getStatus(),
+          task.getUserIgn());
     }
 
-    String queueName = resolveQueueName(task.getPriority());
-    if (task.isForceRecalculation()) {
-      ExpectationCalcMessage message =
-          new ExpectationCalcMessage(
-              task.getUserIgn(), task.isForceRecalculation(), task.getPresetNo());
-      long messageId = pgmqPort.send(queueName, message);
-      return new TaskReceipt(String.valueOf(messageId), task.getUserIgn(), true);
-    } else {
-      ExpectationCalcMessage message =
-          new ExpectationCalcMessage(
-              task.getUserIgn(), task.isForceRecalculation(), task.getPresetNo());
-      // P0-3 FIX: Dedup key must include presetNo to avoid conflicts between different presets
-      String dedupKey = task.getUserIgn() + ":" + task.getPresetNo();
-      long result = pgmqPort.sendIfAbsent(queueName, dedupKey, message);
-      if (result < 0) {
-        long existingId = -result;
-        log.debug(
-            "[Queue] Reusing active task: priority={}, userIgn={}, presetNo={}, taskId={}",
-            task.getPriority(),
-            task.getUserIgn(),
-            task.getPresetNo(),
-            existingId);
-        return new TaskReceipt(String.valueOf(existingId), task.getUserIgn(), true);
-      }
-      return new TaskReceipt(String.valueOf(result), task.getUserIgn(), true);
-    }
+    return new TaskReceipt(job.getJobId().toString(), task.getUserIgn(), true);
   }
 }

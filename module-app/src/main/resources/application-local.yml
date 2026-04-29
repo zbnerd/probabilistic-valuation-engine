@@ -190,7 +190,7 @@ pgmq:
       # donation/nexon-fanout have supportsTwoPhase=false → sequential mode ignored.
       visibility-timeout-sec: 300  # 120→300: sequential batch may take longer than parallel
     expectation-calc-high:
-      enabled: true
+      enabled: false  # bypassed: Controller dispatches directly to external_api_queue
     expectation-calc-low:
       enabled: true
     external-api:

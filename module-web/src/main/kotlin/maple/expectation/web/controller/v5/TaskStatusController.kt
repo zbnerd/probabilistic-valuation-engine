@@ -33,7 +33,7 @@ class TaskStatusController(
     @PreAuthorize("permitAll()")
     fun getTaskStatus(
         @PathVariable @NotBlank @ValidIgn userIgn: String,
-        @PathVariable @NotBlank @Pattern(regexp = "\\d+") taskId: String,
+        @PathVariable @NotBlank @Pattern(regexp = "[0-9a-fA-F\\-]{8,}") taskId: String,
     ): ResponseEntity<TaskStatusResponse> {
         val normalizedIgn = userIgn.trim()
         val status = taskStatusPort.getStatus(normalizedIgn, taskId)

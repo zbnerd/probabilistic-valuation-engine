@@ -69,6 +69,8 @@ abstract class PgmqWorker<T : Any>(
     /** Sequential batch buffer — accumulates messages for [sequentialBatchMs] before processing */
     private val accumulationBuffer = AccumulationBuffer<T>(config.common.sequentialBatchMs)
 
+    private val pollCounter = java.util.concurrent.atomic.AtomicInteger(0)
+
     /** Convenience: sequential batch window from config */
     private val sequentialBatchMs: Long
         get() = config.common.sequentialBatchMs
@@ -184,7 +186,9 @@ abstract class PgmqWorker<T : Any>(
 
                 val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
 
-                metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
+                if (pollCounter.incrementAndGet() % 20 == 0) {
+                    metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
+                }
 
                 if (messages.isEmpty()) {
                     inflightPermits.release(permits)
@@ -311,9 +315,12 @@ abstract class PgmqWorker<T : Any>(
     private var pendingBatchFuture: CompletableFuture<*>? = null
 
     private fun processBatchSinglePhase(messages: List<PgmqMessage<T>>) {
+        val archiveIds = java.util.concurrent.ConcurrentLinkedQueue<Long>()
         val futures = messages.map { message ->
             CompletableFuture.supplyAsync({
-                processSingleMessage(message)
+                val needsArchive = processSingleMessage(message)
+                if (needsArchive) archiveIds.add(message.messageId)
+                needsArchive
             }, workerPool)
         }
         pendingBatchFuture = CompletableFuture.allOf(*futures.toTypedArray())
@@ -322,6 +329,16 @@ abstract class PgmqWorker<T : Any>(
                 null
             }
             .thenAccept {
+                if (archiveIds.isNotEmpty()) {
+                    executor.executeOrDefault(
+                        {
+                            val archived = pgmqClient.archiveBatch(queueName, archiveIds.toList())
+                            log.debug("[{}] Batch archived {}/{} messages", queueName, archived, archiveIds.size)
+                        },
+                        Unit,
+                        TaskContext.of("PgmqWorker", "BatchArchive", queueName),
+                    )
+                }
                 log.debug("[{}] Batch of {} messages completed", queueName, messages.size)
             }
     }
@@ -432,9 +449,7 @@ abstract class PgmqWorker<T : Any>(
 
                 when {
                     success -> {
-                        pgmqClient.archive(queueName, message.messageId)
                         metrics.success.increment()
-                        log.debug("[{}] Archived message: msgId={}", queueName, message.messageId)
                     }
                     message.isRetryable(maxRetries) -> {
                         onProcessingFailed(message)
@@ -442,10 +457,9 @@ abstract class PgmqWorker<T : Any>(
                         log.warn("[{}] Message will be retried: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
                     }
                     else -> {
-                        pgmqClient.archive(queueName, message.messageId)
                         metrics.failure.increment()
                         metrics.dlq.increment()
-                        log.error("[{}] Archived message after max retries: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
+                        log.error("[{}] Max retries exceeded: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
                     }
                 }
 

@@ -85,6 +85,7 @@ abstract class AbstractExpectationCalcWorker(
                 request.userIgn,
                 request.forceRecalculation,
                 message.messageId.toString(),
+                request.presetNo,
             )
 
             val character = gameCharacterPort.getCharacterOrThrow(request.userIgn)
@@ -162,6 +163,21 @@ abstract class AbstractExpectationCalcWorker(
 
         // 3. Bulk upsert — 3 queries total (SELECT + batch UPDATE/INSERT)
         batchRepo.bulkUpsert(parsed)
+
+        // 4. Sync read model for query-server
+        parsed.forEach { view ->
+            viewQueryPort.upsertFromCalculation(
+                userIgn = view.userIgn,
+                messageId = view.messageId,
+                characterOcid = view.characterOcid,
+                characterClass = view.characterClass,
+                characterLevel = null,
+                totalExpectedCost = view.totalExpectedCost,
+                maxPresetNo = view.maxPresetNo,
+                presetNo = view.presetNo,
+                presetsJson = view.presetsJson,
+            )
+        }
     }
 
     private fun batchL2CachePut(results: List<CalculationResult>) {

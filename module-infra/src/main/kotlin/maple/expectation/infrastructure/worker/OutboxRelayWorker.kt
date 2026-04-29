@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.worker
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.core.port.out.OutboxEventPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -15,6 +16,7 @@ class OutboxRelayWorker(
     private val outboxPort: OutboxEventPort,
     private val resultReadyTopic: ResultReadyTopic,
     private val executor: LogicExecutor,
+    private val objectMapper: ObjectMapper,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -32,11 +34,14 @@ class OutboxRelayWorker(
             val context = TaskContext.of("OutboxRelayWorker", "Relay", event.eventId.toString())
             executor.executeOrCatch(
                 {
+                    val payload = event.payload?.let {
+                        runCatching { objectMapper.readValue(it, Map::class.java) as Map<*, *> }.getOrNull()
+                    }
                     val integrationEvent = ResultReadyEventFactory.create(
                         jobId = event.jobId.toString(),
                         resultId = event.eventId.toString(),
-                        characterId = "",
-                        presetNo = 1,
+                        characterId = payload?.get("characterId")?.toString() ?: "",
+                        presetNo = (payload?.get("presetNo") as? Number)?.toInt() ?: 1,
                     )
                     resultReadyTopic.publish(integrationEvent)
                     outboxPort.markPublished(event.eventId)

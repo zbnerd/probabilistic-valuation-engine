@@ -96,6 +96,7 @@ class GameCharacterControllerV5(
         val cachedResult: Optional<EquipmentExpectationResponseV5> = executorPort.executeOrDefault(
             {
                 queryPort.findByUserIgn(userIgn)
+                    .filter { view -> view.presets?.any { it.presetNo == presetNo } ?: false }
                     .map { CharacterViewMapper.toResponseDto(it) }
                     .orElse(Optional.empty())
             },
@@ -105,7 +106,7 @@ class GameCharacterControllerV5(
 
         // 2. HIT: Return immediately (1-10ms)
         if (cachedResult.isPresent) {
-            log.debug("[V5] PostgreSQL HIT: {}", maskIgn(userIgn))
+            log.debug("[V5] PostgreSQL HIT: {} (presetNo={})", maskIgn(userIgn), presetNo)
             return ResponseEntity.ok(cachedResult.get())
         }
 

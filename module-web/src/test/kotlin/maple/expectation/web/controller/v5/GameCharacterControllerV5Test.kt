@@ -236,7 +236,7 @@ class GameCharacterControllerV5Test {
         override val fromCache = true
         override val totalExpectedCost = 1000000L
         override val maxPresetNo = 3
-        override val presets = emptyList<CharacterView.PresetView>()
+        override val presets = listOf(CharacterView.PresetView(presetNo = 1, totalExpectedCost = 1000000L, totalCostText = "100만", costBreakdown = null, items = null))
     }
 
     /**

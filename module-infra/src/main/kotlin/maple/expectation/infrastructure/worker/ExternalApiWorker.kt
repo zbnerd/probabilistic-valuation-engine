@@ -132,7 +132,9 @@ class ExternalApiWorker(
             presetNo = payload.presetNo,
             items = inputItems,
         )
-        calculationInputPort.save(calcInput)
+        if (calculationInputPort.findByJobId(jobId) == null) {
+            calculationInputPort.save(calcInput)
+        }
 
         val snapshotEntity = CalculationSnapshotEntity(
             snapshotId = snapshotId,

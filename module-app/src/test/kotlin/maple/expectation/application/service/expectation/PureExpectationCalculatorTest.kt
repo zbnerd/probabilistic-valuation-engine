@@ -1,5 +1,6 @@
 package maple.expectation.application.service.expectation
 
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.domain.model.PotentialGrade
 import maple.expectation.core.dto.v4.*
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.*
@@ -9,7 +10,6 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.whenever
-import java.util.concurrent.CompletableFuture
 
 class PureExpectationCalculatorTest {
 
@@ -29,7 +29,7 @@ class PureExpectationCalculatorTest {
             blackCubeCost = 500_000.0,
             redCubeCost = 300_000.0,
             additionalCubeCost = 100_000.0,
-            starforceCost = 100_000.0
+            starforceCost = 100_000.0,
         ),
         items = listOf(
             ItemExpectationV4(
@@ -50,9 +50,9 @@ class PureExpectationCalculatorTest {
                 blackCubeExpectation = CubeExpectationDto.empty(),
                 additionalCubeExpectation = CubeExpectationDto.empty(),
                 starforceExpectation = StarforceExpectationDto.empty(),
-                flameExpectation = FlameExpectationDto.empty()
-            )
-        )
+                flameExpectation = FlameExpectationDto.empty(),
+            ),
+        ),
     )
 
     @Test
@@ -74,9 +74,9 @@ class PureExpectationCalculatorTest {
                     starforceScrollFlag = StarforceScrollFlag.USED,
                     addOption = AddOption(0, 0, 3, 0, 0, 0, 0, 5, 0, 0),
                     baseAttackPower = 10,
-                    baseMagicPower = 200
-                )
-            )
+                    baseMagicPower = 200,
+                ),
+            ),
         )
 
         val preset = stubPreset()
@@ -100,7 +100,7 @@ class PureExpectationCalculatorTest {
             userIgn = "테스트유저",
             characterClass = "아크메이지",
             presetNo = 1,
-            items = emptyList()
+            items = emptyList(),
         )
 
         whenever(presetHelper.calculatePresetAsync(any(), any(), any()))

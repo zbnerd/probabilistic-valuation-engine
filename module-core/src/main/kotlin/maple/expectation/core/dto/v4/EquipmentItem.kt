@@ -11,5 +11,5 @@ data class EquipmentItem(
     val starforceScrollFlag: StarforceScrollFlag,
     val addOption: AddOption,
     val baseAttackPower: Int,
-    val baseMagicPower: Int
+    val baseMagicPower: Int,
 )

@@ -79,7 +79,7 @@ class AdaptiveMicroBatchUserService<T : Any>(
     private val meterRegistry: MeterRegistry,
     private val cache: Cache,
     private val singleLoader: (String) -> T?,
-    private val batchLoader: (List<String>) -> Map<String, T>,
+    private val batchLoader: (List<String>) -> CompletableFuture<Map<String, T>>,
 ) {
     /** Semaphore: Fast Lane 동시 실행 제한 */
     private val semaphore = Semaphore(properties.semaphorePermits)
@@ -420,31 +420,41 @@ class AdaptiveMicroBatchUserService<T : Any>(
 
         logicExecutor.executeOrCatch(
             {
-                val results = batchLoader(keys)
-                val keyToFuture = batch.associateBy { it.key }
-
-                keys.forEach { key ->
-                    val result = results[key]
-                    val future = keyToFuture[key]?.future
-
-                    if (result != null) {
-                        cache.put(key, result)
+                batchLoader(keys)
+                    .thenAccept { results -> completeBatchResults(keys, batch, results) }
+                    .exceptionally { e ->
+                        failBatchRequests(batch, e)
+                        null
                     }
-                    future?.complete(result)
-                    cleanupInFlight(key)
-                }
                 null
             },
             { e ->
-                log.error(e) { "[AdaptiveMicroBatch] Batch failed: keys=${keys.size}, completing futures exceptionally" }
-                batch.forEach { request ->
-                    request.future.completeExceptionally(e)
-                    cleanupInFlight(request.key)
-                }
+                failBatchRequests(batch, e)
                 null
             },
             context,
         )
+    }
+
+    private fun completeBatchResults(keys: List<String>, batch: List<BatchRequest<T>>, results: Map<String, T>) {
+        val keyToFuture = batch.associateBy { it.key }
+        keys.forEach { key ->
+            val result = results[key]
+            val future = keyToFuture[key]?.future
+            if (result != null) {
+                cache.put(key, result)
+            }
+            future?.complete(result)
+            cleanupInFlight(key)
+        }
+    }
+
+    private fun failBatchRequests(batch: List<BatchRequest<T>>, e: Throwable) {
+        log.error(e) { "[AdaptiveMicroBatch] Batch failed: keys=${batch.size}, completing futures exceptionally" }
+        batch.forEach { request ->
+            request.future.completeExceptionally(e)
+            cleanupInFlight(request.key)
+        }
     }
 
     /**

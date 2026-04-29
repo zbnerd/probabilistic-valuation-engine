@@ -1,12 +1,5 @@
 package maple.expectation.infrastructure.external.snapshot
 
-import maple.expectation.core.model.snapshot.CalculationSnapshot
-import maple.expectation.core.port.out.SnapshotObjectStore
-import maple.expectation.core.port.out.SnapshotObjectStoreResult
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
 import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -15,12 +8,19 @@ import java.security.MessageDigest
 import java.util.concurrent.Semaphore
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+import maple.expectation.core.model.snapshot.CalculationSnapshot
+import maple.expectation.core.port.out.SnapshotObjectStore
+import maple.expectation.core.port.out.SnapshotObjectStoreResult
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Component
 
 @Component
 class LocalSnapshotObjectStore(
     @Value("\${snapshot.store.local.base-path:/data/snapshots}")
     private val basePath: String,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) : SnapshotObjectStore {
 
     private val writePermits = Semaphore(10)
@@ -51,7 +51,7 @@ class LocalSnapshotObjectStore(
         return SnapshotObjectStoreResult(
             objectKey = snapshot.objectKey,
             compressedSize = compressed.size.toLong(),
-            hash = hash
+            hash = hash,
         )
     }
 

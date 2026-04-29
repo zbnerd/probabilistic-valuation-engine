@@ -8,5 +8,5 @@ enum class CalculationJobStatus {
     CALCULATING,
     COMPLETED,
     FAILED,
-    RETRYING
+    RETRYING,
 }

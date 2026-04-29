@@ -9,7 +9,7 @@ object ResultReadyEventFactory {
         characterId: String,
         presetNo: Int,
         contentEncoding: String = "gzip",
-        schemaVersion: Int = 1
+        schemaVersion: Int = 1,
     ): IntegrationEvent<Map<String, Any>> {
         val payload: Map<String, Any> = mapOf(
             "jobId" to jobId,
@@ -17,7 +17,7 @@ object ResultReadyEventFactory {
             "characterId" to characterId,
             "presetNo" to presetNo,
             "contentEncoding" to contentEncoding,
-            "schemaVersion" to schemaVersion
+            "schemaVersion" to schemaVersion,
         )
         return IntegrationEvent.of("CALCULATION_COMPLETED", payload)
             .copy(schemaVersion = 1, jobId = jobId)

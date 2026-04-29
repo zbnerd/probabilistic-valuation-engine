@@ -4,10 +4,10 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
-import org.hibernate.annotations.JdbcTypeCode
-import org.hibernate.type.SqlTypes
 import java.time.OffsetDateTime
 import java.util.UUID
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 
 @Entity
 @Table(name = "outbox_events")
@@ -20,5 +20,5 @@ class OutboxEventEntity(
     @Column(nullable = false) val published: Boolean = false,
     @Column(nullable = false) val publishAttempts: Int = 0,
     @Column(nullable = false) val createdAt: OffsetDateTime = OffsetDateTime.now(),
-    val publishedAt: OffsetDateTime? = null
+    val publishedAt: OffsetDateTime? = null,
 )

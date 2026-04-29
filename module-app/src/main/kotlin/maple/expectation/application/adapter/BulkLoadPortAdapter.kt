@@ -19,21 +19,13 @@ class BulkLoadPortAdapter(
     private val bulkLoaderService: BulkLoaderService,
 ) : BulkLoadPort {
 
-    override fun loadAll(csvPath: String?, force: Boolean): CompletableFuture<BulkLoadResult> {
-        return bulkLoaderService.loadAll(csvPath, force).thenApply { it.toPortType() }
-    }
+    override fun loadAll(csvPath: String?, force: Boolean): CompletableFuture<BulkLoadResult> = bulkLoaderService.loadAll(csvPath, force).thenApply { it.toPortType() }
 
-    override fun resume(): CompletableFuture<BulkLoadResult> {
-        return bulkLoaderService.resume().thenApply { it.toPortType() }
-    }
+    override fun resume(): CompletableFuture<BulkLoadResult> = bulkLoaderService.resume().thenApply { it.toPortType() }
 
-    override fun retryFailed(): CompletableFuture<BulkLoadResult> {
-        return bulkLoaderService.retryFailed().thenApply { it.toPortType() }
-    }
+    override fun retryFailed(): CompletableFuture<BulkLoadResult> = bulkLoaderService.retryFailed().thenApply { it.toPortType() }
 
-    override fun getStatus(): BulkLoadStatus {
-        return bulkLoaderService.getStatus().toPortType()
-    }
+    override fun getStatus(): BulkLoadStatus = bulkLoaderService.getStatus().toPortType()
 
     override fun stop() {
         bulkLoaderService.stop()

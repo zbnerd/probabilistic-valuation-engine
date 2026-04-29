@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory;
@@ -16,9 +15,6 @@ import maple.expectation.core.domain.cost.CostFormatter;
 import maple.expectation.core.domain.equipment.SecondaryWeaponCategory;
 import maple.expectation.core.domain.flame.FlameEquipCategory;
 import maple.expectation.core.domain.flame.FlameType;
-import maple.expectation.core.flame.port.FlameTrialsPort;
-import maple.expectation.core.probability.FlameScoreCalculator;
-import maple.expectation.core.util.KahanSummation;
 import maple.expectation.core.dto.cube.CubeCalculationInput;
 import maple.expectation.core.dto.v4.EquipmentCalculationInput;
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
@@ -27,8 +23,10 @@ import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.FlameExpecta
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.StarforceExpectationDto;
+import maple.expectation.core.flame.port.FlameTrialsPort;
+import maple.expectation.core.probability.FlameScoreCalculator;
+import maple.expectation.core.util.KahanSummation;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -52,8 +50,7 @@ import org.springframework.stereotype.Component;
  *
  * <h3>분해 근거</h3>
  *
- * <p>EquipmentExpectationServiceV4의 calculatePresetAsync() — 장비별 병렬 계산 (thenCombine)
- * Section 4)
+ * <p>EquipmentExpectationServiceV4의 calculatePresetAsync() — 장비별 병렬 계산 (thenCombine) Section 4)
  */
 @Slf4j
 @Component
@@ -81,8 +78,8 @@ public class PresetCalculationHelper {
   /**
    * 프리셋 기대값 비동기 계산 — 장비별 병렬 처리 (thenCombine, join/get 없음)
    *
-   * <p>각 장비의 계산이 서로 독립이므로 CompletableFuture.supplyAsync로 동시 시작,
-   * thenCombine으로 결과를 누적하여 최종 PresetExpectation을 생성.
+   * <p>각 장비의 계산이 서로 독립이므로 CompletableFuture.supplyAsync로 동시 시작, thenCombine으로 결과를 누적하여 최종
+   * PresetExpectation을 생성.
    *
    * <p>장비 계산은 itemCalculationExecutor에서 실행하여 presetCalculationExecutor와 격리.
    *
@@ -92,9 +89,7 @@ public class PresetCalculationHelper {
    * @return 프리셋 기대값 CompletableFuture
    */
   public CompletableFuture<PresetExpectation> calculatePresetAsync(
-      List<CubeCalculationInput> cubeInputs,
-      int presetNo,
-      String characterClass) {
+      List<CubeCalculationInput> cubeInputs, int presetNo, String characterClass) {
 
     List<CompletableFuture<ItemExpectationV4>> itemFutures = new ArrayList<>();
 
@@ -110,8 +105,7 @@ public class PresetCalculationHelper {
 
       itemFutures.add(
           CompletableFuture.supplyAsync(
-                  () -> calculateSingleItem(input, cubeInput, characterClass),
-                  itemExecutor));
+              () -> calculateSingleItem(input, cubeInput, characterClass), itemExecutor));
     }
 
     if (itemFutures.isEmpty()) {
@@ -145,8 +139,7 @@ public class PresetCalculationHelper {
               });
       breakdownFuture =
           breakdownFuture.thenCombine(
-              itemFuture.thenApply(ItemExpectationV4::getCostBreakdown),
-              CostBreakdownDto::add);
+              itemFuture.thenApply(ItemExpectationV4::getCostBreakdown), CostBreakdownDto::add);
     }
 
     return resultsFuture
@@ -156,11 +149,7 @@ public class PresetCalculationHelper {
             agg -> {
               double totalCost = agg.costAcc.sum();
               return new PresetExpectation(
-                  presetNo,
-                  totalCost,
-                  CostFormatter.format(totalCost),
-                  agg.breakdown,
-                  agg.results);
+                  presetNo, totalCost, CostFormatter.format(totalCost), agg.breakdown, agg.results);
             });
   }
 

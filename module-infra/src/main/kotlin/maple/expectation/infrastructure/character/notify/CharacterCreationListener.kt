@@ -54,7 +54,7 @@ class CharacterCreationListener(
     private val running = AtomicBoolean(false)
     private val waitingFutures = ConcurrentHashMap<String, CompletableFuture<String>>()
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { r ->
-        Thread(r, "character-creation-poller").apply { isDaemon = true }
+        Thread.ofVirtual().name("character-creation-poller").unstarted(r)
     }
 
     @PostConstruct

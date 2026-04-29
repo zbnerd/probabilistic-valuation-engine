@@ -80,12 +80,12 @@ class DedupeMicroBatchWriter(
 
     // Scheduler for time-triggered flush
     private val scheduler: ScheduledExecutorService = ScheduledThreadPoolExecutor(1) { runnable ->
-        Thread(runnable, "micro-batch-flush-scheduler").apply { isDaemon = true }
+        Thread.ofVirtual().name("micro-batch-flush-scheduler").unstarted(runnable)
     }
 
     // 🔥 P0 FIX #3: Dedicated flush executor (prevents worker deadlock)
     private val flushExecutor: ScheduledExecutorService = ScheduledThreadPoolExecutor(2) { runnable ->
-        Thread(runnable, "micro-batch-flush-worker").apply { isDaemon = true }
+        Thread.ofVirtual().name("micro-batch-flush-worker").unstarted(runnable)
     }
 
     // Metrics

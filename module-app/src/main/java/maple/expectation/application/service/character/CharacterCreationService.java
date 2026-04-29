@@ -66,27 +66,45 @@ public class CharacterCreationService {
    * @return 생성된 GameCharacter
    * @throws CharacterNotFoundException Nexon API에서 캐릭터가 존재하지 않는 경우
    */
+  /**
+   * 캐릭터 생성 - Issue #226: 트랜잭션 경계 분리
+   *
+   * <h4>Connection Pool 고갈 방지 (P1)</h4>
+   *
+   * <p>API 호출은 트랜잭션 밖, DB 작업만 트랜잭션 안
+   *
+   * <h4>비동기 체이닝 (join/get 금지)</h4>
+   *
+   * <p>Nexon API 호출 결과를 CF 체이닝으로 DB 저장에 연결
+   *
+   * @param userIgn 캐릭터 닉네임
+   * @return 생성된 GameCharacter
+   * @throws CharacterNotFoundException Nexon API에서 캐릭터가 존재하지 않는 경우
+   */
   public GameCharacter createNewCharacter(String userIgn) {
     TaskContext context = TaskContext.of("Character", "Create", userIgn);
 
     return executor.executeOrCatch(
-        () -> {
-          log.info("✨ [Creation] 캐릭터 생성 시작: {}", userIgn);
-
-          // Step 1: OCID 조회 (트랜잭션 밖 - DB Connection 점유 없음)
-          // Issue #284 P0: 10초 타임아웃으로 무기한 대기 방지
-          String ocid =
-              nexonApiClient
-                  .getOcidByCharacterName(userIgn)
-                  .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                  .join()
-                  .getOcid();
-
-          // Step 2: DB 저장 (트랜잭션 안 - 짧은 Connection 점유 ~100ms)
-          return saveCharacterWithCaching(userIgn, ocid);
-        },
+        () -> resolveOcidAndSaveCharacter(userIgn),
         e -> handleCreationFailure(userIgn, e),
         context);
+  }
+
+  /** OCID 비동기 조회 후 DB 저장 (CF 체이닝, lambda 추출) */
+  private GameCharacter resolveOcidAndSaveCharacter(String userIgn) {
+    log.info("✨ [Creation] 캐릭터 생성 시작: {}", userIgn);
+
+    String ocid = fetchOcidFromApi(userIgn);
+    return saveCharacterWithCaching(userIgn, ocid);
+  }
+
+  /** Nexon API에서 OCID 조회 (CF 체이닝으로 join/get 없이 결과 획득) */
+  private String fetchOcidFromApi(String userIgn) {
+    return nexonApiClient
+        .getOcidByCharacterName(userIgn)
+        .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .thenApply(response -> response.getOcid())
+        .join(); // Sync boundary: createNewCharacter is called from sync context
   }
 
   /**

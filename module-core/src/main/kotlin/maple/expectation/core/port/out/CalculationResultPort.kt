@@ -14,7 +14,7 @@ data class CalculationResultData(
     val originalSize: Int,
     val compressedSize: Int,
     val hash: String,
-    val status: String
+    val status: String,
 ) {
     override fun equals(other: Any?) = this === other
     override fun hashCode() = System.identityHashCode(this)

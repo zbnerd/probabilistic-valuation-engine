@@ -4,10 +4,10 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
-import org.hibernate.annotations.JdbcTypeCode
-import org.hibernate.type.SqlTypes
 import java.time.OffsetDateTime
 import java.util.UUID
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 
 @Entity
 @Table(name = "calculation_snapshot_inputs")
@@ -17,5 +17,5 @@ class CalculationSnapshotInputEntity(
     @Column(nullable = false) val schemaVersion: Int = 1,
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb") val payload: String,
-    val createdAt: OffsetDateTime = OffsetDateTime.now()
+    val createdAt: OffsetDateTime = OffsetDateTime.now(),
 )

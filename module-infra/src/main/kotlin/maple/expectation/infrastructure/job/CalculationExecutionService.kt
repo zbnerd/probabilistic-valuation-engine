@@ -1,5 +1,8 @@
 package maple.expectation.infrastructure.job
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import java.time.Instant
+import java.util.UUID
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CalculationResultData
@@ -8,12 +11,9 @@ import maple.expectation.core.port.out.OutboxEventPort
 import maple.expectation.core.port.out.mq.DomainEventAppender
 import maple.expectation.infrastructure.mq.event.NexonApiResponseEventFactory
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
-import java.util.UUID
 
 @Service
 class CalculationExecutionService(
@@ -22,7 +22,7 @@ class CalculationExecutionService(
     private val nexonApiResponseTopic: NexonApiResponseTopic,
     private val resultPort: CalculationResultPort,
     private val outboxPort: OutboxEventPort,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -56,7 +56,7 @@ class CalculationExecutionService(
                 "",
                 job.ocid ?: return,
                 job.userIgn,
-                job.presetNo
+                job.presetNo,
             )
             eventAppender.append(nexonApiResponseTopic, event)
             log.info("[jobId={}] Calculation retry scheduled (attempt {}, backoff={}s)", jobId, job.retryCount + 1, backoffSeconds)
@@ -71,7 +71,7 @@ class CalculationExecutionService(
         resultJson: String,
         characterClass: String,
         presetNo: Int,
-        characterId: String
+        characterId: String,
     ): Boolean {
         val completed = jobPort.transitionStatus(jobId, CalculationJobStatus.CALCULATING, CalculationJobStatus.COMPLETED)
         if (!completed) return false
@@ -79,28 +79,32 @@ class CalculationExecutionService(
         val gzipData = gzipCompress(resultJson.toByteArray())
         val hash = sha256Hex(resultJson.toByteArray())
 
-        resultPort.save(CalculationResultData(
-            resultId = UUID.randomUUID(),
-            jobId = jobId,
-            characterClass = characterClass,
-            presetNo = presetNo,
-            schemaVersion = 1,
-            contentType = "application/json",
-            contentEncoding = "gzip",
-            responseBody = gzipData,
-            originalSize = resultJson.toByteArray().size,
-            compressedSize = gzipData.size,
-            hash = hash,
-            status = "SUCCESS"
-        ))
+        resultPort.save(
+            CalculationResultData(
+                resultId = UUID.randomUUID(),
+                jobId = jobId,
+                characterClass = characterClass,
+                presetNo = presetNo,
+                schemaVersion = 1,
+                contentType = "application/json",
+                contentEncoding = "gzip",
+                responseBody = gzipData,
+                originalSize = resultJson.toByteArray().size,
+                compressedSize = gzipData.size,
+                hash = hash,
+                status = "SUCCESS",
+            ),
+        )
 
-        val eventPayload = objectMapper.writeValueAsString(mapOf(
-            "jobId" to jobId.toString(),
-            "characterId" to characterId,
-            "presetNo" to presetNo,
-            "contentEncoding" to "gzip",
-            "schemaVersion" to 1
-        ))
+        val eventPayload = objectMapper.writeValueAsString(
+            mapOf(
+                "jobId" to jobId.toString(),
+                "characterId" to characterId,
+                "presetNo" to presetNo,
+                "contentEncoding" to "gzip",
+                "schemaVersion" to 1,
+            ),
+        )
         outboxPort.insertIfAbsent("CALCULATION_COMPLETED", jobId, eventPayload)
 
         jobPort.unlock(jobId)

@@ -8,7 +8,7 @@ data class OutboxEvent(
     val jobId: UUID,
     val payload: String?,
     val published: Boolean,
-    val publishAttempts: Int
+    val publishAttempts: Int,
 )
 
 interface OutboxEventPort {

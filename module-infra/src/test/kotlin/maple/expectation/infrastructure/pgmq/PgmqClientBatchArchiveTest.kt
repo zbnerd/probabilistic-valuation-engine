@@ -13,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.jdbc.core.JdbcTemplate
@@ -89,62 +88,55 @@ class PgmqClientBatchArchiveTest {
     private class StubLogicExecutor : LogicExecutor {
         override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T = task.get()
 
-        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T =
-            try {
-                task.get() ?: defaultValue
-            } catch (e: Exception) {
-                defaultValue
-            }
+        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = try {
+            task.get() ?: defaultValue
+        } catch (e: Exception) {
+            defaultValue
+        }
 
         override fun executeVoid(task: ThrowingRunnable, context: TaskContext) {
             task.run()
         }
 
-        override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T =
-            try {
-                task.get()
-            } finally {
-                finallyBlock.run()
-            }
+        override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T = try {
+            task.get()
+        } finally {
+            finallyBlock.run()
+        }
 
-        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T =
-            try {
-                task.get()
-            } catch (e: Exception) {
-                fallback(e)
-            }
+        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            fallback(e)
+        }
 
         override fun <T> executeWithTranslation(
             task: ThrowingSupplier<T>,
             customTranslator: ExceptionTranslator,
             context: TaskContext,
-        ): T =
-            try {
-                task.get()
-            } catch (e: Exception) {
-                throw customTranslator.translate(e, context)
-            }
+        ): T = try {
+            task.get()
+        } catch (e: Exception) {
+            throw customTranslator.translate(e, context)
+        }
 
-        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T =
-            try {
-                task.get()
-            } catch (e: Exception) {
-                recovery(e)
-            }
+        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            recovery(e)
+        }
 
-        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: ExceptionTranslator, context: TaskContext): T =
-            try {
-                task.get()
-            } catch (e: Exception) {
-                throw fallback.translate(e, context)
-            }
+        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: ExceptionTranslator, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            throw fallback.translate(e, context)
+        }
 
-        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: ExceptionTranslator, context: TaskContext): T =
-            try {
-                task.get()
-            } catch (e: Exception) {
-                throw recovery.translate(e, context)
-            }
+        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: ExceptionTranslator, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            throw recovery.translate(e, context)
+        }
 
         override fun executeVoidJava(task: Runnable, context: TaskContext) {
             task.run()

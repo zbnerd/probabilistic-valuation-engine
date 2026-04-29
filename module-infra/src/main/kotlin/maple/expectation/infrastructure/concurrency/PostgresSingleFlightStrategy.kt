@@ -199,33 +199,57 @@ class PostgresSingleFlightStrategy(
     }
 
     private fun <T> waitForLeaderResult(key: String): CompletableFuture<T> {
-        val future = CompletableFuture<T>()
-        val startTime = System.currentTimeMillis()
+        val resolved = resolveLeaderResult<T>(key)
+        if (resolved != null) return resolved
 
-        CompletableFuture.runAsync({
-            while (System.currentTimeMillis() - startTime < DEFAULT_TIMEOUT.toMillis()) {
-                val inFlight = flights[key]
-                if (inFlight != null && inFlight.isDone) {
-                    try {
+        return scheduleLeaderPoll(key, System.currentTimeMillis())
+    }
+
+    private fun <T> resolveLeaderResult(key: String): CompletableFuture<T>? {
+        val inFlight = flights[key]
+        if (inFlight != null) {
+            @Suppress("UNCHECKED_CAST")
+            return inFlight as CompletableFuture<T>
+        }
+
+        val cached = resultCache[key]
+        if (cached != null) {
+            @Suppress("UNCHECKED_CAST")
+            return cached as CompletableFuture<T>
+        }
+
+        return null
+    }
+
+    private fun <T> scheduleLeaderPoll(key: String, startTime: Long): CompletableFuture<T> {
+        val future = CompletableFuture<T>()
+
+        fun poll() {
+            if (future.isDone) return
+
+            val resolved = resolveLeaderResult<T>(key)
+            if (resolved != null) {
+                resolved.whenComplete { result, error ->
+                    if (error != null) {
+                        future.completeExceptionally(error)
+                    } else {
                         @Suppress("UNCHECKED_CAST")
-                        future.complete(inFlight.get() as T)
-                        return@runAsync
-                    } catch (_: Exception) {
-                        break
+                        future.complete(result as T)
                     }
                 }
-
-                val cached = resultCache[key]
-                if (cached != null) {
-                    @Suppress("UNCHECKED_CAST")
-                    future.complete(cached.get() as T)
-                    return@runAsync
-                }
-                Thread.sleep(POLL_INTERVAL_MS)
+                return
             }
-            future.completeExceptionally(TimeoutException("Leader result not available within ${DEFAULT_TIMEOUT.seconds}s"))
-        }, taskExecutor)
 
+            if (System.currentTimeMillis() - startTime >= DEFAULT_TIMEOUT.toMillis()) {
+                future.completeExceptionally(TimeoutException("Leader result not available within ${DEFAULT_TIMEOUT.seconds}s"))
+                return
+            }
+
+            CompletableFuture.delayedExecutor(POLL_INTERVAL_MS, TimeUnit.MILLISECONDS)
+                .execute { poll() }
+        }
+
+        poll()
         return future
     }
 

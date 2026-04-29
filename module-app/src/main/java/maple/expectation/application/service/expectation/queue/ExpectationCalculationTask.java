@@ -43,7 +43,8 @@ public class ExpectationCalculationTask {
         .build();
   }
 
-  public static ExpectationCalculationTask highPriority(String userIgn, boolean force, int presetNo) {
+  public static ExpectationCalculationTask highPriority(
+      String userIgn, boolean force, int presetNo) {
     return ExpectationCalculationTask.builder()
         .taskId(UUID.randomUUID().toString())
         .userIgn(userIgn)

@@ -17,13 +17,13 @@ class EquipmentItemConverterTest {
                 grade = PotentialGrade.LEGENDARY,
                 line1 = "INT +12%",
                 line2 = "마력 +9%",
-                line3 = "올스탯 +3%"
+                line3 = "올스탯 +3%",
             ),
             additionalPotential = PotentialLines(
                 grade = PotentialGrade.UNIQUE,
                 line1 = "INT +9%",
                 line2 = "마력 +6%",
-                line3 = null
+                line3 = null,
             ),
             starforce = 17,
             starforceScrollFlag = StarforceScrollFlag.USED,
@@ -31,10 +31,10 @@ class EquipmentItemConverterTest {
                 str = 0, dex = 0, `int` = 3, luk = 0,
                 maxHp = 0, allStat = 0,
                 attackPower = 0, magicPower = 5,
-                bossDamage = 0, damage = 0
+                bossDamage = 0, damage = 0,
             ),
             baseAttackPower = 10,
-            baseMagicPower = 200
+            baseMagicPower = 200,
         )
 
         val result = EquipmentItemConverter.toCubeInput(item)
@@ -68,7 +68,7 @@ class EquipmentItemConverterTest {
             starforceScrollFlag = StarforceScrollFlag.NOT_USED,
             addOption = AddOption(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
             baseAttackPower = 0,
-            baseMagicPower = 0
+            baseMagicPower = 0,
         )
 
         val result = EquipmentItemConverter.toCubeInput(item)

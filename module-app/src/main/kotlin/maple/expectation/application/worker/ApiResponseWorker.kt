@@ -1,19 +1,19 @@
 package maple.expectation.application.worker
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.UUID
 import maple.expectation.application.service.expectation.PureExpectationCalculator
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.mq.ConsumeResult
-import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationExecutionService
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.UUID
 
 @Component
 class ApiResponseWorker(
@@ -23,12 +23,12 @@ class ApiResponseWorker(
     private val executionService: CalculationExecutionService,
     private val calculationInputPort: CalculationInputPort,
     private val objectMapper: ObjectMapper,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val terminalStatuses = setOf(
         CalculationJobStatus.COMPLETED,
-        CalculationJobStatus.FAILED
+        CalculationJobStatus.FAILED,
     )
 
     init {
@@ -48,7 +48,7 @@ class ApiResponseWorker(
                 executor.executeVoid({ executionService.handleCalculationFailure(jobId, "CALCULATION_ERROR", msg) }, context)
                 ConsumeResult.Ack
             },
-            context
+            context,
         )
     }
 
@@ -95,7 +95,7 @@ class ApiResponseWorker(
             resultJson = resultJson,
             characterClass = input.characterClass,
             presetNo = presetNo,
-            characterId = characterId
+            characterId = characterId,
         )
 
         log.info("[jobId={}] Calculation completed from CalculationInput (pure)", jobId)

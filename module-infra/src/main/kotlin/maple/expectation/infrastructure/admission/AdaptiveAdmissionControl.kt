@@ -178,7 +178,7 @@ class AdaptiveAdmissionControl(
      */
     private fun startCpuMonitor() {
         val cpuMonitorExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
-            Thread(runnable, "adaptive-admission-cpu-monitor").apply { isDaemon = true }
+            Thread.ofVirtual().name("adaptive-admission-cpu-monitor").unstarted(runnable)
         }
 
         cpuMonitorExecutor.scheduleAtFixedRate(

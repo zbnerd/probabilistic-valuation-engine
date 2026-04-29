@@ -89,8 +89,6 @@ public class TaskStatusService implements TaskStatusPort {
 
   private long parseMessageId(String taskId) {
     return executor.executeOrDefault(
-        () -> Long.parseLong(taskId),
-        -1L,
-        TaskContext.of("TaskStatus", "ParseId", taskId));
+        () -> Long.parseLong(taskId), -1L, TaskContext.of("TaskStatus", "ParseId", taskId));
   }
 }

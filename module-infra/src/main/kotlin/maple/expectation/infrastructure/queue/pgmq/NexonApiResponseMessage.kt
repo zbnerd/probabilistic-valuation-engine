@@ -7,5 +7,5 @@ data class NexonApiResponseMessage(
     val objectKey: String,
     val characterId: String,
     val userIgn: String,
-    val presetNo: Int = 1
+    val presetNo: Int = 1,
 )

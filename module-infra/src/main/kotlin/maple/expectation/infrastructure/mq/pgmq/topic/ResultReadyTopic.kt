@@ -18,7 +18,11 @@ class ResultReadyTopic(
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     queueMetrics: WorkerQueueMetrics,
 ) : PgmqTopicGroup(
-    pgmqClient, objectMapper, executor, lifecycleWrapper, queueMetrics,
+    pgmqClient,
+    objectMapper,
+    executor,
+    lifecycleWrapper,
+    queueMetrics,
     PgmqTopicConfig(batchSize = 10, visibilityTimeoutSec = 30),
 ) {
     override val name: String = QueueNames.RESULT_READY

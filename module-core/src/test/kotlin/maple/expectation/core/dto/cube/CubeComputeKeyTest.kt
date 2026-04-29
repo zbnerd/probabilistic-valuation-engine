@@ -8,9 +8,12 @@ class CubeComputeKeyTest {
     @Test
     fun `identical inputs produce equal keys`() {
         val input = CubeCalculationInput(
-            level = 160, part = "무기", grade = "유니크",
+            level = 160,
+            part = "무기",
+            grade = "유니크",
             targetStatType = StatType.STR_PERCENT,
-            minTotal = 21, enableTailClamp = true,
+            minTotal = 21,
+            enableTailClamp = true,
         )
         val key1 = CubeComputeKey.from(input, "BLACK", "csv-v1.0")
         val key2 = CubeComputeKey.from(input, "BLACK", "csv-v1.0")
@@ -21,9 +24,12 @@ class CubeComputeKeyTest {
     @Test
     fun `different type produces different key`() {
         val input = CubeCalculationInput(
-            level = 160, part = "무기", grade = "유니크",
+            level = 160,
+            part = "무기",
+            grade = "유니크",
             targetStatType = StatType.STR_PERCENT,
-            minTotal = 21, enableTailClamp = true,
+            minTotal = 21,
+            enableTailClamp = true,
         )
         val key1 = CubeComputeKey.from(input, "BLACK", "csv-v1.0")
         val key2 = CubeComputeKey.from(input, "ADDITIONAL", "csv-v1.0")

@@ -38,7 +38,8 @@ public class CalculationQueuePortAdapter implements CalculationQueuePort {
    * @return TaskReceipt with taskId
    */
   @Override
-  public TaskReceipt offerHighPriorityWithReceipt(String userIgn, boolean forceRecalculation, int presetNo) {
+  public TaskReceipt offerHighPriorityWithReceipt(
+      String userIgn, boolean forceRecalculation, int presetNo) {
     ExpectationCalculationTask task =
         ExpectationCalculationTask.highPriority(userIgn, forceRecalculation, presetNo);
     return queue.offerWithReceipt(task);

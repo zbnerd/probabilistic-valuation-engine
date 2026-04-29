@@ -138,9 +138,7 @@ public class ExpectationCalculationQueue {
     TaskContext context =
         TaskContext.of("Queue", "HighPriorityCount", QueueNames.EXPECTATION_CALC_HIGH);
     return executor.executeOrDefault(
-        () -> Math.toIntExact(pgmqPort.queueLength(QueueNames.EXPECTATION_CALC_HIGH)),
-        0,
-        context);
+        () -> Math.toIntExact(pgmqPort.queueLength(QueueNames.EXPECTATION_CALC_HIGH)), 0, context);
   }
 
   /** Get low priority queue size from PGMQ. */
@@ -148,9 +146,7 @@ public class ExpectationCalculationQueue {
     TaskContext context =
         TaskContext.of("Queue", "LowPriorityCount", QueueNames.EXPECTATION_CALC_LOW);
     return executor.executeOrDefault(
-        () -> Math.toIntExact(pgmqPort.queueLength(QueueNames.EXPECTATION_CALC_LOW)),
-        0,
-        context);
+        () -> Math.toIntExact(pgmqPort.queueLength(QueueNames.EXPECTATION_CALC_LOW)), 0, context);
   }
 
   /**
@@ -195,12 +191,14 @@ public class ExpectationCalculationQueue {
     String queueName = resolveQueueName(task.getPriority());
     if (task.isForceRecalculation()) {
       ExpectationCalcMessage message =
-          new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation(), task.getPresetNo());
+          new ExpectationCalcMessage(
+              task.getUserIgn(), task.isForceRecalculation(), task.getPresetNo());
       long messageId = pgmqPort.send(queueName, message);
       return new TaskReceipt(String.valueOf(messageId), task.getUserIgn(), true);
     } else {
       ExpectationCalcMessage message =
-          new ExpectationCalcMessage(task.getUserIgn(), task.isForceRecalculation(), task.getPresetNo());
+          new ExpectationCalcMessage(
+              task.getUserIgn(), task.isForceRecalculation(), task.getPresetNo());
       // P0-3 FIX: Dedup key must include presetNo to avoid conflicts between different presets
       String dedupKey = task.getUserIgn() + ":" + task.getPresetNo();
       long result = pgmqPort.sendIfAbsent(queueName, dedupKey, message);

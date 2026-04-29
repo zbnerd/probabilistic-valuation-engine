@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.pgmq
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.RepeatedTest
 import org.junit.jupiter.api.Test
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
 
 class PipelineBufferTest {
 

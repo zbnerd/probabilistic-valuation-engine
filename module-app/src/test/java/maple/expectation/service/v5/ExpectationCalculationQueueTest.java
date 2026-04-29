@@ -16,6 +16,7 @@ import maple.expectation.application.service.expectation.queue.ExpectationCalcul
 import maple.expectation.application.service.expectation.queue.QueuePriority;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.core.port.inbound.TaskReceipt;
+import maple.expectation.core.port.out.PgmqPort;
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -23,7 +24,6 @@ import maple.expectation.infrastructure.executor.function.CheckedRunnable;
 import maple.expectation.infrastructure.executor.function.CheckedSupplier;
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
-import maple.expectation.core.port.out.PgmqPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -73,8 +73,7 @@ class ExpectationCalculationQueueTest {
   @DisplayName("이미 활성 task가 있으면 non-force 요청은 기존 taskId를 재사용")
   void offerWithReceiptReusesExistingTaskForNonForceRequests() {
     when(pgmqPort.queueLength(anyString())).thenReturn(0L);
-    when(pgmqPort.sendIfAbsent(eq("expectation_calc_high"), eq("user1:1"), any()))
-        .thenReturn(-99L);
+    when(pgmqPort.sendIfAbsent(eq("expectation_calc_high"), eq("user1:1"), any())).thenReturn(-99L);
 
     TaskReceipt receipt =
         queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", false));

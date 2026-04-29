@@ -80,16 +80,15 @@ class GracefulShutdownHook(
         {
             val deadlineNs = System.nanoTime() + Duration.ofSeconds(30).toNanos()
 
-            val coordinatorThread = Thread(
-                {
+            val coordinatorThread = Thread.ofVirtual()
+                .name("shutdown-coordinator")
+                .unstarted {
                     try {
                         coordinator.executeShutdown()
                     } catch (e: Exception) {
                         logger.error("[GracefulShutdownHook] Coordinator 실행 실패", e)
                     }
-                },
-                "shutdown-coordinator",
-            )
+                }
 
             coordinatorThread.start()
 

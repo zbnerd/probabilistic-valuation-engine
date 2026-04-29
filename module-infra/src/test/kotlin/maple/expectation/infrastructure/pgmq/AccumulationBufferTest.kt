@@ -1,23 +1,21 @@
 package maple.expectation.infrastructure.pgmq
 
+import java.time.Duration
+import java.time.Instant
 import org.assertj.core.api.Assertions.assertThat
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import java.time.Duration
-import java.time.Instant
 
 class AccumulationBufferTest {
 
-    private fun testMessage(id: Long = 1L): PgmqMessage<ExpectationCalcMessage> {
-        return PgmqMessage.of(
-            messageId = id,
-            readCount = 0,
-            enqueuedAt = Instant.now(),
-            vt = Instant.now().plusSeconds(30),
-            payload = ExpectationCalcMessage(userIgn = "TestUser$id", forceRecalculation = false),
-        )
-    }
+    private fun testMessage(id: Long = 1L): PgmqMessage<ExpectationCalcMessage> = PgmqMessage.of(
+        messageId = id,
+        readCount = 0,
+        enqueuedAt = Instant.now(),
+        vt = Instant.now().plusSeconds(30),
+        payload = ExpectationCalcMessage(userIgn = "TestUser$id", forceRecalculation = false),
+    )
 
     @Test
     @DisplayName("shouldFlush returns false when buffer is empty")

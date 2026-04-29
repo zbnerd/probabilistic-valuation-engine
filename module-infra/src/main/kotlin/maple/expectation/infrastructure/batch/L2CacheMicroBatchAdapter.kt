@@ -65,7 +65,7 @@ class L2CacheMicroBatchAdapter(
                 meterRegistry = meterRegistry,
                 cache = cache,
                 singleLoader = { key -> l2Strategy.get(key, type) },
-                batchLoader = { keys -> l2Strategy.getAll(keys, type) },
+                batchLoader = { keys -> java.util.concurrent.CompletableFuture.completedFuture(l2Strategy.getAll(keys, type)) },
             ).also { it.startBatchWorker() }
         }
     }

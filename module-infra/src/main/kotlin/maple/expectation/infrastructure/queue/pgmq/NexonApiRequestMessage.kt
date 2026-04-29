@@ -8,5 +8,5 @@ data class NexonApiRequestMessage(
     val userIgn: String,
     val presetNo: Int = 1,
     val eventType: String = "FETCH_EQUIPMENT",
-    val requestedAt: String = Instant.now().toString()
+    val requestedAt: String = Instant.now().toString(),
 )

@@ -14,5 +14,5 @@ data class CalculationSnapshot(
     val originalSize: Long? = null,
     val hash: String? = null,
     val expiresAt: Instant,
-    val createdAt: Instant = Instant.now()
+    val createdAt: Instant = Instant.now(),
 )

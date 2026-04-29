@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.job
 
+import java.util.UUID
 import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
@@ -15,7 +16,6 @@ import maple.expectation.infrastructure.persistence.repository.CalculationSnapsh
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.util.UUID
 
 @Service
 class CalculationJobService(
@@ -24,7 +24,7 @@ class CalculationJobService(
     private val ocidResolveTopic: OcidResolveTopic,
     private val nexonApiRequestTopic: NexonApiRequestTopic,
     private val nexonApiResponseTopic: NexonApiResponseTopic,
-    private val snapshotRepository: CalculationSnapshotRepository
+    private val snapshotRepository: CalculationSnapshotRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -40,7 +40,7 @@ class CalculationJobService(
         val transitioned = jobPort.transitionStatus(
             jobId,
             CalculationJobStatus.REQUESTED,
-            CalculationJobStatus.OCID_RESOLVING
+            CalculationJobStatus.OCID_RESOLVING,
         )
         if (!transitioned) {
             log.warn("[jobId={}] Cannot transition to OCID_RESOLVING", jobId)
@@ -70,16 +70,14 @@ class CalculationJobService(
     fun saveSnapshotAndMarkReady(
         snapshotEntity: CalculationSnapshotEntity,
         jobId: UUID,
-        objectKey: String
+        objectKey: String,
     ): Boolean {
         snapshotRepository.save(snapshotEntity)
         return markSnapshotReadyInternal(jobId, snapshotEntity.snapshotId, objectKey)
     }
 
     @Transactional
-    fun markSnapshotReady(jobId: UUID, snapshotId: UUID, objectKey: String): Boolean {
-        return markSnapshotReadyInternal(jobId, snapshotId, objectKey)
-    }
+    fun markSnapshotReady(jobId: UUID, snapshotId: UUID, objectKey: String): Boolean = markSnapshotReadyInternal(jobId, snapshotId, objectKey)
 
     private fun markSnapshotReadyInternal(jobId: UUID, snapshotId: UUID, objectKey: String): Boolean {
         val ready = jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)

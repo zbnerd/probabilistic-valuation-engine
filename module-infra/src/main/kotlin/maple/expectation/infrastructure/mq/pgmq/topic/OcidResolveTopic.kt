@@ -17,7 +17,11 @@ class OcidResolveTopic(
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     queueMetrics: WorkerQueueMetrics,
 ) : PgmqTopicGroup(
-    pgmqClient, objectMapper, executor, lifecycleWrapper, queueMetrics,
+    pgmqClient,
+    objectMapper,
+    executor,
+    lifecycleWrapper,
+    queueMetrics,
     PgmqTopicConfig(batchSize = 10, visibilityTimeoutSec = 120),
 ) {
     override val name: String = "ocid_resolve_queue"

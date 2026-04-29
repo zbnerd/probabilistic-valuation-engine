@@ -17,7 +17,11 @@ class NexonApiRequestTopic(
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     queueMetrics: WorkerQueueMetrics,
 ) : PgmqTopicGroup(
-    pgmqClient, objectMapper, executor, lifecycleWrapper, queueMetrics,
+    pgmqClient,
+    objectMapper,
+    executor,
+    lifecycleWrapper,
+    queueMetrics,
     PgmqTopicConfig(batchSize = 5, visibilityTimeoutSec = 120),
 ) {
     override val name: String = "nexon_api_request_queue"

@@ -3,10 +3,9 @@ package maple.expectation.service.v5;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
-import static org.mockito.Mockito.mock;
 
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationQueue;
 import maple.expectation.application.service.expectation.queue.ExpectationCalculationTask;
@@ -41,10 +40,8 @@ class CalculationQueuePortAdapterTest {
   @DisplayName("offerHighPriorityWithReceipt delegates to queue.offerWithReceipt")
   void offerHighPriorityWithReceipt_delegatesToQueue() {
     // Given
-    TaskReceipt expectedReceipt =
-        new TaskReceipt("msg123", TEST_USER_IGN, true);
-    when(queue.offerWithReceipt(any(ExpectationCalculationTask.class)))
-        .thenReturn(expectedReceipt);
+    TaskReceipt expectedReceipt = new TaskReceipt("msg123", TEST_USER_IGN, true);
+    when(queue.offerWithReceipt(any(ExpectationCalculationTask.class))).thenReturn(expectedReceipt);
 
     // When
     TaskReceipt result = adapter.offerHighPriorityWithReceipt(TEST_USER_IGN, false, 1);
@@ -143,8 +140,7 @@ class CalculationQueuePortAdapterTest {
   void offerHighPriorityWithReceipt_returnsRejectedWhenQueueFull() {
     // Given
     TaskReceipt rejectedReceipt = TaskReceipt.rejected(TEST_USER_IGN);
-    when(queue.offerWithReceipt(any(ExpectationCalculationTask.class)))
-        .thenReturn(rejectedReceipt);
+    when(queue.offerWithReceipt(any(ExpectationCalculationTask.class))).thenReturn(rejectedReceipt);
 
     // When
     TaskReceipt result = adapter.offerHighPriorityWithReceipt(TEST_USER_IGN, false, 1);

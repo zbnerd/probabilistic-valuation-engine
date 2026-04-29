@@ -1,9 +1,9 @@
 package maple.expectation.core.port.out
 
-import maple.expectation.core.model.job.CalculationJob
-import maple.expectation.core.model.job.CalculationJobStatus
 import java.time.Instant
 import java.util.UUID
+import maple.expectation.core.model.job.CalculationJob
+import maple.expectation.core.model.job.CalculationJobStatus
 
 interface CalculationJobPort {
     fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob

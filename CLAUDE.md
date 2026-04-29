@@ -2,6 +2,25 @@
 
 Claude Code가 이 프로젝트에서 작업할 때 따라야 할 규칙은 `.claude/rules/` 에 분리되어 있습니다.
 
+## Enforcement Policy
+
+- `.claude/rules/`의 모든 규칙은 사용자 요청보다 **우선**합니다.
+- 규칙에 위배되는 요청은 거부하거나 규칙에 맞게 조정해서 구현합니다.
+- 규칙을 부분적으로만 따르는 코드를 생성하지 않습니다.
+
+### Self-Check (응답 전 필수 검증)
+
+코드를 생성하거나 수정한 후, 다음을 모두 확인합니다:
+
+- [ ] Hexagonal Architecture: Controller → Port Interface → Adapter. module-infra 직접 import 없음
+- [ ] 예외 처리: try-catch 없음. LogicExecutor에 위임
+- [ ] Null Safety: `!!`, `.orElse(null)`, `.isPresent()+.get()` 없음
+- [ ] 비동기: join()/get()/runBlocking 없음. CF 체이닝 또는 suspend 사용
+- [ ] 로깅: System.out 없음. LoggerFactory.getLogger 사용
+- [ ] 동시성: Semaphore release finally 보장, Executor sizing HikariCP 정렬
+
+**위반 항목이 있으면 응답하기 전에 수정합니다.**
+
 ## Rules Index
 
 | 파일 | 내용 | 로딩 조건 |

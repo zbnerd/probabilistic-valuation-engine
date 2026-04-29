@@ -77,7 +77,7 @@ public class GameCharacterFacade {
     Optional<GameCharacter> existing = gameCharacterService.getCharacterIfExist(userIgn);
     if (existing.isPresent()) {
       log.info("✅ [AsyncWait] 캐릭터 이미 존재: {}", userIgn);
-      return existing.get();
+      return existing.orElseThrow();
     }
 
     // waitForCharacterCreation이 null이면 (리스너 미설정 등) 바로 실패
@@ -112,7 +112,7 @@ public class GameCharacterFacade {
     Optional<GameCharacter> result = gameCharacterService.getCharacterIfExist(userIgn);
     if (result.isPresent()) {
       log.info("✅ [AsyncWait] 캐릭터 조회 완료: {}", userIgn);
-      return CompletableFuture.completedFuture(result.get());
+      return CompletableFuture.completedFuture(result.orElseThrow());
     }
     log.warn("⏳ [AsyncWait] 캐릭터 조회 타임아웃: {}", userIgn);
     return CompletableFuture.failedFuture(new CharacterNotFoundException(userIgn));

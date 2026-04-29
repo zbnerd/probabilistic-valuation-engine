@@ -585,18 +585,15 @@ public class EquipmentStreamingParser {
     }
   }
 
-  /** ✅ 박멸: close() 시 발생하는 IOException 노이즈 제거 */
+  /** Resource cleanup with IOException noise suppression via LogicExecutor */
   private void closeResources(InputStream is, JsonParser parser) {
-    executor.executeVoidJava(
+    executor.executeOrDefault(
         () -> {
-          try {
-            if (parser != null) parser.close();
-            if (is != null) is.close();
-          } catch (IOException e) {
-            // Ignore close errors - resources are being cleaned up anyway
-            log.debug("Resource close failed (ignoring): {}", e.getMessage());
-          }
+          if (parser != null) parser.close();
+          if (is != null) is.close();
+          return null;
         },
+        null, // Ignore close errors - resources are being cleaned up anyway
         TaskContext.of("Parser", "CloseResources"));
   }
 }

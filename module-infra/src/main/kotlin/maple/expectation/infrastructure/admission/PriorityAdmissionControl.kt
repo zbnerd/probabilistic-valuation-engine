@@ -205,7 +205,7 @@ class PriorityAdmissionControl(
 
     private fun workerLoop(workerIndex: Int) {
         while (!Thread.currentThread().isInterrupted) {
-            try {
+            executor.executeVoid({
                 // 🔥 PRIORITY QUEUE: Blocks until highest priority item available
                 @Suppress("UNCHECKED_CAST")
                 val request = admissionQueue.take() as PriorityAdmissionRequest<*>
@@ -220,7 +220,7 @@ class PriorityAdmissionControl(
                     request.boostedPriority = minOf(request.boostedPriority + 10, 100)
                     if (oldPriority != request.boostedPriority) {
                         log.info(
-                            "[PriorityAdmissionControl] 🔥 Priority aging: {} boosted from {} to {} after {}ms wait",
+                            "[PriorityAdmissionControl] Priority aging: {} boosted from {} to {} after {}ms wait",
                             request.key,
                             oldPriority,
                             request.boostedPriority,
@@ -247,45 +247,29 @@ class PriorityAdmissionControl(
                         AdmissionTimeoutException("Queue timeout after ${properties.queueTimeoutMs}ms"),
                     )
                     log.debug("[PriorityAdmissionControl] Worker {}: Request timed out in queue: key={}", workerIndex, request.key)
-                    continue
+                    return@executeVoid
                 }
 
                 inFlightCount.incrementAndGet()
 
-                // Execute request
-                try {
-                    @Suppress("UNCHECKED_CAST")
-                    val result = request.task.call() as Any
-                    @Suppress("UNCHECKED_CAST")
-                    (request.future as CompletableFuture<Any>).complete(result)
-                } catch (e: Exception) {
-                    request.future.completeExceptionally(e)
-                } finally {
-                    semaphore.release()
-                    inFlightCount.decrementAndGet()
-                }
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                log.info("[PriorityAdmissionControl] Worker {} interrupted", workerIndex)
-                break
-            } catch (e: Exception) {
-                log.error("[PriorityAdmissionControl] Worker {} error", workerIndex, e)
-            }
+                executeRequest(request)
+            }, TaskContext.of("PriorityAdmissionControl", "Worker", "worker-$workerIndex"))
         }
     }
 
     private fun <T> executeRequest(request: PriorityAdmissionRequest<T>) {
-        executor.executeVoid({
-            try {
+        executor.executeWithFinally(
+            {
                 val result = request.task.call()
-                request.future.complete(result)
-            } catch (e: Exception) {
-                request.future.completeExceptionally(e)
-            } finally {
+                @Suppress("UNCHECKED_CAST")
+                (request.future as CompletableFuture<Any>).complete(result)
+            },
+            {
                 semaphore.release()
                 inFlightCount.decrementAndGet()
-            }
-        }, TaskContext.of("PriorityAdmissionControl", "Execute", request.key))
+            },
+            TaskContext.of("PriorityAdmissionControl", "Execute", request.key),
+        )
     }
 
     data class PriorityAdmissionRequest<T>(

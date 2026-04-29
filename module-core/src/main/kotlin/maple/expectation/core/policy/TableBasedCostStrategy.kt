@@ -36,7 +36,12 @@ class TableBasedCostStrategy : CostCalculationStrategy {
         val levelKey = typeTable.floorKey(level) ?: typeTable.firstKey()
 
         // O(1) EnumMap lookup
-        return typeTable[levelKey]!![validGrade]!!
+        val levelCosts = requireNotNull(typeTable[levelKey]) {
+            "No cost table entry for levelKey=$levelKey in CubeType=$type"
+        }
+        return requireNotNull(levelCosts[validGrade]) {
+            "No cost entry for grade=$validGrade at levelKey=$levelKey in CubeType=$type"
+        }
     }
 
     /**

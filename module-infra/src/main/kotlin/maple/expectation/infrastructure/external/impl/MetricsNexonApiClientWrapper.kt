@@ -4,6 +4,8 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import java.util.concurrent.CompletableFuture
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.CharacterBasicResponse
 import maple.expectation.infrastructure.external.dto.v2.CharacterOcidResponse
@@ -47,6 +49,7 @@ class MetricsNexonApiClientWrapper(
     private val delegate: NexonApiClient,
     private val meterRegistry: MeterRegistry,
     private val rateLimiter: NexonRateLimiter,
+    private val logicExecutor: LogicExecutor,
 ) : NexonApiClient {
 
     private val logger = LoggerFactory.getLogger(MetricsNexonApiClientWrapper::class.java)
@@ -143,33 +146,34 @@ class MetricsNexonApiClientWrapper(
 
         return future
             .whenComplete { result, ex ->
-                try {
-                    // Always release permit after call completes
-                    rateLimiter.releasePermit()
+                logicExecutor.executeVoid(
+                    {
+                        // Always release permit after call completes
+                        rateLimiter.releasePermit()
 
-                    val timer = getTimer(endpoint, if (ex == null) "success" else "error")
-                    val duration = sample.stop(timer)
+                        val timer = getTimer(endpoint, if (ex == null) "success" else "error")
+                        val duration = sample.stop(timer)
 
-                    if (ex == null) {
-                        successCounter.increment()
-                        logger.debug(
-                            "[NexonMetrics] {} success: {}ms (acquire: {}ms)",
-                            endpoint,
-                            java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(duration),
-                            acquireTime / 1_000_000,
-                        )
-                    } else {
-                        recordError(endpoint, ex)
-                        logger.warn(
-                            "[NexonMetrics] {} failed: {} (acquire: {}ms)",
-                            endpoint,
-                            ex.javaClass.simpleName,
-                            acquireTime / 1_000_000,
-                        )
-                    }
-                } catch (e: Exception) {
-                    logger.error("[NexonMetrics] Metric recording failed", e)
-                }
+                        if (ex == null) {
+                            successCounter.increment()
+                            logger.debug(
+                                "[NexonMetrics] {} success: {}ms (acquire: {}ms)",
+                                endpoint,
+                                java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(duration),
+                                acquireTime / 1_000_000,
+                            )
+                        } else {
+                            recordError(endpoint, ex)
+                            logger.warn(
+                                "[NexonMetrics] {} failed: {} (acquire: {}ms)",
+                                endpoint,
+                                ex.javaClass.simpleName,
+                                acquireTime / 1_000_000,
+                            )
+                        }
+                    },
+                    TaskContext.of("NexonMetrics", "RecordMetrics", endpoint),
+                )
             }
     }
 

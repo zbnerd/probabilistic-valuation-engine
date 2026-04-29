@@ -65,7 +65,7 @@ open class NexonCharacterRepositoryImpl(
                         ps.setString(2, data.characterName)
                         ps.setString(3, data.worldName)
                         ps.setString(4, data.characterClass)
-                        ps.setInt(5, data.characterLevel!!)
+                        ps.setInt(5, requireNotNull(data.characterLevel) { "characterLevel must not be null for ocid=${data.ocid}" })
                         ps.setString(6, data.guildName)
                         ps.setString(7, data.characterImageUrl)
                         ps.setTimestamp(

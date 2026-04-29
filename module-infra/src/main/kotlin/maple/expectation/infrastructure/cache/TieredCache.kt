@@ -77,13 +77,13 @@ class TieredCache(
         l2Enabled = !isL2Disabled(l2)
         batchBuffer = if (l2Enabled && l2Strategy != null) {
             log.info("[TieredCache] Batch L2 enabled: cache={}", cacheName)
-            BatchL2LookupBuffer(l2Strategy, l1, meterRegistry)
+            BatchL2LookupBuffer(l2Strategy, l1, meterRegistry, executor)
         } else {
             null
         }
         writeBuffer = if (l2Enabled && l2Strategy != null) {
             val ttl = (l2 as? PostgresL2CacheAdapter)?.ttlMinutes ?: 15L
-            BatchL2WriteBuffer(l2Strategy, l1, ttl, meterRegistry)
+            BatchL2WriteBuffer(l2Strategy, l1, ttl, meterRegistry, executor)
         } else {
             null
         }
@@ -132,7 +132,7 @@ class TieredCache(
                 keyVersions[key] = versionCounter.incrementAndGet()
                 tapCacheHit(w, "L2")
             }
-            .orElse(null)
+            .orElseGet { null }
     }
 
     override fun put(key: Any, value: Any?) {

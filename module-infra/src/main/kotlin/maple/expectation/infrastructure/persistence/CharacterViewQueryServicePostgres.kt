@@ -53,11 +53,16 @@ class CharacterViewQueryServicePostgres(
     ) {
         val context = TaskContext.of("PostgresQuery", "UpsertFromCalculation", userIgn)
         executor.executeVoid({
-            val presets: List<CharacterValuationViewEntity.PresetView>? = try {
-                objectMapper.readValue(presetsJson, objectMapper.typeFactory.constructCollectionType(List::class.java, CharacterValuationViewEntity.PresetView::class.java))
-            } catch (_: Exception) {
-                null
-            }
+            val presets: List<CharacterValuationViewEntity.PresetView>? = executor.executeOrDefault(
+                {
+                    objectMapper.readValue(
+                        presetsJson,
+                        objectMapper.typeFactory.constructCollectionType(List::class.java, CharacterValuationViewEntity.PresetView::class.java),
+                    )
+                },
+                null,
+                TaskContext.of("PostgresQuery", "ParsePresets", userIgn),
+            )
             val entity = CharacterValuationViewEntity(
                 userIgn = userIgn,
                 messageId = messageId,

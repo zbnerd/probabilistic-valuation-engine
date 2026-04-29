@@ -5,6 +5,8 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
 
@@ -35,6 +37,7 @@ class BatchL2WriteBuffer(
     private val l1: Cache,
     private val ttlMinutes: Long,
     meterRegistry: MeterRegistry,
+    private val executor: LogicExecutor,
     private val flushIntervalMs: Long = 10,
     private val maxBatchSize: Int = 500,
 ) {
@@ -94,21 +97,27 @@ class BatchL2WriteBuffer(
             uniqueEntries[req.key.toString()] = req.value
         }
 
-        try {
-            val start = System.nanoTime()
-            val entries = uniqueEntries.map { it.key to it.value }
-            l2Strategy.putAll(entries, ttlMinutes)
-            val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
+        executor.executeOrCatch(
+            {
+                val start = System.nanoTime()
+                val entries = uniqueEntries.map { it.key to it.value }
+                l2Strategy.putAll(entries, ttlMinutes)
+                val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
 
-            batchCounter.increment()
-            batchSizeSummary.record(entries.size.toDouble())
+                batchCounter.increment()
+                batchSizeSummary.record(entries.size.toDouble())
 
-            if (log.isDebugEnabled || entries.size >= 50 || elapsedMs >= 100) {
-                log.info("[BatchL2Write] Flush: {} entries in {}ms", entries.size, elapsedMs)
-            }
-        } catch (e: Exception) {
-            log.warn("[BatchL2Write] Flush failed for {} entries: {}", uniqueEntries.size, e.message)
-        }
+                if (log.isDebugEnabled || entries.size >= 50 || elapsedMs >= 100) {
+                    log.info("[BatchL2Write] Flush: {} entries in {}ms", entries.size, elapsedMs)
+                }
+                null
+            },
+            { e ->
+                log.warn("[BatchL2Write] Flush failed for {} entries: {}", uniqueEntries.size, e.message)
+                null
+            },
+            TaskContext.of("BatchL2Write", "Flush", uniqueEntries.size.toString()),
+        )
 
         if (!pending.isEmpty()) {
             sharedScheduler.schedule({ flush() }, 0, TimeUnit.MILLISECONDS)

@@ -199,6 +199,6 @@ class NexonDataCacheAspect(
     private fun wrap(res: EquipmentResponse?, type: Class<*>): Any = if (CompletableFuture::class.java.isAssignableFrom(type)) {
         CompletableFuture.completedFuture(res)
     } else {
-        res!!
+        requireNotNull(res) { "EquipmentResponse must not be null for synchronous cache wrap (ocid lookup)" }
     }
 }

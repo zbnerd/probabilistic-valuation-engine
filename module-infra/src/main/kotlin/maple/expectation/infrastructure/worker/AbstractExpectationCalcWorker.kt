@@ -136,28 +136,29 @@ abstract class AbstractExpectationCalcWorker(
 
         // 2. Parse all results in one pass
         val parsed = deduped.mapNotNull { result ->
-            try {
-                val tree = objectMapper.valueToTree<com.fasterxml.jackson.databind.JsonNode>(result.response)
-                val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return@mapNotNull null
-                val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return@mapNotNull null
-                val presetsNode = tree.get("presets") ?: return@mapNotNull null
-                val presetNo = result.message.payload.presetNo
-                val char = result.character
-                ParsedViewResult(
-                    userIgn = char.userIgn.value,
-                    messageId = result.message.messageId.toString(),
-                    characterOcid = char.characterId.value,
-                    characterClass = char.characterClass ?: "",
-                    totalExpectedCost = totalExpectedCost,
-                    maxPresetNo = maxPresetNo,
-                    presetNo = presetNo,
-                    presetsJson = objectMapper.writeValueAsString(presetsNode),
-                    version = System.currentTimeMillis(),
-                )
-            } catch (e: Exception) {
-                workerLog.warn("[{}] Parse failed for {}: {}", workerName, result.character.userIgn.value, e.message)
-                null
-            }
+            executor.executeOrDefault(
+                {
+                    val tree = objectMapper.valueToTree<com.fasterxml.jackson.databind.JsonNode>(result.response)
+                    val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return@executeOrDefault null
+                    val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return@executeOrDefault null
+                    val presetsNode = tree.get("presets") ?: return@executeOrDefault null
+                    val presetNo = result.message.payload.presetNo
+                    val char = result.character
+                    ParsedViewResult(
+                        userIgn = char.userIgn.value,
+                        messageId = result.message.messageId.toString(),
+                        characterOcid = char.characterId.value,
+                        characterClass = char.characterClass ?: "",
+                        totalExpectedCost = totalExpectedCost,
+                        maxPresetNo = maxPresetNo,
+                        presetNo = presetNo,
+                        presetsJson = objectMapper.writeValueAsString(presetsNode),
+                        version = System.currentTimeMillis(),
+                    )
+                },
+                null,
+                TaskContext.of(workerName, "ParseResult", result.character.userIgn.value),
+            )
         }
         if (parsed.isEmpty()) return
 

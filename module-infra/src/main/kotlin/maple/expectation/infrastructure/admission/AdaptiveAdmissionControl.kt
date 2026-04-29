@@ -183,11 +183,10 @@ class AdaptiveAdmissionControl(
 
         cpuMonitorExecutor.scheduleAtFixedRate(
             {
-                try {
-                    adjustLimitsBasedOnCpu()
-                } catch (e: Exception) {
-                    log.error("[AdaptiveAdmissionControl] CPU monitor error", e)
-                }
+                executor.executeVoid(
+                    { adjustLimitsBasedOnCpu() },
+                    TaskContext.of("AdaptiveAdmissionControl", "CpuMonitor"),
+                )
             },
             5, // Initial delay
             5, // Check every 5 seconds
@@ -280,7 +279,7 @@ class AdaptiveAdmissionControl(
 
     private fun workerLoop(workerIndex: Int) {
         while (!Thread.currentThread().isInterrupted) {
-            try {
+            executor.executeVoid({
                 // 🔥 FIXED: Block HERE (in worker thread, not HTTP thread)
                 @Suppress("UNCHECKED_CAST")
                 val request = admissionQueue.take() as AdmissionRequest<*>
@@ -298,45 +297,29 @@ class AdaptiveAdmissionControl(
                         AdmissionTimeoutException("Queue timeout after ${properties.queueTimeoutMs}ms"),
                     )
                     log.debug("[AdaptiveAdmissionControl] Worker {}: Request timed out in queue: key={}", workerIndex, request.key)
-                    continue
+                    return@executeVoid
                 }
 
                 inFlightCount.incrementAndGet()
 
-                // Execute request
-                try {
-                    @Suppress("UNCHECKED_CAST")
-                    val result = request.task.call() as Any
-                    @Suppress("UNCHECKED_CAST")
-                    (request.future as CompletableFuture<Any>).complete(result)
-                } catch (e: Exception) {
-                    request.future.completeExceptionally(e)
-                } finally {
-                    semaphore.release()
-                    inFlightCount.decrementAndGet()
-                }
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                log.info("[AdaptiveAdmissionControl] Worker {} interrupted", workerIndex)
-                break
-            } catch (e: Exception) {
-                log.error("[AdaptiveAdmissionControl] Worker {} error", workerIndex, e)
-            }
+                executeRequest(request)
+            }, TaskContext.of("AdaptiveAdmissionControl", "Worker", "worker-$workerIndex"))
         }
     }
 
     private fun <T> executeRequest(request: AdmissionRequest<T>) {
-        executor.executeVoid({
-            try {
+        executor.executeWithFinally(
+            {
                 val result = request.task.call()
-                request.future.complete(result)
-            } catch (e: Exception) {
-                request.future.completeExceptionally(e)
-            } finally {
+                @Suppress("UNCHECKED_CAST")
+                (request.future as CompletableFuture<Any>).complete(result)
+            },
+            {
                 semaphore.release()
                 inFlightCount.decrementAndGet()
-            }
-        }, TaskContext.of("AdaptiveAdmissionControl", "Execute", request.key))
+            },
+            TaskContext.of("AdaptiveAdmissionControl", "Execute", request.key),
+        )
     }
 
     data class AdmissionRequest<T>(

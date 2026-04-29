@@ -1,5 +1,7 @@
 package maple.expectation.infrastructure.jdbc
 
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.LockSupport
 import maple.expectation.core.domain.model.equipment.CharacterEquipment
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -210,36 +212,40 @@ class JdbcBatchUpsertRepository(
         var lastException: DataAccessException? = null
 
         while (attempt <= retryConfig.maxRetries) {
-            try {
-                if (attempt > 0) {
-                    val backoff = retryConfig.getBackoffForAttempt(attempt - 1)
-                    log.info(
-                        "Retrying batch upsert after {}ms (attempt {}/{})",
-                        backoff.toMillis(),
-                        attempt,
-                        retryConfig.maxRetries,
-                    )
-                    Thread.sleep(backoff.toMillis())
-                }
-
-                return doBatchUpsert(equipments, batchSize)
-            } catch (e: DataAccessException) {
-                lastException = e
-                attempt++
-
-                if (attempt > retryConfig.maxRetries) {
-                    log.error("Batch upsert failed after {} attempts", attempt, e)
-                    throw IllegalStateException(
-                        "JDBC batch upsert failed after $attempt attempts: ${e.message}",
-                        e,
-                    )
-                }
-
-                log.warn("Batch upsert attempt {} failed: {}", attempt, e.message)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                throw IllegalStateException("Batch upsert interrupted during retry backoff", e)
-            }
+            val currentAttempt = attempt
+            val result = executor.executeOrCatch(
+                {
+                    if (currentAttempt > 0) {
+                        val backoff = retryConfig.getBackoffForAttempt(currentAttempt - 1)
+                        log.info(
+                            "Retrying batch upsert after {}ms (attempt {}/{})",
+                            backoff.toMillis(),
+                            currentAttempt,
+                            retryConfig.maxRetries,
+                        )
+                        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(backoff.toMillis()))
+                    }
+                    doBatchUpsert(equipments, batchSize)
+                },
+                { e ->
+                    val dataEx = if (e is DataAccessException) e else null
+                    if (dataEx != null) {
+                        lastException = dataEx
+                        attempt++
+                        if (attempt > retryConfig.maxRetries) {
+                            log.error("Batch upsert failed after {} attempts", attempt, dataEx)
+                            throw IllegalStateException(
+                                "JDBC batch upsert failed after $attempt attempts: ${dataEx.message}",
+                                dataEx,
+                            )
+                        }
+                        log.warn("Batch upsert attempt {} failed: {}", attempt, dataEx.message)
+                    }
+                    intArrayOf()
+                },
+                TaskContext.of("JdbcBatchUpsert", "RetryAttempt", "$attempt"),
+            )
+            if (result.isNotEmpty() || lastException == null) return result
         }
 
         throw IllegalStateException(

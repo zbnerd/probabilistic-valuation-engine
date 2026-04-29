@@ -330,27 +330,28 @@ abstract class PgmqWorker<T : Any>(
      * Flush the accumulation buffer: drain all messages, pre-warm, split into chunks,
      * submit each chunk as an independent task. Each chunk is processed sequentially
      * on its own thread — no context switching within, parallel across chunks.
-     *
-     * Zero Try-Catch Exception: Direct try-catch for permit leak prevention.
-     * If preWarmBatch or submit fails, messages MUST be re-added to buffer
-     * or inflightPermits will never be released.
      */
     private fun flushSequentialBatch() {
         val batch = accumulationBuffer.drain()
         if (batch.isEmpty()) return
-        try {
-            preWarmBatch(batch)
-            val poolSize = config.common.workerPoolSize
-            val chunkSize = maxOf(1, batch.size / poolSize)
-            val chunks = batch.chunked(chunkSize)
-            log.info("[{}] Batch flush: {} messages → {} chunks after {}ms buffer", queueName, batch.size, chunks.size, sequentialBatchMs)
-            chunks.forEach { chunk ->
-                workerPool.submit { processSequentialBatch(chunk) }
-            }
-        } catch (e: Exception) {
-            log.error("[{}] Batch flush failed, re-queueing {} messages", queueName, batch.size, e)
-            accumulationBuffer.addAll(batch)
-        }
+        executor.executeOrCatch(
+            {
+                preWarmBatch(batch)
+                val poolSize = config.common.workerPoolSize
+                val chunkSize = maxOf(1, batch.size / poolSize)
+                val chunks = batch.chunked(chunkSize)
+                log.info("[{}] Batch flush: {} messages → {} chunks after {}ms buffer", queueName, batch.size, chunks.size, sequentialBatchMs)
+                chunks.forEach { chunk ->
+                    workerPool.submit { processSequentialBatch(chunk) }
+                }
+            },
+            { e ->
+                log.error("[{}] Batch flush failed, re-queueing {} messages", queueName, batch.size, e)
+                accumulationBuffer.addAll(batch)
+                null
+            },
+            TaskContext.of("PgmqWorker", "FlushSequentialBatch", queueName),
+        )
     }
 
     /**
@@ -377,15 +378,20 @@ abstract class PgmqWorker<T : Any>(
 
         val successCount = results.size
 
-        try {
-            if (results.isNotEmpty()) {
-                batchWrite(results)
-            }
-            repeat(successCount) { metrics.success.increment() }
-        } catch (e: Exception) {
-            log.error("[{}] Coroutine batchWrite failed, {} results lost", queueName, results.size, e)
-            repeat(successCount) { metrics.failure.increment() }
-        }
+        executor.executeOrCatch(
+            {
+                if (results.isNotEmpty()) {
+                    batchWrite(results)
+                }
+                repeat(successCount) { metrics.success.increment() }
+            },
+            { e ->
+                log.error("[{}] Coroutine batchWrite failed, {} results lost", queueName, results.size, e)
+                repeat(successCount) { metrics.failure.increment() }
+                null
+            },
+            TaskContext.of("PgmqWorker", "BatchWrite", queueName),
+        )
 
         // Always release permits and inflight metrics — prevent resource leak
         messages.forEach {

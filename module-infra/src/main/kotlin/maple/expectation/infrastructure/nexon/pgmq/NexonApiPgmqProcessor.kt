@@ -149,9 +149,13 @@ class NexonApiPgmqProcessor(
      * Build CF chain for Nexon API call — returns CF<Boolean> without blocking.
      */
     private fun callNexonApi(payload: NexonRetryMessage): CompletableFuture<Boolean> {
-        val eventType = try {
-            NexonApiEventType.valueOf(payload.eventType)
-        } catch (_: IllegalArgumentException) {
+        val eventType = executor.executeOrDefault(
+            { NexonApiEventType.valueOf(payload.eventType) },
+            null,
+            TaskContext.of("NexonApiPgmqProcessor", "ParseEventType", payload.eventType),
+        )
+
+        if (eventType == null) {
             log.error("[NexonApiPgmqProcessor] Unknown eventType: {}", payload.eventType)
             return CompletableFuture.completedFuture(false)
         }

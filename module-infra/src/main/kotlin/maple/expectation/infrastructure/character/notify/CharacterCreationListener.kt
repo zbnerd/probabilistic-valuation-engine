@@ -85,12 +85,18 @@ class CharacterCreationListener(
     private fun startNotificationListener() {
         scheduler.scheduleAtFixedRate(
             {
-                try {
-                    pollNotifications()
-                } catch (e: Exception) {
-                    log.warn("[CharacterCreationListener] Error receiving notifications, reconnecting...", e)
-                    reconnectWithDelay()
-                }
+                executor.executeOrCatch(
+                    {
+                        pollNotifications()
+                        null
+                    },
+                    { e ->
+                        log.warn("[CharacterCreationListener] Error receiving notifications, reconnecting...", e)
+                        reconnectWithDelay()
+                        null
+                    },
+                    TaskContext.of("CharacterCreation", "PollNotifications"),
+                )
             },
             0,
             POLL_INTERVAL_MS,

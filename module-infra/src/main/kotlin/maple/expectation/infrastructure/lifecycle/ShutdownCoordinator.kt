@@ -75,36 +75,25 @@ class ShutdownCoordinator(
         )
     }
 
-    private fun executePhase(bean: SmartLifecycle): Boolean {
-        return executor.executeOrDefault(
-            {
-                val beanName = bean.javaClass.simpleName
+    private fun executePhase(bean: SmartLifecycle): Boolean = executor.executeOrDefault(
+        {
+            val beanName = bean.javaClass.simpleName
 
-                try {
-                    bean.stop()
+            bean.stop()
 
-                    val deadline = System.currentTimeMillis() + 5000
-                    while (bean.isRunning && System.currentTimeMillis() < deadline) {
-                        LockSupport.parkNanos(this, 100_000_000L) // 100ms, Virtual Thread friendly
-                    }
+            val deadline = System.currentTimeMillis() + 5000
+            while (bean.isRunning && System.currentTimeMillis() < deadline) {
+                LockSupport.parkNanos(this, 100_000_000L) // 100ms, Virtual Thread friendly
+            }
 
-                    if (bean.isRunning) {
-                        logger.error("[ShutdownCoordinator] {} 타임아웃 (5초 경과)", beanName)
-                        return@executeOrDefault false
-                    }
-
-                    true
-                } catch (e: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    logger.error("[ShutdownCoordinator] {} 실행 중 인터럽트", beanName, e)
-                    false
-                } catch (e: Exception) {
-                    logger.error("[ShutdownCoordinator] {} 실행 실패", beanName, e)
-                    false
-                }
-            },
-            false,
-            TaskContext.of("ShutdownCoordinator", "ExecutePhase", bean.javaClass.simpleName),
-        )
-    }
+            if (bean.isRunning) {
+                logger.error("[ShutdownCoordinator] {} timeout (5s elapsed)", beanName)
+                false
+            } else {
+                true
+            }
+        },
+        false,
+        TaskContext.of("ShutdownCoordinator", "ExecutePhase", bean.javaClass.simpleName),
+    )
 }

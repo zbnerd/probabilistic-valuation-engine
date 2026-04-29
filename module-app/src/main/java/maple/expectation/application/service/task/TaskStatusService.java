@@ -55,7 +55,7 @@ public class TaskStatusService implements TaskStatusPort {
 
     // 1. PostgreSQL (source of truth)
     Optional<CharacterView> cached = queryPort.findByUserIgn(userIgn);
-    if (cached.filter(view -> taskId.equals(view.getMessageId())).isPresent()) {
+    if (cached.map(view -> taskId.equals(view.getMessageId())).orElse(false)) {
       return TaskStatus.COMPLETED;
     }
 

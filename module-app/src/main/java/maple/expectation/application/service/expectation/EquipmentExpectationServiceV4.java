@@ -321,7 +321,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
           // 1. 캐시된 캐릭터 조회
           Optional<GameCharacter> cached = gameCharacterService.getCharacterIfExist(userIgn);
           if (cached.isPresent()) {
-            return cached.get();
+            return cached.orElseThrow();
           }
 
           // 2. Negative Cache 확인
@@ -338,7 +338,7 @@ public class EquipmentExpectationServiceV4 implements CacheWarmupPort {
   private PresetExpectation findMaxPreset(List<PresetExpectation> presetResults) {
     return presetResults.stream()
         .max((p1, p2) -> Double.compare(p1.getTotalExpectedCost(), p2.getTotalExpectedCost()))
-        .orElse(null);
+        .orElseGet(() -> null);
   }
 
   private EquipmentExpectationResponseV4 buildEmptyResponse(String userIgn) {

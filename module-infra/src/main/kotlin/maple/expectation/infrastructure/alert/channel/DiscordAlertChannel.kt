@@ -51,6 +51,7 @@ class DiscordAlertChannel(
     @Qualifier("alertWebClient") private val alertWebClient: WebClient,
     private val executor: LogicExecutor,
     private val alertFeatureProperties: AlertFeatureProperties,
+    private val messageFactory: MessageFactory,
 ) : AlertChannel {
 
     private val log = LoggerFactory.getLogger(DiscordAlertChannel::class.java)
@@ -83,7 +84,7 @@ class DiscordAlertChannel(
             .post()
             .uri(message.getWebhookUrl())
             .contentType(MediaType.APPLICATION_JSON) // ADR-039 Fix
-            .bodyValue(MessageFactory.toDiscordPayload(message))
+            .bodyValue(messageFactory.toDiscordPayload(message))
             .retrieve()
             .toBodilessEntity()
             .block()

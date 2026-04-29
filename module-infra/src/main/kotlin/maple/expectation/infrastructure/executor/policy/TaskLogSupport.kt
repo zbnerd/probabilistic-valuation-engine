@@ -24,6 +24,9 @@ internal object TaskLogSupport {
     fun safeTaskName(context: TaskContext?): String {
         if (context == null) return UNKNOWN
 
+        // [Executor Infrastructure Exception] Cannot use LogicExecutor here — this class is called
+        // from within ExecutionPolicy implementations that LogicExecutor depends on (circular dependency).
+        // The catch isolates logging failures from the main execution flow (RuntimeException only; Error propagates).
         return try {
             val name = context.toTaskName()
             if (name == null) return UNKNOWN

@@ -240,7 +240,8 @@ enum class StatType(
                 return listOf(levelStat)
             }
 
-            val isPercent = option!!.contains("%")
+            // option is guaranteed non-null here (null/empty check at method entry)
+            val isPercent = option.contains("%")
             val results = ArrayList<StatType>()
 
             // P0: 키워드 길이 내림차순 정렬 (longest-first)
@@ -252,9 +253,9 @@ enum class StatType(
                 .sortedWith(compareByDescending<StatType> { it.keyword.length })
 
             // 매칭된 키워드 위치 추적 (오탐 방지)
-            var remaining = option
+            var remaining: String = option
             for (type in candidates) {
-                if (remaining!!.contains(type.keyword)) {
+                if (remaining.contains(type.keyword)) {
                     results.add(type)
                     // 매칭된 키워드 제거 (동일 위치 재매칭 방지)
                     remaining = remaining.replace(type.keyword, "")

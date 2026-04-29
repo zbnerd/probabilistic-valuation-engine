@@ -121,13 +121,9 @@ public class ExpectationCacheCoordinator {
       EquipmentExpectationResponseV4 response = executeCalculator(calculator);
       String compressedBase64 =
           executorPort.executeWithTranslation(
-              () -> {
-                try {
-                  return compressionService.compressAndSerialize(response, cacheKey);
-                } catch (Exception ex) {
-                  throw new RuntimeException(ex);
-                }
-              },
+              () ->
+                  uncheckedCallable(
+                      () -> compressionService.compressAndSerialize(response, cacheKey)),
               (e, ctx) ->
                   new EquipmentDataProcessingException(
                       String.format(
@@ -153,13 +149,9 @@ public class ExpectationCacheCoordinator {
     EquipmentExpectationResponseV4 response = executeCalculatorWithAdmission(cacheKey, calculator);
     String compressedBase64 =
         executorPort.executeWithTranslation(
-            () -> {
-              try {
-                return compressionService.compressAndSerialize(response, cacheKey);
-              } catch (Exception ex) {
-                throw new RuntimeException(ex);
-              }
-            },
+            () ->
+                uncheckedCallable(
+                    () -> compressionService.compressAndSerialize(response, cacheKey)),
             (e, ctx) ->
                 new EquipmentDataProcessingException(
                     String.format(
@@ -197,13 +189,9 @@ public class ExpectationCacheCoordinator {
       EquipmentExpectationResponseV4 response = executeCalculator(calculator);
       String compressedBase64 =
           executorPort.executeWithTranslation(
-              () -> {
-                try {
-                  return compressionService.compressAndSerialize(response, cacheKey);
-                } catch (Exception ex) {
-                  throw new RuntimeException(ex);
-                }
-              },
+              () ->
+                  uncheckedCallable(
+                      () -> compressionService.compressAndSerialize(response, cacheKey)),
               (e, ctx) ->
                   new EquipmentDataProcessingException(
                       String.format(
@@ -231,13 +219,9 @@ public class ExpectationCacheCoordinator {
     EquipmentExpectationResponseV4 response = executeCalculatorWithAdmission(cacheKey, calculator);
     String compressedBase64 =
         executorPort.executeWithTranslation(
-            () -> {
-              try {
-                return compressionService.compressAndSerialize(response, cacheKey);
-              } catch (Exception ex) {
-                throw new RuntimeException(ex);
-              }
-            },
+            () ->
+                uncheckedCallable(
+                    () -> compressionService.compressAndSerialize(response, cacheKey)),
             (e, ctx) ->
                 new EquipmentDataProcessingException(
                     String.format(
@@ -293,18 +277,13 @@ public class ExpectationCacheCoordinator {
 
   private EquipmentExpectationResponseV4 executeCalculator(
       Callable<EquipmentExpectationResponseV4> calculator) {
+    // Java-Kotlin interop: Callable.call() throws checked Exception; Kotlin () -> T cannot declare
+    // throws.
+    // ExecutorPort.execute() wraps in ThrowingSupplier which handles checked exceptions via
+    // LogicExecutor.
+    // The lambda wraps checked -> unchecked so the Java compiler accepts the Kotlin SAM.
     return executorPort.execute(
-        () -> {
-          try {
-            return calculator.call();
-          } catch (Exception e) {
-            if (e instanceof RuntimeException) {
-              throw (RuntimeException) e;
-            }
-            throw new RuntimeException(e);
-          }
-        },
-        TaskContext.of("CacheCoordinator", "Calculate"));
+        () -> uncheckedCallable(calculator), TaskContext.of("CacheCoordinator", "Calculate"));
   }
 
   /**
@@ -364,27 +343,20 @@ public class ExpectationCacheCoordinator {
   /** Base64 → GZIP byte[] → JSON → Response 압축 해제 (#262 Fix) */
   private EquipmentExpectationResponseV4 decompressCachedResponse(
       String compressedBase64, String cacheKey) {
-    try {
-      return executorPort.executeWithTranslation(
-          () -> {
-            try {
-              EquipmentExpectationResponseV4 response =
-                  compressionService.decompress(compressedBase64, cacheKey);
-              return responseBuilder.buildWithCacheFlag(response);
-            } catch (Exception ex) {
-              throw new RuntimeException(ex);
-            }
-          },
-          (e, context) ->
-              new EquipmentDataProcessingException(
-                  String.format("GZIP 압축 해제 실패 [%s]: %s", context.toTaskName(), cacheKey), e),
-          TaskContext.of("CacheCoordinator", "Decompress", cacheKey));
-    } catch (EquipmentDataProcessingException e) {
-      // Cache defense: evict corrupt data on decompress failure
-      log.warn("[V4] Evicting corrupt cache entry after decompress failure: {}", cacheKey);
-      expectationCache.evict(cacheKey);
-      throw e;
-    }
+    return executorPort.executeWithTranslation(
+        () -> {
+          EquipmentExpectationResponseV4 response =
+              uncheckedCallable(() -> compressionService.decompress(compressedBase64, cacheKey));
+          return responseBuilder.buildWithCacheFlag(response);
+        },
+        (e, context) -> {
+          // Cache defense: evict corrupt data on decompress failure
+          log.warn("[V4] Evicting corrupt cache entry after decompress failure: {}", cacheKey);
+          expectationCache.evict(cacheKey);
+          return new EquipmentDataProcessingException(
+              String.format("GZIP 압축 해제 실패 [%s]: %s", context.toTaskName(), cacheKey), e);
+        },
+        TaskContext.of("CacheCoordinator", "Decompress", cacheKey));
   }
 
   // ==================== Metrics ====================
@@ -395,5 +367,21 @@ public class ExpectationCacheCoordinator {
 
   private void recordFastPathMiss() {
     meterRegistry.counter("cache.l1.fast_path", "result", "miss").increment();
+  }
+
+  /**
+   * Java-Kotlin interop bridge: calls a {@link Callable} from a Kotlin lambda context. Kotlin's
+   * {@code () -> T} cannot declare {@code throws}, so checked exceptions from {@link
+   * Callable#call()} must be converted before crossing the Kotlin SAM boundary. RuntimeExceptions
+   * propagate as-is; checked exceptions are wrapped.
+   */
+  private <V> V uncheckedCallable(Callable<V> callable) {
+    try {
+      return callable.call();
+    } catch (RuntimeException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 }

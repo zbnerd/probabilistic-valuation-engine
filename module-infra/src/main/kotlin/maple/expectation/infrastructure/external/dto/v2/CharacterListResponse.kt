@@ -32,7 +32,7 @@ data class CharacterListResponse(
         }
         return accountList
             .filter { it.characterList != null }
-            .flatMap { it.characterList!!.toList() }
+            .flatMap { requireNotNull(it.characterList).toList() }
     }
 
     /** 계정 정보 */

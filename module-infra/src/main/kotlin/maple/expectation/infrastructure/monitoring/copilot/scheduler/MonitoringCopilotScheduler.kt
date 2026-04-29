@@ -70,8 +70,8 @@ class MonitoringCopilotScheduler(
     private fun selectTopPrioritySignals(signals: List<SignalDefinition>): List<SignalDefinition> = signals.stream()
         .filter { it.metadata != null && it.metadata.containsKey("priorityScore") }
         .sorted { s1, s2 ->
-            val score1 = Integer.parseInt(s1.metadata["priorityScore"]!!)
-            val score2 = Integer.parseInt(s2.metadata["priorityScore"]!!)
+            val score1 = Integer.parseInt(requireNotNull(s1.metadata["priorityScore"]) { "priorityScore missing from signal metadata" })
+            val score2 = Integer.parseInt(requireNotNull(s2.metadata["priorityScore"]) { "priorityScore missing from signal metadata" })
             Integer.compare(score2, score1)
         }
         .limit(topSignalsCount.toLong())

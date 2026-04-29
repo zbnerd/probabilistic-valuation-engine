@@ -134,17 +134,16 @@ public class ExpectationCalculationWorker implements Runnable {
    * @return task or null if interrupted
    */
   private ExpectationCalculationTask pollTaskOrNull(QueuePriority priority) {
-    return executor.executeOrDefault(
-        () -> {
-          try {
-            return queue.poll(priority);
-          } catch (InterruptedException e) {
+    return executor.executeWithFallback(
+        () -> queue.poll(priority),
+        ex -> {
+          if (ex instanceof InterruptedException) {
             Thread.currentThread().interrupt();
             log.info("[V5-Worker] Worker interrupted, shutting down");
-            throw new WorkerShutdownException(e);
+            throw new WorkerShutdownException((InterruptedException) ex);
           }
+          throw ex instanceof RuntimeException ? (RuntimeException) ex : new RuntimeException(ex);
         },
-        null,
         TaskContext.of("V5-Worker", "PollTask", priority.name()));
   }
 

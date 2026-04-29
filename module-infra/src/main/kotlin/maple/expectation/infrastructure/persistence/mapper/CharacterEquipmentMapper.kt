@@ -44,9 +44,9 @@ object CharacterEquipmentMapper {
         requireNotNull(jpaEntity) { "JPA entity cannot be null" }
 
         return CharacterEquipment.restore(
-            CharacterId.of(jpaEntity.ocid!!),
-            EquipmentData.of(jpaEntity.jsonContent!!),
-            jpaEntity.updatedAt!!,
+            CharacterId.of(requireNotNull(jpaEntity.ocid) { "JPA entity ocid must not be null" }),
+            EquipmentData.of(requireNotNull(jpaEntity.jsonContent) { "JPA entity jsonContent must not be null" }),
+            requireNotNull(jpaEntity.updatedAt) { "JPA entity updatedAt must not be null" },
         )
     }
 

@@ -30,11 +30,14 @@ class SnapshotCleanupWorker(
 
             // Delete files first (outside TX — file ops are not transactional)
             for (snapshot in expired) {
-                try {
-                    snapshotStore.delete(snapshot.objectKey)
-                } catch (e: Exception) {
-                    log.warn("Failed to delete snapshot file {}: {}", snapshot.objectKey, e.message)
-                }
+                executor.executeOrDefault(
+                    {
+                        snapshotStore.delete(snapshot.objectKey)
+                        null
+                    },
+                    null,
+                    TaskContext.of("SnapshotCleanup", "DeleteFile", snapshot.objectKey),
+                )
             }
 
             // Batch delete metadata in TX

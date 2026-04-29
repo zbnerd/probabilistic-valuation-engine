@@ -6,6 +6,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
 import maple.expectation.core.dto.v4.CalculationInput
+import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.model.snapshot.CalculationSnapshot
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
@@ -99,6 +100,13 @@ class ExternalApiWorker(
 
     private fun processPipeline(payload: ExternalApiJobPayload) {
         val jobId = UUID.fromString(payload.jobId)
+
+        // Early exit: skip expensive API calls if job already completed/processing
+        val existingJob = jobPort.findJobById(jobId)
+        if (existingJob != null && existingJob.status != CalculationJobStatus.OCID_RESOLVING && existingJob.status != CalculationJobStatus.REQUESTED) {
+            log.debug("[jobId={}] Skipping — already in state {}", jobId, existingJob.status)
+            return
+        }
 
         // Step 1: Resolve OCID (Nexon API ~200ms)
         val ocid = resolveOcid(jobId, payload.userIgn)

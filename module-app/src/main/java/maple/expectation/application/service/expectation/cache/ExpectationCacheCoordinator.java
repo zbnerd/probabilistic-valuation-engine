@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.common.executor.TaskContext;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.core.port.inbound.CacheManagerPort;
 import maple.expectation.core.port.inbound.ExecutorPort;
 import maple.expectation.error.exception.CacheDataNotFoundException;
@@ -11,7 +12,6 @@ import maple.expectation.error.exception.EquipmentDataProcessingException;
 import maple.expectation.infrastructure.admission.AdmissionRejectedException;
 import maple.expectation.infrastructure.admission.AdmissionTimeoutException;
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 import org.springframework.cache.Cache;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
@@ -110,7 +110,10 @@ public class ExpectationCacheCoordinator {
   }
 
   public EquipmentExpectationResponseV4 getOrCalculate(
-      String userIgn, boolean force, Callable<EquipmentExpectationResponseV4> calculator, int presetNo) {
+      String userIgn,
+      boolean force,
+      Callable<EquipmentExpectationResponseV4> calculator,
+      int presetNo) {
     String cacheKey = buildCacheKey(userIgn, presetNo);
 
     if (force) {
@@ -159,7 +162,8 @@ public class ExpectationCacheCoordinator {
             },
             (e, ctx) ->
                 new EquipmentDataProcessingException(
-                    String.format("Cache serialization failed [%s]: %s", ctx.toTaskName(), cacheKey),
+                    String.format(
+                        "Cache serialization failed [%s]: %s", ctx.toTaskName(), cacheKey),
                     e),
             TaskContext.of("CacheCoordinator", "Serialize", cacheKey));
     expectationCache.put(cacheKey, compressedBase64);
@@ -182,7 +186,10 @@ public class ExpectationCacheCoordinator {
   }
 
   public byte[] getGzipOrCalculate(
-      String userIgn, boolean force, Callable<EquipmentExpectationResponseV4> calculator, int presetNo) {
+      String userIgn,
+      boolean force,
+      Callable<EquipmentExpectationResponseV4> calculator,
+      int presetNo) {
     String cacheKey = buildCacheKey(userIgn, presetNo);
 
     if (force) {
@@ -233,7 +240,8 @@ public class ExpectationCacheCoordinator {
             },
             (e, ctx) ->
                 new EquipmentDataProcessingException(
-                    String.format("Cache serialization failed [%s]: %s", ctx.toTaskName(), cacheKey),
+                    String.format(
+                        "Cache serialization failed [%s]: %s", ctx.toTaskName(), cacheKey),
                     e),
             TaskContext.of("CacheCoordinator", "SerializeGzip", cacheKey));
     expectationCache.put(cacheKey, compressedBase64);
@@ -276,8 +284,7 @@ public class ExpectationCacheCoordinator {
   // ==================== Internal Methods ====================
 
   /**
-   * Build cache key based on presetNo.
-   * presetNo=1 uses backward-compatible key (just userIgn).
+   * Build cache key based on presetNo. presetNo=1 uses backward-compatible key (just userIgn).
    * presetNo=2,3 use userIgn:presetNo format.
    */
   private String buildCacheKey(String userIgn, int presetNo) {
@@ -311,6 +318,9 @@ public class ExpectationCacheCoordinator {
    *   <li>Preserves single-key single-flight behavior (handled by caller via cache check)
    * </ul>
    *
+   * <p>submitOrWait()가 반환하는 CF를 체이닝으로 처리합니다. 이 메서드는 동기 API (getOrCalculate)에서 호출되므로 CF 결과를 동기적으로
+   * 반환해야 합니다.
+   *
    * @param cacheKey Request key for admission control (includes presetNo if applicable)
    * @param calculator Cold-path calculation task
    * @return Calculation result
@@ -323,39 +333,29 @@ public class ExpectationCacheCoordinator {
     }
 
     log.debug("[V4] Admission control enabled - queuing calculation: {}", cacheKey);
-    try {
-      return admissionControl
-          .submitOrWait(cacheKey, calculator)
-          .get(); // Blocking wait for CompletableFuture
-    } catch (InterruptedException ie) {
-      // 🔥 P1 FIX #3: Handle InterruptedException properly
-      Thread.currentThread().interrupt();
-      log.error("[V4] Admission control interrupted for: {}", cacheKey, ie);
+    return admissionControl
+        .submitOrWait(cacheKey, calculator)
+        .exceptionally(exception -> handleAdmissionException(cacheKey, exception))
+        .join(); // Sync boundary: getOrCalculate is a synchronous API (Callable-based)
+  }
+
+  /** Admission control 예외 처리 (CF exceptionally 핸들러, lambda 추출) */
+  private EquipmentExpectationResponseV4 handleAdmissionException(
+      String cacheKey, Throwable exception) {
+    Throwable cause = exception.getCause();
+    if (cause instanceof AdmissionTimeoutException) {
+      log.error("[V4] Admission control timeout for: {}", cacheKey);
       throw new EquipmentDataProcessingException(
-          String.format("Calculation interrupted: %s", cacheKey), ie);
-    } catch (java.util.concurrent.ExecutionException ee) {
-      // 🔥 P1 FIX #3: Improved exception handling with proper root cause logging
-      Throwable cause = ee.getCause();
-      if (cause instanceof AdmissionTimeoutException) {
-        log.error("[V4] Admission control timeout for: {}", cacheKey);
-        throw new EquipmentDataProcessingException(
-            String.format("Calculation rejected due to system overload: %s", cacheKey), cause);
-      }
-      if (cause instanceof AdmissionRejectedException) {
-        log.warn("[V4] Admission control queue full - rejecting: {}", cacheKey);
-        throw new EquipmentDataProcessingException(
-            String.format("System at capacity - queue full: %s", cacheKey), cause);
-      }
-      // 🔥 P1 FIX #3: Log unexpected exceptions with full stack trace
-      log.error("[V4] Unexpected exception during admission control for: {}", cacheKey, cause);
-      throw new EquipmentDataProcessingException(
-          String.format("Calculation failed with admission control: %s", cacheKey), cause);
-    } catch (Exception e) {
-      // 🔥 P1 FIX #3: Catch-all for any other unexpected exceptions
-      log.error("[V4] Unexpected error in admission control for: {}", cacheKey, e);
-      throw new EquipmentDataProcessingException(
-          String.format("Calculation failed: %s", cacheKey), e);
+          String.format("Calculation rejected due to system overload: %s", cacheKey), cause);
     }
+    if (cause instanceof AdmissionRejectedException) {
+      log.warn("[V4] Admission control queue full - rejecting: {}", cacheKey);
+      throw new EquipmentDataProcessingException(
+          String.format("System at capacity - queue full: %s", cacheKey), cause);
+    }
+    log.error("[V4] Unexpected exception during admission control for: {}", cacheKey, cause);
+    throw new EquipmentDataProcessingException(
+        String.format("Calculation failed with admission control: %s", cacheKey), cause);
   }
 
   /** Base64 → GZIP byte[] → JSON → Response 압축 해제 (#262 Fix) */

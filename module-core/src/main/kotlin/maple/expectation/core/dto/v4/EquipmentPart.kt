@@ -6,10 +6,10 @@ enum class EquipmentPart(val koreanName: String) {
     ARMOR("방어구"),
     ACCESSORY("장신구"),
     ETC("기타"),
-    UNKNOWN("알 수 없음");
+    UNKNOWN("알 수 없음"),
+    ;
 
     companion object {
-        fun fromKorean(name: String): EquipmentPart =
-            entries.find { it.koreanName == name } ?: UNKNOWN
+        fun fromKorean(name: String): EquipmentPart = entries.find { it.koreanName == name } ?: UNKNOWN
     }
 }

@@ -14,6 +14,8 @@ import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -55,6 +57,8 @@ class GlobalAdmissionControl(
     private val workerExecutor: Executor,
 ) {
     private val log = LoggerFactory.getLogger(GlobalAdmissionControl::class.java)
+
+    private val lock = ReentrantLock()
 
     // Semaphore limits IN-FLIGHT (executing) requests
     private val semaphore = Semaphore(properties.maxInFlight)
@@ -139,7 +143,7 @@ class GlobalAdmissionControl(
     fun <T> submitOrWait(key: String, task: Callable<T>): CompletableFuture<T> {
         // 🔥 P0 FIX #2: Thread-safe lazy initialization using AtomicBoolean
         if (!workerPoolStarted.get()) {
-            synchronized(this) {
+            lock.withLock {
                 if (workerPoolStarted.compareAndSet(false, true)) {
                     startWorkerPool(properties.workerPoolSize)
                 }

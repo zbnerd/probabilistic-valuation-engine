@@ -1,11 +1,15 @@
 package maple.expectation.infrastructure.worker
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import java.time.Instant
+import java.time.ZoneOffset
+import java.util.UUID
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.dto.v4.CalculationInput
 import maple.expectation.core.model.snapshot.CalculationSnapshot
 import maple.expectation.core.port.out.CalculationInputPort
-import maple.expectation.core.port.out.mq.ConsumeResult
 import maple.expectation.core.port.out.SnapshotObjectStore
+import maple.expectation.core.port.out.mq.ConsumeResult
 import maple.expectation.infrastructure.converter.EquipmentResponseToCalculationInputConverter
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -13,12 +17,8 @@ import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiRequestTopic
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.time.Instant
-import java.time.ZoneOffset
-import java.util.UUID
 
 @Component
 class NexonApiWorker(
@@ -29,7 +29,7 @@ class NexonApiWorker(
     private val executor: LogicExecutor,
     private val equipmentFetchProvider: EquipmentFetchProvider,
     private val converter: EquipmentResponseToCalculationInputConverter,
-    private val calculationInputPort: CalculationInputPort
+    private val calculationInputPort: CalculationInputPort,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -65,7 +65,7 @@ class NexonApiWorker(
             storageType = "LOCAL",
             characterId = ocid,
             presetNo = presetNo,
-            expiresAt = Instant.now().plusSeconds(86400)
+            expiresAt = Instant.now().plusSeconds(86400),
         )
 
         val result = snapshotStore.put(snapshot, snapshotData)
@@ -79,7 +79,7 @@ class NexonApiWorker(
             userIgn = userIgn,
             characterClass = equipmentResponse.characterClass ?: "",
             presetNo = presetNo,
-            items = inputItems
+            items = inputItems,
         )
         calculationInputPort.save(calcInput)
 
@@ -93,7 +93,7 @@ class NexonApiWorker(
             compressedSize = result.compressedSize,
             originalSize = snapshotData.size.toLong(),
             hash = result.hash,
-            expiresAt = snapshot.expiresAt
+            expiresAt = snapshot.expiresAt,
         )
 
         jobService.saveSnapshotAndMarkReady(snapshotEntity, jobId, objectKey)
@@ -106,6 +106,6 @@ class NexonApiWorker(
         val now = Instant.now()
         val zoned = now.atZone(ZoneOffset.UTC)
         val datePath = "%04d/%02d/%02d".format(zoned.year, zoned.monthValue, zoned.dayOfMonth)
-        return "snapshots/$datePath/${jobId}.gz"
+        return "snapshots/$datePath/$jobId.gz"
     }
 }

@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.persistence.repository
 
-import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
-import org.springframework.data.jpa.repository.JpaRepository
 import java.time.Instant
 import java.util.UUID
+import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
+import org.springframework.data.jpa.repository.JpaRepository
 
 interface CalculationSnapshotRepository : JpaRepository<CalculationSnapshotEntity, UUID> {
 

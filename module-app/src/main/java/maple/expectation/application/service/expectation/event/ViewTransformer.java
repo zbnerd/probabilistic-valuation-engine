@@ -7,6 +7,10 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.model.character.GameCharacter;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import maple.expectation.core.event.ExpectationCalculationCompletedEvent;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -14,10 +18,6 @@ import maple.expectation.infrastructure.persistence.entity.CharacterValuationVie
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.CostBreakdownView;
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.ItemExpectationView;
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity.PresetView;
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 

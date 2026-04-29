@@ -38,9 +38,7 @@ class CharacterViewQueryServicePostgres(
     // ==================== CharacterViewQueryPort Implementation ====================
 
     @Transactional(value = "transactionManager", readOnly = true)
-    fun findByUserIgn(userIgn: String): CharacterValuationViewEntity? {
-        return findByUserIgnEntity(userIgn)
-    }
+    fun findByUserIgn(userIgn: String): CharacterValuationViewEntity? = findByUserIgnEntity(userIgn)
 
     fun upsertFromCalculation(
         userIgn: String,

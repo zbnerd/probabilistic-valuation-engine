@@ -1,5 +1,6 @@
 package maple.expectation.web.controller
 
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.port.inbound.BulkLoadPort
 import maple.expectation.core.port.inbound.BulkLoadResult
 import maple.expectation.core.port.inbound.BulkLoadStatus
@@ -39,10 +40,7 @@ class BulkLoadController(
     @PostMapping("/load")
     fun startLoad(
         @RequestParam(name = "force", defaultValue = "false") force: Boolean,
-    ): ResponseEntity<BulkLoadResult> {
-        val result = bulkLoadPort.loadAll(force = force).join()
-        return ResponseEntity.ok(result)
-    }
+    ): CompletableFuture<ResponseEntity<BulkLoadResult>> = bulkLoadPort.loadAll(force = force).thenApply { ResponseEntity.ok(it) }
 
     /**
      * Resume bulk load from checkpoint
@@ -50,10 +48,7 @@ class BulkLoadController(
      * @return BulkLoadResult with statistics
      */
     @PostMapping("/resume")
-    fun resume(): ResponseEntity<BulkLoadResult> {
-        val result = bulkLoadPort.resume().join()
-        return ResponseEntity.ok(result)
-    }
+    fun resume(): CompletableFuture<ResponseEntity<BulkLoadResult>> = bulkLoadPort.resume().thenApply { ResponseEntity.ok(it) }
 
     /**
      * Retry failed characters
@@ -61,10 +56,7 @@ class BulkLoadController(
      * @return BulkLoadResult with statistics
      */
     @PostMapping("/retry-failed")
-    fun retryFailed(): ResponseEntity<BulkLoadResult> {
-        val result = bulkLoadPort.retryFailed().join()
-        return ResponseEntity.ok(result)
-    }
+    fun retryFailed(): CompletableFuture<ResponseEntity<BulkLoadResult>> = bulkLoadPort.retryFailed().thenApply { ResponseEntity.ok(it) }
 
     /**
      * Get current bulk load status

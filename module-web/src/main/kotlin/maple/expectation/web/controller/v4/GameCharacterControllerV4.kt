@@ -6,12 +6,12 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 import maple.expectation.core.domain.model.like.LikeToggleResult
 import maple.expectation.core.domain.model.security.AuthenticatedUser
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4
 import maple.expectation.core.port.inbound.AdmissionPort
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.inbound.LikeTogglePort
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
 import maple.expectation.response.ApiResponse
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4
 import maple.expectation.web.dto.v4.LikeStatusResponse
 import maple.expectation.web.dto.v4.LikeToggleResponse
 import maple.expectation.web.validation.ValidIgn

@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component
 class CalculationJobTimeoutScanner(
     private val jobPort: CalculationJobPort,
     private val jobService: CalculationJobService,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 

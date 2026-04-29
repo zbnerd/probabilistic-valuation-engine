@@ -2,12 +2,12 @@ package maple.expectation.infrastructure.pgmq
 
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
+import jakarta.annotation.PreDestroy
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
-import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -50,7 +50,7 @@ abstract class PgmqWorker<T : Any>(
     /** 메시지 병렬 처리용 Fixed Thread Pool (replaces Virtual Thread for CPU-bound stability) */
     private val workerPool: ExecutorService by lazy {
         val pool = Executors.newFixedThreadPool(config.common.workerPoolSize) { runnable ->
-            Thread(runnable, "$queueName-worker").apply { isDaemon = true }
+            Thread.ofVirtual().name("$queueName-worker").unstarted(runnable)
         }
         ExecutorServiceMetrics.monitor(meterRegistry, pool, "$queueName-worker-pool", "pgmq.worker")
         pool
@@ -225,7 +225,7 @@ abstract class PgmqWorker<T : Any>(
     @Scheduled(fixedDelayString = "\${pgmq.worker.common.pipeline-drain-interval-ms:100}")
     fun drainBuffer() {
         if (!supportsTwoPhase) return
-        if (sequentialBatchMs > 0) return  // Sequential mode handles own writes
+        if (sequentialBatchMs > 0) return // Sequential mode handles own writes
         if (!lifecycleWrapper.beforeTask()) return
 
         val context = TaskContext.of("PgmqWorker", "DrainBuffer", queueName)
@@ -320,7 +320,9 @@ abstract class PgmqWorker<T : Any>(
                 log.warn("[{}] Batch completion error: {}", queueName, ex.message)
                 null
             }
-            .join()
+            .thenAccept {
+                log.debug("[{}] Batch of {} messages completed", queueName, messages.size)
+            }
     }
 
     /**

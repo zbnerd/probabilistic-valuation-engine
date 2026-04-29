@@ -11,7 +11,6 @@ import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -36,19 +35,12 @@ class NexonFanOutBatchLoaderTest {
 
     private val sampleResponse = EquipmentResponse(characterClass = "Archer")
 
-    @AfterEach
-    fun tearDown() {
-        if (::sut.isInitialized) {
-            sut.shutdown()
-        }
-    }
-
     @Test
     @DisplayName("빈 OCID 목록이면 빈 결과를 반환한다")
     fun `load returns empty map when ocids is empty`() {
         sut = NexonFanOutBatchLoader(nexonApiClient, fanOutQueuePort, executor)
 
-        val result = sut.load(emptyList())
+        val result = sut.load(emptyList()).join()
 
         assertThat(result).isEmpty()
         verify(nexonApiClient, never()).getItemDataByOcid(any())
@@ -61,7 +53,7 @@ class NexonFanOutBatchLoaderTest {
         sut = NexonFanOutBatchLoader(nexonApiClient, fanOutQueuePort, executor)
         whenever(nexonApiClient.getItemDataByOcid("ocid-1")).thenReturn(CompletableFuture.completedFuture(sampleResponse))
 
-        val result = sut.load(listOf("ocid-1"))
+        val result = sut.load(listOf("ocid-1")).join()
 
         assertThat(result).containsEntry("ocid-1", sampleResponse)
         verify(fanOutQueuePort, never()).enqueue(any(), any(), any())
@@ -80,7 +72,7 @@ class NexonFanOutBatchLoaderTest {
         )
         whenever(nexonApiClient.getItemDataByOcid("ocid-429")).thenReturn(CompletableFuture.failedFuture(tooManyRequests))
 
-        val result = sut.load(listOf("ocid-429"))
+        val result = sut.load(listOf("ocid-429")).join()
 
         assertThat(result).isEmpty()
         verify(fanOutQueuePort, times(1)).enqueue(eq("ocid-429"), eq("batch"), any())
@@ -93,7 +85,7 @@ class NexonFanOutBatchLoaderTest {
         whenever(nexonApiClient.getItemDataByOcid("ocid-500"))
             .thenReturn(CompletableFuture.failedFuture(IllegalStateException("boom")))
 
-        val result = sut.load(listOf("ocid-500"))
+        val result = sut.load(listOf("ocid-500")).join()
 
         assertThat(result).isEmpty()
         verify(fanOutQueuePort, never()).enqueue(any(), any(), any())

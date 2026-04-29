@@ -2,12 +2,10 @@ package maple.expectation.infrastructure.worker
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
-import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.inbound.BatchComputeBuffer
-import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
+import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
 import maple.expectation.core.port.out.GameCharacterPort
@@ -17,6 +15,8 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
+import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository
+import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository.ParsedViewResult
 import maple.expectation.infrastructure.pgmq.CalculationResult
 import maple.expectation.infrastructure.pgmq.ExpectationCalcMessage
 import maple.expectation.infrastructure.pgmq.PgmqClient
@@ -24,8 +24,6 @@ import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
-import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository
-import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository.ParsedViewResult
 import org.slf4j.Logger
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -127,8 +125,11 @@ abstract class AbstractExpectationCalcWorker(
         // 1. Dedup by userIgn — keep latest result per character
         val grouped = results.groupBy { it.character.userIgn.value }
         if (grouped.any { it.value.size > 1 }) {
-            workerLog.warn("[{}] Duplicate userIgn in batch: {}", workerName,
-                grouped.filter { it.value.size > 1 }.keys)
+            workerLog.warn(
+                "[{}] Duplicate userIgn in batch: {}",
+                workerName,
+                grouped.filter { it.value.size > 1 }.keys,
+            )
         }
         val deduped = grouped.mapValues { it.value.last() }.values.toList()
 

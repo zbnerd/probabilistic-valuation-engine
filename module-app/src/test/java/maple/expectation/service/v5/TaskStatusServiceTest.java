@@ -48,7 +48,8 @@ class TaskStatusServiceTest {
   }
 
   @Test
-  @DisplayName("mismatched view messageId does not complete unrelated task — returns NOT_FOUND when no queue/archive signal exists")
+  @DisplayName(
+      "mismatched view messageId does not complete unrelated task — returns NOT_FOUND when no queue/archive signal exists")
   void mismatchedViewMessageIdDoesNotCompleteTask() {
     CharacterView view = mock(CharacterView.class);
     when(view.getMessageId()).thenReturn("999");

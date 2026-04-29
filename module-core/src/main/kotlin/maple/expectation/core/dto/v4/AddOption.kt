@@ -10,5 +10,5 @@ data class AddOption(
     val attackPower: Int,
     val magicPower: Int,
     val bossDamage: Int,
-    val damage: Int
+    val damage: Int,
 )

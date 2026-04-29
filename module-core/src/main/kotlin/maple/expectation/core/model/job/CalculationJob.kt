@@ -19,5 +19,5 @@ data class CalculationJob(
     val errorMessage: String? = null,
     val createdAt: Instant = Instant.now(),
     val updatedAt: Instant = Instant.now(),
-    val completedAt: Instant? = null
+    val completedAt: Instant? = null,
 )

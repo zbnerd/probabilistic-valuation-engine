@@ -1,32 +1,36 @@
 package maple.expectation.infrastructure.job
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.UUID
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CalculationResultPort
 import maple.expectation.core.port.out.OutboxEventPort
 import maple.expectation.core.port.out.mq.DomainEventAppender
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argThat
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import org.mockito.Mock
-import java.util.UUID
 
 @ExtendWith(MockitoExtension::class)
 class CalculationExecutionServiceTest {
 
     @Mock lateinit var jobPort: CalculationJobPort
+
     @Mock lateinit var eventAppender: DomainEventAppender
+
     @Mock lateinit var nexonApiResponseTopic: NexonApiResponseTopic
+
     @Mock lateinit var resultPort: CalculationResultPort
+
     @Mock lateinit var outboxPort: OutboxEventPort
     private val objectMapper = ObjectMapper()
 
@@ -40,7 +44,7 @@ class CalculationExecutionServiceTest {
             nexonApiResponseTopic = nexonApiResponseTopic,
             resultPort = resultPort,
             outboxPort = outboxPort,
-            objectMapper = objectMapper
+            objectMapper = objectMapper,
         )
     }
 
@@ -60,14 +64,16 @@ class CalculationExecutionServiceTest {
             resultJson = resultJson,
             characterClass = "hero",
             presetNo = 1,
-            characterId = "test-char"
+            characterId = "test-char",
         )
 
         assertThat(result).isTrue()
 
-        verify(resultPort).save(argThat { r ->
-            r.jobId == jobId && r.contentEncoding == "gzip"
-        })
+        verify(resultPort).save(
+            argThat { r ->
+                r.jobId == jobId && r.contentEncoding == "gzip"
+            },
+        )
         verify(outboxPort).insertIfAbsent(eq("CALCULATION_COMPLETED"), eq(jobId), any())
     }
 
@@ -83,7 +89,7 @@ class CalculationExecutionServiceTest {
             resultJson = """{"data":1}""",
             characterClass = "paladin",
             presetNo = 2,
-            characterId = "other-char"
+            characterId = "other-char",
         )
 
         assertThat(result).isFalse()

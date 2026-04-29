@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component
 class OutboxCompensatingScanner(
     private val jobPort: CalculationJobPort,
     private val outboxPort: OutboxEventPort,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 

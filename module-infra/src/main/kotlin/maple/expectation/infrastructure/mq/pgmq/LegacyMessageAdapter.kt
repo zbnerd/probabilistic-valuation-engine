@@ -2,9 +2,9 @@ package maple.expectation.infrastructure.mq.pgmq
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.core.domain.event.IntegrationEvent
 import java.time.Instant
 import java.util.UUID
+import maple.expectation.core.domain.event.IntegrationEvent
 
 class LegacyMessageAdapter(private val objectMapper: ObjectMapper) {
 

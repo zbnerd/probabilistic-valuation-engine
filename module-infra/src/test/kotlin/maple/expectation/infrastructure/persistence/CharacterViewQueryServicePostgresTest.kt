@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import java.time.Instant
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -11,6 +12,7 @@ import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import maple.expectation.infrastructure.persistence.repository.CharacterValuationViewJpaRepository
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
@@ -20,14 +22,9 @@ import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
-import java.time.Instant
-import java.util.Optional
-import org.assertj.core.api.Assertions.assertThat
 
 /**
  * Unit tests for [CharacterViewQueryServicePostgres].
@@ -312,9 +309,7 @@ class CharacterViewQueryServicePostgresTest {
             throw RuntimeException(e)
         }
 
-        override fun <T> execute(task: ThrowingSupplier<T>, taskName: String): T {
-            return execute(task, TaskContext.of("Test", taskName))
-        }
+        override fun <T> execute(task: ThrowingSupplier<T>, taskName: String): T = execute(task, TaskContext.of("Test", taskName))
 
         override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = try {
             task.get()
@@ -370,13 +365,11 @@ class CharacterViewQueryServicePostgresTest {
             task: ThrowingSupplier<T>,
             fallback: ExceptionTranslator,
             context: TaskContext,
-        ): T {
-            return try {
-                task.get()
-            } catch (e: Throwable) {
-                @Suppress("UNCHECKED_CAST")
-                fallback.translate(e, context) as T
-            }
+        ): T = try {
+            task.get()
+        } catch (e: Throwable) {
+            @Suppress("UNCHECKED_CAST")
+            fallback.translate(e, context) as T
         }
 
         override fun <T> executeOrCatch(
@@ -393,13 +386,11 @@ class CharacterViewQueryServicePostgresTest {
             task: ThrowingSupplier<T>,
             recovery: ExceptionTranslator,
             context: TaskContext,
-        ): T {
-            return try {
-                task.get()
-            } catch (e: Throwable) {
-                @Suppress("UNCHECKED_CAST")
-                recovery.translate(e, context) as T
-            }
+        ): T = try {
+            task.get()
+        } catch (e: Throwable) {
+            @Suppress("UNCHECKED_CAST")
+            recovery.translate(e, context) as T
         }
 
         override fun executeVoidJava(task: Runnable, context: TaskContext) {

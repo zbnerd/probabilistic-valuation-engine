@@ -4,8 +4,8 @@ import java.util.Optional;
 import maple.expectation.application.service.calculator.EnhanceDecorator;
 import maple.expectation.application.service.calculator.ExpectationCalculator;
 import maple.expectation.application.service.cube.policy.CubeCostPolicy;
-import maple.expectation.domain.v2.CubeType;
 import maple.expectation.core.dto.cube.CubeCalculationInput;
+import maple.expectation.domain.v2.CubeType;
 
 /**
  * V2-specific abstract cube decorator using Long type.

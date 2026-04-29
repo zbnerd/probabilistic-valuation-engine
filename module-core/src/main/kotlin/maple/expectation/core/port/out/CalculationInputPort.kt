@@ -1,7 +1,7 @@
 package maple.expectation.core.port.out
 
-import maple.expectation.core.dto.v4.CalculationInput
 import java.util.UUID
+import maple.expectation.core.dto.v4.CalculationInput
 
 interface CalculationInputPort {
     fun save(input: CalculationInput): CalculationInput

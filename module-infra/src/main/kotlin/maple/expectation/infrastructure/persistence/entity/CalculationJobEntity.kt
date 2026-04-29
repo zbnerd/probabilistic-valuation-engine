@@ -1,10 +1,10 @@
 package maple.expectation.infrastructure.persistence.entity
 
 import jakarta.persistence.*
-import org.hibernate.annotations.JdbcTypeCode
-import org.hibernate.type.SqlTypes
 import java.time.Instant
 import java.util.UUID
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 
 @Entity
 @Table(name = "calculation_jobs")
@@ -51,5 +51,5 @@ open class CalculationJobEntity(
 
     var updatedAt: Instant = Instant.now(),
 
-    var completedAt: Instant? = null
+    var completedAt: Instant? = null,
 )

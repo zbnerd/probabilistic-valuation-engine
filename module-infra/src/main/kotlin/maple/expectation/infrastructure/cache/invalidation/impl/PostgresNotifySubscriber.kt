@@ -80,7 +80,7 @@ class PostgresNotifySubscriber(
 
     private val running = AtomicBoolean(false)
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { r ->
-        Thread(r, "postgres-notify-scheduler").apply { isDaemon = true }
+        Thread.ofVirtual().name("postgres-notify-scheduler").unstarted(r)
     }
 
     /** 이벤트 구독 시작 (애플리케이션 시작 시 자동 호출) */

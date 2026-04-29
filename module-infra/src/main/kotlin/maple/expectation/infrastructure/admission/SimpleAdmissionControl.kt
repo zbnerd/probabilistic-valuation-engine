@@ -59,7 +59,7 @@ class SimpleAdmissionControl(
 
     // 🔥 WORKER POOL
     private val executor = Executors.newFixedThreadPool(workerSize) { runnable ->
-        Thread(runnable, "admission-worker").apply { isDaemon = true }
+        Thread.ofVirtual().name("admission-worker").unstarted(runnable)
     }
 
     // 🔥 METRICS

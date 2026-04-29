@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.converter
 
-import maple.expectation.core.dto.v4.*
 import maple.expectation.core.domain.model.PotentialGrade
+import maple.expectation.core.dto.v4.*
 import org.springframework.stereotype.Component
 
 @Component
@@ -30,10 +30,10 @@ class EquipmentResponseToCalculationInputConverter {
                 attackPower = intStr(addOption?.get("attack_power")),
                 magicPower = intStr(addOption?.get("magic_power")),
                 bossDamage = intStr(addOption?.get("boss_damage")),
-                damage = intStr(addOption?.get("damage"))
+                damage = intStr(addOption?.get("damage")),
             ),
             baseAttackPower = intStr(baseOption?.get("attack_power")),
-            baseMagicPower = intStr(baseOption?.get("magic_power"))
+            baseMagicPower = intStr(baseOption?.get("magic_power")),
         )
     }
 
@@ -46,7 +46,7 @@ class EquipmentResponseToCalculationInputConverter {
             grade = grade,
             line1 = item["${optionPrefix}1"] as? String,
             line2 = item["${optionPrefix}2"] as? String,
-            line3 = item["${optionPrefix}3"] as? String
+            line3 = item["${optionPrefix}3"] as? String,
         )
     }
 }

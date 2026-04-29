@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.converter
 
-import maple.expectation.core.dto.v4.*
 import maple.expectation.core.domain.model.PotentialGrade
+import maple.expectation.core.dto.v4.*
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
@@ -18,7 +18,7 @@ class EquipmentResponseToCalculationInputConverterTest {
             "item_base_option" to mapOf(
                 "base_equipment_level" to "200",
                 "attack_power" to "293",
-                "magic_power" to "0"
+                "magic_power" to "0",
             ),
             "potential_option_grade" to "레전드리",
             "potential_option_1" to "공격력 +12%",
@@ -34,8 +34,8 @@ class EquipmentResponseToCalculationInputConverterTest {
                 "str" to "10", "dex" to "20", "int" to "0", "luk" to "0",
                 "max_hp" to "0", "all_stat" to "5",
                 "attack_power" to "50", "magic_power" to "0",
-                "boss_damage" to "30", "damage" to "0"
-            )
+                "boss_damage" to "30", "damage" to "0",
+            ),
         )
 
         val item = converter.convertItem(nexonItem)
@@ -74,8 +74,8 @@ class EquipmentResponseToCalculationInputConverterTest {
                 "str" to "0", "dex" to "0", "int" to "0", "luk" to "0",
                 "max_hp" to "0", "all_stat" to "0",
                 "attack_power" to "0", "magic_power" to "0",
-                "boss_damage" to "0", "damage" to "0"
-            )
+                "boss_damage" to "0", "damage" to "0",
+            ),
         )
 
         val item = converter.convertItem(nexonItem)

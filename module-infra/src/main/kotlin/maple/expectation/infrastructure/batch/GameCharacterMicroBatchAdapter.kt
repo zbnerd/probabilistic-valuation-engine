@@ -40,7 +40,7 @@ class GameCharacterMicroBatchAdapter(
         meterRegistry = meterRegistry,
         cache = cache,
         singleLoader = { key -> repository.findByUserIgn(key) },
-        batchLoader = { keys -> repository.findByUserIgnIn(keys) },
+        batchLoader = { keys -> java.util.concurrent.CompletableFuture.completedFuture(repository.findByUserIgnIn(keys)) },
     )
 
     @PostConstruct

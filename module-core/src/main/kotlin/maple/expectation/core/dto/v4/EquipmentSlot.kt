@@ -26,10 +26,10 @@ enum class EquipmentSlot(val koreanName: String) {
     FACE("얼굴장식"),
     EYE("눈장식"),
     POWER_SOURCE("파워 소스"),
-    UNKNOWN("알 수 없음");
+    UNKNOWN("알 수 없음"),
+    ;
 
     companion object {
-        fun fromKorean(name: String): EquipmentSlot =
-            entries.find { it.koreanName == name } ?: UNKNOWN
+        fun fromKorean(name: String): EquipmentSlot = entries.find { it.koreanName == name } ?: UNKNOWN
     }
 }

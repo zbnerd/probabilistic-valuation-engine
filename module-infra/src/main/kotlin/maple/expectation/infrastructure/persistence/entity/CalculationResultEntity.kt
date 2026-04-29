@@ -23,5 +23,5 @@ class CalculationResultEntity(
     val hash: String? = null,
     @Column(nullable = false) val status: String = "SUCCESS",
     val createdAt: OffsetDateTime = OffsetDateTime.now(),
-    val expiresAt: OffsetDateTime? = null
+    val expiresAt: OffsetDateTime? = null,
 )

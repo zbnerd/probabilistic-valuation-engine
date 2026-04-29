@@ -1,5 +1,6 @@
 package maple.expectation.adapter.outgoing
 
+import java.util.UUID
 import maple.expectation.infrastructure.persistence.repository.OutboxEventRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -10,12 +11,12 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
-import java.util.UUID
 
 @ExtendWith(MockitoExtension::class)
 class OutboxEventPortAdapterTest {
 
     @Mock lateinit var repo: OutboxEventRepository
+
     @InjectMocks lateinit var adapter: OutboxEventPortAdapter
 
     @Test

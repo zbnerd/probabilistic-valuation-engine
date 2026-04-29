@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional
 class OutboxRelayWorker(
     private val outboxPort: OutboxEventPort,
     private val resultReadyTopic: ResultReadyTopic,
-    private val executor: LogicExecutor
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -36,7 +36,7 @@ class OutboxRelayWorker(
                         jobId = event.jobId.toString(),
                         resultId = event.eventId.toString(),
                         characterId = "",
-                        presetNo = 1
+                        presetNo = 1,
                     )
                     resultReadyTopic.publish(integrationEvent)
                     outboxPort.markPublished(event.eventId)
@@ -45,7 +45,7 @@ class OutboxRelayWorker(
                     log.warn("[eventId={}] Publish failed: {}", event.eventId, e.message)
                     outboxPort.incrementPublishAttempts(event.eventId)
                 },
-                context
+                context,
             )
         }
     }

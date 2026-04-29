@@ -97,3 +97,9 @@ valid-users-*.txt
 # Load test scripts (experimental)
 load-test-scripts/wrk-*.lua
 .worktrees/
+
+# DB backups
+*.dump
+
+# App logs
+module-app/logs/

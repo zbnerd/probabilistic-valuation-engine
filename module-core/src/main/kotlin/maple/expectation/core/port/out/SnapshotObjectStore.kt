@@ -11,5 +11,5 @@ interface SnapshotObjectStore {
 data class SnapshotObjectStoreResult(
     val objectKey: String,
     val compressedSize: Long,
-    val hash: String
+    val hash: String,
 )

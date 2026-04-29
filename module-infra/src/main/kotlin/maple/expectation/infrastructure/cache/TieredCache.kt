@@ -78,11 +78,15 @@ class TieredCache(
         batchBuffer = if (l2Enabled && l2Strategy != null) {
             log.info("[TieredCache] Batch L2 enabled: cache={}", cacheName)
             BatchL2LookupBuffer(l2Strategy, l1, meterRegistry)
-        } else null
+        } else {
+            null
+        }
         writeBuffer = if (l2Enabled && l2Strategy != null) {
             val ttl = (l2 as? PostgresL2CacheAdapter)?.ttlMinutes ?: 15L
             BatchL2WriteBuffer(l2Strategy, l1, ttl, meterRegistry)
-        } else null
+        } else {
+            null
+        }
         l1HitCounter = Counter.builder("cache.hit").tag("layer", "L1").tag("cache", cacheName).register(meterRegistry)
         l2HitCounter = Counter.builder("cache.hit").tag("layer", "L2").tag("cache", cacheName).register(meterRegistry)
         missCounter = Counter.builder("cache.miss").tag("cache", cacheName).register(meterRegistry)
@@ -118,7 +122,9 @@ class TieredCache(
                 keyVersions[key] = versionCounter.incrementAndGet()
                 l2HitCounter.increment()
                 SimpleValueWrapper(value)
-            } else null
+            } else {
+                null
+            }
         }
         return Optional.ofNullable(l2.get(key))
             .map { w ->

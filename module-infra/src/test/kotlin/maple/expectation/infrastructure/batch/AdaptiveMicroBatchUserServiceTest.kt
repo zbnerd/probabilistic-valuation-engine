@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.batch
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -180,7 +181,7 @@ class AdaptiveMicroBatchUserServiceTest {
                 users[key]
             },
             batchLoader = { keys ->
-                keys.mapNotNull { key -> users[key]?.let { key to it } }.toMap()
+                CompletableFuture.completedFuture(keys.mapNotNull { key -> users[key]?.let { key to it } }.toMap())
             },
         ).also { it.startBatchWorker() }
 
@@ -228,7 +229,7 @@ class AdaptiveMicroBatchUserServiceTest {
         },
         batchLoader = { keys ->
             batchLoaderCallCount.incrementAndGet()
-            keys.mapNotNull { key -> users[key]?.let { key to it } }.toMap()
+            CompletableFuture.completedFuture(keys.mapNotNull { key -> users[key]?.let { key to it } }.toMap())
         },
     ).also {
         it.startBatchWorker()

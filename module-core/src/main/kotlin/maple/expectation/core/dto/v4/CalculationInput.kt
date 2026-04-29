@@ -6,5 +6,5 @@ data class CalculationInput(
     val userIgn: String,
     val characterClass: String,
     val presetNo: Int,
-    val items: List<EquipmentItem>
+    val items: List<EquipmentItem>,
 )

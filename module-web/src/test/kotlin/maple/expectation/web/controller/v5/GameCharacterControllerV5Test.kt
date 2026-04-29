@@ -2,6 +2,10 @@ package maple.expectation.web.controller.v5
 
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import java.math.BigDecimal
+import java.time.Instant
+import java.util.Optional
+import java.util.concurrent.Executor
 import maple.expectation.common.executor.TaskContext
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.core.domain.model.character.CharacterView
@@ -12,17 +16,12 @@ import maple.expectation.core.port.inbound.TaskReceipt
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.EquipmentFanOutPort
 import maple.expectation.web.dto.v5.EquipmentExpectationResponseV5
-import maple.expectation.web.mapper.CharacterViewMapper
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpStatus
-import java.math.BigDecimal
-import java.time.Instant
-import java.util.Optional
-import java.util.concurrent.Executor
-import org.assertj.core.api.Assertions.assertThat
 
 /**
  * Unit tests for [GameCharacterControllerV5].
@@ -219,29 +218,25 @@ class GameCharacterControllerV5Test {
         assertThat(entity.statusCode).isEqualTo(HttpStatus.OK)
     }
 
-    private fun createTestResponse(userIgn: String): EquipmentExpectationResponseV5 {
-        return EquipmentExpectationResponseV5(
-            userIgn = userIgn,
-            calculatedAt = Instant.now(),
-            fromCache = true,
-            totalExpectedCost = BigDecimal.valueOf(1000000L),
-            totalCostText = "100만",
-            totalCostBreakdown = EquipmentExpectationResponseV5.CostBreakdownDto.empty(),
-            maxPresetNo = 3,
-            presets = emptyList(),
-        )
-    }
+    private fun createTestResponse(userIgn: String): EquipmentExpectationResponseV5 = EquipmentExpectationResponseV5(
+        userIgn = userIgn,
+        calculatedAt = Instant.now(),
+        fromCache = true,
+        totalExpectedCost = BigDecimal.valueOf(1000000L),
+        totalCostText = "100만",
+        totalCostBreakdown = EquipmentExpectationResponseV5.CostBreakdownDto.empty(),
+        maxPresetNo = 3,
+        presets = emptyList(),
+    )
 
-    private fun createTestCharacterView(userIgn: String): CharacterView {
-        return object : CharacterView {
-            override val userIgn = userIgn
-            override val messageId = "msg-123"
-            override val calculatedAt = Instant.now()
-            override val fromCache = true
-            override val totalExpectedCost = 1000000L
-            override val maxPresetNo = 3
-            override val presets = emptyList<CharacterView.PresetView>()
-        }
+    private fun createTestCharacterView(userIgn: String): CharacterView = object : CharacterView {
+        override val userIgn = userIgn
+        override val messageId = "msg-123"
+        override val calculatedAt = Instant.now()
+        override val fromCache = true
+        override val totalExpectedCost = 1000000L
+        override val maxPresetNo = 3
+        override val presets = emptyList<CharacterView.PresetView>()
     }
 
     /**
@@ -251,9 +246,7 @@ class GameCharacterControllerV5Test {
         var characterView: Optional<CharacterView> = Optional.empty()
         var deleteCalled = false
 
-        override fun findByUserIgn(userIgn: String): Optional<CharacterView> {
-            return characterView
-        }
+        override fun findByUserIgn(userIgn: String): Optional<CharacterView> = characterView
 
         override fun deleteByUserIgn(userIgn: String) {
             deleteCalled = true
@@ -332,12 +325,10 @@ class GameCharacterControllerV5Test {
             task: () -> T,
             defaultValue: T,
             context: TaskContext,
-        ): T {
-            return try {
-                task()
-            } catch (e: Exception) {
-                defaultValue
-            }
+        ): T = try {
+            task()
+        } catch (e: Exception) {
+            defaultValue
         }
 
         override fun executeVoidJava(task: Runnable, context: TaskContext) {
@@ -351,25 +342,19 @@ class GameCharacterControllerV5Test {
             task: ExecutorPort.ThrowingSupplier<T>,
             defaultValue: T,
             context: TaskContext,
-        ): T {
-            return try {
-                task.get()
-            } catch (e: Exception) {
-                defaultValue
-            }
+        ): T = try {
+            task.get()
+        } catch (e: Exception) {
+            defaultValue
         }
 
-        override fun <T> execute(task: () -> T, context: TaskContext): T {
-            return task()
-        }
+        override fun <T> execute(task: () -> T, context: TaskContext): T = task()
 
         override fun <T> executeWithTranslation(
             task: () -> T,
             translator: (Throwable, TaskContext) -> Exception,
             context: TaskContext,
-        ): T {
-            return task()
-        }
+        ): T = task()
     }
 
     /**

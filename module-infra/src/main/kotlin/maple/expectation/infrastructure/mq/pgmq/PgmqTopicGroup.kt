@@ -6,8 +6,8 @@ import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.port.out.mq.ConsumeResult
-import maple.expectation.core.port.out.mq.MessageHandle
 import maple.expectation.core.port.out.mq.MQTopicGroup
+import maple.expectation.core.port.out.mq.MessageHandle
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
@@ -47,7 +47,10 @@ abstract class PgmqTopicGroup(
     fun pollLoop() {
         if (!lifecycleWrapper.beforeTask()) return
         val handler = handlerRef.get()
-        if (handler == null) { lifecycleWrapper.afterTask(); return }
+        if (handler == null) {
+            lifecycleWrapper.afterTask()
+            return
+        }
 
         val context = TaskContext.of("PgmqTopic", "Poll", name)
         executor.executeWithFinally({

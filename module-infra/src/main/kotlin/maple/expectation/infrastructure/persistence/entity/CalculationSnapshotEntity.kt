@@ -36,5 +36,5 @@ open class CalculationSnapshotEntity(
     @Column(nullable = false)
     val expiresAt: Instant,
 
-    val createdAt: Instant = Instant.now()
+    val createdAt: Instant = Instant.now(),
 )

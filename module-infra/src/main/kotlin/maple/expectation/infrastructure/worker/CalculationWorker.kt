@@ -32,6 +32,16 @@ import org.springframework.stereotype.Component
  * <h3>Feature Flag</h3>
  * <p>pgmq.worker.calculation.enabled=true로 활성화
  *
+ * <h3>ADR: .join() 유지 결정</h3>
+ *
+ * **Context:** `process()` returns Boolean for PgmqWorker ACK/NACK routing.
+ * The abstract method signature cannot return CompletableFuture without changing
+ * all PgmqWorker subclasses. This method runs on a dedicated worker pool thread
+ * (not Tomcat), so blocking does not affect request-serving threads.
+ *
+ * **Decision:** Use `handle().join()` to await the async calculation result,
+ * transforming success/failure into Boolean within the CF chain before joining.
+ *
  * @see CalculationQueueProducer 프로듀서
  * @see ExpectationV4Port 계산 포트
  */
@@ -51,24 +61,34 @@ class CalculationWorker(
     override val payloadClass: Class<CalculationRequest> = CalculationRequest::class.java
     override val workerSettings: PgmqWorkerConfig.WorkerSettings = config.calculation
 
+    /**
+     * Process calculation message.
+     *
+     * ADR: `.join()` is required because PgmqWorker.process() returns Boolean
+     * for ACK/NACK routing. Runs on dedicated worker pool thread (not Tomcat).
+     * Uses `handle()` to transform result before joining.
+     */
     override fun process(message: PgmqMessage<CalculationRequest>): Boolean {
         val request = message.payload
         val context = TaskContext.of("CalculationWorker", "Process", request.userIgn)
 
         return executor.executeOrDefault({
-            log.info("🔄 [CalculationWorker] Processing: ign={}, ocid={}", request.userIgn, request.ocid)
+            log.info("Processing: ign={}, ocid={}", request.userIgn, request.ocid)
 
-            // 비동기 계산 수행 및 완료 대기
-            val future = expectationPort.calculateExpectationAsync(
+            expectationPort.calculateExpectationAsync(
                 request.userIgn,
                 request.forceRecalculation,
                 message.messageId.toString(),
                 request.presetNo,
-            )
-            future.join()
-
-            log.info("✅ [CalculationWorker] Completed: ign={}", request.userIgn)
-            true
+            ).handle { _, ex ->
+                if (ex != null) {
+                    log.warn("Calculation failed: ign={}, error={}", request.userIgn, ex.message)
+                    false
+                } else {
+                    log.info("Completed: ign={}", request.userIgn)
+                    true
+                }
+            }.join()
         }, false, context)
     }
 

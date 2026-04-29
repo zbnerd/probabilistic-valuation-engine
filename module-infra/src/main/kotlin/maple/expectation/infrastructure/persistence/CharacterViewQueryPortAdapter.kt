@@ -35,10 +35,6 @@ class CharacterViewQueryPortAdapter(
         }
     }
 
-    override fun deleteByUserIgn(userIgn: String) {
-        queryService.deleteByUserIgn(userIgn)
-    }
-
     override fun upsertFromCalculation(
         userIgn: String,
         messageId: String?,

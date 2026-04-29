@@ -2,11 +2,7 @@ package maple.expectation.infrastructure.persistence.repository
 
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Modifying
-import org.springframework.data.jpa.repository.Query
-import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
-import org.springframework.transaction.annotation.Transactional
 
 /**
  * V5 CQRS: PostgreSQL Repository for Character Valuation Views
@@ -27,12 +23,4 @@ interface CharacterValuationViewJpaRepository : JpaRepository<CharacterValuation
      * messageId으로 조회
      */
     fun findByMessageId(messageId: String): CharacterValuationViewEntity?
-
-    /**
-     * userIgn으로 삭제
-     */
-    @Modifying
-    @Transactional("transactionManager")
-    @Query("DELETE FROM CharacterValuationViewEntity e WHERE e.userIgn = :userIgn")
-    fun deleteByUserIgn(@Param("userIgn") userIgn: String): Int
 }

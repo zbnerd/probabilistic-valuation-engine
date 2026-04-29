@@ -169,16 +169,6 @@ class CharacterViewQueryPortAdapterTest {
     }
 
     @Test
-    @DisplayName("deleteByUserIgn은 queryService에 위임한다")
-    fun deleteByUserIgn_delegatesToQueryService() {
-        val userIgn = "testUser"
-
-        adapter.deleteByUserIgn(userIgn)
-
-        verify(queryService).deleteByUserIgn(userIgn)
-    }
-
-    @Test
     @DisplayName("upsertFromCalculation은 queryService에 올바른 파라미터로 위임한다")
     fun upsertFromCalculation_delegatesToQueryService() {
         val userIgn = "testUser"

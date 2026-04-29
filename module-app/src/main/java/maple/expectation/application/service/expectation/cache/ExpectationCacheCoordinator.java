@@ -343,19 +343,22 @@ public class ExpectationCacheCoordinator {
   private EquipmentExpectationResponseV4 handleAdmissionException(
       String cacheKey, Throwable exception) {
     Throwable cause = exception.getCause();
-    if (cause instanceof AdmissionTimeoutException) {
+    // AdmissionRejectedException/AdmissionTimeoutException may be set directly
+    // (not wrapped) when the CF completes exceptionally with them
+    Throwable target = (cause != null) ? cause : exception;
+    if (target instanceof AdmissionTimeoutException) {
       log.error("[V4] Admission control timeout for: {}", cacheKey);
       throw new EquipmentDataProcessingException(
-          String.format("Calculation rejected due to system overload: %s", cacheKey), cause);
+          String.format("Calculation rejected due to system overload: %s", cacheKey), target);
     }
-    if (cause instanceof AdmissionRejectedException) {
+    if (target instanceof AdmissionRejectedException) {
       log.warn("[V4] Admission control queue full - rejecting: {}", cacheKey);
       throw new EquipmentDataProcessingException(
-          String.format("System at capacity - queue full: %s", cacheKey), cause);
+          String.format("System at capacity - queue full: %s", cacheKey), target);
     }
-    log.error("[V4] Unexpected exception during admission control for: {}", cacheKey, cause);
+    log.error("[V4] Unexpected exception during admission control for: {}", cacheKey, target);
     throw new EquipmentDataProcessingException(
-        String.format("Calculation failed with admission control: %s", cacheKey), cause);
+        String.format("Calculation failed with admission control: %s", cacheKey), target);
   }
 
   /** Base64 → GZIP byte[] → JSON → Response 압축 해제 (#262 Fix) */

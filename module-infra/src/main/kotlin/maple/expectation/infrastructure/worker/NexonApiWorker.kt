@@ -41,9 +41,18 @@ class NexonApiWorker(
         val payload = envelope.payload as Map<*, *>
         val jobId = UUID.fromString(payload["jobId"].toString())
         val context = TaskContext.of("NexonApiWorker", "Process", jobId.toString())
-        return executor.executeOrDefault({
-            processApiRequest(payload, jobId)
-        }, ConsumeResult.Ack, context)
+        return executor.executeOrCatch(
+            { processApiRequest(payload, jobId) },
+            { e ->
+                log.error("[jobId={}] API request failed: {}", jobId, e.message)
+                executor.executeVoid(
+                    { jobService.handleApiFailure(jobId, "API_ERROR", e.message?.take(200) ?: "Unknown") },
+                    context,
+                )
+                ConsumeResult.Ack
+            },
+            context,
+        )
     }
 
     private fun processApiRequest(payload: Map<*, *>, jobId: UUID): ConsumeResult {

@@ -48,6 +48,7 @@ import org.springframework.context.annotation.Primary
 @ConditionalOnProperty(
     name = ["cache.l2.enabled"],
     havingValue = "true",
+    matchIfMissing = true,
 )
 @ConditionalOnProperty(
     name = ["cache.l2.impl"],
@@ -174,7 +175,9 @@ class PostgresL2CacheConfig {
      * <p>Required by TotalExpectationCacheService for JSON serialization.
      */
     @Bean(name = ["expectationObjectMapper"])
-    fun expectationObjectMapper(): com.fasterxml.jackson.databind.ObjectMapper = com.fasterxml.jackson.databind.ObjectMapper()
+    fun expectationObjectMapper(builder: org.springframework.http.converter.json.Jackson2ObjectMapperBuilder): com.fasterxml.jackson.databind.ObjectMapper = builder
+        .createXmlMapper(false)
+        .build<com.fasterxml.jackson.databind.ObjectMapper>()
         .registerModule(com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
         .registerModule(com.fasterxml.jackson.module.kotlin.KotlinModule.Builder().build())
         .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)

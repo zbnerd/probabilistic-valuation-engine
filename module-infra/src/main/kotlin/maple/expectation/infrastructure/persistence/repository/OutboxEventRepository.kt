@@ -11,7 +11,7 @@ import org.springframework.data.repository.query.Param
 interface OutboxEventRepository : JpaRepository<OutboxEventEntity, UUID> {
 
     @Query("SELECT e FROM OutboxEventEntity e WHERE e.published = false ORDER BY e.createdAt")
-    fun findUnpublished(limit: Int): List<OutboxEventEntity>
+    fun findUnpublished(limit: Int, pageable: org.springframework.data.domain.Pageable): List<OutboxEventEntity>
 
     @Modifying
     @Query("UPDATE OutboxEventEntity e SET e.published = true, e.publishedAt = :now WHERE e.eventId = :eventId")

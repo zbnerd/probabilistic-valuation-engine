@@ -167,10 +167,14 @@ class CalculationJobService(
     fun resolveOcidInPlace(jobId: UUID, ocid: String): Boolean = jobPort.resolveOcidAndTransition(jobId, ocid)
 
     @Transactional
-    fun saveSnapshotInPlace(snapshotEntity: CalculationSnapshotEntity): CalculationSnapshotEntity = snapshotRepository.save(snapshotEntity)
-
-    @Transactional
-    fun markSnapshotReadyInPlace(jobId: UUID, snapshotId: UUID): Boolean = jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)
+    fun saveInputSnapshotAndMarkReady(
+        snapshotEntity: CalculationSnapshotEntity,
+        jobId: UUID,
+        snapshotId: UUID,
+    ): Boolean {
+        snapshotRepository.save(snapshotEntity)
+        return jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)
+    }
 
     @Transactional
     fun retryExternalApiJob(jobId: UUID) {

@@ -76,9 +76,7 @@ class ExternalApiWorker(
         SNAPSHOT_WRITER_POOL_SIZE,
     ) { r -> Thread.ofPlatform().name("snapshot-writer-" + THREAD_COUNTER.getAndIncrement()).daemon(true).unstarted(r) }
 
-    private val apiCallPool: ExecutorService = Executors.newFixedThreadPool(
-        API_CALL_POOL_SIZE,
-    ) { r -> Thread.ofPlatform().name("api-call-" + API_THREAD_COUNTER.getAndIncrement()).daemon(true).unstarted(r) }
+    private val apiCallPool: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
     @PreDestroy
     fun shutdownExecutors() {
@@ -237,7 +235,10 @@ class ExternalApiWorker(
                 ocid
             }
             .thenCompose { ocid ->
-                CompletableFuture.supplyAsync({ Pair(ocid, equipmentFetchProvider.fetchWithCache(ocid)) }, apiCallPool)
+                CompletableFuture.supplyAsync({
+                    log.debug("[VT] API call on virtual thread: isVirtual={}", Thread.currentThread().isVirtual)
+                    Pair(ocid, equipmentFetchProvider.fetchWithCache(ocid))
+                }, apiCallPool)
             }
             .orTimeout(15, TimeUnit.SECONDS)
             .join()
@@ -275,8 +276,6 @@ class ExternalApiWorker(
     companion object {
         private val log = LoggerFactory.getLogger(ExternalApiWorker::class.java)
         private const val SNAPSHOT_WRITER_POOL_SIZE = 4
-        private const val API_CALL_POOL_SIZE = 4
         private val THREAD_COUNTER = java.util.concurrent.atomic.AtomicInteger(0)
-        private val API_THREAD_COUNTER = java.util.concurrent.atomic.AtomicInteger(0)
     }
 }

@@ -76,6 +76,47 @@ public class PresetCalculationHelper {
   }
 
   /**
+   * 프리셋 기대값 동기 계산 — 호출 스레드에서 직접 수행 (context switching 없음)
+   *
+   * <p>ExternalApiWorker 등 이미 전용 스레드에서 실행 중인 컨텍스트에서 사용. async submit → get() 패턴(future.get)의 불필요한
+   * context switching을 제거.
+   *
+   * @param cubeInputs 프리셋의 큐브 입력 목록
+   * @param presetNo 프리셋 번호 (1~3)
+   * @param characterClass 직업명 (환생의 불꽃 동적 계산용)
+   * @return 프리셋 기대값
+   */
+  public PresetExpectation calculatePreset(
+      List<CubeCalculationInput> cubeInputs, int presetNo, String characterClass) {
+
+    if (cubeInputs.isEmpty()) {
+      return new PresetExpectation(
+          presetNo, 0.0, CostFormatter.format(0.0), CostBreakdownDto.empty(), List.of());
+    }
+
+    List<ItemExpectationV4> results = new ArrayList<>(cubeInputs.size());
+    KahanSummation costAcc = new KahanSummation();
+    CostBreakdownDto breakdown = CostBreakdownDto.empty();
+
+    for (var cubeInput : cubeInputs) {
+      ItemExpectationV4 item;
+      if (!cubeInput.isReady()) {
+        item = buildNoPotentialItem(cubeInput, presetNo, characterClass);
+      } else {
+        EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
+        item = calculateSingleItem(input, cubeInput, characterClass);
+      }
+      results.add(item);
+      costAcc.add(item.getExpectedCost());
+      breakdown = breakdown.add(item.getCostBreakdown());
+    }
+
+    double totalCost = costAcc.sum();
+    return new PresetExpectation(
+        presetNo, totalCost, CostFormatter.format(totalCost), breakdown, results);
+  }
+
+  /**
    * 프리셋 기대값 비동기 계산 — 장비별 병렬 처리 (thenCombine, join/get 없음)
    *
    * <p>각 장비의 계산이 서로 독립이므로 CompletableFuture.supplyAsync로 동시 시작, thenCombine으로 결과를 누적하여 최종

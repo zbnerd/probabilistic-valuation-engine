@@ -30,4 +30,14 @@ class CalculationInputPortAdapter(
         val entity = repo.findByJobId(jobId) ?: return null
         return objectMapper.readValue(entity.payload, CalculationInput::class.java)
     }
+
+    override fun saveIfAbsent(input: CalculationInput): Boolean {
+        val payload = objectMapper.writeValueAsString(input)
+        return repo.insertIfAbsent(
+            UUID.randomUUID(),
+            UUID.fromString(input.jobId),
+            input.schemaVersion,
+            payload,
+        ) > 0
+    }
 }

@@ -1,6 +1,5 @@
 package maple.expectation.application.service.expectation
 
-import java.util.concurrent.CompletableFuture
 import maple.expectation.core.domain.model.PotentialGrade
 import maple.expectation.core.dto.v4.*
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.*
@@ -80,8 +79,8 @@ class PureExpectationCalculatorTest {
         )
 
         val preset = stubPreset()
-        whenever(presetHelper.calculatePresetAsync(any(), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(preset))
+        whenever(presetHelper.calculatePreset(any(), any(), any()))
+            .thenReturn(preset)
 
         val result = calculator.calculate(input)
 
@@ -103,8 +102,8 @@ class PureExpectationCalculatorTest {
             items = emptyList(),
         )
 
-        whenever(presetHelper.calculatePresetAsync(any(), any(), any()))
-            .thenReturn(CompletableFuture.failedFuture(RuntimeException("Calculation failed")))
+        whenever(presetHelper.calculatePreset(any(), any(), any()))
+            .thenThrow(RuntimeException("Calculation failed"))
 
         assertThrows(Exception::class.java) {
             calculator.calculate(input)

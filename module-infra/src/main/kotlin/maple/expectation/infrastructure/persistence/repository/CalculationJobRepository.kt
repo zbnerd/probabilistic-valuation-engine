@@ -164,6 +164,20 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
     @Query(
         """
         UPDATE CalculationJobEntity j
+        SET j.status = 'COMPLETED',
+            j.completedAt = CURRENT_TIMESTAMP,
+            j.lockedBy = NULL,
+            j.lockedUntil = NULL,
+            j.updatedAt = CURRENT_TIMESTAMP
+        WHERE j.jobId = :jobId AND j.status = 'SNAPSHOT_READY'
+    """,
+    )
+    fun completeFromSnapshotReady(@Param("jobId") jobId: UUID): Int
+
+    @Modifying
+    @Query(
+        """
+        UPDATE CalculationJobEntity j
         SET j.lockedBy = NULL, j.lockedUntil = NULL, j.updatedAt = CURRENT_TIMESTAMP
         WHERE j.jobId = :jobId
     """,

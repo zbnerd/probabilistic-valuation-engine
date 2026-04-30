@@ -22,9 +22,9 @@ import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
-import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 
 /**
  * Unit tests for [CharacterViewQueryServicePostgres].
@@ -60,6 +60,9 @@ class CharacterViewQueryServicePostgresTest {
 
     private lateinit var executor: LogicExecutor
 
+    @Mock
+    private lateinit var jdbc: NamedParameterJdbcTemplate
+
     private lateinit var service: CharacterViewQueryServicePostgres
 
     @BeforeEach
@@ -73,6 +76,7 @@ class CharacterViewQueryServicePostgresTest {
             objectMapper,
             executor,
             meterRegistry,
+            jdbc,
         )
     }
 
@@ -107,18 +111,11 @@ class CharacterViewQueryServicePostgresTest {
         val userIgn = "newUser"
         val messageId = "msg-123"
         val entity = createTestEntity(userIgn, messageId = messageId, version = 100L)
-        whenever(repository.findByMessageId(messageId)).thenReturn(null)
-        whenever(repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn)).thenReturn(null)
-        whenever(repository.save(any())).thenReturn(entity)
+        whenever(jdbc.update(any<String>(), any<Map<String, *>>())).thenReturn(1)
 
         service.upsert(entity)
 
-        val captor = argumentCaptor<CharacterValuationViewEntity>()
-        verify(repository).save(captor.capture())
-        val saved = captor.firstValue
-        assertThat(saved.userIgn).isEqualTo(userIgn)
-        assertThat(saved.version).isEqualTo(1L)
-        assertThat(saved.lastAppliedVersion).isEqualTo(100L)
+        verify(jdbc).update(any<String>(), any<Map<String, *>>())
     }
 
     @Test
@@ -126,20 +123,12 @@ class CharacterViewQueryServicePostgresTest {
     fun upsert_updatesExistingEntityWithNewerVersion() {
         val userIgn = "existingUser"
         val messageId = "msg-456"
-        val existing = createTestEntity(userIgn, messageId = null, version = 50L, lastAppliedVersion = 50L)
         val incoming = createTestEntity(userIgn, messageId = messageId, version = 100L)
-        whenever(repository.findByMessageId(messageId)).thenReturn(null)
-        whenever(repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn)).thenReturn(existing)
-        whenever(repository.save(any())).thenReturn(incoming)
+        whenever(jdbc.update(any<String>(), any<Map<String, *>>())).thenReturn(1)
 
         service.upsert(incoming)
 
-        val captor = argumentCaptor<CharacterValuationViewEntity>()
-        verify(repository).save(captor.capture())
-        val saved = captor.firstValue
-        assertThat(saved.userIgn).isEqualTo(userIgn)
-        assertThat(saved.messageId).isEqualTo(messageId)
-        assertThat(saved.lastAppliedVersion).isEqualTo(100L)
+        verify(jdbc).update(any<String>(), any<Map<String, *>>())
     }
 
     @Test
@@ -147,14 +136,12 @@ class CharacterViewQueryServicePostgresTest {
     fun upsert_skipsUpdateWithStaleVersion() {
         val userIgn = "existingUser"
         val messageId = "msg-789"
-        val existing = createTestEntity(userIgn, messageId = null, version = 100L, lastAppliedVersion = 100L)
         val incoming = createTestEntity(userIgn, messageId = messageId, version = 50L)
-        whenever(repository.findByMessageId(messageId)).thenReturn(null)
-        whenever(repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn)).thenReturn(existing)
+        whenever(jdbc.update(any<String>(), any<Map<String, *>>())).thenReturn(0)
 
         service.upsert(incoming)
 
-        verify(repository, never()).save(any())
+        verify(jdbc).update(any<String>(), any<Map<String, *>>())
     }
 
     @Test
@@ -205,8 +192,8 @@ class CharacterViewQueryServicePostgresTest {
     }
 
     @Test
-    @DisplayName("upsertFromCalculation은 JSON을 파싱하여 entity를 저장한다")
-    fun upsertFromCalculation_parsesJsonAndSaves() {
+    @DisplayName("upsertFromCalculation은 JSON을 파싱하여 entity를 upsert한다")
+    fun upsertFromCalculation_parsesJsonAndUpserts() {
         val userIgn = "testUser"
         val messageId = "msg-123"
         val characterOcid = "ocid-456"
@@ -216,9 +203,7 @@ class CharacterViewQueryServicePostgresTest {
         val maxPresetNo = 3
         val presetsJson = """[]"""
 
-        whenever(repository.findByMessageId(messageId)).thenReturn(null)
-        whenever(repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn)).thenReturn(null)
-        whenever(repository.save(any())).thenReturn(createTestEntity(userIgn, version = 1L))
+        whenever(jdbc.update(any<String>(), any<Map<String, *>>())).thenReturn(1)
 
         service.upsertFromCalculation(
             userIgn,
@@ -232,17 +217,17 @@ class CharacterViewQueryServicePostgresTest {
             presetsJson,
         )
 
-        val captor = argumentCaptor<CharacterValuationViewEntity>()
-        verify(repository).save(captor.capture())
-        val saved = captor.firstValue
-        assertThat(saved.userIgn).isEqualTo(userIgn)
-        assertThat(saved.messageId).isEqualTo(messageId)
-        assertThat(saved.characterOcid).isEqualTo(characterOcid)
-        assertThat(saved.characterClass).isEqualTo(characterClass)
-        assertThat(saved.characterLevel).isEqualTo(characterLevel)
-        assertThat(saved.totalExpectedCost).isEqualTo(totalExpectedCost)
-        assertThat(saved.maxPresetNo).isEqualTo(maxPresetNo)
-        assertThat(saved.presetNo).isEqualTo(1)
+        val captor = argumentCaptor<Map<String, *>>()
+        verify(jdbc).update(any<String>(), captor.capture())
+        val params = captor.firstValue
+        assertThat(params["userIgn"]).isEqualTo(userIgn)
+        assertThat(params["messageId"]).isEqualTo(messageId)
+        assertThat(params["characterOcid"]).isEqualTo(characterOcid)
+        assertThat(params["characterClass"]).isEqualTo(characterClass)
+        assertThat(params["characterLevel"]).isEqualTo(characterLevel)
+        assertThat(params["totalExpectedCost"]).isEqualTo(totalExpectedCost)
+        assertThat(params["maxPresetNo"]).isEqualTo(maxPresetNo)
+        assertThat(params["presetNo"]).isEqualTo(1)
     }
 
     private fun createTestEntity(

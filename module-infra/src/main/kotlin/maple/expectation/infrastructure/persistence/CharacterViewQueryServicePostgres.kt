@@ -9,6 +9,7 @@ import maple.expectation.infrastructure.persistence.entity.CharacterValuationVie
 import maple.expectation.infrastructure.persistence.repository.CharacterValuationViewJpaRepository
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -32,6 +33,7 @@ class CharacterViewQueryServicePostgres(
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
+    private val jdbc: NamedParameterJdbcTemplate,
 ) {
     private val log = LoggerFactory.getLogger(CharacterViewQueryServicePostgres::class.java)
 
@@ -121,17 +123,68 @@ class CharacterViewQueryServicePostgres(
     }
 
     private fun performUpsert(entity: CharacterValuationViewEntity) {
-        val existing = findExistingEntity(entity)
-        val saved = if (existing != null) {
-            updateOrSkipExisting(existing, entity)
+        if (entity.messageId != null) {
+            val presetsJson = entity.presets?.let { objectMapper.writeValueAsString(it) }
+            upsertNative(entity, presetsJson)
+            saveToReadModel(entity)
         } else {
-            insertNew(entity)
+            val existing = findExistingEntity(entity)
+            val saved = if (existing != null) {
+                updateOrSkipExisting(existing, entity)
+            } else {
+                insertNew(entity)
+            }
+            val readModelSource = saved ?: existing
+            if (readModelSource != null) {
+                saveToReadModel(readModelSource)
+            }
         }
-        // Always write to read model with latest available data
-        val readModelSource = saved ?: existing
-        if (readModelSource != null) {
-            saveToReadModel(readModelSource)
-        }
+    }
+
+    private fun upsertNative(entity: CharacterValuationViewEntity, presetsJson: String?) {
+        val params = mapOf(
+            "userIgn" to entity.userIgn,
+            "messageId" to (entity.messageId ?: return),
+            "characterOcid" to entity.characterOcid,
+            "characterClass" to entity.characterClass,
+            "characterLevel" to entity.characterLevel,
+            "calculatedAt" to entity.calculatedAt,
+            "lastApiSyncAt" to entity.lastApiSyncAt,
+            "version" to (entity.version ?: 1L),
+            "lastAppliedVersion" to (entity.lastAppliedVersion ?: entity.version ?: 1L),
+            "totalExpectedCost" to entity.totalExpectedCost,
+            "maxPresetNo" to entity.maxPresetNo,
+            "presetNo" to entity.presetNo,
+            "presets" to presetsJson,
+            "fromCache" to entity.fromCache,
+        )
+        jdbc.update(
+            """
+            INSERT INTO character_valuation_views (
+                user_ign, message_id, character_ocid, character_class, character_level,
+                calculated_at, last_api_sync_at, version, last_applied_version,
+                total_expected_cost, max_preset_no, preset_no, presets, from_cache
+            ) VALUES (
+                :userIgn, :messageId, :characterOcid, :characterClass, :characterLevel,
+                :calculatedAt, :lastApiSyncAt, :version + 1, :lastAppliedVersion,
+                :totalExpectedCost, :maxPresetNo, :presetNo, CAST(:presets AS jsonb), :fromCache
+            )
+            ON CONFLICT (message_id) DO UPDATE SET
+                user_ign = EXCLUDED.user_ign,
+                character_ocid = COALESCE(EXCLUDED.character_ocid, character_valuation_views.character_ocid),
+                character_class = COALESCE(EXCLUDED.character_class, character_valuation_views.character_class),
+                calculated_at = EXCLUDED.calculated_at,
+                version = character_valuation_views.version + 1,
+                last_applied_version = EXCLUDED.last_applied_version,
+                total_expected_cost = EXCLUDED.total_expected_cost,
+                max_preset_no = EXCLUDED.max_preset_no,
+                preset_no = EXCLUDED.preset_no,
+                presets = EXCLUDED.presets,
+                from_cache = EXCLUDED.from_cache
+            WHERE character_valuation_views.last_applied_version < EXCLUDED.last_applied_version
+            """,
+            params,
+        )
     }
 
     private fun updateOrSkipExisting(

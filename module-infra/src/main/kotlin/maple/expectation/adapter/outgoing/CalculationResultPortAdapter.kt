@@ -6,12 +6,14 @@ import maple.expectation.core.port.out.CalculationResultPort
 import maple.expectation.infrastructure.persistence.entity.CalculationResultEntity
 import maple.expectation.infrastructure.persistence.repository.CalculationResultRepository
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 
 @Component
 class CalculationResultPortAdapter(
     private val repo: CalculationResultRepository,
 ) : CalculationResultPort {
 
+    @Transactional(value = "transactionManager", readOnly = false)
     override fun save(result: CalculationResultData): CalculationResultData {
         val existing = repo.findByJobId(result.jobId)
         val entity = if (existing != null && existing.hash == result.hash) {
@@ -50,10 +52,13 @@ class CalculationResultPortAdapter(
         )
     }
 
+    @Transactional(value = "transactionManager", readOnly = true)
     override fun findByJobId(jobId: UUID): CalculationResultData? = repo.findByJobId(jobId)?.toData()
 
+    @Transactional(value = "transactionManager", readOnly = true)
     override fun existsByJobId(jobId: UUID): Boolean = repo.existsByJobId(jobId)
 
+    @Transactional(value = "transactionManager", readOnly = false)
     override fun saveIfAbsent(result: CalculationResultData): Boolean = repo.insertIfAbsent(
         result.resultId,
         result.jobId,

@@ -7,6 +7,7 @@ import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotInputEntity
 import maple.expectation.infrastructure.persistence.repository.CalculationSnapshotInputRepository
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 
 @Component
 class CalculationInputPortAdapter(
@@ -14,6 +15,7 @@ class CalculationInputPortAdapter(
     private val objectMapper: ObjectMapper,
 ) : CalculationInputPort {
 
+    @Transactional(value = "transactionManager", readOnly = false)
     override fun save(input: CalculationInput): CalculationInput {
         val payload = objectMapper.writeValueAsString(input)
         repo.save(
@@ -26,11 +28,13 @@ class CalculationInputPortAdapter(
         return input
     }
 
+    @Transactional(value = "transactionManager", readOnly = true)
     override fun findByJobId(jobId: UUID): CalculationInput? {
         val entity = repo.findByJobId(jobId) ?: return null
         return objectMapper.readValue(entity.payload, CalculationInput::class.java)
     }
 
+    @Transactional(value = "transactionManager", readOnly = false)
     override fun saveIfAbsent(input: CalculationInput): Boolean {
         val payload = objectMapper.writeValueAsString(input)
         return repo.insertIfAbsent(

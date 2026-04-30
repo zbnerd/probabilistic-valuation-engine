@@ -2,9 +2,14 @@ package maple.expectation.infrastructure.worker
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
+import jakarta.annotation.PreDestroy
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import maple.expectation.core.dto.v4.CalculationInput
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.model.snapshot.CalculationSnapshot
@@ -18,6 +23,7 @@ import maple.expectation.infrastructure.converter.EquipmentResponseToCalculation
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
+import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.infrastructure.job.CalculationExecutionService
 import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
@@ -66,6 +72,22 @@ class ExternalApiWorker(
     private val executionService: CalculationExecutionService,
 ) : PgmqWorker<ExternalApiJobPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
 
+    private val snapshotWriter: ExecutorService = Executors.newFixedThreadPool(
+        SNAPSHOT_WRITER_POOL_SIZE,
+    ) { r -> Thread.ofPlatform().name("snapshot-writer-" + THREAD_COUNTER.getAndIncrement()).daemon(true).unstarted(r) }
+
+    private val apiCallPool: ExecutorService = Executors.newFixedThreadPool(
+        API_CALL_POOL_SIZE,
+    ) { r -> Thread.ofPlatform().name("api-call-" + API_THREAD_COUNTER.getAndIncrement()).daemon(true).unstarted(r) }
+
+    @PreDestroy
+    fun shutdownExecutors() {
+        snapshotWriter.shutdown()
+        apiCallPool.shutdown()
+        snapshotWriter.awaitTermination(5, TimeUnit.SECONDS)
+        apiCallPool.awaitTermination(5, TimeUnit.SECONDS)
+    }
+
     override val queueName: String = QueueNames.EXTERNAL_API
     override val payloadClass: Class<ExternalApiJobPayload> = ExternalApiJobPayload::class.java
     override val workerSettings: PgmqWorkerConfig.WorkerSettings = workerConfig.externalApi
@@ -110,14 +132,11 @@ class ExternalApiWorker(
             return
         }
 
-        // Step 1: Resolve OCID (Nexon API ~200ms)
-        val ocid = resolveOcid(jobId, payload.userIgn)
+        // Step 1+2: Resolve OCID → Fetch equipment (thenCompose chain, single block point on cache miss)
+        val (ocid, equipmentResponse) = resolveOcidAndFetchEquipment(jobId, payload.userIgn)
 
-        // Step 2: Fetch equipment data (Nexon API ~300ms)
-        val equipmentResponse = equipmentFetchProvider.fetchWithCache(ocid)
+        // Step 3: Submit snapshot write to overlap with calculation
         val snapshotData = objectMapper.writeValueAsBytes(equipmentResponse)
-
-        // Step 3: Save snapshot + CalculationInput
         val objectKey = generateObjectKey(jobId)
         val snapshotId = UUID.randomUUID()
         val snapshot = CalculationSnapshot(
@@ -129,8 +148,9 @@ class ExternalApiWorker(
             presetNo = payload.presetNo,
             expiresAt = Instant.now().plusSeconds(86400),
         )
-        val putResult = snapshotStore.put(snapshot, snapshotData)
+        val snapshotFuture = CompletableFuture.supplyAsync({ snapshotStore.put(snapshot, snapshotData) }, snapshotWriter)
 
+        // Step 4: Build input items + calculate (overlaps with snapshot file I/O)
         val inputItems = (equipmentResponse.itemEquipment ?: emptyList()).map { item ->
             val itemMap = objectMapper.convertValue(item, Map::class.java) as Map<*, *>
             converter.convertItem(itemMap)
@@ -144,6 +164,17 @@ class ExternalApiWorker(
         )
         calculationInputPort.saveIfAbsent(calcInput)
 
+        // Step 5: Calculate (pure CPU) + pre-compute gzip/hash outside transaction
+        val calcResult = pureCalculationPort.calculate(calcInput)
+        val resultJson = objectMapper.writeValueAsString(calcResult)
+        val resultBytes = resultJson.toByteArray()
+        val gzipData = gzipCompress(resultBytes)
+        val hash = sha256Hex(resultBytes)
+
+        // Wait for snapshot write completion before transactional save
+        val putResult = snapshotFuture.join()
+
+        // Step 6: Save snapshot metadata + result in transaction
         val snapshotEntity = CalculationSnapshotEntity(
             snapshotId = snapshotId,
             jobId = jobId,
@@ -157,13 +188,6 @@ class ExternalApiWorker(
             expiresAt = snapshot.expiresAt,
         )
         jobService.saveInputSnapshotAndMarkReady(snapshotEntity, jobId, snapshotId)
-
-        // Step 4: Calculate (pure CPU, ~ms) + pre-compute gzip/hash outside transaction
-        val calcResult = pureCalculationPort.calculate(calcInput)
-        val resultJson = objectMapper.writeValueAsString(calcResult)
-        val resultBytes = resultJson.toByteArray()
-        val gzipData = gzipCompress(resultBytes)
-        val hash = sha256Hex(resultBytes)
 
         executionService.completeCalculation(
             jobId = jobId,
@@ -179,14 +203,21 @@ class ExternalApiWorker(
         log.info("[jobId={}] Pipeline completed", jobId)
     }
 
-    private fun resolveOcid(jobId: UUID, userIgn: String): String {
+    /**
+     * Resolve OCID and fetch equipment data.
+     *
+     * OCID cache hit: synchronous fast path (no API call).
+     * OCID cache miss: chains OCID API → equipment API via thenCompose,
+     * blocking once at .join() instead of twice.
+     */
+    private fun resolveOcidAndFetchEquipment(jobId: UUID, userIgn: String): Pair<String, EquipmentResponse> {
         val cached = ocidPort.resolveOcid(userIgn)
         if (cached != null) {
             jobService.resolveOcidInPlace(jobId, cached)
-            return cached
+            return Pair(cached, equipmentFetchProvider.fetchWithCache(cached))
         }
 
-        val ocidResponse = nexonApiClient.getOcidByCharacterName(userIgn)
+        return nexonApiClient.getOcidByCharacterName(userIgn)
             .handle { result, ex ->
                 if (ex != null) {
                     log.warn("[jobId={}] OCID resolve failed: {}", jobId, ex.message)
@@ -195,15 +226,21 @@ class ExternalApiWorker(
                     result
                 }
             }
+            .thenApply { response ->
+                if (response == null || response.ocid.isBlank()) {
+                    throw IllegalStateException("OCID resolve returned empty for $userIgn")
+                }
+                response.ocid
+            }
+            .thenApply { ocid ->
+                jobService.resolveOcidInPlace(jobId, ocid)
+                ocid
+            }
+            .thenCompose { ocid ->
+                CompletableFuture.supplyAsync({ Pair(ocid, equipmentFetchProvider.fetchWithCache(ocid)) }, apiCallPool)
+            }
+            .orTimeout(15, TimeUnit.SECONDS)
             .join()
-
-        if (ocidResponse == null || ocidResponse.ocid.isBlank()) {
-            throw IllegalStateException("OCID resolve returned empty for $userIgn")
-        }
-
-        val ocid = ocidResponse.ocid
-        jobService.resolveOcidInPlace(jobId, ocid)
-        return ocid
     }
 
     private fun handleFailure(jobId: UUID, e: Throwable) {
@@ -237,5 +274,9 @@ class ExternalApiWorker(
 
     companion object {
         private val log = LoggerFactory.getLogger(ExternalApiWorker::class.java)
+        private const val SNAPSHOT_WRITER_POOL_SIZE = 4
+        private const val API_CALL_POOL_SIZE = 4
+        private val THREAD_COUNTER = java.util.concurrent.atomic.AtomicInteger(0)
+        private val API_THREAD_COUNTER = java.util.concurrent.atomic.AtomicInteger(0)
     }
 }

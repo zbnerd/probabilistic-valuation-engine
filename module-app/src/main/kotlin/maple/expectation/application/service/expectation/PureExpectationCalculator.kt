@@ -1,7 +1,6 @@
 package maple.expectation.application.service.expectation
 
 import java.time.LocalDateTime
-import java.util.concurrent.TimeUnit
 import maple.expectation.core.dto.v4.CalculationInput
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4
 import maple.expectation.core.dto.v4.EquipmentItemConverter
@@ -14,12 +13,11 @@ class PureExpectationCalculator(
     fun calculate(input: CalculationInput): EquipmentExpectationResponseV4 {
         val cubeInputs = input.items.map { EquipmentItemConverter.toCubeInput(it) }
 
-        val future = presetHelper.calculatePresetAsync(
+        val preset = presetHelper.calculatePreset(
             cubeInputs,
             input.presetNo,
             input.characterClass,
         )
-        val preset = future.get(30, TimeUnit.SECONDS)
 
         return EquipmentExpectationResponseV4(
             userIgn = input.userIgn,

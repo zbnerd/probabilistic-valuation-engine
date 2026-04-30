@@ -8,7 +8,6 @@ import java.util.UUID
 import maple.expectation.core.dto.v4.CalculationInput
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.model.snapshot.CalculationSnapshot
-import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CharacterOcidPort
@@ -64,7 +63,6 @@ class ExternalApiWorker(
     private val pureCalculationPort: PureCalculationPort,
     private val jobPort: CalculationJobPort,
     private val ocidPort: CharacterOcidPort,
-    private val viewQueryPort: CharacterViewQueryPort,
     private val executionService: CalculationExecutionService,
 ) : PgmqWorker<ExternalApiJobPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
 
@@ -144,9 +142,7 @@ class ExternalApiWorker(
             presetNo = payload.presetNo,
             items = inputItems,
         )
-        if (calculationInputPort.findByJobId(jobId) == null) {
-            calculationInputPort.save(calcInput)
-        }
+        calculationInputPort.saveIfAbsent(calcInput)
 
         val snapshotEntity = CalculationSnapshotEntity(
             snapshotId = snapshotId,
@@ -162,38 +158,23 @@ class ExternalApiWorker(
         )
         jobService.saveInputSnapshotAndMarkReady(snapshotEntity, jobId, snapshotId)
 
-        // Step 4: Calculate (pure CPU, ~ms) + complete in one transaction
+        // Step 4: Calculate (pure CPU, ~ms) + pre-compute gzip/hash outside transaction
         val calcResult = pureCalculationPort.calculate(calcInput)
         val resultJson = objectMapper.writeValueAsString(calcResult)
+        val resultBytes = resultJson.toByteArray()
+        val gzipData = gzipCompress(resultBytes)
+        val hash = sha256Hex(resultBytes)
 
-        executionService.startAndCompleteCalculation(
+        executionService.completeCalculation(
             jobId = jobId,
-            workerId = "ExternalApiWorker",
-            resultJson = resultJson,
+            gzipData = gzipData,
+            hash = hash,
+            originalSize = resultBytes.size,
+            compressedSize = gzipData.size,
             characterClass = calcInput.characterClass,
             presetNo = payload.presetNo,
             characterId = ocid,
         )
-
-        // Step 5: View projection — virtual thread fire-and-forget (outbox backstop guarantees eventual consistency)
-        Thread.ofVirtual().name("view-projection-$jobId").start {
-            try {
-                val presetsJson = objectMapper.writeValueAsString(calcResult.presets)
-                viewQueryPort.upsertFromCalculation(
-                    userIgn = payload.userIgn,
-                    messageId = jobId.toString(),
-                    characterOcid = ocid,
-                    characterClass = calcInput.characterClass,
-                    characterLevel = null,
-                    totalExpectedCost = calcResult.totalExpectedCost.toLong(),
-                    maxPresetNo = calcResult.maxPresetNo,
-                    presetNo = payload.presetNo,
-                    presetsJson = presetsJson,
-                )
-            } catch (e: Exception) {
-                log.warn("[jobId={}] View projection failed (outbox backstop will retry): {}", jobId, e.message)
-            }
-        }
 
         log.info("[jobId={}] Pipeline completed", jobId)
     }
@@ -241,6 +222,17 @@ class ExternalApiWorker(
         val zoned = now.atZone(ZoneOffset.UTC)
         val datePath = "%04d/%02d/%02d".format(zoned.year, zoned.monthValue, zoned.dayOfMonth)
         return "snapshots/$datePath/$jobId.gz"
+    }
+
+    private fun gzipCompress(data: ByteArray): ByteArray {
+        val bos = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(bos).use { it.write(data) }
+        return bos.toByteArray()
+    }
+
+    private fun sha256Hex(data: ByteArray): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        return digest.digest(data).joinToString("") { "%02x".format(it) }
     }
 
     companion object {

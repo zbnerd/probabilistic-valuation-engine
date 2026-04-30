@@ -54,6 +54,21 @@ class CalculationResultPortAdapter(
 
     override fun existsByJobId(jobId: UUID): Boolean = repo.existsByJobId(jobId)
 
+    override fun saveIfAbsent(result: CalculationResultData): Boolean = repo.insertIfAbsent(
+        result.resultId,
+        result.jobId,
+        result.characterClass,
+        result.presetNo,
+        result.schemaVersion,
+        result.contentType,
+        result.contentEncoding,
+        result.responseBody,
+        result.originalSize,
+        result.compressedSize,
+        result.hash,
+        result.status,
+    ) > 0
+
     private fun CalculationResultEntity.toData() = CalculationResultData(
         resultId = resultId, jobId = jobId, characterClass = characterClass,
         presetNo = presetNo, schemaVersion = schemaVersion,

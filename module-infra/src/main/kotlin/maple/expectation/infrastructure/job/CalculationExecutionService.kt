@@ -36,6 +36,56 @@ class CalculationExecutionService(
         return locked
     }
 
+    /**
+     * Optimized complete: single UPDATE (SNAPSHOT_READY → COMPLETED) + INSERT ON CONFLICT.
+     * No CPU work inside transaction — gzip/hash must be pre-computed by caller.
+     */
+    @Transactional
+    fun completeCalculation(
+        jobId: UUID,
+        gzipData: ByteArray,
+        hash: String,
+        originalSize: Int,
+        compressedSize: Int,
+        characterClass: String,
+        presetNo: Int,
+        characterId: String,
+    ): Boolean {
+        val completed = jobPort.completeFromSnapshotReady(jobId)
+        if (!completed) return false
+
+        resultPort.saveIfAbsent(
+            CalculationResultData(
+                resultId = UUID.randomUUID(),
+                jobId = jobId,
+                characterClass = characterClass,
+                presetNo = presetNo,
+                schemaVersion = 1,
+                contentType = "application/json",
+                contentEncoding = "gzip",
+                responseBody = gzipData,
+                originalSize = originalSize,
+                compressedSize = compressedSize,
+                hash = hash,
+                status = "SUCCESS",
+            ),
+        )
+
+        val eventPayload = objectMapper.writeValueAsString(
+            mapOf(
+                "jobId" to jobId.toString(),
+                "characterId" to characterId,
+                "presetNo" to presetNo,
+                "contentEncoding" to "gzip",
+                "schemaVersion" to 1,
+            ),
+        )
+        outboxPort.insertIfAbsent("CALCULATION_COMPLETED", jobId, eventPayload)
+
+        log.info("[jobId={}] Calculation completed (optimized single-TX)", jobId)
+        return true
+    }
+
     @Transactional
     fun startAndCompleteCalculation(
         jobId: UUID,

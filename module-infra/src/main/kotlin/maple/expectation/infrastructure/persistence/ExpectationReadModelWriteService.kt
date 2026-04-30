@@ -8,6 +8,7 @@ import maple.expectation.util.GzipUtils
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 /**
  * V5 Query Server: Write service for Character Expectation Read Model
@@ -36,6 +37,7 @@ class ExpectationReadModelWriteService(
      * @param json JSON string to compress and store
      * @param calculatedAt Timestamp of expectation calculation
      */
+    @Transactional(value = "transactionManager", readOnly = false)
     fun writeToReadModel(userIgn: String, json: String, calculatedAt: Instant) {
         val context = TaskContext.of("ReadModel", "Write", userIgn)
         executor.executeVoid({ performWrite(userIgn, json, calculatedAt) }, context)
@@ -55,6 +57,7 @@ class ExpectationReadModelWriteService(
      * @param json JSON string to compress and store
      * @param calculatedAt Timestamp of expectation calculation
      */
+    @Transactional(value = "transactionManager", readOnly = false)
     fun writeToReadModelRaw(userIgn: String, json: String, calculatedAt: Instant) {
         val compressed = GzipUtils.compressUnchecked(json)
         repository.upsertNative(userIgn, compressed, calculatedAt)

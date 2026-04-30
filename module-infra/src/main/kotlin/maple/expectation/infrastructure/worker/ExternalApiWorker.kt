@@ -19,6 +19,7 @@ import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.PureCalculationPort
 import maple.expectation.core.port.out.QueueNames
 import maple.expectation.core.port.out.SnapshotObjectStore
+import maple.expectation.error.exception.CharacterNotFoundException
 import maple.expectation.infrastructure.converter.EquipmentResponseToCalculationInputConverter
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -35,6 +36,7 @@ import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
+import maple.expectation.util.ExceptionUtils
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
@@ -101,9 +103,16 @@ class ExternalApiWorker(
                 true
             },
             { e ->
-                log.error("[jobId={}] Pipeline failed: {}", jobId, e.message)
-                handleFailure(jobId, e)
-                false
+                if (isCharacterNotFound(e)) {
+                    val errorMsg = (ExceptionUtils.unwrapAsyncException(e)?.message ?: "Character not found").take(200)
+                    jobPort.markFailed(jobId, "CHARACTER_NOT_FOUND", errorMsg)
+                    log.warn("[jobId={}] Character not found, skipping retry: {}", jobId, errorMsg)
+                    true
+                } else {
+                    log.error("[jobId={}] Pipeline failed: {}", jobId, e.message)
+                    handleFailure(jobId, e)
+                    false
+                }
             },
             context,
         )
@@ -219,14 +228,14 @@ class ExternalApiWorker(
             .handle { result, ex ->
                 if (ex != null) {
                     log.warn("[jobId={}] OCID resolve failed: {}", jobId, ex.message)
-                    null
+                    throw ExceptionUtils.unwrapAs(ex, CharacterNotFoundException::class.java) ?: ex
                 } else {
                     result
                 }
             }
             .thenApply { response ->
                 if (response == null || response.ocid.isBlank()) {
-                    throw IllegalStateException("OCID resolve returned empty for $userIgn")
+                    throw CharacterNotFoundException(userIgn)
                 }
                 response.ocid
             }
@@ -254,6 +263,8 @@ class ExternalApiWorker(
             jobService.retryExternalApiJob(jobId)
         }
     }
+
+    private fun isCharacterNotFound(e: Throwable): Boolean = ExceptionUtils.containsCause(e, CharacterNotFoundException::class.java)
 
     private fun generateObjectKey(jobId: UUID): String {
         val now = Instant.now()

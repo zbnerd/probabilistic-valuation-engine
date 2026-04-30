@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.persistence
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
+import java.sql.Timestamp
 import java.util.concurrent.TimeUnit
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -42,6 +43,7 @@ class CharacterViewQueryServicePostgres(
     @Transactional(value = "transactionManager", readOnly = true)
     fun findByUserIgn(userIgn: String): CharacterValuationViewEntity? = findByUserIgnEntity(userIgn)
 
+    @Transactional(value = "transactionManager", readOnly = false)
     fun upsertFromCalculation(
         userIgn: String,
         messageId: String?,
@@ -116,7 +118,7 @@ class CharacterViewQueryServicePostgres(
      *
      * @param entity The entity to upsert
      */
-    @Transactional("transactionManager")
+    @Transactional(value = "transactionManager", readOnly = false)
     fun upsert(entity: CharacterValuationViewEntity) {
         val context = TaskContext.of("PostgresQuery", "Upsert", entity.userIgn)
         executor.executeVoid({ performUpsert(entity) }, context)
@@ -148,8 +150,8 @@ class CharacterViewQueryServicePostgres(
             "characterOcid" to entity.characterOcid,
             "characterClass" to entity.characterClass,
             "characterLevel" to entity.characterLevel,
-            "calculatedAt" to entity.calculatedAt,
-            "lastApiSyncAt" to entity.lastApiSyncAt,
+            "calculatedAt" to entity.calculatedAt?.let(Timestamp::from),
+            "lastApiSyncAt" to entity.lastApiSyncAt?.let(Timestamp::from),
             "version" to (entity.version ?: 1L),
             "lastAppliedVersion" to (entity.lastAppliedVersion ?: entity.version ?: 1L),
             "totalExpectedCost" to entity.totalExpectedCost,
@@ -161,19 +163,22 @@ class CharacterViewQueryServicePostgres(
         jdbc.update(
             """
             INSERT INTO character_valuation_views (
-                user_ign, message_id, character_ocid, character_class, character_level,
+                user_ign, message_id, jpa_version, character_ocid, character_class, character_level,
                 calculated_at, last_api_sync_at, version, last_applied_version,
                 total_expected_cost, max_preset_no, preset_no, presets, from_cache
             ) VALUES (
-                :userIgn, :messageId, :characterOcid, :characterClass, :characterLevel,
+                :userIgn, :messageId, 0, :characterOcid, :characterClass, :characterLevel,
                 :calculatedAt, :lastApiSyncAt, :version + 1, :lastAppliedVersion,
                 :totalExpectedCost, :maxPresetNo, :presetNo, CAST(:presets AS jsonb), :fromCache
             )
             ON CONFLICT (message_id) DO UPDATE SET
                 user_ign = EXCLUDED.user_ign,
+                jpa_version = character_valuation_views.jpa_version + 1,
                 character_ocid = COALESCE(EXCLUDED.character_ocid, character_valuation_views.character_ocid),
                 character_class = COALESCE(EXCLUDED.character_class, character_valuation_views.character_class),
+                character_level = COALESCE(EXCLUDED.character_level, character_valuation_views.character_level),
                 calculated_at = EXCLUDED.calculated_at,
+                last_api_sync_at = COALESCE(EXCLUDED.last_api_sync_at, character_valuation_views.last_api_sync_at),
                 version = character_valuation_views.version + 1,
                 last_applied_version = EXCLUDED.last_applied_version,
                 total_expected_cost = EXCLUDED.total_expected_cost,
@@ -257,7 +262,7 @@ class CharacterViewQueryServicePostgres(
     )
 
     /** Delete all documents (for testing) */
-    @Transactional("transactionManager")
+    @Transactional(value = "transactionManager", readOnly = false)
     fun deleteAll() {
         val context = TaskContext.of("PostgresQuery", "DeleteAll", "all")
 

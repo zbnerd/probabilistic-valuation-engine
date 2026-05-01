@@ -13,6 +13,8 @@ import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CalculationResultData
 import maple.expectation.core.port.out.CalculationResultPort
+import maple.expectation.core.port.out.OutboxEvent
+import maple.expectation.core.port.out.OutboxEventPort
 import maple.expectation.core.port.out.QueueNames
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(name = ["v5.enabled"], havingValue = "true", matchIfMissing = false)
 class ResultReadyProjectionWorker(
     private val pgmqClient: PgmqClient,
+    private val outboxPort: OutboxEventPort,
     private val jobPort: CalculationJobPort,
     private val resultPort: CalculationResultPort,
     private val viewQueryPort: CharacterViewQueryPort,
@@ -35,6 +38,7 @@ class ResultReadyProjectionWorker(
     private val objectMapper: ObjectMapper,
     @Value("\${pgmq.worker.result-projection.batch-size:100}") private val batchSize: Int,
     @Value("\${pgmq.worker.result-projection.visibility-timeout-sec:30}") private val visibilityTimeoutSec: Int,
+    @Value("\${app.pipeline.consolidated.enabled:true}") private val consolidatedEnabled: Boolean,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -43,6 +47,94 @@ class ResultReadyProjectionWorker(
         initialDelayString = "\${pgmq.worker.result-projection.initial-delay-ms:5000}",
     )
     fun project() {
+        if (consolidatedEnabled) {
+            projectFromOutbox()
+        } else {
+            projectFromPgmq()
+        }
+    }
+
+    // === Consolidated: read outbox directly, no PGMQ hop ===
+
+    private fun projectFromOutbox() {
+        val events = outboxPort.findUnpublished(batchSize)
+        if (events.isEmpty()) return
+
+        val context = TaskContext.of("ResultProjection", "ProjectBatch", events.size.toString())
+        executor.executeVoid({ projectOutboxBatch(events) }, context)
+    }
+
+    private fun projectOutboxBatch(events: List<OutboxEvent>) {
+        val jobIds = events.map { it.jobId }.distinct()
+        val jobsById = jobPort.findJobsByIds(jobIds).associateBy { it.jobId }
+        val resultsByJobId = resultPort.findByJobIds(jobIds).associateBy { it.jobId }
+
+        val commands = mutableListOf<CharacterViewProjectionCommand>()
+        val publishedIds = mutableListOf<UUID>()
+
+        for (event in events) {
+            val job = jobsById[event.jobId]
+            val resultData = resultsByJobId[event.jobId]
+            if (job == null || resultData == null) {
+                log.warn("[eventId={}] job={} result={}, marking published to skip", event.eventId, job != null, resultData != null)
+                publishedIds += event.eventId
+                continue
+            }
+            val payload = parseOutboxPayload(event)
+            val command = toOutboxProjectionCommand(event, job, resultData, payload)
+            if (command != null) {
+                commands += command
+            }
+            publishedIds += event.eventId
+        }
+
+        if (commands.isNotEmpty()) {
+            viewQueryPort.batchUpsertFromCalculations(commands)
+        }
+        for (id in publishedIds) {
+            outboxPort.markPublished(id)
+        }
+        log.debug("[ResultProjection] projected={}, published={}", commands.size, publishedIds.size)
+    }
+
+    private fun parseOutboxPayload(event: OutboxEvent): Map<*, *> {
+        if (event.payload == null) return emptyMap<String, Any>()
+        return runCatching { objectMapper.readValue(event.payload, Map::class.java) as Map<*, *> }
+            .getOrDefault(emptyMap<String, Any>())
+    }
+
+    private fun toOutboxProjectionCommand(
+        event: OutboxEvent,
+        job: CalculationJob,
+        resultData: CalculationResultData,
+        payload: Map<*, *>,
+    ): CharacterViewProjectionCommand? {
+        val resultJson = decompress(resultData.responseBody)
+        val tree = objectMapper.readTree(resultJson)
+
+        val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return null
+        val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return null
+        val presetsNode = tree.get("presets")
+        val presetNo = (payload["presetNo"] as? Number)?.toInt() ?: 1
+        val characterId = payload["characterId"]?.toString()
+        val presetsJson = if (presetsNode != null) objectMapper.writeValueAsString(presetsNode) else "[]"
+
+        return CharacterViewProjectionCommand(
+            userIgn = job.userIgn,
+            messageId = event.eventId.toString(),
+            characterOcid = characterId,
+            characterClass = resultData.characterClass,
+            characterLevel = null,
+            totalExpectedCost = totalExpectedCost,
+            maxPresetNo = maxPresetNo,
+            presetNo = presetNo,
+            presetsJson = presetsJson,
+        )
+    }
+
+    // === Legacy: read from PGMQ result_ready_queue ===
+
+    private fun projectFromPgmq() {
         val messages = pgmqClient.read(
             QueueNames.RESULT_READY,
             Map::class.java,
@@ -52,12 +144,12 @@ class ResultReadyProjectionWorker(
         if (messages.isEmpty()) return
 
         val context = TaskContext.of("ResultProjection", "ProjectBatch", messages.size.toString())
-        executor.executeVoid({ projectBatch(messages) }, context)
+        executor.executeVoid({ projectPgmqBatch(messages) }, context)
     }
 
-    private fun projectBatch(messages: List<PgmqMessage<Map<*, *>>>) {
+    private fun projectPgmqBatch(messages: List<PgmqMessage<Map<*, *>>>) {
         val archiveIds = mutableListOf<Long>()
-        val parsed = messages.mapNotNull { parseMessage(it, archiveIds) }
+        val parsed = messages.mapNotNull { parsePgmqMessage(it, archiveIds) }
         if (parsed.isEmpty()) {
             archiveIfNeeded(archiveIds)
             return
@@ -66,7 +158,7 @@ class ResultReadyProjectionWorker(
         val jobIds = parsed.map { it.jobId }.distinct()
         val jobsById = jobPort.findJobsByIds(jobIds).associateBy { it.jobId }
         val resultsByJobId = resultPort.findByJobIds(jobIds).associateBy { it.jobId }
-        val outcomes = buildProjectionCommands(parsed, jobsById, resultsByJobId)
+        val outcomes = buildPgmqProjectionCommands(parsed, jobsById, resultsByJobId)
         val commands = outcomes.mapNotNull { it.command }
         archiveIds += outcomes.filter { it.archive }.map { it.messageId }
 
@@ -74,76 +166,52 @@ class ResultReadyProjectionWorker(
             viewQueryPort.batchUpsertFromCalculations(commands)
         }
         archiveIfNeeded(archiveIds)
-        log.debug("[ResultProjection] projected={}, archived={}", commands.size, archiveIds.size)
     }
 
-    private fun buildProjectionCommands(
-        parsed: List<ProjectionMessage>,
+    private fun buildPgmqProjectionCommands(
+        parsed: List<PgmqProjectionMessage>,
         jobsById: Map<UUID, CalculationJob>,
         resultsByJobId: Map<UUID, CalculationResultData>,
-    ): List<ProjectionCommandOutcome> = runBlocking(Dispatchers.Default) {
+    ): List<PgmqProjectionOutcome> = runBlocking(Dispatchers.Default) {
         parsed.map { message ->
             async(Dispatchers.Default) {
-                buildProjectionCommand(message, jobsById, resultsByJobId)
+                val job = jobsById[message.jobId]
+                val resultData = resultsByJobId[message.jobId]
+                when {
+                    job == null || resultData == null -> PgmqProjectionOutcome(message.messageId, archive = true)
+                    else -> PgmqProjectionOutcome(
+                        messageId = message.messageId,
+                        command = toPgmqProjectionCommand(message, job, resultData),
+                        archive = true,
+                    )
+                }
             }
         }.awaitAll()
     }
 
-    private fun buildProjectionCommand(
-        message: ProjectionMessage,
-        jobsById: Map<UUID, CalculationJob>,
-        resultsByJobId: Map<UUID, CalculationResultData>,
-    ): ProjectionCommandOutcome {
-        val job = jobsById[message.jobId]
-        val resultData = resultsByJobId[message.jobId]
-        return when {
-            job == null -> {
-                log.warn("[jobId={}] Job not found, skipping", message.jobId)
-                ProjectionCommandOutcome(message.messageId, archive = true)
-            }
-            resultData == null -> {
-                log.warn("[jobId={}] Result not found, skipping", message.jobId)
-                ProjectionCommandOutcome(message.messageId, archive = true)
-            }
-            else -> ProjectionCommandOutcome(
-                messageId = message.messageId,
-                command = toProjectionCommand(message, job, resultData),
-                archive = true,
-            )
-        }
-    }
-
-    private fun parseMessage(message: PgmqMessage<Map<*, *>>, archiveIds: MutableList<Long>): ProjectionMessage? {
+    private fun parsePgmqMessage(message: PgmqMessage<Map<*, *>>, archiveIds: MutableList<Long>): PgmqProjectionMessage? {
         val payload = message.payload
         val jobIdStr = payload["jobId"]?.toString() ?: run {
-            log.warn("[msgId={}] Missing jobId, skipping", message.messageId)
             archiveIds += message.messageId
             return null
         }
         val jobId = runCatching { UUID.fromString(jobIdStr) }.getOrNull() ?: run {
-            log.warn("[msgId={}] Invalid jobId: {}", message.messageId, jobIdStr)
             archiveIds += message.messageId
             return null
         }
-        return ProjectionMessage(message.messageId, payload, jobId)
+        return PgmqProjectionMessage(message.messageId, payload, jobId)
     }
 
-    private fun toProjectionCommand(
-        message: ProjectionMessage,
+    private fun toPgmqProjectionCommand(
+        message: PgmqProjectionMessage,
         job: CalculationJob,
         resultData: CalculationResultData,
     ): CharacterViewProjectionCommand? {
         val resultJson = decompress(resultData.responseBody)
         val tree = objectMapper.readTree(resultJson)
 
-        val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: run {
-            log.warn("[jobId={}] Missing totalExpectedCost in result", message.jobId)
-            return null
-        }
-        val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: run {
-            log.warn("[jobId={}] Missing maxPresetNo in result", message.jobId)
-            return null
-        }
+        val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return null
+        val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return null
         val presetsNode = tree.get("presets")
         val presetNo = (message.payload["presetNo"] as? Number)?.toInt() ?: 1
         val characterId = message.payload["characterId"]?.toString()
@@ -172,13 +240,13 @@ class ResultReadyProjectionWorker(
         GZIPInputStream(data.inputStream()).use { return String(it.readAllBytes()) }
     }
 
-    private data class ProjectionMessage(
+    private data class PgmqProjectionMessage(
         val messageId: Long,
         val payload: Map<*, *>,
         val jobId: UUID,
     )
 
-    private data class ProjectionCommandOutcome(
+    private data class PgmqProjectionOutcome(
         val messageId: Long,
         val command: CharacterViewProjectionCommand? = null,
         val archive: Boolean = false,

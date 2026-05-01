@@ -7,11 +7,13 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.mq.event.ResultReadyEventFactory
 import maple.expectation.infrastructure.mq.pgmq.topic.ResultReadyTopic
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
 @Component
+@ConditionalOnProperty(name = ["app.pipeline.consolidated.enabled"], havingValue = "false")
 class OutboxRelayWorker(
     private val outboxPort: OutboxEventPort,
     private val resultReadyTopic: ResultReadyTopic,

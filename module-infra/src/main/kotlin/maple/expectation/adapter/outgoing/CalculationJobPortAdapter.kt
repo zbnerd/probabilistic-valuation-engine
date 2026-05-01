@@ -3,6 +3,8 @@ package maple.expectation.adapter.outgoing
 import java.time.Instant
 import java.util.UUID
 import maple.expectation.core.model.job.CalculationJob
+import maple.expectation.core.model.job.CalculationJobClaim
+import maple.expectation.core.model.job.CalculationJobRequestKey
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.infrastructure.persistence.entity.CalculationJobEntity
@@ -21,29 +23,52 @@ class CalculationJobPortAdapter(
 
     private val log = LoggerFactory.getLogger(CalculationJobPortAdapter::class.java)
 
-    override fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob {
-        val existing = jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)
-        if (existing != null) {
-            if (existing.status == CalculationJobStatus.CALCULATING.name) {
-                jobRepository.markFailed(existing.jobId, "SUPERSEDED", "Superseded by new calculation request")
-            } else {
-                return existing.toDomain()
-            }
+    override fun createOrFindActiveJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJobClaim {
+        val requestKey = CalculationJobRequestKey.of(userIgn, presetNo)
+        val jobId = UUID.randomUUID()
+        val sql = """
+            INSERT INTO calculation_jobs (
+                job_id, ocid, user_ign, preset_no, request_key, status,
+                retry_count, max_retries, created_at, updated_at
+            )
+            VALUES (
+                :jobId, :ocid, :userIgn, :presetNo, :requestKey, 'REQUESTED',
+                0, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            ON CONFLICT DO NOTHING
+            RETURNING job_id
+        """.trimIndent()
+        val insertedIds = jdbc.queryForList(
+            sql,
+            mapOf(
+                "jobId" to jobId,
+                "ocid" to ocid,
+                "userIgn" to userIgn,
+                "presetNo" to presetNo,
+                "requestKey" to requestKey,
+            ),
+            UUID::class.java,
+        )
+        if (insertedIds.isNotEmpty()) {
+            return CalculationJobClaim(jobRepository.findById(insertedIds.first()).orElseThrow().toDomain(), true)
         }
 
-        return try {
-            val entity = CalculationJobEntity(
-                ocid = ocid,
-                userIgn = userIgn,
-                presetNo = presetNo,
-            )
-            jobRepository.save(entity).toDomain()
-        } catch (ex: DataIntegrityViolationException) {
-            log.info("[createJob] Constraint violation on dedup index, returning existing job: userIgn={}, presetNo={}", userIgn, presetNo)
-            jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)?.toDomain()
-                ?: throw ex
+        val existingByRequestKey = jobRepository.findActiveByRequestKey(requestKey)
+        if (existingByRequestKey != null) {
+            log.debug("[createJob] Reusing active job by requestKey: userIgn={}, presetNo={}", userIgn, presetNo)
+            return CalculationJobClaim(existingByRequestKey.toDomain(), false)
         }
+
+        val existingByLegacyKey = jobRepository.findActiveByUserIgnAndPreset(userIgn, presetNo)
+        if (existingByLegacyKey != null) {
+            log.debug("[createJob] Reusing active job by legacy key: userIgn={}, presetNo={}", userIgn, presetNo)
+            return CalculationJobClaim(existingByLegacyKey.toDomain(), false)
+        }
+
+        throw DataIntegrityViolationException("Job insert conflicted but no active job was found: requestKey=$requestKey")
     }
+
+    override fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob = createOrFindActiveJob(ocid, userIgn, presetNo).job
 
     override fun findJobById(jobId: UUID): CalculationJob? = jobRepository.findById(jobId).map { it.toDomain() }.orElseGet { null }
 
@@ -107,6 +132,7 @@ class CalculationJobPortAdapter(
         ocid = ocid,
         userIgn = userIgn,
         presetNo = presetNo,
+        requestKey = requestKey,
         status = CalculationJobStatus.valueOf(status),
         snapshotId = snapshotId,
         retryCount = retryCount,

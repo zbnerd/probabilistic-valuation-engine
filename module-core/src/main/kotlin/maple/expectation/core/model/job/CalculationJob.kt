@@ -8,6 +8,7 @@ data class CalculationJob(
     val ocid: String?,
     val userIgn: String,
     val presetNo: Int = 1,
+    val requestKey: String? = null,
     val status: CalculationJobStatus = CalculationJobStatus.REQUESTED,
     val snapshotId: UUID? = null,
     val retryCount: Int = 0,

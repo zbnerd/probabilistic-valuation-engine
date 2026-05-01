@@ -3,10 +3,12 @@ package maple.expectation.core.port.out
 import java.time.Instant
 import java.util.UUID
 import maple.expectation.core.model.job.CalculationJob
+import maple.expectation.core.model.job.CalculationJobClaim
 import maple.expectation.core.model.job.CalculationJobStatus
 
 interface CalculationJobPort {
-    fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob
+    fun createOrFindActiveJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJobClaim
+    fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob = createOrFindActiveJob(ocid, userIgn, presetNo).job
     fun findJobById(jobId: UUID): CalculationJob?
     fun transitionStatus(jobId: UUID, from: CalculationJobStatus, to: CalculationJobStatus): Boolean
     fun markSnapshotReady(jobId: UUID, snapshotId: UUID, from: CalculationJobStatus): Boolean

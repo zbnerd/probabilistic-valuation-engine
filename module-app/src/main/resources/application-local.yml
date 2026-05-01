@@ -87,6 +87,10 @@ lock:
 ratelimit:
   enabled: false
 
+nexon:
+  api:
+    equipment-cache-single-flight-enabled: false
+
 # Retry Budget 비활성화 (Bulk Loading용)
 # Issue #611: 300k 캐릭터 로딩 시 API 호출이 많아 예산 소진 방지
 resilience:
@@ -184,7 +188,7 @@ admission-control:
 pgmq:
   worker:
     common:
-      worker-pool-size: 6   # t3.small: 2vCPU × 3 = 6 threads (batch dedup + parallel throughput, #743)
+      worker-pool-size: 24  # V5 cold-miss throughput sweet spot from load-test runs
       sequential-batch-ms: 500  # Buffer 500ms for batch dedup (90% compute reduction)
       # Only affects workers with supportsTwoPhase=true (expectation-calc).
       # donation/nexon-fanout have supportsTwoPhase=false → sequential mode ignored.

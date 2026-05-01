@@ -10,7 +10,12 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import maple.expectation.core.dto.v4.CalculationInput
+import maple.expectation.core.dto.v4.EquipmentItem
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.model.snapshot.CalculationSnapshot
 import maple.expectation.core.port.out.CalculationInputPort
@@ -75,9 +80,7 @@ class ExternalApiWorker(
     private val executionService: CalculationExecutionService,
 ) : PgmqWorker<ExternalApiJobPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
 
-    private val snapshotWriter: ExecutorService = Executors.newFixedThreadPool(
-        SNAPSHOT_WRITER_POOL_SIZE,
-    ) { r -> Thread.ofPlatform().name("snapshot-writer-" + THREAD_COUNTER.getAndIncrement()).daemon(true).unstarted(r) }
+    private val snapshotWriter: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
     private val apiCallPool: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
@@ -96,7 +99,7 @@ class ExternalApiWorker(
     override fun process(message: PgmqMessage<ExternalApiJobPayload>): Boolean {
         val payload = message.payload
         val jobId = UUID.fromString(payload.jobId)
-        val context = TaskContext.of("ExternalApiWorker", "Pipeline", payload.userIgn)
+        val context = TaskContext.of("ExternalApiWorker", "ProcessMessage", payload.userIgn)
 
         return executor.executeOrCatch(
             {
@@ -140,10 +143,14 @@ class ExternalApiWorker(
         }
 
         // Step 1+2: Resolve OCID → Fetch equipment (thenCompose chain, single block point on cache miss)
-        val (ocid, equipmentResponse) = resolveOcidAndFetchEquipment(jobId, payload.userIgn, existingJob?.ocid)
+        val (ocid, equipmentResponse) = stage("ResolveAndFetch", payload.userIgn) {
+            resolveOcidAndFetchEquipment(jobId, payload.userIgn, existingJob?.ocid)
+        }
 
         // Step 3: Submit snapshot write to overlap with calculation
-        val snapshotData = objectMapper.writeValueAsBytes(equipmentResponse)
+        val snapshotData = stage("SerializeSnapshot", payload.userIgn) {
+            objectMapper.writeValueAsBytes(equipmentResponse)
+        }
         val objectKey = generateObjectKey(jobId)
         val snapshotId = UUID.randomUUID()
         val snapshot = CalculationSnapshot(
@@ -155,12 +162,15 @@ class ExternalApiWorker(
             presetNo = payload.presetNo,
             expiresAt = Instant.now().plusSeconds(86400),
         )
-        val snapshotFuture = CompletableFuture.supplyAsync({ snapshotStore.put(snapshot, snapshotData) }, snapshotWriter)
+        val snapshotFuture = CompletableFuture.supplyAsync({
+            stage("SnapshotPut", jobId.toString()) {
+                snapshotStore.put(snapshot, snapshotData)
+            }
+        }, snapshotWriter)
 
         // Step 4: Build input items + calculate (overlaps with snapshot file I/O)
-        val inputItems = (equipmentResponse.itemEquipment ?: emptyList()).map { item ->
-            val itemMap = objectMapper.convertValue(item, Map::class.java) as Map<*, *>
-            converter.convertItem(itemMap)
+        val inputItems = stage("BuildCalculationInput", payload.userIgn) {
+            convertItems(equipmentResponse)
         }
         val calcInput = CalculationInput(
             jobId = jobId.toString(),
@@ -169,17 +179,28 @@ class ExternalApiWorker(
             presetNo = payload.presetNo,
             items = inputItems,
         )
-        calculationInputPort.saveIfAbsent(calcInput)
+        stage("SaveCalculationInput", jobId.toString()) {
+            calculationInputPort.saveIfAbsent(calcInput)
+        }
 
         // Step 5: Calculate (pure CPU) + pre-compute gzip/hash outside transaction
-        val calcResult = pureCalculationPort.calculate(calcInput)
-        val resultJson = objectMapper.writeValueAsString(calcResult)
-        val resultBytes = resultJson.toByteArray()
-        val gzipData = gzipCompress(resultBytes)
-        val hash = sha256Hex(resultBytes)
+        val calcResult = stage("PureCalculate", payload.userIgn) {
+            pureCalculationPort.calculate(calcInput)
+        }
+        val resultBytes = stage("SerializeResult", payload.userIgn) {
+            objectMapper.writeValueAsString(calcResult).toByteArray()
+        }
+        val gzipData = stage("GzipResult", payload.userIgn) {
+            gzipCompress(resultBytes)
+        }
+        val hash = stage("HashResult", payload.userIgn) {
+            sha256Hex(resultBytes)
+        }
 
         // Wait for snapshot write completion before transactional save
-        val putResult = snapshotFuture.join()
+        val putResult = stage("AwaitSnapshotPut", jobId.toString()) {
+            snapshotFuture.join()
+        }
 
         // Step 6: Save snapshot metadata + result in transaction
         val snapshotEntity = CalculationSnapshotEntity(
@@ -194,20 +215,44 @@ class ExternalApiWorker(
             hash = putResult.hash,
             expiresAt = snapshot.expiresAt,
         )
-        jobService.saveInputSnapshotAndMarkReady(snapshotEntity, jobId, snapshotId)
+        stage("SaveSnapshotMetadata", jobId.toString()) {
+            jobService.saveInputSnapshotAndMarkReady(snapshotEntity, jobId, snapshotId)
+        }
 
-        executionService.completeCalculation(
-            jobId = jobId,
-            gzipData = gzipData,
-            hash = hash,
-            originalSize = resultBytes.size,
-            compressedSize = gzipData.size,
-            characterClass = calcInput.characterClass,
-            presetNo = payload.presetNo,
-            characterId = ocid,
-        )
+        stage("PersistResult", jobId.toString()) {
+            executionService.completeCalculation(
+                jobId = jobId,
+                gzipData = gzipData,
+                hash = hash,
+                originalSize = resultBytes.size,
+                compressedSize = gzipData.size,
+                characterClass = calcInput.characterClass,
+                presetNo = payload.presetNo,
+                characterId = ocid,
+            )
+        }
 
         log.info("[jobId={}] Pipeline completed", jobId)
+    }
+
+    private fun convertItems(equipmentResponse: EquipmentResponse): List<EquipmentItem> {
+        val items = equipmentResponse.itemEquipment ?: return emptyList()
+        if (items.size < PARALLEL_ITEM_CONVERSION_THRESHOLD) {
+            return items.map { convertItem(it) }
+        }
+
+        return runBlocking(Dispatchers.Default) {
+            items.map { item ->
+                async(Dispatchers.Default) {
+                    convertItem(item)
+                }
+            }.awaitAll()
+        }
+    }
+
+    private fun convertItem(item: Any): EquipmentItem {
+        val itemMap = objectMapper.convertValue(item, Map::class.java) as Map<*, *>
+        return converter.convertItem(itemMap)
     }
 
     /**
@@ -266,6 +311,11 @@ class ExternalApiWorker(
         }
     }
 
+    private fun <T> stage(name: String, key: String, block: () -> T): T = executor.execute(
+        { block() },
+        TaskContext.of("ExternalApiWorker", name, key),
+    )
+
     private fun isCharacterNotFound(e: Throwable): Boolean = ExceptionUtils.containsCause(e, CharacterNotFoundException::class.java)
 
     private fun CalculationJobStatus.isExternalApiProcessable(): Boolean = this == CalculationJobStatus.REQUESTED ||
@@ -309,7 +359,6 @@ class ExternalApiWorker(
 
     companion object {
         private val log = LoggerFactory.getLogger(ExternalApiWorker::class.java)
-        private const val SNAPSHOT_WRITER_POOL_SIZE = 4
-        private val THREAD_COUNTER = java.util.concurrent.atomic.AtomicInteger(0)
+        private const val PARALLEL_ITEM_CONVERSION_THRESHOLD = 8
     }
 }

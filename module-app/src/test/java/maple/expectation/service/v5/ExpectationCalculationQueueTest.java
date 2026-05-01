@@ -16,6 +16,7 @@ import maple.expectation.application.service.expectation.queue.ExpectationCalcul
 import maple.expectation.application.service.expectation.queue.QueuePriority;
 import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.core.model.job.CalculationJob;
+import maple.expectation.core.model.job.CalculationJobClaim;
 import maple.expectation.core.model.job.CalculationJobStatus;
 import maple.expectation.core.port.inbound.TaskReceipt;
 import maple.expectation.core.port.out.CalculationJobPort;
@@ -51,7 +52,8 @@ class ExpectationCalculationQueueTest {
   void offerCreatesJobAndDispatches() {
     UUID jobId = UUID.randomUUID();
     CalculationJob job = mockJob(jobId, CalculationJobStatus.REQUESTED);
-    when(jobPort.createJob(null, "user1", 1)).thenReturn(job);
+    when(jobPort.createOrFindActiveJob(null, "user1", 1))
+        .thenReturn(new CalculationJobClaim(job, true));
     when(jobPort.transitionStatus(
             jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
         .thenReturn(true);
@@ -60,7 +62,7 @@ class ExpectationCalculationQueueTest {
     ExpectationCalculationTask highTask = ExpectationCalculationTask.highPriority("user1", false);
     assertThat(queue.offer(highTask)).isTrue();
 
-    verify(jobPort).createJob(null, "user1", 1);
+    verify(jobPort).createOrFindActiveJob(null, "user1", 1);
     verify(pgmqPort).send(eq("external_api_queue"), any());
   }
 
@@ -69,12 +71,13 @@ class ExpectationCalculationQueueTest {
   void existingActiveJobReturnedWithoutDispatch() {
     UUID jobId = UUID.randomUUID();
     CalculationJob job = mockJob(jobId, CalculationJobStatus.OCID_RESOLVING);
-    when(jobPort.createJob(null, "user1", 1)).thenReturn(job);
+    when(jobPort.createOrFindActiveJob(null, "user1", 1))
+        .thenReturn(new CalculationJobClaim(job, false));
 
     ExpectationCalculationTask task = ExpectationCalculationTask.highPriority("user1", false);
     assertThat(queue.offer(task)).isTrue();
 
-    verify(jobPort).createJob(null, "user1", 1);
+    verify(jobPort).createOrFindActiveJob(null, "user1", 1);
     verify(jobPort, never()).transitionStatus(any(), any(), any());
     verify(pgmqPort, never()).send(anyString(), any());
   }
@@ -84,7 +87,8 @@ class ExpectationCalculationQueueTest {
   void offerWithReceiptReturnsJobId() {
     UUID jobId = UUID.randomUUID();
     CalculationJob job = mockJob(jobId, CalculationJobStatus.REQUESTED);
-    when(jobPort.createJob(null, "user1", 1)).thenReturn(job);
+    when(jobPort.createOrFindActiveJob(null, "user1", 1))
+        .thenReturn(new CalculationJobClaim(job, true));
     when(jobPort.transitionStatus(
             jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
         .thenReturn(true);
@@ -102,7 +106,8 @@ class ExpectationCalculationQueueTest {
   void addHighPriorityTaskWorks() {
     UUID jobId = UUID.randomUUID();
     CalculationJob job = mockJob(jobId, CalculationJobStatus.REQUESTED);
-    when(jobPort.createJob(null, "user1", 1)).thenReturn(job);
+    when(jobPort.createOrFindActiveJob(null, "user1", 1))
+        .thenReturn(new CalculationJobClaim(job, true));
     when(jobPort.transitionStatus(
             jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
         .thenReturn(true);
@@ -116,7 +121,8 @@ class ExpectationCalculationQueueTest {
   void addLowPriorityTaskWorks() {
     UUID jobId = UUID.randomUUID();
     CalculationJob job = mockJob(jobId, CalculationJobStatus.REQUESTED);
-    when(jobPort.createJob(null, "user1", 1)).thenReturn(job);
+    when(jobPort.createOrFindActiveJob(null, "user1", 1))
+        .thenReturn(new CalculationJobClaim(job, true));
     when(jobPort.transitionStatus(
             jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
         .thenReturn(true);

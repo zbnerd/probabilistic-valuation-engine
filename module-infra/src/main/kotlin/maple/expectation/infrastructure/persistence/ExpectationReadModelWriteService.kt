@@ -90,7 +90,6 @@ class ExpectationReadModelWriteService(
                 calculated_at = EXCLUDED.calculated_at,
                 updated_at = NOW()
             WHERE EXCLUDED.calculated_at >= character_expectation_read_model.calculated_at
-              AND character_expectation_read_model.payload IS DISTINCT FROM EXCLUDED.payload
             """,
             params.toTypedArray(),
         )

@@ -196,14 +196,6 @@ class CharacterViewQueryServicePostgres(
                 presets = EXCLUDED.presets,
                 from_cache = EXCLUDED.from_cache
             WHERE character_valuation_views.last_applied_version < EXCLUDED.last_applied_version
-              AND (
-                  character_valuation_views.total_expected_cost IS DISTINCT FROM EXCLUDED.total_expected_cost
-               OR character_valuation_views.max_preset_no IS DISTINCT FROM EXCLUDED.max_preset_no
-               OR character_valuation_views.preset_no IS DISTINCT FROM EXCLUDED.preset_no
-               OR character_valuation_views.presets IS DISTINCT FROM EXCLUDED.presets
-               OR character_valuation_views.character_class IS DISTINCT FROM EXCLUDED.character_class
-               OR character_valuation_views.character_ocid IS DISTINCT FROM EXCLUDED.character_ocid
-              )
             """,
             params,
         )
@@ -274,14 +266,6 @@ class CharacterViewQueryServicePostgres(
                 presets = EXCLUDED.presets,
                 from_cache = EXCLUDED.from_cache
             WHERE character_valuation_views.last_applied_version < EXCLUDED.last_applied_version
-              AND (
-                  character_valuation_views.total_expected_cost IS DISTINCT FROM EXCLUDED.total_expected_cost
-               OR character_valuation_views.max_preset_no IS DISTINCT FROM EXCLUDED.max_preset_no
-               OR character_valuation_views.preset_no IS DISTINCT FROM EXCLUDED.preset_no
-               OR character_valuation_views.presets IS DISTINCT FROM EXCLUDED.presets
-               OR character_valuation_views.character_class IS DISTINCT FROM EXCLUDED.character_class
-               OR character_valuation_views.character_ocid IS DISTINCT FROM EXCLUDED.character_ocid
-              )
             """,
             rows.map { it.second }.toTypedArray(),
         )

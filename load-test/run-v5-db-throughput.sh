@@ -34,6 +34,7 @@ CONCURRENCY=${CONCURRENCY:-50}
 SAMPLE_INTERVAL=${SAMPLE_INTERVAL:-30}
 POST_SAMPLE_COUNT=${POST_SAMPLE_COUNT:-2}
 RESET_VIEWS=${RESET_VIEWS:-0}
+RESET_ACTIVE_JOBS=${RESET_ACTIVE_JOBS:-0}
 MAX_DRAIN_WAIT=${MAX_DRAIN_WAIT:-200}
 
 SERVER_PID=""
@@ -71,20 +72,66 @@ db_counts() {
   psql_db -At -c "
     SELECT
       (SELECT count(*) FROM character_valuation_views),
-      (SELECT count(*) FROM pgmq.q_expectation_calc_high);
+      (SELECT count(*) FROM pgmq.q_expectation_calc_high),
+      (SELECT count(*) FROM pgmq.q_external_api_queue),
+      (SELECT count(*) FROM pgmq.q_result_ready_queue),
+      (SELECT count(*) FROM calculation_jobs WHERE status = 'API_REQUESTED');
   "
+}
+
+reset_active_jobs() {
+  if ! [[ "$COUNT" =~ ^[0-9]+$ ]]; then
+    echo "COUNT must be a positive integer for RESET_ACTIVE_JOBS=1" >&2
+    return 1
+  fi
+
+  local ign_file
+  ign_file=$(mktemp)
+  head -n "$COUNT" module-app/src/main/resources/data/userIgn_List.csv >"$ign_file"
+
+  if ! psql_db <<SQL
+CREATE TEMP TABLE load_test_igns(user_ign text PRIMARY KEY);
+\\copy load_test_igns(user_ign) FROM '$ign_file' WITH (FORMAT text);
+
+WITH reset_jobs AS (
+  UPDATE calculation_jobs j
+  SET status = 'FAILED',
+      last_error_code = 'LOAD_TEST_RESET',
+      error_message = 'Reset before V5 DB throughput load test',
+      completed_at = NOW(),
+      locked_by = NULL,
+      locked_until = NULL,
+      updated_at = NOW()
+  FROM load_test_igns i
+  WHERE j.user_ign = i.user_ign
+    AND j.preset_no = 1
+    AND j.status IN ('REQUESTED', 'OCID_RESOLVING', 'API_REQUESTED', 'SNAPSHOT_READY', 'CALCULATING', 'RETRYING')
+  RETURNING j.job_id
+)
+SELECT count(*) AS reset_active_jobs FROM reset_jobs;
+DROP TABLE load_test_igns;
+SQL
+  then
+    rm -f "$ign_file"
+    return 1
+  fi
+
+  rm -f "$ign_file"
 }
 
 monitor_db() {
   local prev_views=""
   local prev_ts=""
 
-  printf '%s\n' "timestamp,elapsed_s,views,queue_high,delta_views,views_per_sec"
+  printf '%s\n' "timestamp,elapsed_s,views,queue_high,queue_external_api,queue_result_ready,active_api_requested,delta_views,views_per_sec"
   while true; do
     local ts
     local counts
     local views
     local queue_high
+    local queue_external_api
+    local queue_result_ready
+    local active_api_requested
     local delta=0
     local rate=0
 
@@ -92,6 +139,9 @@ monitor_db() {
     counts=$(db_counts)
     views=$(echo "$counts" | awk -F'|' '{print $1}')
     queue_high=$(echo "$counts" | awk -F'|' '{print $2}')
+    queue_external_api=$(echo "$counts" | awk -F'|' '{print $3}')
+    queue_result_ready=$(echo "$counts" | awk -F'|' '{print $4}')
+    active_api_requested=$(echo "$counts" | awk -F'|' '{print $5}')
 
     if [[ -n "$prev_ts" ]]; then
       local dt=$((ts - prev_ts))
@@ -101,7 +151,9 @@ monitor_db() {
       fi
     fi
 
-    printf '%s,%s,%s,%s,%s,%s\n' "$(date -Is)" "$((ts - START_TS))" "$views" "$queue_high" "$delta" "$rate"
+    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+      "$(date -Is)" "$((ts - START_TS))" "$views" "$queue_high" "$queue_external_api" \
+      "$queue_result_ready" "$active_api_requested" "$delta" "$rate"
 
     prev_views=$views
     prev_ts=$ts
@@ -127,9 +179,19 @@ else
   echo "Skipping view reset. Set RESET_VIEWS=1 to delete character_valuation_views before the run."
 fi
 
+if [[ "$RESET_ACTIVE_JOBS" == "1" ]]; then
+  echo "Resetting active calculation_jobs for the first $COUNT load-test IGNs"
+  reset_active_jobs
+else
+  echo "Skipping active job reset. Set RESET_ACTIVE_JOBS=1 to mark active load-test jobs as FAILED before the run."
+fi
+
 echo "Initial DB state"
 psql_db -c "SELECT count(*) AS character_valuation_views FROM character_valuation_views;"
 psql_db -c "SELECT count(*) AS expectation_calc_high_queue FROM pgmq.q_expectation_calc_high;"
+psql_db -c "SELECT count(*) AS external_api_queue FROM pgmq.q_external_api_queue;"
+psql_db -c "SELECT count(*) AS result_ready_queue FROM pgmq.q_result_ready_queue;"
+psql_db -c "SELECT status, count(*) FROM calculation_jobs GROUP BY status ORDER BY status;"
 
 START_TS=$(date +%s)
 monitor_db &
@@ -144,3 +206,6 @@ done
 echo "Final DB state"
 psql_db -c "SELECT count(*) AS character_valuation_views FROM character_valuation_views;"
 psql_db -c "SELECT count(*) AS expectation_calc_high_queue FROM pgmq.q_expectation_calc_high;"
+psql_db -c "SELECT count(*) AS external_api_queue FROM pgmq.q_external_api_queue;"
+psql_db -c "SELECT count(*) AS result_ready_queue FROM pgmq.q_result_ready_queue;"
+psql_db -c "SELECT status, count(*) FROM calculation_jobs GROUP BY status ORDER BY status;"

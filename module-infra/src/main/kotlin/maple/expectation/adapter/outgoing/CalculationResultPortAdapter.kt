@@ -56,6 +56,12 @@ class CalculationResultPortAdapter(
     override fun findByJobId(jobId: UUID): CalculationResultData? = repo.findByJobId(jobId)?.toData()
 
     @Transactional(value = "transactionManager", readOnly = true)
+    override fun findByJobIds(jobIds: List<UUID>): List<CalculationResultData> {
+        if (jobIds.isEmpty()) return emptyList()
+        return repo.findByJobIdIn(jobIds).map { it.toData() }
+    }
+
+    @Transactional(value = "transactionManager", readOnly = true)
     override fun existsByJobId(jobId: UUID): Boolean = repo.existsByJobId(jobId)
 
     @Transactional(value = "transactionManager", readOnly = false)

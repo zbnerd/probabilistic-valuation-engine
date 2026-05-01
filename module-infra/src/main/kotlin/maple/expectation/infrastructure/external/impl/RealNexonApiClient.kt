@@ -59,16 +59,14 @@ class RealNexonApiClient(
             .onErrorResume(
                 WebClientResponseException::class.java,
             ) { ex ->
-                if (ex.statusCode.is4xxClientError) {
-                    // Issue #196: 상태 코드 + 실제 에러 메시지 로깅 (디버깅 가시성)
-                    logger.warn(
-                        "[NexonApi] OCID lookup failed. Status: {}, Body: {}",
-                        ex.statusCode,
-                        ex.responseBodyAsString,
-                    )
+                logger.warn(
+                    "[NexonApi] OCID lookup failed. Status: {}, Body: {}",
+                    ex.statusCode,
+                    ex.responseBodyAsString,
+                )
+                if (isInvalidOcidLookupParameter(ex)) {
                     return@onErrorResume Mono.error(CharacterNotFoundException(characterName))
                 }
-                // 5xx: 서킷브레이커 동작을 위해 상위 전파
                 Mono.error(ex)
             }
             .timeout(timeoutProperties.apiCall)
@@ -133,4 +131,6 @@ class RealNexonApiClient(
             .timeout(timeoutProperties.apiCall)
             .toFuture()
     }
+
+    private fun isInvalidOcidLookupParameter(ex: WebClientResponseException): Boolean = ex.statusCode.value() == 400 && ex.responseBodyAsString.contains("OPENAPI00004")
 }

@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param
 
 interface CalculationResultRepository : JpaRepository<CalculationResultEntity, UUID> {
     fun findByJobId(jobId: UUID): CalculationResultEntity?
+    fun findByJobIdIn(jobIds: Collection<UUID>): List<CalculationResultEntity>
     fun existsByJobId(jobId: UUID): Boolean
 
     @Modifying

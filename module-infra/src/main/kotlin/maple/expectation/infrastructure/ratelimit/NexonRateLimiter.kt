@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component
  */
 @Component
 class NexonRateLimiter(
-    @Value("\${nexon.rate-limit.max-concurrent:50}") maxConcurrent: Int,
+    @Value("\${nexon.api.rate-limit.max-concurrent:\${nexon.rate-limit.max-concurrent:50}}") maxConcurrent: Int,
     meterRegistry: MeterRegistry,
 ) {
     private val lock = ReentrantLock()

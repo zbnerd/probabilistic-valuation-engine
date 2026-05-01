@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.persistence
 
 import java.util.Optional
 import maple.expectation.core.domain.model.character.CharacterView
+import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import org.slf4j.LoggerFactory
@@ -51,6 +52,8 @@ class CharacterViewQueryPortAdapter(
             totalExpectedCost, maxPresetNo, presetNo, presetsJson,
         )
     }
+
+    override fun batchUpsertFromCalculations(commands: List<CharacterViewProjectionCommand>): Int = queryService.batchUpsertFromCalculations(commands)
 
     /**
      * JPA Entity를 CharacterView 인터페이스로 어댑트

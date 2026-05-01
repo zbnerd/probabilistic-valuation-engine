@@ -6,6 +6,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import java.time.Instant
 import maple.expectation.common.function.ThrowingSupplier
+import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
@@ -25,6 +26,7 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import org.springframework.jdbc.core.namedparam.SqlParameterSource
 
 /**
  * Unit tests for [CharacterViewQueryServicePostgres].
@@ -228,6 +230,46 @@ class CharacterViewQueryServicePostgresTest {
         assertThat(params["totalExpectedCost"]).isEqualTo(totalExpectedCost)
         assertThat(params["maxPresetNo"]).isEqualTo(maxPresetNo)
         assertThat(params["presetNo"]).isEqualTo(1)
+    }
+
+    @Test
+    @DisplayName("batchUpsertFromCalculations는 JDBC batch upsert를 수행한다")
+    fun batchUpsertFromCalculations_usesJdbcBatchUpsert() {
+        val commands = listOf(
+            CharacterViewProjectionCommand(
+                userIgn = "testUser1",
+                messageId = "101",
+                characterOcid = "ocid-101",
+                characterClass = "전체계산가",
+                characterLevel = null,
+                totalExpectedCost = 1000000L,
+                maxPresetNo = 3,
+                presetNo = 1,
+                presetsJson = "[]",
+            ),
+            CharacterViewProjectionCommand(
+                userIgn = "testUser2",
+                messageId = "102",
+                characterOcid = "ocid-102",
+                characterClass = "전체계산가",
+                characterLevel = null,
+                totalExpectedCost = 2000000L,
+                maxPresetNo = 4,
+                presetNo = 2,
+                presetsJson = "[]",
+            ),
+        )
+        whenever(jdbc.batchUpdate(any<String>(), any<Array<SqlParameterSource>>())).thenReturn(intArrayOf(1, 1))
+
+        val result = service.batchUpsertFromCalculations(commands)
+
+        val captor = argumentCaptor<Array<SqlParameterSource>>()
+        verify(jdbc).batchUpdate(any<String>(), captor.capture())
+        assertThat(result).isEqualTo(2)
+        assertThat(captor.firstValue).hasSize(2)
+        assertThat(captor.firstValue[0].getValue("userIgn")).isEqualTo("testUser1")
+        assertThat(captor.firstValue[0].getValue("messageId")).isEqualTo("101")
+        assertThat(captor.firstValue[1].getValue("totalExpectedCost")).isEqualTo(2000000L)
     }
 
     private fun createTestEntity(

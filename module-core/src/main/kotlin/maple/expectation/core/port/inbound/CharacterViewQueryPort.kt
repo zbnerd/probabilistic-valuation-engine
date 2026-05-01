@@ -3,6 +3,18 @@ package maple.expectation.core.port.inbound
 import java.util.Optional
 import maple.expectation.core.domain.model.character.CharacterView
 
+data class CharacterViewProjectionCommand(
+    val userIgn: String,
+    val messageId: String,
+    val characterOcid: String?,
+    val characterClass: String?,
+    val characterLevel: Int?,
+    val totalExpectedCost: Long,
+    val maxPresetNo: Int,
+    val presetNo: Int,
+    val presetsJson: String,
+)
+
 /**
  * V5 CQRS Query Side Port (ADR-005, Issue #639)
  *
@@ -49,4 +61,6 @@ interface CharacterViewQueryPort {
         presetNo: Int,
         presetsJson: String,
     )
+
+    fun batchUpsertFromCalculations(commands: List<CharacterViewProjectionCommand>): Int
 }

@@ -7,6 +7,7 @@ import java.util.concurrent.Executor
 import maple.expectation.common.executor.TaskContext
 import maple.expectation.core.domain.model.character.CharacterView
 import maple.expectation.core.port.inbound.CalculationQueuePort
+import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExecutorPort
 import maple.expectation.core.port.inbound.TaskReceipt
@@ -176,6 +177,8 @@ class GameCharacterControllerV5Test {
             presetsJson: String,
         ) {
         }
+
+        override fun batchUpsertFromCalculations(commands: List<CharacterViewProjectionCommand>): Int = commands.size
     }
 
     private class FakeCalculationQueuePort : CalculationQueuePort {

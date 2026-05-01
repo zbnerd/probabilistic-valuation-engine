@@ -243,6 +243,9 @@ ratelimit:
 
 app:
   instance-id: ${HOSTNAME:${random.uuid}}  # Issue #278: Scale-out Pub/Sub Self-skip용
+  pipeline:
+    consolidated:
+      enabled: true  # Consolidated pipeline: ExternalApiWorker handles API + calculation + result write inline
   optimization:
     use-compression: true
   aop:
@@ -671,6 +674,8 @@ pgmq:
       enabled: true
       polling-interval-ms: 100
       batch-size: 10
+    result-projection:
+      batch-size: 50
 
 snapshot:
   store:

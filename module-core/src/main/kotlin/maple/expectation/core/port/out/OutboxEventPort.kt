@@ -15,5 +15,6 @@ interface OutboxEventPort {
     fun insertIfAbsent(eventType: String, jobId: UUID, payload: String?): Boolean
     fun findUnpublished(limit: Int): List<OutboxEvent>
     fun markPublished(eventId: UUID)
+    fun markAllPublished(eventIds: List<UUID>)
     fun incrementPublishAttempts(eventId: UUID)
 }

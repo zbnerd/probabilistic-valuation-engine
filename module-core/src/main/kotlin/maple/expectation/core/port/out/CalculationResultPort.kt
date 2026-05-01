@@ -24,5 +24,6 @@ interface CalculationResultPort {
     fun save(result: CalculationResultData): CalculationResultData
     fun saveIfAbsent(result: CalculationResultData): Boolean
     fun findByJobId(jobId: UUID): CalculationResultData?
+    fun findByJobIds(jobIds: List<UUID>): List<CalculationResultData>
     fun existsByJobId(jobId: UUID): Boolean
 }

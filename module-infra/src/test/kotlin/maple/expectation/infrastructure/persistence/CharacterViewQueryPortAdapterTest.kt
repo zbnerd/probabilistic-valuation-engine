@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.persistence
 
 import java.time.Instant
+import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -203,6 +204,30 @@ class CharacterViewQueryPortAdapterTest {
             eq(1), // presetNo default
             eq(presetsJson),
         )
+    }
+
+    @Test
+    @DisplayName("batchUpsertFromCalculations는 queryService에 위임한다")
+    fun batchUpsertFromCalculations_delegatesToQueryService() {
+        val commands = listOf(
+            CharacterViewProjectionCommand(
+                userIgn = "testUser",
+                messageId = "123",
+                characterOcid = "ocid-123",
+                characterClass = "전체계산가",
+                characterLevel = null,
+                totalExpectedCost = 1000000L,
+                maxPresetNo = 3,
+                presetNo = 1,
+                presetsJson = "[]",
+            ),
+        )
+        whenever(queryService.batchUpsertFromCalculations(commands)).thenReturn(1)
+
+        val result = adapter.batchUpsertFromCalculations(commands)
+
+        assertThat(result).isEqualTo(1)
+        verify(queryService).batchUpsertFromCalculations(commands)
     }
 
     @Test

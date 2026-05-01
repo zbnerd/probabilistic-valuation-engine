@@ -40,6 +40,7 @@ import maple.expectation.util.ExceptionUtils
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
+import org.springframework.web.reactive.function.client.WebClientResponseException
 
 /**
  * Consolidated External API Worker (extends PgmqWorker for parallel processing)
@@ -111,7 +112,6 @@ class ExternalApiWorker(
                 } else {
                     log.error("[jobId={}] Pipeline failed: {}", jobId, e.message)
                     handleFailure(jobId, e)
-                    false
                 }
             },
             context,
@@ -134,13 +134,13 @@ class ExternalApiWorker(
 
         // Early exit: skip expensive API calls if job already completed/processing
         val existingJob = jobPort.findJobById(jobId)
-        if (existingJob != null && existingJob.status != CalculationJobStatus.OCID_RESOLVING && existingJob.status != CalculationJobStatus.REQUESTED) {
+        if (existingJob != null && !existingJob.status.isExternalApiProcessable()) {
             log.debug("[jobId={}] Skipping — already in state {}", jobId, existingJob.status)
             return
         }
 
         // Step 1+2: Resolve OCID → Fetch equipment (thenCompose chain, single block point on cache miss)
-        val (ocid, equipmentResponse) = resolveOcidAndFetchEquipment(jobId, payload.userIgn)
+        val (ocid, equipmentResponse) = resolveOcidAndFetchEquipment(jobId, payload.userIgn, existingJob?.ocid)
 
         // Step 3: Submit snapshot write to overlap with calculation
         val snapshotData = objectMapper.writeValueAsBytes(equipmentResponse)
@@ -217,8 +217,8 @@ class ExternalApiWorker(
      * OCID cache miss: chains OCID API → equipment API via thenCompose,
      * blocking once at .join() instead of twice.
      */
-    private fun resolveOcidAndFetchEquipment(jobId: UUID, userIgn: String): Pair<String, EquipmentResponse> {
-        val cached = ocidPort.resolveOcid(userIgn)
+    private fun resolveOcidAndFetchEquipment(jobId: UUID, userIgn: String, jobOcid: String?): Pair<String, EquipmentResponse> {
+        val cached = jobOcid ?: ocidPort.resolveOcid(userIgn)
         if (cached != null) {
             jobService.resolveOcidInPlace(jobId, cached)
             return Pair(cached, equipmentFetchProvider.fetchWithCache(cached))
@@ -253,18 +253,41 @@ class ExternalApiWorker(
             .join()
     }
 
-    private fun handleFailure(jobId: UUID, e: Throwable) {
-        val job = jobPort.findJobById(jobId) ?: return
+    private fun handleFailure(jobId: UUID, e: Throwable): Boolean {
+        val job = jobPort.findJobById(jobId) ?: return false
+        val errorCode = classifyExternalApiError(e)
         val errorMsg = (e.message ?: "Unknown error").take(200)
 
         if (job.retryCount >= job.maxRetries) {
-            jobPort.markFailed(jobId, "EXTERNAL_API_ERROR", errorMsg)
+            jobPort.markFailed(jobId, errorCode, errorMsg)
+            return true
         } else {
-            jobService.retryExternalApiJob(jobId)
+            return jobService.retryExternalApiJob(jobId, errorCode)
         }
     }
 
     private fun isCharacterNotFound(e: Throwable): Boolean = ExceptionUtils.containsCause(e, CharacterNotFoundException::class.java)
+
+    private fun CalculationJobStatus.isExternalApiProcessable(): Boolean = this == CalculationJobStatus.REQUESTED ||
+        this == CalculationJobStatus.OCID_RESOLVING ||
+        this == CalculationJobStatus.API_REQUESTED ||
+        this == CalculationJobStatus.RETRYING
+
+    private fun classifyExternalApiError(e: Throwable): String {
+        val responseException = ExceptionUtils.unwrapAs(e, WebClientResponseException::class.java) ?: return "EXTERNAL_API_ERROR"
+        return when (responseException.statusCode.value()) {
+            400 -> if (responseException.responseBodyAsString.contains("OPENAPI00004")) {
+                "CHARACTER_NOT_FOUND"
+            } else {
+                "NEXON_BAD_REQUEST"
+            }
+            401 -> "NEXON_UNAUTHORIZED"
+            403 -> "NEXON_FORBIDDEN"
+            429 -> "NEXON_RATE_LIMITED"
+            in 500..599 -> "NEXON_SERVER_ERROR"
+            else -> "EXTERNAL_API_ERROR"
+        }
+    }
 
     private fun generateObjectKey(jobId: UUID): String {
         val now = Instant.now()

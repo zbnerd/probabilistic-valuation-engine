@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.persistence
 
+import java.sql.Timestamp
 import java.time.Instant
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -19,6 +20,8 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import org.springframework.jdbc.core.namedparam.SqlParameterSource
 
 /**
  * Unit tests for [ExpectationReadModelWriteService].
@@ -40,11 +43,14 @@ class ExpectationReadModelWriteServiceTest {
     @Mock
     private lateinit var repository: ExpectationReadModelRepository
 
+    @Mock
+    private lateinit var jdbc: NamedParameterJdbcTemplate
+
     private lateinit var service: ExpectationReadModelWriteService
 
     @BeforeEach
     fun setUp() {
-        service = ExpectationReadModelWriteService(repository, executor)
+        service = ExpectationReadModelWriteService(repository, jdbc, executor)
     }
 
     @Test
@@ -105,6 +111,29 @@ class ExpectationReadModelWriteServiceTest {
             service.writeToReadModel(userIgn, json, calculatedAt)
         }
         assert(exception.message?.contains("DB connection failed") == true)
+    }
+
+    @Test
+    fun `writeToReadModelRawBatch compresses JSON and calls jdbc batchUpdate`() {
+        val calculatedAt = Instant.now()
+        val commands = listOf(
+            ReadModelWriteCommand("testUser1", """{"userIgn":"testUser1"}""", calculatedAt),
+            ReadModelWriteCommand("testUser2", """{"userIgn":"testUser2"}""", calculatedAt),
+        )
+        whenever(jdbc.batchUpdate(any<String>(), any<Array<SqlParameterSource>>())).thenReturn(intArrayOf(1, 1))
+
+        val result = service.writeToReadModelRawBatch(commands)
+
+        val captor = argumentCaptor<Array<SqlParameterSource>>()
+        verify(jdbc).batchUpdate(any<String>(), captor.capture())
+        assert(result == 2)
+        assert(captor.firstValue.size == 2)
+        assert(captor.firstValue[0].getValue("userIgn") == "testUser1")
+        assert(captor.firstValue[0].getValue("calculatedAt") == Timestamp.from(calculatedAt))
+        val payload = captor.firstValue[0].getValue("payload") as ByteArray
+        assert(payload[0] == 0x1f.toByte())
+        assert(payload[1] == 0x8b.toByte())
+        assert(GzipUtils.decompress(payload) == """{"userIgn":"testUser1"}""")
     }
 
     /**

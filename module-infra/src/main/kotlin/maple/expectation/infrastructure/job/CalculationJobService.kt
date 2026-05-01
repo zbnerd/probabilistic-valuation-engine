@@ -177,15 +177,31 @@ class CalculationJobService(
     }
 
     @Transactional
-    fun retryExternalApiJob(jobId: UUID) {
-        val job = jobPort.findJobById(jobId) ?: return
+    fun retryExternalApiJob(jobId: UUID, errorCode: String = "EXTERNAL_API_ERROR"): Boolean {
+        val job = jobPort.findJobById(jobId) ?: return false
         if (job.retryCount >= job.maxRetries) {
-            jobPort.markFailed(jobId, "EXTERNAL_API_ERROR", "Max retries exceeded")
+            jobPort.markFailed(jobId, errorCode, "Max retries exceeded")
             log.warn("[jobId={}] External API failed after {} retries", jobId, job.retryCount)
-            return
+            return true
         }
-        jobPort.incrementRetry(jobId, "EXTERNAL_API_ERROR")
+        val incremented = when (job.status) {
+            CalculationJobStatus.OCID_RESOLVING -> jobPort.incrementRetryForOcid(jobId, errorCode)
+            CalculationJobStatus.API_REQUESTED,
+            CalculationJobStatus.RETRYING,
+            -> jobPort.incrementRetry(jobId, errorCode)
+            CalculationJobStatus.REQUESTED -> jobPort.transitionStatus(
+                jobId,
+                CalculationJobStatus.REQUESTED,
+                CalculationJobStatus.OCID_RESOLVING,
+            )
+            else -> false
+        }
+        if (!incremented) {
+            log.warn("[jobId={}] External API retry not scheduled from state {}", jobId, job.status)
+            return false
+        }
         pgmqClient.send(QueueNames.EXTERNAL_API, ExternalApiJobPayload(job.jobId.toString(), job.userIgn, job.presetNo))
         log.info("[jobId={}] External API retry scheduled (attempt {})", jobId, job.retryCount + 1)
+        return true
     }
 }

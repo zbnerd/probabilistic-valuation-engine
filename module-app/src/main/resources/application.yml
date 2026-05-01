@@ -674,6 +674,8 @@ pgmq:
       enabled: true
       polling-interval-ms: 100
       batch-size: 10
+    result-projection:
+      batch-size: 50
 
 snapshot:
   store:

@@ -27,6 +27,12 @@ class OutboxEventPortAdapter(
     }
 
     @Transactional(value = "transactionManager", readOnly = false)
+    override fun markAllPublished(eventIds: List<UUID>) {
+        if (eventIds.isEmpty()) return
+        repo.markAllPublished(eventIds)
+    }
+
+    @Transactional(value = "transactionManager", readOnly = false)
     override fun incrementPublishAttempts(eventId: UUID) {
         repo.incrementPublishAttempts(eventId)
     }

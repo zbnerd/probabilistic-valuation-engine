@@ -18,6 +18,10 @@ interface OutboxEventRepository : JpaRepository<OutboxEventEntity, UUID> {
     fun markPublished(@Param("eventId") eventId: UUID, @Param("now") now: OffsetDateTime = OffsetDateTime.now())
 
     @Modifying
+    @Query("UPDATE OutboxEventEntity e SET e.published = true, e.publishedAt = :now WHERE e.eventId IN :eventIds")
+    fun markAllPublished(@Param("eventIds") eventIds: List<UUID>, @Param("now") now: OffsetDateTime = OffsetDateTime.now())
+
+    @Modifying
     @Query("UPDATE OutboxEventEntity e SET e.publishAttempts = e.publishAttempts + 1 WHERE e.eventId = :eventId")
     fun incrementPublishAttempts(@Param("eventId") eventId: UUID)
 

@@ -69,30 +69,30 @@ class ResultReadyProjectionWorker(
         val jobsById = jobPort.findJobsByIds(jobIds).associateBy { it.jobId }
         val resultsByJobId = resultPort.findByJobIds(jobIds).associateBy { it.jobId }
 
-        val commands = mutableListOf<CharacterViewProjectionCommand>()
-        val publishedIds = mutableListOf<UUID>()
-
-        for (event in events) {
-            val job = jobsById[event.jobId]
-            val resultData = resultsByJobId[event.jobId]
-            if (job == null || resultData == null) {
-                log.warn("[eventId={}] job={} result={}, marking published to skip", event.eventId, job != null, resultData != null)
-                publishedIds += event.eventId
-                continue
-            }
-            val payload = parseOutboxPayload(event)
-            val command = toOutboxProjectionCommand(event, job, resultData, payload)
-            if (command != null) {
-                commands += command
-            }
-            publishedIds += event.eventId
+        val outcomes = runBlocking(Dispatchers.Default) {
+            events.map { event ->
+                async(Dispatchers.Default) {
+                    val job = jobsById[event.jobId]
+                    val resultData = resultsByJobId[event.jobId]
+                    if (job == null || resultData == null) {
+                        OutboxProjectionOutcome(event.eventId, command = null)
+                    } else {
+                        val payload = parseOutboxPayload(event)
+                        val command = toOutboxProjectionCommand(event, job, resultData, payload)
+                        OutboxProjectionOutcome(event.eventId, command = command)
+                    }
+                }
+            }.awaitAll()
         }
+
+        val commands = outcomes.mapNotNull { it.command }
+        val publishedIds = outcomes.map { it.eventId }
 
         if (commands.isNotEmpty()) {
             viewQueryPort.batchUpsertFromCalculations(commands)
         }
-        for (id in publishedIds) {
-            outboxPort.markPublished(id)
+        if (publishedIds.isNotEmpty()) {
+            outboxPort.markAllPublished(publishedIds)
         }
         log.debug("[ResultProjection] projected={}, published={}", commands.size, publishedIds.size)
     }
@@ -250,5 +250,10 @@ class ResultReadyProjectionWorker(
         val messageId: Long,
         val command: CharacterViewProjectionCommand? = null,
         val archive: Boolean = false,
+    )
+
+    private data class OutboxProjectionOutcome(
+        val eventId: UUID,
+        val command: CharacterViewProjectionCommand? = null,
     )
 }

@@ -10,8 +10,8 @@
 
 ## 7. Advisory Lock & Single Flight 규칙
 
-- **Lock Scope:** `pg_try_advisory_xact_lock`(트랜잭션 스코프)만 사용. 세션 스코프(`pg_advisory_lock`)는 HikariCP에서 위험
-- **Pattern:** Leader/Follower 패턴 필수. Leader는 계산 후 L2 저장, Follower는 L2 폴링 (최대 5초)
+- **Lock Scope:** advisory lock을 사용할 때는 `pg_try_advisory_xact_lock`(트랜잭션 스코프)을 우선 사용. 세션 스코프(`pg_advisory_lock`)는 HikariCP에서 위험
+- **Pattern:** hot-key cache stampede 방지가 필요한 L2 cache 경로에서만 Leader/Follower 패턴을 사용한다. Cold-miss external API pipeline은 request idempotency key + DB unique constraint를 우선 사용한다.
 - **AOP 주의:** 같은 클래스 내부에서 `@Transactional` 메서드 직접 호출 금지 (프록시 미작동)
 - **Key 일치:** 락 키, 캐시 키, NOTIFY 페이로드는 반드시 동일한 생성 로직 사용
 - **Cache Key 일관성:** 캐시 키 포맷 변경 시 모든 producer/consumer 업데이트 필수. 키 불일치는 silent data loss 유발

@@ -2,6 +2,7 @@ package maple.expectation.application.service.expectation.queue;
 
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.model.job.CalculationJob;
+import maple.expectation.core.model.job.CalculationJobClaim;
 import maple.expectation.core.model.job.CalculationJobStatus;
 import maple.expectation.core.port.inbound.TaskReceipt;
 import maple.expectation.core.port.out.CalculationJobPort;
@@ -23,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Before: Controller → expectation_calc_high → ExpectationCalcWorker → external_api_queue After:
  * Controller → job creation + external_api_queue publish
  *
- * <p>Job-level dedup is handled by {@link CalculationJobPort#createJob}.
+ * <p>Job-level dedup is handled by {@link CalculationJobPort#createOrFindActiveJob}.
  */
 @Slf4j
 @Component
@@ -115,13 +116,15 @@ public class ExpectationCalculationQueue {
   /**
    * Direct dispatch: create job + publish to external_api_queue in one transaction.
    *
-   * <p>Job-level dedup: {@link CalculationJobPort#createJob} returns existing active job if one
-   * exists for the same userIgn+presetNo. Only dispatches if job is still in REQUESTED.
+   * <p>Job-level dedup: {@link CalculationJobPort#createOrFindActiveJob} returns existing active
+   * job if one exists for the same request key. Only newly created jobs are dispatched.
    */
   private TaskReceipt enqueue(ExpectationCalculationTask task) {
-    CalculationJob job = jobPort.createJob(null, task.getUserIgn(), task.getPresetNo());
+    CalculationJobClaim claim =
+        jobPort.createOrFindActiveJob(null, task.getUserIgn(), task.getPresetNo());
+    CalculationJob job = claim.getJob();
 
-    if (job.getStatus() == CalculationJobStatus.REQUESTED) {
+    if (claim.getCreated() && job.getStatus() == CalculationJobStatus.REQUESTED) {
       boolean transitioned =
           jobPort.transitionStatus(
               job.getJobId(), CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING);

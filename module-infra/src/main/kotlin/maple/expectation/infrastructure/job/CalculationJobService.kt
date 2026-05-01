@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.job
 
 import java.util.UUID
 import maple.expectation.core.model.job.CalculationJob
+import maple.expectation.core.model.job.CalculationJobClaim
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.QueueNames
@@ -37,6 +38,17 @@ class CalculationJobService(
         val job = jobPort.createJob(ocid, userIgn, presetNo)
         log.info("[jobId={}] Job created in REQUESTED state", job.jobId)
         return job
+    }
+
+    @Transactional
+    fun createOrFindActiveJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJobClaim {
+        val claim = jobPort.createOrFindActiveJob(ocid, userIgn, presetNo)
+        if (claim.created) {
+            log.info("[jobId={}] Job claimed in REQUESTED state", claim.job.jobId)
+        } else {
+            log.debug("[jobId={}] Existing active job reused", claim.job.jobId)
+        }
+        return claim
     }
 
     @Transactional

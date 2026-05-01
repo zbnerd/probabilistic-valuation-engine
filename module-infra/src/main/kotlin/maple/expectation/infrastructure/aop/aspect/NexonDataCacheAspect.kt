@@ -56,6 +56,10 @@ class NexonDataCacheAspect(
         ocid: String,
         returnType: Class<*>,
     ): Any {
+        if (!nexonApiProperties.equipmentCacheSingleFlightEnabled) {
+            return executeAsLeader(joinPoint, ocid, returnType)
+        }
+
         val waitTimeSeconds = nexonApiProperties.cacheFollowerTimeoutSeconds
 
         return leaderElectionStrategy.executeWithLeaderElection(

@@ -3,6 +3,10 @@ package maple.expectation.infrastructure.worker
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.UUID
 import java.util.zip.GZIPInputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
@@ -62,29 +66,51 @@ class ResultReadyProjectionWorker(
         val jobIds = parsed.map { it.jobId }.distinct()
         val jobsById = jobPort.findJobsByIds(jobIds).associateBy { it.jobId }
         val resultsByJobId = resultPort.findByJobIds(jobIds).associateBy { it.jobId }
-        val commands = parsed.mapNotNull { message ->
-            val job = jobsById[message.jobId]
-            val resultData = resultsByJobId[message.jobId]
-            when {
-                job == null -> {
-                    log.warn("[jobId={}] Job not found, skipping", message.jobId)
-                    archiveIds += message.messageId
-                    null
-                }
-                resultData == null -> {
-                    log.warn("[jobId={}] Result not found, skipping", message.jobId)
-                    archiveIds += message.messageId
-                    null
-                }
-                else -> toProjectionCommand(message, job, resultData, archiveIds)
-            }
-        }
+        val outcomes = buildProjectionCommands(parsed, jobsById, resultsByJobId)
+        val commands = outcomes.mapNotNull { it.command }
+        archiveIds += outcomes.filter { it.archive }.map { it.messageId }
 
         if (commands.isNotEmpty()) {
             viewQueryPort.batchUpsertFromCalculations(commands)
         }
         archiveIfNeeded(archiveIds)
         log.debug("[ResultProjection] projected={}, archived={}", commands.size, archiveIds.size)
+    }
+
+    private fun buildProjectionCommands(
+        parsed: List<ProjectionMessage>,
+        jobsById: Map<UUID, CalculationJob>,
+        resultsByJobId: Map<UUID, CalculationResultData>,
+    ): List<ProjectionCommandOutcome> = runBlocking(Dispatchers.Default) {
+        parsed.map { message ->
+            async(Dispatchers.Default) {
+                buildProjectionCommand(message, jobsById, resultsByJobId)
+            }
+        }.awaitAll()
+    }
+
+    private fun buildProjectionCommand(
+        message: ProjectionMessage,
+        jobsById: Map<UUID, CalculationJob>,
+        resultsByJobId: Map<UUID, CalculationResultData>,
+    ): ProjectionCommandOutcome {
+        val job = jobsById[message.jobId]
+        val resultData = resultsByJobId[message.jobId]
+        return when {
+            job == null -> {
+                log.warn("[jobId={}] Job not found, skipping", message.jobId)
+                ProjectionCommandOutcome(message.messageId, archive = true)
+            }
+            resultData == null -> {
+                log.warn("[jobId={}] Result not found, skipping", message.jobId)
+                ProjectionCommandOutcome(message.messageId, archive = true)
+            }
+            else -> ProjectionCommandOutcome(
+                messageId = message.messageId,
+                command = toProjectionCommand(message, job, resultData),
+                archive = true,
+            )
+        }
     }
 
     private fun parseMessage(message: PgmqMessage<Map<*, *>>, archiveIds: MutableList<Long>): ProjectionMessage? {
@@ -106,19 +132,16 @@ class ResultReadyProjectionWorker(
         message: ProjectionMessage,
         job: CalculationJob,
         resultData: CalculationResultData,
-        archiveIds: MutableList<Long>,
     ): CharacterViewProjectionCommand? {
         val resultJson = decompress(resultData.responseBody)
         val tree = objectMapper.readTree(resultJson)
 
         val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: run {
             log.warn("[jobId={}] Missing totalExpectedCost in result", message.jobId)
-            archiveIds += message.messageId
             return null
         }
         val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: run {
             log.warn("[jobId={}] Missing maxPresetNo in result", message.jobId)
-            archiveIds += message.messageId
             return null
         }
         val presetsNode = tree.get("presets")
@@ -126,7 +149,6 @@ class ResultReadyProjectionWorker(
         val characterId = message.payload["characterId"]?.toString()
         val presetsJson = if (presetsNode != null) objectMapper.writeValueAsString(presetsNode) else "[]"
 
-        archiveIds += message.messageId
         return CharacterViewProjectionCommand(
             userIgn = job.userIgn,
             messageId = message.messageId.toString(),
@@ -154,5 +176,11 @@ class ResultReadyProjectionWorker(
         val messageId: Long,
         val payload: Map<*, *>,
         val jobId: UUID,
+    )
+
+    private data class ProjectionCommandOutcome(
+        val messageId: Long,
+        val command: CharacterViewProjectionCommand? = null,
+        val archive: Boolean = false,
     )
 }

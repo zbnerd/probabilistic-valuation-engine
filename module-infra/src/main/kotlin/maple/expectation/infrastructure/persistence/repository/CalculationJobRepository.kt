@@ -19,6 +19,15 @@ interface CalculationJobRepository : JpaRepository<CalculationJobEntity, UUID> {
     )
     fun findActiveByUserIgnAndPreset(@Param("userIgn") userIgn: String, @Param("presetNo") presetNo: Int): CalculationJobEntity?
 
+    @Query(
+        """
+        SELECT j FROM CalculationJobEntity j
+        WHERE j.requestKey = :requestKey
+          AND j.status IN ('REQUESTED', 'OCID_RESOLVING', 'API_REQUESTED', 'SNAPSHOT_READY', 'CALCULATING', 'RETRYING')
+    """,
+    )
+    fun findActiveByRequestKey(@Param("requestKey") requestKey: String): CalculationJobEntity?
+
     @Modifying
     @Query(
         """

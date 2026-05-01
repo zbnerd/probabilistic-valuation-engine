@@ -23,6 +23,9 @@ open class CalculationJobEntity(
     @Column(nullable = false)
     val presetNo: Int = 1,
 
+    @Column(length = 160)
+    val requestKey: String? = null,
+
     @Column(nullable = false, length = 32)
     var status: String = "REQUESTED",
 

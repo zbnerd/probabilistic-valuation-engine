@@ -59,9 +59,13 @@ abstract class AbstractExpectationCalcWorker(
 
         return executor.executeOrDefault({
             workerLog.info("[{}] Creating job: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
-            val job = jobService.createJob(null, request.userIgn, request.presetNo)
-            jobService.dispatchToExternalApi(job.jobId, request.userIgn, request.presetNo)
-            workerLog.info("[{}] Job dispatched to external API pipeline: jobId={}", workerName, job.jobId)
+            val claim = jobService.createOrFindActiveJob(null, request.userIgn, request.presetNo)
+            if (claim.created) {
+                jobService.dispatchToExternalApi(claim.job.jobId, request.userIgn, request.presetNo)
+                workerLog.info("[{}] Job dispatched to external API pipeline: jobId={}", workerName, claim.job.jobId)
+            } else {
+                workerLog.info("[{}] Existing active job reused: jobId={}", workerName, claim.job.jobId)
+            }
             true
         }, false, context)
     }

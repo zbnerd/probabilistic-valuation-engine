@@ -113,6 +113,8 @@ class CalculationJobPortAdapter(
 
     override fun completeFromSnapshotReady(jobId: UUID): Boolean = jobRepository.completeFromSnapshotReady(jobId) > 0
 
+    override fun completeFromCalculating(jobId: UUID): Boolean = jobRepository.completeFromCalculating(jobId) > 0
+
     override fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID> {
         val sql = """
             SELECT j.job_id FROM calculation_jobs j

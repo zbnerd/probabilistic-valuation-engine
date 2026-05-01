@@ -21,7 +21,6 @@ import maple.expectation.core.model.snapshot.CalculationSnapshot
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CharacterOcidPort
-import maple.expectation.core.port.out.PureCalculationPort
 import maple.expectation.core.port.out.QueueNames
 import maple.expectation.core.port.out.SnapshotObjectStore
 import maple.expectation.error.exception.CharacterNotFoundException
@@ -30,10 +29,10 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
-import maple.expectation.infrastructure.job.CalculationExecutionService
 import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
+import maple.expectation.infrastructure.pgmq.CalculationRequestedPayload
 import maple.expectation.infrastructure.pgmq.ExternalApiJobPayload
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
@@ -48,15 +47,10 @@ import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClientResponseException
 
 /**
- * Consolidated External API Worker (extends PgmqWorker for parallel processing)
+ * External API stage worker.
  *
- * Replaces OcidResolveWorker + NexonApiWorker + ApiResponseWorker.
- * Processes messages in parallel on a thread pool (worker-pool-size threads).
- *
- * Pipeline per message (~500ms):
- *   OCID resolve (~200ms) -> Equipment API (~300ms) -> Snapshot save -> Calculate -> Result save
- *
- * Throughput: ~workerPoolSize × 2 messages/sec (vs ~2/sec sequential with PgmqTopicGroup)
+ * Resolves OCID, fetches equipment data, persists calculation input/snapshot metadata,
+ * then dispatches CPU-bound calculation to calculation_requested_queue.
  */
 @Component
 @ConditionalOnProperty(name = ["app.worker.external-api.enabled"], havingValue = "true", matchIfMissing = true)
@@ -74,10 +68,8 @@ class ExternalApiWorker(
     private val objectMapper: ObjectMapper,
     private val converter: EquipmentResponseToCalculationInputConverter,
     private val calculationInputPort: CalculationInputPort,
-    private val pureCalculationPort: PureCalculationPort,
     private val jobPort: CalculationJobPort,
     private val ocidPort: CharacterOcidPort,
-    private val executionService: CalculationExecutionService,
 ) : PgmqWorker<ExternalApiJobPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     private val snapshotWriter: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
@@ -113,7 +105,7 @@ class ExternalApiWorker(
                     log.warn("[jobId={}] Character not found, skipping retry: {}", jobId, errorMsg)
                     true
                 } else {
-                    log.error("[jobId={}] Pipeline failed: {}", jobId, e.message)
+                    log.error("[jobId={}] External API stage failed: {}", jobId, e.message)
                     handleFailure(jobId, e)
                 }
             },
@@ -126,9 +118,9 @@ class ExternalApiWorker(
         val maxRetries = workerSettings.maxRetries ?: workerConfig.common.maxRetries
         if (message.readCount >= maxRetries) {
             jobPort.markFailed(jobId, "EXTERNAL_API_ERROR", "Max retries exceeded (attempts=${message.readCount})")
-            log.error("[jobId={}] Pipeline failed permanently after {} attempts", jobId, message.readCount)
+            log.error("[jobId={}] External API stage failed permanently after {} attempts", jobId, message.readCount)
         } else {
-            log.warn("[jobId={}] Pipeline will retry (attempt {})", jobId, message.readCount)
+            log.warn("[jobId={}] External API stage will retry (attempt {})", jobId, message.readCount)
         }
     }
 
@@ -168,14 +160,15 @@ class ExternalApiWorker(
             }
         }, snapshotWriter)
 
-        // Step 4: Build input items + calculate (overlaps with snapshot file I/O)
+        // Step 4: Build and persist calculation input while snapshot file I/O is in flight.
         val inputItems = stage("BuildCalculationInput", payload.userIgn) {
             convertItems(equipmentResponse)
         }
+        val characterClass = equipmentResponse.characterClass ?: ""
         val calcInput = CalculationInput(
             jobId = jobId.toString(),
             userIgn = payload.userIgn,
-            characterClass = equipmentResponse.characterClass ?: "",
+            characterClass = characterClass,
             presetNo = payload.presetNo,
             items = inputItems,
         )
@@ -183,26 +176,12 @@ class ExternalApiWorker(
             calculationInputPort.saveIfAbsent(calcInput)
         }
 
-        // Step 5: Calculate (pure CPU) + pre-compute gzip/hash outside transaction
-        val calcResult = stage("PureCalculate", payload.userIgn) {
-            pureCalculationPort.calculate(calcInput)
-        }
-        val resultBytes = stage("SerializeResult", payload.userIgn) {
-            objectMapper.writeValueAsString(calcResult).toByteArray()
-        }
-        val gzipData = stage("GzipResult", payload.userIgn) {
-            gzipCompress(resultBytes)
-        }
-        val hash = stage("HashResult", payload.userIgn) {
-            sha256Hex(resultBytes)
-        }
-
-        // Wait for snapshot write completion before transactional save
+        // Step 5: Wait for snapshot write completion before publishing CPU-bound calculation work.
         val putResult = stage("AwaitSnapshotPut", jobId.toString()) {
             snapshotFuture.join()
         }
 
-        // Step 6: Save snapshot metadata + result in transaction
+        // Step 6: Save snapshot metadata and dispatch CPU-bound calculation in one transaction.
         val snapshotEntity = CalculationSnapshotEntity(
             snapshotId = snapshotId,
             jobId = jobId,
@@ -215,24 +194,22 @@ class ExternalApiWorker(
             hash = putResult.hash,
             expiresAt = snapshot.expiresAt,
         )
-        stage("SaveSnapshotMetadata", jobId.toString()) {
-            jobService.saveInputSnapshotAndMarkReady(snapshotEntity, jobId, snapshotId)
-        }
-
-        stage("PersistResult", jobId.toString()) {
-            executionService.completeCalculation(
+        stage("DispatchCalculation", jobId.toString()) {
+            jobService.saveInputSnapshotAndDispatchCalculation(
+                snapshotEntity = snapshotEntity,
                 jobId = jobId,
-                gzipData = gzipData,
-                hash = hash,
-                originalSize = resultBytes.size,
-                compressedSize = gzipData.size,
-                characterClass = calcInput.characterClass,
-                presetNo = payload.presetNo,
-                characterId = ocid,
+                snapshotId = snapshotId,
+                payload = CalculationRequestedPayload(
+                    jobId = jobId.toString(),
+                    userIgn = payload.userIgn,
+                    presetNo = payload.presetNo,
+                    characterId = ocid,
+                    characterClass = characterClass,
+                ),
             )
         }
 
-        log.info("[jobId={}] Pipeline completed", jobId)
+        log.info("[jobId={}] External API stage completed", jobId)
     }
 
     private fun convertItems(equipmentResponse: EquipmentResponse): List<EquipmentItem> {
@@ -344,17 +321,6 @@ class ExternalApiWorker(
         val zoned = now.atZone(ZoneOffset.UTC)
         val datePath = "%04d/%02d/%02d".format(zoned.year, zoned.monthValue, zoned.dayOfMonth)
         return "snapshots/$datePath/$jobId.gz"
-    }
-
-    private fun gzipCompress(data: ByteArray): ByteArray {
-        val bos = java.io.ByteArrayOutputStream()
-        java.util.zip.GZIPOutputStream(bos).use { it.write(data) }
-        return bos.toByteArray()
-    }
-
-    private fun sha256Hex(data: ByteArray): String {
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-        return digest.digest(data).joinToString("") { "%02x".format(it) }
     }
 
     companion object {

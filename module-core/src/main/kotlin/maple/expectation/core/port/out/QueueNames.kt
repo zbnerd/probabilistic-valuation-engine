@@ -12,8 +12,14 @@ object QueueNames {
     /** Low priority expectation calculation queue (batch/scheduled updates) */
     const val EXPECTATION_CALC_LOW = "expectation_calc_low"
 
-    /** Consolidated external API pipeline (OCID resolve + equipment fetch + calculation) */
+    /** External API pipeline (OCID resolve + equipment fetch + input/snapshot staging) */
     const val EXTERNAL_API = "external_api_queue"
+
+    /** CPU-bound calculation pipeline after external API input staging */
+    const val CALCULATION_REQUESTED = "calculation_requested_queue"
+
+    /** DB-bound result persistence pipeline after calculation completes */
+    const val CALCULATION_COMPLETED = "calculation_completed_queue"
 
     const val NEXON_API_REQUEST = "nexon_api_request_queue"
     const val NEXON_API_RESPONSE = "nexon_api_response_queue"

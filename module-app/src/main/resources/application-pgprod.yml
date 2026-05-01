@@ -18,6 +18,21 @@ pgmq:
       polling-interval-ms: 500
       batch-size: 50
       max-retries: 3
+    external-api:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
+    calculation-requested:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
+    calculation-completed:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
     nexon-fanout:
       enabled: true
       polling-interval-ms: 50

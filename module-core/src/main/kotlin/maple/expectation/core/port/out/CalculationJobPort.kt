@@ -23,5 +23,6 @@ interface CalculationJobPort {
     fun findActiveJobByUserIgn(userIgn: String, presetNo: Int): CalculationJob?
     fun resolveOcidAndTransition(jobId: UUID, ocid: String): Boolean
     fun completeFromSnapshotReady(jobId: UUID): Boolean
+    fun completeFromCalculating(jobId: UUID): Boolean
     fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID>
 }

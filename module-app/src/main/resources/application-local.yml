@@ -199,6 +199,16 @@ pgmq:
       enabled: true
     external-api:
       enabled: true
+      batch-size: 50
+      max-retries: 3
+    calculation-requested:
+      enabled: true
+      batch-size: 50
+      max-retries: 3
+    calculation-completed:
+      enabled: true
+      batch-size: 50
+      max-retries: 3
 
 # Bulk Loading Configuration (Issue #611)
 bulk:

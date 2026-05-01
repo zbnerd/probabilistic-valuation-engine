@@ -15,6 +15,8 @@ import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.persistence.repository.CalculationSnapshotRepository
+import maple.expectation.infrastructure.pgmq.CalculationCompletedPayload
+import maple.expectation.infrastructure.pgmq.CalculationRequestedPayload
 import maple.expectation.infrastructure.pgmq.ExternalApiJobPayload
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import org.slf4j.LoggerFactory
@@ -186,6 +188,30 @@ class CalculationJobService(
     ): Boolean {
         snapshotRepository.save(snapshotEntity)
         return jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)
+    }
+
+    @Transactional
+    fun saveInputSnapshotAndDispatchCalculation(
+        snapshotEntity: CalculationSnapshotEntity,
+        jobId: UUID,
+        snapshotId: UUID,
+        payload: CalculationRequestedPayload,
+    ): Boolean {
+        snapshotRepository.save(snapshotEntity)
+        val ready = jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)
+        if (!ready) {
+            log.warn("[jobId={}] Cannot mark SNAPSHOT_READY before calculation dispatch", jobId)
+            return false
+        }
+        pgmqClient.send(QueueNames.CALCULATION_REQUESTED, payload)
+        log.info("[jobId={}] Calculation requested", jobId)
+        return true
+    }
+
+    @Transactional
+    fun dispatchCalculationCompleted(payload: CalculationCompletedPayload) {
+        pgmqClient.send(QueueNames.CALCULATION_COMPLETED, payload)
+        log.info("[jobId={}] Calculation completed payload dispatched", payload.jobId)
     }
 
     @Transactional

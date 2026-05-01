@@ -42,3 +42,14 @@
 - `Thread.sleep()` 금지 → `Awaitility` 사용
 - 테스트 간 상태 공유 금지
 - `@DirtiesContext` 남용 금지
+
+## 13. 부하테스트 (Load Test)
+
+**기본 명령어:**
+```bash
+RESET_ACTIVE_JOBS=1 COUNT=10000 CONCURRENCY=50 SAMPLE_INTERVAL=30 POST_SAMPLE_COUNT=6 ./load-test/run-v5-db-throughput.sh
+```
+- `RESET_ACTIVE_JOBS=1`: 첫 `COUNT`개 CSV IGN의 active job을 FAILED/LOAD_TEST_RESET으로 마킹 (파괴적 — 명시적 요청 시만)
+- `RESET_VIEWS=1` 추가 시 `character_valuation_views` 초기화 (파괴적)
+- 부하테스트 전 필수: `RESET_ACTIVE_JOBS=1`로 stale job 정리
+- `module-app/logs/load-test-bootrun-*.log`에 부트 로그 기록

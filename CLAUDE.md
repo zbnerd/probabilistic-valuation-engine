@@ -43,6 +43,7 @@ Claude Code가 이 프로젝트에서 작업할 때 따라야 할 규칙은 `.cl
 | `security-rules.md` | Deny-by-default, API Key 검증, Rate limiting | security/config 파일 |
 | `db-migration.md` | Migration 완전성, Forward compatibility | `**/migration/**`, `**/*.sql` |
 | `skill-routing.md` | Skill 라우팅 규칙 | 항상 |
+| `load-test.md` | 부하테스트 명령어, 파괴적 플래그, 병목 분석 체크리스트 | 부하테스트 시 |
 
 ## 상세 문서 (참조)
 

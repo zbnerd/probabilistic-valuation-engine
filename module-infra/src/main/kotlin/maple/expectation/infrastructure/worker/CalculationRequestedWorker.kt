@@ -29,7 +29,7 @@ import org.springframework.stereotype.Component
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @Component
-@ConditionalOnProperty(name = ["app.worker.calculation-requested.enabled"], havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = ["app.pipeline.consolidated.enabled"], havingValue = "false")
 class CalculationRequestedWorker(
     pgmqClient: PgmqClient,
     executor: LogicExecutor,

@@ -20,7 +20,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
 @Component
-@ConditionalOnProperty(name = ["app.worker.calculation-completed.enabled"], havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = ["app.pipeline.consolidated.enabled"], havingValue = "false")
 class CalculationCompletedWorker(
     pgmqClient: PgmqClient,
     executor: LogicExecutor,

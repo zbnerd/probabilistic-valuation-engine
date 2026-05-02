@@ -79,6 +79,7 @@ class CharacterViewQueryServicePostgresTest {
             executor,
             meterRegistry,
             jdbc,
+            500,
         )
     }
 

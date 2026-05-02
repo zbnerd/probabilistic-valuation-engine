@@ -15,6 +15,7 @@ import maple.expectation.core.port.out.CalculationResultData
 import maple.expectation.core.port.out.CalculationResultPort
 import maple.expectation.core.port.out.QueueNames
 import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.StepTimer
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
@@ -35,6 +36,7 @@ class ResultReadyProjectionWorker(
     private val objectMapper: ObjectMapper,
     @Value("\${pgmq.worker.result-projection.batch-size:100}") private val batchSize: Int,
     @Value("\${pgmq.worker.result-projection.visibility-timeout-sec:30}") private val visibilityTimeoutSec: Int,
+    @Value("\${app.slow-task.step-trace.threshold-ms:500}") private val stepTraceThresholdMs: Long,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -60,24 +62,34 @@ class ResultReadyProjectionWorker(
     }
 
     private fun projectPgmqBatch(messages: List<PgmqMessage<Map<*, *>>>) {
-        val archiveIds = mutableListOf<Long>()
-        val parsed = messages.mapNotNull { parsePgmqMessage(it, archiveIds) }
-        if (parsed.isEmpty()) {
+        val timer = StepTimer("ResultProjection:ProjectBatch", stepTraceThresholdMs, tags = mapOf("batchSize" to messages.size.toString()))
+        try {
+            val archiveIds = mutableListOf<Long>()
+            val parsed = messages.mapNotNull { parsePgmqMessage(it, archiveIds) }
+            timer.mark("parseMessages")
+            if (parsed.isEmpty()) {
+                archiveIfNeeded(archiveIds)
+                return
+            }
+
+            val jobIds = parsed.map { it.jobId }.distinct()
+            val jobsById = jobPort.findJobsByIds(jobIds).associateBy { it.jobId }
+            val resultsByJobId = resultPort.findByJobIds(jobIds).associateBy { it.jobId }
+            timer.mark("loadCalculationResults")
+            val outcomes = buildPgmqProjectionCommands(parsed, jobsById, resultsByJobId)
+            timer.mark("buildViewRows")
+            val commands = outcomes.mapNotNull { it.command }
+            archiveIds += outcomes.filter { it.archive }.map { it.messageId }
+
+            if (commands.isNotEmpty()) {
+                viewQueryPort.batchUpsertFromCalculations(commands)
+            }
+            timer.mark("batchUpsertViews")
             archiveIfNeeded(archiveIds)
-            return
+            timer.mark("archiveMessages")
+        } finally {
+            timer.close(log)
         }
-
-        val jobIds = parsed.map { it.jobId }.distinct()
-        val jobsById = jobPort.findJobsByIds(jobIds).associateBy { it.jobId }
-        val resultsByJobId = resultPort.findByJobIds(jobIds).associateBy { it.jobId }
-        val outcomes = buildPgmqProjectionCommands(parsed, jobsById, resultsByJobId)
-        val commands = outcomes.mapNotNull { it.command }
-        archiveIds += outcomes.filter { it.archive }.map { it.messageId }
-
-        if (commands.isNotEmpty()) {
-            viewQueryPort.batchUpsertFromCalculations(commands)
-        }
-        archiveIfNeeded(archiveIds)
     }
 
     private fun buildPgmqProjectionCommands(

@@ -36,7 +36,101 @@ val calcResult = stage("PureCalculate", payload.userIgn) {
 }
 ```
 
-`pureCalculationPort.calculate(input)` — 순수 CPU 연산. `Dispatchers.Default` 코루틴 위에서 확률 기댓값 계산 수행. 캐릭터 장비 복잡도에 따라 편차 큼 (p50 1s, max 3.7s). **최적화 여지 적음** — 알고리즘 자체가 무거움.
+**호출 체인**:
+
+① `PureCalculationAdapter.calculate()` → ② `PureExpectationCalculator.calculate()` → ③ `PresetCalculationHelper.calculatePreset()`
+
+```kotlin
+// PureCalculationAdapter.kt:13 — module-app
+override fun calculate(input: CalculationInput): EquipmentExpectationResponseV4 =
+    calculator.calculate(input)
+```
+
+```kotlin
+// PureExpectationCalculator.kt:13-32 — module-app
+fun calculate(input: CalculationInput): EquipmentExpectationResponseV4 {
+    val cubeInputs = input.items.map { EquipmentItemConverter.toCubeInput(it) }
+
+    val preset = presetHelper.calculatePreset(
+        cubeInputs,
+        input.presetNo,
+        input.characterClass,
+    )
+
+    return EquipmentExpectationResponseV4(
+        userIgn = input.userIgn,
+        calculatedAt = LocalDateTime.now(),
+        fromCache = false,
+        totalExpectedCost = preset.totalExpectedCost,
+        totalCostText = preset.totalCostText,
+        totalCostBreakdown = preset.costBreakdown,
+        maxPresetNo = input.presetNo,
+        presets = listOf(preset),
+    )
+}
+```
+
+**핵심 병목** — `PresetCalculationHelper.calculatePreset()` (`PresetCalculationHelper.java:89-117`):
+
+```java
+// 장비별 순차 계산 루프 — 캐릭터당 장비 수(13~22개)만큼 반복
+for (var cubeInput : cubeInputs) {
+    EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
+    item = calculateSingleItem(input, cubeInput, characterClass);  // ← 여기가 무거움
+    costAcc.add(item.getExpectedCost());
+}
+```
+
+**`calculateSingleItem` 내부** (`PresetCalculationHelper.java:240-248`):
+
+```java
+private ItemExpectationV4 calculateSingleItem(...) {
+    // Decorator 패턴으로 구성된 계산기 체인
+    EquipmentExpectationCalculator calculator = calculatorFactory.createFullCalculator(input);
+    double itemCost = calculator.calculateCost();       // ← 무거운 CPU 연산
+    var costBreakdown = calculator.getDetailedCosts();
+    return buildItemResult(input, cubeInput, itemCost, costBreakdown,
+        calculator.getEnhancePath(), characterClass);
+}
+```
+
+**`EquipmentExpectationCalculatorFactory.createFullCalculator()`** (`EquipmentExpectationCalculatorFactory.java:48-78`):
+
+```java
+// Decorator 체인 구성 (장비 특성에 따라 선택적 연결):
+// BaseEquipmentItem → BlackCubeDecoratorV4 → AdditionalCubeDecoratorV4 → StarforceDecoratorV4
+public EquipmentExpectationCalculator createFullCalculator(EquipmentCalculationInput input) {
+    EquipmentExpectationCalculator calculator =
+        new BaseEquipmentItem(input.getItemName(), input.getItemLevel(), input.getCurrentStar());
+
+    if (input.hasPotential()) {
+        calculator = new BlackCubeDecoratorV4(calculator, trialsProvider, costPolicy, potentialInput);
+    }
+    if (input.hasAdditionalPotential()) {
+        calculator = new AdditionalCubeDecoratorV4(calculator, trialsProvider, costPolicy, additionalInput);
+    }
+    if (input.hasStarforce()) {
+        calculator = new StarforceDecoratorV4(calculator, starforceLookupPort,
+            input.getCurrentStar(), input.getTargetStar(), input.getItemLevel());
+    }
+    return calculator;
+}
+```
+
+**`AbstractCubeDecoratorV4.calculateCost()`** (`AbstractCubeDecoratorV4.java:161-178`) — Decorator 체인 비용 누적:
+
+```java
+public double calculateCost() {
+    double previousCost = super.calculateCost();            // 이전 단계 누적 비용
+    double expectedTrials = delegate.calculateTrials();     // 기하분포 기대 시도 횟수 계산
+    long roundedTrials = Math.round(expectedTrials);        // 정수 반올림
+    double costPerTrial = delegate.getLongCostPerTrial();   // 큐브 단가 (레벨×등급)
+    double cubeCost = roundedTrials * costPerTrial;         // 큐브 총 비용
+    return previousCost + cubeCost;                         // 누적
+}
+```
+
+`calculateTrials()` 내부에서 기하분포 확률 계산 수행. 장비 등급, 잠재옵션 조합에 따라 시도 횟수가 기하급수적으로 증가. `Dispatchers.Default` 코루틴 위에서 실행. **최적화 여지 적음** — 알고리즘 자체가 무거움 (장비 13~22개 × Decorator 체인 × 확률 계산).
 
 ### serializeResult — avg 5ms / p99 77ms
 

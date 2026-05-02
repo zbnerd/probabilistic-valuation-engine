@@ -3,8 +3,8 @@ package maple.expectation.service.v5;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,8 +19,8 @@ import maple.expectation.core.model.job.CalculationJob;
 import maple.expectation.core.model.job.CalculationJobClaim;
 import maple.expectation.core.model.job.CalculationJobStatus;
 import maple.expectation.core.port.inbound.TaskReceipt;
+import maple.expectation.core.port.out.CalculationDispatchPort;
 import maple.expectation.core.port.out.CalculationJobPort;
-import maple.expectation.core.port.out.PgmqPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
@@ -35,16 +35,16 @@ import org.junit.jupiter.api.Test;
 class ExpectationCalculationQueueTest {
 
   private LogicExecutor executor;
-  private PgmqPort pgmqPort;
+  private CalculationDispatchPort dispatchPort;
   private CalculationJobPort jobPort;
   private ExpectationCalculationQueue queue;
 
   @BeforeEach
   void setUp() {
     executor = new TestLogicExecutor();
-    pgmqPort = mock(PgmqPort.class);
+    dispatchPort = mock(CalculationDispatchPort.class);
     jobPort = mock(CalculationJobPort.class);
-    queue = new ExpectationCalculationQueue(pgmqPort, jobPort, executor);
+    queue = new ExpectationCalculationQueue(dispatchPort, jobPort, executor);
   }
 
   @Test
@@ -57,13 +57,11 @@ class ExpectationCalculationQueueTest {
     when(jobPort.transitionStatus(
             jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
         .thenReturn(true);
-    when(pgmqPort.send(eq("external_api_queue"), any())).thenReturn(1L);
-
     ExpectationCalculationTask highTask = ExpectationCalculationTask.highPriority("user1", false);
     assertThat(queue.offer(highTask)).isTrue();
 
     verify(jobPort).createOrFindActiveJob(null, "user1", 1);
-    verify(pgmqPort).send(eq("external_api_queue"), any());
+    verify(dispatchPort).dispatchExternalApiRequest(jobId.toString(), "user1", 1);
   }
 
   @Test
@@ -79,7 +77,7 @@ class ExpectationCalculationQueueTest {
 
     verify(jobPort).createOrFindActiveJob(null, "user1", 1);
     verify(jobPort, never()).transitionStatus(any(), any(), any());
-    verify(pgmqPort, never()).send(anyString(), any());
+    verify(dispatchPort, never()).dispatchExternalApiRequest(anyString(), anyString(), anyInt());
   }
 
   @Test
@@ -92,7 +90,6 @@ class ExpectationCalculationQueueTest {
     when(jobPort.transitionStatus(
             jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
         .thenReturn(true);
-    when(pgmqPort.send(eq("external_api_queue"), any())).thenReturn(1L);
 
     TaskReceipt receipt =
         queue.offerWithReceipt(ExpectationCalculationTask.highPriority("user1", false));
@@ -111,7 +108,6 @@ class ExpectationCalculationQueueTest {
     when(jobPort.transitionStatus(
             jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
         .thenReturn(true);
-    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
 
     assertThat(queue.addHighPriorityTask("user1", true)).isTrue();
   }
@@ -126,7 +122,6 @@ class ExpectationCalculationQueueTest {
     when(jobPort.transitionStatus(
             jobId, CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING))
         .thenReturn(true);
-    when(pgmqPort.send(anyString(), any())).thenReturn(1L);
 
     assertThat(queue.addLowPriorityTask("user1")).isTrue();
   }

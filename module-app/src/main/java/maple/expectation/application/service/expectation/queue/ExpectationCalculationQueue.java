@@ -5,12 +5,10 @@ import maple.expectation.core.model.job.CalculationJob;
 import maple.expectation.core.model.job.CalculationJobClaim;
 import maple.expectation.core.model.job.CalculationJobStatus;
 import maple.expectation.core.port.inbound.TaskReceipt;
+import maple.expectation.core.port.out.CalculationDispatchPort;
 import maple.expectation.core.port.out.CalculationJobPort;
-import maple.expectation.core.port.out.PgmqPort;
-import maple.expectation.core.port.out.QueueNames;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.pgmq.ExternalApiJobPayload;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,13 +28,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class ExpectationCalculationQueue {
 
-  private final PgmqPort pgmqPort;
+  private final CalculationDispatchPort dispatchPort;
   private final CalculationJobPort jobPort;
   private final LogicExecutor executor;
 
   public ExpectationCalculationQueue(
-      PgmqPort pgmqPort, CalculationJobPort jobPort, LogicExecutor executor) {
-    this.pgmqPort = pgmqPort;
+      CalculationDispatchPort dispatchPort, CalculationJobPort jobPort, LogicExecutor executor) {
+    this.dispatchPort = dispatchPort;
     this.jobPort = jobPort;
     this.executor = executor;
   }
@@ -129,10 +127,8 @@ public class ExpectationCalculationQueue {
           jobPort.transitionStatus(
               job.getJobId(), CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING);
       if (transitioned) {
-        pgmqPort.send(
-            QueueNames.EXTERNAL_API,
-            new ExternalApiJobPayload(
-                job.getJobId().toString(), task.getUserIgn(), task.getPresetNo()));
+        dispatchPort.dispatchExternalApiRequest(
+            job.getJobId().toString(), task.getUserIgn(), task.getPresetNo());
         log.debug(
             "[Queue] Job dispatched: jobId={}, userIgn={}, presetNo={}",
             job.getJobId(),

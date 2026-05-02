@@ -39,5 +39,6 @@ data class KafkaPipelineProperties(
         @DefaultValue("4") val concurrency: Int = 4,
         @DefaultValue("500") val pollTimeoutMs: Long = 500,
         @DefaultValue("50") val maxPollRecords: Int = 50,
+        @DefaultValue("300") val leaseDurationSeconds: Long = 300,
     )
 }

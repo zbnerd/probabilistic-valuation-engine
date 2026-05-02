@@ -3,8 +3,10 @@
 ## 명령어
 
 ```bash
-RESET_ACTIVE_JOBS=1 COUNT=10000 CONCURRENCY=50 SAMPLE_INTERVAL=30 POST_SAMPLE_COUNT=6 ./load-test/run-v5-db-throughput.sh
+RESET_ACTIVE_JOBS=1 RESET_VIEWS=1 COUNT=10000 CONCURRENCY=50 SAMPLE_INTERVAL=30 POST_SAMPLE_COUNT=6 ./load-test/run-v5-db-throughput.sh
 ```
+
+**항상 `RESET_VIEWS=1` + `RESET_ACTIVE_JOBS=1` 함께 사용.** 캐시 히트가 섞이면 throughput 측정이 무의미.
 
 ## 스크립트 동작
 
@@ -30,12 +32,41 @@ RESET_ACTIVE_JOBS=1 COUNT=10000 CONCURRENCY=50 SAMPLE_INTERVAL=30 POST_SAMPLE_CO
 
 **주의:** `q_expectation_calc_high=0`만으로 external/result pipeline이 drain되었다고 판단 금지. 모든 지표를 함께 확인.
 
-## 탐색적 Worker-Pool Throughput Test
+## 실행 및 보고 규칙
 
-- 기본: DB progress 샘플 6개, 30초 간격 (`POST_SAMPLE_COUNT=6`, `SAMPLE_INTERVAL=30`)
+- 부하테스트는 **백그라운드로 실행** (`run_in_background: true`)
+- 부하테스트 스크립트의 샘플 출력은 백그라운드에서 오지 않으므로 **직접 DB 쿼리로 수집**
+- 부하테스트 시작 전 **직접 TRUNCATE로 초기화** (RESET_VIEWS 스크립트에 의존하지 않음):
+  ```bash
+  source .env
+  PSQL_DB_HOST=$(echo "$DB_URL" | sed -n 's|.*://\([^:/]*\).*|\1|p')
+  PSQL_DB_PORT=${DB_PORT:-6543}
+  PSQL_DB_NAME=$(echo "$DB_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
+  PSQL_DB_USER=$(echo "$DB_URL" | sed -n 's|.*user=\([^&]*\).*|\1|p')
+  PSQL_DB_PASS=$(echo "$DB_URL" | sed -n 's|.*password=\(.*\)|\1|p')
+
+  PGPASSWORD="$PSQL_DB_PASS" psql "host=$PSQL_DB_HOST port=$PSQL_DB_PORT user=$PSQL_DB_USER dbname=$PSQL_DB_NAME sslmode=require" -c "
+    TRUNCATE TABLE character_valuation_views;
+    SELECT pgmq.purge_queue('external_api_queue');
+    SELECT pgmq.purge_queue('result_ready_queue');
+    SELECT pgmq.purge_queue('expectation_calc_high_queue');
+  "
+  ```
+- **DB 연결은 `.env`의 `DB_URL` JDBC URL에서 파싱** — `psql "$DB_URL"` 직접 사용 불가 (JDBC 형식이므로)
+- 서버 시작 완료(health check 200) 대기 후 아래 쿼리로 **30초마다 샘플 수집** — 총 6회:
+  ```bash
+  PGPASSWORD="$PSQL_DB_PASS" psql "host=$PSQL_DB_HOST port=$PSQL_DB_PORT user=$PSQL_DB_USER dbname=$PSQL_DB_NAME sslmode=require" -t -A -F',' -c "
+    SELECT
+      (SELECT count(*) FROM character_valuation_views) AS views,
+      (SELECT count(*) FROM pgmq.q_external_api_queue WHERE visible_at <= now()) AS queue_external_api,
+      (SELECT count(*) FROM pgmq.q_result_ready_queue WHERE visible_at <= now()) AS queue_result_ready,
+      (SELECT count(*) FROM calculation_jobs WHERE status = 'API_REQUESTED') AS active_api_requested
+  "
+  ```
+- 각 샘플에서 `delta_views`, `views_per_sec`를 계산하여 사용자에게 즉시 보고
 - 6번째 샘플 후 load-test Python 프로세스와 bootRun 서버 중지
 - 부하테스트 종료 후 slow task 분석:
-  - `module-app/logs/load-test-bootrun-*.log`에서 slow task 분석
+  - `module-app/logs/load-test-bootrun-*.log`에서 StepTrace 및 slow task 분석
   - 각 샘플의 `delta_views`, `views_per_sec`, 에러, slow-task 카테고리 리포트
   - 스크립트 출력과 boot 로그 경로 보존
 

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory;
@@ -94,19 +95,23 @@ public class PresetCalculationHelper {
           presetNo, 0.0, CostFormatter.format(0.0), CostBreakdownDto.empty(), List.of());
     }
 
-    List<ItemExpectationV4> results = new ArrayList<>(cubeInputs.size());
+    // 장비별 독립 계산 — parallelStream으로 ForkJoinPool work-stening 활용
+    List<ItemExpectationV4> results =
+        cubeInputs.parallelStream()
+            .map(
+                cubeInput -> {
+                  if (!cubeInput.isReady()) {
+                    return buildNoPotentialItem(cubeInput, presetNo, characterClass);
+                  }
+                  EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
+                  return calculateSingleItem(input, cubeInput, characterClass);
+                })
+            .collect(Collectors.toList());
+
+    // 비용 누적은 순서 무관
     KahanSummation costAcc = new KahanSummation();
     CostBreakdownDto breakdown = CostBreakdownDto.empty();
-
-    for (var cubeInput : cubeInputs) {
-      ItemExpectationV4 item;
-      if (!cubeInput.isReady()) {
-        item = buildNoPotentialItem(cubeInput, presetNo, characterClass);
-      } else {
-        EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
-        item = calculateSingleItem(input, cubeInput, characterClass);
-      }
-      results.add(item);
+    for (ItemExpectationV4 item : results) {
       costAcc.add(item.getExpectedCost());
       breakdown = breakdown.add(item.getCostBreakdown());
     }

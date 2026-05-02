@@ -3,13 +3,17 @@ package maple.expectation.infrastructure.persistence
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.sql.Timestamp
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.StepTimer
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import maple.expectation.infrastructure.persistence.repository.CharacterValuationViewJpaRepository
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -37,6 +41,8 @@ class CharacterViewQueryServicePostgres(
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
     private val jdbc: NamedParameterJdbcTemplate,
+    @Qualifier("asyncExecutor") private val asyncExecutor: ExecutorService,
+    @Value("\${app.slow-task.step-trace.threshold-ms:500}") private val stepTraceThresholdMs: Long,
 ) {
     private val log = LoggerFactory.getLogger(CharacterViewQueryServicePostgres::class.java)
 
@@ -137,7 +143,7 @@ class CharacterViewQueryServicePostgres(
         if (entity.messageId != null) {
             val presetsJson = entity.presets?.let { objectMapper.writeValueAsString(it) }
             upsertNative(entity, presetsJson)
-            saveToReadModel(entity)
+            asyncExecutor.submit { saveToReadModel(entity) }
         } else {
             val existing = findExistingEntity(entity)
             val saved = if (existing != null) {
@@ -147,7 +153,7 @@ class CharacterViewQueryServicePostgres(
             }
             val readModelSource = saved ?: existing
             if (readModelSource != null) {
-                saveToReadModel(readModelSource)
+                asyncExecutor.submit { saveToReadModel(readModelSource) }
             }
         }
     }
@@ -195,52 +201,54 @@ class CharacterViewQueryServicePostgres(
                 preset_no = EXCLUDED.preset_no,
                 presets = EXCLUDED.presets,
                 from_cache = EXCLUDED.from_cache
-            WHERE character_valuation_views.last_applied_version < EXCLUDED.last_applied_version
             """,
             params,
         )
     }
 
     private fun performBatchUpsert(commands: List<CharacterViewProjectionCommand>): Int {
-        val now = java.time.Instant.now()
-        val versionBase = System.currentTimeMillis()
-        val rows = commands.mapIndexed { index, command ->
-            val version = versionBase + index
-            val presets = parsePresets(command)
-            val entity = CharacterValuationViewEntity(
-                userIgn = command.userIgn,
-                messageId = command.messageId,
-                characterOcid = command.characterOcid,
-                characterClass = command.characterClass,
-                characterLevel = command.characterLevel,
-                totalExpectedCost = command.totalExpectedCost,
-                maxPresetNo = command.maxPresetNo,
-                presetNo = command.presetNo,
-                presets = presets,
-                calculatedAt = now,
-                fromCache = false,
-                version = version,
-                lastAppliedVersion = version,
-            )
-            entity to MapSqlParameterSource()
-                .addValue("userIgn", entity.userIgn)
-                .addValue("messageId", entity.messageId)
-                .addValue("characterOcid", entity.characterOcid)
-                .addValue("characterClass", entity.characterClass)
-                .addValue("characterLevel", entity.characterLevel)
-                .addValue("calculatedAt", entity.calculatedAt?.let(Timestamp::from))
-                .addValue("lastApiSyncAt", entity.lastApiSyncAt?.let(Timestamp::from))
-                .addValue("version", entity.version ?: 1L)
-                .addValue("lastAppliedVersion", entity.lastAppliedVersion ?: entity.version ?: 1L)
-                .addValue("totalExpectedCost", entity.totalExpectedCost)
-                .addValue("maxPresetNo", entity.maxPresetNo)
-                .addValue("presetNo", entity.presetNo)
-                .addValue("presets", command.presetsJson)
-                .addValue("fromCache", entity.fromCache)
-        }
+        val timer = StepTimer("PostgresQuery:BatchUpsertFromCalc", stepTraceThresholdMs, tags = mapOf("batchSize" to commands.size.toString()))
+        try {
+            val now = java.time.Instant.now()
+            val versionBase = System.currentTimeMillis()
+            val rows = commands.mapIndexed { index, command ->
+                val version = versionBase + index
+                val presets = parsePresets(command)
+                val entity = CharacterValuationViewEntity(
+                    userIgn = command.userIgn,
+                    messageId = command.messageId,
+                    characterOcid = command.characterOcid,
+                    characterClass = command.characterClass,
+                    characterLevel = command.characterLevel,
+                    totalExpectedCost = command.totalExpectedCost,
+                    maxPresetNo = command.maxPresetNo,
+                    presetNo = command.presetNo,
+                    presets = presets,
+                    calculatedAt = now,
+                    fromCache = false,
+                    version = version,
+                    lastAppliedVersion = version,
+                )
+                entity to MapSqlParameterSource()
+                    .addValue("userIgn", entity.userIgn)
+                    .addValue("messageId", entity.messageId)
+                    .addValue("characterOcid", entity.characterOcid)
+                    .addValue("characterClass", entity.characterClass)
+                    .addValue("characterLevel", entity.characterLevel)
+                    .addValue("calculatedAt", entity.calculatedAt?.let(Timestamp::from))
+                    .addValue("lastApiSyncAt", entity.lastApiSyncAt?.let(Timestamp::from))
+                    .addValue("version", entity.version ?: 1L)
+                    .addValue("lastAppliedVersion", entity.lastAppliedVersion ?: entity.version ?: 1L)
+                    .addValue("totalExpectedCost", entity.totalExpectedCost)
+                    .addValue("maxPresetNo", entity.maxPresetNo)
+                    .addValue("presetNo", entity.presetNo)
+                    .addValue("presets", command.presetsJson)
+                    .addValue("fromCache", entity.fromCache)
+            }
+            timer.mark("prepareRows")
 
-        val counts = jdbc.batchUpdate(
-            """
+            val counts = jdbc.batchUpdate(
+                """
             INSERT INTO character_valuation_views (
                 user_ign, message_id, jpa_version, character_ocid, character_class, character_level,
                 calculated_at, last_api_sync_at, version, last_applied_version,
@@ -265,12 +273,15 @@ class CharacterViewQueryServicePostgres(
                 preset_no = EXCLUDED.preset_no,
                 presets = EXCLUDED.presets,
                 from_cache = EXCLUDED.from_cache
-            WHERE character_valuation_views.last_applied_version < EXCLUDED.last_applied_version
             """,
-            rows.map { it.second }.toTypedArray(),
-        )
-        saveToReadModelBatch(rows.map { it.first })
-        return counts.sumOf { if (it > 0) it else 0 }
+                rows.map { it.second }.toTypedArray(),
+            )
+            timer.mark("executeValuationViewUpsert")
+            asyncExecutor.submit { saveToReadModelBatch(rows.map { it.first }) }
+            return counts.sumOf { if (it > 0) it else 0 }
+        } finally {
+            timer.close(log)
+        }
     }
 
     private fun parsePresets(command: CharacterViewProjectionCommand): List<CharacterValuationViewEntity.PresetView>? = executor.executeOrDefault(

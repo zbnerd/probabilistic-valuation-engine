@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # Prometheus for metrics collection
   prometheus:
     image: prom/prometheus:latest
     container_name: maple-prometheus
@@ -20,6 +21,31 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # PostgreSQL + PGMQ (Primary Database - Issue #589, #590, #591)
+  # Replaced: MySQL, MongoDB, Redis Queue
+  postgres:
+    image: jumski/postgres-17-pgmq:latest
+    container_name: maple-postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: maple
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
+      POSTGRES_DB: maple_expectation
+      TZ: ${TZ}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - maple-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maple -d maple_expectation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Grafana for visualization
   grafana:
     image: grafana/grafana:latest
     container_name: maple-grafana
@@ -27,8 +53,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
@@ -36,33 +62,6 @@ services:
       - maple-network
     depends_on:
       - prometheus
-
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    container_name: maple-kafka
-    ports:
-      - "9092:9092"
-    environment:
-      # KRaft 모드 필수 설정
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@localhost:29093'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk' # 임의의 Base64 해시값 (필수)
-      
-      # 리스너 및 통신 설정
-      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      
-      # 단일 노드 테스트용 설정
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-    networks:
-      - maple-network
 
 networks:
   maple-network:
@@ -74,3 +73,4 @@ networks:
 volumes:
   prometheus_data:
   grafana_data:
+  postgres_data:

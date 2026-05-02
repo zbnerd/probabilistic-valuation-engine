@@ -105,8 +105,3 @@ load-test-scripts/wrk-*.lua
 
 # App logs
 module-app/logs/
-
-# Build artifacts
-node_modules/
-snapshots/
-module-app/snapshots/

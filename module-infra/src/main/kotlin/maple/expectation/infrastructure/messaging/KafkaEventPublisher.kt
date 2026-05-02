@@ -8,7 +8,6 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Component
 
 @Component
@@ -20,56 +19,45 @@ import org.springframework.stereotype.Component
 )
 class KafkaEventPublisher(
     private val objectMapper: ObjectMapper,
-    private val kafkaTemplate: KafkaTemplate<String, String>,
     private val executor: LogicExecutor,
 ) : EventPublisher {
 
     private val logger = LoggerFactory.getLogger(KafkaEventPublisher::class.java)
 
     override fun publish(topic: String, event: IntegrationEvent<*>) {
-        executor.executeVoid(
-            { publishInternal(topic, event) },
+        executor.executeOrCatch(
+            {
+                publishInternal(topic, event)
+                null
+            },
+            { e ->
+                logger.error("[KafkaEventPublisher] Publish failed for topic: {}", topic, e)
+                null
+            },
             TaskContext.of("KafkaEventPublisher", "Publish", topic),
         )
     }
 
     private fun publishInternal(topic: String, event: IntegrationEvent<*>) {
         val jsonPayload = objectMapper.writeValueAsString(event)
-        val key = event.jobId ?: event.eventId
 
-        kafkaTemplate.send(topic, key, jsonPayload)
-            .whenComplete { _, ex ->
-                if (ex != null) {
-                    logger.error(
-                        "[KafkaEventPublisher] Publish failed for topic={}, eventId={}: {}",
-                        topic,
-                        event.eventId,
-                        ex.message,
-                    )
-                } else {
-                    logger.debug("[KafkaEventPublisher] Published eventId={} to topic={}", event.eventId, topic)
-                }
-            }
+        logger.warn(
+            "[KafkaEventPublisher] STUB MODE - Event not published to Kafka. " +
+                "topic={}, eventId={}, eventType={}, payload={}",
+            topic,
+            event.eventId,
+            event.eventType,
+            jsonPayload,
+        )
     }
 
     override fun publishAsync(topic: String, event: IntegrationEvent<*>): CompletableFuture<Void> {
-        val jsonPayload = executor.executeOrDefault(
-            { objectMapper.writeValueAsString(event) },
-            "",
-            TaskContext.of("KafkaEventPublisher", "Serialize", topic),
+        logger.warn(
+            "[KafkaEventPublisher] STUB MODE - Async publish not implemented. topic={}, eventId={}",
+            topic,
+            event.eventId,
         )
 
-        val key = event.jobId ?: event.eventId
-        return kafkaTemplate.send(topic, key, jsonPayload)
-            .thenAccept {}
-            .exceptionally { ex ->
-                logger.error(
-                    "[KafkaEventPublisher] Async publish failed for topic={}, eventId={}: {}",
-                    topic,
-                    event.eventId,
-                    ex.message,
-                )
-                null
-            }
+        return CompletableFuture.runAsync { publish(topic, event) }
     }
 }

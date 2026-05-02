@@ -11,6 +11,7 @@ import maple.expectation.infrastructure.executor.StepTimer
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import maple.expectation.infrastructure.persistence.repository.CharacterValuationViewJpaRepository
+import org.postgresql.util.PGobject
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -172,7 +173,7 @@ class CharacterViewQueryServicePostgres(
             "totalExpectedCost" to entity.totalExpectedCost,
             "maxPresetNo" to entity.maxPresetNo,
             "presetNo" to entity.presetNo,
-            "presets" to presetsJson,
+            "presets" to presetsJson?.toJsonb(),
             "fromCache" to entity.fromCache,
         )
         jdbc.update(
@@ -184,7 +185,7 @@ class CharacterViewQueryServicePostgres(
             ) VALUES (
                 :userIgn, :messageId, 0, :characterOcid, :characterClass, :characterLevel,
                 :calculatedAt, :lastApiSyncAt, :version + 1, :lastAppliedVersion,
-                :totalExpectedCost, :maxPresetNo, :presetNo, CAST(:presets AS jsonb), :fromCache
+                :totalExpectedCost, :maxPresetNo, :presetNo, :presets, :fromCache
             )
             ON CONFLICT (message_id) DO UPDATE SET
                 user_ign = EXCLUDED.user_ign,
@@ -242,7 +243,7 @@ class CharacterViewQueryServicePostgres(
                     .addValue("totalExpectedCost", entity.totalExpectedCost)
                     .addValue("maxPresetNo", entity.maxPresetNo)
                     .addValue("presetNo", entity.presetNo)
-                    .addValue("presets", command.presetsJson)
+                    .addValue("presets", command.presetsJson.toJsonb())
                     .addValue("fromCache", entity.fromCache)
             }
             timer.mark("prepareRows")
@@ -256,7 +257,7 @@ class CharacterViewQueryServicePostgres(
             ) VALUES (
                 :userIgn, :messageId, 0, :characterOcid, :characterClass, :characterLevel,
                 :calculatedAt, :lastApiSyncAt, :version + 1, :lastAppliedVersion,
-                :totalExpectedCost, :maxPresetNo, :presetNo, CAST(:presets AS jsonb), :fromCache
+                :totalExpectedCost, :maxPresetNo, :presetNo, :presets, :fromCache
             )
             ON CONFLICT (message_id) DO UPDATE SET
                 user_ign = EXCLUDED.user_ign,
@@ -454,4 +455,12 @@ class CharacterViewQueryServicePostgres(
      * serialization, allowing module-web to provide the correct mapping implementation.
      */
     private fun serializeEntityToJson(entity: CharacterValuationViewEntity): String = objectMapper.writeValueAsString(entity)
+}
+
+internal fun String?.toJsonb(): PGobject? {
+    if (this == null) return null
+    return PGobject().apply {
+        type = "jsonb"
+        value = this@toJsonb
+    }
 }

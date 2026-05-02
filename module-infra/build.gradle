@@ -98,6 +98,10 @@ dependencies {
 	// Spring Batch (for equipment refresh job)
 	implementation(libs.spring.boot.starter.batch)
 
+	// Spring Kafka (BOM-managed at 3.3.8 via spring-boot-dependencies 3.5.4)
+	implementation "org.springframework.kafka:spring-kafka"
+	testImplementation "org.springframework.kafka:spring-kafka-test"
+
 	// JWT
 	implementation(libs.jjwt.api)
 	runtimeOnly(libs.jjwt.impl)

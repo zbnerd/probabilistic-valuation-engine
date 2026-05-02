@@ -118,6 +118,19 @@ app:
       enabled: true   # PostgreSQL buffer
   event-publisher:
     type: pgmq  # Use PGMQ (PostgreSQL)
+  kafka:
+    pipeline:
+      enabled: false  # Kafka pipeline disabled in local; PGMQ handles everything
+      outbox:
+        poll-interval-ms: 2000
+        batch-size: 20
+      consumer:
+        external-api:
+          concurrency: 2
+          max-poll-records: 5
+        calculation:
+          concurrency: 2
+          max-poll-records: 20
   aop:
     trace:
       enabled: true  # TraceAspect 활성화 (V5 로그 분석용)

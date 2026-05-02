@@ -20,7 +20,7 @@ interface CalculationResultRepository : JpaRepository<CalculationResultEntity, U
                 total_expected_cost, max_preset_no, presets)
             VALUES (:resultId, :jobId, :characterClass, :presetNo, :schemaVersion,
                 :contentType, :contentEncoding, :responseBody, :originalSize, :compressedSize, :hash, :status, now(),
-                :totalExpectedCost, :maxPresetNo, :presetsJson::jsonb)
+                :totalExpectedCost, :maxPresetNo, CAST(:presetsJson AS jsonb))
             ON CONFLICT (job_id) DO NOTHING
         """,
         nativeQuery = true,

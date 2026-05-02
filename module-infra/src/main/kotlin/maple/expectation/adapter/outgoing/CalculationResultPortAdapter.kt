@@ -2,15 +2,18 @@ package maple.expectation.adapter.outgoing
 
 import java.util.UUID
 import maple.expectation.core.port.out.CalculationResultData
+import maple.expectation.core.port.out.CalculationResultLight
 import maple.expectation.core.port.out.CalculationResultPort
 import maple.expectation.infrastructure.persistence.entity.CalculationResultEntity
 import maple.expectation.infrastructure.persistence.repository.CalculationResultRepository
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
 @Component
 class CalculationResultPortAdapter(
     private val repo: CalculationResultRepository,
+    private val jdbc: JdbcTemplate,
 ) : CalculationResultPort {
 
     @Transactional(value = "transactionManager", readOnly = false)
@@ -47,6 +50,34 @@ class CalculationResultPortAdapter(
 
     @Transactional(value = "transactionManager", readOnly = true)
     override fun findByJobIds(jobIds: List<UUID>): List<CalculationResultData> {
+        if (jobIds.isEmpty()) return emptyList()
+        return repo.findByJobIdIn(jobIds).map { it.toData() }
+    }
+
+    @Transactional(value = "transactionManager", readOnly = true)
+    override fun findByJobIdsLight(jobIds: List<UUID>): List<CalculationResultLight> {
+        if (jobIds.isEmpty()) return emptyList()
+        val placeholders = jobIds.joinToString(",") { "?" }
+        return jdbc.query(
+            "SELECT job_id, character_class, preset_no, total_expected_cost, max_preset_no, presets FROM calculation_results WHERE job_id IN ($placeholders)",
+            { rs, _ ->
+                val tec = rs.getLong("total_expected_cost")
+                val mpn = rs.getInt("max_preset_no")
+                CalculationResultLight(
+                    jobId = rs.getObject("job_id", UUID::class.java),
+                    characterClass = rs.getString("character_class"),
+                    presetNo = rs.getInt("preset_no"),
+                    totalExpectedCost = if (rs.wasNull()) null else tec,
+                    maxPresetNo = if (rs.wasNull()) null else mpn,
+                    presetsJson = rs.getString("presets"),
+                )
+            },
+            *jobIds.toTypedArray(),
+        )
+    }
+
+    @Transactional(value = "transactionManager", readOnly = true)
+    override fun findByJobIdsWithBody(jobIds: List<UUID>): List<CalculationResultData> {
         if (jobIds.isEmpty()) return emptyList()
         return repo.findByJobIdIn(jobIds).map { it.toData() }
     }

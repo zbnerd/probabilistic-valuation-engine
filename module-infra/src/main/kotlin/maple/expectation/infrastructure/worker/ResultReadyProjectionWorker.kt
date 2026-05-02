@@ -14,6 +14,7 @@ import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CalculationResultData
+import maple.expectation.core.port.out.CalculationResultLight
 import maple.expectation.core.port.out.CalculationResultPort
 import maple.expectation.core.port.out.QueueNames
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -81,14 +82,24 @@ class ResultReadyProjectionWorker(
                 { jobPort.findJobsByIds(jobIds).associateBy { it.jobId } },
                 asyncExecutor,
             )
-            val resultsFuture = CompletableFuture.supplyAsync(
-                { resultPort.findByJobIds(jobIds).associateBy { it.jobId } },
+            val lightResultsFuture = CompletableFuture.supplyAsync(
+                { resultPort.findByJobIdsLight(jobIds).associateBy { it.jobId } },
                 asyncExecutor,
             )
             val jobsById = jobsFuture.join()
-            val resultsByJobId = resultsFuture.join()
+            val lightByJobId = lightResultsFuture.join()
             timer.mark("loadCalculationResults")
-            val outcomes = buildPgmqProjectionCommands(parsed, jobsById, resultsByJobId)
+
+            val fallbackIds = lightByJobId.values
+                .filter { it.totalExpectedCost == null || it.maxPresetNo == null || it.presetsJson == null }
+                .map { it.jobId }
+            val fallbackByJobId = if (fallbackIds.isNotEmpty()) {
+                resultPort.findByJobIdsWithBody(fallbackIds).associateBy { it.jobId }
+            } else {
+                emptyMap()
+            }
+
+            val outcomes = buildPgmqProjectionCommands(parsed, jobsById, lightByJobId, fallbackByJobId)
             timer.mark("buildViewRows")
             val commands = outcomes.mapNotNull { it.command }
             archiveIds += outcomes.filter { it.archive }.map { it.messageId }
@@ -107,17 +118,18 @@ class ResultReadyProjectionWorker(
     private fun buildPgmqProjectionCommands(
         parsed: List<PgmqProjectionMessage>,
         jobsById: Map<UUID, CalculationJob>,
-        resultsByJobId: Map<UUID, CalculationResultData>,
+        lightByJobId: Map<UUID, CalculationResultLight>,
+        fallbackByJobId: Map<UUID, CalculationResultData>,
     ): List<PgmqProjectionOutcome> = runBlocking(Dispatchers.Default) {
         parsed.map { message ->
             async(Dispatchers.Default) {
                 val job = jobsById[message.jobId]
-                val resultData = resultsByJobId[message.jobId]
+                val light = lightByJobId[message.jobId]
                 when {
-                    job == null || resultData == null -> PgmqProjectionOutcome(message.messageId, archive = true)
+                    job == null || light == null -> PgmqProjectionOutcome(message.messageId, archive = true)
                     else -> PgmqProjectionOutcome(
                         messageId = message.messageId,
-                        command = toPgmqProjectionCommand(message, job, resultData),
+                        command = toPgmqProjectionCommand(message, job, light, fallbackByJobId[message.jobId]),
                         archive = true,
                     )
                 }
@@ -141,22 +153,24 @@ class ResultReadyProjectionWorker(
     private fun toPgmqProjectionCommand(
         message: PgmqProjectionMessage,
         job: CalculationJob,
-        resultData: CalculationResultData,
+        light: CalculationResultLight,
+        fallback: CalculationResultData?,
     ): CharacterViewProjectionCommand? {
         val totalExpectedCost: Long
         val maxPresetNo: Int
         val presetsJson: String
 
-        val tec = resultData.totalExpectedCost
-        val mpn = resultData.maxPresetNo
-        val pj = resultData.presetsJson
+        val tec = light.totalExpectedCost
+        val mpn = light.maxPresetNo
+        val pj = light.presetsJson
 
         if (tec != null && mpn != null && pj != null) {
             totalExpectedCost = tec
             maxPresetNo = mpn
             presetsJson = pj
         } else {
-            val resultJson = decompress(resultData.responseBody)
+            val fb = fallback ?: return null
+            val resultJson = decompress(fb.responseBody)
             val tree = objectMapper.readTree(resultJson)
             totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return null
             maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return null
@@ -171,7 +185,7 @@ class ResultReadyProjectionWorker(
             userIgn = job.userIgn,
             messageId = message.messageId.toString(),
             characterOcid = characterId,
-            characterClass = resultData.characterClass,
+            characterClass = light.characterClass,
             characterLevel = null,
             totalExpectedCost = totalExpectedCost,
             maxPresetNo = maxPresetNo,

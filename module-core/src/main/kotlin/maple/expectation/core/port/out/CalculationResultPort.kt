@@ -15,6 +15,9 @@ data class CalculationResultData(
     val compressedSize: Int,
     val hash: String,
     val status: String,
+    val totalExpectedCost: Long? = null,
+    val maxPresetNo: Int? = null,
+    val presetsJson: String? = null,
 ) {
     override fun equals(other: Any?) = this === other
     override fun hashCode() = System.identityHashCode(this)

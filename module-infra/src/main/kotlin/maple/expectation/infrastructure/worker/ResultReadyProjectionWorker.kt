@@ -143,15 +143,29 @@ class ResultReadyProjectionWorker(
         job: CalculationJob,
         resultData: CalculationResultData,
     ): CharacterViewProjectionCommand? {
-        val resultJson = decompress(resultData.responseBody)
-        val tree = objectMapper.readTree(resultJson)
+        val totalExpectedCost: Long
+        val maxPresetNo: Int
+        val presetsJson: String
 
-        val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return null
-        val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return null
-        val presetsNode = tree.get("presets")
+        val tec = resultData.totalExpectedCost
+        val mpn = resultData.maxPresetNo
+        val pj = resultData.presetsJson
+
+        if (tec != null && mpn != null && pj != null) {
+            totalExpectedCost = tec
+            maxPresetNo = mpn
+            presetsJson = pj
+        } else {
+            val resultJson = decompress(resultData.responseBody)
+            val tree = objectMapper.readTree(resultJson)
+            totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return null
+            maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return null
+            val presetsNode = tree.get("presets")
+            presetsJson = if (presetsNode != null) objectMapper.writeValueAsString(presetsNode) else "[]"
+        }
+
         val presetNo = (message.payload["presetNo"] as? Number)?.toInt() ?: 1
         val characterId = message.payload["characterId"]?.toString()
-        val presetsJson = if (presetsNode != null) objectMapper.writeValueAsString(presetsNode) else "[]"
 
         return CharacterViewProjectionCommand(
             userIgn = job.userIgn,

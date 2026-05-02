@@ -78,6 +78,9 @@ class CalculationCompletedWorker(
                 characterClass = payload.characterClass,
                 presetNo = payload.presetNo,
                 characterId = payload.characterId,
+                totalExpectedCost = payload.totalExpectedCost,
+                maxPresetNo = payload.maxPresetNo,
+                presetsJson = payload.presetsJson,
             )
         }
     }

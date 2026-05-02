@@ -16,9 +16,11 @@ interface CalculationResultRepository : JpaRepository<CalculationResultEntity, U
     @Query(
         value = """
             INSERT INTO calculation_results (result_id, job_id, character_class, preset_no, schema_version,
-                content_type, content_encoding, response_body, original_size, compressed_size, hash, status, created_at)
+                content_type, content_encoding, response_body, original_size, compressed_size, hash, status, created_at,
+                total_expected_cost, max_preset_no, presets)
             VALUES (:resultId, :jobId, :characterClass, :presetNo, :schemaVersion,
-                :contentType, :contentEncoding, :responseBody, :originalSize, :compressedSize, :hash, :status, now())
+                :contentType, :contentEncoding, :responseBody, :originalSize, :compressedSize, :hash, :status, now(),
+                :totalExpectedCost, :maxPresetNo, :presetsJson::jsonb)
             ON CONFLICT (job_id) DO NOTHING
         """,
         nativeQuery = true,
@@ -36,5 +38,8 @@ interface CalculationResultRepository : JpaRepository<CalculationResultEntity, U
         @Param("compressedSize") compressedSize: Int,
         @Param("hash") hash: String,
         @Param("status") status: String,
+        @Param("totalExpectedCost") totalExpectedCost: Long?,
+        @Param("maxPresetNo") maxPresetNo: Int?,
+        @Param("presetsJson") presetsJson: String?,
     ): Int
 }

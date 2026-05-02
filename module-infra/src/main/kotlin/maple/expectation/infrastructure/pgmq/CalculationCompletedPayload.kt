@@ -9,4 +9,7 @@ data class CalculationCompletedPayload(
     val hash: String,
     val originalSize: Int,
     val compressedSize: Int,
+    val totalExpectedCost: Long? = null,
+    val maxPresetNo: Int? = null,
+    val presetsJson: String? = null,
 )

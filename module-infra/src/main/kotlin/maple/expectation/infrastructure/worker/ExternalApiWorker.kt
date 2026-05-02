@@ -329,6 +329,9 @@ class ExternalApiWorker(
                     characterClass = characterClass,
                     presetNo = payload.presetNo,
                     characterId = characterId,
+                    totalExpectedCost = calcResult.totalExpectedCost.toLong(),
+                    maxPresetNo = calcResult.maxPresetNo,
+                    presetsJson = objectMapper.writeValueAsString(calcResult.presets),
                 )
             }
             timer.mark("completeCalculation")

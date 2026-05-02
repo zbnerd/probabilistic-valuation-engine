@@ -24,4 +24,7 @@ class CalculationResultEntity(
     @Column(nullable = false) val status: String = "SUCCESS",
     val createdAt: OffsetDateTime = OffsetDateTime.now(),
     val expiresAt: OffsetDateTime? = null,
+    val totalExpectedCost: Long? = null,
+    val maxPresetNo: Int? = null,
+    @Column(columnDefinition = "jsonb") val presets: String? = null,
 )

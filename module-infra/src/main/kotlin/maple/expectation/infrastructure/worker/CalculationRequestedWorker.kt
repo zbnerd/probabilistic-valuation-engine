@@ -122,6 +122,9 @@ class CalculationRequestedWorker(
                     hash = hash,
                     originalSize = resultBytes.size,
                     compressedSize = gzipData.size,
+                    totalExpectedCost = calcResult.totalExpectedCost.toLong(),
+                    maxPresetNo = calcResult.maxPresetNo,
+                    presetsJson = objectMapper.writeValueAsString(calcResult.presets),
                 ),
             )
         }

@@ -33,23 +33,13 @@ class CalculationResultPortAdapter(
                     compressedSize = result.compressedSize,
                     hash = result.hash,
                     status = result.status,
+                    totalExpectedCost = result.totalExpectedCost,
+                    maxPresetNo = result.maxPresetNo,
+                    presets = result.presetsJson,
                 ),
             )
         }
-        return CalculationResultData(
-            resultId = entity.resultId,
-            jobId = entity.jobId,
-            characterClass = entity.characterClass,
-            presetNo = entity.presetNo,
-            schemaVersion = entity.schemaVersion,
-            contentType = entity.contentType,
-            contentEncoding = entity.contentEncoding,
-            responseBody = entity.responseBody,
-            originalSize = entity.originalSize,
-            compressedSize = entity.compressedSize,
-            hash = entity.hash ?: "",
-            status = entity.status,
-        )
+        return entity.toData()
     }
 
     @Transactional(value = "transactionManager", readOnly = true)
@@ -78,6 +68,9 @@ class CalculationResultPortAdapter(
         result.compressedSize,
         result.hash,
         result.status,
+        result.totalExpectedCost,
+        result.maxPresetNo,
+        result.presetsJson,
     ) > 0
 
     private fun CalculationResultEntity.toData() = CalculationResultData(
@@ -86,5 +79,7 @@ class CalculationResultPortAdapter(
         contentType = contentType, contentEncoding = contentEncoding,
         responseBody = responseBody, originalSize = originalSize,
         compressedSize = compressedSize, hash = hash ?: "", status = status,
+        totalExpectedCost = totalExpectedCost, maxPresetNo = maxPresetNo,
+        presetsJson = presets,
     )
 }

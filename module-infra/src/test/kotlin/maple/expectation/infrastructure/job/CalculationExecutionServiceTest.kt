@@ -1,13 +1,13 @@
 package maple.expectation.infrastructure.job
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.UUID
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CalculationResultPort
-import maple.expectation.core.port.out.OutboxEventPort
+import maple.expectation.core.port.out.QueueNames
 import maple.expectation.core.port.out.mq.DomainEventAppender
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
+import maple.expectation.infrastructure.pgmq.PgmqClient
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -31,8 +31,7 @@ class CalculationExecutionServiceTest {
 
     @Mock lateinit var resultPort: CalculationResultPort
 
-    @Mock lateinit var outboxPort: OutboxEventPort
-    private val objectMapper = ObjectMapper()
+    @Mock lateinit var pgmqClient: PgmqClient
 
     private lateinit var service: CalculationExecutionService
 
@@ -43,21 +42,18 @@ class CalculationExecutionServiceTest {
             eventAppender = eventAppender,
             nexonApiResponseTopic = nexonApiResponseTopic,
             resultPort = resultPort,
-            outboxPort = outboxPort,
-            objectMapper = objectMapper,
+            pgmqClient = pgmqClient,
         )
     }
 
     @Test
-    fun `completeCalculationWithResult saves result and creates outbox event`() {
+    fun `completeCalculationWithResult saves result and sends PGMQ message`() {
         val jobId = UUID.randomUUID()
         val resultJson = """{"totalExpectedCost":1000000}"""
 
         whenever(jobPort.transitionStatus(jobId, CalculationJobStatus.CALCULATING, CalculationJobStatus.COMPLETED))
             .thenReturn(true)
         whenever(jobPort.unlock(jobId)).thenReturn(true)
-        whenever(outboxPort.insertIfAbsent(eq("CALCULATION_COMPLETED"), eq(jobId), any()))
-            .thenReturn(true)
 
         val result = service.completeCalculationWithResult(
             jobId = jobId,
@@ -74,7 +70,7 @@ class CalculationExecutionServiceTest {
                 r.jobId == jobId && r.contentEncoding == "gzip"
             },
         )
-        verify(outboxPort).insertIfAbsent(eq("CALCULATION_COMPLETED"), eq(jobId), any())
+        verify(pgmqClient).send(eq(QueueNames.RESULT_READY), any())
     }
 
     @Test

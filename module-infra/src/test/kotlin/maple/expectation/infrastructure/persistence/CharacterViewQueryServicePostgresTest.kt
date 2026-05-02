@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import java.time.Instant
+import java.util.concurrent.Executors
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -79,6 +80,7 @@ class CharacterViewQueryServicePostgresTest {
             executor,
             meterRegistry,
             jdbc,
+            Executors.newVirtualThreadPerTaskExecutor(),
             500,
         )
     }

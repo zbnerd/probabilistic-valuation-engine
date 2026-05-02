@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.persistence
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.sql.Timestamp
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -11,6 +12,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import maple.expectation.infrastructure.persistence.repository.CharacterValuationViewJpaRepository
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
@@ -39,6 +41,7 @@ class CharacterViewQueryServicePostgres(
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
     private val jdbc: NamedParameterJdbcTemplate,
+    @Qualifier("asyncExecutor") private val asyncExecutor: ExecutorService,
     @Value("\${app.slow-task.step-trace.threshold-ms:500}") private val stepTraceThresholdMs: Long,
 ) {
     private val log = LoggerFactory.getLogger(CharacterViewQueryServicePostgres::class.java)
@@ -140,7 +143,7 @@ class CharacterViewQueryServicePostgres(
         if (entity.messageId != null) {
             val presetsJson = entity.presets?.let { objectMapper.writeValueAsString(it) }
             upsertNative(entity, presetsJson)
-            saveToReadModel(entity)
+            asyncExecutor.submit { saveToReadModel(entity) }
         } else {
             val existing = findExistingEntity(entity)
             val saved = if (existing != null) {
@@ -150,7 +153,7 @@ class CharacterViewQueryServicePostgres(
             }
             val readModelSource = saved ?: existing
             if (readModelSource != null) {
-                saveToReadModel(readModelSource)
+                asyncExecutor.submit { saveToReadModel(readModelSource) }
             }
         }
     }
@@ -198,7 +201,6 @@ class CharacterViewQueryServicePostgres(
                 preset_no = EXCLUDED.preset_no,
                 presets = EXCLUDED.presets,
                 from_cache = EXCLUDED.from_cache
-            WHERE character_valuation_views.last_applied_version < EXCLUDED.last_applied_version
             """,
             params,
         )
@@ -271,13 +273,11 @@ class CharacterViewQueryServicePostgres(
                 preset_no = EXCLUDED.preset_no,
                 presets = EXCLUDED.presets,
                 from_cache = EXCLUDED.from_cache
-            WHERE character_valuation_views.last_applied_version < EXCLUDED.last_applied_version
             """,
                 rows.map { it.second }.toTypedArray(),
             )
             timer.mark("executeValuationViewUpsert")
-            saveToReadModelBatch(rows.map { it.first })
-            timer.mark("executeReadModelUpsert")
+            asyncExecutor.submit { saveToReadModelBatch(rows.map { it.first }) }
             return counts.sumOf { if (it > 0) it else 0 }
         } finally {
             timer.close(log)

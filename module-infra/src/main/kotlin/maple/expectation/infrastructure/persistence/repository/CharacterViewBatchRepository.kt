@@ -31,7 +31,7 @@ class CharacterViewBatchRepository(
                 version = version + 1, last_applied_version = ?,
                 total_expected_cost = ?, max_preset_no = ?, preset_no = ?,
                 presets = ?::jsonb, from_cache = ?
-            WHERE id = ? AND COALESCE(last_applied_version, version, 0) < ?
+            WHERE id = ?
         """.trimIndent()
 
         private val INSERT_SQL = """
@@ -129,7 +129,6 @@ class CharacterViewBatchRepository(
                 e.result.presetsJson,
                 false,
                 e.existingId,
-                e.result.version,
             )
         }
         return jdbcTemplate.batchUpdate(UPDATE_SQL, args).sumOf { it }

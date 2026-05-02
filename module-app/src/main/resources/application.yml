@@ -39,6 +39,30 @@ spring:
     job:
       enabled: true  # 스케줄러 사용 시 true
 
+  # Kafka Configuration (Kafka Pipeline Transition Plan)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        linger.ms: 5
+        batch.size: 16384
+    consumer:
+      group-id: maple-pipeline
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+      properties:
+        max.poll.records: 50
+        max.poll.interval.ms: 300000
+    listener:
+      ack-mode: manual_immediate
+      concurrency: 1
+
 # Batch Job Schedule Configuration (Issue #356)
 batch:
   equipment-refresh:
@@ -243,6 +267,26 @@ ratelimit:
 
 app:
   instance-id: ${HOSTNAME:${random.uuid}}  # Issue #278: Scale-out Pub/Sub Self-skip용
+  messaging:
+    transport: pgmq  # pgmq | kafka — single transport active, never dual-dispatch
+  kafka:
+    pipeline:
+      enabled: false  # Master switch for Kafka pipeline consumers and outbox publisher
+      outbox:
+        poll-interval-ms: 1000    # KafkaOutboxPublisher poll interval
+        batch-size: 50            # Outbox claim batch size
+        max-retry-count: 5        # Max outbox publish retries before DLT
+        retry-delay-ms: 10000     # Delay between outbox publish retries
+      consumer:
+        external-api:
+          concurrency: 6          # Consumer threads (virtual threads for API I/O)
+          poll-timeout-ms: 500
+          max-poll-records: 10    # API ~1s each → 10s processing window
+          lease-duration-seconds: 60  # locked_until duration for API_IN_PROGRESS
+        calculation:
+          concurrency: 4          # Consumer threads (CPU-bound, align with availableProcessors)
+          poll-timeout-ms: 500
+          max-poll-records: 50    # CPU-bound, high batch efficiency
   pipeline:
     consolidated:
       enabled: true  # Consolidated pipeline: ExternalApiWorker handles API + calculation + result write inline

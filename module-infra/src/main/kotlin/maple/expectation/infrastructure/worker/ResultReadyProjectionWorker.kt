@@ -2,6 +2,8 @@ package maple.expectation.infrastructure.worker
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
 import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -20,6 +22,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.scheduling.annotation.Scheduled
@@ -34,6 +37,7 @@ class ResultReadyProjectionWorker(
     private val viewQueryPort: CharacterViewQueryPort,
     private val executor: LogicExecutor,
     private val objectMapper: ObjectMapper,
+    @Qualifier("asyncExecutor") private val asyncExecutor: ExecutorService,
     @Value("\${pgmq.worker.result-projection.batch-size:100}") private val batchSize: Int,
     @Value("\${pgmq.worker.result-projection.visibility-timeout-sec:30}") private val visibilityTimeoutSec: Int,
     @Value("\${app.slow-task.step-trace.threshold-ms:500}") private val stepTraceThresholdMs: Long,
@@ -73,8 +77,16 @@ class ResultReadyProjectionWorker(
             }
 
             val jobIds = parsed.map { it.jobId }.distinct()
-            val jobsById = jobPort.findJobsByIds(jobIds).associateBy { it.jobId }
-            val resultsByJobId = resultPort.findByJobIds(jobIds).associateBy { it.jobId }
+            val jobsFuture = CompletableFuture.supplyAsync(
+                { jobPort.findJobsByIds(jobIds).associateBy { it.jobId } },
+                asyncExecutor,
+            )
+            val resultsFuture = CompletableFuture.supplyAsync(
+                { resultPort.findByJobIds(jobIds).associateBy { it.jobId } },
+                asyncExecutor,
+            )
+            val jobsById = jobsFuture.join()
+            val resultsByJobId = resultsFuture.join()
             timer.mark("loadCalculationResults")
             val outcomes = buildPgmqProjectionCommands(parsed, jobsById, resultsByJobId)
             timer.mark("buildViewRows")

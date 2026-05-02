@@ -49,6 +49,9 @@ class CalculationExecutionService(
         characterClass: String,
         presetNo: Int,
         characterId: String,
+        totalExpectedCost: Long? = null,
+        maxPresetNo: Int? = null,
+        presetsJson: String? = null,
     ): Boolean {
         val completed = jobPort.completeFromSnapshotReady(jobId)
         if (!completed) return false
@@ -67,6 +70,9 @@ class CalculationExecutionService(
                 compressedSize = compressedSize,
                 hash = hash,
                 status = "SUCCESS",
+                totalExpectedCost = totalExpectedCost,
+                maxPresetNo = maxPresetNo,
+                presetsJson = presetsJson,
             ),
         )
 
@@ -99,6 +105,9 @@ class CalculationExecutionService(
         characterClass: String,
         presetNo: Int,
         characterId: String,
+        totalExpectedCost: Long? = null,
+        maxPresetNo: Int? = null,
+        presetsJson: String? = null,
     ): Boolean {
         val completed = jobPort.completeFromCalculating(jobId)
         if (!completed) return false
@@ -117,6 +126,9 @@ class CalculationExecutionService(
                 compressedSize = compressedSize,
                 hash = hash,
                 status = "SUCCESS",
+                totalExpectedCost = totalExpectedCost,
+                maxPresetNo = maxPresetNo,
+                presetsJson = presetsJson,
             ),
         )
 

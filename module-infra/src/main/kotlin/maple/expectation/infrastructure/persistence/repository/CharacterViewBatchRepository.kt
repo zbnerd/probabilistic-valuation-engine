@@ -4,6 +4,7 @@ import java.sql.Timestamp
 import java.time.Instant
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.persistence.toJsonb
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -30,7 +31,7 @@ class CharacterViewBatchRepository(
                 calculated_at = ?, jpa_version = COALESCE(jpa_version, 0) + 1,
                 version = version + 1, last_applied_version = ?,
                 total_expected_cost = ?, max_preset_no = ?, preset_no = ?,
-                presets = ?::jsonb, from_cache = ?
+                presets = ?, from_cache = ?
             WHERE id = ?
         """.trimIndent()
 
@@ -39,7 +40,7 @@ class CharacterViewBatchRepository(
                 user_ign, message_id, character_ocid, character_class,
                 calculated_at, version, last_applied_version,
                 total_expected_cost, max_preset_no, preset_no, presets, from_cache, jpa_version
-            ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?::jsonb, ?, 0)
+            ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 0)
         """.trimIndent()
     }
 
@@ -126,7 +127,7 @@ class CharacterViewBatchRepository(
                 e.result.totalExpectedCost,
                 e.result.maxPresetNo,
                 e.result.presetNo,
-                e.result.presetsJson,
+                e.result.presetsJson.toJsonb(),
                 false,
                 e.existingId,
             )
@@ -147,7 +148,7 @@ class CharacterViewBatchRepository(
                 r.totalExpectedCost,
                 r.maxPresetNo,
                 r.presetNo,
-                r.presetsJson,
+                r.presetsJson.toJsonb(),
                 false,
             )
         }

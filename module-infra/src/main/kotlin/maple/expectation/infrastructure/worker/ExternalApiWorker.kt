@@ -29,6 +29,7 @@ import maple.expectation.core.port.out.SnapshotObjectStore
 import maple.expectation.error.exception.CharacterNotFoundException
 import maple.expectation.infrastructure.converter.EquipmentResponseToCalculationInputConverter
 import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.StepTimer
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
@@ -83,6 +84,7 @@ class ExternalApiWorker(
     private val ocidPort: CharacterOcidPort,
     private val pureCalculationPort: PureCalculationPort,
     @Value("\${app.pipeline.consolidated.enabled:true}") private val consolidatedEnabled: Boolean,
+    @Value("\${app.slow-task.step-trace.threshold-ms:500}") private val stepTraceThresholdMs: Long,
 ) : PgmqWorker<ExternalApiJobPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     private val snapshotWriter: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
@@ -143,125 +145,139 @@ class ExternalApiWorker(
 
     private fun processPipeline(payload: ExternalApiJobPayload) {
         val jobId = UUID.fromString(payload.jobId)
+        val timer = StepTimer("ExternalApiWorker:ProcessMessage", stepTraceThresholdMs, tags = mapOf("jobId" to payload.jobId))
+        try {
+            val existingJob = jobPort.findJobById(jobId)
+            timer.mark("findJob")
 
-        val existingJob = jobPort.findJobById(jobId)
-
-        // Terminal states: skip entirely
-        if (existingJob != null && (existingJob.status == CalculationJobStatus.COMPLETED || existingJob.status == CalculationJobStatus.FAILED)) {
-            log.debug("[jobId={}] Skipping — terminal state {}", jobId, existingJob.status)
-            return
-        }
-
-        // Consolidated retry: SNAPSHOT_READY means API+snapshot already done, skip to calculation
-        if (consolidatedEnabled && existingJob != null && existingJob.status == CalculationJobStatus.SNAPSHOT_READY) {
-            val characterId = existingJob.ocid
-            if (characterId == null) {
-                log.warn("[jobId={}] No OCID in SNAPSHOT_READY state, cannot retry calculation", jobId)
+            // Terminal states: skip entirely
+            if (existingJob != null && (existingJob.status == CalculationJobStatus.COMPLETED || existingJob.status == CalculationJobStatus.FAILED)) {
+                log.debug("[jobId={}] Skipping — terminal state {}", jobId, existingJob.status)
                 return
             }
-            val characterClass = stage("LoadCharacterClass", jobId.toString()) {
-                calculationInputPort.findByJobId(jobId)?.characterClass ?: ""
-            }
-            log.info("[jobId={}] Resuming from calculation (SNAPSHOT_READY)", jobId)
-            runCalculationAndComplete(jobId, payload, characterId, characterClass)
-            return
-        }
 
-        // Not processable
-        if (existingJob != null && !existingJob.status.isExternalApiProcessable()) {
-            log.debug("[jobId={}] Skipping — state {}", jobId, existingJob.status)
-            return
-        }
-
-        // === Full pipeline: API fetch → snapshot → calculation → result write ===
-
-        // Step 1+2: Resolve OCID → Fetch equipment
-        val (ocid, equipmentResponse) = stage("ResolveAndFetch", payload.userIgn) {
-            resolveOcidAndFetchEquipment(jobId, payload.userIgn, existingJob?.ocid)
-        }
-
-        // Step 3: Serialize snapshot
-        val snapshotData = stage("SerializeSnapshot", payload.userIgn) {
-            objectMapper.writeValueAsBytes(equipmentResponse)
-        }
-        val objectKey = generateObjectKey(jobId)
-        val snapshotId = UUID.randomUUID()
-        val snapshot = CalculationSnapshot(
-            snapshotId = snapshotId,
-            jobId = jobId,
-            objectKey = objectKey,
-            storageType = "LOCAL",
-            characterId = ocid,
-            presetNo = payload.presetNo,
-            expiresAt = Instant.now().plusSeconds(86400),
-        )
-        val snapshotFuture = CompletableFuture.supplyAsync({
-            stage("SnapshotPut", jobId.toString()) {
-                snapshotStore.put(snapshot, snapshotData)
-            }
-        }, snapshotWriter)
-
-        // Step 4: Build and persist calculation input
-        val inputItems = stage("BuildCalculationInput", payload.userIgn) {
-            convertItems(equipmentResponse)
-        }
-        val characterClass = equipmentResponse.characterClass ?: ""
-        val calcInput = CalculationInput(
-            jobId = jobId.toString(),
-            userIgn = payload.userIgn,
-            characterClass = characterClass,
-            presetNo = payload.presetNo,
-            items = inputItems,
-        )
-        stage("SaveCalculationInput", jobId.toString()) {
-            calculationInputPort.saveIfAbsent(calcInput)
-        }
-
-        // Step 5: Wait for snapshot write completion
-        val putResult = stage("AwaitSnapshotPut", jobId.toString()) {
-            snapshotFuture.join()
-        }
-
-        // Step 6: Save snapshot metadata [TX]
-        val snapshotEntity = CalculationSnapshotEntity(
-            snapshotId = snapshotId,
-            jobId = jobId,
-            objectKey = objectKey,
-            storageType = "LOCAL",
-            characterId = ocid,
-            presetNo = payload.presetNo,
-            compressedSize = putResult.compressedSize,
-            originalSize = snapshotData.size.toLong(),
-            hash = putResult.hash,
-            expiresAt = snapshot.expiresAt,
-        )
-
-        if (consolidatedEnabled) {
-            stage("SaveSnapshotAndMarkReady", jobId.toString()) {
-                jobService.saveInputSnapshotAndMarkReady(snapshotEntity, jobId, snapshotId)
+            // Consolidated retry: SNAPSHOT_READY means API+snapshot already done, skip to calculation
+            if (consolidatedEnabled && existingJob != null && existingJob.status == CalculationJobStatus.SNAPSHOT_READY) {
+                val characterId = existingJob.ocid
+                if (characterId == null) {
+                    log.warn("[jobId={}] No OCID in SNAPSHOT_READY state, cannot retry calculation", jobId)
+                    return
+                }
+                val characterClass = stage("LoadCharacterClass", jobId.toString()) {
+                    calculationInputPort.findByJobId(jobId)?.characterClass ?: ""
+                }
+                timer.mark("loadCharacterClass")
+                log.info("[jobId={}] Resuming from calculation (SNAPSHOT_READY)", jobId)
+                runCalculationAndComplete(jobId, payload, characterId, characterClass)
+                timer.mark("runCalculationAndComplete")
+                return
             }
 
-            // Step 7-10: Inline calculation + result write [CPU outside TX, writes inside TX]
-            runCalculationAndComplete(jobId, payload, ocid, characterClass)
-        } else {
-            // Legacy: dispatch to calculation_requested_queue
-            stage("DispatchCalculation", jobId.toString()) {
-                jobService.saveInputSnapshotAndDispatchCalculation(
-                    snapshotEntity = snapshotEntity,
-                    jobId = jobId,
-                    snapshotId = snapshotId,
-                    payload = CalculationRequestedPayload(
-                        jobId = jobId.toString(),
-                        userIgn = payload.userIgn,
-                        presetNo = payload.presetNo,
-                        characterId = ocid,
-                        characterClass = characterClass,
-                    ),
-                )
+            // Not processable
+            if (existingJob != null && !existingJob.status.isExternalApiProcessable()) {
+                log.debug("[jobId={}] Skipping — state {}", jobId, existingJob.status)
+                return
             }
-        }
 
-        log.info("[jobId={}] Pipeline stage completed", jobId)
+            // === Full pipeline: API fetch → snapshot → calculation → result write ===
+
+            // Step 1+2: Resolve OCID → Fetch equipment
+            val (ocid, equipmentResponse) = stage("ResolveAndFetch", payload.userIgn) {
+                resolveOcidAndFetchEquipment(jobId, payload.userIgn, existingJob?.ocid)
+            }
+            timer.mark("resolveAndFetch")
+
+            // Step 3: Serialize snapshot
+            val snapshotData = stage("SerializeSnapshot", payload.userIgn) {
+                objectMapper.writeValueAsBytes(equipmentResponse)
+            }
+            timer.mark("serializeSnapshot")
+            val objectKey = generateObjectKey(jobId)
+            val snapshotId = UUID.randomUUID()
+            val snapshot = CalculationSnapshot(
+                snapshotId = snapshotId,
+                jobId = jobId,
+                objectKey = objectKey,
+                storageType = "LOCAL",
+                characterId = ocid,
+                presetNo = payload.presetNo,
+                expiresAt = Instant.now().plusSeconds(86400),
+            )
+            val snapshotFuture = CompletableFuture.supplyAsync({
+                stage("SnapshotPut", jobId.toString()) {
+                    snapshotStore.put(snapshot, snapshotData)
+                }
+            }, snapshotWriter)
+
+            // Step 4: Build and persist calculation input
+            val inputItems = stage("BuildCalculationInput", payload.userIgn) {
+                convertItems(equipmentResponse)
+            }
+            val characterClass = equipmentResponse.characterClass ?: ""
+            val calcInput = CalculationInput(
+                jobId = jobId.toString(),
+                userIgn = payload.userIgn,
+                characterClass = characterClass,
+                presetNo = payload.presetNo,
+                items = inputItems,
+            )
+            stage("SaveCalculationInput", jobId.toString()) {
+                calculationInputPort.saveIfAbsent(calcInput)
+            }
+            timer.mark("buildAndSaveInput")
+
+            // Step 5: Wait for snapshot write completion
+            val putResult = stage("AwaitSnapshotPut", jobId.toString()) {
+                snapshotFuture.join()
+            }
+            timer.mark("awaitSnapshotPut")
+
+            // Step 6: Save snapshot metadata [TX]
+            val snapshotEntity = CalculationSnapshotEntity(
+                snapshotId = snapshotId,
+                jobId = jobId,
+                objectKey = objectKey,
+                storageType = "LOCAL",
+                characterId = ocid,
+                presetNo = payload.presetNo,
+                compressedSize = putResult.compressedSize,
+                originalSize = snapshotData.size.toLong(),
+                hash = putResult.hash,
+                expiresAt = snapshot.expiresAt,
+            )
+
+            if (consolidatedEnabled) {
+                stage("SaveSnapshotAndMarkReady", jobId.toString()) {
+                    jobService.saveInputSnapshotAndMarkReady(snapshotEntity, jobId, snapshotId)
+                }
+                timer.mark("saveSnapshotAndMarkReady")
+
+                // Step 7-10: Inline calculation + result write [CPU outside TX, writes inside TX]
+                runCalculationAndComplete(jobId, payload, ocid, characterClass)
+                timer.mark("runCalculationAndComplete")
+            } else {
+                // Legacy: dispatch to calculation_requested_queue
+                stage("DispatchCalculation", jobId.toString()) {
+                    jobService.saveInputSnapshotAndDispatchCalculation(
+                        snapshotEntity = snapshotEntity,
+                        jobId = jobId,
+                        snapshotId = snapshotId,
+                        payload = CalculationRequestedPayload(
+                            jobId = jobId.toString(),
+                            userIgn = payload.userIgn,
+                            presetNo = payload.presetNo,
+                            characterId = ocid,
+                            characterClass = characterClass,
+                        ),
+                    )
+                }
+                timer.mark("dispatchCalculation")
+            }
+
+            log.info("[jobId={}] Pipeline stage completed", jobId)
+        } finally {
+            timer.close(log)
+        }
     }
 
     private fun runCalculationAndComplete(
@@ -270,43 +286,54 @@ class ExternalApiWorker(
         characterId: String,
         characterClass: String,
     ) {
-        // Load input [DB read, no TX]
-        val input = stage("LoadInput", jobId.toString()) {
-            calculationInputPort.findByJobId(jobId) ?: error("Calculation input missing: $jobId")
-        }
+        val timer = StepTimer("ExternalApiWorker:PureCalculate", stepTraceThresholdMs, tags = mapOf("jobId" to jobId.toString()))
+        try {
+            // Load input [DB read, no TX]
+            val input = stage("LoadInput", jobId.toString()) {
+                calculationInputPort.findByJobId(jobId) ?: error("Calculation input missing: $jobId")
+            }
+            timer.mark("loadInput")
 
-        // CPU-bound calculation [no TX]
-        val calcResult = stage("PureCalculate", payload.userIgn) {
-            runBlocking(cpuDispatcher) {
-                withContext(cpuDispatcher) {
-                    pureCalculationPort.calculate(input)
+            // CPU-bound calculation [no TX]
+            val calcResult = stage("PureCalculate", payload.userIgn) {
+                runBlocking(cpuDispatcher) {
+                    withContext(cpuDispatcher) {
+                        pureCalculationPort.calculate(input)
+                    }
                 }
             }
-        }
+            timer.mark("pureCalculate")
 
-        // Serialize + gzip + hash [CPU, no TX]
-        val resultBytes = stage("SerializeResult", payload.userIgn) {
-            objectMapper.writeValueAsString(calcResult).toByteArray()
-        }
-        val gzipData = stage("GzipResult", payload.userIgn) {
-            gzipCompress(resultBytes)
-        }
-        val hash = stage("HashResult", payload.userIgn) {
-            sha256Hex(resultBytes)
-        }
+            // Serialize + gzip + hash [CPU, no TX]
+            val resultBytes = stage("SerializeResult", payload.userIgn) {
+                objectMapper.writeValueAsString(calcResult).toByteArray()
+            }
+            timer.mark("serializeResult")
+            val gzipData = stage("GzipResult", payload.userIgn) {
+                gzipCompress(resultBytes)
+            }
+            timer.mark("gzipResult")
+            val hash = stage("HashResult", payload.userIgn) {
+                sha256Hex(resultBytes)
+            }
+            timer.mark("hashResult")
 
-        // Result write [TX: SNAPSHOT_READY → COMPLETED + result save + outbox insert]
-        stage("CompleteCalculation", jobId.toString()) {
-            executionService.completeCalculation(
-                jobId = jobId,
-                gzipData = gzipData,
-                hash = hash,
-                originalSize = resultBytes.size,
-                compressedSize = gzipData.size,
-                characterClass = characterClass,
-                presetNo = payload.presetNo,
-                characterId = characterId,
-            )
+            // Result write [TX: SNAPSHOT_READY → COMPLETED + result save + outbox insert]
+            stage("CompleteCalculation", jobId.toString()) {
+                executionService.completeCalculation(
+                    jobId = jobId,
+                    gzipData = gzipData,
+                    hash = hash,
+                    originalSize = resultBytes.size,
+                    compressedSize = gzipData.size,
+                    characterClass = characterClass,
+                    presetNo = payload.presetNo,
+                    characterId = characterId,
+                )
+            }
+            timer.mark("completeCalculation")
+        } finally {
+            timer.close(log)
         }
     }
 

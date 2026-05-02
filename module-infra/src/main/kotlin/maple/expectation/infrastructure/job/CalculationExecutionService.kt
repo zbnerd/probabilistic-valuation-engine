@@ -1,16 +1,16 @@
 package maple.expectation.infrastructure.job
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Instant
 import java.util.UUID
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CalculationResultData
 import maple.expectation.core.port.out.CalculationResultPort
-import maple.expectation.core.port.out.OutboxEventPort
+import maple.expectation.core.port.out.QueueNames
 import maple.expectation.core.port.out.mq.DomainEventAppender
 import maple.expectation.infrastructure.mq.event.NexonApiResponseEventFactory
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
+import maple.expectation.infrastructure.pgmq.PgmqClient
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -21,8 +21,7 @@ class CalculationExecutionService(
     private val eventAppender: DomainEventAppender,
     private val nexonApiResponseTopic: NexonApiResponseTopic,
     private val resultPort: CalculationResultPort,
-    private val outboxPort: OutboxEventPort,
-    private val objectMapper: ObjectMapper,
+    private val pgmqClient: PgmqClient,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -71,7 +70,8 @@ class CalculationExecutionService(
             ),
         )
 
-        val eventPayload = objectMapper.writeValueAsString(
+        pgmqClient.send(
+            QueueNames.RESULT_READY,
             mapOf(
                 "jobId" to jobId.toString(),
                 "characterId" to characterId,
@@ -80,7 +80,6 @@ class CalculationExecutionService(
                 "schemaVersion" to 1,
             ),
         )
-        outboxPort.insertIfAbsent("CALCULATION_COMPLETED", jobId, eventPayload)
 
         log.info("[jobId={}] Calculation completed (optimized single-TX)", jobId)
         return true
@@ -121,7 +120,8 @@ class CalculationExecutionService(
             ),
         )
 
-        val eventPayload = objectMapper.writeValueAsString(
+        pgmqClient.send(
+            QueueNames.RESULT_READY,
             mapOf(
                 "jobId" to jobId.toString(),
                 "characterId" to characterId,
@@ -130,7 +130,6 @@ class CalculationExecutionService(
                 "schemaVersion" to 1,
             ),
         )
-        outboxPort.insertIfAbsent("CALCULATION_COMPLETED", jobId, eventPayload)
 
         log.info("[jobId={}] Calculation completed from split pipeline", jobId)
         return true
@@ -172,7 +171,8 @@ class CalculationExecutionService(
             ),
         )
 
-        val eventPayload = objectMapper.writeValueAsString(
+        pgmqClient.send(
+            QueueNames.RESULT_READY,
             mapOf(
                 "jobId" to jobId.toString(),
                 "characterId" to characterId,
@@ -181,7 +181,6 @@ class CalculationExecutionService(
                 "schemaVersion" to 1,
             ),
         )
-        outboxPort.insertIfAbsent("CALCULATION_COMPLETED", jobId, eventPayload)
 
         jobPort.unlock(jobId)
         log.info("[jobId={}] Calculation completed with result saved", jobId)
@@ -248,7 +247,8 @@ class CalculationExecutionService(
             ),
         )
 
-        val eventPayload = objectMapper.writeValueAsString(
+        pgmqClient.send(
+            QueueNames.RESULT_READY,
             mapOf(
                 "jobId" to jobId.toString(),
                 "characterId" to characterId,
@@ -257,7 +257,6 @@ class CalculationExecutionService(
                 "schemaVersion" to 1,
             ),
         )
-        outboxPort.insertIfAbsent("CALCULATION_COMPLETED", jobId, eventPayload)
 
         jobPort.unlock(jobId)
         log.info("[jobId={}] Calculation completed with result saved", jobId)

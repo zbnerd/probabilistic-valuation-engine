@@ -5,10 +5,12 @@ import maple.expectation.core.port.out.OutboxEventPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 @Component
+@ConditionalOnProperty(name = ["app.outbox.compensating-scanner.enabled"], havingValue = "true", matchIfMissing = false)
 class OutboxCompensatingScanner(
     private val jobPort: CalculationJobPort,
     private val outboxPort: OutboxEventPort,

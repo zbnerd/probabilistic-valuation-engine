@@ -21,7 +21,7 @@ val input = stage("LoadInput", jobId.toString()) {
 }
 ```
 
-DB에서 `CalculationInput` 조회 (job_id 기반). p99 779ms는 DB 경합.
+`CalculationInputRepository.findByJobId()` — JPA로 `calculation_inputs` 테이블에서 `job_id` 기반 조회. p99 779ms는 DB 경합.
 
 ### pureCalculate — avg 1,054ms / p99 3,292ms (병목)
 
@@ -36,9 +36,7 @@ val calcResult = stage("PureCalculate", payload.userIgn) {
 }
 ```
 
-순수 CPU 연산. `PureCalculationPort.calculate()`에서 확률 기댓값 계산 수행.
-코루틴 `Dispatchers.Default` 위에서 실행. 캐릭터 장비 복잡도에 따라 편차 큼 (p50 1s, max 3.7s).
-**최적화 여지 적음** — 알고리즘 자체가 무거움.
+`pureCalculationPort.calculate(input)` — 순수 CPU 연산. `Dispatchers.Default` 코루틴 위에서 확률 기댓값 계산 수행. 캐릭터 장비 복잡도에 따라 편차 큼 (p50 1s, max 3.7s). **최적화 여지 적음** — 알고리즘 자체가 무거움.
 
 ### serializeResult — avg 5ms / p99 77ms
 
@@ -49,7 +47,7 @@ val resultBytes = stage("SerializeResult", payload.userIgn) {
 }
 ```
 
-Jackson으로 계산 결과 객체를 JSON 문자열로 직렬화.
+Jackson `ObjectMapper.writeValueAsString()`으로 계산 결과 객체 → JSON 문자열 → `ByteArray` 변환.
 
 ### gzipResult — avg 2ms / p99 5ms
 
@@ -57,6 +55,13 @@ Jackson으로 계산 결과 객체를 JSON 문자열로 직렬화.
 // ExternalApiWorker.kt:291
 val gzipData = stage("GzipResult", payload.userIgn) {
     gzipCompress(resultBytes)
+}
+
+// ExternalApiWorker.kt:417
+private fun gzipCompress(data: ByteArray): ByteArray {
+    val bos = java.io.ByteArrayOutputStream()
+    java.util.zip.GZIPOutputStream(bos).use { it.write(data) }
+    return bos.toByteArray()
 }
 ```
 
@@ -69,9 +74,15 @@ val gzipData = stage("GzipResult", payload.userIgn) {
 val hash = stage("HashResult", payload.userIgn) {
     sha256Hex(resultBytes)
 }
+
+// ExternalApiWorker.kt:422
+private fun sha256Hex(data: ByteArray): String {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    return digest.digest(data).joinToString("") { "%02x".format(it) }
+}
 ```
 
-`MessageDigest.getInstance("SHA-256")`으로 무결성 해시 생성.
+`MessageDigest("SHA-256")`으로 무결성 해시 생성.
 
 ### completeCalculation — avg 305ms / p99 1,198ms
 
@@ -88,6 +99,53 @@ stage("CompleteCalculation", jobId.toString()) {
         presetNo = payload.presetNo,
         characterId = characterId,
     )
+}
+```
+
+**내부 구현** (`CalculationExecutionService.kt:43-86`):
+
+```kotlin
+fun completeCalculation(
+    jobId: UUID, gzipData: ByteArray, hash: String,
+    originalSize: Int, compressedSize: Int,
+    characterClass: String, presetNo: Int, characterId: String,
+): Boolean {
+    // 1. CAS 전환: SNAPSHOT_READY → COMPLETED
+    val completed = jobPort.completeFromSnapshotReady(jobId)
+    if (!completed) return false
+
+    // 2. 결과 저장: INSERT ON CONFLICT DO NOTHING
+    resultPort.saveIfAbsent(
+        CalculationResultData(
+            resultId = UUID.randomUUID(),
+            jobId = jobId,
+            characterClass = characterClass,
+            presetNo = presetNo,
+            schemaVersion = 1,
+            contentType = "application/json",
+            contentEncoding = "gzip",
+            responseBody = gzipData,
+            originalSize = originalSize,
+            compressedSize = compressedSize,
+            hash = hash,
+            status = "SUCCESS",
+        ),
+    )
+
+    // 3. PGMQ 메시지 발행
+    pgmqClient.send(
+        QueueNames.RESULT_READY,
+        mapOf(
+            "jobId" to jobId.toString(),
+            "characterId" to characterId,
+            "presetNo" to presetNo,
+            "contentEncoding" to "gzip",
+            "schemaVersion" to 1,
+        ),
+    )
+
+    log.info("[jobId={}] Calculation completed (optimized single-TX)", jobId)
+    return true
 }
 ```
 
@@ -124,15 +182,48 @@ val (ocid, equipmentResponse) = stage("ResolveAndFetch", payload.userIgn) {
 }
 ```
 
+**내부 구현** (`ExternalApiWorker.kt:340-374`):
+
 ```kotlin
-// resolveOcidAndFetchEquipment() 내부:
-val cached = jobOcid ?: ocidPort.resolveOcid(userIgn)   // OCID 캐시/DB 조회
-// 캐시 미스 시:
-val ocid = nexonApiClient.getOcid(userIgn)               // Nexon OCID API
-val equipment = equipmentFetchProvider.fetch(ocid)       // Nexon 장비 API
+private fun resolveOcidAndFetchEquipment(
+    jobId: UUID, userIgn: String, jobOcid: String?
+): Pair<String, EquipmentResponse> {
+    // 빠른 경로: OCID 캐시 히트
+    val cached = jobOcid ?: ocidPort.resolveOcid(userIgn)
+    if (cached != null) {
+        jobService.resolveOcidInPlace(jobId, cached)
+        return Pair(cached, equipmentFetchProvider.fetchWithCache(cached))
+    }
+
+    // 느린 경로: Nexon API 호출 체인
+    return nexonApiClient.getOcidByCharacterName(userIgn)  // ① Nexon OCID API
+        .handle { result, ex ->                            // ② 에러 핸들링
+            if (ex != null) {
+                log.warn("[jobId={}] OCID resolve failed: {}", jobId, ex.message)
+                throw ExceptionUtils.unwrapAs(ex, CharacterNotFoundException::class.java) ?: ex
+            } else { result }
+        }
+        .thenApply { response ->                           // ③ OCID 검증
+            if (response == null || response.ocid.isBlank()) {
+                throw CharacterNotFoundException(userIgn)
+            }
+            response.ocid
+        }
+        .thenApply { ocid ->                               // ④ OCID DB 저장
+            jobService.resolveOcidInPlace(jobId, ocid)
+            ocid
+        }
+        .thenCompose { ocid ->                             // ⑤ 장비 API 호출
+            CompletableFuture.supplyAsync({
+                Pair(ocid, equipmentFetchProvider.fetchWithCache(ocid))
+            }, apiCallPool)                                // virtual thread pool
+        }
+        .orTimeout(15, TimeUnit.SECONDS)                   // 15초 타임아웃
+        .join()
+}
 ```
 
-OCID resolve + Nexon 외부 API 호출. **외부 I/O 병목** — 제어 불가.
+OCID resolve + Nexon 외부 API 호출. 캐시 히트 시 동기 빠른 경로, 미스 시 `getOcidByCharacterName` → `resolveOcidInPlace` → `fetchWithCache` CF 체인 후 `.join()`. **외부 I/O 병목** — 제어 불가.
 
 ### serializeSnapshot — avg 8ms / p99 29ms
 
@@ -150,22 +241,43 @@ Nexon API 응답을 바이트 배열로 직렬화.
 ```kotlin
 // ExternalApiWorker.kt:205-218
 val inputItems = stage("BuildCalculationInput", payload.userIgn) {
-    convertItems(equipmentResponse)  // 장비 아이템 변환 (병렬 async 가능)
+    convertItems(equipmentResponse)
 }
 val calcInput = CalculationInput(jobId=..., items=inputItems, ...)
 stage("SaveCalculationInput", jobId.toString()) {
-    calculationInputPort.saveIfAbsent(calcInput)  // INSERT ON CONFLICT DO NOTHING
+    calculationInputPort.saveIfAbsent(calcInput)
 }
 ```
 
-장비 데이터 변환 + 계산 입력 DB 저장.
+**`convertItems` 구현** (`ExternalApiWorker.kt:313-331`):
+
+```kotlin
+private fun convertItems(equipmentResponse: EquipmentResponse): List<EquipmentItem> {
+    val items = equipmentResponse.itemEquipment ?: return emptyList()
+    if (items.size < PARALLEL_ITEM_CONVERSION_THRESHOLD) {
+        return items.map { convertItem(it) }           // 임계값 미만: 순차
+    }
+    return runBlocking(Dispatchers.Default) {           // 임계값 이상: 병렬
+        items.map { item ->
+            async(Dispatchers.Default) { convertItem(item) }
+        }.awaitAll()
+    }
+}
+
+private fun convertItem(item: Any): EquipmentItem {
+    val itemMap = objectMapper.convertValue(item, Map::class.java) as Map<*, *>
+    return converter.convertItem(itemMap)
+}
+```
+
+장비 데이터 변환 + 계산 입력 DB 저장 (`INSERT ON CONFLICT DO NOTHING`).
 
 ### awaitSnapshotPut — avg 0ms / p99 4ms
 
 ```kotlin
 // ExternalApiWorker.kt:221
 val putResult = stage("AwaitSnapshotPut", jobId.toString()) {
-    snapshotFuture.join()  // 비동기 스냅샷 저장 완료 대기
+    snapshotFuture.join()
 }
 ```
 
@@ -180,9 +292,21 @@ stage("SaveSnapshotAndMarkReady", jobId.toString()) {
 }
 ```
 
-`@Transactional` 내부에서:
-1. snapshot 엔티티 저장
-2. job 상태 `API_REQUESTED → SNAPSHOT_READY` CAS 전환
+**내부 구현** (`CalculationJobService.kt:184-191`):
+
+```kotlin
+fun saveInputSnapshotAndMarkReady(
+    snapshotEntity: CalculationSnapshotEntity,
+    jobId: UUID,
+    snapshotId: UUID,
+): Boolean {
+    snapshotRepository.save(snapshotEntity)                          // ① 스냅샷 저장
+    return jobPort.markSnapshotReady(jobId, snapshotId,              // ② CAS: API_REQUESTED → SNAPSHOT_READY
+        CalculationJobStatus.API_REQUESTED)
+}
+```
+
+`@Transactional` 내부에서 snapshot 엔티티 저장 + job 상태 CAS 전환.
 
 ### runCalculationAndComplete — avg 229ms / p99 1,940ms
 
@@ -206,6 +330,25 @@ runCalculationAndComplete(jobId, payload, ocid, characterClass)
 // ResultReadyProjectionWorker.kt:67-68
 val archiveIds = mutableListOf<Long>()
 val parsed = messages.mapNotNull { parsePgmqMessage(it, archiveIds) }
+```
+
+**`parsePgmqMessage` 구현** (`ResultReadyProjectionWorker.kt:103-114`):
+
+```kotlin
+private fun parsePgmqMessage(
+    message: PgmqMessage, archiveIds: MutableList<Long>
+): PgmqProjectionMessage? {
+    val payload = message.payload
+    val jobIdStr = payload["jobId"]?.toString() ?: run {
+        archiveIds += message.messageId          // 파싱 실패 → archive
+        return null
+    }
+    val jobId = runCatching { UUID.fromString(jobIdStr) }.getOrNull() ?: run {
+        archiveIds += message.messageId
+        return null
+    }
+    return PgmqProjectionMessage(message.messageId, payload, jobId)
+}
 ```
 
 PGMQ 메시지에서 `jobId` 추출. 파싱 실패 시 archiveIds에 추가.
@@ -232,20 +375,73 @@ p99 1.6s는 대량 batch + DB 경합.
 val outcomes = buildPgmqProjectionCommands(parsed, jobsById, resultsByJobId)
 ```
 
+**`buildPgmqProjectionCommands` 구현** (`ResultReadyProjectionWorker.kt:83-102`):
+
 ```kotlin
-// buildPgmqProjectionCommands() 내부 (병렬 async):
-parsed.map { message ->
-    async(Dispatchers.Default) {
-        val resultJson = decompress(resultData.responseBody)  // GZIP 해제
-        val tree = objectMapper.readTree(resultJson)           // JSON 파싱
-        totalExpectedCost = tree.get("totalExpectedCost")?.asLong()
-        presetsJson = objectMapper.writeValueAsString(presetsNode)
-        CharacterViewProjectionCommand(userIgn=..., totalExpectedCost=..., presetsJson=...)
-    }
-}.awaitAll()
+private fun buildPgmqProjectionCommands(
+    parsed: List<PgmqProjectionMessage>,
+    jobsById: Map<UUID, CalculationJob>,
+    resultsByJobId: Map<UUID, CalculationResultData>,
+): List<PgmqProjectionOutcome> = runBlocking(Dispatchers.Default) {
+    parsed.map { message ->
+        async(Dispatchers.Default) {
+            val job = jobsById[message.jobId]
+            val resultData = resultsByJobId[message.jobId]
+            when {
+                job == null || resultData == null ->
+                    PgmqProjectionOutcome(message.messageId, archive = true)
+                else -> PgmqProjectionOutcome(
+                    messageId = message.messageId,
+                    command = toPgmqProjectionCommand(message, job, resultData),
+                    archive = true,
+                )
+            }
+        }
+    }.awaitAll()
+}
 ```
 
-GZIP 해제 + JSON 파싱 + projection command 생성. 병렬 `Dispatchers.Default`.
+**`toPgmqProjectionCommand` 구현** (`ResultReadyProjectionWorker.kt:117-143`):
+
+```kotlin
+private fun toPgmqProjectionCommand(
+    message: PgmqProjectionMessage,
+    job: CalculationJob,
+    resultData: CalculationResultData,
+): CharacterViewProjectionCommand? {
+    val resultJson = decompress(resultData.responseBody)     // GZIP 해제
+    val tree = objectMapper.readTree(resultJson)              // JSON 파싱
+
+    val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return null
+    val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return null
+    val presetsNode = tree.get("presets")
+    val presetNo = (message.payload["presetNo"] as? Number)?.toInt() ?: 1
+    val characterId = message.payload["characterId"]?.toString()
+    val presetsJson = if (presetsNode != null) objectMapper.writeValueAsString(presetsNode) else "[]"
+
+    return CharacterViewProjectionCommand(
+        userIgn = job.userIgn,
+        messageId = message.messageId.toString(),
+        characterOcid = characterId,
+        characterClass = resultData.characterClass,
+        characterLevel = null,
+        totalExpectedCost = totalExpectedCost,
+        maxPresetNo = maxPresetNo,
+        presetNo = presetNo,
+        presetsJson = presetsJson,
+    )
+}
+```
+
+**`decompress` 구현** (`ResultReadyProjectionWorker.kt:151-153`):
+
+```kotlin
+private fun decompress(data: ByteArray): String {
+    GZIPInputStream(data.inputStream()).use { return String(it.readAllBytes()) }
+}
+```
+
+병렬 `Dispatchers.Default` 위에서 각 메시지별로 GZIP 해제 + JSON 파싱 + projection command 생성.
 
 ### batchUpsertViews — avg 829ms / p99 3,093ms (병목)
 
@@ -263,8 +459,16 @@ if (commands.isNotEmpty()) {
 ```kotlin
 // ResultReadyProjectionWorker.kt:89
 archiveIfNeeded(archiveIds)
-// 내부:
-pgmqClient.archiveBatch(QueueNames.RESULT_READY, messageIds)
+```
+
+**`archiveIfNeeded` 구현** (`ResultReadyProjectionWorker.kt:145-149`):
+
+```kotlin
+private fun archiveIfNeeded(messageIds: List<Long>) {
+    if (messageIds.isNotEmpty()) {
+        pgmqClient.archiveBatch(QueueNames.RESULT_READY, messageIds)
+    }
+}
 ```
 
 PGMQ 메시지 아카이브 (`SELECT pgmq.archive(_queue, msgId)`).
@@ -274,7 +478,18 @@ PGMQ 메시지 아카이브 (`SELECT pgmq.archive(_queue, msgId)`).
 ## 4. PostgresQuery:BatchUpsertFromCalc (n=49)
 
 평균 1,149ms. JDBC batch `ON CONFLICT` 쓰기.
-코드: `CharacterViewQueryServicePostgres.kt` → `performBatchUpsert()`
+코드: `CharacterViewQueryServicePostgres.kt`
+
+### 진입점
+
+```kotlin
+// CharacterViewQueryServicePostgres.kt:91-95
+fun batchUpsertFromCalculations(commands: List<CharacterViewProjectionCommand>): Int {
+    if (commands.isEmpty()) return 0
+    val context = TaskContext.of("PostgresQuery", "BatchUpsertFromCalculation", commands.size.toString())
+    return executor.executeOrDefault({ performBatchUpsert(commands) }, 0, context)
+}
+```
 
 ### prepareRows — avg 64ms / p99 960ms
 
@@ -306,23 +521,35 @@ val rows = commands.mapIndexed { index, command ->
 // CharacterViewQueryServicePostgres.kt:248-277
 val counts = jdbc.batchUpdate("""
     INSERT INTO character_valuation_views (
-        user_ign, message_id, ..., presets, from_cache
+        user_ign, message_id, jpa_version, character_ocid, character_class, character_level,
+        calculated_at, last_api_sync_at, version, last_applied_version,
+        total_expected_cost, max_preset_no, preset_no, presets, from_cache
     ) VALUES (
-        :userIgn, :messageId, ..., CAST(:presets AS jsonb), :fromCache
+        :userIgn, :messageId, 0, :characterOcid, :characterClass, :characterLevel,
+        :calculatedAt, :lastApiSyncAt, :version + 1, :lastAppliedVersion,
+        :totalExpectedCost, :maxPresetNo, :presetNo, CAST(:presets AS jsonb), :fromCache
     )
     ON CONFLICT (message_id) DO UPDATE SET
         user_ign = EXCLUDED.user_ign,
+        jpa_version = character_valuation_views.jpa_version + 1,
+        character_ocid = COALESCE(EXCLUDED.character_ocid, character_valuation_views.character_ocid),
+        character_class = COALESCE(EXCLUDED.character_class, character_valuation_views.character_class),
+        character_level = COALESCE(EXCLUDED.character_level, character_valuation_views.character_level),
+        calculated_at = EXCLUDED.calculated_at,
+        last_api_sync_at = COALESCE(EXCLUDED.last_api_sync_at, character_valuation_views.last_api_sync_at),
         version = character_valuation_views.version + 1,
         last_applied_version = EXCLUDED.last_applied_version,
         total_expected_cost = EXCLUDED.total_expected_cost,
+        max_preset_no = EXCLUDED.max_preset_no,
+        preset_no = EXCLUDED.preset_no,
         presets = EXCLUDED.presets,
-        ...
+        from_cache = EXCLUDED.from_cache
     WHERE character_valuation_views.last_applied_version < EXCLUDED.last_applied_version
 """, rows.map { it.second }.toTypedArray())
 ```
 
-JDBC batch `ON CONFLICT (message_id) DO UPDATE` + 버전 체크 `WHERE version <`.
-배치 사이즈 30. 쓰기 경합이 주요 병목.
+JDBC batch `ON CONFLICT (message_id) DO UPDATE` + 버전 체크 `WHERE last_applied_version <`.
+배치 사이즈 30. `COALESCE`로 nullable 필드 보존. 쓰기 경합이 주요 병목.
 
 ### executeReadModelUpsert — avg 370ms / p99 1,415ms
 
@@ -331,8 +558,33 @@ JDBC batch `ON CONFLICT (message_id) DO UPDATE` + 버전 체크 `WHERE version <
 saveToReadModelBatch(rows.map { it.first })
 ```
 
+**`saveToReadModelBatch` 구현** (`CharacterViewQueryServicePostgres.kt:414-432`):
+
+```kotlin
+private fun saveToReadModelBatch(entities: List<CharacterValuationViewEntity>) {
+    val commands = entities.map { entity ->
+        val calculatedAt = entity.calculatedAt
+            ?: throw IllegalStateException("calculatedAt must be set before writing to read model: userIgn=${entity.userIgn}")
+        ReadModelWriteCommand(
+            userIgn = entity.userIgn,
+            json = serializeEntityToJson(entity),       // ObjectMapper로 직렬화
+            calculatedAt = calculatedAt,
+        )
+    }
+    executor.executeOrCatch(
+        { readModelWriteService.writeToReadModelRawBatch(commands) },
+        { e ->
+            log.warn("[ReadModel] Non-fatal batch write failure (will retry on next calculation): rows={}", entities.size, e)
+            0
+        },
+        TaskContext.of("ReadModel", "BestEffortBatchWrite", entities.size.toString()),
+    )
+}
+```
+
 `character_expectation_read_model` 테이블에 batch upsert.
 `ON CONFLICT (game_character_id, preset_no) DO UPDATE SET`.
+실패해도 non-fatal (다음 계산 주기에서 자가 복구).
 
 ---
 

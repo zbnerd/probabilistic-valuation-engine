@@ -1,4 +1,4 @@
-# 13장: 파이프라인 재구성과 Supabase 마이그레이션 — 205개 커밋의 삽질 여정
+# 13장: 파이프라인 재구성과 Supabase 마이그레이션 — 136개 커밋의 삽질 여정
 
 > "완벽한 설계도 현장에서는 깨진다. 중요한 건 깨진 이유를 아는 거다."
 
@@ -6,14 +6,12 @@
 
 ```
 2026년 4월 20일: 단일 파이프라인, Vultr DB, ~10 views/sec
-2026년 5월 3일: 3-stage PGMQ 파이프라인, Supabase Pooler, ~30-38 views/sec
+2026년 5월 3일:  3-stage PGMQ 파이프라인, Supabase Pooler, ~30-38 views/sec
 ```
 
-2주간 205개 커밋, 15개 PR, 수차례 롤백. 최종 성과는 **3-4배 처리량 향상**. 숫자 자체보다 과정에서 배운 게 많았다.
+2주간 136개 커밋, 수차례 롤백. **단일 노드 한계에 도달했고, 다음 단계로 External API 프로세스 분리 + 배치 파이프라인 전환을 설계 중.**
 
 ## 워크로드 규모
-
-이 시스템이 처리하는 워크로드:
 
 ```
 30 TPS (초당 30건)
@@ -34,22 +32,14 @@
 
 > "숫자보다 '왜 이 구조를 선택했는가'가 더 중요하다."
 
-이 시스템은 두 가지 물리적 제약 조건 위에서 설계되었다.
-
-### 제약 조건 1: 외부 API Rate Limit
+### 제약 조건
 
 ```
-Nexon API: 초당 500건, 하루 2,000만 건 (Key 1개 기준)
-→ 멀티 Key 로테이션으로 한계 상향
-→ 여전히 I/O latency 200~500ms/건은 피할 수 없음
-```
+1. 외부 API Rate Limit: 초당 500건, 하루 2,000만 건 (Key 1개)
+   → 멀티 Key 로테이션으로 한계 상향, 여전히 I/O 200~500ms/건은 불가피
 
-### 제약 조건 2: DB 커넥션 풀 병목
-
-```
-Supabase Pooler 세션 모드: 물리적 연결 수 제한
-→ External API I/O 대기 중 DB 커넥션을 점유하면 풀 고갈
-→ pool=15로도 충분해야 하는 구조여야 함
+2. DB 커넥션 풀 병목: Supabase Pooler 세션 모드 물리적 연결 수 제한
+   → External API I/O 대기 중 커넥션 점유하면 풀 고갈
 ```
 
 ### 설계 결정
@@ -64,13 +54,8 @@ Supabase Pooler 세션 모드: 물리적 연결 수 제한
 ### 결과
 
 ```
-단일 노드 기준:
-  초당 30건 (cold miss 기준)
-  초당 6~9MB raw payload 처리
-  하루 260만 건, 0.5~0.8TB
-
-수평 확장 시:
-  인스턴스 + API Key 추가 → 처리량 선형 증가 구조
+단일 노드: 초당 30건, 6~9MB, 하루 260만 건 / 0.5~0.8TB
+수평 확장: 인스턴스 + API Key 추가 → 처리량 선형 증가 구조
 ```
 
 ### 면접 표현
@@ -94,44 +79,315 @@ Nexon API I/O 대기 중 DB 커넥션을 점유하지 않는 구조로 설계했
 
 ---
 
-## Phase 1: 파이프라인 분리 — 하나에서 셋으로 (#730 ~ #742)
+## Phase 0: 인프라 기반 — Supabase DB URL 통일 (#766)
 
-### 시작 상태
+### 작업
 
-계산 파이프라인이 하나의 거대한 워커에 몰려 있었다. 메시지 하나 처리하는 데 API 호출 + 계산 + 결과 저장 + View 갱신까지 직렬로 실행. 한 단계가 느리면 전체가 느려졌다.
+모든 Spring 프로필(`local`, `prod`, `vultr`, `ci`)이 각자 다른 DB 설정을 가지고 있었다. `DB_SERVER_IP`, `DB_ROOT_PASSWORD` 등 환경변수가 분산.
 
-### 작업 내역
+**`c5031951 chore: unify all profiles to use only DB_URL from .env`**
 
-| PR | 내용 | 결과 |
-|----|------|------|
-| #730 | Two-phase batch + PGMQ 성능 튜닝 | 배치 처리 기반 마련 |
-| #731 | Follower 타임아웃 튜닝 | 리더/팔로워 동기화 안정화 |
-| #733 | Semaphore(64) 제거 | 불필요한 동시성 제약 해소 |
-| #734 | Bulk JDBC upsert for view | 개별 upsert → 배치 JDBC |
-| #735 | Virtual Thread → FixedThreadPool | 핀닝 문제 회피 |
-| #738 | BlockingSubmitExecutor 제거 | 불필요한 래핑 제거 |
+모든 프로필을 `DB_URL` 단일 환경변수로 통일. LockHikariConfig에서도 `username`/`password`를 직접 받지 않고 JDBC URL에서 파싱.
+
+```kotlin
+// Before: 각 프로필마다 다른 DB 설정
+url: jdbc:postgresql://${DB_SERVER_IP:localhost}:5432/maple_expectation
+username: maple
+password: ${DB_ROOT_PASSWORD}
+
+// After: 단일 DB_URL
+url: ${DB_URL}
+// LockHikariConfig: URL에서 user/password 자동 추출
+private fun parseCredentialsFromUrl(url: String): Pair<String?, String?>
+```
 
 ### 교훈
 
-파이프라인을 분리하면 각 단계를 독립적으로 튜닝할 수 있다. 하지만 분리 자체가 성능을 올려주진 않는다. **병목이 어디 있는지 먼저 알아야 분리가 의미 있다.**
+인프라 마이그레이션(Vultr → Supabase)을 하려면 먼저 설정을 단일 소스로 통일해야 했다. 이 작업이 없었다면 이후 모든 디버깅이 2배는 더 걸렸을 것.
 
 ---
 
-## Phase 2: Compute Key Dedup (#743 ~ #750)
+## Phase 1: External API 경계 분리 — State Machine 구축 (#767 ~ #769)
 
 ### 문제
 
-같은 캐릭터의 같은 프리셋을 여러 워커가 동시에 계산하고 있었다. 큐에 중복 메시지가 들어오면 동일한 계산을 N번 실행.
+기존엔 API 호출이 서비스 로직 내부에 직접 박혀 있었다. API 호출이 실패하면 어떤 상태인지, 재시도해야 하는지 알 수 없었다.
 
-### 작업 내역
+### 작업 내역 (21개 커밋)
 
-| PR | 내용 |
-|----|------|
-| #743 | BatchComputeBuffer — 계산 키 기반 배치 중복 제거 |
-| #744 | 동시성/API 수정 (Semaphore 제거, 응답 표준화) |
-| #748 | PipelineBuffer backpressure 정렬 |
-| #749 | Chunked parallel batch — 4x throughput |
-| #750 | Time-window batch L2 lookup/write |
+```
+9a111ecb feat(schema): add calculation_jobs, snapshots tables and API request/response queues
+39721d29 feat(core): add CalculationJobStatus, CalculationJob, CalculationSnapshot domain models
+c007b2c0 feat(core): add SnapshotObjectStore, CalculationJobPort interfaces and queue names
+008cb2e2 feat(infra): add CalculationJob/Snapshot JPA entities and repositories
+c1f36860 feat(infra): add LocalSnapshotObjectStore with GZIP compression
+11f63666 feat(infra): add NexonApiWorker — API call, snapshot save, response publish
+f906e24b feat(infra): add CalculationJobService state machine and API message DTOs
+1ecddd97 feat(infra): add CalculationJobTimeoutScanner for stale job recovery
+```
+
+### 핵심 아이디어
+
+API 호출을 별도 워커(`NexonApiWorker`)로 분리하고, 작업 상태를 `CalculationJob` 엔티티로 추적.
+
+```
+기존: 서비스 로직 → 직접 API 호출 → 성공/실패 모호
+이후: 서비스 → Job 생성 → PGMQ: external_api_queue → NexonApiWorker → 결과 publish
+      ↑                                       ↑
+      상태 추적 (REQUESTED/PROCESSING/DONE)    실패 시 재시도 가능
+```
+
+`CalculationJobTimeoutScanner`로 stale job(5분 이상 PROCESSING)을 자동 감지해 재시도 큐로 복귀.
+
+### 추가 작업: 재시도, 동시성 제어, 멱등성
+
+```
+5dcffece fix(critical): retry re-enqueue, job lifecycle completion, status guards
+a1476fb3 fix(operational): write concurrency limit, snapshot TX atomicity, TTL cleanup, idempotency guard
+```
+
+재시도 시 재큐잉, 스냅샷 트랜잭션 원자성, TTL 기반 정리, 멱등성 가드까지 한 PR에 4개修正. 이런 "한 번에 여러 수정"이 인프라 경계 분리 시 흔한 패턴.
+
+### OCID Resolve Pipeline
+
+```
+70276e81 feat(pipeline): replace sync fallback with fully async OCID resolve pipeline
+```
+
+OCID(캐릭터 고유 ID) 해석도 동기 fallback에서 완전 비동기 파이프라인으로 전환. API 호출 → OCID 해석 → 다음 단계까지 모두 MQ 기반.
+
+---
+
+## Phase 2: MQ 추상화 레이어 (#770)
+
+### 작업 (12개 커밋)
+
+PGMQ에 직접 의존하던 코드를 추상화.
+
+```
+1d266fff feat(mq): add MQTopicGroup and DomainEventAppender interfaces
+1c22d351 feat(mq): add PgmqEventAppender with @Transactional for same-TX publishing
+1f7b4d41 feat(mq): add 3 concrete PGMQ topic classes with per-topic config
+9d4c836b feat(mq): add EventFactory objects for OCID resolve, API request, API response
+848722e6 refactor(mq): replace pgmqClient direct calls with DomainEventAppender
+06aeff43 refactor(mq): migrate 3 workers to MQTopicGroup.subscribe() callback pattern
+```
+
+### 핵심 인사이트
+
+`PgmqEventAppender`에 `@Transactional`을 붙여서 **같은 트랜잭션 내에서 메시지 발행**. DB write와 MQ send가 원자적으로 처리됨. 이게 Kafka 시도의 동기이기도 했음 — Kafka에선 이게 기본 제공.
+
+---
+
+## Phase 3: Write Path — 순수 계산 분리 (#771 ~ #773)
+
+### 문제
+
+계산이 ExternalApiWorker 내부에서 실행되고 있었다. API 호출(네트워크) + 계산(CPU) + 결과 저장(DB)이 한 워커에 섞여 있음.
+
+### 작업 (20개 커밋)
+
+```
+871894c3 feat(db): add calculation_snapshot_inputs, calculation_results, outbox_events tables
+fd2b3b62 feat(core): add CalculationInput typed contract model with tests
+99054b01 feat(write-path): add PureExpectationCalculator — pure CalculationInput to response
+70b518fc feat(write-path): add EquipmentItemConverter for pure calculation input
+c7d2d638 refactor(write-path): replace .join() blocking with pure calculator in ApiResponseWorker
+```
+
+### 핵심: PureExpectationCalculator
+
+```kotlin
+// Before: API Worker 내부에서 계산 (네트워크 + CPU 혼합)
+fun runCalculationAndComplete(...) {
+    val response = callNexonApi(...)      // 네트워크 I/O
+    val result = calculateExpectation(...)  // CPU
+    saveResult(result)                      // DB write
+}
+
+// After: 계산만 하는 순수 함수 분리
+class PureExpectationCalculator {
+    fun calculate(input: CalculationInput): ExpectationResponse {
+        // 네트워크 I/O 없음. 순수 계산만.
+    }
+}
+```
+
+CalculationInput → ExpectationResponse로 가는 순수 함수를 만들어서, API Worker는 I/O만, 계산은 별도로.
+
+### OutboxRelayWorker
+
+```
+07d06a1d feat(write-path): add OutboxRelayWorker for event publishing
+148a7882 feat(write-path): add Compensating Scanner for orphaned events
+```
+
+결과 저장 시 Outbox 테이블에 이벤트를 남기고, `OutboxRelayWorker`가 비동기로 PGMQ에 publish. `Compensating Scanner`로 유실된 이벤트(저장은 됐는데 publish가 안 된 경우)를 주기적으로 복구.
+
+---
+
+## Phase 4: 코드 품질 — Rules 도입과 위반 수정 (#774 ~ #776)
+
+### CLAUDE.md 모듈화
+
+```
+724e1abe refactor: split CLAUDE.md into modular .claude/rules/ structure
+48d11a48 refactor: add enforcement policy and self-check to CLAUDE.md
+```
+
+단일 CLAUDE.md를 `.claude/rules/` 디렉토리로 분리. 15개 규칙 파일로 관리.
+
+### 비동기 패턴 위반 수정
+
+```
+47302470 fix: eliminate async pattern violations (join/get/runBlocking/raw Thread/synchronized)
+```
+
+코드 전체에서 `join()`, `get()`, `runBlocking`, `new Thread()`, `synchronized` 제거. 모두 CompletableFuture 체이닝 또는 ReentrantLock으로 대체.
+
+### 코드 규칙 위반 수정
+
+```
+28bc1605 fix: apply code rules violations fix (null safety, Thread.sleep, try-catch)
+```
+
+`!!` (non-null assertion), `Thread.sleep()`, `try-catch` 블록 전면 제거.
+
+---
+
+## Phase 5: 파이프라인 최적화 — 큐 통합과 2-hop 제거 (#777 ~ #788)
+
+### 작업
+
+```
+ff56a596 refactor: remove Read Path ADR boundary violations (Phase 2) (#777)
+083a19ee refactor: consolidate 5 PGMQ queues into 3 with ExternalApiWorker (#779)
+2d90af1e Fix/disable listen notify reduce pool supabase (#780)
+f827f5d0 refactor: V5 pipeline optimization — 2-hop removal, CAS scanner, OCID cache (#782)
+3d6c4757 refactor: consolidate ExternalApiWorker DB calls from 5 TX to 3 TX (#783)
+792ce58b refactor: optimize DB write path — eliminate SELECT, move CPU work outside TX (#784)
+9ac3c36f refactor: pipeline optimization — sync calculator, snapshot overlap, thenCompose chain (#784)
+076b9566 refactor: switch Nexon API calls to virtual thread executor (#784)
+```
+
+### 핵심 최적화
+
+**5큐 → 3큐 통합 (#779):**
+
+```
+Before: expectation_calc_high, external_api_queue, ocid_resolve_queue,
+        nexon_api_request_queue, nexon_api_response_queue, result_ready_queue
+
+After:  expectation_calc_high, external_api_queue, result_ready_queue
+```
+
+OCID 해석, API 요청/응답을 `ExternalApiWorker` 하나로 통합. 큐 hop이 줄어들어 end-to-end latency 감소.
+
+**2-hop 제거 (#782):**
+
+메시지가 큐를 거치는 hop 수를 줄임. 기존 4-5hop → 3hop.
+
+**DB 왕복 5 TX → 3 TX (#783):**
+
+ExternalApiWorker 내부의 DB 호출을 5개 트랜잭션에서 3개로 축소.
+
+**TX 밖으로 CPU 이동 (#784):**
+
+```kotlin
+// Before
+transactionTemplate.execute {
+    val result = heavyCalculation()  // CPU 작업이 TX 안에 있음 → 커넥션 점유
+    saveResult(result)
+}
+
+// After
+val result = heavyCalculation()  // TX 밖에서 CPU 작업
+transactionTemplate.execute {
+    saveResult(result)  // TX 안에서는 DB write만
+}
+```
+
+CPU 작업을 TX 밖으로 빼서 DB 커넥션 점유 시간 최소화.
+
+**Supabase LISTEN/NOTIFY 비활성화 (#780):**
+
+Supabase Pooler 환경에서 LISTEN/NOTIFY가 커넥션을 잡아먹어서 비활성화. 폴링 기반으로 전환.
+
+---
+
+## Phase 6: 파이프라인 분리 — Dedup과 Projection (#787 ~ #793)
+
+### 작업
+
+```
+20066612 perf: split cache dedup and projection stages (#787)
+6e2e5c26 perf: split calculation pipeline workers (#788)
+086c34d0 perf: consolidate calculation pipeline — inline API + calculation + result write (#788)
+12299236 refactor(projection): replace result_ready PGMQ hop with outbox polling
+2966e033 perf(projection): batch outbox publish marking and parallelize projection
+4ccae513 revert: rollback develop to 2966e033 (PGMQ 46-52 views/sec baseline)
+81962d43 refactor: replace outbox events with direct PGMQ send in completion path (#793)
+```
+
+### Outbox 시도 → 롤백
+
+```
+시도: Outbox 테이블 + 폴링 → PGMQ send
+이유: DB write와 MQ publish의 원자성 보장
+문제: 폴링 레이턴시, 추가 DB write, 복잡도 증가
+결과: 46-52 views/sec 베이스라인에서 성능 저하 관측 → 롤백
+교정: PGMQ에 직접 send (#793)
+```
+
+### 교훈
+
+Outbox 패턴이 "정석"이긴 하지만, PGMQ를 쓰는 환경에서는 over-engineering. PGMQ 자체가 PostgreSQL 내장이라 same-TX publish가 가능.
+
+---
+
+## Phase 7: Kafka 시도와 롤백 (#791 ~ #792)
+
+### 시도
+
+```
+4bbfe5b1 docs: add Kafka pipeline transition plan and edge cases design
+e9dd8cc0 feat(kafka): add Kafka foundation for pipeline transition (PR-1)
+aa819296 feat(kafka): implement external-api.requested business connection (PR-2)
+1f716c33 feat(kafka): implement calculation.requested consumer (PR-3)
+```
+
+### 롤백 이유
+
+1. **로컬 개발 복잡도 폭발**: Kafka + ZooKeeper/KRaft 띄워야 함
+2. **Supabase 환경과 부조화**: DB가 PGMQ를 이미 내장
+3. **PGMQ로 충분**: 30 TPS에서 PGMQ가 병목이 아님
+4. **운영 부채**: Kafka 클러스터 모니터링, 파티션 관리, 컨슈머 lag
+
+### 교훈
+
+> **기술 선택은 "가능한가"가 아니라 "필요한가"로 결정해야 한다.**
+
+PGMQ가 30 TPS를 처리하는 데 아무런 문제가 없었다. Kafka는 1000+ TPS에서 고려할 일.
+
+---
+
+## Phase 8: Compute Key Dedup (#743 ~ #750)
+
+### 문제
+
+같은 캐릭터의 같은 프리셋을 여러 워커가 동시에 계산. 큐에 중복 메시지가 들어오면 동일한 계산을 N번 실행.
+
+### 작업
+
+```
+2d80fc78 feat(#743): add CubeComputeKey for batch dedup
+ca8c3006 feat(#743): integrate CubeComputeBuffer into CubeServiceImpl for batch dedup
+3bf16495 feat(#743): wire BatchComputeBuffer into workers for per-batch clearing
+f6c39a3b feat(pgmq): add AccumulationBuffer for time-based message batching
+2a4e6827 feat(pgmq): sequential batch processing with time-window accumulation
+c0258ce7 feat(pgmq): add sequentialBatchMs config for time-window batching
+9f19cbb1 perf(pgmq): chunked parallel batch for 4x throughput improvement
+```
 
 ### 핵심 인사이트
 
@@ -144,73 +400,18 @@ After:  1000 메시지 → dedup 후 200번 계산 (80% 감소)
 
 ---
 
-## Phase 3: 파이프라인 또 분리 (#788 ~ #793)
-
-### 문제
-
-Phase 1에서 분리한 파이프라인이 여전히 한 워커에 너무 많은 책임을 짊어지고 있었다.
-
-### 구조 변경
-
-```
-Before (단일 워커):
-  메시지 수신 → API 호출 → 계산 → 결과 저장 → View 갱신
-
-After (3-stage PGMQ):
-  Stage 1: expectation_calc_high → 계산만 (CPU-bound)
-  Stage 2: external_api_queue   → API 호출 + 결과 저장 (IO-bound)
-  Stage 3: result_ready_queue   → View projection (DB-bound)
-```
-
-각 스테이지가 독립적으로 스케일링 가능. IO-bound와 CPU-bound를 분리.
-
-### 트러블슈팅
-
-Outbox 패턴을 시도했다가 롤백. PGMQ에 직접 send하는 게 더 단순하고 빨랐다.
-
-```
-시도: Outbox 테이블 + 폴링 → PGMQ send
-문제: 폴링 레이턴시, 추가 DB write, 복잡도 증가
-결정: PGMQ에 직접 send (PR #793)
-```
-
----
-
-## Phase 4: Kafka 시도와 롤백 (#791 ~ #792)
-
-### 시도
-
-PGMQ를 Kafka로 교체하면 더 높은 처리량과 내구성을 얻을 수 있을 거라고 판단.
-
-```
-PR #791: Kafka foundation (PR-1)
-PR #792: Kafka business wiring (PR-2, PR-3)
-```
-
-### 롤백 이유
-
-1. **로컬 개발 복잡도 폭발**: Kafka + ZooKeeper/KRaft 띄워야 함
-2. **Supabase 환경과 부조화**: DB가 PGMQ를 이미 내장. Kafka는 또 다른 인프라
-3. **PGMQ로 충분**: 현재 워크로드(30 TPS)에서 PGMQ가 병목이 아님
-4. **운영 부채**: Kafka 클러스터 모니터링, 파티션 관리, 컨슈머 lag 처리
-
-### 교훈
-
-> **기술 선택은 "가능한가"가 아니라 "필요한가"로 결정해야 한다.**
-
-PGMQ가 30 TPS를 처리하는 데 아무런 문제가 없었다. Kafka는 1000+ TPS에서 고려할 일.
-
----
-
-## Phase 5: 병렬 계산과 Projection 최적화 (#794 ~ #796)
+## Phase 9: 병렬 계산과 Projection 최적화 (#794 ~ #796)
 
 ### 작업
 
-| PR | 내용 | 효과 |
-|----|------|------|
-| #794 | Preset 내 아이템 병렬 계산 + async read model write | 계산 시간 단축 |
-| #795 | ResultReadyProjectionWorker에서 dual DB 쿼리 병렬화 | 대기 시간 절반 |
-| #796 | Projection field를 write 시점에 추출 | BYTEA decompress skip |
+```
+fc8b8b48 perf: parallelize per-item calculation in PresetCalculationHelper.calculatePreset
+6526e334 perf: async read model write + remove upsert version check
+db0606b0 perf: parallelize dual DB queries in ResultReadyProjectionWorker
+c961de4d perf: extract projection fields at write time to skip BYTEA decompress
+e1f322be perf: use light query to skip BYTEA transfer in projection read path
+a5b96069 perf: replace CAST(:presets AS jsonb) with PGobject to skip per-row JSON parsing
+```
 
 ### #796의 핵심 아이디어
 
@@ -221,14 +422,13 @@ After:  결과 저장 시 미리 field 추출해서 별도 컬럼에 저장 (1�
 
 매 조회마다 반복하던 압축 해제 + 파싱을 write 시점 1회로 고정. 읽기 경로가 가벼워짐.
 
+`PGobject` 교체로 per-row `CAST(:presets AS jsonb)` SQL 파싱도 제거. JDBC 드라이버 레벨에서 직접 JSONB 타입으로 전송.
+
 ---
 
-## Phase 6: PR #797 — DB 왕복 줄이기 시도와 롤백
+## Phase 10: PR #797 — DB 왕복 줄이기 시도와 롤백
 
 ### 시도
-
-P0: 계산 전 DB write들을 하나의 트랜잭션으로 병합
-P1: `createOrFindActiveJob` + `dispatchToExternalApi`를 단일 TX로
 
 ```kotlin
 // P0: 여러 번의 DB write를 한 번으로
@@ -241,89 +441,60 @@ fun saveAllPreCalculation(...) {
 }
 ```
 
-### 결과: 롤백
-
-부하테스트에서 **성능 저하** 관측. ~7-13 views/sec로 오히려 느려짐.
+### 결과: 롤백 (~7-13 views/sec)
 
 ### 원인 분석
 
-외부 API(Nexon) 레이턴시가 지배적이어서, DB 최적화의 효과가 노이즈에 묻힘. DB 왕복을 3회에서 1회로 줄여도, 외부 API가 1-3초 걸리면 의미 없음.
+**단순히 "노이즈에 묻혔다"가 아니라, 병목 위치를 잘못 판단한 것.**
+
+커넥션 풀 45개 제약 하에서 DB 왕복을 16회 → 11회로 줄이는 것보다, Supabase Pooler 경유 레이턴시 자체가 더 큰 병목이었다. TX 병합으로 커넥션을 더 오래 잡게 되어, 오히려 동시성이 떨어짐.
 
 ### 교훈
 
-> **병목이 아닌 곳을 최적화하면 측정 불가능하다. 외부 API 레이턴시가 지배적인 상황에서 DB 최적화는 무의미.**
+> **병목이 아닌 곳을 최적화하면 측정 불가능하다. 정확히는 — 최적화 효과가 측정되지 않은 게 아니라, 병목 위치를 잘못 판단했던 것.**
 
 ---
 
-## Phase 7: Supabase Pooler 마이그레이션
+## Phase 11: Supabase Pooler 마이그레이션 + Pool 튜닝
 
-### 배경
+### Vultr → Supabase 전환
 
-Vultr 서버의 직접 PostgreSQL 연결에서 Supabase Pooler로 마이그레이션. 이유: 관리 부담 감소, connection pooling 외부화.
+```
+이유: DB 관리 부담 감소, connection pooling 외부화
+아키텍처:
+  Application (HikariCP) → Supabase Pooler (PgBouncer) → PostgreSQL
+  세션 모드 (port 5432): 커넥션당 1:1 매핑, advisory lock 사용 가능, 연결 수 제한
+```
 
 ### 트러블슈팅 연대기
 
-#### 문제 1: application-local.yml이 죽은 Vultr DB를 가리킴
-
+**문제 1: application-local.yml이 죽은 Vultr DB를 가리킴**
 ```
 [Lock Pool] JDBC URL: jdbc:postgresql://158.247.218.6:5432/maple_expectation
 → SocketTimeoutException: Connect timed out
+해결: DB_URL 환경변수로 통일 (#766)
 ```
 
-`DB_SERVER_IP=158.247.218.6` (구 Vultr)이 여전히 .env에 설정되어 있었다.
-
-**해결**: `application-local.yml`을 `${DB_URL}` 사용하도록 변경. `DB_USER`를 `postgres.ekcgdvwipcdfllhsqwjn`으로 업데이트.
-
-#### 문제 2: LockHikariConfig의 minimumIdle = poolSize
-
-```kotlin
-config.minimumIdle = poolSize  // 20개 커넥션을 startup에 강제 생성
+**문제 2: LockHikariConfig의 minimumIdle = poolSize**
+```
+20개 커넥션을 startup에 강제 생성 → Supabase 세션 제한 초과
+해결: minimumIdle = 2, initializationFailTimeout = -1 (lazy init)
 ```
 
-Supabase Pooler 세션 모드는 동시 연결 수에 제한이 있다. 메인 풀(15개) + Lock 풀(20개) = 35개를 동시에 열려고 하면 연결 거부.
-
-**해결**: `minimumIdle = 2`, `initializationFailTimeout = -1` (lazy init)
-
-#### 문제 3: cache_storage 테이블 누락
-
+**문제 3: cache_storage 테이블 누락**
 ```
 ERROR: relation "cache_storage" does not exist
+해결: 수동 CREATE UNLOGGED TABLE
 ```
 
-이전 커밋 시점에 migration이 아직 실행되지 않았던 테이블.
-
-**해결**: 수동 CREATE UNLOGGED TABLE
-
-#### 문제 4: JDBC URL credential vs Spring Boot username/password
-
+**문제 4: JDBC URL credential vs Spring Boot username/password**
 ```
-DB_URL: jdbc:postgresql://...?user=postgres.ekcgdvwipcdfllhsqwjn&password=xxx
-spring.datasource.username: maple (from DB_USER)
+DB_URL: ?user=postgres.ekcgdvwipcdfllhsqwjn&password=xxx
+Spring Boot: username=DB_USER=postgres (오버라이드)
+해결: parseCredentialsFromUrl()로 URL에서 직접 추출
 ```
 
-Spring Boot가 `username` 프로퍼티로 URL의 `user` 파라미터를 오버라이드. Supabase Pooler는 `postgres.{project_ref}` 형식의 username을 요구.
-
-**해결**: develop의 LockHikariConfig에서 URL 파라미터를 직접 파싱하는 `parseCredentialsFromUrl()` 추가.
-
-### Supabase Pooler 아키텍처
-
-```
-Application (HikariCP)
-    ↓ JDBC
-Supabase Pooler (PgBouncer)
-    ↓ 세션 모드 (port 5432)  ← 우리가 사용
-    또는 트랜잭션 모드 (port 6543)
-PostgreSQL (Supabase 관리)
-```
-
-세션 모드: 커넥션당 1:1 매핑. prepared statement, advisory lock 사용 가능. 하지만 연결 수 제한.
-트랜잭션 모드: 트랜잭션 단위로 커넥션 할당. 더 많은 연결 허용. 하지만 session-level 기능 제한.
-
----
-
-## Phase 8: Connection Pool 튜닝 — 15 vs 50
-
-### 실험
+### Pool 튜닝: 15 vs 50
 
 | 설정 | pool=15 | pool=50 |
 |------|---------|---------|
@@ -332,52 +503,30 @@ PostgreSQL (Supabase 관리)
 | 안정 views/sec | 9-12 | 0-8.8 |
 | result_ready_queue | 52→864 (누적) | 90→154 (제어됨) |
 
-### 결과: pool=15가 더 나음
-
-Supabase Pooler 세션 모드의 물리적 한계. 커넥션을 많이 물수록 pooler의 세션 슬롯을 차지하고, 새 커넥션 생성 비용도 증가.
+**pool=15가 더 나음.** Supabase 세션 모드의 물리적 한계. 커넥션 많을수록 pooler 세션 슬롯 점유 증가.
 
 ### 병목의 실체
 
 ```
 ResultProjection:ProjectBatch (배치 30건):
-  loadCalculationResults:  1,000~7,500ms  ← 병목
+  loadCalculationResults:  1,000~7,500ms  ← Supabase Pooler 경유 레이턴시
   batchUpsertViews:        600~2,400ms
   archiveMessages:         90~400ms
 ```
 
-커넥션 풀 크기가 문제가 아니라, **Supabase Pooler를 경유한 쿼리 자체의 레이턴시**가 병목. 로컬 DB였으면 1초면 끝날 게 7.5초까지 걸림.
+로컬 DB였으면 1초면 끝날 게 7.5초까지 걸림. 커넥션 풀 크기가 아니라 **Pooler hop 자체의 레이턴시**가 병목.
 
 ---
 
-## 기술 의사결정 기록
+## 롤백 기록 정리
 
-### 1. Kafka → PGMQ 유지
-
-```
-판단 기준:
-- 현재 처리량 (30 TPS)에서 PGMQ가 병목이 아님
-- Kafka는 1000+ TPS에서 재검토
-- 인프라 복잡도 최소화가 우선
-```
-
-### 2. Vultr 직접 DB → Supabase Pooler
-
-```
-판단 기준:
-- DB 관리 부담 감소
-- Connection pooling 외부화
-- 단점: 쿼리 레이턴시 증가 (pooler hop)
-- 완화: 쿼리 수 자체를 줄이는 방향으로 최적화
-```
-
-### 3. Connection Pool 크기
-
-```
-판단 기준:
-- Supabase 세션 모드: 연결 수에 물리적 제한
-- pool=15가 pool=50보다 실제 처리량 높음
-- 과도한 커넥션은 pooler 세션 고갈 유발
-```
+| 시도 | 이유 | 롤백 사유 | 교훈 |
+|------|------|-----------|------|
+| Outbox 폴링 (#788) | DB write + MQ publish 원자성 | 폴링 레이턴시, 복잡도, 성능 저하 | PGMQ에 same-TX publish 가능 |
+| Kafka (#791-792) | 더 높은 처리량/내구성 | 30 TPS에 과잉, 인프라 복잡도 | "필요한가?"로 결정 |
+| DB 왕복 병합 (#797) | DB 왕복 16→11회 | 병목 위치 오판, TX 병합이 동시성 저하 | 병목이 아닌 곳 최적화 무의미 |
+| IS DISTINCT FROM (#791) | unchanged skip | 비교 자체가 비용, 실제 skip 비율 낮음 | 가드 비용 > 절약 |
+| Virtual Thread (#735) | I/O 블로킹 최적화 | synchronized 핀닝 | ReentrantLock으로 대체 |
 
 ---
 
@@ -406,25 +555,59 @@ ResultProjection:ProjectBatch (배치 30건):
 
 ## 2주간의 교훈
 
-### 1. 병목이 아닌 곳을 최적화하면 측정 불가능하다
+### 1. 병목 위치를 잘못 판단하면 최적화가 역효과
 
-PR #797의 DB 왕복 최적화는 논리적으로 맞았지만, 외부 API 레이턴시가 지배적이라 효과가 측정되지 않았다. **최적화 전에 "이게 전체의 몇 %를 차지하는가?"를 먼저 물어야 한다.**
+PR #797은 논리적으로 맞았지만, 실제 병목(Supabase Pooler 레이턴시)이 아니라 가장 눈에 보이는 곳(DB 왕복)을 최적화했다. **최적화 전에 "이게 전체의 몇 %를 차지하는가?"를 먼저 물어야 한다.**
 
 ### 2. 인프라 변경은 모든 가정을 무효화한다
 
-Vultr → Supabase 마이그레이션 후, 기존에 문제없던 커넥션 풀 설정이 장애를 일으켰다. **인프라 변경 후에는 모든 설정을 재검증해야 한다.**
+Vultr → Supabase 후, 기존에 문제없던 커넥션 풀 설정이 장애를 일으켰다. `minimumIdle=poolSize`, `DB_SERVER_IP` 하드코딩, `username` 오버라이드 — 모두 이전 인프라에서는 정상 동작했다.
 
 ### 3. 롤백은 실패가 아니라 데이터다
 
-Kafka 시도, Outbox 시도, DB 왑복 병합 — 모두 롤백했다. 하지만 각 시도에서 무엇이 문제였는지 명확해졌다. **"왜 안 되는가"를 아는 것도 "되게 하는 것"만큼 가치 있다.**
+Kafka, Outbox, DB 왕복 병합, IS DISTINCT FROM — 모두 롤백했다. 하지만 각 시도에서 "왜 안 되는가"가 명확해졌다. **PGMQ가 30 TPS에서 충분하다**는 확신은 Kafka 롤백 이후에야 확보됐다.
 
-### 4. 측정하지 않으면 모르는 것을 안다고 착각한다
+### 4. 직관은 가설일 뿐, 측정이 판결이다
 
-pool=50이 pool=15보다 나을 거라는 직관이 있었다. 부하테스트 결과는 정반대. **직관은 가설일 뿐, 측정이 판결이다.**
+pool=50이 pool=15보다 나을 거라는 직관. 부하테스트 결과는 정반대. StepTrace로 병목을 단계별로 측정하고 나서야 원인을 이해했다.
 
-### 5. 단일 노드의 한계를 아는 것도 가치다
+### 5. 수평 확장이 필요한 시점을 아는 것도 아키텍처 역량
 
-30-38 views/sec가 이 시스템의 단일 노드 한계에 가깝다. 외부 API 레이턴시 + Supabase Pooler 레이턴시라는 두 개의 외부 병목이 있다. 이 위에서 DB 최적화를 아무리 해도 한계가 명확하다. **수평 확장이 필요한 시점을 아는 것도 아키텍처 역량이다.**
+30-38 views/sec가 단일 노드 한계. 외부 API 레이턴시 + Supabase Pooler 레이턴시라는 두 외부 병목 위에서 DB 최적화를 아무리 해도 한계가 명확하다.
+
+---
+
+## 현재 한계와 다음 방향
+
+### 현재 한계
+
+```
+1. Supabase Pooler 레이턴시 (외부 제어 불가)
+   - loadCalculationResults: 1~7.5초 (로컬 DB면 1초 미만)
+   - 배치 30건 projection에 2~10초
+
+2. Nexon API I/O 대기 중 커넥션 점유
+   - API 호출 200~500ms 동안 DB 커넥션을 잡고 있음
+   - 커넥션 풀 15개의 실제 가용은 동시 요청 수에 따라 제한
+
+3. 단일 노드 처리량 상한
+   - pool=15: ~30 views/sec (cold miss)
+   - pool=50: ~10 views/sec (역효과)
+```
+
+### 다음 방향
+
+```
+External API 프로세스 완전 분리
+→ API I/O 대기를 DB 커넥션과 완전히 분리
+→ 배치 스케줄러 기반 API 호출
+
+Storage 기반 파이프라인 전환
+→ PGMQ 메시지가 아닌 DB 상태 기반 워커
+→ SKIP LOCKED로 수평 확장
+```
+
+**성장 서사**: 한계를 발견했고, 원인을 분석했고, 다음 아키텍처를 설계하고 있다.
 
 ---
 

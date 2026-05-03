@@ -2,16 +2,15 @@ package maple.expectation.infrastructure.worker
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
-import java.util.concurrent.Executor
 import maple.expectation.core.port.inbound.BatchComputeBuffer
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CharacterOcidPort
-import maple.expectation.core.port.out.EquipmentFanOutPort
 import maple.expectation.core.port.out.GameCharacterPort
 import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
 import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository
 import maple.expectation.infrastructure.pgmq.PgmqClient
@@ -19,7 +18,6 @@ import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionTemplate
@@ -35,8 +33,6 @@ class ExpectationCalcLowWorker(
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     expectationPort: ExpectationV4Port,
     characterOcidPort: CharacterOcidPort,
-    equipmentFanOutPort: EquipmentFanOutPort,
-    @Qualifier("asyncExecutor") preWarmExecutor: Executor,
     gameCharacterPort: GameCharacterPort,
     l2CacheStrategy: L2CacheStrategy,
     cacheProperties: CacheProperties,
@@ -45,6 +41,7 @@ class ExpectationCalcLowWorker(
     batchRepo: CharacterViewBatchRepository,
     objectMapper: ObjectMapper,
     computeBuffer: BatchComputeBuffer,
+    jobService: CalculationJobService,
 ) : AbstractExpectationCalcWorker(
     pgmqClient,
     executor,
@@ -54,8 +51,6 @@ class ExpectationCalcLowWorker(
     lifecycleWrapper,
     expectationPort,
     characterOcidPort,
-    equipmentFanOutPort,
-    preWarmExecutor,
     gameCharacterPort,
     l2CacheStrategy,
     cacheProperties,
@@ -64,6 +59,7 @@ class ExpectationCalcLowWorker(
     batchRepo,
     objectMapper,
     computeBuffer,
+    jobService,
 ) {
 
     override val queueName: String = QUEUE_NAME

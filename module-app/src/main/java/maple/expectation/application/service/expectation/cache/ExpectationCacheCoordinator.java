@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.common.executor.TaskContext;
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 import maple.expectation.core.port.inbound.CacheManagerPort;
 import maple.expectation.core.port.inbound.ExecutorPort;
 import maple.expectation.error.exception.CacheDataNotFoundException;
@@ -11,7 +12,6 @@ import maple.expectation.error.exception.EquipmentDataProcessingException;
 import maple.expectation.infrastructure.admission.AdmissionRejectedException;
 import maple.expectation.infrastructure.admission.AdmissionTimeoutException;
 import maple.expectation.infrastructure.admission.GlobalAdmissionControl;
-import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
 import org.springframework.cache.Cache;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
@@ -110,7 +110,10 @@ public class ExpectationCacheCoordinator {
   }
 
   public EquipmentExpectationResponseV4 getOrCalculate(
-      String userIgn, boolean force, Callable<EquipmentExpectationResponseV4> calculator, int presetNo) {
+      String userIgn,
+      boolean force,
+      Callable<EquipmentExpectationResponseV4> calculator,
+      int presetNo) {
     String cacheKey = buildCacheKey(userIgn, presetNo);
 
     if (force) {
@@ -118,13 +121,9 @@ public class ExpectationCacheCoordinator {
       EquipmentExpectationResponseV4 response = executeCalculator(calculator);
       String compressedBase64 =
           executorPort.executeWithTranslation(
-              () -> {
-                try {
-                  return compressionService.compressAndSerialize(response, cacheKey);
-                } catch (Exception ex) {
-                  throw new RuntimeException(ex);
-                }
-              },
+              () ->
+                  uncheckedCallable(
+                      () -> compressionService.compressAndSerialize(response, cacheKey)),
               (e, ctx) ->
                   new EquipmentDataProcessingException(
                       String.format(
@@ -150,16 +149,13 @@ public class ExpectationCacheCoordinator {
     EquipmentExpectationResponseV4 response = executeCalculatorWithAdmission(cacheKey, calculator);
     String compressedBase64 =
         executorPort.executeWithTranslation(
-            () -> {
-              try {
-                return compressionService.compressAndSerialize(response, cacheKey);
-              } catch (Exception ex) {
-                throw new RuntimeException(ex);
-              }
-            },
+            () ->
+                uncheckedCallable(
+                    () -> compressionService.compressAndSerialize(response, cacheKey)),
             (e, ctx) ->
                 new EquipmentDataProcessingException(
-                    String.format("Cache serialization failed [%s]: %s", ctx.toTaskName(), cacheKey),
+                    String.format(
+                        "Cache serialization failed [%s]: %s", ctx.toTaskName(), cacheKey),
                     e),
             TaskContext.of("CacheCoordinator", "Serialize", cacheKey));
     expectationCache.put(cacheKey, compressedBase64);
@@ -182,7 +178,10 @@ public class ExpectationCacheCoordinator {
   }
 
   public byte[] getGzipOrCalculate(
-      String userIgn, boolean force, Callable<EquipmentExpectationResponseV4> calculator, int presetNo) {
+      String userIgn,
+      boolean force,
+      Callable<EquipmentExpectationResponseV4> calculator,
+      int presetNo) {
     String cacheKey = buildCacheKey(userIgn, presetNo);
 
     if (force) {
@@ -190,13 +189,9 @@ public class ExpectationCacheCoordinator {
       EquipmentExpectationResponseV4 response = executeCalculator(calculator);
       String compressedBase64 =
           executorPort.executeWithTranslation(
-              () -> {
-                try {
-                  return compressionService.compressAndSerialize(response, cacheKey);
-                } catch (Exception ex) {
-                  throw new RuntimeException(ex);
-                }
-              },
+              () ->
+                  uncheckedCallable(
+                      () -> compressionService.compressAndSerialize(response, cacheKey)),
               (e, ctx) ->
                   new EquipmentDataProcessingException(
                       String.format(
@@ -224,16 +219,13 @@ public class ExpectationCacheCoordinator {
     EquipmentExpectationResponseV4 response = executeCalculatorWithAdmission(cacheKey, calculator);
     String compressedBase64 =
         executorPort.executeWithTranslation(
-            () -> {
-              try {
-                return compressionService.compressAndSerialize(response, cacheKey);
-              } catch (Exception ex) {
-                throw new RuntimeException(ex);
-              }
-            },
+            () ->
+                uncheckedCallable(
+                    () -> compressionService.compressAndSerialize(response, cacheKey)),
             (e, ctx) ->
                 new EquipmentDataProcessingException(
-                    String.format("Cache serialization failed [%s]: %s", ctx.toTaskName(), cacheKey),
+                    String.format(
+                        "Cache serialization failed [%s]: %s", ctx.toTaskName(), cacheKey),
                     e),
             TaskContext.of("CacheCoordinator", "SerializeGzip", cacheKey));
     expectationCache.put(cacheKey, compressedBase64);
@@ -276,8 +268,7 @@ public class ExpectationCacheCoordinator {
   // ==================== Internal Methods ====================
 
   /**
-   * Build cache key based on presetNo.
-   * presetNo=1 uses backward-compatible key (just userIgn).
+   * Build cache key based on presetNo. presetNo=1 uses backward-compatible key (just userIgn).
    * presetNo=2,3 use userIgn:presetNo format.
    */
   private String buildCacheKey(String userIgn, int presetNo) {
@@ -286,18 +277,13 @@ public class ExpectationCacheCoordinator {
 
   private EquipmentExpectationResponseV4 executeCalculator(
       Callable<EquipmentExpectationResponseV4> calculator) {
+    // Java-Kotlin interop: Callable.call() throws checked Exception; Kotlin () -> T cannot declare
+    // throws.
+    // ExecutorPort.execute() wraps in ThrowingSupplier which handles checked exceptions via
+    // LogicExecutor.
+    // The lambda wraps checked -> unchecked so the Java compiler accepts the Kotlin SAM.
     return executorPort.execute(
-        () -> {
-          try {
-            return calculator.call();
-          } catch (Exception e) {
-            if (e instanceof RuntimeException) {
-              throw (RuntimeException) e;
-            }
-            throw new RuntimeException(e);
-          }
-        },
-        TaskContext.of("CacheCoordinator", "Calculate"));
+        () -> uncheckedCallable(calculator), TaskContext.of("CacheCoordinator", "Calculate"));
   }
 
   /**
@@ -311,6 +297,9 @@ public class ExpectationCacheCoordinator {
    *   <li>Preserves single-key single-flight behavior (handled by caller via cache check)
    * </ul>
    *
+   * <p>submitOrWait()가 반환하는 CF를 체이닝으로 처리합니다. 이 메서드는 동기 API (getOrCalculate)에서 호출되므로 CF 결과를 동기적으로
+   * 반환해야 합니다.
+   *
    * @param cacheKey Request key for admission control (includes presetNo if applicable)
    * @param calculator Cold-path calculation task
    * @return Calculation result
@@ -323,65 +312,51 @@ public class ExpectationCacheCoordinator {
     }
 
     log.debug("[V4] Admission control enabled - queuing calculation: {}", cacheKey);
-    try {
-      return admissionControl
-          .submitOrWait(cacheKey, calculator)
-          .get(); // Blocking wait for CompletableFuture
-    } catch (InterruptedException ie) {
-      // 🔥 P1 FIX #3: Handle InterruptedException properly
-      Thread.currentThread().interrupt();
-      log.error("[V4] Admission control interrupted for: {}", cacheKey, ie);
+    return admissionControl
+        .submitOrWait(cacheKey, calculator)
+        .exceptionally(exception -> handleAdmissionException(cacheKey, exception))
+        .join(); // Sync boundary: getOrCalculate is a synchronous API (Callable-based)
+  }
+
+  /** Admission control 예외 처리 (CF exceptionally 핸들러, lambda 추출) */
+  private EquipmentExpectationResponseV4 handleAdmissionException(
+      String cacheKey, Throwable exception) {
+    Throwable cause = exception.getCause();
+    // AdmissionRejectedException/AdmissionTimeoutException may be set directly
+    // (not wrapped) when the CF completes exceptionally with them
+    Throwable target = (cause != null) ? cause : exception;
+    if (target instanceof AdmissionTimeoutException) {
+      log.error("[V4] Admission control timeout for: {}", cacheKey);
       throw new EquipmentDataProcessingException(
-          String.format("Calculation interrupted: %s", cacheKey), ie);
-    } catch (java.util.concurrent.ExecutionException ee) {
-      // 🔥 P1 FIX #3: Improved exception handling with proper root cause logging
-      Throwable cause = ee.getCause();
-      if (cause instanceof AdmissionTimeoutException) {
-        log.error("[V4] Admission control timeout for: {}", cacheKey);
-        throw new EquipmentDataProcessingException(
-            String.format("Calculation rejected due to system overload: %s", cacheKey), cause);
-      }
-      if (cause instanceof AdmissionRejectedException) {
-        log.warn("[V4] Admission control queue full - rejecting: {}", cacheKey);
-        throw new EquipmentDataProcessingException(
-            String.format("System at capacity - queue full: %s", cacheKey), cause);
-      }
-      // 🔥 P1 FIX #3: Log unexpected exceptions with full stack trace
-      log.error("[V4] Unexpected exception during admission control for: {}", cacheKey, cause);
-      throw new EquipmentDataProcessingException(
-          String.format("Calculation failed with admission control: %s", cacheKey), cause);
-    } catch (Exception e) {
-      // 🔥 P1 FIX #3: Catch-all for any other unexpected exceptions
-      log.error("[V4] Unexpected error in admission control for: {}", cacheKey, e);
-      throw new EquipmentDataProcessingException(
-          String.format("Calculation failed: %s", cacheKey), e);
+          String.format("Calculation rejected due to system overload: %s", cacheKey), target);
     }
+    if (target instanceof AdmissionRejectedException) {
+      log.warn("[V4] Admission control queue full - rejecting: {}", cacheKey);
+      throw new EquipmentDataProcessingException(
+          String.format("System at capacity - queue full: %s", cacheKey), target);
+    }
+    log.error("[V4] Unexpected exception during admission control for: {}", cacheKey, target);
+    throw new EquipmentDataProcessingException(
+        String.format("Calculation failed with admission control: %s", cacheKey), target);
   }
 
   /** Base64 → GZIP byte[] → JSON → Response 압축 해제 (#262 Fix) */
   private EquipmentExpectationResponseV4 decompressCachedResponse(
       String compressedBase64, String cacheKey) {
-    try {
-      return executorPort.executeWithTranslation(
-          () -> {
-            try {
-              EquipmentExpectationResponseV4 response =
-                  compressionService.decompress(compressedBase64, cacheKey);
-              return responseBuilder.buildWithCacheFlag(response);
-            } catch (Exception ex) {
-              throw new RuntimeException(ex);
-            }
-          },
-          (e, context) ->
-              new EquipmentDataProcessingException(
-                  String.format("GZIP 압축 해제 실패 [%s]: %s", context.toTaskName(), cacheKey), e),
-          TaskContext.of("CacheCoordinator", "Decompress", cacheKey));
-    } catch (EquipmentDataProcessingException e) {
-      // Cache defense: evict corrupt data on decompress failure
-      log.warn("[V4] Evicting corrupt cache entry after decompress failure: {}", cacheKey);
-      expectationCache.evict(cacheKey);
-      throw e;
-    }
+    return executorPort.executeWithTranslation(
+        () -> {
+          EquipmentExpectationResponseV4 response =
+              uncheckedCallable(() -> compressionService.decompress(compressedBase64, cacheKey));
+          return responseBuilder.buildWithCacheFlag(response);
+        },
+        (e, context) -> {
+          // Cache defense: evict corrupt data on decompress failure
+          log.warn("[V4] Evicting corrupt cache entry after decompress failure: {}", cacheKey);
+          expectationCache.evict(cacheKey);
+          return new EquipmentDataProcessingException(
+              String.format("GZIP 압축 해제 실패 [%s]: %s", context.toTaskName(), cacheKey), e);
+        },
+        TaskContext.of("CacheCoordinator", "Decompress", cacheKey));
   }
 
   // ==================== Metrics ====================
@@ -392,5 +367,21 @@ public class ExpectationCacheCoordinator {
 
   private void recordFastPathMiss() {
     meterRegistry.counter("cache.l1.fast_path", "result", "miss").increment();
+  }
+
+  /**
+   * Java-Kotlin interop bridge: calls a {@link Callable} from a Kotlin lambda context. Kotlin's
+   * {@code () -> T} cannot declare {@code throws}, so checked exceptions from {@link
+   * Callable#call()} must be converted before crossing the Kotlin SAM boundary. RuntimeExceptions
+   * propagate as-is; checked exceptions are wrapped.
+   */
+  private <V> V uncheckedCallable(Callable<V> callable) {
+    try {
+      return callable.call();
+    } catch (RuntimeException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 }

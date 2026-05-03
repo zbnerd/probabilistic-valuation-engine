@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilde
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder
 
 /**
  * Jackson JSON 파싱 설정
@@ -43,7 +44,9 @@ class JacksonConfig {
      */
     @Bean
     @Primary
-    fun objectMapper(): ObjectMapper = ObjectMapper()
+    fun objectMapper(builder: Jackson2ObjectMapperBuilder): ObjectMapper = builder
+        .createXmlMapper(false)
+        .build<ObjectMapper>()
         .registerModule(KotlinModule.Builder().build())
         .registerModule(JavaTimeModule())
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)

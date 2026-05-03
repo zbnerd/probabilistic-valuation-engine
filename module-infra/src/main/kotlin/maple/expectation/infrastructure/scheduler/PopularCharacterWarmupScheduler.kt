@@ -4,7 +4,9 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import jakarta.annotation.PostConstruct
 import java.time.LocalDateTime
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.LockSupport
 import maple.expectation.core.port.out.CacheWarmupPort
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
 import maple.expectation.error.exception.DistributedLockException
@@ -148,14 +150,7 @@ class PopularCharacterWarmupScheduler(
     }
 
     private fun sleep(millis: Long) {
-        executor.executeOrDefault(
-            {
-                Thread.sleep(millis)
-                null
-            },
-            null,
-            TaskContext.of("Warmup", "Delay"),
-        )
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(millis))
     }
 
     private fun maskIgn(ign: String?): String {

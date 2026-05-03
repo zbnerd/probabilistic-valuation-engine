@@ -8,6 +8,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
 
@@ -33,6 +35,7 @@ class BatchL2LookupBuffer(
     private val l2Strategy: L2CacheStrategy,
     private val l1: Cache,
     meterRegistry: MeterRegistry,
+    private val executor: LogicExecutor,
     private val flushIntervalMs: Long = 10,
     private val maxBatchSize: Int = 500,
 ) {
@@ -105,36 +108,42 @@ class BatchL2LookupBuffer(
         val keyToOriginal = uniqueKeys.associateBy { it.toString() }
         val keyStrings = uniqueKeys.map { it.toString() }
 
-        try {
-            val start = System.nanoTime()
-            val results = l2Strategy.getAll(keyStrings, Any::class.java)
-            val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
+        executor.executeOrCatch(
+            {
+                val start = System.nanoTime()
+                val results = l2Strategy.getAll(keyStrings, Any::class.java)
+                val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
 
-            batchCounter.increment()
-            batchSizeSummary.record(uniqueKeys.size.toDouble())
-            batchLatencyMs.set(elapsedMs)
+                batchCounter.increment()
+                batchSizeSummary.record(uniqueKeys.size.toDouble())
+                batchLatencyMs.set(elapsedMs)
 
-            if (log.isDebugEnabled || uniqueKeys.size >= 50 || elapsedMs >= 100) {
-                log.info("[BatchL2] Flush: {} unique keys → {} hits in {}ms", uniqueKeys.size, results.size, elapsedMs)
-            }
+                if (log.isDebugEnabled || uniqueKeys.size >= 50 || elapsedMs >= 100) {
+                    log.info("[BatchL2] Flush: {} unique keys → {} hits in {}ms", uniqueKeys.size, results.size, elapsedMs)
+                }
 
-            for ((keyStr, value) in results) {
-                val originalKey = keyToOriginal[keyStr] ?: continue
-                l1.put(originalKey, value)
-            }
+                for ((keyStr, value) in results) {
+                    val originalKey = keyToOriginal[keyStr] ?: continue
+                    l1.put(originalKey, value)
+                }
 
-            for (req in batch) {
-                val value = results[req.key.toString()]
-                req.future.complete(value)
-                inflight.remove(req.key)
-            }
-        } catch (e: Exception) {
-            log.warn("[BatchL2] Flush failed for {} keys: {}", uniqueKeys.size, e.message)
-            for (req in batch) {
-                req.future.completeExceptionally(e)
-                inflight.remove(req.key)
-            }
-        }
+                for (req in batch) {
+                    val value = results[req.key.toString()]
+                    req.future.complete(value)
+                    inflight.remove(req.key)
+                }
+                null
+            },
+            { e ->
+                log.warn("[BatchL2] Flush failed for {} keys: {}", uniqueKeys.size, e.message)
+                for (req in batch) {
+                    req.future.completeExceptionally(e)
+                    inflight.remove(req.key)
+                }
+                null
+            },
+            TaskContext.of("BatchL2Lookup", "Flush", uniqueKeys.size.toString()),
+        )
 
         if (!pending.isEmpty()) {
             sharedScheduler.schedule({ flush() }, 0, TimeUnit.MILLISECONDS)

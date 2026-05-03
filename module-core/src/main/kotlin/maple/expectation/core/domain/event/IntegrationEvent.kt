@@ -44,6 +44,15 @@ data class IntegrationEvent<T>(
      * pipeline.
      */
     val payload: T,
+
+    /** Schema version for backward-compatible evolution of event structure. */
+    val schemaVersion: Int = 1,
+
+    /** Job identifier for correlating events within a batch or pipeline run. */
+    val jobId: String? = null,
+
+    /** Trace identifier for distributed tracing across service boundaries. */
+    val traceId: String? = null,
 ) {
 
     companion object {

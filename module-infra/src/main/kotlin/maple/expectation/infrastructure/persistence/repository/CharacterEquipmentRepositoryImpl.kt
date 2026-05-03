@@ -32,14 +32,14 @@ open class CharacterEquipmentRepositoryImpl(
         requireNotNull(characterId) { "CharacterId cannot be null" }
         return jpaRepo.findById(characterId.value)
             .map { CharacterEquipmentMapper.toDomain(it) }
-            .orElse(null)
+            .orElseGet { null }
     }
 
     @Deprecated(" forRemoval = true")
     override fun save(equipment: CharacterEquipment): CharacterEquipment {
         requireNotNull(equipment) { "Equipment cannot be null" }
         val id = equipment.characterId
-        val jpaEntity = jpaRepo.findById(id.value).orElse(null)
+        val jpaEntity = jpaRepo.findById(id.value).orElseGet { null }
 
         return if (jpaEntity != null) {
             CharacterEquipmentMapper.updateJpaEntity(jpaEntity, equipment)

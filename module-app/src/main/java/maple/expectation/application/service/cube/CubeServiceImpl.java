@@ -11,6 +11,8 @@ import maple.expectation.application.service.cube.component.DpModeInferrer;
 import maple.expectation.config.CubeEngineFeatureFlag;
 import maple.expectation.core.calculator.CubeRateCalculator;
 import maple.expectation.core.domain.model.CubeRate;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
+import maple.expectation.core.dto.cube.CubeComputeKey;
 import maple.expectation.domain.repository.CubeProbabilityRepository;
 import maple.expectation.domain.v2.CubeProbability;
 import maple.expectation.domain.v2.CubeType;
@@ -18,8 +20,6 @@ import maple.expectation.error.exception.UnsupportedCalculationEngineException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.util.PermutationUtil;
-import maple.expectation.core.dto.cube.CubeCalculationInput;
-import maple.expectation.core.dto.cube.CubeComputeKey;
 import org.springframework.stereotype.Service;
 
 /**
@@ -86,10 +86,14 @@ public class CubeServiceImpl implements CubeTrialsProvider {
     String tableVersion = repository.getCurrentTableVersion();
 
     CubeComputeKey key = CubeComputeKey.from(input, type.name(), tableVersion);
-    Double v2Result = computeBuffer.getOrCompute(key, () ->
-        executor.execute(
-            () -> dpCalculator.calculateWithCache(input, type, tableVersion),
-            TaskContext.of("CubeService", "CalculateDP", input.getTargetStatType().name())));
+    Double v2Result =
+        computeBuffer.getOrCompute(
+            key,
+            () ->
+                executor.execute(
+                    () -> dpCalculator.calculateWithCache(input, type, tableVersion),
+                    TaskContext.of(
+                        "CubeService", "CalculateDP", input.getTargetStatType().name())));
 
     if (featureFlag.isShadowEnabled()) {
       Double v1Result = calculateWithV1Engine(input, type);

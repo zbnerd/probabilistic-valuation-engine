@@ -11,6 +11,7 @@ import java.util.function.Supplier
 import lombok.extern.slf4j.Slf4j
 import maple.expectation.error.exception.ApiTimeoutException
 import maple.expectation.error.exception.InternalSystemException
+import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.util.ExceptionUtils
 
@@ -112,10 +113,38 @@ object AsyncUtils {
     }
 
     @JvmStatic
+    fun <T> executeAsync(
+        supplier: Callable<T>,
+        asyncExecutor: Executor?,
+        logicExecutor: LogicExecutor,
+        context: TaskContext,
+    ): CompletableFuture<T> {
+        if (asyncExecutor == null) {
+            throw IllegalStateException("Executor must be provided for async operations")
+        }
+
+        return CompletableFuture.supplyAsync(
+            { logicExecutor.execute({ supplier.call() }, context) },
+            asyncExecutor,
+        ).exceptionally { e ->
+            val unwrapped = unwrapCompletionException(e)
+
+            when (unwrapped) {
+                is Error -> throw unwrapped
+                is RuntimeException -> throw unwrapped
+                else -> throw CompletionException(unwrapped)
+            }
+        }
+    }
+
+    @JvmStatic
     private fun <T> executeCallableWithExceptionTranslation(
         supplier: Callable<T>,
         context: TaskContext,
     ): T {
+        // Legacy path for callers that don't provide LogicExecutor.
+        // The Error/Runtime/Checked separation is minimal logic (no logging, no side effects)
+        // that cannot be replaced by LogicExecutor without a DI context.
         try {
             return supplier.call()
         } catch (e: Error) {

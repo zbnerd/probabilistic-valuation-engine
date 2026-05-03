@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.nexon.pgmq
 
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 import kotlin.math.pow
@@ -9,8 +10,8 @@ import maple.expectation.core.port.out.ShutdownDataPersistencePort
 import maple.expectation.infrastructure.alert.StatelessAlertService
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.external.NexonApiClient
+import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.nexon.util.ContentHashUtil
 import maple.expectation.infrastructure.pgmq.NexonRetryMessage
 import maple.expectation.infrastructure.pgmq.PgmqClient
@@ -126,77 +127,84 @@ class NexonApiPgmqProcessor(
                 return@executeVoid
             }
 
-            // 2. API 호출
-            val success = callNexonApi(payload)
-
-            if (success) {
-                pgmqClient.archive(QUEUE_NAME, message.messageId)
-                log.info(
-                    "[NexonApiPgmqProcessor] Archived: msgId={}, requestId={}",
-                    message.messageId,
-                    payload.requestId,
-                )
-                metrics.incrementApiCallSuccess()
-                metrics.incrementProcessed()
-            } else {
-                handleRetry(message)
+            // 2. API 호출 (CF chain — no blocking)
+            callNexonApi(payload).thenAccept { success ->
+                if (success) {
+                    pgmqClient.archive(QUEUE_NAME, message.messageId)
+                    log.info(
+                        "[NexonApiPgmqProcessor] Archived: msgId={}, requestId={}",
+                        message.messageId,
+                        payload.requestId,
+                    )
+                    metrics.incrementApiCallSuccess()
+                    metrics.incrementProcessed()
+                } else {
+                    handleRetry(message)
+                }
             }
         }, context)
     }
 
-    private fun callNexonApi(payload: NexonRetryMessage): Boolean {
-        val eventType = try {
-            NexonApiEventType.valueOf(payload.eventType)
-        } catch (_: IllegalArgumentException) {
+    /**
+     * Build CF chain for Nexon API call — returns CF<Boolean> without blocking.
+     */
+    private fun callNexonApi(payload: NexonRetryMessage): CompletableFuture<Boolean> {
+        val eventType = executor.executeOrDefault(
+            { NexonApiEventType.valueOf(payload.eventType) },
+            null,
+            TaskContext.of("NexonApiPgmqProcessor", "ParseEventType", payload.eventType),
+        )
+
+        if (eventType == null) {
             log.error("[NexonApiPgmqProcessor] Unknown eventType: {}", payload.eventType)
-            return false
+            return CompletableFuture.completedFuture(false)
         }
 
-        return try {
-            when (eventType) {
-                NexonApiEventType.GET_OCID -> {
-                    nexonApiClient.getOcidByCharacterName(payload.payload)
-                        .orTimeout(apiTimeoutSeconds, TimeUnit.SECONDS)
-                        .join()
-                }
-                NexonApiEventType.GET_CHARACTER_BASIC -> {
-                    nexonApiClient.getCharacterBasic(payload.payload)
-                        .orTimeout(apiTimeoutSeconds, TimeUnit.SECONDS)
-                        .join()
-                }
-                NexonApiEventType.GET_ITEM_DATA -> {
-                    nexonApiClient.getItemDataByOcid(payload.payload)
-                        .orTimeout(apiTimeoutSeconds, TimeUnit.SECONDS)
-                        .join()
-                }
-                NexonApiEventType.GET_CUBES -> {
-                    nexonApiClient.getCubeHistory(payload.payload)
-                        .orTimeout(apiTimeoutSeconds, TimeUnit.SECONDS)
-                        .join()
+        val apiFuture = when (eventType) {
+            NexonApiEventType.GET_OCID ->
+                nexonApiClient.getOcidByCharacterName(payload.payload)
+                    .orTimeout(apiTimeoutSeconds, TimeUnit.SECONDS)
+            NexonApiEventType.GET_CHARACTER_BASIC ->
+                nexonApiClient.getCharacterBasic(payload.payload)
+                    .orTimeout(apiTimeoutSeconds, TimeUnit.SECONDS)
+            NexonApiEventType.GET_ITEM_DATA ->
+                nexonApiClient.getItemDataByOcid(payload.payload)
+                    .orTimeout(apiTimeoutSeconds, TimeUnit.SECONDS)
+            NexonApiEventType.GET_CUBES ->
+                nexonApiClient.getCubeHistory(payload.payload)
+                    .orTimeout(apiTimeoutSeconds, TimeUnit.SECONDS)
+        }
+
+        return apiFuture
+            .handle { _, ex ->
+                if (ex != null) {
+                    handleApiError(ex, eventType)
+                    false
+                } else {
+                    log.info("[NexonApiPgmqProcessor] API call success: eventType={}, payload={}", eventType, maskPayload(payload.payload))
+                    true
                 }
             }
-            log.info("[NexonApiPgmqProcessor] API call success: eventType={}, payload={}", eventType, maskPayload(payload.payload))
-            true
-        } catch (e: Exception) {
-            val root = ExceptionUtils.unwrapAsyncException(e)
+    }
 
-            if (root is WebClientResponseException && root.statusCode.is4xxClientError) {
-                log.warn(
-                    "[NexonApiPgmqProcessor] 4xx 오류 (재시도 불가): eventType={}, status={}",
-                    eventType,
-                    root.statusCode,
-                )
-                return false
-            }
+    private fun handleApiError(ex: Throwable, eventType: NexonApiEventType) {
+        val root = ExceptionUtils.unwrapAsyncException(ex)
 
+        if (root is WebClientResponseException && root.statusCode.is4xxClientError) {
             log.warn(
-                "[NexonApiPgmqProcessor] 일시적 장애: eventType={}, error={}",
+                "[NexonApiPgmqProcessor] 4xx error (non-retryable): eventType={}, status={}",
                 eventType,
-                root?.message,
+                root.statusCode,
             )
-            metrics.incrementApiCallRetry()
-            false
+            return
         }
+
+        log.warn(
+            "[NexonApiPgmqProcessor] Transient error: eventType={}, error={}",
+            eventType,
+            root?.message,
+        )
+        metrics.incrementApiCallRetry()
     }
 
     private fun handleRetry(message: PgmqMessage<NexonRetryMessage>) {

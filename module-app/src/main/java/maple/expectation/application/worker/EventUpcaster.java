@@ -101,29 +101,36 @@ public class EventUpcaster {
           currentVersion,
           chain.targetVersion());
 
-      try {
-        JsonNode payloadNode = objectMapper.readTree(currentPayload);
-        JsonNode upcastedNode = chain.upcaster().upcast(payloadNode);
-        currentPayload = objectMapper.writeValueAsString(upcastedNode);
-        currentVersion = chain.targetVersion();
+      String prevPayload = currentPayload;
+      int prevVersion = currentVersion;
+      UpcasterChain currentChain = chain;
 
-        log.debug(
-            "[EventUpcaster] Successfully upcasted to V{}: eventType={}",
-            currentVersion,
-            eventType);
-      } catch (Exception e) {
-        log.error(
-            "[EventUpcaster] Failed to upcast eventType={} from V{} to V{}",
-            eventType,
-            currentVersion,
-            chain.targetVersion(),
-            e);
-        throw new EventUpcastingException(
-            String.format(
-                "Failed to upcast event %s from V%d to V%d",
-                eventType, currentVersion, chain.targetVersion()),
-            e);
-      }
+      currentPayload =
+          executor.executeOrCatch(
+              () -> {
+                JsonNode payloadNode = objectMapper.readTree(prevPayload);
+                JsonNode upcastedNode = currentChain.upcaster().upcast(payloadNode);
+                return objectMapper.writeValueAsString(upcastedNode);
+              },
+              e -> {
+                log.error(
+                    "[EventUpcaster] Failed to upcast eventType={} from V{} to V{}",
+                    eventType,
+                    prevVersion,
+                    currentChain.targetVersion(),
+                    e);
+                throw new EventUpcastingException(
+                    String.format(
+                        "Failed to upcast event %s from V%d to V%d",
+                        eventType, prevVersion, currentChain.targetVersion()),
+                    e);
+              },
+              TaskContext.of("EventUpcaster", "UpcastChain", eventType));
+
+      currentVersion = chain.targetVersion();
+
+      log.debug(
+          "[EventUpcaster] Successfully upcasted to V{}: eventType={}", currentVersion, eventType);
     }
 
     log.info(

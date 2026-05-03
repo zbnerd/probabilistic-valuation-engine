@@ -51,7 +51,7 @@ class PiiMaskingFilter {
 
     fun maskStackTrace(stackTrace: String?): String? {
         if (stackTrace == null) return null
-        var masked = mask(stackTrace)!!
+        var masked = requireNotNull(mask(stackTrace)) { "mask(stackTrace) must not return null for non-null input" }
         masked = masked.replace(Regex("/home/[^/]+/"), "/home/[USER]/")
         masked = masked.replace(Regex("/Users/[^/]+/"), "/Users/[USER]/")
         masked = masked.replace(Regex("C:\\\\\\\\Users\\\\\\\\[^\\\\\\\\]+\\\\\\\\"), "C:\\\\\\\\Users\\\\\\\\[USER]\\\\\\\\")
@@ -62,6 +62,6 @@ class PiiMaskingFilter {
         if (exception == null) return "Unknown error"
         val message = exception.message
         if (message == null) return exception.javaClass.simpleName
-        return mask(message)!!
+        return requireNotNull(mask(message)) { "mask(message) must not return null for non-null input" }
     }
 }

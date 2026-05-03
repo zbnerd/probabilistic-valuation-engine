@@ -13,10 +13,7 @@ spring:
       on-profile: vultr
 
   datasource:
-    # PostgreSQL Configuration for Vultr Seoul
-    url: jdbc:postgresql://${DB_SERVER_IP:158.247.218.6}:5432/maple_expectation
-    username: ${DB_USER:maple}
-    password: ${DB_ROOT_PASSWORD}
+    url: ${DB_URL}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -75,9 +72,24 @@ app:
 pgmq:
   worker:
     expectation-calc-high:
-      enabled: true
+      enabled: false  # bypassed: Controller dispatches directly to external_api_queue
     expectation-calc-low:
       enabled: true
+    external-api:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
+    calculation-requested:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
+    calculation-completed:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
 
 # Retry Budget — tryAcquire가 모든 API 호출마다 카운트되어
 # 100/min 예산으로는 8 RPS × 3 calls = 1440/min 감당 불가 → death spiral

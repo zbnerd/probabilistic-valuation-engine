@@ -152,6 +152,9 @@ public class GameCharacterService {
    * TieredCache를 통한 기본 정보 조회 및 엔티티 업데이트
    *
    * <p>cache-sequence.md 패턴: L1 → L2 → API 호출 순서
+   *
+   * <p>Spring Cache의 {@code cache.get(key, Callable)}는 동기 API이므로 Callable 내부에서 CF 결과를 기다려야 합니다. CF
+   * 체이닝 후 join()을 사용하는 것은 동기 경계에서 불가피합니다.
    */
   private GameCharacter fetchAndUpdateBasicInfo(GameCharacter character) {
     String ocid = character.getOcid();
@@ -159,20 +162,7 @@ public class GameCharacterService {
 
     // TieredCache: L1 → L2 → API 호출 (Single-flight 패턴)
     CharacterBasicResponse basicInfo =
-        cache.get(
-            ocid,
-            () ->
-                executor.execute(
-                    () -> {
-                      log.info(
-                          "🔄 [Enrich] 캐릭터 기본 정보 API 호출: {} (캐시 MISS)",
-                          character.getUserIgn().value());
-                      return nexonApiClient
-                          .getCharacterBasic(ocid)
-                          .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                          .join();
-                    },
-                    TaskContext.of("Cache", "LoadCharacterBasic", ocid)));
+        cache.get(ocid, () -> loadCharacterBasicFromApi(character, ocid));
 
     // 엔티티 업데이트 (메모리)
     GameCharacter updated = updateCharacterWithBasicInfo(character, basicInfo);
@@ -181,6 +171,20 @@ public class GameCharacterService {
     characterAsyncService.saveCharacterBasicInfoAsync(updated);
 
     return updated;
+  }
+
+  /** 캐시 MISS 시 API 호출로 기본 정보 로드 (lambda 추출) */
+  private CharacterBasicResponse loadCharacterBasicFromApi(GameCharacter character, String ocid) {
+    return executor.execute(
+        () -> {
+          log.info("🔄 [Enrich] 캐릭터 기본 정보 API 호출: {} (캐시 MISS)", character.getUserIgn().value());
+          // Sync boundary: Spring Cache Callable은 동기 API이므로 join() 불가피
+          return nexonApiClient
+              .getCharacterBasic(ocid)
+              .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+              .join();
+        },
+        TaskContext.of("Cache", "LoadCharacterBasic", ocid));
   }
 
   /** 엔티티에 기본 정보 설정 - Kotlin immutable data class용 with* 메서드 사용 */

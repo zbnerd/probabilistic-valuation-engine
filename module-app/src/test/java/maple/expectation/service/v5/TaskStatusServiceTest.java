@@ -4,17 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.Optional;
+import java.util.UUID;
 import maple.expectation.application.service.task.TaskStatusService;
 import maple.expectation.common.function.ThrowingSupplier;
-import maple.expectation.core.domain.model.character.CharacterView;
-import maple.expectation.core.port.inbound.CharacterViewQueryPort;
+import maple.expectation.core.model.job.CalculationJob;
+import maple.expectation.core.model.job.CalculationJobStatus;
 import maple.expectation.core.port.inbound.TaskStatus;
+import maple.expectation.core.port.out.CalculationJobPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
-import maple.expectation.infrastructure.pgmq.PgmqClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -24,76 +24,86 @@ import org.junit.jupiter.api.Test;
 @DisplayName("TaskStatusService")
 class TaskStatusServiceTest {
 
-  private CharacterViewQueryPort queryPort;
-  private PgmqClient pgmqClient;
+  private CalculationJobPort jobPort;
   private TaskStatusService service;
 
   @BeforeEach
   void setUp() {
-    queryPort = mock(CharacterViewQueryPort.class);
-    pgmqClient = mock(PgmqClient.class);
-    service = new TaskStatusService(queryPort, pgmqClient, new TestLogicExecutor());
+    jobPort = mock(CalculationJobPort.class);
+    service = new TaskStatusService(jobPort, new TestLogicExecutor());
   }
 
   @Test
-  @DisplayName("matching messageId view is COMPLETED")
-  void matchingViewMessageIdReturnsCompleted() {
-    CharacterView view = mock(CharacterView.class);
-    when(view.getMessageId()).thenReturn("123");
-    when(queryPort.findByUserIgn("user1")).thenReturn(Optional.of(view));
+  @DisplayName("COMPLETED job returns COMPLETED status")
+  void completedJobReturnsCompleted() {
+    UUID jobId = UUID.randomUUID();
+    CalculationJob job = mock(CalculationJob.class);
+    when(job.getUserIgn()).thenReturn("user1");
+    when(job.getStatus()).thenReturn(CalculationJobStatus.COMPLETED);
+    when(jobPort.findJobById(jobId)).thenReturn(job);
 
-    TaskStatus status = service.getStatus("user1", "123");
+    TaskStatus status = service.getStatus("user1", jobId.toString());
 
     assertThat(status).isEqualTo(TaskStatus.COMPLETED);
   }
 
   @Test
-  @DisplayName("mismatched view messageId does not complete unrelated task — returns NOT_FOUND when no queue/archive signal exists")
-  void mismatchedViewMessageIdDoesNotCompleteTask() {
-    CharacterView view = mock(CharacterView.class);
-    when(view.getMessageId()).thenReturn("999");
-    when(queryPort.findByUserIgn("user1")).thenReturn(Optional.of(view));
-    when(pgmqClient.isArchived("expectation_calc_high", 123L)).thenReturn(false);
-    when(pgmqClient.isArchived("expectation_calc_low", 123L)).thenReturn(false);
-    when(pgmqClient.getMessageReadCount("expectation_calc_high", 123L)).thenReturn(0);
-    when(pgmqClient.getMessageReadCount("expectation_calc_low", 123L)).thenReturn(0);
+  @DisplayName("OCID_RESOLVING job returns PROCESSING status")
+  void ocidResolvingJobReturnsProcessing() {
+    UUID jobId = UUID.randomUUID();
+    CalculationJob job = mock(CalculationJob.class);
+    when(job.getUserIgn()).thenReturn("user1");
+    when(job.getStatus()).thenReturn(CalculationJobStatus.OCID_RESOLVING);
+    when(jobPort.findJobById(jobId)).thenReturn(job);
 
-    TaskStatus status = service.getStatus("user1", "123");
-
-    // Returns NOT_FOUND (terminal) instead of PENDING to prevent infinite polling
-    // when task record has disappeared from all queues and archives
-    assertThat(status).isEqualTo(TaskStatus.NOT_FOUND);
-  }
-
-  @Test
-  @DisplayName("archived task is COMPLETED even without current view row")
-  void archivedTaskReturnsCompleted() {
-    when(queryPort.findByUserIgn("user1")).thenReturn(Optional.empty());
-    when(pgmqClient.isArchived("expectation_calc_high", 123L)).thenReturn(true);
-
-    TaskStatus status = service.getStatus("user1", "123");
-
-    assertThat(status).isEqualTo(TaskStatus.COMPLETED);
-  }
-
-  @Test
-  @DisplayName("read count marks task as PROCESSING")
-  void readCountReturnsProcessing() {
-    when(queryPort.findByUserIgn("user1")).thenReturn(Optional.empty());
-    when(pgmqClient.isArchived("expectation_calc_high", 123L)).thenReturn(false);
-    when(pgmqClient.isArchived("expectation_calc_low", 123L)).thenReturn(false);
-    when(pgmqClient.getMessageReadCount("expectation_calc_high", 123L)).thenReturn(1);
-    when(pgmqClient.getMessageReadCount("expectation_calc_low", 123L)).thenReturn(0);
-
-    TaskStatus status = service.getStatus("user1", "123");
+    TaskStatus status = service.getStatus("user1", jobId.toString());
 
     assertThat(status).isEqualTo(TaskStatus.PROCESSING);
   }
 
   @Test
-  @DisplayName("invalid taskId is NOT_FOUND")
+  @DisplayName("non-existent job returns NOT_FOUND")
+  void nonExistentJobReturnsNotFound() {
+    UUID jobId = UUID.randomUUID();
+    when(jobPort.findJobById(jobId)).thenReturn(null);
+
+    TaskStatus status = service.getStatus("user1", jobId.toString());
+
+    assertThat(status).isEqualTo(TaskStatus.NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("wrong userIgn returns NOT_FOUND")
+  void wrongUserIgnReturnsNotFound() {
+    UUID jobId = UUID.randomUUID();
+    CalculationJob job = mock(CalculationJob.class);
+    when(job.getUserIgn()).thenReturn("otherUser");
+    when(job.getStatus()).thenReturn(CalculationJobStatus.COMPLETED);
+    when(jobPort.findJobById(jobId)).thenReturn(job);
+
+    TaskStatus status = service.getStatus("user1", jobId.toString());
+
+    assertThat(status).isEqualTo(TaskStatus.NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("invalid taskId returns NOT_FOUND")
   void invalidTaskIdReturnsNotFound() {
-    TaskStatus status = service.getStatus("user1", "not-a-number");
+    TaskStatus status = service.getStatus("user1", "not-a-uuid");
+
+    assertThat(status).isEqualTo(TaskStatus.NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("FAILED job returns NOT_FOUND")
+  void failedJobReturnsNotFound() {
+    UUID jobId = UUID.randomUUID();
+    CalculationJob job = mock(CalculationJob.class);
+    when(job.getUserIgn()).thenReturn("user1");
+    when(job.getStatus()).thenReturn(CalculationJobStatus.FAILED);
+    when(jobPort.findJobById(jobId)).thenReturn(job);
+
+    TaskStatus status = service.getStatus("user1", jobId.toString());
 
     assertThat(status).isEqualTo(TaskStatus.NOT_FOUND);
   }

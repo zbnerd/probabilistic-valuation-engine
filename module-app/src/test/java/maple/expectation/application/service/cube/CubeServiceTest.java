@@ -17,14 +17,14 @@ import maple.expectation.application.service.cube.component.DpModeInferrer;
 import maple.expectation.config.CubeEngineFeatureFlag;
 import maple.expectation.core.calculator.CubeRateCalculator;
 import maple.expectation.core.domain.stat.StatType;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
+import maple.expectation.core.dto.cube.CubeComputeKey;
 import maple.expectation.domain.repository.CubeProbabilityRepository;
 import maple.expectation.domain.v2.CubeType;
 import maple.expectation.error.exception.UnsupportedCalculationEngineException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.support.TestLogicExecutors;
-import maple.expectation.core.dto.cube.CubeCalculationInput;
-import maple.expectation.core.dto.cube.CubeComputeKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -78,7 +78,13 @@ class CubeServiceTest {
 
     cubeService =
         new CubeServiceImpl(
-            rateCalculator, dpCalculator, repository, featureFlag, executor, dpModeInferrer, computeBuffer);
+            rateCalculator,
+            dpCalculator,
+            repository,
+            featureFlag,
+            executor,
+            dpModeInferrer,
+            computeBuffer);
 
     // Default mock behaviors
     lenient().when(repository.getCurrentTableVersion()).thenReturn(TABLE_VERSION);
@@ -87,11 +93,13 @@ class CubeServiceTest {
     lenient().when(dpModeInferrer.applyDpFields(any())).thenReturn(false);
 
     // Make computeBuffer pass through to the real computation
-    lenient().when(computeBuffer.getOrCompute(any(CubeComputeKey.class), any()))
-        .thenAnswer(inv -> {
-          java.util.function.Supplier<Double> supplier = inv.getArgument(1);
-          return supplier.get();
-        });
+    lenient()
+        .when(computeBuffer.getOrCompute(any(CubeComputeKey.class), any()))
+        .thenAnswer(
+            inv -> {
+              java.util.function.Supplier<Double> supplier = inv.getArgument(1);
+              return supplier.get();
+            });
   }
 
   @Test

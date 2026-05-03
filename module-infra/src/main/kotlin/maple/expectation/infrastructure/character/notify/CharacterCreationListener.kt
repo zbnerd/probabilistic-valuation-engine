@@ -16,6 +16,7 @@ import org.postgresql.PGConnection
 import org.postgresql.PGNotification
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
 /**
@@ -30,9 +31,13 @@ import org.springframework.stereotype.Component
  * GameCharacterFacade에서 waitForCharacterCreation(userIgn) 호출하여
  * 비동기 대기 (Thread.sleep 제거)
  *
+ * <p>pgBouncer(Supabase)에서는 LISTEN/NOTIFY 미지원으로 인해 비활성화 필요.
+ * PGMQ 기반으로 전환 예정.
+ *
  * @see CharacterCreationNotifier
  */
 @Component
+@ConditionalOnProperty(name = ["app.character.creation.listen-enabled"], havingValue = "true", matchIfMissing = false)
 class CharacterCreationListener(
     private val dataSource: DataSource,
     private val executor: LogicExecutor,
@@ -54,7 +59,7 @@ class CharacterCreationListener(
     private val running = AtomicBoolean(false)
     private val waitingFutures = ConcurrentHashMap<String, CompletableFuture<String>>()
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { r ->
-        Thread(r, "character-creation-poller").apply { isDaemon = true }
+        Thread.ofVirtual().name("character-creation-poller").unstarted(r)
     }
 
     @PostConstruct
@@ -85,12 +90,18 @@ class CharacterCreationListener(
     private fun startNotificationListener() {
         scheduler.scheduleAtFixedRate(
             {
-                try {
-                    pollNotifications()
-                } catch (e: Exception) {
-                    log.warn("[CharacterCreationListener] Error receiving notifications, reconnecting...", e)
-                    reconnectWithDelay()
-                }
+                executor.executeOrCatch(
+                    {
+                        pollNotifications()
+                        null
+                    },
+                    { e ->
+                        log.warn("[CharacterCreationListener] Error receiving notifications, reconnecting...", e)
+                        reconnectWithDelay()
+                        null
+                    },
+                    TaskContext.of("CharacterCreation", "PollNotifications"),
+                )
             },
             0,
             POLL_INTERVAL_MS,

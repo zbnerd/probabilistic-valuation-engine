@@ -105,7 +105,7 @@ class NexonRawDataStore(
 
         executor.executeVoidJava(
             {
-                val entity = jpaRepository.findById(id).orElse(null)
+                val entity = jpaRepository.findById(id).orElseGet { null }
                 entity?.markProcessed()
                 entity?.let { jpaRepository.save(it) }
             },
@@ -123,7 +123,7 @@ class NexonRawDataStore(
 
         executor.executeVoidJava(
             {
-                val entity = jpaRepository.findById(id).orElse(null)
+                val entity = jpaRepository.findById(id).orElseGet { null }
                 entity?.markFailed()
                 entity?.let { jpaRepository.save(it) }
             },

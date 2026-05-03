@@ -20,7 +20,6 @@ import org.postgresql.PGConnection
 import org.postgresql.PGNotification
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
 
 /**
  * PostgreSQL LISTEN/NOTIFY 기반 캐시 무효화 이벤트 구독자
@@ -56,7 +55,6 @@ import org.springframework.stereotype.Component
  *
  * @see PostgresNotifyPublisher 발행자 구현
  */
-@Component
 class PostgresNotifySubscriber(
     private val dataSource: DataSource,
     private val tieredCacheManager: TieredCacheManager?,
@@ -80,7 +78,7 @@ class PostgresNotifySubscriber(
 
     private val running = AtomicBoolean(false)
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { r ->
-        Thread(r, "postgres-notify-scheduler").apply { isDaemon = true }
+        Thread.ofVirtual().name("postgres-notify-scheduler").unstarted(r)
     }
 
     /** 이벤트 구독 시작 (애플리케이션 시작 시 자동 호출) */
@@ -139,12 +137,18 @@ class PostgresNotifySubscriber(
         // Use ScheduledExecutorService instead of Thread + Thread.sleep (#642)
         scheduler.scheduleAtFixedRate(
             {
-                try {
-                    pollNotifications()
-                } catch (e: Exception) {
-                    log.warn("[PostgresNotify] Error receiving notifications, reconnecting...", e)
-                    reconnectWithDelay()
-                }
+                executor.executeOrCatch(
+                    {
+                        pollNotifications()
+                        null
+                    },
+                    { e ->
+                        log.warn("[PostgresNotify] Error receiving notifications, reconnecting...", e)
+                        reconnectWithDelay()
+                        null
+                    },
+                    TaskContext.of("CacheInvalidation", "PollNotifications", instanceId),
+                )
             },
             0,
             pollIntervalMs,
@@ -181,10 +185,14 @@ class PostgresNotifySubscriber(
             }
 
             // Deserialize event
-            val event = try {
-                objectMapper.readValue(payload, CacheInvalidationEvent::class.java)
-            } catch (e: Exception) {
-                log.warn("[PostgresNotify] Failed to deserialize event: payload={}", payload, e)
+            val event = executor.executeOrDefault(
+                { objectMapper.readValue(payload, CacheInvalidationEvent::class.java) },
+                null,
+                TaskContext.of("CacheInvalidation", "DeserializeEvent", notification.name),
+            )
+
+            if (event == null) {
+                log.warn("[PostgresNotify] Failed to deserialize event: payload={}", payload)
                 return@executeVoid
             }
 

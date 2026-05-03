@@ -30,9 +30,7 @@ class PgmqPortAdapter(
      * @param message message payload (will be serialized to JSON)
      * @return message ID
      */
-    override fun send(queueName: String, message: Any): Long {
-        return pgmqClient.send(queueName, message)
-    }
+    override fun send(queueName: String, message: Any): Long = pgmqClient.send(queueName, message)
 
     /**
      * Get the current length of the specified queue.
@@ -40,9 +38,7 @@ class PgmqPortAdapter(
      * @param queueName queue name
      * @return number of messages waiting in the queue
      */
-    override fun queueLength(queueName: String): Long {
-        return pgmqClient.queueLength(queueName)
-    }
+    override fun queueLength(queueName: String): Long = pgmqClient.queueLength(queueName)
 
     /**
      * Find the latest active message ID for a user in the target queue.
@@ -51,9 +47,7 @@ class PgmqPortAdapter(
      * @param userIgn user identifier
      * @return message ID if found, null otherwise
      */
-    override fun findActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long? {
-        return pgmqClient.findActiveMessageIdByUserIgn(queueName, userIgn)
-    }
+    override fun findActiveMessageIdByUserIgn(queueName: String, userIgn: String): Long? = pgmqClient.findActiveMessageIdByUserIgn(queueName, userIgn)
 
     /**
      * Atomically send message or return existing message ID if active message found for userIgn.
@@ -64,7 +58,9 @@ class PgmqPortAdapter(
         return jdbcTemplate.queryForObject(
             "SELECT pgmq_send_if_absent(?, ?, ?::jsonb)",
             Long::class.java,
-            queueName, userIgn, json
+            queueName,
+            userIgn,
+            json,
         ) ?: throw IllegalStateException("Failed to execute sendIfAbsent for queue: $queueName")
     }
 }

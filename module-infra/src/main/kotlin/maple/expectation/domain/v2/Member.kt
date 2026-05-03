@@ -87,9 +87,12 @@ class Member {
         }
     }
 
-    private fun maskUuid(): String = if (this.uuid == null || this.uuid!!.length < 8) {
-        "****"
-    } else {
-        this.uuid!!.substring(0, 4) + "****"
+    private fun maskUuid(): String {
+        val uuid = this.uuid ?: return "****"
+        return if (uuid.length < 8) {
+            "****"
+        } else {
+            uuid.substring(0, 4) + "****"
+        }
     }
 }

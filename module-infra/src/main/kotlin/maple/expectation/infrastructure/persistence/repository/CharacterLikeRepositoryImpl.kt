@@ -27,7 +27,7 @@ open class CharacterLikeRepositoryImpl(
         likerAccountId: String,
     ): CharacterLike? = jpaRepo.findByTargetOcidAndLikerAccountId(targetOcid, likerAccountId)
         .map { it.toDomain() }
-        .orElse(null)
+        .orElseGet { null }
 
     override fun findByLikerAccountId(likerAccountId: String): List<CharacterLike> = jpaRepo.findByLikerAccountIdOrderByCreatedAtDesc(likerAccountId).stream()
         .map { it.toDomain() }

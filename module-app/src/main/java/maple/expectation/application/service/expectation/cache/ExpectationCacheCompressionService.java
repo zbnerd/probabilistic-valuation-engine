@@ -2,8 +2,8 @@ package maple.expectation.application.service.expectation.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.util.GzipUtils;
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4;
+import maple.expectation.util.GzipUtils;
 import org.springframework.stereotype.Component;
 
 /**

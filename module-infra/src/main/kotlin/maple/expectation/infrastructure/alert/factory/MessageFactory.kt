@@ -1,12 +1,14 @@
 package maple.expectation.infrastructure.alert.factory
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.infrastructure.alert.message.AlertMessage
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.stereotype.Component
 
 /**
  * Discord Message Factory
@@ -16,21 +18,30 @@ import org.springframework.http.MediaType
  * @author ADR-0345
  * @since 2025-02-12
  */
-object MessageFactory {
+@Component
+class MessageFactory(
+    private val objectMapper: ObjectMapper,
+    private val logicExecutor: LogicExecutor,
+) {
 
-    private val log = LoggerFactory.getLogger(MessageFactory::class.java)
-    private val objectMapper = ObjectMapper()
-    private val COLOR_ERROR = 0xFF0000 // Red
-    private val COLOR_INFO = 0x00FF00 // Green
+    companion object {
+        private val log = LoggerFactory.getLogger(MessageFactory::class.java)
+        private val COLOR_ERROR = 0xFF0000 // Red
+        private val COLOR_INFO = 0x00FF00 // Green
+    }
 
     /** Convert AlertMessage to Discord JSON payload */
-    fun toDiscordPayload(message: AlertMessage): String = try {
-        val payload = buildDiscordPayload(message)
-        objectMapper.writeValueAsString(payload)
-    } catch (e: JsonProcessingException) {
-        log.error("[MessageFactory] Failed to serialize Discord payload: {}", e.message, e)
-        buildFallbackPayload(message)
-    }
+    fun toDiscordPayload(message: AlertMessage): String = logicExecutor.executeWithFallback(
+        {
+            val payload = buildDiscordPayload(message)
+            objectMapper.writeValueAsString(payload)
+        },
+        { e ->
+            log.error("[MessageFactory] Failed to serialize Discord payload: {}", e.message, e)
+            buildFallbackPayload(message)
+        },
+        TaskContext.of("MessageFactory", "ToDiscordPayload", message.getTitle()),
+    )
 
     /** Build Discord payload object from AlertMessage */
     private fun buildDiscordPayload(message: AlertMessage): DiscordPayload {

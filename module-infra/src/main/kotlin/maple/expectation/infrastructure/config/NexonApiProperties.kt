@@ -82,6 +82,14 @@ class NexonApiProperties {
     var cacheFollowerTimeoutSeconds: Int = 32
 
     /**
+     * Equipment cache miss single-flight toggle.
+     *
+     * Disable for cold-miss load tests where most OCIDs are unique and advisory-lock leader
+     * election is fixed overhead instead of useful duplicate suppression.
+     */
+    var equipmentCacheSingleFlightEnabled: Boolean = true
+
+    /**
      * 래치 초기 TTL (초)
      *
      * 리더가 래치를 생성할 때 설정하는 TTL

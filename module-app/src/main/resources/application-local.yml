@@ -10,15 +10,12 @@ spring:
       on-profile: local
 
   datasource:
-    # PostgreSQL Configuration (Issue #591: MySQL migration complete)
-    url: jdbc:postgresql://${DB_SERVER_IP:localhost}:5432/maple_expectation
-    username: maple
-    password: ${DB_ROOT_PASSWORD}
+    url: ${DB_URL}
     driver-class-name: org.postgresql.Driver
 
     hikari:
-      maximum-pool-size: 100
-      minimum-idle: 50
+      maximum-pool-size: 15
+      minimum-idle: 5
       # P2 Unit 5: Connection leak detection - log warning if connection held > 60s
       leak-detection-threshold: 60000
       # P2 Unit 7: JMX monitoring for HikariCP metrics (connections, pending, latency)
@@ -81,9 +78,18 @@ cache:
   l2:
     enabled: false
 
+# Supabase pooler 호환: Lock pool 축소
+lock:
+  datasource:
+    pool-size: 20
+
 # Rate Limiting 비활성화 (부하 테스트용)
 ratelimit:
   enabled: false
+
+nexon:
+  api:
+    equipment-cache-single-flight-enabled: false
 
 # Retry Budget 비활성화 (Bulk Loading용)
 # Issue #611: 300k 캐릭터 로딩 시 API 호출이 많아 예산 소진 방지
@@ -182,15 +188,27 @@ admission-control:
 pgmq:
   worker:
     common:
-      worker-pool-size: 6   # t3.small: 2vCPU × 3 = 6 threads (batch dedup + parallel throughput, #743)
+      worker-pool-size: 24  # V5 cold-miss throughput sweet spot from load-test runs
       sequential-batch-ms: 500  # Buffer 500ms for batch dedup (90% compute reduction)
       # Only affects workers with supportsTwoPhase=true (expectation-calc).
       # donation/nexon-fanout have supportsTwoPhase=false → sequential mode ignored.
       visibility-timeout-sec: 300  # 120→300: sequential batch may take longer than parallel
     expectation-calc-high:
-      enabled: true
+      enabled: false  # bypassed: Controller dispatches directly to external_api_queue
     expectation-calc-low:
       enabled: true
+    external-api:
+      enabled: true
+      batch-size: 50
+      max-retries: 3
+    calculation-requested:
+      enabled: true
+      batch-size: 50
+      max-retries: 3
+    calculation-completed:
+      enabled: true
+      batch-size: 50
+      max-retries: 3
 
 # Bulk Loading Configuration (Issue #611)
 bulk:
@@ -208,3 +226,8 @@ bulk:
     initial-ms: 100  # Increased delay between requests
     min-ms: 50
     max-ms: 1000
+
+snapshot:
+  store:
+    local:
+      base-path: ./snapshots

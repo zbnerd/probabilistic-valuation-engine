@@ -14,6 +14,8 @@ import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -55,6 +57,8 @@ class GlobalAdmissionControl(
     private val workerExecutor: Executor,
 ) {
     private val log = LoggerFactory.getLogger(GlobalAdmissionControl::class.java)
+
+    private val lock = ReentrantLock()
 
     // Semaphore limits IN-FLIGHT (executing) requests
     private val semaphore = Semaphore(properties.maxInFlight)
@@ -139,7 +143,7 @@ class GlobalAdmissionControl(
     fun <T> submitOrWait(key: String, task: Callable<T>): CompletableFuture<T> {
         // 🔥 P0 FIX #2: Thread-safe lazy initialization using AtomicBoolean
         if (!workerPoolStarted.get()) {
-            synchronized(this) {
+            lock.withLock {
                 if (workerPoolStarted.compareAndSet(false, true)) {
                     startWorkerPool(properties.workerPoolSize)
                 }
@@ -232,12 +236,12 @@ class GlobalAdmissionControl(
 
     private fun workerLoop(workerIndex: Int) {
         while (running.get() && !Thread.currentThread().isInterrupted) {
-            try {
+            logicExecutor.executeVoid({
                 // 🔥 FIXED: Block HERE (in worker thread, not HTTP thread)
                 @Suppress("UNCHECKED_CAST")
                 val request = admissionQueue.take() as AdmissionRequest<*>
 
-                if (!running.get()) break
+                if (!running.get()) return@executeVoid
 
                 val waitTimeNanos = System.nanoTime() - request.enqueuedAtNanos
                 queueWaitTimeTimer.record(waitTimeNanos, TimeUnit.NANOSECONDS)
@@ -252,45 +256,29 @@ class GlobalAdmissionControl(
                         AdmissionTimeoutException("Queue timeout after ${properties.queueTimeoutMs}ms"),
                     )
                     log.debug("[AdmissionControl] Worker {}: Request timed out in queue: key={}", workerIndex, request.key)
-                    continue
+                    return@executeVoid
                 }
 
                 inFlightCount.incrementAndGet()
 
-                // Execute request
-                try {
-                    @Suppress("UNCHECKED_CAST")
-                    val result = request.task.call()
-                    @Suppress("UNCHECKED_CAST")
-                    (request.future as CompletableFuture<Any>).complete(result)
-                } catch (e: Exception) {
-                    request.future.completeExceptionally(e)
-                } finally {
-                    semaphore.release()
-                    inFlightCount.decrementAndGet()
-                }
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                log.info("[AdmissionControl] Worker {} interrupted", workerIndex)
-                break
-            } catch (e: Exception) {
-                log.error("[AdmissionControl] Worker {} error", workerIndex, e)
-            }
+                executeRequest(request)
+            }, TaskContext.of("AdmissionControl", "Worker", "worker-$workerIndex"))
         }
     }
 
     private fun <T> executeRequest(request: AdmissionRequest<T>) {
-        logicExecutor.executeVoid({
-            try {
+        logicExecutor.executeWithFinally(
+            {
                 val result = request.task.call()
-                request.future.complete(result)
-            } catch (e: Exception) {
-                request.future.completeExceptionally(e)
-            } finally {
+                @Suppress("UNCHECKED_CAST")
+                (request.future as CompletableFuture<Any>).complete(result)
+            },
+            {
                 semaphore.release()
                 inFlightCount.decrementAndGet()
-            }
-        }, TaskContext.of("AdmissionControl", "Execute", request.key))
+            },
+            TaskContext.of("AdmissionControl", "Execute", request.key),
+        )
     }
 
     /**

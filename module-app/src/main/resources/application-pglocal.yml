@@ -15,9 +15,7 @@ spring:
       on-profile: pglocal
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/maple_expectation?currentSchema=public
-    username: ${DB_USERNAME:-maple}
-    password: ${DB_PASSWORD:-maple123}
+    url: ${DB_URL}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -140,6 +138,21 @@ pgmq:
       polling-interval-ms: 50
       batch-size: 50
       max-retries: 5
+    external-api:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
+    calculation-requested:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
+    calculation-completed:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
 
 # Z.ai LangChain4j Configuration
 langchain4j:

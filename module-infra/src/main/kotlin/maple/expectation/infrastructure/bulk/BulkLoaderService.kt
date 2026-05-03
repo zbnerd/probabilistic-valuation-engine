@@ -11,10 +11,12 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.LockSupport
 import maple.expectation.core.port.out.CacheWarmupPort
 import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer
 import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheStrategy
@@ -309,7 +311,7 @@ class BulkLoaderService(
         val pendingCount = writeBackBuffer.getPendingCount()
         if (pendingCount > BACKPRESSURE_THRESHOLD) {
             log.debug("[BulkLoaderService] Backpressure detected: pending={}", pendingCount)
-            Thread.sleep(100)
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100))
         }
     }
 
@@ -360,7 +362,7 @@ class BulkLoaderService(
         saveCheckpointIfNeeded(currentLoaded, startIndex, index, total, completedSet)
 
         val decision = throttler.onSuccess()
-        Thread.sleep(decision.delayMs)
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(decision.delayMs))
     }
 
     private fun shouldSkipProcessing(ign: String, completedSet: MutableSet<String>): Boolean {

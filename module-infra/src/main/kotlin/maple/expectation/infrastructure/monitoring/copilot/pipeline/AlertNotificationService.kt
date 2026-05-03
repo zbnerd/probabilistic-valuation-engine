@@ -80,7 +80,7 @@ class AlertNotificationService(
 
                 val annotatedSignals = context.anomalies.take(3).map { anomaly ->
                     DiscordNotifier.AnnotatedSignal(
-                        signalMap[anomaly.signalId]!!,
+                        requireNotNull(signalMap[anomaly.signalId]) { "SignalDefinition not found for signalId=${anomaly.signalId}" },
                         anomaly.currentValue,
                     )
                 }

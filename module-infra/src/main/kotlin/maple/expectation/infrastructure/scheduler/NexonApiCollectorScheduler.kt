@@ -87,7 +87,6 @@ class NexonApiCollectorScheduler(
     private fun processBatch() {
         log.info("[NexonApiCollector] Starting scheduled collection")
 
-        // 활성 캐릭터 목록 조회 (최근 30일 내 업데이트)
         val characters = gameCharacterRepository.findActiveCharacters()
 
         if (characters.isEmpty()) {
@@ -95,98 +94,60 @@ class NexonApiCollectorScheduler(
             return
         }
 
-        // 배치 사이즈 제한 (한 번에 최대 100개)
         val batch = characters.take(100)
 
         log.info("[NexonApiCollector] Processing {} characters", batch.size)
 
-        val results = processCharacters(batch)
-
-        log.info(
-            "[NexonApiCollector] Collection completed: success={}, failed={}",
-            results.successCount,
-            results.failureCount,
-        )
+        processCharacters(batch)
+            .thenAccept { results ->
+                log.info(
+                    "[NexonApiCollector] Collection completed: success={}, failed={}",
+                    results.successCount,
+                    results.failureCount,
+                )
+            }
+            .exceptionally { e ->
+                log.error("[NexonApiCollector] Collection failed", e)
+                null
+            }
     }
 
-    /**
-     * 캐릭터별 데이터 수집 처리
-     *
-     * @param characters 처리할 캐릭터 목록
-     * @return 처리 결과 집계
-     */
-    private fun processCharacters(characters: List<maple.expectation.core.domain.model.character.GameCharacter>): CollectionResult {
-        var successCount = 0
-        var failureCount = 0
-        var rateLimitedCount = 0
-
-        characters.forEach { character ->
-            val ocid = character.characterId.value
-            val userIgn = character.userIgn.value
-
-            val result = processSingleCharacter(ocid, userIgn)
-
-            when (result) {
-                ProcessResult.SUCCESS -> successCount++
-                ProcessResult.FAILURE -> failureCount++
-                ProcessResult.RATE_LIMITED -> rateLimitedCount++
-            }
+    private fun processCharacters(characters: List<maple.expectation.core.domain.model.character.GameCharacter>): CompletableFuture<CollectionResult> {
+        val futures = characters.map { character ->
+            processSingleCharacter(character.characterId.value, character.userIgn.value)
         }
 
-        return CollectionResult(successCount, failureCount, rateLimitedCount)
+        return CompletableFuture.allOf(*futures.toTypedArray())
+            .thenApply {
+                val results = futures.map { it.getNow(ProcessResult.FAILURE) }
+                CollectionResult(
+                    successCount = results.count { it == ProcessResult.SUCCESS },
+                    failureCount = results.count { it == ProcessResult.FAILURE },
+                    rateLimitedCount = results.count { it == ProcessResult.RATE_LIMITED },
+                )
+            }
     }
 
-    /**
-     * 단일 캐릭터 처리
-     *
-     * @param ocid 캐릭터 OCID
-     * @param userIgn 사용자 IGN
-     * @return 처리 결과
-     */
-    private fun processSingleCharacter(ocid: String, userIgn: String): ProcessResult {
-        val context = TaskContext.of("NexonApiCollector", "ProcessCharacter", userIgn)
+    private fun processSingleCharacter(ocid: String, userIgn: String): CompletableFuture<ProcessResult> = doProcessSingleCharacter(ocid, userIgn)
+        .exceptionally { _ -> ProcessResult.FAILURE }
 
-        return executor.executeOrDefault(
-            { doProcessSingleCharacter(ocid, userIgn) },
-            ProcessResult.FAILURE,
-            context,
-        )
-    }
-
-    /**
-     * 단일 캐릭터 처리 내부 로직
-     *
-     * <h3>처리 단계</h3>
-     * <ol>
-     *   <li>Rate Limit 확인</li>
-     *   <li>Nexon API 호출 (비동기)</li>
-     *   <li>원본 JSON 데이터 저장</li>
-     *   <li>Calculation Queue에 메시지 발행</li>
-     * </ol>
-     */
-    private fun doProcessSingleCharacter(ocid: String, userIgn: String): ProcessResult {
-        // 1. Rate Limit 확인
+    private fun doProcessSingleCharacter(ocid: String, userIgn: String): CompletableFuture<ProcessResult> {
         val consumeResult = rateLimiter.tryConsume(ocid)
         if (!consumeResult.allowed) {
             log.debug("[NexonApiCollector] Rate limited: ign={}, retryAfter={}s", userIgn, consumeResult.retryAfterSeconds)
-            return ProcessResult.RATE_LIMITED
+            return CompletableFuture.completedFuture(ProcessResult.RATE_LIMITED)
         }
 
-        // 2. Nexon API 호출 (비동기 병렬)
-        val basicFuture = nexonApiClient.getCharacterBasic(ocid)
-        val itemFuture = nexonApiClient.getItemDataByOcid(ocid)
-
-        // 3. 비동기 결과 조합
-        val combinedData = combineApiResponses(ocid, basicFuture, itemFuture)
-
-        // 4. 원본 JSON 데이터 저장
-        saveRawData(ocid, combinedData)
-
-        // 5. Calculation Queue에 메시지 발행
-        queueProducer.publish(ocid, userIgn)
-
-        log.debug("[NexonApiCollector] Successfully collected and queued: ign={}", userIgn)
-        return ProcessResult.SUCCESS
+        return combineApiResponses(
+            ocid,
+            nexonApiClient.getCharacterBasic(ocid),
+            nexonApiClient.getItemDataByOcid(ocid),
+        ).thenApply { combinedData ->
+            saveRawData(ocid, combinedData)
+            queueProducer.publish(ocid, userIgn)
+            log.debug("[NexonApiCollector] Successfully collected and queued: ign={}", userIgn)
+            ProcessResult.SUCCESS
+        }
     }
 
     /**
@@ -201,18 +162,14 @@ class NexonApiCollectorScheduler(
         ocid: String,
         basicFuture: CompletableFuture<CharacterBasicResponse>,
         itemFuture: CompletableFuture<EquipmentResponse>,
-    ): String {
-        val basic = basicFuture.get()
-        val item = itemFuture.get()
-
+    ): CompletableFuture<String> = basicFuture.thenCombine(itemFuture) { basic, item ->
         val combined = mapOf(
             "ocid" to ocid,
             "basic" to basic,
             "item_data" to item,
             "collected_at" to Instant.now().toString(),
         )
-
-        return objectMapper.writeValueAsString(combined)
+        objectMapper.writeValueAsString(combined)
     }
 
     /**

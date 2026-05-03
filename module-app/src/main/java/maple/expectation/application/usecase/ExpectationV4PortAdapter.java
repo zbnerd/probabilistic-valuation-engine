@@ -21,7 +21,8 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
 
   // Implement interface methods with presetNo parameter (Kotlin default params)
   @Override
-  public CompletableFuture<Object> calculateExpectationAsync(String userIgn, boolean force, int presetNo) {
+  public CompletableFuture<Object> calculateExpectationAsync(
+      String userIgn, boolean force, int presetNo) {
     return expectationService
         .calculateExpectationAsync(userIgn, force, null, presetNo)
         .thenApply(response -> response);
@@ -36,7 +37,8 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
   }
 
   @Override
-  public CompletableFuture<byte[]> getGzipExpectationAsync(String userIgn, boolean force, int presetNo) {
+  public CompletableFuture<byte[]> getGzipExpectationAsync(
+      String userIgn, boolean force, int presetNo) {
     return expectationService.getGzipExpectationAsync(userIgn, force, presetNo);
   }
 
@@ -56,7 +58,8 @@ public class ExpectationV4PortAdapter implements ExpectationV4Port {
   }
 
   @Override
-  public Object calculateExpectationWriteOnly(String userIgn, boolean force, String taskId, int presetNo) {
+  public Object calculateExpectationWriteOnly(
+      String userIgn, boolean force, String taskId, int presetNo) {
     return expectationService.calculateExpectationWriteOnly(userIgn, force, taskId, presetNo);
   }
 

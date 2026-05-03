@@ -111,34 +111,6 @@ class GameCharacterControllerV5Test {
     assertThat(response.getBody()).isEqualTo("Queue full, try again later");
   }
 
-  @Test
-  @DisplayName("Force Recalculation: Delete cache and queue task")
-  void testForceRecalculation_DeletesCacheAndQueues() {
-    // Given: Queue accepts task
-    when(queue.offer(any(ExpectationCalculationTask.class))).thenReturn(true);
-
-    // When: Force recalculation
-    ResponseEntity<Void> response = controller.recalculateExpectationV5Internal(TEST_IGN);
-
-    // Then: Cache deleted and task queued
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-    verify(queryService, times(1)).deleteByUserIgn(TEST_IGN);
-    verify(queue, times(1)).offer(any(ExpectationCalculationTask.class));
-  }
-
-  @Test
-  @DisplayName("Force Recalculation Queue Full: Return 503")
-  void testForceRecalculationQueueFull_Returns503() {
-    // Given: Queue full
-    when(queue.offer(any(ExpectationCalculationTask.class))).thenReturn(false);
-
-    // When: Force recalculation
-    ResponseEntity<Void> response = controller.recalculateExpectationV5Internal(TEST_IGN);
-
-    // Then: Return 503
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
-  }
-
   // ==================== Helper Methods ====================
 
   private CharacterValuationViewEntity createMockView() {
@@ -222,8 +194,6 @@ class GameCharacterControllerV5Test {
     }
 
     ResponseEntity<Void> recalculateExpectationV5Internal(String userIgn) {
-      queryService.deleteByUserIgn(userIgn);
-
       ExpectationCalculationTask task = ExpectationCalculationTask.highPriority(userIgn, true);
       boolean queued = queue.offer(task);
 

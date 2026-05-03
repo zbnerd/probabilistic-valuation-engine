@@ -69,7 +69,9 @@ class ItemCalculationExecutorConfig(
 
         log.info(
             "[ItemCalculationExecutor] Initialized: core={}, max={}, queue={}",
-            config.corePoolSize, config.maxPoolSize, config.queueCapacity,
+            config.corePoolSize,
+            config.maxPoolSize,
+            config.queueCapacity,
         )
 
         return executor

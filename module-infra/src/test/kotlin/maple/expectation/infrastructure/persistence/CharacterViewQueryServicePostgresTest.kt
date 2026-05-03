@@ -4,13 +4,17 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import java.time.Instant
+import java.util.concurrent.Executors
 import maple.expectation.common.function.ThrowingSupplier
+import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
 import maple.expectation.infrastructure.persistence.repository.CharacterValuationViewJpaRepository
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
@@ -20,14 +24,10 @@ import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
-import org.mockito.kotlin.eq
-import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
-import java.time.Instant
-import java.util.Optional
-import org.assertj.core.api.Assertions.assertThat
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import org.springframework.jdbc.core.namedparam.SqlParameterSource
 
 /**
  * Unit tests for [CharacterViewQueryServicePostgres].
@@ -63,6 +63,9 @@ class CharacterViewQueryServicePostgresTest {
 
     private lateinit var executor: LogicExecutor
 
+    @Mock
+    private lateinit var jdbc: NamedParameterJdbcTemplate
+
     private lateinit var service: CharacterViewQueryServicePostgres
 
     @BeforeEach
@@ -76,6 +79,9 @@ class CharacterViewQueryServicePostgresTest {
             objectMapper,
             executor,
             meterRegistry,
+            jdbc,
+            Executors.newVirtualThreadPerTaskExecutor(),
+            500,
         )
     }
 
@@ -110,18 +116,11 @@ class CharacterViewQueryServicePostgresTest {
         val userIgn = "newUser"
         val messageId = "msg-123"
         val entity = createTestEntity(userIgn, messageId = messageId, version = 100L)
-        whenever(repository.findByMessageId(messageId)).thenReturn(null)
-        whenever(repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn)).thenReturn(null)
-        whenever(repository.save(any())).thenReturn(entity)
+        whenever(jdbc.update(any<String>(), any<Map<String, *>>())).thenReturn(1)
 
         service.upsert(entity)
 
-        val captor = argumentCaptor<CharacterValuationViewEntity>()
-        verify(repository).save(captor.capture())
-        val saved = captor.firstValue
-        assertThat(saved.userIgn).isEqualTo(userIgn)
-        assertThat(saved.version).isEqualTo(1L)
-        assertThat(saved.lastAppliedVersion).isEqualTo(100L)
+        verify(jdbc).update(any<String>(), any<Map<String, *>>())
     }
 
     @Test
@@ -129,20 +128,12 @@ class CharacterViewQueryServicePostgresTest {
     fun upsert_updatesExistingEntityWithNewerVersion() {
         val userIgn = "existingUser"
         val messageId = "msg-456"
-        val existing = createTestEntity(userIgn, messageId = null, version = 50L, lastAppliedVersion = 50L)
         val incoming = createTestEntity(userIgn, messageId = messageId, version = 100L)
-        whenever(repository.findByMessageId(messageId)).thenReturn(null)
-        whenever(repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn)).thenReturn(existing)
-        whenever(repository.save(any())).thenReturn(incoming)
+        whenever(jdbc.update(any<String>(), any<Map<String, *>>())).thenReturn(1)
 
         service.upsert(incoming)
 
-        val captor = argumentCaptor<CharacterValuationViewEntity>()
-        verify(repository).save(captor.capture())
-        val saved = captor.firstValue
-        assertThat(saved.userIgn).isEqualTo(userIgn)
-        assertThat(saved.messageId).isEqualTo(messageId)
-        assertThat(saved.lastAppliedVersion).isEqualTo(100L)
+        verify(jdbc).update(any<String>(), any<Map<String, *>>())
     }
 
     @Test
@@ -150,14 +141,12 @@ class CharacterViewQueryServicePostgresTest {
     fun upsert_skipsUpdateWithStaleVersion() {
         val userIgn = "existingUser"
         val messageId = "msg-789"
-        val existing = createTestEntity(userIgn, messageId = null, version = 100L, lastAppliedVersion = 100L)
         val incoming = createTestEntity(userIgn, messageId = messageId, version = 50L)
-        whenever(repository.findByMessageId(messageId)).thenReturn(null)
-        whenever(repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn)).thenReturn(existing)
+        whenever(jdbc.update(any<String>(), any<Map<String, *>>())).thenReturn(0)
 
         service.upsert(incoming)
 
-        verify(repository, never()).save(any())
+        verify(jdbc).update(any<String>(), any<Map<String, *>>())
     }
 
     @Test
@@ -208,18 +197,8 @@ class CharacterViewQueryServicePostgresTest {
     }
 
     @Test
-    @DisplayName("deleteByUserIgn은 repository에 위임한다")
-    fun deleteByUserIgn_delegatesToRepository() {
-        val userIgn = "testUser"
-
-        service.deleteByUserIgn(userIgn)
-
-        verify(repository).deleteByUserIgn(userIgn)
-    }
-
-    @Test
-    @DisplayName("upsertFromCalculation은 JSON을 파싱하여 entity를 저장한다")
-    fun upsertFromCalculation_parsesJsonAndSaves() {
+    @DisplayName("upsertFromCalculation은 JSON을 파싱하여 entity를 upsert한다")
+    fun upsertFromCalculation_parsesJsonAndUpserts() {
         val userIgn = "testUser"
         val messageId = "msg-123"
         val characterOcid = "ocid-456"
@@ -229,9 +208,7 @@ class CharacterViewQueryServicePostgresTest {
         val maxPresetNo = 3
         val presetsJson = """[]"""
 
-        whenever(repository.findByMessageId(messageId)).thenReturn(null)
-        whenever(repository.findTopByUserIgnOrderByCalculatedAtDescIdDesc(userIgn)).thenReturn(null)
-        whenever(repository.save(any())).thenReturn(createTestEntity(userIgn, version = 1L))
+        whenever(jdbc.update(any<String>(), any<Map<String, *>>())).thenReturn(1)
 
         service.upsertFromCalculation(
             userIgn,
@@ -245,17 +222,57 @@ class CharacterViewQueryServicePostgresTest {
             presetsJson,
         )
 
-        val captor = argumentCaptor<CharacterValuationViewEntity>()
-        verify(repository).save(captor.capture())
-        val saved = captor.firstValue
-        assertThat(saved.userIgn).isEqualTo(userIgn)
-        assertThat(saved.messageId).isEqualTo(messageId)
-        assertThat(saved.characterOcid).isEqualTo(characterOcid)
-        assertThat(saved.characterClass).isEqualTo(characterClass)
-        assertThat(saved.characterLevel).isEqualTo(characterLevel)
-        assertThat(saved.totalExpectedCost).isEqualTo(totalExpectedCost)
-        assertThat(saved.maxPresetNo).isEqualTo(maxPresetNo)
-        assertThat(saved.presetNo).isEqualTo(1)
+        val captor = argumentCaptor<Map<String, *>>()
+        verify(jdbc).update(any<String>(), captor.capture())
+        val params = captor.firstValue
+        assertThat(params["userIgn"]).isEqualTo(userIgn)
+        assertThat(params["messageId"]).isEqualTo(messageId)
+        assertThat(params["characterOcid"]).isEqualTo(characterOcid)
+        assertThat(params["characterClass"]).isEqualTo(characterClass)
+        assertThat(params["characterLevel"]).isEqualTo(characterLevel)
+        assertThat(params["totalExpectedCost"]).isEqualTo(totalExpectedCost)
+        assertThat(params["maxPresetNo"]).isEqualTo(maxPresetNo)
+        assertThat(params["presetNo"]).isEqualTo(1)
+    }
+
+    @Test
+    @DisplayName("batchUpsertFromCalculations는 JDBC batch upsert를 수행한다")
+    fun batchUpsertFromCalculations_usesJdbcBatchUpsert() {
+        val commands = listOf(
+            CharacterViewProjectionCommand(
+                userIgn = "testUser1",
+                messageId = "101",
+                characterOcid = "ocid-101",
+                characterClass = "전체계산가",
+                characterLevel = null,
+                totalExpectedCost = 1000000L,
+                maxPresetNo = 3,
+                presetNo = 1,
+                presetsJson = "[]",
+            ),
+            CharacterViewProjectionCommand(
+                userIgn = "testUser2",
+                messageId = "102",
+                characterOcid = "ocid-102",
+                characterClass = "전체계산가",
+                characterLevel = null,
+                totalExpectedCost = 2000000L,
+                maxPresetNo = 4,
+                presetNo = 2,
+                presetsJson = "[]",
+            ),
+        )
+        whenever(jdbc.batchUpdate(any<String>(), any<Array<SqlParameterSource>>())).thenReturn(intArrayOf(1, 1))
+
+        val result = service.batchUpsertFromCalculations(commands)
+
+        val captor = argumentCaptor<Array<SqlParameterSource>>()
+        verify(jdbc).batchUpdate(any<String>(), captor.capture())
+        assertThat(result).isEqualTo(2)
+        assertThat(captor.firstValue).hasSize(2)
+        assertThat(captor.firstValue[0].getValue("userIgn")).isEqualTo("testUser1")
+        assertThat(captor.firstValue[0].getValue("messageId")).isEqualTo("101")
+        assertThat(captor.firstValue[1].getValue("totalExpectedCost")).isEqualTo(2000000L)
     }
 
     private fun createTestEntity(
@@ -312,9 +329,7 @@ class CharacterViewQueryServicePostgresTest {
             throw RuntimeException(e)
         }
 
-        override fun <T> execute(task: ThrowingSupplier<T>, taskName: String): T {
-            return execute(task, TaskContext.of("Test", taskName))
-        }
+        override fun <T> execute(task: ThrowingSupplier<T>, taskName: String): T = execute(task, TaskContext.of("Test", taskName))
 
         override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = try {
             task.get()
@@ -370,13 +385,11 @@ class CharacterViewQueryServicePostgresTest {
             task: ThrowingSupplier<T>,
             fallback: ExceptionTranslator,
             context: TaskContext,
-        ): T {
-            return try {
-                task.get()
-            } catch (e: Throwable) {
-                @Suppress("UNCHECKED_CAST")
-                fallback.translate(e, context) as T
-            }
+        ): T = try {
+            task.get()
+        } catch (e: Throwable) {
+            @Suppress("UNCHECKED_CAST")
+            fallback.translate(e, context) as T
         }
 
         override fun <T> executeOrCatch(
@@ -393,13 +406,11 @@ class CharacterViewQueryServicePostgresTest {
             task: ThrowingSupplier<T>,
             recovery: ExceptionTranslator,
             context: TaskContext,
-        ): T {
-            return try {
-                task.get()
-            } catch (e: Throwable) {
-                @Suppress("UNCHECKED_CAST")
-                recovery.translate(e, context) as T
-            }
+        ): T = try {
+            task.get()
+        } catch (e: Throwable) {
+            @Suppress("UNCHECKED_CAST")
+            recovery.translate(e, context) as T
         }
 
         override fun executeVoidJava(task: Runnable, context: TaskContext) {

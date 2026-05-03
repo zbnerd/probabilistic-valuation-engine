@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.scheduler
 
-import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.core.port.out.NexonDataCollectorPort
 import maple.expectation.domain.repository.GameCharacterRepository
 import maple.expectation.infrastructure.executor.LogicExecutor

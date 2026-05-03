@@ -16,12 +16,8 @@ class StatParser {
             return 0
         }
 
-        return try {
-            val cleanStr = value.replace("[^0-9\\-]".toRegex(), "")
-            if (cleanStr.isEmpty()) 0 else cleanStr.toInt()
-        } catch (e: NumberFormatException) {
-            0
-        }
+        val cleanStr = value.replace("[^0-9\\-]".toRegex(), "")
+        return cleanStr.toIntOrNull() ?: 0
     }
 
     /**

@@ -3,6 +3,18 @@ package maple.expectation.core.port.inbound
 import java.util.Optional
 import maple.expectation.core.domain.model.character.CharacterView
 
+data class CharacterViewProjectionCommand(
+    val userIgn: String,
+    val messageId: String,
+    val characterOcid: String?,
+    val characterClass: String?,
+    val characterLevel: Int?,
+    val totalExpectedCost: Long,
+    val maxPresetNo: Int,
+    val presetNo: Int,
+    val presetsJson: String,
+)
+
 /**
  * V5 CQRS Query Side Port (ADR-005, Issue #639)
  *
@@ -22,13 +34,6 @@ interface CharacterViewQueryPort {
      * @return CharacterView 또는 empty
      */
     fun findByUserIgn(userIgn: String): Optional<CharacterView>
-
-    /**
-     * 캐릭터 삭제 (Cache Invalidation)
-     *
-     * @param userIgn 캐릭터 IGN
-     */
-    fun deleteByUserIgn(userIgn: String)
 
     /**
      * V5 CQRS Write: 워커 계산 결과를 뷰 테이블에 upsert
@@ -56,4 +61,6 @@ interface CharacterViewQueryPort {
         presetNo: Int,
         presetsJson: String,
     )
+
+    fun batchUpsertFromCalculations(commands: List<CharacterViewProjectionCommand>): Int
 }

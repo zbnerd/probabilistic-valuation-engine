@@ -1,7 +1,9 @@
 package maple.expectation.infrastructure.persistence
 
-import maple.expectation.core.domain.model.character.CharacterView
+import java.time.Instant
+import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationViewEntity
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
@@ -11,11 +13,7 @@ import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.verifyNoMoreInteractions
 import org.mockito.kotlin.whenever
-import java.time.Instant
-import java.util.Optional
-import org.assertj.core.api.Assertions.assertThat
 
 /**
  * Unit tests for [CharacterViewQueryPortAdapter].
@@ -172,16 +170,6 @@ class CharacterViewQueryPortAdapterTest {
     }
 
     @Test
-    @DisplayName("deleteByUserIgn은 queryService에 위임한다")
-    fun deleteByUserIgn_delegatesToQueryService() {
-        val userIgn = "testUser"
-
-        adapter.deleteByUserIgn(userIgn)
-
-        verify(queryService).deleteByUserIgn(userIgn)
-    }
-
-    @Test
     @DisplayName("upsertFromCalculation은 queryService에 올바른 파라미터로 위임한다")
     fun upsertFromCalculation_delegatesToQueryService() {
         val userIgn = "testUser"
@@ -216,6 +204,30 @@ class CharacterViewQueryPortAdapterTest {
             eq(1), // presetNo default
             eq(presetsJson),
         )
+    }
+
+    @Test
+    @DisplayName("batchUpsertFromCalculations는 queryService에 위임한다")
+    fun batchUpsertFromCalculations_delegatesToQueryService() {
+        val commands = listOf(
+            CharacterViewProjectionCommand(
+                userIgn = "testUser",
+                messageId = "123",
+                characterOcid = "ocid-123",
+                characterClass = "전체계산가",
+                characterLevel = null,
+                totalExpectedCost = 1000000L,
+                maxPresetNo = 3,
+                presetNo = 1,
+                presetsJson = "[]",
+            ),
+        )
+        whenever(queryService.batchUpsertFromCalculations(commands)).thenReturn(1)
+
+        val result = adapter.batchUpsertFromCalculations(commands)
+
+        assertThat(result).isEqualTo(1)
+        verify(queryService).batchUpsertFromCalculations(commands)
     }
 
     @Test
@@ -260,25 +272,23 @@ class CharacterViewQueryPortAdapterTest {
         totalExpectedCost: Long = 1000000L,
         maxPresetNo: Int = 3,
         presets: List<CharacterValuationViewEntity.PresetView>? = null,
-    ): CharacterValuationViewEntity {
-        return CharacterValuationViewEntity(
-            id = 1L,
-            jpaVersion = 0L,
-            userIgn = userIgn,
-            messageId = messageId,
-            characterOcid = "ocid-123",
-            characterClass = "전체계산가",
-            characterLevel = 300,
-            calculatedAt = Instant.now(),
-            lastApiSyncAt = Instant.now(),
-            version = 1L,
-            lastAppliedVersion = 1L,
-            totalExpectedCost = totalExpectedCost,
-            maxPresetNo = maxPresetNo,
-            presets = presets,
-            fromCache = false,
-        )
-    }
+    ): CharacterValuationViewEntity = CharacterValuationViewEntity(
+        id = 1L,
+        jpaVersion = 0L,
+        userIgn = userIgn,
+        messageId = messageId,
+        characterOcid = "ocid-123",
+        characterClass = "전체계산가",
+        characterLevel = 300,
+        calculatedAt = Instant.now(),
+        lastApiSyncAt = Instant.now(),
+        version = 1L,
+        lastAppliedVersion = 1L,
+        totalExpectedCost = totalExpectedCost,
+        maxPresetNo = maxPresetNo,
+        presets = presets,
+        fromCache = false,
+    )
 
     private fun createTestPreset(
         presetNo: Int,

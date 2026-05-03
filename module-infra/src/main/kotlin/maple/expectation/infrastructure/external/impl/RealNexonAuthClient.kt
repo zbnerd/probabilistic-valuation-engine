@@ -95,7 +95,7 @@ class RealNexonAuthClient(
             .block()
 
         return Optional.ofNullable(response)
-            .filter { r -> r.accountList != null && r.accountList!!.isNotEmpty() }
+            .filter { r -> r.accountList != null && requireNotNull(r.accountList).isNotEmpty() }
             .map { r ->
                 logger.info("[NexonAuth] Retrieved {} characters", r.getAllCharacters().size)
                 r

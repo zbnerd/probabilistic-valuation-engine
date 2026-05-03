@@ -1,14 +1,13 @@
 package maple.expectation.infrastructure.pgmq
 
-import maple.expectation.core.domain.model.character.GameCharacter
-import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Test
-import org.mockito.kotlin.mock
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import org.mockito.kotlin.mock
 
 class PgmqWorkerPipelineTest {
 

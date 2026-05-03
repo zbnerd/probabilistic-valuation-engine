@@ -1,11 +1,8 @@
 package maple.expectation.infrastructure.pgmq
 
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.mockito.kotlin.mock
 
 class PgmqWorkerSequentialTest {
 
@@ -34,13 +31,11 @@ class PgmqWorkerSequentialTest {
         assertThat(config.common.sequentialBatchMs).isEqualTo(500)
     }
 
-    private fun testMessage(id: Long): PgmqMessage<ExpectationCalcMessage> {
-        return PgmqMessage.of(
-            messageId = id,
-            readCount = 0,
-            enqueuedAt = java.time.Instant.now(),
-            vt = java.time.Instant.now().plusSeconds(30),
-            payload = ExpectationCalcMessage(userIgn = "User$id", forceRecalculation = false),
-        )
-    }
+    private fun testMessage(id: Long): PgmqMessage<ExpectationCalcMessage> = PgmqMessage.of(
+        messageId = id,
+        readCount = 0,
+        enqueuedAt = java.time.Instant.now(),
+        vt = java.time.Instant.now().plusSeconds(30),
+        payload = ExpectationCalcMessage(userIgn = "User$id", forceRecalculation = false),
+    )
 }

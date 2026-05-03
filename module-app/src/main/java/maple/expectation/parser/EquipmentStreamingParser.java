@@ -17,10 +17,10 @@ import java.util.zip.GZIPInputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.stat.StatParser;
+import maple.expectation.core.dto.cube.CubeCalculationInput;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator;
-import maple.expectation.core.dto.cube.CubeCalculationInput;
 import org.springframework.stereotype.Component;
 
 /** 장비 스트리밍 파서 (Resource-Try까지 박멸한 100% 평탄화 버전) */
@@ -467,10 +467,7 @@ public class EquipmentStreamingParser {
     return is;
   }
 
-  /**
-   * 단일 프리셋 파싱: 지정된 presetNo에 해당하는 장비 배열만 파싱.
-   * parseAllPresets() 대비 ~1/3 파싱 시간.
-   */
+  /** 단일 프리셋 파싱: 지정된 presetNo에 해당하는 장비 배열만 파싱. parseAllPresets() 대비 ~1/3 파싱 시간. */
   public List<CubeCalculationInput> parseSinglePreset(byte[] rawJsonData, int presetNo) {
     if (rawJsonData == null || rawJsonData.length == 0) return List.of();
 
@@ -494,8 +491,8 @@ public class EquipmentStreamingParser {
         context);
   }
 
-  private List<CubeCalculationInput> doStreamParseSinglePreset(JsonParser parser, String targetField)
-      throws IOException {
+  private List<CubeCalculationInput> doStreamParseSinglePreset(
+      JsonParser parser, String targetField) throws IOException {
     while (parser.nextToken() != null) {
       if (parser.currentToken() == JsonToken.FIELD_NAME
           && targetField.equals(parser.currentName())) {
@@ -513,8 +510,8 @@ public class EquipmentStreamingParser {
   /**
    * 1-pass 파싱: preset 1/2/3을 한 번의 JSON 순회로 모두 파싱.
    *
-   * <p>기존 parseCubeInputsForPreset 3회 호출과 동일한 결과를 보장합니다.
-   * 동일한 mapField/FieldMapper 로직을 사용하며, END_ARRAY에서만 중단하는 차이가 있습니다.
+   * <p>기존 parseCubeInputsForPreset 3회 호출과 동일한 결과를 보장합니다. 동일한 mapField/FieldMapper 로직을 사용하며,
+   * END_ARRAY에서만 중단하는 차이가 있습니다.
    */
   public Map<Integer, List<CubeCalculationInput>> parseAllPresets(byte[] rawJsonData) {
     if (rawJsonData == null || rawJsonData.length == 0) return Map.of();
@@ -566,8 +563,7 @@ public class EquipmentStreamingParser {
   }
 
   /**
-   * parseItemArray와 동일한 로직이지만 END_ARRAY에서 중단합니다.
-   * 이를 통해 하나의 JsonParser로 여러 preset 배열을 순차 파싱할 수 있습니다.
+   * parseItemArray와 동일한 로직이지만 END_ARRAY에서 중단합니다. 이를 통해 하나의 JsonParser로 여러 preset 배열을 순차 파싱할 수 있습니다.
    */
   private void parseItemArrayBounded(JsonParser parser, List<CubeCalculationInput> resultList)
       throws IOException {
@@ -589,18 +585,15 @@ public class EquipmentStreamingParser {
     }
   }
 
-  /** ✅ 박멸: close() 시 발생하는 IOException 노이즈 제거 */
+  /** Resource cleanup with IOException noise suppression via LogicExecutor */
   private void closeResources(InputStream is, JsonParser parser) {
-    executor.executeVoidJava(
+    executor.executeOrDefault(
         () -> {
-          try {
-            if (parser != null) parser.close();
-            if (is != null) is.close();
-          } catch (IOException e) {
-            // Ignore close errors - resources are being cleaned up anyway
-            log.debug("Resource close failed (ignoring): {}", e.getMessage());
-          }
+          if (parser != null) parser.close();
+          if (is != null) is.close();
+          return null;
         },
+        null, // Ignore close errors - resources are being cleaned up anyway
         TaskContext.of("Parser", "CloseResources"));
   }
 }

@@ -1,9 +1,6 @@
 package maple.expectation.infrastructure.fanout
 
-import jakarta.annotation.PreDestroy
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.out.FanOutQueuePort
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -39,65 +36,34 @@ class NexonFanOutBatchLoader(
     private val fanOutQueuePort: FanOutQueuePort,
     private val executor: LogicExecutor,
 ) {
-    private val executorService: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
+    fun load(ocids: List<String>): CompletableFuture<Map<String, EquipmentResponse>> {
+        if (ocids.isEmpty()) return CompletableFuture.completedFuture(emptyMap())
 
-    /**
-     * OCID 목록을 병렬로 조회
-     *
-     * @param ocids 조회할 OCID 목록
-     * @return 성공한 OCID → EquipmentResponse 매핑 (429 건은 제외됨)
-     */
-    @PreDestroy
-    fun shutdown() {
-        executorService.shutdown()
-        if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
-            executorService.shutdownNow()
-        }
-    }
+        val futures = ocids.map { fetchOrEnqueueRetryAsync(it) }
 
-    fun load(ocids: List<String>): Map<String, EquipmentResponse> {
-        if (ocids.isEmpty()) return emptyMap()
-
-        val futures = ocids.map { ocid ->
-            CompletableFuture.supplyAsync({
-                fetchOrEnqueueRetry(ocid)
-            }, executorService)
-        }
-
-        CompletableFuture.allOf(*futures.toTypedArray())
+        return CompletableFuture.allOf(*futures.toTypedArray())
             .orTimeout(BATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .join()
-
-        return futures.mapNotNull { it.join() }.associate { it }
+            .thenApply { futures.mapNotNull { it.getNow(null) }.associate { it } }
     }
 
-    /**
-     * 단일 OCID 조회 또는 429 시 PGMQ enqueue
-     *
-     * @param ocid 캐릭터 OCID
-     * @return 성공 시 OCID-Response 쌍, 실패 시 null
-     */
-    private fun fetchOrEnqueueRetry(ocid: String): Pair<String, EquipmentResponse>? {
-        val context = TaskContext.of("FanOutBatchLoader", "Fetch", ocid)
+    private fun fetchOrEnqueueRetryAsync(ocid: String): CompletableFuture<Pair<String, EquipmentResponse>?> = nexonApiClient.getItemDataByOcid(ocid)
+        .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .thenApply { response -> ocid to response }
+        .exceptionally { e ->
+            handleFetchError(ocid, e)
+            null
+        }
 
-        return executor.executeOrCatch(
-            task = {
-                val response = nexonApiClient.getItemDataByOcid(ocid)
-                    .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                    .join()
-                ocid to response
-            },
-            recovery = { e ->
-                if (is429(e)) {
-                    log.warn("[FanOutBatchLoader] 429 Rate Limit, enqueuing retry: ocid={}", ocid)
-                    fanOutQueuePort.enqueue(ocid, BATCH_LANE_USER)
-                } else {
-                    log.error("[FanOutBatchLoader] Failed: ocid={}", ocid, e)
-                }
-                null
-            },
-            context = context,
-        )
+    private fun handleFetchError(ocid: String, e: Throwable) {
+        val context = TaskContext.of("FanOutBatchLoader", "HandleError", ocid)
+        executor.executeVoid({
+            if (is429(e)) {
+                log.warn("[FanOutBatchLoader] 429 Rate Limit, enqueuing retry: ocid={}", ocid)
+                fanOutQueuePort.enqueue(ocid, BATCH_LANE_USER)
+            } else {
+                log.error("[FanOutBatchLoader] Failed: ocid={}", ocid, e)
+            }
+        }, context)
     }
 
     companion object {

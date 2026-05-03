@@ -13,8 +13,6 @@ spring:
 
   datasource:
     url: ${DB_URL}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
 
     hikari:
       maximum-pool-size: 25  # Match Tomcat threads (prevent connection starvation)
@@ -70,7 +68,7 @@ pgmq:
       batch-size: 10
       max-retries: 3
     expectation-calc-high:
-      enabled: true
+      enabled: false  # bypassed: Controller dispatches directly to external_api_queue
       polling-interval-ms: 100
       batch-size: 10
       max-retries: 3
@@ -79,11 +77,40 @@ pgmq:
       polling-interval-ms: 500
       batch-size: 50
       max-retries: 3
+    external-api:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
+    calculation-requested:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
+    calculation-completed:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 50
+      max-retries: 3
     nexon-fanout:
       enabled: true
       polling-interval-ms: 50
       batch-size: 50
       max-retries: 5
+    nexon-api:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 20
+      max-retries: 5
+      visibility-timeout-sec: 120
+    api-response:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 20
+    ocid-resolve:
+      enabled: true
+      polling-interval-ms: 50
+      batch-size: 20
 
 # V5 Stateless Architecture (#271)
 # V5 Migration (Issue #589): Redis removed, PostgreSQL-only
@@ -213,3 +240,8 @@ resilience4j:
     instances:
       discordWebhook:
         timeoutDuration: 5s
+
+snapshot:
+  store:
+    local:
+      base-path: /data/snapshots

@@ -1,6 +1,8 @@
 package maple.expectation.infra.auth
 
 import maple.expectation.core.port.out.TokenPort
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.security.jwt.JwtPayload
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.springframework.stereotype.Component
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Component
 @Component
 class TokenPortImpl(
     private val jwtTokenProvider: JwtTokenProvider,
+    private val logicExecutor: LogicExecutor,
 ) : TokenPort {
 
     override fun generateToken(userId: Long): String {
@@ -32,10 +35,12 @@ class TokenPortImpl(
         )
     }
 
-    override fun validateToken(token: String): Long? = try {
-        val payload: JwtPayload? = jwtTokenProvider.parseToken(token).orElse(null)
-        payload?.sessionId?.toLong()
-    } catch (e: Exception) {
-        null
-    }
+    override fun validateToken(token: String): Long? = logicExecutor.executeOrDefault(
+        {
+            val payload: JwtPayload? = jwtTokenProvider.parseToken(token).orElseGet { null }
+            payload?.sessionId?.toLong()
+        },
+        null,
+        TaskContext.of("TokenPort", "ValidateToken"),
+    )
 }

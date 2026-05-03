@@ -56,6 +56,10 @@ class NexonDataCacheAspect(
         ocid: String,
         returnType: Class<*>,
     ): Any {
+        if (!nexonApiProperties.equipmentCacheSingleFlightEnabled) {
+            return executeAsLeader(joinPoint, ocid, returnType)
+        }
+
         val waitTimeSeconds = nexonApiProperties.cacheFollowerTimeoutSeconds
 
         return leaderElectionStrategy.executeWithLeaderElection(
@@ -199,6 +203,6 @@ class NexonDataCacheAspect(
     private fun wrap(res: EquipmentResponse?, type: Class<*>): Any = if (CompletableFuture::class.java.isAssignableFrom(type)) {
         CompletableFuture.completedFuture(res)
     } else {
-        res!!
+        requireNotNull(res) { "EquipmentResponse must not be null for synchronous cache wrap (ocid lookup)" }
     }
 }

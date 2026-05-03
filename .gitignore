@@ -46,7 +46,6 @@ mysql_data/
 /redis_data/
 /logs/
 *.http
-/.claude/agents/
 /locust*.*
 
 # Python cache
@@ -63,12 +62,18 @@ temp_*.txt
 # Personal documents (resume, cover letters) - moved to 99_Archive
 docs/99_Archive/
 scripts/*
+!scripts/check-before-commit.sh
+!scripts/install-git-hooks.sh
 /.claude/settings.json
 /docker/logs/mysql/slow.log
 /.claude/ralph-loop.local.md
 
+# Claude Code - ignore everything except rules and hooks
+.claude/*
+!.claude/rules/
+!.claude/hooks/
+
 # Claude Code OMC state files
-.claude/
 .omc/
 
 # Patch/build artifacts
@@ -94,3 +99,9 @@ valid-users-*.txt
 # Load test scripts (experimental)
 load-test-scripts/wrk-*.lua
 .worktrees/
+
+# DB backups
+*.dump
+
+# App logs
+module-app/logs/

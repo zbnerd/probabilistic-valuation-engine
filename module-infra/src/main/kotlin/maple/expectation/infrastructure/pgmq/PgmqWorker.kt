@@ -2,12 +2,12 @@ package maple.expectation.infrastructure.pgmq
 
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
+import jakarta.annotation.PreDestroy
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
-import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -50,9 +50,9 @@ abstract class PgmqWorker<T : Any>(
     /** 메시지 병렬 처리용 Fixed Thread Pool (replaces Virtual Thread for CPU-bound stability) */
     private val workerPool: ExecutorService by lazy {
         val pool = Executors.newFixedThreadPool(config.common.workerPoolSize) { runnable ->
-            Thread(runnable, "$queueName-worker").apply { isDaemon = true }
+            Thread.ofVirtual().name("$queueName-worker").unstarted(runnable)
         }
-        ExecutorServiceMetrics.monitor(meterRegistry, pool, "$queueName-worker-pool", "pgmq.worker")
+        ExecutorServiceMetrics.monitor(meterRegistry, pool, "$queueName-worker-pool", io.micrometer.core.instrument.Tags.of("type", "pgmq.worker"))
         pool
     }
 
@@ -68,6 +68,7 @@ abstract class PgmqWorker<T : Any>(
 
     /** Sequential batch buffer — accumulates messages for [sequentialBatchMs] before processing */
     private val accumulationBuffer = AccumulationBuffer<T>(config.common.sequentialBatchMs)
+    private val pollCounter = java.util.concurrent.atomic.AtomicInteger(0)
 
     /** Convenience: sequential batch window from config */
     private val sequentialBatchMs: Long
@@ -184,7 +185,9 @@ abstract class PgmqWorker<T : Any>(
 
                 val messages = pgmqClient.read(queueName, payloadClass, batchSize, visibilityTimeout)
 
-                metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
+                if (pollCounter.incrementAndGet() % 20 == 0) {
+                    metrics.updateQueueDepth(pgmqClient.queueLength(queueName))
+                }
 
                 if (messages.isEmpty()) {
                     inflightPermits.release(permits)
@@ -225,7 +228,7 @@ abstract class PgmqWorker<T : Any>(
     @Scheduled(fixedDelayString = "\${pgmq.worker.common.pipeline-drain-interval-ms:100}")
     fun drainBuffer() {
         if (!supportsTwoPhase) return
-        if (sequentialBatchMs > 0) return  // Sequential mode handles own writes
+        if (sequentialBatchMs > 0) return // Sequential mode handles own writes
         if (!lifecycleWrapper.beforeTask()) return
 
         val context = TaskContext.of("PgmqWorker", "DrainBuffer", queueName)
@@ -267,8 +270,6 @@ abstract class PgmqWorker<T : Any>(
                 workerPool,
             ).exceptionally { error ->
                 log.warn("[{}] Phase 1 failed for msgId={}: {}", queueName, message.messageId, error.message)
-                metrics.inflightDecrement()
-                inflightPermits.release()
                 null to message
             }.thenAccept { result ->
                 val calcResult = result.first as? CalculationResult
@@ -279,7 +280,7 @@ abstract class PgmqWorker<T : Any>(
                         inflightPermits.release()
                     }
                 } else {
-                    log.warn("[{}] Phase 1 returned non-CalculationResult for msgId={}, dropping", queueName, result.second.messageId)
+                    log.warn("[{}] Phase 1 returned null for msgId={}, releasing permit", queueName, result.second.messageId)
                     metrics.inflightDecrement()
                     inflightPermits.release()
                 }
@@ -309,45 +310,64 @@ abstract class PgmqWorker<T : Any>(
         )
     }
 
+    @Volatile
+    private var pendingBatchFuture: CompletableFuture<*>? = null
+
     private fun processBatchSinglePhase(messages: List<PgmqMessage<T>>) {
+        val archiveIds = java.util.concurrent.ConcurrentLinkedQueue<Long>()
         val futures = messages.map { message ->
             CompletableFuture.supplyAsync({
-                processSingleMessage(message)
+                val needsArchive = processSingleMessage(message)
+                if (needsArchive) archiveIds.add(message.messageId)
+                needsArchive
             }, workerPool)
         }
-        CompletableFuture.allOf(*futures.toTypedArray())
+        pendingBatchFuture = CompletableFuture.allOf(*futures.toTypedArray())
             .exceptionally { ex ->
                 log.warn("[{}] Batch completion error: {}", queueName, ex.message)
                 null
             }
-            .join()
+            .thenAccept {
+                if (archiveIds.isNotEmpty()) {
+                    executor.executeOrDefault(
+                        {
+                            val archived = pgmqClient.archiveBatch(queueName, archiveIds.toList())
+                            log.debug("[{}] Batch archived {}/{} messages", queueName, archived, archiveIds.size)
+                        },
+                        Unit,
+                        TaskContext.of("PgmqWorker", "BatchArchive", queueName),
+                    )
+                }
+                log.debug("[{}] Batch of {} messages completed", queueName, messages.size)
+            }
     }
 
     /**
      * Flush the accumulation buffer: drain all messages, pre-warm, split into chunks,
      * submit each chunk as an independent task. Each chunk is processed sequentially
      * on its own thread — no context switching within, parallel across chunks.
-     *
-     * Zero Try-Catch Exception: Direct try-catch for permit leak prevention.
-     * If preWarmBatch or submit fails, messages MUST be re-added to buffer
-     * or inflightPermits will never be released.
      */
     private fun flushSequentialBatch() {
         val batch = accumulationBuffer.drain()
         if (batch.isEmpty()) return
-        try {
-            preWarmBatch(batch)
-            val poolSize = config.common.workerPoolSize
-            val chunkSize = maxOf(1, batch.size / poolSize)
-            val chunks = batch.chunked(chunkSize)
-            log.info("[{}] Batch flush: {} messages → {} chunks after {}ms buffer", queueName, batch.size, chunks.size, sequentialBatchMs)
-            chunks.forEach { chunk ->
-                workerPool.submit { processSequentialBatch(chunk) }
-            }
-        } catch (e: Exception) {
-            log.error("[{}] Batch flush failed, re-queueing {} messages", queueName, batch.size, e)
-            accumulationBuffer.addAll(batch)
-        }
+        executor.executeOrCatch(
+            {
+                preWarmBatch(batch)
+                val poolSize = config.common.workerPoolSize
+                val chunkSize = maxOf(1, batch.size / poolSize)
+                val chunks = batch.chunked(chunkSize)
+                log.info("[{}] Batch flush: {} messages → {} chunks after {}ms buffer", queueName, batch.size, chunks.size, sequentialBatchMs)
+                chunks.forEach { chunk ->
+                    workerPool.submit { processSequentialBatch(chunk) }
+                }
+            },
+            { e ->
+                log.error("[{}] Batch flush failed, re-queueing {} messages", queueName, batch.size, e)
+                accumulationBuffer.addAll(batch)
+                null
+            },
+            TaskContext.of("PgmqWorker", "FlushSequentialBatch", queueName),
+        )
     }
 
     /**
@@ -374,15 +394,20 @@ abstract class PgmqWorker<T : Any>(
 
         val successCount = results.size
 
-        try {
-            if (results.isNotEmpty()) {
-                batchWrite(results)
-            }
-            repeat(successCount) { metrics.success.increment() }
-        } catch (e: Exception) {
-            log.error("[{}] Coroutine batchWrite failed, {} results lost", queueName, results.size, e)
-            repeat(successCount) { metrics.failure.increment() }
-        }
+        executor.executeOrCatch(
+            {
+                if (results.isNotEmpty()) {
+                    batchWrite(results)
+                }
+                repeat(successCount) { metrics.success.increment() }
+            },
+            { e ->
+                log.error("[{}] Coroutine batchWrite failed, {} results lost", queueName, results.size, e)
+                repeat(successCount) { metrics.failure.increment() }
+                null
+            },
+            TaskContext.of("PgmqWorker", "BatchWrite", queueName),
+        )
 
         // Always release permits and inflight metrics — prevent resource leak
         messages.forEach {
@@ -423,9 +448,7 @@ abstract class PgmqWorker<T : Any>(
 
                 when {
                     success -> {
-                        pgmqClient.archive(queueName, message.messageId)
                         metrics.success.increment()
-                        log.debug("[{}] Archived message: msgId={}", queueName, message.messageId)
                     }
                     message.isRetryable(maxRetries) -> {
                         onProcessingFailed(message)
@@ -433,10 +456,9 @@ abstract class PgmqWorker<T : Any>(
                         log.warn("[{}] Message will be retried: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
                     }
                     else -> {
-                        pgmqClient.archive(queueName, message.messageId)
                         metrics.failure.increment()
                         metrics.dlq.increment()
-                        log.error("[{}] Archived message after max retries: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
+                        log.error("[{}] Max retries exceeded: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
                     }
                 }
 
@@ -445,6 +467,7 @@ abstract class PgmqWorker<T : Any>(
             finallyBlock = {
                 metrics.concurrentDecrement()
                 metrics.inflightDecrement()
+                inflightPermits.release()
             },
             context = context,
         )
@@ -457,6 +480,7 @@ abstract class PgmqWorker<T : Any>(
             flushSequentialBatch()
         }
         log.info("[{}] Shutting down worker pool", queueName)
+        pendingBatchFuture?.join()
         workerPool.shutdown()
         if (!workerPool.awaitTermination(5, TimeUnit.SECONDS)) {
             log.warn("[{}] Worker pool did not terminate in 5s, forcing", queueName)

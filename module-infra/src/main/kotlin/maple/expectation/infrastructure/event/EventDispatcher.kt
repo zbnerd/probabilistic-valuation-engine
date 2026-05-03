@@ -34,17 +34,7 @@ class EventDispatcher(
 
     fun registerHandlers(component: Any) {
         executor.executeVoidJava(
-            {
-                try {
-                    registerHandlersInternal(component)
-                } catch (e: Exception) {
-                    logger.error(
-                        "[EventDispatcher] Handler registration failed for component: {}",
-                        component.javaClass.simpleName,
-                        e,
-                    )
-                }
-            },
+            { registerHandlersInternal(component) },
             TaskContext.of("EventDispatcher", "RegisterHandlers", component.javaClass.simpleName),
         )
     }
@@ -104,19 +94,14 @@ class EventDispatcher(
 
     fun dispatch(event: IntegrationEvent<*>) {
         executor.executeVoidJava(
-            {
-                try {
-                    dispatchInternal(event)
-                } catch (e: Exception) {
-                    logger.error("[EventDispatcher] Dispatch failed for event: {}", event.eventType, e)
-                }
-            },
+            { dispatchInternal(event) },
             TaskContext.of("EventDispatcher", "Dispatch", event.eventType),
         )
     }
 
     private fun dispatchInternal(event: IntegrationEvent<*>) {
-        val eventType = event.payload!!.javaClass
+        val payload = requireNotNull(event.payload) { "Event payload must not be null for eventType=${event.eventType}" }
+        val eventType = payload.javaClass
         val eventHandlers = handlers[eventType]
 
         if (eventHandlers.isNullOrEmpty()) {
@@ -133,35 +118,13 @@ class EventDispatcher(
         if (handler.async) {
             virtualThreadExecutor.execute {
                 executor.executeVoidJava(
-                    {
-                        try {
-                            invokeHandler(handler, event)
-                        } catch (e: Exception) {
-                            logger.error(
-                                "[EventDispatcher] Async handler failed: method={}, eventType={}",
-                                handler.method.name,
-                                event.payload!!.javaClass.simpleName,
-                                e,
-                            )
-                        }
-                    },
+                    { invokeHandler(handler, event) },
                     TaskContext.of("EventDispatcher", "InvokeAsync", handler.method.name),
                 )
             }
         } else {
             executor.executeVoidJava(
-                {
-                    try {
-                        invokeHandler(handler, event)
-                    } catch (e: Exception) {
-                        logger.error(
-                            "[EventDispatcher] Sync handler failed: method={}, eventType={}",
-                            handler.method.name,
-                            event.payload!!.javaClass.simpleName,
-                            e,
-                        )
-                    }
-                },
+                { invokeHandler(handler, event) },
                 TaskContext.of("EventDispatcher", "InvokeSync", handler.method.name),
             )
         }
@@ -169,24 +132,21 @@ class EventDispatcher(
 
     @Throws(Exception::class)
     private fun invokeHandler(handler: HandlerMethod, event: IntegrationEvent<*>) {
-        try {
-            handler.method.invoke(handler.component, event.payload)
-            logger.debug("[EventDispatcher] Handler executed: {}", handler.method.name)
-        } catch (e: Exception) {
-            logger.error(
-                "[EventDispatcher] Handler failed: method={}, eventType={}, eventId={}",
-                handler.method.name,
-                event.eventType,
-                event.eventId,
-                e,
-            )
-            throw EventProcessingException(
-                CommonErrorCode.EVENT_HANDLER_ERROR,
-                e,
-                event.eventId,
-                event.eventType,
-            )
-        }
+        executor.executeWithTranslation(
+            {
+                handler.method.invoke(handler.component, event.payload)
+                logger.debug("[EventDispatcher] Handler executed: {}", handler.method.name)
+            },
+            { e, _ ->
+                EventProcessingException(
+                    CommonErrorCode.EVENT_HANDLER_ERROR,
+                    e,
+                    event.eventId,
+                    event.eventType,
+                )
+            },
+            TaskContext.of("EventDispatcher", "InvokeHandler", handler.method.name),
+        )
     }
 
     fun getHandlerCount(): Int = handlers.values.sumOf { it.size }

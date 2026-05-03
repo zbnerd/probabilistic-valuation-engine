@@ -2,6 +2,11 @@ package maple.expectation.infrastructure.external.impl
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import java.util.concurrent.CompletableFuture
+import maple.expectation.common.function.ThrowingSupplier
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.executor.function.ThrowingRunnable
+import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.infrastructure.ratelimit.NexonRateLimiter
@@ -30,7 +35,52 @@ class MetricsNexonApiClientWrapperTest {
     fun setUp() {
         meterRegistry = SimpleMeterRegistry()
         rateLimiter = NexonRateLimiter(2, meterRegistry)
-        wrapper = MetricsNexonApiClientWrapper(delegate, meterRegistry, rateLimiter)
+        wrapper = MetricsNexonApiClientWrapper(delegate, meterRegistry, rateLimiter, StubLogicExecutor())
+    }
+
+    private class StubLogicExecutor : LogicExecutor {
+        override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T = task.get()
+        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = try {
+            task.get() ?: defaultValue
+        } catch (_: Exception) {
+            defaultValue
+        }
+        override fun executeVoid(task: ThrowingRunnable, context: TaskContext) {
+            task.run()
+        }
+        override fun executeVoidJava(task: Runnable, context: TaskContext) {
+            task.run()
+        }
+        override fun <T> executeWithFinally(task: ThrowingSupplier<T>, finallyBlock: Runnable, context: TaskContext): T = try {
+            task.get()
+        } finally {
+            finallyBlock.run()
+        }
+        override fun <T> executeWithTranslation(task: ThrowingSupplier<T>, customTranslator: ExceptionTranslator, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            throw customTranslator.translate(e, context)
+        }
+        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: (Throwable) -> T, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            fallback(e)
+        }
+        override fun <T> executeWithFallback(task: ThrowingSupplier<T>, fallback: ExceptionTranslator, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            throw fallback.translate(e, context)
+        }
+        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: (Throwable) -> T, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            recovery(e)
+        }
+        override fun <T> executeOrCatch(task: ThrowingSupplier<T>, recovery: ExceptionTranslator, context: TaskContext): T = try {
+            task.get()
+        } catch (e: Exception) {
+            throw recovery.translate(e, context)
+        }
     }
 
     @Test

@@ -6,6 +6,8 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.LockSupport
 import maple.expectation.error.exception.InternalSystemException
 import maple.expectation.infrastructure.config.DiscordTimeoutProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -90,22 +92,19 @@ class DiscordNotifier(
     @Throws(Exception::class, InterruptedException::class)
     private fun sendHttpRequest(request: HttpRequest): HttpResponse<String> = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
-    private fun extractRetryAfter(response: HttpResponse<String>): Long = response.headers()
-        .firstValue("Retry-After")
-        .flatMap { retryAfter ->
-            try {
-                val value = Integer.parseInt(retryAfter) * 1000L
-                java.util.Optional.of(value)
-            } catch (e: NumberFormatException) {
-                log.debug("[DiscordNotifier] Invalid Retry-After header: {}", retryAfter)
-                java.util.Optional.empty()
-            }
-        }
-        .orElse(timeoutProperties.retryAfterDefaultMs)
+    private fun extractRetryAfter(response: HttpResponse<String>): Long = executor.executeOrDefault(
+        {
+            response.headers()
+                .firstValue("Retry-After")
+                .map { retryAfter -> Integer.parseInt(retryAfter) * 1000L }
+                .orElse(timeoutProperties.retryAfterDefaultMs)
+        },
+        timeoutProperties.retryAfterDefaultMs,
+        TaskContext.of("DiscordNotifier", "ExtractRetryAfter"),
+    )
 
-    @Throws(InterruptedException::class)
     private fun sleep(millis: Long) {
-        Thread.sleep(millis)
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(millis))
     }
 
     fun formatIncidentMessage(

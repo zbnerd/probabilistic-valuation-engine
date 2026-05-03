@@ -1,41 +1,30 @@
 package maple.expectation.application.service.task;
 
-import java.util.Optional;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.core.domain.model.character.CharacterView;
-import maple.expectation.core.port.inbound.CharacterViewQueryPort;
+import maple.expectation.core.model.job.CalculationJob;
+import maple.expectation.core.model.job.CalculationJobStatus;
 import maple.expectation.core.port.inbound.TaskStatus;
 import maple.expectation.core.port.inbound.TaskStatusPort;
+import maple.expectation.core.port.out.CalculationJobPort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
-import maple.expectation.infrastructure.pgmq.PgmqClient;
-import maple.expectation.infrastructure.worker.ExpectationCalcLowWorker;
-import maple.expectation.infrastructure.worker.ExpectationCalcWorker;
 import org.springframework.stereotype.Service;
 
 /**
  * Task 상태 조회 서비스 (ADR-355)
  *
- * <p>PostgreSQL CharacterView을 source of truth로 사용. 조회 순서:
- *
- * <ol>
- *   <li>PostgreSQL CharacterView → 존재 → COMPLETED
- *   <li>PGMQ archive → 존재 → COMPLETED (보조)
- *   <li>기타 → PENDING
- * </ol>
+ * <p>Job UUID 기반 상태 조회. Controller에서 직접 job을 생성하므로 PGMQ messageId 대신 jobId를 taskId로 사용.
  */
 @Slf4j
 @Service
 public class TaskStatusService implements TaskStatusPort {
 
-  private final CharacterViewQueryPort queryPort;
-  private final PgmqClient pgmqClient;
+  private final CalculationJobPort jobPort;
   private final LogicExecutor executor;
 
-  public TaskStatusService(
-      CharacterViewQueryPort queryPort, PgmqClient pgmqClient, LogicExecutor executor) {
-    this.queryPort = queryPort;
-    this.pgmqClient = pgmqClient;
+  public TaskStatusService(CalculationJobPort jobPort, LogicExecutor executor) {
+    this.jobPort = jobPort;
     this.executor = executor;
   }
 
@@ -48,49 +37,30 @@ public class TaskStatusService implements TaskStatusPort {
   }
 
   private TaskStatus resolveStatus(String userIgn, String taskId) {
-    long messageId = parseMessageId(taskId);
-    if (messageId <= 0) {
+    UUID jobId = parseJobId(taskId);
+    if (jobId == null) {
       return TaskStatus.NOT_FOUND;
     }
 
-    // 1. PostgreSQL (source of truth)
-    Optional<CharacterView> cached = queryPort.findByUserIgn(userIgn);
-    if (cached.filter(view -> taskId.equals(view.getMessageId())).isPresent()) {
-      return TaskStatus.COMPLETED;
+    CalculationJob job = jobPort.findJobById(jobId);
+    if (job == null || !job.getUserIgn().equals(userIgn)) {
+      return TaskStatus.NOT_FOUND;
     }
 
-    // 2. PGMQ archive check (보조)
-    if (isArchivedInAnyQueue(messageId)) {
-      return TaskStatus.COMPLETED;
-    }
-
-    // 3. 활성 큐에서 read_ct 확인 → PROCESSING 판별
-    int readCount = getMaxReadCount(messageId);
-    if (readCount > 0) {
-      return TaskStatus.PROCESSING;
-    }
-
-    // 4. Task record deleted and no signal in any queue or archive.
-    // Return NOT_FOUND (terminal) instead of PENDING to prevent infinite polling
-    // when the task record has been cleaned up.
-    return TaskStatus.NOT_FOUND;
+    return mapStatus(job.getStatus());
   }
 
-  private boolean isArchivedInAnyQueue(long messageId) {
-    return pgmqClient.isArchived(ExpectationCalcWorker.QUEUE_NAME, messageId)
-        || pgmqClient.isArchived(ExpectationCalcLowWorker.QUEUE_NAME, messageId);
+  private TaskStatus mapStatus(CalculationJobStatus status) {
+    return switch (status) {
+      case REQUESTED, OCID_RESOLVING, API_REQUESTED, SNAPSHOT_READY, CALCULATING, RETRYING ->
+          TaskStatus.PROCESSING;
+      case COMPLETED -> TaskStatus.COMPLETED;
+      case FAILED -> TaskStatus.NOT_FOUND;
+    };
   }
 
-  private int getMaxReadCount(long messageId) {
-    return Math.max(
-        pgmqClient.getMessageReadCount(ExpectationCalcWorker.QUEUE_NAME, messageId),
-        pgmqClient.getMessageReadCount(ExpectationCalcLowWorker.QUEUE_NAME, messageId));
-  }
-
-  private long parseMessageId(String taskId) {
+  private UUID parseJobId(String taskId) {
     return executor.executeOrDefault(
-        () -> Long.parseLong(taskId),
-        -1L,
-        TaskContext.of("TaskStatus", "ParseId", taskId));
+        () -> UUID.fromString(taskId), null, TaskContext.of("TaskStatus", "ParseId", taskId));
   }
 }

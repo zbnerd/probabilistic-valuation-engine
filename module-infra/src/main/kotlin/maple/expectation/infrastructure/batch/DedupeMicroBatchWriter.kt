@@ -80,12 +80,12 @@ class DedupeMicroBatchWriter(
 
     // Scheduler for time-triggered flush
     private val scheduler: ScheduledExecutorService = ScheduledThreadPoolExecutor(1) { runnable ->
-        Thread(runnable, "micro-batch-flush-scheduler").apply { isDaemon = true }
+        Thread.ofVirtual().name("micro-batch-flush-scheduler").unstarted(runnable)
     }
 
     // 🔥 P0 FIX #3: Dedicated flush executor (prevents worker deadlock)
     private val flushExecutor: ScheduledExecutorService = ScheduledThreadPoolExecutor(2) { runnable ->
-        Thread(runnable, "micro-batch-flush-worker").apply { isDaemon = true }
+        Thread.ofVirtual().name("micro-batch-flush-worker").unstarted(runnable)
     }
 
     // Metrics
@@ -245,61 +245,66 @@ class DedupeMicroBatchWriter(
         }
 
         val future = CompletableFuture<Void>()
+        val startTime = System.nanoTime()
+        val tasksToFlush = ArrayList(buffer.values)
+        val flushSize = tasksToFlush.size
 
-        executor.executeVoid({
-            val startTime = System.nanoTime()
-            val tasksToFlush = ArrayList(buffer.values)
-            val flushSize = tasksToFlush.size
+        log.info(
+            "[MicroBatchWriter] Flushing: trigger={}, size={}",
+            trigger,
+            flushSize,
+        )
 
-            log.info(
-                "[MicroBatchWriter] 🔥 Flushing: trigger={}, size={}",
-                trigger,
-                flushSize,
-            )
+        // Clear buffer BEFORE flush (prevent double-add during flush)
+        buffer.clear()
 
-            // Clear buffer BEFORE flush (prevent double-add during flush)
-            buffer.clear()
+        executor.executeWithFinally(
+            task = {
+                executor.executeOrCatch(
+                    {
+                        // Execute batch upsert
+                        repository.batchUpsert(tasksToFlush)
 
-            try {
-                // Execute batch upsert
-                repository.batchUpsert(tasksToFlush)
+                        val durationMs = (System.nanoTime() - startTime) / 1_000_000
+                        log.info(
+                            "[MicroBatchWriter] Flush completed: trigger={}, size={}, duration={}ms",
+                            trigger,
+                            flushSize,
+                            durationMs,
+                        )
 
-                val durationMs = (System.nanoTime() - startTime) / 1_000_000
-                log.info(
-                    "[MicroBatchWriter] 🔥 Flush completed: trigger={}, size={}, duration={}ms",
-                    trigger,
-                    flushSize,
-                    durationMs,
+                        // Metrics
+                        flushCounter.increment()
+
+                        Counter.builder("micro_batch_flush_trigger")
+                            .description("Flush trigger events")
+                            .tag("trigger", trigger)
+                            .register(meterRegistry)
+                            .increment()
+
+                        flushTimer.record(durationMs, TimeUnit.MILLISECONDS)
+
+                        meterRegistry.counter("micro_batch_flush_size", "trigger", trigger)
+                            .increment(flushSize.toDouble())
+
+                        future.complete(null)
+                    },
+                    { e ->
+                        log.error("[MicroBatchWriter] Flush failed: trigger={}, size={}", trigger, flushSize, e)
+                        future.completeExceptionally(e)
+                        // Re-add failed tasks to buffer for retry
+                        tasksToFlush.forEach { buffer.putIfAbsent(it.key(), it) }
+                        null
+                    },
+                    TaskContext.of("MicroBatchWriter", "FlushWrite", trigger),
                 )
-
-                // Metrics
-                flushCounter.increment()
-
-                // 🔥 FIXED: Use existing counter with proper tag
-                Counter.builder("micro_batch_flush_trigger")
-                    .description("Flush trigger events")
-                    .tag("trigger", trigger)
-                    .register(meterRegistry)
-                    .increment()
-
-                flushTimer.record(durationMs, TimeUnit.MILLISECONDS)
-
-                // 🔥 ADDED: Record flush size distribution
-                meterRegistry.counter("micro_batch_flush_size", "trigger", trigger)
-                    .increment(flushSize.toDouble())
-
-                future.complete(null)
-            } catch (e: Exception) {
-                log.error("[MicroBatchWriter] 🔥 Flush failed: trigger={}, size={}", trigger, flushSize, e)
-                future.completeExceptionally(e)
-
-                // Re-add failed tasks to buffer for retry
-                tasksToFlush.forEach { buffer.putIfAbsent(it.key(), it) }
-            } finally {
+            },
+            finallyBlock = {
                 // 🔥 CRITICAL: Always release flush lock
                 flushing.set(false)
-            }
-        }, TaskContext.of("MicroBatchWriter", "Flush", trigger))
+            },
+            context = TaskContext.of("MicroBatchWriter", "Flush", trigger),
+        )
 
         return future
     }
@@ -317,7 +322,7 @@ class DedupeMicroBatchWriter(
         val flushSize = tasksToFlush.size
 
         log.warn(
-            "[MicroBatchWriter] 🔴 Synchronous flush: trigger={}, size={}",
+            "[MicroBatchWriter] Synchronous flush: trigger={}, size={}",
             trigger,
             flushSize,
         )
@@ -325,23 +330,28 @@ class DedupeMicroBatchWriter(
         // Clear buffer
         buffer.clear()
 
-        try {
-            repository.batchUpsert(tasksToFlush)
+        executor.executeOrCatch(
+            {
+                repository.batchUpsert(tasksToFlush)
 
-            // Metrics
-            flushCounter.increment()
-            Counter.builder("micro_batch_flush_trigger")
-                .tag("trigger", trigger)
-                .register(meterRegistry)
-                .increment()
+                // Metrics
+                flushCounter.increment()
+                Counter.builder("micro_batch_flush_trigger")
+                    .tag("trigger", trigger)
+                    .register(meterRegistry)
+                    .increment()
 
-            meterRegistry.counter("micro_batch_flush_size", "trigger", trigger)
-                .increment(flushSize.toDouble())
-        } catch (e: Exception) {
-            log.error("[MicroBatchWriter] Synchronous flush failed: size={}", flushSize, e)
-            // Re-add failed tasks
-            tasksToFlush.forEach { buffer.putIfAbsent(it.key(), it) }
-        }
+                meterRegistry.counter("micro_batch_flush_size", "trigger", trigger)
+                    .increment(flushSize.toDouble())
+            },
+            { e ->
+                log.error("[MicroBatchWriter] Synchronous flush failed: size={}", flushSize, e)
+                // Re-add failed tasks
+                tasksToFlush.forEach { buffer.putIfAbsent(it.key(), it) }
+                null
+            },
+            TaskContext.of("MicroBatchWriter", "SyncFlush", trigger),
+        )
     }
 
     /**
@@ -382,22 +392,21 @@ class DedupeMicroBatchWriter(
         scheduler.shutdown()
         // 🔥 P0 FIX #3: Shutdown flush executor
         flushExecutor.shutdown()
-        try {
-            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                log.warn("[MicroBatchWriter] Scheduler did not terminate in time")
-                scheduler.shutdownNow()
-            }
-            // 🔥 P0 FIX #3: Wait for flush executor to terminate
-            if (!flushExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                log.warn("[MicroBatchWriter] Flush executor did not terminate in time")
-                flushExecutor.shutdownNow()
-            }
-        } catch (e: InterruptedException) {
-            log.error("[MicroBatchWriter] Shutdown interrupted", e)
-            scheduler.shutdownNow()
-            flushExecutor.shutdownNow()
-            Thread.currentThread().interrupt()
-        }
+        executor.executeOrDefault(
+            {
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    log.warn("[MicroBatchWriter] Scheduler did not terminate in time")
+                    scheduler.shutdownNow()
+                }
+                // 🔥 P0 FIX #3: Wait for flush executor to terminate
+                if (!flushExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    log.warn("[MicroBatchWriter] Flush executor did not terminate in time")
+                    flushExecutor.shutdownNow()
+                }
+            },
+            Unit,
+            TaskContext.of("MicroBatchWriter", "Shutdown"),
+        )
         log.info("[MicroBatchWriter] Shutdown complete")
     }
 }

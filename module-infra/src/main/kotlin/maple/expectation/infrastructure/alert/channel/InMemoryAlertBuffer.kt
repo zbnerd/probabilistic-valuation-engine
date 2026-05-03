@@ -51,7 +51,7 @@ class InMemoryAlertBuffer :
         var drained = 0
         var message: AlertMessage?
         while (buffer.poll().also { message = it } != null) {
-            val sent = targetChannel.send(message!!)
+            val sent = targetChannel.send(requireNotNull(message) { "Polled message must not be null after non-null check" })
             if (sent) {
                 drained++
             } else if (log.isWarnEnabled) {

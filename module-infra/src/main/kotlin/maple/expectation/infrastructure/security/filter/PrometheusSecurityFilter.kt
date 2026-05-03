@@ -202,30 +202,31 @@ open class PrometheusSecurityFilter(
             return false
         }
 
-        return try {
-            val firstOctet = parts[0].toInt()
-            val secondOctet = parts[1].toInt()
+        return logicExecutor.executeOrDefault(
+            {
+                val firstOctet = parts[0].toInt()
+                val secondOctet = parts[1].toInt()
 
-            // 172.16.0.0/12 (172.16.0.0 ~ 172.31.255.255)
-            if (firstOctet == 172 && secondOctet in 16..31) {
-                return true
-            }
+                // 172.16.0.0/12 (172.16.0.0 ~ 172.31.255.255)
+                if (firstOctet == 172 && secondOctet in 16..31) {
+                    return@executeOrDefault true
+                }
 
-            // 10.0.0.0/8 (10.0.0.0 ~ 10.255.255.255)
-            if (firstOctet == 10) {
-                return true
-            }
+                // 10.0.0.0/8 (10.0.0.0 ~ 10.255.255.255)
+                if (firstOctet == 10) {
+                    return@executeOrDefault true
+                }
 
-            // 192.168.0.0/16 (192.168.0.0 ~ 192.168.255.255)
-            if (firstOctet == 192 && secondOctet == 168) {
-                return true
-            }
+                // 192.168.0.0/16 (192.168.0.0 ~ 192.168.255.255)
+                if (firstOctet == 192 && secondOctet == 168) {
+                    return@executeOrDefault true
+                }
 
-            false
-        } catch (e: NumberFormatException) {
-            log.warn("[Prometheus-Security] Invalid IP format: $ip")
-            false
-        }
+                false
+            },
+            false,
+            TaskContext.of("PrometheusSecurityFilter", "IsInternalNetwork", ip),
+        )
     }
 
     override fun shouldNotFilter(@NonNull request: HttpServletRequest): Boolean = !enabled

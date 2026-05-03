@@ -79,7 +79,7 @@ open class GameCharacterRepositoryImpl(
         val context = TaskContext.of("GameCharacterRepository", "FindByUserIgnIn", "${userIgns.size}")
 
         return logicExecutor.executeOrDefault(
-            { jpaRepo.findAllByUserIgnIn(userIgns).associate { it.userIgn!! to it.toDomain() } },
+            { jpaRepo.findAllByUserIgnIn(userIgns).filter { it.userIgn != null }.associate { requireNotNull(it.userIgn) to it.toDomain() } },
             emptyMap(),
             context,
         )

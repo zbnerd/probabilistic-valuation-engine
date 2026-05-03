@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import lombok.RequiredArgsConstructor;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculator;
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory;
@@ -16,9 +16,6 @@ import maple.expectation.core.domain.cost.CostFormatter;
 import maple.expectation.core.domain.equipment.SecondaryWeaponCategory;
 import maple.expectation.core.domain.flame.FlameEquipCategory;
 import maple.expectation.core.domain.flame.FlameType;
-import maple.expectation.core.flame.port.FlameTrialsPort;
-import maple.expectation.core.probability.FlameScoreCalculator;
-import maple.expectation.core.util.KahanSummation;
 import maple.expectation.core.dto.cube.CubeCalculationInput;
 import maple.expectation.core.dto.v4.EquipmentCalculationInput;
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.CostBreakdownDto;
@@ -27,8 +24,10 @@ import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.FlameExpecta
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.ItemExpectationV4;
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.PresetExpectation;
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4.StarforceExpectationDto;
+import maple.expectation.core.flame.port.FlameTrialsPort;
+import maple.expectation.core.probability.FlameScoreCalculator;
+import maple.expectation.core.util.KahanSummation;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -52,8 +51,7 @@ import org.springframework.stereotype.Component;
  *
  * <h3>분해 근거</h3>
  *
- * <p>EquipmentExpectationServiceV4의 calculatePresetAsync() — 장비별 병렬 계산 (thenCombine)
- * Section 4)
+ * <p>EquipmentExpectationServiceV4의 calculatePresetAsync() — 장비별 병렬 계산 (thenCombine) Section 4)
  */
 @Slf4j
 @Component
@@ -79,10 +77,55 @@ public class PresetCalculationHelper {
   }
 
   /**
+   * 프리셋 기대값 동기 계산 — 호출 스레드에서 직접 수행 (context switching 없음)
+   *
+   * <p>ExternalApiWorker 등 이미 전용 스레드에서 실행 중인 컨텍스트에서 사용. async submit → get() 패턴(future.get)의 불필요한
+   * context switching을 제거.
+   *
+   * @param cubeInputs 프리셋의 큐브 입력 목록
+   * @param presetNo 프리셋 번호 (1~3)
+   * @param characterClass 직업명 (환생의 불꽃 동적 계산용)
+   * @return 프리셋 기대값
+   */
+  public PresetExpectation calculatePreset(
+      List<CubeCalculationInput> cubeInputs, int presetNo, String characterClass) {
+
+    if (cubeInputs.isEmpty()) {
+      return new PresetExpectation(
+          presetNo, 0.0, CostFormatter.format(0.0), CostBreakdownDto.empty(), List.of());
+    }
+
+    // 장비별 독립 계산 — parallelStream으로 ForkJoinPool work-stening 활용
+    List<ItemExpectationV4> results =
+        cubeInputs.parallelStream()
+            .map(
+                cubeInput -> {
+                  if (!cubeInput.isReady()) {
+                    return buildNoPotentialItem(cubeInput, presetNo, characterClass);
+                  }
+                  EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
+                  return calculateSingleItem(input, cubeInput, characterClass);
+                })
+            .collect(Collectors.toList());
+
+    // 비용 누적은 순서 무관
+    KahanSummation costAcc = new KahanSummation();
+    CostBreakdownDto breakdown = CostBreakdownDto.empty();
+    for (ItemExpectationV4 item : results) {
+      costAcc.add(item.getExpectedCost());
+      breakdown = breakdown.add(item.getCostBreakdown());
+    }
+
+    double totalCost = costAcc.sum();
+    return new PresetExpectation(
+        presetNo, totalCost, CostFormatter.format(totalCost), breakdown, results);
+  }
+
+  /**
    * 프리셋 기대값 비동기 계산 — 장비별 병렬 처리 (thenCombine, join/get 없음)
    *
-   * <p>각 장비의 계산이 서로 독립이므로 CompletableFuture.supplyAsync로 동시 시작,
-   * thenCombine으로 결과를 누적하여 최종 PresetExpectation을 생성.
+   * <p>각 장비의 계산이 서로 독립이므로 CompletableFuture.supplyAsync로 동시 시작, thenCombine으로 결과를 누적하여 최종
+   * PresetExpectation을 생성.
    *
    * <p>장비 계산은 itemCalculationExecutor에서 실행하여 presetCalculationExecutor와 격리.
    *
@@ -92,9 +135,7 @@ public class PresetCalculationHelper {
    * @return 프리셋 기대값 CompletableFuture
    */
   public CompletableFuture<PresetExpectation> calculatePresetAsync(
-      List<CubeCalculationInput> cubeInputs,
-      int presetNo,
-      String characterClass) {
+      List<CubeCalculationInput> cubeInputs, int presetNo, String characterClass) {
 
     List<CompletableFuture<ItemExpectationV4>> itemFutures = new ArrayList<>();
 
@@ -110,8 +151,7 @@ public class PresetCalculationHelper {
 
       itemFutures.add(
           CompletableFuture.supplyAsync(
-                  () -> calculateSingleItem(input, cubeInput, characterClass),
-                  itemExecutor));
+              () -> calculateSingleItem(input, cubeInput, characterClass), itemExecutor));
     }
 
     if (itemFutures.isEmpty()) {
@@ -145,8 +185,7 @@ public class PresetCalculationHelper {
               });
       breakdownFuture =
           breakdownFuture.thenCombine(
-              itemFuture.thenApply(ItemExpectationV4::getCostBreakdown),
-              CostBreakdownDto::add);
+              itemFuture.thenApply(ItemExpectationV4::getCostBreakdown), CostBreakdownDto::add);
     }
 
     return resultsFuture
@@ -156,11 +195,7 @@ public class PresetCalculationHelper {
             agg -> {
               double totalCost = agg.costAcc.sum();
               return new PresetExpectation(
-                  presetNo,
-                  totalCost,
-                  CostFormatter.format(totalCost),
-                  agg.breakdown,
-                  agg.results);
+                  presetNo, totalCost, CostFormatter.format(totalCost), agg.breakdown, agg.results);
             });
   }
 

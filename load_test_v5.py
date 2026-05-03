@@ -7,6 +7,7 @@ V5 Expectation Endpoint Load Test
 """
 
 import csv
+import os
 import time
 import urllib.request
 import urllib.parse
@@ -19,10 +20,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 CSV_FILE = "module-app/src/main/resources/data/userIgn_List.csv"
 BASE_URL = "http://localhost:8080/api/v5/characters"
 PROMETHEUS_URL = "http://localhost:8080/actuator/prometheus"
-COUNT = 10000
-CONCURRENCY = 50
-METRICS_INTERVAL = 3  # seconds
-MAX_DRAIN_WAIT = 200  # 200s max wait for queue drain
+COUNT = int(os.getenv("COUNT", "10000"))
+CONCURRENCY = int(os.getenv("CONCURRENCY", "50"))
+METRICS_INTERVAL = int(os.getenv("METRICS_INTERVAL", "3"))  # seconds
+MAX_DRAIN_WAIT = int(os.getenv("MAX_DRAIN_WAIT", "200"))  # seconds
 
 # Shared state
 results_lock = threading.Lock()

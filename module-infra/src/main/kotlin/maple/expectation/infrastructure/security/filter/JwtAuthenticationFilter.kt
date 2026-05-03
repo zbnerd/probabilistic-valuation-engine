@@ -9,10 +9,11 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import java.io.IOException
 import maple.expectation.core.port.out.CharacterOcidPort
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.security.AuthenticatedUser
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.slf4j.LoggerFactory
-import org.springframework.dao.DuplicateKeyException
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
@@ -59,6 +60,7 @@ class JwtAuthenticationFilter(
     private val jwtTokenProvider: JwtTokenProvider,
     private val characterOcidPort: CharacterOcidPort,
     private val objectMapper: ObjectMapper,
+    private val executor: LogicExecutor,
     meterRegistry: MeterRegistry,
 ) : OncePerRequestFilter() {
 
@@ -75,40 +77,56 @@ class JwtAuthenticationFilter(
         val token = extractBearerToken(request)
 
         if (token != null) {
-            try {
-                val payload = jwtTokenProvider.parseToken(token)
+            val authResult = executor.executeWithFallback(
+                {
+                    val payload = jwtTokenProvider.parseToken(token)
 
-                if (payload.isPresent) {
-                    val jwt = payload.get()
-                    val user = resolveAuthenticatedUser(jwt)
+                    if (payload.isPresent) {
+                        val jwt = payload.get()
+                        val user = resolveAuthenticatedUser(jwt)
 
-                    if (user != null) {
-                        val authorities = listOf(SimpleGrantedAuthority("ROLE_${user.role}"))
-                        val authentication = UsernamePasswordAuthenticationToken(user, null, authorities)
-                        SecurityContextHolder.getContext().authentication = authentication
-                        log.debug("[JWT] Authenticated: userIgn={}, role={}, myOcids={}", user.userIgn, user.role, user.myOcids.size)
+                        if (user != null) {
+                            val authorities = listOf(SimpleGrantedAuthority("ROLE_${user.role}"))
+                            val authentication = UsernamePasswordAuthenticationToken(user, null, authorities)
+                            SecurityContextHolder.getContext().authentication = authentication
+                            log.debug("[JWT] Authenticated: userIgn={}, role={}, myOcids={}", user.userIgn, user.role, user.myOcids.size)
+                        }
+                        AuthResult.success()
+                    } else {
+                        // 토큰 파싱 실패 (만료, 변조 등) - P1: silent pass-through 제거
+                        log.warn("[JWT] Token parsing failed: invalid or expired token")
+                        AuthResult.failure("Invalid or expired token")
                     }
-                } else {
-                    // 토큰 파싱 실패 (만료, 변조 등) - P1: silent pass-through 제거
-                    log.warn("[JWT] Token parsing failed: invalid or expired token")
-                    sendUnauthorizedResponse(response, "Invalid or expired token")
-                    return
-                }
-            } catch (e: IllegalArgumentException) {
-                // JWT 파싱 중 IllegalArgumentException (format error, algorithm validation 등)
-                // P1: silent pass-through 제거
-                log.warn("[JWT] Token validation failed: ${e.message}")
-                sendUnauthorizedResponse(response, "Token validation failed: ${e.message}")
-                return
-            } catch (e: Exception) {
-                // 예상치 못한 예외 - P1: silent pass-through 제거
-                log.error("[JWT] Unexpected error during authentication", e)
-                sendUnauthorizedResponse(response, "Authentication error")
+                },
+                { e ->
+                    when (e) {
+                        is IllegalArgumentException -> {
+                            log.warn("[JWT] Token validation failed: ${e.message}")
+                            AuthResult.failure("Token validation failed: ${e.message}")
+                        }
+                        else -> {
+                            log.error("[JWT] Unexpected error during authentication", e)
+                            AuthResult.failure("Authentication error")
+                        }
+                    }
+                },
+                TaskContext.of("JwtFilter", "Authenticate"),
+            )
+
+            if (authResult.isFailure) {
+                sendUnauthorizedResponse(response, authResult.errorMessage)
                 return
             }
         }
 
         filterChain.doFilter(request, response)
+    }
+
+    private data class AuthResult(val isFailure: Boolean, val errorMessage: String) {
+        companion object {
+            fun success(): AuthResult = AuthResult(false, "")
+            fun failure(message: String): AuthResult = AuthResult(true, message)
+        }
     }
 
     /**
@@ -160,12 +178,11 @@ class JwtAuthenticationFilter(
 
         // Lazy backfill: fingerprint NULL인 캐릭터에만 stamp (idempotent)
         if (myOcid != null && !fingerprintOcids.contains(myOcid) && fingerprint.isNotBlank()) {
-            try {
-                characterOcidPort.updateFingerprint(myOcid, fingerprint, fingerprint)
-            } catch (e: DuplicateKeyException) {
-                // uk_account_user_ign 위반: 다른 계정이 이미 해당 조합을 소유
-                log.warn("[JWT] Unique index violation during backfill. Character already registered by different account.")
-            }
+            executor.executeOrDefault(
+                { characterOcidPort.updateFingerprint(myOcid, fingerprint, fingerprint) },
+                Unit,
+                TaskContext.of("JwtFilter", "FingerprintBackfill", userIgn),
+            )
         }
 
         val accountId = fingerprint
@@ -198,11 +215,13 @@ class JwtAuthenticationFilter(
             "status" to 401,
         )
 
-        try {
-            response.writer.write(objectMapper.writeValueAsString(errorResponse))
-        } catch (e: IOException) {
-            log.error("[JWT] Failed to write error response", e)
-        }
+        executor.executeOrDefault(
+            {
+                response.writer.write(objectMapper.writeValueAsString(errorResponse))
+            },
+            Unit,
+            TaskContext.of("JwtFilter", "WriteUnauthorized"),
+        )
     }
 
     companion object {

@@ -25,13 +25,14 @@ class KafkaEventPublisher(
     private val logger = LoggerFactory.getLogger(KafkaEventPublisher::class.java)
 
     override fun publish(topic: String, event: IntegrationEvent<*>) {
-        executor.executeVoidJava(
+        executor.executeOrCatch(
             {
-                try {
-                    publishInternal(topic, event)
-                } catch (e: Exception) {
-                    logger.error("[KafkaEventPublisher] Publish failed for topic: {}", topic, e)
-                }
+                publishInternal(topic, event)
+                null
+            },
+            { e ->
+                logger.error("[KafkaEventPublisher] Publish failed for topic: {}", topic, e)
+                null
             },
             TaskContext.of("KafkaEventPublisher", "Publish", topic),
         )

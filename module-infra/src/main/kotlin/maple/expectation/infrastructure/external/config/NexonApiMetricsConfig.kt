@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.external.config
 
+import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.impl.MetricsNexonApiClientWrapper
 import maple.expectation.infrastructure.external.impl.RealNexonApiClient
@@ -49,5 +50,6 @@ class NexonApiMetricsConfig {
         realNexonApiClient: RealNexonApiClient,
         meterRegistry: io.micrometer.core.instrument.MeterRegistry,
         rateLimiter: NexonRateLimiter,
-    ): NexonApiClient = MetricsNexonApiClientWrapper(realNexonApiClient, meterRegistry, rateLimiter)
+        logicExecutor: LogicExecutor,
+    ): NexonApiClient = MetricsNexonApiClientWrapper(realNexonApiClient, meterRegistry, rateLimiter, logicExecutor)
 }

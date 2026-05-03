@@ -2,20 +2,19 @@ package maple.expectation.infrastructure.worker
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
-import java.util.concurrent.TimeUnit
 import maple.expectation.core.port.inbound.BatchComputeBuffer
-import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
+import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.core.port.out.CharacterOcidPort
-import maple.expectation.core.port.out.EquipmentFanOutPort
 import maple.expectation.core.port.out.GameCharacterPort
 import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
 import maple.expectation.infrastructure.config.CacheProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
+import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository
+import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository.ParsedViewResult
 import maple.expectation.infrastructure.pgmq.CalculationResult
 import maple.expectation.infrastructure.pgmq.ExpectationCalcMessage
 import maple.expectation.infrastructure.pgmq.PgmqClient
@@ -23,8 +22,6 @@ import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
-import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository
-import maple.expectation.infrastructure.persistence.repository.CharacterViewBatchRepository.ParsedViewResult
 import org.slf4j.Logger
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -37,8 +34,6 @@ abstract class AbstractExpectationCalcWorker(
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val expectationPort: ExpectationV4Port,
     private val characterOcidPort: CharacterOcidPort,
-    private val equipmentFanOutPort: EquipmentFanOutPort,
-    private val preWarmExecutor: Executor,
     // Two-phase batch processing dependencies
     private val gameCharacterPort: GameCharacterPort,
     private val l2CacheStrategy: L2CacheStrategy,
@@ -48,6 +43,7 @@ abstract class AbstractExpectationCalcWorker(
     private val batchRepo: CharacterViewBatchRepository,
     private val objectMapper: ObjectMapper,
     private val computeBuffer: BatchComputeBuffer,
+    private val jobService: CalculationJobService,
 ) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val payloadClass: Class<ExpectationCalcMessage> = ExpectationCalcMessage::class.java
@@ -55,55 +51,21 @@ abstract class AbstractExpectationCalcWorker(
     protected abstract val workerName: String
     protected abstract val workerLog: Logger
 
-    override val supportsTwoPhase: Boolean = true
-
-    override fun preWarmBatch(messages: List<PgmqMessage<ExpectationCalcMessage>>) {
-        val stats = computeBuffer.stats()
-        if (stats.total > 0) {
-            workerLog.info("[{}] ComputeBuffer: hits={}, total={}, dedup={}%",
-                workerName, stats.hits, stats.total, "%.1f".format(stats.dedupPercent))
-        }
-        computeBuffer.clear()
-        val context = TaskContext.of(workerName, "PreWarm", queueName)
-
-        executor.executeVoid({
-            val igns = messages.asSequence().map { it.payload.userIgn }.toSet()
-            if (igns.isEmpty()) return@executeVoid
-
-            val ignToOcid = characterOcidPort.resolveOcids(igns)
-            if (ignToOcid.isEmpty()) return@executeVoid
-
-            val warmupFutures = ignToOcid.values.map { ocid ->
-                CompletableFuture.supplyAsync(
-                    { equipmentFanOutPort.preFetchByOcid(ocid) },
-                    preWarmExecutor,
-                )
-            }
-
-            CompletableFuture.allOf(*warmupFutures.toTypedArray())
-                .orTimeout(15, TimeUnit.SECONDS)
-                .handle { _, _ -> null }
-                .join()
-
-            workerLog.info("[{}] Pre-warm: {} igns -> {} ocids", workerName, igns.size, ignToOcid.size)
-        }, context)
-    }
+    override val supportsTwoPhase: Boolean = false
 
     override fun process(message: PgmqMessage<ExpectationCalcMessage>): Boolean {
         val request = message.payload
         val context = TaskContext.of(workerName, "Process", request.userIgn)
 
         return executor.executeOrDefault({
-            workerLog.info("[{}] Processing: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
-
-            expectationPort.calculateExpectationAsync(
-                request.userIgn,
-                request.forceRecalculation,
-                message.messageId.toString(),
-                request.presetNo,
-            ).join()
-
-            workerLog.info("[{}] Completed: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
+            workerLog.info("[{}] Creating job: userIgn={}, taskId={}", workerName, request.userIgn, message.messageId)
+            val claim = jobService.createOrFindActiveJob(null, request.userIgn, request.presetNo)
+            if (claim.created) {
+                jobService.dispatchToExternalApi(claim.job.jobId, request.userIgn, request.presetNo)
+                workerLog.info("[{}] Job dispatched to external API pipeline: jobId={}", workerName, claim.job.jobId)
+            } else {
+                workerLog.info("[{}] Existing active job reused: jobId={}", workerName, claim.job.jobId)
+            }
             true
         }, false, context)
     }
@@ -119,6 +81,7 @@ abstract class AbstractExpectationCalcWorker(
                 request.userIgn,
                 request.forceRecalculation,
                 message.messageId.toString(),
+                request.presetNo,
             )
 
             val character = gameCharacterPort.getCharacterOrThrow(request.userIgn)
@@ -159,40 +122,59 @@ abstract class AbstractExpectationCalcWorker(
         // 1. Dedup by userIgn — keep latest result per character
         val grouped = results.groupBy { it.character.userIgn.value }
         if (grouped.any { it.value.size > 1 }) {
-            workerLog.warn("[{}] Duplicate userIgn in batch: {}", workerName,
-                grouped.filter { it.value.size > 1 }.keys)
+            workerLog.warn(
+                "[{}] Duplicate userIgn in batch: {}",
+                workerName,
+                grouped.filter { it.value.size > 1 }.keys,
+            )
         }
         val deduped = grouped.mapValues { it.value.last() }.values.toList()
 
         // 2. Parse all results in one pass
         val parsed = deduped.mapNotNull { result ->
-            try {
-                val tree = objectMapper.valueToTree<com.fasterxml.jackson.databind.JsonNode>(result.response)
-                val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return@mapNotNull null
-                val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return@mapNotNull null
-                val presetsNode = tree.get("presets") ?: return@mapNotNull null
-                val presetNo = result.message.payload.presetNo
-                val char = result.character
-                ParsedViewResult(
-                    userIgn = char.userIgn.value,
-                    messageId = result.message.messageId.toString(),
-                    characterOcid = char.characterId.value,
-                    characterClass = char.characterClass ?: "",
-                    totalExpectedCost = totalExpectedCost,
-                    maxPresetNo = maxPresetNo,
-                    presetNo = presetNo,
-                    presetsJson = objectMapper.writeValueAsString(presetsNode),
-                    version = System.currentTimeMillis(),
-                )
-            } catch (e: Exception) {
-                workerLog.warn("[{}] Parse failed for {}: {}", workerName, result.character.userIgn.value, e.message)
-                null
-            }
+            executor.executeOrDefault(
+                {
+                    val tree = objectMapper.valueToTree<com.fasterxml.jackson.databind.JsonNode>(result.response)
+                    val totalExpectedCost = tree.get("totalExpectedCost")?.asLong() ?: return@executeOrDefault null
+                    val maxPresetNo = tree.get("maxPresetNo")?.asInt() ?: return@executeOrDefault null
+                    val presetsNode = tree.get("presets") ?: return@executeOrDefault null
+                    val presetNo = result.message.payload.presetNo
+                    val char = result.character
+                    ParsedViewResult(
+                        userIgn = char.userIgn.value,
+                        messageId = result.message.messageId.toString(),
+                        characterOcid = char.characterId.value,
+                        characterClass = char.characterClass ?: "",
+                        totalExpectedCost = totalExpectedCost,
+                        maxPresetNo = maxPresetNo,
+                        presetNo = presetNo,
+                        presetsJson = objectMapper.writeValueAsString(presetsNode),
+                        version = System.currentTimeMillis(),
+                    )
+                },
+                null,
+                TaskContext.of(workerName, "ParseResult", result.character.userIgn.value),
+            )
         }
         if (parsed.isEmpty()) return
 
         // 3. Bulk upsert — 3 queries total (SELECT + batch UPDATE/INSERT)
         batchRepo.bulkUpsert(parsed)
+
+        // 4. Sync read model for query-server
+        parsed.forEach { view ->
+            viewQueryPort.upsertFromCalculation(
+                userIgn = view.userIgn,
+                messageId = view.messageId,
+                characterOcid = view.characterOcid,
+                characterClass = view.characterClass,
+                characterLevel = null,
+                totalExpectedCost = view.totalExpectedCost,
+                maxPresetNo = view.maxPresetNo,
+                presetNo = view.presetNo,
+                presetsJson = view.presetsJson,
+            )
+        }
     }
 
     private fun batchL2CachePut(results: List<CalculationResult>) {

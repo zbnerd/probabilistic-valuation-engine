@@ -54,9 +54,21 @@ class LocalExternalApiArtifactStoreAdapter(
         return GZIPInputStream(Files.readAllBytes(filePath).inputStream()).use { it.readAllBytes() }
     }
 
+    override fun listStoredKeys(endpoint: ExternalApiEndpoint): List<String> {
+        val dir = Paths.get(basePath, endpoint.storageSubDir())
+        if (!Files.exists(dir)) return emptyList()
+        return Files.walk(dir).use { stream ->
+            stream
+                .filter { it.fileName.toString().endsWith(".json.gz") }
+                .map { it.fileName.toString().removeSuffix(".json.gz") }
+                .toList()
+        }
+    }
+
     private fun resolvePath(endpoint: ExternalApiEndpoint, key: String): Path {
         val sanitized = key.replace("/", "_").replace("\\", "_")
-        return Paths.get(basePath, endpoint.storageSubDir(), "$sanitized.json.gz")
+        val shard = sanitized.take(2)
+        return Paths.get(basePath, endpoint.storageSubDir(), shard, "$sanitized.json.gz")
     }
 
     private fun gzipCompress(data: ByteArray): ByteArray {

@@ -1,0 +1,43 @@
+// ========================================
+// Module-External-Api: External API Data Collection
+// Nexon API 호출 + Local Storage 저장 전용 모듈
+// Calculator, DB write path, ReadPath, PGMQ 의존 없음
+// ========================================
+
+plugins {
+	alias(libs.plugins.kotlin.jvm)
+	alias(libs.plugins.kotlin.spring)
+}
+
+dependencies {
+	implementation project(':module-common')
+
+	implementation(libs.kotlin.stdlib)
+	implementation(libs.kotlin.reflect)
+	implementation(libs.kotlin.logging.jvm)
+	implementation(libs.kotlinx.coroutines.core)
+	implementation(libs.kotlinx.coroutines.jdk8)
+
+	// Spring (scheduler, @Service, @Value)
+	implementation(libs.spring.boot)
+	implementation(libs.spring.boot.starter.web)
+
+	// Rate limiting
+	implementation(libs.bucket4j.core)
+
+	// Jackson (JSON serialization + CSV)
+	implementation(libs.jackson.databind)
+	implementation(libs.jackson.dataformat.csv)
+	implementation(libs.jackson.module.kotlin)
+
+	// Testing
+	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.mockito.kotlin)
+	testImplementation(libs.assertj.core)
+}
+
+// Enable plain jar for inter-module dependencies
+tasks.named("jar") {
+	enabled = true
+	archiveClassifier = "plain"
+}

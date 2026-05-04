@@ -7,6 +7,7 @@
 plugins {
 	alias(libs.plugins.kotlin.jvm)
 	alias(libs.plugins.kotlin.spring)
+	alias(libs.plugins.spring.boot)
 }
 
 dependencies {
@@ -36,7 +37,13 @@ dependencies {
 	testImplementation(libs.assertj.core)
 }
 
-// Enable plain jar for inter-module dependencies
+// bootJar enabled — standalone executable application
+bootJar {
+	enabled = true
+	archiveClassifier = ""
+	mainClass.set("maple.externalapi.ExternalApiApplication")
+}
+
 tasks.named("jar") {
 	enabled = true
 	archiveClassifier = "plain"

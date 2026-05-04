@@ -12,9 +12,12 @@ import maple.externalapi.port.inbound.FetchExternalApiUseCase
 import maple.externalapi.reader.UserIgnCsvReader
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 @Component
+@ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class ExternalApiScheduler(
     private val fetchUseCase: FetchExternalApiUseCase,
     private val csvReader: UserIgnCsvReader,
@@ -22,14 +25,21 @@ class ExternalApiScheduler(
     private val permitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
+    @Value("\${external-api.store.base-path:/data/external-api}")
+    private val storeBasePath: String,
 ) {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
 
     private val running = AtomicBoolean(false)
 
+    @Scheduled(cron = "\${external-api.schedule.ocid-lookup-cron:0 0 3 * * *}")
+    fun scheduledOcidLookup() {
+        triggerOcidLookup()
+    }
+
     fun triggerOcidLookup() {
         if (!running.compareAndSet(false, true)) {
-            log.warn("[Scheduler] already running, skipping")
+            log.warn("[Scheduler] OCID lookup already running, skipping")
             return
         }
         try {
@@ -55,10 +65,21 @@ class ExternalApiScheduler(
             return
         }
 
-        log.info("[Scheduler] OCID lookup start: total={}, rate={}/s, batchSize={}", igns.size, permitsPerSecond, batchSize)
+        log.info(
+            "[Scheduler] ========== OCID lookup start ==========",
+        )
+        log.info(
+            "[Scheduler] config: total={}, rate={}/s, batchSize={}, store={}",
+            igns.size,
+            permitsPerSecond,
+            batchSize,
+            storeBasePath,
+        )
+
         val start = Instant.now()
         val successCount = AtomicInteger(0)
         val failCount = AtomicInteger(0)
+        val storedCount = AtomicInteger(0)
 
         igns.chunked(batchSize).forEach { chunk ->
             chunk.forEach { ign ->
@@ -71,21 +92,45 @@ class ExternalApiScheduler(
                     requestKey = ign,
                     characterName = ign,
                 )
-                if (result.success) successCount.incrementAndGet() else failCount.incrementAndGet()
+                if (result.success) {
+                    successCount.incrementAndGet()
+                    if (result.payloadRef != null) {
+                        storedCount.incrementAndGet()
+                    }
+                } else {
+                    failCount.incrementAndGet()
+                }
             }
             val progress = successCount.get() + failCount.get()
             if (progress % 10000 == 0) {
-                log.info("[Scheduler] progress: {}/{} (success={}, fail={})", progress, igns.size, successCount.get(), failCount.get())
+                val elapsed = Duration.between(start, Instant.now())
+                val rate = if (elapsed.seconds > 0) progress / elapsed.seconds else 0
+                log.info(
+                    "[Scheduler] progress: {}/{} (stored={}, fail={}, rate={}/s, elapsed={}s)",
+                    progress,
+                    igns.size,
+                    storedCount.get(),
+                    failCount.get(),
+                    rate,
+                    elapsed.seconds,
+                )
             }
         }
 
         val elapsed = Duration.between(start, Instant.now())
+        val totalProcessed = successCount.get() + failCount.get()
+        val finalRate = if (elapsed.seconds > 0) totalProcessed / elapsed.seconds else 0
         log.info(
-            "[Scheduler] OCID lookup done: total={}, success={}, fail={}, elapsed={}s",
+            "[Scheduler] ========== OCID lookup complete ==========",
+        )
+        log.info(
+            "[Scheduler] result: total={}, stored={}, success={}, fail={}, elapsed={}s, avgRate={}/s",
             igns.size,
+            storedCount.get(),
             successCount.get(),
             failCount.get(),
             elapsed.seconds,
+            finalRate,
         )
     }
 }

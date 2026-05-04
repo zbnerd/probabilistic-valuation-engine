@@ -9,7 +9,7 @@
 2026년 5월 3일:  3-stage PGMQ 파이프라인, Supabase Pooler, ~30-38 views/sec
 ```
 
-2주간 136개 커밋, 수차례 롤백. **단일 노드 한계에 도달했고, 다음 단계로 External API 프로세스 분리 + 배치 파이프라인 전환을 설계 중.**
+2주간 136개 커밋, 수차례 롤백. **단일 노드 한계에 도달했고, 다음 단계로 External API 프로세스 분리 + 비동기 데이터 처리 파이프라인 전환을 설계 중.**
 
 ## 워크로드 규모
 
@@ -31,6 +31,8 @@
 ## 설계 결정 — 제약 조건 → 선택 → 결과
 
 > "숫자보다 '왜 이 구조를 선택했는가'가 더 중요하다."
+>
+> 아래 Phase는 커밋 시간순이 아니라, 병목과 의사결정 주제별로 재구성했다.
 
 ### 제약 조건
 
@@ -39,7 +41,7 @@
    → 멀티 Key 로테이션으로 한계 상향, 여전히 I/O 200~500ms/건은 불가피
 
 2. DB 커넥션 풀 병목: Supabase Pooler 세션 모드 물리적 연결 수 제한
-   → External API I/O 대기 중 커넥션 점유하면 풀 고갈
+   → External API I/O 대기 중 worker slot 점유 시 후속 처리 지연
 ```
 
 ### 설계 결정
@@ -47,15 +49,16 @@
 | 제약 | 설계 결정 | 이유 |
 |------|-----------|------|
 | API Rate Limit | 멀티 Key 로테이션 | 단일 Key 한계 상향 |
-| API I/O 200-500ms | External API 프로세스 완전 분리 | I/O 대기 중 DB 커넥션 점유 방지 |
+| API I/O 200-500ms | External API 프로세스 완전 분리 | API I/O 대기 중 worker slot 점유 방지 |
 | DB 커넥션 15개 | 3-stage PGMQ 파이프라인 | 각 스테이지가 커넥션을 짧게만 사용 |
-| 단일 서버 한계 | SKIP LOCKED 기반 수평 확장 설계 | 인스턴스 추가 시 선형 확장 가능 |
+| 단일 서버 한계 | stage별 독립 확장 설계 | 병목 stage만 수평 확장 가능 |
 
 ### 결과
 
 ```
 단일 노드: 초당 30건, 6~9MB, 하루 260만 건 / 0.5~0.8TB
-수평 확장: 인스턴스 + API Key 추가 → 처리량 선형 증가 구조
+수평 확장: External API stage는 인스턴스 + API Key 단위로 확장 가능
+주의: 전체 completed TPS는 DB write/projection stage 처리량에 의해 제한됨
 ```
 
 ### 면접 표현
@@ -65,14 +68,15 @@
 두 가지 제약 조건 하에서,
 
 External API 프로세스를 완전 분리하여
-Nexon API I/O 대기 중 DB 커넥션을 점유하지 않는 구조로 설계했고,
+API I/O 대기 중 DB 커넥션을 점유하지 않는 구조로 설계했고,
 
 결과적으로 단일 노드 기준
 초당 30건, 6~9MB raw payload를 처리하는
-배치 파이프라인을 구현했습니다.
+외부 API 기반 비동기 데이터 처리 파이프라인을 구현했습니다.
 
-인스턴스와 API Key 스케일아웃 시
-처리량이 선형으로 증가하는 구조입니다."
+External API stage는 인스턴스와 API Key를 추가해 확장 가능한 구조로 설계했습니다.
+다만 전체 처리량은 가장 느린 stage가 결정하므로,
+stage별 queue lag와 DB write latency를 기준으로 병목을 판단했습니다."
 ```
 
 **제약 조건 → 설계 결정 → 결과** 흐름이 기술 면접에서 원하는 답변 구조다.
@@ -367,7 +371,7 @@ aa819296 feat(kafka): implement external-api.requested business connection (PR-2
 
 > **기술 선택은 "가능한가"가 아니라 "필요한가"로 결정해야 한다.**
 
-PGMQ가 30 TPS를 처리하는 데 아무런 문제가 없었다. Kafka는 1000+ TPS에서 고려할 일.
+현재 단일 노드 30 TPS 목표에서는 Kafka 도입 비용이 이득보다 컸다. 따라서 운영 복잡도를 줄이기 위해 PGMQ를 유지했다. 다만 External API stage를 다중 인스턴스로 확장하고, 대용량 payload를 Object Storage artifact로 분리하는 단계에서는 Kafka를 재검토 대상으로 남겼다.
 
 ---
 
@@ -586,9 +590,10 @@ pool=50이 pool=15보다 나을 거라는 직관. 부하테스트 결과는 정�
    - loadCalculationResults: 1~7.5초 (로컬 DB면 1초 미만)
    - 배치 30건 projection에 2~10초
 
-2. Nexon API I/O 대기 중 커넥션 점유
-   - API 호출 200~500ms 동안 DB 커넥션을 잡고 있음
-   - 커넥션 풀 15개의 실제 가용은 동시 요청 수에 따라 제한
+2. Nexon API I/O 대기로 인한 worker slot 점유
+   - API 호출 200~500ms 동안 ExternalApiWorker slot이 점유됨
+   - API latency가 증가하면 queue drain 속도가 하락
+   - DB 작업 자체보다 API I/O와 worker lifecycle이 결합된 것이 문제
 
 3. 단일 노드 처리량 상한
    - pool=15: ~30 views/sec (cold miss)
@@ -602,9 +607,10 @@ External API 프로세스 완전 분리
 → API I/O 대기를 DB 커넥션과 완전히 분리
 → 배치 스케줄러 기반 API 호출
 
-Storage 기반 파이프라인 전환
-→ PGMQ 메시지가 아닌 DB 상태 기반 워커
-→ SKIP LOCKED로 수평 확장
+Object Storage 기반 artifact 파이프라인 전환
+→ 외부 API raw response와 calculation input/result를 Object Storage에 저장
+→ DB는 artifact URI/hash/schemaVersion과 job state만 관리
+→ worker는 DB 상태를 SKIP LOCKED로 claim하여 수평 확장
 ```
 
 **성장 서사**: 한계를 발견했고, 원인을 분석했고, 다음 아키텍처를 설계하고 있다.
@@ -618,11 +624,17 @@ Client Request
     ↓
 Controller (202 Accepted)
     ↓
-PGMQ: expectation_calc_high → [계산만, CPU-bound]
+PGMQ: expectation_calc_high
+    → Job 생성 / 중복 제거 / external_api_queue dispatch
     ↓
-PGMQ: external_api_queue   → [Nexon API 호출, IO-bound]
+PGMQ: external_api_queue
+    → Nexon API 호출 / snapshot 저장 / calculation input staging
     ↓
-PGMQ: result_ready_queue   → [View projection, DB-bound]
+Calculation / Result Persist
+    → Pure calculation / result 저장 / result_ready publish
+    ↓
+PGMQ: result_ready_queue
+    → View projection / batch upsert
     ↓
 character_valuation_views (Read Model)
 ```

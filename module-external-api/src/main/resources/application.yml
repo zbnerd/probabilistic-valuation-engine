@@ -7,6 +7,10 @@ spring:
   main:
     banner-mode: off
 
+nexon:
+  api:
+    key: ${NEXON_API_KEY}
+
 external-api:
   csv:
     path: ../module-app/src/main/resources/data/userIgn_List.csv

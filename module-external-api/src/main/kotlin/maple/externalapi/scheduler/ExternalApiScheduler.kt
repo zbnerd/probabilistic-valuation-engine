@@ -4,6 +4,8 @@ import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.Bucket
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import maple.externalapi.domain.ExternalApiEndpoint
@@ -33,8 +35,8 @@ class ExternalApiScheduler(
     private val runOnStartup: Boolean,
 ) {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
-
     private val running = AtomicBoolean(false)
+    private val executor = Executors.newVirtualThreadPerTaskExecutor()
 
     @EventListener(ApplicationReadyEvent::class)
     fun onStartup() {
@@ -77,11 +79,9 @@ class ExternalApiScheduler(
             return
         }
 
+        log.info("[Scheduler] ========== OCID lookup start ==========")
         log.info(
-            "[Scheduler] ========== OCID lookup start ==========",
-        )
-        log.info(
-            "[Scheduler] config: total={}, rate={}/s, batchSize={}, store={}",
+            "[Scheduler] config: total={}, rate={}/s, batchSize={}, store={}, threads=virtual",
             igns.size,
             permitsPerSecond,
             batchSize,
@@ -92,43 +92,51 @@ class ExternalApiScheduler(
         val successCount = AtomicInteger(0)
         val failCount = AtomicInteger(0)
         val storedCount = AtomicInteger(0)
+        var processed = 0
+        var lastProgressLog = 0
 
-        igns.chunked(batchSize).forEach { chunk ->
-            chunk.forEach { ign ->
-                while (!rateLimiter.tryConsume(1)) {
-                    Thread.sleep(5)
-                }
-                val result = fetchUseCase.fetchSingle(
-                    provider = ExternalApiProvider.NEXON,
-                    endpoint = ExternalApiEndpoint.OCID_LOOKUP,
-                    requestKey = ign,
-                    characterName = ign,
-                )
-                if (result.success) {
-                    successCount.incrementAndGet()
-                    if (result.payloadRef != null) {
-                        storedCount.incrementAndGet()
-                    }
-                } else {
-                    failCount.incrementAndGet()
-                }
+        while (processed < igns.size) {
+            val remaining = igns.size - processed
+            val maxBatch = minOf(batchSize, remaining)
+            val permits = rateLimiter.tryConsumeAsMuchAsPossible(maxBatch.toLong()).toInt()
+
+            if (permits == 0) {
+                Thread.sleep(Duration.ofMillis(100))
+                continue
             }
-            val progress = successCount.get() + failCount.get()
-            if (progress % 5000 == 0) {
-                val elapsed = Duration.between(start, Instant.now())
-                val elapsedSec = elapsed.toMillis() / 1000.0
-                val rate = if (elapsedSec > 0) "%.0f".format(progress / elapsedSec) else "?"
-                val storedRate = if (elapsedSec > 0) "%.0f".format(storedCount.get() / elapsedSec) else "?"
-                log.info(
-                    "[Scheduler] progress: {}/{} (stored={} @{}files/s, fail={}, totalRate={}files/s, elapsed={}s)",
-                    progress,
-                    igns.size,
-                    storedCount.get(),
-                    storedRate,
-                    failCount.get(),
-                    rate,
-                    elapsed.seconds,
+
+            val chunk = igns.subList(processed, processed + permits)
+            processed += permits
+
+            val futures = chunk.map { ign ->
+                executor.submit(
+                    Callable {
+                        try {
+                            val result = fetchUseCase.fetchSingle(
+                                provider = ExternalApiProvider.NEXON,
+                                endpoint = ExternalApiEndpoint.OCID_LOOKUP,
+                                requestKey = ign,
+                                characterName = ign,
+                            )
+                            if (result.success) {
+                                successCount.incrementAndGet()
+                                if (result.payloadRef != null) storedCount.incrementAndGet()
+                            } else {
+                                failCount.incrementAndGet()
+                            }
+                        } catch (ex: Exception) {
+                            failCount.incrementAndGet()
+                        }
+                    },
                 )
+            }
+
+            futures.forEach { it.get() }
+
+            val progress = successCount.get() + failCount.get()
+            if (progress - lastProgressLog >= 5000) {
+                lastProgressLog = progress
+                logProgress(progress, igns.size, storedCount.get(), failCount.get(), start)
             }
         }
 
@@ -137,9 +145,7 @@ class ExternalApiScheduler(
         val totalProcessed = successCount.get() + failCount.get()
         val finalRate = if (elapsedSec > 0) "%.0f".format(totalProcessed / elapsedSec) else "?"
         val storedRate = if (elapsedSec > 0) "%.0f".format(storedCount.get() / elapsedSec) else "?"
-        log.info(
-            "[Scheduler] ========== OCID lookup complete ==========",
-        )
+        log.info("[Scheduler] ========== OCID lookup complete ==========")
         log.info(
             "[Scheduler] result: total={}, stored={} @{}files/s, success={}, fail={}, elapsed={}s, avgRate={}files/s",
             igns.size,
@@ -149,6 +155,23 @@ class ExternalApiScheduler(
             failCount.get(),
             elapsed.seconds,
             finalRate,
+        )
+    }
+
+    private fun logProgress(progress: Int, total: Int, stored: Int, fails: Int, start: Instant) {
+        val elapsed = Duration.between(start, Instant.now())
+        val elapsedSec = elapsed.toMillis() / 1000.0
+        val rate = if (elapsedSec > 0) "%.0f".format(progress / elapsedSec) else "?"
+        val storedRate = if (elapsedSec > 0) "%.0f".format(stored / elapsedSec) else "?"
+        log.info(
+            "[Scheduler] progress: {}/{} (stored={} @{}files/s, fail={}, totalRate={}files/s, elapsed={}s)",
+            progress,
+            total,
+            stored,
+            storedRate,
+            fails,
+            rate,
+            elapsed.seconds,
         )
     }
 }

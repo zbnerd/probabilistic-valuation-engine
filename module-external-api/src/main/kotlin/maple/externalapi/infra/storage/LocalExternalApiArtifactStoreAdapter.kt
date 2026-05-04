@@ -5,6 +5,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiPayloadRef
@@ -13,10 +14,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 
-/**
- * Local file storage for raw API responses.
- * Reuses the same pattern as LocalSnapshotObjectStore: gzip + sha256 + atomic write.
- */
 @Component
 class LocalExternalApiArtifactStoreAdapter(
     @Value("\${external-api.store.base-path:/data/external-api}")
@@ -54,8 +51,7 @@ class LocalExternalApiArtifactStoreAdapter(
     ): ByteArray? {
         val filePath = resolvePath(endpoint, key)
         if (!Files.exists(filePath)) return null
-        val compressed = Files.readAllBytes(filePath)
-        return gzipDecompress(compressed)
+        return GZIPInputStream(Files.readAllBytes(filePath).inputStream()).use { it.readAllBytes() }
     }
 
     private fun resolvePath(endpoint: ExternalApiEndpoint, key: String): Path {
@@ -67,10 +63,6 @@ class LocalExternalApiArtifactStoreAdapter(
         val bos = java.io.ByteArrayOutputStream()
         GZIPOutputStream(bos).use { it.write(data) }
         return bos.toByteArray()
-    }
-
-    private fun gzipDecompress(compressed: ByteArray): ByteArray {
-        java.util.zip.GZIPInputStream(compressed.inputStream()).use { return it.readAllBytes() }
     }
 
     private fun sha256(data: ByteArray): String {

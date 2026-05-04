@@ -22,6 +22,7 @@ dependencies {
 	// Spring (scheduler, @Service, @Value)
 	implementation(libs.spring.boot)
 	implementation(libs.spring.boot.starter.web)
+	implementation(libs.spring.boot.starter.webflux)
 
 	// Rate limiting
 	implementation(libs.bucket4j.core)

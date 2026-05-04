@@ -3,12 +3,14 @@ package maple.externalapi.scheduler
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.Bucket
+import jakarta.annotation.PreDestroy
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.inbound.FetchExternalApiUseCase
@@ -42,46 +44,69 @@ class ExternalApiScheduler(
 ) {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val running = AtomicBoolean(false)
+    private val shutdown = AtomicBoolean(false)
+    private val ocidCache = AtomicReference<Map<String, String>>(emptyMap())
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
 
     @EventListener(ApplicationReadyEvent::class)
     fun onStartup() {
+        loadOcidCache()
+        executor.submit { runItemEquipmentLoop() }
         if (runOnStartup) {
-            log.info("[Scheduler] run-on-startup enabled, triggering full pipeline")
-            triggerFullPipeline()
+            log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
+            triggerDailyRefresh()
         }
     }
 
-    @Scheduled(cron = "\${external-api.schedule.ocid-lookup-cron:0 0 3 * * *}")
-    fun scheduledPipeline() {
-        triggerFullPipeline()
+    @Scheduled(cron = "\${external-api.schedule.daily-cron:0 0 3 * * *}")
+    fun scheduledDailyRefresh() {
+        triggerDailyRefresh()
     }
 
-    fun triggerFullPipeline() {
-        if (!running.compareAndSet(false, true)) {
-            log.warn("[Scheduler] pipeline already running, skipping")
+    fun triggerDailyRefresh() {
+        if (!acquireLock(120_000)) {
+            log.warn("[Scheduler] could not acquire lock for daily refresh, skipping")
             return
         }
         try {
-            val existingOcids = artifactStore.listStoredKeys(ExternalApiEndpoint.OCID_LOOKUP)
-            if (existingOcids.isEmpty()) {
-                doOcidLookup()
-            } else {
-                log.info("[Scheduler] OCID lookup already done ({} files), skipping", existingOcids.size)
-            }
-            val existingBasic = artifactStore.listStoredKeys(ExternalApiEndpoint.CHARACTER_BASIC)
-            if (existingBasic.isEmpty()) {
-                doCharacterBasicLookup()
-            } else {
-                log.info("[Scheduler] CHARACTER_BASIC already done ({} files), skipping", existingBasic.size)
-            }
-            doItemEquipmentLookup()
+            doOcidLookup()
+            loadOcidCache()
+            doCharacterBasicLookup()
         } finally {
             running.set(false)
         }
     }
 
+    private fun runItemEquipmentLoop() {
+        log.info("[Scheduler] ITEM_EQUIPMENT continuous loop started")
+        while (!shutdown.get()) {
+            val entries = ocidCache.get().entries.toList()
+            if (entries.isEmpty()) {
+                log.warn("[Scheduler] OCID cache empty, waiting 30s")
+                Thread.sleep(Duration.ofSeconds(30))
+                loadOcidCache()
+                continue
+            }
+            if (!acquireLock(120_000)) {
+                Thread.sleep(Duration.ofSeconds(5))
+                continue
+            }
+            try {
+                doItemEquipmentLookup(entries)
+            } finally {
+                running.set(false)
+            }
+        }
+        log.info("[Scheduler] ITEM_EQUIPMENT continuous loop stopped")
+    }
+
     private fun doOcidLookup() {
+        val existingOcids = artifactStore.listStoredKeys(ExternalApiEndpoint.OCID_LOOKUP)
+        if (existingOcids.isNotEmpty()) {
+            log.info("[Scheduler] OCID lookup already done ({} files), skipping", existingOcids.size)
+            return
+        }
+
         val rateLimiter = newRateLimiter(ocidLookupPermitsPerSecond)
 
         val igns = csvReader.readAll()
@@ -92,9 +117,9 @@ class ExternalApiScheduler(
 
         log.info("[Scheduler] ========== OCID lookup start ==========")
         log.info(
-            "[Scheduler] config: total={}, rate={}/s, batchSize={}, store={}, threads=virtual",
+            "[Scheduler] config: total={}, rate={}/s, batchSize={}, store={}",
             igns.size,
-            permitsPerSecond,
+            ocidLookupPermitsPerSecond,
             batchSize,
             storeBasePath,
         )
@@ -149,24 +174,24 @@ class ExternalApiScheduler(
     }
 
     private fun doCharacterBasicLookup() {
-        val rateLimiter = newRateLimiter()
-
-        val ocidKeys = artifactStore.listStoredKeys(ExternalApiEndpoint.OCID_LOOKUP)
-        if (ocidKeys.isEmpty()) {
-            log.warn("[Scheduler] no stored OCIDs found, skipping CHARACTER_BASIC")
+        val existingBasic = artifactStore.listStoredKeys(ExternalApiEndpoint.CHARACTER_BASIC)
+        if (existingBasic.isNotEmpty()) {
+            log.info("[Scheduler] CHARACTER_BASIC already done ({} files), skipping", existingBasic.size)
             return
         }
 
-        val ocidMap = readStoredOcids(ocidKeys)
-        if (ocidMap.isEmpty()) {
-            log.warn("[Scheduler] failed to parse any OCIDs, skipping CHARACTER_BASIC")
+        val entries = ocidCache.get().entries.toList()
+        if (entries.isEmpty()) {
+            log.warn("[Scheduler] OCID cache empty, skipping CHARACTER_BASIC")
             return
         }
+
+        val rateLimiter = newRateLimiter(permitsPerSecond)
 
         log.info("[Scheduler] ========== CHARACTER_BASIC lookup start ==========")
         log.info(
             "[Scheduler] config: total={}, rate={}/s, batchSize={}, threads=virtual",
-            ocidMap.size,
+            entries.size,
             permitsPerSecond,
             batchSize,
         )
@@ -177,7 +202,6 @@ class ExternalApiScheduler(
         val storedCount = AtomicInteger(0)
         var processed = 0
         var lastProgressLog = 0
-        val entries = ocidMap.entries.toList()
 
         while (processed < entries.size) {
             val permits = acquirePermits(rateLimiter, entries.size - processed)
@@ -221,25 +245,13 @@ class ExternalApiScheduler(
         logSummary("CHARACTER_BASIC", entries.size, successCount.get(), storedCount.get(), failCount.get(), start)
     }
 
-    private fun doItemEquipmentLookup() {
-        val rateLimiter = newRateLimiter()
-
-        val ocidKeys = artifactStore.listStoredKeys(ExternalApiEndpoint.OCID_LOOKUP)
-        if (ocidKeys.isEmpty()) {
-            log.warn("[Scheduler] no stored OCIDs found, skipping ITEM_EQUIPMENT")
-            return
-        }
-
-        val ocidMap = readStoredOcids(ocidKeys)
-        if (ocidMap.isEmpty()) {
-            log.warn("[Scheduler] failed to parse any OCIDs, skipping ITEM_EQUIPMENT")
-            return
-        }
+    private fun doItemEquipmentLookup(entries: List<Map.Entry<String, String>>) {
+        val rateLimiter = newRateLimiter(permitsPerSecond)
 
         log.info("[Scheduler] ========== ITEM_EQUIPMENT lookup start ==========")
         log.info(
             "[Scheduler] config: total={}, rate={}/s, batchSize={}, threads=virtual",
-            ocidMap.size,
+            entries.size,
             permitsPerSecond,
             batchSize,
         )
@@ -250,7 +262,6 @@ class ExternalApiScheduler(
         val storedCount = AtomicInteger(0)
         var processed = 0
         var lastProgressLog = 0
-        val entries = ocidMap.entries.toList()
 
         while (processed < entries.size) {
             val permits = acquirePermits(rateLimiter, entries.size - processed)
@@ -294,8 +305,14 @@ class ExternalApiScheduler(
         logSummary("ITEM_EQUIPMENT", entries.size, successCount.get(), storedCount.get(), failCount.get(), start)
     }
 
-    private fun readStoredOcids(keys: List<String>): Map<String, String> {
-        val result = mutableMapOf<String, String>()
+    private fun loadOcidCache() {
+        val keys = artifactStore.listStoredKeys(ExternalApiEndpoint.OCID_LOOKUP)
+        if (keys.isEmpty()) {
+            log.info("[Scheduler] no stored OCIDs found, cache empty")
+            return
+        }
+
+        val cache = mutableMapOf<String, String>()
         for (key in keys) {
             try {
                 val bytes = artifactStore.read(ExternalApiEndpoint.OCID_LOOKUP, key)
@@ -303,14 +320,24 @@ class ExternalApiScheduler(
                     val node = objectMapper.readTree(bytes)
                     val ocid = node.get("ocid")?.asText()
                     if (ocid != null) {
-                        result[key] = ocid
+                        cache[key] = ocid
                     }
                 }
             } catch (ex: Exception) {
                 log.debug("[Scheduler] failed to parse OCID for key={}", key)
             }
         }
-        return result
+        ocidCache.set(cache)
+        log.info("[Scheduler] OCID cache loaded: {} entries", cache.size)
+    }
+
+    private fun acquireLock(timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (running.compareAndSet(false, true)) return true
+            Thread.sleep(Duration.ofMillis(500))
+        }
+        return false
     }
 
     private fun newRateLimiter(permits: Int = permitsPerSecond): Bucket = Bucket.builder()
@@ -361,5 +388,12 @@ class ExternalApiScheduler(
             elapsedSec.toLong(),
             rate,
         )
+    }
+
+    @PreDestroy
+    fun onDestroy() {
+        log.info("[Scheduler] shutdown requested")
+        shutdown.set(true)
+        executor.close()
     }
 }

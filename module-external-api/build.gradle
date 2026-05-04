@@ -24,6 +24,9 @@ dependencies {
 	implementation(libs.spring.boot.starter.web)
 	implementation(libs.spring.boot.starter.webflux)
 
+	// Kafka (chunk-ready event publishing)
+	implementation(libs.spring.kafka)
+
 	// Rate limiting
 	implementation(libs.bucket4j.core)
 

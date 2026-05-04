@@ -6,6 +6,13 @@ spring:
     name: external-api-collector
   main:
     banner-mode: off
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
 
 nexon:
   api:
@@ -24,6 +31,22 @@ external-api:
     daily-cron: "0 0 3 * * *"  # 매일 새벽 3시 — OCID + CHARACTER_BASIC
     enabled: true
     run-on-startup: true
+  snapshot:
+    chunk:
+      character-basic:
+        max-records: 2000
+        max-uncompressed-bytes: 134217728
+      item-equipment:
+        max-records: 500
+        max-uncompressed-bytes: 134217728
+    queue-capacity: 1000
+    events:
+      enabled: true
+      kafka:
+        enabled: false
+        chunk-ready-topic: external-api.snapshot.chunk-ready
+        run-completed-topic: external-api.snapshot.run-completed
+        run-failed-topic: external-api.snapshot.run-failed
 
 logging:
   level:

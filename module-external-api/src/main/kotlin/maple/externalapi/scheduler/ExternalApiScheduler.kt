@@ -4,18 +4,16 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.Bucket
 import jakarta.annotation.PreDestroy
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.Callable
-import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
-import maple.externalapi.port.inbound.FetchExternalApiUseCase
-import maple.externalapi.port.out.ExternalApiArtifactStorePort
+import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.reader.UserIgnCsvReader
+import maple.externalapi.snapshot.ChunkedSnapshotSink
+import maple.externalapi.snapshot.SnapshotChunkRecord
+import maple.externalapi.snapshot.SnapshotChunkingProperties
+import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.externalapi.port.out.ExternalApiArtifactStorePort
+import maple.externalapi.port.inbound.FetchExternalApiUseCase
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -23,14 +21,27 @@ import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class ExternalApiScheduler(
     private val fetchUseCase: FetchExternalApiUseCase,
+    private val clientPort: ExternalApiClientPort,
     private val csvReader: UserIgnCsvReader,
     private val artifactStore: ExternalApiArtifactStorePort,
     private val objectMapper: ObjectMapper,
+    private val chunkingProperties: SnapshotChunkingProperties,
+    private val eventPublisher: SnapshotChunkEventPublisher,
     @Value("\${external-api.rate-limit.permits-per-second:200}")
     private val permitsPerSecond: Int,
     @Value("\${external-api.rate-limit.ocid-lookup-permits-per-second:400}")
@@ -118,16 +129,13 @@ class ExternalApiScheduler(
         log.info("[Scheduler] ========== OCID lookup start ==========")
         log.info(
             "[Scheduler] config: total={}, rate={}/s, batchSize={}, store={}",
-            igns.size,
-            ocidLookupPermitsPerSecond,
-            batchSize,
-            storeBasePath,
+            igns.size, ocidLookupPermitsPerSecond, batchSize, storeBasePath,
         )
 
         val start = Instant.now()
-        val successCount = AtomicInteger(0)
-        val failCount = AtomicInteger(0)
-        val storedCount = AtomicInteger(0)
+        val successCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val failCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val storedCount = java.util.concurrent.atomic.AtomicInteger(0)
         var processed = 0
         var lastProgressLog = 0
 
@@ -186,123 +194,183 @@ class ExternalApiScheduler(
             return
         }
 
+        val runId = newRunId()
+        val endpoint = "character-basic"
+        val config = chunkingProperties.configFor(endpoint)
+        val runDir = Paths.get(storeBasePath, "runs", runId)
+        val sink = ChunkedSnapshotSink(
+            runDir = runDir,
+            endpoint = endpoint,
+            maxRecords = config.maxRecords,
+            maxUncompressedBytes = config.maxUncompressedBytes,
+            queueCapacity = chunkingProperties.queueCapacity,
+            objectMapper = objectMapper,
+            eventPublisher = eventPublisher,
+        )
+
         val rateLimiter = newRateLimiter(permitsPerSecond)
 
         log.info("[Scheduler] ========== CHARACTER_BASIC lookup start ==========")
         log.info(
-            "[Scheduler] config: total={}, rate={}/s, batchSize={}, threads=virtual",
-            entries.size,
-            permitsPerSecond,
-            batchSize,
+            "[Scheduler] config: total={}, rate={}/s, batchSize={}, chunk={}records/{}bytes, runId={}",
+            entries.size, permitsPerSecond, batchSize, config.maxRecords, config.maxUncompressedBytes, runId,
         )
 
         val start = Instant.now()
-        val successCount = AtomicInteger(0)
-        val failCount = AtomicInteger(0)
-        val storedCount = AtomicInteger(0)
+        val successCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val failCount = java.util.concurrent.atomic.AtomicInteger(0)
         var processed = 0
         var lastProgressLog = 0
 
-        while (processed < entries.size) {
-            val permits = acquirePermits(rateLimiter, entries.size - processed)
-            if (permits == 0) continue
+        try {
+            while (processed < entries.size) {
+                val permits = acquirePermits(rateLimiter, entries.size - processed)
+                if (permits == 0) continue
 
-            val chunk = entries.subList(processed, processed + permits)
-            processed += permits
+                val chunk = entries.subList(processed, processed + permits)
+                processed += permits
 
-            val futures = chunk.map { (ign, ocid) ->
-                executor.submit(
-                    Callable {
-                        try {
-                            val result = fetchUseCase.fetchSingle(
-                                provider = ExternalApiProvider.NEXON,
-                                endpoint = ExternalApiEndpoint.CHARACTER_BASIC,
-                                requestKey = ocid,
-                                characterName = ign,
-                            )
-                            if (result.success) {
+                val futures = chunk.map { (ign, ocid) ->
+                    executor.submit(
+                        Callable {
+                            try {
+                                val bodyBytes = clientPort.fetch(
+                                    ExternalApiProvider.NEXON,
+                                    ExternalApiEndpoint.CHARACTER_BASIC,
+                                    ocid,
+                                ).join()
+                                sink.submit(
+                                    SnapshotChunkRecord.Success(
+                                        key = ocid,
+                                        endpoint = endpoint,
+                                        keyType = "OCID",
+                                        httpStatus = 200,
+                                        fetchedAt = Instant.now(),
+                                        bodyBytes = bodyBytes,
+                                    ),
+                                )
                                 successCount.incrementAndGet()
-                                if (result.payloadRef != null) storedCount.incrementAndGet()
-                            } else {
+                            } catch (ex: Exception) {
+                                val httpStatus = extractHttpStatus(ex)
+                                sink.submit(
+                                    SnapshotChunkRecord.Failure(
+                                        key = ocid,
+                                        endpoint = endpoint,
+                                        keyType = "OCID",
+                                        httpStatus = httpStatus,
+                                        fetchedAt = Instant.now(),
+                                        errorMessage = ex.message ?: "unknown",
+                                    ),
+                                )
                                 failCount.incrementAndGet()
                             }
-                        } catch (ex: Exception) {
-                            failCount.incrementAndGet()
-                        }
-                    },
-                )
-            }
+                        },
+                    )
+                }
 
-            futures.forEach { it.get() }
+                futures.forEach { it.get() }
 
-            val progress = successCount.get() + failCount.get()
-            if (progress - lastProgressLog >= 5000) {
-                lastProgressLog = progress
-                logProgress("CHARACTER_BASIC", progress, entries.size, storedCount.get(), failCount.get(), start)
+                val progress = successCount.get() + failCount.get()
+                if (progress - lastProgressLog >= 5000) {
+                    lastProgressLog = progress
+                    logProgress("CHARACTER_BASIC", progress, entries.size, successCount.get(), failCount.get(), start)
+                }
             }
+        } finally {
+            sink.close()
         }
 
-        logSummary("CHARACTER_BASIC", entries.size, successCount.get(), storedCount.get(), failCount.get(), start)
+        logSummary("CHARACTER_BASIC", entries.size, successCount.get(), successCount.get(), failCount.get(), start)
     }
 
     private fun doItemEquipmentLookup(entries: List<Map.Entry<String, String>>) {
+        val runId = newRunId()
+        val endpoint = "item-equipment"
+        val config = chunkingProperties.configFor(endpoint)
+        val runDir = Paths.get(storeBasePath, "runs", runId)
+        val sink = ChunkedSnapshotSink(
+            runDir = runDir,
+            endpoint = endpoint,
+            maxRecords = config.maxRecords,
+            maxUncompressedBytes = config.maxUncompressedBytes,
+            queueCapacity = chunkingProperties.queueCapacity,
+            objectMapper = objectMapper,
+            eventPublisher = eventPublisher,
+        )
+
         val rateLimiter = newRateLimiter(permitsPerSecond)
 
         log.info("[Scheduler] ========== ITEM_EQUIPMENT lookup start ==========")
         log.info(
-            "[Scheduler] config: total={}, rate={}/s, batchSize={}, threads=virtual",
-            entries.size,
-            permitsPerSecond,
-            batchSize,
+            "[Scheduler] config: total={}, rate={}/s, batchSize={}, chunk={}records/{}bytes, runId={}",
+            entries.size, permitsPerSecond, batchSize, config.maxRecords, config.maxUncompressedBytes, runId,
         )
 
         val start = Instant.now()
-        val successCount = AtomicInteger(0)
-        val failCount = AtomicInteger(0)
-        val storedCount = AtomicInteger(0)
+        val successCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val failCount = java.util.concurrent.atomic.AtomicInteger(0)
         var processed = 0
         var lastProgressLog = 0
 
-        while (processed < entries.size) {
-            val permits = acquirePermits(rateLimiter, entries.size - processed)
-            if (permits == 0) continue
+        try {
+            while (processed < entries.size) {
+                val permits = acquirePermits(rateLimiter, entries.size - processed)
+                if (permits == 0) continue
 
-            val chunk = entries.subList(processed, processed + permits)
-            processed += permits
+                val chunk = entries.subList(processed, processed + permits)
+                processed += permits
 
-            val futures = chunk.map { (ign, ocid) ->
-                executor.submit(
-                    Callable {
-                        try {
-                            val result = fetchUseCase.fetchSingle(
-                                provider = ExternalApiProvider.NEXON,
-                                endpoint = ExternalApiEndpoint.ITEM_EQUIPMENT,
-                                requestKey = ocid,
-                                characterName = ign,
-                            )
-                            if (result.success) {
+                val futures = chunk.map { (ign, ocid) ->
+                    executor.submit(
+                        Callable {
+                            try {
+                                val bodyBytes = clientPort.fetch(
+                                    ExternalApiProvider.NEXON,
+                                    ExternalApiEndpoint.ITEM_EQUIPMENT,
+                                    ocid,
+                                ).join()
+                                sink.submit(
+                                    SnapshotChunkRecord.Success(
+                                        key = ocid,
+                                        endpoint = endpoint,
+                                        keyType = "OCID",
+                                        httpStatus = 200,
+                                        fetchedAt = Instant.now(),
+                                        bodyBytes = bodyBytes,
+                                    ),
+                                )
                                 successCount.incrementAndGet()
-                                if (result.payloadRef != null) storedCount.incrementAndGet()
-                            } else {
+                            } catch (ex: Exception) {
+                                val httpStatus = extractHttpStatus(ex)
+                                sink.submit(
+                                    SnapshotChunkRecord.Failure(
+                                        key = ocid,
+                                        endpoint = endpoint,
+                                        keyType = "OCID",
+                                        httpStatus = httpStatus,
+                                        fetchedAt = Instant.now(),
+                                        errorMessage = ex.message ?: "unknown",
+                                    ),
+                                )
                                 failCount.incrementAndGet()
                             }
-                        } catch (ex: Exception) {
-                            failCount.incrementAndGet()
-                        }
-                    },
-                )
-            }
+                        },
+                    )
+                }
 
-            futures.forEach { it.get() }
+                futures.forEach { it.get() }
 
-            val progress = successCount.get() + failCount.get()
-            if (progress - lastProgressLog >= 5000) {
-                lastProgressLog = progress
-                logProgress("ITEM_EQUIPMENT", progress, entries.size, storedCount.get(), failCount.get(), start)
+                val progress = successCount.get() + failCount.get()
+                if (progress - lastProgressLog >= 5000) {
+                    lastProgressLog = progress
+                    logProgress("ITEM_EQUIPMENT", progress, entries.size, successCount.get(), failCount.get(), start)
+                }
             }
+        } finally {
+            sink.close()
         }
 
-        logSummary("ITEM_EQUIPMENT", entries.size, successCount.get(), storedCount.get(), failCount.get(), start)
+        logSummary("ITEM_EQUIPMENT", entries.size, successCount.get(), successCount.get(), failCount.get(), start)
     }
 
     private fun loadOcidCache() {
@@ -356,37 +424,35 @@ class ExternalApiScheduler(
         }
     }
 
+    private fun newRunId(): String {
+        val formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.systemDefault())
+        return formatter.format(Instant.now())
+    }
+
+    private fun extractHttpStatus(ex: Throwable): Int {
+        val cause = if (ex is java.util.concurrent.CompletionException) ex.cause else ex
+        return when (cause) {
+            is org.springframework.web.reactive.function.client.WebClientResponseException -> cause.statusCode.value()
+            else -> 0
+        }
+    }
+
     private fun logProgress(phase: String, progress: Int, total: Int, stored: Int, fails: Int, start: Instant) {
         val elapsedSec = Duration.between(start, Instant.now()).toMillis() / 1000.0
         val rate = if (elapsedSec > 0) "%.0f".format(progress / elapsedSec) else "?"
-        val storedRate = if (elapsedSec > 0) "%.0f".format(stored / elapsedSec) else "?"
         log.info(
-            "[Scheduler] {}: {}/{} (stored={} @{}files/s, fail={}, rate={}files/s, elapsed={}s)",
-            phase,
-            progress,
-            total,
-            stored,
-            storedRate,
-            fails,
-            rate,
-            elapsedSec.toLong(),
+            "[Scheduler] {}: {}/{} (success={}, fail={}, rate={}files/s, elapsed={}s)",
+            phase, progress, total, stored, fails, rate, elapsedSec.toLong(),
         )
     }
 
     private fun logSummary(phase: String, total: Int, success: Int, stored: Int, fails: Int, start: Instant) {
         val elapsedSec = Duration.between(start, Instant.now()).toMillis() / 1000.0
         val rate = if (elapsedSec > 0) "%.0f".format(total / elapsedSec) else "?"
-        val storedRate = if (elapsedSec > 0) "%.0f".format(stored / elapsedSec) else "?"
         log.info("[Scheduler] ========== {} complete ==========", phase)
         log.info(
-            "[Scheduler] result: total={}, stored={} @{}files/s, success={}, fail={}, elapsed={}s, avgRate={}files/s",
-            total,
-            stored,
-            storedRate,
-            success,
-            fails,
-            elapsedSec.toLong(),
-            rate,
+            "[Scheduler] result: total={}, success={}, fail={}, elapsed={}s, avgRate={}files/s",
+            total, success, fails, elapsedSec.toLong(), rate,
         )
     }
 

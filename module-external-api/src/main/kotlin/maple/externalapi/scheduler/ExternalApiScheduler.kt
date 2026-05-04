@@ -13,6 +13,8 @@ import maple.externalapi.reader.UserIgnCsvReader
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
@@ -27,10 +29,20 @@ class ExternalApiScheduler(
     private val batchSize: Int,
     @Value("\${external-api.store.base-path:/data/external-api}")
     private val storeBasePath: String,
+    @Value("\${external-api.schedule.run-on-startup:false}")
+    private val runOnStartup: Boolean,
 ) {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
 
     private val running = AtomicBoolean(false)
+
+    @EventListener(ApplicationReadyEvent::class)
+    fun onStartup() {
+        if (runOnStartup) {
+            log.info("[Scheduler] run-on-startup enabled, triggering OCID lookup")
+            triggerOcidLookup()
+        }
+    }
 
     @Scheduled(cron = "\${external-api.schedule.ocid-lookup-cron:0 0 3 * * *}")
     fun scheduledOcidLookup() {

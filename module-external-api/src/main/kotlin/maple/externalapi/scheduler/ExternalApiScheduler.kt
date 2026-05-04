@@ -61,7 +61,12 @@ class ExternalApiScheduler(
             return
         }
         try {
-            doOcidLookup()
+            val existingOcids = artifactStore.listStoredKeys(ExternalApiEndpoint.OCID_LOOKUP)
+            if (existingOcids.isEmpty()) {
+                doOcidLookup()
+            } else {
+                log.info("[Scheduler] OCID lookup already done ({} files), skipping", existingOcids.size)
+            }
             doCharacterBasicLookup()
         } finally {
             running.set(false)

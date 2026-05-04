@@ -114,14 +114,17 @@ class ExternalApiScheduler(
                 }
             }
             val progress = successCount.get() + failCount.get()
-            if (progress % 10000 == 0) {
+            if (progress % 5000 == 0) {
                 val elapsed = Duration.between(start, Instant.now())
-                val rate = if (elapsed.seconds > 0) progress / elapsed.seconds else 0
+                val elapsedSec = elapsed.toMillis() / 1000.0
+                val rate = if (elapsedSec > 0) "%.0f".format(progress / elapsedSec) else "?"
+                val storedRate = if (elapsedSec > 0) "%.0f".format(storedCount.get() / elapsedSec) else "?"
                 log.info(
-                    "[Scheduler] progress: {}/{} (stored={}, fail={}, rate={}/s, elapsed={}s)",
+                    "[Scheduler] progress: {}/{} (stored={} @{}files/s, fail={}, totalRate={}files/s, elapsed={}s)",
                     progress,
                     igns.size,
                     storedCount.get(),
+                    storedRate,
                     failCount.get(),
                     rate,
                     elapsed.seconds,
@@ -130,15 +133,18 @@ class ExternalApiScheduler(
         }
 
         val elapsed = Duration.between(start, Instant.now())
+        val elapsedSec = elapsed.toMillis() / 1000.0
         val totalProcessed = successCount.get() + failCount.get()
-        val finalRate = if (elapsed.seconds > 0) totalProcessed / elapsed.seconds else 0
+        val finalRate = if (elapsedSec > 0) "%.0f".format(totalProcessed / elapsedSec) else "?"
+        val storedRate = if (elapsedSec > 0) "%.0f".format(storedCount.get() / elapsedSec) else "?"
         log.info(
             "[Scheduler] ========== OCID lookup complete ==========",
         )
         log.info(
-            "[Scheduler] result: total={}, stored={}, success={}, fail={}, elapsed={}s, avgRate={}/s",
+            "[Scheduler] result: total={}, stored={} @{}files/s, success={}, fail={}, elapsed={}s, avgRate={}files/s",
             igns.size,
             storedCount.get(),
+            storedRate,
             successCount.get(),
             failCount.get(),
             elapsed.seconds,

@@ -22,8 +22,8 @@ external-api:
     base-path: ./external-api-data
   schedule:
     daily-cron: "0 0 3 * * *"  # 매일 새벽 3시 — OCID + CHARACTER_BASIC
-    enabled: false  # 기본 비활성화, 수동 트리거 또는 YAML 오버라이드로 활성화
-    run-on-startup: false  # true 시 앱 기동 직후 즉시 OCID lookup 실행
+    enabled: true
+    run-on-startup: true
 
 logging:
   level:

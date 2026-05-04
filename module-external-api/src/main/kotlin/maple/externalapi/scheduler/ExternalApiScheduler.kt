@@ -31,6 +31,8 @@ class ExternalApiScheduler(
     private val objectMapper: ObjectMapper,
     @Value("\${external-api.rate-limit.permits-per-second:200}")
     private val permitsPerSecond: Int,
+    @Value("\${external-api.rate-limit.ocid-lookup-permits-per-second:400}")
+    private val ocidLookupPermitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
     @Value("\${external-api.store.base-path:/data/external-api}")
@@ -74,7 +76,7 @@ class ExternalApiScheduler(
     }
 
     private fun doOcidLookup() {
-        val rateLimiter = newRateLimiter()
+        val rateLimiter = newRateLimiter(ocidLookupPermitsPerSecond)
 
         val igns = csvReader.readAll()
         if (igns.isEmpty()) {
@@ -232,11 +234,11 @@ class ExternalApiScheduler(
         return result
     }
 
-    private fun newRateLimiter(): Bucket = Bucket.builder()
+    private fun newRateLimiter(permits: Int = permitsPerSecond): Bucket = Bucket.builder()
         .addLimit(
             Bandwidth.builder()
-                .capacity(permitsPerSecond.toLong())
-                .refillIntervally(permitsPerSecond.toLong(), Duration.ofSeconds(1))
+                .capacity(permits.toLong())
+                .refillIntervally(permits.toLong(), Duration.ofSeconds(1))
                 .build(),
         )
         .build()

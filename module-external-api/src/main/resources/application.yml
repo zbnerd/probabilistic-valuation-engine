@@ -16,6 +16,7 @@ external-api:
     path: ../module-app/src/main/resources/data/userIgn_List.csv
   rate-limit:
     permits-per-second: 200
+    ocid-lookup-permits-per-second: 400
   batch-size: 1000
   store:
     base-path: ./external-api-data

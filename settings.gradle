@@ -16,3 +16,6 @@ include 'module-chaos-test'
 
 // ADR-017: Web layer (GlobalExceptionHandler, Filter)
 include 'module-web'
+
+// External API data collection module (Nexon API → Local Storage)
+include 'module-external-api'

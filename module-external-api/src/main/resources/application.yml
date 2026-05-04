@@ -1,0 +1,31 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: external-api-collector
+  main:
+    banner-mode: off
+
+nexon:
+  api:
+    key: ${NEXON_API_KEY}
+
+external-api:
+  csv:
+    path: ../module-app/src/main/resources/data/userIgn_List.csv
+  rate-limit:
+    permits-per-second: 200
+  batch-size: 1000
+  store:
+    base-path: ./external-api-data
+  schedule:
+    ocid-lookup-cron: "0 0 3 * * *"  # 매일 새벽 3시
+    enabled: false  # 기본 비활성화, 수동 트리거 또는 YAML 오버라이드로 활성화
+    run-on-startup: false  # true 시 앱 기동 직후 즉시 OCID lookup 실행
+
+logging:
+  level:
+    maple.externalapi: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

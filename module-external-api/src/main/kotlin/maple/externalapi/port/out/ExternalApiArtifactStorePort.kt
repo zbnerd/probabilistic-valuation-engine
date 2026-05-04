@@ -1,0 +1,18 @@
+package maple.externalapi.port.out
+
+import maple.externalapi.domain.ExternalApiEndpoint
+import maple.externalapi.domain.ExternalApiPayloadRef
+
+interface ExternalApiArtifactStorePort {
+
+    fun store(
+        endpoint: ExternalApiEndpoint,
+        key: String,
+        data: ByteArray,
+    ): ExternalApiPayloadRef
+
+    fun read(
+        endpoint: ExternalApiEndpoint,
+        key: String,
+    ): ByteArray?
+}

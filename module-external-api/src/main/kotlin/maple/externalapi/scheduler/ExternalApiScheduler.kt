@@ -69,7 +69,13 @@ class ExternalApiScheduler(
             } else {
                 log.info("[Scheduler] OCID lookup already done ({} files), skipping", existingOcids.size)
             }
-            doCharacterBasicLookup()
+            val existingBasic = artifactStore.listStoredKeys(ExternalApiEndpoint.CHARACTER_BASIC)
+            if (existingBasic.isEmpty()) {
+                doCharacterBasicLookup()
+            } else {
+                log.info("[Scheduler] CHARACTER_BASIC already done ({} files), skipping", existingBasic.size)
+            }
+            doItemEquipmentLookup()
         } finally {
             running.set(false)
         }
@@ -213,6 +219,79 @@ class ExternalApiScheduler(
         }
 
         logSummary("CHARACTER_BASIC", entries.size, successCount.get(), storedCount.get(), failCount.get(), start)
+    }
+
+    private fun doItemEquipmentLookup() {
+        val rateLimiter = newRateLimiter()
+
+        val ocidKeys = artifactStore.listStoredKeys(ExternalApiEndpoint.OCID_LOOKUP)
+        if (ocidKeys.isEmpty()) {
+            log.warn("[Scheduler] no stored OCIDs found, skipping ITEM_EQUIPMENT")
+            return
+        }
+
+        val ocidMap = readStoredOcids(ocidKeys)
+        if (ocidMap.isEmpty()) {
+            log.warn("[Scheduler] failed to parse any OCIDs, skipping ITEM_EQUIPMENT")
+            return
+        }
+
+        log.info("[Scheduler] ========== ITEM_EQUIPMENT lookup start ==========")
+        log.info(
+            "[Scheduler] config: total={}, rate={}/s, batchSize={}, threads=virtual",
+            ocidMap.size,
+            permitsPerSecond,
+            batchSize,
+        )
+
+        val start = Instant.now()
+        val successCount = AtomicInteger(0)
+        val failCount = AtomicInteger(0)
+        val storedCount = AtomicInteger(0)
+        var processed = 0
+        var lastProgressLog = 0
+        val entries = ocidMap.entries.toList()
+
+        while (processed < entries.size) {
+            val permits = acquirePermits(rateLimiter, entries.size - processed)
+            if (permits == 0) continue
+
+            val chunk = entries.subList(processed, processed + permits)
+            processed += permits
+
+            val futures = chunk.map { (ign, ocid) ->
+                executor.submit(
+                    Callable {
+                        try {
+                            val result = fetchUseCase.fetchSingle(
+                                provider = ExternalApiProvider.NEXON,
+                                endpoint = ExternalApiEndpoint.ITEM_EQUIPMENT,
+                                requestKey = ocid,
+                                characterName = ign,
+                            )
+                            if (result.success) {
+                                successCount.incrementAndGet()
+                                if (result.payloadRef != null) storedCount.incrementAndGet()
+                            } else {
+                                failCount.incrementAndGet()
+                            }
+                        } catch (ex: Exception) {
+                            failCount.incrementAndGet()
+                        }
+                    },
+                )
+            }
+
+            futures.forEach { it.get() }
+
+            val progress = successCount.get() + failCount.get()
+            if (progress - lastProgressLog >= 5000) {
+                lastProgressLog = progress
+                logProgress("ITEM_EQUIPMENT", progress, entries.size, storedCount.get(), failCount.get(), start)
+            }
+        }
+
+        logSummary("ITEM_EQUIPMENT", entries.size, successCount.get(), storedCount.get(), failCount.get(), start)
     }
 
     private fun readStoredOcids(keys: List<String>): Map<String, String> {

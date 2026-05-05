@@ -1,10 +1,7 @@
 package maple.calculator.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import maple.calculator.event.CalculatorResultChunkReadyEvent
@@ -23,7 +20,6 @@ class KafkaSnapshotChunkReadyConsumer(
     private val resultEventPublisher: KafkaResultEventPublisher,
 ) {
     private val log = LoggerFactory.getLogger(KafkaSnapshotChunkReadyConsumer::class.java)
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val concurrency = Semaphore(2)
 
     @KafkaListener(
@@ -47,7 +43,7 @@ class KafkaSnapshotChunkReadyConsumer(
             return
         }
 
-        scope.launch {
+        runBlocking {
             concurrency.withPermit {
                 runCatching {
                     val result = chunkProcessor.process(event)

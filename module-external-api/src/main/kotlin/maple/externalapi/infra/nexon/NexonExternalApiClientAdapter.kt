@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
+import org.springframework.http.client.reactive.ReactorClientHttpConnector
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.WebClientResponseException
 import org.springframework.web.util.DefaultUriBuilderFactory
@@ -36,6 +37,7 @@ class NexonExternalApiClientAdapter(
         WebClient.builder()
             .uriBuilderFactory(factory)
             .baseUrl("https://open.api.nexon.com")
+            .clientConnector(ReactorClientHttpConnector(httpClient))
             .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
             .codecs { it.defaultCodecs().maxInMemorySize(2 * 1024 * 1024) }
             .build()

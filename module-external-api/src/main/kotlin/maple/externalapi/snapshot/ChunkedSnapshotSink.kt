@@ -62,14 +62,22 @@ class ChunkedSnapshotSink(
             }
             throw IllegalStateException("sink is closed, cannot submit")
         }
-        queue.put(record)
+        if (!queue.offer(record, 30, java.util.concurrent.TimeUnit.SECONDS)) {
+            throw IllegalStateException("sink queue full after 30s, likely writer thread stuck")
+        }
     }
 
     fun close() {
         accepting.set(false)
-        queue.put(SnapshotChunkRecord.CloseSignal)
+        if (!queue.offer(SnapshotChunkRecord.CloseSignal, 30, java.util.concurrent.TimeUnit.SECONDS)) {
+            throw IllegalStateException("failed to enqueue close signal after 30s")
+        }
 
-        writerThread.join()
+        writerThread.join(60_000)
+        if (writerThread.isAlive) {
+            log.warn("[Sink] writer thread did not terminate within 60s, interrupting")
+            writerThread.interrupt()
+        }
 
         val err = writerError.get()
         if (err != null) {

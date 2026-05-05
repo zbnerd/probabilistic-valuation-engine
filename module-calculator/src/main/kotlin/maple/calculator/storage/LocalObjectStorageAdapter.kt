@@ -1,10 +1,11 @@
 package maple.calculator.storage
 
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
 import java.io.InputStream
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Paths
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Component
 
 @Component
 class LocalObjectStorageAdapter(
@@ -17,7 +18,11 @@ class LocalObjectStorageAdapter(
         return Files.newInputStream(path)
     }
 
-    override fun exists(objectKey: String): Boolean {
-        return Files.exists(Paths.get(basePath, objectKey))
+    override fun openOutputStream(objectKey: String): OutputStream {
+        val path = Paths.get(basePath, objectKey)
+        path.parent?.let { Files.createDirectories(it) }
+        return Files.newOutputStream(path)
     }
+
+    override fun exists(objectKey: String): Boolean = Files.exists(Paths.get(basePath, objectKey))
 }

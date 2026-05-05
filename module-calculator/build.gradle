@@ -12,6 +12,7 @@ plugins {
 dependencies {
 	implementation project(':module-common')
 	implementation project(':module-core')
+	implementation project(':module-infra')
 
 	implementation(libs.kotlin.stdlib)
 	implementation(libs.kotlin.reflect)
@@ -29,6 +30,10 @@ dependencies {
 	// Jackson
 	implementation(libs.jackson.databind)
 	implementation(libs.jackson.module.kotlin)
+
+	// Cache
+	implementation(libs.caffeine)
+
 	// Testing
 	testImplementation(libs.spring.boot.starter.test)
 	testImplementation(libs.assertj.core)

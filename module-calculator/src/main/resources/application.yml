@@ -20,6 +20,7 @@ spring:
 calculator:
   kafka:
     snapshot-chunk-ready-topic: external-api.snapshot.chunk-ready
+    result-chunk-ready-topic: calculator.result.chunk-ready
     consumer-group-id: calculator-snapshot-chunk-processor
   store:
     input-base-path: ../module-external-api/external-api-data

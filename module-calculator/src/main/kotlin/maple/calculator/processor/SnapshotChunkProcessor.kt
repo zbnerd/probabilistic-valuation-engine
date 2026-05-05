@@ -1,25 +1,45 @@
 package maple.calculator.processor
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import maple.calculator.config.PipelineProperties
+import maple.calculator.event.SnapshotChunkReadyEvent
 import maple.calculator.parser.SnapshotEquipmentParser
 import maple.calculator.reader.GzipJsonlSnapshotRecordReader
 import maple.calculator.storage.ObjectStorage
-import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory
+import maple.calculator.writer.CalculationResultWriter
 import maple.expectation.application.service.starforce.NoljangProbabilityTable
-import maple.expectation.core.domain.equipment.SecondaryWeaponCategory
 import maple.expectation.core.dto.cube.CubeCalculationInput
-import maple.expectation.core.dto.v4.EquipmentCalculationInput
 import maple.expectation.core.dto.v4.EquipmentItem
 import maple.expectation.core.dto.v4.EquipmentItemConverter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.concurrent.atomic.AtomicInteger
+
+data class CalculationResult(
+    val ocid: String,
+    val presetNo: Int,
+    val itemName: String,
+    val itemLevel: Int,
+    val itemPart: String?,
+    val itemEquipmentPart: String?,
+    val potentialGrade: String?,
+    val potentialOptions: List<String?>,
+    val additionalGrade: String?,
+    val additionalOptions: List<String>,
+    val currentStar: Int,
+    val targetStar: Int,
+    val status: String,
+    val totalCost: Double?,
+    val blackCubeCost: Double?,
+    val additionalCubeCost: Double?,
+    val starforceCost: Double?,
+    val errorMessage: String? = null,
+)
 
 @Component
 class SnapshotChunkProcessor(
@@ -27,9 +47,9 @@ class SnapshotChunkProcessor(
     private val jsonlReader: GzipJsonlSnapshotRecordReader,
     private val equipmentParser: SnapshotEquipmentParser,
     private val calculationCache: CalculationCache,
-    private val calculatorFactory: EquipmentExpectationCalculatorFactory,
     private val objectMapper: ObjectMapper,
     private val properties: PipelineProperties,
+    private val resultWriter: CalculationResultWriter,
 ) {
     private val log = LoggerFactory.getLogger(SnapshotChunkProcessor::class.java)
     private val sampleCount = AtomicInteger(0)
@@ -46,39 +66,65 @@ class SnapshotChunkProcessor(
         val totalItems: Int,
         val calculatedCount: Int,
         val errorCount: Int,
+        val resultObjectKey: String,
+        val resultCount: Int,
+        val resultUncompressedBytes: Long,
+        val resultCompressedBytes: Long,
     )
 
-    fun process(objectKey: String): ChunkResult = runBlocking {
+    suspend fun process(event: SnapshotChunkReadyEvent): ChunkResult = coroutineScope {
         val lineChannel = Channel<String>(properties.channelCapacity)
         val itemChannel = Channel<FlatItem>(properties.channelCapacity)
+        val resultChannel = Channel<CalculationResult>(properties.channelCapacity)
         val recordCount = AtomicInteger(0)
         val successCount = AtomicInteger(0)
         val totalItems = AtomicInteger(0)
         val calculatedCount = AtomicInteger(0)
         val errorCount = AtomicInteger(0)
+        val resultObjectKey = resultObjectKeyFor(event)
 
-        coroutineScope {
-            // 1. reader: gzip에서 raw line만 순차 읽기
-            launch(Dispatchers.IO) { readLines(objectKey, lineChannel) }
+        launch(Dispatchers.IO) { readLines(event.objectKey, lineChannel) }
 
-            // 2. N parsers → itemChannel close when all done
-            launch {
-                coroutineScope {
-                    repeat(properties.workerCount) {
-                        launch(Dispatchers.Default) { parseLines(lineChannel, itemChannel, recordCount, successCount, totalItems) }
+        launch {
+            coroutineScope {
+                repeat(properties.workerCount) {
+                    launch(Dispatchers.Default) {
+                        parseLines(lineChannel, itemChannel, recordCount, successCount, totalItems)
                     }
                 }
-                itemChannel.close()
             }
-
-            // 3. N workers: 계산 (병렬)
-            repeat(properties.workerCount) {
-                launch(Dispatchers.Default) { processItems(itemChannel, calculatedCount, errorCount) }
-            }
+            itemChannel.close()
         }
 
-        ChunkResult(recordCount.get(), successCount.get(), totalItems.get(), calculatedCount.get(), errorCount.get())
+        launch {
+            coroutineScope {
+                repeat(properties.workerCount) {
+                    launch(Dispatchers.Default) {
+                        processItems(itemChannel, resultChannel, calculatedCount, errorCount)
+                    }
+                }
+            }
+            resultChannel.close()
+        }
+
+        val writeResult = async(Dispatchers.IO) {
+            resultWriter.write(resultObjectKey, resultChannel)
+        }.await()
+
+        ChunkResult(
+            recordCount = recordCount.get(),
+            successCount = successCount.get(),
+            totalItems = totalItems.get(),
+            calculatedCount = calculatedCount.get(),
+            errorCount = errorCount.get(),
+            resultObjectKey = writeResult.objectKey,
+            resultCount = writeResult.resultCount,
+            resultUncompressedBytes = writeResult.uncompressedBytes,
+            resultCompressedBytes = writeResult.compressedBytes,
+        )
     }
+
+    private fun resultObjectKeyFor(event: SnapshotChunkReadyEvent): String = "data/calculator/runs/${event.runId}/${event.endpoint}/chunks/result-${event.chunkId}.jsonl.gz"
 
     private suspend fun readLines(
         objectKey: String,
@@ -117,104 +163,129 @@ class SnapshotChunkProcessor(
     }
 
     private suspend fun processItems(
-        channel: Channel<FlatItem>,
+        itemChannel: Channel<FlatItem>,
+        resultChannel: Channel<CalculationResult>,
         calculatedCount: AtomicInteger,
         errorCount: AtomicInteger,
     ) {
-        for (flatItem in channel) {
-            calculateItem(flatItem, calculatedCount, errorCount)
+        for (flatItem in itemChannel) {
+            val result = calculateItem(flatItem)
+            if (result.status == "ERROR") {
+                errorCount.incrementAndGet()
+            } else {
+                calculatedCount.incrementAndGet()
+            }
+            resultChannel.send(result)
         }
     }
 
-    private fun calculateItem(
-        flatItem: FlatItem,
-        calculatedCount: AtomicInteger,
-        errorCount: AtomicInteger,
-    ) {
+    private fun calculateItem(flatItem: FlatItem): CalculationResult = runCatching {
         val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
-        if (!cubeInput.isReady()) {
-            calculatedCount.incrementAndGet()
-            return
-        }
-        try {
-            val shouldSample = sampleCount.incrementAndGet() <= 10
+        val componentCosts = calculateComponentCosts(cubeInput)
+        val status = if (componentCosts.hasAnyCost) "SUCCESS" else "SKIPPED"
+        val result = buildCalculationResult(flatItem, cubeInput, componentCosts, status, null)
+        logSample(result)
+        result
+    }.getOrElse { ex ->
+        val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
+        log.warn("Calculation error: ocid={} preset={}: {}", flatItem.ocid, flatItem.presetNo, ex.message)
+        buildCalculationResult(flatItem, cubeInput, ComponentCosts.empty(), "ERROR", ex.message)
+    }
 
-            if (shouldSample) {
-                val input = buildCalculationInput(cubeInput, flatItem.presetNo)
-                val calculator = calculatorFactory.createFullCalculator(input)
-                val cost = calculator.calculateCost()
-                val details = calculator.detailedCosts
-                val sample = mapOf(
-                    "ocid" to flatItem.ocid,
-                    "presetNo" to flatItem.presetNo,
-                    "itemName" to cubeInput.itemName,
-                    "itemLevel" to cubeInput.level,
-                    "potentialGrade" to cubeInput.grade,
-                    "potentialOption1" to cubeInput.options.getOrNull(0),
-                    "potentialOption2" to cubeInput.options.getOrNull(1),
-                    "potentialOption3" to cubeInput.options.getOrNull(2),
-                    "additionalGrade" to cubeInput.additionalGrade,
-                    "additionalOption1" to cubeInput.additionalOptions.getOrNull(0),
-                    "additionalOption2" to cubeInput.additionalOptions.getOrNull(1),
-                    "additionalOption3" to cubeInput.additionalOptions.getOrNull(2),
-                    "starforce" to cubeInput.starforce,
-                    "totalCost" to cost,
-                    "blackCubeCost" to details.blackCubeCost,
-                    "additionalCubeCost" to details.additionalCubeCost,
-                    "starforceCost" to details.starforceCost,
-                    "enhancePath" to calculator.enhancePath,
-                )
-                log.debug("[SAMPLE] {}", objectMapper.writeValueAsString(sample))
+    private fun calculateComponentCosts(cubeInput: CubeCalculationInput): ComponentCosts {
+        val potentialCost = if (cubeInput.isReady()) {
+            calculationCache.calculatePotential(cubeInput)
+        } else {
+            null
+        }
+
+        val additionalCost = if (hasAdditionalPotential(cubeInput)) {
+            calculationCache.calculateAdditional(cubeInput.toAdditionalCubeInput())
+        } else {
+            null
+        }
+
+        val starforceTarget = targetStar(cubeInput)
+        val starforceCost = if (starforceTarget > 0) {
+            calculationCache.calculateStarforce(cubeInput.itemName ?: "", cubeInput.level, 0, starforceTarget)
+        } else {
+            null
+        }
+
+        return ComponentCosts(
+            blackCubeCost = potentialCost,
+            additionalCubeCost = additionalCost,
+            starforceCost = starforceCost,
+        )
+    }
+
+    private fun hasAdditionalPotential(cubeInput: CubeCalculationInput): Boolean = cubeInput.additionalGrade != null &&
+        cubeInput.additionalOptions.any { it.trim().isNotEmpty() && !"null".equals(it, ignoreCase = true) }
+
+    private fun CubeCalculationInput.toAdditionalCubeInput(): CubeCalculationInput = copy(
+        grade = additionalGrade,
+        options = additionalOptions.toMutableList(),
+    )
+
+    private fun targetStar(cubeInput: CubeCalculationInput): Int {
+        if (cubeInput.starforce <= 0 || cubeInput.itemName.isNullOrBlank() || cubeInput.level <= 0) {
+            return 0
+        }
+        return if (cubeInput.isNoljangEquipment()) {
+            minOf(cubeInput.starforce, NoljangProbabilityTable.MAX_NOLJANG_STAR)
+        } else {
+            cubeInput.starforce
+        }
+    }
+
+    private fun buildCalculationResult(
+        flatItem: FlatItem,
+        cubeInput: CubeCalculationInput,
+        componentCosts: ComponentCosts,
+        status: String,
+        errorMessage: String?,
+    ): CalculationResult = CalculationResult(
+        ocid = flatItem.ocid,
+        presetNo = flatItem.presetNo,
+        itemName = cubeInput.itemName ?: "",
+        itemLevel = cubeInput.level,
+        itemPart = cubeInput.part,
+        itemEquipmentPart = cubeInput.itemEquipmentPart,
+        potentialGrade = cubeInput.grade,
+        potentialOptions = cubeInput.options,
+        additionalGrade = cubeInput.additionalGrade,
+        additionalOptions = cubeInput.additionalOptions,
+        currentStar = 0,
+        targetStar = targetStar(cubeInput),
+        status = status,
+        totalCost = componentCosts.totalCost,
+        blackCubeCost = componentCosts.blackCubeCost,
+        additionalCubeCost = componentCosts.additionalCubeCost,
+        starforceCost = componentCosts.starforceCost,
+        errorMessage = errorMessage,
+    )
+
+    private fun logSample(result: CalculationResult) {
+        if (sampleCount.incrementAndGet() <= 10) {
+            log.debug("[SAMPLE] {}", objectMapper.writeValueAsString(result))
+        }
+    }
+
+    private data class ComponentCosts(
+        val blackCubeCost: Double?,
+        val additionalCubeCost: Double?,
+        val starforceCost: Double?,
+    ) {
+        val hasAnyCost: Boolean = blackCubeCost != null || additionalCubeCost != null || starforceCost != null
+        val totalCost: Double?
+            get() = if (hasAnyCost) {
+                (blackCubeCost ?: 0.0) + (additionalCubeCost ?: 0.0) + (starforceCost ?: 0.0)
             } else {
-                if (cubeInput.grade != null && !cubeInput.options.isNullOrEmpty()) {
-                    calculationCache.calculatePotential(cubeInput)
-                }
-                if (cubeInput.additionalGrade != null && !cubeInput.additionalOptions.isNullOrEmpty()) {
-                    calculationCache.calculateAdditional(cubeInput)
-                }
-                if (cubeInput.starforce > 0) {
-                    val isNoljang = cubeInput.isNoljangEquipment()
-                    val targetStar = if (isNoljang)
-                        minOf(cubeInput.starforce, NoljangProbabilityTable.MAX_NOLJANG_STAR)
-                    else
-                        cubeInput.starforce
-                    calculationCache.calculateStarforce(cubeInput.itemName ?: "", cubeInput.level, 0, targetStar)
-                }
+                null
             }
 
-            calculatedCount.incrementAndGet()
-        } catch (e: Exception) {
-            errorCount.incrementAndGet()
-            log.warn("Calculation error: ocid={}, preset={}: {}", flatItem.ocid, flatItem.presetNo, e.message)
+        companion object {
+            fun empty(): ComponentCosts = ComponentCosts(null, null, null)
         }
-    }
-
-    private fun buildCalculationInput(
-        cubeInput: CubeCalculationInput,
-        presetNo: Int,
-    ): EquipmentCalculationInput {
-        val isNoljang = cubeInput.isNoljangEquipment()
-        val targetStar = if (isNoljang)
-            minOf(cubeInput.starforce, NoljangProbabilityTable.MAX_NOLJANG_STAR)
-        else
-            cubeInput.starforce
-        val potentialPart = SecondaryWeaponCategory.resolvePotentialPart(
-            cubeInput.part, cubeInput.itemEquipmentPart,
-        )
-        return EquipmentCalculationInput.builder()
-            .itemName(cubeInput.itemName ?: "")
-            .itemPart(potentialPart)
-            .itemEquipmentPart(cubeInput.itemEquipmentPart ?: "")
-            .itemIcon(cubeInput.itemIcon ?: "")
-            .itemLevel(cubeInput.level)
-            .presetNo(presetNo)
-            .isNoljang(isNoljang)
-            .potentialGrade(cubeInput.grade)
-            .potentialOptions(cubeInput.options?.filterNotNull())
-            .additionalPotentialGrade(cubeInput.additionalGrade)
-            .additionalPotentialOptions(cubeInput.additionalOptions?.filterNotNull())
-            .currentStar(0)
-            .targetStar(targetStar)
-            .build()
     }
 }

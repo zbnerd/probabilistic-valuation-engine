@@ -31,6 +31,7 @@ external-api:
     daily-cron: "0 0 3 * * *"  # 매일 새벽 3시 — OCID + CHARACTER_BASIC
     enabled: true
     run-on-startup: true
+    skip-character-basic: false
   snapshot:
     chunk:
       character-basic:

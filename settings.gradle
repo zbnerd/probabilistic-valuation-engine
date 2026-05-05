@@ -19,3 +19,6 @@ include 'module-web'
 
 // External API data collection module (Nexon API → Local Storage)
 include 'module-external-api'
+
+// Calculator module (Kafka-driven chunk processing)
+include 'module-calculator'

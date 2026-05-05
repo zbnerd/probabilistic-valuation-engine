@@ -1,0 +1,31 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: calculator
+  main:
+    banner-mode: off
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: calculator-snapshot-chunk-processor
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+
+calculator:
+  kafka:
+    snapshot-chunk-ready-topic: external-api.snapshot.chunk-ready
+    consumer-group-id: calculator-snapshot-chunk-processor
+  store:
+    input-base-path: ../module-external-api/external-api-data
+  pipeline:
+    worker-count: 4
+    channel-capacity: 500
+
+logging:
+  level:
+    maple.calculator: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

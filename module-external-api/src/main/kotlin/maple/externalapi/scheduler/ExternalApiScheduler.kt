@@ -9,6 +9,7 @@ import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.reader.UserIgnCsvReader
 import maple.externalapi.snapshot.ChunkedSnapshotSink
+import maple.externalapi.snapshot.event.NoOpSnapshotChunkEventPublisher
 import maple.externalapi.snapshot.SnapshotChunkRecord
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
@@ -52,6 +53,8 @@ class ExternalApiScheduler(
     private val storeBasePath: String,
     @Value("\${external-api.schedule.run-on-startup:false}")
     private val runOnStartup: Boolean,
+    @Value("\${external-api.schedule.skip-character-basic:false}")
+    private val skipCharacterBasic: Boolean,
 ) {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val running = AtomicBoolean(false)
@@ -62,11 +65,11 @@ class ExternalApiScheduler(
     @EventListener(ApplicationReadyEvent::class)
     fun onStartup() {
         loadOcidCache()
-        executor.submit { runItemEquipmentLoop() }
         if (runOnStartup) {
             log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
             triggerDailyRefresh()
         }
+        executor.submit { runItemEquipmentLoop() }
     }
 
     @Scheduled(cron = "\${external-api.schedule.daily-cron:0 0 3 * * *}")
@@ -80,9 +83,14 @@ class ExternalApiScheduler(
             return
         }
         try {
-            doOcidLookup()
-            loadOcidCache()
-            doCharacterBasicLookup()
+            if (skipCharacterBasic) {
+                log.info("[Scheduler] skip-character-basic enabled, loading OCID cache from existing data")
+                loadOcidCache()
+            } else {
+                doOcidLookup()
+                loadOcidCache()
+                doCharacterBasicLookup()
+            }
         } finally {
             running.set(false)
         }
@@ -205,7 +213,7 @@ class ExternalApiScheduler(
             maxUncompressedBytes = config.maxUncompressedBytes,
             queueCapacity = chunkingProperties.queueCapacity,
             objectMapper = objectMapper,
-            eventPublisher = eventPublisher,
+            eventPublisher = NoOpSnapshotChunkEventPublisher(),
         )
 
         val rateLimiter = newRateLimiter(permitsPerSecond)

@@ -44,6 +44,17 @@ class ExternalApiIngestionService(
             eventPublisherPort.publishFetchCompleted(result)
             log.info("[ExternalApi] fetch completed: jobId={}, key={}, size={}bytes", jobId, requestKey, payloadRef.sizeBytes)
             result
+        } catch (ex: java.util.concurrent.CompletionException) {
+            val cause = ex.cause ?: ex
+            log.error("[ExternalApi] fetch failed: jobId={}, endpoint={}, key={}", jobId, endpoint, requestKey, cause)
+            ExternalApiFetchResult(
+                jobId = jobId,
+                endpoint = endpoint,
+                requestKey = requestKey,
+                payloadRef = null,
+                success = false,
+                errorMessage = cause.message,
+            )
         } catch (ex: Exception) {
             log.error("[ExternalApi] fetch failed: jobId={}, endpoint={}, key={}", jobId, endpoint, requestKey, ex)
             ExternalApiFetchResult(

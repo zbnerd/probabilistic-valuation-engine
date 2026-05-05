@@ -1,10 +1,7 @@
 package maple.calculator.writer
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.io.BufferedWriter
 import java.io.OutputStream
-import java.io.OutputStreamWriter
-import java.nio.charset.StandardCharsets
 import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.channels.ReceiveChannel
 import maple.calculator.processor.CalculationResult
@@ -30,17 +27,16 @@ class CalculationResultWriter(
         objectKey: String,
         results: ReceiveChannel<CalculationResult>,
     ): WriteResult {
-        val countingStream = CountingOutputStream(objectStorage.openOutputStream(objectKey))
+        val compressedCounter = CountingOutputStream(objectStorage.openOutputStream(objectKey))
+        val gzipStream = GZIPOutputStream(compressedCounter)
+        val uncompressedCounter = CountingOutputStream(gzipStream)
         var resultCount = 0
-        var uncompressedBytes = 0L
 
-        BufferedWriter(OutputStreamWriter(GZIPOutputStream(countingStream), StandardCharsets.UTF_8)).use { writer ->
+        objectMapper.factory.createGenerator(uncompressedCounter).use { generator ->
             for (result in results) {
-                val line = objectMapper.writeValueAsString(result)
-                writer.write(line)
-                writer.newLine()
+                generator.writeObject(result)
+                generator.writeRaw('\n')
                 resultCount += 1
-                uncompressedBytes += line.toByteArray(StandardCharsets.UTF_8).size + 1
             }
         }
 
@@ -48,10 +44,10 @@ class CalculationResultWriter(
             "[Writer] wrote calculator result chunk: objectKey={} results={} uncompressedBytes={} compressedBytes={}",
             objectKey,
             resultCount,
-            uncompressedBytes,
-            countingStream.bytesWritten,
+            uncompressedCounter.bytesWritten,
+            compressedCounter.bytesWritten,
         )
-        return WriteResult(objectKey, resultCount, uncompressedBytes, countingStream.bytesWritten)
+        return WriteResult(objectKey, resultCount, uncompressedCounter.bytesWritten, compressedCounter.bytesWritten)
     }
 
     private class CountingOutputStream(

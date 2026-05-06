@@ -72,7 +72,7 @@ public class CubeServiceImpl implements CubeTrialsProvider, CubeTrialsPort {
     if (inferred) {
       // 추론 성공: DP 엔진으로 누적 확률 계산 (Feature Flag 무시)
       // 이유: 자동 추론의 목적 자체가 "X% 이상" 계산이므로 DP 필수
-      log.info(
+      log.debug(
           "[CubeService] DP 모드 자동 추론 성공: {} {}% 이상",
           input.getTargetStatType(), input.getMinTotal());
       return calculateWithDpEngine(input, type);
@@ -202,7 +202,7 @@ public class CubeServiceImpl implements CubeTrialsProvider, CubeTrialsPort {
       return;
     }
     double drift = Math.abs(v1 - v2);
-    log.info(
+    log.debug(
         "[CubeEngine:{}] v1={}, v2={}, drift={}, target={}, tableVersion={}",
         mode,
         v1,

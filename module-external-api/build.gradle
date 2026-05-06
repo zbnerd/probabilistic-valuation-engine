@@ -30,6 +30,10 @@ dependencies {
 	// Rate limiting
 	implementation(libs.bucket4j.core)
 
+	// Metrics
+	implementation(libs.spring.boot.starter.actuator)
+	implementation(libs.micrometer.registry.prometheus)
+
 	// Jackson (JSON serialization + CSV)
 	implementation(libs.jackson.databind)
 	implementation(libs.jackson.dataformat.csv)

@@ -34,6 +34,10 @@ dependencies {
 	// Cache
 	implementation(libs.caffeine)
 
+	// Metrics
+	implementation(libs.spring.boot.starter.actuator)
+	implementation(libs.micrometer.registry.prometheus)
+
 	// Testing
 	testImplementation(libs.spring.boot.starter.test)
 	testImplementation(libs.assertj.core)

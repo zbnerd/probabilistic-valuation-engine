@@ -7,9 +7,11 @@ import kotlinx.coroutines.sync.withPermit
 import maple.calculator.event.CalculatorResultChunkReadyEvent
 import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.event.SnapshotChunkReadyEvent
+import maple.calculator.metrics.CalculatorMetrics
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.storage.ObjectStorage
 import org.slf4j.LoggerFactory
+import java.time.Duration
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
@@ -20,6 +22,7 @@ class KafkaSnapshotChunkReadyConsumer(
     private val chunkProcessor: SnapshotChunkProcessor,
     private val resultEventPublisher: KafkaResultEventPublisher,
     private val objectStorage: ObjectStorage,
+    private val metrics: CalculatorMetrics,
 ) {
     private val log = LoggerFactory.getLogger(KafkaSnapshotChunkReadyConsumer::class.java)
     private val concurrency = Semaphore(2)
@@ -41,12 +44,14 @@ class KafkaSnapshotChunkReadyConsumer(
 
         if (event.endpoint != "item-equipment") {
             log.info("[Consumer] skipping non-item-equipment endpoint: {}", event.endpoint)
+            metrics.recordChunkSkippedEndpoint()
             acknowledgment.acknowledge()
             return
         }
 
         if (!objectStorage.exists(event.objectKey)) {
             log.error("[Consumer] source chunk not found, skipping: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, event.objectKey)
+            metrics.recordChunkSkippedNotFound()
             acknowledgment.acknowledge()
             return
         }
@@ -54,6 +59,7 @@ class KafkaSnapshotChunkReadyConsumer(
         val resultObjectKey = "data/calculator/runs/${event.runId}/${event.endpoint}/chunks/result-${event.chunkId}.jsonl.gz"
         if (objectStorage.exists(resultObjectKey)) {
             log.info("[Consumer] result already exists, republishing event: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, resultObjectKey)
+            metrics.recordChunkSkippedIdempotent()
             runBlocking {
                 resultEventPublisher.publishChunkReady(
                     CalculatorResultChunkReadyEvent(
@@ -77,7 +83,9 @@ class KafkaSnapshotChunkReadyConsumer(
         runBlocking {
             concurrency.withPermit {
                 runCatching {
+                    val start = System.nanoTime()
                     val result = chunkProcessor.process(event)
+                    metrics.timer().record(Duration.ofNanos(System.nanoTime() - start))
                     resultEventPublisher.publishChunkReady(
                         CalculatorResultChunkReadyEvent(
                             sourceRunId = event.runId,
@@ -103,9 +111,15 @@ class KafkaSnapshotChunkReadyConsumer(
                         result.resultCount,
                         result.errorCount,
                     )
+                    metrics.recordChunkProcessed()
+                    metrics.recordUsers(result.recordCount)
+                    metrics.recordItems(result.totalItems)
+                    metrics.recordCalculated(result.resultCount)
+                    metrics.recordErrors(result.errorCount)
                     acknowledgment.acknowledge()
                 }.onFailure { ex ->
                     log.error("[Consumer] chunk processing failed, skipping: runId={} chunkId={}: {}", event.runId, event.chunkId, ex.message, ex)
+                    metrics.recordChunkFailed()
                     acknowledgment.acknowledge()
                 }
             }

@@ -49,6 +49,18 @@ external-api:
         run-completed-topic: external-api.snapshot.run-completed
         run-failed-topic: external-api.snapshot.run-failed
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: external-api
+
 logging:
   level:
     maple.externalapi: INFO

@@ -16,6 +16,7 @@ import maple.expectation.config.TableMassConfig
 import maple.expectation.infrastructure.adapter.policy.PolicyAdapter
 import maple.expectation.infrastructure.config.CalculationPortConfig
 import maple.expectation.infrastructure.config.ExecutorConfig
+import maple.expectation.infrastructure.security.config.SecurityConfig
 import maple.expectation.infrastructure.executor.DefaultLogicExecutor
 import maple.expectation.infrastructure.executor.classifier.DefaultExceptionClassifier
 import maple.expectation.infrastructure.persistence.repository.CubeProbabilityRepositoryImpl
@@ -45,6 +46,7 @@ import org.springframework.context.annotation.Import
     TableMassConfig::class,
     CalculationPortConfig::class,
     ExecutorConfig::class,
+    SecurityConfig::class,
 )
 class CalculatorApplication
 

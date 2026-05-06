@@ -28,6 +28,18 @@ calculator:
     worker-count: 4
     channel-capacity: 500
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: calculator
+
 logging:
   level:
     maple.calculator: INFO

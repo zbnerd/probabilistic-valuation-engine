@@ -13,7 +13,6 @@ import maple.calculator.parser.SnapshotEquipmentParser
 import maple.calculator.reader.GzipJsonlSnapshotRecordReader
 import maple.calculator.storage.ObjectStorage
 import maple.calculator.writer.CalculationResultWriter
-import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory
 import maple.expectation.application.service.starforce.NoljangProbabilityTable
 import maple.expectation.core.domain.equipment.SecondaryWeaponCategory
 import maple.expectation.core.dto.cube.CubeCalculationInput
@@ -49,7 +48,7 @@ class SnapshotChunkProcessor(
     private val objectStorage: ObjectStorage,
     private val jsonlReader: GzipJsonlSnapshotRecordReader,
     private val equipmentParser: SnapshotEquipmentParser,
-    private val calculatorFactory: EquipmentExpectationCalculatorFactory,
+    private val calculationCache: CalculationCache,
     private val objectMapper: ObjectMapper,
     private val properties: PipelineProperties,
     private val resultWriter: CalculationResultWriter,
@@ -192,22 +191,14 @@ class SnapshotChunkProcessor(
     }.getOrElse { ex ->
         val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
         log.warn("Calculation error: ocid={} preset={}: {}", flatItem.ocid, flatItem.presetNo, ex.message)
-        buildCalculationResult(flatItem, cubeInput, ComponentCosts.empty(), "ERROR", ex.message)
+        buildCalculationResult(flatItem, cubeInput, CalculationCache.ComponentCosts.empty(), "ERROR", ex.message)
     }
 
-    private fun calculateComponentCosts(cubeInput: CubeCalculationInput, presetNo: Int): ComponentCosts {
-        if (!cubeInput.isReady()) return ComponentCosts.empty()
+    private fun calculateComponentCosts(cubeInput: CubeCalculationInput, presetNo: Int): CalculationCache.ComponentCosts {
+        if (!cubeInput.isReady()) return CalculationCache.ComponentCosts.empty()
 
         val input = buildCalculationInput(cubeInput, presetNo)
-        val calculator = calculatorFactory.createFullCalculator(input)
-        val cost = calculator.calculateCost()
-        val details = calculator.detailedCosts
-
-        return ComponentCosts(
-            blackCubeCost = details.blackCubeCost,
-            additionalCubeCost = details.additionalCubeCost,
-            starforceCost = details.starforceCost,
-        )
+        return calculationCache.calculate(input)
     }
 
     private fun buildCalculationInput(
@@ -237,7 +228,7 @@ class SnapshotChunkProcessor(
     private fun buildCalculationResult(
         flatItem: FlatItem,
         cubeInput: CubeCalculationInput,
-        componentCosts: ComponentCosts,
+        componentCosts: CalculationCache.ComponentCosts,
         status: String,
         errorMessage: String?,
     ): CalculationResult = CalculationResult(
@@ -273,24 +264,6 @@ class SnapshotChunkProcessor(
     private fun logSample(result: CalculationResult) {
         if (sampleCount.incrementAndGet() <= 10) {
             log.debug("[SAMPLE] {}", objectMapper.writeValueAsString(result))
-        }
-    }
-
-    private data class ComponentCosts(
-        val blackCubeCost: Double?,
-        val additionalCubeCost: Double?,
-        val starforceCost: Double?,
-    ) {
-        val hasAnyCost: Boolean = blackCubeCost != null || additionalCubeCost != null || starforceCost != null
-        val totalCost: Double?
-            get() = if (hasAnyCost) {
-                (blackCubeCost ?: 0.0) + (additionalCubeCost ?: 0.0) + (starforceCost ?: 0.0)
-            } else {
-                null
-            }
-
-        companion object {
-            fun empty(): ComponentCosts = ComponentCosts(null, null, null)
         }
     }
 }

@@ -6,6 +6,17 @@ spring:
     name: synchronizer
   main:
     banner-mode: off
+  datasource:
+    url: ${DB_URL}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 3000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
@@ -21,6 +32,17 @@ synchronizer:
   kafka:
     result-chunk-ready-topic: calculator.result.chunk-ready
     consumer-group-id: synchronizer-result-chunk-consumer
+  store:
+    base-path: ../module-external-api/external-api-data
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
 
 logging:
   level:

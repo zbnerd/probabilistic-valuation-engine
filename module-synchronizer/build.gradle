@@ -16,10 +16,13 @@ dependencies {
 	implementation(libs.kotlin.stdlib)
 	implementation(libs.kotlin.reflect)
 	implementation(libs.kotlin.logging.jvm)
+	implementation(libs.kotlinx.coroutines.core)
 
 	// Spring
 	implementation(libs.spring.boot)
 	implementation(libs.spring.boot.starter.web)
+	implementation(libs.spring.boot.starter.data.jpa)
+	runtimeOnly(libs.postgresql)
 
 	// Kafka
 	implementation(libs.spring.kafka)

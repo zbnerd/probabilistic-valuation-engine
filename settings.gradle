@@ -22,3 +22,6 @@ include 'module-external-api'
 
 // Calculator module (Kafka-driven chunk processing)
 include 'module-calculator'
+
+// Synchronizer module (Calculator result files → DB sync)
+include 'module-synchronizer'

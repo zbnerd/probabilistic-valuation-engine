@@ -260,6 +260,7 @@ class ExternalApiScheduler(
                                     ),
                                 )
                                 successCount.incrementAndGet()
+                                metrics.recordCharacterBasicFetched()
                             } catch (ex: Exception) {
                                 val httpStatus = extractHttpStatus(ex)
                                 sink.submit(
@@ -273,6 +274,7 @@ class ExternalApiScheduler(
                                     ),
                                 )
                                 failCount.incrementAndGet()
+                                metrics.recordCharacterBasicFailed()
                             }
                         },
                     )
@@ -290,6 +292,7 @@ class ExternalApiScheduler(
             sink.close()
         }
 
+        metrics.characterBasicTimer().record(Duration.between(start, Instant.now()))
         logSummary("CHARACTER_BASIC", entries.size, successCount.get(), successCount.get(), failCount.get(), start)
     }
 
@@ -350,7 +353,7 @@ class ExternalApiScheduler(
                                     ),
                                 )
                                 successCount.incrementAndGet()
-                                metrics.recordFetched()
+                                metrics.recordItemEquipmentFetched()
                             } catch (ex: Exception) {
                                 val httpStatus = extractHttpStatus(ex)
                                 sink.submit(
@@ -364,7 +367,7 @@ class ExternalApiScheduler(
                                     ),
                                 )
                                 failCount.incrementAndGet()
-                                metrics.recordFailed()
+                                metrics.recordItemEquipmentFailed()
                             }
                         },
                     )
@@ -382,6 +385,7 @@ class ExternalApiScheduler(
             sink.close()
         }
 
+        metrics.itemEquipmentTimer().record(Duration.between(start, Instant.now()))
         logSummary("ITEM_EQUIPMENT", entries.size, successCount.get(), successCount.get(), failCount.get(), start)
     }
 

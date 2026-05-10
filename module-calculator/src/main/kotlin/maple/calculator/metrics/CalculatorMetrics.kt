@@ -1,6 +1,7 @@
 package maple.calculator.metrics
 
 import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import org.springframework.stereotype.Component
@@ -22,6 +23,18 @@ class CalculatorMetrics(registry: MeterRegistry) {
         .description("Time to process a single snapshot chunk")
         .register(registry)
 
+    @Volatile private var lastChunkUsersPerSec = 0.0
+    @Volatile private var lastChunkItemsPerSec = 0.0
+
+    init {
+        Gauge.builder("calculator_chunk_users_per_second") { lastChunkUsersPerSec }
+            .description("Users processed per second in the last completed chunk")
+            .register(registry)
+        Gauge.builder("calculator_chunk_items_per_second") { lastChunkItemsPerSec }
+            .description("Items processed per second in the last completed chunk")
+            .register(registry)
+    }
+
     fun recordChunkProcessed() = chunksProcessed.increment()
     fun recordChunkSkippedEndpoint() = chunksSkipped.increment()
     fun recordChunkSkippedNotFound() = chunksNotFound.increment()
@@ -32,6 +45,13 @@ class CalculatorMetrics(registry: MeterRegistry) {
     fun recordItems(count: Int) = itemsProcessed.increment(count.toDouble())
     fun recordCalculated(count: Int) = itemsCalculated.increment(count.toDouble())
     fun recordErrors(count: Int) = itemsErrored.increment(count.toDouble())
+
+    fun recordChunkRates(users: Int, items: Int, durationSec: Double) {
+        if (durationSec > 0) {
+            lastChunkUsersPerSec = users / durationSec
+            lastChunkItemsPerSec = items / durationSec
+        }
+    }
 
     fun timer(): Timer = chunkTimer
 }

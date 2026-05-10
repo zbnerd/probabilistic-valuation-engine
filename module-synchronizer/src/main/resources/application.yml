@@ -1,0 +1,29 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: synchronizer
+  main:
+    banner-mode: off
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: synchronizer-result-chunk-consumer
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual
+
+synchronizer:
+  kafka:
+    result-chunk-ready-topic: calculator.result.chunk-ready
+    consumer-group-id: synchronizer-result-chunk-consumer
+
+logging:
+  level:
+    maple.synchronizer: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

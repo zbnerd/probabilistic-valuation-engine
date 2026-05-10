@@ -1,0 +1,359 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "title": "Pipeline Overview",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "title": "Users Fetched / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "rate(external_api_users_fetched_total{application=\"external-api\"}[1m])", "legendFormat": "total", "refId": "A" },
+        { "expr": "rate(external_api_character_basic_fetched_total{application=\"external-api\"}[1m])", "legendFormat": "character_basic", "refId": "B" },
+        { "expr": "rate(external_api_item_equipment_fetched_total{application=\"external-api\"}[1m])", "legendFormat": "item_equipment", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "title": "Users Failed / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "rate(external_api_users_failed_total{application=\"external-api\"}[1m])", "legendFormat": "total", "refId": "A" },
+        { "expr": "rate(external_api_character_basic_failed_total{application=\"external-api\"}[1m])", "legendFormat": "character_basic", "refId": "B" },
+        { "expr": "rate(external_api_item_equipment_failed_total{application=\"external-api\"}[1m])", "legendFormat": "item_equipment", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "title": "Calculator: Users / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "rate(calculator_users_processed_total{application=\"calculator\"}[1m])", "legendFormat": "users/s", "refId": "A" },
+        { "expr": "calculator_chunk_users_per_second{application=\"calculator\"}", "legendFormat": "last chunk rate", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "title": "Calculator: Items / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "rate(calculator_items_calculated_total{application=\"calculator\"}[1m])", "legendFormat": "items/s", "refId": "A" },
+        { "expr": "calculator_chunk_items_per_second{application=\"calculator\"}", "legendFormat": "last chunk rate", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } } }
+    },
+
+    {
+      "title": "Cumulative Totals",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "collapsed": false
+    },
+    {
+      "title": "External API: Total Fetched",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "external_api_users_fetched_total{application=\"external-api\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "blue" }] } } }
+    },
+    {
+      "title": "External API: Total Failed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "external_api_users_failed_total{application=\"external-api\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "green" }, { "value": 10, "color": "yellow" }, { "value": 100, "color": "red" }] } } }
+    },
+    {
+      "title": "Calculator: Chunks Processed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "calculator_chunks_processed_total{application=\"calculator\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "blue" }] } } }
+    },
+    {
+      "title": "Calculator: Items Calculated",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "calculator_items_calculated_total{application=\"calculator\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "blue" }] } } }
+    },
+    {
+      "title": "Calculator: Errors",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "calculator_items_errored_total{application=\"calculator\"}", "refId": "A" },
+        { "expr": "calculator_chunks_failed_total{application=\"calculator\"}", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "green" }, { "value": 1, "color": "red" }] } } }
+    },
+    {
+      "title": "Calculator: Users Processed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "calculator_users_processed_total{application=\"calculator\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "blue" }] } } }
+    },
+
+    {
+      "title": "External API: Endpoint Metrics",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "collapsed": false
+    },
+    {
+      "title": "CHARACTER_BASIC: Fetched",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "external_api_character_basic_fetched_total{application=\"external-api\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "green" }] } } }
+    },
+    {
+      "title": "CHARACTER_BASIC: Failed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "external_api_character_basic_failed_total{application=\"external-api\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "green" }, { "value": 1, "color": "yellow" }, { "value": 10, "color": "red" }] } } }
+    },
+    {
+      "title": "ITEM_EQUIPMENT: Fetched",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "external_api_item_equipment_fetched_total{application=\"external-api\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "green" }] } } }
+    },
+    {
+      "title": "ITEM_EQUIPMENT: Failed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "external_api_item_equipment_failed_total{application=\"external-api\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "green" }, { "value": 1, "color": "yellow" }, { "value": 10, "color": "red" }] } } }
+    },
+    {
+      "title": "Success Rate",
+      "type": "gauge",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "external_api_users_fetched_total{application=\"external-api\"} / (external_api_users_fetched_total{application=\"external-api\"} + external_api_users_failed_total{application=\"external-api\"}) * 100", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 99, "max": 100, "thresholds": { "steps": [{ "value": null, "color": "red" }, { "value": 99.5, "color": "yellow" }, { "value": 99.9, "color": "green" }] } } }
+    },
+    {
+      "title": "Failure Rate",
+      "type": "gauge",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "external_api_users_failed_total{application=\"external-api\"} / (external_api_users_fetched_total{application=\"external-api\"} + external_api_users_failed_total{application=\"external-api\"}) * 100", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 1, "thresholds": { "steps": [{ "value": null, "color": "green" }, { "value": 0.1, "color": "yellow" }, { "value": 0.5, "color": "red" }] } } }
+    },
+
+    {
+      "title": "Durations",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 19 },
+      "collapsed": false
+    },
+    {
+      "title": "External API: Lookup Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "external_api_character_basic_duration_seconds_sum{application=\"external-api\"} / external_api_character_basic_duration_seconds_count{application=\"external-api\"}", "legendFormat": "character_basic avg", "refId": "A" },
+        { "expr": "external_api_item_equipment_duration_seconds_sum{application=\"external-api\"} / external_api_item_equipment_duration_seconds_count{application=\"external-api\"}", "legendFormat": "item_equipment avg", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "title": "Calculator: Chunk Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "calculator_chunk_duration_seconds_sum{application=\"calculator\"} / calculator_chunk_duration_seconds_count{application=\"calculator\"}", "legendFormat": "avg duration", "refId": "A" },
+        { "expr": "calculator_chunk_duration_seconds_max{application=\"calculator\"}", "legendFormat": "max duration", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "title": "Calculator: Chunk Rates (Gauge)",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "calculator_chunk_users_per_second{application=\"calculator\"}", "legendFormat": "users/s", "refId": "A" },
+        { "expr": "calculator_chunk_items_per_second{application=\"calculator\"} / 1000", "legendFormat": "items/s (K)", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "thresholds": { "steps": [{ "value": null, "color": "blue" }] } } }
+    },
+
+    {
+      "title": "JVM & System Metrics",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
+      "collapsed": false
+    },
+    {
+      "title": "JVM Heap Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 29 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "jvm_memory_used_bytes{application=~\"external-api|calculator\", area=\"heap\"}", "legendFormat": "{{application}} used", "refId": "A" },
+        { "expr": "jvm_memory_max_bytes{application=~\"external-api|calculator\", area=\"heap\"}", "legendFormat": "{{application}} max", "refId": "B" },
+        { "expr": "jvm_memory_committed_bytes{application=~\"external-api|calculator\", area=\"heap\"}", "legendFormat": "{{application}} committed", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "title": "JVM Non-Heap Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 29 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "jvm_memory_used_bytes{application=~\"external-api|calculator\", area=\"nonheap\"}", "legendFormat": "{{application}} used", "refId": "A" },
+        { "expr": "jvm_memory_max_bytes{application=~\"external-api|calculator\", area=\"nonheap\"}", "legendFormat": "{{application}} max", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "title": "GC Pause",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 29 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "rate(jvm_gc_pause_seconds_sum{application=~\"external-api|calculator\"}[1m])", "legendFormat": "{{application}} {{action}} {{cause}}", "refId": "A" },
+        { "expr": "jvm_gc_max_data_size_bytes{application=~\"external-api|calculator\"}", "legendFormat": "{{application}} gc max data", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } }
+    },
+
+    {
+      "title": "CPU Usage",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 37 },
+      "collapsed": false
+    },
+    {
+      "title": "Process CPU Usage",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "process_cpu_usage{application=\"external-api\"}", "legendFormat": "external-api", "refId": "A" },
+        { "expr": "process_cpu_usage{application=\"calculator\"}", "legendFormat": "calculator", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1, "thresholds": { "steps": [{ "value": null, "color": "green" }, { "value": 0.7, "color": "yellow" }, { "value": 0.9, "color": "red" }] } } }
+    },
+    {
+      "title": "System CPU Usage",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "system_cpu_usage{application=~\"external-api|calculator\"}", "legendFormat": "{{application}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1, "thresholds": { "steps": [{ "value": null, "color": "green" }, { "value": 0.7, "color": "yellow" }, { "value": 0.9, "color": "red" }] } } }
+    },
+    {
+      "title": "JVM Threads",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "jvm_threads_live_threads{application=~\"external-api|calculator\"}", "legendFormat": "{{application}} live", "refId": "A" },
+        { "expr": "jvm_threads_states_threads{application=~\"external-api|calculator\", state=\"runnable\"}", "legendFormat": "{{application}} runnable", "refId": "B" },
+        { "expr": "jvm_threads_states_threads{application=~\"external-api|calculator\", state=\"blocked\"}", "legendFormat": "{{application}} blocked", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "title": "GC Count / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "rate(jvm_gc_pause_seconds_count{application=~\"external-api|calculator\"}[1m])", "legendFormat": "{{application}} {{action}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } } }
+    },
+
+    {
+      "title": "Process Uptime",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 },
+      "collapsed": false
+    },
+    {
+      "title": "External API Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 47 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "process_uptime_seconds{application=\"external-api\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "green" }] } } }
+    },
+    {
+      "title": "Calculator Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 47 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "process_uptime_seconds{application=\"calculator\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "green" }] } } }
+    },
+    {
+      "title": "Disk Free (External API)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 47 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "disk_free_bytes{application=\"external-api\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "bytes", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "green" }, { "value": 10737418240, "color": "yellow" }, { "value": 1073741824, "color": "red" }] } } }
+    },
+    {
+      "title": "Disk Free (Calculator)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 47 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "disk_free_bytes{application=\"calculator\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "bytes", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": null, "color": "green" }, { "value": 10737418240, "color": "yellow" }, { "value": 1073741824, "color": "red" }] } } }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["maple", "pipeline", "external-api", "calculator"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "selected": true, "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Maple Pipeline - External API & Calculator",
+  "uid": "maple-pipeline"
+}

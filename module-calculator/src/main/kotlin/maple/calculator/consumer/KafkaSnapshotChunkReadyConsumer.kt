@@ -82,8 +82,8 @@ class KafkaSnapshotChunkReadyConsumer(
 
         runBlocking {
             concurrency.withPermit {
+                val start = System.nanoTime()
                 runCatching {
-                    val start = System.nanoTime()
                     val result = chunkProcessor.process(event)
                     metrics.timer().record(Duration.ofNanos(System.nanoTime() - start))
                     resultEventPublisher.publishChunkReady(
@@ -116,6 +116,8 @@ class KafkaSnapshotChunkReadyConsumer(
                     metrics.recordItems(result.totalItems)
                     metrics.recordCalculated(result.resultCount)
                     metrics.recordErrors(result.errorCount)
+                    val durationSec = (System.nanoTime() - start) / 1_000_000_000.0
+                    metrics.recordChunkRates(result.recordCount, result.totalItems, durationSec)
                     acknowledgment.acknowledge()
                 }.onFailure { ex ->
                     log.error("[Consumer] chunk processing failed, skipping: runId={} chunkId={}: {}", event.runId, event.chunkId, ex.message, ex)

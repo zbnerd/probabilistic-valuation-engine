@@ -5,14 +5,20 @@ import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import org.springframework.stereotype.Component
+import java.util.concurrent.atomic.AtomicInteger
 
 @Component
 class SynchronizerMetrics(private val registry: MeterRegistry) {
 
     // Chunk counters
     private val chunksReceived = registry.counter("synchronizer_chunks_received_total")
+    private val chunksProcessing = AtomicInteger(0)
     private val chunksProcessed = registry.counter("synchronizer_chunks_processed_total")
     private val chunksFailed = registry.counter("synchronizer_chunks_failed_total")
+
+    init {
+        registry.gauge("synchronizer_chunks_processing", chunksProcessing)
+    }
 
     // Document / item counters
     private val documentsProcessed = registry.counter("synchronizer_documents_processed_total")
@@ -61,6 +67,8 @@ class SynchronizerMetrics(private val registry: MeterRegistry) {
         registry.counter("synchronizer_chunk_status_transition_total", "status", status)
 
     fun incrementReceived() = chunksReceived.increment()
+    fun incrementProcessing() = chunksProcessing.incrementAndGet()
+    fun decrementProcessing() = chunksProcessing.decrementAndGet()
     fun incrementProcessed() = chunksProcessed.increment()
     fun incrementFailed() = chunksFailed.increment()
 

@@ -1,0 +1,22 @@
+# Synchronizer local profile — local PostgreSQL via docker compose
+# Usage: docker compose -f docker-compose.postgres.yml up -d postgres
+#        SPRING_PROFILES_ACTIVE=local ./gradlew :module-synchronizer:bootRun
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/maple_expectation
+    username: maple
+    password: maple123
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+      keepalive-time: 30000
+      max-lifetime: 600000
+      connection-test-query: SELECT 1
+  jpa:
+    open-in-view: false
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: none

@@ -11,15 +11,20 @@ spring:
       - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
       - org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration
       - org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration
   datasource:
     url: ${DB_URL}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 3000
+      maximum-pool-size: 3
+      minimum-idle: 1
+      connection-timeout: 5000
+      keepalive-time: 30000
+      max-lifetime: 600000
+      connection-test-query: SELECT 1
   jpa:
     open-in-view: false
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: none
   kafka:
@@ -31,7 +36,7 @@ spring:
       auto-offset-reset: earliest
       enable-auto-commit: false
     listener:
-      ack-mode: manual
+      ack-mode: manual_immediate
 
 synchronizer:
   kafka:

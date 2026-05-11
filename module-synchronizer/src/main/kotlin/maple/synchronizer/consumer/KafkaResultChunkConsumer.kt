@@ -14,6 +14,7 @@ import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
+import java.util.concurrent.Semaphore
 
 @Component
 class KafkaResultChunkConsumer(
@@ -27,6 +28,9 @@ class KafkaResultChunkConsumer(
     private val log = LoggerFactory.getLogger(KafkaResultChunkConsumer::class.java)
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
 
+    // Permit covers entire chunk processing: file read → parse → build → upsert
+    private val processingPermit = Semaphore(2)
+
     @KafkaListener(
         topics = ["\${synchronizer.kafka.result-chunk-ready-topic}"],
         groupId = "\${synchronizer.kafka.consumer-group-id}",
@@ -36,22 +40,52 @@ class KafkaResultChunkConsumer(
         val runId = event.sourceRunId
         val chunkId = event.sourceChunkId
 
-        val chunkSample = Timer.start()
-        metrics.incrementReceived()
-        metrics.recordStatusTransition("RECEIVED")
+        log.info("[Synchronizer] received: runId={} chunkId={} objectKey={} results={}",
+            runId, chunkId, event.objectKey, event.resultCount)
 
-        log.info(
-            "[Synchronizer] received: runId={} chunkId={} objectKey={} results={}",
-            runId, chunkId, event.objectKey, event.resultCount,
-        )
+        // 1. Idempotency: skip already-successful chunks
+        if (chunkStatusRepository.isAlreadySuccess(runId, chunkId)) {
+            log.info("[Synchronizer] skip already-successful chunk: runId={} chunkId={}", runId, chunkId)
+            acknowledgment.acknowledge()
+            return
+        }
+
+        // 2. Atomic claim: only this worker proceeds if claim succeeds
+        if (!chunkStatusRepository.claimChunk(runId, chunkId, event.objectKey)) {
+            log.info("[Synchronizer] skip - chunk already claimed by another worker: runId={} chunkId={}", runId, chunkId)
+            acknowledgment.acknowledge()
+            return
+        }
+
+        // 3. Try acquire processing permit — covers entire chunk lifecycle
+        if (!processingPermit.tryAcquire()) {
+            log.info("[Synchronizer] processing permit busy, will retry: runId={} chunkId={}", runId, chunkId)
+            // DON'T ACK — message will be redelivered after poll timeout
+            return
+        }
+
+        // 4. Dispatch full processing to virtual thread — only event metadata is passed
+        metrics.incrementReceived()
+        metrics.incrementProcessing()
+
+        CompletableFuture.runAsync({
+            processChunk(event, acknowledgment)
+        }, vtExecutor)
+    }
+
+    private fun processChunk(event: CalculatorResultChunkReadyEvent, acknowledgment: Acknowledgment) {
+        val runId = event.sourceRunId
+        val chunkId = event.sourceChunkId
+        val chunkSample = Timer.start()
 
         try {
-            chunkStatusRepository.markReceived(runId, chunkId, event.objectKey)
-            chunkStatusRepository.markProcessing(runId, chunkId)
-            metrics.recordStatusTransition("PROCESSING")
-
-            val grouped = timed(metrics.fileReadTimer()) { resultFileReader.readAndGroupByCompositeKey(event.objectKey) }
-            val documents = timed(metrics.documentBuildTimer()) { grouped.map { documentBuilder.build(runId, chunkId, it) } }
+            // All heavy work happens here — inside the processing permit
+            val grouped = timed(metrics.fileReadTimer()) {
+                resultFileReader.readAndGroupByCompositeKey(event.objectKey)
+            }
+            val documents = timed(metrics.documentBuildTimer()) {
+                grouped.map { documentBuilder.build(runId, chunkId, it) }
+            }
             val itemsCount = grouped.sumOf { it.items.size.toLong() }
 
             log.info("[Synchronizer] grouped {} results into {} documents", event.resultCount, documents.size)
@@ -61,25 +95,31 @@ class KafkaResultChunkConsumer(
             metrics.recordChunkSize(documents.size, itemsCount, documents.size.toLong())
             documents.forEach { metrics.recordDocumentEquipment(it.summary.equipmentCount) }
 
-            CompletableFuture.runAsync({
-                metrics.mainUpsertTimer().record(Runnable { readModelRepository.bulkUpsert(runId, chunkId, documents) })
-            }, vtExecutor)
-                .thenRun {
-                    chunkStatusRepository.markSuccess(runId, chunkId)
-                    metrics.incrementProcessed()
-                    metrics.recordStatusTransition("SUCCESS")
-                    chunkSample.stop(metrics.chunkTimer())
-                }
-                .join()
+            // DB upsert — still inside same permit
+            metrics.mainUpsertTimer().record(Runnable {
+                readModelRepository.bulkUpsert(runId, chunkId, documents)
+            })
 
+            chunkStatusRepository.markSuccess(runId, chunkId)
+            metrics.incrementProcessed()
+            metrics.recordStatusTransition("SUCCESS")
+            chunkSample.stop(metrics.chunkTimer())
             acknowledgment.acknowledge()
         } catch (e: Exception) {
+            chunkStatusRepository.markFailed(runId, chunkId, e.message ?: "unknown")
             metrics.incrementFailed()
             metrics.recordStatusTransition("FAILED")
-            chunkStatusRepository.markFailed(runId, chunkId, e.message ?: "unknown")
             log.error("[Synchronizer] chunk processing failed: runId={} chunkId={}", runId, chunkId, e)
-            throw e
+            // DON'T ACK — message will be redelivered
+        } finally {
+            metrics.decrementProcessing()
+            processingPermit.release()
         }
+    }
+
+    private fun unwrapCompletionException(ex: Throwable): Throwable {
+        val cause = ex.cause
+        return if (cause != null && ex is java.util.concurrent.CompletionException) cause else ex
     }
 
     private inline fun <T> timed(timer: Timer, block: () -> T): T {

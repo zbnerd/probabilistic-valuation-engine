@@ -24,6 +24,16 @@ calculator:
     consumer-group-id: calculator-snapshot-chunk-processor
   store:
     input-base-path: ../module-external-api/external-api-data
+  cleanup:
+    enabled: false                    # enable to activate cleanup scheduler
+    dry-run: true                     # true = log candidates without deleting
+    interval-ms: 21600000             # 6 hours between cleanup cycles
+    max-delete-runs-per-cycle: 10     # max runs deleted per cycle
+    max-delete-bytes-per-cycle: 5368709120  # 5GB max deleted per cycle
+    max-runtime-seconds: 60           # hard wall-clock limit per cycle
+    runs:
+      keep-recent: 5                  # always keep the 5 most recent runs
+      keep-within-hours: 48           # keep runs newer than 48 hours
   pipeline:
     worker-count: 4
     channel-capacity: 500

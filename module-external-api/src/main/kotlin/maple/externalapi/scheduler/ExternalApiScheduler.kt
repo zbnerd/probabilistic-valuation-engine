@@ -5,6 +5,7 @@ import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.Bucket
 import jakarta.annotation.PreDestroy
 import maple.externalapi.metrics.ExternalApiMetrics
+import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.out.ExternalApiClientPort
@@ -46,6 +47,7 @@ class ExternalApiScheduler(
     private val chunkingProperties: SnapshotChunkingProperties,
     private val eventPublisher: SnapshotChunkEventPublisher,
     private val metrics: ExternalApiMetrics,
+    private val volumeMetrics: SnapshotVolumeMetrics,
     @Value("\${external-api.rate-limit.permits-per-second:200}")
     private val permitsPerSecond: Int,
     @Value("\${external-api.rate-limit.ocid-lookup-permits-per-second:400}")
@@ -218,6 +220,7 @@ class ExternalApiScheduler(
             queueCapacity = chunkingProperties.queueCapacity,
             objectMapper = objectMapper,
             eventPublisher = NoOpSnapshotChunkEventPublisher(),
+            volumeMetrics = volumeMetrics,
         )
 
         val rateLimiter = newRateLimiter(permitsPerSecond)
@@ -312,6 +315,7 @@ class ExternalApiScheduler(
             queueCapacity = chunkingProperties.queueCapacity,
             objectMapper = objectMapper,
             eventPublisher = eventPublisher,
+            volumeMetrics = volumeMetrics,
         )
 
         val rateLimiter = newRateLimiter(permitsPerSecond)

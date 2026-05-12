@@ -1,6 +1,7 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.externalapi.snapshot.event.SnapshotChunkReadyEvent
 import maple.externalapi.snapshot.event.SnapshotRunCompletedEvent
@@ -22,6 +23,7 @@ class ChunkedSnapshotSink(
     private val queueCapacity: Int,
     private val objectMapper: ObjectMapper,
     private val eventPublisher: SnapshotChunkEventPublisher,
+    private val volumeMetrics: SnapshotVolumeMetrics,
 ) {
     private val log = LoggerFactory.getLogger(ChunkedSnapshotSink::class.java)
 
@@ -200,11 +202,19 @@ class ChunkedSnapshotSink(
         "runs/${manifest.runId}/${endpoint}/${stats.path}"
 
     private fun publishChunkReady(stats: ChunkStats) {
+        val chunkId = String.format("part-%06d", stats.partIndex)
+        val ratio = if (stats.compressedBytes > 0) "%.2f".format(stats.uncompressedBytes.toDouble() / stats.compressedBytes.toDouble()) else "N/A"
+        volumeMetrics.recordChunk(stats.compressedBytes, stats.uncompressedBytes, stats.recordCount.toLong())
+        log.info(
+            "[snapshotVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",
+            manifest.runId, chunkId, stats.compressedBytes, stats.uncompressedBytes, stats.recordCount, ratio,
+        )
+
         val event = SnapshotChunkReadyEvent(
             eventId = UUID.randomUUID().toString(),
             runId = manifest.runId,
             endpoint = endpoint,
-            chunkId = String.format("part-%06d", stats.partIndex),
+            chunkId = chunkId,
             objectKey = objectKeyFor(stats),
             recordCount = stats.recordCount,
             uncompressedBytes = stats.uncompressedBytes,

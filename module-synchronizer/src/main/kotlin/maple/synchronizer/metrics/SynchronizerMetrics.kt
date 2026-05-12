@@ -62,6 +62,23 @@ class SynchronizerMetrics(private val registry: MeterRegistry) {
         .description("Equipment count per document")
         .register(registry)
 
+    // Volume metrics — pre-upsert data volume
+    private val preUpsertCompressedBytesTotal = registry.counter("synchronizer_pre_upsert_compressed_bytes_total")
+    private val preUpsertUncompressedBytesTotal = registry.counter("synchronizer_pre_upsert_uncompressed_bytes_total")
+    private val preUpsertJsonRowsTotal = registry.counter("synchronizer_pre_upsert_json_rows_total")
+
+    private val preUpsertCompressedSummary = DistributionSummary.builder("synchronizer_pre_upsert_compressed_bytes")
+        .description("Compressed artifact bytes per chunk before DB upsert")
+        .register(registry)
+
+    private val preUpsertUncompressedSummary = DistributionSummary.builder("synchronizer_pre_upsert_uncompressed_bytes")
+        .description("Uncompressed artifact bytes per chunk before DB upsert")
+        .register(registry)
+
+    private val preUpsertCompressionRatio = DistributionSummary.builder("synchronizer_pre_upsert_compression_ratio")
+        .description("Compression ratio (uncompressed/compressed) per chunk before DB upsert")
+        .register(registry)
+
     // Status transition counter
     private fun statusCounter(status: String) =
         registry.counter("synchronizer_chunk_status_transition_total", "status", status)
@@ -84,6 +101,17 @@ class SynchronizerMetrics(private val registry: MeterRegistry) {
     }
 
     fun recordDocumentEquipment(count: Int) = documentEquipmentSummary.record(count.toDouble())
+
+    fun recordPreUpsertVolume(compressedBytes: Long, uncompressedBytes: Long, jsonRows: Long) {
+        preUpsertCompressedBytesTotal.increment(compressedBytes.toDouble())
+        preUpsertUncompressedBytesTotal.increment(uncompressedBytes.toDouble())
+        preUpsertJsonRowsTotal.increment(jsonRows.toDouble())
+        preUpsertCompressedSummary.record(compressedBytes.toDouble())
+        preUpsertUncompressedSummary.record(uncompressedBytes.toDouble())
+        if (compressedBytes > 0) {
+            preUpsertCompressionRatio.record(uncompressedBytes.toDouble() / compressedBytes.toDouble())
+        }
+    }
 
     fun chunkTimer(): Timer = chunkTimer
     fun fileReadTimer(): Timer = fileReadTimer

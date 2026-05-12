@@ -38,26 +38,28 @@ class ArtifactCleanupScheduler(
 
     @Scheduled(fixedDelayString = "\${external-api.cleanup.interval-ms:21600000}")
     fun cleanup() {
-        val sample = io.micrometer.core.instrument.Timer.start()
-        val start = Instant.now()
-        log.info("[Cleanup] started: dryRun={}", dryRun)
+        Thread.ofVirtual().name("cleanup-ext").start {
+            val sample = io.micrometer.core.instrument.Timer.start()
+            val start = Instant.now()
+            log.info("[Cleanup] started: dryRun={}", dryRun)
 
-        updateStorageMetrics()
+            updateStorageMetrics()
 
-        val result = runCatching { cleanupRuns(start) }
+            val result = runCatching { cleanupRuns(start) }
 
-        val durationMs = Instant.now().toEpochMilli() - start.toEpochMilli()
-        sample.stop(metrics.timer())
+            val durationMs = Instant.now().toEpochMilli() - start.toEpochMilli()
+            sample.stop(metrics.timer())
 
-        result.onSuccess { res ->
-            log.info(
-                "[Cleanup] completed: dryRun={}, runsDeleted={}, bytesDeleted={}, " +
-                    "throttled={}, errors={}, durationMs={}",
-                dryRun, res.runsDeleted, res.bytesDeleted, res.throttled, res.errors, durationMs,
-            )
-        }.onFailure { ex ->
-            metrics.recordError()
-            log.error("[Cleanup] failed (pipeline NOT affected): {}", ex.message, ex)
+            result.onSuccess { res ->
+                log.info(
+                    "[Cleanup] completed: dryRun={}, runsDeleted={}, bytesDeleted={}, " +
+                        "throttled={}, errors={}, durationMs={}",
+                    dryRun, res.runsDeleted, res.bytesDeleted, res.throttled, res.errors, durationMs,
+                )
+            }.onFailure { ex ->
+                metrics.recordError()
+                log.error("[Cleanup] failed (pipeline NOT affected): {}", ex.message, ex)
+            }
         }
     }
 

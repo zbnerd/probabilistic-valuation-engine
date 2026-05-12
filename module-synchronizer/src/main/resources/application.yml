@@ -13,7 +13,7 @@ spring:
       - org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
       - org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration
   datasource:
-    url: ${DB_URL}
+    url: jdbc:postgresql://localhost:5432/maple_expectation?user=maple&password=${DB_ROOT_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 3

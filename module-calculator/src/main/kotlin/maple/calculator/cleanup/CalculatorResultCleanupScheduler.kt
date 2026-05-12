@@ -36,22 +36,24 @@ class CalculatorResultCleanupScheduler(
 
     @Scheduled(fixedDelayString = "\${calculator.cleanup.interval-ms:21600000}")
     fun cleanup() {
-        val start = Instant.now()
-        log.info("[CalculatorCleanup] started: dryRun={}", dryRun)
+        Thread.ofVirtual().name("cleanup-calc").start {
+            val start = Instant.now()
+            log.info("[CalculatorCleanup] started: dryRun={}", dryRun)
 
-        // Pipeline isolation: catch everything, never propagate
-        val result = runCatching { cleanupRuns(start) }
+            // Pipeline isolation: catch everything, never propagate
+            val result = runCatching { cleanupRuns(start) }
 
-        val durationMs = Instant.now().toEpochMilli() - start.toEpochMilli()
+            val durationMs = Instant.now().toEpochMilli() - start.toEpochMilli()
 
-        result.onSuccess { res ->
-            log.info(
-                "[CalculatorCleanup] completed: dryRun={}, deleted={}, bytes={}, " +
-                    "errors={}, throttled={}, durationMs={}",
-                dryRun, res.deleted, res.bytes, res.errors, res.throttled, durationMs,
-            )
-        }.onFailure { ex ->
-            log.error("[CalculatorCleanup] failed (pipeline NOT affected): {}", ex.message, ex)
+            result.onSuccess { res ->
+                log.info(
+                    "[CalculatorCleanup] completed: dryRun={}, deleted={}, bytes={}, " +
+                        "errors={}, throttled={}, durationMs={}",
+                    dryRun, res.deleted, res.bytes, res.errors, res.throttled, durationMs,
+                )
+            }.onFailure { ex ->
+                log.error("[CalculatorCleanup] failed (pipeline NOT affected): {}", ex.message, ex)
+            }
         }
     }
 

@@ -63,6 +63,37 @@ services:
     depends_on:
       - prometheus
 
+  # Kafka (Message Queue)
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: maple-kafka
+    restart: always
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,HOST://localhost:9092
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,HOST://0.0.0.0:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CLUSTER_ID: maple-kafka-cluster
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Retention settings to prevent disk fill
+      KAFKA_LOG_RETENTION_HOURS: 48
+      KAFKA_LOG_RETENTION_BYTES: 5368709120   # 5GB
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824     # 1GB segments
+      KAFKA_LOG_CLEANUP_POLICY: delete
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - maple-network
+    depends_on:
+      - postgres
+
 networks:
   maple-network:
     driver: bridge
@@ -74,3 +105,4 @@ volumes:
   prometheus_data:
   grafana_data:
   postgres_data:
+  kafka_data:

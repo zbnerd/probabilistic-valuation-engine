@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 class ChunkedSnapshotSink(
-    runDir: Path,
+    private val runDir: Path,
     private val endpoint: String,
     private val maxRecords: Int,
     private val maxUncompressedBytes: Long,
@@ -99,6 +99,12 @@ class ChunkedSnapshotSink(
 
         // create _SUCCESS
         Files.writeString(successPath, "")
+
+        // Remove run-level _RUNNING marker (if exists)
+        val runningMarker = runDir.resolve("_RUNNING")
+        if (Files.exists(runningMarker)) {
+            Files.delete(runningMarker)
+        }
 
         log.info(
             "[Sink] closed: endpoint={}, chunks={}, records={}, failed={}",

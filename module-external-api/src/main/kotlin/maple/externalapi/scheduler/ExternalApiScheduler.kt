@@ -24,6 +24,7 @@ import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.time.Instant
@@ -208,6 +209,7 @@ class ExternalApiScheduler(
         val endpoint = "character-basic"
         val config = chunkingProperties.configFor(endpoint)
         val runDir = Paths.get(storeBasePath, "runs", runId)
+        writeRunningMarker(runDir)
         val sink = ChunkedSnapshotSink(
             runDir = runDir,
             endpoint = endpoint,
@@ -301,6 +303,7 @@ class ExternalApiScheduler(
         val endpoint = "item-equipment"
         val config = chunkingProperties.configFor(endpoint)
         val runDir = Paths.get(storeBasePath, "runs", runId)
+        writeRunningMarker(runDir)
         val sink = ChunkedSnapshotSink(
             runDir = runDir,
             endpoint = endpoint,
@@ -443,6 +446,13 @@ class ExternalApiScheduler(
     private fun newRunId(): String {
         val formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.systemDefault())
         return formatter.format(Instant.now())
+    }
+
+    private fun writeRunningMarker(runDir: Path) {
+        val marker = runDir.resolve("_RUNNING")
+        Files.createDirectories(runDir)
+        Files.writeString(marker, Instant.now().toString())
+        log.info("[Scheduler] wrote _RUNNING marker: {}", marker)
     }
 
     private fun extractHttpStatus(ex: Throwable): Int {

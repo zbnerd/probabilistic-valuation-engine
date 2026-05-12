@@ -33,7 +33,7 @@ calculator:
     max-runtime-seconds: 60           # hard wall-clock limit per cycle
     runs:
       keep-recent: 5                  # always keep the 5 most recent runs
-      keep-within-hours: 48           # keep runs newer than 48 hours
+      keep-within-hours: 12           # keep runs newer than 12 hours
   pipeline:
     worker-count: 4
     channel-capacity: 500

@@ -1,10 +1,15 @@
 package maple.externalapi.infra.storage
 
+import java.nio.file.FileVisitOption
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
+import java.util.stream.Collectors
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 import maple.externalapi.domain.ExternalApiEndpoint
@@ -62,6 +67,46 @@ class LocalExternalApiArtifactStoreAdapter(
                 .filter { it.fileName.toString().endsWith(".json.gz") }
                 .map { it.fileName.toString().removeSuffix(".json.gz") }
                 .toList()
+        }
+    }
+
+    override fun listRuns(): List<String> {
+        val runsDir = Paths.get(basePath, "runs")
+        if (!Files.exists(runsDir)) return emptyList()
+        return Files.list(runsDir).use { stream ->
+            stream
+                .filter { Files.isDirectory(it) }
+                .map { it.fileName.toString() }
+                .collect(Collectors.toList())
+        }
+    }
+
+    override fun deleteRun(runId: String): Long {
+        val runDir = Paths.get(basePath, "runs", runId)
+        if (!Files.exists(runDir)) return 0L
+        var deletedBytes = 0L
+        Files.walkFileTree(runDir, object : SimpleFileVisitor<Path>() {
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                deletedBytes += attrs.size()
+                Files.delete(file)
+                return FileVisitResult.CONTINUE
+            }
+            override fun postVisitDirectory(dir: Path, exc: java.io.IOException?): FileVisitResult {
+                Files.delete(dir)
+                return FileVisitResult.CONTINUE
+            }
+        })
+        return deletedBytes
+    }
+
+    override fun fileExists(relativePath: String): Boolean =
+        Files.exists(Paths.get(basePath, relativePath))
+
+    override fun calculateDirectorySize(relativePath: String): Long {
+        val dir = Paths.get(basePath, relativePath)
+        if (!Files.exists(dir)) return 0L
+        return Files.walk(dir, FileVisitOption.FOLLOW_LINKS).use { stream ->
+            stream.filter { Files.isRegularFile(it) }.mapToLong { Files.size(it) }.sum()
         }
     }
 

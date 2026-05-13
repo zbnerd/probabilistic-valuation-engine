@@ -1,0 +1,14 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: rest-controller
+  main:
+    banner-mode: off
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

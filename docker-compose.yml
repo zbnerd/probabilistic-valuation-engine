@@ -142,11 +142,11 @@ services:
     image: fluent/fluent-bit:3.2
     container_name: maple-fluent-bit
     restart: always
+    command: -c /fluent-bit/etc/fluent-bit.conf -R /fluent-bit/etc/parsers.conf
     volumes:
-      - ./docker/fluent-bit/fluent-bit.yml:/fluent-bit/etc/fluent-bit.yml:ro
+      - ./docker/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
       - ./docker/fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
-      - /var/lib/docker/containers:/var/log/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - .:/var/log/app:ro
     networks:
       - maple-network
     depends_on:

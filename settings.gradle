@@ -25,3 +25,6 @@ include 'module-calculator'
 
 // Synchronizer module (Calculator result files → DB sync)
 include 'module-synchronizer'
+
+// Standalone REST Controller module
+include 'module-rest-controller'

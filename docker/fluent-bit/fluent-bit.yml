@@ -3,23 +3,17 @@ service:
 
 input:
   - name: tail
-    path: /var/log/containers/*.log
-    parser: docker_json
-    tag: kube.*
+    path: /var/log/app/*.log
+    parser: logstash_json
+    tag: app.*
     mem_buf_limit: 5MB
     skip_long_lines: on
     refresh_interval: 5
-
-filter:
-  - name: parser
-    match: kube.*
-    key_name: log
-    parser: logstash_json
-    reserve_data: on
+    read_from_head: true
 
 output:
   - name: es
-    match: kube.*
+    match: app.*
     host: elasticsearch
     port: 9200
     logstash_format: on

@@ -92,8 +92,15 @@ class KafkaResultChunkConsumer(
 
             metrics.incrementDocuments(documents.size)
             metrics.incrementItems(itemsCount)
-            metrics.recordChunkSize(documents.size, itemsCount, documents.size.toLong())
+            metrics.recordChunkSize(documents.size, itemsCount, event.compressedBytes)
             documents.forEach { metrics.recordDocumentEquipment(it.summary.equipmentCount) }
+
+            metrics.recordPreUpsertVolume(event.compressedBytes, event.uncompressedBytes, event.resultCount.toLong())
+            val ratio = if (event.compressedBytes > 0) "%.2f".format(event.uncompressedBytes.toDouble() / event.compressedBytes.toDouble()) else "N/A"
+            log.info(
+                "[preUpsertVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} documents={} compressionRatio={}",
+                runId, chunkId, event.compressedBytes, event.uncompressedBytes, event.resultCount, documents.size, ratio,
+            )
 
             // DB upsert — still inside same permit
             metrics.mainUpsertTimer().record(Runnable {

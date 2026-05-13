@@ -5,6 +5,7 @@ import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.Bucket
 import jakarta.annotation.PreDestroy
 import maple.externalapi.metrics.ExternalApiMetrics
+import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.out.ExternalApiClientPort
@@ -24,6 +25,7 @@ import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.time.Instant
@@ -45,6 +47,7 @@ class ExternalApiScheduler(
     private val chunkingProperties: SnapshotChunkingProperties,
     private val eventPublisher: SnapshotChunkEventPublisher,
     private val metrics: ExternalApiMetrics,
+    private val volumeMetrics: SnapshotVolumeMetrics,
     @Value("\${external-api.rate-limit.permits-per-second:200}")
     private val permitsPerSecond: Int,
     @Value("\${external-api.rate-limit.ocid-lookup-permits-per-second:400}")
@@ -208,6 +211,7 @@ class ExternalApiScheduler(
         val endpoint = "character-basic"
         val config = chunkingProperties.configFor(endpoint)
         val runDir = Paths.get(storeBasePath, "runs", runId)
+        writeRunningMarker(runDir)
         val sink = ChunkedSnapshotSink(
             runDir = runDir,
             endpoint = endpoint,
@@ -216,6 +220,7 @@ class ExternalApiScheduler(
             queueCapacity = chunkingProperties.queueCapacity,
             objectMapper = objectMapper,
             eventPublisher = NoOpSnapshotChunkEventPublisher(),
+            volumeMetrics = volumeMetrics,
         )
 
         val rateLimiter = newRateLimiter(permitsPerSecond)
@@ -301,6 +306,7 @@ class ExternalApiScheduler(
         val endpoint = "item-equipment"
         val config = chunkingProperties.configFor(endpoint)
         val runDir = Paths.get(storeBasePath, "runs", runId)
+        writeRunningMarker(runDir)
         val sink = ChunkedSnapshotSink(
             runDir = runDir,
             endpoint = endpoint,
@@ -309,6 +315,7 @@ class ExternalApiScheduler(
             queueCapacity = chunkingProperties.queueCapacity,
             objectMapper = objectMapper,
             eventPublisher = eventPublisher,
+            volumeMetrics = volumeMetrics,
         )
 
         val rateLimiter = newRateLimiter(permitsPerSecond)
@@ -443,6 +450,13 @@ class ExternalApiScheduler(
     private fun newRunId(): String {
         val formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.systemDefault())
         return formatter.format(Instant.now())
+    }
+
+    private fun writeRunningMarker(runDir: Path) {
+        val marker = runDir.resolve("_RUNNING")
+        Files.createDirectories(runDir)
+        Files.writeString(marker, Instant.now().toString())
+        log.info("[Scheduler] wrote _RUNNING marker: {}", marker)
     }
 
     private fun extractHttpStatus(ex: Throwable): Int {

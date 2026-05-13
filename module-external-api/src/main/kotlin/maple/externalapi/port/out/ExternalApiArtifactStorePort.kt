@@ -17,4 +17,12 @@ interface ExternalApiArtifactStorePort {
     ): ByteArray?
 
     fun listStoredKeys(endpoint: ExternalApiEndpoint): List<String>
+
+    fun listRuns(): List<String>
+
+    fun deleteRun(runId: String): Long
+
+    fun fileExists(relativePath: String): Boolean
+
+    fun calculateDirectorySize(relativePath: String): Long
 }

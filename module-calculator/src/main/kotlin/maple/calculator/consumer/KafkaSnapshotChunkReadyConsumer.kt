@@ -8,6 +8,7 @@ import maple.calculator.event.CalculatorResultChunkReadyEvent
 import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.event.SnapshotChunkReadyEvent
 import maple.calculator.metrics.CalculatorMetrics
+import maple.calculator.metrics.CalculatorVolumeMetrics
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.storage.ObjectStorage
 import org.slf4j.LoggerFactory
@@ -23,6 +24,7 @@ class KafkaSnapshotChunkReadyConsumer(
     private val resultEventPublisher: KafkaResultEventPublisher,
     private val objectStorage: ObjectStorage,
     private val metrics: CalculatorMetrics,
+    private val volumeMetrics: CalculatorVolumeMetrics,
 ) {
     private val log = LoggerFactory.getLogger(KafkaSnapshotChunkReadyConsumer::class.java)
     private val concurrency = Semaphore(2)
@@ -110,6 +112,14 @@ class KafkaSnapshotChunkReadyConsumer(
                         result.totalItems,
                         result.resultCount,
                         result.errorCount,
+                    )
+                    volumeMetrics.recordInput(event.compressedBytes, event.uncompressedBytes)
+                    volumeMetrics.recordResult(result.resultCompressedBytes, result.resultUncompressedBytes, result.resultCount.toLong())
+                    val resultRatio = if (result.resultCompressedBytes > 0) "%.2f".format(result.resultUncompressedBytes.toDouble() / result.resultCompressedBytes.toDouble()) else "N/A"
+                    log.info(
+                        "[calculatorArtifactVolume] runId={} chunkId={} inputCompressedBytes={} inputUncompressedBytes={} resultCompressedBytes={} resultUncompressedBytes={} resultJsonRows={} resultCompressionRatio={}",
+                        event.runId, event.chunkId, event.compressedBytes, event.uncompressedBytes,
+                        result.resultCompressedBytes, result.resultUncompressedBytes, result.resultCount, resultRatio,
                     )
                     metrics.recordChunkProcessed()
                     metrics.recordUsers(result.recordCount)

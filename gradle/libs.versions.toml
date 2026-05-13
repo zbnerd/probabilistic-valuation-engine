@@ -57,6 +57,7 @@ springdoc = "2.8.13"
 
 # Logging
 loki-logback = "1.4.2"
+logstash-logback = "8.0"
 
 # Spring Dotenv
 spring-dotenv = "4.0.0"
@@ -158,6 +159,7 @@ springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openap
 
 # Logging
 loki-logback-appender = { module = "com.github.loki4j:loki-logback-appender", version.ref = "loki-logback" }
+logstash-logback-encoder = { module = "net.logstash.logback:logstash-logback-encoder", version.ref = "logstash-logback" }
 
 # Spring Dotenv
 spring-dotenv = { module = "me.paulschwarz:spring-dotenv", version.ref = "spring-dotenv" }

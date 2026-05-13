@@ -12,6 +12,7 @@ import maple.calculator.metrics.CalculatorVolumeMetrics
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.storage.ObjectStorage
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import java.time.Duration
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
@@ -81,60 +82,66 @@ class KafkaSnapshotChunkReadyConsumer(
             return
         }
 
-
-        runBlocking {
-            concurrency.withPermit {
-                val start = System.nanoTime()
-                runCatching {
-                    val result = chunkProcessor.process(event)
-                    metrics.timer().record(Duration.ofNanos(System.nanoTime() - start))
-                    resultEventPublisher.publishChunkReady(
-                        CalculatorResultChunkReadyEvent(
-                            sourceRunId = event.runId,
-                            sourceEndpoint = event.endpoint,
-                            sourceChunkId = event.chunkId,
-                            objectKey = result.resultObjectKey,
-                            sourceRecordCount = event.recordCount,
-                            resultCount = result.resultCount,
-                            errorCount = result.errorCount,
-                            uncompressedBytes = result.resultUncompressedBytes,
-                            compressedBytes = result.resultCompressedBytes,
-                        ),
-                    )
-                    result
-                }.onSuccess { result ->
-                    log.info(
-                        "[Consumer] processed chunk: runId={} chunkId={} records={} success={} items={} results={} errors={}",
-                        event.runId,
-                        event.chunkId,
-                        result.recordCount,
-                        result.successCount,
-                        result.totalItems,
-                        result.resultCount,
-                        result.errorCount,
-                    )
-                    volumeMetrics.recordInput(event.compressedBytes, event.uncompressedBytes)
-                    volumeMetrics.recordResult(result.resultCompressedBytes, result.resultUncompressedBytes, result.resultCount.toLong())
-                    val resultRatio = if (result.resultCompressedBytes > 0) "%.2f".format(result.resultUncompressedBytes.toDouble() / result.resultCompressedBytes.toDouble()) else "N/A"
-                    log.info(
-                        "[calculatorArtifactVolume] runId={} chunkId={} inputCompressedBytes={} inputUncompressedBytes={} resultCompressedBytes={} resultUncompressedBytes={} resultJsonRows={} resultCompressionRatio={}",
-                        event.runId, event.chunkId, event.compressedBytes, event.uncompressedBytes,
-                        result.resultCompressedBytes, result.resultUncompressedBytes, result.resultCount, resultRatio,
-                    )
-                    metrics.recordChunkProcessed()
-                    metrics.recordUsers(result.recordCount)
-                    metrics.recordItems(result.totalItems)
-                    metrics.recordCalculated(result.resultCount)
-                    metrics.recordErrors(result.errorCount)
-                    val durationSec = (System.nanoTime() - start) / 1_000_000_000.0
-                    metrics.recordChunkRates(result.recordCount, result.totalItems, durationSec)
-                    acknowledgment.acknowledge()
-                }.onFailure { ex ->
-                    log.error("[Consumer] chunk processing failed, skipping: runId={} chunkId={}: {}", event.runId, event.chunkId, ex.message, ex)
-                    metrics.recordChunkFailed()
-                    acknowledgment.acknowledge()
+        MDC.put("runId", event.runId)
+        MDC.put("chunkId", event.chunkId)
+        MDC.put("kafkaTopic", "external-api.snapshot.chunk-ready")
+        try {
+            runBlocking {
+                concurrency.withPermit {
+                    val start = System.nanoTime()
+                    runCatching {
+                        val result = chunkProcessor.process(event)
+                        metrics.timer().record(Duration.ofNanos(System.nanoTime() - start))
+                        resultEventPublisher.publishChunkReady(
+                            CalculatorResultChunkReadyEvent(
+                                sourceRunId = event.runId,
+                                sourceEndpoint = event.endpoint,
+                                sourceChunkId = event.chunkId,
+                                objectKey = result.resultObjectKey,
+                                sourceRecordCount = event.recordCount,
+                                resultCount = result.resultCount,
+                                errorCount = result.errorCount,
+                                uncompressedBytes = result.resultUncompressedBytes,
+                                compressedBytes = result.resultCompressedBytes,
+                            ),
+                        )
+                        result
+                    }.onSuccess { result ->
+                        log.info(
+                            "[Consumer] processed chunk: runId={} chunkId={} records={} success={} items={} results={} errors={}",
+                            event.runId,
+                            event.chunkId,
+                            result.recordCount,
+                            result.successCount,
+                            result.totalItems,
+                            result.resultCount,
+                            result.errorCount,
+                        )
+                        volumeMetrics.recordInput(event.compressedBytes, event.uncompressedBytes)
+                        volumeMetrics.recordResult(result.resultCompressedBytes, result.resultUncompressedBytes, result.resultCount.toLong())
+                        val resultRatio = if (result.resultCompressedBytes > 0) "%.2f".format(result.resultUncompressedBytes.toDouble() / result.resultCompressedBytes.toDouble()) else "N/A"
+                        log.info(
+                            "[calculatorArtifactVolume] runId={} chunkId={} inputCompressedBytes={} inputUncompressedBytes={} resultCompressedBytes={} resultUncompressedBytes={} resultJsonRows={} resultCompressionRatio={}",
+                            event.runId, event.chunkId, event.compressedBytes, event.uncompressedBytes,
+                            result.resultCompressedBytes, result.resultUncompressedBytes, result.resultCount, resultRatio,
+                        )
+                        metrics.recordChunkProcessed()
+                        metrics.recordUsers(result.recordCount)
+                        metrics.recordItems(result.totalItems)
+                        metrics.recordCalculated(result.resultCount)
+                        metrics.recordErrors(result.errorCount)
+                        val durationSec = (System.nanoTime() - start) / 1_000_000_000.0
+                        metrics.recordChunkRates(result.recordCount, result.totalItems, durationSec)
+                        acknowledgment.acknowledge()
+                    }.onFailure { ex ->
+                        log.error("[Consumer] chunk processing failed, skipping: runId={} chunkId={}: {}", event.runId, event.chunkId, ex.message, ex)
+                        metrics.recordChunkFailed()
+                        acknowledgment.acknowledge()
+                    }
                 }
             }
+        } finally {
+            MDC.clear()
         }
     }
 }

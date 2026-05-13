@@ -9,6 +9,7 @@ import maple.synchronizer.repository.EquipmentReadModelRepository
 import maple.synchronizer.repository.SynchronizerChunkStatusRepository
 import maple.synchronizer.storage.ResultFileReader
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
@@ -78,6 +79,9 @@ class KafkaResultChunkConsumer(
         val chunkId = event.sourceChunkId
         val chunkSample = Timer.start()
 
+        MDC.put("runId", runId)
+        MDC.put("chunkId", chunkId)
+        MDC.put("kafkaTopic", "calculator.result.chunk-ready")
         try {
             // All heavy work happens here — inside the processing permit
             val grouped = timed(metrics.fileReadTimer()) {
@@ -121,6 +125,7 @@ class KafkaResultChunkConsumer(
         } finally {
             metrics.decrementProcessing()
             processingPermit.release()
+            MDC.clear()
         }
     }
 

@@ -28,7 +28,7 @@ external-api:
   store:
     base-path: ./external-api-data
   cleanup:
-    enabled: true                     # enable to activate cleanup scheduler
+    enabled: false                    # enable to activate cleanup scheduler
     dry-run: false                    # true = log candidates without deleting
     interval-ms: 21600000             # 6 hours between cleanup cycles
     max-delete-runs-per-cycle: 10     # max runs deleted per cycle

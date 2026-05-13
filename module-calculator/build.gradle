@@ -38,6 +38,9 @@ dependencies {
 	implementation(libs.spring.boot.starter.actuator)
 	implementation(libs.micrometer.registry.prometheus)
 
+	// Structured JSON logging
+	implementation(libs.logstash.logback.encoder)
+
 	// Testing
 	testImplementation(libs.spring.boot.starter.test)
 	testImplementation(libs.assertj.core)

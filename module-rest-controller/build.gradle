@@ -1,5 +1,5 @@
 // ========================================
-// Module-Synchronizer: Calculator result files → DB sync
+// Module-Rest-Controller: Standalone REST API
 // ========================================
 
 plugins {
@@ -10,46 +10,39 @@ plugins {
 
 dependencies {
 	implementation project(':module-common')
-	implementation project(':module-core')
-	implementation project(':module-infra')
 
 	implementation(libs.kotlin.stdlib)
 	implementation(libs.kotlin.reflect)
-	implementation(libs.kotlin.logging.jvm)
-	implementation(libs.kotlinx.coroutines.core)
 
-	// Spring
-	implementation(libs.spring.boot)
+	// Spring Web
 	implementation(libs.spring.boot.starter.web)
-	implementation(libs.spring.boot.starter.data.jpa)
-	runtimeOnly(libs.postgresql)
 
-	// Metrics
+	// Actuator
 	implementation(libs.spring.boot.starter.actuator)
 	implementation(libs.micrometer.registry.prometheus)
 
-	// Structured JSON logging
-	implementation(libs.logstash.logback.encoder)
-
-	// Kafka
-	implementation(libs.spring.kafka)
-
 	// Jackson
-	implementation(libs.jackson.databind)
 	implementation(libs.jackson.module.kotlin)
 
 	// Testing
 	testImplementation(libs.spring.boot.starter.test)
-	testImplementation(libs.assertj.core)
 }
 
 bootJar {
 	enabled = true
 	archiveClassifier = ""
-	mainClass.set("maple.synchronizer.SynchronizerApplication")
+	mainClass.set("maple.restcontroller.RestControllerApplication")
 }
 
 tasks.named("jar") {
 	enabled = true
 	archiveClassifier = "plain"
+}
+
+bootRun {
+	jvmArgs = [
+		'-Xms512m',
+		'-Xmx512m',
+		"-Dspring.profiles.active=${project.findProperty('springProfile') ?: 'local'}"
+	]
 }

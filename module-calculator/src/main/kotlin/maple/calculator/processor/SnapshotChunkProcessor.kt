@@ -19,6 +19,7 @@ import maple.expectation.core.dto.cube.CubeCalculationInput
 import maple.expectation.core.dto.v4.EquipmentCalculationInput
 import maple.expectation.core.dto.v4.EquipmentItem
 import maple.expectation.core.dto.v4.EquipmentItemConverter
+import maple.expectation.util.StringMaskingUtils
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
@@ -190,7 +191,7 @@ class SnapshotChunkProcessor(
         result
     }.getOrElse { ex ->
         val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
-        log.warn("Calculation error: ocid={} preset={}: {}", flatItem.ocid, flatItem.presetNo, ex.message)
+        log.warn("Calculation error: ocid={} preset={}: {}", StringMaskingUtils.maskOcid(flatItem.ocid), flatItem.presetNo, ex.message)
         buildCalculationResult(flatItem, cubeInput, CalculationCache.ComponentCosts.empty(), "ERROR", ex.message)
     }
 

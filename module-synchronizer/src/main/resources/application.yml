@@ -44,6 +44,8 @@ synchronizer:
     consumer-group-id: synchronizer-result-chunk-consumer
   store:
     base-path: ../module-external-api/external-api-data
+  chunk:
+    max-rows: 100000
 
 management:
   endpoints:

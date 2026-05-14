@@ -1,4 +1,4 @@
-package maple.calculator.event
+package maple.expectation.common.event
 
 import java.time.Instant
 import java.util.UUID

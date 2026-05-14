@@ -4,7 +4,7 @@ import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import maple.calculator.event.CalculatorResultChunkReadyEvent
+import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.event.SnapshotChunkReadyEvent
 import maple.calculator.metrics.CalculatorMetrics

@@ -5,11 +5,9 @@ import maple.synchronizer.domain.EquipmentReadDocument
 import maple.synchronizer.domain.EquipmentReadMetadata
 import maple.synchronizer.domain.EquipmentSummary
 import maple.synchronizer.domain.GroupedEquipmentResult
-import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.time.Instant
 
-@Component
 class EquipmentDocumentBuilder {
 
     fun build(runId: String, chunkId: String, grouped: GroupedEquipmentResult): EquipmentReadDocument {

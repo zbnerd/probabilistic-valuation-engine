@@ -1,9 +1,7 @@
 package maple.externalapi.scheduler
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.annotation.PreDestroy
-import maple.externalapi.domain.ExternalApiEndpoint
-import maple.externalapi.port.out.ExternalApiArtifactStorePort
+import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.scheduler.phase.CharacterBasicSnapshotPhase
 import maple.externalapi.scheduler.phase.ItemEquipmentSnapshotPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
@@ -17,7 +15,6 @@ import org.springframework.stereotype.Component
 import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
@@ -25,8 +22,7 @@ class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
     private val characterBasicPhase: CharacterBasicSnapshotPhase,
     private val itemEquipmentPhase: ItemEquipmentSnapshotPhase,
-    private val artifactStore: ExternalApiArtifactStorePort,
-    private val objectMapper: ObjectMapper,
+    private val ocidCacheProvider: OcidCacheProvider,
     @Value("\${external-api.schedule.run-on-startup:false}")
     private val runOnStartup: Boolean,
     @Value("\${external-api.schedule.skip-character-basic:false}")
@@ -35,12 +31,11 @@ class ExternalApiScheduler(
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val running = AtomicBoolean(false)
     private val shutdown = AtomicBoolean(false)
-    private val ocidCache = AtomicReference<Map<String, String>>(emptyMap())
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
 
     @EventListener(ApplicationReadyEvent::class)
     fun onStartup() {
-        loadOcidCache()
+        ocidCacheProvider.refresh()
         if (runOnStartup) {
             log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
             triggerDailyRefresh()
@@ -61,11 +56,11 @@ class ExternalApiScheduler(
         try {
             if (skipCharacterBasic) {
                 log.info("[Scheduler] skip-character-basic enabled, loading OCID cache from existing data")
-                loadOcidCache()
+                ocidCacheProvider.refresh()
             } else {
                 ocidLookupPhase.execute(executor)
-                loadOcidCache()
-                characterBasicPhase.execute(executor, ocidCache.get())
+                val cache = ocidCacheProvider.refresh()
+                characterBasicPhase.execute(executor, cache)
             }
         } finally {
             running.set(false)
@@ -75,11 +70,11 @@ class ExternalApiScheduler(
     private fun runItemEquipmentLoop() {
         log.info("[Scheduler] ITEM_EQUIPMENT continuous loop started")
         while (!shutdown.get()) {
-            val entries = ocidCache.get().entries.toList()
+            val entries = ocidCacheProvider.current().entries.toList()
             if (entries.isEmpty()) {
                 log.warn("[Scheduler] OCID cache empty, waiting 30s")
                 Thread.sleep(Duration.ofSeconds(30))
-                loadOcidCache()
+                ocidCacheProvider.refresh()
                 continue
             }
             if (!acquireLock(120_000)) {
@@ -93,32 +88,6 @@ class ExternalApiScheduler(
             }
         }
         log.info("[Scheduler] ITEM_EQUIPMENT continuous loop stopped")
-    }
-
-    private fun loadOcidCache() {
-        val keys = artifactStore.listStoredKeys(ExternalApiEndpoint.OCID_LOOKUP)
-        if (keys.isEmpty()) {
-            log.info("[Scheduler] no stored OCIDs found, cache empty")
-            return
-        }
-
-        val cache = mutableMapOf<String, String>()
-        for (key in keys) {
-            try {
-                val bytes = artifactStore.read(ExternalApiEndpoint.OCID_LOOKUP, key)
-                if (bytes != null) {
-                    val node = objectMapper.readTree(bytes)
-                    val ocid = node.get("ocid")?.asText()
-                    if (ocid != null) {
-                        cache[key] = ocid
-                    }
-                }
-            } catch (ex: Exception) {
-                log.debug("[Scheduler] failed to parse OCID for key={}", key)
-            }
-        }
-        ocidCache.set(cache)
-        log.info("[Scheduler] OCID cache loaded: {} entries", cache.size)
     }
 
     private fun acquireLock(timeoutMs: Long): Boolean {

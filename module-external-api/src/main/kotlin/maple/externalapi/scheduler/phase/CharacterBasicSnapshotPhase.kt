@@ -94,43 +94,7 @@ class CharacterBasicSnapshotPhase(
                 processed += permits
 
                 val futures = chunk.map { (ign, ocid) ->
-                    executor.submit(
-                        Callable {
-                            try {
-                                val bodyBytes = clientPort.fetch(
-                                    ExternalApiProvider.NEXON,
-                                    ExternalApiEndpoint.CHARACTER_BASIC,
-                                    ocid,
-                                ).join()
-                                sink.submit(
-                                    SnapshotChunkRecord.Success(
-                                        key = ocid,
-                                        endpoint = endpoint,
-                                        keyType = "OCID",
-                                        httpStatus = 200,
-                                        fetchedAt = Instant.now(),
-                                        bodyBytes = bodyBytes,
-                                    ),
-                                )
-                                successCount.incrementAndGet()
-                                metrics.recordCharacterBasicFetched()
-                            } catch (ex: Exception) {
-                                val httpStatus = SchedulerPhaseUtils.extractHttpStatus(ex)
-                                sink.submit(
-                                    SnapshotChunkRecord.Failure(
-                                        key = ocid,
-                                        endpoint = endpoint,
-                                        keyType = "OCID",
-                                        httpStatus = httpStatus,
-                                        fetchedAt = Instant.now(),
-                                        errorMessage = ex.message ?: "unknown",
-                                    ),
-                                )
-                                failCount.incrementAndGet()
-                                metrics.recordCharacterBasicFailed()
-                            }
-                        },
-                    )
+                    executor.submit(Callable { fetchCharacterBasic(ocid, endpoint, sink, successCount, failCount) })
                 }
 
                 futures.forEach { it.get() }
@@ -147,5 +111,47 @@ class CharacterBasicSnapshotPhase(
 
         metrics.characterBasicTimer().record(Duration.between(start, Instant.now()))
         SchedulerPhaseUtils.logSummary("CHARACTER_BASIC", entries.size, successCount.get(), successCount.get(), failCount.get(), start)
+    }
+
+    private fun fetchCharacterBasic(
+        ocid: String,
+        endpoint: String,
+        sink: ChunkedSnapshotSink,
+        successCount: java.util.concurrent.atomic.AtomicInteger,
+        failCount: java.util.concurrent.atomic.AtomicInteger,
+    ) {
+        try {
+            val bodyBytes = clientPort.fetch(
+                ExternalApiProvider.NEXON,
+                ExternalApiEndpoint.CHARACTER_BASIC,
+                ocid,
+            ).join()
+            sink.submit(
+                SnapshotChunkRecord.Success(
+                    key = ocid,
+                    endpoint = endpoint,
+                    keyType = "OCID",
+                    httpStatus = 200,
+                    fetchedAt = Instant.now(),
+                    bodyBytes = bodyBytes,
+                ),
+            )
+            successCount.incrementAndGet()
+            metrics.recordCharacterBasicFetched()
+        } catch (ex: Exception) {
+            val httpStatus = SchedulerPhaseUtils.extractHttpStatus(ex)
+            sink.submit(
+                SnapshotChunkRecord.Failure(
+                    key = ocid,
+                    endpoint = endpoint,
+                    keyType = "OCID",
+                    httpStatus = httpStatus,
+                    fetchedAt = Instant.now(),
+                    errorMessage = ex.message ?: "unknown",
+                ),
+            )
+            failCount.incrementAndGet()
+            metrics.recordCharacterBasicFailed()
+        }
     }
 }

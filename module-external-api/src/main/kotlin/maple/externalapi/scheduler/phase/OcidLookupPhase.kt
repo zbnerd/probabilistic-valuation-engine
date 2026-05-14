@@ -64,22 +64,7 @@ class OcidLookupPhase(
             processed += permits
 
             val futures = chunk.map { ign ->
-                executor.submit(
-                    Callable {
-                        try {
-                            val data = clientPort.fetch(
-                                ExternalApiProvider.NEXON,
-                                ExternalApiEndpoint.OCID_LOOKUP,
-                                ign,
-                            ).join()
-                            val payloadRef = artifactStore.store(ExternalApiEndpoint.OCID_LOOKUP, ign, data)
-                            successCount.incrementAndGet()
-                            if (payloadRef != null) storedCount.incrementAndGet()
-                        } catch (ex: Exception) {
-                            failCount.incrementAndGet()
-                        }
-                    },
-                )
+                executor.submit(Callable { fetchAndStoreOcid(ign, successCount, failCount, storedCount) })
             }
 
             futures.forEach { it.get() }
@@ -92,5 +77,25 @@ class OcidLookupPhase(
         }
 
         SchedulerPhaseUtils.logSummary("OCID lookup", igns.size, successCount.get(), storedCount.get(), failCount.get(), start)
+    }
+
+    private fun fetchAndStoreOcid(
+        ign: String,
+        successCount: java.util.concurrent.atomic.AtomicInteger,
+        failCount: java.util.concurrent.atomic.AtomicInteger,
+        storedCount: java.util.concurrent.atomic.AtomicInteger,
+    ) {
+        try {
+            val data = clientPort.fetch(
+                ExternalApiProvider.NEXON,
+                ExternalApiEndpoint.OCID_LOOKUP,
+                ign,
+            ).join()
+            val payloadRef = artifactStore.store(ExternalApiEndpoint.OCID_LOOKUP, ign, data)
+            successCount.incrementAndGet()
+            if (payloadRef != null) storedCount.incrementAndGet()
+        } catch (ex: Exception) {
+            failCount.incrementAndGet()
+        }
     }
 }

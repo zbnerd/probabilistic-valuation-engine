@@ -4,10 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.util.GzipUtils
 import maple.synchronizer.domain.EquipmentReadDocument
 import java.security.MessageDigest
-import org.springframework.stereotype.Component
 import java.sql.Timestamp
 
-@Component
 class EquipmentDocumentPreparer(private val objectMapper: ObjectMapper) {
 
     fun prepare(documents: List<EquipmentReadDocument>): List<PreppedDocument> {

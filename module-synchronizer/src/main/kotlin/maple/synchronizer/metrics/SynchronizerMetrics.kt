@@ -94,9 +94,12 @@ class SynchronizerMetrics(private val registry: MeterRegistry) {
 
     fun recordStatusTransition(status: String) = statusCounter(status).increment()
 
-    fun recordChunkSize(documents: Int, items: Long, bytes: Long) {
+    fun recordChunkSize(documents: Int, items: Long) {
         chunkDocumentsSummary.record(documents.toDouble())
         chunkItemsSummary.record(items.toDouble())
+    }
+
+    fun recordChunkBytes(bytes: Long) {
         chunkBytesSummary.record(bytes.toDouble())
     }
 

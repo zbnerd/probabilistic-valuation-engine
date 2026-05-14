@@ -14,6 +14,8 @@ import java.util.zip.GZIPInputStream
 class ResultFileReader(
     @Value("\${synchronizer.store.base-path:../module-external-api/external-api-data}")
     private val basePath: String,
+    @Value("\${synchronizer.chunk.max-rows:100000}")
+    private val maxRowsPerChunk: Int,
     private val objectMapper: ObjectMapper,
 ) {
     fun readAndGroupByCompositeKey(objectKey: String): List<GroupedEquipmentResult> {
@@ -23,20 +25,29 @@ class ResultFileReader(
         }
 
         GZIPInputStream(Files.newInputStream(path)).bufferedReader().use { reader ->
-            val items = reader.lineSequence()
-                .filter { it.isNotBlank() }
-                .mapNotNull { parseItem(it) }
-                .toList()
+            var rowCount = 0
+            val grouped = mutableMapOf<String, MutableList<CalculatedEquipmentItem>>()
 
-            return items.groupBy { "${it.ocid}:${it.presetNo}" }
-                .map { (readKey, group) ->
-                    GroupedEquipmentResult(
-                        readKey = readKey,
-                        ocid = group.first().ocid,
-                        presetNo = group.first().presetNo,
-                        items = group,
-                    )
+            reader.lineSequence()
+                .filter { it.isNotBlank() }
+                .forEach { line ->
+                    rowCount++
+                    require(rowCount <= maxRowsPerChunk) {
+                        "Chunk row limit exceeded: objectKey=$objectKey, maxRows=$maxRowsPerChunk, current=$rowCount"
+                    }
+                    parseItem(line)?.let { item ->
+                        grouped.getOrPut("${item.ocid}:${item.presetNo}") { mutableListOf() }.add(item)
+                    }
                 }
+
+            return grouped.map { (readKey, group) ->
+                GroupedEquipmentResult(
+                    readKey = readKey,
+                    ocid = group.first().ocid,
+                    presetNo = group.first().presetNo,
+                    items = group,
+                )
+            }
         }
     }
 

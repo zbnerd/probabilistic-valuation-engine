@@ -10,7 +10,7 @@ import java.math.BigDecimal
 class ResultFileReaderTest {
 
     private val objectMapper = ObjectMapper().registerKotlinModule()
-    private val reader = ResultFileReader(basePath = "/nonexistent", objectMapper = objectMapper)
+    private val reader = ResultFileReader(basePath = "/nonexistent", maxRowsPerChunk = 100000, objectMapper = objectMapper)
 
     @Test
     fun `parseItem - valid JSON line produces item`() {

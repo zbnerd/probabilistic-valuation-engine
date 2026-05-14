@@ -7,6 +7,7 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.synchronizer.processor.ChunkProcessInput
 import maple.synchronizer.processor.ChunkProcessor
 import maple.synchronizer.repository.SynchronizerChunkStatusRepository
 import org.slf4j.LoggerFactory
@@ -71,11 +72,19 @@ class KafkaResultChunkConsumer(
                 task = {
                     logicExecutor.executeOrCatch(
                         task = {
-                            chunkProcessor.process(event)
+                            chunkProcessor.process(ChunkProcessInput(
+                                objectKey = event.objectKey,
+                                sourceRunId = runId,
+                                sourceChunkId = chunkId,
+                                resultCount = event.resultCount,
+                            ))
                             chunkStatusRepository.markSuccess(runId, chunkId)
                             metrics.incrementProcessed()
                             metrics.recordStatusTransition("SUCCESS")
                             chunkSample.stop(metrics.chunkTimer())
+
+                            metrics.recordChunkBytes(event.compressedBytes)
+                            recordPreUpsertVolume(event)
                             acknowledgment.acknowledge()
                         },
                         recovery = { ex ->
@@ -96,6 +105,18 @@ class KafkaResultChunkConsumer(
                 context = TaskContext.of("Synchronizer", "ChunkLifecycle", chunkId),
             )
         }, vtExecutor)
+    }
+
+    private fun recordPreUpsertVolume(event: CalculatorResultChunkReadyEvent) {
+        metrics.recordPreUpsertVolume(event.compressedBytes, event.uncompressedBytes, event.resultCount.toLong())
+        val ratio = if (event.compressedBytes > 0)
+            "%.2f".format(event.uncompressedBytes.toDouble() / event.compressedBytes.toDouble())
+        else "N/A"
+        log.info(
+            "[preUpsertVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",
+            event.sourceRunId, event.sourceChunkId, event.compressedBytes, event.uncompressedBytes,
+            event.resultCount, ratio,
+        )
     }
 
     @PreDestroy

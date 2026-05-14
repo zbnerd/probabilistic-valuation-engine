@@ -1,6 +1,6 @@
 package maple.synchronizer.processor
 
-import maple.synchronizer.event.CalculatorResultChunkReadyEvent
+import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 
 interface ChunkProcessor {
     fun process(event: CalculatorResultChunkReadyEvent): ChunkProcessResult

@@ -1,19 +1,14 @@
 package maple.synchronizer.repository
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.util.GzipUtils
-import maple.synchronizer.domain.EquipmentReadDocument
+import maple.synchronizer.preparer.PreppedDocument
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
-import java.security.MessageDigest
-import java.sql.Timestamp
 
 @Repository
 class EquipmentReadModelRepository(
     private val jdbc: NamedParameterJdbcTemplate,
-    private val objectMapper: ObjectMapper,
 ) {
     private val log = LoggerFactory.getLogger(EquipmentReadModelRepository::class.java)
 
@@ -21,28 +16,14 @@ class EquipmentReadModelRepository(
         private const val SUB_BATCH_SIZE = 100
     }
 
-    fun bulkUpsert(runId: String, chunkId: String, documents: List<EquipmentReadDocument>) {
-        val prepped = documents.map { doc ->
-            val json = objectMapper.writeValueAsString(doc)
-            PreppedDocument(
-                readKey = "${doc.ocid}:${doc.presetNo}",
-                ocid = doc.ocid,
-                presetNo = doc.presetNo.toShort(),
-                compressed = GzipUtils.compress(json),
-                documentHash = sha256Hex(json),
-                totalCost = doc.summary.totalCost,
-                equipmentCount = doc.summary.equipmentCount,
-                calculatedAt = Timestamp.from(doc.metadata.calculatedAt),
-            )
-        }
-
-        val compSizes = prepped.map { it.compressed.size }
-        val batches = prepped.chunked(SUB_BATCH_SIZE)
+    fun bulkUpsert(runId: String, chunkId: String, documents: List<PreppedDocument>) {
+        val batches = documents.chunked(SUB_BATCH_SIZE)
+        val compSizes = documents.map { it.compressed.size }
         val totalStart = System.currentTimeMillis()
 
         log.info("[Synchronizer] upsert start: docs={} batches={} batchSize={} " +
             "compressedBytes avg={} max={} total={} : runId={} chunkId={}",
-            prepped.size, batches.size, SUB_BATCH_SIZE,
+            documents.size, batches.size, SUB_BATCH_SIZE,
             compSizes.average().toInt(), compSizes.max(), compSizes.sum(),
             runId, chunkId)
 
@@ -58,7 +39,7 @@ class EquipmentReadModelRepository(
 
         val totalMs = System.currentTimeMillis() - totalStart
         log.info("[Synchronizer] upsert done: docs={} affected={} totalDurationMs={} : runId={} chunkId={}",
-            prepped.size, totalAffected, totalMs, runId, chunkId)
+            documents.size, totalAffected, totalMs, runId, chunkId)
     }
 
     private fun upsertBatch(runId: String, chunkId: String, batch: List<PreppedDocument>): Int {
@@ -98,20 +79,4 @@ class EquipmentReadModelRepository(
             .addValue("calculatedAts", batch.map { it.calculatedAt }.toTypedArray())
         )
     }
-
-    private fun sha256Hex(input: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }
-    }
-
-    private data class PreppedDocument(
-        val readKey: String,
-        val ocid: String,
-        val presetNo: Short,
-        val compressed: ByteArray,
-        val documentHash: String,
-        val totalCost: java.math.BigDecimal,
-        val equipmentCount: Int,
-        val calculatedAt: Timestamp,
-    )
 }

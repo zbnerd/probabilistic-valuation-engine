@@ -5,7 +5,7 @@ import io.micrometer.core.instrument.Timer
 import jakarta.annotation.PreDestroy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.synchronizer.event.CalculatorResultChunkReadyEvent
+import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.processor.ChunkProcessor
 import maple.synchronizer.repository.SynchronizerChunkStatusRepository

@@ -8,6 +8,8 @@ import maple.synchronizer.domain.EquipmentReadMetadata
 import maple.synchronizer.domain.EquipmentSummary
 import maple.synchronizer.domain.GroupedEquipmentResult
 import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.synchronizer.preparer.EquipmentDocumentPreparer
+import maple.synchronizer.preparer.PreppedDocument
 import maple.synchronizer.repository.EquipmentReadModelRepository
 import maple.synchronizer.storage.ResultFileReader
 import org.assertj.core.api.Assertions.assertThat
@@ -20,12 +22,14 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.math.BigDecimal
+import java.sql.Timestamp
 import java.time.Instant
 
 class DefaultChunkProcessorTest {
 
     private val resultFileReader: ResultFileReader = mock()
     private val documentBuilder: EquipmentDocumentBuilder = mock()
+    private val preparer: EquipmentDocumentPreparer = mock()
     private val readModelRepository: EquipmentReadModelRepository = mock()
     private val metrics = SynchronizerMetrics(SimpleMeterRegistry())
 
@@ -33,18 +37,17 @@ class DefaultChunkProcessorTest {
 
     @BeforeEach
     fun setUp() {
-        chunkProcessor = DefaultChunkProcessor(resultFileReader, documentBuilder, readModelRepository, metrics)
+        chunkProcessor = DefaultChunkProcessor(resultFileReader, documentBuilder, preparer, readModelRepository, metrics)
     }
 
     @Test
     fun `process - happy path returns result with correct counts`() {
         val event = testEvent()
-        val items = listOf(testItem())
-        val grouped = listOf(GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = items))
-        val document = testDocument()
+        val grouped = listOf(GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = listOf(testItem())))
 
         whenever(resultFileReader.readAndGroupByCompositeKey(any())).thenReturn(grouped)
-        whenever(documentBuilder.build(any(), any(), any())).thenReturn(document)
+        whenever(documentBuilder.build(any(), any(), any())).thenReturn(testDocument())
+        whenever(preparer.prepare(any())).thenReturn(listOf(testPreppedDocument()))
 
         val result = chunkProcessor.process(event)
 
@@ -56,16 +59,19 @@ class DefaultChunkProcessorTest {
     }
 
     @Test
-    fun `process - calls repository bulkUpsert`() {
+    fun `process - calls preparer then repository bulkUpsert`() {
         val event = testEvent()
         val grouped = listOf(GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = listOf(testItem())))
+        val prepped = listOf(testPreppedDocument())
 
         whenever(resultFileReader.readAndGroupByCompositeKey(any())).thenReturn(grouped)
         whenever(documentBuilder.build(any(), any(), any())).thenReturn(testDocument())
+        whenever(preparer.prepare(any())).thenReturn(prepped)
 
         chunkProcessor.process(event)
 
-        verify(readModelRepository).bulkUpsert(eq(event.sourceRunId), eq(event.sourceChunkId), any())
+        verify(preparer).prepare(any())
+        verify(readModelRepository).bulkUpsert(eq(event.sourceRunId), eq(event.sourceChunkId), eq(prepped))
     }
 
     @Test
@@ -86,6 +92,7 @@ class DefaultChunkProcessorTest {
 
         whenever(resultFileReader.readAndGroupByCompositeKey(any())).thenReturn(grouped)
         whenever(documentBuilder.build(any(), any(), any())).thenReturn(testDocument())
+        whenever(preparer.prepare(any())).thenReturn(listOf(testPreppedDocument()))
         whenever(readModelRepository.bulkUpsert(any(), any(), any()))
             .thenThrow(RuntimeException("DB connection failed"))
 
@@ -104,6 +111,7 @@ class DefaultChunkProcessorTest {
 
         whenever(resultFileReader.readAndGroupByCompositeKey(any())).thenReturn(grouped)
         whenever(documentBuilder.build(any(), any(), any())).thenReturn(testDocument())
+        whenever(preparer.prepare(any())).thenReturn(listOf(testPreppedDocument(), testPreppedDocument(readKey = "oc2:1")))
 
         val result = chunkProcessor.process(event)
 
@@ -114,7 +122,7 @@ class DefaultChunkProcessorTest {
     private fun testEvent(
         objectKey: String = "run1/chunk001.jsonl.gz",
         resultCount: Int = 1,
-    ) = maple.synchronizer.event.CalculatorResultChunkReadyEvent(
+    ) = maple.expectation.common.event.CalculatorResultChunkReadyEvent(
         eventId = "evt-1",
         eventType = "CALCULATOR_RESULT_CHUNK_READY",
         schemaVersion = 1,
@@ -162,5 +170,18 @@ class DefaultChunkProcessorTest {
         summary = EquipmentSummary(totalCost = BigDecimal("150000000000"), equipmentCount = 1),
         equipment = listOf(mapOf("itemName" to "Test Sword")),
         metadata = EquipmentReadMetadata(sourceRunId = "run-1", sourceChunkId = "chunk-001", calculatedAt = Instant.now()),
+    )
+
+    private fun testPreppedDocument(
+        readKey: String = "oc1:1",
+    ) = PreppedDocument(
+        readKey = readKey,
+        ocid = "oc1",
+        presetNo = 1,
+        compressed = ByteArray(0),
+        documentHash = "abc123",
+        totalCost = BigDecimal("150000000000"),
+        equipmentCount = 1,
+        calculatedAt = Timestamp.from(Instant.now()),
     )
 }

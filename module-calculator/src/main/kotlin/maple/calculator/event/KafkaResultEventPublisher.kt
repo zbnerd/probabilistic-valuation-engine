@@ -1,6 +1,7 @@
 package maple.calculator.event
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import kotlinx.coroutines.future.await
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value

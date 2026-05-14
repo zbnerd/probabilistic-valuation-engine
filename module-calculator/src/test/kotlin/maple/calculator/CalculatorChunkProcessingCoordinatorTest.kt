@@ -2,7 +2,7 @@ package maple.calculator
 
 import io.micrometer.core.instrument.Timer
 import kotlinx.coroutines.runBlocking
-import maple.calculator.event.CalculatorResultChunkReadyEvent
+import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.event.SnapshotChunkReadyEvent
 import maple.calculator.metrics.CalculatorMetrics

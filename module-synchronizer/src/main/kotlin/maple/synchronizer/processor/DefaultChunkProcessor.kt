@@ -1,9 +1,10 @@
 package maple.synchronizer.processor
 
 import io.micrometer.core.instrument.Timer
+import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.synchronizer.builder.EquipmentDocumentBuilder
-import maple.synchronizer.event.CalculatorResultChunkReadyEvent
 import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.synchronizer.preparer.EquipmentDocumentPreparer
 import maple.synchronizer.repository.EquipmentReadModelRepository
 import maple.synchronizer.storage.ResultFileReader
 import org.slf4j.LoggerFactory
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component
 class DefaultChunkProcessor(
     private val resultFileReader: ResultFileReader,
     private val documentBuilder: EquipmentDocumentBuilder,
+    private val preparer: EquipmentDocumentPreparer,
     private val readModelRepository: EquipmentReadModelRepository,
     private val metrics: SynchronizerMetrics,
 ) : ChunkProcessor {
@@ -47,8 +49,10 @@ class DefaultChunkProcessor(
             event.resultCount, documents.size, ratio,
         )
 
+        val prepped = preparer.prepare(documents)
+
         metrics.mainUpsertTimer().record(Runnable {
-            readModelRepository.bulkUpsert(event.sourceRunId, event.sourceChunkId, documents)
+            readModelRepository.bulkUpsert(event.sourceRunId, event.sourceChunkId, prepped)
         })
 
         return ChunkProcessResult(

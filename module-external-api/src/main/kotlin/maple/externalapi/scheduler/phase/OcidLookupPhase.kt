@@ -2,6 +2,8 @@ package maple.externalapi.scheduler.phase
 
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import maple.externalapi.reader.UserIgnCsvReader
@@ -19,6 +21,7 @@ class OcidLookupPhase(
     private val clientPort: ExternalApiClientPort,
     private val csvReader: UserIgnCsvReader,
     private val artifactStore: ExternalApiArtifactStorePort,
+    private val executor: LogicExecutor,
     @Value("\${external-api.rate-limit.ocid-lookup-permits-per-second:400}")
     private val ocidLookupPermitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
@@ -85,17 +88,25 @@ class OcidLookupPhase(
         failCount: java.util.concurrent.atomic.AtomicInteger,
         storedCount: java.util.concurrent.atomic.AtomicInteger,
     ) {
-        try {
-            val data = clientPort.fetch(
-                ExternalApiProvider.NEXON,
-                ExternalApiEndpoint.OCID_LOOKUP,
-                ign,
-            ).join()
-            val payloadRef = artifactStore.store(ExternalApiEndpoint.OCID_LOOKUP, ign, data)
-            successCount.incrementAndGet()
-            if (payloadRef != null) storedCount.incrementAndGet()
-        } catch (ex: Exception) {
-            failCount.incrementAndGet()
-        }
+        executor.executeWithFallback(
+            { performOcidFetch(ign, successCount, storedCount) },
+            { failCount.incrementAndGet() },
+            TaskContext.of("OcidLookup", "FetchStore", ign),
+        )
+    }
+
+    private fun performOcidFetch(
+        ign: String,
+        successCount: java.util.concurrent.atomic.AtomicInteger,
+        storedCount: java.util.concurrent.atomic.AtomicInteger,
+    ) {
+        val data = clientPort.fetch(
+            ExternalApiProvider.NEXON,
+            ExternalApiEndpoint.OCID_LOOKUP,
+            ign,
+        ).join()
+        val payloadRef = artifactStore.store(ExternalApiEndpoint.OCID_LOOKUP, ign, data)
+        successCount.incrementAndGet()
+        if (payloadRef != null) storedCount.incrementAndGet()
     }
 }

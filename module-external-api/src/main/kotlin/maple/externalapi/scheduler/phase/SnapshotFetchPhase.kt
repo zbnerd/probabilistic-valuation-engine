@@ -2,6 +2,8 @@ package maple.externalapi.scheduler.phase
 
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
@@ -42,6 +44,7 @@ class SnapshotFetchPhase(
     private val chunkingProperties: SnapshotChunkingProperties,
     private val volumeMetrics: SnapshotVolumeMetrics,
     private val metrics: ExternalApiMetrics,
+    private val executor: LogicExecutor,
     @Qualifier("characterBasicSnapshotPublisher")
     private val characterBasicPublisher: SnapshotChunkEventPublisher,
     private val itemEquipmentPublisher: SnapshotChunkEventPublisher,
@@ -168,38 +171,57 @@ class SnapshotFetchPhase(
         successCount: AtomicInteger,
         failCount: AtomicInteger,
     ) {
-        try {
-            val bodyBytes = clientPort.fetch(
-                ExternalApiProvider.NEXON,
-                config.apiEndpoint,
-                ocid,
-            ).join()
-            sink.submit(
-                SnapshotChunkRecord.Success(
-                    key = ocid,
-                    endpoint = config.endpoint,
-                    keyType = "OCID",
-                    httpStatus = 200,
-                    fetchedAt = Instant.now(),
-                    bodyBytes = bodyBytes,
-                ),
-            )
-            successCount.incrementAndGet()
-            config.onFetched()
-        } catch (ex: Exception) {
-            val httpStatus = SchedulerPhaseUtils.extractHttpStatus(ex)
-            sink.submit(
-                SnapshotChunkRecord.Failure(
-                    key = ocid,
-                    endpoint = config.endpoint,
-                    keyType = "OCID",
-                    httpStatus = httpStatus,
-                    fetchedAt = Instant.now(),
-                    errorMessage = ex.message ?: "unknown",
-                ),
-            )
-            failCount.incrementAndGet()
-            config.onFailed()
-        }
+        executor.executeWithFallback(
+            { performSnapshotFetch(ocid, config, sink, successCount) },
+            { ex -> handleSnapshotFailure(ocid, config, sink, failCount, ex) },
+            TaskContext.of("SnapshotFetch", "FetchSingle", ocid),
+        )
+    }
+
+    private fun performSnapshotFetch(
+        ocid: String,
+        config: SnapshotFetchConfig,
+        sink: ChunkedSnapshotSink,
+        successCount: AtomicInteger,
+    ) {
+        val bodyBytes = clientPort.fetch(
+            ExternalApiProvider.NEXON,
+            config.apiEndpoint,
+            ocid,
+        ).join()
+        sink.submit(
+            SnapshotChunkRecord.Success(
+                key = ocid,
+                endpoint = config.endpoint,
+                keyType = "OCID",
+                httpStatus = 200,
+                fetchedAt = Instant.now(),
+                bodyBytes = bodyBytes,
+            ),
+        )
+        successCount.incrementAndGet()
+        config.onFetched()
+    }
+
+    private fun handleSnapshotFailure(
+        ocid: String,
+        config: SnapshotFetchConfig,
+        sink: ChunkedSnapshotSink,
+        failCount: AtomicInteger,
+        ex: Throwable,
+    ) {
+        val httpStatus = SchedulerPhaseUtils.extractHttpStatus(ex)
+        sink.submit(
+            SnapshotChunkRecord.Failure(
+                key = ocid,
+                endpoint = config.endpoint,
+                keyType = "OCID",
+                httpStatus = httpStatus,
+                fetchedAt = Instant.now(),
+                errorMessage = ex.message ?: "unknown",
+            ),
+        )
+        failCount.incrementAndGet()
+        config.onFailed()
     }
 }

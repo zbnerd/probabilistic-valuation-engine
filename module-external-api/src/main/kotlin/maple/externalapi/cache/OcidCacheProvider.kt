@@ -1,6 +1,8 @@
 package maple.externalapi.cache
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.infrastructure.executor.TaskContext
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import org.slf4j.LoggerFactory
@@ -11,6 +13,7 @@ import java.util.concurrent.atomic.AtomicReference
 class OcidCacheProvider(
     private val artifactStore: ExternalApiArtifactStorePort,
     private val objectMapper: ObjectMapper,
+    private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(OcidCacheProvider::class.java)
     private val cacheRef = AtomicReference<Map<String, String>>(emptyMap())
@@ -48,12 +51,10 @@ class OcidCacheProvider(
         return parseOcidField(bytes, key)
     }
 
-    private fun parseOcidField(bytes: ByteArray, key: String): String? {
-        return runCatching {
-            objectMapper.readTree(bytes).get("ocid")?.asText()
-        }.getOrElse {
-            log.debug("[OcidCache] failed to parse OCID for key={}", key)
-            null
-        }
-    }
+    private fun parseOcidField(bytes: ByteArray, key: String): String? =
+        executor.executeOrDefault(
+            { objectMapper.readTree(bytes).get("ocid")?.asText() },
+            null,
+            TaskContext.of("OcidCache", "ParseField", key),
+        )
 }

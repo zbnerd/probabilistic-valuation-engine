@@ -13,11 +13,12 @@ import org.springframework.stereotype.Component
 @Component
 class DefaultChunkProcessor(
     private val resultFileReader: ResultFileReader,
-    private val documentBuilder: EquipmentDocumentBuilder,
     private val preparer: EquipmentDocumentPreparer,
     private val readModelRepository: EquipmentReadModelRepository,
     private val metrics: SynchronizerMetrics,
 ) : ChunkProcessor {
+
+    private val documentBuilder = EquipmentDocumentBuilder()
 
     private val log = LoggerFactory.getLogger(DefaultChunkProcessor::class.java)
 

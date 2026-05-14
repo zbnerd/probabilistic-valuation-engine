@@ -13,7 +13,6 @@ import maple.calculator.metrics.CalculatorVolumeMetrics
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.storage.ObjectStorage
 import org.slf4j.LoggerFactory
-import org.slf4j.MDC
 import org.springframework.stereotype.Component
 import java.time.Duration
 
@@ -127,14 +126,10 @@ class CalculatorChunkProcessingCoordinator(
         metrics.recordChunkRates(result.recordCount, result.totalItems, durationSec)
     }
 
-    private suspend fun <T> withMdc(event: SnapshotChunkReadyEvent, block: suspend () -> T): T {
-        MDC.put("runId", event.runId)
-        MDC.put("chunkId", event.chunkId)
-        MDC.put("kafkaTopic", "external-api.snapshot.chunk-ready")
-        return try {
-            withContext(MDCContext()) { block() }
-        } finally {
-            MDC.clear()
-        }
-    }
+    private suspend fun <T> withMdc(event: SnapshotChunkReadyEvent, block: suspend () -> T): T =
+        withContext(MDCContext(mapOf(
+            "runId" to event.runId,
+            "chunkId" to event.chunkId,
+            "kafkaTopic" to "external-api.snapshot.chunk-ready",
+        ))) { block() }
 }

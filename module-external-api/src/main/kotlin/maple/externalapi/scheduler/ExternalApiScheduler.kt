@@ -2,9 +2,8 @@ package maple.externalapi.scheduler
 
 import jakarta.annotation.PreDestroy
 import maple.externalapi.cache.OcidCacheProvider
-import maple.externalapi.scheduler.phase.CharacterBasicSnapshotPhase
-import maple.externalapi.scheduler.phase.ItemEquipmentSnapshotPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
+import maple.externalapi.scheduler.phase.SnapshotFetchPhase
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -20,8 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
-    private val characterBasicPhase: CharacterBasicSnapshotPhase,
-    private val itemEquipmentPhase: ItemEquipmentSnapshotPhase,
+    private val snapshotFetchPhase: SnapshotFetchPhase,
     private val ocidCacheProvider: OcidCacheProvider,
     @Value("\${external-api.schedule.run-on-startup:false}")
     private val runOnStartup: Boolean,
@@ -60,7 +58,7 @@ class ExternalApiScheduler(
             } else {
                 ocidLookupPhase.execute(executor)
                 val cache = ocidCacheProvider.refresh()
-                characterBasicPhase.execute(executor, cache)
+                snapshotFetchPhase.executeCharacterBasic(executor, cache)
             }
         } finally {
             running.set(false)
@@ -82,7 +80,7 @@ class ExternalApiScheduler(
                 continue
             }
             try {
-                itemEquipmentPhase.execute(executor, entries)
+                snapshotFetchPhase.executeItemEquipment(executor, entries)
             } finally {
                 running.set(false)
             }

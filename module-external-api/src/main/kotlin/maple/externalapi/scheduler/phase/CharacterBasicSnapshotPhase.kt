@@ -10,8 +10,9 @@ import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.ChunkedSnapshotSink
 import maple.externalapi.snapshot.SnapshotChunkRecord
 import maple.externalapi.snapshot.SnapshotChunkingProperties
-import maple.externalapi.snapshot.event.NoOpSnapshotChunkEventPublisher
+import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
@@ -30,6 +31,8 @@ class CharacterBasicSnapshotPhase(
     private val chunkingProperties: SnapshotChunkingProperties,
     private val volumeMetrics: SnapshotVolumeMetrics,
     private val metrics: ExternalApiMetrics,
+    @Qualifier("characterBasicSnapshotPublisher")
+    private val eventPublisher: SnapshotChunkEventPublisher,
     @Value("\${external-api.rate-limit.permits-per-second:200}")
     private val permitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
@@ -64,7 +67,7 @@ class CharacterBasicSnapshotPhase(
             maxUncompressedBytes = config.maxUncompressedBytes,
             queueCapacity = chunkingProperties.queueCapacity,
             objectMapper = objectMapper,
-            eventPublisher = NoOpSnapshotChunkEventPublisher(),
+            eventPublisher = eventPublisher,
             volumeMetrics = volumeMetrics,
         )
 

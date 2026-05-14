@@ -6,7 +6,6 @@ import maple.externalapi.domain.ExternalApiPayloadRef
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import maple.externalapi.port.out.ExternalApiClientPort
-import maple.externalapi.port.out.ExternalApiEventPublisherPort
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -26,9 +25,6 @@ class ExternalApiIngestionServiceTest {
     @Mock
     private lateinit var artifactStorePort: ExternalApiArtifactStorePort
 
-    @Mock
-    private lateinit var eventPublisherPort: ExternalApiEventPublisherPort
-
     private lateinit var service: ExternalApiIngestionService
 
     private val dummyRef = ExternalApiPayloadRef(
@@ -39,7 +35,7 @@ class ExternalApiIngestionServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = ExternalApiIngestionService(clientPort, artifactStorePort, eventPublisherPort)
+        service = ExternalApiIngestionService(clientPort, artifactStorePort)
     }
 
     @Test
@@ -65,7 +61,6 @@ class ExternalApiIngestionServiceTest {
 
         verify(clientPort).fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.OCID_LOOKUP, "강은호")
         verify(artifactStorePort).store(ExternalApiEndpoint.OCID_LOOKUP, "강은호", responseData)
-        verify(eventPublisherPort).publishFetchCompleted(result)
     }
 
     @Test

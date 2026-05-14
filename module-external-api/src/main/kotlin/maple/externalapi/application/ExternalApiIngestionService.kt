@@ -7,7 +7,6 @@ import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.inbound.FetchExternalApiUseCase
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import maple.externalapi.port.out.ExternalApiClientPort
-import maple.externalapi.port.out.ExternalApiEventPublisherPort
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -15,7 +14,6 @@ import org.springframework.stereotype.Service
 class ExternalApiIngestionService(
     private val clientPort: ExternalApiClientPort,
     private val artifactStorePort: ExternalApiArtifactStorePort,
-    private val eventPublisherPort: ExternalApiEventPublisherPort,
 ) : FetchExternalApiUseCase {
 
     private val log = LoggerFactory.getLogger(ExternalApiIngestionService::class.java)
@@ -41,7 +39,6 @@ class ExternalApiIngestionService(
                 payloadRef = payloadRef,
                 success = true,
             )
-            eventPublisherPort.publishFetchCompleted(result)
             log.info("[ExternalApi] fetch completed: jobId={}, key={}, size={}bytes", jobId, requestKey, payloadRef.sizeBytes)
             result
         } catch (ex: java.util.concurrent.CompletionException) {

@@ -19,6 +19,7 @@ dependencies {
 	implementation(libs.kotlin.logging.jvm)
 	implementation(libs.kotlinx.coroutines.core)
 	implementation(libs.kotlinx.coroutines.jdk8)
+	implementation(libs.kotlinx.coroutines.slf4j)
 
 	// Spring
 	implementation(libs.spring.boot)
@@ -44,6 +45,7 @@ dependencies {
 	// Testing
 	testImplementation(libs.spring.boot.starter.test)
 	testImplementation(libs.assertj.core)
+	testImplementation(libs.mockito.kotlin)
 }
 
 bootJar {

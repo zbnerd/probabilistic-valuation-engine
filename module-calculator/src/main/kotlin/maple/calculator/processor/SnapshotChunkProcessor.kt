@@ -9,40 +9,18 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import maple.calculator.config.PipelineProperties
 import maple.calculator.event.SnapshotChunkReadyEvent
+import maple.calculator.model.CalculationResult
+import maple.calculator.model.ChunkResult
 import maple.calculator.parser.SnapshotEquipmentParser
 import maple.calculator.reader.GzipJsonlSnapshotRecordReader
 import maple.calculator.storage.ObjectStorage
 import maple.calculator.writer.CalculationResultWriter
-import maple.expectation.application.service.starforce.NoljangProbabilityTable
-import maple.expectation.core.domain.equipment.SecondaryWeaponCategory
 import maple.expectation.core.dto.cube.CubeCalculationInput
-import maple.expectation.core.dto.v4.EquipmentCalculationInput
 import maple.expectation.core.dto.v4.EquipmentItem
 import maple.expectation.core.dto.v4.EquipmentItemConverter
 import maple.expectation.util.StringMaskingUtils
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-
-data class CalculationResult(
-    val ocid: String,
-    val presetNo: Int,
-    val itemName: String,
-    val itemLevel: Int,
-    val itemPart: String?,
-    val itemEquipmentPart: String?,
-    val potentialGrade: String?,
-    val potentialOptions: List<String?>,
-    val additionalGrade: String?,
-    val additionalOptions: List<String>,
-    val currentStar: Int,
-    val targetStar: Int,
-    val status: String,
-    val totalCost: Double?,
-    val blackCubeCost: Double?,
-    val additionalCubeCost: Double?,
-    val starforceCost: Double?,
-    val errorMessage: String? = null,
-)
 
 @Component
 class SnapshotChunkProcessor(
@@ -63,19 +41,7 @@ class SnapshotChunkProcessor(
         val item: EquipmentItem,
     )
 
-    data class ChunkResult(
-        val recordCount: Int,
-        val successCount: Int,
-        val totalItems: Int,
-        val calculatedCount: Int,
-        val errorCount: Int,
-        val resultObjectKey: String,
-        val resultCount: Int,
-        val resultUncompressedBytes: Long,
-        val resultCompressedBytes: Long,
-    )
-
-    suspend fun process(event: SnapshotChunkReadyEvent): ChunkResult = coroutineScope {
+    suspend fun process(event: SnapshotChunkReadyEvent, resultObjectKey: String): ChunkResult = coroutineScope {
         val lineChannel = Channel<String>(properties.channelCapacity)
         val itemChannel = Channel<FlatItem>(properties.channelCapacity)
         val resultChannel = Channel<CalculationResult>(properties.channelCapacity)
@@ -84,7 +50,6 @@ class SnapshotChunkProcessor(
         val totalItems = AtomicInteger(0)
         val calculatedCount = AtomicInteger(0)
         val errorCount = AtomicInteger(0)
-        val resultObjectKey = resultObjectKeyFor(event)
 
         launch(Dispatchers.IO) { readLines(event.objectKey, lineChannel) }
 
@@ -126,8 +91,6 @@ class SnapshotChunkProcessor(
             resultCompressedBytes = writeResult.compressedBytes,
         )
     }
-
-    private fun resultObjectKeyFor(event: SnapshotChunkReadyEvent): String = "data/calculator/runs/${event.runId}/${event.endpoint}/chunks/result-${event.chunkId}.jsonl.gz"
 
     private suspend fun readLines(
         objectKey: String,
@@ -186,80 +149,19 @@ class SnapshotChunkProcessor(
         val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
         val componentCosts = calculateComponentCosts(cubeInput, flatItem.presetNo)
         val status = if (componentCosts.hasAnyCost) "SUCCESS" else "SKIPPED"
-        val result = buildCalculationResult(flatItem, cubeInput, componentCosts, status, null)
+        val result = EquipmentCalculationInputConverter.toCalculationResult(flatItem.ocid, flatItem.presetNo, cubeInput, componentCosts, status, null)
         logSample(result)
         result
     }.getOrElse { ex ->
         val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
         log.warn("Calculation error: ocid={} preset={}: {}", StringMaskingUtils.maskOcid(flatItem.ocid), flatItem.presetNo, ex.message)
-        buildCalculationResult(flatItem, cubeInput, CalculationCache.ComponentCosts.empty(), "ERROR", ex.message)
+        EquipmentCalculationInputConverter.toCalculationResult(flatItem.ocid, flatItem.presetNo, cubeInput, CalculationCache.ComponentCosts.empty(), "ERROR", ex.message)
     }
 
     private fun calculateComponentCosts(cubeInput: CubeCalculationInput, presetNo: Int): CalculationCache.ComponentCosts {
         if (!cubeInput.isReady()) return CalculationCache.ComponentCosts.empty()
-
-        val input = buildCalculationInput(cubeInput, presetNo)
+        val input = EquipmentCalculationInputConverter.toCalculationInput(cubeInput, presetNo)
         return calculationCache.calculate(input)
-    }
-
-    private fun buildCalculationInput(
-        cubeInput: CubeCalculationInput,
-        presetNo: Int,
-    ): EquipmentCalculationInput {
-        val potentialPart = SecondaryWeaponCategory.resolvePotentialPart(
-            cubeInput.part, cubeInput.itemEquipmentPart,
-        )
-        return EquipmentCalculationInput.builder()
-            .itemName(cubeInput.itemName ?: "")
-            .itemPart(potentialPart)
-            .itemEquipmentPart(cubeInput.itemEquipmentPart ?: "")
-            .itemIcon(cubeInput.itemIcon ?: "")
-            .itemLevel(cubeInput.level)
-            .presetNo(presetNo)
-            .isNoljang(cubeInput.isNoljangEquipment())
-            .potentialGrade(cubeInput.grade)
-            .potentialOptions(cubeInput.options?.filterNotNull())
-            .additionalPotentialGrade(cubeInput.additionalGrade)
-            .additionalPotentialOptions(cubeInput.additionalOptions?.filterNotNull())
-            .currentStar(0)
-            .targetStar(targetStar(cubeInput))
-            .build()
-    }
-
-    private fun buildCalculationResult(
-        flatItem: FlatItem,
-        cubeInput: CubeCalculationInput,
-        componentCosts: CalculationCache.ComponentCosts,
-        status: String,
-        errorMessage: String?,
-    ): CalculationResult = CalculationResult(
-        ocid = flatItem.ocid,
-        presetNo = flatItem.presetNo,
-        itemName = cubeInput.itemName ?: "",
-        itemLevel = cubeInput.level,
-        itemPart = cubeInput.part,
-        itemEquipmentPart = cubeInput.itemEquipmentPart,
-        potentialGrade = cubeInput.grade,
-        potentialOptions = cubeInput.options,
-        additionalGrade = cubeInput.additionalGrade,
-        additionalOptions = cubeInput.additionalOptions,
-        currentStar = 0,
-        targetStar = targetStar(cubeInput),
-        status = status,
-        totalCost = componentCosts.totalCost,
-        blackCubeCost = componentCosts.blackCubeCost,
-        additionalCubeCost = componentCosts.additionalCubeCost,
-        starforceCost = componentCosts.starforceCost,
-        errorMessage = errorMessage,
-    )
-
-    private fun targetStar(cubeInput: CubeCalculationInput): Int {
-        if (cubeInput.starforce <= 0 || cubeInput.itemName.isNullOrBlank() || cubeInput.level <= 0) return 0
-        return if (cubeInput.isNoljangEquipment()) {
-            minOf(cubeInput.starforce, NoljangProbabilityTable.MAX_NOLJANG_STAR)
-        } else {
-            cubeInput.starforce
-        }
     }
 
     private fun logSample(result: CalculationResult) {

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import java.io.OutputStream
 import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.channels.ReceiveChannel
-import maple.calculator.processor.CalculationResult
+import maple.calculator.model.CalculationResult
 import maple.calculator.storage.ObjectStorage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component

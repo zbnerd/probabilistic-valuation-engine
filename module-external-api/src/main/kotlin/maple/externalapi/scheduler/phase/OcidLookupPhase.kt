@@ -2,7 +2,7 @@ package maple.externalapi.scheduler.phase
 
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
-import maple.externalapi.port.inbound.FetchExternalApiUseCase
+import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import maple.externalapi.reader.UserIgnCsvReader
 import org.slf4j.LoggerFactory
@@ -16,7 +16,7 @@ import java.util.concurrent.ExecutorService
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class OcidLookupPhase(
-    private val fetchUseCase: FetchExternalApiUseCase,
+    private val clientPort: ExternalApiClientPort,
     private val csvReader: UserIgnCsvReader,
     private val artifactStore: ExternalApiArtifactStorePort,
     @Value("\${external-api.rate-limit.ocid-lookup-permits-per-second:400}")
@@ -67,18 +67,14 @@ class OcidLookupPhase(
                 executor.submit(
                     Callable {
                         try {
-                            val result = fetchUseCase.fetchSingle(
-                                provider = ExternalApiProvider.NEXON,
-                                endpoint = ExternalApiEndpoint.OCID_LOOKUP,
-                                requestKey = ign,
-                                characterName = ign,
-                            )
-                            if (result.success) {
-                                successCount.incrementAndGet()
-                                if (result.payloadRef != null) storedCount.incrementAndGet()
-                            } else {
-                                failCount.incrementAndGet()
-                            }
+                            val data = clientPort.fetch(
+                                ExternalApiProvider.NEXON,
+                                ExternalApiEndpoint.OCID_LOOKUP,
+                                ign,
+                            ).join()
+                            val payloadRef = artifactStore.store(ExternalApiEndpoint.OCID_LOOKUP, ign, data)
+                            successCount.incrementAndGet()
+                            if (payloadRef != null) storedCount.incrementAndGet()
                         } catch (ex: Exception) {
                             failCount.incrementAndGet()
                         }

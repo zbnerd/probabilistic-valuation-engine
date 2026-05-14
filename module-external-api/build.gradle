@@ -12,6 +12,7 @@ plugins {
 
 dependencies {
 	implementation project(':module-common')
+	implementation project(':module-infra')
 
 	implementation(libs.kotlin.stdlib)
 	implementation(libs.kotlin.reflect)

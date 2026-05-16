@@ -68,6 +68,7 @@ class ReadModelCacheService(
             val key = cacheKey(userIgn, response.presetNo)
             val json = objectMapper.writeValueAsString(response)
             redisTemplate.opsForValue().set(key, json, ttl)
+            clearUrgentPending(userIgn)
         }
 
         log.debug("Redis cache write: {} entries, TTL={}s", results.size, ttl.seconds)
@@ -90,9 +91,16 @@ class ReadModelCacheService(
 
     fun urgentPendingKey(userIgn: String): String = "$URGENT_PENDING_PREFIX:$userIgn"
 
-    fun tryMarkUrgentPending(userIgn: String, ttlSeconds: Long = 30): Boolean {
+    fun tryMarkUrgentPending(userIgn: String): Boolean {
         val result = redisTemplate.opsForValue()
-            .setIfAbsent(urgentPendingKey(userIgn), "1", Duration.ofSeconds(ttlSeconds))
+            .setIfAbsent(urgentPendingKey(userIgn), "1", Duration.ofSeconds(properties.urgentPendingTtlSeconds))
         return result == true
+    }
+
+    fun isUrgentPending(userIgn: String): Boolean =
+        redisTemplate.hasKey(urgentPendingKey(userIgn))
+
+    fun clearUrgentPending(userIgn: String) {
+        redisTemplate.delete(urgentPendingKey(userIgn))
     }
 }

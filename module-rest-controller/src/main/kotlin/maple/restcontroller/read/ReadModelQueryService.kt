@@ -5,11 +5,9 @@ import maple.expectation.util.GzipUtils
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
-import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.time.Instant
 
-@Service
 class ReadModelQueryService(
     private val jdbc: NamedParameterJdbcTemplate,
     private val objectMapper: ObjectMapper,

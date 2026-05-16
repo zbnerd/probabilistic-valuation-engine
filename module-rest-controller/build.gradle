@@ -1,0 +1,61 @@
+// ========================================
+// Module-Rest-Controller: Standalone REST API
+// ========================================
+
+plugins {
+	alias(libs.plugins.kotlin.jvm)
+	alias(libs.plugins.kotlin.spring)
+	alias(libs.plugins.spring.boot)
+}
+
+dependencies {
+	implementation project(':module-common')
+	implementation project(':module-core')
+
+	implementation(libs.kotlin.stdlib)
+	implementation(libs.kotlin.reflect)
+
+	// Spring Web
+	implementation(libs.spring.boot.starter.web)
+	implementation(libs.spring.boot.starter.validation)
+
+	// Actuator
+	implementation(libs.spring.boot.starter.actuator)
+	implementation(libs.micrometer.registry.prometheus)
+
+	// JDBC for read model queries
+	implementation(libs.spring.boot.starter.jdbc)
+	runtimeOnly(libs.postgresql)
+
+	// Redis for V6 read model cache
+	implementation(libs.spring.boot.starter.data.redis)
+
+	// Kafka for urgent pipeline trigger
+	implementation(libs.spring.kafka)
+
+	// Jackson
+	implementation(libs.jackson.module.kotlin)
+
+	// Testing
+	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.mockito.kotlin)
+}
+
+bootJar {
+	enabled = true
+	archiveClassifier = ""
+	mainClass.set("maple.restcontroller.RestControllerApplication")
+}
+
+tasks.named("jar") {
+	enabled = true
+	archiveClassifier = "plain"
+}
+
+bootRun {
+	jvmArgs = [
+		'-Xms512m',
+		'-Xmx512m',
+		"-Dspring.profiles.active=${project.findProperty('springProfile') ?: 'local'}"
+	]
+}

@@ -1,0 +1,51 @@
+server:
+  port: 8084
+  shutdown: graceful
+
+spring:
+  application:
+    name: rest-controller
+  main:
+    banner-mode: off
+  lifecycle:
+    timeout-per-shutdown-phase: 10s
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: rest-controller-urgent-feedback
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual_immediate
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+expectation:
+  v6:
+    enabled: false                    # feature flag — enable per environment
+    batch-window-ms: 10               # scheduler drain interval (Phase 2)
+    request-timeout-ms: 1500          # DeferredResult timeout
+    max-batch-size: 200               # scheduler batch size (Phase 2)
+    queue-capacity: 5000              # RequestBuffer max capacity
+    shutdown-drain-timeout-seconds: 5 # graceful shutdown deadline
+    urgent:
+      enabled: false                              # feature flag
+      request-topic: urgent-character-request
+      not-found-topic: urgent-character-not-found
+      negative-cache-ttl-seconds: 3600            # 1 hour
+      pending-ttl-seconds: 30                     # urgent dedup TTL

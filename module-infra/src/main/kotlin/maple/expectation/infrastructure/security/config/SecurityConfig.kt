@@ -56,8 +56,8 @@ class SecurityConfig(
                     .requestMatchers("/favicon.ico", "/*.html", "/*.css", "/*.js").permitAll()
                     // Root
                     .requestMatchers(HttpMethod.GET, "/").permitAll()
-                    // V5 public endpoints (expectation lookup)
-                    .requestMatchers("/api/v5/**").permitAll()
+                    // V5/V6 public endpoints (expectation lookup)
+                    .requestMatchers("/api/v5/**", "/api/v6/**").permitAll()
                     // API endpoints require authentication
                     .requestMatchers("/api/**").authenticated()
                     // Everything else - deny by default (explicit allow list above)

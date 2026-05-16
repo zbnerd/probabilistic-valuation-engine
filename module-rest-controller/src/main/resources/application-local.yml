@@ -9,3 +9,4 @@ spring:
 expectation:
   v6:
     enabled: true
+    request-timeout-ms: 5000

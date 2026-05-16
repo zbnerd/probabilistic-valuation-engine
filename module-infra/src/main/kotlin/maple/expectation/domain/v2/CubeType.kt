@@ -15,13 +15,4 @@ enum class CubeType(val description: String) {
         RED -> maple.expectation.core.domain.model.CubeType.RED
         ADDITIONAL -> maple.expectation.core.domain.model.CubeType.ADDITIONAL
     }
-
-    companion object {
-        @JvmStatic
-        fun fromCore(core: maple.expectation.core.domain.model.CubeType): CubeType = when (core) {
-            maple.expectation.core.domain.model.CubeType.BLACK -> BLACK
-            maple.expectation.core.domain.model.CubeType.RED -> RED
-            maple.expectation.core.domain.model.CubeType.ADDITIONAL -> ADDITIONAL
-        }
-    }
 }

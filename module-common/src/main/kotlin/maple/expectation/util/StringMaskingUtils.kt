@@ -15,10 +15,6 @@ object StringMaskingUtils {
     private const val PREFIX_LENGTH = 4
     private const val CACHE_KEY_PATTERN = "(expectation:v\\d+):[^:]+"
     private const val CACHE_KEY_REPLACEMENT = "$1***"
-    private const val IGN_MASK = "***"
-    private const val IGN_MIN_LENGTH = 2
-    private const val IGN_PREFIX_LENGTH = 1
-    private const val IGN_SUFFIX_LENGTH = 1
 
     /**
      * OCID 마스킹: 앞 4자리 + "***"
@@ -86,27 +82,5 @@ object StringMaskingUtils {
     fun maskAccountId(accountId: String?): String {
         if (accountId.isNullOrEmpty()) return OCID_MASK
         return accountId.substring(0, minOf(MIN_LENGTH, accountId.length)) + "..."
-    }
-
-    /**
-     * IGN(캐릭터명) 마스킹: 첫 글자 + "***" + 마지막 글자
-     * 예: "진격캐넌" → "진***넌"
-     */
-    @JvmStatic
-    fun maskIgn(value: String?): String {
-        if (value == null || value.length < IGN_MIN_LENGTH) return IGN_MASK
-        return value.substring(0, IGN_PREFIX_LENGTH) + IGN_MASK + value.substring(value.length - IGN_SUFFIX_LENGTH)
-    }
-
-    /**
-     * Correlation용 SHA-256 해시 (PII 아님, 검색 가능)
-     * OCID 등 stable identifier의 교차 모듈 추적에 사용
-     */
-    @JvmStatic
-    fun hashForCorrelation(value: String?): String {
-        if (value == null) return "null"
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-        val hash = digest.digest(value.toByteArray(Charsets.UTF_8))
-        return hash.take(8).joinToString("") { "%02x".format(it) }
     }
 }

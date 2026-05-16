@@ -33,7 +33,8 @@
 | Modify | `module-rest-controller/.../read/ExpectationReadFacade.kt` | presetNo 전달 |
 | Create | `module-rest-controller/.../read/ReadModelQueryService.kt` | read model batch 조회 + gzip 해제 |
 | Create | `module-rest-controller/.../read/V6ExpectationResponse.kt` | V6 응답 DTO |
-| Modify | `module-rest-controller/.../read/BatchReadScheduler.kt` | batch query + DeferredResult resolve |
+| Create | `module-rest-controller/.../read/V6ReadMetrics.kt` | V6 read hit/miss counters + batch latency timer |
+| Modify | `module-rest-controller/.../read/BatchReadScheduler.kt` | batch query + DeferredResult resolve + metrics |
 | Modify | `module-rest-controller/.../config/V6ReadConfig.kt` | 새 bean wiring |
 | Create | test files per component | TDD |
 
@@ -48,8 +49,9 @@
 
 ```sql
 -- V125__read_model_add_user_ign.sql
+-- NOTE: NOT NULL 제약은 V126에서 추가. Synchronizer 배포 전까지 nullable 허용.
 
--- Step 1: 컬럼 추가 (nullable)
+-- Step 1: 컬럼 추가 (nullable — V126에서 NOT NULL 전환)
 ALTER TABLE character_equipment_read_model
     ADD COLUMN user_ign TEXT;
 
@@ -59,13 +61,16 @@ SET user_ign = gc.user_ign
 FROM game_character gc
 WHERE r.ocid = gc.ocid;
 
--- Step 3: NOT NULL 제약
-ALTER TABLE character_equipment_read_model
-    ALTER COLUMN user_ign SET NOT NULL;
-
--- Step 4: V6 batch 조회용 인덱스
+-- Step 3: V6 batch 조회용 인덱스
 CREATE INDEX idx_equipment_read_model_user_ign_preset
     ON character_equipment_read_model (user_ign, preset_no);
+```
+
+**NOTE:** NOT NULL 제약은 V126 마이그레이션에서 Synchronizer 배포 완료 후 별도로 적용:
+```sql
+-- V126__read_model_user_ign_not_null.sql (Synchronizer 배포 후 실행)
+ALTER TABLE character_equipment_read_model
+    ALTER COLUMN user_ign SET NOT NULL;
 ```
 
 - [ ] **Step 2: 컴파일 검증**
@@ -184,20 +189,20 @@ class OcidUserIgnResolver(
 `CalculatedEquipmentItem.kt`의 `GroupedEquipmentResult`, `EquipmentReadDocument`, `PreppedDocument`에 userIgn 필드 추가:
 
 ```kotlin
-// GroupedEquipmentResult에 userIgn 추가
+// GroupedEquipmentResult에 userIgn 추가 (nullable — game_character에 없는 ocid는 null)
 data class GroupedEquipmentResult(
     val readKey: String,
     val ocid: String,
     val presetNo: Int,
-    val userIgn: String = "",  // Default for backward compat during migration
+    val userIgn: String? = null,  // null if ocid not in game_character yet
     val items: List<CalculatedEquipmentItem>,
 )
 
-// EquipmentReadDocument에 userIgn 추가
+// EquipmentReadDocument에 userIgn 추가 (nullable — same reason)
 data class EquipmentReadDocument(
     val ocid: String,
     val presetNo: Int,
-    val userIgn: String = "",  // Default for backward compat
+    val userIgn: String? = null,  // null if ocid not in game_character yet
     val summary: EquipmentSummary,
     val equipment: List<Map<String, Any?>>,
     val metadata: EquipmentReadMetadata,
@@ -211,7 +216,7 @@ data class PreppedDocument(
     val readKey: String,
     val ocid: String,
     val presetNo: Short,
-    val userIgn: String,       // NEW
+    val userIgn: String?,      // nullable — ocid not in game_character
     val compressed: ByteArray,
     val documentHash: String,
     val totalCost: java.math.BigDecimal,
@@ -362,6 +367,7 @@ private fun upsertBatch(runId: String, chunkId: String, batch: List<PreppedDocum
             source_chunk_id = excluded.source_chunk_id,
             updated_at = now()
         WHERE character_equipment_read_model.document_hash IS DISTINCT FROM excluded.document_hash
+           OR character_equipment_read_model.user_ign IS DISTINCT FROM excluded.user_ign
     """.trimIndent()
 
     return jdbc.update(sql, MapSqlParameterSource()
@@ -433,7 +439,7 @@ class DefaultChunkProcessor(
 
         val documents = timed(metrics.documentBuildTimer()) {
             grouped.map { g ->
-                val userIgn = ocidToUserIgn[g.ocid] ?: ""
+                val userIgn = ocidToUserIgn[g.ocid]  // null if ocid not in game_character
                 val withUserIgn = g.copy(userIgn = userIgn)
                 documentBuilder.build(input.sourceRunId, input.sourceChunkId, withUserIgn)
             }
@@ -707,13 +713,13 @@ class ReadModelQueryServiceTest {
     private val service = ReadModelQueryService(jdbc, objectMapper)
 
     @Test
-    fun `should return empty map for empty userIgns`() {
-        val result = service.batchQuery(emptySet())
+    fun `should return empty map for empty requests`() {
+        val result = service.batchQuery(emptyMap())
         assertThat(result).isEmpty()
     }
 
     @Test
-    fun `should decompress and parse read model rows`() {
+    fun `should decompress and parse read model rows with presetNo filter`() {
         val response = mapOf(
             "userIgn" to "아델",
             "presetNo" to 1,
@@ -727,7 +733,8 @@ class ReadModelQueryServiceTest {
         whenever(jdbc.query(any<String>(), any<RowMapper<Pair<String, ByteArray>>>(), any<MapSqlParameterSource>()))
             .thenReturn(listOf("아델" to compressed))
 
-        val result = service.batchQuery(setOf("아델"))
+        val requests = mapOf("아델" to 1, "강은호" to 1)
+        val result = service.batchQuery(requests)
         assertThat(result).containsKey("아델")
         assertThat(result["아델"]!!.userIgn).isEqualTo("아델")
     }
@@ -760,16 +767,28 @@ class ReadModelQueryService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun batchQuery(userIgns: Set<String>): Map<String, V6ExpectationResponse> {
-        if (userIgns.isEmpty()) return emptyMap()
+    /**
+     * @param requests userIgn → presetNo mapping
+     * @return userIgn → V6ExpectationResponse for hits only
+     */
+    fun batchQuery(requests: Map<String, Int>): Map<String, V6ExpectationResponse> {
+        if (requests.isEmpty()) return emptyMap()
+
+        // Build (userIgn, presetNo) pairs for batch filtering
+        val userIgns = requests.keys.toList()
+        val presetNos = requests.values.distinct()
 
         val sql = """
             SELECT user_ign, preset_no, document, total_cost, equipment_count, calculated_at
             FROM character_equipment_read_model
             WHERE user_ign IN (:userIgns)
+              AND preset_no IN (:presetNos)
+              AND user_ign IS NOT NULL
         """.trimIndent()
 
-        val params = MapSqlParameterSource("userIgns", userIgns.toList())
+        val params = MapSqlParameterSource()
+            .addValue("userIgns", userIgns)
+            .addValue("presetNos", presetNos)
 
         val rows = jdbc.query(sql, params) { rs, _ ->
             rs.getString("user_ign") to rs.getBytes("document")
@@ -818,13 +837,14 @@ git commit -m "feat(rest-controller): add ReadModelQueryService for V6 batch rea
 - Modify: `module-rest-controller/src/main/kotlin/maple/restcontroller/config/V6ReadConfig.kt`
 - Modify: `module-rest-controller/src/test/kotlin/maple/restcontroller/read/ExpectationReadFacadeTest.kt`
 
-- [ ] **Step 1: BatchReadScheduler에 ReadModelQueryService 연동**
+- [ ] **Step 1: BatchReadScheduler에 ReadModelQueryService + V6ReadMetrics 연동**
 
 ```kotlin
 class BatchReadScheduler(
     private val buffer: LocalRequestBuffer,
     private val registry: InflightRequestRegistry,
     private val queryService: ReadModelQueryService,     // NEW
+    private val metrics: V6ReadMetrics,                  // NEW
     private val properties: V6ReadProperties
 ) : SmartLifecycle {
 
@@ -836,20 +856,26 @@ class BatchReadScheduler(
         val batch = buffer.drain(properties.maxBatchSize)
         if (batch.isEmpty()) return
 
-        val userIgns = batch.map { it.userIgn }.toSet()
-        val results = queryService.batchQuery(userIgns)
+        // Build userIgn → presetNo map from batch
+        val requests = batch.associate { it.userIgn to it.presetNo }
+
+        val sample = Timer.start(metrics.batchLatency())
+        val results = queryService.batchQuery(requests)
+        sample.stop(metrics.batchLatency())
 
         batch.forEach { request ->
             val deferreds = registry.getAndRemove(request.userIgn)
             val response = results[request.userIgn]
 
             if (response != null) {
+                metrics.recordHit()
                 deferreds.forEach { deferred ->
                     deferred.setResult(
                         ResponseEntity.ok(response)
                     )
                 }
             } else {
+                metrics.recordMiss("read_model_empty")
                 // Miss: DeferredResult는 timeout으로 202 처리됨
                 // registry에서 이미 제거했으므로 re-register하지 않음
                 // timeout 콜백이 이미 facade에서 설정됨
@@ -859,11 +885,51 @@ class BatchReadScheduler(
 }
 ```
 
-- [ ] **Step 2: V6ReadConfig에 새 bean wiring**
-
-`V6ReadConfig`에 `ReadModelQueryService` bean 추가:
+- [ ] **Step 2: V6ReadMetrics 클래스 생성**
 
 ```kotlin
+package maple.restcontroller.read
+
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
+
+class V6ReadMetrics(registry: MeterRegistry) {
+    private val hitCounter = Counter.builder("v6_read_hit_total")
+        .description("V6 read model cache hits")
+        .register(registry)
+
+    private val missCounters = mutableMapOf<String, Counter>()
+    private val meterRegistry = registry
+
+    private val batchLatencyTimer = Timer.builder("v6_batch_latency")
+        .description("V6 batch query latency")
+        .register(registry)
+
+    fun recordHit() = hitCounter.increment()
+
+    fun recordMiss(reason: String) {
+        val counter = missCounters.getOrPut(reason) {
+            Counter.builder("v6_read_miss_total")
+                .tag("reason", reason)
+                .description("V6 read model cache misses")
+                .register(meterRegistry)
+        }
+        counter.increment()
+    }
+
+    fun batchLatency(): Timer = batchLatencyTimer
+}
+```
+
+- [ ] **Step 3: V6ReadConfig에 새 bean wiring**
+
+`V6ReadConfig`에 `ReadModelQueryService`, `V6ReadMetrics` bean 추가:
+
+```kotlin
+@Bean
+fun v6ReadMetrics(registry: MeterRegistry): V6ReadMetrics = V6ReadMetrics(registry)
+
 @Bean
 fun readModelQueryService(
     jdbc: NamedParameterJdbcTemplate,
@@ -874,8 +940,9 @@ fun readModelQueryService(
 fun batchReadScheduler(
     buffer: LocalRequestBuffer,
     registry: InflightRequestRegistry,
-    queryService: ReadModelQueryService
-): BatchReadScheduler = BatchReadScheduler(buffer, registry, queryService, properties)
+    queryService: ReadModelQueryService,
+    v6ReadMetrics: V6ReadMetrics
+): BatchReadScheduler = BatchReadScheduler(buffer, registry, queryService, v6ReadMetrics, properties)
 ```
 
 `ObjectMapper` bean 추가 (Spring Boot auto-configured):
@@ -887,21 +954,21 @@ fun batchReadScheduler(
 
 기존 `batchReadScheduler` bean 정의를 위로 변경.
 
-- [ ] **Step 3: 전체 테스트 실행**
+- [ ] **Step 4: 전체 테스트 실행**
 
 Run: `./gradlew :module-rest-controller:test 2>&1 | tail -5`
 Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 4: 전체 컴파일 검증**
+- [ ] **Step 5: 전체 컴파일 검증**
 
 Run: `./gradlew compileKotlin compileJava --continue 2>&1 | grep -E "BUILD|FAIL|ERROR" | head -5`
 Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add module-rest-controller/
-git commit -m "feat(rest-controller): wire BatchReadScheduler with ReadModelQueryService for V6 batch queries"
+git commit -m "feat(rest-controller): wire BatchReadScheduler with ReadModelQueryService and V6ReadMetrics"
 ```
 
 ---

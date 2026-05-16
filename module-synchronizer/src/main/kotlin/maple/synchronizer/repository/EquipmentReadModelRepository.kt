@@ -45,16 +45,17 @@ class EquipmentReadModelRepository(
     private fun upsertBatch(runId: String, chunkId: String, batch: List<PreppedDocument>): Int {
         val sql = """
             INSERT INTO character_equipment_read_model (
-                read_key, ocid, preset_no, document, document_hash,
+                read_key, ocid, preset_no, user_ign, document, document_hash,
                 total_cost, equipment_count, calculated_at,
                 source_run_id, source_chunk_id, updated_at
             )
             SELECT
                 unnest(:readKeys), unnest(:ocids), unnest(:presetNos),
-                unnest(:documents), unnest(:documentHashes),
+                unnest(:userIgns), unnest(:documents), unnest(:documentHashes),
                 unnest(:totalCosts), unnest(:equipmentCounts), unnest(:calculatedAts),
                 :runId, :chunkId, now()
             ON CONFLICT (read_key) DO UPDATE SET
+                user_ign = excluded.user_ign,
                 document = excluded.document,
                 document_hash = excluded.document_hash,
                 total_cost = excluded.total_cost,
@@ -64,6 +65,7 @@ class EquipmentReadModelRepository(
                 source_chunk_id = excluded.source_chunk_id,
                 updated_at = now()
             WHERE character_equipment_read_model.document_hash IS DISTINCT FROM excluded.document_hash
+               OR character_equipment_read_model.user_ign IS DISTINCT FROM excluded.user_ign
         """.trimIndent()
 
         return jdbc.update(sql, MapSqlParameterSource()
@@ -72,6 +74,7 @@ class EquipmentReadModelRepository(
             .addValue("readKeys", batch.map { it.readKey }.toTypedArray())
             .addValue("ocids", batch.map { it.ocid }.toTypedArray())
             .addValue("presetNos", batch.map { it.presetNo }.toTypedArray())
+            .addValue("userIgns", batch.map { it.userIgn }.toTypedArray())
             .addValue("documents", batch.map { it.compressed }.toTypedArray())
             .addValue("documentHashes", batch.map { it.documentHash }.toTypedArray())
             .addValue("totalCosts", batch.map { it.totalCost }.toTypedArray())

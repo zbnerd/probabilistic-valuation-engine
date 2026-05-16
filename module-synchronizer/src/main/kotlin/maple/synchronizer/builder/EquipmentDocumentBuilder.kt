@@ -17,6 +17,7 @@ class EquipmentDocumentBuilder {
         return EquipmentReadDocument(
             ocid = grouped.ocid,
             presetNo = grouped.presetNo,
+            userIgn = grouped.userIgn,
             summary = EquipmentSummary(
                 totalCost = totalCost,
                 equipmentCount = equipmentCount,

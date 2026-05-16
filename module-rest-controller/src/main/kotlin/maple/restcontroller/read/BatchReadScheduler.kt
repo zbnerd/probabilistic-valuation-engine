@@ -40,12 +40,12 @@ class BatchReadScheduler(
             TimeUnit.SECONDS.toNanos(properties.shutdownDrainTimeoutSeconds)
 
         var drained = 0
+        var failed = 0
         while (!buffer.isEmpty() && System.nanoTime() < deadlineNanos) {
             val batch = buffer.drain(properties.maxBatchSize)
-            batch.forEach { request ->
-                registry.getAndRemove(request.userIgn)
-            }
-            drained += batch.size
+            val resolved = resolveBatch(batch)
+            drained += resolved
+            failed += batch.size - resolved
         }
 
         // Resolve any drained-but-unhandled deferreds with 503
@@ -65,8 +65,30 @@ class BatchReadScheduler(
             )
         }
 
-        log.info("BatchReadScheduler stopped — drained={}, remaining={}", drained, remaining)
+        log.info("BatchReadScheduler stopped — resolved={}, failed={}, remaining={}", drained, failed, remaining)
         callback.run()
+    }
+
+    private fun resolveBatch(batch: List<ReadRequest>): Int {
+        if (batch.isEmpty()) return 0
+
+        val requests = batch.associate { it.userIgn to it.presetNo }
+        val results = queryService.batchQuery(requests)
+        var resolved = 0
+
+        batch.forEach { request ->
+            val deferreds = registry.getAndRemove(request.userIgn)
+            val response = results[request.userIgn]
+
+            if (response != null) {
+                metrics.recordHit()
+                deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
+                resolved++
+            } else {
+                metrics.recordMiss("read_model_empty")
+            }
+        }
+        return resolved
     }
 
     override fun isRunning(): Boolean = running
@@ -81,24 +103,8 @@ class BatchReadScheduler(
         val batch = buffer.drain(properties.maxBatchSize)
         if (batch.isEmpty()) return
 
-        val requests = batch.associate { it.userIgn to it.presetNo }
-
         val sample = io.micrometer.core.instrument.Timer.start()
-        val results = queryService.batchQuery(requests)
+        resolveBatch(batch)
         sample.stop(metrics.batchLatency)
-
-        batch.forEach { request ->
-            val deferreds = registry.getAndRemove(request.userIgn)
-            val response = results[request.userIgn]
-
-            if (response != null) {
-                metrics.recordHit()
-                deferreds.forEach { deferred ->
-                    deferred.setResult(ResponseEntity.ok(response))
-                }
-            } else {
-                metrics.recordMiss("read_model_empty")
-            }
-        }
     }
 }

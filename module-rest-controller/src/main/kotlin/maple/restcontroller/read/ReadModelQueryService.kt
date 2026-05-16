@@ -37,7 +37,7 @@ class ReadModelQueryService(
             .addValue("presetNos", presetNos)
 
         @Suppress("UNCHECKED_CAST")
-        val rows = jdbc.queryForList(sql, params, Map::class.java) as List<Map<String, Any>>
+        val rows = jdbc.queryForList(sql, params) as List<Map<String, Any>>
 
         return rows.associate { row ->
             val userIgn = row["user_ign"].toString()

@@ -59,7 +59,7 @@ class BasicChunkFileReader(
             val worldName = body.get("world_name")?.asText()
             val characterClass = body.get("character_class")?.asText()
             val characterLevel = body.get("character_level")?.asInt()
-            val guildName = body.get("guild_name")?.asText()
+            val guildName = body.get("character_guild_name")?.asText()
 
             val bodyJson = objectMapper.writeValueAsString(body)
             val compressed = GzipUtils.compress(bodyJson)

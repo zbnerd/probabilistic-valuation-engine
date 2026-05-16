@@ -12,6 +12,7 @@ class BatchReadScheduler(
     private val buffer: LocalRequestBuffer,
     private val registry: InflightRequestRegistry,
     private val queryService: ReadModelQueryService,
+    private val cacheService: ReadModelCacheService,
     private val metrics: V6ReadMetrics,
     private val properties: V6ReadProperties
 ) : SmartLifecycle {
@@ -73,21 +74,43 @@ class BatchReadScheduler(
         if (batch.isEmpty()) return 0
 
         val requests = batch.associate { it.userIgn to it.presetNo }
-        val results = queryService.batchQuery(requests)
         var resolved = 0
 
-        batch.forEach { request ->
-            val deferreds = registry.getAndRemove(request.userIgn)
-            val response = results[request.userIgn]
+        // 1. Redis cache lookup — split hits / misses
+        val (cacheHits, cacheMisses) = cacheService.multiGet(requests)
 
-            if (response != null) {
-                metrics.recordHit()
-                deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
-                resolved++
-            } else {
-                metrics.recordMiss("read_model_empty")
+        // 2. Resolve cache hits directly
+        cacheHits.forEach { (userIgn, response) ->
+            val deferreds = registry.getAndRemove(userIgn)
+            metrics.recordHit()
+            metrics.recordRedisHit()
+            deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
+            resolved++
+        }
+
+        // 3. DB batch query for cache misses only
+        if (cacheMisses.isNotEmpty()) {
+            val dbResults = queryService.batchQuery(cacheMisses)
+
+            // 4. Write DB results to Redis cache
+            cacheService.multiPut(dbResults)
+
+            // 5. Resolve miss deferreds
+            cacheMisses.keys.forEach { userIgn ->
+                val deferreds = registry.getAndRemove(userIgn)
+                val response = dbResults[userIgn]
+
+                if (response != null) {
+                    metrics.recordHit()
+                    metrics.recordDbHit()
+                    deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
+                    resolved++
+                } else {
+                    metrics.recordMiss("read_model_empty")
+                }
             }
         }
+
         return resolved
     }
 

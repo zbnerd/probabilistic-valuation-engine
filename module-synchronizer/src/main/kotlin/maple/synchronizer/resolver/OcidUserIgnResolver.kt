@@ -22,9 +22,10 @@ class OcidUserIgnResolver(
 
         val rows = jdbc.queryForList(sql, params, Map::class.java)
 
-        val mapping = rows.associate { row ->
-            row["ocid"].toString() to row["user_ign"].toString()
-        }
+        val mapping = rows.mapNotNull { row ->
+            val ign = row["user_ign"]?.toString() ?: return@mapNotNull null
+            row["ocid"].toString() to ign
+        }.toMap()
         log.debug("Resolved {} of {} ocids to userIgn", mapping.size, ocids.size)
         return mapping
     }

@@ -23,4 +23,14 @@ class UrgentCharacterNotFoundConsumerTest {
         verify(cacheService).setNegativeCache("unknownChar", 3600L)
         verify(acknowledgment).acknowledge()
     }
+
+    @Test
+    fun `consume with missing userIgn acknowledges without setting negative cache`() {
+        val message = """{"reason":"OPENAPI00004"}"""
+
+        consumer.consume(message, acknowledgment)
+
+        verify(cacheService, never()).setNegativeCache(any(), any())
+        verify(acknowledgment).acknowledge()
+    }
 }

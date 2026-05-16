@@ -1,5 +1,6 @@
 package maple.restcontroller.urgent
 
+import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.restcontroller.read.ReadModelCacheService
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
@@ -23,8 +24,13 @@ class UrgentCharacterNotFoundConsumer(
         groupId = "\${spring.kafka.consumer.group-id}"
     )
     fun consume(message: String, acknowledgment: Acknowledgment) {
-        val userIgn = objectMapper.readTree(message).get("userIgn").asText()
-        log.info("Received character-not-found event: userIgn={}", userIgn)
+        val userIgn = objectMapper.readTree(message).get("userIgn")?.asText()
+        if (userIgn == null) {
+            log.warn("Missing userIgn in not-found message, acknowledging to skip")
+            acknowledgment.acknowledge()
+            return
+        }
+        log.info("Received character-not-found event: userIgn={}", maskIgn(userIgn))
         cacheService.setNegativeCache(userIgn, negativeCacheTtlSeconds)
         acknowledgment.acknowledge()
     }

@@ -6,12 +6,15 @@ import maple.restcontroller.advice.RestControllerExceptionHandler
 import maple.restcontroller.controller.ExpectationV6Controller
 import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.read.*
+import maple.restcontroller.urgent.UrgentTriggerPublisher
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.scheduling.annotation.EnableScheduling
 
 @Configuration
@@ -73,4 +76,12 @@ class V6ReadConfig(
     @Bean
     fun restControllerExceptionHandler(): RestControllerExceptionHandler =
         RestControllerExceptionHandler()
+
+    @Bean
+    @ConditionalOnProperty(name = ["expectation.v6.urgent.enabled"], havingValue = "true")
+    fun urgentTriggerPublisher(
+        kafkaTemplate: KafkaTemplate<String, String>,
+        objectMapper: ObjectMapper,
+        @Value("\${expectation.v6.urgent.request-topic}") topic: String
+    ): UrgentTriggerPublisher = UrgentTriggerPublisher(kafkaTemplate, objectMapper, topic)
 }

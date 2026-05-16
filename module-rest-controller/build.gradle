@@ -30,6 +30,9 @@ dependencies {
 	// Redis for V6 read model cache
 	implementation(libs.spring.boot.starter.data.redis)
 
+	// Kafka for urgent pipeline trigger
+	implementation(libs.spring.kafka)
+
 	// Jackson
 	implementation(libs.jackson.module.kotlin)
 

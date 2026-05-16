@@ -48,3 +48,4 @@ expectation:
       request-topic: urgent-character-request
       not-found-topic: urgent-character-not-found
       negative-cache-ttl-seconds: 3600            # 1 hour
+      pending-ttl-seconds: 30                     # urgent dedup TTL

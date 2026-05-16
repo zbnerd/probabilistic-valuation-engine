@@ -1,5 +1,6 @@
 package maple.restcontroller.config
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import maple.restcontroller.advice.RestControllerExceptionHandler
 import maple.restcontroller.controller.ExpectationV6Controller
@@ -9,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.scheduling.annotation.EnableScheduling
 
 @Configuration
@@ -35,6 +37,12 @@ class V6ReadConfig(
     ): V6ReadMetrics = V6ReadMetrics(meterRegistry, buffer, registry)
 
     @Bean
+    fun readModelQueryService(
+        jdbc: NamedParameterJdbcTemplate,
+        objectMapper: ObjectMapper
+    ): ReadModelQueryService = ReadModelQueryService(jdbc, objectMapper)
+
+    @Bean
     fun expectationReadFacade(
         registry: InflightRequestRegistry,
         buffer: LocalRequestBuffer,
@@ -44,8 +52,10 @@ class V6ReadConfig(
     @Bean
     fun batchReadScheduler(
         buffer: LocalRequestBuffer,
-        registry: InflightRequestRegistry
-    ): BatchReadScheduler = BatchReadScheduler(buffer, registry, properties)
+        registry: InflightRequestRegistry,
+        queryService: ReadModelQueryService,
+        v6ReadMetrics: V6ReadMetrics
+    ): BatchReadScheduler = BatchReadScheduler(buffer, registry, queryService, v6ReadMetrics, properties)
 
     @Bean
     fun expectationV6Controller(

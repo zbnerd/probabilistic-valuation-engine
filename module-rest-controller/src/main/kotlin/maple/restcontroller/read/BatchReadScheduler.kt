@@ -1,6 +1,7 @@
 package maple.restcontroller.read
 
 import maple.restcontroller.config.V6ReadProperties
+import maple.restcontroller.metrics.V6ReadMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.http.ResponseEntity
@@ -10,6 +11,8 @@ import java.util.concurrent.TimeUnit
 class BatchReadScheduler(
     private val buffer: LocalRequestBuffer,
     private val registry: InflightRequestRegistry,
+    private val queryService: ReadModelQueryService,
+    private val metrics: V6ReadMetrics,
     private val properties: V6ReadProperties
 ) : SmartLifecycle {
 
@@ -37,12 +40,12 @@ class BatchReadScheduler(
             TimeUnit.SECONDS.toNanos(properties.shutdownDrainTimeoutSeconds)
 
         var drained = 0
+        var failed = 0
         while (!buffer.isEmpty() && System.nanoTime() < deadlineNanos) {
             val batch = buffer.drain(properties.maxBatchSize)
-            batch.forEach { request ->
-                registry.getAndRemove(request.userIgn)
-            }
-            drained += batch.size
+            val resolved = resolveBatch(batch)
+            drained += resolved
+            failed += batch.size - resolved
         }
 
         // Resolve any drained-but-unhandled deferreds with 503
@@ -62,8 +65,30 @@ class BatchReadScheduler(
             )
         }
 
-        log.info("BatchReadScheduler stopped — drained={}, remaining={}", drained, remaining)
+        log.info("BatchReadScheduler stopped — resolved={}, failed={}, remaining={}", drained, failed, remaining)
         callback.run()
+    }
+
+    private fun resolveBatch(batch: List<ReadRequest>): Int {
+        if (batch.isEmpty()) return 0
+
+        val requests = batch.associate { it.userIgn to it.presetNo }
+        val results = queryService.batchQuery(requests)
+        var resolved = 0
+
+        batch.forEach { request ->
+            val deferreds = registry.getAndRemove(request.userIgn)
+            val response = results[request.userIgn]
+
+            if (response != null) {
+                metrics.recordHit()
+                deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
+                resolved++
+            } else {
+                metrics.recordMiss("read_model_empty")
+            }
+        }
+        return resolved
     }
 
     override fun isRunning(): Boolean = running
@@ -78,7 +103,8 @@ class BatchReadScheduler(
         val batch = buffer.drain(properties.maxBatchSize)
         if (batch.isEmpty()) return
 
-        // Phase 1: drain buffer only. Actual processing + response wiring in Phase 2.
-        // DeferredResults time out via V6ReadProperties.requestTimeoutMs.
+        val sample = io.micrometer.core.instrument.Timer.start()
+        resolveBatch(batch)
+        sample.stop(metrics.batchLatency)
     }
 }

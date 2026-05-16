@@ -42,11 +42,20 @@ class ExpectationV6ControllerTest {
 
     @Test
     fun `should buffer valid request`() {
-        mockMvc.perform(get("/api/v6/characters/{userIgn}/expectation", "진격캐넌"))
+        mockMvc.perform(get("/api/v6/characters/{userIgn}/expectation", "진격캐넌")
+            .param("presetNo", "1"))
             .andExpect(status().isOk)
 
         assertThat(buffer.size()).isEqualTo(1)
         assertThat(registry.size()).isEqualTo(1)
+    }
+
+    @Test
+    fun `should use default presetNo when not specified`() {
+        mockMvc.perform(get("/api/v6/characters/{userIgn}/expectation", "진격캐넌"))
+            .andExpect(status().isOk)
+
+        assertThat(buffer.size()).isEqualTo(1)
     }
 
     @Test

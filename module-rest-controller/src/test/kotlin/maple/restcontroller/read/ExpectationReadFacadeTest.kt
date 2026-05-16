@@ -24,9 +24,9 @@ class ExpectationReadFacadeTest {
         facade = ExpectationReadFacade(registry, buffer, metrics)
     }
 
-    private fun enqueue(ign: String): DeferredResult<ResponseEntity<*>> {
+    private fun enqueue(ign: String, presetNo: Int = 1): DeferredResult<ResponseEntity<*>> {
         val deferred = DeferredResult<ResponseEntity<*>>()
-        facade.enqueue(ign, deferred)
+        facade.enqueue(ign, presetNo, deferred)
         return deferred
     }
 
@@ -57,10 +57,10 @@ class ExpectationReadFacadeTest {
         val fullFacade = ExpectationReadFacade(registry, smallBuffer, smallMetrics)
 
         val d1 = DeferredResult<ResponseEntity<*>>()
-        fullFacade.enqueue("a", d1)
+        fullFacade.enqueue("a", 1, d1)
 
         val d2 = DeferredResult<ResponseEntity<*>>()
-        fullFacade.enqueue("b", d2)
+        fullFacade.enqueue("b", 1, d2)
 
         assertThat(smallMetrics.bufferRejectedTotal.count()).isEqualTo(1.0)
         assertThat(d2.result).isNotNull

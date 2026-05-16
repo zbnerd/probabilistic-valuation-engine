@@ -5,6 +5,7 @@ import maple.synchronizer.builder.EquipmentDocumentBuilder
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.preparer.EquipmentDocumentPreparer
 import maple.synchronizer.repository.EquipmentReadModelRepository
+import maple.synchronizer.resolver.OcidUserIgnResolver
 import maple.synchronizer.storage.ResultFileReader
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component
 class DefaultChunkProcessor(
     private val resultFileReader: ResultFileReader,
     private val readModelRepository: EquipmentReadModelRepository,
+    private val ocidUserIgnResolver: OcidUserIgnResolver,
     private val metrics: SynchronizerMetrics,
     objectMapper: com.fasterxml.jackson.databind.ObjectMapper,
 ) : ChunkProcessor {
@@ -27,8 +29,14 @@ class DefaultChunkProcessor(
             resultFileReader.readAndGroupByCompositeKey(input.objectKey)
         }
 
+        val ocids = grouped.map { it.ocid }.toSet()
+        val ocidToUserIgn = ocidUserIgnResolver.resolve(ocids)
+
         val documents = timed(metrics.documentBuildTimer()) {
-            grouped.map { documentBuilder.build(input.sourceRunId, input.sourceChunkId, it) }
+            grouped.map { g ->
+                val withUserIgn = g.copy(userIgn = ocidToUserIgn[g.ocid])
+                documentBuilder.build(input.sourceRunId, input.sourceChunkId, withUserIgn)
+            }
         }
 
         val itemsCount = grouped.sumOf { it.items.size.toLong() }

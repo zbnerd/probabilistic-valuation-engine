@@ -21,15 +21,16 @@ class ExpectationV6Controller(
 
     @GetMapping("/{userIgn}/expectation")
     fun getExpectation(
-        @PathVariable @ValidUserIgn userIgn: String
+        @PathVariable @ValidUserIgn userIgn: String,
+        @RequestParam(defaultValue = "1") presetNo: Int
     ): DeferredResult<ResponseEntity<*>> {
-        log.debug("V6 read request userIgn={}", maskIgn(userIgn))
+        log.debug("V6 read request userIgn={} presetNo={}", maskIgn(userIgn), presetNo)
 
         val deferred = DeferredResult<ResponseEntity<*>>(
             properties.requestTimeoutMs
         )
 
-        facade.enqueue(userIgn, deferred)
+        facade.enqueue(userIgn, presetNo, deferred)
 
         return deferred
     }

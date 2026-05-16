@@ -8,6 +8,7 @@ import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.repository.SynchronizerChunkStatusRepository
 import maple.synchronizer.storage.BasicChunkFileReader
 import maple.synchronizer.storage.BasicRecord
+import maple.expectation.util.StringMaskingUtils.maskIgn
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Value
@@ -181,7 +182,7 @@ class BasicSnapshotChunkConsumer(
                     .addValue("userIgn", record.userIgn)
                     .addValue("ocid", record.ocid)
             )
-            log.info("[BasicSync] upserted OCID to game_character: userIgn={}", record.userIgn)
+            log.info("[BasicSync] upserted OCID to game_character: userIgn={}", maskIgn(record.userIgn))
         }
     }
 

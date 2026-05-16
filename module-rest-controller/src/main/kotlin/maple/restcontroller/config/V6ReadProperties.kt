@@ -10,4 +10,5 @@ class V6ReadProperties {
     var maxBatchSize: Int = 200
     var queueCapacity: Int = 5000
     var shutdownDrainTimeoutSeconds: Long = 5
+    var cacheTtlSeconds: Long = 300
 }

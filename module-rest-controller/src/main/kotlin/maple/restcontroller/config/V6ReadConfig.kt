@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.scheduling.annotation.EnableScheduling
 
@@ -43,6 +44,12 @@ class V6ReadConfig(
     ): ReadModelQueryService = ReadModelQueryService(jdbc, objectMapper)
 
     @Bean
+    fun readModelCacheService(
+        redisTemplate: StringRedisTemplate,
+        objectMapper: ObjectMapper
+    ): ReadModelCacheService = ReadModelCacheService(redisTemplate, objectMapper, properties)
+
+    @Bean
     fun expectationReadFacade(
         registry: InflightRequestRegistry,
         buffer: LocalRequestBuffer,
@@ -54,8 +61,9 @@ class V6ReadConfig(
         buffer: LocalRequestBuffer,
         registry: InflightRequestRegistry,
         queryService: ReadModelQueryService,
+        cacheService: ReadModelCacheService,
         v6ReadMetrics: V6ReadMetrics
-    ): BatchReadScheduler = BatchReadScheduler(buffer, registry, queryService, v6ReadMetrics, properties)
+    ): BatchReadScheduler = BatchReadScheduler(buffer, registry, queryService, cacheService, v6ReadMetrics, properties)
 
     @Bean
     fun expectationV6Controller(

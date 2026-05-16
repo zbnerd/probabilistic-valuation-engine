@@ -27,6 +27,9 @@ dependencies {
 	implementation(libs.spring.boot.starter.jdbc)
 	runtimeOnly(libs.postgresql)
 
+	// Redis for V6 read model cache
+	implementation(libs.spring.boot.starter.data.redis)
+
 	// Jackson
 	implementation(libs.jackson.module.kotlin)
 

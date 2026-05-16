@@ -36,6 +36,14 @@ class V6ReadMetrics(
         .description("V6 read model cache hits")
         .register(meterRegistry)
 
+    private val redisHitCounter: Counter = Counter.builder("v6_redis_hit_total")
+        .description("V6 Redis cache hits")
+        .register(meterRegistry)
+
+    private val dbHitCounter: Counter = Counter.builder("v6_db_hit_total")
+        .description("V6 DB query hits (cache miss -> DB fallback)")
+        .register(meterRegistry)
+
     private val missCounters = mutableMapOf<String, Counter>()
     private val meterRegistry = meterRegistry
 
@@ -44,6 +52,10 @@ class V6ReadMetrics(
         .register(meterRegistry)
 
     fun recordHit() = hitCounter.increment()
+
+    fun recordRedisHit() = redisHitCounter.increment()
+
+    fun recordDbHit() = dbHitCounter.increment()
 
     fun recordMiss(reason: String) {
         val counter = missCounters.getOrPut(reason) {

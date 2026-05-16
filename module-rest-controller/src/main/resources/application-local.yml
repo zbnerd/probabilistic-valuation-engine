@@ -1,1 +1,5 @@
 # Local profile overrides
+
+expectation:
+  v6:
+    enabled: true

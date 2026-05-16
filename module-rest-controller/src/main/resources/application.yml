@@ -1,14 +1,26 @@
 server:
   port: 8084
+  shutdown: graceful
 
 spring:
   application:
     name: rest-controller
   main:
     banner-mode: off
+  lifecycle:
+    timeout-per-shutdown-phase: 10s
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
+
+expectation:
+  v6:
+    enabled: false                    # feature flag — enable per environment
+    batch-window-ms: 10               # scheduler drain interval (Phase 2)
+    request-timeout-ms: 1500          # DeferredResult timeout
+    max-batch-size: 200               # scheduler batch size (Phase 2)
+    queue-capacity: 5000              # RequestBuffer max capacity
+    shutdown-drain-timeout-seconds: 5 # graceful shutdown deadline

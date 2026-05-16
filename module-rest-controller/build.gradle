@@ -10,12 +10,14 @@ plugins {
 
 dependencies {
 	implementation project(':module-common')
+	implementation project(':module-core')
 
 	implementation(libs.kotlin.stdlib)
 	implementation(libs.kotlin.reflect)
 
 	// Spring Web
 	implementation(libs.spring.boot.starter.web)
+	implementation(libs.spring.boot.starter.validation)
 
 	// Actuator
 	implementation(libs.spring.boot.starter.actuator)

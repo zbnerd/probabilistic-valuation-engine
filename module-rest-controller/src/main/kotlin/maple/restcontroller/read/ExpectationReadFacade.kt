@@ -42,9 +42,7 @@ class ExpectationReadFacade(
         deferred.onTimeout {
             metrics.timeoutTotal.increment()
             deferred.setErrorResult(
-                ResponseEntity.accepted()
-                    .header("X-Task-Id", userIgn)
-                    .build<Any>()
+                ResponseEntity.accepted().build<Any>()
             )
         }
 

@@ -9,6 +9,10 @@ spring:
     banner-mode: off
   lifecycle:
     timeout-per-shutdown-phase: 10s
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
 
 management:
   endpoints:

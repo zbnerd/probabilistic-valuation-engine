@@ -23,6 +23,10 @@ dependencies {
 	implementation(libs.spring.boot.starter.actuator)
 	implementation(libs.micrometer.registry.prometheus)
 
+	// JDBC for read model queries
+	implementation(libs.spring.boot.starter.jdbc)
+	runtimeOnly(libs.postgresql)
+
 	// Jackson
 	implementation(libs.jackson.module.kotlin)
 

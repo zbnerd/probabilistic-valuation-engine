@@ -105,3 +105,4 @@ load-test-scripts/wrk-*.lua
 
 # App logs
 module-app/logs/
+module-*/logs/

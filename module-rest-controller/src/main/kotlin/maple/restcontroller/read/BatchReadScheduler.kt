@@ -1,7 +1,10 @@
 package maple.restcontroller.read
 
+import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.metrics.V6ReadMetrics
+import maple.restcontroller.urgent.UrgentCharacterRequest
+import maple.restcontroller.urgent.UrgentTriggerPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.http.ResponseEntity
@@ -13,6 +16,7 @@ class BatchReadScheduler(
     private val registry: InflightRequestRegistry,
     private val queryService: ReadModelQueryService,
     private val cacheService: ReadModelCacheService,
+    private val urgentPublisher: UrgentTriggerPublisher?,
     private val metrics: V6ReadMetrics,
     private val properties: V6ReadProperties
 ) : SmartLifecycle {
@@ -107,6 +111,26 @@ class BatchReadScheduler(
                     resolved++
                 } else {
                     metrics.recordMiss("read_model_empty")
+
+                    // Check negative cache first (character previously confirmed not found by Nexon)
+                    if (cacheService.getNegativeCache(userIgn)) {
+                        val notFoundResponse = ResponseEntity.status(404)
+                            .header("X-Error-Reason", "character-not-found")
+                            .build<Any>()
+                        deferreds.forEach { it.setResult(notFoundResponse) }
+                        resolved++
+                        return@forEach
+                    }
+
+                    // Trigger urgent pipeline (with dedup via Redis SETNX)
+                    if (urgentPublisher != null && cacheService.tryMarkUrgentPending(userIgn)) {
+                        val presetNo = cacheMisses[userIgn] ?: 1
+                        urgentPublisher.publish(UrgentCharacterRequest(userIgn = userIgn, presetNo = presetNo))
+                        metrics.urgentTriggerTotal.increment()
+                        log.info("Triggered urgent pipeline: userIgn={}", maskIgn(userIgn))
+                    }
+
+                    // Otherwise DeferredResult will time out → 202 Accepted
                 }
             }
         }

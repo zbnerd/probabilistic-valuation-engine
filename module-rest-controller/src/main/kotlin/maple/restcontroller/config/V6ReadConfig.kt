@@ -7,6 +7,7 @@ import maple.restcontroller.controller.ExpectationV6Controller
 import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.read.*
 import maple.restcontroller.urgent.UrgentTriggerPublisher
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -65,8 +66,13 @@ class V6ReadConfig(
         registry: InflightRequestRegistry,
         queryService: ReadModelQueryService,
         cacheService: ReadModelCacheService,
-        v6ReadMetrics: V6ReadMetrics
-    ): BatchReadScheduler = BatchReadScheduler(buffer, registry, queryService, cacheService, v6ReadMetrics, properties)
+        v6ReadMetrics: V6ReadMetrics,
+        urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>
+    ): BatchReadScheduler = BatchReadScheduler(
+        buffer, registry, queryService, cacheService,
+        urgentPublisherProvider.ifAvailable,
+        v6ReadMetrics, properties
+    )
 
     @Bean
     fun expectationV6Controller(

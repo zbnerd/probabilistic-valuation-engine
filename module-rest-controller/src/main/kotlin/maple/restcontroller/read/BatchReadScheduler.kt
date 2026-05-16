@@ -92,9 +92,17 @@ class BatchReadScheduler(
             resolved++
         }
 
-        // 3. DB batch query for cache misses only
+        // 3. DB batch query for cache misses only (skip characters with urgent pending)
         if (cacheMisses.isNotEmpty()) {
-            val dbResults = queryService.batchQuery(cacheMisses)
+            val dbLookupCandidates = cacheMisses.filterKeys { userIgn ->
+                !cacheService.isUrgentPending(userIgn)
+            }
+
+            val dbResults = if (dbLookupCandidates.isNotEmpty()) {
+                queryService.batchQuery(dbLookupCandidates)
+            } else {
+                emptyMap()
+            }
 
             // 4. Write DB results to Redis cache
             cacheService.multiPut(dbResults)

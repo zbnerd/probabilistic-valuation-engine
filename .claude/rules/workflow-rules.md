@@ -28,7 +28,20 @@
    - 202만 보고 성공 판단 금지 — 비동기 파이프라인 전체 완료까지 로그로 추적
 4. **컴파일 + 테스트 통과 ≠ 런타임 정상 동작 보장** — 반드시 실제 서버에서 검증
 
-## 11. 검증 명령어
+## 11. 테스트용 userIGN 우선순위
+
+userIGN이 필요한 테스트 및 런타임 검증 시 다음 순서로 선택:
+
+1. **1순위 (고정 캐릭터):** `진격캐넌`, `아델`, `강은호`
+2. **2순위 (CSV 랜덤 추출):** `module-app/src/main/resources/data/userIgn_List.csv`에서 추출
+   ```bash
+   # 1개 추출
+   shuf -n 1 module-app/src/main/resources/data/userIgn_List.csv
+   # 여러개 추출 (필요 시)
+   shuf -n 3 module-app/src/main/resources/data/userIgn_List.csv
+   ```
+
+## 12. 검증 명령어
 
 ```bash
 ./gradlew compileKotlin compileJava --continue  # 컴파일 확인
@@ -37,13 +50,13 @@
 - 컴파일검증시 --continue 반드시 사용할것.
 - 컴파일, 테스트 검증시 처음부터 실패하는경우, 에러나는경우만 메시지 나타나도록 할것. 없으면 성공.
 
-## 12. Flaky Test Prevention
+## 13. Flaky Test Prevention
 - kotlin `delay()` 사용금지
 - `Thread.sleep()` 금지 → `Awaitility` 사용
 - 테스트 간 상태 공유 금지
 - `@DirtiesContext` 남용 금지
 
-## 13. 부하테스트 (Load Test)
+## 14. 부하테스트 (Load Test)
 
 **기본 명령어:**
 ```bash

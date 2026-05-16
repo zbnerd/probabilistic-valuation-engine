@@ -1,6 +1,7 @@
 package maple.restcontroller.read
 
 import maple.restcontroller.config.V6ReadProperties
+import maple.restcontroller.metrics.V6ReadMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.http.ResponseEntity
@@ -10,6 +11,8 @@ import java.util.concurrent.TimeUnit
 class BatchReadScheduler(
     private val buffer: LocalRequestBuffer,
     private val registry: InflightRequestRegistry,
+    private val queryService: ReadModelQueryService,
+    private val metrics: V6ReadMetrics,
     private val properties: V6ReadProperties
 ) : SmartLifecycle {
 
@@ -78,7 +81,24 @@ class BatchReadScheduler(
         val batch = buffer.drain(properties.maxBatchSize)
         if (batch.isEmpty()) return
 
-        // Phase 1: drain buffer only. Actual processing + response wiring in Phase 2.
-        // DeferredResults time out via V6ReadProperties.requestTimeoutMs.
+        val requests = batch.associate { it.userIgn to it.presetNo }
+
+        val sample = io.micrometer.core.instrument.Timer.start()
+        val results = queryService.batchQuery(requests)
+        sample.stop(metrics.batchLatency)
+
+        batch.forEach { request ->
+            val deferreds = registry.getAndRemove(request.userIgn)
+            val response = results[request.userIgn]
+
+            if (response != null) {
+                metrics.recordHit()
+                deferreds.forEach { deferred ->
+                    deferred.setResult(ResponseEntity.ok(response))
+                }
+            } else {
+                metrics.recordMiss("read_model_empty")
+            }
+        }
     }
 }

@@ -3,6 +3,7 @@ package maple.restcontroller.metrics
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import maple.restcontroller.read.InflightRequestRegistry
 import maple.restcontroller.read.LocalRequestBuffer
 
@@ -30,6 +31,29 @@ class V6ReadMetrics(
     val bufferRejectedTotal: Counter = Counter.builder("v6_buffer_rejected_total")
         .description("Buffer full to 503 rejection count")
         .register(meterRegistry)
+
+    private val hitCounter: Counter = Counter.builder("v6_read_hit_total")
+        .description("V6 read model cache hits")
+        .register(meterRegistry)
+
+    private val missCounters = mutableMapOf<String, Counter>()
+    private val meterRegistry = meterRegistry
+
+    val batchLatency: Timer = Timer.builder("v6_batch_latency")
+        .description("V6 batch query latency")
+        .register(meterRegistry)
+
+    fun recordHit() = hitCounter.increment()
+
+    fun recordMiss(reason: String) {
+        val counter = missCounters.getOrPut(reason) {
+            Counter.builder("v6_read_miss_total")
+                .tag("reason", reason)
+                .description("V6 read model cache misses")
+                .register(meterRegistry)
+        }
+        counter.increment()
+    }
 
     init {
         Gauge.builder("v6_buffer_size", requestBuffer) { it.size().toDouble() }

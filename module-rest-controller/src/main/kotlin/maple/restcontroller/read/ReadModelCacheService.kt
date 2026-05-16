@@ -1,6 +1,7 @@
 package maple.restcontroller.read
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.restcontroller.config.V6ReadProperties
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -82,7 +83,7 @@ class ReadModelCacheService(
 
     fun setNegativeCache(userIgn: String, ttlSeconds: Long) {
         redisTemplate.opsForValue().set(negativeCacheKey(userIgn), "NOT_FOUND", Duration.ofSeconds(ttlSeconds))
-        log.info("Set negative cache: userIgn={}", userIgn)
+        log.info("Set negative cache: userIgn={}", maskIgn(userIgn))
     }
 
     // --- Urgent dedup (prevent duplicate triggers) ---

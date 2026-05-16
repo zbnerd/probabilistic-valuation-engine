@@ -28,12 +28,14 @@ data class GroupedEquipmentResult(
     val readKey: String,
     val ocid: String,
     val presetNo: Int,
+    val userIgn: String? = null,
     val items: List<CalculatedEquipmentItem>,
 )
 
 data class EquipmentReadDocument(
     val ocid: String,
     val presetNo: Int,
+    val userIgn: String? = null,
     val summary: EquipmentSummary,
     val equipment: List<Map<String, Any?>>,
     val metadata: EquipmentReadMetadata,

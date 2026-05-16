@@ -8,6 +8,7 @@ import maple.synchronizer.domain.GroupedEquipmentResult
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.preparer.EquipmentDocumentPreparer
 import maple.synchronizer.repository.EquipmentReadModelRepository
+import maple.synchronizer.resolver.OcidUserIgnResolver
 import maple.synchronizer.storage.ResultFileReader
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -24,6 +25,7 @@ class DefaultChunkProcessorTest {
 
     private val resultFileReader: ResultFileReader = mock()
     private val readModelRepository: EquipmentReadModelRepository = mock()
+    private val ocidUserIgnResolver: OcidUserIgnResolver = mock()
     private val metrics = SynchronizerMetrics(SimpleMeterRegistry())
     private val objectMapper = ObjectMapper().registerModule(JavaTimeModule())
 
@@ -31,7 +33,8 @@ class DefaultChunkProcessorTest {
 
     @BeforeEach
     fun setUp() {
-        chunkProcessor = DefaultChunkProcessor(resultFileReader, readModelRepository, metrics, objectMapper)
+        chunkProcessor = DefaultChunkProcessor(resultFileReader, readModelRepository, ocidUserIgnResolver, metrics, objectMapper)
+        whenever(ocidUserIgnResolver.resolve(any())).thenReturn(emptyMap())
     }
 
     @Test

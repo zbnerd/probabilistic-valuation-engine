@@ -13,14 +13,14 @@ class ExpectationReadFacade(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun enqueue(userIgn: String, deferred: DeferredResult<ResponseEntity<*>>) {
+    fun enqueue(userIgn: String, presetNo: Int, deferred: DeferredResult<ResponseEntity<*>>) {
         metrics.requestTotal.increment()
 
         val isFirst = registry.register(userIgn, deferred)
 
         if (isFirst) {
             metrics.dedupMissTotal.increment()
-            val request = ReadRequest(userIgn = userIgn)
+            val request = ReadRequest(userIgn = userIgn, presetNo = presetNo)
 
             if (!buffer.offer(request)) {
                 metrics.bufferRejectedTotal.increment()

@@ -52,10 +52,10 @@ class ReadModelQueryService(
                 presetNo = tree.get("presetNo")?.asInt() ?: 1,
                 totalCost = tree.get("summary")?.get("totalCost")?.decimalValue() ?: BigDecimal.ZERO,
                 equipmentCount = tree.get("summary")?.get("equipmentCount")?.asInt() ?: 0,
-                equipment = objectMapper.readValue(
-                    tree.get("equipment").toString(),
-                    objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java)
-                ),
+                equipment = tree.get("equipment")?.let {
+                    objectMapper.readValue(it.toString(),
+                        objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java))
+                } ?: emptyList(),
                 calculatedAt = Instant.parse(
                     tree.get("metadata")?.get("calculatedAt")?.asText()
                         ?: Instant.now().toString()

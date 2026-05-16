@@ -32,6 +32,10 @@ class V6ReadMetrics(
         .description("Buffer full to 503 rejection count")
         .register(meterRegistry)
 
+    val urgentTriggerTotal: Counter = Counter.builder("v6_urgent_trigger_total")
+        .description("Total urgent pipeline triggers")
+        .register(meterRegistry)
+
     private val hitCounter: Counter = Counter.builder("v6_read_hit_total")
         .description("V6 read model cache hits")
         .register(meterRegistry)

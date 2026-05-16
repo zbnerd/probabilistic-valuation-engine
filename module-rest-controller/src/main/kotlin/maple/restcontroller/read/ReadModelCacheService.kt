@@ -1,6 +1,7 @@
 package maple.restcontroller.read
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.restcontroller.config.V6ReadProperties
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -15,6 +16,8 @@ class ReadModelCacheService(
 
     companion object {
         private const val KEY_PREFIX = "v6:read"
+        private const val NEGATIVE_KEY_PREFIX = "v6:not-found"
+        private const val URGENT_PENDING_PREFIX = "v6:urgent-pending"
     }
 
     fun cacheKey(userIgn: String, presetNo: Int): String =
@@ -68,5 +71,28 @@ class ReadModelCacheService(
         }
 
         log.debug("Redis cache write: {} entries, TTL={}s", results.size, ttl.seconds)
+    }
+
+    // --- Negative cache (non-existent characters) ---
+
+    fun negativeCacheKey(userIgn: String): String = "$NEGATIVE_KEY_PREFIX:$userIgn"
+
+    fun getNegativeCache(userIgn: String): Boolean {
+        return redisTemplate.hasKey(negativeCacheKey(userIgn))
+    }
+
+    fun setNegativeCache(userIgn: String, ttlSeconds: Long) {
+        redisTemplate.opsForValue().set(negativeCacheKey(userIgn), "NOT_FOUND", Duration.ofSeconds(ttlSeconds))
+        log.info("Set negative cache: userIgn={}", maskIgn(userIgn))
+    }
+
+    // --- Urgent dedup (prevent duplicate triggers) ---
+
+    fun urgentPendingKey(userIgn: String): String = "$URGENT_PENDING_PREFIX:$userIgn"
+
+    fun tryMarkUrgentPending(userIgn: String, ttlSeconds: Long = 30): Boolean {
+        val result = redisTemplate.opsForValue()
+            .setIfAbsent(urgentPendingKey(userIgn), "1", Duration.ofSeconds(ttlSeconds))
+        return result == true
     }
 }

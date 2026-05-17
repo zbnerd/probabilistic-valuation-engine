@@ -17,6 +17,15 @@ object StringMaskingUtils {
     private const val CACHE_KEY_REPLACEMENT = "$1***"
 
     /**
+     * IGN 마스킹: 앞 1자리 + "***"
+     */
+    @JvmStatic
+    fun maskIgn(value: String?): String {
+        if (value.isNullOrBlank()) return "***"
+        return value.take(1) + "***"
+    }
+
+    /**
      * OCID 마스킹: 앞 4자리 + "***"
      *
      * @param value OCID 문자열

@@ -63,6 +63,95 @@ services:
     depends_on:
       - prometheus
 
+  # Kafka (Message Queue)
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: maple-kafka
+    restart: always
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,HOST://localhost:9092
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,HOST://0.0.0.0:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CLUSTER_ID: maple-kafka-cluster
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Retention settings to prevent disk fill
+      KAFKA_LOG_RETENTION_HOURS: 48
+      KAFKA_LOG_RETENTION_BYTES: 5368709120   # 5GB
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824     # 1GB segments
+      KAFKA_LOG_CLEANUP_POLICY: delete
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - maple-network
+    depends_on:
+      - postgres
+
+  # Redis (Cache)
+  redis:
+    image: redis:7-alpine
+    container_name: maple-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - maple-network
+
+  # Elasticsearch
+  elasticsearch:
+    image: elasticsearch:8.17.0
+    container_name: maple-elasticsearch
+    restart: always
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - maple-network
+
+  # Kibana
+  kibana:
+    image: kibana:8.17.0
+    container_name: maple-kibana
+    restart: always
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - maple-network
+    depends_on:
+      - elasticsearch
+
+  # Fluent Bit (Log Shipper)
+  fluent-bit:
+    image: fluent/fluent-bit:3.2
+    container_name: maple-fluent-bit
+    restart: always
+    command: -c /fluent-bit/etc/fluent-bit.conf -R /fluent-bit/etc/parsers.conf
+    volumes:
+      - ./docker/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./docker/fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - .:/var/log/app:ro
+    networks:
+      - maple-network
+    depends_on:
+      - elasticsearch
+
 networks:
   maple-network:
     driver: bridge
@@ -74,3 +163,6 @@ volumes:
   prometheus_data:
   grafana_data:
   postgres_data:
+  kafka_data:
+  redis_data:
+  elasticsearch_data:

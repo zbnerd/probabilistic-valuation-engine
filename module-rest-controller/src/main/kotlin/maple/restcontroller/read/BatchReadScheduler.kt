@@ -1,10 +1,7 @@
 package maple.restcontroller.read
 
-import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.metrics.V6ReadMetrics
-import maple.restcontroller.urgent.UrgentCharacterRequest
-import maple.restcontroller.urgent.UrgentTriggerPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.http.ResponseEntity
@@ -15,8 +12,6 @@ class BatchReadScheduler(
     private val buffer: LocalRequestBuffer,
     private val registry: InflightRequestRegistry,
     private val queryService: ReadModelQueryService,
-    private val cacheService: ReadModelCacheService,
-    private val urgentPublisher: UrgentTriggerPublisher?,
     private val metrics: V6ReadMetrics,
     private val properties: V6ReadProperties
 ) : SmartLifecycle {
@@ -78,71 +73,21 @@ class BatchReadScheduler(
         if (batch.isEmpty()) return 0
 
         val requests = batch.associate { it.userIgn to it.presetNo }
+        val results = queryService.batchQuery(requests)
         var resolved = 0
 
-        // 1. Redis cache lookup — split hits / misses
-        val (cacheHits, cacheMisses) = cacheService.multiGet(requests)
+        batch.forEach { request ->
+            val deferreds = registry.getAndRemove(request.userIgn)
+            val response = results[request.userIgn]
 
-        // 2. Resolve cache hits directly
-        cacheHits.forEach { (userIgn, response) ->
-            val deferreds = registry.getAndRemove(userIgn)
-            metrics.recordHit()
-            metrics.recordRedisHit()
-            deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
-            resolved++
-        }
-
-        // 3. DB batch query for cache misses only (skip characters with urgent pending)
-        if (cacheMisses.isNotEmpty()) {
-            val dbLookupCandidates = cacheMisses.filterKeys { userIgn ->
-                !cacheService.isUrgentPending(userIgn)
-            }
-
-            val dbResults = if (dbLookupCandidates.isNotEmpty()) {
-                queryService.batchQuery(dbLookupCandidates)
+            if (response != null) {
+                metrics.recordHit()
+                deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
+                resolved++
             } else {
-                emptyMap()
-            }
-
-            // 4. Write DB results to Redis cache
-            cacheService.multiPut(dbResults)
-
-            // 5. Resolve miss deferreds
-            cacheMisses.keys.forEach { userIgn ->
-                val deferreds = registry.getAndRemove(userIgn)
-                val response = dbResults[userIgn]
-
-                if (response != null) {
-                    metrics.recordHit()
-                    metrics.recordDbHit()
-                    deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
-                    resolved++
-                } else {
-                    metrics.recordMiss("read_model_empty")
-
-                    // Check negative cache first (character previously confirmed not found by Nexon)
-                    if (cacheService.getNegativeCache(userIgn)) {
-                        val notFoundResponse = ResponseEntity.status(404)
-                            .header("X-Error-Reason", "character-not-found")
-                            .build<Any>()
-                        deferreds.forEach { it.setResult(notFoundResponse) }
-                        resolved++
-                        return@forEach
-                    }
-
-                    // Trigger urgent pipeline (with dedup via Redis SETNX)
-                    if (urgentPublisher != null && cacheService.tryMarkUrgentPending(userIgn)) {
-                        val presetNo = cacheMisses[userIgn] ?: 1
-                        urgentPublisher.publish(UrgentCharacterRequest(userIgn = userIgn, presetNo = presetNo))
-                        metrics.urgentTriggerTotal.increment()
-                        log.info("Triggered urgent pipeline: userIgn={}", maskIgn(userIgn))
-                    }
-
-                    // Otherwise DeferredResult will time out → 202 Accepted
-                }
+                metrics.recordMiss("read_model_empty")
             }
         }
-
         return resolved
     }
 

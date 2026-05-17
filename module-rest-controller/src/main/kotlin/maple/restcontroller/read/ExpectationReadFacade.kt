@@ -1,34 +1,35 @@
 package maple.restcontroller.read
 
-import maple.expectation.util.StringMaskingUtils.maskIgn
-import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.metrics.V6ReadMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.context.request.async.DeferredResult
+import maple.expectation.util.StringMaskingUtils.maskIgn
 
 class ExpectationReadFacade(
     private val registry: InflightRequestRegistry,
     private val buffer: RequestBuffer,
-    private val metrics: V6ReadMetrics,
-    private val cacheService: ReadModelCacheService,
-    private val properties: V6ReadProperties,
+    private val metrics: V6ReadMetrics
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun enqueue(userIgn: String, presetNo: Int, deferred: DeferredResult<ResponseEntity<*>>) {
         metrics.requestTotal.increment()
-        val firstRequest = registry.register(userIgn, deferred)
-        if (firstRequest) {
+
+        val isFirst = registry.register(userIgn, deferred)
+
+        if (isFirst) {
             metrics.dedupMissTotal.increment()
-            if (!buffer.offer(ReadRequest(userIgn = userIgn, presetNo = presetNo))) {
+            val request = ReadRequest(userIgn = userIgn, presetNo = presetNo)
+
+            if (!buffer.offer(request)) {
                 metrics.bufferRejectedTotal.increment()
                 registry.cleanup(userIgn, deferred)
                 log.warn("Buffer full, rejecting request userIgn={}", maskIgn(userIgn))
                 deferred.setErrorResult(
                     ResponseEntity.status(503)
                         .header("Retry-After", "1")
-                        .build<Any>(),
+                        .build<Any>()
                 )
                 return
             }
@@ -41,12 +42,10 @@ class ExpectationReadFacade(
         deferred.onTimeout {
             metrics.timeoutTotal.increment()
             deferred.setErrorResult(
-                ResponseEntity.accepted()
-                    .header("Location", cacheService.statusUrl(userIgn, presetNo))
-                    .header("Retry-After", properties.statusRetryAfterSeconds.toString())
-                    .body(cacheService.status(userIgn, presetNo)),
+                ResponseEntity.accepted().build<Any>()
             )
         }
+
         deferred.onCompletion {
             registry.cleanup(userIgn, deferred)
         }

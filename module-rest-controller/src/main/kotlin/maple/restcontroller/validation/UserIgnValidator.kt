@@ -4,12 +4,15 @@ import jakarta.validation.ConstraintValidator
 import jakarta.validation.ConstraintValidatorContext
 
 class UserIgnValidator : ConstraintValidator<ValidUserIgn, String> {
+
     override fun isValid(value: String?, context: ConstraintValidatorContext): Boolean {
         if (value.isNullOrBlank()) return false
+        if (value.length > 12) return false
+        if (value.length < 2) return false
         return IGN_PATTERN.matches(value)
     }
 
     companion object {
-        private val IGN_PATTERN = Regex("^[가-힣a-zA-Z0-9]{2,12}$")
+        private val IGN_PATTERN = Regex("^[a-zA-Z0-9가-힣]+$")
     }
 }

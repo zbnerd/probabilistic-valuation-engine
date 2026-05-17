@@ -13,21 +13,6 @@ spring:
     hikari:
       maximum-pool-size: 5
       minimum-idle: 2
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-      acks: all
-      retries: 3
-    consumer:
-      group-id: rest-controller-urgent-feedback
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-    listener:
-      ack-mode: manual_immediate
 
 management:
   endpoints:
@@ -43,11 +28,3 @@ expectation:
     max-batch-size: 200               # scheduler batch size (Phase 2)
     queue-capacity: 5000              # RequestBuffer max capacity
     shutdown-drain-timeout-seconds: 5 # graceful shutdown deadline
-    status-retry-after-seconds: 3     # frontend polling hint after 202/status
-    status-estimated-throughput-per-second: 5.0 # approximate urgent pipeline throughput
-    urgent:
-      enabled: false                              # feature flag
-      request-topic: urgent-character-request
-      not-found-topic: urgent-character-not-found
-      negative-cache-ttl-seconds: 3600            # 1 hour
-      pending-ttl-seconds: 30                     # urgent dedup TTL

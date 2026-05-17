@@ -14,8 +14,15 @@ class ReadModelQueryService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * @param requests userIgn -> presetNo mapping
+     * @return userIgn -> V6ExpectationResponse for hits only
+     */
     fun batchQuery(requests: Map<String, Int>): Map<String, V6ExpectationResponse> {
         if (requests.isEmpty()) return emptyMap()
+
+        val userIgns = requests.keys.toList()
+        val presetNos = requests.values.distinct()
 
         val sql = """
             SELECT user_ign, preset_no, document, total_cost, equipment_count, calculated_at
@@ -24,38 +31,34 @@ class ReadModelQueryService(
               AND preset_no IN (:presetNos)
               AND user_ign IS NOT NULL
         """.trimIndent()
-        val params = MapSqlParameterSource()
-            .addValue("userIgns", requests.keys.toList())
-            .addValue("presetNos", requests.values.distinct())
 
-        val rows = jdbc.queryForList(sql, params)
-        val result = LinkedHashMap<String, V6ExpectationResponse>()
-        rows.forEach { row ->
+        val params = MapSqlParameterSource()
+            .addValue("userIgns", userIgns)
+            .addValue("presetNos", presetNos)
+
+        @Suppress("UNCHECKED_CAST")
+        val rows = jdbc.queryForList(sql, params, Map::class.java) as List<Map<String, Any>>
+
+        return rows.associate { row ->
             val userIgn = row["user_ign"].toString()
-            val document = row["document"] as ByteArray
-            val node = objectMapper.readTree(GzipUtils.decompress(document))
-            val summary = node["summary"]
-            val equipmentNode = node["equipment"]
-            val equipment = if (equipmentNode != null && !equipmentNode.isNull) {
-                objectMapper.readValue(
-                    equipmentNode.toString(),
-                    objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java),
-                ) as List<Map<String, Any>>
-            } else {
-                emptyList()
-            }
-            result[userIgn] = V6ExpectationResponse(
+            val compressed = row["document"] as ByteArray
+            val json = GzipUtils.decompress(compressed)
+            val tree = objectMapper.readTree(json)
+
+            userIgn to V6ExpectationResponse(
                 userIgn = userIgn,
-                presetNo = node["presetNo"]?.asInt() ?: (row["preset_no"] as Number).toInt(),
-                totalCost = summary?.get("totalCost")?.decimalValue() ?: (row["total_cost"] as? BigDecimal ?: BigDecimal.ZERO),
-                equipmentCount = summary?.get("equipmentCount")?.asInt() ?: (row["equipment_count"] as? Number)?.toInt() ?: 0,
-                equipment = equipment,
-                calculatedAt = node["metadata"]?.get("calculatedAt")?.asText()?.let(Instant::parse)
-                    ?: (row["calculated_at"] as? java.sql.Timestamp)?.toInstant()
-                    ?: Instant.now(),
+                presetNo = tree.get("presetNo")?.asInt() ?: 1,
+                totalCost = tree.get("summary")?.get("totalCost")?.decimalValue() ?: BigDecimal.ZERO,
+                equipmentCount = tree.get("summary")?.get("equipmentCount")?.asInt() ?: 0,
+                equipment = tree.get("equipment")?.let {
+                    objectMapper.readValue(it.toString(),
+                        objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java))
+                } ?: emptyList(),
+                calculatedAt = Instant.parse(
+                    tree.get("metadata")?.get("calculatedAt")?.asText()
+                        ?: Instant.now().toString()
+                ),
             )
         }
-        log.debug("Read model query: requested={}, hits={}", requests.size, result.size)
-        return result
     }
 }

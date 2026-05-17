@@ -42,12 +42,6 @@ external-api:
     enabled: true
     run-on-startup: true
     skip-character-basic: false
-  urgent:
-    enabled: false                                    # feature flag for urgent pipeline
-    request-topic: urgent-character-request
-    not-found-topic: urgent-character-not-found
-    chunk-ready-topic: external-api.urgent.snapshot.chunk-ready
-    consumer-group-id: external-api-urgent-processor
   snapshot:
     chunk:
       character-basic:

@@ -2,13 +2,14 @@ package maple.restcontroller.validation
 
 import jakarta.validation.Constraint
 import jakarta.validation.Payload
-import kotlin.reflect.KClass
+import kotlin.annotation.AnnotationTarget.VALUE_PARAMETER
+import kotlin.annotation.AnnotationRetention.RUNTIME
 
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FIELD)
-@Retention(AnnotationRetention.RUNTIME)
+@Target(VALUE_PARAMETER)
+@Retention(RUNTIME)
 @Constraint(validatedBy = [UserIgnValidator::class])
 annotation class ValidUserIgn(
-    val message: String = "invalid userIgn",
-    val groups: Array<KClass<*>> = [],
-    val payload: Array<KClass<out Payload>> = [],
+    val message: String = "Invalid character name",
+    val groups: Array<kotlin.reflect.KClass<*>> = [],
+    val payload: Array<kotlin.reflect.KClass<out Payload>> = []
 )

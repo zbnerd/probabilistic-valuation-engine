@@ -37,6 +37,10 @@ spring:
       enable-auto-commit: false
     listener:
       ack-mode: manual_immediate
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 synchronizer:
   kafka:
@@ -50,6 +54,11 @@ synchronizer:
     base-path: ../module-external-api/external-api-data
   chunk:
     max-rows: 100000
+  ranking:
+    enabled: true
+    key-prefix: ranking:equipment:total-cost
+    batch-size: 1000
+    top-size: 10
 
 management:
   endpoints:

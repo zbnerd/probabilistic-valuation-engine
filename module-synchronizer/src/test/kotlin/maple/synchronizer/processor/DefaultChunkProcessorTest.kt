@@ -7,6 +7,7 @@ import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.preparer.EquipmentDocumentPreparer
+import maple.synchronizer.ranking.EquipmentRankingRedisWriter
 import maple.synchronizer.repository.EquipmentReadModelRepository
 import maple.synchronizer.resolver.OcidUserIgnResolver
 import maple.synchronizer.storage.ResultFileReader
@@ -26,6 +27,7 @@ class DefaultChunkProcessorTest {
     private val resultFileReader: ResultFileReader = mock()
     private val readModelRepository: EquipmentReadModelRepository = mock()
     private val ocidUserIgnResolver: OcidUserIgnResolver = mock()
+    private val rankingWriter: EquipmentRankingRedisWriter = mock()
     private val metrics = SynchronizerMetrics(SimpleMeterRegistry())
     private val objectMapper = ObjectMapper().registerModule(JavaTimeModule())
 
@@ -33,7 +35,14 @@ class DefaultChunkProcessorTest {
 
     @BeforeEach
     fun setUp() {
-        chunkProcessor = DefaultChunkProcessor(resultFileReader, readModelRepository, ocidUserIgnResolver, metrics, objectMapper)
+        chunkProcessor = DefaultChunkProcessor(
+            resultFileReader,
+            readModelRepository,
+            ocidUserIgnResolver,
+            metrics,
+            rankingWriter,
+            objectMapper,
+        )
         whenever(ocidUserIgnResolver.resolve(any())).thenReturn(emptyMap())
     }
 
@@ -61,6 +70,7 @@ class DefaultChunkProcessorTest {
         chunkProcessor.process(input)
 
         verify(readModelRepository).bulkUpsert(eq(input.sourceRunId), eq(input.sourceChunkId), any())
+        verify(rankingWriter).update(any())
     }
 
     @Test

@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.Timer
 import maple.synchronizer.builder.EquipmentDocumentBuilder
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.preparer.EquipmentDocumentPreparer
+import maple.synchronizer.ranking.EquipmentRankingRedisWriter
 import maple.synchronizer.repository.EquipmentReadModelRepository
 import maple.synchronizer.resolver.OcidUserIgnResolver
 import maple.synchronizer.storage.ResultFileReader
@@ -16,6 +17,7 @@ class DefaultChunkProcessor(
     private val readModelRepository: EquipmentReadModelRepository,
     private val ocidUserIgnResolver: OcidUserIgnResolver,
     private val metrics: SynchronizerMetrics,
+    private val rankingWriter: EquipmentRankingRedisWriter,
     objectMapper: com.fasterxml.jackson.databind.ObjectMapper,
 ) : ChunkProcessor {
 
@@ -53,6 +55,7 @@ class DefaultChunkProcessor(
         metrics.mainUpsertTimer().record(Runnable {
             readModelRepository.bulkUpsert(input.sourceRunId, input.sourceChunkId, prepped)
         })
+        rankingWriter.update(prepped)
 
         return ChunkProcessResult(
             documentCount = documents.size,

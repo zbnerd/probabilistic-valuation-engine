@@ -14,4 +14,10 @@ class V6ReadProperties {
     var urgentPendingTtlSeconds: Long = 30
     var statusRetryAfterSeconds: Long = 3
     var statusEstimatedThroughputPerSecond: Double = 5.0
+    var ranking: Ranking = Ranking()
+
+    class Ranking {
+        var redisKeyPrefix: String = "ranking:equipment:total-cost"
+        var topSize: Int = 10
+    }
 }

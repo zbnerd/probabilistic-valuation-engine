@@ -34,6 +34,9 @@ dependencies {
 	// Kafka
 	implementation(libs.spring.kafka)
 
+	// Redis ranking projection
+	implementation(libs.spring.boot.starter.data.redis)
+
 	// Jackson
 	implementation(libs.jackson.databind)
 	implementation(libs.jackson.module.kotlin)

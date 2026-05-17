@@ -2,8 +2,6 @@ package maple.restcontroller.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
-import maple.restcontroller.advice.RestControllerExceptionHandler
-import maple.restcontroller.controller.ExpectationV6Controller
 import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.read.*
 import maple.restcontroller.urgent.UrgentTriggerPublisher
@@ -57,8 +55,9 @@ class V6ReadConfig(
     fun expectationReadFacade(
         registry: InflightRequestRegistry,
         buffer: LocalRequestBuffer,
-        metrics: V6ReadMetrics
-    ): ExpectationReadFacade = ExpectationReadFacade(registry, buffer, metrics)
+        metrics: V6ReadMetrics,
+        cacheService: ReadModelCacheService
+    ): ExpectationReadFacade = ExpectationReadFacade(registry, buffer, metrics, cacheService, properties)
 
     @Bean
     fun batchReadScheduler(
@@ -73,15 +72,6 @@ class V6ReadConfig(
         urgentPublisherProvider.ifAvailable,
         v6ReadMetrics, properties
     )
-
-    @Bean
-    fun expectationV6Controller(
-        facade: ExpectationReadFacade
-    ): ExpectationV6Controller = ExpectationV6Controller(facade, properties)
-
-    @Bean
-    fun restControllerExceptionHandler(): RestControllerExceptionHandler =
-        RestControllerExceptionHandler()
 
     @Bean
     @ConditionalOnProperty(name = ["expectation.v6.urgent.enabled"], havingValue = "true")

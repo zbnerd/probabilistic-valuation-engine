@@ -16,3 +16,6 @@ include 'module-chaos-test'
 
 // ADR-017: Web layer (GlobalExceptionHandler, Filter)
 include 'module-web'
+
+// Standalone V6 REST read controller
+include 'module-rest-controller'

@@ -3,6 +3,9 @@ package maple.restcontroller.config
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import maple.restcontroller.metrics.V6ReadMetrics
+import maple.restcontroller.ranking.EquipmentRankingCacheService
+import maple.restcontroller.ranking.EquipmentRankingQueryService
+import maple.restcontroller.ranking.EquipmentRankingService
 import maple.restcontroller.read.*
 import maple.restcontroller.urgent.UrgentTriggerPublisher
 import org.springframework.beans.factory.ObjectProvider
@@ -50,6 +53,22 @@ class V6ReadConfig(
         redisTemplate: StringRedisTemplate,
         objectMapper: ObjectMapper
     ): ReadModelCacheService = ReadModelCacheService(redisTemplate, objectMapper, properties)
+
+    @Bean
+    fun equipmentRankingCacheService(
+        redisTemplate: StringRedisTemplate
+    ): EquipmentRankingCacheService = EquipmentRankingCacheService(redisTemplate, properties)
+
+    @Bean
+    fun equipmentRankingQueryService(
+        jdbc: NamedParameterJdbcTemplate
+    ): EquipmentRankingQueryService = EquipmentRankingQueryService(jdbc)
+
+    @Bean
+    fun equipmentRankingService(
+        cacheService: EquipmentRankingCacheService,
+        queryService: EquipmentRankingQueryService
+    ): EquipmentRankingService = EquipmentRankingService(cacheService, queryService, properties)
 
     @Bean
     fun expectationReadFacade(

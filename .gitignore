@@ -79,6 +79,7 @@ scripts/*
 # Patch/build artifacts
 *.orig
 *.rej
+.codex-measure/
 
 # Verification/analysis reports (temporary)
 claude-rules-verification-report.md

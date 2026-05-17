@@ -5,6 +5,7 @@ import maple.externalapi.domain.ExternalApiProvider
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.externalapi.metrics.ExternalApiMetrics
+import maple.externalapi.metrics.SnapshotFetchMetrics
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import maple.externalapi.port.out.ExternalApiClientPort
@@ -44,6 +45,7 @@ class SnapshotFetchPhase(
     private val chunkingProperties: SnapshotChunkingProperties,
     private val volumeMetrics: SnapshotVolumeMetrics,
     private val metrics: ExternalApiMetrics,
+    private val fetchMetrics: SnapshotFetchMetrics,
     private val executor: LogicExecutor,
     @Qualifier("characterBasicSnapshotPublisher")
     private val characterBasicPublisher: SnapshotChunkEventPublisher,
@@ -144,11 +146,25 @@ class SnapshotFetchPhase(
                 val chunk = entries.subList(processed, processed + permits)
                 processed += permits
 
+                val batchWaitStart = Instant.now()
                 val futures = chunk.map { (ign, ocid) ->
                     executor.submit(Callable { fetchSingle(ocid, config, sink, successCount, failCount) })
                 }
 
                 futures.forEach { it.get() }
+                val batchWaitDuration = Duration.between(batchWaitStart, Instant.now())
+                fetchMetrics.recordBatchWait(config.endpoint, batchWaitDuration, chunk.size)
+                if (batchWaitDuration.toMillis() >= 1_000) {
+                    log.info(
+                        "[SnapshotFetchMetrics] batch wait: endpoint={}, runId={}, batchSize={}, durationMs={}, success={}, failed={}",
+                        config.endpoint,
+                        runId,
+                        chunk.size,
+                        batchWaitDuration.toMillis(),
+                        successCount.get(),
+                        failCount.get(),
+                    )
+                }
 
                 val progress = successCount.get() + failCount.get()
                 if (progress - lastProgressLog >= 5000) {
@@ -184,11 +200,17 @@ class SnapshotFetchPhase(
         sink: ChunkedSnapshotSink,
         successCount: AtomicInteger,
     ) {
+        val fetchStart = Instant.now()
         val bodyBytes = clientPort.fetch(
             ExternalApiProvider.NEXON,
             config.apiEndpoint,
             ocid,
         ).join()
+        val fetchDuration = Duration.between(fetchStart, Instant.now())
+        fetchMetrics.recordFetchJoin(config.endpoint, fetchDuration)
+
+        val queueDepthBeforeSubmit = sink.queueDepth()
+        val submitStart = Instant.now()
         sink.submit(
             SnapshotChunkRecord.Success(
                 key = ocid,
@@ -199,6 +221,19 @@ class SnapshotFetchPhase(
                 bodyBytes = bodyBytes,
             ),
         )
+        val submitDuration = Duration.between(submitStart, Instant.now())
+        fetchMetrics.recordSinkSubmit(config.endpoint, submitDuration, queueDepthBeforeSubmit)
+        if (fetchDuration.toMillis() >= 500 || submitDuration.toMillis() >= 100) {
+            log.info(
+                "[SnapshotFetchMetrics] fetch/sink: endpoint={}, ocid={}, responseBytes={}, fetchJoinMs={}, sinkSubmitMs={}, sinkQueueDepthBeforeSubmit={}",
+                config.endpoint,
+                ocid,
+                bodyBytes.size,
+                fetchDuration.toMillis(),
+                submitDuration.toMillis(),
+                queueDepthBeforeSubmit,
+            )
+        }
         successCount.incrementAndGet()
         config.onFetched()
     }

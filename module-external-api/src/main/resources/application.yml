@@ -17,6 +17,15 @@ spring:
 nexon:
   api:
     key: ${NEXON_API_KEY}
+  http-client:
+    pool-name: ${NEXON_HTTP_POOL_NAME:nexon-pool}
+    max-connections: ${NEXON_HTTP_MAX_CONNECTIONS:50}
+    pending-acquire-max-count: ${NEXON_HTTP_PENDING_ACQUIRE_MAX_COUNT:1000}
+    pending-acquire-timeout-ms: ${NEXON_HTTP_PENDING_ACQUIRE_TIMEOUT_MS:5000}
+    connect-timeout-ms: ${NEXON_HTTP_CONNECT_TIMEOUT_MS:3000}
+    response-timeout-seconds: ${NEXON_HTTP_RESPONSE_TIMEOUT_SECONDS:5}
+    max-in-memory-size-bytes: ${NEXON_HTTP_MAX_IN_MEMORY_SIZE_BYTES:2097152}
+    metrics-enabled: ${NEXON_HTTP_METRICS_ENABLED:true}
 
 external-api:
   csv:

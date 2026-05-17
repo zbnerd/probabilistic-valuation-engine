@@ -69,6 +69,8 @@ class ChunkedSnapshotSink(
         }
     }
 
+    fun queueDepth(): Int = queue.size
+
     fun close() {
         accepting.set(false)
         if (!queue.offer(SnapshotChunkRecord.CloseSignal, 30, java.util.concurrent.TimeUnit.SECONDS)) {

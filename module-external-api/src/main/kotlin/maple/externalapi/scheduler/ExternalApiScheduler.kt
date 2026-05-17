@@ -51,41 +51,64 @@ class ExternalApiScheduler(
             log.warn("[Scheduler] could not acquire lock for daily refresh, skipping")
             return
         }
-        try {
-            if (skipCharacterBasic) {
-                log.info("[Scheduler] skip-character-basic enabled, loading OCID cache from existing data")
-                ocidCacheProvider.refresh()
-            } else {
-                ocidLookupPhase.execute(executor)
+        if (skipCharacterBasic) {
+            log.info("[Scheduler] skip-character-basic enabled, loading OCID cache from existing data")
+            ocidCacheProvider.refresh()
+            running.set(false)
+            return
+        }
+
+        ocidLookupPhase.execute(executor)
+            .thenCompose {
                 val cache = ocidCacheProvider.refresh()
                 snapshotFetchPhase.executeCharacterBasic(executor, cache)
             }
-        } finally {
-            running.set(false)
-        }
+            .whenComplete { _, ex ->
+                if (ex != null) {
+                    log.error("[Scheduler] daily refresh failed", ex)
+                }
+                running.set(false)
+            }
     }
 
     private fun runItemEquipmentLoop() {
         log.info("[Scheduler] ITEM_EQUIPMENT continuous loop started")
-        while (!shutdown.get()) {
-            val entries = ocidCacheProvider.current().entries.toList()
-            if (entries.isEmpty()) {
-                log.warn("[Scheduler] OCID cache empty, waiting 30s")
+        runItemEquipmentCycle()
+    }
+
+    private fun runItemEquipmentCycle() {
+        if (shutdown.get()) {
+            log.info("[Scheduler] ITEM_EQUIPMENT continuous loop stopped")
+            return
+        }
+
+        val entries = ocidCacheProvider.current().entries.toList()
+        if (entries.isEmpty()) {
+            log.warn("[Scheduler] OCID cache empty, waiting 30s")
+            executor.submit {
                 Thread.sleep(Duration.ofSeconds(30))
                 ocidCacheProvider.refresh()
-                continue
+                runItemEquipmentCycle()
             }
-            if (!acquireLock(120_000)) {
-                Thread.sleep(Duration.ofSeconds(5))
-                continue
-            }
-            try {
-                snapshotFetchPhase.executeItemEquipment(executor, entries)
-            } finally {
-                running.set(false)
-            }
+            return
         }
-        log.info("[Scheduler] ITEM_EQUIPMENT continuous loop stopped")
+
+        if (!acquireLock(120_000)) {
+            executor.submit {
+                Thread.sleep(Duration.ofSeconds(5))
+                runItemEquipmentCycle()
+            }
+            return
+        }
+
+        snapshotFetchPhase.executeItemEquipment(executor, entries)
+            .whenComplete { _, ex ->
+                if (ex != null) {
+                    log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)
+                }
+                running.set(false)
+                executor.submit { runItemEquipmentCycle() }
+            }
     }
 
     private fun acquireLock(timeoutMs: Long): Boolean {

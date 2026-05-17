@@ -44,6 +44,32 @@ class SnapshotEventPublisherConfig {
 
     @Bean
     @Qualifier("characterBasicSnapshotPublisher")
-    fun characterBasicSnapshotPublisher(): SnapshotChunkEventPublisher =
+    @ConditionalOnProperty(
+        prefix = "external-api.snapshot.events.kafka",
+        name = ["enabled"],
+        havingValue = "false",
+        matchIfMissing = true,
+    )
+    fun noOpCharacterBasicSnapshotPublisher(): SnapshotChunkEventPublisher =
         NoOpSnapshotChunkEventPublisher()
+
+    @Bean
+    @Qualifier("characterBasicSnapshotPublisher")
+    @ConditionalOnProperty(
+        prefix = "external-api.snapshot.events.kafka",
+        name = ["enabled"],
+        havingValue = "true",
+    )
+    fun kafkaCharacterBasicSnapshotPublisher(
+        kafkaTemplate: KafkaTemplate<String, String>,
+        objectMapper: ObjectMapper,
+        properties: SnapshotEventProperties,
+    ): SnapshotChunkEventPublisher =
+        KafkaSnapshotChunkEventPublisher(
+            kafkaTemplate = kafkaTemplate,
+            objectMapper = objectMapper,
+            chunkReadyTopic = properties.kafka.chunkReadyTopic,
+            runCompletedTopic = properties.kafka.runCompletedTopic,
+            runFailedTopic = properties.kafka.runFailedTopic,
+        )
 }

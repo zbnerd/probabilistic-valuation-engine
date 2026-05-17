@@ -4,9 +4,11 @@ import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotEventProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.context.annotation.Import
 import org.springframework.scheduling.annotation.EnableScheduling
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = ["maple.externalapi", "maple.expectation.infrastructure.executor"])
+@Import(maple.expectation.infrastructure.config.ExecutorConfig::class)
 @EnableScheduling
 @EnableConfigurationProperties(SnapshotChunkingProperties::class, SnapshotEventProperties::class)
 class ExternalApiApplication

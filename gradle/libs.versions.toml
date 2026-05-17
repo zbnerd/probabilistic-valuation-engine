@@ -104,7 +104,6 @@ spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-star
 
 # Spring Boot Core
 spring-boot = { module = "org.springframework.boot:spring-boot" }
-spring-kafka = { module = "org.springframework.kafka:spring-kafka" }
 
 # Databases
 h2 = { module = "com.h2database:h2", version.ref = "h2" }

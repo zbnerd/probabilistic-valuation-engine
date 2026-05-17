@@ -8,6 +8,6 @@ data class V6ExpectationResponse(
     val presetNo: Int,
     val totalCost: BigDecimal,
     val equipmentCount: Int,
-    val equipment: List<Map<String, Any>>,
+    val equipment: List<Map<String, Any?>>,
     val calculatedAt: Instant,
 )

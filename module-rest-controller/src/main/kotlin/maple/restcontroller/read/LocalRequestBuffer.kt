@@ -5,8 +5,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class LocalRequestBuffer(
-    private val maxCapacity: Int,
+    private val maxCapacity: Int
 ) : RequestBuffer {
+
     private val queue = ConcurrentLinkedQueue<ReadRequest>()
     private val counter = AtomicInteger(0)
     private val accepting = AtomicBoolean(true)
@@ -25,13 +26,13 @@ class LocalRequestBuffer(
     }
 
     override fun drain(maxItems: Int): List<ReadRequest> {
-        val batch = ArrayList<ReadRequest>(maxItems)
+        val result = mutableListOf<ReadRequest>()
         repeat(maxItems) {
-            val request = queue.poll() ?: return@repeat
+            val element = queue.poll() ?: return@repeat
             counter.decrementAndGet()
-            batch.add(request)
+            result.add(element)
         }
-        return batch
+        return result
     }
 
     override fun size(): Int = counter.get()

@@ -41,11 +41,7 @@ spring:
 synchronizer:
   kafka:
     result-chunk-ready-topic: calculator.result.chunk-ready
-    basic-chunk-ready-topic: external-api.snapshot.chunk-ready
     consumer-group-id: synchronizer-result-chunk-consumer
-    basic-consumer-group-id: synchronizer-basic-chunk-consumer
-    urgent-basic-chunk-ready-topic: external-api.urgent.snapshot.chunk-ready
-    urgent-basic-consumer-group-id: synchronizer-urgent-basic-chunk-consumer
   store:
     base-path: ../module-external-api/external-api-data
   chunk:

@@ -29,18 +29,4 @@ class KafkaSnapshotChunkReadyConsumer(
         runBlocking { coordinator.handle(event) }
         acknowledgment.acknowledge()
     }
-
-    @KafkaListener(
-        topics = ["\${calculator.kafka.urgent-snapshot-chunk-ready-topic}"],
-        groupId = "\${calculator.kafka.urgent-consumer-group-id}",
-    )
-    fun consumeUrgent(message: String, acknowledgment: Acknowledgment) {
-        val event = objectMapper.readValue(message, SnapshotChunkReadyEvent::class.java)
-        log.info(
-            "[Consumer] received URGENT chunk-ready: runId={} endpoint={} chunkId={} objectKey={} recordCount={}",
-            event.runId, event.endpoint, event.chunkId, event.objectKey, event.recordCount,
-        )
-        runBlocking { coordinator.handle(event) }
-        acknowledgment.acknowledge()
-    }
 }

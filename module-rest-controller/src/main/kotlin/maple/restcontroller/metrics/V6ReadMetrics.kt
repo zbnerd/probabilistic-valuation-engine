@@ -32,20 +32,8 @@ class V6ReadMetrics(
         .description("Buffer full to 503 rejection count")
         .register(meterRegistry)
 
-    val urgentTriggerTotal: Counter = Counter.builder("v6_urgent_trigger_total")
-        .description("Total urgent pipeline triggers")
-        .register(meterRegistry)
-
     private val hitCounter: Counter = Counter.builder("v6_read_hit_total")
         .description("V6 read model cache hits")
-        .register(meterRegistry)
-
-    private val redisHitCounter: Counter = Counter.builder("v6_redis_hit_total")
-        .description("V6 Redis cache hits")
-        .register(meterRegistry)
-
-    private val dbHitCounter: Counter = Counter.builder("v6_db_hit_total")
-        .description("V6 DB query hits (cache miss -> DB fallback)")
         .register(meterRegistry)
 
     private val missCounters = mutableMapOf<String, Counter>()
@@ -56,10 +44,6 @@ class V6ReadMetrics(
         .register(meterRegistry)
 
     fun recordHit() = hitCounter.increment()
-
-    fun recordRedisHit() = redisHitCounter.increment()
-
-    fun recordDbHit() = dbHitCounter.increment()
 
     fun recordMiss(reason: String) {
         val counter = missCounters.getOrPut(reason) {

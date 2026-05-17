@@ -8,6 +8,7 @@ import maple.restcontroller.read.*
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.mock
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -19,6 +20,8 @@ class ExpectationV6ControllerTest {
     private lateinit var buffer: LocalRequestBuffer
     private lateinit var registry: InflightRequestRegistry
     private lateinit var facade: ExpectationReadFacade
+    private lateinit var cacheService: ReadModelCacheService
+    private lateinit var queryService: ReadModelQueryService
     private val properties = V6ReadProperties().apply {
         requestTimeoutMs = 100
         queueCapacity = 10
@@ -32,10 +35,12 @@ class ExpectationV6ControllerTest {
         buffer = LocalRequestBuffer(properties.queueCapacity)
         registry = InflightRequestRegistry()
         val metrics = V6ReadMetrics(SimpleMeterRegistry(), buffer, registry)
-        facade = ExpectationReadFacade(registry, buffer, metrics)
+        cacheService = mock()
+        queryService = mock()
+        facade = ExpectationReadFacade(registry, buffer, metrics, cacheService, properties)
 
         mockMvc = MockMvcBuilders
-            .standaloneSetup(ExpectationV6Controller(facade, properties))
+            .standaloneSetup(ExpectationV6Controller(facade, properties, cacheService, queryService))
             .setControllerAdvice(RestControllerExceptionHandler())
             .build()
     }

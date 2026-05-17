@@ -4,6 +4,29 @@
 
 서버 코드(Controller, Service, Worker)에서 `join()`, `get()`, `runBlocking` 사용 금지.
 
+### CompletableFuture + blocking anti-pattern
+
+`CompletableFuture`를 만든 뒤 같은 실행 흐름에서 `join()`/`get()`으로 기다리는 코드는 **비동기 + 블로킹 혼합 안티패턴**이다.
+이 패턴은 WebClient/Reactor Netty의 async contract를 깨고, 가상 스레드나 worker thread를 대기 상태로 묶어 TCP read drain, connection pool 회전, Kafka worker 처리량을 모두 악화시킬 수 있다.
+
+**금지 예시:**
+
+```kotlin
+val future = webClientCall()
+val body = future.join()
+sink.submit(body)
+```
+
+**허용 패턴:**
+
+```kotlin
+webClientCall()
+    .thenAcceptAsync({ body -> sink.submit(body) }, boundedExecutor)
+    .whenComplete { _, ex -> lifecycleCleanup(ex) }
+```
+
+원칙: `CompletableFuture` 결과가 필요하면 기다리지 말고 `thenApply`, `thenCompose`, `thenAcceptAsync`, `handle`, `whenComplete`로 다음 작업을 연결한다.
+
 **금지 패턴:**
 - `thread.join()` / `future.join()` / `future.get()` — 스레드 블로킹
 - `runBlocking { }` — 코루틴 장점 상실, blocking 세계로 회귀

@@ -34,7 +34,7 @@ class ReadModelQueryServiceTest {
         ))
         val compressed = GzipUtils.compress(String(docJson))
 
-        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>(), any<Class<*>>()))
+        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>()))
             .thenReturn(listOf(
                 mapOf<String, Any>(
                     "user_ign" to "아델",
@@ -63,7 +63,7 @@ class ReadModelQueryServiceTest {
 
     @Test
     fun `should return empty when no rows match`() {
-        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>(), any<Class<*>>()))
+        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>()))
             .thenReturn(emptyList())
 
         val requests = mapOf("존재하지않는닉네임" to 1)
@@ -88,7 +88,7 @@ class ReadModelQueryServiceTest {
             "metadata" to mapOf("calculatedAt" to now.toString())
         ))
 
-        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>(), any<Class<*>>()))
+        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>()))
             .thenReturn(listOf(
                 mapOf<String, Any>(
                     "user_ign" to "아델",

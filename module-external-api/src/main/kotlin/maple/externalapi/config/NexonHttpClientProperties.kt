@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 @ConfigurationProperties(prefix = "nexon.http-client")
 data class NexonHttpClientProperties(
     val poolName: String = "nexon-pool",
-    val maxConnections: Int = 50,
+    val maxConnections: Int = 150,
     val pendingAcquireMaxCount: Int = 1000,
     val pendingAcquireTimeoutMs: Long = 5000,
     val connectTimeoutMs: Int = 3000,

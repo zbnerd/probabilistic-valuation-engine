@@ -11,6 +11,7 @@ import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.any
@@ -18,6 +19,7 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
+import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.kafka.core.KafkaTemplate
@@ -52,6 +54,11 @@ class UrgentCharacterRequestConsumerTest {
             urgentChunkReadyTopic = "external-api.urgent.snapshot.chunk-ready",
             storeBasePath = tempDir.toString(),
         )
+    }
+
+    @AfterEach
+    fun tearDown() {
+        consumer.close()
     }
 
     private fun stubSendResult(): CompletableFuture<SendResult<String, String>> {
@@ -95,7 +102,7 @@ class UrgentCharacterRequestConsumerTest {
 
         // Then - verify 2 chunk-ready events published
         val captor = argumentCaptor<String>()
-        verify(kafkaTemplate, times(2)).send(
+        verify(kafkaTemplate, timeout(5_000).times(2)).send(
             eq("external-api.urgent.snapshot.chunk-ready"),
             any(),
             captor.capture(),
@@ -144,7 +151,7 @@ class UrgentCharacterRequestConsumerTest {
 
         // Then
         val captor = argumentCaptor<String>()
-        verify(kafkaTemplate).send(
+        verify(kafkaTemplate, timeout(5_000)).send(
             eq("urgent-character-not-found"),
             any(),
             captor.capture(),

@@ -2,8 +2,6 @@ package maple.externalapi.scheduler.phase
 
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
 import maple.externalapi.metrics.SnapshotVolumeMetrics
@@ -22,7 +20,7 @@ import org.springframework.stereotype.Component
 import java.nio.file.Paths
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.Callable
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -46,7 +44,6 @@ class SnapshotFetchPhase(
     private val volumeMetrics: SnapshotVolumeMetrics,
     private val metrics: ExternalApiMetrics,
     private val fetchMetrics: SnapshotFetchMetrics,
-    private val executor: LogicExecutor,
     @Qualifier("characterBasicSnapshotPublisher")
     private val characterBasicPublisher: SnapshotChunkEventPublisher,
     private val itemEquipmentPublisher: SnapshotChunkEventPublisher,
@@ -59,9 +56,9 @@ class SnapshotFetchPhase(
 ) {
     private val log = LoggerFactory.getLogger(SnapshotFetchPhase::class.java)
 
-    fun executeCharacterBasic(executor: ExecutorService, ocidCache: Map<String, String>) {
+    fun executeCharacterBasic(workerExecutor: ExecutorService, ocidCache: Map<String, String>): CompletableFuture<Void> =
         execute(
-            executor,
+            workerExecutor,
             ocidCache.entries.toList(),
             SnapshotFetchConfig(
                 endpoint = "character-basic",
@@ -73,11 +70,10 @@ class SnapshotFetchPhase(
                 skipIfExisting = true,
             ),
         )
-    }
 
-    fun executeItemEquipment(executor: ExecutorService, entries: List<Map.Entry<String, String>>) {
+    fun executeItemEquipment(workerExecutor: ExecutorService, entries: List<Map.Entry<String, String>>): CompletableFuture<Void> =
         execute(
-            executor,
+            workerExecutor,
             entries,
             SnapshotFetchConfig(
                 endpoint = "item-equipment",
@@ -88,24 +84,23 @@ class SnapshotFetchPhase(
                 recordDuration = { metrics.itemEquipmentTimer().record(it) },
             ),
         )
-    }
 
     private fun execute(
-        executor: ExecutorService,
+        workerExecutor: ExecutorService,
         entries: List<Map.Entry<String, String>>,
         config: SnapshotFetchConfig,
-    ) {
+    ): CompletableFuture<Void> {
         if (config.skipIfExisting) {
             val existing = artifactStore.listStoredKeys(config.apiEndpoint)
             if (existing.isNotEmpty()) {
                 log.info("[Scheduler] {} already done ({} files), skipping", config.endpoint, existing.size)
-                return
+                return CompletableFuture.completedFuture(null)
             }
         }
 
         if (entries.isEmpty()) {
             log.warn("[Scheduler] OCID cache empty, skipping {}", config.endpoint)
-            return
+            return CompletableFuture.completedFuture(null)
         }
 
         val runId = SchedulerPhaseUtils.newRunId()
@@ -135,77 +130,112 @@ class SnapshotFetchPhase(
         val start = Instant.now()
         val successCount = AtomicInteger(0)
         val failCount = AtomicInteger(0)
-        var processed = 0
-        var lastProgressLog = 0
+        val lastProgressLog = AtomicInteger(0)
 
-        try {
-            while (processed < entries.size) {
-                val permits = SchedulerPhaseUtils.acquirePermits(rateLimiter, batchSize, entries.size - processed)
-                if (permits == 0) continue
-
-                val chunk = entries.subList(processed, processed + permits)
-                processed += permits
-
-                val batchWaitStart = Instant.now()
-                val futures = chunk.map { (ign, ocid) ->
-                    executor.submit(Callable { fetchSingle(ocid, config, sink, successCount, failCount) })
-                }
-
-                futures.forEach { it.get() }
-                val batchWaitDuration = Duration.between(batchWaitStart, Instant.now())
-                fetchMetrics.recordBatchWait(config.endpoint, batchWaitDuration, chunk.size)
-                if (batchWaitDuration.toMillis() >= 1_000) {
-                    log.info(
-                        "[SnapshotFetchMetrics] batch wait: endpoint={}, runId={}, batchSize={}, durationMs={}, success={}, failed={}",
-                        config.endpoint,
-                        runId,
-                        chunk.size,
-                        batchWaitDuration.toMillis(),
-                        successCount.get(),
-                        failCount.get(),
-                    )
-                }
-
-                val progress = successCount.get() + failCount.get()
-                if (progress - lastProgressLog >= 5000) {
-                    lastProgressLog = progress
-                    SchedulerPhaseUtils.logProgress(config.endpoint, progress, entries.size, successCount.get(), failCount.get(), start)
-                }
-            }
-        } finally {
+        return processBatch(
+            workerExecutor = workerExecutor,
+            rateLimiter = rateLimiter,
+            entries = entries,
+            processed = 0,
+            config = config,
+            sink = sink,
+            runId = runId,
+            successCount = successCount,
+            failCount = failCount,
+            lastProgressLog = lastProgressLog,
+            start = start,
+        ).whenComplete { _, _ ->
             sink.close()
+            config.recordDuration(Duration.between(start, Instant.now()))
+            SchedulerPhaseUtils.logSummary(config.endpoint, entries.size, successCount.get(), successCount.get(), failCount.get(), start)
         }
-
-        config.recordDuration(Duration.between(start, Instant.now()))
-        SchedulerPhaseUtils.logSummary(config.endpoint, entries.size, successCount.get(), successCount.get(), failCount.get(), start)
     }
 
-    private fun fetchSingle(
-        ocid: String,
+    private fun processBatch(
+        workerExecutor: ExecutorService,
+        rateLimiter: io.github.bucket4j.Bucket,
+        entries: List<Map.Entry<String, String>>,
+        processed: Int,
         config: SnapshotFetchConfig,
         sink: ChunkedSnapshotSink,
+        runId: String,
         successCount: AtomicInteger,
         failCount: AtomicInteger,
-    ) {
-        executor.executeWithFallback(
-            { performSnapshotFetch(ocid, config, sink, successCount) },
-            { ex -> handleSnapshotFailure(ocid, config, sink, failCount, ex) },
-            TaskContext.of("SnapshotFetch", "FetchSingle", ocid),
-        )
+        lastProgressLog: AtomicInteger,
+        start: Instant,
+    ): CompletableFuture<Void> {
+        if (processed >= entries.size) {
+            return CompletableFuture.completedFuture(null)
+        }
+
+        val permits = SchedulerPhaseUtils.acquirePermits(rateLimiter, batchSize, entries.size - processed)
+        if (permits == 0) {
+            return processBatch(workerExecutor, rateLimiter, entries, processed, config, sink, runId, successCount, failCount, lastProgressLog, start)
+        }
+
+        val chunk = entries.subList(processed, processed + permits)
+        val batchWaitStart = Instant.now()
+        val futures = chunk.map { (_, ocid) ->
+            fetchSingleAsync(ocid, config, sink, workerExecutor, successCount, failCount)
+        }
+
+        return CompletableFuture.allOf(*futures.toTypedArray()).thenCompose {
+            val batchWaitDuration = Duration.between(batchWaitStart, Instant.now())
+            fetchMetrics.recordBatchWait(config.endpoint, batchWaitDuration, chunk.size)
+            if (batchWaitDuration.toMillis() >= 1_000) {
+                log.info(
+                    "[SnapshotFetchMetrics] batch wait: endpoint={}, runId={}, batchSize={}, durationMs={}, success={}, failed={}",
+                    config.endpoint,
+                    runId,
+                    chunk.size,
+                    batchWaitDuration.toMillis(),
+                    successCount.get(),
+                    failCount.get(),
+                )
+            }
+
+            val progress = successCount.get() + failCount.get()
+            if (progress - lastProgressLog.get() >= 5000) {
+                lastProgressLog.set(progress)
+                SchedulerPhaseUtils.logProgress(config.endpoint, progress, entries.size, successCount.get(), failCount.get(), start)
+            }
+            processBatch(workerExecutor, rateLimiter, entries, processed + permits, config, sink, runId, successCount, failCount, lastProgressLog, start)
+        }
     }
 
-    private fun performSnapshotFetch(
+    private fun fetchSingleAsync(
         ocid: String,
         config: SnapshotFetchConfig,
         sink: ChunkedSnapshotSink,
+        workerExecutor: ExecutorService,
         successCount: AtomicInteger,
-    ) {
+        failCount: AtomicInteger,
+    ): CompletableFuture<Void> {
         val fetchStart = Instant.now()
-        val bodyBytes = clientPort.fetch(
+        return clientPort.fetch(
             ExternalApiProvider.NEXON,
             config.apiEndpoint,
             ocid,
-        ).join()
+        )
+            .thenAcceptAsync({ bodyBytes ->
+                handleSnapshotSuccess(ocid, config, sink, successCount, fetchStart, bodyBytes)
+            }, workerExecutor)
+            .handle { _, ex ->
+                if (ex != null) {
+                    handleSnapshotFailure(ocid, config, sink, failCount, ex)
+                }
+                null
+            }
+    }
+
+    private fun handleSnapshotSuccess(
+        ocid: String,
+        config: SnapshotFetchConfig,
+        sink: ChunkedSnapshotSink,
+        successCount: AtomicInteger,
+        fetchStart: Instant,
+        bodyBytes: ByteArray,
+    ) {
         val fetchDuration = Duration.between(fetchStart, Instant.now())
         fetchMetrics.recordFetchJoin(config.endpoint, fetchDuration)
 

@@ -19,7 +19,7 @@ nexon:
     key: ${NEXON_API_KEY}
   http-client:
     pool-name: ${NEXON_HTTP_POOL_NAME:nexon-pool}
-    max-connections: ${NEXON_HTTP_MAX_CONNECTIONS:50}
+    max-connections: ${NEXON_HTTP_MAX_CONNECTIONS:150}
     pending-acquire-max-count: ${NEXON_HTTP_PENDING_ACQUIRE_MAX_COUNT:1000}
     pending-acquire-timeout-ms: ${NEXON_HTTP_PENDING_ACQUIRE_TIMEOUT_MS:5000}
     connect-timeout-ms: ${NEXON_HTTP_CONNECT_TIMEOUT_MS:3000}
@@ -31,7 +31,7 @@ external-api:
   csv:
     path: ../module-app/src/main/resources/data/userIgn_List.csv
   rate-limit:
-    permits-per-second: 200
+    permits-per-second: ${EXTERNAL_API_RATE_LIMIT_PERMITS_PER_SECOND:250}
     ocid-lookup-permits-per-second: 400
   batch-size: 1000
   store:

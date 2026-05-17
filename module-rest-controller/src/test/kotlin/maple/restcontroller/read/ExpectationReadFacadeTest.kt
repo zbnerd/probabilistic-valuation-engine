@@ -2,9 +2,11 @@ package maple.restcontroller.read
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import maple.restcontroller.metrics.V6ReadMetrics
+import maple.restcontroller.config.V6ReadProperties
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.mock
 import org.springframework.http.ResponseEntity
 import org.springframework.web.context.request.async.DeferredResult
 
@@ -15,13 +17,17 @@ class ExpectationReadFacadeTest {
     private lateinit var registry: InflightRequestRegistry
     private lateinit var metrics: V6ReadMetrics
     private lateinit var facade: ExpectationReadFacade
+    private lateinit var cacheService: ReadModelCacheService
+    private lateinit var properties: V6ReadProperties
 
     @BeforeEach
     fun setup() {
         buffer = LocalRequestBuffer(100)
         registry = InflightRequestRegistry()
         metrics = V6ReadMetrics(meterRegistry, buffer, registry)
-        facade = ExpectationReadFacade(registry, buffer, metrics)
+        cacheService = mock()
+        properties = V6ReadProperties()
+        facade = ExpectationReadFacade(registry, buffer, metrics, cacheService, properties)
     }
 
     private fun enqueue(ign: String, presetNo: Int = 1): DeferredResult<ResponseEntity<*>> {
@@ -54,7 +60,7 @@ class ExpectationReadFacadeTest {
     fun `enqueue sets 503 error when buffer is full`() {
         val smallBuffer = LocalRequestBuffer(1)
         val smallMetrics = V6ReadMetrics(SimpleMeterRegistry(), smallBuffer, registry)
-        val fullFacade = ExpectationReadFacade(registry, smallBuffer, smallMetrics)
+        val fullFacade = ExpectationReadFacade(registry, smallBuffer, smallMetrics, cacheService, properties)
 
         val d1 = DeferredResult<ResponseEntity<*>>()
         fullFacade.enqueue("a", 1, d1)

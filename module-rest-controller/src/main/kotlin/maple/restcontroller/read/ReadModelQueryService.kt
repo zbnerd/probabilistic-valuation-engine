@@ -36,29 +36,40 @@ class ReadModelQueryService(
             .addValue("userIgns", userIgns)
             .addValue("presetNos", presetNos)
 
-        @Suppress("UNCHECKED_CAST")
-        val rows = jdbc.queryForList(sql, params, Map::class.java) as List<Map<String, Any>>
-
-        return rows.associate { row ->
+        val rows = jdbc.queryForList(sql, params)
+        val result = LinkedHashMap<String, V6ExpectationResponse>()
+        rows.forEach { row ->
             val userIgn = row["user_ign"].toString()
             val compressed = row["document"] as ByteArray
             val json = GzipUtils.decompress(compressed)
             val tree = objectMapper.readTree(json)
+            val equipmentNode = tree["equipment"]
+            val equipment = if (equipmentNode != null && !equipmentNode.isNull) {
+                @Suppress("UNCHECKED_CAST")
+                objectMapper.readValue(
+                    equipmentNode.toString(),
+                    objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java),
+                ) as List<Map<String, Any?>>
+            } else {
+                emptyList()
+            }
 
-            userIgn to V6ExpectationResponse(
+            result[userIgn] = V6ExpectationResponse(
                 userIgn = userIgn,
-                presetNo = tree.get("presetNo")?.asInt() ?: 1,
-                totalCost = tree.get("summary")?.get("totalCost")?.decimalValue() ?: BigDecimal.ZERO,
-                equipmentCount = tree.get("summary")?.get("equipmentCount")?.asInt() ?: 0,
-                equipment = tree.get("equipment")?.let {
-                    objectMapper.readValue(it.toString(),
-                        objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java))
-                } ?: emptyList(),
-                calculatedAt = Instant.parse(
-                    tree.get("metadata")?.get("calculatedAt")?.asText()
-                        ?: Instant.now().toString()
-                ),
+                presetNo = tree["presetNo"]?.asInt() ?: (row["preset_no"] as Number).toInt(),
+                totalCost = tree["summary"]?.get("totalCost")?.decimalValue()
+                    ?: row["total_cost"] as? BigDecimal
+                    ?: BigDecimal.ZERO,
+                equipmentCount = tree["summary"]?.get("equipmentCount")?.asInt()
+                    ?: (row["equipment_count"] as? Number)?.toInt()
+                    ?: 0,
+                equipment = equipment,
+                calculatedAt = tree["metadata"]?.get("calculatedAt")?.asText()?.let(Instant::parse)
+                    ?: (row["calculated_at"] as? java.sql.Timestamp)?.toInstant()
+                    ?: Instant.now(),
             )
         }
+        log.debug("Read model query: requested={}, hits={}", requests.size, result.size)
+        return result
     }
 }

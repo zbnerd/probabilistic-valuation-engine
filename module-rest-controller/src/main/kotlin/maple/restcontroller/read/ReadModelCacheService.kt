@@ -59,21 +59,32 @@ class ReadModelCacheService(
     }
 
     /**
-     * Write DB results to Redis cache with TTL.
+     * Write DB results to Redis cache with TTL using pipeline (1 RTT).
      */
     fun multiPut(results: Map<String, V6ExpectationResponse>) {
         if (results.isEmpty()) return
 
-        val ttl = Duration.ofSeconds(properties.cacheTtlSeconds)
-        results.forEach { (userIgn, response) ->
-            val key = cacheKey(userIgn, response.presetNo)
-            val json = objectMapper.writeValueAsString(response)
-            redisTemplate.opsForValue().set(key, json, ttl)
-            clearUrgentPending(userIgn)
-            removeUrgentStatus(userIgn)
+        val ttl = properties.cacheTtlSeconds
+        val pendingKeys = mutableListOf<String>()
+        val statusMembers = mutableListOf<String>()
+
+        redisTemplate.executePipelined { connection ->
+            results.forEach { (userIgn, response) ->
+                val key = cacheKey(userIgn, response.presetNo).toByteArray()
+                val json = objectMapper.writeValueAsBytes(response)
+                connection.stringCommands().setEx(key, ttl, json)
+                pendingKeys.add(urgentPendingKey(userIgn))
+                statusMembers.add(userIgn)
+            }
+            null
         }
 
-        log.debug("Redis cache write: {} entries, TTL={}s", results.size, ttl.seconds)
+        if (pendingKeys.isNotEmpty()) {
+            redisTemplate.delete(pendingKeys)
+            redisTemplate.opsForZSet().remove(URGENT_STATUS_QUEUE_KEY, *statusMembers.toTypedArray())
+        }
+
+        log.debug("Redis cache write (pipeline): {} entries, TTL={}s", results.size, ttl)
     }
 
     // --- Negative cache (non-existent characters) ---

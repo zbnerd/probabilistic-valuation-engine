@@ -1,4 +1,4 @@
-package maple.expectation.application.service.like;
+package maple.expectation.infrastructure.like;
 
 /** 좋아요 처리 인터페이스 */
 public interface LikeProcessor {

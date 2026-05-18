@@ -36,6 +36,11 @@ out/
 ### VS Code ###
 .vscode/
 
+# Local agent/tool installs
+node_modules/
+.agents/skills/
+docs/agents/
+
 # Docker & Secrets
 .env
 .env.local
@@ -107,3 +112,6 @@ load-test-scripts/wrk-*.lua
 # App logs
 module-app/logs/
 module-*/logs/
+
+# Local copied/generated resource data
+module-calculator/src/main/resources/data/

@@ -2,10 +2,10 @@ package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.Timer
-import jakarta.annotation.PreDestroy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
+import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.processor.ChunkProcessInput
 import maple.synchronizer.processor.ChunkProcessor
@@ -26,7 +26,7 @@ class KafkaResultChunkConsumer(
     private val chunkStatusRepository: SynchronizerChunkStatusRepository,
     private val metrics: SynchronizerMetrics,
     private val logicExecutor: LogicExecutor,
-) {
+	) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(KafkaResultChunkConsumer::class.java)
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
     private val processingPermit = Semaphore(2)
@@ -119,8 +119,9 @@ class KafkaResultChunkConsumer(
         )
     }
 
-    @PreDestroy
-    fun close() {
+    override val lifecyclePhase: Int = 100
+
+    override fun stopLifecycle() {
         vtExecutor.close()
     }
 }

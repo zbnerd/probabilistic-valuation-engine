@@ -1,9 +1,9 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import jakarta.annotation.PreDestroy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.repository.SynchronizerChunkStatusRepository
 import maple.synchronizer.storage.BasicChunkFileReader
@@ -31,7 +31,7 @@ class BasicSnapshotChunkConsumer(
     private val jdbc: NamedParameterJdbcTemplate,
     @Value("\${synchronizer.store.base-path:../module-external-api/external-api-data}")
     private val basePath: String,
-) {
+	) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
     private val processingPermit = Semaphore(2)
@@ -186,8 +186,9 @@ class BasicSnapshotChunkConsumer(
         }
     }
 
-    @PreDestroy
-    fun close() {
+    override val lifecyclePhase: Int = 100
+
+    override fun stopLifecycle() {
         vtExecutor.close()
     }
 }

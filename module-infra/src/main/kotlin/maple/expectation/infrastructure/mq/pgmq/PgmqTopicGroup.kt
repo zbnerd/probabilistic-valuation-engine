@@ -1,7 +1,6 @@
 package maple.expectation.infrastructure.mq.pgmq
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import jakarta.annotation.PreDestroy
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.core.domain.event.IntegrationEvent
@@ -10,6 +9,7 @@ import maple.expectation.core.port.out.mq.MQTopicGroup
 import maple.expectation.core.port.out.mq.MessageHandle
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
@@ -24,7 +24,7 @@ abstract class PgmqTopicGroup(
     private val lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val queueMetrics: WorkerQueueMetrics,
     private val config: PgmqTopicConfig,
-) : MQTopicGroup {
+	) : MQTopicGroup, ManagedLifecycle {
 
     private val log = LoggerFactory.getLogger(javaClass)
     private val metrics by lazy { queueMetrics.forQueue(name) }
@@ -104,8 +104,9 @@ abstract class PgmqTopicGroup(
         }
     }
 
-    @PreDestroy
-    fun onShutdown() {
+    override val lifecyclePhase: Int = 100
+
+    override fun stopLifecycle() {
         handlerRef.set(null)
     }
 }

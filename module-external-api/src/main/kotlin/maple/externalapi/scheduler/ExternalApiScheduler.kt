@@ -1,9 +1,9 @@
 package maple.externalapi.scheduler
 
-import jakarta.annotation.PreDestroy
 import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.SnapshotFetchPhase
+import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -25,7 +25,7 @@ class ExternalApiScheduler(
     private val runOnStartup: Boolean,
     @Value("\${external-api.schedule.skip-character-basic:false}")
     private val skipCharacterBasic: Boolean,
-) {
+	) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val running = AtomicBoolean(false)
     private val shutdown = AtomicBoolean(false)
@@ -120,8 +120,9 @@ class ExternalApiScheduler(
         return false
     }
 
-    @PreDestroy
-    fun onDestroy() {
+    override val lifecyclePhase: Int = 100
+
+    override fun stopLifecycle() {
         log.info("[Scheduler] shutdown requested")
         shutdown.set(true)
         executor.close()

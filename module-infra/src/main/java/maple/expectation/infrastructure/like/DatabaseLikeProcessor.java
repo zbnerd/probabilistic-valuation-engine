@@ -1,4 +1,4 @@
-package maple.expectation.application.service.like;
+package maple.expectation.infrastructure.like;
 
 import lombok.RequiredArgsConstructor;
 import maple.expectation.core.port.out.LikeBufferStrategy;
@@ -17,13 +17,11 @@ public class DatabaseLikeProcessor implements LikeProcessor {
 
   @Override
   public Long processLike(String userIgn) {
-    // 좋아요 추가: 카운터 +1, 새 delta 반환
     return likeBufferStrategy.increment(userIgn, 1);
   }
 
   @Override
   public Long processUnlike(String userIgn) {
-    // 좋아요 취소: 카운터 -1, 새 delta 반환
     return likeBufferStrategy.increment(userIgn, -1);
   }
 }

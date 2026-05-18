@@ -1,20 +1,23 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.common.event.ChunkExecutionIdentity
+import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
+import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.synchronizer.repository.CharacterBasicRepository
-import maple.synchronizer.repository.SynchronizerChunkStatusRepository
 import maple.synchronizer.storage.BasicChunkFileReader
 import maple.synchronizer.storage.BasicRecord
-import maple.expectation.util.StringMaskingUtils.maskIgn
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
+import org.springframework.kafka.support.KafkaHeaders
+import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
@@ -24,12 +27,11 @@ class BasicSnapshotChunkConsumer(
     private val objectMapper: ObjectMapper,
     private val fileReader: BasicChunkFileReader,
     private val repository: CharacterBasicRepository,
-    private val chunkStatusRepository: SynchronizerChunkStatusRepository,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val jdbc: NamedParameterJdbcTemplate,
     @Value("\${synchronizer.store.base-path:../module-external-api/external-api-data}")
     private val basePath: String,
-	) : ManagedLifecycle {
+) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
     private val processingPermit = Semaphore(2)
@@ -38,10 +40,18 @@ class BasicSnapshotChunkConsumer(
         topics = ["\${synchronizer.kafka.basic-chunk-ready-topic}"],
         groupId = "\${synchronizer.kafka.basic-consumer-group-id}",
     )
-    fun consume(message: String, acknowledgment: Acknowledgment) {
+    fun consume(
+        message: String,
+        acknowledgment: Acknowledgment,
+        @Header(name = KafkaHeaders.RECEIVED_TOPIC, required = false) topic: String?,
+        @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) messageKey: String?,
+    ) {
         val event = objectMapper.readValue(message, SnapshotChunkReadyEvent::class.java)
 
-        if (event.endpoint != "character-basic") return
+        if (event.endpoint != "character-basic") {
+            acknowledgment.acknowledge()
+            return
+        }
 
         val runId = event.runId
         val chunkId = event.chunkId
@@ -49,14 +59,19 @@ class BasicSnapshotChunkConsumer(
         log.info("[BasicSync] received: runId={} chunkId={} objectKey={} records={}",
             runId, chunkId, event.objectKey, event.recordCount)
 
-        submitBasicChunk(event, acknowledgment, urgent = false)
+        submitBasicChunk(event, message, acknowledgment, topic, messageKey, urgent = false)
     }
 
     @KafkaListener(
         topics = ["\${synchronizer.kafka.urgent-basic-chunk-ready-topic}"],
         groupId = "\${synchronizer.kafka.urgent-basic-consumer-group-id}",
     )
-    fun consumeUrgentBasic(message: String, acknowledgment: Acknowledgment) {
+    fun consumeUrgentBasic(
+        message: String,
+        acknowledgment: Acknowledgment,
+        @Header(name = KafkaHeaders.RECEIVED_TOPIC, required = false) topic: String?,
+        @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) messageKey: String?,
+    ) {
         val event = objectMapper.readValue(message, SnapshotChunkReadyEvent::class.java)
 
         if (event.endpoint != "character-basic") {
@@ -70,32 +85,43 @@ class BasicSnapshotChunkConsumer(
         log.info("[BasicSync] received URGENT: runId={} chunkId={} objectKey={} records={}",
             runId, chunkId, event.objectKey, event.recordCount)
 
-        submitBasicChunk(event, acknowledgment, urgent = true)
+        submitBasicChunk(event, message, acknowledgment, topic, messageKey, urgent = true)
     }
 
     private fun submitBasicChunk(
         event: SnapshotChunkReadyEvent,
+        eventPayloadJson: String,
         acknowledgment: Acknowledgment,
+        topic: String?,
+        messageKey: String?,
         urgent: Boolean,
     ) {
         val runId = event.runId
         val chunkId = event.chunkId
         val operation = if (urgent) "UrgentChunk" else "Chunk"
+        val identity = ChunkExecutionIdentity(
+            executionType = ChunkExecutionType.SYNCHRONIZER_BASIC_CHUNK,
+            runId = runId,
+            endpoint = event.endpoint,
+            chunkId = chunkId,
+        )
 
         chunkConsumerTemplate.submit(
             ChunkConsumerRequest(
                 logPrefix = "BasicSync",
                 log = log,
-                runId = runId,
-                chunkId = chunkId,
+                identity = identity,
+                topic = topic ?: event.eventType,
+                messageKey = messageKey ?: event.kafkaKey(),
+                eventType = event.eventType,
+                schemaVersion = event.schemaVersion,
+                eventPayloadJson = eventPayloadJson,
                 objectKey = event.objectKey,
                 acknowledgment = acknowledgment,
                 processingPermit = processingPermit,
                 executor = vtExecutor,
                 processContext = TaskContext.of("BasicSync", "${operation}Process", chunkId),
                 lifecycleContext = TaskContext.of("BasicSync", "${operation}Lifecycle", chunkId),
-                isAlreadySuccess = { chunkStatusRepository.isAlreadySuccess(runId, chunkId) },
-                claimChunk = { chunkStatusRepository.claimChunk(runId, chunkId, event.objectKey) },
                 process = {
                     val records = fileReader.read(event.objectKey)
                     repository.bulkUpsert(runId, chunkId, records)
@@ -110,8 +136,6 @@ class BasicSnapshotChunkConsumer(
                         records.size,
                     )
                 },
-                markSuccess = { chunkStatusRepository.markSuccess(runId, chunkId) },
-                markFailed = { reason -> chunkStatusRepository.markFailed(runId, chunkId, reason) },
                 onFailure = { ex ->
                     log.error(
                         "[BasicSync] {}chunk processing failed: runId={} chunkId={}",

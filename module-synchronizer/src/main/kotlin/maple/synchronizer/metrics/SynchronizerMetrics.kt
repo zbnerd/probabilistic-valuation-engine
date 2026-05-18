@@ -4,6 +4,8 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import maple.expectation.common.event.ChunkExecutionStatus
+import maple.expectation.common.event.ChunkExecutionType
 import org.springframework.stereotype.Component
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -83,11 +85,62 @@ class SynchronizerMetrics(private val registry: MeterRegistry) {
     private fun statusCounter(status: String) =
         registry.counter("synchronizer_chunk_status_transition_total", "status", status)
 
+    private fun chunkExecutionCounter(name: String, executionType: ChunkExecutionType): Counter =
+        registry.counter(name, "execution_type", executionType.name)
+
+    private fun chunkExecutionSkippedCounter(
+        executionType: ChunkExecutionType,
+        status: ChunkExecutionStatus,
+    ): Counter =
+        registry.counter(
+            "chunk_execution_skipped_total",
+            "execution_type",
+            executionType.name,
+            "status",
+            status.name,
+        )
+
+    private fun chunkExecutionFailedCounter(
+        executionType: ChunkExecutionType,
+        status: ChunkExecutionStatus,
+        reason: String,
+    ): Counter =
+        registry.counter(
+            "chunk_execution_failed_total",
+            "execution_type",
+            executionType.name,
+            "status",
+            status.name,
+            "reason",
+            reason,
+        )
+
     fun incrementReceived() = chunksReceived.increment()
     fun incrementProcessing() = chunksProcessing.incrementAndGet()
     fun decrementProcessing() = chunksProcessing.decrementAndGet()
     fun incrementProcessed() = chunksProcessed.increment()
     fun incrementFailed() = chunksFailed.increment()
+
+    fun recordChunkExecutionInserted(executionType: ChunkExecutionType) =
+        chunkExecutionCounter("chunk_execution_inserted_total", executionType).increment()
+
+    fun recordChunkExecutionClaimed(executionType: ChunkExecutionType) =
+        chunkExecutionCounter("chunk_execution_claimed_total", executionType).increment()
+
+    fun recordChunkExecutionSkipped(executionType: ChunkExecutionType, status: ChunkExecutionStatus) =
+        chunkExecutionSkippedCounter(executionType, status).increment()
+
+    fun recordChunkExecutionSucceeded(executionType: ChunkExecutionType) =
+        chunkExecutionCounter("chunk_execution_succeeded_total", executionType).increment()
+
+    fun recordChunkExecutionFailed(
+        executionType: ChunkExecutionType,
+        status: ChunkExecutionStatus,
+        reason: String,
+    ) = chunkExecutionFailedCounter(executionType, status, reason).increment()
+
+    fun recordChunkExecutionReclaimedExpired(executionType: ChunkExecutionType) =
+        chunkExecutionCounter("chunk_execution_reclaimed_expired_total", executionType).increment()
 
     fun incrementDocuments(count: Int) = documentsProcessed.increment(count.toDouble())
     fun incrementItems(count: Long) = itemsProcessed.increment(count.toDouble())

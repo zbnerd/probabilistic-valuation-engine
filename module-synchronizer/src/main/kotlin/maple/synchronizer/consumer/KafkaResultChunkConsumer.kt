@@ -2,16 +2,19 @@ package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.Timer
-import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
+import maple.expectation.common.event.ChunkExecutionIdentity
+import maple.expectation.common.event.ChunkExecutionType
+import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.processor.ChunkProcessInput
 import maple.synchronizer.processor.ChunkProcessor
-import maple.synchronizer.repository.SynchronizerChunkStatusRepository
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
+import org.springframework.kafka.support.KafkaHeaders
+import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
@@ -20,10 +23,9 @@ import java.util.concurrent.Semaphore
 class KafkaResultChunkConsumer(
     private val objectMapper: ObjectMapper,
     private val chunkProcessor: ChunkProcessor,
-    private val chunkStatusRepository: SynchronizerChunkStatusRepository,
     private val metrics: SynchronizerMetrics,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
-		) : ManagedLifecycle {
+) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(KafkaResultChunkConsumer::class.java)
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
     private val processingPermit = Semaphore(2)
@@ -32,10 +34,21 @@ class KafkaResultChunkConsumer(
         topics = ["\${synchronizer.kafka.result-chunk-ready-topic}"],
         groupId = "\${synchronizer.kafka.consumer-group-id}",
     )
-    fun consume(message: String, acknowledgment: Acknowledgment) {
+    fun consume(
+        message: String,
+        acknowledgment: Acknowledgment,
+        @Header(name = KafkaHeaders.RECEIVED_TOPIC, required = false) topic: String?,
+        @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) messageKey: String?,
+    ) {
         val event = objectMapper.readValue(message, CalculatorResultChunkReadyEvent::class.java)
         val runId = event.sourceRunId
         val chunkId = event.sourceChunkId
+        val identity = ChunkExecutionIdentity(
+            executionType = ChunkExecutionType.SYNCHRONIZER_RESULT_CHUNK,
+            runId = runId,
+            endpoint = event.sourceEndpoint.ifBlank { "result" },
+            chunkId = chunkId,
+        )
 
         log.info("[Synchronizer] received: runId={} chunkId={} objectKey={} results={}",
             runId, chunkId, event.objectKey, event.resultCount)
@@ -45,17 +58,19 @@ class KafkaResultChunkConsumer(
             ChunkConsumerRequest(
                 logPrefix = "Synchronizer",
                 log = log,
-                runId = runId,
-                chunkId = chunkId,
+                identity = identity,
+                topic = topic ?: event.eventType,
+                messageKey = messageKey ?: event.kafkaKey(),
+                eventType = event.eventType,
+                schemaVersion = event.schemaVersion,
+                eventPayloadJson = message,
                 objectKey = event.objectKey,
                 acknowledgment = acknowledgment,
                 processingPermit = processingPermit,
                 executor = vtExecutor,
                 processContext = TaskContext.of("Synchronizer", "ChunkProcess", chunkId),
                 lifecycleContext = TaskContext.of("Synchronizer", "ChunkLifecycle", chunkId),
-                mdcValues = mapOf("kafkaTopic" to "calculator.result.chunk-ready"),
-                isAlreadySuccess = { chunkStatusRepository.isAlreadySuccess(runId, chunkId) },
-                claimChunk = { chunkStatusRepository.claimChunk(runId, chunkId, event.objectKey) },
+                mdcValues = mapOf("kafkaTopic" to (topic ?: event.eventType)),
                 process = {
                     chunkProcessor.process(ChunkProcessInput(
                         objectKey = event.objectKey,
@@ -64,8 +79,6 @@ class KafkaResultChunkConsumer(
                         resultCount = event.resultCount,
                     ))
                 },
-                markSuccess = { chunkStatusRepository.markSuccess(runId, chunkId) },
-                markFailed = { reason -> chunkStatusRepository.markFailed(runId, chunkId, reason) },
                 onAccepted = {
                     chunkSample = Timer.start()
                     metrics.incrementReceived()

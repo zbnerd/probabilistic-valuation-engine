@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import java.math.BigDecimal
+import java.sql.Timestamp
+import java.time.Duration
 import java.time.Instant
 
 class ReadModelQueryService(
@@ -18,7 +20,10 @@ class ReadModelQueryService(
      * @param requests userIgn -> presetNo mapping
      * @return userIgn -> V6ExpectationResponse for hits only
      */
-    fun batchQuery(requests: Map<String, Int>): Map<String, V6ExpectationResponse> {
+    fun batchQuery(
+        requests: Map<String, Int>,
+        maxAge: Duration? = null,
+    ): Map<String, V6ExpectationResponse> {
         if (requests.isEmpty()) return emptyMap()
 
         val params = MapSqlParameterSource()
@@ -30,7 +35,7 @@ class ReadModelQueryService(
         }.joinToString(" OR ")
 
         val sql = """
-            SELECT user_ign, preset_no, document, total_cost, equipment_count, calculated_at
+            SELECT user_ign, preset_no, document, total_cost, equipment_count, calculated_at, updated_at
             FROM character_equipment_read_model
             WHERE ($pairPredicates)
               AND user_ign IS NOT NULL
@@ -38,7 +43,15 @@ class ReadModelQueryService(
 
         val rows = jdbc.queryForList(sql, params)
         val result = LinkedHashMap<String, V6ExpectationResponse>()
+        val minimumUpdatedAt = maxAge?.let { Instant.now().minus(it) }
+        var stale = 0
         rows.forEach { row ->
+            val updatedAt = (row["updated_at"] as? Timestamp)?.toInstant() ?: Instant.EPOCH
+            if (minimumUpdatedAt != null && updatedAt.isBefore(minimumUpdatedAt)) {
+                stale++
+                return@forEach
+            }
+
             val userIgn = row["user_ign"].toString()
             val compressed = row["document"] as ByteArray
             val json = GzipUtils.decompress(compressed)
@@ -65,11 +78,11 @@ class ReadModelQueryService(
                     ?: 0,
                 equipment = equipment,
                 calculatedAt = tree["metadata"]?.get("calculatedAt")?.asText()?.let(Instant::parse)
-                    ?: (row["calculated_at"] as? java.sql.Timestamp)?.toInstant()
+                    ?: (row["calculated_at"] as? Timestamp)?.toInstant()
                     ?: Instant.now(),
             )
         }
-        log.debug("Read model query: requested={}, hits={}", requests.size, result.size)
+        log.debug("Read model query: requested={}, hits={}, stale={}", requests.size, result.size, stale)
         return result
     }
 }

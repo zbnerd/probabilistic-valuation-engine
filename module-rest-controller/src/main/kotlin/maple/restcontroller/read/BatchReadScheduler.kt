@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.http.ResponseEntity
 import org.springframework.scheduling.annotation.Scheduled
+import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 class BatchReadScheduler(
@@ -94,7 +95,10 @@ class BatchReadScheduler(
 
         // 3. DB batch query for cache misses, including urgent-pending keys.
         if (cacheMisses.isNotEmpty()) {
-            val dbResults = queryService.batchQuery(cacheMisses)
+            val dbResults = queryService.batchQuery(
+                cacheMisses,
+                Duration.ofSeconds(properties.readModelFreshnessSeconds),
+            )
 
             // 4. Write DB results to Redis cache
             cacheService.multiPut(dbResults)

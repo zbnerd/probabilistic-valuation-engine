@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.context.request.async.DeferredResult
+import java.time.Duration
 
 @RestController
 @RequestMapping("/api/v6/characters")
@@ -48,7 +49,10 @@ class ExpectationV6Controller(
     ): ResponseEntity<*> {
         val current = cacheService.status(userIgn, presetNo)
         val status = if (current.state == UrgentReadState.PENDING || current.state == UrgentReadState.UNKNOWN) {
-            val dbResult = queryService.batchQuery(mapOf(userIgn to presetNo))
+            val dbResult = queryService.batchQuery(
+                mapOf(userIgn to presetNo),
+                Duration.ofSeconds(properties.readModelFreshnessSeconds),
+            )
             if (dbResult.isNotEmpty()) {
                 cacheService.multiPut(dbResult)
                 cacheService.status(userIgn, presetNo)

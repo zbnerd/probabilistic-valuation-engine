@@ -11,6 +11,7 @@ class V6ReadProperties {
     var queueCapacity: Int = 5000
     var shutdownDrainTimeoutSeconds: Long = 5
     var cacheTtlSeconds: Long = 300
+    var readModelFreshnessSeconds: Long = 1800
     var urgentPendingTtlSeconds: Long = 30
     var statusRetryAfterSeconds: Long = 3
     var statusEstimatedThroughputPerSecond: Double = 5.0

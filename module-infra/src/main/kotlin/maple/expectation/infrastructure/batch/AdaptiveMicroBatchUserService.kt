@@ -4,8 +4,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
-import jakarta.annotation.PostConstruct
-import jakarta.annotation.PreDestroy
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -24,6 +22,7 @@ import kotlinx.coroutines.withTimeout
 import maple.expectation.infrastructure.config.AdaptiveMicroBatchProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import org.springframework.cache.Cache
 
 private val log = KotlinLogging.logger {}
@@ -80,7 +79,7 @@ class AdaptiveMicroBatchUserService<T : Any>(
     private val cache: Cache,
     private val singleLoader: (String) -> T?,
     private val batchLoader: (List<String>) -> CompletableFuture<Map<String, T>>,
-) {
+	) : ManagedLifecycle {
     /** Semaphore: Fast Lane 동시 실행 제한 */
     private val semaphore = Semaphore(properties.semaphorePermits)
 
@@ -141,7 +140,8 @@ class AdaptiveMicroBatchUserService<T : Any>(
     /**
      * 애플리케이션 기동 시 백그라운드 배치 워커 시작
      */
-    @PostConstruct
+    override val lifecyclePhase: Int = 50
+
     fun startBatchWorker() {
         scope.launch {
             log.info { "[AdaptiveMicroBatch] Batch worker started: permits=${properties.semaphorePermits}, batchSize=${properties.batchMaxSize}, waitMs=${properties.batchMaxWaitMs}" }
@@ -149,10 +149,17 @@ class AdaptiveMicroBatchUserService<T : Any>(
         }
     }
 
-    @PreDestroy
     fun stopBatchWorker() {
         scope.cancel("AdaptiveMicroBatchUserService shutdown")
         inFlightRequests.clear()
+    }
+
+    override fun startLifecycle() {
+        startBatchWorker()
+    }
+
+    override fun stopLifecycle() {
+        stopBatchWorker()
     }
 
     /**

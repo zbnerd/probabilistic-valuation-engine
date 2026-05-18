@@ -3,9 +3,9 @@ package maple.externalapi.snapshot
 import com.fasterxml.jackson.databind.ObjectMapper
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
-import maple.externalapi.snapshot.event.SnapshotChunkReadyEvent
-import maple.externalapi.snapshot.event.SnapshotRunCompletedEvent
-import maple.externalapi.snapshot.event.SnapshotRunFailedEvent
+import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.common.event.SnapshotRunCompletedEvent
+import maple.expectation.common.event.SnapshotRunFailedEvent
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -225,6 +225,10 @@ class ChunkedSnapshotSink(
         )
         try {
             eventPublisher.publishChunkReady(event)
+                .exceptionally { ex ->
+                    log.warn("[Sink] failed to publish chunk-ready event for chunkId={}: {}", event.chunkId, ex.message)
+                    null
+                }
         } catch (ex: Exception) {
             log.warn("[Sink] failed to publish chunk-ready event for chunkId={}: {}", event.chunkId, ex.message)
         }
@@ -245,6 +249,10 @@ class ChunkedSnapshotSink(
         )
         try {
             eventPublisher.publishRunCompleted(event)
+                .exceptionally { ex ->
+                    log.warn("[Sink] failed to publish run-completed event for runId={}: {}", manifest.runId, ex.message)
+                    null
+                }
         } catch (ex: Exception) {
             log.warn("[Sink] failed to publish run-completed event for runId={}: {}", manifest.runId, ex.message)
         }
@@ -260,6 +268,10 @@ class ChunkedSnapshotSink(
         )
         try {
             eventPublisher.publishRunFailed(event)
+                .exceptionally { ex ->
+                    log.warn("[Sink] failed to publish run-failed event for runId={}: {}", manifest.runId, ex.message)
+                    null
+                }
         } catch (ex: Exception) {
             log.warn("[Sink] failed to publish run-failed event for runId={}: {}", manifest.runId, ex.message)
         }

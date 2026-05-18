@@ -1,4 +1,4 @@
-package maple.externalapi.snapshot.event
+package maple.expectation.common.event
 
 import java.time.Instant
 
@@ -15,4 +15,6 @@ data class SnapshotRunCompletedEvent(
     val startedAt: Instant,
     val finishedAt: Instant,
     val createdAt: Instant,
-)
+) {
+    fun kafkaKey(): String = "$runId:$endpoint"
+}

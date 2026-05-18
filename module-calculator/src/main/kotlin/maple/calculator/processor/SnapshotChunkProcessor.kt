@@ -8,13 +8,13 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import maple.calculator.config.PipelineProperties
-import maple.calculator.event.SnapshotChunkReadyEvent
 import maple.calculator.model.CalculationResult
 import maple.calculator.model.ChunkResult
 import maple.calculator.parser.SnapshotEquipmentParser
 import maple.calculator.reader.GzipJsonlSnapshotRecordReader
 import maple.calculator.storage.ObjectStorage
 import maple.calculator.writer.CalculationResultWriter
+import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.core.dto.cube.CubeCalculationInput
 import maple.expectation.core.dto.v4.EquipmentItem
 import maple.expectation.core.dto.v4.EquipmentItemConverter

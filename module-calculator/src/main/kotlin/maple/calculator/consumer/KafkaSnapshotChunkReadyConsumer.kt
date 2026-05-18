@@ -3,7 +3,7 @@ package maple.calculator.consumer
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.runBlocking
 import maple.calculator.CalculatorChunkProcessingCoordinator
-import maple.calculator.event.SnapshotChunkReadyEvent
+import maple.expectation.common.event.SnapshotChunkReadyEvent
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment

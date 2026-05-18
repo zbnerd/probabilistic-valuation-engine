@@ -1,7 +1,8 @@
 package maple.externalapi.cleanup
 
+import maple.common.cleanup.RunCleanupExecutor
+import maple.common.cleanup.RunCleanupResult
 import maple.common.cleanup.RunInfo
-import maple.common.cleanup.RunRetentionPolicy
 import maple.externalapi.metrics.CleanupMetrics
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import org.slf4j.LoggerFactory
@@ -32,6 +33,7 @@ class ArtifactCleanupScheduler(
     private val maxRuntimeSeconds: Long,
 ) {
     private val log = LoggerFactory.getLogger(ArtifactCleanupScheduler::class.java)
+    private val cleanupExecutor = RunCleanupExecutor("Cleanup")
 
     private val runIdPattern = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
         .withZone(ZoneId.systemDefault())
@@ -63,11 +65,11 @@ class ArtifactCleanupScheduler(
         }
     }
 
-    private fun cleanupRuns(startedAt: Instant): CleanupResult {
+    private fun cleanupRuns(startedAt: Instant): RunCleanupResult {
         val runIds = artifactStore.listRuns()
         if (runIds.isEmpty()) {
             log.info("[Cleanup] no runs found")
-            return CleanupResult.ZERO
+            return RunCleanupResult.ZERO
         }
 
         var skippedActive = 0
@@ -89,75 +91,28 @@ class ArtifactCleanupScheduler(
 
         log.info("[Cleanup] scanned {} runs, skipped {} active, {} parseable", runIds.size, skippedActive, runInfos.size)
 
-        val toDelete = RunRetentionPolicy.selectForDeletion(
+        return cleanupExecutor.cleanup(
             runs = runInfos,
-            keepRecentCount = keepRecent,
+            dryRun = dryRun,
+            keepRecent = keepRecent,
             keepWithinHours = keepWithinHours,
             now = Instant.now(),
-        )
-
-        if (toDelete.isEmpty()) {
-            log.info("[Cleanup] no runs to delete")
-            return CleanupResult.ZERO
-        }
-
-        val throttled = maxOf(0, toDelete.size - maxDeleteRunsPerCycle)
-        val limited = if (toDelete.size > maxDeleteRunsPerCycle) {
-            log.info("[Cleanup] throttling: {} candidates, limit {}", toDelete.size, maxDeleteRunsPerCycle)
-            metrics.recordThrottled(throttled)
-            toDelete.take(maxDeleteRunsPerCycle)
-        } else {
-            toDelete
-        }
-
-        log.info(
-            "[Cleanup] candidates: {} of {} scanned (throttled={}, dryRun={})",
-            limited.size, runInfos.size, maxOf(0, throttled), dryRun,
-        )
-
-        if (dryRun) {
-            limited.forEach { run ->
+            maxDeleteRunsPerCycle = maxDeleteRunsPerCycle,
+            maxDeleteBytesPerCycle = maxDeleteBytesPerCycle,
+            maxRuntimeSeconds = maxRuntimeSeconds,
+            startedAt = startedAt,
+            deleteRun = { run -> artifactStore.deleteRun(run.runId) },
+            onThrottled = { metrics.recordThrottled(it) },
+            onDeletedBytes = { metrics.recordDeletedBytes(it) },
+            onDeletedRuns = { metrics.recordDeletedRuns(it) },
+            onDeleteError = { metrics.recordError() },
+            onDryRunCandidate = { run ->
                 log.info(
                     "[Cleanup] would delete: runId={}, size={}MB, createdAt={}",
                     run.runId, run.sizeBytes / (1024 * 1024), run.createdAt,
                 )
-            }
-            return CleanupResult(limited.size, limited.sumOf { it.sizeBytes }, 0, maxOf(0, throttled))
-        }
-
-        return deleteRunWithLimits(limited, startedAt)
-    }
-
-    private fun deleteRunWithLimits(runs: List<RunInfo>, startedAt: Instant): CleanupResult {
-        var deletedRuns = 0
-        var deletedBytes = 0L
-        var errors = 0
-
-        for (run in runs) {
-            val elapsed = Instant.now().toEpochMilli() - startedAt.toEpochMilli()
-            if (elapsed > maxRuntimeSeconds * 1000) {
-                log.info("[Cleanup] runtime limit reached: {}ms > {}ms, stopping", elapsed, maxRuntimeSeconds * 1000)
-                break
-            }
-            if (deletedBytes >= maxDeleteBytesPerCycle) {
-                log.info("[Cleanup] byte limit reached: {} >= {}, stopping", deletedBytes, maxDeleteBytesPerCycle)
-                break
-            }
-
-            val bytes = artifactStore.deleteRun(run.runId)
-            if (bytes >= 0) {
-                deletedRuns++
-                deletedBytes += bytes
-                metrics.recordDeletedBytes(bytes)
-            } else {
-                errors++
-                metrics.recordError()
-                log.warn("[Cleanup] failed to delete run: {} (pipeline NOT affected)", run.runId)
-            }
-        }
-
-        metrics.recordDeletedRuns(deletedRuns)
-        return CleanupResult(deletedRuns, deletedBytes, errors, 0)
+            },
+        )
     }
 
     private fun parseRunIdTimestamp(runId: String): Instant? {
@@ -169,14 +124,4 @@ class ArtifactCleanupScheduler(
         metrics.updateStorageUsed(runsSize)
     }
 
-    private data class CleanupResult(
-        val runsDeleted: Int,
-        val bytesDeleted: Long,
-        val errors: Int,
-        val throttled: Int,
-    ) {
-        companion object {
-            val ZERO = CleanupResult(0, 0L, 0, 0)
-        }
-    }
 }

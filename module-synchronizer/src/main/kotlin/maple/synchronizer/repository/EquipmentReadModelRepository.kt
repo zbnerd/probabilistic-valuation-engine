@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository
 @Repository
 class EquipmentReadModelRepository(
     private val jdbc: NamedParameterJdbcTemplate,
+    private val batchExecutor: JdbcChunkedBatchExecutor,
 ) {
     private val log = LoggerFactory.getLogger(EquipmentReadModelRepository::class.java)
 
@@ -17,29 +18,23 @@ class EquipmentReadModelRepository(
     }
 
     fun bulkUpsert(runId: String, chunkId: String, documents: List<PreppedDocument>) {
-        val batches = documents.chunked(SUB_BATCH_SIZE)
         val compSizes = documents.map { it.compressed.size }
-        val totalStart = System.currentTimeMillis()
 
         log.info("[Synchronizer] upsert start: docs={} batches={} batchSize={} " +
             "compressedBytes avg={} max={} total={} : runId={} chunkId={}",
-            documents.size, batches.size, SUB_BATCH_SIZE,
+            documents.size, documents.chunked(SUB_BATCH_SIZE).size, SUB_BATCH_SIZE,
             compSizes.average().toInt(), compSizes.max(), compSizes.sum(),
             runId, chunkId)
 
-        var totalAffected = 0
-        batches.forEachIndexed { idx, batch ->
-            val batchStart = System.currentTimeMillis()
-            val affected = upsertBatch(runId, chunkId, batch)
-            val batchMs = System.currentTimeMillis() - batchStart
-            totalAffected += affected
-            log.info("[Synchronizer] upsert batch: batchNo={}/{} attempted={} affected={} durationMs={}",
-                idx + 1, batches.size, batch.size, affected, batchMs)
-        }
-
-        val totalMs = System.currentTimeMillis() - totalStart
-        log.info("[Synchronizer] upsert done: docs={} affected={} totalDurationMs={} : runId={} chunkId={}",
-            documents.size, totalAffected, totalMs, runId, chunkId)
+        batchExecutor.execute(
+            label = "Synchronizer",
+            itemLabel = "docs",
+            runId = runId,
+            chunkId = chunkId,
+            items = documents,
+            batchSize = SUB_BATCH_SIZE,
+            upsertBatch = { batch -> upsertBatch(runId, chunkId, batch) },
+        )
     }
 
     private fun upsertBatch(runId: String, chunkId: String, batch: List<PreppedDocument>): Int {

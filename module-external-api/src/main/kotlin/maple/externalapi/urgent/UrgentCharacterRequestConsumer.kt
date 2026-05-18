@@ -1,13 +1,13 @@
 package maple.externalapi.urgent
 
-import jakarta.annotation.PreDestroy
 import com.fasterxml.jackson.databind.ObjectMapper
+import jakarta.annotation.PreDestroy
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.GzipJsonlChunkWriter
 import maple.externalapi.snapshot.SnapshotChunkRecord
-import maple.externalapi.snapshot.event.SnapshotChunkReadyEvent
+import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.util.StringMaskingUtils.maskIgn
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -19,9 +19,9 @@ import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
-import java.util.UUID
 
 @Component
 @ConditionalOnProperty(
@@ -55,10 +55,10 @@ class UrgentCharacterRequestConsumer(
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Urgent] failed: userIgn={}", maskIgn(request.userIgn), ex)
-                } else {
-                    acknowledgment.acknowledge()
-                    log.info("[Urgent] completed: userIgn={}", maskIgn(request.userIgn))
+                    return@whenComplete
                 }
+                acknowledgment.acknowledge()
+                log.info("[Urgent] completed: userIgn={}", maskIgn(request.userIgn))
             }
     }
 
@@ -67,34 +67,36 @@ class UrgentCharacterRequestConsumer(
             ExternalApiProvider.NEXON,
             ExternalApiEndpoint.OCID_LOOKUP,
             request.userIgn,
-        )
-            .thenComposeAsync({ ocidData ->
-                val ocidNode = objectMapper.readTree(ocidData).get("ocid")
-                if (ocidNode == null || ocidNode.isNull) {
-                    log.info("[Urgent] OCID not found: userIgn={}", maskIgn(request.userIgn))
-                    return@thenComposeAsync publishNotFoundAsync(request.userIgn)
-                }
+        ).thenComposeAsync({ ocidData ->
+            val ocidNode = objectMapper.readTree(ocidData).get("ocid")
+            if (ocidNode == null || ocidNode.isNull) {
+                log.info("[Urgent] OCID not found: userIgn={}", maskIgn(request.userIgn))
+                return@thenComposeAsync publishNotFoundAsync(request.userIgn)
+            }
 
-                val ocid = ocidNode.asText()
-                log.info("[Urgent] OCID resolved: userIgn={}", maskIgn(request.userIgn))
+            val ocid = ocidNode.asText()
+            log.info("[Urgent] OCID resolved: userIgn={}", maskIgn(request.userIgn))
 
-                val basicFuture = clientPort.fetch(
-                    ExternalApiProvider.NEXON,
-                    ExternalApiEndpoint.CHARACTER_BASIC,
-                    ocid,
-                )
-                val equipmentFuture = clientPort.fetch(
-                    ExternalApiProvider.NEXON,
-                    ExternalApiEndpoint.ITEM_EQUIPMENT,
-                    ocid,
-                )
+            val basicFuture = clientPort.fetch(
+                ExternalApiProvider.NEXON,
+                ExternalApiEndpoint.CHARACTER_BASIC,
+                ocid,
+            )
+            val equipmentFuture = clientPort.fetch(
+                ExternalApiProvider.NEXON,
+                ExternalApiEndpoint.ITEM_EQUIPMENT,
+                ocid,
+            )
 
-                basicFuture.thenCompose { basicData ->
-                    equipmentFuture.thenComposeAsync({ equipmentData ->
-                        publishUrgentChunksAsync(request, basicData, equipmentData)
-                    }, workerExecutor)
-                }
-            }, workerExecutor)
+            CompletableFuture.allOf(basicFuture, equipmentFuture)
+                .thenComposeAsync({
+                    publishUrgentChunksAsync(
+                        request = request,
+                        basicData = basicFuture.resultNow(),
+                        equipmentData = equipmentFuture.resultNow(),
+                    )
+                }, workerExecutor)
+        }, workerExecutor)
 
     private fun publishUrgentChunksAsync(
         request: UrgentCharacterRequest,
@@ -104,7 +106,9 @@ class UrgentCharacterRequestConsumer(
         val runId = "urgent-${UUID.randomUUID()}"
 
         return publishUrgentChunkAsync(runId, ExternalApiEndpoint.CHARACTER_BASIC, request.userIgn, basicData, "OCID")
-            .thenCompose { publishUrgentChunkAsync(runId, ExternalApiEndpoint.ITEM_EQUIPMENT, request.userIgn, equipmentData, "OCID") }
+            .thenCompose {
+                publishUrgentChunkAsync(runId, ExternalApiEndpoint.ITEM_EQUIPMENT, request.userIgn, equipmentData, "OCID")
+            }
             .thenAccept {
                 log.info(
                     "[Urgent] data fetch complete: userIgn={}, runId={}",
@@ -153,8 +157,7 @@ class UrgentCharacterRequestConsumer(
             )
         }, workerExecutor).thenCompose { event ->
             val eventJson = objectMapper.writeValueAsString(event)
-            val key = "${event.runId}:${event.endpoint}:${event.chunkId}"
-            kafkaTemplate.send(urgentChunkReadyTopic, key, eventJson).thenAccept {
+            kafkaTemplate.send(urgentChunkReadyTopic, event.kafkaKey(), eventJson).thenAccept {
                 log.info(
                     "[Urgent] published chunk: endpoint={}, userIgn={}, objectKey={}",
                     event.endpoint,
@@ -172,7 +175,9 @@ class UrgentCharacterRequestConsumer(
         )
         val json = objectMapper.writeValueAsString(event)
         return kafkaTemplate.send(notFoundTopic, userIgn, json)
-            .thenAccept { log.info("[Urgent] published not-found: userIgn={}", maskIgn(userIgn)) }
+            .thenAccept {
+                log.info("[Urgent] published not-found: userIgn={}", maskIgn(userIgn))
+            }
     }
 
     @PreDestroy

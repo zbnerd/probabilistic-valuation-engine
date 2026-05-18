@@ -1,8 +1,9 @@
 package maple.calculator.cleanup
 
 import maple.calculator.storage.ObjectStorage
+import maple.common.cleanup.RunCleanupExecutor
+import maple.common.cleanup.RunCleanupResult
 import maple.common.cleanup.RunInfo
-import maple.common.cleanup.RunRetentionPolicy
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -33,6 +34,7 @@ class CalculatorResultCleanupScheduler(
     private val basePath: String,
 ) {
     private val log = LoggerFactory.getLogger(CalculatorResultCleanupScheduler::class.java)
+    private val cleanupExecutor = RunCleanupExecutor("CalculatorCleanup")
 
     @Scheduled(fixedDelayString = "\${calculator.cleanup.interval-ms:21600000}")
     fun cleanup() {
@@ -49,7 +51,7 @@ class CalculatorResultCleanupScheduler(
                 log.info(
                     "[CalculatorCleanup] completed: dryRun={}, deleted={}, bytes={}, " +
                         "errors={}, throttled={}, durationMs={}",
-                    dryRun, res.deleted, res.bytes, res.errors, res.throttled, durationMs,
+                    dryRun, res.runsDeleted, res.bytesDeleted, res.errors, res.throttled, durationMs,
                 )
             }.onFailure { ex ->
                 log.error("[CalculatorCleanup] failed (pipeline NOT affected): {}", ex.message, ex)
@@ -57,84 +59,34 @@ class CalculatorResultCleanupScheduler(
         }
     }
 
-    private fun cleanupRuns(startedAt: Instant): CleanupResult {
+    private fun cleanupRuns(startedAt: Instant): RunCleanupResult {
         val prefix = "data/calculator/runs"
         val runDirs = objectStorage.listDirectories(prefix)
         if (runDirs.isEmpty()) {
             log.info("[CalculatorCleanup] no calculator runs found")
-            return CleanupResult.ZERO
+            return RunCleanupResult.ZERO
         }
 
         val runInfos = runDirs.mapNotNull { parseRunInfo(prefix, it) }
 
-        val toDelete = RunRetentionPolicy.selectForDeletion(
+        return cleanupExecutor.cleanup(
             runs = runInfos,
-            keepRecentCount = keepRecent,
+            dryRun = dryRun,
+            keepRecent = keepRecent,
             keepWithinHours = keepWithinHours,
             now = Instant.now(),
-        )
-
-        if (toDelete.isEmpty()) {
-            log.info("[CalculatorCleanup] no runs to delete")
-            return CleanupResult.ZERO
-        }
-
-        // Apply throttling limits
-        val throttled = maxOf(0, toDelete.size - maxDeleteRunsPerCycle)
-        val limited = if (toDelete.size > maxDeleteRunsPerCycle) {
-            log.info("[CalculatorCleanup] throttling: {} candidates, limit {}", toDelete.size, maxDeleteRunsPerCycle)
-            toDelete.take(maxDeleteRunsPerCycle)
-        } else {
-            toDelete
-        }
-
-        log.info(
-            "[CalculatorCleanup] candidates: {} of {} (throttled={}, dryRun={})",
-            limited.size, runInfos.size, throttled, dryRun,
-        )
-
-        if (dryRun) {
-            limited.forEach { run ->
+            maxDeleteRunsPerCycle = maxDeleteRunsPerCycle,
+            maxDeleteBytesPerCycle = maxDeleteBytesPerCycle,
+            maxRuntimeSeconds = maxRuntimeSeconds,
+            startedAt = startedAt,
+            deleteRun = { run -> objectStorage.deleteDirectory("data/calculator/runs/${run.runId}") },
+            onDryRunCandidate = { run ->
                 log.info(
                     "[CalculatorCleanup] would delete: runId={}, size={}MB",
                     run.runId, run.sizeBytes / (1024 * 1024),
                 )
-            }
-            return CleanupResult(limited.size, limited.sumOf { it.sizeBytes }, 0, throttled)
-        }
-
-        return deleteRunWithLimits(limited, startedAt)
-    }
-
-    private fun deleteRunWithLimits(runs: List<RunInfo>, startedAt: Instant): CleanupResult {
-        var deleted = 0
-        var bytes = 0L
-        var errors = 0
-
-        for (run in runs) {
-            // Check runtime limit
-            val elapsed = Instant.now().toEpochMilli() - startedAt.toEpochMilli()
-            if (elapsed > maxRuntimeSeconds * 1000) {
-                log.info("[CalculatorCleanup] runtime limit reached: {}ms, stopping", elapsed)
-                break
-            }
-            // Check byte limit
-            if (bytes >= maxDeleteBytesPerCycle) {
-                log.info("[CalculatorCleanup] byte limit reached: {} bytes, stopping", bytes)
-                break
-            }
-
-            val deletedBytes = objectStorage.deleteDirectory("data/calculator/runs/${run.runId}")
-            if (deletedBytes >= 0) {
-                deleted++
-                bytes += deletedBytes
-            } else {
-                errors++
-                log.warn("[CalculatorCleanup] failed to delete: {} (pipeline NOT affected)", run.runId)
-            }
-        }
-
-        return CleanupResult(deleted, bytes, errors, 0)
+            },
+        )
     }
 
     private fun parseRunInfo(prefix: String, runId: String): RunInfo? {
@@ -165,14 +117,4 @@ class CalculatorResultCleanupScheduler(
         return modifiedAt.isAfter(Instant.now().minusSeconds(1800))
     }
 
-    private data class CleanupResult(
-        val deleted: Int,
-        val bytes: Long,
-        val errors: Int,
-        val throttled: Int,
-    ) {
-        companion object {
-            val ZERO = CleanupResult(0, 0L, 0, 0)
-        }
-    }
 }

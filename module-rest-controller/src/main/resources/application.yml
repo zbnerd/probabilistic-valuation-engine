@@ -48,6 +48,13 @@ expectation:
     ranking:
       redis-key-prefix: ranking:equipment:total-cost
       top-size: 10
+    popular:
+      redis-key-prefix: popular:characters:v6
+      top-size: 10
+      default-window-hours: 3
+      max-window-hours: 24
+      bucket-ttl-hours: 48
+      rolling-ttl-seconds: 60
     urgent:
       enabled: false                              # feature flag
       request-topic: urgent-character-request

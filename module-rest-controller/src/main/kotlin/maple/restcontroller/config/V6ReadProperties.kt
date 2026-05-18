@@ -15,9 +15,19 @@ class V6ReadProperties {
     var statusRetryAfterSeconds: Long = 3
     var statusEstimatedThroughputPerSecond: Double = 5.0
     var ranking: Ranking = Ranking()
+    var popular: Popular = Popular()
 
     class Ranking {
         var redisKeyPrefix: String = "ranking:equipment:total-cost"
         var topSize: Int = 10
+    }
+
+    class Popular {
+        var redisKeyPrefix: String = "popular:characters:v6"
+        var topSize: Int = 10
+        var defaultWindowHours: Int = 3
+        var maxWindowHours: Int = 24
+        var bucketTtlHours: Long = 48
+        var rollingTtlSeconds: Long = 60
     }
 }

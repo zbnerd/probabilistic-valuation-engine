@@ -3,6 +3,7 @@ package maple.restcontroller.config
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import maple.restcontroller.metrics.V6ReadMetrics
+import maple.restcontroller.popular.PopularCharacterService
 import maple.restcontroller.ranking.EquipmentRankingCacheService
 import maple.restcontroller.ranking.EquipmentRankingQueryService
 import maple.restcontroller.ranking.EquipmentRankingService
@@ -71,12 +72,25 @@ class V6ReadConfig(
     ): EquipmentRankingService = EquipmentRankingService(cacheService, queryService, properties)
 
     @Bean
+    fun popularCharacterService(
+        redisTemplate: StringRedisTemplate
+    ): PopularCharacterService = PopularCharacterService(redisTemplate, properties)
+
+    @Bean
     fun expectationReadFacade(
         registry: InflightRequestRegistry,
         buffer: LocalRequestBuffer,
         metrics: V6ReadMetrics,
-        cacheService: ReadModelCacheService
-    ): ExpectationReadFacade = ExpectationReadFacade(registry, buffer, metrics, cacheService, properties)
+        cacheService: ReadModelCacheService,
+        popularCharacterService: PopularCharacterService
+    ): ExpectationReadFacade = ExpectationReadFacade(
+        registry,
+        buffer,
+        metrics,
+        cacheService,
+        popularCharacterService,
+        properties,
+    )
 
     @Bean
     fun batchReadScheduler(

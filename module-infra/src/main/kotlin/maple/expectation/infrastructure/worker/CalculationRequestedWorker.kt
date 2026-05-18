@@ -3,10 +3,6 @@ package maple.expectation.infrastructure.worker
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.UUID
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
@@ -27,7 +23,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
-@OptIn(ExperimentalCoroutinesApi::class)
 @Component
 @ConditionalOnProperty(name = ["app.pipeline.consolidated.enabled"], havingValue = "false")
 class CalculationRequestedWorker(
@@ -47,10 +42,6 @@ class CalculationRequestedWorker(
     override val queueName: String = QueueNames.CALCULATION_REQUESTED
     override val payloadClass: Class<CalculationRequestedPayload> = CalculationRequestedPayload::class.java
     override val workerSettings: PgmqWorkerConfig.WorkerSettings = workerConfig.calculationRequested
-
-    private val cpuDispatcher = Dispatchers.Default.limitedParallelism(
-        Runtime.getRuntime().availableProcessors().coerceAtLeast(1),
-    )
 
     override fun process(message: PgmqMessage<CalculationRequestedPayload>): Boolean {
         val payload = message.payload
@@ -95,11 +86,7 @@ class CalculationRequestedWorker(
             calculationInputPort.findByJobId(jobId) ?: error("Calculation input missing: $jobId")
         }
         val calcResult = stage("PureCalculate", payload.userIgn) {
-            runBlocking(cpuDispatcher) {
-                withContext(cpuDispatcher) {
-                    pureCalculationPort.calculate(input)
-                }
-            }
+            pureCalculationPort.calculate(input)
         }
         val resultBytes = stage("SerializeResult", payload.userIgn) {
             objectMapper.writeValueAsString(calcResult).toByteArray()

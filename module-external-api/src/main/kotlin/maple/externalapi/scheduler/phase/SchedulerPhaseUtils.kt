@@ -30,8 +30,9 @@ internal object SchedulerPhaseUtils {
     }
 
     fun newRunId(): String {
+        val now = Instant.now()
         val formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.systemDefault())
-        return formatter.format(Instant.now())
+        return "${formatter.format(now)}-${now.nano}"
     }
 
     fun writeRunningMarker(runDir: Path) {

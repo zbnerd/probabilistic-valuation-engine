@@ -228,19 +228,19 @@ class JdbcBatchUpsertRepository(
                     doBatchUpsert(equipments, batchSize)
                 },
                 { e ->
-                    val dataEx = if (e is DataAccessException) e else null
-                    if (dataEx != null) {
-                        lastException = dataEx
-                        attempt++
-                        if (attempt > retryConfig.maxRetries) {
-                            log.error("Batch upsert failed after {} attempts", attempt, dataEx)
-                            throw IllegalStateException(
-                                "JDBC batch upsert failed after $attempt attempts: ${dataEx.message}",
-                                dataEx,
-                            )
-                        }
-                        log.warn("Batch upsert attempt {} failed: {}", attempt, dataEx.message)
+                    if (e !is DataAccessException) {
+                        throw e
                     }
+                    lastException = e
+                    attempt++
+                    if (attempt > retryConfig.maxRetries) {
+                        log.error("Batch upsert failed after {} attempts", attempt, e)
+                        throw IllegalStateException(
+                            "JDBC batch upsert failed after $attempt attempts: ${e.message}",
+                            e,
+                        )
+                    }
+                    log.warn("Batch upsert attempt {} failed: {}", attempt, e.message)
                     intArrayOf()
                 },
                 TaskContext.of("JdbcBatchUpsert", "RetryAttempt", "$attempt"),

@@ -9,6 +9,7 @@ import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
+import java.util.UUID
 import java.util.stream.Collectors
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
@@ -37,7 +38,7 @@ class LocalExternalApiArtifactStoreAdapter(
         val filePath = resolvePath(endpoint, key)
 
         filePath.parent.toFile().mkdirs()
-        val tempFile = filePath.resolveSibling(filePath.fileName.toString() + ".tmp")
+        val tempFile = filePath.resolveSibling("${filePath.fileName}.${UUID.randomUUID()}.tmp")
         Files.write(tempFile, compressed)
         Files.move(tempFile, filePath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
 

@@ -9,18 +9,18 @@ class InflightRequestRegistry {
 
     private val registry = ConcurrentHashMap<String, CopyOnWriteArrayList<DeferredResult<ResponseEntity<*>>>>()
 
-    fun register(userIgn: String, deferred: DeferredResult<ResponseEntity<*>>): Boolean {
-        val list = registry.computeIfAbsent(userIgn) { CopyOnWriteArrayList() }
+    fun register(userIgn: String, presetNo: Int, deferred: DeferredResult<ResponseEntity<*>>): Boolean {
+        val list = registry.computeIfAbsent(key(userIgn, presetNo)) { CopyOnWriteArrayList() }
         list.add(deferred)
         return list.size == 1
     }
 
-    fun getAndRemove(userIgn: String): List<DeferredResult<ResponseEntity<*>>> {
-        return registry.remove(userIgn) ?: emptyList()
+    fun getAndRemove(userIgn: String, presetNo: Int): List<DeferredResult<ResponseEntity<*>>> {
+        return registry.remove(key(userIgn, presetNo)) ?: emptyList()
     }
 
-    fun cleanup(userIgn: String, deferred: DeferredResult<ResponseEntity<*>>) {
-        registry.computeIfPresent(userIgn) { _, list ->
+    fun cleanup(userIgn: String, presetNo: Int, deferred: DeferredResult<ResponseEntity<*>>) {
+        registry.computeIfPresent(key(userIgn, presetNo)) { _, list ->
             list.remove(deferred)
             if (list.isEmpty()) null else list
         }
@@ -36,4 +36,6 @@ class InflightRequestRegistry {
             }
         }
     }
+
+    private fun key(userIgn: String, presetNo: Int): String = "$userIgn:$presetNo"
 }

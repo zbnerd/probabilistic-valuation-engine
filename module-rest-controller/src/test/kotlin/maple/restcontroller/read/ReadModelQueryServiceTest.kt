@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import java.math.BigDecimal
 import java.sql.Timestamp
+import java.time.Duration
 import java.time.Instant
 
 class ReadModelQueryServiceTest {
@@ -42,7 +43,8 @@ class ReadModelQueryServiceTest {
                     "document" to compressed,
                     "total_cost" to BigDecimal(1000),
                     "equipment_count" to 5,
-                    "calculated_at" to Timestamp.from(now)
+                    "calculated_at" to Timestamp.from(now),
+                    "updated_at" to Timestamp.from(now),
                 )
             ))
 
@@ -96,7 +98,8 @@ class ReadModelQueryServiceTest {
                     "document" to GzipUtils.compress(String(doc1)),
                     "total_cost" to BigDecimal(1000),
                     "equipment_count" to 3,
-                    "calculated_at" to Timestamp.from(now)
+                    "calculated_at" to Timestamp.from(now),
+                    "updated_at" to Timestamp.from(now),
                 ),
                 mapOf<String, Any>(
                     "user_ign" to "진격캐넌",
@@ -104,7 +107,8 @@ class ReadModelQueryServiceTest {
                     "document" to GzipUtils.compress(String(doc2)),
                     "total_cost" to BigDecimal(2000),
                     "equipment_count" to 6,
-                    "calculated_at" to Timestamp.from(now)
+                    "calculated_at" to Timestamp.from(now),
+                    "updated_at" to Timestamp.from(now),
                 )
             ))
 
@@ -115,5 +119,33 @@ class ReadModelQueryServiceTest {
         assertThat(result["아델"]!!.presetNo).isEqualTo(1)
         assertThat(result["진격캐넌"]!!.presetNo).isEqualTo(2)
         assertThat(result["진격캐넌"]!!.totalCost).isEqualByComparingTo(BigDecimal(2000))
+    }
+
+    @Test
+    fun `should treat stale updatedAt as cache miss`() {
+        val now = Instant.now()
+        val docJson = objectMapper.writeValueAsBytes(mapOf(
+            "presetNo" to 1,
+            "summary" to mapOf("totalCost" to 1000, "equipmentCount" to 5),
+            "equipment" to emptyList<Any>(),
+            "metadata" to mapOf("calculatedAt" to now.toString())
+        ))
+
+        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>()))
+            .thenReturn(listOf(
+                mapOf<String, Any>(
+                    "user_ign" to "아델",
+                    "preset_no" to 1,
+                    "document" to GzipUtils.compress(String(docJson)),
+                    "total_cost" to BigDecimal(1000),
+                    "equipment_count" to 5,
+                    "calculated_at" to Timestamp.from(now),
+                    "updated_at" to Timestamp.from(now.minus(Duration.ofMinutes(31))),
+                )
+            ))
+
+        val result = service.batchQuery(mapOf("아델" to 1), Duration.ofMinutes(30))
+
+        assertThat(result).isEmpty()
     }
 }

@@ -10,6 +10,26 @@ UPDATE calculation_jobs
 SET request_key = 'calc:v1:ign:' || lower(btrim(user_ign)) || ':preset:' || preset_no || ':schema:1'
 WHERE request_key IS NULL;
 
+WITH ranked AS (
+    SELECT
+        job_id,
+        row_number() OVER (
+            PARTITION BY request_key
+            ORDER BY created_at DESC, updated_at DESC, job_id DESC
+        ) AS rn
+    FROM calculation_jobs
+    WHERE status IN ('REQUESTED', 'OCID_RESOLVING', 'API_REQUESTED', 'SNAPSHOT_READY', 'CALCULATING', 'RETRYING')
+)
+UPDATE calculation_jobs cj
+SET
+    status = 'FAILED',
+    last_error_code = 'DUPLICATE_ACTIVE_REQUEST_KEY',
+    error_message = 'Superseded during request_key dedup migration',
+    updated_at = now()
+FROM ranked r
+WHERE cj.job_id = r.job_id
+  AND r.rn > 1;
+
 CREATE UNIQUE INDEX IF NOT EXISTS ux_calc_jobs_active_request_key
     ON calculation_jobs (request_key)
     WHERE status IN ('REQUESTED', 'OCID_RESOLVING', 'API_REQUESTED', 'SNAPSHOT_READY', 'CALCULATING', 'RETRYING');

@@ -12,6 +12,7 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -64,7 +65,19 @@ class ChunkedSnapshotSink(
             }
             throw IllegalStateException("sink is closed, cannot submit")
         }
-        if (!queue.offer(record, 30, java.util.concurrent.TimeUnit.SECONDS)) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
+        while (System.nanoTime() < deadline) {
+            writerError.get()?.let { err ->
+                throw IllegalStateException("sink closed due to writer error: ${err.message}", err)
+            }
+            if (!writerThread.isAlive) {
+                throw IllegalStateException("sink writer thread is not alive")
+            }
+            if (queue.offer(record, 100, TimeUnit.MILLISECONDS)) {
+                return
+            }
+        }
+        if (!queue.offer(record)) {
             throw IllegalStateException("sink queue full after 30s, likely writer thread stuck")
         }
     }

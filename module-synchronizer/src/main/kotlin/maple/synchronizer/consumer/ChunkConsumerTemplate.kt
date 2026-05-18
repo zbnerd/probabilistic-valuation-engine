@@ -75,6 +75,16 @@ class ChunkConsumerTemplate(
         val claim = chunkExecutionRepository.claimProcessing(request.identity, processingTimeout)
         if (claim == null) {
             request.processingPermit.release()
+            if (state.shouldPreserveKafkaRedelivery()) {
+                request.log.info(
+                    "[{}] retryable chunk not due, leaving unacked for Kafka redelivery: runId={} chunkId={} nextRetryAt={}",
+                    request.logPrefix,
+                    request.runId,
+                    request.chunkId,
+                    state.nextRetryAt,
+                )
+                return
+            }
             request.log.info(
                 "[{}] skip - chunk not eligible for claim: runId={} chunkId={} status={}",
                 request.logPrefix,
@@ -92,13 +102,13 @@ class ChunkConsumerTemplate(
         }
 
         request.onAccepted()
-        MDC.put("runId", request.runId)
-        MDC.put("chunkId", request.chunkId)
-        request.mdcValues.forEach { (key, value) -> MDC.put(key, value) }
 
         request.executor.execute {
             logicExecutor.executeWithFinally(
                 task = {
+                    MDC.put("runId", request.runId)
+                    MDC.put("chunkId", request.chunkId)
+                    request.mdcValues.forEach { (key, value) -> MDC.put(key, value) }
                     processClaimed(request, claim)
                 },
                 finallyBlock = {
@@ -220,6 +230,16 @@ class ChunkConsumerTemplate(
                 failure.terminalReason ?: RETRYABLE_FAILURE,
             )
             request.onFailure(ex)
+            if (failure.terminalReason == null) {
+                request.log.warn(
+                    "[{}] retryable chunk failure recorded, leaving unacked for Kafka redelivery: runId={} chunkId={} attempt={}",
+                    request.logPrefix,
+                    request.runId,
+                    request.chunkId,
+                    claim.attemptCount,
+                )
+                return
+            }
             request.acknowledgment.acknowledge()
             return
         }
@@ -263,13 +283,16 @@ class ChunkConsumerTemplate(
             return true
         }
         if (status == ChunkExecutionStatus.FAILED_RETRYABLE && nextRetryAt?.isAfter(now) == true) {
-            return true
+            return false
         }
         if (status == ChunkExecutionStatus.PROCESSING && leaseUntil?.isAfter(now) == true) {
             return true
         }
         return false
     }
+
+    private fun ChunkExecutionState.shouldPreserveKafkaRedelivery(): Boolean =
+        status == ChunkExecutionStatus.FAILED_RETRYABLE && nextRetryAt?.isAfter(Instant.now()) == true
 
     private fun ChunkConsumerRequest.toInsertCommand(): InsertChunkExecutionCommand =
         InsertChunkExecutionCommand(

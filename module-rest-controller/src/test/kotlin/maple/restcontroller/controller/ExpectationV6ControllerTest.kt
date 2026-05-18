@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import maple.restcontroller.advice.RestControllerExceptionHandler
 import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.metrics.V6ReadMetrics
+import maple.restcontroller.popular.PopularCharacterService
 import maple.restcontroller.read.*
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -21,6 +22,7 @@ class ExpectationV6ControllerTest {
     private lateinit var registry: InflightRequestRegistry
     private lateinit var facade: ExpectationReadFacade
     private lateinit var cacheService: ReadModelCacheService
+    private lateinit var popularCharacterService: PopularCharacterService
     private lateinit var queryService: ReadModelQueryService
     private val properties = V6ReadProperties().apply {
         requestTimeoutMs = 100
@@ -36,8 +38,9 @@ class ExpectationV6ControllerTest {
         registry = InflightRequestRegistry()
         val metrics = V6ReadMetrics(SimpleMeterRegistry(), buffer, registry)
         cacheService = mock()
+        popularCharacterService = mock()
         queryService = mock()
-        facade = ExpectationReadFacade(registry, buffer, metrics, cacheService, properties)
+        facade = ExpectationReadFacade(registry, buffer, metrics, cacheService, popularCharacterService, properties)
 
         mockMvc = MockMvcBuilders
             .standaloneSetup(ExpectationV6Controller(facade, properties, cacheService, queryService))

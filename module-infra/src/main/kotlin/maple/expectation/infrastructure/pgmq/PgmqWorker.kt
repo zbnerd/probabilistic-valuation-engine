@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.pgmq
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
 import jakarta.annotation.PreDestroy
+import java.util.concurrent.Callable
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -310,36 +311,29 @@ abstract class PgmqWorker<T : Any>(
         )
     }
 
-    @Volatile
-    private var pendingBatchFuture: CompletableFuture<*>? = null
-
     private fun processBatchSinglePhase(messages: List<PgmqMessage<T>>) {
         val archiveIds = java.util.concurrent.ConcurrentLinkedQueue<Long>()
-        val futures = messages.map { message ->
-            CompletableFuture.supplyAsync({
+        val tasks = messages.map { message ->
+            Callable {
                 val needsArchive = processSingleMessage(message)
                 if (needsArchive) archiveIds.add(message.messageId)
                 needsArchive
-            }, workerPool)
+            }
         }
-        pendingBatchFuture = CompletableFuture.allOf(*futures.toTypedArray())
-            .exceptionally { ex ->
-                log.warn("[{}] Batch completion error: {}", queueName, ex.message)
-                null
-            }
-            .thenAccept {
-                if (archiveIds.isNotEmpty()) {
-                    executor.executeOrDefault(
-                        {
-                            val archived = pgmqClient.archiveBatch(queueName, archiveIds.toList())
-                            log.debug("[{}] Batch archived {}/{} messages", queueName, archived, archiveIds.size)
-                        },
-                        Unit,
-                        TaskContext.of("PgmqWorker", "BatchArchive", queueName),
-                    )
-                }
-                log.debug("[{}] Batch of {} messages completed", queueName, messages.size)
-            }
+        val visibilityTimeout = config.common.visibilityTimeoutSec.toLong()
+        workerPool.invokeAll(tasks, visibilityTimeout, TimeUnit.SECONDS)
+
+        if (archiveIds.isNotEmpty()) {
+            executor.executeOrDefault(
+                {
+                    val archived = pgmqClient.archiveBatch(queueName, archiveIds.toList())
+                    log.debug("[{}] Batch archived {}/{} messages", queueName, archived, archiveIds.size)
+                },
+                Unit,
+                TaskContext.of("PgmqWorker", "BatchArchive", queueName),
+            )
+        }
+        log.debug("[{}] Batch of {} messages completed", queueName, messages.size)
     }
 
     /**
@@ -449,20 +443,21 @@ abstract class PgmqWorker<T : Any>(
                 when {
                     success -> {
                         metrics.success.increment()
+                        true
                     }
                     message.isRetryable(maxRetries) -> {
                         onProcessingFailed(message)
                         metrics.failure.increment()
                         log.warn("[{}] Message will be retried: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
+                        false
                     }
                     else -> {
                         metrics.failure.increment()
                         metrics.dlq.increment()
                         log.error("[{}] Max retries exceeded: msgId={}, readCount={}", queueName, message.messageId, message.readCount)
+                        true
                     }
                 }
-
-                success
             },
             finallyBlock = {
                 metrics.concurrentDecrement()
@@ -480,7 +475,6 @@ abstract class PgmqWorker<T : Any>(
             flushSequentialBatch()
         }
         log.info("[{}] Shutting down worker pool", queueName)
-        pendingBatchFuture?.join()
         workerPool.shutdown()
         if (!workerPool.awaitTermination(5, TimeUnit.SECONDS)) {
             log.warn("[{}] Worker pool did not terminate in 5s, forcing", queueName)

@@ -6,11 +6,13 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import org.springframework.transaction.annotation.Transactional
 
 interface CalculationSnapshotInputRepository : JpaRepository<CalculationSnapshotInputEntity, UUID> {
     fun findByJobId(jobId: UUID): CalculationSnapshotInputEntity?
 
     @Modifying
+    @Transactional("transactionManager")
     @Query(
         value = """
             INSERT INTO calculation_snapshot_inputs (input_id, job_id, schema_version, payload, created_at)

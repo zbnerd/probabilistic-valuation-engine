@@ -12,6 +12,8 @@ object RunRetentionPolicy {
         now: Instant,
     ): List<RunInfo> {
         if (runs.isEmpty()) return emptyList()
+        require(keepRecentCount >= 0) { "keepRecentCount must be non-negative: $keepRecentCount" }
+        require(keepWithinHours >= 0) { "keepWithinHours must be non-negative: $keepWithinHours" }
 
         val cutoff = now.minus(Duration.ofHours(keepWithinHours))
         val recentRunIds = runs.sortedByDescending { it.createdAt }

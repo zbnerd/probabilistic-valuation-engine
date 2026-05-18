@@ -28,30 +28,29 @@ class ResultFileReaderTest {
     }
 
     @Test
-    fun `parseItem - missing ocid returns null`() {
+    fun `parseItem - missing ocid throws`() {
         val line = """{"presetNo":1,"itemName":"Sword"}"""
 
-        val item = reader.parseItem(line)
-
-        assertThat(item).isNull()
+        assertThatThrownBy { reader.parseItem(line) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("Missing required field: ocid")
     }
 
     @Test
-    fun `parseItem - missing presetNo returns null`() {
+    fun `parseItem - missing presetNo throws`() {
         val line = """{"ocid":"oc1","itemName":"Sword"}"""
 
-        val item = reader.parseItem(line)
-
-        assertThat(item).isNull()
+        assertThatThrownBy { reader.parseItem(line) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("Missing required field: presetNo")
     }
 
     @Test
-    fun `parseItem - invalid JSON returns null`() {
+    fun `parseItem - invalid JSON throws`() {
         val line = "not json at all"
 
-        val item = reader.parseItem(line)
-
-        assertThat(item).isNull()
+        assertThatThrownBy { reader.parseItem(line) }
+            .isInstanceOf(Exception::class.java)
     }
 
     @Test

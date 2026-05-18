@@ -89,7 +89,7 @@ class ChunkConsumerTemplateTest {
     }
 
     @Test
-    fun `retryable failure not due acks without permit or claim`() {
+    fun `retryable failure not due does not ack without permit or claim`() {
         val permit = Semaphore(0)
         whenever(repository.findExecutionState(identity)).thenReturn(
             state(ChunkExecutionStatus.FAILED_RETRYABLE, nextRetryAt = Instant.now().plusSeconds(60)),
@@ -98,7 +98,7 @@ class ChunkConsumerTemplateTest {
         template.submit(request(processingPermit = permit, process = { error("must not process") }))
 
         verify(repository, never()).claimProcessing(any(), any())
-        verify(acknowledgment).acknowledge()
+        verify(acknowledgment, never()).acknowledge()
     }
 
     @Test
@@ -126,16 +126,15 @@ class ChunkConsumerTemplateTest {
     }
 
     @Test
-    fun `business failure writes retryable failure before ack`() {
+    fun `business failure writes retryable failure and preserves Kafka redelivery`() {
         whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.PENDING))
         whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 1))
         whenever(repository.markFailedRetryable(eq(identity), eq(1), any(), any())).thenReturn(true)
 
         template.submit(request(process = { error("boom") }))
 
-        val order = inOrder(repository, acknowledgment)
-        order.verify(repository).markFailedRetryable(eq(identity), eq(1), any(), any())
-        order.verify(acknowledgment).acknowledge()
+        verify(repository).markFailedRetryable(eq(identity), eq(1), any(), any())
+        verify(acknowledgment, never()).acknowledge()
         verify(repository, never()).markSucceeded(any(), any())
     }
 

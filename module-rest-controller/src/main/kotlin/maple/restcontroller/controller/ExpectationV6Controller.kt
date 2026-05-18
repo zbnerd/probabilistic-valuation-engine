@@ -8,6 +8,7 @@ import maple.restcontroller.read.ReadModelQueryService
 import maple.restcontroller.read.UrgentReadState
 import maple.restcontroller.validation.ValidUserIgn
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.ResponseEntity
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
@@ -16,10 +17,12 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.context.request.async.DeferredResult
+import java.time.Duration
 
 @RestController
 @RequestMapping("/api/v6/characters")
 @Validated
+@ConditionalOnProperty(name = ["expectation.v6.enabled"], havingValue = "true")
 class ExpectationV6Controller(
     private val facade: ExpectationReadFacade,
     private val properties: V6ReadProperties,
@@ -46,7 +49,10 @@ class ExpectationV6Controller(
     ): ResponseEntity<*> {
         val current = cacheService.status(userIgn, presetNo)
         val status = if (current.state == UrgentReadState.PENDING || current.state == UrgentReadState.UNKNOWN) {
-            val dbResult = queryService.batchQuery(mapOf(userIgn to presetNo))
+            val dbResult = queryService.batchQuery(
+                mapOf(userIgn to presetNo),
+                Duration.ofSeconds(properties.readModelFreshnessSeconds),
+            )
             if (dbResult.isNotEmpty()) {
                 cacheService.multiPut(dbResult)
                 cacheService.status(userIgn, presetNo)

@@ -43,11 +43,19 @@ expectation:
     max-batch-size: 200               # scheduler batch size (Phase 2)
     queue-capacity: 5000              # RequestBuffer max capacity
     shutdown-drain-timeout-seconds: 5 # graceful shutdown deadline
+    read-model-freshness-seconds: 1800 # DB read model TTL before urgent refresh
     status-retry-after-seconds: 3     # frontend polling hint after 202/status
     status-estimated-throughput-per-second: 5.0 # approximate urgent pipeline throughput
     ranking:
       redis-key-prefix: ranking:equipment:total-cost
       top-size: 10
+    popular:
+      redis-key-prefix: popular:characters:v6
+      top-size: 10
+      default-window-hours: 3
+      max-window-hours: 24
+      bucket-ttl-hours: 48
+      rolling-ttl-seconds: 60
     urgent:
       enabled: false                              # feature flag
       request-topic: urgent-character-request

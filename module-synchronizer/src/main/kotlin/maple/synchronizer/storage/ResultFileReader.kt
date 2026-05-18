@@ -35,9 +35,8 @@ class ResultFileReader(
                     require(rowCount <= maxRowsPerChunk) {
                         "Chunk row limit exceeded: objectKey=$objectKey, maxRows=$maxRowsPerChunk, current=$rowCount"
                     }
-                    parseItem(line)?.let { item ->
-                        grouped.getOrPut("${item.ocid}:${item.presetNo}") { mutableListOf() }.add(item)
-                    }
+                    val item = parseItem(line)
+                    grouped.getOrPut("${item.ocid}:${item.presetNo}") { mutableListOf() }.add(item)
                 }
 
             return grouped.map { (readKey, group) ->
@@ -51,31 +50,29 @@ class ResultFileReader(
         }
     }
 
-    fun parseItem(line: String): CalculatedEquipmentItem? {
-        return runCatching {
-            val node = objectMapper.readTree(line)
-            val ocid = node.get("ocid")?.asText() ?: return null
-            val presetNo = node.get("presetNo")?.asInt() ?: return null
-            CalculatedEquipmentItem(
-                ocid = ocid,
-                presetNo = presetNo,
-                itemName = node.get("itemName")?.asText() ?: "",
-                itemLevel = node.get("itemLevel")?.asInt() ?: 0,
-                itemPart = node.get("itemPart")?.asText() ?: "",
-                itemEquipmentPart = node.get("itemEquipmentPart")?.asText(),
-                potentialGrade = node.get("potentialGrade")?.asText(),
-                potentialOptions = node.get("potentialOptions")?.map { it.asText() },
-                additionalGrade = node.get("additionalGrade")?.asText(),
-                additionalOptions = node.get("additionalOptions")?.map { it.asText() },
-                currentStar = node.get("currentStar")?.asInt() ?: 0,
-                targetStar = node.get("targetStar")?.asInt() ?: 0,
-                status = node.get("status")?.asText() ?: "UNKNOWN",
-                totalCost = node.get("totalCost")?.decimalValue() ?: BigDecimal.ZERO,
-                blackCubeCost = node.get("blackCubeCost")?.decimalValue() ?: BigDecimal.ZERO,
-                additionalCubeCost = node.get("additionalCubeCost")?.decimalValue() ?: BigDecimal.ZERO,
-                starforceCost = node.get("starforceCost")?.decimalValue() ?: BigDecimal.ZERO,
-                errorMessage = node.get("errorMessage")?.asText(),
-            )
-        }.getOrNull()
+    fun parseItem(line: String): CalculatedEquipmentItem {
+        val node = objectMapper.readTree(line)
+        val ocid = requireNotNull(node.get("ocid")?.asText()) { "Missing required field: ocid" }
+        val presetNo = requireNotNull(node.get("presetNo")?.asInt()) { "Missing required field: presetNo" }
+        return CalculatedEquipmentItem(
+            ocid = ocid,
+            presetNo = presetNo,
+            itemName = node.get("itemName")?.asText() ?: "",
+            itemLevel = node.get("itemLevel")?.asInt() ?: 0,
+            itemPart = node.get("itemPart")?.asText() ?: "",
+            itemEquipmentPart = node.get("itemEquipmentPart")?.asText(),
+            potentialGrade = node.get("potentialGrade")?.asText(),
+            potentialOptions = node.get("potentialOptions")?.map { it.asText() },
+            additionalGrade = node.get("additionalGrade")?.asText(),
+            additionalOptions = node.get("additionalOptions")?.map { it.asText() },
+            currentStar = node.get("currentStar")?.asInt() ?: 0,
+            targetStar = node.get("targetStar")?.asInt() ?: 0,
+            status = node.get("status")?.asText() ?: "UNKNOWN",
+            totalCost = node.get("totalCost")?.decimalValue() ?: BigDecimal.ZERO,
+            blackCubeCost = node.get("blackCubeCost")?.decimalValue() ?: BigDecimal.ZERO,
+            additionalCubeCost = node.get("additionalCubeCost")?.decimalValue() ?: BigDecimal.ZERO,
+            starforceCost = node.get("starforceCost")?.decimalValue() ?: BigDecimal.ZERO,
+            errorMessage = node.get("errorMessage")?.asText(),
+        )
     }
 }

@@ -34,6 +34,9 @@ class SnapshotChunkProcessor(
 ) {
     private val log = LoggerFactory.getLogger(SnapshotChunkProcessor::class.java)
     private val sampleCount = AtomicInteger(0)
+    private val workerCount: Int = requireNotNull(properties.workerCount.takeIf { it > 0 }) {
+        "calculator.pipeline.worker-count must be positive: ${properties.workerCount}"
+    }
 
     data class FlatItem(
         val ocid: String,
@@ -55,7 +58,7 @@ class SnapshotChunkProcessor(
 
         launch {
             coroutineScope {
-                repeat(properties.workerCount) {
+                repeat(workerCount) {
                     launch(Dispatchers.Default) {
                         parseLines(lineChannel, itemChannel, recordCount, successCount, totalItems)
                     }
@@ -66,7 +69,7 @@ class SnapshotChunkProcessor(
 
         launch {
             coroutineScope {
-                repeat(properties.workerCount) {
+                repeat(workerCount) {
                     launch(Dispatchers.Default) {
                         processItems(itemChannel, resultChannel, calculatedCount, errorCount)
                     }
@@ -159,7 +162,6 @@ class SnapshotChunkProcessor(
     }
 
     private fun calculateComponentCosts(cubeInput: CubeCalculationInput, presetNo: Int): CalculationCache.ComponentCosts {
-        if (!cubeInput.isReady()) return CalculationCache.ComponentCosts.empty()
         val input = EquipmentCalculationInputConverter.toCalculationInput(cubeInput, presetNo)
         return calculationCache.calculate(input)
     }

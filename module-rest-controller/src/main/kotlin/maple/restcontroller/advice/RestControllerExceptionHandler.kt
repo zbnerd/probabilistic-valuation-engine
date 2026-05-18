@@ -1,9 +1,11 @@
 package maple.restcontroller.advice
 
+import jakarta.validation.ConstraintViolationException
 import maple.expectation.error.dto.ErrorResponse
 import maple.expectation.error.exception.base.BaseException
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 
@@ -18,6 +20,17 @@ class RestControllerExceptionHandler {
         return ResponseEntity
             .status(ex.errorCode.statusCode)
             .body(ErrorResponse.from(ex))
+    }
+
+    @ExceptionHandler(
+        ConstraintViolationException::class,
+        MethodArgumentNotValidException::class,
+    )
+    fun handleValidation(ex: Exception): ResponseEntity<ErrorResponse> {
+        log.warn("Validation exception: {}", ex.message)
+        return ResponseEntity
+            .badRequest()
+            .body(ErrorResponse.from(400, "C001", "Invalid request"))
     }
 
     @ExceptionHandler(Exception::class)

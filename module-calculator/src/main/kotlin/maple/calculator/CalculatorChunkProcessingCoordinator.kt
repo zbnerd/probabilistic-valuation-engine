@@ -83,6 +83,7 @@ class CalculatorChunkProcessingCoordinator(
         }.onFailure { ex ->
             log.error("[Coordinator] chunk processing failed: runId={} chunkId={}: {}", event.runId, event.chunkId, ex.message, ex)
             metrics.recordChunkFailed()
+            throw ex
         }
     }
 

@@ -10,7 +10,7 @@ class EquipmentRankingService(
     fun topByTotalCost(presetNo: Int): EquipmentRankingResponse {
         val limit = properties.ranking.topSize.coerceAtLeast(1)
         val cached = cacheService.topByTotalCost(presetNo, limit)
-        if (cached != null) {
+        if (!cached.isNullOrEmpty()) {
             return EquipmentRankingResponse(presetNo, EquipmentRankingSource.REDIS, cached)
         }
 

@@ -82,7 +82,7 @@ class PostgresAdvisoryLockStrategy(
                 @Suppress("UNCHECKED_CAST")
                 return result as T
             }
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(POLL_INTERVAL_MS))
+            parkForPollOrThrow(key)
         }
 
         lockMetrics.recordFailure("postgres")
@@ -137,7 +137,7 @@ class PostgresAdvisoryLockStrategy(
                 log.info("✅ [Follower] Leader completed, proceeding: key={}", key)
                 break
             }
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(POLL_INTERVAL_MS))
+            parkForPollOrThrow(key)
         }
 
         return executor.execute({ followerTask.get() }, context)
@@ -207,6 +207,17 @@ class PostgresAdvisoryLockStrategy(
         Long::class.java,
         "latch:char:$key",
     ) ?: key.hashCode().toLong()
+
+    private fun parkForPollOrThrow(key: String) {
+        if (Thread.currentThread().isInterrupted) {
+            throw DistributedLockException("Interrupted while waiting for lock: $key")
+        }
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(POLL_INTERVAL_MS))
+        if (Thread.interrupted()) {
+            Thread.currentThread().interrupt()
+            throw DistributedLockException("Interrupted while waiting for lock: $key")
+        }
+    }
 
     companion object {
         private val log = LoggerFactory.getLogger(PostgresAdvisoryLockStrategy::class.java)

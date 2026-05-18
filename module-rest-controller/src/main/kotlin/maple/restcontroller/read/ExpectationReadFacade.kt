@@ -18,12 +18,12 @@ class ExpectationReadFacade(
 
     fun enqueue(userIgn: String, presetNo: Int, deferred: DeferredResult<ResponseEntity<*>>) {
         metrics.requestTotal.increment()
-        val firstRequest = registry.register(userIgn, deferred)
+        val firstRequest = registry.register(userIgn, presetNo, deferred)
         if (firstRequest) {
             metrics.dedupMissTotal.increment()
             if (!buffer.offer(ReadRequest(userIgn = userIgn, presetNo = presetNo))) {
                 metrics.bufferRejectedTotal.increment()
-                registry.cleanup(userIgn, deferred)
+                registry.cleanup(userIgn, presetNo, deferred)
                 log.warn("Buffer full, rejecting request userIgn={}", maskIgn(userIgn))
                 deferred.setErrorResult(
                     ResponseEntity.status(503)
@@ -48,7 +48,7 @@ class ExpectationReadFacade(
             )
         }
         deferred.onCompletion {
-            registry.cleanup(userIgn, deferred)
+            registry.cleanup(userIgn, presetNo, deferred)
         }
     }
 }

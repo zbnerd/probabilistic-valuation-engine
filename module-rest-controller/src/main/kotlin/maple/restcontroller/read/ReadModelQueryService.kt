@@ -21,20 +21,20 @@ class ReadModelQueryService(
     fun batchQuery(requests: Map<String, Int>): Map<String, V6ExpectationResponse> {
         if (requests.isEmpty()) return emptyMap()
 
-        val userIgns = requests.keys.toList()
-        val presetNos = requests.values.distinct()
+        val params = MapSqlParameterSource()
+        val pairPredicates = requests.entries.mapIndexed { index, (userIgn, presetNo) ->
+            params
+                .addValue("userIgn$index", userIgn)
+                .addValue("presetNo$index", presetNo)
+            "(user_ign = :userIgn$index AND preset_no = :presetNo$index)"
+        }.joinToString(" OR ")
 
         val sql = """
             SELECT user_ign, preset_no, document, total_cost, equipment_count, calculated_at
             FROM character_equipment_read_model
-            WHERE user_ign IN (:userIgns)
-              AND preset_no IN (:presetNos)
+            WHERE ($pairPredicates)
               AND user_ign IS NOT NULL
         """.trimIndent()
-
-        val params = MapSqlParameterSource()
-            .addValue("userIgns", userIgns)
-            .addValue("presetNos", presetNos)
 
         val rows = jdbc.queryForList(sql, params)
         val result = LinkedHashMap<String, V6ExpectationResponse>()

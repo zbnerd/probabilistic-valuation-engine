@@ -92,6 +92,7 @@ class UrgentCharacterRequestConsumer(
                 .thenComposeAsync({
                     publishUrgentChunksAsync(
                         request = request,
+                        ocid = ocid,
                         basicData = basicFuture.resultNow(),
                         equipmentData = equipmentFuture.resultNow(),
                     )
@@ -100,14 +101,15 @@ class UrgentCharacterRequestConsumer(
 
     private fun publishUrgentChunksAsync(
         request: UrgentCharacterRequest,
+        ocid: String,
         basicData: ByteArray,
         equipmentData: ByteArray,
     ): CompletableFuture<Void> {
         val runId = "urgent-${UUID.randomUUID()}"
 
-        return publishUrgentChunkAsync(runId, ExternalApiEndpoint.CHARACTER_BASIC, request.userIgn, basicData, "OCID")
+        return publishUrgentChunkAsync(runId, ExternalApiEndpoint.CHARACTER_BASIC, request.userIgn, ocid, basicData, "OCID")
             .thenCompose {
-                publishUrgentChunkAsync(runId, ExternalApiEndpoint.ITEM_EQUIPMENT, request.userIgn, equipmentData, "OCID")
+                publishUrgentChunkAsync(runId, ExternalApiEndpoint.ITEM_EQUIPMENT, request.userIgn, ocid, equipmentData, "OCID")
             }
             .thenAccept {
                 log.info(
@@ -122,6 +124,7 @@ class UrgentCharacterRequestConsumer(
         runId: String,
         endpoint: ExternalApiEndpoint,
         userIgn: String,
+        key: String,
         data: ByteArray,
         keyType: String,
     ): CompletableFuture<Void> =
@@ -133,7 +136,7 @@ class UrgentCharacterRequestConsumer(
             val writer = GzipJsonlChunkWriter(chunksDir, 1, 1, Long.MAX_VALUE, objectMapper)
             writer.append(
                 SnapshotChunkRecord.Success(
-                    key = userIgn,
+                    key = key,
                     endpoint = endpointDir,
                     keyType = keyType,
                     httpStatus = 200,
@@ -148,7 +151,7 @@ class UrgentCharacterRequestConsumer(
                 eventId = UUID.randomUUID().toString(),
                 runId = runId,
                 endpoint = endpointDir,
-                chunkId = "part-000001",
+                chunkId = "$endpointDir-part-000001",
                 objectKey = objectKey,
                 recordCount = stats.recordCount,
                 uncompressedBytes = stats.uncompressedBytes,

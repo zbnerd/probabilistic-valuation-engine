@@ -15,7 +15,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import maple.expectation.core.dto.v4.CalculationInput
 import maple.expectation.core.dto.v4.EquipmentItem
 import maple.expectation.core.model.job.CalculationJobStatus
@@ -90,10 +89,6 @@ class ExternalApiWorker(
     private val snapshotWriter: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
     private val apiCallPool: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
-
-    private val cpuDispatcher = Dispatchers.Default.limitedParallelism(
-        Runtime.getRuntime().availableProcessors().coerceAtLeast(1),
-    )
 
     @PreDestroy
     fun shutdownExecutors() {
@@ -296,11 +291,7 @@ class ExternalApiWorker(
 
             // CPU-bound calculation [no TX]
             val calcResult = stage("PureCalculate", payload.userIgn) {
-                runBlocking(cpuDispatcher) {
-                    withContext(cpuDispatcher) {
-                        pureCalculationPort.calculate(input)
-                    }
-                }
+                pureCalculationPort.calculate(input)
             }
             timer.mark("pureCalculate")
 

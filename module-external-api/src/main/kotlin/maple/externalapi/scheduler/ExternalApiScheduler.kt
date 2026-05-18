@@ -12,6 +12,7 @@ import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -101,7 +102,8 @@ class ExternalApiScheduler(
             return
         }
 
-        snapshotFetchPhase.executeItemEquipment(executor, entries)
+        CompletableFuture.completedFuture(null)
+            .thenCompose { snapshotFetchPhase.executeItemEquipment(executor, entries) }
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)

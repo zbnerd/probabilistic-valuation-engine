@@ -143,8 +143,10 @@ class CharacterViewQueryServicePostgres(
     private fun performUpsert(entity: CharacterValuationViewEntity) {
         if (entity.messageId != null) {
             val presetsJson = entity.presets?.let { objectMapper.writeValueAsString(it) }
-            upsertNative(entity, presetsJson)
-            asyncExecutor.submit { saveToReadModel(entity) }
+            val applied = upsertNative(entity, presetsJson)
+            if (applied > 0) {
+                asyncExecutor.submit { saveToReadModel(entity) }
+            }
         } else {
             val existing = findExistingEntity(entity)
             val saved = if (existing != null) {
@@ -159,10 +161,10 @@ class CharacterViewQueryServicePostgres(
         }
     }
 
-    private fun upsertNative(entity: CharacterValuationViewEntity, presetsJson: String?) {
+    private fun upsertNative(entity: CharacterValuationViewEntity, presetsJson: String?): Int {
         val params = mapOf(
             "userIgn" to entity.userIgn,
-            "messageId" to (entity.messageId ?: return),
+            "messageId" to (entity.messageId ?: return 0),
             "characterOcid" to entity.characterOcid,
             "characterClass" to entity.characterClass,
             "characterLevel" to entity.characterLevel,
@@ -176,7 +178,7 @@ class CharacterViewQueryServicePostgres(
             "presets" to presetsJson?.toJsonb(),
             "fromCache" to entity.fromCache,
         )
-        jdbc.update(
+        return jdbc.update(
             """
             INSERT INTO character_valuation_views (
                 user_ign, message_id, jpa_version, character_ocid, character_class, character_level,
@@ -202,6 +204,7 @@ class CharacterViewQueryServicePostgres(
                 preset_no = EXCLUDED.preset_no,
                 presets = EXCLUDED.presets,
                 from_cache = EXCLUDED.from_cache
+            WHERE COALESCE(character_valuation_views.last_applied_version, 0) < EXCLUDED.last_applied_version
             """,
             params,
         )
@@ -274,11 +277,17 @@ class CharacterViewQueryServicePostgres(
                 preset_no = EXCLUDED.preset_no,
                 presets = EXCLUDED.presets,
                 from_cache = EXCLUDED.from_cache
+            WHERE COALESCE(character_valuation_views.last_applied_version, 0) < EXCLUDED.last_applied_version
             """,
                 rows.map { it.second }.toTypedArray(),
             )
             timer.mark("executeValuationViewUpsert")
-            asyncExecutor.submit { saveToReadModelBatch(rows.map { it.first }) }
+            val appliedRows = rows.zip(counts.toList())
+                .filter { (_, count) -> count > 0 }
+                .map { (row, _) -> row.first }
+            if (appliedRows.isNotEmpty()) {
+                asyncExecutor.submit { saveToReadModelBatch(appliedRows) }
+            }
             return counts.sumOf { if (it > 0) it else 0 }
         } finally {
             timer.close(log)

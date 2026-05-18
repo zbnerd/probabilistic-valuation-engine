@@ -17,4 +17,6 @@ data class CalculatorResultChunkReadyEvent(
     val uncompressedBytes: Long,
     val compressedBytes: Long,
     val createdAt: Instant = Instant.now(),
-)
+) {
+    fun kafkaKey(): String = "$sourceRunId:$sourceEndpoint:$sourceChunkId"
+}

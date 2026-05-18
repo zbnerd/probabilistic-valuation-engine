@@ -1,7 +1,6 @@
 package maple.synchronizer.repository
 
 import maple.synchronizer.storage.BasicRecord
-import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
@@ -9,28 +8,22 @@ import org.springframework.stereotype.Repository
 @Repository
 class CharacterBasicRepository(
     private val jdbc: NamedParameterJdbcTemplate,
+    private val batchExecutor: JdbcChunkedBatchExecutor,
 ) {
-    private val log = LoggerFactory.getLogger(javaClass)
-
     companion object {
         private const val SUB_BATCH_SIZE = 100
     }
 
     fun bulkUpsert(runId: String, chunkId: String, records: List<BasicRecord>) {
-        val batches = records.chunked(SUB_BATCH_SIZE)
-        log.info("[CharacterBasic] upsert start: records={} batches={}: runId={} chunkId={}",
-            records.size, batches.size, runId, chunkId)
-
-        var totalAffected = 0
-        batches.forEachIndexed { idx, batch ->
-            val affected = upsertBatch(runId, chunkId, batch)
-            totalAffected += affected
-            log.info("[CharacterBasic] upsert batch: batchNo={}/{} attempted={} affected={}",
-                idx + 1, batches.size, batch.size, affected)
-        }
-
-        log.info("[CharacterBasic] upsert done: records={} affected={}: runId={} chunkId={}",
-            records.size, totalAffected, runId, chunkId)
+        batchExecutor.execute(
+            label = "CharacterBasic",
+            itemLabel = "records",
+            runId = runId,
+            chunkId = chunkId,
+            items = records,
+            batchSize = SUB_BATCH_SIZE,
+            upsertBatch = { batch -> upsertBatch(runId, chunkId, batch) },
+        )
     }
 
     private fun upsertBatch(runId: String, chunkId: String, batch: List<BasicRecord>): Int {

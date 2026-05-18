@@ -8,6 +8,20 @@ Claude Code가 이 프로젝트에서 작업할 때 따라야 할 규칙은 `.cl
 - 규칙에 위배되는 요청은 거부하거나 규칙에 맞게 조정해서 구현합니다.
 - 규칙을 부분적으로만 따르는 코드를 생성하지 않습니다.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default Matt Pocock skill triage label vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repo using root-level domain docs and `docs/01_ADR/`. See `docs/agents/domain.md`.
+
 ### Self-Check (응답 전 필수 검증)
 
 코드를 생성하거나 수정한 후, 다음을 모두 확인합니다:

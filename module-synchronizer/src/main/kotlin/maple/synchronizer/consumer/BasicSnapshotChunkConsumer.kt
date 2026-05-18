@@ -1,7 +1,7 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.infrastructure.executor.LogicExecutor
+import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.synchronizer.repository.CharacterBasicRepository
@@ -10,14 +10,12 @@ import maple.synchronizer.storage.BasicChunkFileReader
 import maple.synchronizer.storage.BasicRecord
 import maple.expectation.util.StringMaskingUtils.maskIgn
 import org.slf4j.LoggerFactory
-import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 
@@ -27,7 +25,7 @@ class BasicSnapshotChunkConsumer(
     private val fileReader: BasicChunkFileReader,
     private val repository: CharacterBasicRepository,
     private val chunkStatusRepository: SynchronizerChunkStatusRepository,
-    private val logicExecutor: LogicExecutor,
+    private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val jdbc: NamedParameterJdbcTemplate,
     @Value("\${synchronizer.store.base-path:../module-external-api/external-api-data}")
     private val basePath: String,
@@ -51,54 +49,7 @@ class BasicSnapshotChunkConsumer(
         log.info("[BasicSync] received: runId={} chunkId={} objectKey={} records={}",
             runId, chunkId, event.objectKey, event.recordCount)
 
-        if (chunkStatusRepository.isAlreadySuccess(runId, chunkId)) {
-            log.info("[BasicSync] skip already-successful chunk: runId={} chunkId={}", runId, chunkId)
-            acknowledgment.acknowledge()
-            return
-        }
-
-        if (!chunkStatusRepository.claimChunk(runId, chunkId, event.objectKey)) {
-            log.info("[BasicSync] skip - chunk already claimed: runId={} chunkId={}", runId, chunkId)
-            acknowledgment.acknowledge()
-            return
-        }
-
-        if (!processingPermit.tryAcquire()) {
-            log.info("[BasicSync] processing permit busy, will retry: runId={} chunkId={}", runId, chunkId)
-            return
-        }
-
-        MDC.put("runId", runId)
-        MDC.put("chunkId", chunkId)
-
-        CompletableFuture.runAsync({
-            logicExecutor.executeWithFinally(
-                task = {
-                    logicExecutor.executeOrCatch(
-                        task = {
-                            val records = fileReader.read(event.objectKey)
-                            repository.bulkUpsert(runId, chunkId, records)
-                            chunkStatusRepository.markSuccess(runId, chunkId)
-                            log.info("[BasicSync] chunk processed: runId={} chunkId={} records={}",
-                                runId, chunkId, records.size)
-                            acknowledgment.acknowledge()
-                        },
-                        recovery = { ex ->
-                            chunkStatusRepository.markFailed(runId, chunkId, ex.message ?: "unknown")
-                            log.error("[BasicSync] chunk processing failed: runId={} chunkId={}",
-                                runId, chunkId, ex)
-                            null
-                        },
-                        context = TaskContext.of("BasicSync", "ChunkProcess", chunkId),
-                    )
-                },
-                finallyBlock = {
-                    processingPermit.release()
-                    MDC.clear()
-                },
-                context = TaskContext.of("BasicSync", "ChunkLifecycle", chunkId),
-            )
-        }, vtExecutor)
+        submitBasicChunk(event, acknowledgment, urgent = false)
     }
 
     @KafkaListener(
@@ -119,57 +70,59 @@ class BasicSnapshotChunkConsumer(
         log.info("[BasicSync] received URGENT: runId={} chunkId={} objectKey={} records={}",
             runId, chunkId, event.objectKey, event.recordCount)
 
-        if (chunkStatusRepository.isAlreadySuccess(runId, chunkId)) {
-            log.info("[BasicSync] skip already-successful urgent chunk: runId={} chunkId={}", runId, chunkId)
-            acknowledgment.acknowledge()
-            return
-        }
+        submitBasicChunk(event, acknowledgment, urgent = true)
+    }
 
-        if (!chunkStatusRepository.claimChunk(runId, chunkId, event.objectKey)) {
-            log.info("[BasicSync] skip - urgent chunk already claimed: runId={} chunkId={}", runId, chunkId)
-            acknowledgment.acknowledge()
-            return
-        }
+    private fun submitBasicChunk(
+        event: SnapshotChunkReadyEvent,
+        acknowledgment: Acknowledgment,
+        urgent: Boolean,
+    ) {
+        val runId = event.runId
+        val chunkId = event.chunkId
+        val operation = if (urgent) "UrgentChunk" else "Chunk"
 
-        if (!processingPermit.tryAcquire()) {
-            log.info("[BasicSync] processing permit busy, urgent will retry: runId={} chunkId={}", runId, chunkId)
-            return
-        }
-
-        MDC.put("runId", runId)
-        MDC.put("chunkId", chunkId)
-
-        CompletableFuture.runAsync({
-            logicExecutor.executeWithFinally(
-                task = {
-                    logicExecutor.executeOrCatch(
-                        task = {
-                            val records = fileReader.read(event.objectKey)
-                            repository.bulkUpsert(runId, chunkId, records)
-                            chunkStatusRepository.markSuccess(runId, chunkId)
-
-                            upsertOcidFromBasicRecords(records)
-
-                            log.info("[BasicSync] urgent chunk processed: runId={} chunkId={} records={}",
-                                runId, chunkId, records.size)
-                            acknowledgment.acknowledge()
-                        },
-                        recovery = { ex ->
-                            chunkStatusRepository.markFailed(runId, chunkId, ex.message ?: "unknown")
-                            log.error("[BasicSync] urgent chunk processing failed: runId={} chunkId={}",
-                                runId, chunkId, ex)
-                            null
-                        },
-                        context = TaskContext.of("BasicSync", "UrgentChunkProcess", chunkId),
+        chunkConsumerTemplate.submit(
+            ChunkConsumerRequest(
+                logPrefix = "BasicSync",
+                log = log,
+                runId = runId,
+                chunkId = chunkId,
+                objectKey = event.objectKey,
+                acknowledgment = acknowledgment,
+                processingPermit = processingPermit,
+                executor = vtExecutor,
+                processContext = TaskContext.of("BasicSync", "${operation}Process", chunkId),
+                lifecycleContext = TaskContext.of("BasicSync", "${operation}Lifecycle", chunkId),
+                isAlreadySuccess = { chunkStatusRepository.isAlreadySuccess(runId, chunkId) },
+                claimChunk = { chunkStatusRepository.claimChunk(runId, chunkId, event.objectKey) },
+                process = {
+                    val records = fileReader.read(event.objectKey)
+                    repository.bulkUpsert(runId, chunkId, records)
+                    if (urgent) {
+                        upsertOcidFromBasicRecords(records)
+                    }
+                    log.info(
+                        "[BasicSync] {}chunk processed: runId={} chunkId={} records={}",
+                        if (urgent) "urgent " else "",
+                        runId,
+                        chunkId,
+                        records.size,
                     )
                 },
-                finallyBlock = {
-                    processingPermit.release()
-                    MDC.clear()
+                markSuccess = { chunkStatusRepository.markSuccess(runId, chunkId) },
+                markFailed = { reason -> chunkStatusRepository.markFailed(runId, chunkId, reason) },
+                onFailure = { ex ->
+                    log.error(
+                        "[BasicSync] {}chunk processing failed: runId={} chunkId={}",
+                        if (urgent) "urgent " else "",
+                        runId,
+                        chunkId,
+                        ex,
+                    )
                 },
-                context = TaskContext.of("BasicSync", "UrgentChunkLifecycle", chunkId),
-            )
-        }, vtExecutor)
+            ),
+        )
     }
 
     private fun upsertOcidFromBasicRecords(records: List<BasicRecord>) {
@@ -192,11 +145,3 @@ class BasicSnapshotChunkConsumer(
         vtExecutor.close()
     }
 }
-
-private data class SnapshotChunkReadyEvent(
-    val runId: String,
-    val endpoint: String,
-    val chunkId: String,
-    val objectKey: String,
-    val recordCount: Int,
-)

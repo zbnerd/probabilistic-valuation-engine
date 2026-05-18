@@ -1,4 +1,4 @@
-package maple.externalapi.snapshot.event
+package maple.expectation.common.event
 
 import java.time.Instant
 
@@ -15,4 +15,6 @@ data class SnapshotChunkReadyEvent(
     val compressedBytes: Long,
     val sha256: String? = null,
     val createdAt: Instant,
-)
+) {
+    fun kafkaKey(): String = "$runId:$endpoint:$chunkId"
+}

@@ -1,4 +1,4 @@
-package maple.externalapi.snapshot.event
+package maple.expectation.common.event
 
 import java.time.Instant
 
@@ -10,4 +10,6 @@ data class SnapshotRunFailedEvent(
     val endpoint: String,
     val errorMessage: String,
     val createdAt: Instant,
-)
+) {
+    fun kafkaKey(): String = "$runId:$endpoint"
+}

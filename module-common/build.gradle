@@ -10,6 +10,7 @@ plugins {
 dependencies {
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
 	implementation(libs.kotlin.stdlib)
+	implementation(libs.kotlin.logging.jvm)
 
 	// Jackson (Spring-independent JSON serialization)
 	implementation(libs.jackson.annotations)

@@ -5,8 +5,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
+import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.calculator.event.KafkaResultEventPublisher
-import maple.calculator.event.SnapshotChunkReadyEvent
 import maple.calculator.metrics.CalculatorMetrics
 import maple.calculator.model.ChunkResult
 import maple.calculator.metrics.CalculatorVolumeMetrics

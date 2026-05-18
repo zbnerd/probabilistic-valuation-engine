@@ -18,9 +18,8 @@ class KafkaResultEventPublisher(
     private val log = LoggerFactory.getLogger(KafkaResultEventPublisher::class.java)
 
     suspend fun publishChunkReady(event: CalculatorResultChunkReadyEvent) {
-        val key = "${event.sourceRunId}:${event.sourceEndpoint}:${event.sourceChunkId}"
         val payload = objectMapper.writeValueAsString(event)
-        kafkaTemplate.send(resultChunkReadyTopic, key, payload).await()
+        kafkaTemplate.send(resultChunkReadyTopic, event.kafkaKey(), payload).await()
         log.info(
             "[Event] published calculator result chunk-ready: sourceRunId={} sourceEndpoint={} sourceChunkId={} objectKey={} results={}",
             event.sourceRunId,

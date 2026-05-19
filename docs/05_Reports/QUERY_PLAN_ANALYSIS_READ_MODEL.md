@@ -6,6 +6,15 @@
 
 ---
 
+## Executive Summary
+
+EXPLAIN ANALYZE 중 두 가지 버그 발견:
+
+1. **Pipeline data population bug**: `user_ign` 컬럼이 99.999% NULL. Synchronizer/Calculator write path에서 user_ign mapping 누락. read path 전체가 비활성 상태.
+2. **Ranking query 병목**: `ORDER BY total_cost DESC LIMIT 10` 쿼리가 preset_no별 288K row full scan + sort 수행. **3.8초** 소요. `(preset_no, total_cost DESC)` index로 <1ms 예상.
+
+---
+
 ## 1. Table Overview
 
 | Metric | Value |
@@ -17,20 +26,28 @@
 | HOT update rate | 92.4% |
 | Fillfactor | default (100) |
 
+### Row Distribution by preset_no
+
+| preset_no | count | user_ign populated |
+|-----------|-------|--------------------|
+| 1 | 288,206 | 2 |
+| 2 | 288,382 | 2 |
+| 3 | 288,280 | 2 |
+
 ### Indexes
 
 | Index | Columns | Size | Scans | Purpose |
 |-------|---------|------|-------|---------|
 | `character_equipment_read_model_pkey` | `read_key` (PK) | 83 MB | 90,740,406 | Upsert arbiter |
 | `uq_character_equipment_ocid_preset` | `(ocid, preset_no)` UNIQUE | 83 MB | 3 | Dedup constraint |
-| `idx_equipment_read_model_user_ign_preset` | `(user_ign, preset_no)` | 10 MB | 7 | Query support |
+| `idx_equipment_read_model_user_ign_preset` | `(user_ign, preset_no)` | 10 MB | 7 | Read path (currently inactive) |
 
 ### Column Statistics (pg_stats)
 
 | Column | n_distinct | null_frac | correlation | Notes |
 |--------|-----------|-----------|-------------|-------|
-| `user_ign` | 0 | **1.0 (100%)** | - | **Pipeline bug: NULL in all recent data** (6 / 864,868 non-null). 5/17 bulk upsert (861K rows): 0% populated |
-| `preset_no` | 3 | 0 | 0.34 | Even split: {3: 33.5%, 2: 33.3%, 1: 33.2%} |
+| `user_ign` | 0 | **1.0 (100%)** | - | **Pipeline bug: NULL in all recent data**. 5/17 bulk upsert (861K rows): 0% populated |
+| `preset_no` | 3 | 0 | 0.34 | Even split: {1: 33.3%, 2: 33.3%, 3: 33.3%} |
 | `total_cost` | -0.62 | 0 | -0.006 | Low correlation, high cardinality |
 | `ocid` | -0.33 | 0 | 0.004 | High cardinality, low correlation |
 | `document_hash` | -1 | 0 | 0.002 | Near-unique |
@@ -38,41 +55,9 @@
 
 ---
 
-## 2. Current Bottlenecks
+## 2. Bug #1: user_ign Pipeline Population Failure
 
-### 2.1 Query 2: ORDER BY total_cost LIMIT — **303 ms (Critical)**
-
-```sql
-SELECT user_ign, total_cost
-FROM character_equipment_read_model
-WHERE preset_no = 0
-ORDER BY total_cost DESC
-LIMIT 10;
-```
-
-**Execution Plan:**
-
-```
-Limit (cost=11686.87..11686.87 rows=1 width=41) (actual time=303.056..303.059 rows=0 loops=1)
-  -> Sort (cost=11686.87..11686.87 rows=1 width=41) (actual time=303.054..303.056 rows=0 loops=1)
-       Sort Key: total_cost DESC
-       Sort Method: quicksort  Memory: 25kB
-       -> Index Scan using idx_equipment_read_model_user_ign_preset
-            Index Cond: (preset_no = 0)
-            Buffers: shared hit=23 read=1269
-```
-
-**Why this plan:**
-
-1. Planner picks `idx_equipment_read_model_user_ign_preset` because `preset_no` is the trailing column
-2. Since `user_ign` is unconstrained, only the second index column is usable — but as a **skip scan** over the leading NULL column
-3. PostgreSQL must traverse all NULL user_ign entries where preset_no=0 (~288K rows, 33% of table)
-4. All 288K rows fetched, then **sorted in memory** by total_cost DESC
-5. LIMIT 10 applied after full sort — late optimization
-
-**Bottleneck:** Missing index on `(preset_no, total_cost DESC)` forces full scan + sort for every leaderboard query.
-
-### 2.2 user_ign = 100% NULL — Pipeline Bug + Index Dead Weight
+### Evidence
 
 `user_ign` is NULL across **all** recent data, not just old rows:
 
@@ -82,15 +67,78 @@ Limit (cost=11686.87..11686.87 rows=1 width=41) (actual time=303.056..303.059 ro
 | 2026-05-13 | 3,203 | 6 | 0.19% |
 | 2026-05-12 | 4 | 0 | 0.00% |
 
-**Root cause:** Current pipeline does not populate `user_ign` during upsert. The column was likely intended to be filled but the mapping is missing in the Synchronizer/Calculator write path.
+### Root Cause
 
-The index `idx_equipment_read_model_user_ign_preset` has `user_ign` as leading column. Since user_ign is NULL in 99.999% of rows:
+Current pipeline (Synchronizer/Calculator → upsert) does not map `user_ign` during write. The column exists in the table and index but the write path omits the value.
 
-- **Query 1** (`WHERE user_ign = ? AND preset_no = ?`): Returns 0 rows. Index works but serves no real data.
-- The index only contributes to Query 2 by accident (providing preset_no filtering via skip scan), which is the wrong tool for that job.
-- **10 MB wasted** on an index that has been scanned 7 times total.
+### Impact
 
-### 2.3 Upsert Write Amplification
+- **Query 1** (`WHERE user_ign = ? AND preset_no = ?`): Returns 0 rows for all IGN lookups. Read path via user_ign is completely broken.
+- **Index `idx_equipment_read_model_user_ign_preset`**: Scanned only 7 times. Not because it's unneeded — because the data it indexes doesn't exist.
+- **Index should NOT be dropped** — it becomes the primary read path once user_ign is populated.
+
+### Fix Required
+
+1. Trace Synchronizer/Calculator write path → find where user_ign mapping should occur
+2. Add user_ign to the upsert DTO/projection
+3. Backfill or let next sync cycle populate user_ign
+4. Verify index usage after population
+
+---
+
+## 3. Bug #2: Ranking Query Full Scan — 3,779 ms
+
+### Query Shape
+
+```sql
+SELECT user_ign, total_cost
+FROM character_equipment_read_model
+WHERE preset_no = 1
+ORDER BY total_cost DESC
+LIMIT 10;
+```
+
+### Execution Plan (preset_no=1, 288K matching rows)
+
+```
+Limit (actual time=3761.632..3776.930 rows=10)
+  -> Gather Merge (Workers Planned: 2, Workers Launched: 2)
+       -> Sort (Sort Method: top-N heapsort Memory: 25kB)
+            Sort Key: total_cost DESC
+            -> Parallel Seq Scan on character_equipment_read_model
+                 Filter: (preset_no = 1)
+                 Rows Removed by Filter: 192,221
+                 Buffers: shared hit=11264 read=50365
+Execution Time: 3779.657 ms
+```
+
+### Why This Plan
+
+1. `preset_no = 1` matches 288K rows (33% of table) — planner correctly rejects index scan
+2. Falls back to **Parallel Seq Scan** (2 workers), reading ~400 MB from disk
+3. Each worker sorts its ~96K row partition with **top-N heapsort**
+4. Gather Merge merges 3 sorted streams, LIMIT 10 applied last
+5. **No index supports `ORDER BY total_cost DESC`** — sort is unavoidable without it
+
+### Why Initial Measurement Was Misleading
+
+Initial EXPLAIN used `preset_no = 0` which has **0 matching rows** → planner chose cheap index scan → 303ms. Real preset values (1/2/3) each match 288K rows → planner switches to parallel seq scan → **3.8 seconds**.
+
+| Query | preset_no | Matching rows | Plan | Time |
+|-------|-----------|---------------|------|------|
+| Initial test | 0 | 0 | Index Scan | 303 ms |
+| **Actual** | **1** | **288,206** | **Parallel Seq Scan + Sort** | **3,779 ms** |
+| **Actual** | **2** | **288,382** | **Parallel Seq Scan + Sort** | **~3,800 ms** |
+
+### Bottleneck
+
+Missing index on `(preset_no, total_cost DESC)` forces 288K row scan + sort per ranking query.
+
+---
+
+## 4. Upsert Write Amplification
+
+### Current Upsert Pattern
 
 ```sql
 INSERT ... ON CONFLICT (read_key) DO UPDATE SET ...
@@ -105,98 +153,91 @@ WHERE document_hash IS DISTINCT FROM EXCLUDED.document_hash
 | HOT updates | 83,024,492 (92.4%) |
 | Non-HOT updates | 6,850,052 (7.6%) |
 
-**Analysis:**
+### Analysis
 
-- 92.4% HOT rate is healthy — most updates don't touch indexed columns
-- The 7.6% non-HOT updates cause index page splits and bloat on the PK index
-- Each non-HOT update writes a new index entry in all 3 indexes (PK, ocid_preset, user_ign_preset)
-- The `user_ign_preset` index is maintained on every update despite being useless — adding write cost with zero read benefit
+- 92.4% HOT rate is healthy — most updates change only `document`, `total_cost`, `updated_at`, `document_hash`
+- 7.6% non-HOT from page overflow after repeated in-place updates
+- `user_ign_preset` index maintenance cost is real but small (10 MB index, B-tree insert only)
+- Upsert conflict filter: since user_ign is NULL on both sides, `NULL IS DISTINCT FROM NULL` = `false`. Update fires only on `document_hash` change. Correct but adds eval overhead.
 
-**Upsert conflict filter:** Since user_ign is NULL on both old and new rows almost always, `NULL IS DISTINCT FROM NULL` = `false`. The update fires only when `document_hash` changes. Correct behavior, but the OR condition adds eval cost on every conflict check.
+### HOT update detail
 
----
-
-## 3. Planner Decision Analysis
-
-### Why planner chose Index Scan over Seq Scan for Query 2
-
-- Table has 864K rows, `preset_no = 0` matches ~0 rows (preset values are 1,2,3 — not 0)
-- Planner estimates 1 row → index scan cheaper than seq scan
-- **But**: When preset_no=1/2/3 (the real values), the index would match ~288K rows each
-- With 288K rows, planner might switch to Seq Scan + Sort — neither is good
-- The correct fix is an index that provides pre-sorted order
-
-### Why HOT rate is 92.4% without fillfactor tuning
-
-- `document` (bytea, ~avg 500B compressed) is TOASTed — stored out of line
-- When only `total_cost`, `updated_at`, `document_hash` change, the heap tuple fits in the same page
-- Non-HOT occurs when: tuple grows beyond page free space, or indexed column (`ocid`, `preset_no`, `read_key`) changes
-- 7.6% non-HOT likely from row migration after repeated updates fill the page
+- `document` (bytea) is TOASTed — stored out of line, heap tuple stays small
+- Non-HOT occurs when tuple grows beyond page free space after multiple updates
+- 92.4% without fillfactor tuning is already good — fillfactor=90 could push to ~97% but diminishing returns
 
 ---
 
-## 4. Recommendations
+## 5. Planner Decision Analysis
 
-### 4.1 Add: `(preset_no, total_cost DESC)` — Priority: P0
+### Why Parallel Seq Scan for ranking query
+
+- 288K/864K = 33% selectivity on preset_no — beyond index scan threshold (~5-10%)
+- No index provides pre-sorted order on total_cost
+- Planner correctly chooses parallel seq scan over index scan + random heap access
+- Adding `(preset_no, total_cost DESC)` index lets planner do **index-only scan** returning first 10 rows directly — no sort, no seq scan
+
+### Why Index Scan was chosen for preset_no=0 (initial test)
+
+- 0 matching rows → cardinality estimate = 1 → index scan wins over seq scan
+- Misleading measurement — real workload uses preset_no 1/2/3
+
+---
+
+## 6. Recommendations
+
+### 6.1 Fix user_ign Pipeline Mapping — Priority: P0 (Data Bug)
+
+Trace Synchronizer/Calculator write path. Add user_ign to upsert projection. Verify with next sync cycle.
+
+### 6.2 Add `(preset_no, total_cost DESC)` Index — Priority: P0
 
 ```sql
-CREATE INDEX idx_equipment_read_model_preset_cost
+CREATE INDEX CONCURRENTLY idx_equipment_read_model_preset_cost
     ON character_equipment_read_model (preset_no, total_cost DESC);
 ```
 
-**Expected plan change:**
+**Expected plan:**
 
 ```
 Limit (cost=0.42..1.24 rows=10)
   -> Index Scan using idx_equipment_read_model_preset_cost
        Index Cond: (preset_no = ?)
-       -- No sort needed. Index already ordered by total_cost DESC.
+       -- Pre-sorted. No sort. No seq scan.
 ```
 
 **Expected improvement:**
 
 | Metric | Before | After |
 |--------|--------|-------|
-| Execution time | 303 ms | < 1 ms |
-| Buffers read | 1,269 | < 20 |
-| Sort required | Yes (288K rows) | No |
-| Index depth | N/A | 3-4 levels |
+| Execution time | 3,779 ms | < 1 ms |
+| Buffers read | 50,365 | < 20 |
+| Rows scanned | 288,206 | 10 |
+| Sort required | Yes (top-N heapsort) | No |
+| Workers needed | 2 | 0 |
 
 **Trade-off:**
 
 - +~20-30 MB index size
-- +index maintenance on every INSERT/UPDATE (total_cost changes frequently)
-- HOT update rate may decrease slightly if total_cost is in the new index and changes trigger non-HOT updates
-- **Net: strongly positive** — leaderboard query goes from 300ms to <1ms
+- +index maintenance on every upsert where total_cost changes
+- HOT update rate may decrease (new indexed column changes → non-HOT)
+- **Net: strongly positive** — 3,800x improvement on ranking query
 
-### 4.2 Drop or Repurpose: `idx_equipment_read_model_user_ign_preset` — Priority: P1
+### 6.3 Keep `idx_equipment_read_model_user_ign_preset` — Priority: Defer
 
-```sql
--- Option A: Drop entirely if user_ign queries are not used
-DROP INDEX idx_equipment_read_model_user_ign_preset;
+**Do NOT drop.** This index becomes the primary read path once user_ign pipeline bug is fixed.
 
--- Option B: Replace with (preset_no, user_ign) if user_ign will be populated later
-DROP INDEX idx_equipment_read_model_user_ign_preset;
-CREATE INDEX idx_equipment_read_model_preset_ign
-    ON character_equipment_read_model (preset_no, user_ign);
-```
+After user_ign population:
+- Re-evaluate with `ANALYZE character_equipment_read_model`
+- Verify index usage in Query 1 plans
+- Consider reversing column order to `(preset_no, user_ign)` if preset_no selectivity is needed first
 
-**Rationale:**
-
-- user_ign is 99.999% NULL — index provides zero query acceleration
-- Every upsert pays maintenance cost on this index (insert + potential page split)
-- Dropping saves 10 MB and reduces per-upsert overhead
-- If user_ign will be populated in the future, recreate with `preset_no` as leading column for better selectivity
-
-### 4.3 Consider: Fillfactor 90 — Priority: P2
+### 6.4 Consider Fillfactor 90 — Priority: P2
 
 ```sql
 ALTER TABLE character_equipment_read_model SET (fillfactor = 90);
--- Requires VACUUM FULL to rebuild table with new fillfactor
--- VACUUM FULL requires exclusive lock — schedule during maintenance window
+-- Requires VACUUM FULL — schedule during maintenance window
 ```
-
-**Expected impact:**
 
 | Metric | Before (fillfactor=100) | After (fillfactor=90) |
 |--------|------------------------|----------------------|
@@ -204,59 +245,65 @@ ALTER TABLE character_equipment_read_model SET (fillfactor = 90);
 | Table size increase | baseline | +10% (~48 MB) |
 | Non-HOT updates reduced | 6.85M | ~1.7M |
 
-**Trade-off:**
-
-- 10% more disk usage per page (free space reserved for updates)
-- VACUUM FULL requires full table rewrite + exclusive lock
-- Diminishing returns — 92.4% → 97% is nice but not critical
-- **Defer until non-HOT updates become a measurable bottleneck**
-
-### 4.4 Consider: Partial index on user_ign — Priority: P3
-
-If user_ign will be populated for a subset of rows:
-
-```sql
-CREATE INDEX idx_equipment_read_model_user_ign_partial
-    ON character_equipment_read_model (user_ign, preset_no)
-    WHERE user_ign IS NOT NULL;
-```
-
-Tiny index (6 rows currently), fast for the rare case of user_ign lookups.
+Defer — 92.4% is already healthy.
 
 ---
 
-## 5. Read/Write Trade-off Summary
-
-| Change | Read Benefit | Write Cost | Verdict |
-|--------|-------------|------------|---------|
-| Add `(preset_no, total_cost DESC)` | 300x faster leaderboard | +index maint on upsert | **Do now** |
-| Drop `(user_ign, preset_no)` | None (dead index) | -10 MB, -1 index to maintain | **Do now** |
-| Fillfactor 90 | Indirect (more HOT) | +48 MB, VACUUM FULL lock | **Defer** |
-| Partial index on user_ign | Fast NULL-filtered lookup | Negligible | **If user_ign gets populated** |
-
----
-
-## 6. Implementation Order
+## 7. Implementation Order
 
 ```
-1. CREATE INDEX idx_equipment_read_model_preset_cost
-   ON character_equipment_read_model (preset_no, total_cost DESC);
-   -- CREATE INDEX CONCURRENTLY in production to avoid lock
-
-2. DROP INDEX idx_equipment_read_model_user_ign_preset;
-   -- Safe: only 7 scans in history, all returns 0 rows
-
-3. Monitor: pg_stat_user_indexes for new index usage
-
-4. (Future) ALTER TABLE SET (fillfactor = 90) + VACUUM FULL
-   -- Schedule during maintenance window
+1. [P0] Fix user_ign mapping in Synchronizer/Calculator write path
+2. [P0] CREATE INDEX CONCURRENTLY idx_equipment_read_model_preset_cost
+       ON character_equipment_read_model (preset_no, total_cost DESC);
+3. [Verify] ANALYZE character_equipment_read_model;
+4. [Verify] Re-run EXPLAIN ANALYZE with preset_no = 1, user_ign populated
+5. [P2] (Future) ALTER TABLE SET (fillfactor = 90) + VACUUM FULL
 ```
 
 ---
 
-## 7. EXPLAIN ANALYZE Raw Results
+## 8. EXPLAIN ANALYZE Raw Results
 
-### Query 1: user_ign + preset_no lookup
+### Ranking Query: preset_no=1, ORDER BY total_cost DESC LIMIT 10 (SELECT user_ign, total_cost)
+
+```
+Limit (cost=69640.16..69641.33 rows=10 width=41)
+  (actual time=3761.632..3776.930 rows=10 loops=1)
+  Buffers: shared hit=11264 read=50365
+  -> Gather Merge (cost=69640.16..97545.74 rows=239174 width=41)
+       Workers Planned: 2  Workers Launched: 2
+       Buffers: shared hit=11264 read=50365
+       -> Sort (cost=68640.14..68939.11 rows=119587 width=41)
+            (actual time=3749.682..3749.685 rows=8 loops=3)
+            Sort Key: total_cost DESC
+            Sort Method: top-N heapsort  Memory: 25kB
+            -> Parallel Seq Scan on character_equipment_read_model
+                 (cost=0.00..66055.91 rows=119587 width=41)
+                 (actual time=1.137..3709.418 rows=96069 loops=3)
+                 Filter: (preset_no = 1)
+                 Rows Removed by Filter: 192221
+                 Buffers: shared hit=11192 read=50365
+Planning Time: 11.285 ms
+Execution Time: 3779.657 ms
+```
+
+### Ranking Query: preset_no=1, SELECT * (full row)
+
+```
+Limit (cost=69640.16..69641.33 rows=10 width=400)
+  (actual time=164.914..176.240 rows=10 loops=1)
+  Buffers: shared hit=11360 read=50269
+  -> Gather Merge
+       -> Sort (Sort Method: top-N heapsort Memory: 30kB)
+            Sort Key: total_cost DESC
+            -> Parallel Seq Scan on character_equipment_read_model
+                 Filter: (preset_no = 1)
+                 Rows Removed by Filter: 192221
+Planning Time: 5.090 ms
+Execution Time: 176.591 ms
+```
+
+### Query 1: user_ign + preset_no lookup (currently returns 0 rows)
 
 ```
 Index Scan using idx_equipment_read_model_user_ign_preset
@@ -268,20 +315,19 @@ Planning Time: 16.883 ms
 Execution Time: 8.249 ms
 ```
 
-### Query 2: ORDER BY total_cost DESC LIMIT 10
+### ocid + preset_no lookup (unique constraint, with data)
 
 ```
-Limit (cost=11686.87..11686.87 rows=1 width=41)
-  (actual time=303.056..303.059 rows=0 loops=1)
-  Buffers: shared hit=26 read=1269
-  -> Sort (cost=11686.87..11686.87 rows=1 width=41)
-       Sort Key: total_cost DESC
-       Sort Method: quicksort  Memory: 25kB
-       -> Index Scan using idx_equipment_read_model_user_ign_preset
-            Index Cond: (preset_no = 0)
-            Buffers: shared hit=23 read=1269
-Planning Time: 0.934 ms
-Execution Time: 303.104 ms
+Nested Loop (cost=8.87..16.90 rows=1 width=87)
+  (actual time=1.698..1.702 rows=1 loops=1)
+  -> HashAggregate (Group Key: ocid)
+       -> Limit -> Index Scan using idx_equipment_read_model_user_ign_preset
+            Index Cond: (user_ign IS NOT NULL)
+  -> Index Scan using uq_character_equipment_ocid_preset
+       Index Cond: ((ocid = ?) AND (preset_no = 1))
+       Buffers: shared hit=7
+Planning Time: 13.151 ms
+Execution Time: 2.029 ms
 ```
 
 ### Upsert pattern
@@ -298,16 +344,4 @@ Insert on character_equipment_read_model
   Buffers: shared hit=24 read=6 dirtied=4
 Planning Time: 1.029 ms
 Execution Time: 13.905 ms
-```
-
-### ocid + preset_no lookup (unique constraint)
-
-```
-Index Scan using uq_character_equipment_ocid_preset
-  (cost=0.42..8.44 rows=1 width=55)
-  (actual time=2.400..2.401 rows=0 loops=1)
-  Index Cond: ((ocid = 'abcdef1234567890'::text) AND (preset_no = 0))
-  Buffers: shared hit=5 read=1
-Planning Time: 1.215 ms
-Execution Time: 2.471 ms
 ```

@@ -66,6 +66,7 @@ class RunCleanupExecutor(
             startedAt = startedAt,
             maxDeleteBytesPerCycle = maxDeleteBytesPerCycle,
             maxRuntimeSeconds = maxRuntimeSeconds,
+            throttled = throttled,
             deleteRun = deleteRun,
             onDeletedBytes = onDeletedBytes,
             onDeleteError = onDeleteError,
@@ -77,6 +78,7 @@ class RunCleanupExecutor(
         startedAt: Instant,
         maxDeleteBytesPerCycle: Long,
         maxRuntimeSeconds: Long,
+        throttled: Int,
         deleteRun: (RunInfo) -> Long,
         onDeletedBytes: (Long) -> Unit,
         onDeleteError: (RunInfo) -> Unit,
@@ -108,7 +110,7 @@ class RunCleanupExecutor(
             }
         }
 
-        return RunCleanupResult(deletedRuns, deletedBytes, errors, 0)
+        return RunCleanupResult(deletedRuns, deletedBytes, errors, throttled)
     }
 }
 

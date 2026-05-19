@@ -52,7 +52,7 @@ class RunCleanupExecutorTest {
             maxDeleteRunsPerCycle = 2,
             maxDeleteBytesPerCycle = Long.MAX_VALUE,
             maxRuntimeSeconds = 60,
-            startedAt = now,
+            startedAt = Instant.now(),
             now = now,
             deleteRun = {
                 deleted.add(it.runId)
@@ -79,7 +79,7 @@ class RunCleanupExecutorTest {
             maxDeleteRunsPerCycle = 10,
             maxDeleteBytesPerCycle = Long.MAX_VALUE,
             maxRuntimeSeconds = 60,
-            startedAt = now,
+            startedAt = Instant.now(),
             now = now,
             deleteRun = { if (it.runId == "run-1") -1L else it.sizeBytes },
             onDeleteError = { errors.add(it.runId) },

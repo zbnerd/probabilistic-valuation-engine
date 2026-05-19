@@ -11,6 +11,7 @@ import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.storage.ObjectStorage
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -171,7 +172,10 @@ class CalculatorChunkProcessingCoordinatorTest {
         whenever(objectStorage.exists(coordinator.resultObjectKeyFor(event))).thenReturn(false)
         whenever(chunkProcessor.process(any(), any())).thenThrow(RuntimeException("boom"))
 
-        coordinator.handle(event)
+        assertThatThrownBy {
+            runBlocking { coordinator.handle(event) }
+        }.isInstanceOf(RuntimeException::class.java)
+            .hasMessage("boom")
 
         verify(metrics).recordChunkFailed()
         verify(resultEventPublisher, never()).publishChunkReady(any())

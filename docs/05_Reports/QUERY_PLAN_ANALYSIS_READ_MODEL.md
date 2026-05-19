@@ -29,7 +29,7 @@
 
 | Column | n_distinct | null_frac | correlation | Notes |
 |--------|-----------|-----------|-------------|-------|
-| `user_ign` | 0 | **1.0 (100%)** | - | **Almost entirely NULL** (6 / 864,868 non-null) |
+| `user_ign` | 0 | **1.0 (100%)** | - | **Pipeline bug: NULL in all recent data** (6 / 864,868 non-null). 5/17 bulk upsert (861K rows): 0% populated |
 | `preset_no` | 3 | 0 | 0.34 | Even split: {3: 33.5%, 2: 33.3%, 1: 33.2%} |
 | `total_cost` | -0.62 | 0 | -0.006 | Low correlation, high cardinality |
 | `ocid` | -0.33 | 0 | 0.004 | High cardinality, low correlation |
@@ -72,7 +72,17 @@ Limit (cost=11686.87..11686.87 rows=1 width=41) (actual time=303.056..303.059 ro
 
 **Bottleneck:** Missing index on `(preset_no, total_cost DESC)` forces full scan + sort for every leaderboard query.
 
-### 2.2 user_ign = 100% NULL — Index Dead Weight
+### 2.2 user_ign = 100% NULL — Pipeline Bug + Index Dead Weight
+
+`user_ign` is NULL across **all** recent data, not just old rows:
+
+| Date | Rows | user_ign populated | % |
+|------|------|-------------------|---|
+| 2026-05-17 | 861,654 | 0 | 0.00% |
+| 2026-05-13 | 3,203 | 6 | 0.19% |
+| 2026-05-12 | 4 | 0 | 0.00% |
+
+**Root cause:** Current pipeline does not populate `user_ign` during upsert. The column was likely intended to be filled but the mapping is missing in the Synchronizer/Calculator write path.
 
 The index `idx_equipment_read_model_user_ign_preset` has `user_ign` as leading column. Since user_ign is NULL in 99.999% of rows:
 

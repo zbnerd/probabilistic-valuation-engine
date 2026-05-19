@@ -15,7 +15,7 @@ class OcidUserIgnResolver(
         if (ocids.isEmpty()) return emptyMap()
 
         val sql = """
-            SELECT ocid, user_ign FROM game_character WHERE ocid IN (:ocids)
+            SELECT ocid, user_ign FROM character_basic_read_model WHERE ocid IN (:ocids)
         """.trimIndent()
 
         val params = MapSqlParameterSource("ocids", ocids.toList())

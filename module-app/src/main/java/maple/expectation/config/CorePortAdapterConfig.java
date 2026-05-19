@@ -5,7 +5,6 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.calculator.PotentialCalculator;
-import maple.expectation.core.calculator.CubeRateCalculator;
 import maple.expectation.core.domain.model.AlertMessage;
 import maple.expectation.core.domain.model.AlertPriority;
 import maple.expectation.core.domain.model.CharacterId;
@@ -13,18 +12,12 @@ import maple.expectation.core.domain.model.CubeRate;
 import maple.expectation.core.domain.model.PotentialStat;
 import maple.expectation.core.domain.model.equipment.CharacterEquipment;
 import maple.expectation.core.domain.model.equipment.EquipmentData;
-import maple.expectation.core.flame.component.FlameScoreResolver;
-import maple.expectation.core.flame.port.FlameTrialsPort;
-import maple.expectation.core.flame.service.FlameTrialsService;
 import maple.expectation.core.port.out.AlertPort;
 import maple.expectation.core.port.out.CubeRatePort;
 import maple.expectation.core.port.out.EquipmentDataPort;
 import maple.expectation.core.port.out.ItemPricePort;
 import maple.expectation.core.port.out.PotentialStatPort;
 import maple.expectation.core.port.out.ShutdownDataPersistencePort;
-import maple.expectation.core.probability.FlameDpCalculator;
-import maple.expectation.core.probability.FlameScoreCalculator;
-import maple.expectation.core.probability.TailProbabilityCalculator;
 import maple.expectation.domain.repository.CharacterEquipmentRepository;
 import maple.expectation.domain.repository.CubeProbabilityRepository;
 import maple.expectation.domain.v2.CubeProbability;
@@ -64,88 +57,11 @@ public class CorePortAdapterConfig {
   private final CharacterEquipmentRepository characterEquipmentRepository;
 
   /**
-   * Core Utility Beans
-   *
-   * <p>Registers core layer utilities as Spring beans for dependency injection.
-   *
-   * <p><b>Phase 3:</b> Move to module-core configuration when core becomes self-contained.
-   */
-  @Bean
-  public maple.expectation.core.domain.stat.StatParser statParser() {
-    log.info("[CorePortAdapter] Initializing StatParser bean");
-    return new maple.expectation.core.domain.stat.StatParser();
-  }
-
-  @Bean
-  public maple.expectation.core.probability.ProbabilityConvolver probabilityConvolver() {
-    log.info("[CorePortAdapter] Initializing ProbabilityConvolver bean");
-    return new maple.expectation.core.probability.ProbabilityConvolver();
-  }
-
-  /**
-   * Core Calculator Beans
-   *
-   * <p>Registers core layer calculators as Spring beans for dependency injection.
-   *
-   * <p><b>Phase 3:</b> Move to module-core configuration when core becomes self-contained.
-   */
-  @Bean
-  public CubeRateCalculator cubeRateCalculator() {
-    log.info("[CorePortAdapter] Initializing CubeRateCalculator bean");
-    return new CubeRateCalculator();
-  }
-
-  @Bean
   public PotentialCalculator potentialCalculator(
       maple.expectation.core.domain.stat.StatParser statParser,
       maple.expectation.infrastructure.executor.LogicExecutor logicExecutor) {
     log.info("[CorePortAdapter] Initializing PotentialCalculator bean");
     return new PotentialCalculator(statParser, logicExecutor);
-  }
-
-  @Bean
-  public FlameScoreCalculator flameScoreCalculator() {
-    log.info("[CorePortAdapter] Initializing FlameScoreCalculator bean");
-    return new FlameScoreCalculator();
-  }
-
-  @Bean
-  public FlameDpCalculator flameDpCalculator() {
-    log.info("[CorePortAdapter] Initializing FlameDpCalculator bean");
-    return new FlameDpCalculator();
-  }
-
-  @Bean
-  public TailProbabilityCalculator tailProbabilityCalculator() {
-    log.info("[CorePortAdapter] Initializing TailProbabilityCalculator bean");
-    return new TailProbabilityCalculator();
-  }
-
-  /**
-   * FlameTrials Port Adapter
-   *
-   * <p>Provides expected flame trials calculation using {@link FlameTrialsService}.
-   *
-   * <p>Implements {@link FlameTrialsPort} for use by {@link
-   * maple.expectation.application.service.expectation.PresetCalculationHelper}.
-   */
-  @Bean
-  public FlameTrialsPort flameTrialsPort(
-      FlameDpCalculator dpCalculator, FlameScoreCalculator scoreCalculator) {
-    log.info("[CorePortAdapter] Initializing FlameTrialsPort bean");
-    return new FlameTrialsService(dpCalculator, scoreCalculator);
-  }
-
-  /**
-   * FlameScoreResolver Bean
-   *
-   * <p>Provides singleton access to {@link FlameScoreResolver} for calculating flame score from
-   * additional options.
-   */
-  @Bean
-  public FlameScoreResolver flameScoreResolver() {
-    log.info("[CorePortAdapter] Initializing FlameScoreResolver bean");
-    return FlameScoreResolver.INSTANCE;
   }
 
   /**

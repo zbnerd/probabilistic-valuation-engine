@@ -10,19 +10,35 @@
 - [ ] 브랜치 생성
 
 **서버 런타임 검증 절차 (커밋 전 필수):**
-1. `set -a && source .env && set +a && ./gradlew :module-app:bootRun` 으로 서버 구동
-2. `GameCharacterControllerV5` 엔드포인트 curl로 호출:
+
+`module-app`은 레거시. 아래 4개 모듈이 현재 활성 서비스:
+
+| 모듈 | 용도 | Port |
+|------|------|------|
+| `module-external-api` | 외부 API 호출 파이프라인 | 8081 |
+| `module-calculator` | 계산 파이프라인 | 8082 |
+| `module-synchronizer` | Read model 동기화 | 8083 |
+| `module-rest-controller` | REST API 엔드포인트 | 8080 |
+
+1. 수정한 모듈에 해당하는 `bootRun`으로 서버 구동:
+   ```bash
+   set -a && source .env && set +a
+   ./gradlew :module-rest-controller:bootRun    # REST API
+   ./gradlew :module-external-api:bootRun       # External API
+   ./gradlew :module-calculator:bootRun         # Calculator
+   ./gradlew :module-synchronizer:bootRun       # Synchronizer
+   ```
+2. API 검증:
    ```bash
    curl -s -w "\nHTTP %{http_code}" "http://localhost:8080/api/v5/characters/진격캐넌/expectation"
    ```
    - 경로: `/api/v5/characters` (복수형 주의)
-   - 검증 대상 controller: `module-web/.../controller/v5/GameCharacterControllerV5.kt`
-3. **202는 접수일 뿐, 실제 성공 여부는 서버 로그로 확인** (`module-app/logs/app.log`)
+3. **202는 접수일 뿐, 실제 성공 여부는 서버 로그로 확인** (해당 모듈의 `logs/` 디렉토리)
    ```bash
    # 계산 완료 로그 확인 (필수)
-   grep "Calculation completed" module-app/logs/app.log | tail -5
+   grep "Calculation completed" module-calculator/logs/app.log | tail -5
    # 에러 로그 확인 (ERROR가 없어야 함)
-   grep "ERROR" module-app/logs/app.log | tail -10
+   grep "ERROR" <module>/logs/app.log | tail -10
    ```
    - 성공 기준: `Calculation completed with result saved` 로그 확인 + `ERROR` 없음
    - 202만 보고 성공 판단 금지 — 비동기 파이프라인 전체 완료까지 로그로 추적
@@ -52,4 +68,4 @@ RESET_ACTIVE_JOBS=1 COUNT=10000 CONCURRENCY=50 SAMPLE_INTERVAL=30 POST_SAMPLE_CO
 - `RESET_ACTIVE_JOBS=1`: 첫 `COUNT`개 CSV IGN의 active job을 FAILED/LOAD_TEST_RESET으로 마킹 (파괴적 — 명시적 요청 시만)
 - `RESET_VIEWS=1` 추가 시 `character_valuation_views` 초기화 (파괴적)
 - 부하테스트 전 필수: `RESET_ACTIVE_JOBS=1`로 stale job 정리
-- `module-app/logs/load-test-bootrun-*.log`에 부트 로그 기록
+- 각 모듈의 `logs/` 디렉토리에 부트 로그 기록

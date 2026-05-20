@@ -37,7 +37,7 @@ class UrgentCharacterRequestConsumer(
     private val notFoundTopic: String,
     @Value("\${external-api.urgent.chunk-ready-topic}")
     private val urgentChunkReadyTopic: String,
-    @Value("\${external-api.store.base-path}")
+    @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)

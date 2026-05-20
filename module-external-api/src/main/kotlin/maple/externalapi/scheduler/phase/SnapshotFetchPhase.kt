@@ -51,7 +51,7 @@ class SnapshotFetchPhase(
     private val permitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
-    @Value("\${external-api.store.base-path:/data/external-api}")
+    @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
 ) {
     private val log = LoggerFactory.getLogger(SnapshotFetchPhase::class.java)

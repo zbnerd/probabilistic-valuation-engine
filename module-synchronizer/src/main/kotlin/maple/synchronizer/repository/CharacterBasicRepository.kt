@@ -15,18 +15,32 @@ class CharacterBasicRepository(
     }
 
     fun bulkUpsert(runId: String, chunkId: String, records: List<BasicRecord>) {
+        val deduped = records
+            .groupBy { it.ocid }
+            .map { it.value.first() }
+
         batchExecutor.execute(
             label = "CharacterBasic",
             itemLabel = "records",
             runId = runId,
             chunkId = chunkId,
-            items = records,
+            items = deduped,
             batchSize = SUB_BATCH_SIZE,
             upsertBatch = { batch -> upsertBatch(runId, chunkId, batch) },
         )
     }
 
     private fun upsertBatch(runId: String, chunkId: String, batch: List<BasicRecord>): Int {
+        val ocids = batch.map { it.ocid }.toTypedArray()
+        val userIgns = batch.map { it.userIgn }.toTypedArray()
+
+        jdbc.update(
+            "DELETE FROM character_basic_read_model WHERE ocid = ANY(:ocids) AND NOT (user_ign = ANY(:userIgns))",
+            MapSqlParameterSource()
+                .addValue("ocids", ocids)
+                .addValue("userIgns", userIgns),
+        )
+
         val sql = """
             INSERT INTO character_basic_read_model (
                 user_ign, ocid, world_name, character_class, character_level,
@@ -54,8 +68,8 @@ class CharacterBasicRepository(
         return jdbc.update(sql, MapSqlParameterSource()
             .addValue("runId", runId)
             .addValue("chunkId", chunkId)
-            .addValue("userIgns", batch.map { it.userIgn }.toTypedArray())
-            .addValue("ocids", batch.map { it.ocid }.toTypedArray())
+            .addValue("userIgns", userIgns)
+            .addValue("ocids", ocids)
             .addValue("worldNames", batch.map { it.worldName }.toTypedArray())
             .addValue("characterClasses", batch.map { it.characterClass }.toTypedArray())
             .addValue("characterLevels", batch.map { it.characterLevel }.toTypedArray())

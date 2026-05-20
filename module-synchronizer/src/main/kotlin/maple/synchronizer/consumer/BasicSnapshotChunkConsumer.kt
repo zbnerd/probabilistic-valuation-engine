@@ -11,7 +11,6 @@ import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.storage.BasicChunkFileReader
 import maple.synchronizer.storage.BasicRecord
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.kafka.annotation.KafkaListener
@@ -29,8 +28,6 @@ class BasicSnapshotChunkConsumer(
     private val repository: CharacterBasicRepository,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val jdbc: NamedParameterJdbcTemplate,
-    @Value("\${synchronizer.store.base-path:../data}")
-    private val basePath: String,
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()

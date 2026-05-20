@@ -39,14 +39,14 @@ class RankingFetchPhase(
     private val maxPages: Int,
     @Value("\${external-api.ranking.permits-per-second:50}")
     private val permitsPerSecond: Int,
-    @Value("\${external-api.store.base-path:/data/external-api}")
+    @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
 ) {
     private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
 
     fun execute(workerExecutor: ExecutorService): CompletableFuture<Path> {
         val runId = SchedulerPhaseUtils.newRunId()
-        val date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val date = LocalDate.now().minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
         val runDir: Path = Paths.get(storeBasePath, "runs", runId)
         val endpointConfig = chunkingProperties.configFor("ranking-overall")
 

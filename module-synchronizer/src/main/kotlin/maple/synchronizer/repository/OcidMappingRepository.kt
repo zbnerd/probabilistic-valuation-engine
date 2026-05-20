@@ -18,8 +18,8 @@ class OcidMappingRepository(
         private const val BATCH_SIZE = 50000
         private const val REDIS_KEY = "ocid:mapping"
         private const val MERGE_SQL = """
-            INSERT INTO game_character (user_ign, ocid, created_at, updated_at)
-            SELECT unnest(:userIgns::varchar[]), unnest(:ocids::varchar[]), now(), now()
+            INSERT INTO game_character (user_ign, ocid, updated_at)
+            SELECT unnest(:userIgns::varchar[]), unnest(:ocids::varchar[]), now()
             ON CONFLICT (user_ign) DO UPDATE SET
                 ocid = EXCLUDED.ocid,
                 updated_at = now()

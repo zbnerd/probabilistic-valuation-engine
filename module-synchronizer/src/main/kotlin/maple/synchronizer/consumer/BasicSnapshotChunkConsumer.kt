@@ -152,8 +152,8 @@ class BasicSnapshotChunkConsumer(
     private fun upsertOcidFromBasicRecords(records: List<BasicRecord>) {
         records.forEach { record ->
             jdbc.update(
-                """INSERT INTO game_character (user_ign, ocid, created_at, updated_at)
-                   VALUES (:userIgn, :ocid, NOW(), NOW())
+                """INSERT INTO game_character (user_ign, ocid, updated_at)
+                   VALUES (:userIgn, :ocid, NOW())
                    ON CONFLICT (user_ign) DO UPDATE SET ocid = EXCLUDED.ocid, updated_at = NOW()""",
                 MapSqlParameterSource()
                     .addValue("userIgn", record.userIgn)

@@ -75,6 +75,10 @@ external-api:
         chunk-ready-topic: external-api.snapshot.chunk-ready
         run-completed-topic: external-api.snapshot.run-completed
         run-failed-topic: external-api.snapshot.run-failed
+  ranking:
+    enabled: true
+    max-pages: 300
+    permits-per-second: 50
 
 management:
   endpoints:

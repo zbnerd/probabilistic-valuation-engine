@@ -72,4 +72,35 @@ class SnapshotEventPublisherConfig {
             runCompletedTopic = properties.kafka.runCompletedTopic,
             runFailedTopic = properties.kafka.runFailedTopic,
         )
+
+    @Bean
+    @Qualifier("rankingSnapshotPublisher")
+    @ConditionalOnProperty(
+        prefix = "external-api.snapshot.events.kafka",
+        name = ["enabled"],
+        havingValue = "false",
+        matchIfMissing = true,
+    )
+    fun noOpRankingSnapshotPublisher(): SnapshotChunkEventPublisher =
+        NoOpSnapshotChunkEventPublisher()
+
+    @Bean
+    @Qualifier("rankingSnapshotPublisher")
+    @ConditionalOnProperty(
+        prefix = "external-api.snapshot.events.kafka",
+        name = ["enabled"],
+        havingValue = "true",
+    )
+    fun kafkaRankingSnapshotPublisher(
+        kafkaTemplate: KafkaTemplate<String, String>,
+        objectMapper: ObjectMapper,
+        properties: SnapshotEventProperties,
+    ): SnapshotChunkEventPublisher =
+        KafkaSnapshotChunkEventPublisher(
+            kafkaTemplate = kafkaTemplate,
+            objectMapper = objectMapper,
+            chunkReadyTopic = properties.kafka.chunkReadyTopic,
+            runCompletedTopic = properties.kafka.runCompletedTopic,
+            runFailedTopic = properties.kafka.runFailedTopic,
+        )
 }

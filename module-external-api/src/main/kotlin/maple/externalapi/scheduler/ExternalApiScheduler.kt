@@ -65,23 +65,26 @@ class ExternalApiScheduler(
         }
 
         val rankingPhase = rankingFetchPhaseProvider.ifAvailable
-        val rankingFuture = if (rankingPhase != null) {
-            log.info("[Scheduler] starting ranking fetch phase")
-            rankingPhase.execute(executor)
-                .handle { _, ex ->
-                    if (ex != null) {
-                        log.error("[Scheduler] ranking fetch failed, continuing with OCID lookup", ex)
-                    }
-                    null
-                }
-        } else {
-            log.info("[Scheduler] ranking fetch phase disabled, skipping")
-            CompletableFuture.completedFuture(null)
+        if (rankingPhase == null) {
+            log.error("[Scheduler] ranking fetch phase is required but not enabled")
+            releaseLock()
+            return
         }
 
-        rankingFuture
-            .thenCompose {
-                ocidLookupPhase.execute(executor)
+        log.info("[Scheduler] starting ranking fetch phase")
+        rankingPhase.execute(executor)
+            .handle { runDir, ex ->
+                if (ex != null) {
+                    log.error("[Scheduler] ranking fetch failed, cannot proceed with OCID lookup", ex)
+                }
+                runDir
+            }
+            .thenCompose { runDir ->
+                if (runDir == null) {
+                    CompletableFuture.completedFuture(null)
+                } else {
+                    ocidLookupPhase.execute(executor, runDir)
+                }
             }
             .thenCompose {
                 val cache = ocidCacheProvider.refresh()

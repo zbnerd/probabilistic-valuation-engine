@@ -100,6 +100,24 @@ class LocalExternalApiArtifactStoreAdapter(
         return deletedBytes
     }
 
+    override fun deleteAll(endpoint: ExternalApiEndpoint): Int {
+        val dir = Paths.get(basePath, endpoint.storageSubDir())
+        if (!Files.exists(dir)) return 0
+        var count = 0
+        Files.walkFileTree(dir, object : SimpleFileVisitor<Path>() {
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                Files.delete(file)
+                count++
+                return FileVisitResult.CONTINUE
+            }
+            override fun postVisitDirectory(d: Path, exc: java.io.IOException?): FileVisitResult {
+                Files.delete(d)
+                return FileVisitResult.CONTINUE
+            }
+        })
+        return count
+    }
+
     override fun fileExists(relativePath: String): Boolean =
         Files.exists(Paths.get(basePath, relativePath))
 

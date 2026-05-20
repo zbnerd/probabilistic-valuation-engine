@@ -31,14 +31,12 @@ class RankingFetchPhaseTest {
     private lateinit var clientPort: ExternalApiClientPort
     private lateinit var objectMapper: ObjectMapper
     private lateinit var phase: RankingFetchPhase
-    private lateinit var csvPath: Path
     private lateinit var executor: java.util.concurrent.ExecutorService
 
     @BeforeEach
     fun setUp() {
         clientPort = mock()
         objectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())
-        csvPath = tempDir.resolve("userIgn_List.csv")
         val storeBasePath = tempDir.resolve("store").toString()
 
         val registry = SimpleMeterRegistry()
@@ -52,7 +50,6 @@ class RankingFetchPhaseTest {
             maxPages = 3,
             permitsPerSecond = 100,
             storeBasePath = storeBasePath,
-            csvPath = csvPath.toString(),
         )
         executor = Executors.newVirtualThreadPerTaskExecutor()
     }
@@ -70,8 +67,7 @@ class RankingFetchPhaseTest {
     }
 
     @Test
-    fun `execute fetches all pages and writes character names to CSV`() {
-        // Given - 3 pages with different character names
+    fun `execute returns runDir and creates gzip chunks`() {
         whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:1"))
             .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerA", "PlayerB")))
         whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:2"))
@@ -79,27 +75,22 @@ class RankingFetchPhaseTest {
         whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:3"))
             .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerE")))
 
-        // When
-        val future = phase.execute(executor)
-        future.join()
+        val resultPath = phase.execute(executor).join()
 
-        // Then - CSV contains all character names
-        val csvLines = Files.readAllLines(csvPath).filter { it.isNotBlank() }
-        assertThat(csvLines).containsExactly("PlayerA", "PlayerB", "PlayerC", "PlayerD", "PlayerE")
+        assertThat(resultPath).isNotNull
+        assertThat(resultPath.toString()).contains("runs")
 
-        // And - gzip chunk files created in store
-        val chunksDir = tempDir.resolve("store").resolve("runs")
-        val gzFiles = Files.walk(chunksDir).filter { it.toString().endsWith(".gz") }.toList()
+        val gzFiles = Files.walk(tempDir.resolve("store").resolve("runs"))
+            .filter { it.toString().endsWith(".gz") }.toList()
         assertThat(gzFiles).isNotEmpty
 
-        // And - _SUCCESS marker exists
-        val successMarkers = Files.walk(chunksDir).filter { it.fileName.toString() == "_SUCCESS" }.toList()
+        val successMarkers = Files.walk(tempDir.resolve("store").resolve("runs"))
+            .filter { it.fileName.toString() == "_SUCCESS" }.toList()
         assertThat(successMarkers).hasSize(1)
     }
 
     @Test
-    fun `execute continues on page failure and writes successful names to CSV`() {
-        // Given - page 1 succeeds, page 2 fails, page 3 succeeds
+    fun `execute continues on page failure`() {
         whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:1"))
             .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerA")))
         whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:2"))
@@ -107,33 +98,26 @@ class RankingFetchPhaseTest {
         whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:3"))
             .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerC")))
 
-        // When
-        val future = phase.execute(executor)
-        future.join()
+        val resultPath = phase.execute(executor).join()
 
-        // Then - CSV contains only names from successful pages
-        val csvLines = Files.readAllLines(csvPath).filter { it.isNotBlank() }
-        assertThat(csvLines).containsExactly("PlayerA", "PlayerC")
+        assertThat(resultPath).isNotNull
+        val gzFiles = Files.walk(tempDir.resolve("store").resolve("runs"))
+            .filter { it.toString().endsWith(".gz") }.toList()
+        assertThat(gzFiles).isNotEmpty
     }
 
     @Test
     fun `execute skips entries without character_name`() {
-        // Given - page with entries where one has no character_name
         val json = """{"ranking":[{"ranking":1,"character_name":"ValidName","world_name":"크로아"},{"ranking":2,"world_name":"크로아"}]}""".toByteArray()
         whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:1"))
             .thenReturn(CompletableFuture.completedFuture(json))
-        // Return empty for remaining pages to end quickly
         whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:2"))
             .thenReturn(CompletableFuture.completedFuture("""{"ranking":[]}""".toByteArray()))
         whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:3"))
             .thenReturn(CompletableFuture.completedFuture("""{"ranking":[]}""".toByteArray()))
 
-        // When
-        val future = phase.execute(executor)
-        future.join()
+        val resultPath = phase.execute(executor).join()
 
-        // Then - only valid entry in CSV
-        val csvLines = Files.readAllLines(csvPath).filter { it.isNotBlank() }
-        assertThat(csvLines).containsExactly("ValidName")
+        assertThat(resultPath).isNotNull
     }
 }

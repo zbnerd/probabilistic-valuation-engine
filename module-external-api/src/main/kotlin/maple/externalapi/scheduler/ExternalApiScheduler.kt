@@ -13,10 +13,10 @@ import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
-import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
 
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
@@ -34,6 +34,8 @@ class ExternalApiScheduler(
     private val running = AtomicBoolean(false)
     private val shutdown = AtomicBoolean(false)
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
+    private val lock = ReentrantLock()
+    private val idle = lock.newCondition()
 
     @EventListener(ApplicationReadyEvent::class)
     fun onStartup() {
@@ -51,14 +53,14 @@ class ExternalApiScheduler(
     }
 
     fun triggerDailyRefresh() {
-        if (!acquireLock(120_000)) {
+        if (!acquireLock(3_600_000)) {
             log.warn("[Scheduler] could not acquire lock for daily refresh, skipping")
             return
         }
         if (skipCharacterBasic) {
             log.info("[Scheduler] skip-character-basic enabled, loading OCID cache from existing data")
             ocidCacheProvider.refresh()
-            running.set(false)
+            releaseLock()
             return
         }
 
@@ -89,7 +91,7 @@ class ExternalApiScheduler(
                 if (ex != null) {
                     log.error("[Scheduler] daily refresh failed", ex)
                 }
-                running.set(false)
+                releaseLock()
             }
     }
 
@@ -108,7 +110,7 @@ class ExternalApiScheduler(
         if (entries.isEmpty()) {
             log.warn("[Scheduler] OCID cache empty, waiting 30s")
             executor.submit {
-                Thread.sleep(Duration.ofSeconds(30))
+                Thread.sleep(java.time.Duration.ofSeconds(30))
                 ocidCacheProvider.refresh()
                 runItemEquipmentCycle()
             }
@@ -117,7 +119,7 @@ class ExternalApiScheduler(
 
         if (!acquireLock(120_000)) {
             executor.submit {
-                Thread.sleep(Duration.ofSeconds(5))
+                Thread.sleep(java.time.Duration.ofSeconds(5))
                 runItemEquipmentCycle()
             }
             return
@@ -129,18 +131,29 @@ class ExternalApiScheduler(
                 if (ex != null) {
                     log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)
                 }
-                running.set(false)
+                releaseLock()
                 executor.submit { runItemEquipmentCycle() }
             }
     }
 
     private fun acquireLock(timeoutMs: Long): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            if (running.compareAndSet(false, true)) return true
-            Thread.sleep(Duration.ofMillis(500))
+        lock.lock()
+        try {
+            var remainingNanos = timeoutMs * 1_000_000L
+            while (!running.compareAndSet(false, true)) {
+                if (remainingNanos <= 0) return false
+                remainingNanos = idle.awaitNanos(remainingNanos)
+            }
+            return true
+        } finally {
+            lock.unlock()
         }
-        return false
+    }
+
+    private fun releaseLock() {
+        running.set(false)
+        lock.lock()
+        try { idle.signalAll() } finally { lock.unlock() }
     }
 
     override val lifecyclePhase: Int = 100

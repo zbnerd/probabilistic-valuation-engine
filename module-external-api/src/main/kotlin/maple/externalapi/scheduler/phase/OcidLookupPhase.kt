@@ -3,8 +3,11 @@ package maple.externalapi.scheduler.phase
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.expectation.common.event.SnapshotRunCompletedEvent
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
@@ -14,6 +17,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.Collections
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.atomic.AtomicInteger
@@ -31,6 +35,8 @@ class OcidLookupPhase(
     private val batchSize: Int,
     @Value("\${external-api.store.base-path:./data}")
     private val storeBasePath: String,
+    @Qualifier("ocidLookupSnapshotPublisher")
+    private val eventPublisher: SnapshotChunkEventPublisher,
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
 
@@ -70,8 +76,21 @@ class OcidLookupPhase(
             results = results,
             start = start,
         ).thenApply {
-            val outputPath = writeGzipJsonl(mappingDir, results)
+            val runId = SchedulerPhaseUtils.newRunId()
+            val outputPath = writeGzipJsonl(mappingDir, results, runId)
             SchedulerPhaseUtils.logSummary("OCID lookup", igns.size, successCount.get(), successCount.get(), failCount.get(), start)
+            eventPublisher.publishRunCompleted(SnapshotRunCompletedEvent(
+                eventId = UUID.randomUUID().toString(),
+                runId = runId,
+                endpoint = "ocid-lookup",
+                manifestPath = "ocid-mapping/${outputPath.fileName}",
+                totalRecords = results.size,
+                totalFailed = failCount.get(),
+                chunkCount = 1,
+                startedAt = start,
+                finishedAt = Instant.now(),
+                createdAt = Instant.now(),
+            ))
             outputPath
         }
     }
@@ -112,9 +131,8 @@ class OcidLookupPhase(
         log.info("[Scheduler] deleted {} old OCID mapping files in {}", deleted, mappingDir)
     }
 
-    private fun writeGzipJsonl(mappingDir: Path, results: List<String>): Path {
+    private fun writeGzipJsonl(mappingDir: Path, results: List<String>, runId: String): Path {
         Files.createDirectories(mappingDir)
-        val runId = SchedulerPhaseUtils.newRunId()
         val outputPath = mappingDir.resolve("ocid-mapping-$runId.jsonl.gz")
         val tempFile = Files.createTempFile("ocid-mapping-", ".jsonl")
         tempFile.toFile().deleteOnExit()

@@ -73,6 +73,7 @@ external-api:
         chunk-ready-topic: external-api.snapshot.chunk-ready
         run-completed-topic: external-api.snapshot.run-completed
         run-failed-topic: external-api.snapshot.run-failed
+        ocid-lookup-topic: external-api.ocid.lookup-ready
   ranking:
     enabled: true
     max-pages: 3000

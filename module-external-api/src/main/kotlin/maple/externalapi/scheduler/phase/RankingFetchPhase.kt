@@ -16,10 +16,8 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -43,12 +41,10 @@ class RankingFetchPhase(
     private val permitsPerSecond: Int,
     @Value("\${external-api.store.base-path:/data/external-api}")
     private val storeBasePath: String,
-    @Value("\${external-api.csv.path:userIgn_List.csv}")
-    private val csvPath: String,
 ) {
     private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
 
-    fun execute(workerExecutor: ExecutorService): CompletableFuture<Void> {
+    fun execute(workerExecutor: ExecutorService): CompletableFuture<Path> {
         val runId = SchedulerPhaseUtils.newRunId()
         val date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
         val runDir: Path = Paths.get(storeBasePath, "runs", runId)
@@ -70,21 +66,20 @@ class RankingFetchPhase(
         val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
         val fetched = AtomicInteger(0)
         val failed = AtomicInteger(0)
-        val characterNames = mutableListOf<String>()
 
         log.info("[RankingFetch] starting: runId={}, date={}, maxPages={}, permitsPerSecond={}", runId, date, maxPages, permitsPerSecond)
         val start = Instant.now()
 
-        return processPages(workerExecutor, sink, rateLimiter, date, 1, fetched, failed, characterNames)
+        return processPages(workerExecutor, sink, rateLimiter, date, 1, fetched, failed)
             .whenComplete { _, ex ->
                 sink.close()
                 if (ex != null) {
                     log.error("[RankingFetch] failed: runId={}, fetched={}, failed={}", runId, fetched.get(), failed.get(), ex)
                 } else {
-                    writeCsv(characterNames)
                     SchedulerPhaseUtils.logSummary("RankingFetch", fetched.get(), fetched.get(), fetched.get(), failed.get(), start)
                 }
             }
+            .thenApply { runDir }
     }
 
     private fun processPages(
@@ -95,7 +90,6 @@ class RankingFetchPhase(
         currentPage: Int,
         fetched: AtomicInteger,
         failed: AtomicInteger,
-        characterNames: MutableList<String>,
     ): CompletableFuture<Void> {
         if (currentPage > maxPages) {
             return CompletableFuture.completedFuture(null)
@@ -106,7 +100,7 @@ class RankingFetchPhase(
         val requestKey = "$date:$currentPage"
         return clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, requestKey)
             .thenAcceptAsync({ bodyBytes ->
-                val count = submitRankingEntries(sink, bodyBytes, currentPage, characterNames)
+                val count = submitRankingEntries(sink, bodyBytes, currentPage)
                 fetched.addAndGet(count)
                 metrics.recordRankingFetched(count)
                 if (fetched.get() % 10000 == 0) {
@@ -130,14 +124,13 @@ class RankingFetchPhase(
                 }
                 null
             }
-            .thenCompose { processPages(workerExecutor, sink, rateLimiter, date, currentPage + 1, fetched, failed, characterNames) }
+            .thenCompose { processPages(workerExecutor, sink, rateLimiter, date, currentPage + 1, fetched, failed) }
     }
 
     private fun submitRankingEntries(
         sink: ChunkedSnapshotSink,
         bodyBytes: ByteArray,
         page: Int,
-        characterNames: MutableList<String>,
     ): Int {
         val root = objectMapper.readTree(bodyBytes)
         val rankingArray = root.get("ranking")
@@ -150,7 +143,6 @@ class RankingFetchPhase(
         for (node in rankingArray) {
             val name = node.get("character_name")?.asText() ?: continue
             val entryBytes = objectMapper.writeValueAsBytes(node)
-            characterNames.add(name)
             sink.submit(SnapshotChunkRecord.Success(
                 bodyBytes = entryBytes,
                 key = name,
@@ -162,12 +154,5 @@ class RankingFetchPhase(
             count++
         }
         return count
-    }
-
-    private fun writeCsv(characterNames: List<String>) {
-        val path = Paths.get(csvPath)
-        val content = characterNames.joinToString("\n", postfix = "\n")
-        Files.writeString(path, content)
-        log.info("[RankingFetch] CSV overwritten: path={}, count={}", path.toAbsolutePath(), characterNames.size)
     }
 }

@@ -32,6 +32,7 @@ class OcidLookupPhaseTest {
             ocidLookupPermitsPerSecond = 400,
             batchSize = 1000,
             storeBasePath = tempDir.resolve("store").toString(),
+            eventPublisher = maple.externalapi.snapshot.event.NoOpSnapshotChunkEventPublisher(),
         )
     }
 

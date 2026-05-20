@@ -11,7 +11,6 @@ import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.storage.BasicChunkFileReader
 import maple.synchronizer.storage.BasicRecord
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.kafka.annotation.KafkaListener
@@ -29,8 +28,6 @@ class BasicSnapshotChunkConsumer(
     private val repository: CharacterBasicRepository,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val jdbc: NamedParameterJdbcTemplate,
-    @Value("\${synchronizer.store.base-path:../data}")
-    private val basePath: String,
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
@@ -152,8 +149,8 @@ class BasicSnapshotChunkConsumer(
     private fun upsertOcidFromBasicRecords(records: List<BasicRecord>) {
         records.forEach { record ->
             jdbc.update(
-                """INSERT INTO game_character (user_ign, ocid, created_at, updated_at)
-                   VALUES (:userIgn, :ocid, NOW(), NOW())
+                """INSERT INTO game_character (user_ign, ocid, updated_at)
+                   VALUES (:userIgn, :ocid, NOW())
                    ON CONFLICT (user_ign) DO UPDATE SET ocid = EXCLUDED.ocid, updated_at = NOW()""",
                 MapSqlParameterSource()
                     .addValue("userIgn", record.userIgn)

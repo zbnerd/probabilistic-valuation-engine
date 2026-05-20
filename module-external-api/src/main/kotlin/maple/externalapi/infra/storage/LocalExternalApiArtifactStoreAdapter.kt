@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class LocalExternalApiArtifactStoreAdapter(
-    @Value("\${external-api.store.base-path:/data/external-api}")
+    @Value("\${external-api.store.base-path:../data}")
     private val basePath: String,
 ) : ExternalApiArtifactStorePort {
 

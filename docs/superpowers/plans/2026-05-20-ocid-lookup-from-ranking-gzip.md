@@ -2,125 +2,186 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Change OcidLookupPhase input source from CSV file to ranking gzip JSONL chunks, passing runDir through the scheduler CF chain.
+**Goal:** Change OcidLookupPhase input source from CSV file to ranking gzip JSONL chunks. Remove CSV dependency entirely. OCID lookup runs daily (no skip guard), deleting prior OCID files before each run.
 
-**Architecture:** RankingFetchPhase returns its runDir after completion. OcidLookupPhase reads character_names from gzip JSONL chunks in that runDir. If ranking is disabled (runDir=null), falls back to existing CSV reader. Scheduler wires the runDir via CF chain.
+**Architecture:** RankingFetchPhase returns its runDir. OcidLookupPhase reads character_names from gzip JSONL chunks in that runDir, deletes existing OCID files, then fetches OCID for all characters. ranking enabled=true is mandatory. Scheduler wires runDir via CF chain.
 
 **Tech Stack:** Kotlin, Jackson ObjectMapper, java.util.zip.GZIPInputStream, CompletableFuture, JUnit 5 + Mockito
 
 ---
 
-### Task 1: RankingFetchPhase returns runDir
+### Task 1: RankingFetchPhase returns runDir, remove CSV
 
 **Files:**
-- Modify: `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhase.kt:51`
-- Test: `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhaseTest.kt`
+- Modify: `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhase.kt`
+- Modify: `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhaseTest.kt`
 
-- [ ] **Step 1: Update RankingFetchPhase.execute() return type**
+- [ ] **Step 1: Update RankingFetchPhase — return Path, remove csvPath + writeCsv**
 
-Change return type from `CompletableFuture<Void>` to `CompletableFuture<Path>` and add `.thenApply { runDir }`:
+Remove `csvPath` constructor parameter, `characterNames` accumulator, and `writeCsv()` method. Return `CompletableFuture<Path>`:
 
 ```kotlin
-fun execute(workerExecutor: ExecutorService): CompletableFuture<Path> {
-    val runId = SchedulerPhaseUtils.newRunId()
-    val date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-    val runDir: Path = Paths.get(storeBasePath, "runs", runId)
-    val endpointConfig = chunkingProperties.configFor("ranking-overall")
+package maple.externalapi.scheduler.phase
 
-    SchedulerPhaseUtils.writeRunningMarker(runDir)
+import com.fasterxml.jackson.databind.ObjectMapper
+import maple.externalapi.domain.ExternalApiEndpoint
+import maple.externalapi.domain.ExternalApiProvider
+import maple.externalapi.domain.KeyType
+import maple.externalapi.metrics.ExternalApiMetrics
+import maple.externalapi.metrics.SnapshotVolumeMetrics
+import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.snapshot.ChunkedSnapshotSink
+import maple.externalapi.snapshot.SnapshotChunkRecord
+import maple.externalapi.snapshot.SnapshotChunkingProperties
+import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.stereotype.Component
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.time.Instant
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.atomic.AtomicInteger
 
-    val sink = ChunkedSnapshotSink(
-        runDir = runDir,
-        endpoint = "ranking-overall",
-        maxRecords = endpointConfig.maxRecords,
-        maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
-        queueCapacity = chunkingProperties.queueCapacity,
-        objectMapper = objectMapper,
-        eventPublisher = rankingPublisher,
-        volumeMetrics = volumeMetrics,
-    )
+@Component
+@ConditionalOnProperty(name = ["external-api.ranking.enabled"], havingValue = "true", matchIfMissing = false)
+class RankingFetchPhase(
+    private val clientPort: ExternalApiClientPort,
+    private val objectMapper: ObjectMapper,
+    private val chunkingProperties: SnapshotChunkingProperties,
+    private val volumeMetrics: SnapshotVolumeMetrics,
+    private val metrics: ExternalApiMetrics,
+    @Qualifier("rankingSnapshotPublisher")
+    private val rankingPublisher: SnapshotChunkEventPublisher,
+    @Value("\${external-api.ranking.max-pages:300}")
+    private val maxPages: Int,
+    @Value("\${external-api.ranking.permits-per-second:50}")
+    private val permitsPerSecond: Int,
+    @Value("\${external-api.store.base-path:/data/external-api}")
+    private val storeBasePath: String,
+) {
+    private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
 
-    val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
-    val fetched = AtomicInteger(0)
-    val failed = AtomicInteger(0)
-    val characterNames = mutableListOf<String>()
+    fun execute(workerExecutor: ExecutorService): CompletableFuture<Path> {
+        val runId = SchedulerPhaseUtils.newRunId()
+        val date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val runDir: Path = Paths.get(storeBasePath, "runs", runId)
+        val endpointConfig = chunkingProperties.configFor("ranking-overall")
 
-    log.info("[RankingFetch] starting: runId={}, date={}, maxPages={}, permitsPerSecond={}", runId, date, maxPages, permitsPerSecond)
-    val start = Instant.now()
+        SchedulerPhaseUtils.writeRunningMarker(runDir)
 
-    return processPages(workerExecutor, sink, rateLimiter, date, 1, fetched, failed, characterNames)
-        .whenComplete { _, ex ->
-            sink.close()
-            if (ex != null) {
-                log.error("[RankingFetch] failed: runId={}, fetched={}, failed={}", runId, fetched.get(), failed.get(), ex)
-            } else {
-                writeCsv(characterNames)
-                SchedulerPhaseUtils.logSummary("RankingFetch", fetched.get(), fetched.get(), fetched.get(), failed.get(), start)
+        val sink = ChunkedSnapshotSink(
+            runDir = runDir,
+            endpoint = "ranking-overall",
+            maxRecords = endpointConfig.maxRecords,
+            maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
+            queueCapacity = chunkingProperties.queueCapacity,
+            objectMapper = objectMapper,
+            eventPublisher = rankingPublisher,
+            volumeMetrics = volumeMetrics,
+        )
+
+        val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
+        val fetched = AtomicInteger(0)
+        val failed = AtomicInteger(0)
+
+        log.info("[RankingFetch] starting: runId={}, date={}, maxPages={}, permitsPerSecond={}", runId, date, maxPages, permitsPerSecond)
+        val start = Instant.now()
+
+        return processPages(workerExecutor, sink, rateLimiter, date, 1, fetched, failed)
+            .whenComplete { _, ex ->
+                sink.close()
+                if (ex != null) {
+                    log.error("[RankingFetch] failed: runId={}, fetched={}, failed={}", runId, fetched.get(), failed.get(), ex)
+                } else {
+                    SchedulerPhaseUtils.logSummary("RankingFetch", fetched.get(), fetched.get(), fetched.get(), failed.get(), start)
+                }
             }
+            .thenApply { runDir }
+    }
+
+    private fun processPages(
+        workerExecutor: ExecutorService,
+        sink: ChunkedSnapshotSink,
+        rateLimiter: io.github.bucket4j.Bucket,
+        date: String,
+        currentPage: Int,
+        fetched: AtomicInteger,
+        failed: AtomicInteger,
+    ): CompletableFuture<Void> {
+        if (currentPage > maxPages) {
+            return CompletableFuture.completedFuture(null)
         }
-        .thenApply { runDir }
+
+        SchedulerPhaseUtils.acquirePermits(rateLimiter, 1, 1)
+
+        val requestKey = "$date:$currentPage"
+        return clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, requestKey)
+            .thenAcceptAsync({ bodyBytes ->
+                val count = submitRankingEntries(sink, bodyBytes, currentPage)
+                fetched.addAndGet(count)
+                metrics.recordRankingFetched(count)
+                if (fetched.get() % 10000 == 0) {
+                    log.info("[RankingFetch] progress: fetched={}, failed={}, page={}/{}", fetched.get(), failed.get(), currentPage, maxPages)
+                }
+            }, workerExecutor)
+            .handle { _, ex ->
+                if (ex != null) {
+                    failed.incrementAndGet()
+                    metrics.recordRankingFailed()
+                    val status = SchedulerPhaseUtils.extractHttpStatus(ex)
+                    sink.submit(SnapshotChunkRecord.Failure(
+                        key = requestKey,
+                        endpoint = "ranking-overall",
+                        keyType = KeyType.DATE_PAGE.name,
+                        httpStatus = status,
+                        fetchedAt = Instant.now(),
+                        errorMessage = ex.message ?: "unknown",
+                    ))
+                    log.warn("[RankingFetch] page failed: page={}, status={}, error={}", currentPage, status, ex.message)
+                }
+                null
+            }
+            .thenCompose { processPages(workerExecutor, sink, rateLimiter, date, currentPage + 1, fetched, failed) }
+    }
+
+    private fun submitRankingEntries(
+        sink: ChunkedSnapshotSink,
+        bodyBytes: ByteArray,
+        page: Int,
+    ): Int {
+        val root = objectMapper.readTree(bodyBytes)
+        val rankingArray = root.get("ranking")
+        if (rankingArray == null || !rankingArray.isArray) {
+            log.warn("[RankingFetch] no ranking array in response: page={}", page)
+            return 0
+        }
+
+        var count = 0
+        for (node in rankingArray) {
+            val name = node.get("character_name")?.asText() ?: continue
+            val entryBytes = objectMapper.writeValueAsBytes(node)
+            sink.submit(SnapshotChunkRecord.Success(
+                bodyBytes = entryBytes,
+                key = name,
+                endpoint = "ranking-overall",
+                keyType = KeyType.DATE_PAGE.name,
+                httpStatus = 200,
+                fetchedAt = Instant.now(),
+            ))
+            count++
+        }
+        return count
+    }
 }
 ```
 
-- [ ] **Step 2: Update existing test to verify runDir is returned**
-
-In `RankingFetchPhaseTest`, update the first test to verify the returned path:
-
-```kotlin
-@Test
-fun `execute fetches all pages and writes character names to CSV`() {
-    whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:1"))
-        .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerA", "PlayerB")))
-    whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:2"))
-        .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerC", "PlayerD")))
-    whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:3"))
-        .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerE")))
-
-    val future = phase.execute(executor)
-    val resultPath = future.join()
-
-    // Then - returns runDir path
-    assertThat(resultPath).isNotNull
-    assertThat(resultPath.toString()).contains("runs")
-
-    // And - CSV contains all character names
-    val csvLines = Files.readAllLines(csvPath).filter { it.isNotBlank() }
-    assertThat(csvLines).containsExactly("PlayerA", "PlayerB", "PlayerC", "PlayerD", "PlayerE")
-
-    // And - gzip chunk files created in store
-    val chunksDir = tempDir.resolve("store").resolve("runs")
-    val gzFiles = Files.walk(chunksDir).filter { it.toString().endsWith(".gz") }.toList()
-    assertThat(gzFiles).isNotEmpty
-
-    // And - _SUCCESS marker exists
-    val successMarkers = Files.walk(chunksDir).filter { it.fileName.toString() == "_SUCCESS" }.toList()
-    assertThat(successMarkers).hasSize(1)
-}
-```
-
-- [ ] **Step 3: Run tests to verify**
-
-Run: `./gradlew :module-external-api:test --tests "maple.externalapi.scheduler.phase.RankingFetchPhaseTest" -i`
-Expected: All 3 tests PASS
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhase.kt module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhaseTest.kt
-git commit -m "refactor(external-api): RankingFetchPhase returns runDir Path"
-```
-
----
-
-### Task 2: Add gzip JSONL chunk reader to OcidLookupPhase
-
-**Files:**
-- Modify: `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt`
-- Test: `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt` (create)
-
-- [ ] **Step 1: Write test for readCharacterNamesFromChunks**
-
-Create test file at `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt`:
+- [ ] **Step 2: Update RankingFetchPhaseTest — remove CSV assertions, remove csvPath**
 
 ```kotlin
 package maple.externalapi.scheduler.phase
@@ -128,10 +189,158 @@ package maple.externalapi.scheduler.phase
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import maple.externalapi.domain.ExternalApiEndpoint
+import maple.externalapi.domain.ExternalApiProvider
+import maple.externalapi.metrics.ExternalApiMetrics
+import maple.externalapi.metrics.SnapshotVolumeMetrics
+import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.snapshot.SnapshotChunkingProperties
+import maple.externalapi.snapshot.event.NoOpSnapshotChunkEventPublisher
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
+
+class RankingFetchPhaseTest {
+
+    @TempDir
+    lateinit var tempDir: Path
+
+    private lateinit var clientPort: ExternalApiClientPort
+    private lateinit var objectMapper: ObjectMapper
+    private lateinit var phase: RankingFetchPhase
+    private lateinit var executor: java.util.concurrent.ExecutorService
+
+    @BeforeEach
+    fun setUp() {
+        clientPort = mock()
+        objectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())
+        val storeBasePath = tempDir.resolve("store").toString()
+
+        val registry = SimpleMeterRegistry()
+        phase = RankingFetchPhase(
+            clientPort = clientPort,
+            objectMapper = objectMapper,
+            chunkingProperties = SnapshotChunkingProperties(),
+            volumeMetrics = SnapshotVolumeMetrics(registry),
+            metrics = ExternalApiMetrics(registry),
+            rankingPublisher = NoOpSnapshotChunkEventPublisher(),
+            maxPages = 3,
+            permitsPerSecond = 100,
+            storeBasePath = storeBasePath,
+        )
+        executor = Executors.newVirtualThreadPerTaskExecutor()
+    }
+
+    @AfterEach
+    fun tearDown() {
+        executor.close()
+    }
+
+    private fun rankingJson(vararg names: String): ByteArray {
+        val entries = names.mapIndexed { i, name ->
+            """{"ranking":${i + 1},"character_name":"$name","world_name":"크로아","class_name":"전사"}"""
+        }.joinToString(",", prefix = """{"ranking":[""", postfix = "]}")
+        return entries.toByteArray()
+    }
+
+    @Test
+    fun `execute returns runDir and creates gzip chunks`() {
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:1"))
+            .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerA", "PlayerB")))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:2"))
+            .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerC", "PlayerD")))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:3"))
+            .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerE")))
+
+        val resultPath = phase.execute(executor).join()
+
+        assertThat(resultPath).isNotNull
+        assertThat(resultPath.toString()).contains("runs")
+
+        val gzFiles = Files.walk(tempDir.resolve("store").resolve("runs"))
+            .filter { it.toString().endsWith(".gz") }.toList()
+        assertThat(gzFiles).isNotEmpty
+
+        val successMarkers = Files.walk(tempDir.resolve("store").resolve("runs"))
+            .filter { it.fileName.toString() == "_SUCCESS" }.toList()
+        assertThat(successMarkers).hasSize(1)
+    }
+
+    @Test
+    fun `execute continues on page failure`() {
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:1"))
+            .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerA")))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:2"))
+            .thenReturn(CompletableFuture.failedFuture(RuntimeException("API error")))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:3"))
+            .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerC")))
+
+        val resultPath = phase.execute(executor).join()
+
+        assertThat(resultPath).isNotNull
+        val gzFiles = Files.walk(tempDir.resolve("store").resolve("runs"))
+            .filter { it.toString().endsWith(".gz") }.toList()
+        assertThat(gzFiles).isNotEmpty
+    }
+
+    @Test
+    fun `execute skips entries without character_name`() {
+        val json = """{"ranking":[{"ranking":1,"character_name":"ValidName","world_name":"크로아"},{"ranking":2,"world_name":"크로아"}]}""".toByteArray()
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:1"))
+            .thenReturn(CompletableFuture.completedFuture(json))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:2"))
+            .thenReturn(CompletableFuture.completedFuture("""{"ranking":[]}""".toByteArray()))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:3"))
+            .thenReturn(CompletableFuture.completedFuture("""{"ranking":[]}""".toByteArray()))
+
+        val resultPath = phase.execute(executor).join()
+
+        assertThat(resultPath).isNotNull
+    }
+}
+```
+
+- [ ] **Step 3: Run tests**
+
+Run: `./gradlew :module-external-api:test --tests "maple.externalapi.scheduler.phase.RankingFetchPhaseTest"`
+Expected: All 3 tests PASS
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhase.kt module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhaseTest.kt
+git commit -m "refactor(external-api): RankingFetchPhase returns runDir, remove CSV"
+```
+
+---
+
+### Task 2: Rewrite OcidLookupPhase — gzip input, no skip guard, pre-delete
+
+**Files:**
+- Modify: `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt`
+- Create: `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt`
+
+- [ ] **Step 1: Write test for readCharacterNamesFromChunks**
+
+Create `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt`:
+
+```kotlin
+package maple.externalapi.scheduler.phase
+
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
-import maple.externalapi.reader.UserIgnCsvReader
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -156,8 +365,8 @@ class OcidLookupPhaseTest {
         objectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())
         phase = OcidLookupPhase(
             clientPort = mock(),
-            csvReader = mock(),
             artifactStore = mock(),
+            objectMapper = objectMapper,
             ocidLookupPermitsPerSecond = 400,
             batchSize = 1000,
             storeBasePath = tempDir.resolve("store").toString(),
@@ -178,27 +387,21 @@ class OcidLookupPhaseTest {
 
     @Test
     fun `readCharacterNamesFromChunks extracts distinct keys from gzip JSONL`() {
-        // Given - two chunk files with some duplicate keys
         val chunksDir = tempDir.resolve("runs").resolve("20260520-030000-123").resolve("ranking-overall").resolve("chunks")
         writeGzipJsonl(chunksDir.resolve("part-000001.jsonl.gz"), listOf("PlayerA", "PlayerB", "PlayerC"))
         writeGzipJsonl(chunksDir.resolve("part-000002.jsonl.gz"), listOf("PlayerC", "PlayerD"))
 
-        // When
         val names = phase.readCharacterNamesFromChunks(tempDir.resolve("runs").resolve("20260520-030000-123"))
 
-        // Then - distinct character names
         assertThat(names).containsExactlyInAnyOrder("PlayerA", "PlayerB", "PlayerC", "PlayerD")
     }
 
     @Test
     fun `readCharacterNamesFromChunks returns empty list when no chunk files`() {
-        // Given - empty directory
         val runDir = tempDir.resolve("runs").resolve("empty-run")
 
-        // When
         val names = phase.readCharacterNamesFromChunks(runDir)
 
-        // Then
         assertThat(names).isEmpty()
     }
 }
@@ -206,12 +409,12 @@ class OcidLookupPhaseTest {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `./gradlew :module-external-api:test --tests "maple.externalapi.scheduler.phase.OcidLookupPhaseTest" -i`
-Expected: FAIL — `readCharacterNamesFromChunks` is not defined
+Run: `./gradlew :module-external-api:test --tests "maple.externalapi.scheduler.phase.OcidLookupPhaseTest"`
+Expected: FAIL — `readCharacterNamesFromChunks` not defined, constructor mismatch
 
-- [ ] **Step 3: Add readCharacterNamesFromChunks method and update execute signature**
+- [ ] **Step 3: Rewrite OcidLookupPhase**
 
-Add to `OcidLookupPhase.kt`:
+Replace entire `OcidLookupPhase.kt`:
 
 ```kotlin
 package maple.externalapi.scheduler.phase
@@ -220,7 +423,6 @@ import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
-import maple.externalapi.reader.UserIgnCsvReader
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -239,7 +441,6 @@ import java.util.zip.GZIPInputStream
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class OcidLookupPhase(
     private val clientPort: ExternalApiClientPort,
-    private val csvReader: UserIgnCsvReader,
     private val artifactStore: ExternalApiArtifactStorePort,
     private val objectMapper: ObjectMapper,
     @Value("\${external-api.rate-limit.ocid-lookup-permits-per-second:400}")
@@ -251,25 +452,16 @@ class OcidLookupPhase(
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
 
-    fun execute(workerExecutor: ExecutorService, rankingRunDir: Path? = null): CompletableFuture<Void> {
-        val existingOcids = artifactStore.listStoredKeys(ExternalApiEndpoint.OCID_LOOKUP)
-        if (existingOcids.isNotEmpty()) {
-            log.info("[Scheduler] OCID lookup already done ({} files), skipping", existingOcids.size)
-            return CompletableFuture.completedFuture(null)
-        }
+    fun execute(workerExecutor: ExecutorService, rankingRunDir: Path): CompletableFuture<Void> {
+        val deleted = artifactStore.deleteAll(ExternalApiEndpoint.OCID_LOOKUP)
+        log.info("[Scheduler] deleted {} existing OCID files", deleted)
 
-        val igns = if (rankingRunDir != null) {
-            val names = readCharacterNamesFromChunks(rankingRunDir)
-            log.info("[Scheduler] read {} character names from ranking chunks: {}", names.size, rankingRunDir)
-            names
-        } else {
-            csvReader.readAll()
-        }
-
+        val igns = readCharacterNamesFromChunks(rankingRunDir)
         if (igns.isEmpty()) {
-            log.warn("[Scheduler] no IGNs to process")
+            log.warn("[Scheduler] no character names from ranking chunks: {}", rankingRunDir)
             return CompletableFuture.completedFuture(null)
         }
+        log.info("[Scheduler] read {} character names from ranking chunks: {}", igns.size, rankingRunDir)
 
         val rateLimiter = SchedulerPhaseUtils.newRateLimiter(ocidLookupPermitsPerSecond)
 
@@ -381,22 +573,35 @@ class OcidLookupPhase(
 }
 ```
 
-Key changes:
+Key changes from original:
+- Removed `UserIgnCsvReader` dependency
+- Removed skip guard (always runs)
+- Added `artifactStore.deleteAll()` at start of each run
+- `rankingRunDir: Path` is required (no nullable fallback)
 - Added `ObjectMapper` constructor parameter
-- Added `rankingRunDir: Path? = null` parameter to `execute()`
 - Added `readCharacterNamesFromChunks(runDir: Path): List<String>`
-- If rankingRunDir provided, reads from gzip chunks; otherwise falls back to csvReader
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 4: Add `deleteAll` to ExternalApiArtifactStorePort**
 
-Run: `./gradlew :module-external-api:test --tests "maple.externalapi.scheduler.phase.OcidLookupPhaseTest" -i`
+Check if `deleteAll` method exists in `ExternalApiArtifactStorePort`. If not, add it:
+
+```kotlin
+// In ExternalApiArtifactStorePort interface:
+fun deleteAll(endpoint: ExternalApiEndpoint): Int
+```
+
+And implement in the local adapter — delete the directory for the given endpoint and return count of deleted files.
+
+- [ ] **Step 5: Run tests**
+
+Run: `./gradlew :module-external-api:test --tests "maple.externalapi.scheduler.phase.OcidLookupPhaseTest"`
 Expected: Both tests PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt
-git commit -m "feat(external-api): OcidLookupPhase reads from ranking gzip chunks"
+git commit -m "feat(external-api): OcidLookupPhase reads from ranking gzip, no skip guard, pre-delete"
 ```
 
 ---
@@ -404,31 +609,32 @@ git commit -m "feat(external-api): OcidLookupPhase reads from ranking gzip chunk
 ### Task 3: Wire runDir in ExternalApiScheduler
 
 **Files:**
-- Modify: `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt:64-78`
+- Modify: `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt`
 
-- [ ] **Step 1: Update scheduler CF chain to pass runDir**
-
-In `triggerDailyRefresh()`, update the ranking → OCID lookup chain:
+- [ ] **Step 1: Update triggerDailyRefresh() CF chain**
 
 ```kotlin
 val rankingPhase = rankingFetchPhaseProvider.ifAvailable
-val rankingFuture = if (rankingPhase != null) {
-    log.info("[Scheduler] starting ranking fetch phase")
-    rankingPhase.execute(executor)
-        .handle { runDir, ex ->
-            if (ex != null) {
-                log.error("[Scheduler] ranking fetch failed, continuing with OCID lookup", ex)
-            }
-            runDir
-        }
-} else {
-    log.info("[Scheduler] ranking fetch phase disabled, skipping")
-    CompletableFuture.completedFuture(null)
+if (rankingPhase == null) {
+    log.error("[Scheduler] ranking fetch phase is required but not enabled")
+    releaseLock()
+    return
 }
 
-rankingFuture
+log.info("[Scheduler] starting ranking fetch phase")
+rankingPhase.execute(executor)
+    .handle { runDir, ex ->
+        if (ex != null) {
+            log.error("[Scheduler] ranking fetch failed, cannot proceed with OCID lookup", ex)
+        }
+        runDir
+    }
     .thenCompose { runDir ->
-        ocidLookupPhase.execute(executor, runDir)
+        if (runDir == null) {
+            CompletableFuture.completedFuture(null)
+        } else {
+            ocidLookupPhase.execute(executor, runDir)
+        }
     }
     .thenCompose {
         val cache = ocidCacheProvider.refresh()
@@ -442,9 +648,11 @@ rankingFuture
     }
 ```
 
-Note: `.handle` now passes through `runDir` (Path or null) instead of always returning null. This allows OCID lookup to receive the ranking run directory when ranking is enabled and successful.
+Key changes:
+- ranking is now required — log error and release lock if disabled
+- `rankingRunDir` passed directly to `ocidLookupPhase.execute(executor, runDir)`
 
-- [ ] **Step 2: Compile to verify**
+- [ ] **Step 2: Compile**
 
 Run: `./gradlew :module-external-api:compileKotlin --continue`
 Expected: BUILD SUCCESSFUL
@@ -453,19 +661,47 @@ Expected: BUILD SUCCESSFUL
 
 ```bash
 git add module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt
-git commit -m "feat(external-api): wire ranking runDir to OCID lookup via scheduler chain"
+git commit -m "feat(external-api): wire ranking runDir to OCID lookup, ranking required"
 ```
 
 ---
 
-### Task 4: Integration verification
+### Task 4: Cleanup — remove CSV infrastructure
 
-**Files:** None (runtime verification only)
+**Files:**
+- Delete: `module-external-api/src/main/kotlin/maple/externalapi/reader/UserIgnCsvReader.kt`
+- Modify: `module-external-api/src/main/resources/application.yml` (remove `csv.path` if present)
+
+- [ ] **Step 1: Delete UserIgnCsvReader**
+
+```bash
+git rm module-external-api/src/main/kotlin/maple/externalapi/reader/UserIgnCsvReader.kt
+```
+
+- [ ] **Step 2: Remove csv.path from application.yml if present**
+
+Check `module-external-api/src/main/resources/application.yml` for `csv` or `csv-path` keys and remove them.
+
+- [ ] **Step 3: Compile**
+
+Run: `./gradlew :module-external-api:compileKotlin --continue`
+Expected: BUILD SUCCESSFUL
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add -A
+git commit -m "chore(external-api): remove UserIgnCsvReader and CSV config"
+```
+
+---
+
+### Task 5: Integration verification
 
 - [ ] **Step 1: Run full test suite**
 
-Run: `./gradlew :module-external-api:test -i`
-Expected: All tests PASS (RankingFetchPhaseTest 3 tests + OcidLookupPhaseTest 2 tests)
+Run: `./gradlew :module-external-api:test`
+Expected: All tests PASS
 
 - [ ] **Step 2: Compile all modules**
 
@@ -474,13 +710,13 @@ Expected: BUILD SUCCESSFUL
 
 - [ ] **Step 3: Runtime test**
 
-Start server:
 ```bash
 set -a && source .env && set +a && export SPRING_PROFILES_ACTIVE=local && export EXTERNAL_API_RANKING_MAX_PAGES=2 && export EXTERNAL_API_SCHEDULE_RUN_ON_STARTUP=true && ./gradlew :module-external-api:bootRun
 ```
 
 Verify in logs:
 1. `[RankingFetch]` completes with `result: total=400`
-2. `[Scheduler] read 400 character names from ranking chunks: ...`
-3. `[Scheduler] ========== OCID lookup start ==========`
-4. OCID lookup processes the 400 character names from ranking gzip chunks
+2. `[Scheduler] deleted N existing OCID files`
+3. `[Scheduler] read 400 character names from ranking chunks: ...`
+4. `[Scheduler] ========== OCID lookup start ==========`
+5. OCID lookup processes 400 character names

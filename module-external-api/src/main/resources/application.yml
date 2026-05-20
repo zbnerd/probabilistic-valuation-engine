@@ -30,8 +30,6 @@ nexon:
     metrics-enabled: ${NEXON_HTTP_METRICS_ENABLED:true}
 
 external-api:
-  csv:
-    path: ../module-app/src/main/resources/data/userIgn_List.csv
   rate-limit:
     permits-per-second: ${EXTERNAL_API_RATE_LIMIT_PERMITS_PER_SECOND:250}
     ocid-lookup-permits-per-second: 400

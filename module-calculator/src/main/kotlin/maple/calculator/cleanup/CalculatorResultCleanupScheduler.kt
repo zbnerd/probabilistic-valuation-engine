@@ -30,7 +30,7 @@ class CalculatorResultCleanupScheduler(
     private val maxDeleteBytesPerCycle: Long,
     @Value("\${calculator.cleanup.max-runtime-seconds:60}")
     private val maxRuntimeSeconds: Long,
-    @Value("\${calculator.store.input-base-path:./external-api-data}")
+    @Value("\${calculator.store.input-base-path:../data}")
     private val basePath: String,
 ) {
     private val log = LoggerFactory.getLogger(CalculatorResultCleanupScheduler::class.java)

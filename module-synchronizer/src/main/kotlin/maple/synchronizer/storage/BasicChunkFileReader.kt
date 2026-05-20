@@ -26,7 +26,7 @@ data class BasicRecord(
 
 @Component
 class BasicChunkFileReader(
-    @Value("\${synchronizer.store.base-path:../module-external-api/external-api-data}")
+    @Value("\${synchronizer.store.base-path:../data}")
     private val basePath: String,
     private val objectMapper: ObjectMapper,
 ) {

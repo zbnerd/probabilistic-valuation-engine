@@ -15,29 +15,27 @@ class OcidMappingRepository(
     private val log = LoggerFactory.getLogger(javaClass)
 
     companion object {
-        private const val BATCH_SIZE = 1000
+        private const val BATCH_SIZE = 50000
         private const val REDIS_KEY = "ocid:mapping"
+        private const val MERGE_SQL = """
+            INSERT INTO game_character (user_ign, ocid, created_at, updated_at)
+            SELECT unnest(:userIgns::varchar[]), unnest(:ocids::varchar[]), now(), now()
+            ON CONFLICT (user_ign) DO UPDATE SET
+                ocid = EXCLUDED.ocid,
+                updated_at = now()
+            WHERE game_character.ocid IS DISTINCT FROM EXCLUDED.ocid
+        """
     }
 
     fun batchUpsert(mappings: List<OcidMapping>) {
-        var upserted = 0
-        mappings.chunked(BATCH_SIZE).forEach { batch ->
-            val sql = """
-                INSERT INTO game_character (user_ign, ocid, updated_at)
-                SELECT unnest(:userIgns::varchar[]), unnest(:ocids::varchar[]), now()
-                ON CONFLICT (user_ign) DO UPDATE SET
-                    ocid = EXCLUDED.ocid,
-                    updated_at = EXCLUDED.updated_at
-                WHERE game_character.ocid IS DISTINCT FROM EXCLUDED.ocid
-            """.trimIndent()
-
-            jdbc.update(sql, MapSqlParameterSource()
+        val batches = mappings.chunked(BATCH_SIZE)
+        batches.forEachIndexed { index, batch ->
+            jdbc.update(MERGE_SQL, MapSqlParameterSource()
                 .addValue("userIgns", batch.map { it.userIgn }.toTypedArray())
                 .addValue("ocids", batch.map { it.ocid }.toTypedArray())
             )
-            upserted += batch.size
+            log.info("[OcidMapping] DB upsert batch {}/{}: {} mappings", index + 1, batches.size, batch.size)
         }
-        log.info("[OcidMapping] DB upserted: {} mappings", upserted)
     }
 
     fun writeOcidToRedis(mappings: List<OcidMapping>) {

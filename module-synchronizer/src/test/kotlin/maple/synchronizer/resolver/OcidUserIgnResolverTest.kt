@@ -3,7 +3,6 @@ package maple.synchronizer.resolver
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
@@ -23,7 +22,7 @@ class OcidUserIgnResolverTest {
     @Test
     fun `should resolve ocids to userIgn map`() {
         @Suppress("UNCHECKED_CAST")
-        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>(), eq(Map::class.java) as Class<Any>))
+        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>()))
             .thenReturn(listOf(
                 mapOf("ocid" to "ocid1", "user_ign" to "아델"),
                 mapOf("ocid" to "ocid2", "user_ign" to "강은호")
@@ -38,7 +37,7 @@ class OcidUserIgnResolverTest {
     @Test
     fun `should handle partial miss — return only found mappings`() {
         @Suppress("UNCHECKED_CAST")
-        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>(), eq(Map::class.java) as Class<Any>))
+        whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>()))
             .thenReturn(listOf(
                 mapOf("ocid" to "ocid1", "user_ign" to "아델")
             ))

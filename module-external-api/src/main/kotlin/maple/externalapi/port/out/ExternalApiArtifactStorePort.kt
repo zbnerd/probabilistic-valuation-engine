@@ -22,6 +22,8 @@ interface ExternalApiArtifactStorePort {
 
     fun deleteRun(runId: String): Long
 
+    fun deleteAll(endpoint: ExternalApiEndpoint): Int
+
     fun fileExists(relativePath: String): Boolean
 
     fun calculateDirectorySize(relativePath: String): Long

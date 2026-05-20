@@ -25,7 +25,7 @@ calculator:
     urgent-snapshot-chunk-ready-topic: external-api.urgent.snapshot.chunk-ready
     urgent-consumer-group-id: calculator-urgent-chunk-processor
   store:
-    input-base-path: ../module-external-api/external-api-data
+    input-base-path: ../data
   cleanup:
     enabled: false                    # enable to activate cleanup scheduler
     dry-run: false                    # true = log candidates without deleting

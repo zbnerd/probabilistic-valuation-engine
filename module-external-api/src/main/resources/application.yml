@@ -35,7 +35,7 @@ external-api:
     ocid-lookup-permits-per-second: 400
   batch-size: 1000
   store:
-    base-path: ./external-api-data
+    base-path: ../data
   cleanup:
     enabled: false                    # enable to activate cleanup scheduler
     dry-run: false                    # true = log candidates without deleting
@@ -73,9 +73,10 @@ external-api:
         chunk-ready-topic: external-api.snapshot.chunk-ready
         run-completed-topic: external-api.snapshot.run-completed
         run-failed-topic: external-api.snapshot.run-failed
+        ocid-lookup-topic: external-api.ocid.lookup-ready
   ranking:
     enabled: true
-    max-pages: 300
+    max-pages: 3000
     permits-per-second: 50
 
 management:

@@ -12,7 +12,7 @@ import java.util.zip.GZIPInputStream
 
 @Component
 class ResultFileReader(
-    @Value("\${synchronizer.store.base-path:../module-external-api/external-api-data}")
+    @Value("\${synchronizer.store.base-path:../data}")
     private val basePath: String,
     @Value("\${synchronizer.chunk.max-rows:100000}")
     private val maxRowsPerChunk: Int,

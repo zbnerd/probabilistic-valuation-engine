@@ -50,8 +50,11 @@ synchronizer:
     basic-consumer-group-id: synchronizer-basic-chunk-consumer
     urgent-basic-chunk-ready-topic: external-api.urgent.snapshot.chunk-ready
     urgent-basic-consumer-group-id: synchronizer-urgent-basic-chunk-consumer
+    ocid-lookup-enabled: true
+    ocid-lookup-topic: external-api.ocid.lookup-ready
+    ocid-lookup-consumer-group-id: synchronizer-ocid-lookup-consumer
   store:
-    base-path: ../module-external-api/external-api-data
+    base-path: ../data
   chunk:
     max-rows: 100000
   ranking:

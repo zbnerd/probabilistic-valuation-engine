@@ -29,7 +29,7 @@ class BasicSnapshotChunkConsumer(
     private val repository: CharacterBasicRepository,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val jdbc: NamedParameterJdbcTemplate,
-    @Value("\${synchronizer.store.base-path:../module-external-api/external-api-data}")
+    @Value("\${synchronizer.store.base-path:../data}")
     private val basePath: String,
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)

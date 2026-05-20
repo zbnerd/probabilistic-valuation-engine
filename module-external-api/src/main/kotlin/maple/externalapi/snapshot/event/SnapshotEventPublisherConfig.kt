@@ -103,4 +103,35 @@ class SnapshotEventPublisherConfig {
             runCompletedTopic = properties.kafka.runCompletedTopic,
             runFailedTopic = properties.kafka.runFailedTopic,
         )
+
+    @Bean
+    @Qualifier("ocidLookupSnapshotPublisher")
+    @ConditionalOnProperty(
+        prefix = "external-api.snapshot.events.kafka",
+        name = ["enabled"],
+        havingValue = "false",
+        matchIfMissing = true,
+    )
+    fun noOpOcidLookupSnapshotPublisher(): SnapshotChunkEventPublisher =
+        NoOpSnapshotChunkEventPublisher()
+
+    @Bean
+    @Qualifier("ocidLookupSnapshotPublisher")
+    @ConditionalOnProperty(
+        prefix = "external-api.snapshot.events.kafka",
+        name = ["enabled"],
+        havingValue = "true",
+    )
+    fun kafkaOcidLookupSnapshotPublisher(
+        kafkaTemplate: KafkaTemplate<String, String>,
+        objectMapper: ObjectMapper,
+        properties: SnapshotEventProperties,
+    ): SnapshotChunkEventPublisher =
+        KafkaSnapshotChunkEventPublisher(
+            kafkaTemplate = kafkaTemplate,
+            objectMapper = objectMapper,
+            chunkReadyTopic = properties.kafka.ocidLookupTopic,
+            runCompletedTopic = properties.kafka.ocidLookupTopic,
+            runFailedTopic = properties.kafka.runFailedTopic,
+        )
 }

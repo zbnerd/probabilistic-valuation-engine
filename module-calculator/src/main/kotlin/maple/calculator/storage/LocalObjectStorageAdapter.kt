@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class LocalObjectStorageAdapter(
-    @Value("\${calculator.store.input-base-path:./external-api-data}")
+    @Value("\${calculator.store.input-base-path:../data}")
     private val basePath: String,
 ) : ObjectStorage {
 

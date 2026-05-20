@@ -12,5 +12,6 @@ data class SnapshotEventProperties(
         val chunkReadyTopic: String = "external-api.snapshot.chunk-ready",
         val runCompletedTopic: String = "external-api.snapshot.run-completed",
         val runFailedTopic: String = "external-api.snapshot.run-failed",
+        val ocidLookupTopic: String = "external-api.ocid.lookup-ready",
     )
 }

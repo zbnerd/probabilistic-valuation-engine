@@ -81,32 +81,34 @@ class OcidLookupPhase(
         if (!Files.exists(chunksDir)) return emptyList()
 
         val names = linkedSetOf<String>()
-        Files.list(chunksDir)
-            .filter { it.toString().endsWith(".jsonl.gz") }
-            .sorted()
-            .forEach { chunkFile ->
-                GZIPInputStream(BufferedInputStream(Files.newInputStream(chunkFile))).bufferedReader().use { reader ->
-                    reader.lineSequence().forEach { line ->
-                        if (line.isNotBlank()) {
-                            val node = objectMapper.readTree(line)
-                            val key = node.get("key")?.asText()
-                            if (key != null) names.add(key)
+        Files.list(chunksDir).use { stream ->
+            stream.filter { it.toString().endsWith(".jsonl.gz") }
+                .sorted()
+                .forEach { chunkFile ->
+                    GZIPInputStream(BufferedInputStream(Files.newInputStream(chunkFile))).bufferedReader().use { reader ->
+                        reader.lineSequence().forEach { line ->
+                            if (line.isNotBlank()) {
+                                val node = objectMapper.readTree(line)
+                                val key = node.get("key")?.asText()
+                                if (key != null) names.add(key)
+                            }
                         }
                     }
                 }
-            }
+        }
         return names.toList()
     }
 
     private fun deleteOldMappingFiles(mappingDir: Path) {
         if (!Files.exists(mappingDir)) return
         var deleted = 0
-        Files.list(mappingDir)
-            .filter { it.toString().endsWith(".jsonl.gz") }
-            .forEach { file ->
-                Files.deleteIfExists(file)
-                deleted++
-            }
+        Files.list(mappingDir).use { stream ->
+            stream.filter { it.toString().endsWith(".jsonl.gz") }
+                .forEach { file ->
+                    Files.deleteIfExists(file)
+                    deleted++
+                }
+        }
         log.info("[Scheduler] deleted {} old OCID mapping files in {}", deleted, mappingDir)
     }
 
@@ -115,15 +117,12 @@ class OcidLookupPhase(
         val runId = SchedulerPhaseUtils.newRunId()
         val outputPath = mappingDir.resolve("ocid-mapping-$runId.jsonl.gz")
         val tempFile = Files.createTempFile("ocid-mapping-", ".jsonl")
-
-        try {
-            Files.write(tempFile, results)
-            GZIPOutputStream(BufferedOutputStream(Files.newOutputStream(outputPath))).use { gzip ->
-                Files.copy(tempFile, gzip)
-            }
-        } finally {
-            Files.deleteIfExists(tempFile)
+        tempFile.toFile().deleteOnExit()
+        Files.write(tempFile, results)
+        GZIPOutputStream(BufferedOutputStream(Files.newOutputStream(outputPath))).use { gzip ->
+            Files.copy(tempFile, gzip)
         }
+        Files.deleteIfExists(tempFile)
 
         val size = Files.size(outputPath)
         log.info("[Scheduler] wrote {} OCID mappings to {} ({} bytes)", results.size, outputPath, size)
@@ -178,9 +177,12 @@ class OcidLookupPhase(
             ign,
         )
             .thenAcceptAsync({ data ->
-                val json = String(objectMapper.writeValueAsBytes(mapOf("userIgn" to ign, "ocid" to objectMapper.readTree(data).get("ocid")?.asText())))
-                results.add(json)
-                successCount.incrementAndGet()
+                val ocid = objectMapper.readTree(data).get("ocid")?.asText()
+                if (ocid != null) {
+                    val json = String(objectMapper.writeValueAsBytes(mapOf("userIgn" to ign, "ocid" to ocid)))
+                    results.add(json)
+                    successCount.incrementAndGet()
+                }
             }, workerExecutor)
             .handle { _, ex ->
                 if (ex != null) failCount.incrementAndGet()

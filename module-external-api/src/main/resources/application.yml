@@ -75,7 +75,7 @@ external-api:
         run-failed-topic: external-api.snapshot.run-failed
   ranking:
     enabled: true
-    max-pages: 300
+    max-pages: 3000
     permits-per-second: 50
 
 management:

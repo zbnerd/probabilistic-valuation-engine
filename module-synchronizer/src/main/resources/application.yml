@@ -54,7 +54,7 @@ synchronizer:
     ocid-lookup-topic: external-api.ocid.lookup-ready
     ocid-lookup-consumer-group-id: synchronizer-ocid-lookup-consumer
   store:
-    base-path: ../module-external-api/external-api-data
+    base-path: ../data
   chunk:
     max-rows: 100000
   ranking:

@@ -14,7 +14,7 @@ import java.util.zip.GZIPInputStream
 @Component
 class OcidCacheProvider(
     private val objectMapper: ObjectMapper,
-    @Value("\${external-api.store.base-path:./data}") private val storeBasePath: String,
+    @Value("\${external-api.store.base-path:../data}") private val storeBasePath: String,
 ) {
     private val log = LoggerFactory.getLogger(OcidCacheProvider::class.java)
     private val cacheRef = AtomicReference<Map<String, String>>(emptyMap())

@@ -33,7 +33,7 @@ class OcidLookupPhase(
     private val ocidLookupPermitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
-    @Value("\${external-api.store.base-path:./data}")
+    @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
     @Qualifier("ocidLookupSnapshotPublisher")
     private val eventPublisher: SnapshotChunkEventPublisher,

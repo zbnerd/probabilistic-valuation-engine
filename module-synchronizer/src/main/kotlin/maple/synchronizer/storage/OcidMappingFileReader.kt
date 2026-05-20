@@ -16,7 +16,7 @@ data class OcidMapping(
 
 @Component
 class OcidMappingFileReader(
-    @Value("\${synchronizer.store.base-path:./data}")
+    @Value("\${synchronizer.store.base-path:../data}")
     private val storeBasePath: String,
     private val objectMapper: ObjectMapper,
 ) {

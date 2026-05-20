@@ -35,7 +35,7 @@ external-api:
     ocid-lookup-permits-per-second: 400
   batch-size: 1000
   store:
-    base-path: ./external-api-data
+    base-path: ../data
   cleanup:
     enabled: false                    # enable to activate cleanup scheduler
     dry-run: false                    # true = log candidates without deleting

@@ -16,6 +16,7 @@ enum class ExternalApiEndpoint(
     OCID_LOOKUP("/maplestory/v1/id", KeyType.USER_IGN),
     CHARACTER_BASIC("/maplestory/v1/character/basic", KeyType.OCID),
     ITEM_EQUIPMENT("/maplestory/v1/character/item-equipment", KeyType.OCID),
+    RANKING_OVERALL("/maplestory/v1/ranking/overall", KeyType.DATE_PAGE),
     ;
 
     fun storageSubDir(): String = name.lowercase().replace('_', '-')
@@ -24,4 +25,5 @@ enum class ExternalApiEndpoint(
 enum class KeyType {
     USER_IGN,
     OCID,
+    DATE_PAGE,
 }

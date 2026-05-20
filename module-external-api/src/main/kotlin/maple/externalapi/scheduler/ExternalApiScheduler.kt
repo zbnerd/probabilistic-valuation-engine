@@ -2,9 +2,11 @@ package maple.externalapi.scheduler
 
 import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.scheduler.phase.OcidLookupPhase
+import maple.externalapi.scheduler.phase.RankingFetchPhase
 import maple.externalapi.scheduler.phase.SnapshotFetchPhase
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.event.ApplicationReadyEvent
@@ -22,6 +24,7 @@ class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
     private val snapshotFetchPhase: SnapshotFetchPhase,
     private val ocidCacheProvider: OcidCacheProvider,
+    private val rankingFetchPhaseProvider: ObjectProvider<RankingFetchPhase>,
     @Value("\${external-api.schedule.run-on-startup:false}")
     private val runOnStartup: Boolean,
     @Value("\${external-api.schedule.skip-character-basic:false}")
@@ -59,7 +62,25 @@ class ExternalApiScheduler(
             return
         }
 
-        ocidLookupPhase.execute(executor)
+        val rankingPhase = rankingFetchPhaseProvider.ifAvailable
+        val rankingFuture = if (rankingPhase != null) {
+            log.info("[Scheduler] starting ranking fetch phase")
+            rankingPhase.execute(executor)
+                .handle { _, ex ->
+                    if (ex != null) {
+                        log.error("[Scheduler] ranking fetch failed, continuing with OCID lookup", ex)
+                    }
+                    null
+                }
+        } else {
+            log.info("[Scheduler] ranking fetch phase disabled, skipping")
+            CompletableFuture.completedFuture(null)
+        }
+
+        rankingFuture
+            .thenCompose {
+                ocidLookupPhase.execute(executor)
+            }
             .thenCompose {
                 val cache = ocidCacheProvider.refresh()
                 snapshotFetchPhase.executeCharacterBasic(executor, cache)

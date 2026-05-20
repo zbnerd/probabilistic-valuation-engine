@@ -10,6 +10,7 @@ data class SnapshotChunkingProperties(
     data class ChunkConfig(
         val characterBasic: EndpointChunkConfig = EndpointChunkConfig(maxRecords = 2000),
         val itemEquipment: EndpointChunkConfig = EndpointChunkConfig(maxRecords = 500),
+        val rankingOverall: EndpointChunkConfig = EndpointChunkConfig(maxRecords = 5000),
     )
 
     data class EndpointChunkConfig(
@@ -20,6 +21,7 @@ data class SnapshotChunkingProperties(
     fun configFor(endpoint: String): EndpointChunkConfig = when (endpoint) {
         "character-basic" -> chunk.characterBasic
         "item-equipment" -> chunk.itemEquipment
+        "ranking-overall" -> chunk.rankingOverall
         else -> EndpointChunkConfig()
     }
 }

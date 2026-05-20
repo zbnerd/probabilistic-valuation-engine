@@ -73,18 +73,20 @@ class NexonExternalApiClientAdapter(
         endpoint: ExternalApiEndpoint,
         requestKey: String,
     ): CompletableFuture<ByteArray> {
-        val queryParam = when (endpoint.keyType) {
-            KeyType.USER_IGN -> "character_name"
-            KeyType.OCID -> "ocid"
-        }
-
         val startedAt = Instant.now()
         return webClient.get()
             .uri { builder ->
-                builder
-                    .path(endpoint.path)
-                    .queryParam(queryParam, requestKey)
-                    .build()
+                val pathBuilder = builder.path(endpoint.path)
+                when (endpoint.keyType) {
+                    KeyType.USER_IGN -> pathBuilder.queryParam("character_name", requestKey)
+                    KeyType.OCID -> pathBuilder.queryParam("ocid", requestKey)
+                    KeyType.DATE_PAGE -> {
+                        val parts = requestKey.split(":", limit = 2)
+                        pathBuilder
+                            .queryParam("date", parts[0])
+                            .queryParam("page", parts.getOrElse(1) { "1" })
+                    }
+                }.build()
             }
             .header("x-nxopen-api-key", apiKey)
             .retrieve()

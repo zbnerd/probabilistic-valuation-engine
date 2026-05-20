@@ -16,6 +16,9 @@ class ExternalApiMetrics(registry: MeterRegistry) {
     private val itemEquipmentFailed = registry.counter("external_api_item_equipment_failed_total")
     private val chunksCreated = registry.counter("external_api_chunks_created_total")
 
+    private val rankingFetched = registry.counter("external_api_ranking_fetched_total")
+    private val rankingFailed = registry.counter("external_api_ranking_failed_total")
+
     private val lookupTimer = Timer.builder("external_api_lookup_duration_seconds")
         .description("Time for a full endpoint lookup run")
         .register(registry)
@@ -56,4 +59,12 @@ class ExternalApiMetrics(registry: MeterRegistry) {
     fun lookupTimer(): Timer = lookupTimer
     fun characterBasicTimer(): Timer = characterBasicTimer
     fun itemEquipmentTimer(): Timer = itemEquipmentTimer
+
+    fun recordRankingFetched(count: Int = 1) {
+        rankingFetched.increment(count.toDouble())
+    }
+
+    fun recordRankingFailed(count: Int = 1) {
+        rankingFailed.increment(count.toDouble())
+    }
 }

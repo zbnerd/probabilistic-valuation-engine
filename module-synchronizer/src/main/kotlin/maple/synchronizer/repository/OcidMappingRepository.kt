@@ -1,11 +1,14 @@
 package maple.synchronizer.repository
 
 import maple.synchronizer.storage.OcidMapping
+import org.postgresql.copy.CopyManager
+import org.postgresql.core.BaseConnection
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
+import org.springframework.jdbc.core.ConnectionCallback
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
+import java.sql.Connection
 
 @Repository
 class OcidMappingRepository(
@@ -15,27 +18,46 @@ class OcidMappingRepository(
     private val log = LoggerFactory.getLogger(javaClass)
 
     companion object {
-        private const val BATCH_SIZE = 50000
         private const val REDIS_KEY = "ocid:mapping"
-        private const val MERGE_SQL = """
-            INSERT INTO game_character (user_ign, ocid, updated_at)
-            SELECT unnest(:userIgns::varchar[]), unnest(:ocids::varchar[]), now()
-            ON CONFLICT (user_ign) DO UPDATE SET
-                ocid = EXCLUDED.ocid,
-                updated_at = now()
-            WHERE game_character.ocid IS DISTINCT FROM EXCLUDED.ocid
-        """
     }
 
     fun batchUpsert(mappings: List<OcidMapping>) {
-        val batches = mappings.chunked(BATCH_SIZE)
-        batches.forEachIndexed { index, batch ->
-            jdbc.update(MERGE_SQL, MapSqlParameterSource()
-                .addValue("userIgns", batch.map { it.userIgn }.toTypedArray())
-                .addValue("ocids", batch.map { it.ocid }.toTypedArray())
-            )
-            log.info("[OcidMapping] DB upsert batch {}/{}: {} mappings", index + 1, batches.size, batch.size)
-        }
+        val affected: Int = jdbc.jdbcTemplate.execute(
+            ConnectionCallback { con: Connection ->
+                con.autoCommit = false
+
+                runCatching {
+                    con.createStatement().use { stmt ->
+                        stmt.execute("DROP TABLE IF EXISTS tmp_ocid_mapping")
+                        stmt.execute("CREATE TEMP TABLE tmp_ocid_mapping (user_ign text NOT NULL, ocid text NOT NULL) ON COMMIT DROP")
+                    }
+
+                    val copyManager = CopyManager(con.unwrap(BaseConnection::class.java))
+                    val data = mappings.joinToString("\n") { "${it.userIgn}\t${it.ocid}" }
+                    copyManager.copyIn("COPY tmp_ocid_mapping (user_ign, ocid) FROM STDIN", data.reader())
+
+                    val rows = con.createStatement().use { stmt ->
+                        stmt.executeUpdate("""
+                            INSERT INTO game_character (user_ign, ocid, updated_at)
+                            SELECT user_ign, ocid, now()
+                            FROM tmp_ocid_mapping
+                            ON CONFLICT (user_ign) DO UPDATE SET
+                                ocid = EXCLUDED.ocid,
+                                updated_at = now()
+                            WHERE game_character.ocid IS DISTINCT FROM EXCLUDED.ocid
+                        """.trimIndent())
+                    }
+
+                    con.commit()
+                    rows
+                }.getOrElse { ex ->
+                    runCatching { con.rollback() }
+                    throw ex
+                }
+            }
+        ) ?: 0
+
+        log.info("[OcidMapping] DB upserted via COPY→merge: {} mappings, {} affected", mappings.size, affected)
     }
 
     fun writeOcidToRedis(mappings: List<OcidMapping>) {

@@ -50,7 +50,7 @@ dependencies {
 bootJar {
 	enabled = true
 	archiveClassifier = ""
-	mainClass.set("maple.synchronizer.SynchronizerApplication")
+	mainClass.set("maple.synchronizer.SynchronizerApplicationKt")
 }
 
 tasks.named("jar") {

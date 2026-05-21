@@ -13,22 +13,22 @@ class EquipmentDocumentPreparer(private val objectMapper: ObjectMapper) {
     }
 
     private fun prepareOne(doc: EquipmentReadDocument): PreppedDocument {
-        val json = objectMapper.writeValueAsString(doc)
+        val bytes = objectMapper.writeValueAsBytes(doc)
         return PreppedDocument(
             readKey = "${doc.ocid}:${doc.presetNo}",
             ocid = doc.ocid,
             presetNo = doc.presetNo.toShort(),
             userIgn = doc.userIgn,
-            compressed = GzipUtils.compress(json),
-            documentHash = sha256Hex(json),
+            compressed = GzipUtils.compress(bytes),
+            documentHash = sha256Hex(bytes),
             totalCost = doc.summary.totalCost,
             equipmentCount = doc.summary.equipmentCount,
             calculatedAt = Timestamp.from(doc.metadata.calculatedAt),
         )
     }
 
-    private fun sha256Hex(input: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
+    private fun sha256Hex(input: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(input)
         return digest.joinToString("") { "%02x".format(it) }
     }
 }

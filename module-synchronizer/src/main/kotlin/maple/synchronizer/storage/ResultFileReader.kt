@@ -28,9 +28,9 @@ class ResultFileReader(
             var rowCount = 0
             val grouped = mutableMapOf<String, MutableList<CalculatedEquipmentItem>>()
 
-            reader.lineSequence()
-                .filter { it.isNotBlank() }
-                .forEach { line ->
+            var line: String? = reader.readLine()
+            while (line != null) {
+                if (line.isNotBlank()) {
                     rowCount++
                     require(rowCount <= maxRowsPerChunk) {
                         "Chunk row limit exceeded: objectKey=$objectKey, maxRows=$maxRowsPerChunk, current=$rowCount"
@@ -38,6 +38,8 @@ class ResultFileReader(
                     val item = parseItem(line)
                     grouped.getOrPut("${item.ocid}:${item.presetNo}") { mutableListOf() }.add(item)
                 }
+                line = reader.readLine()
+            }
 
             return grouped.map { (readKey, group) ->
                 GroupedEquipmentResult(

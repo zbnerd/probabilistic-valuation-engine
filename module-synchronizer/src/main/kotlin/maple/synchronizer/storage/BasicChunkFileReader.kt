@@ -38,9 +38,13 @@ class BasicChunkFileReader(
 
         GZIPInputStream(Files.newInputStream(path)).bufferedReader().use { reader ->
             val records = mutableListOf<BasicRecord>()
-            reader.lineSequence()
-                .filter { it.isNotBlank() }
-                .forEach { line -> parseRecord(line)?.let { records.add(it) } }
+            var line: String? = reader.readLine()
+            while (line != null) {
+                if (line.isNotBlank()) {
+                    parseRecord(line)?.let { records.add(it) }
+                }
+                line = reader.readLine()
+            }
             log.info("[BasicChunkFileReader] parsed {} records from {}", records.size, objectKey)
             return records
         }
@@ -61,9 +65,9 @@ class BasicChunkFileReader(
             val characterLevel = body.get("character_level")?.asInt()
             val guildName = body.get("guild_name")?.asText()
 
-            val bodyJson = objectMapper.writeValueAsString(body)
-            val compressed = GzipUtils.compress(bodyJson)
-            val hash = sha256Hex(bodyJson.toByteArray(Charsets.UTF_8))
+            val bodyBytes = objectMapper.writeValueAsBytes(body)
+            val compressed = GzipUtils.compress(bodyBytes)
+            val hash = sha256Hex(bodyBytes)
 
             BasicRecord(
                 userIgn = userIgn,

@@ -51,7 +51,7 @@ dependencies {
 bootJar {
 	enabled = true
 	archiveClassifier = ""
-	mainClass.set("maple.calculator.CalculatorApplication")
+	mainClass.set("maple.calculator.CalculatorApplicationKt")
 }
 
 tasks.named("jar") {

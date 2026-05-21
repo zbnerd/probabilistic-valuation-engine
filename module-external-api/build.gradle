@@ -53,7 +53,7 @@ dependencies {
 bootJar {
 	enabled = true
 	archiveClassifier = ""
-	mainClass.set("maple.externalapi.ExternalApiApplication")
+	mainClass.set("maple.externalapi.ExternalApiApplicationKt")
 }
 
 tasks.named("jar") {

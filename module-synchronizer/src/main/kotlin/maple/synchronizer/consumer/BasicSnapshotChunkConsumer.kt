@@ -120,17 +120,20 @@ class BasicSnapshotChunkConsumer(
                 processContext = TaskContext.of("BasicSync", "${operation}Process", chunkId),
                 lifecycleContext = TaskContext.of("BasicSync", "${operation}Lifecycle", chunkId),
                 process = {
-                    val records = fileReader.read(event.objectKey)
-                    repository.bulkUpsert(runId, chunkId, records)
-                    if (urgent) {
-                        upsertOcidFromBasicRecords(records)
+                    var totalRecords = 0
+                    fileReader.readInBatches(event.objectKey) { batch ->
+                        repository.bulkUpsert(runId, chunkId, batch)
+                        if (urgent) {
+                            upsertOcidFromBasicRecords(batch)
+                        }
+                        totalRecords += batch.size
                     }
                     log.info(
                         "[BasicSync] {}chunk processed: runId={} chunkId={} records={}",
                         if (urgent) "urgent " else "",
                         runId,
                         chunkId,
-                        records.size,
+                        totalRecords,
                     )
                 },
                 onFailure = { ex ->

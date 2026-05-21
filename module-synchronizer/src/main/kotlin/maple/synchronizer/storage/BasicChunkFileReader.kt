@@ -32,6 +32,10 @@ class BasicChunkFileReader(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    companion object {
+        private const val DEFAULT_BATCH_SIZE = 1000
+    }
+
     fun read(objectKey: String): List<BasicRecord> {
         val path = Paths.get(basePath, objectKey)
         require(Files.exists(path)) { "Chunk file not found: $path" }
@@ -47,6 +51,43 @@ class BasicChunkFileReader(
             }
             log.info("[BasicChunkFileReader] parsed {} records from {}", records.size, objectKey)
             return records
+        }
+    }
+
+    fun readInBatches(
+        objectKey: String,
+        batchSize: Int = DEFAULT_BATCH_SIZE,
+        handler: (List<BasicRecord>) -> Unit,
+    ) {
+        val path = Paths.get(basePath, objectKey)
+        require(Files.exists(path)) { "Chunk file not found: $path" }
+
+        GZIPInputStream(Files.newInputStream(path)).bufferedReader().use { reader ->
+            val batch = mutableListOf<BasicRecord>()
+            val seenOcids = mutableSetOf<String>()
+            var totalCount = 0
+            var line: String? = reader.readLine()
+
+            while (line != null) {
+                if (line.isNotBlank()) {
+                    val record = parseRecord(line)
+                    if (record != null && seenOcids.add(record.ocid)) {
+                        batch.add(record)
+                        if (batch.size >= batchSize) {
+                            totalCount += batch.size
+                            handler(batch.toList())
+                            batch.clear()
+                        }
+                    }
+                }
+                line = reader.readLine()
+            }
+
+            if (batch.isNotEmpty()) {
+                totalCount += batch.size
+                handler(batch)
+            }
+            log.info("[BasicChunkFileReader] streamed {} records from {} in batches of {}", totalCount, objectKey, batchSize)
         }
     }
 

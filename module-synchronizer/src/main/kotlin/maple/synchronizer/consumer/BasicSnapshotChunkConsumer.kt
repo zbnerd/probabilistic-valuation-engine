@@ -162,13 +162,18 @@ class BasicSnapshotChunkConsumer(
 
     private fun upsertOcidFromBasicRecords(records: List<BasicRecord>) {
         records.forEach { record ->
+            val params = MapSqlParameterSource()
+                .addValue("userIgn", record.userIgn)
+                .addValue("ocid", record.ocid)
+            jdbc.update(
+                "DELETE FROM game_character WHERE ocid = :ocid AND user_ign != :userIgn",
+                params,
+            )
             jdbc.update(
                 """INSERT INTO game_character (user_ign, ocid, updated_at)
                    VALUES (:userIgn, :ocid, NOW())
                    ON CONFLICT (user_ign) DO UPDATE SET ocid = EXCLUDED.ocid, updated_at = NOW()""",
-                MapSqlParameterSource()
-                    .addValue("userIgn", record.userIgn)
-                    .addValue("ocid", record.ocid)
+                params,
             )
             log.info("[BasicSync] upserted OCID to game_character: userIgn={}", maskIgn(record.userIgn))
         }

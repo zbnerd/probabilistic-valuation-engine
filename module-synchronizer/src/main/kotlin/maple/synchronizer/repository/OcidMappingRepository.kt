@@ -38,6 +38,13 @@ class OcidMappingRepository(
 
                     val rows = con.createStatement().use { stmt ->
                         stmt.executeUpdate("""
+                            DELETE FROM game_character
+                            WHERE EXISTS (
+                                SELECT 1 FROM tmp_ocid_mapping t
+                                WHERE t.ocid = game_character.ocid AND t.user_ign != game_character.user_ign
+                            )
+                        """.trimIndent())
+                        stmt.executeUpdate("""
                             INSERT INTO game_character (user_ign, ocid, updated_at)
                             SELECT user_ign, ocid, now()
                             FROM tmp_ocid_mapping

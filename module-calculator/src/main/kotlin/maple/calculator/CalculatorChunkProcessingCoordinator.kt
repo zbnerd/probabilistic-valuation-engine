@@ -54,7 +54,7 @@ class CalculatorChunkProcessingCoordinator(
     }
 
     fun resultObjectKeyFor(event: SnapshotChunkReadyEvent): String =
-        "data/calculator/runs/${event.runId}/${event.endpoint}/chunks/result-${event.chunkId}.jsonl.gz"
+        "calculator/runs/${event.runId}/${event.endpoint}/chunks/result-${event.chunkId}.jsonl.gz"
 
     private suspend fun republishExistingResult(event: SnapshotChunkReadyEvent, resultObjectKey: String) {
         log.info("[Coordinator] result already exists, republishing: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, resultObjectKey)

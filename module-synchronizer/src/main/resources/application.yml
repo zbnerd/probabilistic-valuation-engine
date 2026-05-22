@@ -35,6 +35,9 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: earliest
       enable-auto-commit: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
     listener:
       ack-mode: manual_immediate
   data:
@@ -53,6 +56,10 @@ synchronizer:
     ocid-lookup-enabled: true
     ocid-lookup-topic: external-api.ocid.lookup-ready
     ocid-lookup-consumer-group-id: synchronizer-ocid-lookup-consumer
+    chunk-consumed-topic: synchronizer.chunk.consumed
+  events:
+    consumed:
+      enabled: true
   store:
     base-path: ../data
   chunk:

@@ -46,6 +46,10 @@ external-api:
     runs:
       keep-recent: 5                  # always keep the 5 most recent runs
       keep-within-hours: 12           # keep runs newer than 12 hours
+    consumed:
+      enabled: true                   # enable consumed-chunk auto-deletion
+      interval-ms: 3600000            # 1 hour between batch deletes
+      consumer-group-id: external-api-consumed-chunk-cleanup
   schedule:
     daily-cron: "0 0 3 * * *"  # 매일 새벽 3시 — OCID + CHARACTER_BASIC
     enabled: true
@@ -65,7 +69,7 @@ external-api:
       item-equipment:
         max-records: 500
         max-uncompressed-bytes: 134217728
-    queue-capacity: 1000
+    queue-capacity: 3000
     events:
       enabled: true
       kafka:
@@ -74,6 +78,8 @@ external-api:
         run-completed-topic: external-api.snapshot.run-completed
         run-failed-topic: external-api.snapshot.run-failed
         ocid-lookup-topic: external-api.ocid.lookup-ready
+  kafka:
+    chunk-consumed-topic: synchronizer.chunk.consumed
   ranking:
     enabled: true
     max-pages: 3000

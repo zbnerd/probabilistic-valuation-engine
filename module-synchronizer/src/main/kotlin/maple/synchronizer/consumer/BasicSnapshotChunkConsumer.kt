@@ -1,12 +1,14 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.common.event.ChunkConsumedEvent
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.expectation.util.StringMaskingUtils.maskIgn
+import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.storage.BasicChunkFileReader
 import maple.synchronizer.storage.BasicRecord
@@ -28,6 +30,7 @@ class BasicSnapshotChunkConsumer(
     private val repository: CharacterBasicRepository,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val jdbc: NamedParameterJdbcTemplate,
+    private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
@@ -135,6 +138,14 @@ class BasicSnapshotChunkConsumer(
                         chunkId,
                         totalRecords,
                     )
+                },
+                onSuccess = {
+                    consumedEventPublisher.publish(ChunkConsumedEvent(
+                        runId = runId,
+                        endpoint = event.endpoint,
+                        chunkId = chunkId,
+                        objectKey = event.objectKey,
+                    ))
                 },
                 onFailure = { ex ->
                     log.error(

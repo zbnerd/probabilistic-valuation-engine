@@ -60,7 +60,7 @@ class CalculatorResultCleanupScheduler(
     }
 
     private fun cleanupRuns(startedAt: Instant): RunCleanupResult {
-        val prefix = "data/calculator/runs"
+        val prefix = "calculator/runs"
         val runDirs = objectStorage.listDirectories(prefix)
         if (runDirs.isEmpty()) {
             log.info("[CalculatorCleanup] no calculator runs found")
@@ -79,7 +79,7 @@ class CalculatorResultCleanupScheduler(
             maxDeleteBytesPerCycle = maxDeleteBytesPerCycle,
             maxRuntimeSeconds = maxRuntimeSeconds,
             startedAt = startedAt,
-            deleteRun = { run -> objectStorage.deleteDirectory("data/calculator/runs/${run.runId}") },
+            deleteRun = { run -> objectStorage.deleteDirectory("calculator/runs/${run.runId}") },
             onDryRunCandidate = { run ->
                 log.info(
                     "[CalculatorCleanup] would delete: runId={}, size={}MB",

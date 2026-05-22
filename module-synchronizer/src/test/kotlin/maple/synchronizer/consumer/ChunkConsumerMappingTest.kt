@@ -2,6 +2,7 @@ package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import maple.expectation.common.event.ChunkExecutionType
+import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.processor.ChunkProcessor
 import maple.synchronizer.repository.CharacterBasicRepository
@@ -27,7 +28,7 @@ class ChunkConsumerMappingTest {
             repository = mock<CharacterBasicRepository>(),
             chunkConsumerTemplate = template,
             jdbc = mock<NamedParameterJdbcTemplate>(),
-            basePath = "base",
+            consumedEventPublisher = mock<KafkaChunkConsumedEventPublisher>(),
         )
 
         consumer.consume(basicMessage, mock<Acknowledgment>(), "basic-topic", null)
@@ -54,6 +55,7 @@ class ChunkConsumerMappingTest {
             chunkProcessor = mock<ChunkProcessor>(),
             metrics = mock<SynchronizerMetrics>(),
             chunkConsumerTemplate = template,
+            consumedEventPublisher = mock<KafkaChunkConsumedEventPublisher>(),
         )
 
         consumer.consume(resultMessage, mock<Acknowledgment>(), "result-topic", "result-key")

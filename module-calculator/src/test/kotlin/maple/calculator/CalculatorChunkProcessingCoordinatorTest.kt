@@ -78,7 +78,7 @@ class CalculatorChunkProcessingCoordinatorTest {
         totalItems = 500,
         calculatedCount = 480,
         errorCount = 20,
-        resultObjectKey = "data/calculator/runs/run-1/item-equipment/chunks/result-chunk-1.jsonl.gz",
+        resultObjectKey = "calculator/runs/run-1/item-equipment/chunks/result-chunk-1.jsonl.gz",
         resultCount = 480,
         resultUncompressedBytes = 10000,
         resultCompressedBytes = 2000,
@@ -187,7 +187,7 @@ class CalculatorChunkProcessingCoordinatorTest {
         val event = testEvent(runId = "run-42", chunkId = "chunk-7")
 
         assertThat(coordinator.resultObjectKeyFor(event))
-            .isEqualTo("data/calculator/runs/run-42/item-equipment/chunks/result-chunk-7.jsonl.gz")
+            .isEqualTo("calculator/runs/run-42/item-equipment/chunks/result-chunk-7.jsonl.gz")
     }
 
     @Test
@@ -213,7 +213,7 @@ class CalculatorChunkProcessingCoordinatorTest {
             assertThat(published.sourceRunId).isEqualTo("run-abc")
             assertThat(published.sourceChunkId).isEqualTo("chunk-xyz")
             assertThat(published.objectKey)
-                .isEqualTo("data/calculator/runs/run-abc/item-equipment/chunks/result-chunk-xyz.jsonl.gz")
+                .isEqualTo("calculator/runs/run-abc/item-equipment/chunks/result-chunk-xyz.jsonl.gz")
             assertThat(published.resultCount).isEqualTo(0)
             assertThat(published.errorCount).isEqualTo(0)
             assertThat(published.uncompressedBytes).isEqualTo(0)

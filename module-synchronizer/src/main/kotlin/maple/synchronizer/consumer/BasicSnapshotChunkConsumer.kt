@@ -1,12 +1,14 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.common.event.ChunkConsumedEvent
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.expectation.util.StringMaskingUtils.maskIgn
+import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.storage.BasicChunkFileReader
 import maple.synchronizer.storage.BasicRecord
@@ -28,6 +30,7 @@ class BasicSnapshotChunkConsumer(
     private val repository: CharacterBasicRepository,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val jdbc: NamedParameterJdbcTemplate,
+    private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
@@ -136,6 +139,14 @@ class BasicSnapshotChunkConsumer(
                         totalRecords,
                     )
                 },
+                onSuccess = {
+                    consumedEventPublisher.publish(ChunkConsumedEvent(
+                        runId = runId,
+                        endpoint = event.endpoint,
+                        chunkId = chunkId,
+                        objectKey = event.objectKey,
+                    ))
+                },
                 onFailure = { ex ->
                     log.error(
                         "[BasicSync] {}chunk processing failed: runId={} chunkId={}",
@@ -151,13 +162,18 @@ class BasicSnapshotChunkConsumer(
 
     private fun upsertOcidFromBasicRecords(records: List<BasicRecord>) {
         records.forEach { record ->
+            val params = MapSqlParameterSource()
+                .addValue("userIgn", record.userIgn)
+                .addValue("ocid", record.ocid)
+            jdbc.update(
+                "DELETE FROM game_character WHERE ocid = :ocid AND user_ign != :userIgn",
+                params,
+            )
             jdbc.update(
                 """INSERT INTO game_character (user_ign, ocid, updated_at)
                    VALUES (:userIgn, :ocid, NOW())
                    ON CONFLICT (user_ign) DO UPDATE SET ocid = EXCLUDED.ocid, updated_at = NOW()""",
-                MapSqlParameterSource()
-                    .addValue("userIgn", record.userIgn)
-                    .addValue("ocid", record.ocid)
+                params,
             )
             log.info("[BasicSync] upserted OCID to game_character: userIgn={}", maskIgn(record.userIgn))
         }

@@ -7,9 +7,11 @@ import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
+import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.processor.ChunkProcessInput
 import maple.synchronizer.processor.ChunkProcessor
+import maple.expectation.common.event.ChunkConsumedEvent
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
@@ -25,6 +27,7 @@ class KafkaResultChunkConsumer(
     private val chunkProcessor: ChunkProcessor,
     private val metrics: SynchronizerMetrics,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
+    private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(KafkaResultChunkConsumer::class.java)
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
@@ -90,6 +93,13 @@ class KafkaResultChunkConsumer(
                     chunkSample?.stop(metrics.chunkTimer())
                     metrics.recordChunkBytes(event.compressedBytes)
                     recordPreUpsertVolume(event)
+                    consumedEventPublisher.publish(ChunkConsumedEvent(
+                        runId = runId,
+                        endpoint = event.sourceEndpoint.ifBlank { "result" },
+                        chunkId = chunkId,
+                        objectKey = event.objectKey,
+                        sourceObjectKey = "runs/${runId}/${event.sourceEndpoint}/chunks/${chunkId}.jsonl.gz",
+                    ))
                 },
                 onFailure = { ex ->
                     metrics.incrementFailed()

@@ -4,13 +4,11 @@ global:
   external_labels:
     monitor: 'maple-expectation'
 
-# Rule files
 rule_files:
   - "rules/alert_rules.yml"
   - "rules/lock-alerts.yml"
   - "rules/load-test-rules.yml"
 
-# Alertmanager configuration
 alerting:
   alertmanagers:
     - static_configs:
@@ -19,27 +17,55 @@ alerting:
 
 scrape_configs:
   # ============================================
-  # Maple Expectation Application
+  # Spring Boot Modules
   # ============================================
-  - job_name: 'maple-expectation'
+  - job_name: 'external-api'
     scrape_interval: 5s
+    scrape_timeout: 3s
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['host.docker.internal:8080']
+      - targets: ['external-api:8081']
         labels:
-          application: 'maple-expectation'
-          environment: '${ENVIRONMENT:local}'
-    scrape_timeout: 3s
+          application: 'external-api'
+      - targets: ['host.docker.internal:8081']
+        labels:
+          application: 'external-api'
 
-  # ============================================
-  # Spring Boot Actuator
-  # ============================================
-  - job_name: 'spring-boot-actuator'
+  - job_name: 'calculator'
     scrape_interval: 5s
-    metrics_path: '/actuator'
-    static_configs:
-      - targets: ['host.docker.internal:8080']
     scrape_timeout: 3s
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['calculator:8082']
+        labels:
+          application: 'calculator'
+      - targets: ['host.docker.internal:8082']
+        labels:
+          application: 'calculator'
+
+  - job_name: 'synchronizer'
+    scrape_interval: 5s
+    scrape_timeout: 3s
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['synchronizer:8083']
+        labels:
+          application: 'synchronizer'
+      - targets: ['host.docker.internal:8083']
+        labels:
+          application: 'synchronizer'
+
+  - job_name: 'rest-controller'
+    scrape_interval: 5s
+    scrape_timeout: 3s
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['rest-controller:8084']
+        labels:
+          application: 'rest-controller'
+      - targets: ['host.docker.internal:8084']
+        labels:
+          application: 'rest-controller'
 
   # ============================================
   # Node Exporter - System Metrics
@@ -50,54 +76,3 @@ scrape_configs:
       - targets: ['node-exporter:9100']
         labels:
           component: 'system'
-
-  # ============================================
-  # PostgreSQL Metrics (via postgres_exporter)
-  # V5 Migration (Issue #589, #590, #591): Single DB
-  # ============================================
-  - job_name: 'postgresql'
-    scrape_interval: 15s
-    static_configs:
-      - targets: ['postgres-exporter:9187']
-        labels:
-          component: 'postgresql'
-
-  # ============================================
-  # Blackbox Probes
-  # ============================================
-  - job_name: 'blackbox'
-    metrics_path: /probe
-    params:
-      module: [http_2xx]
-    static_configs:
-      - targets:
-        - http://localhost:8080/actuator/health
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: blackbox:9115
-
-  # ============================================
-  # Chaos Test Metrics
-  # ============================================
-  - job_name: 'chaos-test'
-    scrape_interval: 5s
-    metrics_path: '/chaos/metrics'
-    static_configs:
-      - targets: ['host.docker.internal:8080']
-        labels:
-          test_type: 'chaos'
-
-  # ============================================
-  # Resilience4j Metrics
-  # ============================================
-  - job_name: 'resilience4j'
-    scrape_interval: 5s
-    metrics_path: '/actuator/resilience4j'
-    static_configs:
-      - targets: ['host.docker.internal:8080']
-        labels:
-          component: 'circuit-breaker'

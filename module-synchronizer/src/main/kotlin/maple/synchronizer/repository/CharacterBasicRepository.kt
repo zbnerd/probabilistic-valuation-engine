@@ -1,7 +1,6 @@
 package maple.synchronizer.repository
 
 import maple.synchronizer.storage.BasicRecord
-import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
@@ -9,31 +8,39 @@ import org.springframework.stereotype.Repository
 @Repository
 class CharacterBasicRepository(
     private val jdbc: NamedParameterJdbcTemplate,
+    private val batchExecutor: JdbcChunkedBatchExecutor,
 ) {
-    private val log = LoggerFactory.getLogger(javaClass)
-
     companion object {
         private const val SUB_BATCH_SIZE = 100
     }
 
     fun bulkUpsert(runId: String, chunkId: String, records: List<BasicRecord>) {
-        val batches = records.chunked(SUB_BATCH_SIZE)
-        log.info("[CharacterBasic] upsert start: records={} batches={}: runId={} chunkId={}",
-            records.size, batches.size, runId, chunkId)
+        val deduped = records
+            .groupBy { it.ocid }
+            .map { it.value.first() }
 
-        var totalAffected = 0
-        batches.forEachIndexed { idx, batch ->
-            val affected = upsertBatch(runId, chunkId, batch)
-            totalAffected += affected
-            log.info("[CharacterBasic] upsert batch: batchNo={}/{} attempted={} affected={}",
-                idx + 1, batches.size, batch.size, affected)
-        }
-
-        log.info("[CharacterBasic] upsert done: records={} affected={}: runId={} chunkId={}",
-            records.size, totalAffected, runId, chunkId)
+        batchExecutor.execute(
+            label = "CharacterBasic",
+            itemLabel = "records",
+            runId = runId,
+            chunkId = chunkId,
+            items = deduped,
+            batchSize = SUB_BATCH_SIZE,
+            upsertBatch = { batch -> upsertBatch(runId, chunkId, batch) },
+        )
     }
 
     private fun upsertBatch(runId: String, chunkId: String, batch: List<BasicRecord>): Int {
+        val ocids = batch.map { it.ocid }.toTypedArray()
+        val userIgns = batch.map { it.userIgn }.toTypedArray()
+
+        jdbc.update(
+            "DELETE FROM character_basic_read_model WHERE ocid = ANY(:ocids) AND NOT (user_ign = ANY(:userIgns))",
+            MapSqlParameterSource()
+                .addValue("ocids", ocids)
+                .addValue("userIgns", userIgns),
+        )
+
         val sql = """
             INSERT INTO character_basic_read_model (
                 user_ign, ocid, world_name, character_class, character_level,
@@ -61,8 +68,8 @@ class CharacterBasicRepository(
         return jdbc.update(sql, MapSqlParameterSource()
             .addValue("runId", runId)
             .addValue("chunkId", chunkId)
-            .addValue("userIgns", batch.map { it.userIgn }.toTypedArray())
-            .addValue("ocids", batch.map { it.ocid }.toTypedArray())
+            .addValue("userIgns", userIgns)
+            .addValue("ocids", ocids)
             .addValue("worldNames", batch.map { it.worldName }.toTypedArray())
             .addValue("characterClasses", batch.map { it.characterClass }.toTypedArray())
             .addValue("characterLevels", batch.map { it.characterLevel }.toTypedArray())

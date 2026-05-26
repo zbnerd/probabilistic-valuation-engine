@@ -28,10 +28,20 @@ object GzipUtils {
             return ByteArray(0)
         }
 
-        val out = ByteArrayOutputStream()
-        val gzip = GZIPOutputStream(out)
-        gzip.write(str.toByteArray(StandardCharsets.UTF_8))
-        gzip.finish()
+        return compress(str.toByteArray(StandardCharsets.UTF_8))
+    }
+
+    @JvmStatic
+    @Throws(IOException::class)
+    fun compress(bytes: ByteArray): ByteArray {
+        if (bytes.isEmpty()) {
+            return ByteArray(0)
+        }
+
+        val out = ByteArrayOutputStream(bytes.size)
+        GZIPOutputStream(out).use { gzip ->
+            gzip.write(bytes)
+        }
         return out.toByteArray()
     }
 

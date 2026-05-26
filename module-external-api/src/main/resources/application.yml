@@ -8,6 +8,8 @@ spring:
     banner-mode: off
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    listener:
+      ack-mode: manual
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -17,16 +19,23 @@ spring:
 nexon:
   api:
     key: ${NEXON_API_KEY}
+  http-client:
+    pool-name: ${NEXON_HTTP_POOL_NAME:nexon-pool}
+    max-connections: ${NEXON_HTTP_MAX_CONNECTIONS:150}
+    pending-acquire-max-count: ${NEXON_HTTP_PENDING_ACQUIRE_MAX_COUNT:1000}
+    pending-acquire-timeout-ms: ${NEXON_HTTP_PENDING_ACQUIRE_TIMEOUT_MS:5000}
+    connect-timeout-ms: ${NEXON_HTTP_CONNECT_TIMEOUT_MS:3000}
+    response-timeout-seconds: ${NEXON_HTTP_RESPONSE_TIMEOUT_SECONDS:5}
+    max-in-memory-size-bytes: ${NEXON_HTTP_MAX_IN_MEMORY_SIZE_BYTES:2097152}
+    metrics-enabled: ${NEXON_HTTP_METRICS_ENABLED:true}
 
 external-api:
-  csv:
-    path: ../module-app/src/main/resources/data/userIgn_List.csv
   rate-limit:
-    permits-per-second: 200
+    permits-per-second: ${EXTERNAL_API_RATE_LIMIT_PERMITS_PER_SECOND:250}
     ocid-lookup-permits-per-second: 400
   batch-size: 1000
   store:
-    base-path: ./external-api-data
+    base-path: ../data
   cleanup:
     enabled: false                    # enable to activate cleanup scheduler
     dry-run: false                    # true = log candidates without deleting
@@ -37,6 +46,10 @@ external-api:
     runs:
       keep-recent: 5                  # always keep the 5 most recent runs
       keep-within-hours: 12           # keep runs newer than 12 hours
+    consumed:
+      enabled: true                   # enable consumed-chunk auto-deletion
+      interval-ms: 3600000            # 1 hour between batch deletes
+      consumer-group-id: external-api-consumed-chunk-cleanup
   schedule:
     daily-cron: "0 0 3 * * *"  # 매일 새벽 3시 — OCID + CHARACTER_BASIC
     enabled: true
@@ -56,7 +69,7 @@ external-api:
       item-equipment:
         max-records: 500
         max-uncompressed-bytes: 134217728
-    queue-capacity: 1000
+    queue-capacity: 3000
     events:
       enabled: true
       kafka:
@@ -64,6 +77,13 @@ external-api:
         chunk-ready-topic: external-api.snapshot.chunk-ready
         run-completed-topic: external-api.snapshot.run-completed
         run-failed-topic: external-api.snapshot.run-failed
+        ocid-lookup-topic: external-api.ocid.lookup-ready
+  kafka:
+    chunk-consumed-topic: synchronizer.chunk.consumed
+  ranking:
+    enabled: true
+    max-pages: 3000
+    permits-per-second: 50
 
 management:
   endpoints:

@@ -8,6 +8,20 @@ Claude Code가 이 프로젝트에서 작업할 때 따라야 할 규칙은 `.cl
 - 규칙에 위배되는 요청은 거부하거나 규칙에 맞게 조정해서 구현합니다.
 - 규칙을 부분적으로만 따르는 코드를 생성하지 않습니다.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default Matt Pocock skill triage label vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repo using root-level domain docs and `docs/01_ADR/`. See `docs/agents/domain.md`.
+
 ### Self-Check (응답 전 필수 검증)
 
 코드를 생성하거나 수정한 후, 다음을 모두 확인합니다:
@@ -44,6 +58,8 @@ Claude Code가 이 프로젝트에서 작업할 때 따라야 할 규칙은 `.cl
 | `db-migration.md` | Migration 완전성, Forward compatibility | `**/migration/**`, `**/*.sql` |
 | `skill-routing.md` | Skill 라우팅 규칙 | 항상 |
 | `load-test.md` | 부하테스트 명령어, 파괴적 플래그, 병목 분석 체크리스트 | 부하테스트 시 |
+| `prometheus-metrics.md` | External API / Calculator Prometheus 메트릭 이름, 쿼리, 엔드포인트 | 메트릭 확인 시 |
+| `adr-conventions.md` | ADR 구조 (5섹션), Trade-offs 필수, 긴 설명 금지 | `docs/01_ADR/` |
 
 ## 상세 문서 (참조)
 

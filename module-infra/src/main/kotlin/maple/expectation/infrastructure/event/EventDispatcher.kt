@@ -117,17 +117,29 @@ class EventDispatcher(
     private fun executeHandler(handler: HandlerMethod, event: IntegrationEvent<*>) {
         if (handler.async) {
             virtualThreadExecutor.execute {
-                executor.executeVoidJava(
+                executor.executeOrCatch(
                     { invokeHandler(handler, event) },
+                    { e -> logHandlerFailure(handler, event, e) },
                     TaskContext.of("EventDispatcher", "InvokeAsync", handler.method.name),
                 )
             }
         } else {
-            executor.executeVoidJava(
+            executor.executeOrCatch(
                 { invokeHandler(handler, event) },
+                { e -> logHandlerFailure(handler, event, e) },
                 TaskContext.of("EventDispatcher", "InvokeSync", handler.method.name),
             )
         }
+    }
+
+    private fun logHandlerFailure(handler: HandlerMethod, event: IntegrationEvent<*>, error: Throwable) {
+        logger.error(
+            "[EventDispatcher] Handler failed: eventId={}, eventType={}, handler={}",
+            event.eventId,
+            event.eventType,
+            handler.method.name,
+            error,
+        )
     }
 
     @Throws(Exception::class)

@@ -1,0 +1,5 @@
+# Docker Compose production profile
+
+calculator:
+  store:
+    input-base-path: /data

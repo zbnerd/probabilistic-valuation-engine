@@ -26,11 +26,15 @@ data class BasicRecord(
 
 @Component
 class BasicChunkFileReader(
-    @Value("\${synchronizer.store.base-path:../module-external-api/external-api-data}")
+    @Value("\${synchronizer.store.base-path:../data}")
     private val basePath: String,
     private val objectMapper: ObjectMapper,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    companion object {
+        private const val DEFAULT_BATCH_SIZE = 1000
+    }
 
     fun read(objectKey: String): List<BasicRecord> {
         val path = Paths.get(basePath, objectKey)
@@ -38,11 +42,52 @@ class BasicChunkFileReader(
 
         GZIPInputStream(Files.newInputStream(path)).bufferedReader().use { reader ->
             val records = mutableListOf<BasicRecord>()
-            reader.lineSequence()
-                .filter { it.isNotBlank() }
-                .forEach { line -> parseRecord(line)?.let { records.add(it) } }
+            var line: String? = reader.readLine()
+            while (line != null) {
+                if (line.isNotBlank()) {
+                    parseRecord(line)?.let { records.add(it) }
+                }
+                line = reader.readLine()
+            }
             log.info("[BasicChunkFileReader] parsed {} records from {}", records.size, objectKey)
             return records
+        }
+    }
+
+    fun readInBatches(
+        objectKey: String,
+        batchSize: Int = DEFAULT_BATCH_SIZE,
+        handler: (List<BasicRecord>) -> Unit,
+    ) {
+        val path = Paths.get(basePath, objectKey)
+        require(Files.exists(path)) { "Chunk file not found: $path" }
+
+        GZIPInputStream(Files.newInputStream(path)).bufferedReader().use { reader ->
+            val batch = mutableListOf<BasicRecord>()
+            val seenOcids = mutableSetOf<String>()
+            var totalCount = 0
+            var line: String? = reader.readLine()
+
+            while (line != null) {
+                if (line.isNotBlank()) {
+                    val record = parseRecord(line)
+                    if (record != null && seenOcids.add(record.ocid)) {
+                        batch.add(record)
+                        if (batch.size >= batchSize) {
+                            totalCount += batch.size
+                            handler(batch.toList())
+                            batch.clear()
+                        }
+                    }
+                }
+                line = reader.readLine()
+            }
+
+            if (batch.isNotEmpty()) {
+                totalCount += batch.size
+                handler(batch)
+            }
+            log.info("[BasicChunkFileReader] streamed {} records from {} in batches of {}", totalCount, objectKey, batchSize)
         }
     }
 
@@ -59,11 +104,11 @@ class BasicChunkFileReader(
             val worldName = body.get("world_name")?.asText()
             val characterClass = body.get("character_class")?.asText()
             val characterLevel = body.get("character_level")?.asInt()
-            val guildName = body.get("character_guild_name")?.asText()
+            val guildName = body.get("guild_name")?.asText()
 
-            val bodyJson = objectMapper.writeValueAsString(body)
-            val compressed = GzipUtils.compress(bodyJson)
-            val hash = sha256Hex(bodyJson.toByteArray(Charsets.UTF_8))
+            val bodyBytes = objectMapper.writeValueAsBytes(body)
+            val compressed = GzipUtils.compress(bodyBytes)
+            val hash = sha256Hex(bodyBytes)
 
             BasicRecord(
                 userIgn = userIgn,

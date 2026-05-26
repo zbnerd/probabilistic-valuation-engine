@@ -124,7 +124,7 @@ public class ExpectationCalculationQueue {
         jobPort.createOrFindActiveJob(null, task.getUserIgn(), task.getPresetNo());
     CalculationJob job = claim.getJob();
 
-    if (claim.getCreated() && job.getStatus() == CalculationJobStatus.REQUESTED) {
+    if (job.getStatus() == CalculationJobStatus.REQUESTED) {
       boolean transitioned =
           jobPort.transitionStatus(
               job.getJobId(), CalculationJobStatus.REQUESTED, CalculationJobStatus.OCID_RESOLVING);

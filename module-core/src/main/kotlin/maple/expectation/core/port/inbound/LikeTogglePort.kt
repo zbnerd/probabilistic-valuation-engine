@@ -8,7 +8,7 @@ import maple.expectation.core.domain.model.like.LikeToggleWithCount
  *
  * <p>책임: 좋아요 토글, 상태 조회
  *
- * <p>구현체: LikeToggleService (module-app)
+ * <p>구현체: LikeToggleService (module-infra)
  */
 interface LikeTogglePort {
 

@@ -267,17 +267,28 @@ class GlobalAdmissionControl(
     }
 
     private fun <T> executeRequest(request: AdmissionRequest<T>) {
+        val context = TaskContext.of("AdmissionControl", "Execute", request.key)
         logicExecutor.executeWithFinally(
             {
-                val result = request.task.call()
-                @Suppress("UNCHECKED_CAST")
-                (request.future as CompletableFuture<Any>).complete(result)
+                logicExecutor.executeWithFallback(
+                    {
+                        val result = request.task.call()
+                        @Suppress("UNCHECKED_CAST")
+                        (request.future as CompletableFuture<Any>).complete(result)
+                        Unit
+                    },
+                    { e ->
+                        request.future.completeExceptionally(e)
+                        Unit
+                    },
+                    context,
+                )
             },
             {
                 semaphore.release()
                 inFlightCount.decrementAndGet()
             },
-            TaskContext.of("AdmissionControl", "Execute", request.key),
+            context,
         )
     }
 

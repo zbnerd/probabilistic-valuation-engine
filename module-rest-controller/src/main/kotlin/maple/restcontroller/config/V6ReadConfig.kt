@@ -2,9 +2,11 @@ package maple.restcontroller.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
-import maple.restcontroller.advice.RestControllerExceptionHandler
-import maple.restcontroller.controller.ExpectationV6Controller
 import maple.restcontroller.metrics.V6ReadMetrics
+import maple.restcontroller.popular.PopularCharacterService
+import maple.restcontroller.ranking.EquipmentRankingCacheService
+import maple.restcontroller.ranking.EquipmentRankingQueryService
+import maple.restcontroller.ranking.EquipmentRankingService
 import maple.restcontroller.read.*
 import maple.restcontroller.urgent.UrgentTriggerPublisher
 import org.springframework.beans.factory.ObjectProvider
@@ -54,11 +56,41 @@ class V6ReadConfig(
     ): ReadModelCacheService = ReadModelCacheService(redisTemplate, objectMapper, properties)
 
     @Bean
+    fun equipmentRankingCacheService(
+        redisTemplate: StringRedisTemplate
+    ): EquipmentRankingCacheService = EquipmentRankingCacheService(redisTemplate, properties)
+
+    @Bean
+    fun equipmentRankingQueryService(
+        jdbc: NamedParameterJdbcTemplate
+    ): EquipmentRankingQueryService = EquipmentRankingQueryService(jdbc)
+
+    @Bean
+    fun equipmentRankingService(
+        cacheService: EquipmentRankingCacheService,
+        queryService: EquipmentRankingQueryService
+    ): EquipmentRankingService = EquipmentRankingService(cacheService, queryService, properties)
+
+    @Bean
+    fun popularCharacterService(
+        redisTemplate: StringRedisTemplate
+    ): PopularCharacterService = PopularCharacterService(redisTemplate, properties)
+
+    @Bean
     fun expectationReadFacade(
         registry: InflightRequestRegistry,
         buffer: LocalRequestBuffer,
-        metrics: V6ReadMetrics
-    ): ExpectationReadFacade = ExpectationReadFacade(registry, buffer, metrics)
+        metrics: V6ReadMetrics,
+        cacheService: ReadModelCacheService,
+        popularCharacterService: PopularCharacterService
+    ): ExpectationReadFacade = ExpectationReadFacade(
+        registry,
+        buffer,
+        metrics,
+        cacheService,
+        popularCharacterService,
+        properties,
+    )
 
     @Bean
     fun batchReadScheduler(
@@ -73,15 +105,6 @@ class V6ReadConfig(
         urgentPublisherProvider.ifAvailable,
         v6ReadMetrics, properties
     )
-
-    @Bean
-    fun expectationV6Controller(
-        facade: ExpectationReadFacade
-    ): ExpectationV6Controller = ExpectationV6Controller(facade, properties)
-
-    @Bean
-    fun restControllerExceptionHandler(): RestControllerExceptionHandler =
-        RestControllerExceptionHandler()
 
     @Bean
     @ConditionalOnProperty(name = ["expectation.v6.urgent.enabled"], havingValue = "true")

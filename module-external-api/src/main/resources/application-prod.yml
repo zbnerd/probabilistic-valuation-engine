@@ -1,0 +1,11 @@
+# Docker Compose production profile
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+
+external-api:
+  store:
+    base-path: /data

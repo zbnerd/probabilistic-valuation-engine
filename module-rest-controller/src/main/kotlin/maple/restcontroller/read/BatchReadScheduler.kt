@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.http.ResponseEntity
 import org.springframework.scheduling.annotation.Scheduled
+import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 class BatchReadScheduler(
@@ -85,31 +86,27 @@ class BatchReadScheduler(
 
         // 2. Resolve cache hits directly
         cacheHits.forEach { (userIgn, response) ->
-            val deferreds = registry.getAndRemove(userIgn)
+            val deferreds = registry.getAndRemove(userIgn, response.presetNo)
             metrics.recordHit()
             metrics.recordRedisHit()
             deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
             resolved++
         }
 
-        // 3. DB batch query for cache misses only (skip characters with urgent pending)
+        // 3. DB batch query for cache misses, including urgent-pending keys.
         if (cacheMisses.isNotEmpty()) {
-            val dbLookupCandidates = cacheMisses.filterKeys { userIgn ->
-                !cacheService.isUrgentPending(userIgn)
-            }
-
-            val dbResults = if (dbLookupCandidates.isNotEmpty()) {
-                queryService.batchQuery(dbLookupCandidates)
-            } else {
-                emptyMap()
-            }
+            val dbResults = queryService.batchQuery(
+                cacheMisses,
+                Duration.ofSeconds(properties.readModelFreshnessSeconds),
+            )
 
             // 4. Write DB results to Redis cache
             cacheService.multiPut(dbResults)
 
             // 5. Resolve miss deferreds
             cacheMisses.keys.forEach { userIgn ->
-                val deferreds = registry.getAndRemove(userIgn)
+                val presetNo = cacheMisses[userIgn] ?: 1
+                val deferreds = registry.getAndRemove(userIgn, presetNo)
                 val response = dbResults[userIgn]
 
                 if (response != null) {
@@ -132,7 +129,6 @@ class BatchReadScheduler(
 
                     // Trigger urgent pipeline (with dedup via Redis SETNX)
                     if (urgentPublisher != null && cacheService.tryMarkUrgentPending(userIgn)) {
-                        val presetNo = cacheMisses[userIgn] ?: 1
                         urgentPublisher.publish(UrgentCharacterRequest(userIgn = userIgn, presetNo = presetNo))
                         metrics.urgentTriggerTotal.increment()
                         log.info("Triggered urgent pipeline: userIgn={}", maskIgn(userIgn))

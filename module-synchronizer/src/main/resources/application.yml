@@ -35,8 +35,15 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: earliest
       enable-auto-commit: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
     listener:
       ack-mode: manual_immediate
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 synchronizer:
   kafka:
@@ -46,10 +53,22 @@ synchronizer:
     basic-consumer-group-id: synchronizer-basic-chunk-consumer
     urgent-basic-chunk-ready-topic: external-api.urgent.snapshot.chunk-ready
     urgent-basic-consumer-group-id: synchronizer-urgent-basic-chunk-consumer
+    ocid-lookup-enabled: true
+    ocid-lookup-topic: external-api.ocid.lookup-ready
+    ocid-lookup-consumer-group-id: synchronizer-ocid-lookup-consumer
+    chunk-consumed-topic: synchronizer.chunk.consumed
+  events:
+    consumed:
+      enabled: true
   store:
-    base-path: ../module-external-api/external-api-data
+    base-path: ../data
   chunk:
     max-rows: 100000
+  ranking:
+    enabled: true
+    key-prefix: ranking:equipment:total-cost
+    batch-size: 1000
+    top-size: 10
 
 management:
   endpoints:

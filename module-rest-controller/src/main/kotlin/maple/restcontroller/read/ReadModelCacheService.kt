@@ -18,6 +18,7 @@ class ReadModelCacheService(
         private const val KEY_PREFIX = "v6:read"
         private const val NEGATIVE_KEY_PREFIX = "v6:not-found"
         private const val URGENT_PENDING_PREFIX = "v6:urgent-pending"
+        private const val URGENT_STATUS_QUEUE_KEY = "v6:urgent:status-queue"
     }
 
     fun cacheKey(userIgn: String, presetNo: Int): String =
@@ -58,20 +59,32 @@ class ReadModelCacheService(
     }
 
     /**
-     * Write DB results to Redis cache with TTL.
+     * Write DB results to Redis cache with TTL using pipeline (1 RTT).
      */
     fun multiPut(results: Map<String, V6ExpectationResponse>) {
         if (results.isEmpty()) return
 
-        val ttl = Duration.ofSeconds(properties.cacheTtlSeconds)
-        results.forEach { (userIgn, response) ->
-            val key = cacheKey(userIgn, response.presetNo)
-            val json = objectMapper.writeValueAsString(response)
-            redisTemplate.opsForValue().set(key, json, ttl)
-            clearUrgentPending(userIgn)
+        val ttl = properties.cacheTtlSeconds
+        val pendingKeys = mutableListOf<String>()
+        val statusMembers = mutableListOf<String>()
+
+        redisTemplate.executePipelined { connection ->
+            results.forEach { (userIgn, response) ->
+                val key = cacheKey(userIgn, response.presetNo).toByteArray()
+                val json = objectMapper.writeValueAsBytes(response)
+                connection.stringCommands().setEx(key, ttl, json)
+                pendingKeys.add(urgentPendingKey(userIgn))
+                statusMembers.add(userIgn)
+            }
+            null
         }
 
-        log.debug("Redis cache write: {} entries, TTL={}s", results.size, ttl.seconds)
+        if (pendingKeys.isNotEmpty()) {
+            redisTemplate.delete(pendingKeys)
+            redisTemplate.opsForZSet().remove(URGENT_STATUS_QUEUE_KEY, *statusMembers.toTypedArray())
+        }
+
+        log.debug("Redis cache write (pipeline): {} entries, TTL={}s", results.size, ttl)
     }
 
     // --- Negative cache (non-existent characters) ---
@@ -84,6 +97,8 @@ class ReadModelCacheService(
 
     fun setNegativeCache(userIgn: String, ttlSeconds: Long) {
         redisTemplate.opsForValue().set(negativeCacheKey(userIgn), "NOT_FOUND", Duration.ofSeconds(ttlSeconds))
+        clearUrgentPending(userIgn)
+        removeUrgentStatus(userIgn)
         log.info("Set negative cache: userIgn={}", maskIgn(userIgn))
     }
 
@@ -93,7 +108,12 @@ class ReadModelCacheService(
 
     fun tryMarkUrgentPending(userIgn: String): Boolean {
         val result = redisTemplate.opsForValue()
-            .setIfAbsent(urgentPendingKey(userIgn), "1", Duration.ofSeconds(properties.urgentPendingTtlSeconds))
+            .setIfAbsent(urgentPendingKey(userIgn), System.currentTimeMillis().toString(), Duration.ofSeconds(properties.urgentPendingTtlSeconds))
+        if (result == true) {
+            redisTemplate.opsForZSet().add(URGENT_STATUS_QUEUE_KEY, userIgn, System.currentTimeMillis().toDouble())
+        } else if (isUrgentPending(userIgn) && redisTemplate.opsForZSet().rank(URGENT_STATUS_QUEUE_KEY, userIgn) == null) {
+            redisTemplate.opsForZSet().add(URGENT_STATUS_QUEUE_KEY, userIgn, System.currentTimeMillis().toDouble())
+        }
         return result == true
     }
 
@@ -102,5 +122,40 @@ class ReadModelCacheService(
 
     fun clearUrgentPending(userIgn: String) {
         redisTemplate.delete(urgentPendingKey(userIgn))
+    }
+
+    fun statusUrl(userIgn: String, presetNo: Int): String = "/api/v6/characters/$userIgn/status?presetNo=$presetNo"
+
+    fun status(userIgn: String, presetNo: Int): UrgentReadStatusResponse {
+        val state = when {
+            hasReadyCache(userIgn, presetNo) -> UrgentReadState.READY
+            getNegativeCache(userIgn) -> UrgentReadState.NOT_FOUND
+            isUrgentPending(userIgn) -> UrgentReadState.PENDING
+            else -> UrgentReadState.UNKNOWN
+        }
+        val position = if (state == UrgentReadState.PENDING) queuePosition(userIgn) else null
+        return UrgentReadStatusResponse(
+            state = state,
+            userIgn = userIgn,
+            statusUrl = statusUrl(userIgn, presetNo),
+            queuePositionApprox = position,
+            estimatedWaitSeconds = position?.let(::estimateWaitSeconds),
+            retryAfterSeconds = if (state == UrgentReadState.READY || state == UrgentReadState.NOT_FOUND) 0 else properties.statusRetryAfterSeconds,
+        )
+    }
+
+    private fun hasReadyCache(userIgn: String, presetNo: Int): Boolean =
+        redisTemplate.hasKey(cacheKey(userIgn, presetNo))
+
+    private fun queuePosition(userIgn: String): Long? =
+        redisTemplate.opsForZSet().rank(URGENT_STATUS_QUEUE_KEY, userIgn)?.plus(1)
+
+    private fun estimateWaitSeconds(queuePosition: Long): Long {
+        val throughput = properties.statusEstimatedThroughputPerSecond.takeIf { it > 0.0 } ?: 1.0
+        return kotlin.math.ceil(queuePosition / throughput).toLong().coerceAtLeast(1)
+    }
+
+    private fun removeUrgentStatus(userIgn: String) {
+        redisTemplate.opsForZSet().remove(URGENT_STATUS_QUEUE_KEY, userIgn)
     }
 }

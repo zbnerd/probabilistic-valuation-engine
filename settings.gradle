@@ -16,3 +16,15 @@ include 'module-chaos-test'
 
 // ADR-017: Web layer (GlobalExceptionHandler, Filter)
 include 'module-web'
+
+// External API data collection module (Nexon API → Local Storage)
+include 'module-external-api'
+
+// Calculator module (Kafka-driven chunk processing)
+include 'module-calculator'
+
+// Synchronizer module (Calculator result files → DB sync)
+include 'module-synchronizer'
+
+// Standalone REST Controller module
+include 'module-rest-controller'

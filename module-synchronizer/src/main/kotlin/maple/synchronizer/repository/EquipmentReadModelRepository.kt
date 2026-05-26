@@ -1,0 +1,80 @@
+package maple.synchronizer.repository
+
+import maple.synchronizer.preparer.PreppedDocument
+import org.slf4j.LoggerFactory
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import org.springframework.stereotype.Repository
+
+@Repository
+class EquipmentReadModelRepository(
+    private val jdbc: NamedParameterJdbcTemplate,
+    private val batchExecutor: JdbcChunkedBatchExecutor,
+) {
+    private val log = LoggerFactory.getLogger(EquipmentReadModelRepository::class.java)
+
+    companion object {
+        private const val SUB_BATCH_SIZE = 100
+    }
+
+    fun bulkUpsert(runId: String, chunkId: String, documents: List<PreppedDocument>) {
+        val compSizes = documents.map { it.compressed.size }
+
+        log.info("[Synchronizer] upsert start: docs={} batches={} batchSize={} " +
+            "compressedBytes avg={} max={} total={} : runId={} chunkId={}",
+            documents.size, documents.chunked(SUB_BATCH_SIZE).size, SUB_BATCH_SIZE,
+            compSizes.average().toInt(), compSizes.max(), compSizes.sum(),
+            runId, chunkId)
+
+        batchExecutor.execute(
+            label = "Synchronizer",
+            itemLabel = "docs",
+            runId = runId,
+            chunkId = chunkId,
+            items = documents,
+            batchSize = SUB_BATCH_SIZE,
+            upsertBatch = { batch -> upsertBatch(runId, chunkId, batch) },
+        )
+    }
+
+    private fun upsertBatch(runId: String, chunkId: String, batch: List<PreppedDocument>): Int {
+        val sql = """
+            INSERT INTO character_equipment_read_model (
+                read_key, ocid, preset_no, user_ign, document, document_hash,
+                total_cost, equipment_count, calculated_at,
+                source_run_id, source_chunk_id, updated_at
+            )
+            SELECT
+                unnest(:readKeys), unnest(:ocids), unnest(:presetNos),
+                unnest(:userIgns), unnest(:documents), unnest(:documentHashes),
+                unnest(:totalCosts), unnest(:equipmentCounts), unnest(:calculatedAts),
+                :runId, :chunkId, now()
+            ON CONFLICT (read_key) DO UPDATE SET
+                user_ign = excluded.user_ign,
+                document = excluded.document,
+                document_hash = excluded.document_hash,
+                total_cost = excluded.total_cost,
+                equipment_count = excluded.equipment_count,
+                calculated_at = excluded.calculated_at,
+                source_run_id = excluded.source_run_id,
+                source_chunk_id = excluded.source_chunk_id,
+                updated_at = now()
+            WHERE character_equipment_read_model.document_hash IS DISTINCT FROM excluded.document_hash
+               OR character_equipment_read_model.user_ign IS DISTINCT FROM excluded.user_ign
+        """.trimIndent()
+
+        return jdbc.update(sql, MapSqlParameterSource()
+            .addValue("runId", runId)
+            .addValue("chunkId", chunkId)
+            .addValue("readKeys", batch.map { it.readKey }.toTypedArray())
+            .addValue("ocids", batch.map { it.ocid }.toTypedArray())
+            .addValue("presetNos", batch.map { it.presetNo }.toTypedArray())
+            .addValue("userIgns", batch.map { it.userIgn }.toTypedArray())
+            .addValue("documents", batch.map { it.compressed }.toTypedArray())
+            .addValue("documentHashes", batch.map { it.documentHash }.toTypedArray())
+            .addValue("totalCosts", batch.map { it.totalCost }.toTypedArray())
+            .addValue("equipmentCounts", batch.map { it.equipmentCount }.toTypedArray())
+            .addValue("calculatedAts", batch.map { it.calculatedAt }.toTypedArray())
+        )
+    }
+}

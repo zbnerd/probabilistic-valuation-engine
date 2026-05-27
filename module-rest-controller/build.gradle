@@ -50,7 +50,7 @@ dependencies {
 bootJar {
 	enabled = true
 	archiveClassifier = ""
-	mainClass.set("maple.restcontroller.RestControllerApplication")
+	mainClass.set("maple.restcontroller.RestControllerApplicationKt")
 }
 
 tasks.named("jar") {

@@ -5,14 +5,22 @@ import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotEventProperties
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycleCoordinator
 import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Import
 import org.springframework.scheduling.annotation.EnableScheduling
 
-@SpringBootApplication(scanBasePackages = [
-    "maple.externalapi",
-    "maple.expectation.infrastructure.executor",
-])
+@SpringBootApplication(
+    scanBasePackages = [
+        "maple.externalapi",
+        "maple.expectation.infrastructure.executor",
+    ],
+    exclude = [
+        SecurityAutoConfiguration::class,
+        SecurityFilterAutoConfiguration::class,
+    ]
+)
 @Import(
     maple.expectation.infrastructure.config.ExecutorConfig::class,
     ManagedLifecycleCoordinator::class,

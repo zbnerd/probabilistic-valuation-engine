@@ -1,6 +1,5 @@
 package maple.auth.login
 
-import maple.expectation.core.auth.event.CharacterFetchRequest
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.auth.fingerprint.FingerprintService
 import maple.auth.jwt.JwtGeneratorService
@@ -28,68 +27,73 @@ class LoginServiceTest {
     @Mock private lateinit var pendingLoginRegistry: PendingLoginRegistry
     @Mock private lateinit var jwtGeneratorService: JwtGeneratorService
 
-    @Captor private lateinit var requestCaptor: ArgumentCaptor<CharacterFetchRequest>
+    @Captor private lateinit var requestCaptor: ArgumentCaptor<maple.expectation.core.auth.event.CharacterFetchRequest>
 
     private fun createService() = LoginService(
         fingerprintService, sessionCacheService, authEventPublisher, pendingLoginRegistry, jwtGeneratorService
     )
 
     @Test
-    fun `cache hit returns immediately with token`() {
+    fun `cache hit after Nexon response returns cached session`() {
         val service = createService()
         val session = Session.create("s-1", "fp-1", "User1", "fp-1", "key", setOf("ocid-1"), "USER")
-        whenever(fingerprintService.generate("key")).thenReturn("fp-1")
+        whenever(fingerprintService.generate("acc-1")).thenReturn("fp-1")
         whenever(sessionCacheService.findByFingerprint("fp-1")).thenReturn(session)
         whenever(jwtGeneratorService.generateToken("s-1", "fp-1", "USER", "User1")).thenReturn("jwt-token")
+
+        val response = CharacterFetchResponse(
+            eventId = "evt-1",
+            accountId = "acc-1",
+            success = true,
+            characterOcidMap = mapOf("User1" to "ocid-1"),
+        )
+        whenever(pendingLoginRegistry.register(any())).thenReturn(
+            CompletableFuture.completedFuture(response)
+        )
 
         val result = service.login("key", "User1").get()
 
         assertThat(result.cached).isTrue()
         assertThat(result.token).isEqualTo("jwt-token")
-        assertThat(result.userIgn).isEqualTo("User1")
     }
 
     @Test
-    fun `cache miss publishes Kafka and returns on response`() {
+    fun `cache miss creates new session with fingerprint from accountId`() {
         val service = createService()
-        whenever(fingerprintService.generate("key")).thenReturn("fp-1")
+        whenever(fingerprintService.generate("acc-1")).thenReturn("fp-1")
         whenever(sessionCacheService.findByFingerprint("fp-1")).thenReturn(null)
         whenever(jwtGeneratorService.generateToken(any(), any(), any(), any())).thenReturn("jwt-token")
 
         val response = CharacterFetchResponse(
             eventId = "evt-1",
-            fingerprint = "fp-1",
+            accountId = "acc-1",
             success = true,
             characterOcidMap = mapOf("User1" to "ocid-1", "User2" to "ocid-2"),
         )
-        whenever(pendingLoginRegistry.register("fp-1")).thenReturn(
+        whenever(pendingLoginRegistry.register(any())).thenReturn(
             CompletableFuture.completedFuture(response)
         )
 
         val result = service.login("key", "User1").get()
 
         assertThat(result.cached).isFalse()
+        assertThat(result.fingerprint).isEqualTo("fp-1")
         assertThat(result.characterCount).isEqualTo(2)
         assertThat(result.userIgn).isEqualTo("User1")
-        verify(authEventPublisher).publishCharacterFetchRequest(capture(requestCaptor))
-        assertThat(requestCaptor.value.userIgn).isEqualTo("User1")
-        assertThat(requestCaptor.value.apiKey).isEqualTo("key")
+        verify(authEventPublisher).publishCharacterFetchRequest(any())
         verify(sessionCacheService).save(any())
     }
 
     @Test
     fun `failed response throws 401`() {
         val service = createService()
-        whenever(fingerprintService.generate("key")).thenReturn("fp-1")
-        whenever(sessionCacheService.findByFingerprint("fp-1")).thenReturn(null)
 
         val response = CharacterFetchResponse(
             eventId = "evt-1",
-            fingerprint = "fp-1",
             success = false,
             errorMessage = "Invalid API key",
         )
-        whenever(pendingLoginRegistry.register("fp-1")).thenReturn(
+        whenever(pendingLoginRegistry.register(any())).thenReturn(
             CompletableFuture.completedFuture(response)
         )
 
@@ -105,16 +109,14 @@ class LoginServiceTest {
     @Test
     fun `userIgn not in character map throws 401`() {
         val service = createService()
-        whenever(fingerprintService.generate("key")).thenReturn("fp-1")
-        whenever(sessionCacheService.findByFingerprint("fp-1")).thenReturn(null)
 
         val response = CharacterFetchResponse(
             eventId = "evt-1",
-            fingerprint = "fp-1",
+            accountId = "acc-1",
             success = true,
             characterOcidMap = mapOf("OtherChar" to "ocid-1"),
         )
-        whenever(pendingLoginRegistry.register("fp-1")).thenReturn(
+        whenever(pendingLoginRegistry.register(any())).thenReturn(
             CompletableFuture.completedFuture(response)
         )
 

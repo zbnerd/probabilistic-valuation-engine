@@ -133,7 +133,7 @@ class RateLimitingFacadeExampleTest : UsecaseTestTemplate() {
     @DisplayName("Admin 사용자 - Rate Limit 우회")
     fun `Admin 사용자는 Rate Limit 우회`() {
         // Given
-        val adminUser = maple.expectation.infrastructure.security.AuthenticatedUser(
+        val adminUser = maple.expectation.core.domain.model.security.AuthenticatedUser(
             sessionId = "session-123",
             fingerprint = "admin-123",
             userIgn = "admin",

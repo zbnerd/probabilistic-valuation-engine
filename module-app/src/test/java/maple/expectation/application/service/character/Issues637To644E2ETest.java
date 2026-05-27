@@ -25,7 +25,7 @@ import maple.expectation.domain.repository.GameCharacterRepository;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.infrastructure.character.notify.CharacterCreationListener;
 import maple.expectation.infrastructure.executor.LogicExecutor;
-import maple.expectation.infrastructure.security.jwt.JwtPayload;
+import maple.expectation.core.auth.JwtPayload;
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider;
 import maple.expectation.support.TestLogicExecutors;
 import org.junit.jupiter.api.BeforeEach;

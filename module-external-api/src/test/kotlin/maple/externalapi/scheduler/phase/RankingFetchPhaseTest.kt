@@ -20,10 +20,14 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 
 class RankingFetchPhaseTest {
+
+    private val testDate = LocalDate.now().minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
 
     @TempDir
     lateinit var tempDir: Path
@@ -68,11 +72,11 @@ class RankingFetchPhaseTest {
 
     @Test
     fun `execute returns runDir and creates gzip chunks`() {
-        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:1"))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "$testDate:1"))
             .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerA", "PlayerB")))
-        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:2"))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "$testDate:2"))
             .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerC", "PlayerD")))
-        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:3"))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "$testDate:3"))
             .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerE")))
 
         val resultPath = phase.execute(executor).join()
@@ -91,11 +95,11 @@ class RankingFetchPhaseTest {
 
     @Test
     fun `execute continues on page failure`() {
-        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:1"))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "$testDate:1"))
             .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerA")))
-        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:2"))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "$testDate:2"))
             .thenReturn(CompletableFuture.failedFuture(RuntimeException("API error")))
-        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:3"))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "$testDate:3"))
             .thenReturn(CompletableFuture.completedFuture(rankingJson("PlayerC")))
 
         val resultPath = phase.execute(executor).join()
@@ -109,11 +113,11 @@ class RankingFetchPhaseTest {
     @Test
     fun `execute skips entries without character_name`() {
         val json = """{"ranking":[{"ranking":1,"character_name":"ValidName","world_name":"크로아"},{"ranking":2,"world_name":"크로아"}]}""".toByteArray()
-        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:1"))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "$testDate:1"))
             .thenReturn(CompletableFuture.completedFuture(json))
-        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:2"))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "$testDate:2"))
             .thenReturn(CompletableFuture.completedFuture("""{"ranking":[]}""".toByteArray()))
-        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-05-20:3"))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "$testDate:3"))
             .thenReturn(CompletableFuture.completedFuture("""{"ranking":[]}""".toByteArray()))
 
         val resultPath = phase.execute(executor).join()

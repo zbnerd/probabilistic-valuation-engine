@@ -1,8 +1,10 @@
 # 코드 규칙 (Code Rules)
 
-## 1. Zero Try-Catch Policy & LogicExecutor
+## 1. LogicExecutor 우선 정책
 
-**모든 패키지**에서 `try-catch` 및 `try-finally` 블록 사용 금지. 모든 실행 흐름과 예외 처리는 **LogicExecutor**에 위임.
+**module-infra, module-app, module-web** 등 LogicExecutor에 접근 가능한 모듈에서는 `try-catch` / `try-finally` 대신 **LogicExecutor** 위임을 권장.
+
+**module-rest-controller** 등 LogicExecutor 의존이 없는 경량 모듈에서는 Spring 예외 전파(`@RestControllerAdvice` 등) 허용.
 
 | 패턴 | 메서드 | 용도 |
 |------|--------|------|
@@ -14,7 +16,7 @@
 | 6 | `executeWithFinally(task, finalizer, context)` | 자원 해제 등 finally 필요 시 |
 | 7 | `executeWithTranslation(task, translator, context)` | 기술적 예외를 도메인 예외로 변환 |
 
-**허용 예외:** LogicExecutor 구현체 내부, AOP 순환참조 방지
+**LogicExecutor 없는 모듈 예외 처리:** Spring `@RestControllerAdvice` + 예외 자연 전파. `runCatching` 허용. raw `try-catch`는 마지막 수단으로 제한.
 
 ## 2. Anti-Pattern: Lambda Hell
 

@@ -11,7 +11,7 @@ import java.io.IOException
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.security.AuthenticatedUser
+import maple.expectation.core.domain.model.security.AuthenticatedUser
 import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.slf4j.LoggerFactory
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken

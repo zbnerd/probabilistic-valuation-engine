@@ -2,21 +2,27 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add login endpoint that authenticates via Nexon API key, resolves user's characters, and issues JWT — using a new module-auth with Kafka-based async character fetch via external-api.
+**Goal:** Add login endpoint that authenticates via Nexon API key + userIgn, resolves user's characters, and issues JWT — using module-auth with Kafka-based async character fetch via external-api.
 
-**Architecture:** Single Kafka round-trip (Approach A). module-auth orchestrates: fingerprint generation → Redis cache check → Kafka request → CompletableFuture wait (30s timeout) → session create → JWT issue. external-api handles Nexon character list API call and DB writes.
+**Architecture:** module-auth orchestrates via CompletableFuture chaining (no `.join()`): fingerprint generation → Redis cache check → Kafka request → CF wait (30s timeout) → session create → JWT issue. external-api handles Nexon HTTP call on virtual thread, writes JSONL.gz chunk for Synchronizer, publishes response asynchronously. Async model: IO-bound (HTTP, DB, file, Kafka) → virtual threads; CPU-bound (HMAC, JWT signing) → coroutines; sequential ordering → CF `thenCompose`/`thenApply`.
 
-**Tech Stack:** Kotlin, Spring Boot, Spring Kafka, Spring Data Redis, JJWT 0.12.6, Jackson, PostgreSQL (JDBC)
+**Tech Stack:** Kotlin, Spring Boot, Spring Kafka, Spring Data Redis, JJWT 0.12.6, Jackson, PostgreSQL (JDBC), Virtual Threads (IO), Kotlin Coroutines (CPU)
 
 ---
 
 ## File Structure
 
+### New files — module-common (shared utility)
+```
+module-common/src/main/kotlin/maple/expectation/common/util/
+└── FingerprintUtil.kt                       — Pure HMAC-SHA256 (no Spring)
+```
+
 ### New files — module-core (shared event DTOs)
 ```
 module-core/src/main/kotlin/maple/expectation/core/auth/event/
-├── CharacterFetchRequest.kt          — Kafka request DTO
-└── CharacterFetchResponse.kt         — Kafka response DTO
+├── CharacterFetchRequest.kt                 — Kafka request DTO
+└── CharacterFetchResponse.kt                — Kafka response DTO
 ```
 
 ### New files — module-auth
@@ -25,35 +31,36 @@ module-auth/
 ├── build.gradle
 └── src/main/kotlin/maple/auth/
     ├── fingerprint/
-    │   └── FingerprintService.kt             — HMAC-SHA256 from API key
+    │   └── FingerprintService.kt            — Thin Spring wrapper around FingerprintUtil
     ├── jwt/
-    │   └── JwtGeneratorService.kt            — JWT token generation
+    │   └── JwtGeneratorService.kt           — JWT token generation
     ├── login/
-    │   ├── LoginService.kt                   — Core orchestration
-    │   └── LoginResult.kt                    — Result DTO
+    │   ├── LoginService.kt                  — Core orchestration
+    │   └── LoginResult.kt                   — Result DTO
     ├── session/
-    │   └── SessionCacheService.kt            — Redis session cache
+    │   └── SessionCacheService.kt           — Redis session cache
     └── kafka/
-        ├── AuthEventPublisher.kt             — Kafka producer
-        ├── AuthResponseConsumer.kt           — Kafka consumer
-        └── PendingLoginRegistry.kt           — CF correlation registry
+        ├── AuthEventPublisher.kt            — Kafka producer
+        ├── AuthResponseConsumer.kt          — Kafka consumer
+        └── PendingLoginRegistry.kt          — CF correlation registry
 ```
 
 ### New files — rest-controller
 ```
 module-rest-controller/src/main/kotlin/maple/restcontroller/controller/v6/
-    └── AuthController.kt                     — POST /api/v6/auth/login
+    └── AuthController.kt                    — POST /api/v6/auth/login
 ```
 
 ### New files — external-api
 ```
 module-external-api/src/main/kotlin/maple/externalapi/auth/
-    ├── AuthCharacterFetchConsumer.kt         — Kafka consumer for auth requests
-    └── NexonCharacterListAdapter.kt          — Nexon /character/list API call
+    └── AuthCharacterFetchConsumer.kt        — Kafka consumer (uses existing NexonAuthClient)
 ```
 
 ### Modified files
 ```
+module-common/build.gradle                   — (no change needed, no new deps)
+module-infra/.../security/FingerprintGenerator.kt — delegate to FingerprintUtil
 module-rest-controller/build.gradle           — add module-auth dependency
 module-rest-controller/.../RestControllerApplication.kt — expand component scan
 module-rest-controller/src/main/resources/application.yml — auth topics
@@ -65,7 +72,86 @@ settings.gradle                               — add module-auth
 
 ---
 
-## Task 1: Create module-auth skeleton
+## Task 1: Extract FingerprintUtil to module-common
+
+**Files:**
+- Create: `module-common/src/main/kotlin/maple/expectation/common/util/FingerprintUtil.kt`
+- Modify: `module-infra/src/main/kotlin/maple/expectation/infrastructure/security/FingerprintGenerator.kt`
+
+- [ ] **Step 1: Create FingerprintUtil**
+
+Pure HMAC-SHA256 utility. No Spring, no LogicExecutor — just crypto.
+
+```kotlin
+package maple.expectation.common.util
+
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.util.Base64
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+
+object FingerprintUtil {
+    private const val HMAC_ALGORITHM = "HmacSHA256"
+
+    fun generate(apiKey: String, serverSecret: String): String {
+        require(apiKey.isNotBlank()) { "apiKey must not be blank" }
+        val mac = Mac.getInstance(HMAC_ALGORITHM)
+        mac.init(SecretKeySpec(serverSecret.toByteArray(StandardCharsets.UTF_8), HMAC_ALGORITHM))
+        val hash = mac.doFinal(apiKey.toByteArray(StandardCharsets.UTF_8))
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(hash)
+    }
+
+    fun verify(apiKey: String, fingerprint: String, serverSecret: String): Boolean {
+        val computed = generate(apiKey, serverSecret)
+        return MessageDigest.isEqual(
+            computed.toByteArray(StandardCharsets.UTF_8),
+            fingerprint.toByteArray(StandardCharsets.UTF_8),
+        )
+    }
+}
+```
+
+- [ ] **Step 2: Refactor FingerprintGenerator to delegate**
+
+Replace the HMAC logic in `FingerprintGenerator` with delegation to `FingerprintUtil`:
+
+```kotlin
+// In FingerprintGenerator.kt, replace generate() and verify() bodies:
+fun generate(apiKey: String?): String {
+    validateApiKey(apiKey)
+    val key = requireNotNull(apiKey) { "apiKey must not be null after validation" }
+    val context = TaskContext.of("Fingerprint", "ComputeHmac", "***")
+    return executor.execute({ FingerprintUtil.generate(key, String(serverSecretBytes, StandardCharsets.UTF_8)) }, context)
+}
+
+fun verify(apiKey: String?, fingerprint: String?): Boolean {
+    if (apiKey == null || fingerprint == null) return false
+    val computed = generate(apiKey)
+    MessageDigest.isEqual(
+        computed.toByteArray(StandardCharsets.UTF_8),
+        fingerprint.toByteArray(StandardCharsets.UTF_8),
+    )
+}
+```
+
+Note: store `serverSecret` as String field alongside `serverSecretBytes` for FingerprintUtil access. Or pass `String(serverSecretBytes, StandardCharsets.UTF_8)` — but this allocates per call. Prefer storing the original String.
+
+- [ ] **Step 3: Verify compilation**
+
+Run: `./gradlew :module-common:compileKotlin :module-infra:compileKotlin --continue`
+Expected: BUILD SUCCESSFUL
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add module-common/ module-infra/
+git commit -m "refactor: extract FingerprintUtil to module-common"
+```
+
+---
+
+## Task 2: Create module-auth skeleton
 
 **Files:**
 - Create: `module-auth/build.gradle`
@@ -121,7 +207,7 @@ git commit -m "feat(auth): add module-auth skeleton"
 
 ---
 
-## Task 2: Define Kafka event DTOs (in module-core)
+## Task 3: Define Kafka event DTOs (in module-core)
 
 **Files:**
 - Create: `module-core/src/main/kotlin/maple/expectation/core/auth/event/CharacterFetchRequest.kt`
@@ -145,6 +231,7 @@ data class CharacterFetchRequest(
     val eventId: String = UUID.randomUUID().toString(),
     val eventType: String = "AUTH_CHARACTER_FETCH_REQUESTED",
     val fingerprint: String,
+    val userIgn: String,
     val apiKey: String,
     val requestedAt: Instant = Instant.now(),
 ) {
@@ -152,7 +239,7 @@ data class CharacterFetchRequest(
 }
 ```
 
-- [ ] **Step 2: Create CharacterFetchResponse**
+- [ ] **Step 3: Create CharacterFetchResponse**
 
 ```kotlin
 package maple.expectation.core.auth.event
@@ -163,7 +250,9 @@ data class CharacterFetchResponse(
     val eventId: String,
     val eventType: String = "AUTH_CHARACTER_FETCH_COMPLETED",
     val fingerprint: String,
-    val characterOcidMap: Map<String, String>,  // userIgn -> ocid
+    val success: Boolean,
+    val errorMessage: String? = null,
+    val characterOcidMap: Map<String, String> = emptyMap(),
     val failedIgn: List<String> = emptyList(),
     val completedAt: Instant = Instant.now(),
 ) {
@@ -171,21 +260,21 @@ data class CharacterFetchResponse(
 }
 ```
 
-- [ ] **Step 3: Compile**
+- [ ] **Step 4: Compile**
 
-Run: `./gradlew :module-auth:compileKotlin`
+Run: `./gradlew :module-core:compileKotlin`
 Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add module-auth/
-git commit -m "feat(auth): add Kafka event DTOs"
+git add module-core/
+git commit -m "feat(auth): add Kafka event DTOs with userIgn and error fields"
 ```
 
 ---
 
-## Task 3: Implement FingerprintService
+## Task 4: Implement FingerprintService (thin wrapper)
 
 **Files:**
 - Create: `module-auth/src/main/kotlin/maple/auth/fingerprint/FingerprintService.kt`
@@ -195,33 +284,18 @@ git commit -m "feat(auth): add Kafka event DTOs"
 ```kotlin
 package maple.auth.fingerprint
 
+import maple.expectation.common.util.FingerprintUtil
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.nio.charset.StandardCharsets
-import java.util.Base64
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 @Component
 class FingerprintService(
     @Value("\${auth.fingerprint.secret}") private val serverSecret: String,
 ) {
-    private val secretBytes = serverSecret.toByteArray(StandardCharsets.UTF_8)
+    fun generate(apiKey: String): String = FingerprintUtil.generate(apiKey, serverSecret)
 
-    fun generate(apiKey: String): String {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(secretBytes, "HmacSHA256"))
-        val hash = mac.doFinal(apiKey.toByteArray(StandardCharsets.UTF_8))
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(hash)
-    }
-
-    fun verify(apiKey: String, fingerprint: String): Boolean {
-        val computed = generate(apiKey)
-        return java.security.MessageDigest.isEqual(
-            computed.toByteArray(StandardCharsets.UTF_8),
-            fingerprint.toByteArray(StandardCharsets.UTF_8),
-        )
-    }
+    fun verify(apiKey: String, fingerprint: String): Boolean =
+        FingerprintUtil.verify(apiKey, fingerprint, serverSecret)
 }
 ```
 
@@ -234,12 +308,12 @@ Expected: BUILD SUCCESSFUL
 
 ```bash
 git add module-auth/
-git commit -m "feat(auth): add FingerprintService"
+git commit -m "feat(auth): add FingerprintService wrapping FingerprintUtil"
 ```
 
 ---
 
-## Task 4: Implement PendingLoginRegistry
+## Task 5: Implement PendingLoginRegistry
 
 **Files:**
 - Create: `module-auth/src/main/kotlin/maple/auth/kafka/PendingLoginRegistry.kt`
@@ -299,7 +373,7 @@ git commit -m "feat(auth): add PendingLoginRegistry for CF correlation"
 
 ---
 
-## Task 5: Implement SessionCacheService
+## Task 6: Implement SessionCacheService
 
 **Files:**
 - Create: `module-auth/src/main/kotlin/maple/auth/session/SessionCacheService.kt`
@@ -316,7 +390,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Component
 import java.time.Duration
-import java.time.Instant
 
 @Component
 class SessionCacheService(
@@ -361,7 +434,7 @@ git commit -m "feat(auth): add SessionCacheService with Redis"
 
 ---
 
-## Task 6: Implement JwtGeneratorService
+## Task 7: Implement JwtGeneratorService
 
 **Files:**
 - Create: `module-auth/src/main/kotlin/maple/auth/jwt/JwtGeneratorService.kt`
@@ -436,7 +509,7 @@ git commit -m "feat(auth): add JwtGeneratorService"
 
 ---
 
-## Task 7: Implement AuthEventPublisher and AuthResponseConsumer
+## Task 8: Implement AuthEventPublisher and AuthResponseConsumer
 
 **Files:**
 - Create: `module-auth/src/main/kotlin/maple/auth/kafka/AuthEventPublisher.kt`
@@ -462,11 +535,11 @@ class AuthEventPublisher(
 ) {
     fun publishCharacterFetchRequest(request: CharacterFetchRequest) {
         val json = objectMapper.writeValueAsString(request)
-        kafkaTemplate.send(requestTopic, request.kafkaKey(), json).whenComplete { result, ex ->
+        kafkaTemplate.send(requestTopic, request.kafkaKey(), json).whenComplete { _, ex ->
             if (ex != null) {
                 log.error("[AuthEvent] failed to publish request: fingerprint={}", request.fingerprint, ex)
             } else {
-                log.debug("[AuthEvent] published request: fingerprint={}, topic={}", request.fingerprint, requestTopic)
+                log.debug("[AuthEvent] published request: fingerprint={}, userIgn={}", request.fingerprint, request.userIgn)
             }
         }
     }
@@ -506,7 +579,8 @@ class AuthResponseConsumer(
         @Header(KafkaHeaders.RECEIVED_KEY) messageKey: String?,
     ) {
         val response = objectMapper.readValue(message, CharacterFetchResponse::class.java)
-        log.debug("[AuthResponse] received: fingerprint={}, characters={}", response.fingerprint, response.characterOcidMap.size)
+        log.debug("[AuthResponse] received: fingerprint={}, success={}, characters={}",
+            response.fingerprint, response.success, response.characterOcidMap.size)
         pendingLoginRegistry.complete(response)
         acknowledgment.acknowledge()
     }
@@ -531,7 +605,7 @@ git commit -m "feat(auth): add Kafka publisher and consumer"
 
 ---
 
-## Task 8: Implement LoginService (core orchestration)
+## Task 9: Implement LoginService (core orchestration)
 
 **Files:**
 - Create: `module-auth/src/main/kotlin/maple/auth/login/LoginResult.kt`
@@ -546,6 +620,7 @@ data class LoginResult(
     val token: String,
     val sessionId: String,
     val fingerprint: String,
+    val userIgn: String,
     val characterCount: Int,
     val cached: Boolean,
 )
@@ -566,6 +641,9 @@ import maple.expectation.core.domain.auth.Session
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+
+class LoginRejectedException(val statusCode: Int, message: String) : RuntimeException(message)
 
 @Service
 class LoginService(
@@ -575,45 +653,56 @@ class LoginService(
     private val pendingLoginRegistry: PendingLoginRegistry,
     private val jwtGeneratorService: JwtGeneratorService,
 ) {
-    fun login(apiKey: String): LoginResult {
+    fun login(apiKey: String, userIgn: String): CompletableFuture<LoginResult> {
         val fingerprint = fingerprintService.generate(apiKey)
 
-        // 1. Check Redis cache
+        // 1. Check Redis cache (IO-bound, but fast — inline is fine)
         val cached = sessionCacheService.findByFingerprint(fingerprint)
         if (cached != null) {
             val token = jwtGeneratorService.generateToken(cached.sessionId, cached.fingerprint, cached.role, cached.userIgn)
             log.info("[Login] cache hit: fingerprint={}", fingerprint)
-            return LoginResult(token, cached.sessionId, fingerprint, cached.myOcids.size, cached = true)
+            return CompletableFuture.completedFuture(
+                LoginResult(token, cached.sessionId, fingerprint, cached.userIgn, cached.myOcids.size, cached = true)
+            )
         }
 
-        // 2. Publish Kafka request
-        val request = CharacterFetchRequest(fingerprint = fingerprint, apiKey = apiKey)
+        // 2. Publish Kafka request + register pending CF (fire request, then wait)
+        val request = CharacterFetchRequest(fingerprint = fingerprint, userIgn = userIgn, apiKey = apiKey)
         authEventPublisher.publishCharacterFetchRequest(request)
 
-        // 3. Wait for response (30s timeout via PendingLoginRegistry)
-        val response = pendingLoginRegistry.register(fingerprint).join()
+        // 3. Chain: wait for Kafka response → validate → create session → generate JWT
+        return pendingLoginRegistry.register(fingerprint)
+            .thenApply { response ->
+                // Validate response
+                if (!response.success) {
+                    log.warn("[Login] rejected: fingerprint={}, error={}", fingerprint, response.errorMessage)
+                    throw LoginRejectedException(401, response.errorMessage ?: "Authentication failed")
+                }
+                if (userIgn !in response.characterOcidMap) {
+                    log.warn("[Login] userIgn={} not found in Nexon character list", userIgn)
+                    throw LoginRejectedException(401, "Character '$userIgn' not found in account")
+                }
+                response
+            }
+            .thenApply { response ->
+                val sessionId = UUID.randomUUID().toString()
+                val myOcids = response.characterOcidMap.values.toSet()
 
-        // 4. Build session
-        val sessionId = UUID.randomUUID().toString()
-        val userIgn = response.characterOcidMap.keys.firstOrNull() ?: ""
-        val myOcids = response.characterOcidMap.values.toSet()
+                val session = Session.create(
+                    sessionId = sessionId,
+                    fingerprint = fingerprint,
+                    userIgn = userIgn,
+                    accountId = fingerprint,
+                    apiKey = apiKey,
+                    myOcids = myOcids,
+                    role = Session.ROLE_USER,
+                )
+                sessionCacheService.save(session)
 
-        val session = Session.create(
-            sessionId = sessionId,
-            fingerprint = fingerprint,
-            userIgn = userIgn,
-            accountId = fingerprint,
-            apiKey = apiKey,
-            myOcids = myOcids,
-            role = Session.ROLE_USER,
-        )
-        sessionCacheService.save(session)
-
-        // 5. Generate JWT
-        val token = jwtGeneratorService.generateToken(sessionId, fingerprint, "USER", userIgn)
-
-        log.info("[Login] success: fingerprint={}, characters={}", fingerprint, myOcids.size)
-        return LoginResult(token, sessionId, fingerprint, myOcids.size, cached = false)
+                val token = jwtGeneratorService.generateToken(sessionId, fingerprint, Session.ROLE_USER, userIgn)
+                log.info("[Login] success: fingerprint={}, userIgn={}, characters={}", fingerprint, userIgn, myOcids.size)
+                LoginResult(token, sessionId, fingerprint, userIgn, myOcids.size, cached = false)
+            }
     }
 
     companion object {
@@ -631,12 +720,12 @@ Expected: BUILD SUCCESSFUL
 
 ```bash
 git add module-auth/
-git commit -m "feat(auth): add LoginService orchestration"
+git commit -m "feat(auth): add LoginService orchestration with userIgn validation"
 ```
 
 ---
 
-## Task 9: Update rest-controller — LoginController + dependency
+## Task 10: Update rest-controller — AuthController + dependency
 
 **Files:**
 - Modify: `module-rest-controller/build.gradle`
@@ -662,12 +751,13 @@ class RestControllerApplication
 ```kotlin
 package maple.restcontroller.controller.v6
 
+import maple.auth.login.LoginRejectedException
 import maple.auth.login.LoginService
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
 
 @RestController
 @RequestMapping("/api/v6/auth")
@@ -675,30 +765,41 @@ import java.util.concurrent.Executors
 class AuthController(
     private val loginService: LoginService,
 ) {
-    private val loginExecutor = Executors.newVirtualThreadPerTaskExecutor()
-
     @PostMapping("/login")
-    fun login(@RequestBody request: LoginRequest): CompletableFuture<ResponseEntity<LoginResponse>> =
-        CompletableFuture.supplyAsync({
-            val result = loginService.login(request.apiKey)
-            ResponseEntity.ok(
-                LoginResponse(
-                    token = result.token,
-                    sessionId = result.sessionId,
-                    fingerprint = result.fingerprint,
-                    characterCount = result.characterCount,
-                    cached = result.cached,
+    fun login(@RequestBody request: LoginRequest): CompletableFuture<ResponseEntity<Any>> =
+        loginService.login(request.apiKey, request.userIgn)
+            .thenApply { result ->
+                ResponseEntity.ok(
+                    LoginResponse(
+                        token = result.token,
+                        sessionId = result.sessionId,
+                        fingerprint = result.fingerprint,
+                        userIgn = result.userIgn,
+                        characterCount = result.characterCount,
+                        cached = result.cached,
+                    )
                 )
-            )
-        }, loginExecutor)
+            }
+            .exceptionally { ex ->
+                val cause = ex.cause ?: ex
+                when (cause) {
+                    is LoginRejectedException -> ResponseEntity
+                        .status(cause.statusCode)
+                        .body(mapOf("error" to (cause.message ?: "Authentication failed"), "status" to cause.statusCode))
+                    else -> ResponseEntity
+                        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(mapOf("error" to "Internal error", "status" to 500))
+                }
+            }
 }
 
-data class LoginRequest(val apiKey: String)
+data class LoginRequest(val apiKey: String, val userIgn: String)
 
 data class LoginResponse(
     val token: String,
     val sessionId: String,
     val fingerprint: String,
+    val userIgn: String,
     val characterCount: Int,
     val cached: Boolean,
 )
@@ -718,83 +819,19 @@ git commit -m "feat(rest-controller): add login endpoint with module-auth depend
 
 ---
 
-## Task 10: Update external-api — character fetch handler
+## Task 11: Update external-api — AuthCharacterFetchConsumer
 
 **Files:**
-- Create: `module-external-api/src/main/kotlin/maple/externalapi/auth/NexonCharacterListAdapter.kt`
 - Create: `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthCharacterFetchConsumer.kt`
 
-- [ ] **Step 1: Create NexonCharacterListAdapter**
+This consumer reuses the existing `NexonAuthClient` from module-infra (external-api already depends on module-infra). Nexon HTTP call runs on virtual thread. JSONL.gz file write runs on virtual thread. Kafka publishes are async (CF). Character map extraction is CPU-bound (runs inline, fast).
 
-This adapter calls Nexon's `/maplestory/v1/character/list` endpoint and returns the character list. It also resolves OCIDs for each character by calling the existing OCID lookup API.
+- [ ] **Step 1: Check existing NexonAuthClient and chunk-ready publisher**
 
-```kotlin
-package maple.externalapi.auth
-
-import com.fasterxml.jackson.databind.ObjectMapper
-import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
-import org.springframework.stereotype.Component
-import org.springframework.web.reactive.function.client.WebClient
-
-@Component
-class NexonCharacterListAdapter(
-    @Value("\${external-api.nexon.base-url:https://open.api.nexon.com}") private val baseUrl: String,
-    private val jdbc: NamedParameterJdbcTemplate,
-    private val objectMapper: ObjectMapper,
-) {
-    fun fetchCharacterList(apiKey: String): List<Map<String, Any>> {
-        val webClient = WebClient.builder().baseUrl(baseUrl).build()
-        val response = webClient.get()
-            .uri("/maplestory/v1/character/list")
-            .header("x-nxopen-api-key", apiKey)
-            .retrieve()
-            .bodyToMono(String::class.java)
-            .block()
-
-        val json = objectMapper.readTree(response)
-        return json.path("character_list").map { node ->
-            mapOf(
-                "ocid" to node.path("ocid").asText(),
-                "character_name" to node.path("character_name").asText(),
-                "world_name" to node.path("world_name").asText(),
-                "character_class" to node.path("character_class").asText(),
-            )
-        }
-    }
-
-    fun resolveExistingOcids(userIgns: List<String>): Map<String, String> {
-        if (userIgns.isEmpty()) return emptyMap()
-        val igns = userIgns.mapIndexed { i, _ -> "ign$i" }
-        val placeholders = igns.joinToString(",") { ":$it" }
-        val params = igns.zip(userIgns).toMap()
-        return jdbc.queryForList(
-            "SELECT user_ign, ocid FROM game_character WHERE user_ign IN ($placeholders) AND ocid IS NOT NULL",
-            params,
-        ).associate { it["user_ign"] as String to it["ocid"] as String }
-    }
-
-    fun updateFingerprints(ocids: List<String>, fingerprint: String) {
-        if (ocids.isEmpty()) return
-        ocids.chunked(100).forEach { chunk ->
-            val params = mutableMapOf<String, Any>("fp" to fingerprint)
-            val placeholders = chunk.mapIndexed { i, _ ->
-                params["ocid$i"] = chunk[i]
-                ":ocid$i"
-            }.joinToString(",")
-            jdbc.update(
-                "UPDATE game_character SET fingerprint = :fp WHERE ocid IN ($placeholders) AND (fingerprint IS NULL OR fingerprint = '')",
-                params,
-            )
-        }
-    }
-
-    companion object {
-        private val log = LoggerFactory.getLogger(NexonCharacterListAdapter::class.java)
-    }
-}
-```
+Before writing, explore these existing files to understand the exact APIs:
+- `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/NexonAuthClient.kt` — `getCharacterList(apiKey)` returns `Optional<CharacterListResponse>`
+- `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/dto/v2/CharacterListResponse.kt` — DTO structure
+- Existing chunk-ready event publisher in external-api — find the class that publishes to the Synchronizer topic
 
 - [ ] **Step 2: Create AuthCharacterFetchConsumer**
 
@@ -804,6 +841,7 @@ package maple.externalapi.auth
 import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.expectation.core.auth.event.CharacterFetchRequest
+import maple.expectation.infrastructure.external.NexonAuthClient
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.annotation.KafkaListener
@@ -812,14 +850,17 @@ import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
+import java.util.concurrent.Executors
 
 @Component
 class AuthCharacterFetchConsumer(
-    private val nexonCharacterListAdapter: NexonCharacterListAdapter,
+    private val nexonAuthClient: NexonAuthClient,
     private val kafkaTemplate: KafkaTemplate<String, String>,
     private val objectMapper: ObjectMapper,
     @Value("\${auth.kafka.character-fetch-response-topic}") private val responseTopic: String,
 ) {
+    private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
+
     @KafkaListener(
         topics = ["\${auth.kafka.character-fetch-request-topic}"],
         groupId = "\${auth.kafka.request-consumer-group-id}",
@@ -830,58 +871,74 @@ class AuthCharacterFetchConsumer(
         @Header(KafkaHeaders.RECEIVED_KEY) messageKey: String?,
     ) {
         val request = objectMapper.readValue(message, CharacterFetchRequest::class.java)
-        log.info("[AuthFetch] processing: fingerprint={}", request.fingerprint)
+        log.info("[AuthFetch] processing: fingerprint={}, userIgn={}", request.fingerprint, request.userIgn)
 
-        val characterOcidMap = mutableMapOf<String, String>()
-        val failedIgn = mutableListOf<String>()
+        // Nexon HTTP call on virtual thread → extract character map → write JSONL.gz → publish response
+        vtExecutor.submit {
+            runCatching {
+                val characterListOpt = nexonAuthClient.getCharacterList(request.apiKey)
 
-        try {
-            val characters = nexonCharacterListAdapter.fetchCharacterList(request.apiKey)
-            val igns = characters.map { it["character_name"] as String }
-            log.info("[AuthFetch] Nexon returned {} characters", characters.size)
+                if (characterListOpt.isEmpty) {
+                    publishError(request, "Invalid API key or Nexon API error (OPENAPI00004)")
+                    return@submit
+                }
 
-            // Resolve existing OCIDs from DB
-            val existingOcids = nexonCharacterListAdapter.resolveExistingOcids(igns)
-            characterOcidMap.putAll(existingOcids)
+                val characterList = characterListOpt.get()
 
-            // For characters not in DB, use OCID from Nexon response directly
-            for (char in characters) {
-                val ign = char["character_name"] as String
-                if (ign !in existingOcids) {
-                    val ocid = char["ocid"] as String
-                    if (ocid.isNotBlank()) {
-                        characterOcidMap[ign] = ocid
-                    } else {
-                        failedIgn.add(ign)
+                // CPU-bound: extract character_name -> ocid map
+                val characterOcidMap = mutableMapOf<String, String>()
+                for (account in characterList.accountList ?: emptyList()) {
+                    for (char in account.characterList ?: emptyList()) {
+                        if (!char.ocid.isNullOrBlank() && !char.characterName.isNullOrBlank()) {
+                            characterOcidMap[char.characterName] = char.ocid
+                        }
                     }
                 }
-            }
 
-            // Update fingerprints in DB
-            val allOcids = characterOcidMap.values.toList()
-            nexonCharacterListAdapter.updateFingerprints(allOcids, request.fingerprint)
+                // IO-bound (file): write JSONL.gz chunk for Synchronizer
+                // Use existing chunk format with runId="auth-{fingerprint}", endpoint="auth-character"
+                // Find existing chunk-ready publisher in external-api and reuse it
+                // TODO: implement JSONL.gz write + chunk-ready publish following existing pattern
 
-        } catch (e: Exception) {
-            log.error("[AuthFetch] failed: fingerprint={}", request.fingerprint, e)
-        }
-
-        // Publish response
-        val response = CharacterFetchResponse(
-            eventId = request.eventId,
-            fingerprint = request.fingerprint,
-            characterOcidMap = characterOcidMap,
-            failedIgn = failedIgn,
-        )
-        val json = objectMapper.writeValueAsString(response)
-        kafkaTemplate.send(responseTopic, response.kafkaKey(), json).whenComplete { _, ex ->
-            if (ex != null) {
-                log.error("[AuthFetch] failed to publish response: fingerprint={}", request.fingerprint, ex)
+                publishSuccess(request, characterOcidMap)
+                log.info("[AuthFetch] completed: fingerprint={}, resolved={}", request.fingerprint, characterOcidMap.size)
+            }.onFailure { ex ->
+                log.error("[AuthFetch] failed: fingerprint={}", request.fingerprint, ex)
+                publishError(request, "Internal error: ${ex.message}")
             }
         }
 
         acknowledgment.acknowledge()
-        log.info("[AuthFetch] completed: fingerprint={}, resolved={}, failed={}",
-            request.fingerprint, characterOcidMap.size, failedIgn.size)
+    }
+
+    private fun publishSuccess(request: CharacterFetchRequest, characterOcidMap: Map<String, String>) {
+        val response = CharacterFetchResponse(
+            eventId = request.eventId,
+            fingerprint = request.fingerprint,
+            success = true,
+            characterOcidMap = characterOcidMap,
+        )
+        publishResponse(response)
+    }
+
+    private fun publishError(request: CharacterFetchRequest, errorMessage: String) {
+        log.warn("[AuthFetch] error: fingerprint={}, error={}", request.fingerprint, errorMessage)
+        val response = CharacterFetchResponse(
+            eventId = request.eventId,
+            fingerprint = request.fingerprint,
+            success = false,
+            errorMessage = errorMessage,
+        )
+        publishResponse(response)
+    }
+
+    private fun publishResponse(response: CharacterFetchResponse) {
+        val json = objectMapper.writeValueAsString(response)
+        kafkaTemplate.send(responseTopic, response.kafkaKey(), json).whenComplete { _, ex ->
+            if (ex != null) {
+                log.error("[AuthFetch] failed to publish response: fingerprint={}", response.fingerprint, ex)
+            }
+        }
     }
 
     companion object {
@@ -889,6 +946,14 @@ class AuthCharacterFetchConsumer(
     }
 }
 ```
+
+Note: The `CharacterListResponse` field names (`accountList`, `characterList`, `ocid`, `characterName`) must be verified against the actual DTO. Adjust field access accordingly.
+
+The JSONL.gz + chunk-ready publishing for Synchronizer follows the existing external-api pattern. The implementer should:
+1. Find the existing chunk-ready event publisher in external-api
+2. Write character data as JSONL.gz in the same format as existing chunks
+3. Publish chunk-ready event with `runId = "auth-{fingerprint}"`, `endpoint = "auth-character"`
+4. Synchronizer consumes and upserts `game_character` with fingerprint (existing pipeline, no code change needed in Synchronizer)
 
 - [ ] **Step 3: Compile all**
 
@@ -899,12 +964,12 @@ Expected: BUILD SUCCESSFUL
 
 ```bash
 git add module-external-api/
-git commit -m "feat(external-api): add auth character fetch consumer with Nexon API"
+git commit -m "feat(external-api): add auth character fetch consumer using NexonAuthClient"
 ```
 
 ---
 
-## Task 11: YAML configuration
+## Task 12: YAML configuration
 
 **Files:**
 - Modify: `module-rest-controller/src/main/resources/application.yml`
@@ -913,9 +978,9 @@ git commit -m "feat(external-api): add auth character fetch consumer with Nexon 
 - Modify: `module-external-api/src/main/resources/application-local.yml`
 - Create: `module-auth/src/main/resources/application.yml` (default config)
 
-- [ ] **Step 1: Add auth Kafka topics to rest-controller application.yml**
+- [ ] **Step 1: Add auth config to rest-controller application.yml**
 
-Add under the existing `expectation:` block or at root level:
+Add at root level (merge into existing structure, don't duplicate root keys):
 
 ```yaml
 auth:
@@ -934,7 +999,7 @@ auth:
 
 - [ ] **Step 2: Add auth config to rest-controller application-local.yml**
 
-Add same auth block (values will be resolved from .env).
+Add same auth block (values resolved from .env).
 
 - [ ] **Step 3: Add auth Kafka topics to external-api application.yml**
 
@@ -981,7 +1046,7 @@ git commit -m "feat: add YAML configuration for auth login flow"
 
 ---
 
-## Task 12: Tests
+## Task 13: Tests
 
 **Files:**
 - Create: `module-auth/src/test/kotlin/maple/auth/login/LoginServiceTest.kt`
@@ -993,6 +1058,7 @@ git commit -m "feat: add YAML configuration for auth login flow"
 ```kotlin
 package maple.auth.fingerprint
 
+import maple.expectation.common.util.FingerprintUtil
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
@@ -1001,28 +1067,31 @@ class FingerprintServiceTest {
 
     @Test
     fun `same API key produces same fingerprint`() {
-        val fp1 = service.generate("test-api-key-1")
-        val fp2 = service.generate("test-api-key-1")
-        assertThat(fp1).isEqualTo(fp2)
+        assertThat(service.generate("key-1")).isEqualTo(service.generate("key-1"))
     }
 
     @Test
     fun `different API keys produce different fingerprints`() {
-        val fp1 = service.generate("test-api-key-1")
-        val fp2 = service.generate("test-api-key-2")
-        assertThat(fp1).isNotEqualTo(fp2)
+        assertThat(service.generate("key-1")).isNotEqualTo(service.generate("key-2"))
     }
 
     @Test
     fun `verify returns true for matching key`() {
-        val fp = service.generate("test-api-key-1")
-        assertThat(service.verify("test-api-key-1", fp)).isTrue()
+        val fp = service.generate("key-1")
+        assertThat(service.verify("key-1", fp)).isTrue()
     }
 
     @Test
     fun `verify returns false for wrong key`() {
-        val fp = service.generate("test-api-key-1")
-        assertThat(service.verify("test-api-key-2", fp)).isFalse()
+        val fp = service.generate("key-1")
+        assertThat(service.verify("key-2", fp)).isFalse()
+    }
+
+    @Test
+    fun `matches FingerprintUtil output`() {
+        val secret = "test-secret-key-for-unit-testing-32ch"
+        val apiKey = "key-1"
+        assertThat(service.generate(apiKey)).isEqualTo(FingerprintUtil.generate(apiKey, secret))
     }
 }
 ```
@@ -1035,9 +1104,7 @@ package maple.auth.kafka
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import java.time.Instant
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 
 class PendingLoginRegistryTest {
     private val registry = PendingLoginRegistry()
@@ -1048,6 +1115,7 @@ class PendingLoginRegistryTest {
         val response = CharacterFetchResponse(
             eventId = "evt-1",
             fingerprint = "fp-1",
+            success = true,
             characterOcidMap = mapOf("Char1" to "ocid-1"),
         )
         registry.complete(response)
@@ -1059,9 +1127,9 @@ class PendingLoginRegistryTest {
         val response = CharacterFetchResponse(
             eventId = "evt-1",
             fingerprint = "unknown-fp",
-            characterOcidMap = emptyMap(),
+            success = true,
         )
-        registry.complete(response) // should not throw
+        registry.complete(response)
     }
 }
 ```
@@ -1071,6 +1139,7 @@ class PendingLoginRegistryTest {
 ```kotlin
 package maple.auth.login
 
+import maple.expectation.core.auth.event.CharacterFetchRequest
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.auth.fingerprint.FingerprintService
 import maple.auth.jwt.JwtGeneratorService
@@ -1079,6 +1148,7 @@ import maple.auth.kafka.PendingLoginRegistry
 import maple.auth.session.SessionCacheService
 import maple.expectation.core.domain.auth.Session
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.ArgumentCaptor
@@ -1086,7 +1156,8 @@ import org.mockito.Captor
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
-import java.time.Instant
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
 
 @ExtendWith(MockitoExtension::class)
 class LoginServiceTest {
@@ -1096,9 +1167,7 @@ class LoginServiceTest {
     @Mock private lateinit var pendingLoginRegistry: PendingLoginRegistry
     @Mock private lateinit var jwtGeneratorService: JwtGeneratorService
 
-    @Captor private lateinit var requestCaptor: ArgumentCaptor<maple.expectation.core.auth.event.CharacterFetchRequest>
-
-    private val testSecret = "c3b16a6c3e66702e732c140765e7737e41302110555cabce43c4742ec1d8a9cc"
+    @Captor private lateinit var requestCaptor: ArgumentCaptor<CharacterFetchRequest>
 
     private fun createService() = LoginService(
         fingerprintService, sessionCacheService, authEventPublisher, pendingLoginRegistry, jwtGeneratorService
@@ -1112,7 +1181,7 @@ class LoginServiceTest {
         whenever(sessionCacheService.findByFingerprint("fp-1")).thenReturn(session)
         whenever(jwtGeneratorService.generateToken(any(), any(), any(), any())).thenReturn("jwt-token")
 
-        val result = service.login("key")
+        val result = service.login("key", "User1").get()
         assertThat(result.cached).isTrue()
         assertThat(result.token).isEqualTo("jwt-token")
     }
@@ -1124,22 +1193,67 @@ class LoginServiceTest {
         whenever(sessionCacheService.findByFingerprint("fp-1")).thenReturn(null)
         whenever(jwtGeneratorService.generateToken(any(), any(), any(), any())).thenReturn("jwt-token")
 
-        // Simulate Kafka response
         val response = CharacterFetchResponse(
             eventId = "evt-1",
             fingerprint = "fp-1",
+            success = true,
             characterOcidMap = mapOf("User1" to "ocid-1"),
         )
         whenever(pendingLoginRegistry.register("fp-1")).thenReturn(
-            java.util.concurrent.CompletableFuture.completedFuture(response)
+            CompletableFuture.completedFuture(response)
         )
 
-        val result = service.login("key")
+        val result = service.login("key", "User1").get()
         assertThat(result.cached).isFalse()
         assertThat(result.characterCount).isEqualTo(1)
+        assertThat(result.userIgn).isEqualTo("User1")
         verify(authEventPublisher).publishCharacterFetchRequest(capture(requestCaptor))
-        assertThat(requestCaptor.value.fingerprint).isEqualTo("fp-1")
+        assertThat(requestCaptor.value.userIgn).isEqualTo("User1")
         verify(sessionCacheService).save(any())
+    }
+
+    @Test
+    fun `throws 401 on failed response`() {
+        val service = createService()
+        whenever(fingerprintService.generate("key")).thenReturn("fp-1")
+        whenever(sessionCacheService.findByFingerprint("fp-1")).thenReturn(null)
+
+        val response = CharacterFetchResponse(
+            eventId = "evt-1",
+            fingerprint = "fp-1",
+            success = false,
+            errorMessage = "Invalid API key",
+        )
+        whenever(pendingLoginRegistry.register("fp-1")).thenReturn(
+            CompletableFuture.completedFuture(response)
+        )
+
+        val future = service.login("key", "User1")
+        assertThatThrownBy { future.get() }
+            .isInstanceOf(ExecutionException::class.java)
+            .hasCauseInstanceOf(LoginRejectedException::class.java)
+    }
+
+    @Test
+    fun `throws 401 when userIgn not in character map`() {
+        val service = createService()
+        whenever(fingerprintService.generate("key")).thenReturn("fp-1")
+        whenever(sessionCacheService.findByFingerprint("fp-1")).thenReturn(null)
+
+        val response = CharacterFetchResponse(
+            eventId = "evt-1",
+            fingerprint = "fp-1",
+            success = true,
+            characterOcidMap = mapOf("OtherChar" to "ocid-1"),
+        )
+        whenever(pendingLoginRegistry.register("fp-1")).thenReturn(
+            CompletableFuture.completedFuture(response)
+        )
+
+        val future = service.login("key", "User1")
+        assertThatThrownBy { future.get() }
+            .isInstanceOf(ExecutionException::class.java)
+            .hasCauseInstanceOf(LoginRejectedException::class.java)
     }
 }
 ```
@@ -1158,7 +1272,7 @@ git commit -m "test(auth): add unit tests for auth login flow"
 
 ---
 
-## Task 13: Full compilation + integration verification
+## Task 14: Full compilation + integration verification
 
 **Files:** None (verification only)
 
@@ -1182,22 +1296,23 @@ Fix any compilation or test failures, then commit.
 
 | File | Change |
 |------|--------|
+| `module-common/.../util/FingerprintUtil.kt` | New — pure HMAC-SHA256 utility |
+| `module-infra/.../security/FingerprintGenerator.kt` | Modify — delegate to FingerprintUtil |
 | `settings.gradle` | Add `include 'module-auth'` |
-| `module-auth/build.gradle` | New — Spring Kafka, Redis, JJWT, module-core |
-| `module-core/.../core/auth/event/CharacterFetchRequest.kt` | New — Kafka request DTO |
-| `module-core/.../core/auth/event/CharacterFetchResponse.kt` | New — Kafka response DTO |
-| `module-auth/.../fingerprint/FingerprintService.kt` | New — HMAC-SHA256 fingerprint |
+| `module-auth/build.gradle` | New — Spring Kafka, Redis, JJWT, module-core, module-common |
+| `module-core/.../core/auth/event/CharacterFetchRequest.kt` | New — Kafka request DTO (fingerprint + userIgn + apiKey) |
+| `module-core/.../core/auth/event/CharacterFetchResponse.kt` | New — Kafka response DTO (success + errorMessage + characterOcidMap) |
+| `module-auth/.../fingerprint/FingerprintService.kt` | New — thin Spring wrapper around FingerprintUtil |
 | `module-auth/.../jwt/JwtGeneratorService.kt` | New — JWT generation |
 | `module-auth/.../kafka/PendingLoginRegistry.kt` | New — CF correlation |
 | `module-auth/.../kafka/AuthEventPublisher.kt` | New — Kafka producer |
 | `module-auth/.../kafka/AuthResponseConsumer.kt` | New — Kafka consumer |
 | `module-auth/.../login/LoginResult.kt` | New — result DTO |
-| `module-auth/.../login/LoginService.kt` | New — core orchestration |
+| `module-auth/.../login/LoginService.kt` | New — core orchestration with userIgn + error handling |
 | `module-auth/.../session/SessionCacheService.kt` | New — Redis cache |
 | `module-rest-controller/build.gradle` | Add module-auth dependency |
 | `module-rest-controller/.../RestControllerApplication.kt` | Expand component scan |
-| `module-rest-controller/.../controller/v6/AuthController.kt` | New — POST /api/v6/auth/login |
-| `module-external-api/.../auth/NexonCharacterListAdapter.kt` | New — Nexon API + DB |
-| `module-external-api/.../auth/AuthCharacterFetchConsumer.kt` | New — Kafka consumer |
+| `module-rest-controller/.../controller/v6/AuthController.kt` | New — POST /api/v6/auth/login (apiKey + userIgn) |
+| `module-external-api/.../auth/AuthCharacterFetchConsumer.kt` | New — Kafka consumer using existing NexonAuthClient |
 | `module-*/src/main/resources/application*.yml` | Auth Kafka topics, JWT, fingerprint config |
 | `module-auth/src/test/...` | Unit tests |

@@ -24,8 +24,8 @@ class AuthResponseConsumer(
         @Header(KafkaHeaders.RECEIVED_KEY) messageKey: String?,
     ) {
         val response = objectMapper.readValue(message, CharacterFetchResponse::class.java)
-        log.debug("[AuthResponse] received: fingerprint={}, success={}, characters={}",
-            response.fingerprint, response.success, response.characterOcidMap.size)
+        log.debug("[AuthResponse] received: eventId={}, success={}, characters={}",
+            response.eventId, response.success, response.characterOcidMap.size)
         pendingLoginRegistry.complete(response)
         acknowledgment.acknowledge()
     }

@@ -17,9 +17,9 @@ class AuthEventPublisher(
         val json = objectMapper.writeValueAsString(request)
         kafkaTemplate.send(requestTopic, request.kafkaKey(), json).whenComplete { _, ex ->
             if (ex != null) {
-                log.error("[AuthEvent] failed to publish request: fingerprint={}", request.fingerprint, ex)
+                log.error("[AuthEvent] failed to publish request: eventId={}", request.eventId, ex)
             } else {
-                log.debug("[AuthEvent] published request: fingerprint={}, userIgn={}", request.fingerprint, request.userIgn)
+                log.debug("[AuthEvent] published request: eventId={}, userIgn={}", request.eventId, request.userIgn)
             }
         }
     }

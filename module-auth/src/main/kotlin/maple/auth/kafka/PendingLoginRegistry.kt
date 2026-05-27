@@ -11,22 +11,22 @@ import java.util.concurrent.TimeUnit
 class PendingLoginRegistry {
     private val pending = ConcurrentHashMap<String, CompletableFuture<CharacterFetchResponse>>()
 
-    fun register(fingerprint: String): CompletableFuture<CharacterFetchResponse> {
+    fun register(eventId: String): CompletableFuture<CharacterFetchResponse> {
         val future = CompletableFuture<CharacterFetchResponse>()
-        pending[fingerprint] = future
+        pending[eventId] = future
         future.orTimeout(30, TimeUnit.SECONDS)
-            .whenComplete { _, _ -> pending.remove(fingerprint) }
-        log.debug("[PendingLogin] registered: fingerprint={}, pendingCount={}", fingerprint, pending.size)
+            .whenComplete { _, _ -> pending.remove(eventId) }
+        log.debug("[PendingLogin] registered: eventId={}, pendingCount={}", eventId, pending.size)
         return future
     }
 
     fun complete(response: CharacterFetchResponse) {
-        val future = pending.remove(response.fingerprint)
+        val future = pending.remove(response.eventId)
         if (future != null) {
             future.complete(response)
-            log.debug("[PendingLogin] completed: fingerprint={}", response.fingerprint)
+            log.debug("[PendingLogin] completed: eventId={}", response.eventId)
         } else {
-            log.warn("[PendingLogin] no pending request for fingerprint={}", response.fingerprint)
+            log.warn("[PendingLogin] no pending request for eventId={}", response.eventId)
         }
     }
 

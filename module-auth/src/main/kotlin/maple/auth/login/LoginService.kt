@@ -23,25 +23,17 @@ class LoginService(
     private val jwtGeneratorService: JwtGeneratorService,
 ) {
     fun login(apiKey: String, userIgn: String): CompletableFuture<LoginResult> {
-        val fingerprint = fingerprintService.generate(apiKey)
-
-        val cached = sessionCacheService.findByFingerprint(fingerprint)
-        if (cached != null) {
-            val token = jwtGeneratorService.generateToken(cached.sessionId, cached.fingerprint, cached.role, cached.userIgn)
-            log.info("[Login] cache hit: fingerprint={}", fingerprint)
-            return CompletableFuture.completedFuture(
-                LoginResult(token, cached.sessionId, fingerprint, cached.userIgn, cached.myOcids.size, cached = true)
-            )
-        }
-
-        val request = CharacterFetchRequest(fingerprint = fingerprint, userIgn = userIgn, apiKey = apiKey)
+        val request = CharacterFetchRequest(userIgn = userIgn, apiKey = apiKey)
         authEventPublisher.publishCharacterFetchRequest(request)
 
-        return pendingLoginRegistry.register(fingerprint)
+        return pendingLoginRegistry.register(request.eventId)
             .thenApply { response ->
                 if (!response.success) {
-                    log.warn("[Login] rejected: fingerprint={}, error={}", fingerprint, response.errorMessage)
+                    log.warn("[Login] rejected: eventId={}, error={}", request.eventId, response.errorMessage)
                     throw LoginRejectedException(401, response.errorMessage ?: "Authentication failed")
+                }
+                if (response.accountId.isNullOrBlank()) {
+                    throw LoginRejectedException(401, "Account ID not found in Nexon response")
                 }
                 if (userIgn !in response.characterOcidMap) {
                     log.warn("[Login] userIgn={} not found in Nexon character list", userIgn)
@@ -50,6 +42,15 @@ class LoginService(
                 response
             }
             .thenApply { response ->
+                val fingerprint = fingerprintService.generate(requireNotNull(response.accountId) { "accountId missing" })
+
+                val cached = sessionCacheService.findByFingerprint(fingerprint)
+                if (cached != null) {
+                    val token = jwtGeneratorService.generateToken(cached.sessionId, cached.fingerprint, cached.role, cached.userIgn)
+                    log.info("[Login] cache hit: fingerprint={}", fingerprint)
+                    return@thenApply LoginResult(token, cached.sessionId, fingerprint, cached.userIgn, cached.myOcids.size, cached = true)
+                }
+
                 val sessionId = UUID.randomUUID().toString()
                 val myOcids = response.characterOcidMap.values.toSet()
 

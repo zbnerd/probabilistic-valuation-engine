@@ -33,7 +33,7 @@ class AuthCharacterFetchConsumer(
         @Header(KafkaHeaders.RECEIVED_KEY) messageKey: String?,
     ) {
         val request = objectMapper.readValue(message, CharacterFetchRequest::class.java)
-        log.info("[AuthFetch] processing: fingerprint={}, userIgn={}", request.fingerprint, request.userIgn)
+        log.info("[AuthFetch] processing: eventId={}, userIgn={}", request.eventId, request.userIgn)
 
         vtExecutor.submit {
             runCatching {
@@ -44,7 +44,9 @@ class AuthCharacterFetchConsumer(
                     return@submit
                 }
 
-                val allCharacters = characterListOpt.get().getAllCharacters()
+                val resp = characterListOpt.get()
+                val accountId = resp.accountList?.firstOrNull()?.accountId
+                val allCharacters = resp.getAllCharacters()
 
                 val characterOcidMap = mutableMapOf<String, String>()
                 for (char in allCharacters) {
@@ -55,14 +57,10 @@ class AuthCharacterFetchConsumer(
                     }
                 }
 
-                // TODO: Write JSONL.gz chunk + publish SnapshotChunkReadyEvent for Synchronizer
-                // runId = "auth-${request.fingerprint}", endpoint = "auth-character"
-                // Synchronizer will upsert game_character with fingerprint
-
-                publishSuccess(request, characterOcidMap)
-                log.info("[AuthFetch] completed: fingerprint={}, resolved={}", request.fingerprint, characterOcidMap.size)
+                publishSuccess(request, accountId, characterOcidMap)
+                log.info("[AuthFetch] completed: eventId={}, accountId={}, resolved={}", request.eventId, accountId, characterOcidMap.size)
             }.onFailure { ex ->
-                log.error("[AuthFetch] failed: fingerprint={}", request.fingerprint, ex)
+                log.error("[AuthFetch] failed: eventId={}", request.eventId, ex)
                 publishError(request, "Internal error: ${ex.message}")
             }
         }
@@ -70,10 +68,10 @@ class AuthCharacterFetchConsumer(
         acknowledgment.acknowledge()
     }
 
-    private fun publishSuccess(request: CharacterFetchRequest, characterOcidMap: Map<String, String>) {
+    private fun publishSuccess(request: CharacterFetchRequest, accountId: String?, characterOcidMap: Map<String, String>) {
         val response = CharacterFetchResponse(
             eventId = request.eventId,
-            fingerprint = request.fingerprint,
+            accountId = accountId,
             success = true,
             characterOcidMap = characterOcidMap,
         )
@@ -81,10 +79,9 @@ class AuthCharacterFetchConsumer(
     }
 
     private fun publishError(request: CharacterFetchRequest, errorMessage: String) {
-        log.warn("[AuthFetch] error: fingerprint={}, error={}", request.fingerprint, errorMessage)
+        log.warn("[AuthFetch] error: eventId={}, error={}", request.eventId, errorMessage)
         val response = CharacterFetchResponse(
             eventId = request.eventId,
-            fingerprint = request.fingerprint,
             success = false,
             errorMessage = errorMessage,
         )
@@ -95,7 +92,7 @@ class AuthCharacterFetchConsumer(
         val json = objectMapper.writeValueAsString(response)
         kafkaTemplate.send(responseTopic, response.kafkaKey(), json).whenComplete { _, ex ->
             if (ex != null) {
-                log.error("[AuthFetch] failed to publish response: fingerprint={}", response.fingerprint, ex)
+                log.error("[AuthFetch] failed to publish response: eventId={}", response.eventId, ex)
             }
         }
     }

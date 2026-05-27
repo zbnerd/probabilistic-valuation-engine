@@ -7,6 +7,7 @@ import maple.expectation.infrastructure.lifecycle.ManagedLifecycleCoordinator
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
 import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration
+import org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Import
 import org.springframework.scheduling.annotation.EnableScheduling
@@ -19,6 +20,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
     exclude = [
         SecurityAutoConfiguration::class,
         SecurityFilterAutoConfiguration::class,
+        ManagementWebSecurityAutoConfiguration::class,
     ]
 )
 @Import(

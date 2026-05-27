@@ -11,6 +11,7 @@ plugins {
 dependencies {
 	implementation project(':module-common')
 	implementation project(':module-core')
+	implementation project(':module-auth')
 
 	implementation(libs.kotlin.stdlib)
 	implementation(libs.kotlin.reflect)
@@ -49,7 +50,7 @@ dependencies {
 bootJar {
 	enabled = true
 	archiveClassifier = ""
-	mainClass.set("maple.restcontroller.RestControllerApplication")
+	mainClass.set("maple.restcontroller.RestControllerApplicationKt")
 }
 
 tasks.named("jar") {

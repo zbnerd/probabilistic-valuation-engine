@@ -28,3 +28,6 @@ include 'module-synchronizer'
 
 // Standalone REST Controller module
 include 'module-rest-controller'
+
+// Auth module (login, JWT, session)
+include 'module-auth'

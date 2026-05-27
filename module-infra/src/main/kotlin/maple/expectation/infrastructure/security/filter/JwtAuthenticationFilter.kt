@@ -11,8 +11,8 @@ import java.io.IOException
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.core.auth.JwtParserPort
 import maple.expectation.core.domain.model.security.AuthenticatedUser
-import maple.expectation.infrastructure.security.jwt.JwtTokenProvider
 import org.slf4j.LoggerFactory
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
@@ -51,13 +51,13 @@ import org.springframework.web.filter.OncePerRequestFilter
  * <p>GameCharacterRepository(도메인 포트)에 직접 의존하는 것을 피하고 CharacterOcidPort(코어 포트)를 통해
  * OCID를 조회합니다. ObjectMapper는 Bean을 주입받아 매번 새 인스턴스 생성을 방지합니다.
  *
- * @property jwtTokenProvider JWT 토큰 제공자
+ * @property jwtParserPort JWT 파싱 포트 (DIP 준수)
  * @property characterOcidPort 코어 포트 (DIP 준수)
  * @property objectMapper JSON 직렬화용 ObjectMapper Bean
  */
 @Component
 class JwtAuthenticationFilter(
-    private val jwtTokenProvider: JwtTokenProvider,
+    private val jwtParserPort: JwtParserPort,
     private val characterOcidPort: CharacterOcidPort,
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor,
@@ -79,7 +79,7 @@ class JwtAuthenticationFilter(
         if (token != null) {
             val authResult = executor.executeWithFallback(
                 {
-                    val payload = jwtTokenProvider.parseToken(token)
+                    val payload = jwtParserPort.parseToken(token)
 
                     if (payload.isPresent) {
                         val jwt = payload.get()

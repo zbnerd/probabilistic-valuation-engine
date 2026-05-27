@@ -36,6 +36,11 @@ dependencies {
 	// Jackson
 	implementation(libs.jackson.module.kotlin)
 
+	// JWT parsing for like endpoint auth
+	implementation(libs.jjwt.api)
+	runtimeOnly(libs.jjwt.impl)
+	runtimeOnly(libs.jjwt.jackson)
+
 	// Testing
 	testImplementation(libs.spring.boot.starter.test)
 	testImplementation(libs.mockito.kotlin)

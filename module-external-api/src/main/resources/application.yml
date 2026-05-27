@@ -85,6 +85,12 @@ external-api:
     max-pages: 3000
     permits-per-second: 50
 
+auth:
+  kafka:
+    character-fetch-request-topic: auth-character-fetch-request
+    character-fetch-response-topic: auth-character-fetch-response
+    request-consumer-group-id: module-external-api-auth-consumer
+
 management:
   endpoints:
     web:

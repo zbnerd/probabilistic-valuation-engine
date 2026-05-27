@@ -1,0 +1,41 @@
+// ========================================
+// Module-Auth: Authentication & Login
+// JWT generation, fingerprint, session cache, Kafka orchestration
+// ========================================
+
+plugins {
+	alias(libs.plugins.kotlin.jvm)
+	alias(libs.plugins.kotlin.spring)
+	alias(libs.plugins.spring.boot)
+}
+
+dependencies {
+	implementation project(':module-common')
+	implementation project(':module-core')
+
+	implementation(libs.kotlin.stdlib)
+	implementation(libs.kotlin.reflect)
+
+	// Spring
+	implementation(libs.spring.boot)
+	implementation(libs.spring.boot.starter.data.redis)
+
+	// Kafka
+	implementation(libs.spring.kafka)
+
+	// Jackson
+	implementation(libs.jackson.module.kotlin)
+
+	// JWT
+	implementation(libs.jjwt.api)
+	runtimeOnly(libs.jjwt.impl)
+	runtimeOnly(libs.jjwt.jackson)
+
+	// Testing
+	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.mockito.kotlin)
+	testImplementation(libs.assertj.core)
+}
+
+bootJar { enabled = false }
+jar { enabled = true }

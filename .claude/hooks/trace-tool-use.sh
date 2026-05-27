@@ -9,7 +9,9 @@ INPUT=$(cat)
 
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"')
 TOOL_INPUT=$(echo "$INPUT" | jq -c '.tool_input // {}')
-RESULT=$(echo "$INPUT" | jq -r '.tool_result // ""' | head -c 500)
+
+# Capture result — try .tool_result, then .result, handle string/object
+RESULT=$(echo "$INPUT" | jq -c '(.tool_result // .result // "") | if type == "string" then .[0:500] else (tostring[0:500]) end' 2>/dev/null || echo '""')
 ERROR=$(echo "$INPUT" | jq -r '.error // null')
 TS=$(trace_ts)
 
@@ -18,7 +20,7 @@ ENTRY=$(jq -n \
     --arg ts "$TS" \
     --arg tool "$TOOL_NAME" \
     --argjson input "$TOOL_INPUT" \
-    --arg result "$RESULT" \
+    --argjson result "$RESULT" \
     --arg error "$ERROR" \
     '{timestamp: $ts, tool: $tool, input: $input, result_preview: $result, error: $error}')
 

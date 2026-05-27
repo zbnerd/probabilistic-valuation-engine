@@ -23,3 +23,6 @@ ENTRY=$(jq -n \
 
 echo "$ENTRY" >> "$SESSION_DIR/session.jsonl"
 echo "AI trace session: $SESSION_ID"
+
+# Compress trace files older than 7 days
+find "$TRACE_BASE" -name "*.jsonl" -mtime +7 ! -name "*.gz" -exec gzip {} \; 2>/dev/null || true

@@ -61,7 +61,7 @@ services:
     container_name: maple-airflow-scheduler
     command: scheduler
     healthcheck:
-      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname "$$(hostname)""]
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname '$$(hostname)'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -69,6 +69,7 @@ services:
 networks:
   maple-network:
     external: true
+    name: probabilistic-valuation-engine_maple-network
 
 volumes:
   airflow_db_data:

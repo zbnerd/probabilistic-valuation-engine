@@ -11,9 +11,9 @@ from datetime import datetime, timedelta
 
 import requests
 from airflow import DAG
-from airflow.operators.http import SimpleHttpOperator
 from airflow.operators.python import PythonOperator
-from airflow.sensors.http import HttpSensor
+from airflow.providers.http.operators.http import HttpOperator
+from airflow.providers.http.sensors.http import HttpSensor
 
 
 def poll_run_completion(**context):
@@ -65,7 +65,7 @@ with DAG(
         timeout=120,
     )
 
-    trigger_daily_collection = SimpleHttpOperator(
+    trigger_daily_collection = HttpOperator(
         task_id="trigger_daily_collection",
         http_conn_id="external_api",
         endpoint="api/internal/trigger/daily",

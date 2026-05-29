@@ -58,7 +58,7 @@ class ExternalApiScheduler(
         triggerDailyRefresh()
     }
 
-    fun triggerDailyRefresh() {
+    fun triggerDailyRefresh(externalRunId: String? = null) {
         if (!acquireLock(3_600_000)) {
             log.warn("[Scheduler] could not acquire lock for daily refresh, skipping")
             return
@@ -77,7 +77,7 @@ class ExternalApiScheduler(
             return
         }
 
-        val runId = UUID.randomUUID().toString()
+        val runId = externalRunId ?: UUID.randomUUID().toString()
         runStatusTracker.startRun(runId)
 
         log.info("[Scheduler] starting ranking fetch phase, runId={}", runId)

@@ -6,8 +6,6 @@ import maple.common.cleanup.RunCleanupResult
 import maple.common.cleanup.RunInfo
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-
 import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -15,7 +13,6 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.time.Instant
 
 @Component
-@ConditionalOnProperty(name = ["calculator.cleanup.enabled"], havingValue = "true")
 class CalculatorResultCleanupScheduler(
     private val objectStorage: ObjectStorage,
     @Value("\${calculator.cleanup.dry-run:true}")

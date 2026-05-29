@@ -7,14 +7,12 @@ import maple.externalapi.metrics.CleanupMetrics
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Component
-@ConditionalOnProperty(name = ["external-api.cleanup.enabled"], havingValue = "true")
 class ArtifactCleanupScheduler(
     private val artifactStore: ExternalApiArtifactStorePort,
     private val metrics: CleanupMetrics,

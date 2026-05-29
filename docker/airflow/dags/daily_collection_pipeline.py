@@ -9,6 +9,8 @@ Data Plane: Kafka handles chunk processing, retry, backpressure.
 
 from datetime import datetime, timedelta
 
+import json
+
 import requests
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -20,6 +22,8 @@ from airflow.providers.http.sensors.http import HttpSensor
 def poll_run_completion(**context):
     """Poll run-status, return True when triggered run reaches terminal state."""
     trigger_response = context["ti"].xcom_pull(task_ids="trigger_daily_collection")
+    if isinstance(trigger_response, str):
+        trigger_response = json.loads(trigger_response)
     run_id = trigger_response["runId"]
 
     resp = requests.get("http://host.docker.internal:8081/api/internal/run-status", timeout=10)

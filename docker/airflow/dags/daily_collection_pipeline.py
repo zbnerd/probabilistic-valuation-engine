@@ -1,7 +1,7 @@
 """
 Daily Nexon data collection pipeline.
 
-Trigger → Poll run-status with run_id correlation → Report.
+Trigger → Poll run-status with run_id correlation → Trigger cleanup.
 
 Control Plane: Airflow triggers and monitors.
 Data Plane: Kafka handles chunk processing, retry, backpressure.
@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import requests
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.http.operators.http import HttpOperator
 from airflow.providers.http.sensors.http import HttpSensor
 
@@ -79,4 +80,10 @@ with DAG(
         execution_timeout=timedelta(hours=2),
     )
 
-    check_external_api >> trigger_daily_collection >> wait_for_completion
+    trigger_cleanup = TriggerDagRunOperator(
+        task_id="trigger_cleanup_pipeline",
+        trigger_dag_id="daily_cleanup_pipeline",
+        wait_for_completion=False,
+    )
+
+    check_external_api >> trigger_daily_collection >> wait_for_completion >> trigger_cleanup

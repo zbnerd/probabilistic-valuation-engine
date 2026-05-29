@@ -37,6 +37,7 @@ class ExternalApiScheduler(
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val running = AtomicBoolean(false)
     private val shutdown = AtomicBoolean(false)
+    private val itemEquipmentStarted = AtomicBoolean(false)
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
     private val lock = ReentrantLock()
     private val idle = lock.newCondition()
@@ -49,7 +50,6 @@ class ExternalApiScheduler(
             log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
             triggerDailyRefresh()
         }
-        executor.submit { runItemEquipmentLoop() }
     }
 
     @Scheduled(cron = "\${external-api.schedule.daily-cron:0 0 3 * * *}")
@@ -67,6 +67,7 @@ class ExternalApiScheduler(
             log.info("[Scheduler] skip-character-basic enabled, loading OCID cache from existing data")
             ocidCacheProvider.refresh()
             releaseLock()
+            startItemEquipmentLoopOnce()
             return
         }
 
@@ -74,6 +75,7 @@ class ExternalApiScheduler(
         if (rankingPhase == null) {
             log.error("[Scheduler] ranking fetch phase is required but not enabled")
             releaseLock()
+            startItemEquipmentLoopOnce()
             return
         }
 
@@ -112,7 +114,14 @@ class ExternalApiScheduler(
                     log.info("[Scheduler] daily refresh completed, runId={}", runId)
                 }
                 releaseLock()
+                startItemEquipmentLoopOnce()
             }
+    }
+
+    private fun startItemEquipmentLoopOnce() {
+        if (itemEquipmentStarted.compareAndSet(false, true)) {
+            executor.submit { runItemEquipmentLoop() }
+        }
     }
 
     private fun runItemEquipmentLoop() {

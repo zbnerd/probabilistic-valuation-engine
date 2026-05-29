@@ -28,7 +28,9 @@ class InternalApiControllerTest {
     fun setUp() {
         runStatusTracker = org.mockito.kotlin.mock()
         scheduler = org.mockito.kotlin.mock()
-        val controller = InternalApiController(runStatusTracker, scheduler)
+        val artifactCleanup = org.mockito.kotlin.mock<maple.externalapi.cleanup.ArtifactCleanupScheduler>()
+        val consumedCleanup = org.mockito.kotlin.mock<maple.externalapi.cleanup.ConsumedChunkCleanupScheduler>()
+        val controller = InternalApiController(runStatusTracker, scheduler, artifactCleanup, consumedCleanup)
         mockMvc = standaloneSetup(controller)
             .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
             .build()
@@ -108,5 +110,41 @@ class InternalApiControllerTest {
 
         mockMvc.perform(post("/api/internal/trigger/daily"))
             .andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `POST trigger artifact-cleanup returns 202`() {
+        mockMvc.perform(post("/api/internal/trigger/artifact-cleanup"))
+            .andExpect(status().isAccepted)
+            .andExpect(jsonPath("$.status").value("STARTED"))
+    }
+
+    @Test
+    fun `POST trigger consumed-cleanup returns 202`() {
+        mockMvc.perform(post("/api/internal/trigger/consumed-cleanup"))
+            .andExpect(status().isAccepted)
+            .andExpect(jsonPath("$.status").value("STARTED"))
+    }
+
+    @Test
+    fun `POST trigger artifact-cleanup returns 409 when already running`() {
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val artifactCleanup = org.mockito.kotlin.mock<maple.externalapi.cleanup.ArtifactCleanupScheduler>()
+        whenever(artifactCleanup.cleanup()).thenAnswer {
+            latch.await(5, java.util.concurrent.TimeUnit.SECONDS)
+            Unit
+        }
+        val consumedCleanup = org.mockito.kotlin.mock<maple.externalapi.cleanup.ConsumedChunkCleanupScheduler>()
+        val controller = InternalApiController(runStatusTracker, scheduler, artifactCleanup, consumedCleanup)
+        mockMvc = standaloneSetup(controller)
+            .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
+            .build()
+
+        mockMvc.perform(post("/api/internal/trigger/artifact-cleanup"))
+            .andExpect(status().isAccepted)
+        // Second call returns 409 because AtomicBoolean is still true (cleanup blocks on latch)
+        mockMvc.perform(post("/api/internal/trigger/artifact-cleanup"))
+            .andExpect(status().isConflict)
+        latch.countDown()
     }
 }

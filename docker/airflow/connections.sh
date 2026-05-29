@@ -13,4 +13,11 @@ docker exec maple-airflow-scheduler airflow connections add external_api \
   --conn-port 8081 \
   --conn-schema http
 
+# Calculator (host.docker.internal → host port 8082)
+docker exec maple-airflow-scheduler airflow connections add calculator \
+  --conn-type http \
+  --conn-host http://host.docker.internal \
+  --conn-port 8082 \
+  --conn-schema http
+
 echo "Done. Verify with: docker exec maple-airflow-scheduler airflow connections list"

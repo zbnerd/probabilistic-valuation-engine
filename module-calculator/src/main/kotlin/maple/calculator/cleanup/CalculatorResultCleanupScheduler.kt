@@ -7,7 +7,7 @@ import maple.common.cleanup.RunInfo
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.scheduling.annotation.Scheduled
+
 import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -36,26 +36,22 @@ class CalculatorResultCleanupScheduler(
     private val log = LoggerFactory.getLogger(CalculatorResultCleanupScheduler::class.java)
     private val cleanupExecutor = RunCleanupExecutor("CalculatorCleanup")
 
-    @Scheduled(fixedDelayString = "\${calculator.cleanup.interval-ms:21600000}")
     fun cleanup() {
-        Thread.ofVirtual().name("cleanup-calc").start {
-            val start = Instant.now()
-            log.info("[CalculatorCleanup] started: dryRun={}", dryRun)
+        val start = Instant.now()
+        log.info("[CalculatorCleanup] started: dryRun={}", dryRun)
 
-            // Pipeline isolation: catch everything, never propagate
-            val result = runCatching { cleanupRuns(start) }
+        val result = runCatching { cleanupRuns(start) }
 
-            val durationMs = Instant.now().toEpochMilli() - start.toEpochMilli()
+        val durationMs = Instant.now().toEpochMilli() - start.toEpochMilli()
 
-            result.onSuccess { res ->
-                log.info(
-                    "[CalculatorCleanup] completed: dryRun={}, deleted={}, bytes={}, " +
-                        "errors={}, throttled={}, durationMs={}",
-                    dryRun, res.runsDeleted, res.bytesDeleted, res.errors, res.throttled, durationMs,
-                )
-            }.onFailure { ex ->
-                log.error("[CalculatorCleanup] failed (pipeline NOT affected): {}", ex.message, ex)
-            }
+        result.onSuccess { res ->
+            log.info(
+                "[CalculatorCleanup] completed: dryRun={}, deleted={}, bytes={}, " +
+                    "errors={}, throttled={}, durationMs={}",
+                dryRun, res.runsDeleted, res.bytesDeleted, res.errors, res.throttled, durationMs,
+            )
+        }.onFailure { ex ->
+            log.error("[CalculatorCleanup] failed (pipeline NOT affected): {}", ex.message, ex)
         }
     }
 

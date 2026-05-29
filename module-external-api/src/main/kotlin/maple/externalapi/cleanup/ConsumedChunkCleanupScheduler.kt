@@ -10,7 +10,6 @@ import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -47,7 +46,6 @@ class ConsumedChunkCleanupScheduler(
         acknowledgment.acknowledge()
     }
 
-    @Scheduled(fixedDelayString = "\${external-api.cleanup.consumed.interval-ms:3600000}")
     fun cleanup() {
         val batch = mutableListOf<ChunkConsumedEvent>()
         while (true) {

@@ -8,7 +8,6 @@ import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.ZoneId
@@ -38,30 +37,27 @@ class ArtifactCleanupScheduler(
     private val runIdPattern = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
         .withZone(ZoneId.systemDefault())
 
-    @Scheduled(fixedDelayString = "\${external-api.cleanup.interval-ms:21600000}")
     fun cleanup() {
-        Thread.ofVirtual().name("cleanup-ext").start {
-            val sample = io.micrometer.core.instrument.Timer.start()
-            val start = Instant.now()
-            log.info("[Cleanup] started: dryRun={}", dryRun)
+        val sample = io.micrometer.core.instrument.Timer.start()
+        val start = Instant.now()
+        log.info("[Cleanup] started: dryRun={}", dryRun)
 
-            updateStorageMetrics()
+        updateStorageMetrics()
 
-            val result = runCatching { cleanupRuns(start) }
+        val result = runCatching { cleanupRuns(start) }
 
-            val durationMs = Instant.now().toEpochMilli() - start.toEpochMilli()
-            sample.stop(metrics.timer())
+        val durationMs = Instant.now().toEpochMilli() - start.toEpochMilli()
+        sample.stop(metrics.timer())
 
-            result.onSuccess { res ->
-                log.info(
-                    "[Cleanup] completed: dryRun={}, runsDeleted={}, bytesDeleted={}, " +
-                        "throttled={}, errors={}, durationMs={}",
-                    dryRun, res.runsDeleted, res.bytesDeleted, res.throttled, res.errors, durationMs,
-                )
-            }.onFailure { ex ->
-                metrics.recordError()
-                log.error("[Cleanup] failed (pipeline NOT affected): {}", ex.message, ex)
-            }
+        result.onSuccess { res ->
+            log.info(
+                "[Cleanup] completed: dryRun={}, runsDeleted={}, bytesDeleted={}, " +
+                    "throttled={}, errors={}, durationMs={}",
+                dryRun, res.runsDeleted, res.bytesDeleted, res.throttled, res.errors, durationMs,
+            )
+        }.onFailure { ex ->
+            metrics.recordError()
+            log.error("[Cleanup] failed (pipeline NOT affected): {}", ex.message, ex)
         }
     }
 

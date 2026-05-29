@@ -1,6 +1,8 @@
 package maple.externalapi.scheduler
 
 import maple.externalapi.cache.OcidCacheProvider
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
 import maple.externalapi.scheduler.phase.SnapshotFetchPhase
@@ -8,28 +10,30 @@ import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
 @Component
-@ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
     private val snapshotFetchPhase: SnapshotFetchPhase,
     private val ocidCacheProvider: OcidCacheProvider,
     private val rankingFetchPhaseProvider: ObjectProvider<RankingFetchPhase>,
+    private val runStatusTracker: RunStatusTracker,
+    @Value("\${external-api.schedule.enabled:false}")
+    private val scheduleEnabled: Boolean,
     @Value("\${external-api.schedule.run-on-startup:false}")
     private val runOnStartup: Boolean,
     @Value("\${external-api.schedule.skip-character-basic:false}")
     private val skipCharacterBasic: Boolean,
-	) : ManagedLifecycle {
+) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val running = AtomicBoolean(false)
     private val shutdown = AtomicBoolean(false)
@@ -39,6 +43,7 @@ class ExternalApiScheduler(
 
     @EventListener(ApplicationReadyEvent::class)
     fun onStartup() {
+        if (!scheduleEnabled) return
         ocidCacheProvider.refresh()
         if (runOnStartup) {
             log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
@@ -49,10 +54,11 @@ class ExternalApiScheduler(
 
     @Scheduled(cron = "\${external-api.schedule.daily-cron:0 0 3 * * *}")
     fun scheduledDailyRefresh() {
+        if (!scheduleEnabled) return
         triggerDailyRefresh()
     }
 
-    fun triggerDailyRefresh() {
+    fun triggerDailyRefresh(externalRunId: String? = null) {
         if (!acquireLock(3_600_000)) {
             log.warn("[Scheduler] could not acquire lock for daily refresh, skipping")
             return
@@ -71,7 +77,11 @@ class ExternalApiScheduler(
             return
         }
 
-        log.info("[Scheduler] starting ranking fetch phase")
+        val runId = externalRunId ?: UUID.randomUUID().toString()
+        runStatusTracker.startRun(runId)
+
+        log.info("[Scheduler] starting ranking fetch phase, runId={}", runId)
+        runStatusTracker.transitionPhase(PipelinePhase.RANKING_FETCH)
         rankingPhase.execute(executor)
             .handle { runDir, ex ->
                 if (ex != null) {
@@ -83,16 +93,23 @@ class ExternalApiScheduler(
                 if (runDir == null) {
                     CompletableFuture.completedFuture(null)
                 } else {
+                    runStatusTracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
                     ocidLookupPhase.execute(executor, runDir)
                 }
             }
             .thenCompose {
                 val cache = ocidCacheProvider.refresh()
+                runStatusTracker.transitionPhase(PipelinePhase.CHARACTER_BASIC)
                 snapshotFetchPhase.executeCharacterBasic(executor, cache)
             }
             .whenComplete { _, ex ->
                 if (ex != null) {
-                    log.error("[Scheduler] daily refresh failed", ex)
+                    val message = ex.cause?.message ?: ex.message ?: "unknown error"
+                    runStatusTracker.failRun(message)
+                    log.error("[Scheduler] daily refresh failed, runId={}", runId, ex)
+                } else {
+                    runStatusTracker.completeRun(0, 0)
+                    log.info("[Scheduler] daily refresh completed, runId={}", runId)
                 }
                 releaseLock()
             }

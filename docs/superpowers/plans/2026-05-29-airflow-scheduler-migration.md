@@ -162,6 +162,11 @@ class InternalApiController(
         }
         return ResponseEntity.accepted().body(mapOf("status" to "STARTED"))
     }
+
+    @jakarta.annotation.PreDestroy
+    fun shutdown() {
+        triggerExecutor.close()
+    }
 }
 
 data class RunStatusResponse(
@@ -383,6 +388,11 @@ class InternalApiController(
         }
         return ResponseEntity.accepted().body(mapOf("status" to "STARTED"))
     }
+
+    @jakarta.annotation.PreDestroy
+    fun shutdown() {
+        triggerExecutor.close()
+    }
 }
 ```
 
@@ -513,6 +523,7 @@ with DAG(
         http_conn_id="external_api",
         endpoint="api/internal/trigger/artifact-cleanup",
         method="POST",
+        execution_timeout=timedelta(seconds=30),
         response_check=lambda r: r.json().get("status") == "STARTED",
     )
 
@@ -521,6 +532,7 @@ with DAG(
         http_conn_id="external_api",
         endpoint="api/internal/trigger/consumed-cleanup",
         method="POST",
+        execution_timeout=timedelta(seconds=30),
         response_check=lambda r: r.json().get("status") == "STARTED",
     )
 
@@ -529,6 +541,7 @@ with DAG(
         http_conn_id="calculator",
         endpoint="api/internal/trigger/result-cleanup",
         method="POST",
+        execution_timeout=timedelta(seconds=30),
         response_check=lambda r: r.json().get("status") == "STARTED",
     )
 
@@ -708,13 +721,33 @@ Expected: BUILD SUCCESSFUL
 
 ---
 
-### Task 9: YAML config — no changes needed
+### Task 9: YAML config — add graceful shutdown timeout
 
-The `@ConditionalOnProperty` stays as-is. Cleanup beans are created when `cleanup.enabled=true`. The difference is that `@Scheduled` no longer fires automatically — only the Airflow trigger endpoint invokes cleanup.
+**Files:**
+- Modify: `module-external-api/src/main/resources/application.yml`
+- Modify: `module-calculator/src/main/resources/application.yml`
 
-In the local profile (`application-local.yml`), if `run-on-startup: true` is set, the pipeline starts on boot. Cleanup still needs to be triggered separately (via Airflow or manual curl).
+- [ ] **Step 1: Add timeout-per-shutdown-phase to both modules**
 
-No YAML changes required for this migration.
+Append to each module's `application.yml`:
+
+```yaml
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 6m
+```
+
+This ensures `triggerExecutor.close()` in `@PreDestroy` has time to complete cleanup tasks (max `maxRuntimeSeconds=300` + buffer).
+
+The `@ConditionalOnProperty` stays as-is (`cleanup.enabled=true` creates the bean). `@Scheduled` no longer fires — only Airflow trigger endpoint invokes cleanup.
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add module-external-api/src/main/resources/application.yml \
+        module-calculator/src/main/resources/application.yml
+git commit -m "feat: add graceful shutdown timeout for cleanup trigger executors"
+```
 
 ---
 

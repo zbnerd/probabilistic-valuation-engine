@@ -1,10 +1,10 @@
 """
 Daily cleanup pipeline.
 
-Triggered by daily_collection_pipeline after successful completion.
-Runs artifact cleanup, consumed chunk cleanup, and calculator result cleanup in parallel.
+Runs every 6 hours and after daily_collection_pipeline completion.
+Cleans up artifact runs, consumed chunks, and calculator results in parallel.
 
-Control Plane: Airflow triggers.
+Control Plane: Airflow schedules and triggers.
 Data Plane: Modules execute cleanup on virtual threads.
 """
 

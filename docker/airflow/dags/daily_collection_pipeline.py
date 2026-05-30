@@ -1,7 +1,7 @@
 """
 Daily Nexon data collection pipeline.
 
-Trigger → Poll run-status with run_id correlation → Trigger cleanup.
+Trigger → Poll run-status with run_id correlation → Wait for synchronizer chunk consumed event → Trigger cleanup.
 
 Control Plane: Airflow triggers and monitors.
 Data Plane: Kafka handles chunk processing, retry, backpressure.
@@ -45,6 +45,37 @@ def poll_run_completion(**context):
     return True
 
 
+def wait_for_item_equipment_cycle(**context):
+    """Wait for item-equipment chunk consumed event from synchronizer via Kafka.
+
+    Consumes from synchronizer.chunk.consumed topic. When the first
+    item-equipment consumed event arrives, synchronizer has finished
+    processing at least one chunk — safe to trigger cleanup.
+    """
+    import json as _json
+    from kafka import KafkaConsumer
+
+    consumer = KafkaConsumer(
+        "synchronizer.chunk.consumed",
+        bootstrap_servers="host.docker.internal:9092",
+        auto_offset_reset="latest",
+        enable_auto_commit=False,
+        group_id="airflow-ie-cycle-waiter",
+        value_deserializer=lambda m: _json.loads(m.decode("utf-8")),
+        consumer_timeout_ms=120 * 60 * 1000,  # 2 hours
+    )
+
+    try:
+        for message in consumer:
+            event = message.value
+            if event.get("endpoint") == "item-equipment":
+                return True
+    finally:
+        consumer.close()
+
+    raise RuntimeError("Timed out waiting for item-equipment consumed event")
+
+
 default_args = {
     "owner": "maple-pipeline",
     "retries": 120,
@@ -84,10 +115,17 @@ with DAG(
         execution_timeout=timedelta(hours=2),
     )
 
+    wait_ie_cycle = PythonOperator(
+        task_id="wait_for_item_equipment_cycle",
+        python_callable=wait_for_item_equipment_cycle,
+        execution_timeout=timedelta(hours=1),
+        retries=1,
+    )
+
     trigger_cleanup = TriggerDagRunOperator(
         task_id="trigger_cleanup_pipeline",
         trigger_dag_id="daily_cleanup_pipeline",
         wait_for_completion=False,
     )
 
-    check_external_api >> trigger_daily_collection >> wait_for_completion >> trigger_cleanup
+    check_external_api >> trigger_daily_collection >> wait_for_completion >> wait_ie_cycle >> trigger_cleanup

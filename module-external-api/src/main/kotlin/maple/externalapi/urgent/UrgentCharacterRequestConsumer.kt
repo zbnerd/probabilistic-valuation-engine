@@ -55,10 +55,11 @@ class UrgentCharacterRequestConsumer(
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Urgent] failed: userIgn={}", maskIgn(request.userIgn), ex)
-                    return@whenComplete
+                } else {
+                    log.info("[Urgent] completed: userIgn={}", maskIgn(request.userIgn))
                 }
-                acknowledgment.acknowledge()
-                log.info("[Urgent] completed: userIgn={}", maskIgn(request.userIgn))
+                runCatching { acknowledgment.acknowledge() }
+                    .onFailure { log.warn("[Urgent] ACK failed: userIgn={}", maskIgn(request.userIgn)) }
             }
     }
 

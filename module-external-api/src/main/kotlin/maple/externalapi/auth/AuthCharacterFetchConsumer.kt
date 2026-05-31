@@ -63,9 +63,10 @@ class AuthCharacterFetchConsumer(
                 log.error("[AuthFetch] failed: eventId={}", request.eventId, ex)
                 publishError(request, "Internal error: ${ex.message}")
             }
-        }
 
-        acknowledgment.acknowledge()
+            runCatching { acknowledgment.acknowledge() }
+                .onFailure { log.warn("[AuthFetch] ACK failed: eventId={}", request.eventId) }
+        }
     }
 
     private fun publishSuccess(request: CharacterFetchRequest, accountId: String?, characterOcidMap: Map<String, String>) {

@@ -24,7 +24,7 @@ with DAG(
     dag_id="daily_cleanup_pipeline",
     default_args=default_args,
     start_date=datetime(2026, 5, 29),
-    schedule=None,
+    schedule="0 */6 * * *",  # every 6 hours + triggered after collection
     catchup=False,
     tags=["pipeline", "cleanup"],
 ) as dag:

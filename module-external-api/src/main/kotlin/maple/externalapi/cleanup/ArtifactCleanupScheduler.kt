@@ -110,7 +110,8 @@ class ArtifactCleanupScheduler(
     }
 
     private fun parseRunIdTimestamp(runId: String): Instant? {
-        return runIdPattern.parse(runId) { Instant.from(it) }
+        val timestamp = runId.substringBeforeLast("-")
+        return runCatching { runIdPattern.parse(timestamp) { Instant.from(it) } }.getOrNull()
     }
 
     private fun updateStorageMetrics() {

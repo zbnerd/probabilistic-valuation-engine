@@ -1,7 +1,8 @@
 package maple.expectation.infrastructure.event
 
 import io.micrometer.core.instrument.MeterRegistry
-import java.util.concurrent.Executor
+import jakarta.annotation.PreDestroy
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.Semaphore
@@ -20,7 +21,7 @@ class HighPriorityEventConsumer(
     @Value("\${event.consumer.high.max-concurrent:50}") private val maxConcurrent: Int,
 ) {
     private val logger = LoggerFactory.getLogger(HighPriorityEventConsumer::class.java)
-    private val executor: Executor = Executors.newVirtualThreadPerTaskExecutor()
+    private val executor: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
     private val semaphore = Semaphore(maxConcurrent)
 
     fun <T> processAsync(event: IntegrationEvent<T>, handler: EventHandler<T>) {
@@ -68,5 +69,15 @@ class HighPriorityEventConsumer(
 
     fun interface EventHandler<T> {
         fun handle(payload: T)
+    }
+
+    @PreDestroy
+    fun shutdown() {
+        executor.shutdown()
+        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+            logger.warn("[HighPriorityEventConsumer] VT executor did not terminate in 5s")
+            executor.shutdownNow()
+        }
+        logger.info("[HighPriorityEventConsumer] Executor shut down")
     }
 }

@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.config
 
 import io.micrometer.core.instrument.MeterRegistry
+import jakarta.annotation.PreDestroy
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -59,6 +60,8 @@ class ExecutorConfig(
 ) {
 
     private val log = LoggerFactory.getLogger(ExecutorConfig::class.java)
+    private val asyncVtExecutor: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
+    private val aiVtExecutor: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
     init {
         // P2-25: 시작 시점에 1:2 비율 검증
@@ -154,10 +157,9 @@ class ExecutorConfig(
         maxConcurrent: Int,
     ): Executor {
         val semaphore = Semaphore(maxConcurrent)
-        val virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor()
 
         return Executor { runnable ->
-            virtualThreadExecutor.execute {
+            aiVtExecutor.execute {
                 var acquired = false
                 try {
                     acquired = semaphore.tryAcquire(10, TimeUnit.SECONDS)
@@ -185,7 +187,7 @@ class ExecutorConfig(
      * Async Executor for CompletableFuture operations (ADR-039)
      */
     @Bean(name = ["asyncExecutor"])
-    fun asyncExecutor(): ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
+    fun asyncExecutor(): ExecutorService = asyncVtExecutor
 
     /**
      * Default TaskExecutor for @Async methods (Unit 1: P2 Technical Debt)
@@ -336,4 +338,16 @@ class ExecutorConfig(
 
     @Bean
     fun taskDecoratorFactory(): TaskDecoratorFactory = TaskDecoratorFactory()
+
+    @PreDestroy
+    fun shutdownVirtualThreadExecutors() {
+        listOf(asyncVtExecutor, aiVtExecutor).forEach { es ->
+            es.shutdown()
+            if (!es.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("[ExecutorConfig] VT executor did not terminate in 5s, forcing shutdown")
+                es.shutdownNow()
+            }
+        }
+        log.info("[ExecutorConfig] Virtual thread executors shut down")
+    }
 }

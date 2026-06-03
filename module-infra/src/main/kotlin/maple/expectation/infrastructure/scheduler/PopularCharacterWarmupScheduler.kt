@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.LockSupport
 import maple.expectation.core.port.out.CacheWarmupPort
+import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.expectation.core.port.out.PopularCharacterTrackerPort
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -151,10 +152,5 @@ class PopularCharacterWarmupScheduler(
 
     private fun sleep(millis: Long) {
         LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(millis))
-    }
-
-    private fun maskIgn(ign: String?): String {
-        if (ign == null || ign.length < 2) return "***"
-        return ign[0] + "***" + ign.substring(ign.length - 1)
     }
 }

@@ -5,11 +5,11 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.security.MessageDigest
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
+import maple.expectation.util.GzipUtils.compress
+import maple.expectation.util.GzipUtils.decompressBytes
+import maple.expectation.util.HashUtils.sha256Hex
 import maple.expectation.core.model.snapshot.CalculationSnapshot
 import maple.expectation.core.port.out.SnapshotObjectStore
 import maple.expectation.core.port.out.SnapshotObjectStoreResult
@@ -42,11 +42,11 @@ class LocalSnapshotObjectStore(
 
     private fun doPut(snapshot: CalculationSnapshot, data: ByteArray): SnapshotObjectStoreResult {
         val gzipStart = System.nanoTime()
-        val compressed = gzipCompress(data)
+        val compressed = compress(data)
         meterRegistry.timer("snapshot.store.gzip").record(System.nanoTime() - gzipStart, TimeUnit.NANOSECONDS)
 
         val hashStart = System.nanoTime()
-        val hash = sha256(compressed)
+        val hash = sha256Hex(compressed)
         meterRegistry.timer("snapshot.store.hash").record(System.nanoTime() - hashStart, TimeUnit.NANOSECONDS)
 
         val fullPath = resolveFullPath(snapshot.objectKey)
@@ -70,7 +70,7 @@ class LocalSnapshotObjectStore(
     override fun get(objectKey: String): ByteArray {
         val fullPath = resolveFullPath(objectKey)
         val compressed = Files.readAllBytes(fullPath)
-        return gzipDecompress(compressed)
+        return decompressBytes(compressed)
     }
 
     override fun delete(objectKey: String) {
@@ -81,20 +81,5 @@ class LocalSnapshotObjectStore(
     private fun resolveFullPath(objectKey: String): Path {
         val logicalKey = objectKey.removePrefix("/")
         return Paths.get(basePath, logicalKey)
-    }
-
-    private fun gzipCompress(data: ByteArray): ByteArray {
-        val bos = java.io.ByteArrayOutputStream()
-        GZIPOutputStream(bos).use { it.write(data) }
-        return bos.toByteArray()
-    }
-
-    private fun gzipDecompress(compressed: ByteArray): ByteArray {
-        GZIPInputStream(compressed.inputStream()).use { return it.readAllBytes() }
-    }
-
-    private fun sha256(data: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(data).joinToString("") { "%02x".format(it) }
     }
 }

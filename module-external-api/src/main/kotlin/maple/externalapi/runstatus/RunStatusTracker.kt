@@ -29,10 +29,11 @@ class RunStatusTracker {
         log.info("[RunStatus] phase={}", phase)
     }
 
-    fun completeRun(chunksProcessed: Int, recordsProcessed: Long) {
+    fun completeRun(runId: String, chunksProcessed: Int, recordsProcessed: Long) {
         val now = Instant.now()
-        currentRun.updateAndGet { current ->
-            current?.copy(
+        val completed = currentRun.updateAndGet { current ->
+            if (current?.runId != runId) return@updateAndGet current
+            current.copy(
                 phase = PipelinePhase.COMPLETED,
                 updatedAt = now,
                 completedAt = now,
@@ -40,22 +41,23 @@ class RunStatusTracker {
                 recordsProcessed = recordsProcessed,
             )
         }
-        lastCompletedRun.set(currentRun.get())
-        log.info("[RunStatus] completed chunks={} records={}", chunksProcessed, recordsProcessed)
+        lastCompletedRun.set(completed)
+        log.info("[RunStatus] completed run={} chunks={} records={}", completed?.runId, chunksProcessed, recordsProcessed)
     }
 
-    fun failRun(errorMessage: String) {
+    fun failRun(runId: String, errorMessage: String) {
         val now = Instant.now()
-        currentRun.updateAndGet { current ->
-            current?.copy(
+        val failed = currentRun.updateAndGet { current ->
+            if (current?.runId != runId) return@updateAndGet current
+            current.copy(
                 phase = PipelinePhase.FAILED,
                 updatedAt = now,
                 completedAt = now,
                 errorMessage = errorMessage,
             )
         }
-        lastCompletedRun.set(currentRun.get())
-        log.error("[RunStatus] failed: {}", errorMessage)
+        lastCompletedRun.set(failed)
+        log.error("[RunStatus] failed run={}: {}", failed?.runId, errorMessage)
     }
 
     fun getCurrentStatus(): RunStatus? = currentRun.get()

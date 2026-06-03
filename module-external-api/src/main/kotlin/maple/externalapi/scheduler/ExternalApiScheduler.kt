@@ -107,10 +107,10 @@ class ExternalApiScheduler(
             .whenComplete { _, ex ->
                 if (ex != null) {
                     val message = ex.cause?.message ?: ex.message ?: "unknown error"
-                    runStatusTracker.failRun(message)
+                    runStatusTracker.failRun(runId, message)
                     log.error("[Scheduler] daily refresh failed, runId={}", runId, ex)
                 } else {
-                    runStatusTracker.completeRun(0, 0)
+                    runStatusTracker.completeRun(runId, 0, 0)
                     log.info("[Scheduler] daily refresh completed, runId={}", runId)
                 }
                 releaseLock()

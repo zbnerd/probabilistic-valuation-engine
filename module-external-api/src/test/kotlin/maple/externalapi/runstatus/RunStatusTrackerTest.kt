@@ -37,7 +37,7 @@ class RunStatusTrackerTest {
     fun `completeRun sets COMPLETED`() {
         tracker.startRun("run-1")
         tracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
-        tracker.completeRun(100, 600000L)
+        tracker.completeRun("run-1", 100, 600000L)
 
         val status = tracker.getCurrentStatus()!!
         assertThat(status.phase).isEqualTo(PipelinePhase.COMPLETED)
@@ -50,7 +50,7 @@ class RunStatusTrackerTest {
     @Test
     fun `failRun sets FAILED with message`() {
         tracker.startRun("run-1")
-        tracker.failRun("Nexon API timeout")
+        tracker.failRun("run-1", "Nexon API timeout")
 
         val status = tracker.getCurrentStatus()!!
         assertThat(status.phase).isEqualTo(PipelinePhase.FAILED)
@@ -60,7 +60,7 @@ class RunStatusTrackerTest {
     @Test
     fun `getLastCompletedRun returns most recent completed`() {
         tracker.startRun("run-1")
-        tracker.completeRun(10, 1000L)
+        tracker.completeRun("run-1", 10, 1000L)
 
         Thread.sleep(10)
 

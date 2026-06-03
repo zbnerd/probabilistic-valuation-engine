@@ -48,7 +48,14 @@ class OcidLookupRunConsumer(
         }
 
         repository.batchUpsert(mappings)
-        repository.writeOcidToRedis(mappings)
+        runCatching {
+            repository.writeOcidToRedis(mappings)
+        }.onFailure { ex ->
+            log.error(
+                "[OcidConsumer] Redis write failed after DB upsert: runId={} mappings={} - {}. Redis may be stale until next run.",
+                event.runId, mappings.size, ex.message, ex,
+            )
+        }
 
         log.info("[OcidConsumer] completed: runId={} processed={}", event.runId, mappings.size)
         acknowledgment.acknowledge()

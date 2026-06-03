@@ -7,14 +7,13 @@ import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
-import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.repository.CharacterBasicRepository
+import maple.synchronizer.repository.OcidMappingRepository
 import maple.synchronizer.storage.BasicChunkFileReader
 import maple.synchronizer.storage.BasicRecord
+import maple.synchronizer.storage.OcidMapping
 import org.slf4j.LoggerFactory
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
@@ -28,8 +27,8 @@ class BasicSnapshotChunkConsumer(
     private val objectMapper: ObjectMapper,
     private val fileReader: BasicChunkFileReader,
     private val repository: CharacterBasicRepository,
+    private val ocidMappingRepository: OcidMappingRepository,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
-    private val jdbc: NamedParameterJdbcTemplate,
     private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -161,22 +160,9 @@ class BasicSnapshotChunkConsumer(
     }
 
     private fun upsertOcidFromBasicRecords(records: List<BasicRecord>) {
-        records.forEach { record ->
-            val params = MapSqlParameterSource()
-                .addValue("userIgn", record.userIgn)
-                .addValue("ocid", record.ocid)
-            jdbc.update(
-                "DELETE FROM game_character WHERE ocid = :ocid AND user_ign != :userIgn",
-                params,
-            )
-            jdbc.update(
-                """INSERT INTO game_character (user_ign, ocid, updated_at)
-                   VALUES (:userIgn, :ocid, NOW())
-                   ON CONFLICT (user_ign) DO UPDATE SET ocid = EXCLUDED.ocid, updated_at = NOW()""",
-                params,
-            )
-            log.info("[BasicSync] upserted OCID to game_character: userIgn={}", maskIgn(record.userIgn))
-        }
+        val mappings = records.map { OcidMapping(userIgn = it.userIgn, ocid = it.ocid) }
+        ocidMappingRepository.batchUpsert(mappings)
+        log.info("[BasicSync] batch upserted OCID mappings: count={}", mappings.size)
     }
 
     override val lifecyclePhase: Int = 100

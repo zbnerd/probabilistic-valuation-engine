@@ -65,19 +65,24 @@ def poll_run_completion(**context):
 def wait_for_item_equipment_cycle(**context):
     """Wait for item-equipment chunk consumed event from synchronizer via Kafka.
 
-    Consumes from synchronizer.chunk.consumed topic. When the first
-    item-equipment consumed event arrives, synchronizer has finished
-    processing at least one chunk — safe to trigger cleanup.
+    Consumes from synchronizer.chunk.consumed topic. Filters by runId
+    to only accept events from the run triggered by this pipeline invocation.
+    Uses per-run group_id to avoid partition rebalancing on overlapping runs.
     """
     import json as _json
     from kafka import KafkaConsumer
+
+    trigger_response = context["ti"].xcom_pull(task_ids="trigger_daily_collection")
+    if isinstance(trigger_response, str):
+        trigger_response = _json.loads(trigger_response)
+    run_id = trigger_response["runId"]
 
     consumer = KafkaConsumer(
         "synchronizer.chunk.consumed",
         bootstrap_servers="host.docker.internal:9092",
         auto_offset_reset="latest",
         enable_auto_commit=False,
-        group_id="airflow-ie-cycle-waiter",
+        group_id=f"airflow-ie-cycle-waiter-{run_id[:8]}",
         value_deserializer=lambda m: _json.loads(m.decode("utf-8")),
         consumer_timeout_ms=120 * 60 * 1000,  # 2 hours
     )
@@ -85,7 +90,7 @@ def wait_for_item_equipment_cycle(**context):
     try:
         for message in consumer:
             event = message.value
-            if event.get("endpoint") == "item-equipment":
+            if event.get("endpoint") == "item-equipment" and event.get("runId") == run_id:
                 return True
     finally:
         consumer.close()

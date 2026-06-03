@@ -34,20 +34,21 @@ class CalculatorChunkProcessingCoordinator(
             return
         }
 
-        if (!objectStorage.exists(event.objectKey)) {
-            log.error("[Coordinator] source chunk not found: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, event.objectKey)
-            metrics.recordChunkSkippedNotFound()
-            return
-        }
-
-        val resultObjectKey = resultObjectKeyFor(event)
-        if (objectStorage.exists(resultObjectKey)) {
-            republishExistingResult(event, resultObjectKey)
-            return
-        }
-
         withMdc(event) {
             concurrency.withPermit {
+                // All checks inside semaphore — eliminates TOCTOU race
+                if (!objectStorage.exists(event.objectKey)) {
+                    log.error("[Coordinator] source chunk not found: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, event.objectKey)
+                    metrics.recordChunkSkippedNotFound()
+                    return@withPermit
+                }
+
+                val resultObjectKey = resultObjectKeyFor(event)
+                if (objectStorage.exists(resultObjectKey)) {
+                    republishExistingResult(event, resultObjectKey)
+                    return@withPermit
+                }
+
                 executeChunk(event, resultObjectKey)
             }
         }

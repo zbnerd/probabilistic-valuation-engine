@@ -14,6 +14,19 @@ from airflow import DAG
 from airflow.providers.http.operators.http import HttpOperator
 from airflow.providers.http.sensors.http import HttpSensor
 
+
+def is_accepted_response(response):
+    """Check if HTTP response indicates success or already-accepted state.
+    Handles 409 CONFLICT (already running/started) as acceptance.
+    """
+    if response.status_code == 409:
+        return True
+    try:
+        return response.json().get("status") in ("UP", "STARTED")
+    except (ValueError, AttributeError):
+        return False
+
+
 default_args = {
     "owner": "maple-pipeline",
     "retries": 1,
@@ -34,7 +47,7 @@ with DAG(
         http_conn_id="external_api",
         endpoint="actuator/health",
         request_params={},
-        response_check=lambda r: r.json().get("status") == "UP",
+        response_check=is_accepted_response,
         poke_interval=30,
         timeout=120,
     )
@@ -45,7 +58,7 @@ with DAG(
         endpoint="api/internal/trigger/artifact-cleanup",
         method="POST",
         execution_timeout=timedelta(seconds=30),
-        response_check=lambda r: r.json().get("status") == "STARTED",
+        response_check=is_accepted_response,
     )
 
     trigger_consumed_cleanup = HttpOperator(
@@ -54,7 +67,7 @@ with DAG(
         endpoint="api/internal/trigger/consumed-cleanup",
         method="POST",
         execution_timeout=timedelta(seconds=30),
-        response_check=lambda r: r.json().get("status") == "STARTED",
+        response_check=is_accepted_response,
     )
 
     trigger_result_cleanup = HttpOperator(
@@ -63,7 +76,7 @@ with DAG(
         endpoint="api/internal/trigger/result-cleanup",
         method="POST",
         execution_timeout=timedelta(seconds=30),
-        response_check=lambda r: r.json().get("status") == "STARTED",
+        response_check=is_accepted_response,
     )
 
     check_external_api >> [trigger_artifact_cleanup, trigger_consumed_cleanup, trigger_result_cleanup]

@@ -1,10 +1,13 @@
 package maple.expectation.infrastructure.event
 
+import jakarta.annotation.PreDestroy
 import java.lang.reflect.Method
 import java.util.ArrayList
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.EventProcessingException
@@ -170,6 +173,18 @@ class EventDispatcher(
     ) {
         init {
             method.isAccessible = true
+        }
+    }
+
+    @PreDestroy
+    fun shutdown() {
+        (virtualThreadExecutor as? ExecutorService)?.let { es ->
+            es.shutdown()
+            if (!es.awaitTermination(5, TimeUnit.SECONDS)) {
+                logger.warn("[EventDispatcher] VT executor did not terminate in 5s")
+                es.shutdownNow()
+            }
+            logger.info("[EventDispatcher] Virtual thread executor shut down")
         }
     }
 }

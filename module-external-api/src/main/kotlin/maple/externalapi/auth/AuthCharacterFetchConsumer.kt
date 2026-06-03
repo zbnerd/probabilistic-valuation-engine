@@ -1,6 +1,7 @@
 package maple.externalapi.auth
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import jakarta.annotation.PreDestroy
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.expectation.core.auth.event.CharacterFetchRequest
 import maple.expectation.infrastructure.external.NexonAuthClient
@@ -22,6 +23,16 @@ class AuthCharacterFetchConsumer(
     @Value("\${auth.kafka.character-fetch-response-topic}") private val responseTopic: String,
 ) {
     private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
+
+    @PreDestroy
+    fun shutdown() {
+        vtExecutor.shutdown()
+        if (!vtExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+            log.warn("[AuthFetch] VT executor did not terminate in 5s")
+            vtExecutor.shutdownNow()
+        }
+        log.info("[AuthFetch] VT executor shut down")
+    }
 
     @KafkaListener(
         topics = ["\${auth.kafka.character-fetch-request-topic}"],

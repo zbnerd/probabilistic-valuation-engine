@@ -7,8 +7,8 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import java.util.UUID
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 @RestController
@@ -19,7 +19,7 @@ class InternalApiController(
     @Autowired(required = false) private val artifactCleanup: ArtifactCleanupScheduler?,
     @Autowired(required = false) private val consumedCleanup: ConsumedChunkCleanupScheduler?,
 ) {
-    private val triggerExecutor = Executors.newVirtualThreadPerTaskExecutor()
+    private val exec = VirtualThreadExecutorManager("InternalApiController")
     private val artifactCleanupRunning = AtomicBoolean(false)
     private val consumedCleanupRunning = AtomicBoolean(false)
 
@@ -43,7 +43,7 @@ class InternalApiController(
         }
 
         val runId = airflowRunId ?: UUID.randomUUID().toString()
-        triggerExecutor.submit { scheduler.triggerDailyRefresh(runId) }
+        exec.executor.submit { scheduler.triggerDailyRefresh(runId) }
         return ResponseEntity.accepted().body(mapOf("status" to "STARTED", "runId" to runId))
     }
 
@@ -57,7 +57,7 @@ class InternalApiController(
             return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(mapOf("status" to "ALREADY_RUNNING"))
         }
-        triggerExecutor.submit {
+        exec.executor.submit {
             try { artifactCleanup.cleanup() } finally { artifactCleanupRunning.set(false) }
         }
         return ResponseEntity.accepted().body(mapOf("status" to "STARTED"))
@@ -73,7 +73,7 @@ class InternalApiController(
             return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(mapOf("status" to "ALREADY_RUNNING"))
         }
-        triggerExecutor.submit {
+        exec.executor.submit {
             try { consumedCleanup.cleanup() } finally { consumedCleanupRunning.set(false) }
         }
         return ResponseEntity.accepted().body(mapOf("status" to "STARTED"))
@@ -81,7 +81,7 @@ class InternalApiController(
 
     @jakarta.annotation.PreDestroy
     fun shutdown() {
-        triggerExecutor.close()
+        exec.shutdown()
     }
 }
 

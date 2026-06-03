@@ -12,8 +12,8 @@ import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
+import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import org.springframework.stereotype.Component
-import java.util.concurrent.Executors
 
 @Component
 class AuthCharacterFetchConsumer(
@@ -22,16 +22,11 @@ class AuthCharacterFetchConsumer(
     private val objectMapper: ObjectMapper,
     @Value("\${auth.kafka.character-fetch-response-topic}") private val responseTopic: String,
 ) {
-    private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
+    private val exec = VirtualThreadExecutorManager("AuthCharacterFetchConsumer")
 
     @PreDestroy
     fun shutdown() {
-        vtExecutor.shutdown()
-        if (!vtExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
-            log.warn("[AuthFetch] VT executor did not terminate in 5s")
-            vtExecutor.shutdownNow()
-        }
-        log.info("[AuthFetch] VT executor shut down")
+        exec.shutdown()
     }
 
     @KafkaListener(
@@ -46,7 +41,7 @@ class AuthCharacterFetchConsumer(
         val request = objectMapper.readValue(message, CharacterFetchRequest::class.java)
         log.info("[AuthFetch] processing: eventId={}, userIgn={}", request.eventId, request.userIgn)
 
-        vtExecutor.submit {
+        exec.executor.submit {
             runCatching {
                 val characterListOpt = nexonAuthClient.getCharacterList(request.apiKey)
 

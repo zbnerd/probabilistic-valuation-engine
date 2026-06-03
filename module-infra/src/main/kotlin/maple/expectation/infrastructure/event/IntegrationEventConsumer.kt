@@ -2,14 +2,13 @@ package maple.expectation.infrastructure.event
 
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.annotation.PreDestroy
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import org.slf4j.LoggerFactory
 
 /**
@@ -26,7 +25,7 @@ open class IntegrationEventConsumer(
 ) {
     private val logPrefix = "${priority.replaceFirstChar { it.uppercase() }}PriorityConsumer"
     private val logger = LoggerFactory.getLogger(IntegrationEventConsumer::class.java)
-    private val executor: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
+    private val exec = VirtualThreadExecutorManager("IntegrationEventConsumer")
     private val semaphore = Semaphore(maxConcurrent)
 
     fun <T> processAsync(event: IntegrationEvent<T>, handler: EventHandler<T>) {
@@ -42,7 +41,7 @@ open class IntegrationEventConsumer(
                 throw RejectedExecutionException("$priority priority event semaphore timeout")
             }
 
-            executor.execute {
+            exec.executor.execute {
                 val start = System.nanoTime()
                 logicExecutor.executeWithFinally(
                     {
@@ -73,12 +72,5 @@ open class IntegrationEventConsumer(
     }
 
     @PreDestroy
-    fun shutdown() {
-        executor.shutdown()
-        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-            logger.warn("[$logPrefix] VT executor did not terminate in 5s")
-            executor.shutdownNow()
-        }
-        logger.info("[$logPrefix] Executor shut down")
-    }
+    fun shutdown() = exec.shutdown()
 }

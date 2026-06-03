@@ -14,9 +14,9 @@ import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
@@ -38,7 +38,7 @@ class ExternalApiScheduler(
     private val running = AtomicBoolean(false)
     private val shutdown = AtomicBoolean(false)
     private val itemEquipmentStarted = AtomicBoolean(false)
-    private val executor = Executors.newVirtualThreadPerTaskExecutor()
+    private val exec = VirtualThreadExecutorManager("ExternalApiScheduler")
     private val lock = ReentrantLock()
     private val idle = lock.newCondition()
 
@@ -84,7 +84,7 @@ class ExternalApiScheduler(
 
         log.info("[Scheduler] starting ranking fetch phase, runId={}", runId)
         runStatusTracker.transitionPhase(PipelinePhase.RANKING_FETCH)
-        rankingPhase.execute(executor)
+        rankingPhase.execute(exec.executor)
             .handle { runDir, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ranking fetch failed, cannot proceed with OCID lookup", ex)
@@ -96,13 +96,13 @@ class ExternalApiScheduler(
                     CompletableFuture.completedFuture(null)
                 } else {
                     runStatusTracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
-                    ocidLookupPhase.execute(executor, runDir)
+                    ocidLookupPhase.execute(exec.executor, runDir)
                 }
             }
             .thenCompose {
                 val cache = ocidCacheProvider.refresh()
                 runStatusTracker.transitionPhase(PipelinePhase.CHARACTER_BASIC)
-                snapshotFetchPhase.executeCharacterBasic(executor, cache)
+                snapshotFetchPhase.executeCharacterBasic(exec.executor, cache)
             }
             .whenComplete { _, ex ->
                 if (ex != null) {
@@ -120,7 +120,7 @@ class ExternalApiScheduler(
 
     private fun startItemEquipmentLoopOnce() {
         if (itemEquipmentStarted.compareAndSet(false, true)) {
-            executor.submit { runItemEquipmentLoop() }
+            exec.executor.submit { runItemEquipmentLoop() }
         }
     }
 
@@ -138,7 +138,7 @@ class ExternalApiScheduler(
         val entries = ocidCacheProvider.current().entries.toList()
         if (entries.isEmpty()) {
             log.warn("[Scheduler] OCID cache empty, waiting 30s")
-            executor.submit {
+            exec.executor.submit {
                 Thread.sleep(java.time.Duration.ofSeconds(30))
                 ocidCacheProvider.refresh()
                 runItemEquipmentCycle()
@@ -147,7 +147,7 @@ class ExternalApiScheduler(
         }
 
         if (!acquireLock(120_000)) {
-            executor.submit {
+            exec.executor.submit {
                 Thread.sleep(java.time.Duration.ofSeconds(5))
                 runItemEquipmentCycle()
             }
@@ -155,13 +155,13 @@ class ExternalApiScheduler(
         }
 
         CompletableFuture.completedFuture(null)
-            .thenCompose { snapshotFetchPhase.executeItemEquipment(executor, entries) }
+            .thenCompose { snapshotFetchPhase.executeItemEquipment(exec.executor, entries) }
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)
                 }
                 releaseLock()
-                executor.submit { runItemEquipmentCycle() }
+                exec.executor.submit { runItemEquipmentCycle() }
             }
     }
 
@@ -190,6 +190,6 @@ class ExternalApiScheduler(
     override fun stopLifecycle() {
         log.info("[Scheduler] shutdown requested")
         shutdown.set(true)
-        executor.close()
+        exec.shutdown()
     }
 }

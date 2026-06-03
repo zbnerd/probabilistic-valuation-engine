@@ -19,9 +19,9 @@ import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
 
 @Component
 @ConditionalOnProperty(
@@ -41,7 +41,7 @@ class UrgentCharacterRequestConsumer(
     private val storeBasePath: String,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val workerExecutor = Executors.newVirtualThreadPerTaskExecutor()
+    private val exec = VirtualThreadExecutorManager("UrgentCharacterRequestConsumer")
 
     @KafkaListener(
         topics = ["\${external-api.urgent.request-topic}"],
@@ -97,8 +97,8 @@ class UrgentCharacterRequestConsumer(
                         basicData = basicFuture.resultNow(),
                         equipmentData = equipmentFuture.resultNow(),
                     )
-                }, workerExecutor)
-        }, workerExecutor)
+                }, exec.executor)
+        }, exec.executor)
 
     private fun publishUrgentChunksAsync(
         request: UrgentCharacterRequest,
@@ -159,7 +159,7 @@ class UrgentCharacterRequestConsumer(
                 compressedBytes = stats.compressedBytes,
                 createdAt = Instant.now(),
             )
-        }, workerExecutor).thenCompose { event ->
+        }, exec.executor).thenCompose { event ->
             val eventJson = objectMapper.writeValueAsString(event)
             kafkaTemplate.send(urgentChunkReadyTopic, event.kafkaKey(), eventJson).thenAccept {
                 log.info(
@@ -186,7 +186,7 @@ class UrgentCharacterRequestConsumer(
 
     @PreDestroy
     fun close() {
-        workerExecutor.close()
+        exec.shutdown()
     }
 }
 

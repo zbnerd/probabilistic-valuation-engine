@@ -3,7 +3,7 @@ package maple.synchronizer.consumer
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import maple.expectation.common.event.ChunkExecutionType
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
-import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
 import maple.synchronizer.processor.ChunkProcessor
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.storage.BasicChunkFileReader
@@ -53,7 +53,7 @@ class ChunkConsumerMappingTest {
         val consumer = KafkaResultChunkConsumer(
             objectMapper = objectMapper,
             chunkProcessor = mock<ChunkProcessor>(),
-            metrics = mock<SynchronizerMetrics>(),
+            chunkMetricsListener = mock<SynchronizerChunkMetricsListener>(),
             chunkConsumerTemplate = template,
             consumedEventPublisher = mock<KafkaChunkConsumedEventPublisher>(),
         )

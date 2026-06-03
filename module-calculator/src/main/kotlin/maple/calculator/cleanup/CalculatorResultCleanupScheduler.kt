@@ -1,5 +1,6 @@
 package maple.calculator.cleanup
 
+import maple.calculator.config.CalculatorCleanupProperties
 import maple.calculator.storage.ObjectStorage
 import maple.common.cleanup.RunCleanupExecutor
 import maple.common.cleanup.RunCleanupResult
@@ -15,18 +16,7 @@ import java.time.Instant
 @Component
 class CalculatorResultCleanupScheduler(
     private val objectStorage: ObjectStorage,
-    @Value("\${calculator.cleanup.dry-run:true}")
-    private val dryRun: Boolean,
-    @Value("\${calculator.cleanup.runs.keep-recent:5}")
-    private val keepRecent: Int,
-    @Value("\${calculator.cleanup.runs.keep-within-hours:48}")
-    private val keepWithinHours: Long,
-    @Value("\${calculator.cleanup.max-delete-runs-per-cycle:10}")
-    private val maxDeleteRunsPerCycle: Int,
-    @Value("\${calculator.cleanup.max-delete-bytes-per-cycle:5368709120}")
-    private val maxDeleteBytesPerCycle: Long,
-    @Value("\${calculator.cleanup.max-runtime-seconds:60}")
-    private val maxRuntimeSeconds: Long,
+    private val cleanupProperties: CalculatorCleanupProperties,
     @Value("\${calculator.store.input-base-path:../data}")
     private val basePath: String,
 ) {
@@ -35,7 +25,7 @@ class CalculatorResultCleanupScheduler(
 
     fun cleanup() {
         val start = Instant.now()
-        log.info("[CalculatorCleanup] started: dryRun={}", dryRun)
+        log.info("[CalculatorCleanup] started: dryRun={}", cleanupProperties.dryRun)
 
         val result = runCatching { cleanupRuns(start) }
 
@@ -45,7 +35,7 @@ class CalculatorResultCleanupScheduler(
             log.info(
                 "[CalculatorCleanup] completed: dryRun={}, deleted={}, bytes={}, " +
                     "errors={}, throttled={}, durationMs={}",
-                dryRun, res.runsDeleted, res.bytesDeleted, res.errors, res.throttled, durationMs,
+                cleanupProperties.dryRun, res.runsDeleted, res.bytesDeleted, res.errors, res.throttled, durationMs,
             )
         }.onFailure { ex ->
             log.error("[CalculatorCleanup] failed (pipeline NOT affected): {}", ex.message, ex)
@@ -64,13 +54,13 @@ class CalculatorResultCleanupScheduler(
 
         return cleanupExecutor.cleanup(
             runs = runInfos,
-            dryRun = dryRun,
-            keepRecent = keepRecent,
-            keepWithinHours = keepWithinHours,
+            dryRun = cleanupProperties.dryRun,
+            keepRecent = cleanupProperties.runs.keepRecent,
+            keepWithinHours = cleanupProperties.runs.keepWithinHours,
             now = Instant.now(),
-            maxDeleteRunsPerCycle = maxDeleteRunsPerCycle,
-            maxDeleteBytesPerCycle = maxDeleteBytesPerCycle,
-            maxRuntimeSeconds = maxRuntimeSeconds,
+            maxDeleteRunsPerCycle = cleanupProperties.maxDeleteRunsPerCycle,
+            maxDeleteBytesPerCycle = cleanupProperties.maxDeleteBytesPerCycle,
+            maxRuntimeSeconds = cleanupProperties.maxRuntimeSeconds,
             startedAt = startedAt,
             deleteRun = { run -> objectStorage.deleteDirectory("calculator/runs/${run.runId}") },
             onDryRunCandidate = { run ->

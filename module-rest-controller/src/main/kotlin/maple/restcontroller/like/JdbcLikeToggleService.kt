@@ -5,6 +5,7 @@ import maple.expectation.core.domain.model.like.LikeToggleWithCount
 import maple.expectation.core.port.inbound.LikeTogglePort
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.error.exception.CharacterNotFoundException
+import maple.expectation.util.StringMaskingUtils.maskIgn
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
@@ -82,7 +83,4 @@ class JdbcLikeToggleService(
             Long::class.java,
         ) ?: 0L
     }
-
-    private fun maskIgn(ign: String): String =
-        if (ign.length <= 2) "***" else "${ign.first()}***${ign.last()}"
 }

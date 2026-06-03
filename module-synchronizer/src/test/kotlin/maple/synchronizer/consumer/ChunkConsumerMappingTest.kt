@@ -5,6 +5,7 @@ import maple.expectation.common.event.ChunkExecutionType
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
 import maple.synchronizer.processor.ChunkProcessor
+import maple.synchronizer.repository.OcidMappingRepository
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.storage.BasicChunkFileReader
 import org.assertj.core.api.Assertions.assertThat
@@ -12,7 +13,6 @@ import org.junit.jupiter.api.Test
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.kafka.support.Acknowledgment
 
 class ChunkConsumerMappingTest {
@@ -26,8 +26,8 @@ class ChunkConsumerMappingTest {
             objectMapper = objectMapper,
             fileReader = mock<BasicChunkFileReader>(),
             repository = mock<CharacterBasicRepository>(),
+            ocidMappingRepository = mock<OcidMappingRepository>(),
             chunkConsumerTemplate = template,
-            jdbc = mock<NamedParameterJdbcTemplate>(),
             consumedEventPublisher = mock<KafkaChunkConsumedEventPublisher>(),
         )
 

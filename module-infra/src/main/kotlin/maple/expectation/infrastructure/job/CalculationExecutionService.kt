@@ -13,6 +13,8 @@ import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import maple.expectation.util.GzipUtils.compress as gzipCompress
+import maple.expectation.util.HashUtils.sha256Hex
 import org.springframework.transaction.annotation.Transactional
 
 @Service
@@ -280,14 +282,4 @@ class CalculationExecutionService(
         return minOf(baseSeconds * (1L shl retryCount), 600L)
     }
 
-    private fun gzipCompress(data: ByteArray): ByteArray {
-        val bos = java.io.ByteArrayOutputStream()
-        java.util.zip.GZIPOutputStream(bos).use { it.write(data) }
-        return bos.toByteArray()
-    }
-
-    private fun sha256Hex(data: ByteArray): String {
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-        return digest.digest(data).joinToString("") { "%02x".format(it) }
-    }
 }

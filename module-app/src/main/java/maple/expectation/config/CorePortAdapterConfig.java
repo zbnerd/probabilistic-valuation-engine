@@ -7,7 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.calculator.PotentialCalculator;
 import maple.expectation.core.domain.model.AlertMessage;
 import maple.expectation.core.domain.model.AlertPriority;
-import maple.expectation.core.domain.model.CharacterId;
+import maple.expectation.core.domain.model.character.CharacterId;
 import maple.expectation.core.domain.model.CubeRate;
 import maple.expectation.core.domain.model.PotentialStat;
 import maple.expectation.core.domain.model.equipment.CharacterEquipment;

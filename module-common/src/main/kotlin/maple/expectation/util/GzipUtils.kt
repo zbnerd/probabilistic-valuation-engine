@@ -67,6 +67,17 @@ object GzipUtils {
         return String(gzip.readAllBytes(), StandardCharsets.UTF_8)
     }
 
+    @JvmStatic
+    @Throws(IOException::class)
+    fun decompressBytes(compressed: ByteArray): ByteArray {
+        if (compressed.isEmpty()) {
+            return ByteArray(0)
+        }
+
+        val gzip = GZIPInputStream(ByteArrayInputStream(compressed))
+        return gzip.readAllBytes()
+    }
+
     /**
      * 문자열을 GZIP 압축합니다 (IOException을 IllegalStateException로 래핑).
      *

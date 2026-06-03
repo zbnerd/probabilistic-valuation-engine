@@ -1,7 +1,7 @@
 package maple.expectation.core.port.out
 
 import java.util.Optional
-import maple.expectation.core.domain.model.CharacterId
+import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.equipment.EquipmentData
 
 /**

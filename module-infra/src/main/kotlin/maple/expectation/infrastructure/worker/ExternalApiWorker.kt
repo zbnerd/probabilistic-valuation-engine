@@ -45,6 +45,8 @@ import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
 import maple.expectation.util.ExceptionUtils
+import maple.expectation.util.GzipUtils.compress
+import maple.expectation.util.HashUtils.sha256Hex
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -301,7 +303,7 @@ class ExternalApiWorker(
             }
             timer.mark("serializeResult")
             val gzipData = stage("GzipResult", payload.userIgn) {
-                gzipCompress(resultBytes)
+                compress(resultBytes)
             }
             timer.mark("gzipResult")
             val hash = stage("HashResult", payload.userIgn) {
@@ -435,16 +437,6 @@ class ExternalApiWorker(
         }
     }
 
-    private fun gzipCompress(data: ByteArray): ByteArray {
-        val bos = java.io.ByteArrayOutputStream()
-        java.util.zip.GZIPOutputStream(bos).use { it.write(data) }
-        return bos.toByteArray()
-    }
-
-    private fun sha256Hex(data: ByteArray): String {
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-        return digest.digest(data).joinToString("") { "%02x".format(it) }
-    }
 
     private fun generateObjectKey(jobId: UUID): String {
         val now = Instant.now()

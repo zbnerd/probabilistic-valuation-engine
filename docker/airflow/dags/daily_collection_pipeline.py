@@ -19,6 +19,18 @@ from airflow.providers.http.operators.http import HttpOperator
 from airflow.providers.http.sensors.http import HttpSensor
 
 
+def is_accepted_response(response):
+    """Check if HTTP response indicates success or already-accepted state.
+    Handles 409 CONFLICT (already running/started) as acceptance.
+    """
+    if response.status_code == 409:
+        return True
+    try:
+        return response.json().get("status") in ("UP", "STARTED")
+    except (ValueError, AttributeError):
+        return False
+
+
 def poll_run_completion(**context):
     """Poll run-status, return True when triggered run reaches terminal state."""
     trigger_response = context["ti"].xcom_pull(task_ids="trigger_daily_collection")
@@ -27,6 +39,11 @@ def poll_run_completion(**context):
     run_id = trigger_response["runId"]
 
     resp = requests.get("http://host.docker.internal:8081/api/internal/run-status", timeout=10)
+
+    # 409 CONFLICT means a run is already active — treat as in-progress, not error
+    if resp.status_code == 409:
+        raise RuntimeError(f"Run {run_id} still in progress (409 CONFLICT - another run active)")
+
     resp.raise_for_status()
     data = resp.json()
 
@@ -96,7 +113,7 @@ with DAG(
         http_conn_id="external_api",
         endpoint="actuator/health",
         request_params={},
-        response_check=lambda r: r.json().get("status") == "UP",
+        response_check=is_accepted_response,
         poke_interval=30,
         timeout=120,
     )
@@ -106,7 +123,7 @@ with DAG(
         http_conn_id="external_api",
         endpoint="api/internal/trigger/daily",
         method="POST",
-        response_check=lambda r: r.json().get("status") == "STARTED",
+        response_check=is_accepted_response,
     )
 
     wait_for_completion = PythonOperator(

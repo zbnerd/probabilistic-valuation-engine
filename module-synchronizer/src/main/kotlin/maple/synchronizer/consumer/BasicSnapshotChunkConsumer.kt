@@ -19,7 +19,7 @@ import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
-import java.util.concurrent.Executors
+import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import java.util.concurrent.Semaphore
 
 @Component
@@ -32,7 +32,7 @@ class BasicSnapshotChunkConsumer(
     private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
+    private val exec = VirtualThreadExecutorManager("BasicSnapshotChunkConsumer")
     private val processingPermit = Semaphore(2)
 
     @KafkaListener(
@@ -118,7 +118,7 @@ class BasicSnapshotChunkConsumer(
                 objectKey = event.objectKey,
                 acknowledgment = acknowledgment,
                 processingPermit = processingPermit,
-                executor = vtExecutor,
+                executor = exec.executor,
                 processContext = TaskContext.of("BasicSync", "${operation}Process", chunkId),
                 lifecycleContext = TaskContext.of("BasicSync", "${operation}Lifecycle", chunkId),
                 process = {
@@ -168,6 +168,6 @@ class BasicSnapshotChunkConsumer(
     override val lifecyclePhase: Int = 100
 
     override fun stopLifecycle() {
-        vtExecutor.close()
+        exec.shutdown()
     }
 }

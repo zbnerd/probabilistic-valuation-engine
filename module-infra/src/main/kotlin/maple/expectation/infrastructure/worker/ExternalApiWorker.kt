@@ -7,8 +7,6 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -35,6 +33,7 @@ import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.infrastructure.job.CalculationExecutionService
 import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
+import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.pgmq.CalculationRequestedPayload
 import maple.expectation.infrastructure.pgmq.ExternalApiJobPayload
@@ -88,16 +87,13 @@ class ExternalApiWorker(
     @Value("\${app.slow-task.step-trace.threshold-ms:500}") private val stepTraceThresholdMs: Long,
 ) : PgmqWorker<ExternalApiJobPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
 
-    private val snapshotWriter: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
-
-    private val apiCallPool: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
+    private val snapshotExec = VirtualThreadExecutorManager("ExternalApiWorker-snapshot")
+    private val apiCallExec = VirtualThreadExecutorManager("ExternalApiWorker-apiCall")
 
     @PreDestroy
     fun shutdownExecutors() {
-        snapshotWriter.shutdown()
-        apiCallPool.shutdown()
-        snapshotWriter.awaitTermination(5, TimeUnit.SECONDS)
-        apiCallPool.awaitTermination(5, TimeUnit.SECONDS)
+        snapshotExec.shutdown()
+        apiCallExec.shutdown()
     }
 
     override val queueName: String = QueueNames.EXTERNAL_API
@@ -204,7 +200,7 @@ class ExternalApiWorker(
                 stage("SnapshotPut", jobId.toString()) {
                     snapshotStore.put(snapshot, snapshotData)
                 }
-            }, snapshotWriter)
+            }, snapshotExec.executor)
 
             // Step 4: Build and persist calculation input
             val inputItems = stage("BuildCalculationInput", payload.userIgn) {
@@ -390,7 +386,7 @@ class ExternalApiWorker(
                 CompletableFuture.supplyAsync({
                     log.debug("[VT] API call on virtual thread: isVirtual={}", Thread.currentThread().isVirtual)
                     Pair(ocid, equipmentFetchProvider.fetchWithCache(ocid))
-                }, apiCallPool)
+                }, apiCallExec.executor)
             }
             .orTimeout(15, TimeUnit.SECONDS)
             .join()

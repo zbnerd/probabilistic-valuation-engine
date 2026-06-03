@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import java.util.concurrent.Executors
+import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import java.util.concurrent.atomic.AtomicBoolean
 
 @RestController
@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class InternalApiController(
     @Autowired(required = false) private val resultCleanup: CalculatorResultCleanupScheduler?,
 ) {
-    private val triggerExecutor = Executors.newVirtualThreadPerTaskExecutor()
+    private val exec = VirtualThreadExecutorManager("CalculatorInternalApi")
     private val resultCleanupRunning = AtomicBoolean(false)
 
     @PostMapping("/trigger/result-cleanup")
@@ -25,7 +25,7 @@ class InternalApiController(
             return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(mapOf("status" to "ALREADY_RUNNING"))
         }
-        triggerExecutor.submit {
+        exec.executor.submit {
             try {
                 resultCleanup.cleanup()
             } finally {
@@ -37,6 +37,6 @@ class InternalApiController(
 
     @jakarta.annotation.PreDestroy
     fun shutdown() {
-        triggerExecutor.close()
+        exec.shutdown()
     }
 }

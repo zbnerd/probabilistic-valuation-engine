@@ -40,10 +40,7 @@ class ChunkConsumerTemplateTest {
         logicExecutor = ImmediateLogicExecutor(),
         chunkExecutionRepository = repository,
         metrics = metrics,
-        processingTimeout = Duration.ofSeconds(600),
-        retryBaseBackoff = Duration.ofSeconds(60),
-        maxAttempts = 5,
-        artifactMissingMaxAttempts = 2,
+        properties = ChunkExecutionProperties(),
     )
 
     @Test

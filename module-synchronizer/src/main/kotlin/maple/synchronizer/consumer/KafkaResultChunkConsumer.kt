@@ -1,17 +1,17 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import io.micrometer.core.instrument.Timer
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
+import maple.expectation.common.event.ChunkConsumedEvent
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
+import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.processor.ChunkProcessInput
 import maple.synchronizer.processor.ChunkProcessor
-import maple.expectation.common.event.ChunkConsumedEvent
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
@@ -25,7 +25,7 @@ import java.util.concurrent.Semaphore
 class KafkaResultChunkConsumer(
     private val objectMapper: ObjectMapper,
     private val chunkProcessor: ChunkProcessor,
-    private val metrics: SynchronizerMetrics,
+    private val chunkMetricsListener: SynchronizerChunkMetricsListener,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
 ) : ManagedLifecycle {
@@ -56,7 +56,7 @@ class KafkaResultChunkConsumer(
         log.info("[Synchronizer] received: runId={} chunkId={} objectKey={} results={}",
             runId, chunkId, event.objectKey, event.resultCount)
 
-        var chunkSample: Timer.Sample? = null
+        var startNanos: Long = 0
         chunkConsumerTemplate.submit(
             ChunkConsumerRequest(
                 logPrefix = "Synchronizer",
@@ -83,16 +83,19 @@ class KafkaResultChunkConsumer(
                     ))
                 },
                 onAccepted = {
-                    chunkSample = Timer.start()
-                    metrics.incrementReceived()
-                    metrics.incrementProcessing()
+                    startNanos = System.nanoTime()
+                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Accepted(runId, chunkId))
                 },
                 onSuccess = {
-                    metrics.incrementProcessed()
-                    metrics.recordStatusTransition("SUCCESS")
-                    chunkSample?.stop(metrics.chunkTimer())
-                    metrics.recordChunkBytes(event.compressedBytes)
-                    recordPreUpsertVolume(event)
+                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Succeeded(
+                        runId = runId,
+                        chunkId = chunkId,
+                        compressedBytes = event.compressedBytes,
+                        uncompressedBytes = event.uncompressedBytes,
+                        resultCount = event.resultCount.toLong(),
+                        durationNanos = System.nanoTime() - startNanos,
+                    ))
+                    logPreUpsertVolume(event)
                     consumedEventPublisher.publish(ChunkConsumedEvent(
                         runId = runId,
                         endpoint = event.sourceEndpoint.ifBlank { "result" },
@@ -102,17 +105,17 @@ class KafkaResultChunkConsumer(
                     ))
                 },
                 onFailure = { ex ->
-                    metrics.incrementFailed()
-                    metrics.recordStatusTransition("FAILED")
+                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Failed(runId, chunkId))
                     log.error("[Synchronizer] chunk processing failed: runId={} chunkId={}", runId, chunkId, ex)
                 },
-                onFinally = { metrics.decrementProcessing() },
+                onFinally = {
+                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Finally(runId, chunkId))
+                },
             ),
         )
     }
 
-    private fun recordPreUpsertVolume(event: CalculatorResultChunkReadyEvent) {
-        metrics.recordPreUpsertVolume(event.compressedBytes, event.uncompressedBytes, event.resultCount.toLong())
+    private fun logPreUpsertVolume(event: CalculatorResultChunkReadyEvent) {
         val ratio = if (event.compressedBytes > 0)
             "%.2f".format(event.uncompressedBytes.toDouble() / event.compressedBytes.toDouble())
         else "N/A"

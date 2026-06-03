@@ -11,10 +11,8 @@ import maple.synchronizer.repository.ChunkExecutionRepository
 import maple.synchronizer.repository.InsertChunkExecutionCommand
 import org.slf4j.Logger
 import org.slf4j.MDC
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
-import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.Executor
 import java.util.concurrent.Semaphore
@@ -24,14 +22,7 @@ class ChunkConsumerTemplate(
     private val logicExecutor: LogicExecutor,
     private val chunkExecutionRepository: ChunkExecutionRepository,
     private val metrics: SynchronizerMetrics,
-    @Value("#{T(java.time.Duration).ofSeconds(\${chunk-execution.processing-timeout-seconds:600})}")
-    private val processingTimeout: Duration = Duration.ofSeconds(600),
-    @Value("#{T(java.time.Duration).ofSeconds(\${chunk-execution.retry.base-backoff-seconds:60})}")
-    private val retryBaseBackoff: Duration = Duration.ofSeconds(60),
-    @Value("\${chunk-execution.retry.max-attempts:5}")
-    private val maxAttempts: Int = 5,
-    @Value("\${chunk-execution.retry.artifact-missing-max-attempts:2}")
-    private val artifactMissingMaxAttempts: Int = 2,
+    private val properties: ChunkExecutionProperties,
 ) {
     fun submit(request: ChunkConsumerRequest) {
         if (chunkExecutionRepository.insertPendingIfAbsent(request.toInsertCommand())) {
@@ -72,7 +63,7 @@ class ChunkConsumerTemplate(
             return
         }
 
-        val claim = chunkExecutionRepository.claimProcessing(request.identity, processingTimeout)
+        val claim = chunkExecutionRepository.claimProcessing(request.identity, properties.processingTimeout)
         if (claim == null) {
             request.processingPermit.release()
             if (state.shouldPreserveKafkaRedelivery()) {
@@ -207,7 +198,7 @@ class ChunkConsumerTemplate(
                 request.identity,
                 claim.attemptCount,
                 error,
-                Instant.now().plus(retryBaseBackoff.multipliedBy(claim.attemptCount.toLong())),
+                Instant.now().plus(properties.retryBaseBackoff.multipliedBy(claim.attemptCount.toLong())),
             )
         } else {
             chunkExecutionRepository.markFailedTerminal(
@@ -252,10 +243,10 @@ class ChunkConsumerTemplate(
         claim: ChunkExecutionClaim,
     ): FailureDecision {
         val artifactMissing = ex.message?.contains("file not found", ignoreCase = true) == true
-        if (artifactMissing && claim.attemptCount >= artifactMissingMaxAttempts) {
+        if (artifactMissing && claim.attemptCount >= properties.retry.artifactMissingMaxAttempts) {
             return FailureDecision(ARTIFACT_MISSING_MAX_ATTEMPTS)
         }
-        if (!artifactMissing && claim.attemptCount >= maxAttempts) {
+        if (!artifactMissing && claim.attemptCount >= properties.retry.maxAttempts) {
             return FailureDecision(MAX_ATTEMPTS_EXCEEDED)
         }
         return FailureDecision(terminalReason = null)

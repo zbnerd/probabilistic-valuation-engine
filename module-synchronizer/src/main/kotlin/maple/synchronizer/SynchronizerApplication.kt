@@ -1,6 +1,7 @@
 package maple.synchronizer
 
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycleCoordinator
+import maple.synchronizer.consumer.ChunkExecutionProperties
 import maple.synchronizer.ranking.EquipmentRankingProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -11,7 +12,7 @@ import org.springframework.context.annotation.Import
     "maple.synchronizer",
     "maple.expectation.infrastructure.executor",
 ])
-@EnableConfigurationProperties(EquipmentRankingProperties::class)
+@EnableConfigurationProperties(EquipmentRankingProperties::class, ChunkExecutionProperties::class)
 @Import(
     maple.expectation.infrastructure.config.ExecutorConfig::class,
     ManagedLifecycleCoordinator::class,

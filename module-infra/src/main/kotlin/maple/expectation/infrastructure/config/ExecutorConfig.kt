@@ -205,7 +205,7 @@ class ExecutorConfig(
         executor.setKeepAliveSeconds(30)
 
         executor.setTaskDecorator(contextPropagatingDecorator)
-        executor.setRejectedExecutionHandler(java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy())
+        executor.setRejectedExecutionHandler(rejectionPolicyFactory().createAsyncAbortPolicy())
         executor.setWaitForTasksToCompleteOnShutdown(true)
         executor.setAwaitTerminationSeconds(30)
 
@@ -311,7 +311,7 @@ class ExecutorConfig(
         executor.setKeepAliveSeconds(30)
 
         executor.setTaskDecorator(contextPropagatingDecorator)
-        executor.setRejectedExecutionHandler(java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy())
+        executor.setRejectedExecutionHandler(rejectionPolicyFactory().createBackfillAbortPolicy())
         executor.setWaitForTasksToCompleteOnShutdown(true)
         executor.setAwaitTerminationSeconds(60)
 

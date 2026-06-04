@@ -60,6 +60,7 @@ enum class CommonErrorCode(override val code: String, override val message: Stri
 
     // === System Errors (5xx) ===
     SYSTEM_ERROR("S017", "시스템 오류가 발생했습니다. (%s)", 500),
+    ARTIFACT_NOT_FOUND("S018", "아티팩트를 찾을 수 없습니다 (endpoint: %s, key: %s)", 500),
 
     // === Event Handler Errors ===
     EVENT_HANDLER_ERROR("E001", "이벤트 핸들러가 잘못되었습니다. (%s)", 500),

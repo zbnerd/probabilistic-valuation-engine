@@ -35,10 +35,10 @@
 
 - [ ] **Step 1: enum 상수 추가**
 
-`CommonErrorCode` 클래스 내 `S016 CACHE_DATA_NOT_FOUND` 다음 줄에 추가:
+`CommonErrorCode` 클래스 내 `S017 SYSTEM_ERROR` 다음 줄에 추가:
 
 ```kotlin
-ARTIFACT_NOT_FOUND("S017", "아티팩트를 찾을 수 없습니다 (endpoint: %s, key: %s)", 500),
+ARTIFACT_NOT_FOUND("S018", "아티팩트를 찾을 수 없습니다 (endpoint: %s, key: %s)", 500),
 ```
 
 - [ ] **Step 2: 컴파일 검증**
@@ -55,7 +55,7 @@ Expected: BUILD SUCCESSFUL
 
 ```bash
 git add module-common/src/main/kotlin/maple/expectation/error/CommonErrorCode.kt
-git commit -m "feat(common): add ARTIFACT_NOT_FOUND error code (S017) for #999"
+git commit -m "feat(common): add ARTIFACT_NOT_FOUND error code (S018) for #999"
 ```
 
 ---
@@ -148,47 +148,16 @@ git commit -m "feat(common): ArtifactNotFoundException for #999"
 
 ---
 
-## Task 3: Port 시그니처 hard break
+## Task 3: Port 시그니처 hard break + Adapter 동시 변경 (squash)
+
+**Note:** 본 task는 (1) Port hard break, (2) Adapter read 구현, (3) 테스트 4건을 단일 PR에 동시 적용. TDD 학습용 red 단계는 git history에 보존하지 않음.
 
 **Files:**
 - Modify: `module-external-api/src/main/kotlin/maple/externalapi/port/out/ExternalApiArtifactStorePort.kt`
-
-- [ ] **Step 1: read 반환 타입 변경**
-
-`ExternalApiArtifactStorePort.kt:14-17`:
-
-```kotlin
-    fun read(
-        endpoint: ExternalApiEndpoint,
-        key: String,
-    ): ByteArray
-```
-
-- [ ] **Step 2: 컴파일 검증 — adapter 미수정 상태이므로 실패해야 함**
-
-Run:
-```bash
-cd /home/maple/probabilistic-valuation-engine
-./gradlew :module-external-api:compileKotlin --continue
-```
-
-Expected: FAIL with type mismatch in `LocalExternalApiArtifactStoreAdapter.read` (return type)
-
-- [ ] **Step 3: 커밋 (red 단계 보존)**
-
-```bash
-git add module-external-api/src/main/kotlin/maple/externalapi/port/out/ExternalApiArtifactStorePort.kt
-git commit -m "refactor(external-api): ArtifactStorePort.read returns non-null ByteArray (red) for #999"
-```
-
----
-
-## Task 4: LocalExternalApiArtifactStoreAdapter.read — 실패 테스트
-
-**Files:**
+- Modify: `module-external-api/src/main/kotlin/maple/externalapi/infra/storage/LocalExternalApiArtifactStoreAdapter.kt`
 - Create: `module-external-api/src/test/kotlin/maple/externalapi/infra/storage/LocalExternalApiArtifactStoreAdapterTest.kt`
 
-- [ ] **Step 1: 테스트 작성**
+- [ ] **Step 1: 테스트 4건 작성**
 
 ```kotlin
 package maple.externalapi.infra.storage
@@ -199,7 +168,6 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import java.nio.file.Files
 import java.nio.file.Path
 
 class LocalExternalApiArtifactStoreAdapterTest {
@@ -247,7 +215,7 @@ class LocalExternalApiArtifactStoreAdapterTest {
         val adapter = newAdapter(tempDir.toString())
         val endpoint = ExternalApiEndpoint.ITEM_EQUIPMENT
         val key = "user-2"
-        val payload = "binary- -data".toByteArray()
+        val payload = "binary-data".toByteArray()
 
         adapter.store(endpoint, key, payload)
         val result = adapter.read(endpoint, key)
@@ -257,53 +225,24 @@ class LocalExternalApiArtifactStoreAdapterTest {
 }
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [ ] **Step 2: Port 시그니처 + Adapter read 본문 교체**
 
-Run:
-```bash
-cd /home/maple/probabilistic-valuation-engine
-./gradlew :module-external-api:test --tests "maple.externalapi.infra.storage.LocalExternalApiArtifactStoreAdapterTest"
+Port (`ExternalApiArtifactStorePort.kt:14-17`):
+```kotlin
+    fun read(
+        endpoint: ExternalApiEndpoint,
+        key: String,
+    ): ByteArray
 ```
 
-Expected: FAIL (read가 아직 `ByteArray?` 반환 → type mismatch, 또는 store는 통과 후 read에서 null 반환 시 fail)
-
-- [ ] **Step 3: (실패만 확인, 커밋 안함 — 다음 task에서 같이 green)**
-- [ ] **Step 4: 진행**
-
----
-
-## Task 5: LocalExternalApiArtifactStoreAdapter.read — 구현
-
-**Files:**
-- Modify: `module-external-api/src/main/kotlin/maple/externalapi/infra/storage/LocalExternalApiArtifactStoreAdapter.kt`
-
-- [ ] **Step 1: import 추가**
-
-`LocalExternalApiArtifactStoreAdapter.kt` 상단 import 블록에:
-
+Adapter import 추가:
 ```kotlin
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.ArtifactNotFoundException
 import java.nio.file.NoSuchFileException
 ```
 
-- [ ] **Step 2: read 메서드 본문 교체**
-
-기존 `lines 54-61`:
-
-```kotlin
-    override fun read(
-        endpoint: ExternalApiEndpoint,
-        key: String,
-    ): ByteArray? {
-        val filePath = resolvePath(endpoint, key)
-        if (!Files.exists(filePath)) return null
-        return GZIPInputStream(Files.readAllBytes(filePath).inputStream()).use { it.readAllBytes() }
-    }
-```
-
-신규:
-
+Adapter read 본문 (`LocalExternalApiArtifactStoreAdapter.kt:54-61`):
 ```kotlin
     override fun read(
         endpoint: ExternalApiEndpoint,
@@ -322,7 +261,6 @@ import java.nio.file.NoSuchFileException
 
 - [ ] **Step 3: 테스트 통과 확인**
 
-Run:
 ```bash
 cd /home/maple/probabilistic-valuation-engine
 ./gradlew :module-external-api:test --tests "maple.externalapi.infra.storage.LocalExternalApiArtifactStoreAdapterTest"
@@ -330,28 +268,18 @@ cd /home/maple/probabilistic-valuation-engine
 
 Expected: PASS (4 tests)
 
-- [ ] **Step 4: 전체 external-api 컴파일 검증**
-
-Run:
-```bash
-cd /home/maple/probabilistic-valuation-engine
-./gradlew :module-external-api:compileKotlin compileJava --continue
-```
-
-Expected: BUILD SUCCESSFUL
-
-- [ ] **Step 5: 커밋**
+- [ ] **Step 4: 커밋 (단일, red 흔적 없음)**
 
 ```bash
-git add module-external-api/src/main/kotlin/maple/externalapi/infra/storage/LocalExternalApiArtifactStoreAdapter.kt
 git add module-external-api/src/main/kotlin/maple/externalapi/port/out/ExternalApiArtifactStorePort.kt
+git add module-external-api/src/main/kotlin/maple/externalapi/infra/storage/LocalExternalApiArtifactStoreAdapter.kt
 git add module-external-api/src/test/kotlin/maple/externalapi/infra/storage/LocalExternalApiArtifactStoreAdapterTest.kt
 git commit -m "feat(external-api): ArtifactStorePort.read throws ArtifactNotFoundException for #999"
 ```
 
 ---
 
-## Task 6: ConsumedChunkCleanupScheduler.deleteFile — 실패 테스트
+## Task 4: ConsumedChunkCleanupScheduler.deleteFile — 실패 테스트
 
 **Files:**
 - Create: `module-external-api/src/test/kotlin/maple/externalapi/cleanup/ConsumedChunkCleanupSchedulerDeleteFileTest.kt`
@@ -427,7 +355,7 @@ Expected: FAIL on `deleteFile throws IOException` test (현재 `runCatching`이 
 
 ---
 
-## Task 7: ConsumedChunkCleanupScheduler.deleteFile — 구현
+## Task 5: ConsumedChunkCleanupScheduler.deleteFile — 구현
 
 **Files:**
 - Modify: `module-external-api/src/main/kotlin/maple/externalapi/cleanup/ConsumedChunkCleanupScheduler.kt`
@@ -506,7 +434,7 @@ git commit -m "feat(external-api): ConsumedChunkCleanupScheduler.deleteFile prop
 
 ---
 
-## Task 8: 전체 검증
+## Task 6: 전체 검증
 
 - [ ] **Step 1: 외부 API 모듈 전체 컴파일**
 
@@ -559,21 +487,21 @@ git diff --cached --quiet || git commit -m "chore(#999): verification log"
 
 | Spec 요구사항 | Task |
 |--------------|------|
-| `CommonErrorCode.ARTIFACT_NOT_FOUND` (S017) | T1 |
+| `CommonErrorCode.ARTIFACT_NOT_FOUND` (S018) | T1 |
 | `ArtifactNotFoundException` (ServerBaseException) | T2 |
 | `read` 반환 non-null | T3 |
-| Adapter read: 파일 없음 → throw | T4, T5 |
-| Adapter read: 다른 IOException 자연 전파 | T5 (catch 분리로 implicit 보장) |
-| deleteFile IOException/SecurityException throw | T6, T7 |
-| deleteFile "이미 없음" false 유지 | T6 (테스트) |
-| 단위 테스트 8건 | T2(2) + T4(4) + T6(3) = 9건 (1 초과 OK) |
-| 컴파일 + 기존 테스트 | T8 |
+| Adapter read: 파일 없음 → throw | T3 |
+| Adapter read: 다른 IOException 자연 전파 | T3 (catch 분리로 implicit 보장) |
+| deleteFile IOException/SecurityException throw | T4, T5 |
+| deleteFile "이미 없음" false 유지 | T4 (테스트) |
+| 단위 테스트 9건 | T2(2) + T3(4) + T4(3) |
+| 컴파일 + 기존 테스트 | T6 |
 
 ### Placeholder scan
 - "TBD" / "TODO" / "fill in" / "similar to" 없음
 - 모든 코드 블록은 실제 코드
 
 ### Type consistency
-- `ArtifactNotFoundException(errorCode, cause, vararg args)` — T2에서 정의, T5에서 사용. 시그니처 일치.
-- `deleteFile(objectKey): Boolean` — T6에서 시그니처 보존, T7에서 내부 로직만 변경. 시그니처 일치.
-- `read(endpoint, key): ByteArray` — T3에서 정의, T4에서 호출. 시그니처 일치.
+- `ArtifactNotFoundException(errorCode, cause, vararg args)` — T2에서 정의, T3에서 사용. 시그니처 일치.
+- `deleteFile(objectKey): Boolean` — T4에서 시그니처 보존, T5에서 내부 로직만 변경. 시그니처 일치.
+- `read(endpoint, key): ByteArray` — T3 Port 변경 + T3 테스트에서 호출. 시그니처 일치.

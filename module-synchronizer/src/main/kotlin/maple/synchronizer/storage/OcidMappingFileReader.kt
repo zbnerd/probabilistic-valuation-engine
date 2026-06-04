@@ -69,8 +69,15 @@ class OcidMappingFileReader(
             throw ex
         }
         val ign = node.get("userIgn")?.asText()
+        if (ign == null) {
+            log.debug("skip mapping: reason=missing_userIgn")
+            missingFieldCount.incrementAndGet()
+            readerMetrics.incrementMissingField("ocid_mapping")
+            return null
+        }
         val ocid = node.get("ocid")?.asText()
-        if (ign.isNullOrBlank() || ocid.isNullOrBlank()) {
+        if (ocid == null) {
+            log.debug("skip mapping: reason=missing_ocid")
             missingFieldCount.incrementAndGet()
             readerMetrics.incrementMissingField("ocid_mapping")
             return null

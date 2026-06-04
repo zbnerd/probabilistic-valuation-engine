@@ -48,7 +48,7 @@ fun read(endpoint: ExternalApiEndpoint, key: String): ByteArray
 
 - 위치: `module-common/src/main/kotlin/maple/expectation/error/exception/ArtifactNotFoundException.kt`
 - 상속: `ServerBaseException` (I/O 실패 = 서버 측 오류)
-- `ErrorCode`: `CommonErrorCode.ARTIFACT_NOT_FOUND` 신규 추가 (`"S017"`, 500, "아티팩트를 찾을 수 없습니다 (endpoint: %s, key: %s)")
+- `ErrorCode`: `CommonErrorCode.ARTIFACT_NOT_FOUND` 신규 추가 (`"S018"`, 500, "아티팩트를 찾을 수 없습니다 (endpoint: %s, key: %s)")
 - 생성자: `(errorCode: ErrorCode, vararg args: Any?)`, `(errorCode: ErrorCode, cause: Throwable, vararg args: Any?)` (기존 `ExternalApiException` 패턴 동일)
 
 `module-common` 위치 선택 근거:
@@ -110,7 +110,7 @@ private fun deleteFile(objectKey: String): Boolean {
 | `module-external-api/.../port/out/ExternalApiArtifactStorePort.kt` | `read` 시그니처 `ByteArray?` → `ByteArray` |
 | `module-external-api/.../infra/storage/LocalExternalApiArtifactStoreAdapter.kt` | `read` 구현, exception 처리 |
 | `module-external-api/.../cleanup/ConsumedChunkCleanupScheduler.kt` | `deleteFile` catch 분리 |
-| `module-external-api/src/test/.../LocalExternalApiArtifactStoreAdapterTest.kt` | 신규 (5 케이스) |
+| `module-external-api/src/test/.../LocalExternalApiArtifactStoreAdapterTest.kt` | 신규 (4 케이스) |
 | `module-external-api/src/test/.../ConsumedChunkCleanupSchedulerDeleteFileTest.kt` | 신규 (3 케이스) |
 
 ## Error Handling
@@ -129,9 +129,8 @@ private fun deleteFile(objectKey: String): Boolean {
 
 1. `read` 성공 — 정상 gzip 파일 → `ByteArray` 반환
 2. `read` 파일 없음 → `ArtifactNotFoundException` throw
-3. `read` 권한 거부 (디렉토리 read 불가 설정) → `IOException` throw
+3. `read`에서 `ArtifactNotFoundException`의 cause에 `NoSuchFileException` 포함 확인
 4. `store` → `read` 왕복 — round-trip 동일성
-5. `read`에서 `ArtifactNotFoundException`의 cause에 `NoSuchFileException` 포함 확인
 
 ### Unit test: `ConsumedChunkCleanupSchedulerDeleteFileTest`
 
@@ -144,14 +143,14 @@ private fun deleteFile(objectKey: String): Boolean {
 
 ## Acceptance criteria
 
-- [ ] `CommonErrorCode.ARTIFACT_NOT_FOUND` 추가 (`S017`)
+- [ ] `CommonErrorCode.ARTIFACT_NOT_FOUND` 추가 (`S018`)
 - [ ] `ArtifactNotFoundException` `ServerBaseException` 상속
 - [ ] `ExternalApiArtifactStorePort.read` 반환 타입 non-null
 - [ ] `LocalExternalApiArtifactStoreAdapter.read` 파일 없음 시 `ArtifactNotFoundException` throw
 - [ ] `LocalExternalApiArtifactStoreAdapter.read` 다른 `IOException`은 자연 전파
 - [ ] `ConsumedChunkCleanupScheduler.deleteFile` `IOException`/`SecurityException` throw
 - [ ] `deleteFile` "이미 없음"은 `false` 유지
-- [ ] 신규 단위 테스트 8건 통과
+- [ ] 신규 단위 테스트 9건 통과 (`ArtifactNotFoundExceptionTest` 2 + `LocalExternalApiArtifactStoreAdapterTest` 4 + `ConsumedChunkCleanupSchedulerDeleteFileTest` 3)
 - [ ] `./gradlew compileKotlin compileJava --continue` 통과
 - [ ] 기존 테스트 회귀 없음
 
@@ -176,6 +175,7 @@ private fun deleteFile(objectKey: String): Boolean {
 
 ### Risk
 - `Bytes.exists` 제거로 race condition 가능 (파일이 read 도중 삭제됨). catch에서 `NoSuchFileException`을 `ArtifactNotFoundException`으로 변환하므로 안전.
+- `deleteFile`에서 `IOException` throw 시 `cleanup()` batch가 중단됨. 의도된 동작 (실패 관측성 확보)이지만, `pendingDeletions`이 in-memory `ConcurrentLinkedQueue`이며 `cleanup()` 시작 시점에 batch가 `poll`되어 제거된 상태. **process kill/restart 시 batch의 남은 events 영구 손실** → `mq-messaging.md`의 "복구 불가능한 in-memory 상태 금지" 룰의 기존 위반과 연관. **본 PR scope 밖.** EPIC-2 umbrella #1096 또는 후속 issue에서 `pendingDeletions`을 PGMQ/DB-backed queue로 이관 필요.
 
 ### Non-Risk
-- `deleteFile`에서 `IOException` throw가 cleanup batch를 중단시킬 수 있음 → 의도된 동작. 호출부 `cleanup`이 재시도 책임을 짐.
+- `deleteFile`에서 `IOException` throw가 cleanup batch를 중단시킬 수 있음 → 의도된 동작. 호출부 `cleanup`이 재시도 책임을 짐 (다음 `@Scheduled` 또는 `@PreDestroy` cycle).

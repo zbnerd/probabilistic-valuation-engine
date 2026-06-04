@@ -118,20 +118,36 @@ class BasicChunkFileReader(
             throw ex
         }
 
-        if (node.get("status")?.asText() != "SUCCESS") {
+        val status = node.get("status")?.asText()
+        if (status != "SUCCESS") {
+            log.debug("skip record: reason=status_mismatch actual={}", status)
             filteredCount.incrementAndGet()
             readerMetrics.incrementFiltered("basic_chunk", "status")
             return null
         }
-        if (node.get("endpoint")?.asText() != "character-basic") {
+        val endpoint = node.get("endpoint")?.asText()
+        if (endpoint != "character-basic") {
+            log.debug("skip record: reason=endpoint_mismatch actual={}", endpoint)
             filteredCount.incrementAndGet()
             readerMetrics.incrementFiltered("basic_chunk", "endpoint")
             return null
         }
 
         val ocid = node.get("key")?.asText()
+        if (ocid == null) {
+            log.debug("skip record: reason=missing_ocid")
+            missingFieldCount.incrementAndGet()
+            readerMetrics.incrementMissingField("basic_chunk")
+            if (missingFieldCount.get() > missingFieldThreshold) {
+                throw IllegalStateException(
+                    "BasicChunk missing-field threshold exceeded: $missingFieldCount > $missingFieldThreshold",
+                )
+            }
+            return null
+        }
         val body = node.get("body")
-        if (ocid.isNullOrBlank() || body == null) {
+        if (body == null) {
+            log.debug("skip record: reason=missing_body")
             missingFieldCount.incrementAndGet()
             readerMetrics.incrementMissingField("basic_chunk")
             if (missingFieldCount.get() > missingFieldThreshold) {
@@ -142,7 +158,11 @@ class BasicChunkFileReader(
             return null
         }
 
-        val userIgn = body.get("character_name")?.asText() ?: return null
+        val userIgn = body.get("character_name")?.asText()
+        if (userIgn == null) {
+            log.debug("skip record: reason=missing_character_name")
+            return null
+        }
         val worldName = body.get("world_name")?.asText()
         val characterClass = body.get("character_class")?.asText()
         val characterLevel = body.get("character_level")?.asInt()

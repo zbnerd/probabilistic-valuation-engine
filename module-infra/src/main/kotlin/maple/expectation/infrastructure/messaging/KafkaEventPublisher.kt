@@ -29,7 +29,7 @@ class KafkaEventPublisher(
     private val logger = LoggerFactory.getLogger(KafkaEventPublisher::class.java)
 
     @PostConstruct
-    fun warnStubMode() {
+    fun logStubMode() {
         logger.error(
             "[KafkaEventPublisher] STUB MODE ACTIVE — events will NOT be published to Kafka. " +
                 "Set app.event-publisher.type=pgmq (or implement KafkaTemplate here). " +

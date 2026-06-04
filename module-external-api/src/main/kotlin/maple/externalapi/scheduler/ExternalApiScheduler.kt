@@ -39,7 +39,7 @@ class ExternalApiScheduler(
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val running = AtomicBoolean(false)
     private val shutdown = AtomicBoolean(false)
-    private val itemEquipmentStarted = AtomicBoolean(false)
+    internal val itemEquipmentStarted = AtomicBoolean(false)
     private val lock = ReentrantLock()
     private val idle = lock.newCondition()
 
@@ -86,36 +86,29 @@ class ExternalApiScheduler(
         log.info("[Scheduler] starting ranking fetch phase, runId={}", runId)
         runStatusTracker.transitionPhase(PipelinePhase.RANKING_FETCH)
         rankingPhase.execute(executor)
-            .handle { runDir, ex ->
-                if (ex != null) {
-                    log.error("[Scheduler] ranking fetch failed, cannot proceed with OCID lookup", ex)
-                }
-                runDir
-            }
             .thenCompose { runDir ->
-                if (runDir == null) {
-                    CompletableFuture.completedFuture(null)
-                } else {
-                    runStatusTracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
-                    ocidLookupPhase.execute(executor, runDir)
-                }
+                val resolved = runDir ?: error("ranking fetch returned null runDir")
+                runStatusTracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
+                ocidLookupPhase.execute(executor, resolved)
             }
-            .thenCompose {
+            .thenCompose { _ ->
                 val cache = ocidCacheProvider.refresh()
                 runStatusTracker.transitionPhase(PipelinePhase.CHARACTER_BASIC)
                 snapshotFetchPhase.executeCharacterBasic(executor, cache)
             }
             .whenComplete { _, ex ->
                 if (ex != null) {
-                    val message = ex.cause?.message ?: ex.message ?: "unknown error"
+                    val cause = ex.cause ?: ex
+                    val message = cause.message ?: cause::class.simpleName ?: "unknown error"
                     runStatusTracker.failRun(runId, message)
-                    log.error("[Scheduler] daily refresh failed, runId={}", runId, ex)
+                    log.error("[Scheduler] daily refresh failed, runId={}", runId, cause)
+                    releaseLock()
                 } else {
                     runStatusTracker.completeRun(runId, 0, 0)
                     log.info("[Scheduler] daily refresh completed, runId={}", runId)
+                    releaseLock()
+                    startItemEquipmentLoopOnce()
                 }
-                releaseLock()
-                startItemEquipmentLoopOnce()
             }
     }
 

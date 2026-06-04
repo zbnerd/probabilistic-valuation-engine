@@ -18,6 +18,7 @@ spring:
       enable-auto-commit: false
     listener:
       ack-mode: manual
+      concurrency: 4
 
 calculator:
   kafka:
@@ -26,6 +27,8 @@ calculator:
     consumer-group-id: calculator-snapshot-chunk-processor
     urgent-snapshot-chunk-ready-topic: external-api.urgent.snapshot.chunk-ready
     urgent-consumer-group-id: calculator-urgent-chunk-processor
+    consumer-max-retries: 3
+    consumer-retry-backoff-ms: 500
   store:
     input-base-path: ../data
   cleanup:

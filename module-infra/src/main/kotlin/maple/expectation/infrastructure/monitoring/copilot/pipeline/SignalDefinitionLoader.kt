@@ -10,6 +10,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.monitoring.copilot.ingestor.GrafanaJsonIngestor
 import maple.expectation.infrastructure.monitoring.copilot.model.SignalDefinition
 import org.slf4j.LoggerFactory
+import jakarta.annotation.PostConstruct
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
@@ -31,11 +32,15 @@ class SignalDefinitionLoader(
     @Value("\${monitoring.copilot.cache-ttl-ms:300000}")
     private var cacheTtlMs: Long = 300000
 
-    private val signalCatalogCache: Cache<String, List<SignalDefinition>> =
-        Caffeine.newBuilder()
+    private lateinit var signalCatalogCache: Cache<String, List<SignalDefinition>>
+
+    @PostConstruct
+    fun initCache() {
+        signalCatalogCache = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofMillis(cacheTtlMs))
             .recordStats()
             .build()
+    }
 
     fun loadSignalDefinitions(): List<SignalDefinition> = signalCatalogCache.get(CACHE_KEY) { loadSignalDefinitionsFromDisk() }
 

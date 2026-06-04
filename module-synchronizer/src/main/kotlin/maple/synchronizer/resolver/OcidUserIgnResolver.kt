@@ -20,12 +20,18 @@ class OcidUserIgnResolver(
 
         val params = MapSqlParameterSource("ocids", ocids.toList())
 
-        val mapping = jdbc.queryForList(sql, params)
-            .associate { row ->
-                row["ocid"].toString() to (row["user_ign"]?.toString() ?: "")
-            }
-            .filterValues { it.isNotEmpty() }
-        log.debug("Resolved {} of {} ocids to userIgn", mapping.size, ocids.size)
-        return mapping
+        val rows = jdbc.queryForList(sql, params)
+        val mapping = rows.associate { row ->
+            row["ocid"].toString() to (row["user_ign"]?.toString() ?: "")
+        }
+        val excluded = mapping.filterValues { it.isEmpty() }
+        val result = mapping.filterValues { it.isNotEmpty() }
+        if (excluded.isNotEmpty()) {
+            log.debug("Resolved {} of {} ocids; excluded {} with empty user_ign (sample: {})",
+                result.size, ocids.size, excluded.size, excluded.keys.take(5))
+        } else {
+            log.debug("Resolved {} of {} ocids to userIgn", result.size, ocids.size)
+        }
+        return result
     }
 }

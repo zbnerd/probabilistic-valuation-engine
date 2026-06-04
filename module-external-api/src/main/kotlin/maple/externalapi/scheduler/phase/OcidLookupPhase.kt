@@ -16,6 +16,7 @@ import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.expectation.common.event.SnapshotRunCompletedEvent
+import maple.expectation.util.StringMaskingUtils.maskIgn
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -157,7 +158,10 @@ class OcidLookupPhase(
                 val ocid = objectMapper.readTree(data).get("ocid")?.asText()
                 if (ocid != null) {
                     String(objectMapper.writeValueAsBytes(mapOf("userIgn" to ign, "ocid" to ocid)))
-                } else null
+                } else {
+                    log.warn("[OCID] null ocid for ign={}", maskIgn(ign))
+                    null
+                }
             }
         }
     }

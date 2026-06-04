@@ -340,15 +340,7 @@ class ExternalApiWorker(
 
     private fun convertItems(equipmentResponse: EquipmentResponse): List<EquipmentItem> {
         val items = equipmentResponse.itemEquipment ?: return emptyList()
-        if (items.size < PARALLEL_ITEM_CONVERSION_THRESHOLD) {
-            return items.map { convertItem(it) }
-        }
-
-        val futures = items.map { item ->
-            CompletableFuture.supplyAsync { convertItem(item) }
-        }
-        CompletableFuture.allOf(*futures.toTypedArray()).join()
-        return futures.map { it.join() }
+        return items.map { convertItem(it) }
     }
 
     private fun convertItem(item: Any): EquipmentItem {
@@ -455,6 +447,5 @@ class ExternalApiWorker(
 
     companion object {
         private val log = LoggerFactory.getLogger(ExternalApiWorker::class.java)
-        private const val PARALLEL_ITEM_CONVERSION_THRESHOLD = 8
     }
 }

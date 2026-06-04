@@ -54,12 +54,13 @@ class UrgentCharacterRequestConsumerTest {
             urgentChunkReadyTopic = "external-api.urgent.snapshot.chunk-ready",
             storeBasePath = tempDir.toString(),
             maxConcurrent = 30,
+            executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
         )
     }
 
     @AfterEach
     fun tearDown() {
-        consumer.close()
+        // executor lifecycle managed by VtExecutorConfig
     }
 
     private fun stubSendResult(): CompletableFuture<SendResult<String, String>> {

@@ -29,6 +29,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 )
 @Import(
     maple.expectation.infrastructure.config.CoreExecutorConfig::class,
+    maple.expectation.infrastructure.config.VtExecutorConfig::class,
     MaplestoryApiConfig::class,
     ExternalApiMetricsFilter::class,
     RealNexonAuthClient::class,

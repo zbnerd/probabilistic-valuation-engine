@@ -96,10 +96,9 @@ class OcidLookupPhaseTest {
             clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.OCID_LOOKUP, "PlayerNullOcid"),
         ).thenReturn(CompletableFuture.completedFuture("""{"character_name":"x"}""".toByteArray()))
 
-        val outputPath = phase.execute(executor, runDir).get()
+        val outputPath = requireNotNull(phase.execute(executor, runDir).get()) { "execute returned null path" }
 
-        assertThat(outputPath).isNotNull
-        assertThat(Files.exists(outputPath!!)).isTrue
+        assertThat(Files.exists(outputPath)).isTrue
 
         val lines = GZIPInputStream(BufferedInputStream(Files.newInputStream(outputPath)))
             .bufferedReader()

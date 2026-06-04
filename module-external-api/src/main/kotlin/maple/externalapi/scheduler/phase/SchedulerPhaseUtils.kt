@@ -23,13 +23,6 @@ internal object SchedulerPhaseUtils {
         )
         .build()
 
-    fun acquirePermits(rateLimiter: Bucket, batchSize: Int, remaining: Int): Int {
-        val maxBatch = minOf(batchSize, remaining)
-        return rateLimiter.tryConsumeAsMuchAsPossible(maxBatch.toLong()).toInt().also {
-            if (it == 0) Thread.sleep(Duration.ofMillis(100))
-        }
-    }
-
     /**
      * Suspend-friendly rate limit permit acquisition.
      * Replaces Thread.sleep(100) with coroutine delay(100) when no permits available.

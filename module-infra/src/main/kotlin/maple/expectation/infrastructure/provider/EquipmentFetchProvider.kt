@@ -6,8 +6,10 @@ import maple.expectation.infrastructure.aop.annotation.NexonDataCache
 import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.CharacterBasicResponse
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Component
+import java.util.concurrent.Executor
 
 /**
  * 장비 데이터 Fetch Provider (캐시 적용)
@@ -46,6 +48,7 @@ import org.springframework.stereotype.Component
 @Component
 class EquipmentFetchProvider(
     private val nexonApiClient: NexonApiClient,
+    @Qualifier("taskExecutor") private val executor: Executor,
 ) {
     private val logger = org.slf4j.LoggerFactory.getLogger(EquipmentFetchProvider::class.java)
 
@@ -84,7 +87,7 @@ class EquipmentFetchProvider(
             .getCharacterBasic(ocid)
             .orTimeout(API_TIMEOUT_SECONDS, TimeUnit.SECONDS)
 
-        val itemFuture = CompletableFuture.supplyAsync { fetchWithCache(ocid) }
+        val itemFuture = CompletableFuture.supplyAsync({ fetchWithCache(ocid) }, executor)
 
         return basicFuture.thenCombine(itemFuture) { basic, item -> Pair(basic, item) }
     }

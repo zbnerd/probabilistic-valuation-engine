@@ -14,7 +14,7 @@ import maple.expectation.config.CubeEngineFeatureFlag
 import maple.expectation.config.TableMassConfig
 import maple.expectation.infrastructure.adapter.policy.PolicyAdapter
 import maple.expectation.infrastructure.config.CalculationPortConfig
-import maple.expectation.infrastructure.config.ExecutorConfig
+import maple.expectation.infrastructure.config.CoreExecutorConfig
 import maple.expectation.infrastructure.executor.DefaultLogicExecutor
 import maple.expectation.infrastructure.executor.classifier.DefaultExceptionClassifier
 import maple.expectation.infrastructure.persistence.repository.CubeProbabilityRepositoryImpl
@@ -40,6 +40,6 @@ import org.springframework.context.annotation.Import
     CubeEngineFeatureFlag::class,
     TableMassConfig::class,
     CalculationPortConfig::class,
-    ExecutorConfig::class,
+    CoreExecutorConfig::class,
 )
 class CalculatorEngineConfiguration

@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Import
 ])
 @EnableConfigurationProperties(EquipmentRankingProperties::class, ChunkExecutionProperties::class)
 @Import(
-    maple.expectation.infrastructure.config.ExecutorConfig::class,
+    maple.expectation.infrastructure.config.CoreExecutorConfig::class,
     ManagedLifecycleCoordinator::class,
 )
 class SynchronizerApplication

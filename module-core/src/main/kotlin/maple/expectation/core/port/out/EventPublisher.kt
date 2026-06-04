@@ -85,5 +85,5 @@ interface EventPublisher {
      * @param event Event to publish
      * @return CompletableFuture that completes when published
      */
-    fun publishAsync(topic: String, event: IntegrationEvent<*>): CompletableFuture<Void> = CompletableFuture.runAsync { publish(topic, event) }
+    fun publishAsync(topic: String, event: IntegrationEvent<*>): CompletableFuture<Void>
 }

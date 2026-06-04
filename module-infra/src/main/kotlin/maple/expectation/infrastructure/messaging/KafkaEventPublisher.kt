@@ -7,8 +7,10 @@ import maple.expectation.core.port.out.EventPublisher
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
+import java.util.concurrent.Executor
 
 @Component
 @ConditionalOnProperty(
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Component
 class KafkaEventPublisher(
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor,
+    @Qualifier("taskExecutor") private val taskExecutor: Executor,
 ) : EventPublisher {
 
     private val logger = LoggerFactory.getLogger(KafkaEventPublisher::class.java)
@@ -58,6 +61,6 @@ class KafkaEventPublisher(
             event.eventId,
         )
 
-        return CompletableFuture.runAsync { publish(topic, event) }
+        return CompletableFuture.runAsync({ publish(topic, event) }, taskExecutor)
     }
 }

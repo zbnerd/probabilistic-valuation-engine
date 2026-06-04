@@ -9,8 +9,10 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
+import java.util.concurrent.Executor
 
 /**
  * PGMQ-based EventPublisher adapter.
@@ -30,6 +32,7 @@ class PgmqEventPublisherAdapter(
     private val pgmqClient: PgmqClient,
     private val executor: LogicExecutor,
     private val objectMapper: ObjectMapper,
+    @Qualifier("taskExecutor") private val taskExecutor: Executor,
 ) : EventPublisher {
 
     override fun publish(topic: String, event: IntegrationEvent<*>) {
@@ -55,7 +58,7 @@ class PgmqEventPublisherAdapter(
         }, context)
     }
 
-    override fun publishAsync(topic: String, event: IntegrationEvent<*>): CompletableFuture<Void> = CompletableFuture.runAsync { publish(topic, event) }
+    override fun publishAsync(topic: String, event: IntegrationEvent<*>): CompletableFuture<Void> = CompletableFuture.runAsync({ publish(topic, event) }, taskExecutor)
 
     /**
      * Data class for stream message.

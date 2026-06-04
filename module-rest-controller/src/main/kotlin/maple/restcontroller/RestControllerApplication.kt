@@ -9,5 +9,5 @@ import org.springframework.context.annotation.ComponentScan
 class RestControllerApplication
 
 fun main(args: Array<String>) {
-	runApplication<RestControllerApplication>(*args)
+    runApplication<RestControllerApplication>(*args)
 }

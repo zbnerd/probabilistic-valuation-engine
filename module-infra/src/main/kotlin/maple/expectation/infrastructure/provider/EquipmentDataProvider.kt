@@ -10,8 +10,10 @@ import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.util.GzipUtils
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.util.concurrent.Executor
 
 @Component
 class EquipmentDataProvider(
@@ -19,6 +21,7 @@ class EquipmentDataProvider(
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor,
     @Value("\${app.optimization.use-compression:true}") private val useCompression: Boolean,
+    @Qualifier("taskExecutor") private val taskExecutor: Executor,
 ) {
     private val logger = LoggerFactory.getLogger(EquipmentDataProvider::class.java)
 
@@ -27,9 +30,9 @@ class EquipmentDataProvider(
         val context = TaskContext.of("EquipmentProvider", "GetRawData", ocid)
 
         // supplyAsync 내부 로직을 executor로 보호하여 예외 및 지표 추적
-        return CompletableFuture.supplyAsync {
+        return CompletableFuture.supplyAsync({
             executor.execute({ fetchProvider.fetchWithCache(ocid) }, context)
-        }
+        }, taskExecutor)
             .thenApply { response -> serializeResponse(response, context) }
     }
 

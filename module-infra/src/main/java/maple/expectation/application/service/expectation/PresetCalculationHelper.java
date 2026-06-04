@@ -95,17 +95,26 @@ public class PresetCalculationHelper {
           presetNo, 0.0, CostFormatter.format(0.0), CostBreakdownDto.empty(), List.of());
     }
 
-    // 장비별 독립 계산 — parallelStream으로 ForkJoinPool work-stening 활용
-    List<ItemExpectationV4> results =
-        cubeInputs.parallelStream()
+    // 장비별 독립 계산 — 전용 executor 기반 병렬 처리 (parallelStream/ForkJoinPool 제거)
+    List<CompletableFuture<ItemExpectationV4>> futures =
+        cubeInputs.stream()
             .map(
-                cubeInput -> {
-                  if (!cubeInput.isReady()) {
-                    return buildNoPotentialItem(cubeInput, presetNo, characterClass);
-                  }
-                  EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
-                  return calculateSingleItem(input, cubeInput, characterClass);
-                })
+                cubeInput ->
+                    CompletableFuture.supplyAsync(
+                        () -> {
+                          if (!cubeInput.isReady()) {
+                            return buildNoPotentialItem(cubeInput, presetNo, characterClass);
+                          }
+                          EquipmentCalculationInput input = buildInput(cubeInput, presetNo);
+                          return calculateSingleItem(input, cubeInput, characterClass);
+                        },
+                        itemExecutor))
+            .collect(Collectors.toList());
+
+    // .join() justified: calculatePreset is sync, called from worker thread
+    List<ItemExpectationV4> results =
+        futures.stream()
+            .map(CompletableFuture::join)
             .collect(Collectors.toList());
 
     // 비용 누적은 순서 무관

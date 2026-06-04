@@ -10,6 +10,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import jakarta.annotation.PreDestroy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
@@ -168,6 +169,7 @@ class SimpleAdmissionControl(
     /**
      * 🔥 SHUTDOWN: Graceful shutdown
      */
+    @PreDestroy
     fun shutdown() {
         log.info("[SimpleAdmissionControl] Shutting down...")
         workerPool.shutdown()

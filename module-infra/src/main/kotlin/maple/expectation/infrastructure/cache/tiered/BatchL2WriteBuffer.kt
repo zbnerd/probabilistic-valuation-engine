@@ -44,6 +44,13 @@ class BatchL2WriteBuffer(
     companion object {
         private val log = LoggerFactory.getLogger(BatchL2WriteBuffer::class.java)
         private val sharedScheduler = Executors.newSingleThreadScheduledExecutor { Thread(it, "batch-l2-write") }
+
+        fun shutdown() {
+            sharedScheduler.shutdown()
+            if (!sharedScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                sharedScheduler.shutdownNow()
+            }
+        }
     }
 
     private data class PendingWrite(

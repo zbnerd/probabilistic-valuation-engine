@@ -3,6 +3,7 @@ package maple.externalapi.infra.storage
 import java.nio.file.FileVisitOption
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.SimpleFileVisitor
@@ -13,6 +14,8 @@ import java.util.UUID
 import java.util.stream.Collectors
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+import maple.expectation.error.CommonErrorCode
+import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiPayloadRef
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
@@ -54,10 +57,15 @@ class LocalExternalApiArtifactStoreAdapter(
     override fun read(
         endpoint: ExternalApiEndpoint,
         key: String,
-    ): ByteArray? {
+    ): ByteArray {
         val filePath = resolvePath(endpoint, key)
-        if (!Files.exists(filePath)) return null
-        return GZIPInputStream(Files.readAllBytes(filePath).inputStream()).use { it.readAllBytes() }
+        return try {
+            GZIPInputStream(Files.readAllBytes(filePath).inputStream()).use { it.readAllBytes() }
+        } catch (ex: NoSuchFileException) {
+            log.warn("[ArtifactStore] artifact not found: endpoint={}, key={}", endpoint, key)
+            throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, ex, endpoint.toString(), key)
+        }
+        // other IOException (permission, disk) propagates naturally — adapter does not swallow
     }
 
     override fun listStoredKeys(endpoint: ExternalApiEndpoint): List<String> {

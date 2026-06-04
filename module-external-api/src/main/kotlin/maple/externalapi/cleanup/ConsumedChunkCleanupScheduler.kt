@@ -13,6 +13,7 @@ import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -90,9 +91,9 @@ class ConsumedChunkCleanupScheduler(
         )
     }
 
-    private fun deleteFile(objectKey: String): Boolean {
+    internal fun deleteFile(objectKey: String): Boolean {
         val path = Paths.get(basePath, objectKey)
-        return runCatching {
+        return try {
             val deleted = Files.deleteIfExists(path)
             if (deleted) {
                 log.info("[ConsumedChunkCleanup] deleted: {}", objectKey)
@@ -100,9 +101,13 @@ class ConsumedChunkCleanupScheduler(
                 log.debug("[ConsumedChunkCleanup] already gone: {}", objectKey)
             }
             deleted
-        }.onFailure { ex ->
-            log.warn("[ConsumedChunkCleanup] delete failed: {} - {}", objectKey, ex.message)
-        }.getOrDefault(false)
+        } catch (ex: IOException) {
+            log.error("[ConsumedChunkCleanup] delete failed (IO): {} - {}", objectKey, ex.message, ex)
+            throw ex
+        } catch (ex: SecurityException) {
+            log.error("[ConsumedChunkCleanup] delete failed (security): {} - {}", objectKey, ex.message, ex)
+            throw ex
+        }
     }
 
     override val lifecyclePhase: Int = 200

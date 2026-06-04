@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.concurrency
 
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
@@ -69,7 +70,19 @@ class PostgresSingleFlightStrategy(
     /** Completed result cache for followers (short-lived, ~30s). */
     private val resultCache = ConcurrentHashMap<String, CompletableFuture<Any>>()
 
-    override fun <T> execute(key: String, supplier: Supplier<T>): T = executeAsync(key) { CompletableFuture.supplyAsync(supplier, taskExecutor) }.join()
+    override fun <T> execute(key: String, supplier: Supplier<T>): T {
+        return try {
+            executeAsync(key) { CompletableFuture.supplyAsync(supplier, taskExecutor) }
+                .orTimeout(DEFAULT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                .join()
+        } catch (ex: CompletionException) {
+            if (ex.cause is TimeoutException) {
+                log.warn("[SingleFlight] Timeout waiting for result: key={}", maskKey(key))
+                throw ex
+            }
+            throw ex
+        }
+    }
 
     override fun <T> executeAsync(key: String, asyncSupplier: Supplier<CompletableFuture<T>>): CompletableFuture<T> {
         val context = TaskContext.of("SingleFlight", "Execute", key)

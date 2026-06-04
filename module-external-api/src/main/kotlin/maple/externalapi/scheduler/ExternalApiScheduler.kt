@@ -39,7 +39,7 @@ class ExternalApiScheduler(
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val running = AtomicBoolean(false)
     private val shutdown = AtomicBoolean(false)
-    private val itemEquipmentStarted = AtomicBoolean(false)
+    internal val itemEquipmentStarted = AtomicBoolean(false)
     private val lock = ReentrantLock()
     private val idle = lock.newCondition()
 

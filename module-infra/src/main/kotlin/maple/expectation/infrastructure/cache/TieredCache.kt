@@ -4,7 +4,7 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.Optional
 import java.util.concurrent.Callable
-import java.util.concurrent.ConcurrentHashMap
+import com.github.benmanes.caffeine.cache.Caffeine
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.LockSupport
@@ -51,7 +51,10 @@ class TieredCache(
     }
 
     private val versionCounter = AtomicLong(0)
-    private val keyVersions = ConcurrentHashMap<Any, Long>()
+    private val keyVersions = Caffeine.newBuilder()
+        .expireAfterAccess(10, TimeUnit.MINUTES)
+        .maximumSize(10_000)
+        .build<Any, Long>()
 
     private val l1HitCounter: Counter
     private val l2HitCounter: Counter
@@ -119,7 +122,7 @@ class TieredCache(
         if (buffer != null) {
             val value = buffer.submit(key).join()
             return if (value != null) {
-                keyVersions[key] = versionCounter.incrementAndGet()
+                keyVersions.put(key, versionCounter.incrementAndGet())
                 l2HitCounter.increment()
                 SimpleValueWrapper(value)
             } else {
@@ -129,7 +132,7 @@ class TieredCache(
         return Optional.ofNullable(l2.get(key))
             .map { w ->
                 l1.put(key, w.get())
-                keyVersions[key] = versionCounter.incrementAndGet()
+                keyVersions.put(key, versionCounter.incrementAndGet())
                 tapCacheHit(w, "L2")
             }
             .orElseGet { null }
@@ -146,7 +149,7 @@ class TieredCache(
         if (buffer != null) {
             buffer.submit(key, value)
             val ver = versionCounter.incrementAndGet()
-            keyVersions[key] = ver
+            keyVersions.put(key, ver)
             publishEvictEvent(key, ver)
             return
         }
@@ -157,7 +160,7 @@ class TieredCache(
         if (l2Success) {
             executor.executeVoid({ l1.put(key, value) }, context)
             val ver = versionCounter.incrementAndGet()
-            keyVersions[key] = ver
+            keyVersions.put(key, ver)
             publishEvictEvent(key, ver)
         } else {
             log.warn("[TieredCache] L2 put failed, skipping L1 for consistency: key={}", key)
@@ -181,7 +184,7 @@ class TieredCache(
             l2FailureCounter.increment()
         }
         executor.executeVoid({ l1.evict(key) }, context)
-        keyVersions.remove(key)
+        keyVersions.invalidate(key)
         publishEvictEvent(key, versionCounter.incrementAndGet())
     }
 
@@ -201,7 +204,7 @@ class TieredCache(
             l2FailureCounter.increment()
         }
         executor.executeVoid({ l1.clear() }, context)
-        keyVersions.clear()
+        keyVersions.invalidateAll()
         publishClearAllEvent()
     }
 
@@ -274,14 +277,14 @@ class TieredCache(
     }
 
     fun clearKeyVersions() {
-        keyVersions.clear()
+        keyVersions.invalidateAll()
     }
 
     fun clearKeyVersion(key: Any) {
-        keyVersions.remove(key)
+        keyVersions.invalidate(key)
     }
 
-    fun getKeyVersion(key: Any): Long? = keyVersions[key]
+    fun getKeyVersion(key: Any): Long? = keyVersions.getIfPresent(key)
 
     fun getCurrentVersion(): Long = versionCounter.get()
 

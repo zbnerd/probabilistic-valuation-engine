@@ -11,6 +11,7 @@ package maple.expectation.infrastructure.pgmq
  */
 class AccumulationBuffer<T>(
     private val bufferMs: Long,
+    private val maxSize: Int = 10_000,
 ) {
     private val messages = ArrayDeque<PgmqMessage<T>>()
     private var firstMessageTimeMs: Long = 0L
@@ -39,4 +40,6 @@ class AccumulationBuffer<T>(
     fun isEmpty(): Boolean = messages.isEmpty()
 
     fun size(): Int = messages.size
+
+    fun isFull(): Boolean = messages.size >= maxSize
 }

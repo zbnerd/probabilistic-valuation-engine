@@ -207,6 +207,10 @@ abstract class PgmqWorker<T : Any>(
 
                 // Phase C: Route to processing mode
                 if (sequentialBatchMs > 0 && supportsTwoPhase) {
+                    if (accumulationBuffer.isFull()) {
+                        log.warn("[{}] Accumulation buffer full ({}), flushing before adding", queueName, accumulationBuffer.size())
+                        flushSequentialBatch()
+                    }
                     accumulationBuffer.addAll(messages)
                     if (accumulationBuffer.shouldFlush()) {
                         flushSequentialBatch()

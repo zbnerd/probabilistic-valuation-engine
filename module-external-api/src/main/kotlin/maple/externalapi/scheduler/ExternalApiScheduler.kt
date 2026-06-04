@@ -6,7 +6,9 @@ import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
 import maple.externalapi.scheduler.phase.SnapshotFetchPhase
+import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
+import maple.externalapi.metrics.SchedulerMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Value
@@ -28,6 +30,7 @@ class ExternalApiScheduler(
     private val ocidCacheProvider: OcidCacheProvider,
     private val rankingFetchPhaseProvider: ObjectProvider<RankingFetchPhase>,
     private val runStatusTracker: RunStatusTracker,
+    private val schedulerMetrics: SchedulerMetrics,
     @Value("\${external-api.schedule.enabled:false}")
     private val scheduleEnabled: Boolean,
     @Value("\${external-api.schedule.run-on-startup:false}")
@@ -60,10 +63,13 @@ class ExternalApiScheduler(
     }
 
     fun triggerDailyRefresh(externalRunId: String? = null) {
-        if (!acquireLock(3_600_000)) {
-            log.warn("[Scheduler] could not acquire lock for daily refresh, skipping")
+        try {
+            acquireLock("daily_refresh", 3_600_000)
+        } catch (ex: DistributedLockException) {
+            log.error("[Scheduler] could not acquire lock for daily refresh, skipping until next cron", ex)
             return
         }
+        schedulerMetrics.incrementLockAcquired("daily_refresh")
         if (skipCharacterBasic) {
             log.info("[Scheduler] skip-character-basic enabled, loading OCID cache from existing data")
             ocidCacheProvider.refresh()
@@ -140,13 +146,17 @@ class ExternalApiScheduler(
             return
         }
 
-        if (!acquireLock(120_000)) {
+        try {
+            acquireLock("item_equipment", 120_000)
+        } catch (ex: DistributedLockException) {
+            log.error("[Scheduler] could not acquire lock for ITEM_EQUIPMENT, scheduling single retry in 60s", ex)
             executor.submit {
-                Thread.sleep(java.time.Duration.ofSeconds(5))
+                Thread.sleep(java.time.Duration.ofSeconds(60))
                 runItemEquipmentCycle()
             }
             return
         }
+        schedulerMetrics.incrementLockAcquired("item_equipment")
 
         CompletableFuture.completedFuture(null)
             .thenCompose { snapshotFetchPhase.executeItemEquipment(executor, entries) }
@@ -159,15 +169,17 @@ class ExternalApiScheduler(
             }
     }
 
-    private fun acquireLock(timeoutMs: Long): Boolean {
+    private fun acquireLock(phase: String, timeoutMs: Long) {
         lock.lock()
         try {
             var remainingNanos = timeoutMs * 1_000_000L
             while (!running.compareAndSet(false, true)) {
-                if (remainingNanos <= 0) return false
+                if (remainingNanos <= 0) {
+                    schedulerMetrics.incrementLockTimeout(phase)
+                    throw DistributedLockException("ExternalApiScheduler:$phase")
+                }
                 remainingNanos = idle.awaitNanos(remainingNanos)
             }
-            return true
         } finally {
             lock.unlock()
         }

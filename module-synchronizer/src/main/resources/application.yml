@@ -64,6 +64,8 @@ synchronizer:
     base-path: ../data
   chunk:
     max-rows: 100000
+  reader:
+    missing-field-threshold: 100
   ranking:
     enabled: true
     key-prefix: ranking:equipment:total-cost

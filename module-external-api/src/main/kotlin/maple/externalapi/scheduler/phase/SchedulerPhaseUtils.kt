@@ -2,6 +2,7 @@ package maple.externalapi.scheduler.phase
 
 import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.Bucket
+import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -27,6 +28,19 @@ internal object SchedulerPhaseUtils {
         return rateLimiter.tryConsumeAsMuchAsPossible(maxBatch.toLong()).toInt().also {
             if (it == 0) Thread.sleep(Duration.ofMillis(100))
         }
+    }
+
+    /**
+     * Suspend-friendly rate limit permit acquisition.
+     * Replaces Thread.sleep(100) with coroutine delay(100) when no permits available.
+     */
+    suspend fun acquirePermitsSuspend(rateLimiter: Bucket, batchSize: Int, remaining: Int): Int {
+        val maxBatch = minOf(batchSize, remaining)
+        val consumed = rateLimiter.tryConsumeAsMuchAsPossible(maxBatch.toLong()).toInt()
+        if (consumed == 0) {
+            delay(100)
+        }
+        return consumed
     }
 
     fun newRunId(): String {

@@ -2,6 +2,7 @@ package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.common.event.SnapshotRunCompletedEvent
+import maple.synchronizer.redis.OcidMappingRedisWriter
 import maple.synchronizer.repository.OcidMappingRepository
 import maple.synchronizer.storage.OcidMappingFileReader
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Component
 class OcidLookupRunConsumer(
     private val fileReader: OcidMappingFileReader,
     private val repository: OcidMappingRepository,
+    private val ocidMappingRedisWriter: OcidMappingRedisWriter,
     private val objectMapper: ObjectMapper,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -49,7 +51,7 @@ class OcidLookupRunConsumer(
 
         repository.batchUpsert(mappings)
         runCatching {
-            repository.writeOcidToRedis(mappings)
+            ocidMappingRedisWriter.writeOcidToRedis(mappings)
         }.onFailure { ex ->
             log.error(
                 "[OcidConsumer] Redis write failed after DB upsert: runId={} mappings={} - {}. Redis may be stale until next run.",

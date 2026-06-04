@@ -474,6 +474,18 @@ abstract class PgmqWorker<T : Any>(
             log.warn("[{}] Shutdown with {} messages in buffer, forcing flush", queueName, accumulationBuffer.size())
             flushSequentialBatch()
         }
+
+        // Drain pipeline buffer — Phase 1 results that are buffered but not yet persisted
+        val remaining = pipelineBuffer.drain(pipelineBuffer.size())
+        if (remaining.isNotEmpty()) {
+            log.warn("[{}] Shutdown with {} items in pipeline buffer, draining", queueName, remaining.size)
+            executor.executeOrDefault(
+                { batchWrite(remaining); true },
+                false,
+                TaskContext.of(queueName, "PipelineBufferDrain"),
+            )
+        }
+
         log.info("[{}] Shutting down worker pool", queueName)
         workerPool.shutdown()
         if (!workerPool.awaitTermination(5, TimeUnit.SECONDS)) {

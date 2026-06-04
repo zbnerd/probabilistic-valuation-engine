@@ -1,6 +1,10 @@
 package maple.externalapi.scheduler.phase
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.future.future
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.domain.KeyType
@@ -23,7 +27,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.atomic.AtomicInteger
 
 @Component
 @ConditionalOnProperty(name = ["external-api.ranking.enabled"], havingValue = "true", matchIfMissing = false)
@@ -64,67 +67,68 @@ class RankingFetchPhase(
         )
 
         val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
-        val fetched = AtomicInteger(0)
-        val failed = AtomicInteger(0)
+        val start = Instant.now()
+        val dispatcher = workerExecutor.asCoroutineDispatcher()
 
         log.info("[RankingFetch] starting: runId={}, date={}, maxPages={}, permitsPerSecond={}", runId, date, maxPages, permitsPerSecond)
-        val start = Instant.now()
 
-        return processPages(workerExecutor, sink, rateLimiter, date, 1, fetched, failed)
-            .whenComplete { _, ex ->
+        return CoroutineScope(dispatcher).future {
+            try {
+                val (fetched, failed) = processPagesSuspend(sink, rateLimiter, date)
+                SchedulerPhaseUtils.logSummary("RankingFetch", fetched, fetched, fetched, failed, start)
+            } catch (ex: Throwable) {
+                log.error("[RankingFetch] failed: runId={}, error={}", runId, ex.message)
+                throw ex
+            } finally {
                 sink.close()
-                if (ex != null) {
-                    log.error("[RankingFetch] failed: runId={}, fetched={}, failed={}", runId, fetched.get(), failed.get(), ex)
-                } else {
-                    SchedulerPhaseUtils.logSummary("RankingFetch", fetched.get(), fetched.get(), fetched.get(), failed.get(), start)
-                }
             }
-            .thenApply { runDir }
+            runDir
+        }
     }
 
-    private fun processPages(
-        workerExecutor: ExecutorService,
+    /**
+     * Sequential page processing with suspend-based rate limiting.
+     * Replaces recursive CompletableFuture chain with while loop.
+     */
+    private suspend fun processPagesSuspend(
         sink: ChunkedSnapshotSink,
         rateLimiter: io.github.bucket4j.Bucket,
         date: String,
-        currentPage: Int,
-        fetched: AtomicInteger,
-        failed: AtomicInteger,
-    ): CompletableFuture<Void> {
-        if (currentPage > maxPages) {
-            return CompletableFuture.completedFuture(null)
-        }
+    ): Pair<Int, Int> {
+        var fetched = 0
+        var failed = 0
+        var currentPage = 1
 
-        SchedulerPhaseUtils.acquirePermits(rateLimiter, 1, 1)
+        while (currentPage <= maxPages) {
+            val permits = SchedulerPhaseUtils.acquirePermitsSuspend(rateLimiter, 1, 1)
+            if (permits == 0) continue // acquirePermitsSuspend already delays 100ms
 
-        val requestKey = "$date:$currentPage"
-        return clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, requestKey)
-            .thenAcceptAsync({ bodyBytes ->
+            val requestKey = "$date:$currentPage"
+            try {
+                val bodyBytes = clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, requestKey).await()
                 val count = submitRankingEntries(sink, bodyBytes, currentPage)
-                fetched.addAndGet(count)
+                fetched += count
                 metrics.recordRankingFetched(count)
-                if (fetched.get() % 10000 == 0) {
-                    log.info("[RankingFetch] progress: fetched={}, failed={}, page={}/{}", fetched.get(), failed.get(), currentPage, maxPages)
+                if (fetched % 10000 == 0) {
+                    log.info("[RankingFetch] progress: fetched={}, failed={}, page={}/{}", fetched, failed, currentPage, maxPages)
                 }
-            }, workerExecutor)
-            .handle { _, ex ->
-                if (ex != null) {
-                    failed.incrementAndGet()
-                    metrics.recordRankingFailed()
-                    val status = SchedulerPhaseUtils.extractHttpStatus(ex)
-                    sink.submit(SnapshotChunkRecord.Failure(
-                        key = requestKey,
-                        endpoint = "ranking-overall",
-                        keyType = KeyType.DATE_PAGE.name,
-                        httpStatus = status,
-                        fetchedAt = Instant.now(),
-                        errorMessage = ex.message ?: "unknown",
-                    ))
-                    log.warn("[RankingFetch] page failed: page={}, status={}, error={}", currentPage, status, ex.message)
-                }
-                null
+            } catch (ex: Throwable) {
+                failed++
+                metrics.recordRankingFailed()
+                val status = SchedulerPhaseUtils.extractHttpStatus(ex)
+                sink.submit(SnapshotChunkRecord.Failure(
+                    key = requestKey,
+                    endpoint = "ranking-overall",
+                    keyType = KeyType.DATE_PAGE.name,
+                    httpStatus = status,
+                    fetchedAt = Instant.now(),
+                    errorMessage = ex.message ?: "unknown",
+                ))
+                log.warn("[RankingFetch] page failed: page={}, status={}, error={}", currentPage, status, ex.message)
             }
-            .thenCompose { processPages(workerExecutor, sink, rateLimiter, date, currentPage + 1, fetched, failed) }
+            currentPage++
+        }
+        return fetched to failed
     }
 
     private fun submitRankingEntries(

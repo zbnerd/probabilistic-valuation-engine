@@ -1,11 +1,21 @@
 package maple.externalapi.scheduler.phase
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.future.future
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.expectation.common.event.SnapshotRunCompletedEvent
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -16,12 +26,9 @@ import java.io.BufferedOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
-import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Semaphore
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
@@ -43,6 +50,7 @@ class OcidLookupPhase(
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
     private val semaphore = Semaphore(maxInFlight)
+    private val maxInFlight = maxInFlight
 
     fun execute(workerExecutor: ExecutorService, rankingRunDir: Path): CompletableFuture<Path?> {
         val mappingDir = Path.of(storeBasePath).resolve("ocid-mapping")
@@ -60,42 +68,97 @@ class OcidLookupPhase(
         log.info("[Scheduler] ========== OCID lookup start ==========")
         log.info(
             "[Scheduler] config: total={}, rate={}/s, batchSize={}, maxInFlight={}, store={}",
-            igns.size, ocidLookupPermitsPerSecond, batchSize, semaphore.availablePermits(), storeBasePath,
+            igns.size, ocidLookupPermitsPerSecond, batchSize, maxInFlight, storeBasePath,
         )
 
         val start = Instant.now()
-        val successCount = AtomicInteger(0)
-        val failCount = AtomicInteger(0)
-        val lastProgressLog = AtomicInteger(0)
-        val results: MutableList<String> = Collections.synchronizedList(mutableListOf())
+        val dispatcher = workerExecutor.asCoroutineDispatcher()
+        val results = mutableListOf<String>()
 
-        return processBatch(
-            workerExecutor = workerExecutor,
-            rateLimiter = rateLimiter,
-            igns = igns,
-            processed = 0,
-            successCount = successCount,
-            failCount = failCount,
-            lastProgressLog = lastProgressLog,
-            results = results,
-            start = start,
-        ).thenApply {
+        return CoroutineScope(dispatcher).future {
+            val (successCount, failCount) = processBatchSuspend(rateLimiter, igns, results)
+
             val runId = SchedulerPhaseUtils.newRunId()
             val outputPath = writeGzipJsonl(mappingDir, results, runId)
-            SchedulerPhaseUtils.logSummary("OCID lookup", igns.size, successCount.get(), successCount.get(), failCount.get(), start)
+            SchedulerPhaseUtils.logSummary("OCID lookup", igns.size, successCount, successCount, failCount, start)
             eventPublisher.publishRunCompleted(SnapshotRunCompletedEvent(
                 eventId = UUID.randomUUID().toString(),
                 runId = runId,
                 endpoint = "ocid-lookup",
                 manifestPath = "ocid-mapping/${outputPath.fileName}",
                 totalRecords = results.size,
-                totalFailed = failCount.get(),
+                totalFailed = failCount,
                 chunkCount = 1,
                 startedAt = start,
                 finishedAt = Instant.now(),
                 createdAt = Instant.now(),
             ))
             outputPath
+        }
+    }
+
+    /**
+     * Batch processing with coroutine-based parallelism and semaphore-gated concurrency.
+     * Replaces recursive CF chain + AtomicInteger with while loop + local accumulators.
+     */
+    private suspend fun processBatchSuspend(
+        rateLimiter: io.github.bucket4j.Bucket,
+        igns: List<String>,
+        results: MutableList<String>,
+    ): Pair<Int, Int> {
+        var processed = 0
+        var successCount = 0
+        var failCount = 0
+        var lastProgressLog = 0
+        val start = Instant.now()
+
+        while (processed < igns.size) {
+            val permits = SchedulerPhaseUtils.acquirePermitsSuspend(rateLimiter, batchSize, igns.size - processed)
+            if (permits == 0) continue // acquirePermitsSuspend already delays 100ms
+
+            val chunk = igns.subList(processed, processed + permits)
+            val batchResults = coroutineScope {
+                chunk.map { ign ->
+                    async {
+                        runCatching { fetchOcid(ign) }.getOrNull()
+                    }
+                }.awaitAll()
+            }
+
+            val batchSuccess = batchResults.filterNotNull()
+            results.addAll(batchSuccess)
+            successCount += batchSuccess.size
+            failCount += chunk.size - batchSuccess.size
+
+            processed += permits
+
+            val progress = successCount + failCount
+            if (progress - lastProgressLog >= 5000) {
+                lastProgressLog = progress
+                SchedulerPhaseUtils.logProgress("OCID lookup", progress, igns.size, successCount, failCount, start)
+            }
+        }
+        return successCount to failCount
+    }
+
+    /**
+     * Fetches OCID for a single IGN. Coroutine Semaphore gates concurrency with
+     * 10s timeout to prevent indefinite hang on semaphore acquisition.
+     * Replaces tryAcquireWithBackoff() + Thread.sleep with structured suspension.
+     */
+    private suspend fun fetchOcid(ign: String): String? {
+        return withTimeoutOrNull(10_000L) {
+            semaphore.withPermit {
+                val data = clientPort.fetch(
+                    ExternalApiProvider.NEXON,
+                    ExternalApiEndpoint.OCID_LOOKUP,
+                    ign,
+                ).await()
+                val ocid = objectMapper.readTree(data).get("ocid")?.asText()
+                if (ocid != null) {
+                    String(objectMapper.writeValueAsBytes(mapOf("userIgn" to ign, "ocid" to ocid)))
+                } else null
+            }
         }
     }
 
@@ -149,88 +212,5 @@ class OcidLookupPhase(
         val size = Files.size(outputPath)
         log.info("[Scheduler] wrote {} OCID mappings to {} ({} bytes)", results.size, outputPath, size)
         return outputPath
-    }
-
-    private fun processBatch(
-        workerExecutor: ExecutorService,
-        rateLimiter: io.github.bucket4j.Bucket,
-        igns: List<String>,
-        processed: Int,
-        successCount: AtomicInteger,
-        failCount: AtomicInteger,
-        lastProgressLog: AtomicInteger,
-        results: MutableList<String>,
-        start: Instant,
-    ): CompletableFuture<Void> {
-        if (processed >= igns.size) {
-            return CompletableFuture.completedFuture(null)
-        }
-
-        val permits = SchedulerPhaseUtils.acquirePermits(rateLimiter, batchSize, igns.size - processed)
-        if (permits == 0) {
-            return processBatch(workerExecutor, rateLimiter, igns, processed, successCount, failCount, lastProgressLog, results, start)
-        }
-
-        val chunk = igns.subList(processed, processed + permits)
-        val futures = chunk.map { ign ->
-            fetchAndCollectOcidAsync(ign, workerExecutor, successCount, failCount, results)
-        }
-
-        return CompletableFuture.allOf(*futures.toTypedArray()).thenCompose {
-            val progress = successCount.get() + failCount.get()
-            if (progress - lastProgressLog.get() >= 5000) {
-                lastProgressLog.set(progress)
-                SchedulerPhaseUtils.logProgress("OCID lookup", progress, igns.size, successCount.get(), failCount.get(), start)
-            }
-            processBatch(workerExecutor, rateLimiter, igns, processed + permits, successCount, failCount, lastProgressLog, results, start)
-        }
-    }
-
-    private fun fetchAndCollectOcidAsync(
-        ign: String,
-        workerExecutor: ExecutorService,
-        successCount: AtomicInteger,
-        failCount: AtomicInteger,
-        results: MutableList<String>,
-    ): CompletableFuture<Void> {
-        return tryAcquireWithBackoff(semaphore, workerExecutor)
-            .thenCompose { acquired ->
-                val fetchFuture: CompletableFuture<Void> = if (!acquired) {
-                    log.warn("[OCID] backpressure: semaphore exhausted, skipping ign={}", ign.take(3) + "***")
-                    failCount.incrementAndGet()
-                    CompletableFuture.completedFuture(null)
-                } else {
-                    clientPort.fetch(
-                        ExternalApiProvider.NEXON,
-                        ExternalApiEndpoint.OCID_LOOKUP,
-                        ign,
-                    )
-                        .thenAcceptAsync({ data ->
-                            val ocid = objectMapper.readTree(data).get("ocid")?.asText()
-                            if (ocid != null) {
-                                val json = String(objectMapper.writeValueAsBytes(mapOf("userIgn" to ign, "ocid" to ocid)))
-                                results.add(json)
-                                successCount.incrementAndGet()
-                            }
-                        }, workerExecutor)
-                        .handle { _, ex ->
-                            if (ex != null) failCount.incrementAndGet()
-                            null
-                        }
-                }
-                fetchFuture.whenComplete { _, _ -> if (acquired) semaphore.release() }
-            }
-    }
-
-    private fun tryAcquireWithBackoff(semaphore: Semaphore, executor: ExecutorService): CompletableFuture<Boolean> {
-        if (semaphore.tryAcquire()) return CompletableFuture.completedFuture(true)
-        return CompletableFuture.supplyAsync({
-            var retries = 0
-            while (!semaphore.tryAcquire()) {
-                if (retries++ >= 3) return@supplyAsync false
-                Thread.sleep(50L * retries)
-            }
-            true
-        }, executor)
     }
 }

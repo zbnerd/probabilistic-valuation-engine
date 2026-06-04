@@ -42,9 +42,15 @@ class OcidMappingFileReader(
     private fun parseMapping(line: String): OcidMapping? {
         return runCatching {
             val node = objectMapper.readTree(line)
-            val ign = node.get("userIgn")?.asText() ?: return null
-            val ocid = node.get("ocid")?.asText() ?: return null
+            val ign = node.get("userIgn")?.asText() ?: run {
+                log.debug("skip mapping: reason=missing_userIgn")
+                return null
+            }
+            val ocid = node.get("ocid")?.asText() ?: run {
+                log.debug("skip mapping: reason=missing_ocid")
+                return null
+            }
             OcidMapping(ign, ocid)
-        }.getOrNull()
+        }.onFailure { log.debug("mapping parse fail: {}", it.message) }.getOrNull()
     }
 }

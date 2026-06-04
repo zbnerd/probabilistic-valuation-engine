@@ -94,13 +94,31 @@ class BasicChunkFileReader(
     private fun parseRecord(line: String): BasicRecord? {
         return runCatching {
             val node = objectMapper.readTree(line)
-            if (node.get("status")?.asText() != "SUCCESS") return null
-            if (node.get("endpoint")?.asText() != "character-basic") return null
 
-            val ocid = node.get("key")?.asText() ?: return null
-            val body = node.get("body") ?: return null
+            val status = node.get("status")?.asText()
+            if (status != "SUCCESS") {
+                log.debug("skip record: reason=status_mismatch actual={}", status)
+                return null
+            }
+            val endpoint = node.get("endpoint")?.asText()
+            if (endpoint != "character-basic") {
+                log.debug("skip record: reason=endpoint_mismatch actual={}", endpoint)
+                return null
+            }
 
-            val userIgn = body.get("character_name")?.asText() ?: return null
+            val ocid = node.get("key")?.asText() ?: run {
+                log.debug("skip record: reason=missing_ocid")
+                return null
+            }
+            val body = node.get("body") ?: run {
+                log.debug("skip record: reason=missing_body")
+                return null
+            }
+
+            val userIgn = body.get("character_name")?.asText() ?: run {
+                log.debug("skip record: reason=missing_character_name")
+                return null
+            }
             val worldName = body.get("world_name")?.asText()
             val characterClass = body.get("character_class")?.asText()
             val characterLevel = body.get("character_level")?.asInt()
@@ -120,7 +138,7 @@ class BasicChunkFileReader(
                 compressedBody = compressed,
                 bodyHash = hash,
             )
-        }.getOrNull()
+        }.onFailure { log.debug("record parse fail: {}", it.message) }.getOrNull()
     }
 
     private fun sha256Hex(input: ByteArray): String {

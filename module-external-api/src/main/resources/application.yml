@@ -35,6 +35,9 @@ external-api:
   rate-limit:
     permits-per-second: ${EXTERNAL_API_RATE_LIMIT_PERMITS_PER_SECOND:250}
     ocid-lookup-permits-per-second: 400
+  concurrency:
+    max-in-flight: ${EXTERNAL_API_CONCURRENCY_MAX_IN_FLIGHT:100}
+    urgent-max-concurrent: ${EXTERNAL_API_URGENT_MAX_CONCURRENT:30}
   batch-size: 1000
   store:
     base-path: ../data

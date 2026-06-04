@@ -53,6 +53,7 @@ class UrgentCharacterRequestConsumerTest {
             notFoundTopic = "urgent-character-not-found",
             urgentChunkReadyTopic = "external-api.urgent.snapshot.chunk-ready",
             storeBasePath = tempDir.toString(),
+            maxConcurrent = 30,
         )
     }
 

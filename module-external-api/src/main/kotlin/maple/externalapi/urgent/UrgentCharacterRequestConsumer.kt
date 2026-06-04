@@ -22,6 +22,7 @@ import java.time.Instant
 import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Semaphore
 
 @Component
 @ConditionalOnProperty(
@@ -39,9 +40,12 @@ class UrgentCharacterRequestConsumer(
     private val urgentChunkReadyTopic: String,
     @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
+    @Value("\${external-api.concurrency.urgent-max-concurrent:30}")
+    maxConcurrent: Int,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val exec = VirtualThreadExecutorManager("UrgentCharacterRequestConsumer")
+    private val semaphore = Semaphore(maxConcurrent)
 
     @KafkaListener(
         topics = ["\${external-api.urgent.request-topic}"],
@@ -51,6 +55,12 @@ class UrgentCharacterRequestConsumer(
         val request = objectMapper.readValue(message, UrgentCharacterRequest::class.java)
         log.info("[Urgent] received: userIgn={}", maskIgn(request.userIgn))
 
+        if (!semaphore.tryAcquire()) {
+            log.warn("[Urgent] backpressure: semaphore exhausted, skipping userIgn={}", maskIgn(request.userIgn))
+            acknowledgment.acknowledge()
+            return
+        }
+
         processUrgentCharacterAsync(request)
             .whenComplete { _, ex ->
                 if (ex != null) {
@@ -58,6 +68,7 @@ class UrgentCharacterRequestConsumer(
                 } else {
                     log.info("[Urgent] completed: userIgn={}", maskIgn(request.userIgn))
                 }
+                semaphore.release()
                 runCatching { acknowledgment.acknowledge() }
                     .onFailure { log.warn("[Urgent] ACK failed: userIgn={}", maskIgn(request.userIgn)) }
             }

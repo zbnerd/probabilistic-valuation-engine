@@ -4,7 +4,6 @@ import maple.synchronizer.storage.OcidMapping
 import org.postgresql.copy.CopyManager
 import org.postgresql.core.BaseConnection
 import org.slf4j.LoggerFactory
-import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.jdbc.core.ConnectionCallback
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
@@ -13,13 +12,8 @@ import java.sql.Connection
 @Repository
 class OcidMappingRepository(
     private val jdbc: NamedParameterJdbcTemplate,
-    private val redisTemplate: StringRedisTemplate,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
-
-    companion object {
-        private const val REDIS_KEY = "ocid:mapping"
-    }
 
     fun batchUpsert(mappings: List<OcidMapping>) {
         val affected: Int = jdbc.jdbcTemplate.execute(
@@ -65,26 +59,5 @@ class OcidMappingRepository(
         ) ?: 0
 
         log.info("[OcidMapping] DB upserted via COPY→merge: {} mappings, {} affected", mappings.size, affected)
-    }
-
-    fun writeOcidToRedis(mappings: List<OcidMapping>) {
-        if (mappings.isEmpty()) {
-            redisTemplate.delete(REDIS_KEY)
-            log.info("[OcidMapping] Redis cleared: empty mappings")
-            return
-        }
-        val tempKey = "$REDIS_KEY:tmp:${System.nanoTime()}"
-        redisTemplate.executePipelined { connection ->
-            for (mapping in mappings) {
-                connection.hashCommands().hSet(
-                    tempKey.toByteArray(),
-                    mapping.userIgn.toByteArray(),
-                    mapping.ocid.toByteArray(),
-                )
-            }
-            null
-        }
-        redisTemplate.rename(tempKey, REDIS_KEY)
-        log.info("[OcidMapping] Redis written atomically via RENAME: {} mappings to {}", mappings.size, REDIS_KEY)
     }
 }

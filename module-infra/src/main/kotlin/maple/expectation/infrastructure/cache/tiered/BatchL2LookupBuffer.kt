@@ -42,6 +42,13 @@ class BatchL2LookupBuffer(
     companion object {
         private val log = LoggerFactory.getLogger(BatchL2LookupBuffer::class.java)
         private val sharedScheduler = Executors.newSingleThreadScheduledExecutor { Thread(it, "batch-l2-flush") }
+
+        fun shutdown() {
+            sharedScheduler.shutdown()
+            if (!sharedScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                sharedScheduler.shutdownNow()
+            }
+        }
     }
 
     private data class PendingRequest(

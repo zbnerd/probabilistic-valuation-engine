@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.cache
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
+import jakarta.annotation.PreDestroy
 import java.util.function.Consumer
 import maple.expectation.infrastructure.cache.invalidation.CacheInvalidationEvent
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -180,5 +181,13 @@ class TieredCacheManager(
 
     fun clearKeyVersion(cacheName: String, key: Any) {
         (getCache(cacheName) as? TieredCache)?.clearKeyVersion(key)
+    }
+
+    @PreDestroy
+    fun shutdown() {
+        log.info("[TieredCacheManager] Shutting down batch buffers for {} caches", cachePool.size)
+        cachePool.values.forEach { cache ->
+            (cache as? TieredCache)?.shutdown()
+        }
     }
 }

@@ -285,6 +285,12 @@ class TieredCache(
 
     fun getCurrentVersion(): Long = versionCounter.get()
 
+    /** Shutdown batch buffers (called by TieredCacheManager @PreDestroy) */
+    fun shutdown() {
+        batchBuffer?.let { BatchL2LookupBuffer.shutdown() }
+        writeBuffer?.let { BatchL2WriteBuffer.shutdown() }
+    }
+
     override fun <T : Any?> get(key: Any, type: Class<T>?): T? {
         val wrapper = get(key)
         @Suppress("UNCHECKED_CAST")

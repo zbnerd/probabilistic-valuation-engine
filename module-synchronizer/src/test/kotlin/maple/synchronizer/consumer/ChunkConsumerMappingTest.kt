@@ -29,6 +29,7 @@ class ChunkConsumerMappingTest {
             ocidMappingRepository = mock<OcidMappingRepository>(),
             chunkConsumerTemplate = template,
             consumedEventPublisher = mock<KafkaChunkConsumedEventPublisher>(),
+            executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
         )
 
         consumer.consume(basicMessage, mock<Acknowledgment>(), "basic-topic", null)
@@ -56,6 +57,7 @@ class ChunkConsumerMappingTest {
             chunkMetricsListener = mock<SynchronizerChunkMetricsListener>(),
             chunkConsumerTemplate = template,
             consumedEventPublisher = mock<KafkaChunkConsumedEventPublisher>(),
+            executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
         )
 
         consumer.consume(resultMessage, mock<Acknowledgment>(), "result-topic", "result-key")

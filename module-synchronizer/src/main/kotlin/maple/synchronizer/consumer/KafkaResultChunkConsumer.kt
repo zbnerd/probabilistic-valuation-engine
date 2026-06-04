@@ -6,7 +6,6 @@ import maple.expectation.common.event.ChunkConsumedEvent
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
 import maple.synchronizer.metrics.SynchronizerMetrics
@@ -18,7 +17,8 @@ import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
-import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
+import org.springframework.beans.factory.annotation.Qualifier
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Semaphore
 
 @Component
@@ -28,9 +28,9 @@ class KafkaResultChunkConsumer(
     private val chunkMetricsListener: SynchronizerChunkMetricsListener,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
-) : ManagedLifecycle {
+    @Qualifier("kafkaResultChunkExecutor") private val executor: ExecutorService,
+) {
     private val log = LoggerFactory.getLogger(KafkaResultChunkConsumer::class.java)
-    private val exec = VirtualThreadExecutorManager("KafkaResultChunkConsumer")
     private val processingPermit = Semaphore(2)
 
     @KafkaListener(
@@ -70,7 +70,7 @@ class KafkaResultChunkConsumer(
                 objectKey = event.objectKey,
                 acknowledgment = acknowledgment,
                 processingPermit = processingPermit,
-                executor = exec.executor,
+                executor = executor,
                 processContext = TaskContext.of("Synchronizer", "ChunkProcess", chunkId),
                 lifecycleContext = TaskContext.of("Synchronizer", "ChunkLifecycle", chunkId),
                 mdcValues = mapOf("kafkaTopic" to (topic ?: event.eventType)),
@@ -124,11 +124,5 @@ class KafkaResultChunkConsumer(
             event.sourceRunId, event.sourceChunkId, event.compressedBytes, event.uncompressedBytes,
             event.resultCount, ratio,
         )
-    }
-
-    override val lifecyclePhase: Int = 100
-
-    override fun stopLifecycle() {
-        exec.shutdown()
     }
 }

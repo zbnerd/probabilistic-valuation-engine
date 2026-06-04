@@ -14,9 +14,10 @@ import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
-import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
+import org.springframework.beans.factory.annotation.Qualifier
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
@@ -33,12 +34,12 @@ class ExternalApiScheduler(
     private val runOnStartup: Boolean,
     @Value("\${external-api.schedule.skip-character-basic:false}")
     private val skipCharacterBasic: Boolean,
+    @Qualifier("externalApiSchedulerExecutor") private val executor: ExecutorService,
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val running = AtomicBoolean(false)
     private val shutdown = AtomicBoolean(false)
     private val itemEquipmentStarted = AtomicBoolean(false)
-    private val exec = VirtualThreadExecutorManager("ExternalApiScheduler")
     private val lock = ReentrantLock()
     private val idle = lock.newCondition()
 
@@ -84,7 +85,7 @@ class ExternalApiScheduler(
 
         log.info("[Scheduler] starting ranking fetch phase, runId={}", runId)
         runStatusTracker.transitionPhase(PipelinePhase.RANKING_FETCH)
-        rankingPhase.execute(exec.executor)
+        rankingPhase.execute(executor)
             .handle { runDir, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ranking fetch failed, cannot proceed with OCID lookup", ex)
@@ -96,13 +97,13 @@ class ExternalApiScheduler(
                     CompletableFuture.completedFuture(null)
                 } else {
                     runStatusTracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
-                    ocidLookupPhase.execute(exec.executor, runDir)
+                    ocidLookupPhase.execute(executor, runDir)
                 }
             }
             .thenCompose {
                 val cache = ocidCacheProvider.refresh()
                 runStatusTracker.transitionPhase(PipelinePhase.CHARACTER_BASIC)
-                snapshotFetchPhase.executeCharacterBasic(exec.executor, cache)
+                snapshotFetchPhase.executeCharacterBasic(executor, cache)
             }
             .whenComplete { _, ex ->
                 if (ex != null) {
@@ -120,7 +121,7 @@ class ExternalApiScheduler(
 
     private fun startItemEquipmentLoopOnce() {
         if (itemEquipmentStarted.compareAndSet(false, true)) {
-            exec.executor.submit { runItemEquipmentLoop() }
+            executor.submit { runItemEquipmentLoop() }
         }
     }
 
@@ -138,7 +139,7 @@ class ExternalApiScheduler(
         val entries = ocidCacheProvider.current().entries.toList()
         if (entries.isEmpty()) {
             log.warn("[Scheduler] OCID cache empty, waiting 30s")
-            exec.executor.submit {
+            executor.submit {
                 Thread.sleep(java.time.Duration.ofSeconds(30))
                 ocidCacheProvider.refresh()
                 runItemEquipmentCycle()
@@ -147,7 +148,7 @@ class ExternalApiScheduler(
         }
 
         if (!acquireLock(120_000)) {
-            exec.executor.submit {
+            executor.submit {
                 Thread.sleep(java.time.Duration.ofSeconds(5))
                 runItemEquipmentCycle()
             }
@@ -155,13 +156,13 @@ class ExternalApiScheduler(
         }
 
         CompletableFuture.completedFuture(null)
-            .thenCompose { snapshotFetchPhase.executeItemEquipment(exec.executor, entries) }
+            .thenCompose { snapshotFetchPhase.executeItemEquipment(executor, entries) }
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)
                 }
                 releaseLock()
-                exec.executor.submit { runItemEquipmentCycle() }
+                executor.submit { runItemEquipmentCycle() }
             }
     }
 
@@ -190,6 +191,5 @@ class ExternalApiScheduler(
     override fun stopLifecycle() {
         log.info("[Scheduler] shutdown requested")
         shutdown.set(true)
-        exec.shutdown()
     }
 }

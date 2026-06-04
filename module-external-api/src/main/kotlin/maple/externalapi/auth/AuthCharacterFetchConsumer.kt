@@ -1,19 +1,19 @@
 package maple.externalapi.auth
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import jakarta.annotation.PreDestroy
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.expectation.core.auth.event.CharacterFetchRequest
 import maple.expectation.infrastructure.external.NexonAuthClient
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
-import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import org.springframework.stereotype.Component
+import java.util.concurrent.ExecutorService
 
 @Component
 class AuthCharacterFetchConsumer(
@@ -21,13 +21,8 @@ class AuthCharacterFetchConsumer(
     private val kafkaTemplate: KafkaTemplate<String, String>,
     private val objectMapper: ObjectMapper,
     @Value("\${auth.kafka.character-fetch-response-topic}") private val responseTopic: String,
+    @Qualifier("authCharacterFetchExecutor") private val executor: ExecutorService,
 ) {
-    private val exec = VirtualThreadExecutorManager("AuthCharacterFetchConsumer")
-
-    @PreDestroy
-    fun shutdown() {
-        exec.shutdown()
-    }
 
     @KafkaListener(
         topics = ["\${auth.kafka.character-fetch-request-topic}"],
@@ -41,7 +36,7 @@ class AuthCharacterFetchConsumer(
         val request = objectMapper.readValue(message, CharacterFetchRequest::class.java)
         log.info("[AuthFetch] processing: eventId={}, userIgn={}", request.eventId, request.userIgn)
 
-        exec.executor.submit {
+        executor.submit {
             runCatching {
                 val characterListOpt = nexonAuthClient.getCharacterList(request.apiKey)
 

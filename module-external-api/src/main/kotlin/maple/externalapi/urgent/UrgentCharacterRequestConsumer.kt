@@ -1,7 +1,6 @@
 package maple.externalapi.urgent
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import jakarta.annotation.PreDestroy
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.port.out.ExternalApiClientPort
@@ -10,6 +9,7 @@ import maple.externalapi.snapshot.SnapshotChunkRecord
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.util.StringMaskingUtils.maskIgn
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.kafka.annotation.KafkaListener
@@ -19,9 +19,9 @@ import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
-import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Semaphore
 
 @Component
@@ -42,9 +42,9 @@ class UrgentCharacterRequestConsumer(
     private val storeBasePath: String,
     @Value("\${external-api.concurrency.urgent-max-concurrent:30}")
     maxConcurrent: Int,
+    @Qualifier("urgentCharacterRequestExecutor") private val executor: ExecutorService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val exec = VirtualThreadExecutorManager("UrgentCharacterRequestConsumer")
     private val semaphore = Semaphore(maxConcurrent)
 
     @KafkaListener(
@@ -108,8 +108,8 @@ class UrgentCharacterRequestConsumer(
                         basicData = basicFuture.resultNow(),
                         equipmentData = equipmentFuture.resultNow(),
                     )
-                }, exec.executor)
-        }, exec.executor)
+                }, executor)
+        }, executor)
 
     private fun publishUrgentChunksAsync(
         request: UrgentCharacterRequest,
@@ -170,7 +170,7 @@ class UrgentCharacterRequestConsumer(
                 compressedBytes = stats.compressedBytes,
                 createdAt = Instant.now(),
             )
-        }, exec.executor).thenCompose { event ->
+        }, executor).thenCompose { event ->
             val eventJson = objectMapper.writeValueAsString(event)
             kafkaTemplate.send(urgentChunkReadyTopic, event.kafkaKey(), eventJson).thenAccept {
                 log.info(
@@ -193,11 +193,6 @@ class UrgentCharacterRequestConsumer(
             .thenAccept {
                 log.info("[Urgent] published not-found: userIgn={}", maskIgn(userIgn))
             }
-    }
-
-    @PreDestroy
-    fun close() {
-        exec.shutdown()
     }
 }
 

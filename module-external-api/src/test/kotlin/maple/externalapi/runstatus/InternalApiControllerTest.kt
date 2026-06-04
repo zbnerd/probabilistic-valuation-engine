@@ -30,7 +30,7 @@ class InternalApiControllerTest {
         scheduler = org.mockito.kotlin.mock()
         val artifactCleanup = org.mockito.kotlin.mock<maple.externalapi.cleanup.ArtifactCleanupScheduler>()
         val consumedCleanup = org.mockito.kotlin.mock<maple.externalapi.cleanup.ConsumedChunkCleanupScheduler>()
-        val controller = InternalApiController(runStatusTracker, scheduler, artifactCleanup, consumedCleanup)
+        val controller = InternalApiController(runStatusTracker, scheduler, artifactCleanup, consumedCleanup, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor())
         mockMvc = standaloneSetup(controller)
             .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
             .build()
@@ -135,7 +135,7 @@ class InternalApiControllerTest {
             Unit
         }
         val consumedCleanup = org.mockito.kotlin.mock<maple.externalapi.cleanup.ConsumedChunkCleanupScheduler>()
-        val controller = InternalApiController(runStatusTracker, scheduler, artifactCleanup, consumedCleanup)
+        val controller = InternalApiController(runStatusTracker, scheduler, artifactCleanup, consumedCleanup, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor())
         mockMvc = standaloneSetup(controller)
             .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
             .build()

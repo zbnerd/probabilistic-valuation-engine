@@ -6,7 +6,6 @@ import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.repository.OcidMappingRepository
@@ -19,7 +18,8 @@ import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
-import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
+import org.springframework.beans.factory.annotation.Qualifier
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Semaphore
 
 @Component
@@ -30,9 +30,9 @@ class BasicSnapshotChunkConsumer(
     private val ocidMappingRepository: OcidMappingRepository,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
-) : ManagedLifecycle {
+    @Qualifier("basicSnapshotChunkExecutor") private val executor: ExecutorService,
+) {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val exec = VirtualThreadExecutorManager("BasicSnapshotChunkConsumer")
     private val processingPermit = Semaphore(2)
 
     @KafkaListener(
@@ -118,7 +118,7 @@ class BasicSnapshotChunkConsumer(
                 objectKey = event.objectKey,
                 acknowledgment = acknowledgment,
                 processingPermit = processingPermit,
-                executor = exec.executor,
+                executor = executor,
                 processContext = TaskContext.of("BasicSync", "${operation}Process", chunkId),
                 lifecycleContext = TaskContext.of("BasicSync", "${operation}Lifecycle", chunkId),
                 process = {
@@ -165,9 +165,4 @@ class BasicSnapshotChunkConsumer(
         log.info("[BasicSync] batch upserted OCID mappings: count={}", mappings.size)
     }
 
-    override val lifecyclePhase: Int = 100
-
-    override fun stopLifecycle() {
-        exec.shutdown()
-    }
 }

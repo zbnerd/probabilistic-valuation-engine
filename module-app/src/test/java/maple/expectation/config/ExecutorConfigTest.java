@@ -9,8 +9,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import maple.expectation.infrastructure.config.ExecutorConfig;
+import maple.expectation.infrastructure.config.ExecutorMetricsConfigurator;
 import maple.expectation.infrastructure.config.ExecutorProperties;
+import maple.expectation.infrastructure.config.InfraExecutorConfig;
+import maple.expectation.infrastructure.config.RejectionPolicyFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,8 @@ class ExecutorConfigTest {
   private MeterRegistry meterRegistry;
   private TaskDecorator noOpDecorator;
   private ExecutorProperties executorProperties;
+  private RejectionPolicyFactory rejectionPolicyFactory;
+  private ExecutorMetricsConfigurator executorMetricsConfigurator;
 
   @BeforeEach
   void setUp() {
@@ -42,14 +46,16 @@ class ExecutorConfigTest {
     executorProperties.getAlert().setCorePoolSize(2);
     executorProperties.getAlert().setMaxPoolSize(4);
     // Equipment pool uses default (core=8, max=16) - no override needed
+    rejectionPolicyFactory = new RejectionPolicyFactory(meterRegistry);
+    executorMetricsConfigurator = new ExecutorMetricsConfigurator(meterRegistry);
   }
 
   @Test
   @DisplayName("expectationComputeExecutor 큐 포화 시 RejectedExecutionException 발생")
   void expectationComputeExecutor_QueueFull_ThrowsRejected() throws InterruptedException {
     // Given: Executor 생성
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
-    Executor executor = executorConfig.expectationComputeExecutor(noOpDecorator);
+    InfraExecutorConfig executorConfig = new InfraExecutorConfig(executorProperties);
+    Executor executor = executorConfig.expectationComputeExecutor(noOpDecorator, rejectionPolicyFactory, executorMetricsConfigurator);
     ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor) executor;
 
     // 설정 확인: maxPoolSize=8, queueCapacity=200
@@ -90,8 +96,8 @@ class ExecutorConfigTest {
   @DisplayName("alertTaskExecutor 큐 포화 시 TaskRejectedException 발생")
   void alertTaskExecutor_QueueFull_ThrowsRejected() throws InterruptedException {
     // Given: Executor 생성
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
-    Executor executor = executorConfig.alertTaskExecutor(noOpDecorator);
+    InfraExecutorConfig executorConfig = new InfraExecutorConfig(executorProperties);
+    Executor executor = executorConfig.alertTaskExecutor(noOpDecorator, rejectionPolicyFactory, executorMetricsConfigurator);
     ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor) executor;
 
     // 설정 확인: maxPoolSize=4, queueCapacity=200
@@ -132,8 +138,8 @@ class ExecutorConfigTest {
   @DisplayName("expectationComputeExecutor rejected Counter 증가 검증")
   void expectationComputeExecutor_RejectedCounter_Increments() throws InterruptedException {
     // Given: Executor 생성
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
-    Executor executor = executorConfig.expectationComputeExecutor(noOpDecorator);
+    InfraExecutorConfig executorConfig = new InfraExecutorConfig(executorProperties);
+    Executor executor = executorConfig.expectationComputeExecutor(noOpDecorator, rejectionPolicyFactory, executorMetricsConfigurator);
     ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor) executor;
 
     CountDownLatch blocker = new CountDownLatch(1);
@@ -176,8 +182,8 @@ class ExecutorConfigTest {
   @DisplayName("alertTaskExecutor rejected Counter 증가 검증")
   void alertTaskExecutor_RejectedCounter_Increments() throws InterruptedException {
     // Given: Executor 생성
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
-    Executor executor = executorConfig.alertTaskExecutor(noOpDecorator);
+    InfraExecutorConfig executorConfig = new InfraExecutorConfig(executorProperties);
+    Executor executor = executorConfig.alertTaskExecutor(noOpDecorator, rejectionPolicyFactory, executorMetricsConfigurator);
     ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor) executor;
 
     CountDownLatch blocker = new CountDownLatch(1);
@@ -218,8 +224,8 @@ class ExecutorConfigTest {
   @DisplayName("ExecutorServiceMetrics 등록 검증 (expectation.compute)")
   void expectationComputeExecutor_MetricsRegistered() {
     // Given & When
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
-    executorConfig.expectationComputeExecutor(noOpDecorator);
+    InfraExecutorConfig executorConfig = new InfraExecutorConfig(executorProperties);
+    executorConfig.expectationComputeExecutor(noOpDecorator, rejectionPolicyFactory, executorMetricsConfigurator);
 
     // Then: ExecutorServiceMetrics 메트릭 등록 확인
     assertThat(meterRegistry.find("executor.pool.size").tag("name", "expectation.compute").gauge())
@@ -233,8 +239,8 @@ class ExecutorConfigTest {
   @DisplayName("ExecutorServiceMetrics 등록 검증 (alert)")
   void alertTaskExecutor_MetricsRegistered() {
     // Given & When
-    ExecutorConfig executorConfig = new ExecutorConfig(meterRegistry, executorProperties);
-    executorConfig.alertTaskExecutor(noOpDecorator);
+    InfraExecutorConfig executorConfig = new InfraExecutorConfig(executorProperties);
+    executorConfig.alertTaskExecutor(noOpDecorator, rejectionPolicyFactory, executorMetricsConfigurator);
 
     // Then: ExecutorServiceMetrics 메트릭 등록 확인
     assertThat(meterRegistry.find("executor.pool.size").tag("name", "alert").gauge()).isNotNull();

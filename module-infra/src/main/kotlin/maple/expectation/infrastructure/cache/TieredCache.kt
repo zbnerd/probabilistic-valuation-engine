@@ -120,7 +120,23 @@ class TieredCache(
     private fun getFromL2WithBackfill(key: Any): ValueWrapper? {
         val buffer = batchBuffer
         if (buffer != null) {
-            val value = buffer.submit(key).join()
+            val value = try {
+                buffer.submit(key)
+                    .orTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                    .join()
+            } catch (ex: java.util.concurrent.CompletionException) {
+                if (ex.cause is java.util.concurrent.TimeoutException) {
+                    log.warn("[TieredCache] L2 buffer timeout, falling back to direct lookup: key={}", key)
+                    return Optional.ofNullable(l2.get(key))
+                        .map { w ->
+                            l1.put(key, w.get())
+                            keyVersions.put(key, versionCounter.incrementAndGet())
+                            tapCacheHit(w, "L2")
+                        }
+                        .orElseGet { null }
+                }
+                throw ex
+            }
             return if (value != null) {
                 keyVersions.put(key, versionCounter.incrementAndGet())
                 l2HitCounter.increment()

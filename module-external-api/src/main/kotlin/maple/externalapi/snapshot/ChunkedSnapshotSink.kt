@@ -12,6 +12,9 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -25,6 +28,9 @@ class ChunkedSnapshotSink(
     private val objectMapper: ObjectMapper,
     private val eventPublisher: SnapshotChunkEventPublisher,
     private val volumeMetrics: SnapshotVolumeMetrics,
+    private val writerExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread.ofPlatform().name("snapshot-writer-$endpoint").unstarted(runnable)
+    },
 ) {
     private val log = LoggerFactory.getLogger(ChunkedSnapshotSink::class.java)
 
@@ -53,7 +59,7 @@ class ChunkedSnapshotSink(
         currentWriter = newChunkWriter(1)
     }
 
-    private val writerThread: Thread = Thread.ofPlatform().name("snapshot-writer-$endpoint").start {
+    private val writerFuture: Future<*> = writerExecutor.submit {
         runWriterLoop()
     }
 
@@ -70,7 +76,7 @@ class ChunkedSnapshotSink(
             writerError.get()?.let { err ->
                 throw IllegalStateException("sink closed due to writer error: ${err.message}", err)
             }
-            if (!writerThread.isAlive) {
+            if (writerFuture.isDone) {
                 throw IllegalStateException("sink writer thread is not alive")
             }
             if (queue.offer(record, 100, TimeUnit.MILLISECONDS)) {
@@ -90,10 +96,10 @@ class ChunkedSnapshotSink(
             throw IllegalStateException("failed to enqueue close signal after 30s")
         }
 
-        writerThread.join(60_000)
-        if (writerThread.isAlive) {
-            log.warn("[Sink] writer thread did not terminate within 60s, interrupting")
-            writerThread.interrupt()
+        writerExecutor.shutdown()
+        if (!writerExecutor.awaitTermination(60, TimeUnit.SECONDS)) {
+            log.warn("[Sink] writer executor did not terminate within 60s, forcing shutdown")
+            writerExecutor.shutdownNow()
         }
 
         val err = writerError.get()

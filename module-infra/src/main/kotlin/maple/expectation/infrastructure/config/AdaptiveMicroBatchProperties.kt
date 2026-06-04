@@ -77,6 +77,23 @@ data class AdaptiveMicroBatchProperties(
      */
     @DefaultValue("500") @Min(100) @Max(5000)
     val requestTimeoutMs: Long = 500,
+
+    /**
+     * Batch Lane 채널 용량
+     *
+     * Channel.UNLIMITED 대신 BUFFERED 사용으로 backpressure 보장.
+     * send()가 capacity 초과 시 suspend → 자연스러운 backpressure.
+     */
+    @DefaultValue("200") @Min(50) @Max(5000)
+    val batchChannelCapacity: Int = 200,
+
+    /**
+     * in-flight 최대 개수 (fail-fast 임계치)
+     *
+     * 이 값을 초과하면 새 요청 즉시 실패.
+     */
+    @DefaultValue("1000") @Min(100) @Max(10000)
+    val maxInFlight: Int = 1000,
 ) {
     companion object {
         /** 테스트 및 기본 설정용 팩토리 메서드 */

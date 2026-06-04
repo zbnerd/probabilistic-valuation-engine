@@ -22,6 +22,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicInteger
 
 data class SnapshotFetchConfig(
@@ -53,8 +54,11 @@ class SnapshotFetchPhase(
     private val batchSize: Int,
     @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
+    @Value("\${external-api.concurrency.max-in-flight:100}")
+    maxInFlight: Int,
 ) {
     private val log = LoggerFactory.getLogger(SnapshotFetchPhase::class.java)
+    private val semaphore = Semaphore(maxInFlight)
 
     fun executeCharacterBasic(workerExecutor: ExecutorService, ocidCache: Map<String, String>): CompletableFuture<Void> =
         execute(
@@ -211,21 +215,44 @@ class SnapshotFetchPhase(
         successCount: AtomicInteger,
         failCount: AtomicInteger,
     ): CompletableFuture<Void> {
-        val fetchStart = Instant.now()
-        return clientPort.fetch(
-            ExternalApiProvider.NEXON,
-            config.apiEndpoint,
-            ocid,
-        )
-            .thenAcceptAsync({ bodyBytes ->
-                handleSnapshotSuccess(ocid, config, sink, successCount, fetchStart, bodyBytes)
-            }, workerExecutor)
-            .handle { _, ex ->
-                if (ex != null) {
-                    handleSnapshotFailure(ocid, config, sink, failCount, ex)
+        return tryAcquireWithBackoff(semaphore, workerExecutor)
+            .thenCompose { acquired ->
+                val fetchFuture: CompletableFuture<Void> = if (!acquired) {
+                    log.warn("[{}] backpressure: semaphore exhausted, skipping ocid={}", config.endpoint, ocid.take(3) + "***")
+                    failCount.incrementAndGet()
+                    config.onFailed()
+                    CompletableFuture.completedFuture(null)
+                } else {
+                    val fetchStart = Instant.now()
+                    clientPort.fetch(
+                        ExternalApiProvider.NEXON,
+                        config.apiEndpoint,
+                        ocid,
+                    )
+                        .thenAcceptAsync({ bodyBytes ->
+                            handleSnapshotSuccess(ocid, config, sink, successCount, fetchStart, bodyBytes)
+                        }, workerExecutor)
+                        .handle { _, ex ->
+                            if (ex != null) {
+                                handleSnapshotFailure(ocid, config, sink, failCount, ex)
+                            }
+                            null
+                        }
                 }
-                null
+                fetchFuture.whenComplete { _, _ -> if (acquired) semaphore.release() }
             }
+    }
+
+    private fun tryAcquireWithBackoff(semaphore: Semaphore, executor: ExecutorService): CompletableFuture<Boolean> {
+        if (semaphore.tryAcquire()) return CompletableFuture.completedFuture(true)
+        return CompletableFuture.supplyAsync({
+            var retries = 0
+            while (!semaphore.tryAcquire()) {
+                if (retries++ >= 3) return@supplyAsync false
+                Thread.sleep(50L * retries)
+            }
+            true
+        }, executor)
     }
 
     private fun handleSnapshotSuccess(

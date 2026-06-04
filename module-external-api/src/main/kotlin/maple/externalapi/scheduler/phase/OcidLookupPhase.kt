@@ -20,6 +20,7 @@ import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
@@ -37,8 +38,11 @@ class OcidLookupPhase(
     private val storeBasePath: String,
     @Qualifier("ocidLookupSnapshotPublisher")
     private val eventPublisher: SnapshotChunkEventPublisher,
+    @Value("\${external-api.concurrency.max-in-flight:100}")
+    maxInFlight: Int,
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
+    private val semaphore = Semaphore(maxInFlight)
 
     fun execute(workerExecutor: ExecutorService, rankingRunDir: Path): CompletableFuture<Path?> {
         val mappingDir = Path.of(storeBasePath).resolve("ocid-mapping")
@@ -55,8 +59,8 @@ class OcidLookupPhase(
 
         log.info("[Scheduler] ========== OCID lookup start ==========")
         log.info(
-            "[Scheduler] config: total={}, rate={}/s, batchSize={}, store={}",
-            igns.size, ocidLookupPermitsPerSecond, batchSize, storeBasePath,
+            "[Scheduler] config: total={}, rate={}/s, batchSize={}, maxInFlight={}, store={}",
+            igns.size, ocidLookupPermitsPerSecond, batchSize, semaphore.availablePermits(), storeBasePath,
         )
 
         val start = Instant.now()
@@ -188,22 +192,45 @@ class OcidLookupPhase(
         successCount: AtomicInteger,
         failCount: AtomicInteger,
         results: MutableList<String>,
-    ): CompletableFuture<Void> =
-        clientPort.fetch(
-            ExternalApiProvider.NEXON,
-            ExternalApiEndpoint.OCID_LOOKUP,
-            ign,
-        )
-            .thenAcceptAsync({ data ->
-                val ocid = objectMapper.readTree(data).get("ocid")?.asText()
-                if (ocid != null) {
-                    val json = String(objectMapper.writeValueAsBytes(mapOf("userIgn" to ign, "ocid" to ocid)))
-                    results.add(json)
-                    successCount.incrementAndGet()
+    ): CompletableFuture<Void> {
+        return tryAcquireWithBackoff(semaphore, workerExecutor)
+            .thenCompose { acquired ->
+                val fetchFuture: CompletableFuture<Void> = if (!acquired) {
+                    log.warn("[OCID] backpressure: semaphore exhausted, skipping ign={}", ign.take(3) + "***")
+                    failCount.incrementAndGet()
+                    CompletableFuture.completedFuture(null)
+                } else {
+                    clientPort.fetch(
+                        ExternalApiProvider.NEXON,
+                        ExternalApiEndpoint.OCID_LOOKUP,
+                        ign,
+                    )
+                        .thenAcceptAsync({ data ->
+                            val ocid = objectMapper.readTree(data).get("ocid")?.asText()
+                            if (ocid != null) {
+                                val json = String(objectMapper.writeValueAsBytes(mapOf("userIgn" to ign, "ocid" to ocid)))
+                                results.add(json)
+                                successCount.incrementAndGet()
+                            }
+                        }, workerExecutor)
+                        .handle { _, ex ->
+                            if (ex != null) failCount.incrementAndGet()
+                            null
+                        }
                 }
-            }, workerExecutor)
-            .handle { _, ex ->
-                if (ex != null) failCount.incrementAndGet()
-                null
+                fetchFuture.whenComplete { _, _ -> if (acquired) semaphore.release() }
             }
+    }
+
+    private fun tryAcquireWithBackoff(semaphore: Semaphore, executor: ExecutorService): CompletableFuture<Boolean> {
+        if (semaphore.tryAcquire()) return CompletableFuture.completedFuture(true)
+        return CompletableFuture.supplyAsync({
+            var retries = 0
+            while (!semaphore.tryAcquire()) {
+                if (retries++ >= 3) return@supplyAsync false
+                Thread.sleep(50L * retries)
+            }
+            true
+        }, executor)
+    }
 }

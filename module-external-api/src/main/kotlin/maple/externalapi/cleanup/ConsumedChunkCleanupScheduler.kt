@@ -90,7 +90,7 @@ class ConsumedChunkCleanupScheduler(
         )
     }
 
-    private fun deleteFile(objectKey: String): Boolean {
+    internal fun deleteFile(objectKey: String): Boolean {
         val path = Paths.get(basePath, objectKey)
         return runCatching {
             val deleted = Files.deleteIfExists(path)

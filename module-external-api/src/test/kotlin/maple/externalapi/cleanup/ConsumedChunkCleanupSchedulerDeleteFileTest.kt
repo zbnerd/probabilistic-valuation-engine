@@ -38,7 +38,10 @@ class ConsumedChunkCleanupSchedulerDeleteFileTest {
     @Test
     fun `deleteFile throws IOException when target is a directory`() {
         val scheduler = newScheduler()
-        Files.createDirectory(tempDir.resolve("subdir.json.gz"))
+        val dir = tempDir.resolve("subdir.json.gz")
+        Files.createDirectory(dir)
+        // Make directory non-empty so deleteIfExists raises DirectoryNotEmptyException (IOException subclass)
+        Files.write(dir.resolve("inner.txt"), "x".toByteArray())
 
         assertThatThrownBy { scheduler.deleteFile("subdir.json.gz") }
             .isInstanceOf(java.io.IOException::class.java)

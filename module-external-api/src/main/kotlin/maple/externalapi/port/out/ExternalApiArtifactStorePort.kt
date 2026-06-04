@@ -14,7 +14,7 @@ interface ExternalApiArtifactStorePort {
     fun read(
         endpoint: ExternalApiEndpoint,
         key: String,
-    ): ByteArray?
+    ): ByteArray
 
     fun listStoredKeys(endpoint: ExternalApiEndpoint): List<String>
 

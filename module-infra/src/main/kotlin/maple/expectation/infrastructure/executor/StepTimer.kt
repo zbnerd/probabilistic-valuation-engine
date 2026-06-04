@@ -1,6 +1,8 @@
 package maple.expectation.infrastructure.executor
 
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ThreadLocalRandom
+import java.util.concurrent.atomic.AtomicLong
 import org.slf4j.Logger
 
 class StepTimer(
@@ -10,14 +12,13 @@ class StepTimer(
     private val tags: Map<String, String> = emptyMap(),
 ) {
     private val startedAt = System.nanoTime()
-    private var lastMark = startedAt
-    private val steps = mutableListOf<Pair<String, Long>>()
+    private val lastMark = AtomicLong(startedAt)
+    private val steps = ConcurrentLinkedQueue<Pair<String, Long>>()
 
     fun mark(step: String) {
         val now = System.nanoTime()
-        val elapsedMs = (now - lastMark) / 1_000_000
+        val elapsedMs = (now - lastMark.getAndSet(now)) / 1_000_000
         steps += step to elapsedMs
-        lastMark = now
     }
 
     fun close(logger: Logger) {

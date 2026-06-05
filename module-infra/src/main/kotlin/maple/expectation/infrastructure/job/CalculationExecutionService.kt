@@ -25,7 +25,7 @@ class CalculationExecutionService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun startCalculation(jobId: UUID, workerId: String): Boolean {
         val locked = jobPort.lockForProcessing(jobId, workerId, CalculationJobStatus.SNAPSHOT_READY)
         if (locked) {
@@ -39,7 +39,7 @@ class CalculationExecutionService(
      * Optimized complete: single UPDATE (SNAPSHOT_READY → COMPLETED) + INSERT ON CONFLICT.
      * No CPU work inside transaction — gzip/hash must be pre-computed by caller.
      */
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun completeCalculation(
         jobId: UUID,
         gzipData: ByteArray,
@@ -95,7 +95,7 @@ class CalculationExecutionService(
      * Split-pipeline complete: single UPDATE (CALCULATING → COMPLETED) + INSERT ON CONFLICT.
      * No CPU work inside transaction — gzip/hash must be pre-computed by CalculationWorker.
      */
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun completeCalculatedResult(
         jobId: UUID,
         gzipData: ByteArray,
@@ -147,7 +147,6 @@ class CalculationExecutionService(
         return true
     }
 
-    @Transactional
     fun startAndCompleteCalculation(
         jobId: UUID,
         workerId: String,
@@ -156,15 +155,41 @@ class CalculationExecutionService(
         presetNo: Int,
         characterId: String,
     ): Boolean {
+        // CPU work outside TX boundary (gzip + SHA-256)
+        val rawBytes = resultJson.toByteArray()
+        val gzipData = gzipCompress(rawBytes)
+        val hash = sha256Hex(rawBytes)
+        return startAndCompleteCalculationInTx(
+            jobId = jobId,
+            workerId = workerId,
+            characterClass = characterClass,
+            presetNo = presetNo,
+            characterId = characterId,
+            gzipData = gzipData,
+            hash = hash,
+            originalSize = rawBytes.size,
+            compressedSize = gzipData.size,
+        )
+    }
+
+    @Transactional(value = "transactionManager", readOnly = false)
+    fun startAndCompleteCalculationInTx(
+        jobId: UUID,
+        workerId: String,
+        characterClass: String,
+        presetNo: Int,
+        characterId: String,
+        gzipData: ByteArray,
+        hash: String,
+        originalSize: Int,
+        compressedSize: Int,
+    ): Boolean {
         val locked = jobPort.lockForProcessing(jobId, workerId, CalculationJobStatus.SNAPSHOT_READY)
         if (!locked) return false
         jobPort.transitionStatus(jobId, CalculationJobStatus.SNAPSHOT_READY, CalculationJobStatus.CALCULATING)
 
         val completed = jobPort.transitionStatus(jobId, CalculationJobStatus.CALCULATING, CalculationJobStatus.COMPLETED)
         if (!completed) return false
-
-        val gzipData = gzipCompress(resultJson.toByteArray())
-        val hash = sha256Hex(resultJson.toByteArray())
 
         resultPort.save(
             CalculationResultData(
@@ -176,8 +201,8 @@ class CalculationExecutionService(
                 contentType = "application/json",
                 contentEncoding = "gzip",
                 responseBody = gzipData,
-                originalSize = resultJson.toByteArray().size,
-                compressedSize = gzipData.size,
+                originalSize = originalSize,
+                compressedSize = compressedSize,
                 hash = hash,
                 status = "SUCCESS",
             ),
@@ -199,7 +224,7 @@ class CalculationExecutionService(
         return true
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun handleCalculationFailure(jobId: UUID, errorCode: String, errorMessage: String) {
         val job = jobPort.findJobById(jobId) ?: return
 
@@ -228,7 +253,6 @@ class CalculationExecutionService(
         }
     }
 
-    @Transactional
     fun completeCalculationWithResult(
         jobId: UUID,
         resultJson: String,
@@ -236,11 +260,35 @@ class CalculationExecutionService(
         presetNo: Int,
         characterId: String,
     ): Boolean {
+        // CPU work outside TX boundary (gzip + SHA-256)
+        val rawBytes = resultJson.toByteArray()
+        val gzipData = gzipCompress(rawBytes)
+        val hash = sha256Hex(rawBytes)
+        return completeCalculationWithResultInTx(
+            jobId = jobId,
+            characterClass = characterClass,
+            presetNo = presetNo,
+            characterId = characterId,
+            gzipData = gzipData,
+            hash = hash,
+            originalSize = rawBytes.size,
+            compressedSize = gzipData.size,
+        )
+    }
+
+    @Transactional(value = "transactionManager", readOnly = false)
+    fun completeCalculationWithResultInTx(
+        jobId: UUID,
+        characterClass: String,
+        presetNo: Int,
+        characterId: String,
+        gzipData: ByteArray,
+        hash: String,
+        originalSize: Int,
+        compressedSize: Int,
+    ): Boolean {
         val completed = jobPort.transitionStatus(jobId, CalculationJobStatus.CALCULATING, CalculationJobStatus.COMPLETED)
         if (!completed) return false
-
-        val gzipData = gzipCompress(resultJson.toByteArray())
-        val hash = sha256Hex(resultJson.toByteArray())
 
         resultPort.save(
             CalculationResultData(
@@ -252,8 +300,8 @@ class CalculationExecutionService(
                 contentType = "application/json",
                 contentEncoding = "gzip",
                 responseBody = gzipData,
-                originalSize = resultJson.toByteArray().size,
-                compressedSize = gzipData.size,
+                originalSize = originalSize,
+                compressedSize = compressedSize,
                 hash = hash,
                 status = "SUCCESS",
             ),

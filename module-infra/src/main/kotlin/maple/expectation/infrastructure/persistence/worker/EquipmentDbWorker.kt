@@ -15,6 +15,7 @@ import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.util.StringMaskingUtils
 import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Lazy
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Propagation
@@ -36,13 +37,13 @@ class EquipmentDbWorker(
     private val objectMapper: ObjectMapper,
     private val persistenceTracker: PersistenceTrackerStrategy,
     private val executor: LogicExecutor,
+    @Lazy private val self: EquipmentDbWorker,
 ) {
     /**
      * 비동기 저장 로직
      * try-catch 대신 executeOrCatch를 사용하여 Future의 상태를 결정합니다.
      */
     @Async
-    @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW)
     fun persist(ocid: String, response: EquipmentResponse): CompletableFuture<Void> {
         val future = CompletableFuture<Void>()
         val context = TaskContext.of("EquipmentWorker", "AsyncPersist", ocid)
@@ -52,7 +53,7 @@ class EquipmentDbWorker(
 
         return executor.executeOrCatch(
             {
-                performSave(ocid, response, context)
+                self.persistInTx(ocid, response, context)
                 log.debug("💾 [Async DB Save Success] ocid: {}", ocid)
                 future.complete(null)
                 future
@@ -64,6 +65,11 @@ class EquipmentDbWorker(
             },
             context,
         )
+    }
+
+    @Transactional(value = "transactionManager", propagation = Propagation.REQUIRES_NEW)
+    fun persistInTx(ocid: String, response: EquipmentResponse, context: TaskContext) {
+        performSave(ocid, response, context)
     }
 
     /** 헬퍼: 실제 저장 로직 (직렬화 및 DB 반영) */
@@ -94,7 +100,7 @@ class EquipmentDbWorker(
      * @param ocid 캐릭터 OCID
      * @return 유효한 JSON 데이터 (없거나 만료되면 empty)
      */
-    @Transactional("transactionManager", readOnly = true)
+    @Transactional(value = "transactionManager", readOnly = true)
     fun findValidJson(ocid: String): Optional<String> {
         return executor.execute(
             {
@@ -124,7 +130,6 @@ class EquipmentDbWorker(
      * Nexon API 호출 후 DB에 저장하여 다음 요청에서 API 호출 최소화
      */
     @Async
-    @Transactional("transactionManager", propagation = Propagation.REQUIRES_NEW)
     fun persistRawJson(ocid: String, json: String): CompletableFuture<Void> {
         val future = CompletableFuture<Void>()
         val context = TaskContext.of("EquipmentDb", "PersistRaw", ocid)
@@ -133,7 +138,7 @@ class EquipmentDbWorker(
 
         return executor.executeOrCatch(
             {
-                performRawSave(ocid, json)
+                self.persistRawJsonInTx(ocid, json)
                 log.debug("💾 [DB Save] Raw JSON saved: ocid={}", StringMaskingUtils.maskOcid(ocid))
                 future.complete(null)
                 future
@@ -145,6 +150,11 @@ class EquipmentDbWorker(
             },
             context,
         )
+    }
+
+    @Transactional(value = "transactionManager", propagation = Propagation.REQUIRES_NEW)
+    fun persistRawJsonInTx(ocid: String, json: String) {
+        performRawSave(ocid, json)
     }
 
     /** 헬퍼: Raw JSON 저장 로직 */

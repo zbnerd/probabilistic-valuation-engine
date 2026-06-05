@@ -1,4 +1,4 @@
-package maple.expectation.domain.v2
+package maple.expectation.infrastructure.persistence.entity
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import maple.expectation.core.domain.model.CubeType

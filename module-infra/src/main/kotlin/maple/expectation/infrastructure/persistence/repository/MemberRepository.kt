@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.persistence.repository
 
-import maple.expectation.domain.v2.Member
+import maple.expectation.infrastructure.persistence.entity.MemberEntity
 
 /**
  * Member Repository Interface (Port)
@@ -64,7 +64,7 @@ interface MemberRepository {
      * @return Member if found, null otherwise
      * @throws IllegalArgumentException if uuid is null or blank
      */
-    fun findByUuid(uuid: String): Member?
+    fun findByUuid(uuid: String): MemberEntity?
 
     /**
      * Find a member by their database ID
@@ -76,7 +76,7 @@ interface MemberRepository {
      * @return Member if found, null otherwise
      * @throws IllegalArgumentException if id is null
      */
-    fun findById(id: Long?): Member?
+    fun findById(id: Long?): MemberEntity?
 
     /**
      * Save a member (create or update)
@@ -96,7 +96,7 @@ interface MemberRepository {
      * @throws IllegalArgumentException if member is null
      * @throws javax.persistence.OptimisticLockException if version conflict occurs during update
      */
-    fun save(member: Member): Member
+    fun save(member: MemberEntity): MemberEntity
 
     /**
      * Delete a member by UUID
@@ -135,7 +135,7 @@ interface MemberRepository {
      * @return the existing or newly created member
      * @throws IllegalArgumentException if uuid is null or initialPoint is negative
      */
-    fun findOrCreateGuest(uuid: String, initialPoint: Long): Member
+    fun findOrCreateGuest(uuid: String, initialPoint: Long): MemberEntity
 
     /**
      * Atomically increase point balance by UUID
@@ -148,4 +148,15 @@ interface MemberRepository {
      * @return the number of rows updated (1 if successful, 0 if member not found)
      */
     fun increasePointByUuid(uuid: String, amount: Long): Int
+
+    /**
+     * Atomically decrease point balance by UUID.
+     *
+     * <p>Uses {@code WHERE point >= amount} to prevent overdraw in high-concurrency scenarios.
+     *
+     * @param uuid the member's UUID
+     * @param amount the amount to decrease (must be positive)
+     * @return 1 if successful, 0 if member not found or insufficient balance
+     */
+    fun decreasePointByUuid(uuid: String, amount: Long): Int
 }

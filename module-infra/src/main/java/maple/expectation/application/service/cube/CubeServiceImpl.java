@@ -14,7 +14,7 @@ import maple.expectation.core.domain.model.CubeRate;
 import maple.expectation.core.dto.cube.CubeCalculationInput;
 import maple.expectation.core.dto.cube.CubeComputeKey;
 import maple.expectation.infrastructure.persistence.repository.CubeProbabilityRepository;
-import maple.expectation.domain.v2.CubeProbability;
+import maple.expectation.infrastructure.persistence.entity.CubeProbability;
 import maple.expectation.core.domain.model.CubeType;
 import maple.expectation.error.exception.UnsupportedCalculationEngineException;
 import maple.expectation.infrastructure.executor.LogicExecutor;

@@ -1,4 +1,4 @@
-package maple.expectation.domain.v2
+package maple.expectation.infrastructure.persistence.entity
 
 import jakarta.persistence.*
 import java.math.BigDecimal
@@ -49,7 +49,7 @@ import java.time.LocalDateTime
         ),
     ],
 )
-class EquipmentExpectationSummary {
+class EquipmentExpectationSummaryEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -134,7 +134,7 @@ class EquipmentExpectationSummary {
             redCubeCost: BigDecimal?,
             additionalCubeCost: BigDecimal?,
             starforceCost: BigDecimal?,
-        ): EquipmentExpectationSummary = EquipmentExpectationSummary(
+        ): EquipmentExpectationSummaryEntity = EquipmentExpectationSummaryEntity(
             gameCharacterId,
             presetNo,
             totalExpectedCost,
@@ -143,26 +143,5 @@ class EquipmentExpectationSummary {
             additionalCubeCost,
             starforceCost,
         )
-    }
-
-    /** 기대값 업데이트 (기존 레코드 갱신 시 사용) */
-    fun updateExpectation(
-        totalExpectedCost: BigDecimal?,
-        blackCubeCost: BigDecimal?,
-        redCubeCost: BigDecimal?,
-        additionalCubeCost: BigDecimal?,
-        starforceCost: BigDecimal?,
-    ) {
-        this.totalExpectedCost = totalExpectedCost
-        this.blackCubeCost = blackCubeCost
-        this.redCubeCost = redCubeCost
-        this.additionalCubeCost = additionalCubeCost
-        this.starforceCost = starforceCost
-        this.calculatedAt = LocalDateTime.now()
-    }
-
-    /** 계산 시점 갱신 */
-    fun touch() {
-        this.calculatedAt = LocalDateTime.now()
     }
 }

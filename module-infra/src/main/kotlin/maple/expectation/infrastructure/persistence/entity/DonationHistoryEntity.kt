@@ -1,4 +1,4 @@
-package maple.expectation.domain.v2
+package maple.expectation.infrastructure.persistence.entity
 
 import jakarta.persistence.*
 import java.time.LocalDateTime
@@ -14,7 +14,7 @@ import org.springframework.data.annotation.CreatedDate
     name = "donation_history",
     uniqueConstraints = [UniqueConstraint(name = "uk_request_id", columnNames = ["request_id"])],
 )
-class DonationHistory {
+class DonationHistoryEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -59,6 +59,6 @@ class DonationHistory {
             receiverFingerprint: String?,
             amount: Long?,
             requestId: String?,
-        ): DonationHistory = DonationHistory(senderUuid, receiverFingerprint, amount, requestId)
+        ): DonationHistoryEntity = DonationHistoryEntity(senderUuid, receiverFingerprint, amount, requestId)
     }
 }

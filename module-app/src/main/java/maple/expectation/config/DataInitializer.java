@@ -3,7 +3,7 @@ package maple.expectation.config;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.infrastructure.persistence.repository.MemberRepository;
-import maple.expectation.domain.v2.Member;
+import maple.expectation.infrastructure.persistence.entity.MemberEntity;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import org.springframework.boot.CommandLineRunner;
@@ -46,7 +46,7 @@ public class DataInitializer implements CommandLineRunner {
   private Object createAndSaveDeveloper(TaskContext context) {
     log.info("🚀 시스템 초기 데이터 생성: 개발자 계정 ({})", context.getDynamicValue());
 
-    Member developer = Member.Companion.createSystemAdmin(DEVELOPER_UUID, 0L);
+    MemberEntity developer = MemberEntity.Companion.createSystemAdmin(DEVELOPER_UUID, 0L);
     memberRepository.save(developer);
 
     log.info("✅ 개발자 계정 생성 완료");

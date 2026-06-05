@@ -20,7 +20,7 @@ import maple.expectation.core.port.out.PotentialStatPort;
 import maple.expectation.core.port.out.ShutdownDataPersistencePort;
 import maple.expectation.infrastructure.persistence.repository.CharacterEquipmentRepository;
 import maple.expectation.infrastructure.persistence.repository.CubeProbabilityRepository;
-import maple.expectation.domain.v2.CubeProbability;
+import maple.expectation.infrastructure.persistence.entity.CubeProbability;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

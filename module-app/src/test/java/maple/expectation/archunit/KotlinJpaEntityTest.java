@@ -38,8 +38,8 @@ import org.junit.jupiter.api.Test;
  * }
  * </pre>
  *
- * @see maple.expectation.domain.v2.EventOutbox
- * @see maple.expectation.domain.v2.EquipmentExpectationSummary
+ * @see maple.expectation.infrastructure.persistence.entity.EquipmentExpectationSummaryEntity
+ * @see maple.expectation.infrastructure.persistence.entity.MemberEntity
  */
 @DisplayName("Kotlin JPA Entity Rules (P1-8)")
 class KotlinJpaEntityTest {

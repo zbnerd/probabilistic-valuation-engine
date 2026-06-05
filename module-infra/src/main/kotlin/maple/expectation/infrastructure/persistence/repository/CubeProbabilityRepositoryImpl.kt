@@ -4,7 +4,7 @@ import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.dataformat.csv.CsvSchema
 import jakarta.annotation.PostConstruct
 import maple.expectation.infrastructure.persistence.repository.CubeProbabilityRepository
-import maple.expectation.domain.v2.CubeProbability
+import maple.expectation.infrastructure.persistence.entity.CubeProbability
 import maple.expectation.core.domain.model.CubeType
 import maple.expectation.error.exception.CubeDataInitializationException
 import maple.expectation.infrastructure.executor.LogicExecutor

@@ -6,10 +6,10 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
 import maple.expectation.domain.nexon.NexonApiCharacterData
-import maple.expectation.domain.v2.DonationHistory
-import maple.expectation.domain.v2.EquipmentExpectationSummary
-import maple.expectation.domain.v2.GameCharacter
-import maple.expectation.domain.v2.Member
+import maple.expectation.infrastructure.persistence.entity.DonationHistoryEntity
+import maple.expectation.infrastructure.persistence.entity.EquipmentExpectationSummaryEntity
+import maple.expectation.infrastructure.persistence.entity.GameCharacterV2Entity
+import maple.expectation.infrastructure.persistence.entity.MemberEntity
 import maple.expectation.infrastructure.persistence.entity.CharacterEquipmentJpaEntity
 import maple.expectation.infrastructure.persistence.entity.CharacterLikeJpaEntity
 import maple.expectation.infrastructure.persistence.entity.CharacterValuationEntity
@@ -47,14 +47,14 @@ class JpaNPlusOneRegressionTest {
         CharacterValuationViewEntity::class.java,
         GameCharacterJpaEntity::class.java,
         NexonApiCharacterData::class.java,
-        Member::class.java,
-        DonationHistory::class.java,
-        EquipmentExpectationSummary::class.java,
+        MemberEntity::class.java,
+        DonationHistoryEntity::class.java,
+        EquipmentExpectationSummaryEntity::class.java,
     )
 
     /** Legacy v2 entities — may have protected relationships (@EntityGraph + LAZY). */
     private val legacyEntities: List<Class<*>> = listOf(
-        GameCharacter::class.java,
+        GameCharacterV2Entity::class.java,
     )
 
     private val allEntities: List<Class<*>> = activeEntities + legacyEntities

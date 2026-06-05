@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component
  * <p>Delegates all operations to PgmqClient, which handles exceptions via LogicExecutor.
  */
 @Component
-class PgmqPortAdapter(
+class MessageQueuePortAdapter(
     private val pgmqClient: PgmqClient,
     private val jdbcTemplate: JdbcTemplate,
     private val objectMapper: ObjectMapper,

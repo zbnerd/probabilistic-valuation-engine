@@ -35,6 +35,7 @@ class ExpectationBatchRepository(
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(ExpectationBatchRepository::class.java)
+        private const val BATCH_SIZE = 100
 
         /**
          * PostgreSQL upsert query with ON CONFLICT ... DO UPDATE SET.
@@ -104,17 +105,18 @@ class ExpectationBatchRepository(
 
         val startTime = System.currentTimeMillis()
 
-        // Convert tasks to batch arguments
-        val batchArgs: List<Array<Any?>> = tasks.map { toBatchArgs(it) }
-
-        // Execute batch update
-        val results = jdbcTemplate.batchUpdate(UPSERT_SQL, batchArgs)
+        val results = tasks.chunked(BATCH_SIZE).flatMap { chunk ->
+            val batchArgs = chunk.map { toBatchArgs(it) }
+            jdbcTemplate.batchUpdate(UPSERT_SQL, batchArgs).toList()
+        }.toIntArray()
 
         val duration = System.currentTimeMillis() - startTime
 
         log.info(
-            "[ExpectationBatchRepo] Batch upsert completed: {} records in {}ms ({} records/sec)",
+            "[ExpectationBatchRepo] Batch upsert completed: {} records in {} chunks of {} in {}ms ({} records/sec)",
             tasks.size,
+            tasks.chunked(BATCH_SIZE).size,
+            BATCH_SIZE,
             duration,
             if (duration > 0) tasks.size * 1000L / duration else 0,
         )

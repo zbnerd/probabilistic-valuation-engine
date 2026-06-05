@@ -1,7 +1,6 @@
 package maple.expectation.infrastructure.persistence.repository
 
 import maple.expectation.core.domain.model.like.CharacterLike
-import maple.expectation.domain.repository.CharacterLikeRepository as DomainCharacterLikeRepository
 import maple.expectation.infrastructure.persistence.entity.CharacterLikeJpaEntity
 import maple.expectation.infrastructure.persistence.jpa.CharacterLikeJpaRepository
 import org.springframework.lang.Nullable
@@ -19,7 +18,7 @@ import org.springframework.stereotype.Repository
 @Repository
 open class CharacterLikeRepositoryImpl(
     private val jpaRepo: CharacterLikeJpaRepository,
-) : DomainCharacterLikeRepository {
+) : CharacterLikeRepository {
 
     @Nullable
     override fun findByTargetOcidAndLikerAccountId(

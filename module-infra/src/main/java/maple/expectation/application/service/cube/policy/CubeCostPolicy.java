@@ -2,7 +2,7 @@ package maple.expectation.application.service.cube.policy;
 
 import lombok.RequiredArgsConstructor;
 import maple.expectation.core.port.out.PolicyPort;
-import maple.expectation.domain.v2.CubeType;
+import maple.expectation.core.domain.model.CubeType;
 import org.springframework.stereotype.Component;
 
 /**

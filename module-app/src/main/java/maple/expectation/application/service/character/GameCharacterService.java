@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.worker.CharacterAsyncService;
 import maple.expectation.core.domain.model.character.GameCharacter;
-import maple.expectation.domain.repository.GameCharacterRepository;
+import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.infrastructure.aop.annotation.ObservedTransaction;
 import maple.expectation.infrastructure.executor.LogicExecutor;

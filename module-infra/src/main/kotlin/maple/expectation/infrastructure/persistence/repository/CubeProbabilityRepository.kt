@@ -1,7 +1,7 @@
-package maple.expectation.domain.repository
+package maple.expectation.infrastructure.persistence.repository
 
-import maple.expectation.domain.v2.CubeProbability
-import maple.expectation.domain.v2.CubeType
+import maple.expectation.core.domain.model.CubeType
+import maple.expectation.infrastructure.persistence.entity.CubeProbability
 
 /**
  * 큐브 확률 데이터 저장소 인터페이스

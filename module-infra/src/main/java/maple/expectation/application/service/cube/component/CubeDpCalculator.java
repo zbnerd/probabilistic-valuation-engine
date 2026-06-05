@@ -9,7 +9,7 @@ import maple.expectation.core.domain.model.calculator.SparsePmf;
 import maple.expectation.core.dto.cube.CubeCalculationInput;
 import maple.expectation.core.probability.ProbabilityConvolver;
 import maple.expectation.core.probability.TailProbabilityCalculator;
-import maple.expectation.domain.v2.CubeType;
+import maple.expectation.core.domain.model.CubeType;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
 

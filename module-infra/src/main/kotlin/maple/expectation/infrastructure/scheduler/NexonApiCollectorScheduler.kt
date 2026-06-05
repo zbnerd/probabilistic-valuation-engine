@@ -5,7 +5,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import maple.expectation.core.port.out.NexonDataCollectorPort
-import maple.expectation.domain.repository.GameCharacterRepository
+import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient

@@ -14,7 +14,7 @@ import maple.expectation.common.function.ThrowingSupplier;
 import maple.expectation.core.domain.model.like.LikeToggleResult;
 import maple.expectation.core.domain.model.like.LikeToggleWithCount;
 import maple.expectation.core.port.out.CharacterOcidPort;
-import maple.expectation.domain.repository.CharacterLikeRepository;
+import maple.expectation.infrastructure.persistence.repository.CharacterLikeRepository;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.exception.SelfLikeNotAllowedException;
 import maple.expectation.infrastructure.executor.LogicExecutor;

@@ -1,4 +1,4 @@
-package maple.expectation.domain.repository
+package maple.expectation.infrastructure.persistence.repository
 
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.equipment.CharacterEquipment

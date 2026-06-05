@@ -2,7 +2,7 @@ package maple.expectation.infrastructure.external.impl
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.Executor
-import maple.expectation.domain.repository.CharacterEquipmentRepository
+import maple.expectation.infrastructure.persistence.repository.CharacterEquipmentRepository
 import maple.expectation.infrastructure.alert.StatelessAlertService
 import maple.expectation.infrastructure.executor.CheckedLogicExecutor
 import maple.expectation.infrastructure.executor.classifier.ExceptionClassifier

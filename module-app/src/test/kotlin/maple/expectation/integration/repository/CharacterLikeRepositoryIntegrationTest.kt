@@ -3,7 +3,7 @@ package maple.expectation.integration.repository
 import java.time.Duration
 import java.time.temporal.ChronoUnit
 import maple.expectation.core.domain.model.like.CharacterLike
-import maple.expectation.domain.repository.CharacterLikeRepository
+import maple.expectation.infrastructure.persistence.repository.CharacterLikeRepository
 import maple.expectation.test.RepositoryIntegrationTestBase
 import org.assertj.core.api.Assertions.assertThat
 import org.awaitility.Awaitility.await

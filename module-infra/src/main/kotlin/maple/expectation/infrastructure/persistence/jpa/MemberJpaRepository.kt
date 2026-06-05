@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.persistence.jpa
 
-import maple.expectation.domain.v2.Member
+import maple.expectation.infrastructure.persistence.entity.MemberEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
@@ -10,11 +10,11 @@ import org.springframework.data.repository.query.Param
  * Spring Data JPA Repository for Member.
  *
  * <p>This is an INTERNAL repository interface used only by infrastructure layer. Domain layer uses
- * [maple.expectation.domain.repository.MemberRepository] instead.
+ * [maple.expectation.infrastructure.persistence.repository.MemberRepository] instead.
  *
  * @see maple.expectation.infrastructure.persistence.repository.MemberRepositoryImpl
  */
-interface MemberJpaRepository : JpaRepository<Member, Long> {
+interface MemberJpaRepository : JpaRepository<MemberEntity, Long> {
 
     /**
      * Find member by UUID.
@@ -22,7 +22,7 @@ interface MemberJpaRepository : JpaRepository<Member, Long> {
      * @param uuid the member's UUID
      * @return Member if found, empty otherwise
      */
-    fun findByUuid(uuid: String?): Member?
+    fun findByUuid(uuid: String?): MemberEntity?
 
     /**
      * Check if member exists by UUID.

@@ -5,7 +5,7 @@ import java.time.LocalDateTime
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.equipment.CharacterEquipment
 import maple.expectation.core.domain.model.equipment.EquipmentData
-import maple.expectation.domain.repository.CharacterEquipmentRepository
+import maple.expectation.infrastructure.persistence.repository.CharacterEquipmentRepository
 import maple.expectation.test.RepositoryIntegrationTestBase
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName

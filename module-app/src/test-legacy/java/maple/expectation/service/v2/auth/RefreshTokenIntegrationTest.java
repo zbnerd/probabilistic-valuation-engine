@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import maple.expectation.core.domain.auth.RefreshToken;
 import maple.expectation.core.domain.auth.Session;
-import maple.expectation.domain.repository.RedisRefreshTokenRepository;
+import maple.expectation.infrastructure.persistence.repository.RedisRefreshTokenRepository;
 import maple.expectation.global.error.exception.auth.InvalidRefreshTokenException;
 import maple.expectation.global.error.exception.auth.RefreshTokenExpiredException;
 import maple.expectation.global.error.exception.auth.TokenReusedException;

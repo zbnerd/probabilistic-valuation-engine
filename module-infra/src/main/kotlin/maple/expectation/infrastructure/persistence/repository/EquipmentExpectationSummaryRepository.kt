@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.persistence.repository
 
-import maple.expectation.domain.v2.EquipmentExpectationSummary
+import maple.expectation.infrastructure.persistence.entity.EquipmentExpectationSummaryEntity
 import org.springframework.data.jpa.repository.JpaRepository
 
 /**
@@ -19,4 +19,4 @@ import org.springframework.data.jpa.repository.JpaRepository
  * @see EquipmentExpectationSummary 연관 엔티티
  * @see <a href="../../../../../docs/adr/013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
  */
-interface EquipmentExpectationSummaryRepository : JpaRepository<EquipmentExpectationSummary, Long>
+interface EquipmentExpectationSummaryRepository : JpaRepository<EquipmentExpectationSummaryEntity, Long>

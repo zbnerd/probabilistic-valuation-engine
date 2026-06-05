@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.model.character.CharacterId;
 import maple.expectation.core.domain.model.character.GameCharacter;
-import maple.expectation.domain.repository.GameCharacterRepository;
+import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;

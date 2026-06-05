@@ -17,6 +17,7 @@ import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
+import maple.expectation.util.CompressionUtils
 import org.springframework.beans.factory.annotation.Qualifier
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Semaphore
@@ -116,9 +117,7 @@ class KafkaResultChunkConsumer(
     }
 
     private fun logPreUpsertVolume(event: CalculatorResultChunkReadyEvent) {
-        val ratio = if (event.compressedBytes > 0)
-            "%.2f".format(event.uncompressedBytes.toDouble() / event.compressedBytes.toDouble())
-        else "N/A"
+        val ratio = CompressionUtils.ratioString(event.uncompressedBytes, event.compressedBytes)
         log.info(
             "[preUpsertVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",
             event.sourceRunId, event.sourceChunkId, event.compressedBytes, event.uncompressedBytes,

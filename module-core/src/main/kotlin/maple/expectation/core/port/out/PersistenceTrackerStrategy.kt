@@ -7,30 +7,8 @@ import java.util.concurrent.CompletableFuture
 /**
  * Persistence Tracker Strategy Interface (#271 V5 Stateless Architecture)
  *
- * <h3>Role</h3>
- *
- * <p>Defines the strategy for tracking async persistence operations. Supports pluggable
- * implementations: In-Memory or Redis via Feature Flag.
- *
- * <h3>Implementations</h3>
- *
- * <ul>
- *   <li>maple.expectation.service.v2.shutdown.EquipmentPersistenceTracker - In-Memory
- *   <li>maple.expectation.infrastructure.queue.persistence.RedisEquipmentPersistenceTracker - Redis
- * </ul>
- *
- * <h3>5-Agent Council Agreement</h3>
- *
- * <ul>
- *   <li>Blue (Architect): Strategy pattern minimizes infrastructure changes
- *   <li>Green (Performance): In-Memory faster for single instance
- *   <li>Red (SRE): Feature flag enables operational rollback
- *   <li>Yellow (QA): In-Memory for tests removes external dependencies
- * </ul>
- *
- * @see maple.expectation.service.v2.shutdown.EquipmentPersistenceTracker In-Memory implementation
- * @see maple.expectation.infrastructure.queue.persistence.RedisEquipmentPersistenceTracker Redis
- *     implementation
+ * <p>Pluggable strategy for tracking async persistence operations.
+ * Implementations vary by storage backend and crash-recovery needs.
  */
 interface PersistenceTrackerStrategy {
 
@@ -71,7 +49,7 @@ interface PersistenceTrackerStrategy {
     /**
      * Get current strategy type
      *
-     * @return strategy type (IN_MEMORY or REDIS)
+     * @return strategy type (IN_MEMORY or DISTRIBUTED)
      */
     fun getType(): StrategyType
 
@@ -80,8 +58,8 @@ interface PersistenceTrackerStrategy {
         /** In-Memory ConcurrentHashMap based (single instance) */
         IN_MEMORY,
 
-        /** Redis SET based (scale-out enabled) */
-        REDIS,
+        /** Distributed cache SET based (scale-out enabled) */
+        DISTRIBUTED,
 
         /** PostgreSQL regular table based (crash recovery) */
         POSTGRES,

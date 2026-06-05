@@ -3,13 +3,8 @@ package maple.expectation.core.port.out
 /**
  * FanOut 큐 발행 Port (DIP - Hexagonal Architecture)
  *
- * <h3>역할</h3>
- * <p>429 Rate Limit 발생 시 Batch Lane에서 PGMQ로 재시도 메시지를 발행
- *
- * <h3>구현체</h3>
- * <p>module-infra의 FanOutQueueProducer
- *
- * @see maple.expectation.infrastructure.queue.pgmq.FanOutQueueProducer
+ * <p>Rate-limit 재시도 메시지를 큐로 발행하는 outbound port.
+ * 실제 메시지 브로커는 adapter가 결정.
  */
 interface FanOutQueuePort {
 

@@ -1,7 +1,5 @@
 package maple.synchronizer.processor
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult

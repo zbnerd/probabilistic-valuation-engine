@@ -5,12 +5,14 @@ import maple.expectation.core.port.out.OutboxEvent
 import maple.expectation.core.port.out.OutboxEventPort
 import maple.expectation.infrastructure.persistence.repository.OutboxEventRepository
 import org.springframework.data.domain.PageRequest
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
 @Component
 class OutboxEventPortAdapter(
     private val repo: OutboxEventRepository,
+    private val jdbc: NamedParameterJdbcTemplate,
 ) : OutboxEventPort {
 
     @Transactional(value = "transactionManager", readOnly = false)
@@ -35,5 +37,20 @@ class OutboxEventPortAdapter(
     @Transactional(value = "transactionManager", readOnly = false)
     override fun incrementPublishAttempts(eventId: UUID) {
         repo.incrementPublishAttempts(eventId)
+    }
+
+    @Transactional(value = "transactionManager", readOnly = true)
+    override fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID> {
+        val sql = """
+            SELECT j.job_id FROM calculation_jobs j
+            WHERE j.status = 'COMPLETED'
+              AND j.completed_at < now() - INTERVAL '1 minute'
+              AND NOT EXISTS (
+                SELECT 1 FROM outbox_events o
+                WHERE o.job_id = j.job_id AND o.event_type = 'CALCULATION_COMPLETED'
+              )
+            LIMIT :limit
+        """.trimIndent()
+        return jdbc.queryForList(sql, mapOf("limit" to limit), UUID::class.java)
     }
 }

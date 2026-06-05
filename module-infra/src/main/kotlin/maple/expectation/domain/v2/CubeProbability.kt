@@ -1,6 +1,7 @@
 package maple.expectation.domain.v2
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import maple.expectation.core.domain.model.CubeType
 
 /**
  * 큐브 확률 데이터 도메인 모델

@@ -10,7 +10,7 @@ import maple.expectation.core.domain.model.calculator.SparsePmf;
 import maple.expectation.core.domain.stat.StatType;
 import maple.expectation.domain.repository.CubeProbabilityRepository;
 import maple.expectation.domain.v2.CubeProbability;
-import maple.expectation.domain.v2.CubeType;
+import maple.expectation.core.domain.model.CubeType;
 import maple.expectation.error.exception.ProbabilityInvariantException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;

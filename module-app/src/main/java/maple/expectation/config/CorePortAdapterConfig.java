@@ -84,7 +84,7 @@ public class CorePortAdapterConfig {
             .map(
                 p ->
                     new CubeRate(
-                        mapToCoreCubeType(p.getCubeType()),
+                        p.getCubeType(),
                         p.getOptionName(),
                         p.getRate(),
                         p.getSlot(),
@@ -100,7 +100,7 @@ public class CorePortAdapterConfig {
             .map(
                 p ->
                     new CubeRate(
-                        mapToCoreCubeType(p.getCubeType()),
+                        p.getCubeType(),
                         p.getOptionName(),
                         p.getRate(),
                         p.getSlot(),
@@ -266,10 +266,5 @@ public class CorePortAdapterConfig {
   private static maple.expectation.core.domain.model.character.CharacterId mapToLegacyCharacterId(
       CharacterId coreId) {
     return maple.expectation.core.domain.model.character.CharacterId.of(coreId.value());
-  }
-
-  private static maple.expectation.core.domain.model.CubeType mapToCoreCubeType(
-      maple.expectation.domain.v2.CubeType legacyType) {
-    return legacyType.toCore();
   }
 }

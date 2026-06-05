@@ -15,8 +15,7 @@ import maple.expectation.core.dto.cube.CubeCalculationInput;
 import maple.expectation.core.dto.cube.CubeComputeKey;
 import maple.expectation.domain.repository.CubeProbabilityRepository;
 import maple.expectation.domain.v2.CubeProbability;
-import maple.expectation.core.calculator.port.CubeTrialsPort;
-import maple.expectation.domain.v2.CubeType;
+import maple.expectation.core.domain.model.CubeType;
 import maple.expectation.error.exception.UnsupportedCalculationEngineException;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
@@ -43,7 +42,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service("cubeServiceImpl")
 @RequiredArgsConstructor
-public class CubeServiceImpl implements CubeTrialsProvider, CubeTrialsPort {
+public class CubeServiceImpl implements CubeTrialsProvider {
 
   private final CubeRateCalculator rateCalculator;
   private final CubeDpCalculator dpCalculator;
@@ -161,17 +160,16 @@ public class CubeServiceImpl implements CubeTrialsProvider, CubeTrialsPort {
   private double calculateCaseProbability(
       CubeCalculationInput input, CubeType type, List<String> caseOptions) {
     // Fetch probabilities for this cube type and level
-    var coreType = type.toCore();
-    List<CubeProbability> v2Probabilities =
+    List<CubeProbability> cubeProbabilities =
         repository.findProbabilities(type, input.getLevel(), input.getPart(), input.getGrade(), 0);
 
-    // Convert v2.CubeProbability to core.CubeRate
+    // Convert to core.CubeRate
     List<CubeRate> coreRates =
-        v2Probabilities.stream()
+        cubeProbabilities.stream()
             .map(
                 p ->
                     new CubeRate(
-                        coreType,
+                        type,
                         p.getOptionName(),
                         p.getRate(),
                         p.getSlot(),
@@ -184,7 +182,7 @@ public class CubeServiceImpl implements CubeTrialsProvider, CubeTrialsPort {
     for (int i = 0; i < 3; i++) {
       caseProb *=
           rateCalculator.getOptionRate(
-              coreType,
+              type,
               input.getLevel(),
               input.getPart(),
               input.getGrade(),
@@ -210,12 +208,5 @@ public class CubeServiceImpl implements CubeTrialsProvider, CubeTrialsPort {
         drift,
         input.getTargetStatType(),
         tableVersion);
-  }
-
-  @Override
-  public double calculateExpectedTrials(CubeCalculationInput input, maple.expectation.core.domain.model.CubeType type) {
-    CubeType v2Type = CubeType.fromCore(type);
-    Double result = calculateExpectedTrials(input, v2Type);
-    return result != null ? result : 0.0;
   }
 }

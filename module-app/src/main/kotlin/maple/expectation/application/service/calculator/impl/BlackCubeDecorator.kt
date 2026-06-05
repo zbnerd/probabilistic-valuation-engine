@@ -4,7 +4,7 @@ import maple.expectation.application.service.calculator.ExpectationCalculator
 import maple.expectation.application.service.cube.AbstractCubeDecoratorV2
 import maple.expectation.application.service.cube.CubeTrialsProvider
 import maple.expectation.application.service.cube.policy.CubeCostPolicy
-import maple.expectation.domain.v2.CubeType
+import maple.expectation.core.domain.model.CubeType
 import maple.expectation.core.dto.cube.CubeCalculationInput
 
 /**

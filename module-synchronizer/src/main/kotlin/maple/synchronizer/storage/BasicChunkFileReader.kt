@@ -46,7 +46,7 @@ class BasicChunkFileReader(
 
     fun read(objectKey: String): List<BasicRecord> {
         val path = Paths.get(basePath, objectKey)
-        require(Files.exists(path)) { "Chunk file not found: $path" }
+        if (!Files.exists(path)) throw IllegalStateException("Chunk file not found: $path")
 
         val parseErrors = AtomicLong(0)
         val missingFields = AtomicLong(0)
@@ -71,7 +71,7 @@ class BasicChunkFileReader(
         handler: (List<BasicRecord>) -> Unit,
     ) {
         val path = Paths.get(basePath, objectKey)
-        require(Files.exists(path)) { "Chunk file not found: $path" }
+        if (!Files.exists(path)) throw IllegalStateException("Chunk file not found: $path")
 
         val parseErrors = AtomicLong(0)
         val missingFields = AtomicLong(0)

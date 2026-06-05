@@ -35,14 +35,14 @@ class CalculationJobService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun createJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJob {
         val job = jobPort.createJob(ocid, userIgn, presetNo)
         log.info("[jobId={}] Job created in REQUESTED state", job.jobId)
         return job
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun createOrFindActiveJob(ocid: String?, userIgn: String, presetNo: Int): CalculationJobClaim {
         val claim = jobPort.createOrFindActiveJob(ocid, userIgn, presetNo)
         if (claim.created) {
@@ -53,7 +53,7 @@ class CalculationJobService(
         return claim
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun requestOcidResolve(jobId: UUID, userIgn: String, presetNo: Int) {
         val transitioned = jobPort.transitionStatus(
             jobId,
@@ -69,7 +69,7 @@ class CalculationJobService(
         log.info("[jobId={}] Transitioned to OCID_RESOLVING, resolve enqueued", jobId)
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun resolveOcidAndEnqueueApiData(jobId: UUID, ocid: String): Boolean {
         val transitioned = jobPort.resolveOcidAndTransition(jobId, ocid)
         if (!transitioned) {
@@ -84,7 +84,7 @@ class CalculationJobService(
         return true
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun saveSnapshotAndMarkReady(
         snapshotEntity: CalculationSnapshotEntity,
         jobId: UUID,
@@ -94,7 +94,7 @@ class CalculationJobService(
         return markSnapshotReadyInternal(jobId, snapshotEntity.snapshotId, objectKey)
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun markSnapshotReady(jobId: UUID, snapshotId: UUID, objectKey: String): Boolean = markSnapshotReadyInternal(jobId, snapshotId, objectKey)
 
     private fun markSnapshotReadyInternal(jobId: UUID, snapshotId: UUID, objectKey: String): Boolean {
@@ -109,7 +109,7 @@ class CalculationJobService(
         return ready
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun handleApiFailure(jobId: UUID, errorCode: String, errorMessage: String) {
         val job = jobPort.findJobById(jobId) ?: return
 
@@ -125,7 +125,7 @@ class CalculationJobService(
         }
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun handleOcidFailure(jobId: UUID, errorCode: String, errorMessage: String) {
         val job = jobPort.findJobById(jobId) ?: return
 
@@ -143,7 +143,7 @@ class CalculationJobService(
 
     // ===== Consolidated Pipeline Methods (ExternalApiWorker) =====
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun retryOcidResolvingJob(jobId: UUID, userIgn: String, presetNo: Int): Boolean {
         val incremented = jobPort.incrementRetryForOcid(jobId, "OCID_RESOLVE_TIMEOUT")
         if (incremented) {
@@ -152,7 +152,7 @@ class CalculationJobService(
         return incremented
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun retryApiRequestedJob(jobId: UUID, userIgn: String, presetNo: Int): Boolean {
         val incremented = jobPort.incrementRetry(jobId, "EXTERNAL_API_TIMEOUT")
         if (incremented) {
@@ -161,7 +161,7 @@ class CalculationJobService(
         return incremented
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun dispatchToExternalApi(jobId: UUID, userIgn: String, presetNo: Int) {
         val transitioned = jobPort.transitionStatus(
             jobId,
@@ -177,10 +177,10 @@ class CalculationJobService(
         log.info("[jobId={}] Dispatched to consolidated external API pipeline", jobId)
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun resolveOcidInPlace(jobId: UUID, ocid: String): Boolean = jobPort.resolveOcidAndTransition(jobId, ocid)
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun saveInputSnapshotAndMarkReady(
         snapshotEntity: CalculationSnapshotEntity,
         jobId: UUID,
@@ -190,7 +190,7 @@ class CalculationJobService(
         return jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun saveInputSnapshotAndDispatchCalculation(
         snapshotEntity: CalculationSnapshotEntity,
         jobId: UUID,
@@ -208,13 +208,13 @@ class CalculationJobService(
         return true
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun dispatchCalculationCompleted(payload: CalculationCompletedPayload) {
         pgmqClient.send(QueueNames.CALCULATION_COMPLETED, payload)
         log.info("[jobId={}] Calculation completed payload dispatched", payload.jobId)
     }
 
-    @Transactional
+    @Transactional(value = "transactionManager", readOnly = false)
     fun retryExternalApiJob(jobId: UUID, errorCode: String = "EXTERNAL_API_ERROR"): Boolean {
         val job = jobPort.findJobById(jobId) ?: return false
         if (job.retryCount >= job.maxRetries) {

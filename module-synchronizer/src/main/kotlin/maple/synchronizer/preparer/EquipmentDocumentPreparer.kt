@@ -2,8 +2,8 @@ package maple.synchronizer.preparer
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.util.GzipUtils
+import maple.expectation.util.HashUtils
 import maple.synchronizer.domain.EquipmentReadDocument
-import java.security.MessageDigest
 import java.sql.Timestamp
 
 class EquipmentDocumentPreparer(private val objectMapper: ObjectMapper) {
@@ -20,16 +20,11 @@ class EquipmentDocumentPreparer(private val objectMapper: ObjectMapper) {
             presetNo = doc.presetNo.toShort(),
             userIgn = doc.userIgn,
             compressed = GzipUtils.compress(bytes),
-            documentHash = sha256Hex(bytes),
+            documentHash = HashUtils.sha256Hex(bytes),
             totalCost = doc.summary.totalCost,
             equipmentCount = doc.summary.equipmentCount,
             calculatedAt = Timestamp.from(doc.metadata.calculatedAt),
         )
-    }
-
-    private fun sha256Hex(input: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(input)
-        return digest.joinToString("") { "%02x".format(it) }
     }
 }
 

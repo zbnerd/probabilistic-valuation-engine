@@ -1,21 +1,16 @@
 package maple.synchronizer.processor
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
 import maple.synchronizer.metrics.SynchronizerMetrics
-import maple.synchronizer.preparer.EquipmentDocumentPreparer
-import maple.synchronizer.ranking.EquipmentRankingRedisWriter
-import maple.synchronizer.repository.EquipmentReadModelRepository
-import maple.synchronizer.resolver.OcidUserIgnResolver
-import maple.synchronizer.storage.ResultFileReader
+import maple.synchronizer.preparer.PreppedDocument
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
@@ -24,34 +19,27 @@ import java.math.BigDecimal
 
 class DefaultChunkProcessorTest {
 
-    private val resultFileReader: ResultFileReader = mock()
-    private val readModelRepository: EquipmentReadModelRepository = mock()
-    private val ocidUserIgnResolver: OcidUserIgnResolver = mock()
-    private val rankingWriter: EquipmentRankingRedisWriter = mock()
+    private val dataReader: ChunkDataReader = mock()
+    private val transformer: ChunkDocumentTransformer = mock()
+    private val writer: ChunkDocumentWriter = mock()
     private val metrics = SynchronizerMetrics(SimpleMeterRegistry())
-    private val objectMapper = ObjectMapper().registerModule(JavaTimeModule())
 
     private lateinit var chunkProcessor: DefaultChunkProcessor
 
     @BeforeEach
     fun setUp() {
-        chunkProcessor = DefaultChunkProcessor(
-            resultFileReader,
-            readModelRepository,
-            ocidUserIgnResolver,
-            metrics,
-            rankingWriter,
-            objectMapper,
-        )
-        whenever(ocidUserIgnResolver.resolve(any())).thenReturn(emptyMap())
+        chunkProcessor = DefaultChunkProcessor(dataReader, transformer, writer, metrics)
     }
 
     @Test
     fun `process - happy path returns result with correct counts`() {
         val input = testInput()
         val grouped = listOf(GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = listOf(testItem())))
+        val prepped = listOf<PreppedDocument>(mock())
+        val transformResult = TransformResult(documentCount = 1, itemCount = 1, prepped = prepped)
 
-        whenever(resultFileReader.readAndGroupByCompositeKey(any())).thenReturn(grouped)
+        whenever(dataReader.read(any())).thenReturn(grouped)
+        whenever(transformer.transform(any(), any(), any())).thenReturn(transformResult)
 
         val result = chunkProcessor.process(input)
 
@@ -61,22 +49,24 @@ class DefaultChunkProcessorTest {
     }
 
     @Test
-    fun `process - calls preparer then repository bulkUpsert`() {
+    fun `process - calls writer with prepped documents`() {
         val input = testInput()
         val grouped = listOf(GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = listOf(testItem())))
+        val prepped = listOf<PreppedDocument>(mock())
+        val transformResult = TransformResult(documentCount = 1, itemCount = 1, prepped = prepped)
 
-        whenever(resultFileReader.readAndGroupByCompositeKey(any())).thenReturn(grouped)
+        whenever(dataReader.read(any())).thenReturn(grouped)
+        whenever(transformer.transform(any(), any(), any())).thenReturn(transformResult)
 
         chunkProcessor.process(input)
 
-        verify(readModelRepository).bulkUpsert(eq(input.sourceRunId), eq(input.sourceChunkId), any())
-        verify(rankingWriter).update(any())
+        verify(writer).write(eq(input.sourceRunId), eq(input.sourceChunkId), eq(prepped))
     }
 
     @Test
     fun `process - file not found propagates exception`() {
         val input = testInput()
-        whenever(resultFileReader.readAndGroupByCompositeKey(any()))
+        whenever(dataReader.read(any()))
             .thenThrow(IllegalStateException("Result file not found"))
 
         assertThatThrownBy { chunkProcessor.process(input) }
@@ -88,10 +78,13 @@ class DefaultChunkProcessorTest {
     fun `process - upsert failure propagates exception`() {
         val input = testInput()
         val grouped = listOf(GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = listOf(testItem())))
+        val prepped = listOf<PreppedDocument>(mock())
+        val transformResult = TransformResult(documentCount = 1, itemCount = 1, prepped = prepped)
 
-        whenever(resultFileReader.readAndGroupByCompositeKey(any())).thenReturn(grouped)
-        whenever(readModelRepository.bulkUpsert(any(), any(), any()))
-            .thenThrow(RuntimeException("DB connection failed"))
+        whenever(dataReader.read(any())).thenReturn(grouped)
+        whenever(transformer.transform(any(), any(), any())).thenReturn(transformResult)
+        doThrow(RuntimeException("DB connection failed"))
+            .whenever(writer).write(any(), any(), any())
 
         assertThatThrownBy { chunkProcessor.process(input) }
             .isInstanceOf(RuntimeException::class.java)
@@ -105,8 +98,11 @@ class DefaultChunkProcessorTest {
             GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = listOf(testItem(ocid = "oc1"))),
             GroupedEquipmentResult(readKey = "oc2:1", ocid = "oc2", presetNo = 1, items = listOf(testItem(ocid = "oc2"), testItem(ocid = "oc2"))),
         )
+        val prepped = listOf<PreppedDocument>(mock(), mock())
+        val transformResult = TransformResult(documentCount = 2, itemCount = 3, prepped = prepped)
 
-        whenever(resultFileReader.readAndGroupByCompositeKey(any())).thenReturn(grouped)
+        whenever(dataReader.read(any())).thenReturn(grouped)
+        whenever(transformer.transform(any(), any(), any())).thenReturn(transformResult)
 
         val result = chunkProcessor.process(input)
 

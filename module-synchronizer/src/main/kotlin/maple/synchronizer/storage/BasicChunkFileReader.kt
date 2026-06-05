@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.util.GzipUtils
+import maple.expectation.util.HashUtils
 import maple.synchronizer.metrics.SynchronizerReaderMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -11,7 +12,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.GZIPInputStream
 
@@ -170,7 +170,7 @@ class BasicChunkFileReader(
 
         val bodyBytes = objectMapper.writeValueAsBytes(body)
         val compressed = GzipUtils.compress(bodyBytes)
-        val hash = sha256Hex(bodyBytes)
+        val hash = HashUtils.sha256Hex(bodyBytes)
 
         return BasicRecord(
             userIgn = userIgn,
@@ -182,11 +182,6 @@ class BasicChunkFileReader(
             compressedBody = compressed,
             bodyHash = hash,
         )
-    }
-
-    private fun sha256Hex(input: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(input)
-        return digest.joinToString("") { "%02x".format(it) }
     }
 
     private fun logChunkSummary(

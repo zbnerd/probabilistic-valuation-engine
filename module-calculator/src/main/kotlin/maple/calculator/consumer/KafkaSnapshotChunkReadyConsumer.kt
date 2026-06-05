@@ -50,7 +50,7 @@ class KafkaSnapshotChunkReadyConsumer(
     /**
      * Processes the event with bounded retry. On exhaustion, rethrows so Spring Kafka
      * DefaultErrorHandler routes the message to DLT via DeadLetterPublishingRecoverer
-     * (configured in module-calculator/.../config/KafkaConsumerConfig.kt).
+     * (configured in module-infra/.../config/KafkaConsumerConfig.kt).
      *
      * runBlocking bridges the suspend `coordinator.handle` call from this non-suspend
      * listener method. We keep the listener non-suspend for consistency with the

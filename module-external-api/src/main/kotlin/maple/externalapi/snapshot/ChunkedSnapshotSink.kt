@@ -1,6 +1,7 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.util.CompressionUtils
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.expectation.common.event.SnapshotChunkReadyEvent
@@ -224,7 +225,7 @@ class ChunkedSnapshotSink(
 
     private fun publishChunkReady(stats: ChunkStats) {
         val chunkId = String.format("part-%06d", stats.partIndex)
-        val ratio = if (stats.compressedBytes > 0) "%.2f".format(stats.uncompressedBytes.toDouble() / stats.compressedBytes.toDouble()) else "N/A"
+        val ratio = CompressionUtils.ratioString(stats.uncompressedBytes, stats.compressedBytes)
         volumeMetrics.recordChunk(stats.compressedBytes, stats.uncompressedBytes, stats.recordCount.toLong())
         log.info(
             "[snapshotVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",

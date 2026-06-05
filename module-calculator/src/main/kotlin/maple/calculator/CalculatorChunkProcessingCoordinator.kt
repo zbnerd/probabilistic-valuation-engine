@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.calculator.event.ChunkProcessingEvent
+import maple.expectation.util.CompressionUtils
 import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
@@ -107,7 +108,7 @@ class CalculatorChunkProcessingCoordinator(
             event.runId, event.chunkId,
             result.recordCount, result.successCount, result.totalItems, result.resultCount, result.errorCount,
         )
-        val ratio = if (result.resultCompressedBytes > 0) "%.2f".format(result.resultUncompressedBytes.toDouble() / result.resultCompressedBytes.toDouble()) else "N/A"
+        val ratio = CompressionUtils.ratioString(result.resultUncompressedBytes, result.resultCompressedBytes)
         log.info(
             "[calculatorArtifactVolume] runId={} chunkId={} inputCompressedBytes={} inputUncompressedBytes={} resultCompressedBytes={} resultUncompressedBytes={} resultJsonRows={} resultCompressionRatio={}",
             event.runId, event.chunkId, event.compressedBytes, event.uncompressedBytes,

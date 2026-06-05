@@ -28,6 +28,9 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.jdbc.core.namedparam.SqlParameterSource
+import org.springframework.transaction.support.SimpleTransactionStatus
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 
 /**
  * Unit tests for [CharacterViewQueryServicePostgres].
@@ -66,6 +69,8 @@ class CharacterViewQueryServicePostgresTest {
     @Mock
     private lateinit var jdbc: NamedParameterJdbcTemplate
 
+    private lateinit var transactionTemplate: TransactionTemplate
+
     private lateinit var service: CharacterViewQueryServicePostgres
 
     @BeforeEach
@@ -73,6 +78,7 @@ class CharacterViewQueryServicePostgresTest {
         objectMapper = ObjectMapper().registerModule(JavaTimeModule())
         meterRegistry = SimpleMeterRegistry()
         executor = TestLogicExecutor()
+        transactionTemplate = NoOpTransactionTemplate()
         service = CharacterViewQueryServicePostgres(
             repository,
             readModelWriteService,
@@ -80,6 +86,7 @@ class CharacterViewQueryServicePostgresTest {
             executor,
             meterRegistry,
             jdbc,
+            transactionTemplate,
             Executors.newVirtualThreadPerTaskExecutor(),
             500,
         )
@@ -420,5 +427,12 @@ class CharacterViewQueryServicePostgresTest {
         override fun executeVoidJava(task: Runnable, taskName: String) {
             executeVoidJava(task, TaskContext.of("Test", taskName))
         }
+    }
+
+    /**
+     * 테스트용 TransactionTemplate - callback을 즉시 실행 (트랜잭션 없음)
+     */
+    private class NoOpTransactionTemplate : TransactionTemplate() {
+        override fun <T> execute(action: TransactionCallback<T>): T? = action.doInTransaction(SimpleTransactionStatus())
     }
 }

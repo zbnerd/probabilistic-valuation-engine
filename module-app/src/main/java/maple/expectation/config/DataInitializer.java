@@ -2,7 +2,7 @@ package maple.expectation.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.repository.MemberRepository;
+import maple.expectation.infrastructure.persistence.repository.MemberRepository;
 import maple.expectation.domain.v2.Member;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;

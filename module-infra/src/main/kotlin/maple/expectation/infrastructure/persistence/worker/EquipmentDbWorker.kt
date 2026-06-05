@@ -8,7 +8,7 @@ import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.equipment.CharacterEquipment
 import maple.expectation.core.domain.model.equipment.EquipmentData
 import maple.expectation.core.port.out.PersistenceTrackerStrategy
-import maple.expectation.domain.repository.CharacterEquipmentRepository
+import maple.expectation.infrastructure.persistence.repository.CharacterEquipmentRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator

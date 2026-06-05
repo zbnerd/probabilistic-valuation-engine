@@ -1,4 +1,4 @@
-package maple.expectation.domain.repository
+package maple.expectation.infrastructure.persistence.repository
 
 import maple.expectation.domain.v2.CubeProbability
 import maple.expectation.core.domain.model.CubeType

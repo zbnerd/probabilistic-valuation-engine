@@ -2,7 +2,6 @@ package maple.expectation.infrastructure.persistence.repository
 
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.equipment.CharacterEquipment
-import maple.expectation.domain.repository.CharacterEquipmentRepository as DomainCharacterEquipmentRepository
 import maple.expectation.infrastructure.jdbc.JdbcBatchUpsertRepository
 import maple.expectation.infrastructure.persistence.CharacterEquipmentJpaRepository
 import maple.expectation.infrastructure.persistence.mapper.CharacterEquipmentMapper
@@ -24,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional
 open class CharacterEquipmentRepositoryImpl(
     private val jpaRepo: CharacterEquipmentJpaRepository,
     private val jdbcBatchUpsertRepository: JdbcBatchUpsertRepository,
-) : DomainCharacterEquipmentRepository {
+) : CharacterEquipmentRepository {
 
     @Transactional("transactionManager", readOnly = true)
     @Nullable

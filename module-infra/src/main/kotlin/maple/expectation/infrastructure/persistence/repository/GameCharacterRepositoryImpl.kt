@@ -3,7 +3,6 @@ package maple.expectation.infrastructure.persistence.repository
 import maple.expectation.core.domain.model.Page
 import maple.expectation.core.domain.model.PageRequest
 import maple.expectation.core.domain.model.character.GameCharacter
-import maple.expectation.domain.repository.GameCharacterRepository as DomainGameCharacterRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.persistence.entity.GameCharacterJpaEntity
@@ -29,7 +28,7 @@ open class GameCharacterRepositoryImpl(
     private val jpaRepo: GameCharacterJpaRepository,
     private val jpaCustomRepo: GameCharacterJpaRepositoryCustom,
     private val logicExecutor: LogicExecutor,
-) : DomainGameCharacterRepository {
+) : GameCharacterRepository {
 
     @Nullable
     override fun findByOcid(ocid: String): GameCharacter? = jpaRepo.findByOcid(ocid)?.toDomain()

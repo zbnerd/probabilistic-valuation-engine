@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param
  * Spring Data JPA Repository for Member.
  *
  * <p>This is an INTERNAL repository interface used only by infrastructure layer. Domain layer uses
- * [maple.expectation.domain.repository.MemberRepository] instead.
+ * [maple.expectation.infrastructure.persistence.repository.MemberRepository] instead.
  *
  * @see maple.expectation.infrastructure.persistence.repository.MemberRepositoryImpl
  */

@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.scheduler
 
 import maple.expectation.core.port.out.NexonDataCollectorPort
-import maple.expectation.domain.repository.GameCharacterRepository
+import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory

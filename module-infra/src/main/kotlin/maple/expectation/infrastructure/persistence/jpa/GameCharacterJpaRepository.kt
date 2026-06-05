@@ -11,7 +11,7 @@ import org.springframework.data.repository.query.Param
  * Spring Data JPA Repository for GameCharacter.
  *
  * <p>This is an INTERNAL repository interface used only by infrastructure layer. Domain layer uses
- * [maple.expectation.domain.repository.GameCharacterRepository] instead.
+ * [maple.expectation.infrastructure.persistence.repository.GameCharacterRepository] instead.
  *
  * @see maple.expectation.infrastructure.persistence.repository.GameCharacterRepositoryImpl
  */

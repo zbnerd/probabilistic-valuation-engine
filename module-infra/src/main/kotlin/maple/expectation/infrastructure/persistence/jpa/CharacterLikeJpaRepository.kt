@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional
  *
  *
  * This is an INTERNAL repository interface used only by infrastructure layer. Domain layer uses
- * [maple.expectation.domain.repository.CharacterLikeRepository] instead.
+ * [maple.expectation.infrastructure.persistence.repository.CharacterLikeRepository] instead.
  *
  * @see maple.expectation.infrastructure.persistence.repository.CharacterLikeRepositoryImpl
  */

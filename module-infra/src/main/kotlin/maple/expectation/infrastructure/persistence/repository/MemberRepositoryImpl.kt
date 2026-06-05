@@ -1,6 +1,6 @@
 package maple.expectation.infrastructure.persistence.repository
 
-import maple.expectation.domain.repository.MemberRepository
+import maple.expectation.infrastructure.persistence.repository.MemberRepository
 import maple.expectation.domain.v2.Member
 import maple.expectation.infrastructure.persistence.jpa.MemberJpaRepository
 import org.springframework.stereotype.Repository

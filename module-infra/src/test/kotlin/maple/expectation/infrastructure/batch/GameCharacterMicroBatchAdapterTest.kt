@@ -6,7 +6,7 @@ import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.core.domain.model.character.UserIgn
-import maple.expectation.domain.repository.GameCharacterRepository
+import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository
 import maple.expectation.infrastructure.config.AdaptiveMicroBatchProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext

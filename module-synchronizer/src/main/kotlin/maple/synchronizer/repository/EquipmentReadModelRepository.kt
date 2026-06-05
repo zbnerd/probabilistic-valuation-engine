@@ -15,30 +15,7 @@ class EquipmentReadModelRepository(
 
     companion object {
         private const val SUB_BATCH_SIZE = 100
-    }
-
-    fun bulkUpsert(runId: String, chunkId: String, documents: List<PreppedDocument>) {
-        val compSizes = documents.map { it.compressed.size }
-
-        log.info("[Synchronizer] upsert start: docs={} batches={} batchSize={} " +
-            "compressedBytes avg={} max={} total={} : runId={} chunkId={}",
-            documents.size, documents.chunked(SUB_BATCH_SIZE).size, SUB_BATCH_SIZE,
-            compSizes.average().toInt(), compSizes.max(), compSizes.sum(),
-            runId, chunkId)
-
-        batchExecutor.execute(
-            label = "Synchronizer",
-            itemLabel = "docs",
-            runId = runId,
-            chunkId = chunkId,
-            items = documents,
-            batchSize = SUB_BATCH_SIZE,
-            upsertBatch = { batch -> upsertBatch(runId, chunkId, batch) },
-        )
-    }
-
-    private fun upsertBatch(runId: String, chunkId: String, batch: List<PreppedDocument>): Int {
-        val sql = """
+        private val UPSERT_SQL = """
             INSERT INTO character_equipment_read_model (
                 read_key, ocid, preset_no, user_ign, document, document_hash,
                 total_cost, equipment_count, calculated_at,
@@ -62,8 +39,34 @@ class EquipmentReadModelRepository(
             WHERE character_equipment_read_model.document_hash IS DISTINCT FROM excluded.document_hash
                OR character_equipment_read_model.user_ign IS DISTINCT FROM excluded.user_ign
         """.trimIndent()
+    }
 
-        return jdbc.update(sql, MapSqlParameterSource()
+    fun bulkUpsert(runId: String, chunkId: String, documents: List<PreppedDocument>) {
+        val compSizes = documents.map { it.compressed.size }
+
+        log.info("[Synchronizer] upsert start: docs={} batches={} batchSize={} " +
+            "compressedBytes avg={} max={} total={} : runId={} chunkId={}",
+            documents.size, documents.chunked(SUB_BATCH_SIZE).size, SUB_BATCH_SIZE,
+            compSizes.average().toInt(), compSizes.max(), compSizes.sum(),
+            runId, chunkId)
+
+        batchExecutor.execute(
+            label = "Synchronizer",
+            itemLabel = "docs",
+            runId = runId,
+            chunkId = chunkId,
+            items = documents,
+            batchSize = SUB_BATCH_SIZE,
+            upsertBatch = { batch -> upsertBatch(runId, chunkId, batch) },
+        )
+    }
+
+    private fun upsertBatch(runId: String, chunkId: String, batch: List<PreppedDocument>): Int {
+        return jdbc.update(UPSERT_SQL, buildUpsertParams(runId, chunkId, batch))
+    }
+
+    private fun buildUpsertParams(runId: String, chunkId: String, batch: List<PreppedDocument>): MapSqlParameterSource {
+        return MapSqlParameterSource()
             .addValue("runId", runId)
             .addValue("chunkId", chunkId)
             .addValue("readKeys", batch.map { it.readKey }.toTypedArray())
@@ -75,6 +78,5 @@ class EquipmentReadModelRepository(
             .addValue("totalCosts", batch.map { it.totalCost }.toTypedArray())
             .addValue("equipmentCounts", batch.map { it.equipmentCount }.toTypedArray())
             .addValue("calculatedAts", batch.map { it.calculatedAt }.toTypedArray())
-        )
     }
 }

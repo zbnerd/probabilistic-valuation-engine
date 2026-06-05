@@ -1,4 +1,4 @@
-package maple.synchronizer.config
+package maple.expectation.infrastructure.config
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition

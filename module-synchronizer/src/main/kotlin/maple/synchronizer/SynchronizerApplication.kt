@@ -1,5 +1,6 @@
 package maple.synchronizer
 
+import maple.expectation.infrastructure.config.KafkaConsumerConfig
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycleCoordinator
 import maple.synchronizer.consumer.ChunkExecutionProperties
 import maple.synchronizer.ranking.EquipmentRankingProperties
@@ -16,6 +17,7 @@ import org.springframework.context.annotation.Import
 @Import(
     maple.expectation.infrastructure.config.CoreExecutorConfig::class,
     maple.expectation.infrastructure.config.VtExecutorConfig::class,
+    KafkaConsumerConfig::class,
     ManagedLifecycleCoordinator::class,
 )
 class SynchronizerApplication

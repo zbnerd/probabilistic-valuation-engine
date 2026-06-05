@@ -23,6 +23,7 @@ open class GameCharacterJpaRepositoryCustomImpl(
                 GameCharacterJpaEntity::class.java,
             )
             .setParameter("threshold", threshold)
+            .setMaxResults(100)
             .resultList
     }
 }

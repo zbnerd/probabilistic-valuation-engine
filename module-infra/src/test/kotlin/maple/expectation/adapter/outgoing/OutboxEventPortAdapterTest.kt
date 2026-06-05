@@ -10,12 +10,16 @@ import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 
 @ExtendWith(MockitoExtension::class)
 class OutboxEventPortAdapterTest {
 
     @Mock lateinit var repo: OutboxEventRepository
+
+    @Mock lateinit var jdbc: NamedParameterJdbcTemplate
 
     @InjectMocks lateinit var adapter: OutboxEventPortAdapter
 
@@ -37,5 +41,33 @@ class OutboxEventPortAdapterTest {
         val result = adapter.insertIfAbsent("CALCULATION_COMPLETED", jobId, "{}")
 
         assertThat(result).isFalse()
+    }
+
+    @Test
+    fun `findCompletedJobsMissingOutboxEvents returns ids from jdbc`() {
+        val ids = listOf(UUID.randomUUID(), UUID.randomUUID())
+        whenever(jdbc.queryForList(any<String>(), any<Map<String, Any>>(), eq(UUID::class.java))).thenReturn(ids)
+
+        val result = adapter.findCompletedJobsMissingOutboxEvents(50)
+
+        assertThat(result).hasSize(2).containsExactlyElementsOf(ids)
+    }
+
+    @Test
+    fun `findCompletedJobsMissingOutboxEvents returns empty list when jdbc yields nothing`() {
+        whenever(jdbc.queryForList(any<String>(), any<Map<String, Any>>(), eq(UUID::class.java))).thenReturn(emptyList())
+
+        val result = adapter.findCompletedJobsMissingOutboxEvents(50)
+
+        assertThat(result).isEmpty()
+    }
+
+    @Test
+    fun `findCompletedJobsMissingOutboxEvents passes limit to jdbc query`() {
+        whenever(jdbc.queryForList(any<String>(), any<Map<String, Any>>(), eq(UUID::class.java))).thenReturn(emptyList())
+
+        adapter.findCompletedJobsMissingOutboxEvents(25)
+
+        verify(jdbc).queryForList(any<String>(), eq(mapOf("limit" to 25)), eq(UUID::class.java))
     }
 }

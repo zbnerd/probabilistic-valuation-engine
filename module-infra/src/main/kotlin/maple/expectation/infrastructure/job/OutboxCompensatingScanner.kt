@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.job
 
-import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.OutboxEventPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Component
 @Component
 @ConditionalOnProperty(name = ["app.outbox.compensating-scanner.enabled"], havingValue = "true", matchIfMissing = false)
 class OutboxCompensatingScanner(
-    private val jobPort: CalculationJobPort,
     private val outboxPort: OutboxEventPort,
     private val executor: LogicExecutor,
 ) {
@@ -22,7 +20,7 @@ class OutboxCompensatingScanner(
     fun scan() {
         val context = TaskContext.of("OutboxCompensatingScanner", "Scan", "system")
         executor.executeVoid({
-            val orphaned = jobPort.findCompletedJobsMissingOutboxEvents(50)
+            val orphaned = outboxPort.findCompletedJobsMissingOutboxEvents(50)
             if (orphaned.isEmpty()) return@executeVoid
 
             log.warn("Found {} orphaned completed jobs without outbox events", orphaned.size)

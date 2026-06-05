@@ -17,4 +17,5 @@ interface OutboxEventPort {
     fun markPublished(eventId: UUID)
     fun markAllPublished(eventIds: List<UUID>)
     fun incrementPublishAttempts(eventId: UUID)
+    fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID>
 }

@@ -6,8 +6,8 @@ import maple.expectation.core.model.job.CalculationJobClaim;
 import maple.expectation.core.model.job.CalculationJobStatus;
 import maple.expectation.core.port.inbound.TaskReceipt;
 import maple.expectation.core.port.out.CalculationJobPort;
-import maple.expectation.core.port.out.PgmqPort;
-import maple.expectation.core.port.out.QueueNames;
+import maple.expectation.core.port.out.MessageQueuePort;
+import maple.expectation.infrastructure.queue.QueueNames;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.pgmq.ExternalApiJobPayload;
@@ -30,12 +30,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class ExpectationCalculationQueue {
 
-  private final PgmqPort pgmqPort;
+  private final MessageQueuePort pgmqPort;
   private final CalculationJobPort jobPort;
   private final LogicExecutor executor;
 
   public ExpectationCalculationQueue(
-      PgmqPort pgmqPort, CalculationJobPort jobPort, LogicExecutor executor) {
+      MessageQueuePort pgmqPort, CalculationJobPort jobPort, LogicExecutor executor) {
     this.pgmqPort = pgmqPort;
     this.jobPort = jobPort;
     this.executor = executor;

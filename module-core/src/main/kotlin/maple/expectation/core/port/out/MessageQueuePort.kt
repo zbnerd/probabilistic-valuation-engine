@@ -1,12 +1,13 @@
 package maple.expectation.core.port.out
 
 /**
- * PGMQ (PostgreSQL Message Queue) outbound port.
+ * Outbound port for message queue operations.
  *
- * <p>Hexagonal architecture boundary for message queue operations.
- * Infrastructure layer implements this port to provide PGMQ functionality.
+ * <p>Technology-neutral contract. Adapters may target PGMQ, Kafka, RabbitMQ,
+ * SQS, or any other message broker. Implementations are selected by
+ * configuration and injected as a Spring bean.
  */
-interface PgmqPort {
+interface MessageQueuePort {
     /**
      * Send a message to the specified queue.
      *

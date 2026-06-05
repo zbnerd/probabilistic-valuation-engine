@@ -4,7 +4,7 @@ import java.util.UUID
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CalculationResultPort
-import maple.expectation.core.port.out.QueueNames
+import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.core.port.out.mq.DomainEventAppender
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import maple.expectation.infrastructure.pgmq.PgmqClient

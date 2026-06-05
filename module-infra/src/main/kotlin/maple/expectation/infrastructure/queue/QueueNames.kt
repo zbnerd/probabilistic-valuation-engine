@@ -1,9 +1,11 @@
-package maple.expectation.core.port.out
+package maple.expectation.infrastructure.queue
 
 /**
- * Queue name constants for PGMQ queues.
+ * Queue name constants.
  *
- * <p>Centralized queue name definitions to avoid hardcoding across the codebase.
+ * <p>String identifiers for message broker queues. These values are
+ * adapter-implementation specific (PGMQ in current setup) and are not
+ * part of the public domain port contract.
  */
 object QueueNames {
     /** High priority expectation calculation queue (user-initiated requests) */

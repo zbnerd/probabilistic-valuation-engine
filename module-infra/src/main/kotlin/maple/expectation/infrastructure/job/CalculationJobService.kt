@@ -5,7 +5,7 @@ import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.model.job.CalculationJobClaim
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
-import maple.expectation.core.port.out.QueueNames
+import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.core.port.out.mq.DomainEventAppender
 import maple.expectation.infrastructure.mq.event.NexonApiRequestEventFactory
 import maple.expectation.infrastructure.mq.event.NexonApiResponseEventFactory

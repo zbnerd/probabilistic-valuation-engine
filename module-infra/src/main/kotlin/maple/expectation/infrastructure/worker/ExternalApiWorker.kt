@@ -17,7 +17,7 @@ import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.PureCalculationPort
-import maple.expectation.core.port.out.QueueNames
+import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.core.port.out.SnapshotObjectStore
 import maple.expectation.error.exception.CharacterNotFoundException
 import maple.expectation.infrastructure.converter.EquipmentResponseToCalculationInputConverter

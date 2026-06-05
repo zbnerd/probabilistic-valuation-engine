@@ -5,9 +5,9 @@ import java.util.function.BiConsumer
 /**
  * Message topic for pub/sub pattern.
  *
- * <p>Domain port for publish-subscribe messaging. Abstraction over Redis topics, Kafka topics, etc.
- * Supports DIP (Dependency Inversion Principle) by allowing business logic to depend on this
- * interface instead of concrete Redis APIs.
+ * <p>Domain port for publish-subscribe messaging. Adapters wrap any
+ * pub/sub technology (message broker topics, distributed cache pub/sub,
+ * event bus topics, etc.). Business logic depends on this interface.
  *
  * @param <T> message type
  */

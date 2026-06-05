@@ -1,7 +1,7 @@
 package maple.expectation.adapter.outgoing
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.core.port.out.PgmqPort
+import maple.expectation.core.port.out.MessageQueuePort
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component
 /**
  * PGMQ port adapter implementation.
  *
- * <p>Adapts the infrastructure PgmqClient to the core PgmqPort interface.
+ * <p>Adapts the infrastructure PgmqClient to the core MessageQueuePort interface.
  * This is the hexagonal architecture adapter that connects the core port
  * to the infrastructure implementation.
  *
@@ -17,11 +17,11 @@ import org.springframework.stereotype.Component
  * <p>Delegates all operations to PgmqClient, which handles exceptions via LogicExecutor.
  */
 @Component
-class PgmqPortAdapter(
+class MessageQueuePortAdapter(
     private val pgmqClient: PgmqClient,
     private val jdbcTemplate: JdbcTemplate,
     private val objectMapper: ObjectMapper,
-) : PgmqPort {
+) : MessageQueuePort {
 
     /**
      * Send a message to the specified queue.

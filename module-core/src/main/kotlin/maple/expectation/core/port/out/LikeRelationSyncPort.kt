@@ -3,19 +3,17 @@ package maple.expectation.core.port.out
 /**
  * Like Relation Sync Port - 좋아요 관계 동기화 작업을 위한 인터페이스
  *
- * <h3>Implementations</h3>
- * <ul>
- *   <li>module-infra/adapter/LikeRelationSyncAdapter - LikeRelationSyncService에 위임
- * </ul>
+ * <p>Method names reference cache tiers (L1/L2) and persistence layer
+ * in a technology-neutral way. Adapters determine the actual storage.
  */
 interface LikeRelationSyncPort {
     /**
-     * L1 (Caffeine) → L2 (Redis) Flush
+     * L1 → L2 flush
      */
-    fun flushLocalToRedis()
+    fun flushLocalToL2()
 
     /**
-     * L2 (Redis) → L3 (MySQL) Sync
+     * L2 → persistence sync
      */
-    fun syncRedisToDatabase()
+    fun syncL2ToPersistence()
 }

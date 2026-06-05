@@ -20,7 +20,7 @@ import maple.expectation.core.model.job.CalculationJobClaim;
 import maple.expectation.core.model.job.CalculationJobStatus;
 import maple.expectation.core.port.inbound.TaskReceipt;
 import maple.expectation.core.port.out.CalculationJobPort;
-import maple.expectation.core.port.out.PgmqPort;
+import maple.expectation.core.port.out.MessageQueuePort;
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable;
@@ -35,14 +35,14 @@ import org.junit.jupiter.api.Test;
 class ExpectationCalculationQueueTest {
 
   private LogicExecutor executor;
-  private PgmqPort pgmqPort;
+  private MessageQueuePort pgmqPort;
   private CalculationJobPort jobPort;
   private ExpectationCalculationQueue queue;
 
   @BeforeEach
   void setUp() {
     executor = new TestLogicExecutor();
-    pgmqPort = mock(PgmqPort.class);
+    pgmqPort = mock(MessageQueuePort.class);
     jobPort = mock(CalculationJobPort.class);
     queue = new ExpectationCalculationQueue(pgmqPort, jobPort, executor);
   }

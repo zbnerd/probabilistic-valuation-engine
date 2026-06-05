@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.mq.pgmq.topic
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.core.port.out.QueueNames
+import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.mq.pgmq.PgmqTopicConfig

@@ -4,7 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import java.util.UUID
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
-import maple.expectation.core.port.out.QueueNames
+import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationExecutionService

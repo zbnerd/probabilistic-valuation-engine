@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional
  * @see <a href="../../../../../../docs/01_ADR/ADR-013-multi-datasource-transaction-strategy.md">ADR-013: Multi-DataSource Transaction Strategy</a>
  */
 @Repository
-@Transactional("transactionManager")
+@Transactional(value = "transactionManager", readOnly = true)
 open class CharacterValuationRepositoryImpl(
     private val jpaRepo: CharacterValuationJpaRepository,
 ) {
@@ -74,6 +74,7 @@ open class CharacterValuationRepositoryImpl(
      * @param entity JPA entity to save
      * @return saved entity with generated ID
      */
+    @Transactional(value = "transactionManager", readOnly = false)
     open fun save(entity: CharacterValuationEntity): CharacterValuationEntity {
         requireNotNull(entity) { "Entity cannot be null" }
         return jpaRepo.save(entity)
@@ -86,6 +87,7 @@ open class CharacterValuationRepositoryImpl(
      *
      * @param userIgn User in-game name
      */
+    @Transactional(value = "transactionManager", readOnly = false)
     open fun deleteByUserIgn(userIgn: String?) {
         jpaRepo.deleteByUserIgn(userIgn)
     }
@@ -95,6 +97,7 @@ open class CharacterValuationRepositoryImpl(
      *
      * <p>Use with caution - primarily for testing.
      */
+    @Transactional(value = "transactionManager", readOnly = false)
     open fun deleteAll() {
         jpaRepo.deleteAll()
     }
@@ -154,6 +157,7 @@ open class CharacterValuationRepositoryImpl(
      * @param entity Entity to upsert
      * @return true if updated, false if skipped
      */
+    @Transactional(value = "transactionManager", readOnly = false)
     open fun upsertByVersion(entity: CharacterValuationEntity): Boolean {
         val existing = findByUserIgn(entity.userIgn)
 

@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.concurrency
 
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 
 interface ExecutorSelector {
     fun <T> submit(qualifier: ExecutorQualifier, block: () -> T): CompletableFuture<T>
@@ -9,7 +10,7 @@ interface ExecutorSelector {
 
 class DefaultExecutorSelector(private val registry: ExecutorRegistry) : ExecutorSelector {
     override fun <T> submit(qualifier: ExecutorQualifier, block: () -> T): CompletableFuture<T> {
-        val exec = registry.get(qualifier)
+        val exec: Executor = registry.get(qualifier)
         return CompletableFuture.supplyAsync({ block() }, exec)
     }
 

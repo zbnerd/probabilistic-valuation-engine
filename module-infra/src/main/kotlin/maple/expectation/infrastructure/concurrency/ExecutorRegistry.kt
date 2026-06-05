@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.concurrency
 
-import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executor
 
-class ExecutorRegistry(private val executors: Map<ExecutorQualifier, ExecutorService>) {
-    fun get(qualifier: ExecutorQualifier): ExecutorService =
+class ExecutorRegistry(private val executors: Map<ExecutorQualifier, Executor>) {
+    fun get(qualifier: ExecutorQualifier): Executor =
         executors[qualifier]
             ?: throw IllegalArgumentException("No executor registered for $qualifier")
 }

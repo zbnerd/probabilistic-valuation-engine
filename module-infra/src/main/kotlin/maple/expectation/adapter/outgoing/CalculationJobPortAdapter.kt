@@ -115,20 +115,6 @@ class CalculationJobPortAdapter(
 
     override fun completeFromCalculating(jobId: UUID): Boolean = jobRepository.completeFromCalculating(jobId) > 0
 
-    override fun findCompletedJobsMissingOutboxEvents(limit: Int): List<UUID> {
-        val sql = """
-            SELECT j.job_id FROM calculation_jobs j
-            WHERE j.status = 'COMPLETED'
-              AND j.completed_at < now() - INTERVAL '1 minute'
-              AND NOT EXISTS (
-                SELECT 1 FROM outbox_events o
-                WHERE o.job_id = j.job_id AND o.event_type = 'CALCULATION_COMPLETED'
-              )
-            LIMIT :limit
-        """.trimIndent()
-        return jdbc.queryForList(sql, mapOf("limit" to limit), UUID::class.java)
-    }
-
     private fun CalculationJobEntity.toDomain() = CalculationJob(
         jobId = jobId,
         ocid = ocid,

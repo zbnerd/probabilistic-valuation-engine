@@ -41,7 +41,6 @@ sealed class ChunkExecutionStatus(val name: String) {
     abstract fun isTerminal(): Boolean
     abstract fun shouldAckSkip(now: Instant): Boolean
     abstract fun shouldPreserveKafkaRedelivery(now: Instant): Boolean
-    abstract fun isReclaimed(now: Instant): Boolean
     fun isTerminalSkip(): Boolean = this is Succeeded || this is FailedTerminal
 
     companion object {
@@ -52,24 +51,27 @@ sealed class ChunkExecutionStatus(val name: String) {
             Succeeded.NAME -> Succeeded
             FailedRetryable.NAME -> FailedRetryable(null)
             FailedTerminal.NAME -> FailedTerminal(null)
-            else -> error("Unknown ChunkExecutionStatus name: $s")
+            else -> throw IllegalArgumentException("Unknown ChunkExecutionStatus name: $s")
         }
     }
 
+    /** Singleton — use `is Processing` checks, not `===`. */
     object Processing : ChunkExecutionStatus(NAME) {
         const val NAME: String = "PROCESSING"
         override fun isTerminal(): Boolean = false
         override fun shouldAckSkip(now: Instant): Boolean = false
         override fun shouldPreserveKafkaRedelivery(now: Instant): Boolean = false
-        override fun isReclaimed(now: Instant): Boolean = false
+        /** True when the lease has expired or was never set — this chunk is reclaimable. */
+        fun isReclaimed(leaseUntil: Instant?, now: Instant): Boolean =
+            leaseUntil?.isAfter(now) != true
     }
 
+    /** Singleton — use `is Succeeded` checks, not `===`. */
     object Succeeded : ChunkExecutionStatus(NAME) {
         const val NAME: String = "SUCCEEDED"
         override fun isTerminal(): Boolean = true
         override fun shouldAckSkip(now: Instant): Boolean = true
         override fun shouldPreserveKafkaRedelivery(now: Instant): Boolean = false
-        override fun isReclaimed(now: Instant): Boolean = false
     }
 
     data class FailedRetryable(val nextRetryAt: Instant?) : ChunkExecutionStatus(NAME) {
@@ -77,7 +79,6 @@ sealed class ChunkExecutionStatus(val name: String) {
         override fun isTerminal(): Boolean = false
         override fun shouldAckSkip(now: Instant): Boolean = nextRetryAt?.isAfter(now) != true
         override fun shouldPreserveKafkaRedelivery(now: Instant): Boolean = nextRetryAt?.isAfter(now) == true
-        override fun isReclaimed(now: Instant): Boolean = false
     }
 
     data class FailedTerminal(val reason: String?) : ChunkExecutionStatus(NAME) {
@@ -85,7 +86,6 @@ sealed class ChunkExecutionStatus(val name: String) {
         override fun isTerminal(): Boolean = true
         override fun shouldAckSkip(now: Instant): Boolean = true
         override fun shouldPreserveKafkaRedelivery(now: Instant): Boolean = false
-        override fun isReclaimed(now: Instant): Boolean = false
     }
 }
 ```
@@ -135,8 +135,8 @@ class ChunkExecutionStatusTest {
     }
 
     @Test
-    fun `fromName throws on unknown value`() {
-        val ex = assertThrows<IllegalStateException> {
+    fun `fromName throws IllegalArgumentException on unknown value`() {
+        val ex = assertThrows<IllegalArgumentException> {
             ChunkExecutionStatus.fromName("BOGUS")
         }
         assertThat(ex.message).contains("BOGUS")
@@ -148,7 +148,19 @@ class ChunkExecutionStatusTest {
         assertThat(s.isTerminal()).isFalse()
         assertThat(s.shouldAckSkip(now)).isFalse()
         assertThat(s.shouldPreserveKafkaRedelivery(now)).isFalse()
-        assertThat(s.isReclaimed(now)).isFalse()
+    }
+
+    @Test
+    fun `Processing isReclaimed is true when lease is null or expired`() {
+        val s = ChunkExecutionStatus.Processing
+        assertThat(s.isReclaimed(leaseUntil = null, now = now)).isTrue()
+        assertThat(s.isReclaimed(leaseUntil = past, now = now)).isTrue()
+    }
+
+    @Test
+    fun `Processing isReclaimed is false when lease is in the future`() {
+        val s = ChunkExecutionStatus.Processing
+        assertThat(s.isReclaimed(leaseUntil = future, now = now)).isFalse()
     }
 
     @Test
@@ -415,12 +427,16 @@ if (state.status == ChunkExecutionStatus.PROCESSING) {
 ```
 Replace with:
 ```kotlin
-if (state.status is ChunkExecutionStatus.Processing && state.leaseUntil?.isAfter(Instant.now()) != true) {
+if (state.isReclaimedExpired(Instant.now())) {
     metrics.recordChunkExecutionReclaimedExpired(request.identity.executionType)
 }
 ```
 
-(Logic: reclaimed = Processing state with expired or null lease. The original `== PROCESSING` check is preserved plus the lease check that was implicit in the old `isReclaimed` extension.)
+Add this private extension to the bottom of the file (alongside other private extensions or near the `FailureDecision` data class):
+```kotlin
+private fun ChunkExecutionState.isReclaimedExpired(now: Instant): Boolean =
+    (status as? ChunkExecutionStatus.Processing)?.isReclaimed(leaseUntil, now) == true
+```
 
 - [ ] **Step 5: Update `markUnsupportedSchema` to use sealed type**
 

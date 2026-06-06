@@ -100,7 +100,7 @@ git commit -m "docs(core): fix LikeBufferStrategy KDoc — remove nonexistent Re
 - Delete: `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeEventPublisher.kt`
 - Delete (directory): `module-core/src/main/kotlin/maple/expectation/core/port/out/like/`
 
-- [ ] **Step 1: Delete the 5 files using git rm**
+- [ ] **Step 1: Delete the 5 port files AND the now-empty `like/` directory in one operation**
 
 ```bash
 cd /home/maple/probabilistic-valuation-engine/.worktrees/like-port-merge-pr1
@@ -109,30 +109,17 @@ git rm module-core/src/main/kotlin/maple/expectation/core/port/out/LikeRelationB
 git rm module-core/src/main/kotlin/maple/expectation/core/port/out/LikeRelationSyncPort.kt
 git rm module-core/src/main/kotlin/maple/expectation/core/port/out/LikeSyncPort.kt
 git rm module-core/src/main/kotlin/maple/expectation/core/port/out/LikeEventPublisher.kt
+git rm -r module-core/src/main/kotlin/maple/expectation/core/port/out/like/
 ```
 
-- [ ] **Step 2: Remove now-empty `like/` directory**
+(`git rm -r` on the directory handles the empty-directory case AND any stray files like `.DS_Store`.)
 
-```bash
-rmdir module-core/src/main/kotlin/maple/expectation/core/port/out/like/
-```
-
-If `rmdir` fails (directory not empty), investigate with `ls -la module-core/src/main/kotlin/maple/expectation/core/port/out/like/` and stop — something else lives there.
-
-- [ ] **Step 3: Verify directory is gone**
+- [ ] **Step 2: Verify directory is gone**
 
 Run: `ls module-core/src/main/kotlin/maple/expectation/core/port/out/`
 Expected: list does NOT contain `like/`
 
-- [ ] **Step 4: Stage directory removal if needed**
-
-```bash
-git add -u module-core/src/main/kotlin/maple/expectation/core/port/out/like/
-```
-
-(If `like/` was untracked, it disappears automatically; if it had been tracked, `git add -u` records the removal.)
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git commit -m "refactor(core): delete 5 dead Like port hypothetical seams (#897, ADR-391)"

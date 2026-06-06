@@ -28,6 +28,7 @@ class SnapshotChunkProcessor(
     private val pipeline: SnapshotChunkPipeline,
     private val calculationCache: CalculationCache,
     private val objectMapper: ObjectMapper,
+    private val sampleLogSerializer: SampleLogSerializer,
     private val resultWriter: CalculationResultWriter,
 ) {
     private val log = LoggerFactory.getLogger(SnapshotChunkProcessor::class.java)
@@ -115,7 +116,7 @@ class SnapshotChunkProcessor(
 
     private fun logSample(result: CalculationResult) {
         if (sampleCount.incrementAndGet() <= 10) {
-            log.debug("[SAMPLE] {}", objectMapper.writeValueAsString(result))
+            log.debug("[SAMPLE] {}", sampleLogSerializer.serialize(result))
         }
     }
 }

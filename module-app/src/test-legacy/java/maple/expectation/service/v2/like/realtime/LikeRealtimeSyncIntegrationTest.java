@@ -50,12 +50,6 @@ class LikeRealtimeSyncIntegrationTest extends IntegrationTestSupport {
 
   @Autowired private StringRedisTemplate redisTemplate;
 
-  @Autowired(required = false)
-  private LikeEventPublisher likeEventPublisher;
-
-  @Autowired(required = false)
-  private LikeEventSubscriber likeEventSubscriber;
-
   @BeforeEach
   void setUp() {
     // 테스트 전 Redis 데이터 초기화
@@ -100,18 +94,6 @@ class LikeRealtimeSyncIntegrationTest extends IntegrationTestSupport {
 
     // Cleanup
     topic.removeListener(listenerId);
-  }
-
-  @Test
-  @DisplayName("LikeEventPublisher Bean이 정상 생성됨")
-  void shouldCreatePublisherBean() {
-    assertThat(likeEventPublisher).isNotNull();
-  }
-
-  @Test
-  @DisplayName("LikeEventSubscriber Bean이 정상 생성됨")
-  void shouldCreateSubscriberBean() {
-    assertThat(likeEventSubscriber).isNotNull();
   }
 
   @Test

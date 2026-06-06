@@ -5,6 +5,8 @@
 - Owner: TBD
 - Branch: `worktree-refactor+906-port-abstraction` (worktree)
 
+> **Note (2026-06-06):** 6 dead Like ports (LikeAtomicFetchStrategy, CompensationCommand, LikeRelationBufferStrategy, LikeRelationSyncPort, LikeSyncPort, LikeEventPublisher) were deleted in PR TBD. See [2026-06-06-like-port-merge-design.md](2026-06-06-like-port-merge-design.md) for the actual deletion rationale.
+
 ---
 
 ## 1. Background / Problem

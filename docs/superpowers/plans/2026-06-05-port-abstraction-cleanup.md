@@ -1,5 +1,7 @@
 # Port Abstraction Cleanup (Issue #906) Implementation Plan
 
+> **Note (2026-06-06):** 6 dead Like ports (LikeAtomicFetchStrategy, CompensationCommand, LikeRelationBufferStrategy, LikeRelationSyncPort, LikeSyncPort, LikeEventPublisher) were deleted in PR TBD. See [2026-06-06-like-port-merge-design.md](2026-06-06-like-port-merge-design.md) for the actual deletion rationale.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Remove all infrastructure technology names (PGMQ, Redis, Kafka, MySQL, Spring, Micrometer) from module-core port interfaces, and replace `Any?`-returning methods with typed contracts defined in module-common.

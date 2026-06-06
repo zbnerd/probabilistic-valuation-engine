@@ -2,6 +2,7 @@ package maple.synchronizer.storage
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import maple.expectation.error.exception.ArtifactNotFoundException
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
@@ -70,7 +71,8 @@ class ResultFileReaderTest {
     @Test
     fun `readAndGroupByCompositeKey - nonexistent file throws`() {
         assertThatThrownBy { reader.readAndGroupByCompositeKey("missing.jsonl.gz") }
-            .isInstanceOf(IllegalStateException::class.java)
-            .hasMessageContaining("Result file not found")
+            .isInstanceOf(ArtifactNotFoundException::class.java)
+            .hasMessageContaining("ResultFileReader")
+            .hasMessageContaining("missing.jsonl.gz")
     }
 }

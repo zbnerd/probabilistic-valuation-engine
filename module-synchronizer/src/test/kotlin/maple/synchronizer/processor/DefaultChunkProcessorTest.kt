@@ -1,7 +1,8 @@
 package maple.synchronizer.processor
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
-import maple.core.domain.chunk.ChunkProcessInput
+import maple.expectation.error.CommonErrorCode
+import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
 import maple.synchronizer.metrics.SynchronizerMetrics
@@ -65,14 +66,15 @@ class DefaultChunkProcessorTest {
     }
 
     @Test
-    fun `process - file not found propagates exception`() {
+    fun `process - file not found propagates ArtifactNotFoundException`() {
         val input = testInput()
         whenever(dataReader.read(any()))
-            .thenThrow(IllegalStateException("Result file not found"))
+            .thenThrow(ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "ResultFileReader", "/tmp/missing"))
 
         assertThatThrownBy { chunkProcessor.process(input) }
-            .isInstanceOf(IllegalStateException::class.java)
-            .hasMessageContaining("Result file not found")
+            .isInstanceOf(ArtifactNotFoundException::class.java)
+            .hasMessageContaining("ResultFileReader")
+            .hasMessageContaining("/tmp/missing")
     }
 
     @Test

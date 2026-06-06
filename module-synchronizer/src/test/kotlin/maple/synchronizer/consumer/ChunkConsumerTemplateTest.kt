@@ -8,6 +8,8 @@ import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
+import maple.expectation.error.CommonErrorCode
+import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.repository.ChunkExecutionClaim
 import maple.synchronizer.repository.ChunkExecutionState
@@ -165,7 +167,7 @@ class ChunkConsumerTemplateTest {
         whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 2))
         whenever(repository.markFailedTerminal(eq(identity), eq(2), any(), eq("ARTIFACT_MISSING_MAX_ATTEMPTS"))).thenReturn(true)
 
-        template.submit(request(process = { throw IllegalStateException("Result file not found: /tmp/missing") }))
+        template.submit(request(process = { throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "ResultFileReader", "/tmp/missing") }))
 
         verify(repository).markFailedTerminal(eq(identity), eq(2), any(), eq("ARTIFACT_MISSING_MAX_ATTEMPTS"))
         verify(acknowledgment).acknowledge()

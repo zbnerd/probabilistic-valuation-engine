@@ -1,6 +1,7 @@
 package maple.synchronizer.consumer
 
 import maple.expectation.common.event.ChunkExecutionIdentity
+import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.state.ChunkExecutionStatus
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -191,39 +192,42 @@ class ChunkConsumerTemplate(
         claim: ChunkExecutionClaim,
         ex: Throwable,
     ) {
-        val failure = classifyFailure(ex, claim)
+        val decision = classifyFailure(ex, claim)
         val error = ex.message ?: ex.javaClass.simpleName
-        val marked = if (failure.terminalReason == null) {
-            chunkExecutionRepository.markFailedRetryable(
+
+        val marked = when (decision) {
+            is FailureDecision.Retryable -> chunkExecutionRepository.markFailedRetryable(
                 request.identity,
                 claim.attemptCount,
                 error,
-                Instant.now().plus(properties.retryBaseBackoff.multipliedBy(claim.attemptCount.toLong())),
+                decision.nextRetryAt,
             )
-        } else {
-            chunkExecutionRepository.markFailedTerminal(
+            is FailureDecision.Terminal -> chunkExecutionRepository.markFailedTerminal(
                 request.identity,
                 claim.attemptCount,
                 error,
-                failure.terminalReason,
+                decision.terminalReason,
             )
         }
 
-        if (marked) {
-            val status = if (failure.terminalReason == null) {
-                ChunkExecutionStatus.FailedRetryable(
-                    Instant.now().plus(properties.retryBaseBackoff.multipliedBy(claim.attemptCount.toLong())),
-                )
-            } else {
-                ChunkExecutionStatus.FailedTerminal(failure.terminalReason)
-            }
-            metrics.recordChunkExecutionFailed(
-                request.identity.executionType,
-                status,
-                failure.terminalReason ?: RETRYABLE_FAILURE,
-            )
-            request.onFailure(ex)
-            if (failure.terminalReason == null) {
+        if (!marked) {
+            logFailedStateWrite(request, claim)
+            return
+        }
+
+        val status: ChunkExecutionStatus = when (decision) {
+            is FailureDecision.Retryable -> ChunkExecutionStatus.FailedRetryable(decision.nextRetryAt)
+            is FailureDecision.Terminal -> ChunkExecutionStatus.FailedTerminal(decision.terminalReason)
+        }
+        metrics.recordChunkExecutionFailed(
+            request.identity.executionType,
+            status,
+            decision.reason,
+        )
+        request.onFailure(ex)
+
+        when (decision) {
+            is FailureDecision.Retryable -> {
                 request.log.warn(
                     "[{}] retryable chunk failure recorded, leaving unacked for Kafka redelivery: runId={} chunkId={} attempt={}",
                     request.logPrefix,
@@ -231,27 +235,37 @@ class ChunkConsumerTemplate(
                     request.chunkId,
                     claim.attemptCount,
                 )
-                return
             }
-            request.acknowledgment.acknowledge()
-            return
+            is FailureDecision.Terminal -> {
+                request.acknowledgment.acknowledge()
+            }
         }
-
-        logFailedStateWrite(request, claim)
     }
 
     private fun classifyFailure(
         ex: Throwable,
         claim: ChunkExecutionClaim,
     ): FailureDecision {
-        val artifactMissing = ex.message?.contains("file not found", ignoreCase = true) == true
-        if (artifactMissing && claim.attemptCount >= properties.retry.artifactMissingMaxAttempts) {
-            return FailureDecision(ARTIFACT_MISSING_MAX_ATTEMPTS)
+        val artifactMissing = ex is ArtifactNotFoundException
+        val maxAttempts = if (artifactMissing) {
+            properties.retry.artifactMissingMaxAttempts
+        } else {
+            properties.retry.maxAttempts
         }
-        if (!artifactMissing && claim.attemptCount >= properties.retry.maxAttempts) {
-            return FailureDecision(MAX_ATTEMPTS_EXCEEDED)
+        return if (claim.attemptCount >= maxAttempts) {
+            val terminalReason = if (artifactMissing) ARTIFACT_MISSING_MAX_ATTEMPTS else MAX_ATTEMPTS_EXCEEDED
+            FailureDecision.Terminal(
+                attemptCount = claim.attemptCount,
+                terminalReason = terminalReason,
+            )
+        } else {
+            FailureDecision.Retryable(
+                attemptCount = claim.attemptCount,
+                nextRetryAt = Instant.now().plus(
+                    properties.retryBaseBackoff.multipliedBy(claim.attemptCount.toLong()),
+                ),
+            )
         }
-        return FailureDecision(terminalReason = null)
     }
 
     private fun logFailedStateWrite(
@@ -272,16 +286,16 @@ class ChunkConsumerTemplate(
 
     private fun ChunkExecutionState.shouldAckSkip(): Boolean {
         val now = Instant.now()
+        // Note: PROCESSING + active lease returns TRUE (skip — another worker holds it).
+        // FAILED_RETRYABLE + future retry returns FALSE (don't skip — Kafka should redeliver later).
+        // This inversion is intentional: skip means "ack and move on", so we ack when the work
+        // is already done (terminal / leased) and leave unacked when Kafka should retry.
         return when (val s = status) {
-            // Terminal states: nothing more to do.
-            ChunkExecutionStatus.Succeeded,
+            is ChunkExecutionStatus.Succeeded,
             is ChunkExecutionStatus.FailedTerminal -> true
-            // Failed retryable: skip only when retry window has passed.
             is ChunkExecutionStatus.FailedRetryable -> s.nextRetryAt?.isAfter(now) != true
-            // Pending: claimable, not a skip.
-            ChunkExecutionStatus.Pending -> false
-            // Processing: skip only if lease is still active (another worker holds it).
             ChunkExecutionStatus.Processing -> leaseUntil?.isAfter(now) == true
+            ChunkExecutionStatus.Pending -> false
         }
     }
 
@@ -300,9 +314,24 @@ class ChunkConsumerTemplate(
             eventPayloadJson = eventPayloadJson,
         )
 
-    private data class FailureDecision(
-        val terminalReason: String?,
-    )
+    private sealed class FailureDecision {
+        abstract val attemptCount: Int
+        abstract val reason: String
+
+        data class Retryable(
+            override val attemptCount: Int,
+            val nextRetryAt: Instant,
+        ) : FailureDecision() {
+            override val reason: String = RETRYABLE_FAILURE
+        }
+
+        data class Terminal(
+            override val attemptCount: Int,
+            val terminalReason: String,
+        ) : FailureDecision() {
+            override val reason: String = terminalReason
+        }
+    }
 
     private companion object {
         private const val SUPPORTED_SCHEMA_VERSION = 1

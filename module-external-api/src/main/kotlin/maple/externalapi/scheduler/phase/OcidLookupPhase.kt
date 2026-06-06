@@ -33,6 +33,9 @@ import java.util.concurrent.ExecutorService
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
+/** Emit a progress log every N items processed. 5,000 chosen to keep log volume under ~3 lines/sec/chunk. */
+private const val PROGRESS_LOG_INTERVAL: Int = 5_000
+
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class OcidLookupPhase(
@@ -134,7 +137,7 @@ class OcidLookupPhase(
             processed += permits
 
             val progress = successCount + failCount
-            if (progress - lastProgressLog >= 5000) {
+            if (progress - lastProgressLog >= PROGRESS_LOG_INTERVAL) {
                 lastProgressLog = progress
                 SchedulerPhaseUtils.logProgress("OCID lookup", progress, igns.size, successCount, failCount, start)
             }

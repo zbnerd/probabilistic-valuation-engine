@@ -11,6 +11,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+/** Inter-phase sleep — 100 ms keeps the scheduler responsive without busy-looping when rate-limit permits are unavailable. */
+private const val PHASE_TICK_INTERVAL_MS: Long = 100L
+
 internal object SchedulerPhaseUtils {
     private val log = LoggerFactory.getLogger(SchedulerPhaseUtils::class.java)
 
@@ -31,7 +34,7 @@ internal object SchedulerPhaseUtils {
         val maxBatch = minOf(batchSize, remaining)
         val consumed = rateLimiter.tryConsumeAsMuchAsPossible(maxBatch.toLong()).toInt()
         if (consumed == 0) {
-            delay(100)
+            delay(PHASE_TICK_INTERVAL_MS)
         }
         return consumed
     }

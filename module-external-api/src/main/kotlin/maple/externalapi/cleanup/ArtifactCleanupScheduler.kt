@@ -24,7 +24,7 @@ class ArtifactCleanupScheduler(
     private val keepWithinHours: Long,
     @Value("\${external-api.cleanup.max-delete-runs-per-cycle:10}")
     private val maxDeleteRunsPerCycle: Int,
-    @Value("\${external-api.cleanup.max-delete-bytes-per-cycle:5368709120}")
+    @Value("\${external-api.cleanup.max-delete-bytes-per-cycle:5368709120}") // 5 GB
     private val maxDeleteBytesPerCycle: Long,
     @Value("\${external-api.cleanup.max-runtime-seconds:60}")
     private val maxRuntimeSeconds: Long,

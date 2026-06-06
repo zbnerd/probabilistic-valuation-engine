@@ -13,6 +13,9 @@ import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
 import java.time.Instant
 
+/** 1,800 s = 30 min — directory is considered "running" if modified within the last half hour. */
+private const val RECENTLY_MODIFIED_WINDOW_SECONDS: Long = 30L * 60L
+
 @Component
 class CalculatorResultCleanupScheduler(
     private val objectStorage: ObjectStorage,
@@ -97,8 +100,8 @@ class CalculatorResultCleanupScheduler(
         if (!Files.exists(path)) return false
         val attrs = Files.readAttributes(path, BasicFileAttributes::class.java)
         val modifiedAt = Instant.ofEpochMilli(attrs.lastModifiedTime().toMillis())
-        // 1,800 seconds = 30 minutes — directory is considered "running" if modified within the last half hour.
-        return modifiedAt.isAfter(Instant.now().minusSeconds(1800))
+        // 1,800 s = 30 min — directory is considered "running" if modified within the last half hour.
+        return modifiedAt.isAfter(Instant.now().minusSeconds(RECENTLY_MODIFIED_WINDOW_SECONDS))
     }
 
 }

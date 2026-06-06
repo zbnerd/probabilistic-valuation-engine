@@ -16,7 +16,7 @@ import maple.calculator.storage.ObjectStorage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
-/** Two concurrent chunk processors — matches HikariCP `maximumPoolSize / 2` to avoid DB pool starvation. */
+/** Two concurrent chunk processors — assumes HikariCP `maximumPoolSize >= 4` to leave headroom for other DB-bound work. */
 private const val CONCURRENCY_PERMITS: Int = 2
 
 @Component

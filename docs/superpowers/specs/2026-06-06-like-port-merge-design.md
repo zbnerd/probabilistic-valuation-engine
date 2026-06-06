@@ -1,9 +1,8 @@
-# Like Port Hypothetical Seam Removal (6 dead + 1 alive)
+# Like Port Merge Design (6 → 2)
 
 - Date: 2026-06-06
 - Owner: TBD
 - Related: #897, ADR-391
-- Supersedes: previous sketch of "6→2 merge" (that sketch was based on assumption of parallel Redis adapters that do not exist)
 
 ---
 
@@ -11,76 +10,64 @@
 
 ### Background
 
-ADR-391 + #897 audit classified 49 outbound ports. Like-related ports (6) were flagged as having overlapping responsibilities. Specification #1154 §5 sketched a 6→2 merge.
+ADR-391 + #897 audit classified 49 outbound ports. Like-related ports (6) were flagged as having overlapping responsibilities across three concerns: data fetch, buffer, sync. Specification #1154 §5 proposed merging them into 2 ports.
 
-### Problem — actual state of Like ports
+### Problem
 
-Codebase grep reveals that **6 of 7 Like ports are dead hypothetical seams**: interface declared in `module-core/.../port/out/` with zero adapter implementations and zero non-port consumers in `module-core`/`module-infra`. The 7th port (the "6→2" merge referred to 6 Like ports, but the `like/` subdir actually contained 6 — `LikeAtomicFetchStrategy` + `CompensationCommand` — plus 4 ports in `port/out/` root = 7 files total).
+Current 6 ports:
 
-| Port | Location | Adapter impls | Non-port consumers | Status |
-|------|----------|---------------|--------------------|--------|
-| `LikeAtomicFetchStrategy` | `port/out/like/` | 0 | 0 | **Dead hypothetical seam** |
-| `CompensationCommand` | `port/out/like/` | 0 | 0 | **Dead hypothetical seam** |
-| `LikeBufferStrategy` | `port/out/` | 1 (`InMemoryLikeBufferStorage`) | 4 (`DatabaseLikeProcessor`, `LikeSyncExecutor`, `BufferedLikeAspect`, `InMemoryLikeBufferStorage` impl) + 2 module-app test files | **Alive** |
-| `LikeRelationBufferStrategy` | `port/out/` | 0 | 0 | **Dead hypothetical seam** |
-| `LikeSyncPort` | `port/out/` | 0 (deprecated by #664, no-op) | 0 | **Dead deprecated seam** |
-| `LikeRelationSyncPort` | `port/out/` | 0 | 0 | **Dead hypothetical seam** |
-| `LikeEventPublisher` | `port/out/` | 0 | 1 legacy test (`LikeRealtimeSyncIntegrationTest` uses `@Autowired(required = false)` so will compile with null) | **Dead hypothetical seam** |
+| Port | Concern | Status |
+|------|---------|--------|
+| `LikeAtomicFetchStrategy` | atomic fetch (Redis) | Active seam |
+| `LikeBufferStrategy` | buffer push + size | Active seam |
+| `LikeRelationBufferStrategy` | relation buffer (Redis) | Active seam |
+| `LikeSyncPort` | flush L2 → persistence | Active seam |
+| `LikeRelationSyncPort` | relation sync (Redis → MySQL) | Active seam |
+| `LikeEventPublisher` | publish LikeEvent | Active seam |
 
-`LikeBufferStrategy` is the only port with a real adapter. The "6→2 merge" sketch in #1154 was based on assumed parallel Redis adapter pairs (`RedisLikeBufferAdapter`/`RedisLikeAtomicFetchAdapter`/`RedisLikeRelationBufferAdapter`/`RedisLikeRelationSyncAdapter`/`KafkaLikeEventPublisher`) that **were never implemented** — they exist only in port-interface KDoc.
+3 concerns split across 6 ports. Caller must know which port to inject. Adapter count = 6 (~5 in `module-infra`, 1 in test).
 
 ### Goal
 
-Delete the 6 dead port files (4 in `port/out/` + 2 in `port/out/like/`). Keep `LikeBufferStrategy` as-is. No new ports created. No new adapters created.
+Merge into 2 ports with cohesive concerns: `LikeReadPort` (fetch + buffer control) and `LikeSyncPort` (sync + publish). Remove the 4 deprecated ports in the same PR.
 
 ---
 
 ## 2. Decision
 
-> Delete 6 dead port files from `module-core`. Do not create new ports. `LikeBufferStrategy` remains the single outbound port for like buffer concerns.
+> Replace 6 Like-related outbound ports with 2 (`LikeReadPort`, `LikeSyncPort`). Adapters consolidate. `LikeSyncPort` is the new owner of the existing name; `LikeReadPort` is a new name.
 
 ```text
-DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/like/LikeAtomicFetchStrategy.kt
-DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/like/CompensationCommand.kt
-DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/LikeRelationBufferStrategy.kt
-DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/LikeRelationSyncPort.kt
-DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/LikeSyncPort.kt
-DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/LikeEventPublisher.kt
-        (also remove the LikeEventSubscriber nested interface — no consumers)
+// New: data fetch + buffer manipulation (3 → 1)
+interface LikeReadPort {
+    fun fetchAtomic(userId: String): Optional<LikeData>
+    fun bufferPush(event: LikeEvent): CompletableFuture<Void>
+    fun bufferSize(): Int
+}
 
-KEEP:   module-core/src/main/kotlin/maple/expectation/core/port/out/LikeBufferStrategy.kt
-        (and its adapter InMemoryLikeBufferStorage.kt — already wired)
+// New: sync + event publish (3 → 1)
+interface LikeSyncPort {
+    fun syncRelation(fromUser: String, toUser: String): Result<Unit>
+    fun publish(event: LikeEvent): Result<Unit>
+}
 ```
 
-The 6→2 merge sketch is abandoned because the premise (parallel Redis adapters) was wrong. Single-PR deletion is safe because no live code path depends on the 5 removed ports.
+Removed ports: `LikeAtomicFetchStrategy`, `LikeBufferStrategy`, `LikeRelationBufferStrategy`, `LikeRelationSyncPort`, `LikeEventPublisher`. `LikeSyncPort` is the surviving port (replaces its old flush semantics with the new sync+publish semantics).
 
 ---
 
-## 3. Migration Impact
+## 3. Adapter Mapping
 
-### Files touched (all deletions, no new files)
+| Old Adapter | New Adapter | Location |
+|------------|-------------|----------|
+| `RedisLikeAtomicFetchAdapter` | `LikeReadPortAdapter` (read methods) | `module-infra/.../like/` |
+| `RedisLikeBufferAdapter` | `LikeReadPortAdapter` (buffer methods) | same file |
+| `RedisLikeRelationBufferAdapter` | (delete — buffer merged into read) | removed |
+| `LikeSyncExecutor` (flush) | `LikeSyncPortAdapter` (sync methods) | `module-infra/.../like/` |
+| `RedisLikeRelationSyncAdapter` | `LikeSyncPortAdapter` (relation sync) | same file |
+| `KafkaLikeEventPublisher` | `LikeSyncPortAdapter` (publish) | same file |
 
-| File | Reason |
-|------|--------|
-| `module-core/src/main/kotlin/.../port/out/like/LikeAtomicFetchStrategy.kt` | Dead seam |
-| `module-core/src/main/kotlin/.../port/out/LikeRelationBufferStrategy.kt` | Dead seam |
-| `module-core/src/main/kotlin/.../port/out/LikeRelationSyncPort.kt` | Dead seam |
-| `module-core/src/main/kotlin/.../port/out/LikeSyncPort.kt` | Dead deprecated |
-| `module-core/src/main/kotlin/.../port/out/LikeEventPublisher.kt` | Dead seam (also drops `LikeEventSubscriber` nested iface) |
-| `module-core/src/main/kotlin/.../port/out/like/` directory | Becomes empty — remove directory |
-
-### Files NOT touched (alive port path)
-
-* `module-infra/.../cache/like/InMemoryLikeBufferStorage.kt` — impl stays
-* `module-infra/.../aop/aspect/BufferedLikeAspect.kt` — consumer stays
-* `module-infra/.../queue/like/LikeSyncExecutor.kt` — consumer stays (deprecated, but still wired)
-* `module-infra/.../like/DatabaseLikeProcessor.java` — consumer stays
-* `module-app/src/test/kotlin/.../PgmqClientIntegrationTest.kt` — `@Autowired` of `LikeBufferStrategy` stays
-* `module-app/src/test/kotlin/.../PgmqTransactionAtomicityTest.kt` — same
-
-### Files with safe side-effect (no edit needed)
-
-* `module-app/src/test-legacy/.../LikeRealtimeSyncIntegrationTest.java` — uses `@Autowired(required = false)` for `LikeEventPublisher`. With the port removed, the autowire resolves to `null` and the test continues to compile. The `@DisplayName("LikeEventPublisher Bean이 정상 생성됨")` test (line 106) will now check `null` — must be updated to assert `null` or the test method deleted (decision: delete the test, see plan Task 4).
+3 adapter files instead of 6.
 
 ---
 
@@ -88,61 +75,65 @@ The 6→2 merge sketch is abandoned because the premise (parallel Redis adapters
 
 ### Sensitivity
 
-* Compile-time port surface area (5 file deletions propagate to KDoc references — verified zero)
-* Boot classpath scan (no Spring beans of removed types — verified zero)
-* Legacy test relying on removed type (`LikeEventPublisher`) — must update assertion
+* Donation hot path (every like triggers fetch + buffer + eventual sync)
+* Number of consumers across `module-core` (currently ~10 inject sites)
+* Test fakes (4-5 in `module-core/src/test/`)
+* Adapter count in Spring context (boot classpath scan)
 
 ### Trade-off
 
 | 선택 | 얻는 것 | 포기한 것 |
 | -- | ---- | ----- |
-| 5개 port file 삭제 (no new port) | dead code 0, surface 6→1, cognitive load ↓↑ | 향후 Redis adapter 추가 시 새 port 정의 필요 |
-| `LikeBufferStrategy` 유지 (rename 안 함) | caller 변경 없음, import stable | port name이 buffer-only로 좁아짐 (현재도 그럼) |
-| Legacy test method 삭제 | 깨끗 | 테스트 커버리지 1개 감소 (실질적 가치 없음 — port가 dead) |
+| 6 → 2 port 병합 | 신규 개발자 학습 ↓, type graph 단순, 어댑터 6→3 | 각 port fat (3-4 메서드), 단일 책임 약화 |
+| `LikeSyncPort` 이름 재사용 (의미 변경) | import site diff ↓, file path 동일 | 기존 caller는 시그니처 변경을 명시적으로 인식 필요 |
+| `LikeRelationBufferStrategy` 완전 제거 | redis 의존 1개 감소 | relation buffer 단독 테스트 시 별도 fake 필요 |
+| 동일 PR에 제거 | 깔끔, dead code 0 | PR 큼 (~25 파일 변경), 리뷰 부담 |
 
 ### Risk
 
-* Legacy test (`LikeRealtimeSyncIntegrationTest`) references `LikeEventPublisher` only in `@Autowired(required = false)` field + 1 assertion test. With the port deleted, the field type becomes unresolved → compile error. Must remove the field and the assertion test method.
-* KDoc in `LikeBufferStrategy` mentions "Redis 구현" by class name `RedisLikeBufferStorage` — this class does not exist in current code. Will fix in the same PR to avoid future confusion.
+* `LikeSyncPort` 이름 충돌 — 신규 시그니처로 alias 만들기보다 rename이 안전
+* `LikeRelationBufferStrategy` 제거 후 buffer 책임 unclear — `LikeReadPort.bufferPush`로 명시
+* Adapter 3개로 합치면서 Spring bean wiring 누락 가능 — `@Primary` 명시로 boot 안정성 확보
 
 ### Non-Risk
 
-* Production runtime: no live code path depends on the 5 removed ports
-* Boot context: no Spring beans of removed types
-* Test fakes: no test code mocks the removed ports
+* `LikeAtomicFetchStrategy` adapter가 port 변경 후에도 Redis 의존성 동일
+* Boot classpath scan은 port 이름으로 wiring하므로 의존성 그래프 단순화 효과
+* 테스트 fake는 mock library로 쉽게 통합 가능
 
 ---
 
 ## 5. Migration Plan (single PR)
 
-1. Update KDoc in `LikeBufferStrategy.kt` to remove references to nonexistent `RedisLikeBufferStorage`
-2. Delete 5 port files (see §3)
-3. Update `LikeRealtimeSyncIntegrationTest.java` — remove the `LikeEventPublisher` field and the assertion test
-4. Verify compile + test
-5. PR
+1. Create `LikeReadPort` + `LikeSyncPort` in `module-core/.../core/port/out/`
+2. Create `LikeReadPortAdapter` (Redis fetch + buffer), `LikeSyncPortAdapter` (flush + relation sync + publish) in `module-infra/.../like/`
+3. Update all `module-core` consumers (5-10 sites)
+4. Update all `module-infra` adapter call sites
+5. Delete old 5 ports + 3 adapter files
+6. Update test fakes in `module-core/src/test/`
 
 ---
 
 ## 6. Test Strategy
 
-* `./gradlew compileKotlin compileJava --continue` — must pass
-* `./gradlew test` — existing like tests (`InMemoryLikeBufferStorageTest`, `LikeToggleServiceTest`) must still pass
-* Legacy `LikeRealtimeSyncIntegrationTest` should still compile (only the 1 assertion method is removed; rest of test class untouched)
+* `LikeReadPortAdapter` unit test: fetch / bufferPush / bufferSize each verified
+* `LikeSyncPortAdapter` unit test: sync / publish each verified
+* `module-core` consumer integration test: existing tests use updated fake
+* Boot context test: ensure no orphan bean wiring
 
-Coverage target: no regression on `LikeBufferStrategy` impl (already has unit test). Removed ports had no test coverage to begin with.
+Coverage target: 80%+ on adapters, consumer regression = 0.
 
 ---
 
 ## 7. Success Signal
 
-* LOC: 6 port files (~280 LOC) → 1 port file (~90 LOC) = -190 LOC
-* Files: 6 → 1, plus empty `like/` subdir removal
-* Tests: existing like tests pass; legacy test compiles with 1 method removed
+* LOC: 6 port files + 3 adapter files = ~9 files, ~600 LOC → 2 port files + 2 adapter files = ~4 files, ~350 LOC
+* Tests: existing like-related test 0 fail, new adapter test 4-6 pass
 
 ---
 
 ## 8. Out of Scope
 
-* Monitoring port 7→2 merge (PR2)
+* Monitoring 7→2 merge (PR2)
+* Dead port removal (PR3)
 * Inbound port consolidation (not in #897 scope)
-* Renaming `LikeBufferStrategy` to something more general (YAGNI — current name matches actual responsibility)

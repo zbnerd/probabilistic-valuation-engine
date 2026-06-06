@@ -1,6 +1,8 @@
 package maple.synchronizer.storage
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.error.CommonErrorCode
+import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
 import org.springframework.beans.factory.annotation.Value
@@ -21,7 +23,7 @@ class ResultFileReader(
     fun readAndGroupByCompositeKey(objectKey: String): List<GroupedEquipmentResult> {
         val path = Paths.get(basePath, objectKey)
         if (!Files.exists(path)) {
-            throw IllegalStateException("Result file not found: $path")
+            throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "ResultFileReader", objectKey)
         }
 
         GZIPInputStream(Files.newInputStream(path)).bufferedReader().use { reader ->

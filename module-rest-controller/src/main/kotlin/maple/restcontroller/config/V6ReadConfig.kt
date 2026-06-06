@@ -94,17 +94,29 @@ class V6ReadConfig(
     )
 
     @Bean
+    fun batchResolver(
+        cacheService: ReadModelCacheService,
+        registry: InflightRequestRegistry,
+        queryService: ReadModelQueryService,
+        v6ReadMetrics: V6ReadMetrics,
+        urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>
+    ): BatchResolver = BatchResolver(
+        cacheService,
+        registry,
+        queryService,
+        urgentPublisherProvider.ifAvailable,
+        properties,
+        v6ReadMetrics,
+    )
+
+    @Bean
     fun batchReadScheduler(
         buffer: LocalRequestBuffer,
         registry: InflightRequestRegistry,
-        queryService: ReadModelQueryService,
-        cacheService: ReadModelCacheService,
+        resolver: BatchResolver,
         v6ReadMetrics: V6ReadMetrics,
-        urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>
     ): BatchReadScheduler = BatchReadScheduler(
-        buffer, registry, queryService, cacheService,
-        urgentPublisherProvider.ifAvailable,
-        v6ReadMetrics, properties
+        buffer, registry, resolver, v6ReadMetrics, properties
     )
 
     @Bean

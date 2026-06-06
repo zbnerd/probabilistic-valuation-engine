@@ -1,7 +1,7 @@
 package maple.synchronizer.consumer
 
 import maple.expectation.common.event.ChunkExecutionIdentity
-import maple.expectation.common.event.ChunkExecutionStatus
+import maple.synchronizer.state.ChunkExecutionStatus
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.synchronizer.metrics.SynchronizerMetrics
@@ -88,7 +88,7 @@ class ChunkConsumerTemplate(
             return
         }
         metrics.recordChunkExecutionClaimed(request.identity.executionType)
-        if (state.status == ChunkExecutionStatus.PROCESSING) {
+        if (state.isReclaimedExpired(Instant.now())) {
             metrics.recordChunkExecutionReclaimedExpired(request.identity.executionType)
         }
 
@@ -169,7 +169,7 @@ class ChunkConsumerTemplate(
         if (marked) {
             metrics.recordChunkExecutionFailed(
                 request.identity.executionType,
-                ChunkExecutionStatus.FAILED_TERMINAL,
+                ChunkExecutionStatus.FailedTerminal(UNSUPPORTED_SCHEMA_VERSION),
                 UNSUPPORTED_SCHEMA_VERSION,
             )
             request.log.warn(
@@ -211,9 +211,11 @@ class ChunkConsumerTemplate(
 
         if (marked) {
             val status = if (failure.terminalReason == null) {
-                ChunkExecutionStatus.FAILED_RETRYABLE
+                ChunkExecutionStatus.FailedRetryable(
+                    Instant.now().plus(properties.retryBaseBackoff.multipliedBy(claim.attemptCount.toLong())),
+                )
             } else {
-                ChunkExecutionStatus.FAILED_TERMINAL
+                ChunkExecutionStatus.FailedTerminal(failure.terminalReason)
             }
             metrics.recordChunkExecutionFailed(
                 request.identity.executionType,
@@ -265,25 +267,28 @@ class ChunkConsumerTemplate(
         )
     }
 
-    private fun ChunkExecutionStatus.isTerminalSkip(): Boolean =
-        this == ChunkExecutionStatus.SUCCEEDED || this == ChunkExecutionStatus.FAILED_TERMINAL
+    private fun ChunkExecutionState.isReclaimedExpired(now: Instant): Boolean =
+        (status as? ChunkExecutionStatus.Processing)?.isReclaimed(leaseUntil, now) == true
 
     private fun ChunkExecutionState.shouldAckSkip(): Boolean {
         val now = Instant.now()
-        if (status.isTerminalSkip()) {
-            return true
+        return when (val s = status) {
+            // Terminal states: nothing more to do.
+            ChunkExecutionStatus.Succeeded,
+            is ChunkExecutionStatus.FailedTerminal -> true
+            // Failed retryable: skip only when retry window has passed.
+            is ChunkExecutionStatus.FailedRetryable -> s.nextRetryAt?.isAfter(now) != true
+            // Pending: claimable, not a skip.
+            ChunkExecutionStatus.Pending -> false
+            // Processing: skip only if lease is still active (another worker holds it).
+            ChunkExecutionStatus.Processing -> leaseUntil?.isAfter(now) == true
         }
-        if (status == ChunkExecutionStatus.FAILED_RETRYABLE && nextRetryAt?.isAfter(now) == true) {
-            return false
-        }
-        if (status == ChunkExecutionStatus.PROCESSING && leaseUntil?.isAfter(now) == true) {
-            return true
-        }
-        return false
     }
 
-    private fun ChunkExecutionState.shouldPreserveKafkaRedelivery(): Boolean =
-        status == ChunkExecutionStatus.FAILED_RETRYABLE && nextRetryAt?.isAfter(Instant.now()) == true
+    private fun ChunkExecutionState.shouldPreserveKafkaRedelivery(): Boolean {
+        val s = status as? ChunkExecutionStatus.FailedRetryable ?: return false
+        return s.nextRetryAt?.isAfter(Instant.now()) == true
+    }
 
     private fun ChunkConsumerRequest.toInsertCommand(): InsertChunkExecutionCommand =
         InsertChunkExecutionCommand(

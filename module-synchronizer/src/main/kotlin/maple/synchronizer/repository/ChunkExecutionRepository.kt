@@ -1,7 +1,7 @@
 package maple.synchronizer.repository
 
 import maple.expectation.common.event.ChunkExecutionIdentity
-import maple.expectation.common.event.ChunkExecutionStatus
+import maple.synchronizer.state.ChunkExecutionStatus
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
@@ -78,7 +78,7 @@ class ChunkExecutionRepository(
 
         return jdbc.query(sql, identity.toParams()) { rs, _ -> rs.getString("status") }
             .firstOrNull()
-            ?.let(ChunkExecutionStatus::valueOf)
+            ?.let(ChunkExecutionStatus::fromName)
     }
 
     fun findExecutionState(identity: ChunkExecutionIdentity): ChunkExecutionState? {
@@ -96,9 +96,15 @@ class ChunkExecutionRepository(
         """.trimIndent()
 
         return jdbc.query(sql, identity.toParams()) { rs, _ ->
+            val statusName = rs.getString("status")
+            val nextRetryAt = rs.getTimestamp("next_retry_at")?.toInstant()
+            val status: ChunkExecutionStatus = when (statusName) {
+                ChunkExecutionStatus.FAILED_RETRYABLE_NAME -> ChunkExecutionStatus.FailedRetryable(nextRetryAt)
+                else -> ChunkExecutionStatus.fromName(statusName)
+            }
             ChunkExecutionState(
-                status = ChunkExecutionStatus.valueOf(rs.getString("status")),
-                nextRetryAt = rs.getTimestamp("next_retry_at")?.toInstant(),
+                status = status,
+                nextRetryAt = nextRetryAt,
                 leaseUntil = rs.getTimestamp("lease_until")?.toInstant(),
                 attemptCount = rs.getInt("attempt_count"),
             )
@@ -229,7 +235,7 @@ class ChunkExecutionRepository(
             .addValue("eventType", eventType)
             .addValue("schemaVersion", schemaVersion)
             .addValue("eventPayloadJson", eventPayloadJson)
-            .addValue("status", ChunkExecutionStatus.PENDING.name)
+            .addValue("status", ChunkExecutionStatus.PENDING_NAME)
             .addValue("attemptCount", 0)
 
     private fun ChunkExecutionIdentity.toParams(): MapSqlParameterSource =

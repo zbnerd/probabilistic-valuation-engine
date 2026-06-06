@@ -249,7 +249,51 @@ If any cleanup was needed, commit it. Otherwise this step is a no-op.
 
 ---
 
-## Task 5: Push branch and open PR
+## Task 5: Annotate active spec files (1-line note each)
+
+> Historical reports (40+ `.md` files in `docs/05_Reports/`, `docs/09_Plans/`, etc.) that mention the removed ports are **left untouched** — they describe the system's *history at the time of writing*. Only the 3 active spec files describing this work get a 1-line note.
+
+**Files:**
+- Modify: `docs/superpowers/specs/2026-06-05-897-port-audit-design.md`
+- Modify: `docs/superpowers/specs/2026-06-05-port-abstraction-cleanup-design.md`
+- Modify: `docs/superpowers/plans/2026-06-05-897-port-audit.md`
+- Modify: `docs/superpowers/plans/2026-06-05-port-abstraction-cleanup.md`
+
+- [ ] **Step 1: Read each spec/plan file's header section to find insertion point**
+
+For each of the 4 files, find the first heading or frontmatter line. The annotation goes at the very top, after the title block.
+
+- [ ] **Step 2: Add annotation to all 4 files**
+
+For each file, prepend the following note after the title/frontmatter (before any other content):
+
+```markdown
+> **Note (2026-06-06):** 5 dead Like ports (LikeAtomicFetchStrategy, LikeRelationBufferStrategy, LikeRelationSyncPort, LikeSyncPort, LikeEventPublisher) were deleted in PR #X. See [2026-06-06-like-port-merge-design.md](2026-06-06-like-port-merge-design.md) for the actual deletion rationale.
+```
+
+(Replace `#X` with the actual PR number once opened. If pre-PR, use `TBD`.)
+
+- [ ] **Step 3: Verify no other active specs need updating**
+
+Run:
+```bash
+grep -rln "LikeAtomicFetchStrategy\|LikeRelationBufferStrategy\|LikeRelationSyncPort\|LikeEventPublisher" docs/ --include="*.md"
+```
+Expected: only the 4 modified files appear (plus the new spec/plan we just created). All others are historical reports.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add docs/superpowers/specs/2026-06-05-897-port-audit-design.md \
+        docs/superpowers/specs/2026-06-05-port-abstraction-cleanup-design.md \
+        docs/superpowers/plans/2026-06-05-897-port-audit.md \
+        docs/superpowers/plans/2026-06-05-port-abstraction-cleanup.md
+git commit -m "docs: annotate 4 active specs — 5 Like ports deleted (see 2026-06-06-like-port-merge)"
+```
+
+---
+
+## Task 6: Push branch and open PR
 
 - [ ] **Step 1: Push branch**
 

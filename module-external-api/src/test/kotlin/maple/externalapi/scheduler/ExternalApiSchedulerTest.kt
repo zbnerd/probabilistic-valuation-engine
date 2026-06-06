@@ -1,6 +1,7 @@
 package maple.externalapi.scheduler
 
 import maple.externalapi.cache.OcidCacheProvider
+import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.OcidLookupPhase
@@ -36,6 +37,7 @@ class ExternalApiSchedulerTest {
     private lateinit var tracker: RunStatusTracker
     private lateinit var executor: ExecutorService
     private lateinit var scheduler: ExternalApiScheduler
+    private lateinit var schedulerMetrics: SchedulerMetrics
 
     @BeforeEach
     fun setUp() {
@@ -44,6 +46,7 @@ class ExternalApiSchedulerTest {
         ocidCacheProvider = mock()
         rankingPhase = mock()
         rankingPhaseProvider = mock()
+        schedulerMetrics = mock()
 
         whenever(rankingPhaseProvider.ifAvailable).thenReturn(rankingPhase)
         whenever(ocidCacheProvider.refresh()).thenReturn(emptyMap())
@@ -56,6 +59,7 @@ class ExternalApiSchedulerTest {
             ocidCacheProvider = ocidCacheProvider,
             rankingFetchPhaseProvider = rankingPhaseProvider,
             runStatusTracker = tracker,
+            schedulerMetrics = schedulerMetrics,
             scheduleEnabled = false,
             runOnStartup = false,
             skipCharacterBasic = false,

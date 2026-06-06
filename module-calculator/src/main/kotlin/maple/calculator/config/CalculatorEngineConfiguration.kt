@@ -1,45 +1,22 @@
 package maple.calculator.config
 
-import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory
-import maple.expectation.application.service.cube.CubeServiceImpl
-import maple.expectation.application.service.cube.component.CubeComputeBuffer
-import maple.expectation.application.service.cube.component.CubeDpCalculator
-import maple.expectation.application.service.cube.component.CubeSlotCountResolver
-import maple.expectation.application.service.cube.component.DpModeInferrer
-import maple.expectation.application.service.cube.component.SlotDistributionBuilder
-import maple.expectation.application.service.cube.component.StatValueExtractor
-import maple.expectation.application.service.cube.policy.CubeCostPolicy
-import maple.expectation.application.service.starforce.StarforceLookupAdapter
-import maple.expectation.config.CubeEngineFeatureFlag
-import maple.expectation.config.TableMassConfig
-import maple.expectation.infrastructure.adapter.policy.PolicyAdapter
-import maple.expectation.infrastructure.config.CalculationPortConfig
+import maple.expectation.infrastructure.config.CalculatorEngineAutoConfiguration
 import maple.expectation.infrastructure.config.CoreExecutorConfig
-import maple.expectation.infrastructure.executor.DefaultLogicExecutor
-import maple.expectation.infrastructure.executor.classifier.DefaultExceptionClassifier
-import maple.expectation.infrastructure.persistence.repository.CubeProbabilityRepositoryImpl
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 
+/**
+ * Calculator Engine Configuration — module-calculator의 2-import facade.
+ *
+ * <p>Cube engine의 17개 빈은 {@link CalculatorEngineAutoConfiguration}이 소유.
+ * 이 클래스는 {@link CoreExecutorConfig}를 함께 import하여 lightweight executor
+ * 빈이 calculator에 노출되도록 한다.
+ *
+ * @see maple.expectation.infrastructure.config.CalculatorEngineAutoConfiguration
+ */
 @Configuration
 @Import(
-    EquipmentExpectationCalculatorFactory::class,
-    CubeServiceImpl::class,
-    CubeDpCalculator::class,
-    CubeComputeBuffer::class,
-    CubeSlotCountResolver::class,
-    DpModeInferrer::class,
-    SlotDistributionBuilder::class,
-    StatValueExtractor::class,
-    CubeCostPolicy::class,
-    StarforceLookupAdapter::class,
-    PolicyAdapter::class,
-    DefaultLogicExecutor::class,
-    DefaultExceptionClassifier::class,
-    CubeProbabilityRepositoryImpl::class,
-    CubeEngineFeatureFlag::class,
-    TableMassConfig::class,
-    CalculationPortConfig::class,
+    CalculatorEngineAutoConfiguration::class,
     CoreExecutorConfig::class,
 )
 class CalculatorEngineConfiguration

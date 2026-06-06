@@ -12,6 +12,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+/** 5 GB hard cap on bytes deleted per cleanup cycle. Referenced from the [ArtifactCleanupScheduler] @Value via SpEL. */
+private const val DEFAULT_MAX_DELETE_BYTES_PER_CYCLE: Long = 5L * 1024L * 1024L * 1024L
+
 @Component
 class ArtifactCleanupScheduler(
     private val artifactStore: ExternalApiArtifactStorePort,
@@ -24,7 +27,7 @@ class ArtifactCleanupScheduler(
     private val keepWithinHours: Long,
     @Value("\${external-api.cleanup.max-delete-runs-per-cycle:10}")
     private val maxDeleteRunsPerCycle: Int,
-    @Value("\${external-api.cleanup.max-delete-bytes-per-cycle:5368709120}") // 5 GB
+    @Value("\${external-api.cleanup.max-delete-bytes-per-cycle:#{T(maple.externalapi.cleanup.ArtifactCleanupSchedulerKt).DEFAULT_MAX_DELETE_BYTES_PER_CYCLE}}")
     private val maxDeleteBytesPerCycle: Long,
     @Value("\${external-api.cleanup.max-runtime-seconds:60}")
     private val maxRuntimeSeconds: Long,

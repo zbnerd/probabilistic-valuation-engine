@@ -1599,16 +1599,19 @@ class ExpectationV6Controller(
     fun getExpectation(
         @PathVariable @ValidUserIgn userIgn: String,
         @RequestParam(defaultValue = "1") presetNo: Int,
-    ): ResponseEntity<*> {
+    ): DeferredResult<ResponseEntity<*>> {
         log.debug("V6 read request userIgn={} presetNo={}", maskIgn(userIgn), presetNo)
         val deferred = DeferredResult<ResponseEntity<*>>(properties.requestTimeoutMs)
         val result: EnqueueResult = facade.enqueue(userIgn, presetNo, deferred)
-        // Map the synchronous outcome. If the facade returns Accepted, the
-        // controller responds with 202 + status snapshot. If Rejected (buffer
-        // full), the controller responds with 503.
-        val response = ReadResponseMapper.toResponseEntity(result, properties.statusRetryAfterSeconds)
-        // If accepted, also wire deferred timeout (facade installed it).
-        return response
+        if (result is EnqueueResult.Rejected) {
+            // Synchronous rejection — set 503 on the deferred immediately.
+            // Accepted case: leave the deferred for the scheduler (200/404) or
+            // the timeout callback (202) to resolve.
+            deferred.setResult(
+                ReadResponseMapper.toResponseEntity(result, properties.statusRetryAfterSeconds)
+            )
+        }
+        return deferred
     }
 
     @GetMapping("/{userIgn}/status")
@@ -1638,27 +1641,12 @@ class ExpectationV6Controller(
 }
 ```
 
-**Note on the controller redesign**: the prior controller returned `DeferredResult<ResponseEntity<*>>` and never set a result — the deferred was set asynchronously by the scheduler. The new design returns a `ResponseEntity<*>` directly for the synchronous case (`Accepted → 202` or `Rejected → 503`). The deferred still exists for timeout / completion lifecycle but is no longer returned to the client. The timeout callback installed by the facade no longer fires because the response has been sent.
+**Note**: This preserves the original async wire behavior. The client receives:
+- `503` synchronously when the buffer is full (`Rejected`)
+- `200` / `404` if the scheduler finds the data within `requestTimeoutMs`
+- `202` if neither happens within `requestTimeoutMs` (timeout callback)
 
-If the previous behavior of "200 OK with the eventual result" must be preserved (where the client blocks on the deferred for up to `requestTimeoutMs` to receive 200, 404, or 202), the controller must return `DeferredResult` and call `deferred.setResult(response)` after `enqueue` returns. Restore the original `DeferredResult`-returning signature:
-
-```kotlin
-@GetMapping("/{userIgn}/expectation")
-fun getExpectation(
-    @PathVariable @ValidUserIgn userIgn: String,
-    @RequestParam(defaultValue = "1") presetNo: Int,
-): DeferredResult<ResponseEntity<*>> {
-    log.debug("V6 read request userIgn={} presetNo={}", maskIgn(userIgn), presetNo)
-    val deferred = DeferredResult<ResponseEntity<*>>(properties.requestTimeoutMs)
-    val result: EnqueueResult = facade.enqueue(userIgn, presetNo, deferred)
-    val mapped = ReadResponseMapper.toResponseEntity(result, properties.statusRetryAfterSeconds)
-    // If facade gave us a synchronous response (Accepted/Rejected), set it on the deferred.
-    deferred.setResult(mapped)
-    return deferred
-}
-```
-
-This preserves the asynchronous wire shape (the client still waits up to `requestTimeoutMs`) while the controller owns the HTTP-shape decision. **Use this version in the file.** The tests in Step 1 expect 202 status which is consistent with `Accepted` mapping.
+The controller owns the synchronous 503 decision via the typed `EnqueueResult`; the scheduler owns the 200/404 path; the facade-installed timeout owns the 202 path.
 
 - [ ] **Step 5: Run all controller tests to verify they pass**
 

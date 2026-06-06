@@ -4,7 +4,7 @@
 
 **Goal:** Split `SynchronizerMetrics` into a `SynchronizerMeterRegistry` (meter creation) and a refactored `SynchronizerMetrics` (recording methods only). Consumers and public API unchanged.
 
-**Architecture:** New `@Component` class `SynchronizerMeterRegistry` holds `MeterRegistry` and owns 19 meter declarations + 4 factory methods. `SynchronizerMetrics` is refactored to hold `SynchronizerMeterRegistry` and delegates every recording method. No consumer-side changes.
+**Architecture:** New `@Component` class `SynchronizerMeterRegistry` holds `MeterRegistry` and owns 19 meter declarations + 4 factory methods, all exposed as `public val` properties. `SynchronizerMetrics` is refactored to hold `SynchronizerMeterRegistry` and delegates every recording method. No consumer-side changes.
 
 **Tech Stack:** Kotlin, Spring `@Component`, Micrometer `MeterRegistry` (Counter, Timer, DistributionSummary, Gauge), `java.util.concurrent.atomic.AtomicInteger`.
 
@@ -14,7 +14,7 @@
 
 | File | Action | Responsibility |
 |------|--------|----------------|
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/metrics/SynchronizerMeterRegistry.kt` | Create | Owns all meter creation, 1-time init. Exposes meters via getters. |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/metrics/SynchronizerMeterRegistry.kt` | Create | Owns all meter creation, 1-time init. Exposes meters as `public val`. |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/metrics/SynchronizerMetrics.kt` | Modify | Refactored: holds `SynchronizerMeterRegistry`, recording methods only. Public API unchanged. |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/processor/DefaultChunkProcessorTest.kt` | Modify | Update line 27 constructor call to wrap `SimpleMeterRegistry` in `SynchronizerMeterRegistry`. |
 
@@ -27,7 +27,7 @@ All consumer files (`ChunkConsumerTemplate.kt`, `ChunkDataReader.kt`, `ChunkDocu
 **Files:**
 - Create: `module-synchronizer/src/main/kotlin/maple/synchronizer/metrics/SynchronizerMeterRegistry.kt`
 
-- [ ] **Step 1: Create the new file with all 19 meter declarations + 4 factory methods**
+- [ ] **Step 1: Create the new file**
 
 Path: `module-synchronizer/src/main/kotlin/maple/synchronizer/metrics/SynchronizerMeterRegistry.kt`
 
@@ -44,104 +44,78 @@ import org.springframework.stereotype.Component
 import java.util.concurrent.atomic.AtomicInteger
 
 @Component
-class SynchronizerMeterRegistry(private val registry: MeterRegistry) {
+class SynchronizerMeterRegistry(registry: MeterRegistry) {
 
     // Chunk counters
-    private val chunksReceived = registry.counter("synchronizer_chunks_received_total")
-    private val chunksProcessing = AtomicInteger(0)
-    private val chunksProcessed = registry.counter("synchronizer_chunks_processed_total")
-    private val chunksFailed = registry.counter("synchronizer_chunks_failed_total")
+    val chunksReceived = registry.counter("synchronizer_chunks_received_total")
+    val chunksProcessing = AtomicInteger(0)
+    val chunksProcessed = registry.counter("synchronizer_chunks_processed_total")
+    val chunksFailed = registry.counter("synchronizer_chunks_failed_total")
 
     init {
         registry.gauge("synchronizer_chunks_processing", chunksProcessing)
     }
 
     // Document / item counters
-    private val documentsProcessed = registry.counter("synchronizer_documents_processed_total")
-    private val itemsProcessed = registry.counter("synchronizer_items_processed_total")
+    val documentsProcessed = registry.counter("synchronizer_documents_processed_total")
+    val itemsProcessed = registry.counter("synchronizer_items_processed_total")
 
     // Timers — 각 단계별 latency
-    private val chunkTimer = Timer.builder("synchronizer_chunk_duration_seconds")
+    val chunkTimer = Timer.builder("synchronizer_chunk_duration_seconds")
         .description("Total time to process a single chunk end-to-end")
         .publishPercentileHistogram()
         .register(registry)
 
-    private val fileReadTimer = Timer.builder("synchronizer_file_read_duration_seconds")
+    val fileReadTimer = Timer.builder("synchronizer_file_read_duration_seconds")
         .description("Time to read and decompress gzip JSONL file")
         .publishPercentileHistogram()
         .register(registry)
 
-    private val documentBuildTimer = Timer.builder("synchronizer_document_build_duration_seconds")
+    val documentBuildTimer = Timer.builder("synchronizer_document_build_duration_seconds")
         .description("Time to build read model documents from grouped results")
         .publishPercentileHistogram()
         .register(registry)
 
-    private val mainUpsertTimer = Timer.builder("synchronizer_main_upsert_duration_seconds")
+    val mainUpsertTimer = Timer.builder("synchronizer_main_upsert_duration_seconds")
         .description("Time to bulk upsert documents into main read model table")
         .publishPercentileHistogram()
         .register(registry)
 
     // Distribution summaries — chunk 크기/분포
-    private val chunkDocumentsSummary = DistributionSummary.builder("synchronizer_chunk_documents")
+    val chunkDocumentsSummary = DistributionSummary.builder("synchronizer_chunk_documents")
         .description("Number of documents per chunk")
         .register(registry)
 
-    private val chunkItemsSummary = DistributionSummary.builder("synchronizer_chunk_items")
+    val chunkItemsSummary = DistributionSummary.builder("synchronizer_chunk_items")
         .description("Number of items per chunk")
         .register(registry)
 
-    private val chunkBytesSummary = DistributionSummary.builder("synchronizer_chunk_bytes")
+    val chunkBytesSummary = DistributionSummary.builder("synchronizer_chunk_bytes")
         .description("Compressed document bytes per chunk")
         .register(registry)
 
-    private val documentEquipmentSummary = DistributionSummary.builder("synchronizer_document_equipment_count")
+    val documentEquipmentSummary = DistributionSummary.builder("synchronizer_document_equipment_count")
         .description("Equipment count per document")
         .register(registry)
 
     // Volume metrics — pre-upsert data volume
-    private val preUpsertCompressedBytesTotal = registry.counter("synchronizer_pre_upsert_compressed_bytes_total")
-    private val preUpsertUncompressedBytesTotal = registry.counter("synchronizer_pre_upsert_uncompressed_bytes_total")
-    private val preUpsertJsonRowsTotal = registry.counter("synchronizer_pre_upsert_json_rows_total")
+    val preUpsertCompressedBytesTotal = registry.counter("synchronizer_pre_upsert_compressed_bytes_total")
+    val preUpsertUncompressedBytesTotal = registry.counter("synchronizer_pre_upsert_uncompressed_bytes_total")
+    val preUpsertJsonRowsTotal = registry.counter("synchronizer_pre_upsert_json_rows_total")
 
-    private val preUpsertCompressedSummary = DistributionSummary.builder("synchronizer_pre_upsert_compressed_bytes")
+    val preUpsertCompressedSummary = DistributionSummary.builder("synchronizer_pre_upsert_compressed_bytes")
         .description("Compressed artifact bytes per chunk before DB upsert")
         .register(registry)
 
-    private val preUpsertUncompressedSummary = DistributionSummary.builder("synchronizer_pre_upsert_uncompressed_bytes")
+    val preUpsertUncompressedSummary = DistributionSummary.builder("synchronizer_pre_upsert_uncompressed_bytes")
         .description("Uncompressed artifact bytes per chunk before DB upsert")
         .register(registry)
 
-    private val preUpsertCompressionRatio = DistributionSummary.builder("synchronizer_pre_upsert_compression_ratio")
+    val preUpsertCompressionRatio = DistributionSummary.builder("synchronizer_pre_upsert_compression_ratio")
         .description("Compression ratio (uncompressed/compressed) per chunk before DB upsert")
         .register(registry)
 
-    // Counter getters
-    fun chunksReceived(): Counter = chunksReceived
-    fun chunksProcessing(): AtomicInteger = chunksProcessing
-    fun chunksProcessed(): Counter = chunksProcessed
-    fun chunksFailed(): Counter = chunksFailed
-    fun documentsProcessed(): Counter = documentsProcessed
-    fun itemsProcessed(): Counter = itemsProcessed
-    fun preUpsertCompressedBytesTotal(): Counter = preUpsertCompressedBytesTotal
-    fun preUpsertUncompressedBytesTotal(): Counter = preUpsertUncompressedBytesTotal
-    fun preUpsertJsonRowsTotal(): Counter = preUpsertJsonRowsTotal
-
-    // Timer getters
-    fun chunkTimer(): Timer = chunkTimer
-    fun fileReadTimer(): Timer = fileReadTimer
-    fun documentBuildTimer(): Timer = documentBuildTimer
-    fun mainUpsertTimer(): Timer = mainUpsertTimer
-
-    // DistributionSummary getters
-    fun chunkDocumentsSummary(): DistributionSummary = chunkDocumentsSummary
-    fun chunkItemsSummary(): DistributionSummary = chunkItemsSummary
-    fun chunkBytesSummary(): DistributionSummary = chunkBytesSummary
-    fun documentEquipmentSummary(): DistributionSummary = documentEquipmentSummary
-    fun preUpsertCompressedSummary(): DistributionSummary = preUpsertCompressedSummary
-    fun preUpsertUncompressedSummary(): DistributionSummary = preUpsertUncompressedSummary
-    fun preUpsertCompressionRatio(): DistributionSummary = preUpsertCompressionRatio
-
-    // Status transition counter
+    // Status / execution factory methods — these create per-tag meters on demand
     fun statusCounter(status: String): Counter =
         registry.counter("synchronizer_chunk_status_transition_total", "status", status)
 
@@ -177,7 +151,7 @@ class SynchronizerMeterRegistry(private val registry: MeterRegistry) {
 }
 ```
 
-Note: getter names mirror the private property names for the 1:1 meters (e.g. `chunksReceived()` returns `chunksReceived`). This is the only deliberate shadow — Kotlin allows it because one is a property and the other a function.
+Note: meters are exposed as `public val` properties (Kotlin-idiomatic). `SynchronizerMetrics` accesses them as `meterRegistry.chunksReceived.increment()`. The 4 factory methods remain functions because they take parameters and create per-tag meters on demand.
 
 - [ ] **Step 2: Compile to verify the new file builds**
 
@@ -209,8 +183,6 @@ Path: `module-synchronizer/src/main/kotlin/maple/synchronizer/metrics/Synchroniz
 ```kotlin
 package maple.synchronizer.metrics
 
-import io.micrometer.core.instrument.Counter
-import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.Timer
 import maple.synchronizer.state.ChunkExecutionStatus
 import maple.expectation.common.event.ChunkExecutionType
@@ -219,11 +191,11 @@ import org.springframework.stereotype.Component
 @Component
 class SynchronizerMetrics(private val meterRegistry: SynchronizerMeterRegistry) {
 
-    fun incrementReceived() = meterRegistry.chunksReceived().increment()
-    fun incrementProcessing() = meterRegistry.chunksProcessing().incrementAndGet()
-    fun decrementProcessing() = meterRegistry.chunksProcessing().decrementAndGet()
-    fun incrementProcessed() = meterRegistry.chunksProcessed().increment()
-    fun incrementFailed() = meterRegistry.chunksFailed().increment()
+    fun incrementReceived() = meterRegistry.chunksReceived.increment()
+    fun incrementProcessing() = meterRegistry.chunksProcessing.incrementAndGet()
+    fun decrementProcessing() = meterRegistry.chunksProcessing.decrementAndGet()
+    fun incrementProcessed() = meterRegistry.chunksProcessed.increment()
+    fun incrementFailed() = meterRegistry.chunksFailed.increment()
 
     fun recordChunkExecutionInserted(executionType: ChunkExecutionType) =
         meterRegistry.chunkExecutionCounter("chunk_execution_inserted_total", executionType).increment()
@@ -246,59 +218,59 @@ class SynchronizerMetrics(private val meterRegistry: SynchronizerMeterRegistry) 
     fun recordChunkExecutionReclaimedExpired(executionType: ChunkExecutionType) =
         meterRegistry.chunkExecutionCounter("chunk_execution_reclaimed_expired_total", executionType).increment()
 
-    fun incrementDocuments(count: Int) = meterRegistry.documentsProcessed().increment(count.toDouble())
-    fun incrementItems(count: Long) = meterRegistry.itemsProcessed().increment(count.toDouble())
+    fun incrementDocuments(count: Int) = meterRegistry.documentsProcessed.increment(count.toDouble())
+    fun incrementItems(count: Long) = meterRegistry.itemsProcessed.increment(count.toDouble())
 
     fun recordStatusTransition(status: String) = meterRegistry.statusCounter(status).increment()
 
     fun recordChunkSize(documents: Int, items: Long) {
-        meterRegistry.chunkDocumentsSummary().record(documents.toDouble())
-        meterRegistry.chunkItemsSummary().record(items.toDouble())
+        meterRegistry.chunkDocumentsSummary.record(documents.toDouble())
+        meterRegistry.chunkItemsSummary.record(items.toDouble())
     }
 
     fun recordChunkBytes(bytes: Long) {
-        meterRegistry.chunkBytesSummary().record(bytes.toDouble())
+        meterRegistry.chunkBytesSummary.record(bytes.toDouble())
     }
 
-    fun recordDocumentEquipment(count: Int) = meterRegistry.documentEquipmentSummary().record(count.toDouble())
+    fun recordDocumentEquipment(count: Int) = meterRegistry.documentEquipmentSummary.record(count.toDouble())
 
     fun recordPreUpsertVolume(compressedBytes: Long, uncompressedBytes: Long, jsonRows: Long) {
-        meterRegistry.preUpsertCompressedBytesTotal().increment(compressedBytes.toDouble())
-        meterRegistry.preUpsertUncompressedBytesTotal().increment(uncompressedBytes.toDouble())
-        meterRegistry.preUpsertJsonRowsTotal().increment(jsonRows.toDouble())
-        meterRegistry.preUpsertCompressedSummary().record(compressedBytes.toDouble())
-        meterRegistry.preUpsertUncompressedSummary().record(uncompressedBytes.toDouble())
+        meterRegistry.preUpsertCompressedBytesTotal.increment(compressedBytes.toDouble())
+        meterRegistry.preUpsertUncompressedBytesTotal.increment(uncompressedBytes.toDouble())
+        meterRegistry.preUpsertJsonRowsTotal.increment(jsonRows.toDouble())
+        meterRegistry.preUpsertCompressedSummary.record(compressedBytes.toDouble())
+        meterRegistry.preUpsertUncompressedSummary.record(uncompressedBytes.toDouble())
         if (compressedBytes > 0) {
-            meterRegistry.preUpsertCompressionRatio().record(uncompressedBytes.toDouble() / compressedBytes.toDouble())
+            meterRegistry.preUpsertCompressionRatio.record(uncompressedBytes.toDouble() / compressedBytes.toDouble())
         }
     }
 
-    fun chunkTimer(): Timer = meterRegistry.chunkTimer()
-    fun fileReadTimer(): Timer = meterRegistry.fileReadTimer()
-    fun documentBuildTimer(): Timer = meterRegistry.documentBuildTimer()
-    fun mainUpsertTimer(): Timer = meterRegistry.mainUpsertTimer()
+    fun chunkTimer(): Timer = meterRegistry.chunkTimer
+    fun fileReadTimer(): Timer = meterRegistry.fileReadTimer
+    fun documentBuildTimer(): Timer = meterRegistry.documentBuildTimer
+    fun mainUpsertTimer(): Timer = meterRegistry.mainUpsertTimer
 }
 ```
 
-Note: `Counter` and `DistributionSummary` imports remain because the **method signatures** of `recordChunkExecutionInserted` etc. resolve through the registry's factory methods which return `Counter`. Actually the return type is inferred — they can be dropped. Check after compile.
+Note: public API preserved byte-for-byte. The 4 `fun xxxTimer(): Timer` methods are kept (consumers like `SynchronizerChunkMetricsListener` call `metrics.chunkTimer()`). `Counter` and `DistributionSummary` imports dropped — only `Timer` is referenced explicitly in return types.
 
-- [ ] **Step 2: Compile to verify the refactor builds**
+- [ ] **Step 2: Compile the synchronizer module**
 
 Run:
 ```bash
 ./gradlew :module-synchronizer:compileKotlin --continue
 ```
 
-Expected: BUILD SUCCESSFUL. If `Counter`/`DistributionSummary` imports are flagged as unused, remove them and re-run.
+Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 3: Verify consumer sites still compile (the public API is byte-for-byte identical, so this should pass with no other changes)**
+- [ ] **Step 3: Full compile check across all modules**
 
 Run:
 ```bash
 ./gradlew compileKotlin compileJava --continue
 ```
 
-Expected: BUILD SUCCESSFUL across all modules.
+Expected: BUILD SUCCESSFUL. (No consumer diff — public API identical.)
 
 - [ ] **Step 4: Commit**
 
@@ -316,7 +288,7 @@ git commit -m "refactor(synchronizer): delegate SynchronizerMetrics recording to
 
 - [ ] **Step 1: Locate the constructor call at line 27**
 
-The current line is:
+Current line:
 ```kotlin
 private val metrics = SynchronizerMetrics(SimpleMeterRegistry())
 ```
@@ -327,9 +299,17 @@ private val metrics = SynchronizerMetrics(SimpleMeterRegistry())
 private val metrics = SynchronizerMetrics(SynchronizerMeterRegistry(SimpleMeterRegistry()))
 ```
 
-Verify the file imports `SynchronizerMeterRegistry` from `maple.synchronizer.metrics` — if not, add the import. (Test files in this module typically import with `import maple.synchronizer.metrics.SynchronizerMetrics` already; add `import maple.synchronizer.metrics.SynchronizerMeterRegistry` next to it.)
+- [ ] **Step 3: Verify the import for `SynchronizerMeterRegistry` is present**
 
-- [ ] **Step 3: Run the test file to verify the change**
+Open the file imports section. The file already imports `maple.synchronizer.metrics.SynchronizerMetrics`. Add adjacent:
+
+```kotlin
+import maple.synchronizer.metrics.SynchronizerMeterRegistry
+```
+
+If the import is already present (from wildcard or previous), no change needed.
+
+- [ ] **Step 4: Run the test file to verify the change**
 
 Run:
 ```bash
@@ -338,7 +318,7 @@ Run:
 
 Expected: BUILD SUCCESSFUL, tests pass.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add module-synchronizer/src/test/kotlin/maple/synchronizer/processor/DefaultChunkProcessorTest.kt
@@ -367,7 +347,7 @@ Run:
 ./gradlew compileKotlin compileJava --continue
 ```
 
-Expected: BUILD SUCCESSFUL. No errors emitted. (Per workflow-rules §11, only failures should appear; absence of error output = success.)
+Expected: BUILD SUCCESSFUL. (Per workflow-rules §11, only failures should appear; absence of error output = success.)
 
 ---
 
@@ -382,16 +362,16 @@ set -a && source .env && set +a
 ./gradlew :module-synchronizer:bootRun
 ```
 
-Run in background: `run_in_background: true`. Wait for `Started SynchronizerApplication` log line.
+Run with `run_in_background: true`. Wait for `Started SynchronizerApplication` log line (or equivalent startup success marker).
 
 - [ ] **Step 2: Verify the meter registry bean is registered**
 
-Hit Prometheus endpoint:
+Hit Prometheus endpoint (synchronizer is on port 8083):
 ```bash
-curl -s http://localhost:8083/actuator/prometheus | grep -E "^synchronizer_(chunks_received|chunks_processed|documents_processed)" | head -5
+curl -s http://localhost:8083/actuator/prometheus | grep -E "^synchronizer_(chunks_received|chunks_processed|documents_processed)_total" | head -5
 ```
 
-Expected: lines like `synchronizer_chunks_received_total{application="synchronizer"} 0.0` etc. (gauge is registered but not yet incremented). No `ERROR` in logs.
+Expected: lines like `synchronizer_chunks_received_total{application="synchronizer"} 0.0` etc. The gauge `synchronizer_chunks_processing` should also be present. No `ERROR` in logs.
 
 - [ ] **Step 3: Stop the server**
 
@@ -418,7 +398,9 @@ gh pr create \
   --base develop \
   --head refactor/issue-1066-sync-metrics-split \
   --title "refactor(synchronizer): split SynchronizerMetrics into meter registry + recording (#1066)" \
-  --body "Decomposes SynchronizerMetrics (176 lines) into SynchronizerMeterRegistry (meter creation, 80 lines) and SynchronizerMetrics (recording only, 90 lines). Public API of SynchronizerMetrics is unchanged — no consumer diff. New metrics now touch one class only.
+  --body "Decomposes SynchronizerMetrics (176 lines) into SynchronizerMeterRegistry (meter creation) and SynchronizerMetrics (recording only). Public API of SynchronizerMetrics is unchanged — no consumer diff. New metrics now touch one class only.
+
+Closes #1066
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```
@@ -429,7 +411,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **1. Spec coverage:**
 - SynchronizerMeterRegistry separated → Task 1 ✓
-- SynchronizerMetrics recording only → Task 2 ✓
+- SynchronizerMetrics recording only → Task 2 (no `MeterRegistry` import, no meter declarations) ✓
 - Public API byte-for-byte identical → Task 2 explicitly preserves all 24 public methods ✓
 - New metric = 1 file change → enforced by file structure (registration in registry only) ✓
 - :module-synchronizer:test passes → Task 4 ✓
@@ -438,4 +420,4 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **2. Placeholder scan:** No TBD/TODO. No "implement later". All code blocks are complete.
 
-**3. Type consistency:** `chunkTimer()` getter exists in `SynchronizerMeterRegistry` (Task 1) and is referenced in `SynchronizerMetrics.chunkTimer()` (Task 2) — names match. All factory method names (`statusCounter`, `chunkExecutionCounter`, `chunkExecutionSkippedCounter`, `chunkExecutionFailedCounter`) preserved exactly. `AtomicInteger` access via `incrementAndGet`/`decrementAndGet` preserved.
+**3. Type consistency:** `chunkTimer` property in `SynchronizerMeterRegistry` (Task 1) is referenced via `meterRegistry.chunkTimer` in `SynchronizerMetrics.chunkTimer()` (Task 2) — names match. All factory method names (`statusCounter`, `chunkExecutionCounter`, `chunkExecutionSkippedCounter`, `chunkExecutionFailedCounter`) preserved exactly. `AtomicInteger` access via `incrementAndGet`/`decrementAndGet` preserved.

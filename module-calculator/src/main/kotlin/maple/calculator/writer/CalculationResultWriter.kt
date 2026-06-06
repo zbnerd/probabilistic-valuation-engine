@@ -3,7 +3,7 @@ package maple.calculator.writer
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.io.OutputStream
 import java.util.zip.GZIPOutputStream
-import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.flow.Flow
 import maple.calculator.model.CalculationResult
 import maple.calculator.storage.ObjectStorage
 import org.slf4j.LoggerFactory
@@ -25,7 +25,7 @@ class CalculationResultWriter(
 
     suspend fun write(
         objectKey: String,
-        results: ReceiveChannel<CalculationResult>,
+        results: Flow<CalculationResult>,
     ): WriteResult {
         val compressedCounter = CountingOutputStream(objectStorage.openOutputStream(objectKey))
         val gzipStream = GZIPOutputStream(compressedCounter)
@@ -33,7 +33,7 @@ class CalculationResultWriter(
         var resultCount = 0
 
         objectMapper.factory.createGenerator(uncompressedCounter).use { generator ->
-            for (result in results) {
+            results.collect { result ->
                 generator.writeObject(result)
                 generator.writeRaw('\n')
                 resultCount += 1

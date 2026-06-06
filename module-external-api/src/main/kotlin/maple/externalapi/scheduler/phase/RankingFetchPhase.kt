@@ -12,6 +12,7 @@ import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.ChunkedSnapshotSink
+import maple.externalapi.snapshot.SinkEventPublisher
 import maple.externalapi.snapshot.SnapshotChunkRecord
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
@@ -65,7 +66,7 @@ class RankingFetchPhase(
             maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
             queueCapacity = chunkingProperties.queueCapacity,
             objectMapper = objectMapper,
-            eventPublisher = rankingPublisher,
+            eventPublisher = SinkEventPublisher(rankingPublisher),
             volumeMetrics = volumeMetrics,
         )
 

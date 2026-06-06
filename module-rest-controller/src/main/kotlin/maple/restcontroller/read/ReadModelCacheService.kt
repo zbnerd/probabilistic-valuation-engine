@@ -127,20 +127,25 @@ class ReadModelCacheService(
     fun statusUrl(userIgn: String, presetNo: Int): String = "/api/v6/characters/$userIgn/status?presetNo=$presetNo"
 
     fun status(userIgn: String, presetNo: Int): UrgentReadStatusResponse {
-        val state = when {
-            hasReadyCache(userIgn, presetNo) -> UrgentReadState.READY
-            getNegativeCache(userIgn) -> UrgentReadState.NOT_FOUND
-            isUrgentPending(userIgn) -> UrgentReadState.PENDING
-            else -> UrgentReadState.UNKNOWN
+        val state: UrgentReadState = when {
+            hasReadyCache(userIgn, presetNo) -> UrgentReadState.Ready
+            getNegativeCache(userIgn) -> UrgentReadState.NotFound
+            isUrgentPending(userIgn) -> {
+                val pos = queuePosition(userIgn)
+                UrgentReadState.Pending(
+                    queuePositionApprox = pos,
+                    estimatedWaitSeconds = pos?.let(::estimateWaitSeconds),
+                )
+            }
+            else -> UrgentReadState.Unknown
         }
-        val position = if (state == UrgentReadState.PENDING) queuePosition(userIgn) else null
         return UrgentReadStatusResponse(
             state = state,
             userIgn = userIgn,
             statusUrl = statusUrl(userIgn, presetNo),
-            queuePositionApprox = position,
-            estimatedWaitSeconds = position?.let(::estimateWaitSeconds),
-            retryAfterSeconds = if (state == UrgentReadState.READY || state == UrgentReadState.NOT_FOUND) 0 else properties.statusRetryAfterSeconds,
+            queuePositionApprox = state.queuePositionApprox,
+            estimatedWaitSeconds = state.estimatedWaitSeconds,
+            retryAfterSeconds = state.retryAfterSeconds(properties.statusRetryAfterSeconds),
         )
     }
 

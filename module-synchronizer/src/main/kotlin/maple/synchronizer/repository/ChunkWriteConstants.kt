@@ -8,7 +8,7 @@ package maple.synchronizer.repository
 internal object ChunkWriteConstants {
     /**
      * Items per sub-batch in bulk upsert calls. 100 fits a single PG prepared-statement
-     * parameter limit and matches the calculator's DEFAULT_BATCH_SIZE.
+     * parameter limit (32k parameters / ~300 columns/row).
      */
     const val SUB_BATCH_SIZE: Int = 100
 }

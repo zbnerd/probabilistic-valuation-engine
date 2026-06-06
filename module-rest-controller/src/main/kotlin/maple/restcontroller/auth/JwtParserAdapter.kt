@@ -24,6 +24,9 @@ class JwtParserAdapter(
         private const val CLAIM_FINGERPRINT = "fgp"
         private const val CLAIM_ROLE = "role"
         private const val CLAIM_USER_IGN = "userIgn"
+
+        /** Default token lifetime — 1 hour, matches the legacy cookie session. */
+        private const val DEFAULT_TOKEN_LIFETIME_SECONDS: Long = 60L * 60L // 1 hour
     }
 
     override fun parseToken(token: String?): Optional<JwtPayload> = runCatching {
@@ -36,7 +39,7 @@ class JwtParserAdapter(
 
         val claims = jws.payload
         val issuedAt = claims.issuedAt?.toInstant() ?: Instant.now()
-        val expiration = claims.expiration?.toInstant() ?: issuedAt.plusSeconds(3600)
+        val expiration = claims.expiration?.toInstant() ?: issuedAt.plusSeconds(DEFAULT_TOKEN_LIFETIME_SECONDS)
 
         Optional.of(
             JwtPayload(

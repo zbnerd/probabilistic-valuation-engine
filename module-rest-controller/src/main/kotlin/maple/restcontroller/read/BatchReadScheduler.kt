@@ -144,7 +144,15 @@ class BatchReadScheduler(
 
     override fun isRunning(): Boolean = running
 
-    override fun getPhase(): Int = Integer.MAX_VALUE - 100
+    /**
+     * Phase ordinal for the batch-read scheduler. Sized to 100 less than [Integer.MAX_VALUE]
+     * so it runs after all business schedulers but before any future "very last" hook.
+     */
+    override fun getPhase(): Int = PHASE_BATCH_READ
+
+    private companion object {
+        private const val PHASE_BATCH_READ: Int = Integer.MAX_VALUE - 100
+    }
 
     override fun isAutoStartup(): Boolean = true
 

@@ -22,6 +22,8 @@ class JwtAuthInterceptor(
     companion object {
         private val log = LoggerFactory.getLogger(JwtAuthInterceptor::class.java)
         const val USER_ATTRIBUTE = "authenticatedUser"
+        private const val BEARER_PREFIX: String = "Bearer "
+        private const val BEARER_PREFIX_LENGTH: Int = BEARER_PREFIX.length
     }
 
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
@@ -59,7 +61,7 @@ class JwtAuthInterceptor(
     private fun extractBearerToken(request: HttpServletRequest): String? {
         val header = request.getHeader("Authorization") ?: return null
         return if (header.startsWith("Bearer ", ignoreCase = true)) {
-            header.substring(7).trim().takeIf { it.isNotBlank() }
+            header.substring(BEARER_PREFIX_LENGTH).trim().takeIf { it.isNotBlank() }
         } else null
     }
 

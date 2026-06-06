@@ -3,6 +3,8 @@ package maple.synchronizer.storage
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.error.CommonErrorCode
+import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.expectation.util.GzipUtils
 import maple.expectation.util.HashUtils
 import maple.synchronizer.metrics.SynchronizerReaderMetrics
@@ -46,7 +48,7 @@ class BasicChunkFileReader(
 
     fun read(objectKey: String): List<BasicRecord> {
         val path = Paths.get(basePath, objectKey)
-        if (!Files.exists(path)) throw IllegalStateException("Chunk file not found: $path")
+        if (!Files.exists(path)) throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "BasicChunkFileReader", path.toString())
 
         val parseErrors = AtomicLong(0)
         val missingFields = AtomicLong(0)
@@ -71,7 +73,7 @@ class BasicChunkFileReader(
         handler: (List<BasicRecord>) -> Unit,
     ) {
         val path = Paths.get(basePath, objectKey)
-        if (!Files.exists(path)) throw IllegalStateException("Chunk file not found: $path")
+        if (!Files.exists(path)) throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "BasicChunkFileReader", path.toString())
 
         val parseErrors = AtomicLong(0)
         val missingFields = AtomicLong(0)

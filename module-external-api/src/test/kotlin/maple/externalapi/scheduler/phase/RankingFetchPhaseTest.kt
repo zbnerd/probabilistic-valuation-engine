@@ -8,6 +8,7 @@ import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotVolumeMetrics
+import maple.externalapi.parser.RankingEntryParser
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.NoOpSnapshotChunkEventPublisher
@@ -47,6 +48,7 @@ class RankingFetchPhaseTest {
         phase = RankingFetchPhase(
             clientPort = clientPort,
             objectMapper = objectMapper,
+            rankingEntryParser = RankingEntryParser(objectMapper),
             chunkingProperties = SnapshotChunkingProperties(),
             volumeMetrics = SnapshotVolumeMetrics(registry),
             metrics = ExternalApiMetrics(registry),

@@ -9,7 +9,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
 import maple.synchronizer.metrics.SynchronizerMetrics
-import maple.synchronizer.processor.ChunkProcessInput
+import maple.core.domain.chunk.ChunkProcessInput
 import maple.synchronizer.processor.ChunkProcessor
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener

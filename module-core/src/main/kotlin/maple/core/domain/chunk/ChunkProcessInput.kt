@@ -1,4 +1,4 @@
-package maple.synchronizer.processor
+package maple.core.domain.chunk
 
 data class ChunkProcessInput(
     val objectKey: String,

@@ -1,6 +1,7 @@
 package maple.synchronizer.processor
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import maple.core.domain.chunk.ChunkProcessInput
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
 import maple.synchronizer.metrics.SynchronizerMetrics

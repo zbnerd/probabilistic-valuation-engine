@@ -1,5 +1,6 @@
 package maple.synchronizer.processor
 
+import maple.core.domain.chunk.ChunkProcessInput
 import maple.synchronizer.metrics.SynchronizerMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component

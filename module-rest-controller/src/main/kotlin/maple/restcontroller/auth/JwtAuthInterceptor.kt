@@ -1,6 +1,5 @@
 package maple.restcontroller.auth
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import maple.expectation.core.auth.JwtParserPort
@@ -16,7 +15,6 @@ import org.springframework.web.servlet.HandlerInterceptor
 class JwtAuthInterceptor(
     private val jwtParserPort: JwtParserPort,
     private val characterOcidPort: CharacterOcidPort,
-    private val objectMapper: ObjectMapper,
 ) : HandlerInterceptor {
 
     companion object {

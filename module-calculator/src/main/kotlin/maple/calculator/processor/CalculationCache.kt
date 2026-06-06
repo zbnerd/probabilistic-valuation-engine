@@ -4,7 +4,6 @@ import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory
 import maple.expectation.core.dto.v4.EquipmentCalculationInput
-import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 /** Caffeine max size — 100k entries × ~256 B/entry ≈ 25 MB heap. Sized to keep 5 min of calc hot-set in memory. */
@@ -14,8 +13,6 @@ private const val CACHE_MAX_SIZE: Long = 100_000L
 class CalculationCache(
     private val factory: EquipmentExpectationCalculatorFactory,
 ) {
-    private val log = LoggerFactory.getLogger(CalculationCache::class.java)
-
     data class CacheKey(
         val itemName: String,
         val itemPart: String,

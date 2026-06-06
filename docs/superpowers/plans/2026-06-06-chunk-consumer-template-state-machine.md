@@ -516,12 +516,40 @@ import maple.expectation.error.exception.ArtifactNotFoundException
 Run: `cd /home/maple/probabilistic-valuation-engine && ./gradlew :module-synchronizer:test --tests "maple.synchronizer.processor.DefaultChunkProcessorTest"`
 Expected: PASS
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Update existing reader tests to expect ArtifactNotFoundException**
+
+In `module-synchronizer/src/test/kotlin/maple/synchronizer/storage/ResultFileReaderTest.kt`, find the test at line ~74:
+```kotlin
+.hasMessageContaining("Result file not found")
+```
+
+Add to that same test (or replace the assertion chain):
+```kotlin
+.isInstanceOf(ArtifactNotFoundException::class.java)
+```
+
+Add the import:
+```kotlin
+import maple.expectation.error.exception.ArtifactNotFoundException
+```
+
+Apply the same change in `module-synchronizer/src/test/kotlin/maple/synchronizer/storage/OcidMappingFileReaderTest.kt` at line ~54:
+- Add `ArtifactNotFoundException` import
+- Add `.isInstanceOf(ArtifactNotFoundException::class.java)` to the assertion chain
+
+For `BasicChunkFileReaderTest.kt`, check if a similar test exists. If yes, apply the same change. If no, skip.
+
+- [ ] **Step 5: Run storage tests**
+
+Run: `cd /home/maple/probabilistic-valuation-engine && ./gradlew :module-synchronizer:test --tests "maple.synchronizer.storage.*"`
+Expected: PASS
+
+- [ ] **Step 6: Commit**
 
 ```bash
 cd /home/maple/probabilistic-valuation-engine
-git add module-synchronizer/src/test/kotlin/maple/synchronizer/processor/DefaultChunkProcessorTest.kt
-git commit -m "test(synchronizer): DefaultChunkProcessorTest expects ArtifactNotFoundException (#983)"
+git add module-synchronizer/src/test/kotlin/maple/synchronizer/storage/ResultFileReaderTest.kt module-synchronizer/src/test/kotlin/maple/synchronizer/storage/OcidMappingFileReaderTest.kt module-synchronizer/src/test/kotlin/maple/synchronizer/storage/BasicChunkFileReaderTest.kt
+git commit -m "test(synchronizer): reader tests expect ArtifactNotFoundException (#983)"
 ```
 
 ---

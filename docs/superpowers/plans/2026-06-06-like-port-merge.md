@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Delete 5 dead Like outbound port files in `module-core`. Keep `LikeBufferStrategy` (only alive port). Update 1 legacy test that referenced the removed `LikeEventPublisher`/`LikeEventSubscriber`.
+**Goal:** Delete 6 dead Like outbound port files in `module-core` (4 in `port/out/` + 2 in `port/out/like/`). Keep `LikeBufferStrategy` (only alive port). Update 1 legacy test that referenced the removed `LikeEventPublisher`/`LikeEventSubscriber`.
 
-**Architecture:** Pure deletion. No new ports, no new adapters. Refactor restores the 6→1 reality (1 alive + 5 dead seams → just 1 alive). The previously sketched "6→2 merge" was based on assumed Redis adapters that never existed; this plan supersedes that.
+**Architecture:** Pure deletion. No new ports, no new adapters. Refactor restores the 7→1 reality (1 alive + 6 dead seams → just 1 alive). The previously sketched "6→2 merge" was based on assumed Redis adapters that never existed; this plan supersedes that.
 
 **Tech Stack:** Kotlin, Spring Boot, JUnit5
 
@@ -12,7 +12,7 @@
 
 ## File Structure
 
-### Files deleted (5 port files + 1 empty directory)
+### Files deleted (6 port files + 1 empty directory)
 
 | File | Reason |
 |------|--------|
@@ -90,21 +90,23 @@ git commit -m "docs(core): fix LikeBufferStrategy KDoc — remove nonexistent Re
 
 ---
 
-## Task 2: Delete 5 dead port files + empty directory
+## Task 2: Delete 6 dead port files + empty directory
 
 **Files:**
 - Delete: `module-core/src/main/kotlin/maple/expectation/core/port/out/like/LikeAtomicFetchStrategy.kt`
+- Delete: `module-core/src/main/kotlin/maple/expectation/core/port/out/like/CompensationCommand.kt`
 - Delete: `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeRelationBufferStrategy.kt`
 - Delete: `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeRelationSyncPort.kt`
 - Delete: `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeSyncPort.kt`
 - Delete: `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeEventPublisher.kt`
 - Delete (directory): `module-core/src/main/kotlin/maple/expectation/core/port/out/like/`
 
-- [ ] **Step 1: Delete the 5 port files AND the now-empty `like/` directory in one operation**
+- [ ] **Step 1: Delete the 6 port files AND the now-empty `like/` directory in one operation**
 
 ```bash
 cd /home/maple/probabilistic-valuation-engine/.worktrees/like-port-merge-pr1
 git rm module-core/src/main/kotlin/maple/expectation/core/port/out/like/LikeAtomicFetchStrategy.kt
+git rm module-core/src/main/kotlin/maple/expectation/core/port/out/like/CompensationCommand.kt
 git rm module-core/src/main/kotlin/maple/expectation/core/port/out/LikeRelationBufferStrategy.kt
 git rm module-core/src/main/kotlin/maple/expectation/core/port/out/LikeRelationSyncPort.kt
 git rm module-core/src/main/kotlin/maple/expectation/core/port/out/LikeSyncPort.kt
@@ -122,7 +124,7 @@ Expected: list does NOT contain `like/`
 - [ ] **Step 3: Commit**
 
 ```bash
-git commit -m "refactor(core): delete 5 dead Like port hypothetical seams (#897, ADR-391)"
+git commit -m "refactor(core): delete 6 dead Like port hypothetical seams (#897, ADR-391)"
 ```
 
 ---
@@ -255,7 +257,7 @@ For each of the 4 files, find the first heading or frontmatter line. The annotat
 For each file, prepend the following note after the title/frontmatter (before any other content):
 
 ```markdown
-> **Note (2026-06-06):** 5 dead Like ports (LikeAtomicFetchStrategy, LikeRelationBufferStrategy, LikeRelationSyncPort, LikeSyncPort, LikeEventPublisher) were deleted in PR #X. See [2026-06-06-like-port-merge-design.md](2026-06-06-like-port-merge-design.md) for the actual deletion rationale.
+> **Note (2026-06-06):** 6 dead Like ports (LikeAtomicFetchStrategy, CompensationCommand, LikeRelationBufferStrategy, LikeRelationSyncPort, LikeSyncPort, LikeEventPublisher) were deleted in PR #X. See [2026-06-06-like-port-merge-design.md](2026-06-06-like-port-merge-design.md) for the actual deletion rationale.
 ```
 
 (Replace `#X` with the actual PR number once opened. If pre-PR, use `TBD`.)
@@ -292,10 +294,10 @@ git push -u origin refactor/like-port-merge-pr1
 
 ```bash
 gh pr create --base develop --head refactor/like-port-merge-pr1 \
-  --title "refactor(core): delete 5 dead Like port hypothetical seams (#897)" \
+  --title "refactor(core): delete 6 dead Like port hypothetical seams (#897)" \
   --body "Closes #897 partial
 
-Removes 5 unused outbound port interfaces in module-core (LikeAtomicFetchStrategy, LikeRelationBufferStrategy, LikeRelationSyncPort, LikeSyncPort, LikeEventPublisher + nested LikeEventSubscriber). Spec: docs/superpowers/specs/2026-06-06-like-port-merge-design.md.
+Removes 6 unused outbound port interfaces in module-core (LikeAtomicFetchStrategy, CompensationCommand, LikeRelationBufferStrategy, LikeRelationSyncPort, LikeSyncPort, LikeEventPublisher + nested LikeEventSubscriber). Spec: docs/superpowers/specs/2026-06-06-like-port-merge-design.md.
 
 Verification: only LikeBufferStrategy remains as a live port with one adapter (InMemoryLikeBufferStorage). All other Like ports were hypothetical seams with zero adapter implementations."
 ```
@@ -308,7 +310,7 @@ Verification: only LikeBufferStrategy remains as a live port with one adapter (I
 
 | Spec section | Task |
 |--------------|------|
-| §3 Delete 5 port files | Task 2 |
+| §3 Delete 6 port files | Task 2 |
 | §3 Remove empty `like/` directory | Task 2 |
 | §5 Fix KDoc in LikeBufferStrategy | Task 1 |
 | §5 Update legacy test | Task 3 |

@@ -1,4 +1,4 @@
-# Like Port Hypothetical Seam Removal (5 dead + 1 alive)
+# Like Port Hypothetical Seam Removal (6 dead + 1 alive)
 
 - Date: 2026-06-06
 - Owner: TBD
@@ -15,31 +15,33 @@ ADR-391 + #897 audit classified 49 outbound ports. Like-related ports (6) were f
 
 ### Problem — actual state of Like ports
 
-Codebase grep reveals that **5 of 6 Like ports are dead hypothetical seams**: interface declared in `module-core/.../port/out/` with zero adapter implementations and zero non-port consumers in `module-core`/`module-infra`.
+Codebase grep reveals that **6 of 7 Like ports are dead hypothetical seams**: interface declared in `module-core/.../port/out/` with zero adapter implementations and zero non-port consumers in `module-core`/`module-infra`. The 7th port (the "6→2" merge referred to 6 Like ports, but the `like/` subdir actually contained 6 — `LikeAtomicFetchStrategy` + `CompensationCommand` — plus 4 ports in `port/out/` root = 7 files total).
 
-| Port | Adapter impls | Non-port consumers | Status |
-|------|---------------|--------------------|--------|
-| `LikeAtomicFetchStrategy` | 0 | 0 | **Dead hypothetical seam** |
-| `LikeBufferStrategy` | 1 (`InMemoryLikeBufferStorage`) | 4 (`DatabaseLikeProcessor`, `LikeSyncExecutor`, `BufferedLikeAspect`, `InMemoryLikeBufferStorage` impl) + 2 module-app test files | **Alive** |
-| `LikeRelationBufferStrategy` | 0 | 0 | **Dead hypothetical seam** |
-| `LikeSyncPort` | 0 (deprecated by #664, no-op) | 0 | **Dead deprecated seam** |
-| `LikeRelationSyncPort` | 0 | 0 | **Dead hypothetical seam** |
-| `LikeEventPublisher` | 0 | 1 legacy test (`LikeRealtimeSyncIntegrationTest` uses `@Autowired(required = false)` so will compile with null) | **Dead hypothetical seam** |
+| Port | Location | Adapter impls | Non-port consumers | Status |
+|------|----------|---------------|--------------------|--------|
+| `LikeAtomicFetchStrategy` | `port/out/like/` | 0 | 0 | **Dead hypothetical seam** |
+| `CompensationCommand` | `port/out/like/` | 0 | 0 | **Dead hypothetical seam** |
+| `LikeBufferStrategy` | `port/out/` | 1 (`InMemoryLikeBufferStorage`) | 4 (`DatabaseLikeProcessor`, `LikeSyncExecutor`, `BufferedLikeAspect`, `InMemoryLikeBufferStorage` impl) + 2 module-app test files | **Alive** |
+| `LikeRelationBufferStrategy` | `port/out/` | 0 | 0 | **Dead hypothetical seam** |
+| `LikeSyncPort` | `port/out/` | 0 (deprecated by #664, no-op) | 0 | **Dead deprecated seam** |
+| `LikeRelationSyncPort` | `port/out/` | 0 | 0 | **Dead hypothetical seam** |
+| `LikeEventPublisher` | `port/out/` | 0 | 1 legacy test (`LikeRealtimeSyncIntegrationTest` uses `@Autowired(required = false)` so will compile with null) | **Dead hypothetical seam** |
 
 `LikeBufferStrategy` is the only port with a real adapter. The "6→2 merge" sketch in #1154 was based on assumed parallel Redis adapter pairs (`RedisLikeBufferAdapter`/`RedisLikeAtomicFetchAdapter`/`RedisLikeRelationBufferAdapter`/`RedisLikeRelationSyncAdapter`/`KafkaLikeEventPublisher`) that **were never implemented** — they exist only in port-interface KDoc.
 
 ### Goal
 
-Delete the 5 dead port files. Keep `LikeBufferStrategy` as-is. No new ports created. No new adapters created.
+Delete the 6 dead port files (4 in `port/out/` + 2 in `port/out/like/`). Keep `LikeBufferStrategy` as-is. No new ports created. No new adapters created.
 
 ---
 
 ## 2. Decision
 
-> Delete 5 dead port files from `module-core`. Do not create new ports. `LikeBufferStrategy` remains the single outbound port for like buffer concerns.
+> Delete 6 dead port files from `module-core`. Do not create new ports. `LikeBufferStrategy` remains the single outbound port for like buffer concerns.
 
 ```text
 DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/like/LikeAtomicFetchStrategy.kt
+DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/like/CompensationCommand.kt
 DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/LikeRelationBufferStrategy.kt
 DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/LikeRelationSyncPort.kt
 DELETE: module-core/src/main/kotlin/maple/expectation/core/port/out/LikeSyncPort.kt

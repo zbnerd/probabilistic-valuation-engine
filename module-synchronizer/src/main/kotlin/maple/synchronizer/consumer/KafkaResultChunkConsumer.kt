@@ -7,6 +7,7 @@ import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
+import maple.synchronizer.event.ResultChunkEventPathBuilder
 import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.core.domain.chunk.ChunkProcessInput
@@ -29,6 +30,7 @@ class KafkaResultChunkConsumer(
     private val chunkMetricsListener: SynchronizerChunkMetricsListener,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
+    private val eventPathBuilder: ResultChunkEventPathBuilder,
     @Qualifier("kafkaResultChunkExecutor") private val executor: ExecutorService,
 ) {
     private val log = LoggerFactory.getLogger(KafkaResultChunkConsumer::class.java)
@@ -102,7 +104,11 @@ class KafkaResultChunkConsumer(
                         endpoint = event.sourceEndpoint.ifBlank { "result" },
                         chunkId = chunkId,
                         objectKey = event.objectKey,
-                        sourceObjectKey = "runs/${runId}/${event.sourceEndpoint}/chunks/${chunkId}.jsonl.gz",
+                        sourceObjectKey = eventPathBuilder.sourceObjectKey(
+                            runId = runId,
+                            sourceEndpoint = event.sourceEndpoint.ifBlank { "result" },
+                            chunkId = chunkId,
+                        ),
                     ))
                 },
                 onFailure = { ex ->

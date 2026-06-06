@@ -23,7 +23,8 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
-private const val DAILY_REFRESH_LOCK_TIMEOUT_MS: Long = 3_600_000L // 1 hour — matches Kafka consumer poll cycle
+/** 1 hour — long enough for the full daily refresh pipeline (snapshot → ocid → ranking) to complete without contention, but bounded so a hung worker releases the lock within one refresh cycle. */
+private const val DAILY_REFRESH_LOCK_TIMEOUT_MS: Long = 3_600_000L
 
 @Component
 class ExternalApiScheduler(

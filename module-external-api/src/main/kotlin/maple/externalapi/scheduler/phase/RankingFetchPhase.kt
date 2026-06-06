@@ -1,6 +1,5 @@
 package maple.externalapi.scheduler.phase
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.await
@@ -9,14 +8,12 @@ import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.domain.KeyType
 import maple.externalapi.metrics.ExternalApiMetrics
-import maple.externalapi.metrics.SnapshotVolumeMetrics
+import maple.externalapi.parser.RankingEntryParser
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.ChunkedSnapshotSink
+import maple.externalapi.snapshot.RankingSnapshotSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkRecord
-import maple.externalapi.snapshot.SnapshotChunkingProperties
-import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
@@ -28,16 +25,16 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 
+/** Emit a progress log every N items fetched. 10,000 chosen for ranking phase (lower call rate). */
+private const val PROGRESS_LOG_INTERVAL: Int = 10_000
+
 @Component
 @ConditionalOnProperty(name = ["external-api.ranking.enabled"], havingValue = "true", matchIfMissing = false)
 class RankingFetchPhase(
     private val clientPort: ExternalApiClientPort,
-    private val objectMapper: ObjectMapper,
-    private val chunkingProperties: SnapshotChunkingProperties,
-    private val volumeMetrics: SnapshotVolumeMetrics,
+    private val rankingEntryParser: RankingEntryParser,
     private val metrics: ExternalApiMetrics,
-    @Qualifier("rankingSnapshotPublisher")
-    private val rankingPublisher: SnapshotChunkEventPublisher,
+    private val sinkFactory: RankingSnapshotSinkFactory,
     @Value("\${external-api.ranking.max-pages:300}")
     private val maxPages: Int,
     @Value("\${external-api.ranking.permits-per-second:50}")
@@ -51,20 +48,10 @@ class RankingFetchPhase(
         val runId = SchedulerPhaseUtils.newRunId()
         val date = LocalDate.now().minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
         val runDir: Path = Paths.get(storeBasePath, "runs", runId)
-        val endpointConfig = chunkingProperties.configFor("ranking-overall")
 
         SchedulerPhaseUtils.writeRunningMarker(runDir)
 
-        val sink = ChunkedSnapshotSink(
-            runDir = runDir,
-            endpoint = "ranking-overall",
-            maxRecords = endpointConfig.maxRecords,
-            maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
-            queueCapacity = chunkingProperties.queueCapacity,
-            objectMapper = objectMapper,
-            eventPublisher = rankingPublisher,
-            volumeMetrics = volumeMetrics,
-        )
+        val sink = sinkFactory.create(runDir, "ranking-overall")
 
         val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
         val start = Instant.now()
@@ -109,7 +96,7 @@ class RankingFetchPhase(
                 val count = submitRankingEntries(sink, bodyBytes, currentPage)
                 fetched += count
                 metrics.recordRankingFetched(count)
-                if (fetched % 10000 == 0) {
+                if (fetched % PROGRESS_LOG_INTERVAL == 0) {
                     log.info("[RankingFetch] progress: fetched={}, failed={}, page={}/{}", fetched, failed, currentPage, maxPages)
                 }
             } catch (ex: Throwable) {
@@ -136,27 +123,24 @@ class RankingFetchPhase(
         bodyBytes: ByteArray,
         page: Int,
     ): Int {
-        val root = objectMapper.readTree(bodyBytes)
-        val rankingArray = root.get("ranking")
-        if (rankingArray == null || !rankingArray.isArray) {
+        val entries = rankingEntryParser.parseEntries(bodyBytes)
+        if (entries.isEmpty()) {
             log.warn("[RankingFetch] no ranking array in response: page={}", page)
             return 0
         }
 
-        var count = 0
-        for (node in rankingArray) {
-            val name = node.get("character_name")?.asText() ?: continue
-            val entryBytes = objectMapper.writeValueAsBytes(node)
-            sink.submit(SnapshotChunkRecord.Success(
-                bodyBytes = entryBytes,
-                key = name,
-                endpoint = "ranking-overall",
-                keyType = KeyType.DATE_PAGE.name,
-                httpStatus = 200,
-                fetchedAt = Instant.now(),
-            ))
-            count++
+        for (entry in entries) {
+            sink.submit(
+                SnapshotChunkRecord.Success(
+                    bodyBytes = entry.bodyBytes,
+                    key = entry.characterName,
+                    endpoint = "ranking-overall",
+                    keyType = KeyType.DATE_PAGE.name,
+                    httpStatus = 200,
+                    fetchedAt = Instant.now(),
+                ),
+            )
         }
-        return count
+        return entries.size
     }
 }

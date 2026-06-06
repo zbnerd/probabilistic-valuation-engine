@@ -21,10 +21,10 @@ class ChunkExecutionStatusTest {
     }
 
     @Test
-    fun `Pending is not terminal and does not ack-skip or preserve redelivery`() {
+    fun `Pending is not terminal and does not acknowledge or preserve redelivery`() {
         val s = ChunkExecutionStatus.Pending
         assertThat(s.isTerminal()).isFalse()
-        assertThat(s.shouldAckSkip(now)).isFalse()
+        assertThat(s.shouldAcknowledge(now)).isFalse()
         assertThat(s.shouldPreserveKafkaRedelivery(now)).isFalse()
     }
 
@@ -40,7 +40,7 @@ class ChunkExecutionStatusTest {
     fun `Processing is not terminal and does not preserve redelivery`() {
         val s = ChunkExecutionStatus.Processing
         assertThat(s.isTerminal()).isFalse()
-        assertThat(s.shouldAckSkip(now)).isFalse()
+        assertThat(s.shouldAcknowledge(now)).isFalse()
         assertThat(s.shouldPreserveKafkaRedelivery(now)).isFalse()
     }
 
@@ -58,42 +58,42 @@ class ChunkExecutionStatusTest {
     }
 
     @Test
-    fun `Succeeded is terminal and always ack-skips`() {
+    fun `Succeeded is terminal and always acknowledges`() {
         val s = ChunkExecutionStatus.Succeeded
         assertThat(s.isTerminal()).isTrue()
         assertThat(s.isTerminalSkip()).isTrue()
-        assertThat(s.shouldAckSkip(now)).isTrue()
+        assertThat(s.shouldAcknowledge(now)).isTrue()
         assertThat(s.shouldPreserveKafkaRedelivery(now)).isFalse()
     }
 
     @Test
-    fun `FailedTerminal is terminal and always ack-skips`() {
+    fun `FailedTerminal is terminal and always acknowledges`() {
         val s = ChunkExecutionStatus.FailedTerminal("MAX_ATTEMPTS_EXCEEDED")
         assertThat(s.isTerminal()).isTrue()
         assertThat(s.isTerminalSkip()).isTrue()
-        assertThat(s.shouldAckSkip(now)).isTrue()
+        assertThat(s.shouldAcknowledge(now)).isTrue()
         assertThat(s.shouldPreserveKafkaRedelivery(now)).isFalse()
     }
 
     @Test
-    fun `FailedRetryable with future retry preserves redelivery and does not ack-skip`() {
+    fun `FailedRetryable with future retry preserves redelivery and does not acknowledge`() {
         val s = ChunkExecutionStatus.FailedRetryable(future)
         assertThat(s.isTerminal()).isFalse()
-        assertThat(s.shouldAckSkip(now)).isFalse()
+        assertThat(s.shouldAcknowledge(now)).isFalse()
         assertThat(s.shouldPreserveKafkaRedelivery(now)).isTrue()
     }
 
     @Test
-    fun `FailedRetryable with past retry does not preserve redelivery and ack-skips`() {
+    fun `FailedRetryable with past retry does not preserve redelivery and acknowledges`() {
         val s = ChunkExecutionStatus.FailedRetryable(past)
-        assertThat(s.shouldAckSkip(now)).isTrue()
+        assertThat(s.shouldAcknowledge(now)).isTrue()
         assertThat(s.shouldPreserveKafkaRedelivery(now)).isFalse()
     }
 
     @Test
-    fun `FailedRetryable with null nextRetryAt ack-skips immediately`() {
+    fun `FailedRetryable with null nextRetryAt acknowledges immediately`() {
         val s = ChunkExecutionStatus.FailedRetryable(null)
-        assertThat(s.shouldAckSkip(now)).isTrue()
+        assertThat(s.shouldAcknowledge(now)).isTrue()
         assertThat(s.shouldPreserveKafkaRedelivery(now)).isFalse()
     }
 

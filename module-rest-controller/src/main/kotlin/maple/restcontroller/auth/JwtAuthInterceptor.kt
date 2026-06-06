@@ -1,6 +1,5 @@
 package maple.restcontroller.auth
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import maple.expectation.core.auth.JwtParserPort
@@ -16,12 +15,13 @@ import org.springframework.web.servlet.HandlerInterceptor
 class JwtAuthInterceptor(
     private val jwtParserPort: JwtParserPort,
     private val characterOcidPort: CharacterOcidPort,
-    private val objectMapper: ObjectMapper,
 ) : HandlerInterceptor {
 
     companion object {
         private val log = LoggerFactory.getLogger(JwtAuthInterceptor::class.java)
         const val USER_ATTRIBUTE = "authenticatedUser"
+        private const val BEARER_PREFIX: String = "Bearer "
+        private const val BEARER_PREFIX_LENGTH: Int = BEARER_PREFIX.length
     }
 
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
@@ -58,8 +58,8 @@ class JwtAuthInterceptor(
 
     private fun extractBearerToken(request: HttpServletRequest): String? {
         val header = request.getHeader("Authorization") ?: return null
-        return if (header.startsWith("Bearer ", ignoreCase = true)) {
-            header.substring(7).trim().takeIf { it.isNotBlank() }
+        return if (header.startsWith(BEARER_PREFIX, ignoreCase = true)) {
+            header.substring(BEARER_PREFIX_LENGTH).trim().takeIf { it.isNotBlank() }
         } else null
     }
 

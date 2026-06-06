@@ -3,21 +3,15 @@ package maple.calculator.consumer
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.runBlocking
-import maple.calculator.CalculatorChunkProcessingCoordinator
+import maple.calculator.parser.SnapshotEventParser
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
-import org.mockito.kotlin.any
-import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
 import org.springframework.kafka.support.Acknowledgment
 import java.time.Instant
 
@@ -25,7 +19,7 @@ import java.time.Instant
 class KafkaSnapshotChunkReadyConsumerTest {
 
     @Mock
-    private lateinit var coordinator: CalculatorChunkProcessingCoordinator
+    private lateinit var dispatchService: SnapshotDispatchService
 
     @Mock
     private lateinit var acknowledgment: Acknowledgment
@@ -51,65 +45,22 @@ class KafkaSnapshotChunkReadyConsumerTest {
     @BeforeEach
     fun setUp() {
         consumer = KafkaSnapshotChunkReadyConsumer(
-            objectMapper = objectMapper,
-            coordinator = coordinator,
-            maxRetries = 2,
-            retryBackoffMs = 5,
+            eventParser = SnapshotEventParser(objectMapper),
+            dispatchService = dispatchService,
         )
     }
 
     @Test
-    fun `consume ACKs on success`() = runBlocking {
-        whenever(coordinator.handle(any())).thenReturn(Unit)
-
+    fun `consume parses and delegates to dispatchService with Consumer label`() {
         consumer.consume(messageJson, acknowledgment)
 
-        verify(coordinator, times(1)).handle(any())
-        verify(acknowledgment, times(1)).acknowledge()
+        verify(dispatchService, times(1)).dispatch(event, acknowledgment, "Consumer")
     }
 
     @Test
-    fun `consume retries transient failure then ACKs`() = runBlocking {
-        whenever(coordinator.handle(any()))
-            .thenThrow(RuntimeException("transient-1"))
-            .thenThrow(RuntimeException("transient-2"))
-            .thenReturn(Unit)
+    fun `consumeUrgent parses and delegates to dispatchService with URGENT label`() {
+        consumer.consumeUrgent(messageJson, acknowledgment)
 
-        consumer.consume(messageJson, acknowledgment)
-
-        verify(coordinator, times(3)).handle(any())
-        verify(acknowledgment, times(1)).acknowledge()
-    }
-
-    @Test
-    fun `consume throws after exhausting retries without ACKing`() {
-        runBlocking {
-            whenever(coordinator.handle(any())).thenThrow(RuntimeException("permanent"))
-        }
-
-        assertThrows<RuntimeException> {
-            consumer.consume(messageJson, acknowledgment)
-        }
-
-        runBlocking {
-            verify(coordinator, times(3)).handle(any())
-            verify(acknowledgment, never()).acknowledge()
-        }
-    }
-
-    @Test
-    fun `consume propagates CancellationException without retry`() {
-        runBlocking {
-            whenever(coordinator.handle(any())).thenThrow(CancellationException("cancelled"))
-        }
-
-        assertThrows<CancellationException> {
-            consumer.consume(messageJson, acknowledgment)
-        }
-
-        runBlocking {
-            verify(coordinator, times(1)).handle(any())
-            verify(acknowledgment, never()).acknowledge()
-        }
+        verify(dispatchService, times(1)).dispatch(event, acknowledgment, "URGENT")
     }
 }

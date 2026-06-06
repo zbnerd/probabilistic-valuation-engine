@@ -2,11 +2,9 @@ package maple.expectation.infrastructure.worker
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
-import maple.expectation.core.port.inbound.BatchComputeBuffer
 import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExpectationV4Port
-import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.GameCharacterPort
 import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
 import maple.expectation.infrastructure.config.CacheProperties
@@ -34,7 +32,6 @@ abstract class AbstractExpectationCalcWorker(
     queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val expectationPort: ExpectationV4Port,
-    private val characterOcidPort: CharacterOcidPort,
     // Two-phase batch processing dependencies
     private val gameCharacterPort: GameCharacterPort,
     private val l2CacheStrategy: L2CacheStrategy,
@@ -43,7 +40,6 @@ abstract class AbstractExpectationCalcWorker(
     private val viewQueryPort: CharacterViewQueryPort,
     private val batchRepo: CharacterViewBatchRepository,
     private val objectMapper: ObjectMapper,
-    private val computeBuffer: BatchComputeBuffer,
     private val jobService: CalculationJobService,
 ) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 

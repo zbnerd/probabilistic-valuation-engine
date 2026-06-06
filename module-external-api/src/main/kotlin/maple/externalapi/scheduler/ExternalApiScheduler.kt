@@ -23,6 +23,9 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
+/** 1 hour — long enough for the full daily refresh pipeline (snapshot → ocid → ranking) to complete without contention, but bounded so a hung worker releases the lock within one refresh cycle. */
+private const val DAILY_REFRESH_LOCK_TIMEOUT_MS: Long = 3_600_000L
+
 @Component
 class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
@@ -64,7 +67,7 @@ class ExternalApiScheduler(
 
     fun triggerDailyRefresh(externalRunId: String? = null) {
         try {
-            acquireLock("daily_refresh", 3_600_000)
+            acquireLock("daily_refresh", DAILY_REFRESH_LOCK_TIMEOUT_MS)
         } catch (ex: DistributedLockException) {
             log.error("[Scheduler] could not acquire lock for daily refresh, skipping until next cron", ex)
             return

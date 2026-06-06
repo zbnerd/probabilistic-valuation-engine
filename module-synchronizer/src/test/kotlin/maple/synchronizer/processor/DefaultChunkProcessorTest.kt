@@ -1,10 +1,12 @@
 package maple.synchronizer.processor
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import maple.core.domain.chunk.ChunkProcessInput
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
+import maple.synchronizer.metrics.SynchronizerMeterRegistry
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.preparer.PreppedDocument
 import org.assertj.core.api.Assertions.assertThat
@@ -24,7 +26,7 @@ class DefaultChunkProcessorTest {
     private val dataReader: ChunkDataReader = mock()
     private val transformer: ChunkDocumentTransformer = mock()
     private val writer: ChunkDocumentWriter = mock()
-    private val metrics = SynchronizerMetrics(SimpleMeterRegistry())
+    private val metrics = SynchronizerMetrics(SynchronizerMeterRegistry(SimpleMeterRegistry()))
 
     private lateinit var chunkProcessor: DefaultChunkProcessor
 

@@ -2,17 +2,20 @@ package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import maple.expectation.common.event.ChunkExecutionType
+import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
+import maple.synchronizer.event.ResultChunkEventPathBuilder
 import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
 import maple.synchronizer.processor.ChunkProcessor
-import maple.synchronizer.repository.OcidMappingRepository
-import maple.synchronizer.repository.CharacterBasicRepository
-import maple.synchronizer.storage.BasicChunkFileReader
+import maple.synchronizer.service.BasicChunkIngestionService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 import org.springframework.kafka.support.Acknowledgment
 
 class ChunkConsumerMappingTest {
@@ -20,32 +23,29 @@ class ChunkConsumerMappingTest {
     private val objectMapper = jacksonObjectMapper().findAndRegisterModules()
 
     @Test
-    fun `basic consumer maps event metadata to basic chunk execution request`() {
-        val template = mock<ChunkConsumerTemplate>()
+    fun `basic consumer delegates parsed event to ingestion service`() {
+        val ingestionService = mock<BasicChunkIngestionService>()
+        whenever(ingestionService.process(any(), any(), any(), any(), any(), any())).thenReturn(true)
         val consumer = BasicSnapshotChunkConsumer(
             objectMapper = objectMapper,
-            fileReader = mock<BasicChunkFileReader>(),
-            repository = mock<CharacterBasicRepository>(),
-            ocidMappingRepository = mock<OcidMappingRepository>(),
-            chunkConsumerTemplate = template,
-            consumedEventPublisher = mock<KafkaChunkConsumedEventPublisher>(),
-            executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
+            ingestionService = ingestionService,
         )
 
         consumer.consume(basicMessage, mock<Acknowledgment>(), "basic-topic", null)
 
-        val captor = argumentCaptor<ChunkConsumerRequest>()
-        verify(template).submit(captor.capture())
-        val request = captor.firstValue
-        assertThat(request.identity.executionType).isEqualTo(ChunkExecutionType.SYNCHRONIZER_BASIC_CHUNK)
-        assertThat(request.identity.runId).isEqualTo("run-basic")
-        assertThat(request.identity.endpoint).isEqualTo("character-basic")
-        assertThat(request.identity.chunkId).isEqualTo("chunk-1")
-        assertThat(request.topic).isEqualTo("basic-topic")
-        assertThat(request.messageKey).isEqualTo("run-basic:character-basic:chunk-1")
-        assertThat(request.eventType).isEqualTo("SNAPSHOT_CHUNK_READY")
-        assertThat(request.schemaVersion).isEqualTo(1)
-        assertThat(request.eventPayloadJson).isEqualTo(basicMessage)
+        val eventCaptor = argumentCaptor<SnapshotChunkReadyEvent>()
+        verify(ingestionService).process(
+            eventCaptor.capture(),
+            eq(basicMessage),
+            any(),
+            eq("basic-topic"),
+            eq(null),
+            eq(false),
+        )
+        val event = eventCaptor.firstValue
+        assertThat(event.runId).isEqualTo("run-basic")
+        assertThat(event.endpoint).isEqualTo("character-basic")
+        assertThat(event.chunkId).isEqualTo("chunk-1")
     }
 
     @Test
@@ -57,6 +57,7 @@ class ChunkConsumerMappingTest {
             chunkMetricsListener = mock<SynchronizerChunkMetricsListener>(),
             chunkConsumerTemplate = template,
             consumedEventPublisher = mock<KafkaChunkConsumedEventPublisher>(),
+            eventPathBuilder = mock<ResultChunkEventPathBuilder>(),
             executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
         )
 

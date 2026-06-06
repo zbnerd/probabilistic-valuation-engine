@@ -1,6 +1,5 @@
 package maple.externalapi.scheduler.phase
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
@@ -13,7 +12,9 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
+import maple.externalapi.parser.OcidResponseParser
 import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.reader.CharacterNameReader
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.util.StringMaskingUtils.maskIgn
@@ -22,7 +23,6 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -30,14 +30,17 @@ import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
-import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+
+/** Emit a progress log every N items processed. 5,000 chosen to keep log volume under ~3 lines/sec/chunk. */
+private const val PROGRESS_LOG_INTERVAL: Int = 5_000
 
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class OcidLookupPhase(
     private val clientPort: ExternalApiClientPort,
-    private val objectMapper: ObjectMapper,
+    private val ocidResponseParser: OcidResponseParser,
+    private val characterNameReader: CharacterNameReader,
     @Value("\${external-api.rate-limit.ocid-lookup-permits-per-second:400}")
     private val ocidLookupPermitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
@@ -134,7 +137,7 @@ class OcidLookupPhase(
             processed += permits
 
             val progress = successCount + failCount
-            if (progress - lastProgressLog >= 5000) {
+            if (progress - lastProgressLog >= PROGRESS_LOG_INTERVAL) {
                 lastProgressLog = progress
                 SchedulerPhaseUtils.logProgress("OCID lookup", progress, igns.size, successCount, failCount, start)
             }
@@ -155,9 +158,9 @@ class OcidLookupPhase(
                     ExternalApiEndpoint.OCID_LOOKUP,
                     ign,
                 ).await()
-                val ocid = objectMapper.readTree(data).get("ocid")?.asText()
+                val ocid = ocidResponseParser.extractOcid(String(data))
                 if (ocid != null) {
-                    String(objectMapper.writeValueAsBytes(mapOf("userIgn" to ign, "ocid" to ocid)))
+                    String(ocidResponseParser.serializeMapping(ign, ocid), Charsets.UTF_8)
                 } else {
                     log.warn("[OCID] null ocid for ign={}", maskIgn(ign))
                     null
@@ -168,25 +171,7 @@ class OcidLookupPhase(
 
     fun readCharacterNamesFromChunks(runDir: Path): List<String> {
         val chunksDir = runDir.resolve("ranking-overall").resolve("chunks")
-        if (!Files.exists(chunksDir)) return emptyList()
-
-        val names = linkedSetOf<String>()
-        Files.list(chunksDir).use { stream ->
-            stream.filter { it.toString().endsWith(".jsonl.gz") }
-                .sorted()
-                .forEach { chunkFile ->
-                    GZIPInputStream(BufferedInputStream(Files.newInputStream(chunkFile))).bufferedReader().use { reader ->
-                        reader.lineSequence().forEach { line ->
-                            if (line.isNotBlank()) {
-                                val node = objectMapper.readTree(line)
-                                val key = node.get("key")?.asText()
-                                if (key != null) names.add(key)
-                            }
-                        }
-                    }
-                }
-        }
-        return names.toList()
+        return characterNameReader.readDistinctKeys(chunksDir)
     }
 
     private fun deleteOldMappingFiles(mappingDir: Path) {

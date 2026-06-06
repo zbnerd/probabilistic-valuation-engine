@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class ConsumedChunkCleanupScheduler(
     private val objectMapper: ObjectMapper,
     @Value("\${external-api.store.base-path:../data}") private val basePath: String,
-    @Value("\${external-api.cleanup.consumed.max-pending:10000}") private val maxPending: Int,
+    @Value("\${external-api.cleanup.consumed.max-pending:10000}") private val maxPending: Int, // 10,000 pending threshold
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)
     private val pendingDeletions = ConcurrentLinkedQueue<ChunkConsumedEvent>()
@@ -59,7 +59,7 @@ class ConsumedChunkCleanupScheduler(
         acknowledgment.acknowledge()
     }
 
-    @Scheduled(fixedDelayString = "\${external-api.cleanup.consumed.interval-ms:3600000}")
+    @Scheduled(fixedDelayString = "\${external-api.cleanup.consumed.interval-ms:3600000}") // 3,600,000 ms = 1 hour
     fun scheduledCleanup() {
         cleanup()
     }

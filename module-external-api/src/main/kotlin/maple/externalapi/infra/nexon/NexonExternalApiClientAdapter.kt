@@ -22,6 +22,9 @@ import org.springframework.web.util.DefaultUriBuilderFactory
 import reactor.netty.http.client.HttpClient
 import reactor.netty.resources.ConnectionProvider
 
+/** Per-request HTTP call timeout for the Nexon API — bounds slow upstream responses. */
+private val HTTP_CALL_TIMEOUT: Duration = Duration.ofSeconds(10)
+
 @Component
 class NexonExternalApiClientAdapter(
     @Value("\${nexon.api.key}")
@@ -120,7 +123,7 @@ class NexonExternalApiClientAdapter(
                 log.warn("[NexonAdapter] fetch failed: endpoint={}, key={}, status={}, body={}", endpoint.name, requestKey, ex.statusCode, ex.responseBodyAsString)
                 throw ex
             }
-            .timeout(Duration.ofSeconds(10))
+            .timeout(HTTP_CALL_TIMEOUT)
             .toFuture()
     }
 }

@@ -47,8 +47,8 @@ class V6ReadConfig(
     @Bean
     fun readModelQueryService(
         jdbc: NamedParameterJdbcTemplate,
-        objectMapper: ObjectMapper
-    ): ReadModelQueryService = ReadModelQueryService(jdbc, objectMapper)
+        documentExtractor: ReadModelDocumentExtractor,
+    ): ReadModelQueryService = ReadModelQueryService(jdbc, documentExtractor)
 
     @Bean
     fun readModelCacheService(

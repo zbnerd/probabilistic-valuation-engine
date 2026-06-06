@@ -39,24 +39,18 @@ package maple.restcontroller.read
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 
 class ReadModelRowQueryTest {
     @Test
-    fun `build returns empty predicate and empty params for empty requests`() {
-        val (sql, params) = ReadModelRowQuery.build(emptyMap())
-
-        assertTrue(
-            sql.contains("FROM character_equipment_read_model"),
-            "expected SELECT in: $sql",
-        )
-        assertTrue(
-            sql.contains("WHERE ()"),
-            "expected empty predicate placeholder in: $sql",
-        )
-        // No values added.
-        assertEquals(0, params.parameterNames.size)
+    fun `build throws on empty requests to avoid WHERE () syntax error`() {
+        val ex = assertThrows(IllegalArgumentException::class.java) {
+            ReadModelRowQuery.build(emptyMap())
+        }
+        // No SQL or params are produced.
+        assertTrue(ex.message!!.contains("requests"), "message: ${ex.message}")
     }
 
     @Test
@@ -102,6 +96,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 
 object ReadModelRowQuery {
     fun build(requests: Map<String, Int>): Pair<String, MapSqlParameterSource> {
+        require(requests.isNotEmpty()) { "ReadModelRowQuery.build requires non-empty requests" }
         val params = MapSqlParameterSource()
         val predicates = requests.entries.mapIndexed { i, (userIgn, presetNo) ->
             params

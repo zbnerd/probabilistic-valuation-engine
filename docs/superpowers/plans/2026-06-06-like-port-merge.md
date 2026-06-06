@@ -27,7 +27,7 @@
 
 | File | Change |
 |------|--------|
-| `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeBufferStrategy.kt` | Fix KDoc reference to nonexistent `RedisLikeBufferStorage` |
+| `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeBufferStrategy.kt` | Fix KDoc — remove "5-Agent Council Agreement" block + stale `maple.expectation.service.v2.cache.LikeBufferStorage` reference + redundant `@see` |
 | `module-app/src/test-legacy/java/maple/expectation/service/v2/like/realtime/LikeRealtimeSyncIntegrationTest.java` | Remove `LikeEventPublisher` and `LikeEventSubscriber` fields + 2 assertion test methods |
 | `module-core/src/main/kotlin/maple/expectation/core/port/out/like/` directory | Remove empty directory after file deletion |
 
@@ -48,20 +48,20 @@
 **Files:**
 - Modify: `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeBufferStrategy.kt:17-26`
 
-- [ ] **Step 1: Read current KDoc lines 17-26 of the file**
+- [ ] **Step 1: Read current KDoc lines 1-26 of the file**
 
-Run: `Read module-core/src/main/kotlin/maple/expectation/core/port/out/LikeBufferStrategy.kt` (offset 17, limit 10)
-Expected: KDoc block referencing `maple.expectation.service.v2.cache.LikeBufferStorage` and the @see line for "In-Memory implementation"
+Run: `Read module-core/src/main/kotlin/maple/expectation/core/port/out/LikeBufferStrategy.kt` (offset 1, limit 26)
+Expected: KDoc block (lines 3-26) referencing `maple.expectation.service.v2.cache.LikeBufferStorage` (line 22) and `@see` (line 25), with "5-Agent Council Agreement" block at lines 10-17
 
-- [ ] **Step 2: Edit the KDoc**
+- [ ] **Step 2: Replace the entire KDoc (lines 3-26) with a corrected version**
 
-In `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeBufferStrategy.kt`, change the KDoc so lines 17-26 become:
+In `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeBufferStrategy.kt`, replace the entire KDoc block (lines 3-26) so the file becomes:
 
 ```kotlin
+package maple.expectation.core.port.out
+
 /**
  * Like Buffer Strategy Interface (#271 V5 Stateless Architecture)
- *
- * <h3>Role</h3>
  *
  * <p>Defines the strategy for buffering like increments. In-Memory (Caffeine) implementation.
  *
@@ -71,9 +71,10 @@ In `module-core/src/main/kotlin/maple/expectation/core/port/out/LikeBufferStrate
  *   <li>maple.expectation.infrastructure.cache.like.InMemoryLikeBufferStorage - In-Memory Caffeine
  * </ul>
  */
+interface LikeBufferStrategy {
 ```
 
-(Removes: the "5-Agent Council Agreement" block at lines 7-15 of original, and the `@see` line at line 25. Note: the "5-Agent Council Agreement" block is at the TOP of the original file, lines 7-15. Re-read first to confirm exact lines.)
+(Removes: the "5-Agent Council Agreement" block at lines 10-17, the stale `maple.expectation.service.v2.cache.LikeBufferStorage` reference at line 22, and the redundant `@see` line 25. The interface body and rest of the file below line 27 are unchanged.)
 
 - [ ] **Step 3: Verify file still compiles standalone**
 

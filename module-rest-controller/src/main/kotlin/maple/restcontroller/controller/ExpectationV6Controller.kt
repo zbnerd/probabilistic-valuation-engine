@@ -48,7 +48,7 @@ class ExpectationV6Controller(
         @RequestParam(defaultValue = "1") presetNo: Int,
     ): ResponseEntity<*> {
         val current = cacheService.status(userIgn, presetNo)
-        val status = if (current.state == UrgentReadState.PENDING || current.state == UrgentReadState.UNKNOWN) {
+        val status = if (current.state.shouldTryDb()) {
             val dbResult = queryService.batchQuery(
                 mapOf(userIgn to presetNo),
                 Duration.ofSeconds(properties.readModelFreshnessSeconds),

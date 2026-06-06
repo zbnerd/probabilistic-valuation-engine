@@ -1,7 +1,7 @@
 package maple.synchronizer.repository
 
 import maple.expectation.common.event.ChunkExecutionIdentity
-import maple.expectation.common.event.ChunkExecutionStatus
+import maple.synchronizer.state.ChunkExecutionStatus
 import maple.expectation.common.event.ChunkExecutionType
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterAll
@@ -37,7 +37,7 @@ class ChunkExecutionRepositoryTest {
         assertThat(first).isTrue()
         assertThat(second).isFalse()
         assertThat(rowCount()).isEqualTo(1)
-        assertThat(repository.findStatus(identity)).isEqualTo(ChunkExecutionStatus.PENDING)
+        assertThat(repository.findStatus(identity)).isEqualTo(ChunkExecutionStatus.Pending)
     }
 
     @Test
@@ -49,7 +49,7 @@ class ChunkExecutionRepositoryTest {
 
         val state = repository.findExecutionState(identity)
 
-        assertThat(state?.status).isEqualTo(ChunkExecutionStatus.FAILED_RETRYABLE)
+        assertThat(state?.status).isEqualTo(ChunkExecutionStatus.FailedRetryable(nextRetryAt))
         assertThat(state?.nextRetryAt).isEqualTo(nextRetryAt)
         assertThat(state?.leaseUntil).isNull()
         assertThat(state?.attemptCount).isEqualTo(1)

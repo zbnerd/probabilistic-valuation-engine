@@ -3,6 +3,7 @@ package maple.synchronizer.storage
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.metrics.SynchronizerReaderMetrics
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -51,10 +52,11 @@ class OcidMappingFileReaderTest {
     }
 
     @Test
-    fun `read throws IllegalStateException when file not found`() {
+    fun `read throws ArtifactNotFoundException when file not found`() {
         assertThatThrownBy { reader.read("nonexistent/path.jsonl.gz") }
-            .isInstanceOf(IllegalStateException::class.java)
-            .hasMessageContaining("Ocid mapping file not found")
+            .isInstanceOf(ArtifactNotFoundException::class.java)
+            .hasMessageContaining("OcidMappingFileReader")
+            .hasMessageContaining("nonexistent/path.jsonl.gz")
     }
 
     @Test

@@ -17,11 +17,15 @@ dependencies {
 	implementation(libs.jackson.annotations)
 	implementation(libs.jackson.databind)
 
+	// Coroutines (suspend in port interfaces)
+	implementation(libs.kotlinx.coroutines.core)
+
 	// Testing
 	testImplementation(libs.junit.jupiter)
 	testImplementation(libs.jqwik)
 	testImplementation(libs.assertj.core)
 	testImplementation(libs.jackson.module.kotlin)
+	testImplementation(libs.kotlinx.coroutines.test)
 }
 
 test {

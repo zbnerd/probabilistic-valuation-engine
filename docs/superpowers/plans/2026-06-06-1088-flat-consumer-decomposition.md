@@ -4,7 +4,7 @@
 
 **Goal:** Refactor `OcidLookupRunConsumer`, `BasicSnapshotChunkConsumer`, and `KafkaResultChunkConsumer` so each `consume(...)` method only deserializes, delegates to a service, and ACKs. Move endpoint filtering, ingestion logic, and event-path templating out of the consumers.
 
-**Architecture:** Three small services / builders under `module-synchronizer`: `OcidLookupService` (file read + DB upsert + Redis write + log policy), `BasicChunkIngestionService` (endpoint predicate), `ResultChunkEventPathBuilder` (storage path templating). Each is a pure `@Component` with no Kafka awareness. The existing `ChunkConsumerTemplate` continues to handle async chunk lifecycle for the two chunk consumers.
+**Architecture:** Three small services / builders under `module-synchronizer`: `OcidLookupService` (file read + DB upsert + Redis write + log policy), `BasicChunkIngestionService` (endpoint filter + chunk template submission + urgent handling), `ResultChunkEventPathBuilder` (storage path templating). Each is a pure `@Component` with no Kafka awareness in the body. The existing `ChunkConsumerTemplate` continues to handle async chunk lifecycle. Both services expose a single `process(event)`-style entry point so consumers become `parse → service.process → ack-if-not-handled`.
 
 **Tech Stack:** Kotlin 1.9, Spring Boot 3, Jackson, JUnit 5 + MockK, SLF4J, Gradle (Kotlin DSL).
 
@@ -15,13 +15,13 @@
 | File | Responsibility | Action |
 |------|----------------|--------|
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/service/OcidLookupService.kt` | Ingest `SnapshotRunCompletedEvent` for `ocid-lookup` endpoint: file read, batch upsert, Redis write, log policy | Create |
-| `module-synchronizer/src/test/kotlin/maple/synchronizer/service/OcidLookupServiceTest.kt` | Unit tests for happy / empty / Redis-failure paths | Create |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/service/BasicChunkIngestionService.kt` | Single predicate `shouldHandle(event)` for `character-basic` endpoint | Create |
-| `module-synchronizer/src/test/kotlin/maple/synchronizer/service/BasicChunkIngestionServiceTest.kt` | Unit tests for the predicate | Create |
+| `module-synchronizer/src/test/kotlin/maple/synchronizer/service/OcidLookupServiceTest.kt` | Unit tests for happy / empty / Redis-failure / non-matching paths | Create |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/service/BasicChunkIngestionService.kt` | Endpoint filter + chunk template submission + urgent flag handling | Create |
+| `module-synchronizer/src/test/kotlin/maple/synchronizer/service/BasicChunkIngestionServiceTest.kt` | Unit tests: `process` returns false for non-matching endpoint; template submission wiring for matching endpoint | Create |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/event/ResultChunkEventPathBuilder.kt` | Build source object key for result chunks | Create |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/event/ResultChunkEventPathBuilderTest.kt` | Format test | Create |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/OcidLookupRunConsumer.kt` | Shrink to `parse → service.ingest → ack` | Modify |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/BasicSnapshotChunkConsumer.kt` | Inject `BasicChunkIngestionService`; replace inline endpoint checks | Modify |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/BasicSnapshotChunkConsumer.kt` | Two thin listeners that delegate to `BasicChunkIngestionService` | Modify |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/KafkaResultChunkConsumer.kt` | Inject `ResultChunkEventPathBuilder`; use it in `onSuccess` | Modify |
 
 ---
@@ -85,7 +85,7 @@ class OcidLookupServiceTest {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `./gradlew :module-synchronizer:test --tests "maple.synchronizer.service.OcidLookupServiceTest" -i`
-Expected: COMPILATION FAILURE — `Unresolved reference: OcidLookupService` (and the `OcidMappingRedisWriter` / `OcidMappingFileReader` types must exist as referenced).
+Expected: COMPILATION FAILURE — `Unresolved reference: OcidLookupService`.
 
 - [ ] **Step 3: Write minimal implementation — `OcidLookupService`**
 
@@ -217,14 +217,6 @@ Append to `OcidLookupServiceTest`:
     }
 ```
 
-Add import at top of file:
-
-```kotlin
-import io.mockk.verify
-```
-
-(`verify` may already be imported from Task 1.)
-
 - [ ] **Step 2: Run tests to verify they pass**
 
 Run: `./gradlew :module-synchronizer:test --tests "maple.synchronizer.service.OcidLookupServiceTest" -i`
@@ -284,8 +276,6 @@ class OcidLookupRunConsumer(
 }
 ```
 
-Note the dropped `log`, `fileReader`, `repository`, `ocidMappingRedisWriter` fields and their imports.
-
 - [ ] **Step 2: Compile to verify no stale references**
 
 Run: `./gradlew :module-synchronizer:compileKotlin :module-synchronizer:compileJava --continue`
@@ -313,38 +303,79 @@ git commit -m "refactor(synchronizer): OcidLookupRunConsumer delegates to OcidLo
 
 - [ ] **Step 1: Write the failing test**
 
-Create `module-synchronizer/src/test/kotlin/maple/synchronizer/service/BasicChunkIngestionServiceTest.kt`:
+Create `module-synchronizer/src/test/kotlin/maple/synchronizer/service/BasicChunkIngestionServiceTest.kt`. This test verifies only the endpoint filter (the heavy template-submission wiring is integration-tested in the existing template tests). Discover the actual `SnapshotChunkReadyEvent` constructor parameter names from `module-synchronizer/.../consumer/BasicSnapshotChunkConsumer.kt` (it constructs one at line 48) and use those exact names.
 
 ```kotlin
 package maple.synchronizer.service
 
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.synchronizer.consumer.ChunkConsumerTemplate
+import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
+import maple.synchronizer.repository.CharacterBasicRepository
+import maple.synchronizer.repository.OcidMappingRepository
+import maple.synchronizer.storage.BasicChunkFileReader
+import io.mockk.mockk
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.springframework.beans.factory.annotation.Qualifier
+import java.util.concurrent.ExecutorService
 
 class BasicChunkIngestionServiceTest {
-    private val service = BasicChunkIngestionService()
+    private val fileReader = mockk<BasicChunkFileReader>(relaxed = true)
+    private val repository = mockk<CharacterBasicRepository>(relaxed = true)
+    private val ocidRepo = mockk<OcidMappingRepository>(relaxed = true)
+    private val template = mockk<ChunkConsumerTemplate>(relaxed = true)
+    private val publisher = mockk<KafkaChunkConsumedEventPublisher>(relaxed = true)
+    private val executor = mockk<ExecutorService>(relaxed = true)
+
+    private val service = BasicChunkIngestionService(
+        fileReader = fileReader,
+        repository = repository,
+        ocidMappingRepository = ocidRepo,
+        chunkConsumerTemplate = template,
+        consumedEventPublisher = publisher,
+        executor = executor,
+    )
 
     @Test
-    fun `shouldHandle returns true for character-basic endpoint`() {
-        val event = event(endpoint = "character-basic")
-        assertTrue(service.shouldHandle(event))
+    fun `process returns false and skips template for non-character-basic endpoint`() {
+        val event = makeEvent(endpoint = "ocid-lookup")
+
+        val handled = service.process(
+            event = event,
+            eventPayloadJson = "{}",
+            acknowledgment = mockk(relaxed = true),
+            topic = "t",
+            messageKey = "k",
+            urgent = false,
+        )
+
+        assertFalse(handled)
+        verify(exactly = 0) { template.submit(any()) }
     }
 
     @Test
-    fun `shouldHandle returns false for other endpoints`() {
-        val event = event(endpoint = "ocid-lookup")
-        assertFalse(service.shouldHandle(event))
+    fun `process returns true and submits template for character-basic endpoint`() {
+        val event = makeEvent(endpoint = "character-basic")
+
+        val handled = service.process(
+            event = event,
+            eventPayloadJson = "{}",
+            acknowledgment = mockk(relaxed = true),
+            topic = "t",
+            messageKey = "k",
+            urgent = false,
+        )
+
+        assertTrue(handled)
+        verify(exactly = 1) { template.submit(any()) }
     }
 
-    @Test
-    fun `shouldHandle returns false for blank endpoint`() {
-        val event = event(endpoint = "")
-        assertFalse(service.shouldHandle(event))
-    }
-
-    private fun event(endpoint: String) = SnapshotChunkReadyEvent(
+    private fun makeEvent(endpoint: String) = SnapshotChunkReadyEvent(
+        // Use the actual parameter names from the real constructor.
+        // This placeholder block is filled in by the executing subagent from the source.
         runId = "run-1",
         chunkId = "chunk-1",
         endpoint = endpoint,
@@ -356,73 +387,215 @@ class BasicChunkIngestionServiceTest {
 }
 ```
 
-Confirm `SnapshotChunkReadyEvent`'s constructor parameter names from the existing consumer (lines 7, 48, 56 of `BasicSnapshotChunkConsumer.kt`). The names used here are placeholders; the actual test file must use the real constructor signature discovered from the source.
+> **Note for the executing subagent:** Open `BasicSnapshotChunkConsumer.kt` and read the actual `SnapshotChunkReadyEvent(...)` constructor at line 48. The `makeEvent` helper above is a placeholder — replace it with the exact parameter names from the source.
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `./gradlew :module-synchronizer:test --tests "maple.synchronizer.service.BasicChunkIngestionServiceTest" -i`
-Expected: COMPILATION FAILURE — `Unresolved reference: BasicChunkIngestionService` (and possibly the `SnapshotChunkReadyEvent` constructor if names differ).
+Expected: COMPILATION FAILURE — `Unresolved reference: BasicChunkIngestionService` (and possibly the `SnapshotChunkReadyEvent` constructor parameter names if they differ from the placeholder).
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `module-synchronizer/src/main/kotlin/maple/synchronizer/service/BasicChunkIngestionService.kt`:
+Create `module-synchronizer/src/main/kotlin/maple/synchronizer/service/BasicChunkIngestionService.kt`. Mirror the existing `submitBasicChunk` body, `upsertOcidFromBasicRecords`, and constructor wiring from `BasicSnapshotChunkConsumer.kt` (lines 26-34 and 90-166). The endpoint filter, urgent-flag decision, and template submission all move here; the consumer becomes a thin dispatcher.
 
 ```kotlin
 package maple.synchronizer.service
 
+import maple.expectation.common.event.ChunkConsumedEvent
+import maple.expectation.common.event.ChunkExecutionIdentity
+import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.infrastructure.executor.TaskContext
+import maple.synchronizer.consumer.ChunkConsumerRequest
+import maple.synchronizer.consumer.ChunkConsumerTemplate
+import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
+import maple.synchronizer.repository.CharacterBasicRepository
+import maple.synchronizer.repository.OcidMappingRepository
+import maple.synchronizer.storage.BasicChunkFileReader
+import maple.synchronizer.storage.BasicRecord
+import maple.synchronizer.storage.OcidMapping
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Semaphore
 
 @Component
-class BasicChunkIngestionService {
-    fun shouldHandle(event: SnapshotChunkReadyEvent): Boolean = event.endpoint == "character-basic"
+class BasicChunkIngestionService(
+    private val fileReader: BasicChunkFileReader,
+    private val repository: CharacterBasicRepository,
+    private val ocidMappingRepository: OcidMappingRepository,
+    private val chunkConsumerTemplate: ChunkConsumerTemplate,
+    private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
+    @Qualifier("basicSnapshotChunkExecutor") private val executor: ExecutorService,
+) {
+    private val log = LoggerFactory.getLogger(javaClass)
+    private val processingPermit = Semaphore(2)
+
+    fun process(
+        event: SnapshotChunkReadyEvent,
+        eventPayloadJson: String,
+        acknowledgment: Acknowledgment,
+        topic: String?,
+        messageKey: String?,
+        urgent: Boolean,
+    ): Boolean {
+        if (event.endpoint != "character-basic") return false
+
+        val runId = event.runId
+        val chunkId = event.chunkId
+        val operation = if (urgent) "UrgentChunk" else "Chunk"
+        val identity = ChunkExecutionIdentity(
+            executionType = ChunkExecutionType.SYNCHRONIZER_BASIC_CHUNK,
+            runId = runId,
+            endpoint = event.endpoint,
+            chunkId = chunkId,
+        )
+
+        log.info(
+            "[BasicSync] {}received: runId={} chunkId={} objectKey={} records={}",
+            if (urgent) "URGENT " else "",
+            runId, chunkId, event.objectKey, event.recordCount,
+        )
+
+        chunkConsumerTemplate.submit(
+            ChunkConsumerRequest(
+                logPrefix = "BasicSync",
+                log = log,
+                identity = identity,
+                topic = topic ?: event.eventType,
+                messageKey = messageKey ?: event.kafkaKey(),
+                eventType = event.eventType,
+                schemaVersion = event.schemaVersion,
+                eventPayloadJson = eventPayloadJson,
+                objectKey = event.objectKey,
+                acknowledgment = acknowledgment,
+                processingPermit = processingPermit,
+                executor = executor,
+                processContext = TaskContext.of("BasicSync", "${operation}Process", chunkId),
+                lifecycleContext = TaskContext.of("BasicSync", "${operation}Lifecycle", chunkId),
+                process = {
+                    var totalRecords = 0
+                    fileReader.readInBatches(event.objectKey) { batch ->
+                        repository.bulkUpsert(runId, chunkId, batch)
+                        if (urgent) {
+                            upsertOcidFromBasicRecords(batch)
+                        }
+                        totalRecords += batch.size
+                    }
+                    log.info(
+                        "[BasicSync] {}chunk processed: runId={} chunkId={} records={}",
+                        if (urgent) "urgent " else "",
+                        runId,
+                        chunkId,
+                        totalRecords,
+                    )
+                },
+                onSuccess = {
+                    consumedEventPublisher.publish(ChunkConsumedEvent(
+                        runId = runId,
+                        endpoint = event.endpoint,
+                        chunkId = chunkId,
+                        objectKey = event.objectKey,
+                    ))
+                },
+                onFailure = { ex ->
+                    log.error(
+                        "[BasicSync] {}chunk processing failed: runId={} chunkId={}",
+                        if (urgent) "urgent " else "",
+                        runId,
+                        chunkId,
+                        ex,
+                    )
+                },
+            ),
+        )
+        return true
+    }
+
+    private fun upsertOcidFromBasicRecords(records: List<BasicRecord>) {
+        val mappings = records.map { OcidMapping(userIgn = it.userIgn, ocid = it.ocid) }
+        ocidMappingRepository.batchUpsert(mappings)
+        log.info("[BasicSync] batch upserted OCID mappings: count={}", mappings.size)
+    }
 }
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `./gradlew :module-synchronizer:test --tests "maple.synchronizer.service.BasicChunkIngestionServiceTest" -i`
-Expected: PASS — 3 tests, 0 failures.
+Expected: PASS — 2 tests, 0 failures.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add module-synchronizer/src/main/kotlin/maple/synchronizer/service/BasicChunkIngestionService.kt \
         module-synchronizer/src/test/kotlin/maple/synchronizer/service/BasicChunkIngestionServiceTest.kt
-git commit -m "feat(synchronizer): add BasicChunkIngestionService.shouldHandle predicate"
+git commit -m "feat(synchronizer): add BasicChunkIngestionService.process (endpoint filter + template wiring)"
 ```
 
 ---
 
-## Task 5: Wire `BasicChunkIngestionService` into `BasicSnapshotChunkConsumer`
+## Task 5: Refactor `BasicSnapshotChunkConsumer` to delegate to `BasicChunkIngestionService`
 
 **Files:**
 - Modify: `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/BasicSnapshotChunkConsumer.kt`
 
-- [ ] **Step 1: Add constructor parameter and replace inline endpoint check**
+- [ ] **Step 1: Replace consumer with thin dispatcher**
 
-In `BasicSnapshotChunkConsumer.kt`:
+Rewrite the file to:
 
-1. Add import: `import maple.synchronizer.service.BasicChunkIngestionService`
-2. Add to constructor parameters (position it before `chunkConsumerTemplate` for readability):
-   ```kotlin
-   private val ingestionService: BasicChunkIngestionService,
-   ```
-3. In `consume(...)` (around line 50) replace:
-   ```kotlin
-   if (event.endpoint != "character-basic") {
-       acknowledgment.acknowledge()
-       return
-   }
-   ```
-   with:
-   ```kotlin
-   if (!ingestionService.shouldHandle(event)) {
-       acknowledgment.acknowledge()
-       return
-   }
-   ```
-4. In `consumeUrgentBasic(...)` (around line 76) apply the same replacement.
+```kotlin
+package maple.synchronizer.consumer
+
+import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.synchronizer.service.BasicChunkIngestionService
+import org.springframework.kafka.annotation.KafkaListener
+import org.springframework.kafka.support.Acknowledgment
+import org.springframework.kafka.support.KafkaHeaders
+import org.springframework.messaging.handler.annotation.Header
+import org.springframework.stereotype.Component
+
+@Component
+class BasicSnapshotChunkConsumer(
+    private val objectMapper: ObjectMapper,
+    private val ingestionService: BasicChunkIngestionService,
+) {
+    @KafkaListener(
+        topics = ["\${synchronizer.kafka.basic-chunk-ready-topic}"],
+        groupId = "\${synchronizer.kafka.basic-consumer-group-id}",
+    )
+    fun consume(
+        message: String,
+        acknowledgment: Acknowledgment,
+        @Header(name = KafkaHeaders.RECEIVED_TOPIC, required = false) topic: String?,
+        @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) messageKey: String?,
+    ) {
+        val event = objectMapper.readValue(message, SnapshotChunkReadyEvent::class.java)
+        if (!ingestionService.process(event, message, acknowledgment, topic, messageKey, urgent = false)) {
+            acknowledgment.acknowledge()
+        }
+    }
+
+    @KafkaListener(
+        topics = ["\${synchronizer.kafka.urgent-basic-chunk-ready-topic}"],
+        groupId = "\${synchronizer.kafka.urgent-basic-consumer-group-id}",
+    )
+    fun consumeUrgentBasic(
+        message: String,
+        acknowledgment: Acknowledgment,
+        @Header(name = KafkaHeaders.RECEIVED_TOPIC, required = false) topic: String?,
+        @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) messageKey: String?,
+    ) {
+        val event = objectMapper.readValue(message, SnapshotChunkReadyEvent::class.java)
+        if (!ingestionService.process(event, message, acknowledgment, topic, messageKey, urgent = true)) {
+            acknowledgment.acknowledge()
+        }
+    }
+}
+```
 
 - [ ] **Step 2: Compile + run synchronizer tests**
 
@@ -433,7 +606,7 @@ Expected: BUILD SUCCESSFUL, all tests pass.
 
 ```bash
 git add module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/BasicSnapshotChunkConsumer.kt
-git commit -m "refactor(synchronizer): BasicSnapshotChunkConsumer uses BasicChunkIngestionService"
+git commit -m "refactor(synchronizer): BasicSnapshotChunkConsumer delegates to BasicChunkIngestionService"
 ```
 
 ---
@@ -558,7 +731,7 @@ Expected: BUILD SUCCESSFUL — no errors across all modules.
 - [ ] **Step 2: Run synchronizer test suite**
 
 Run: `./gradlew :module-synchronizer:test -i`
-Expected: BUILD SUCCESSFUL — all tests pass, including the 8 new tests added in Tasks 1, 2, 4, 6.
+Expected: BUILD SUCCESSFUL — all tests pass, including 7 new tests added in Tasks 1, 2, 4, 6.
 
 - [ ] **Step 3: Sanity-check consumer file sizes**
 
@@ -568,7 +741,7 @@ wc -l module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/OcidLookup
        module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/BasicSnapshotChunkConsumer.kt \
        module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/KafkaResultChunkConsumer.kt
 ```
-Expected: `OcidLookupRunConsumer.kt` is roughly 30 lines (down from 65), the other two unchanged in line count but with one indirection added.
+Expected: `OcidLookupRunConsumer.kt` and `BasicSnapshotChunkConsumer.kt` are much shorter than the originals; `KafkaResultChunkConsumer.kt` line count roughly unchanged but with one indirection added.
 
 - [ ] **Step 4: Verify no leftover hardcoded path template**
 
@@ -585,10 +758,10 @@ If everything is clean, no further commit is needed. If verification surfaces a 
 
 **Spec coverage:**
 - §2.A Extract `OcidLookupService` → Task 1 (create) + Task 2 (tests) + Task 3 (consumer refactor). Covered.
-- §2.B `BasicChunkIngestionService` → Task 4 (create) + Task 5 (wire into consumer). Covered.
+- §2.B `BasicChunkIngestionService` (symmetric with `OcidLookupService`) → Task 4 (create) + Task 5 (wire into consumer). Covered.
 - §2.C `ResultChunkEventPathBuilder` → Task 6 (create) + Task 7 (wire into consumer). Covered.
 - §2 acceptance criteria (`./gradlew :module-synchronizer:test`, compileKotlin/compileJava) → Task 8. Covered.
 
-**Placeholder scan:** No "TBD" or "implement later" markers. All step 3 / 1 code blocks are complete. Task 4 Step 1 calls out the constructor parameter-name placeholder explicitly because the test must mirror the real `SnapshotChunkReadyEvent` signature — this is intentional, not a real placeholder.
+**Placeholder scan:** No "TBD" or "implement later" markers. Task 4 Step 1 contains an explicit note that the executing subagent must verify the `SnapshotChunkReadyEvent` constructor parameter names from the source — this is intentional, not a real placeholder. All other step 3 / 1 code blocks are complete.
 
-**Type consistency:** `OcidLookupService.ingest(event: SnapshotRunCompletedEvent)` used in both Task 1 test and Task 3 consumer. `BasicChunkIngestionService.shouldHandle(event: SnapshotChunkReadyEvent): Boolean` used in Task 4 test and Task 5 consumer. `ResultChunkEventPathBuilder.sourceObjectKey(runId, sourceEndpoint, chunkId): String` used in Task 6 test and Task 7 consumer. Consistent.
+**Type consistency:** `OcidLookupService.ingest(event: SnapshotRunCompletedEvent)` used in both Task 1 test and Task 3 consumer. `BasicChunkIngestionService.process(event: SnapshotChunkReadyEvent, eventPayloadJson: String, acknowledgment: Acknowledgment, topic: String?, messageKey: String?, urgent: Boolean): Boolean` used in both Task 4 test and Task 5 consumer. `ResultChunkEventPathBuilder.sourceObjectKey(runId: String, sourceEndpoint: String, chunkId: String): String` used in both Task 6 test and Task 7 consumer. Consistent.

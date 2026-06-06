@@ -219,11 +219,15 @@ git commit -m "refactor(rest): ExpectationV6Controller uses shouldTryDb instead 
 ```kotlin
 package maple.restcontroller.read
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
 class UrgentReadStateTest {
+
+    private val mapper: ObjectMapper = ObjectMapper().registerKotlinModule()
 
     @Test
     fun `fromName round-trips all four names`() {
@@ -283,13 +287,36 @@ class UrgentReadStateTest {
         assertThat(UrgentReadState.Pending(null, null).name).isEqualTo("PENDING")
         assertThat(UrgentReadState.Unknown.name).isEqualTo("UNKNOWN")
     }
+
+    @Test
+    fun `Jackson serialization produces name string for all four states`() {
+        assertThat(mapper.writeValueAsString(UrgentReadState.Ready)).isEqualTo("\"READY\"")
+        assertThat(mapper.writeValueAsString(UrgentReadState.NotFound)).isEqualTo("\"NOT_FOUND\"")
+        assertThat(mapper.writeValueAsString(UrgentReadState.Pending(5L, 30L))).isEqualTo("\"PENDING\"")
+        assertThat(mapper.writeValueAsString(UrgentReadState.Unknown)).isEqualTo("\"UNKNOWN\"")
+    }
+
+    @Test
+    fun `UrgentReadStatusResponse JSON contains state name string`() {
+        val response = UrgentReadStatusResponse(
+            state = UrgentReadState.Pending(queuePositionApprox = 5L, estimatedWaitSeconds = 30L),
+            userIgn = "test",
+            statusUrl = "/api/v6/characters/test/status?presetNo=1",
+            queuePositionApprox = 5L,
+            estimatedWaitSeconds = 30L,
+            retryAfterSeconds = 10L,
+        )
+        val json = mapper.writeValueAsString(response)
+        assertThat(json).contains("\"state\":\"PENDING\"")
+        assertThat(json).contains("\"userIgn\":\"test\"")
+    }
 }
 ```
 
 - [ ] **Step 2: Run tests**
 
 Run: `cd /home/maple/probabilistic-valuation-engine && ./gradlew :module-rest-controller:test --tests "maple.restcontroller.read.UrgentReadStateTest"`
-Expected: 8 tests, all PASS
+Expected: 10 tests, all PASS
 
 - [ ] **Step 3: Commit**
 

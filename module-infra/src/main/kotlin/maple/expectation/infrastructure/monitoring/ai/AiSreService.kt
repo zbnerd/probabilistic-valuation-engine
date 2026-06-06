@@ -12,7 +12,6 @@ import maple.expectation.infrastructure.monitoring.copilot.model.IncidentContext
 import maple.expectation.infrastructure.monitoring.security.PiiMaskingFilter
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 
@@ -26,7 +25,6 @@ class AiSreService(
     @Qualifier("aiTaskExecutor") private val aiTaskExecutor: Executor,
     private val promptBuilder: AiPromptBuilder,
     private val responseParser: AiResponseParser,
-    @Value("\${ai.sre.enabled:false}") private val aiEnabled: Boolean,
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(AiSreService::class.java)

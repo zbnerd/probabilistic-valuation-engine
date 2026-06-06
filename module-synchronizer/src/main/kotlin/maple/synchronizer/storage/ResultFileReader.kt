@@ -23,7 +23,7 @@ class ResultFileReader(
     fun readAndGroupByCompositeKey(objectKey: String): List<GroupedEquipmentResult> {
         val path = Paths.get(basePath, objectKey)
         if (!Files.exists(path)) {
-            throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "ResultFileReader", objectKey)
+            throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "ResultFileReader", path.toString())
         }
 
         GZIPInputStream(Files.newInputStream(path)).bufferedReader().use { reader ->

@@ -32,7 +32,7 @@ class OcidMappingFileReader(
     fun read(manifestPath: String): List<OcidMapping> {
         val path = Paths.get(storeBasePath, manifestPath)
         if (!Files.exists(path)) {
-            throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "OcidMappingFileReader", manifestPath)
+            throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "OcidMappingFileReader", path.toString())
         }
 
         val parseErrors = AtomicLong(0)

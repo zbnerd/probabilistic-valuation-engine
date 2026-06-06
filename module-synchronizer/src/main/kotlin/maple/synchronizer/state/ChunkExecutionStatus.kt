@@ -4,7 +4,17 @@ import java.time.Instant
 
 sealed class ChunkExecutionStatus(val name: String) {
     abstract fun isTerminal(): Boolean
-    abstract fun shouldAckSkip(now: Instant): Boolean
+    /**
+     * Whether the Kafka consumer should acknowledge the message (true) or leave it
+     * unacked so Kafka redelivers it later (false).
+     *
+     * The contract: `true` = "this chunk is finished from our perspective, ack and move on".
+     * `false` = "another worker is processing this, or Kafka should retry it later — preserve
+     * the message for redelivery".
+     *
+     * Per-subtype policy is documented on each override.
+     */
+    abstract fun shouldAcknowledge(now: Instant): Boolean
     abstract fun shouldPreserveKafkaRedelivery(now: Instant): Boolean
     fun isTerminalSkip(): Boolean = this is Succeeded || this is FailedTerminal
 
@@ -28,14 +38,19 @@ sealed class ChunkExecutionStatus(val name: String) {
     /** Singleton — use `is Pending` checks, not `===`. */
     object Pending : ChunkExecutionStatus(PENDING_NAME) {
         override fun isTerminal(): Boolean = false
-        override fun shouldAckSkip(now: Instant): Boolean = false
+        // Acknowledge when state is PENDING? No — PENDING means the row was just inserted and
+        // a worker is about to claim it. Leave unacked so the in-flight worker proceeds.
+        override fun shouldAcknowledge(now: Instant): Boolean = false
         override fun shouldPreserveKafkaRedelivery(now: Instant): Boolean = false
     }
 
     /** Singleton — use `is Processing` checks, not `===`. */
     object Processing : ChunkExecutionStatus(PROCESSING_NAME) {
         override fun isTerminal(): Boolean = false
-        override fun shouldAckSkip(now: Instant): Boolean = false
+        // Acknowledge while PROCESSING? No — a worker holds the lease and is still running.
+        // Leaving unacked lets Kafka redeliver if the worker dies; `leaseUntil` reclaim logic
+        // handles the timeout case.
+        override fun shouldAcknowledge(now: Instant): Boolean = false
         override fun shouldPreserveKafkaRedelivery(now: Instant): Boolean = false
         /** True when the lease has expired or was never set — this chunk is reclaimable. */
         fun isReclaimed(leaseUntil: Instant?, now: Instant): Boolean =
@@ -45,19 +60,26 @@ sealed class ChunkExecutionStatus(val name: String) {
     /** Singleton — use `is Succeeded` checks, not `===`. */
     object Succeeded : ChunkExecutionStatus(SUCCEEDED_NAME) {
         override fun isTerminal(): Boolean = true
-        override fun shouldAckSkip(now: Instant): Boolean = true
+        // SUCCEEDED: work is done, the chunk will not be reprocessed. Acknowledge.
+        override fun shouldAcknowledge(now: Instant): Boolean = true
         override fun shouldPreserveKafkaRedelivery(now: Instant): Boolean = false
     }
 
     data class FailedRetryable(val nextRetryAt: Instant?) : ChunkExecutionStatus(FAILED_RETRYABLE_NAME) {
         override fun isTerminal(): Boolean = false
-        override fun shouldAckSkip(now: Instant): Boolean = nextRetryAt?.isAfter(now) != true
+        // FAILED_RETRYABLE with a future retry: another worker will pick it up — leave unacked
+        // so Kafka redelivers when the backoff expires.
+        // FAILED_RETRYABLE with past or null retry: the retry window has passed and the row
+        // is stale; no worker will pick it up. Acknowledge to drain the queue.
+        override fun shouldAcknowledge(now: Instant): Boolean = nextRetryAt?.isAfter(now) != true
         override fun shouldPreserveKafkaRedelivery(now: Instant): Boolean = nextRetryAt?.isAfter(now) == true
     }
 
     data class FailedTerminal(val reason: String?) : ChunkExecutionStatus(FAILED_TERMINAL_NAME) {
         override fun isTerminal(): Boolean = true
-        override fun shouldAckSkip(now: Instant): Boolean = true
+        // FAILED_TERMINAL: chunk exhausted retries or hit a non-retryable error. Work is
+        // permanently done from this consumer's perspective. Acknowledge.
+        override fun shouldAcknowledge(now: Instant): Boolean = true
         override fun shouldPreserveKafkaRedelivery(now: Instant): Boolean = false
     }
 }

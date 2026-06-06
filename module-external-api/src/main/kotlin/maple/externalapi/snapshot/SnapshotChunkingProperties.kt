@@ -15,7 +15,7 @@ data class SnapshotChunkingProperties(
 
     data class EndpointChunkConfig(
         val maxRecords: Int = 1000,
-        val maxUncompressedBytes: Long = 134217728L,
+        val maxUncompressedBytes: Long = 128L * 1024 * 1024, // 128 MB hard cap per uncompressed chunk
     )
 
     fun configFor(endpoint: String): EndpointChunkConfig = when (endpoint) {

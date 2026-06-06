@@ -1,5 +1,6 @@
 package maple.synchronizer.repository
 
+import maple.synchronizer.repository.ChunkWriteConstants.SUB_BATCH_SIZE
 import maple.synchronizer.storage.BasicRecord
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -11,7 +12,6 @@ class CharacterBasicRepository(
     private val batchExecutor: JdbcChunkedBatchExecutor,
 ) {
     companion object {
-        private const val SUB_BATCH_SIZE = 100
         private const val DELETE_STALE_SQL =
             "DELETE FROM character_basic_read_model WHERE ocid = ANY(:ocids) AND NOT (user_ign = ANY(:userIgns))"
         private val UPSERT_SQL = """

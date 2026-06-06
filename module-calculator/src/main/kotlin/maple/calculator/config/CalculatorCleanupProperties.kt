@@ -7,7 +7,8 @@ data class CalculatorCleanupProperties(
     val dryRun: Boolean = true,
     val runs: Runs = Runs(),
     val maxDeleteRunsPerCycle: Int = 10,
-    val maxDeleteBytesPerCycle: Long = 5368709120,
+    /** 5 GB hard cap on bytes deleted per cleanup cycle to avoid long DB transactions. */
+    val maxDeleteBytesPerCycle: Long = 5L * 1024 * 1024 * 1024,
     val maxRuntimeSeconds: Long = 60,
 ) {
     data class Runs(

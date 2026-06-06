@@ -1,6 +1,7 @@
 package maple.synchronizer.repository
 
 import maple.synchronizer.preparer.PreppedDocument
+import maple.synchronizer.repository.ChunkWriteConstants.SUB_BATCH_SIZE
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -14,7 +15,6 @@ class EquipmentReadModelRepository(
     private val log = LoggerFactory.getLogger(EquipmentReadModelRepository::class.java)
 
     companion object {
-        private const val SUB_BATCH_SIZE = 100
         private val UPSERT_SQL = """
             INSERT INTO character_equipment_read_model (
                 read_key, ocid, preset_no, user_ign, document, document_hash,

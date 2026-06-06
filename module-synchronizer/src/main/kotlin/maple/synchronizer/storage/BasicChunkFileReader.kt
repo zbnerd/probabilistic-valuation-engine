@@ -41,6 +41,10 @@ class BasicChunkFileReader(
     private val log = LoggerFactory.getLogger(javaClass)
 
     companion object {
+        /**
+         * 1,000 records per reader batch — chosen to bound memory at ~16 MB per batch
+         * (assuming ~16 KB JSON record) and match JDBC `reWriteBatchedInserts` throughput.
+         */
         private const val DEFAULT_BATCH_SIZE = 1000
     }
 

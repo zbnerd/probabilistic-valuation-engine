@@ -13,7 +13,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /** 5 GB hard cap on bytes deleted per cleanup cycle. Referenced from the [ArtifactCleanupScheduler] @Value via SpEL. */
-private const val DEFAULT_MAX_DELETE_BYTES_PER_CYCLE: Long = 5L * 1024L * 1024L * 1024L
+internal const val DEFAULT_MAX_DELETE_BYTES_PER_CYCLE: Long = 5L * 1024L * 1024L * 1024L
 
 @Component
 class ArtifactCleanupScheduler(

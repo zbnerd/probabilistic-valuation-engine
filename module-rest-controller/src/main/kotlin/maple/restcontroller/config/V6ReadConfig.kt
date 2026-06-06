@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.popular.PopularCharacterService
+import maple.restcontroller.popular.port.out.PopularCharacterRedisPort
 import maple.restcontroller.ranking.EquipmentRankingCacheService
 import maple.restcontroller.ranking.EquipmentRankingQueryService
 import maple.restcontroller.ranking.EquipmentRankingService
@@ -73,8 +74,8 @@ class V6ReadConfig(
 
     @Bean
     fun popularCharacterService(
-        redisTemplate: StringRedisTemplate
-    ): PopularCharacterService = PopularCharacterService(redisTemplate, properties)
+        redisPort: PopularCharacterRedisPort
+    ): PopularCharacterService = PopularCharacterService(redisPort, properties)
 
     @Bean
     fun expectationReadFacade(

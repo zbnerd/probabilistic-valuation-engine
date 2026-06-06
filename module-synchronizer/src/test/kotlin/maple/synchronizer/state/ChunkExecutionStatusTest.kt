@@ -12,11 +12,20 @@ class ChunkExecutionStatusTest {
     private val past: Instant = now.minusSeconds(60)
 
     @Test
-    fun `fromName round-trips all four non-pending names`() {
+    fun `fromName round-trips all five names`() {
+        assertThat(ChunkExecutionStatus.fromName("PENDING")).isEqualTo(ChunkExecutionStatus.Pending)
         assertThat(ChunkExecutionStatus.fromName("PROCESSING")).isEqualTo(ChunkExecutionStatus.Processing)
         assertThat(ChunkExecutionStatus.fromName("SUCCEEDED")).isEqualTo(ChunkExecutionStatus.Succeeded)
         assertThat(ChunkExecutionStatus.fromName("FAILED_RETRYABLE")).isEqualTo(ChunkExecutionStatus.FailedRetryable(null))
         assertThat(ChunkExecutionStatus.fromName("FAILED_TERMINAL")).isEqualTo(ChunkExecutionStatus.FailedTerminal(null))
+    }
+
+    @Test
+    fun `Pending is not terminal and does not ack-skip or preserve redelivery`() {
+        val s = ChunkExecutionStatus.Pending
+        assertThat(s.isTerminal()).isFalse()
+        assertThat(s.shouldAckSkip(now)).isFalse()
+        assertThat(s.shouldPreserveKafkaRedelivery(now)).isFalse()
     }
 
     @Test
@@ -95,6 +104,7 @@ class ChunkExecutionStatusTest {
 
     @Test
     fun `name property on each subtype matches NAME constant`() {
+        assertThat(ChunkExecutionStatus.Pending.name).isEqualTo("PENDING")
         assertThat(ChunkExecutionStatus.Processing.name).isEqualTo("PROCESSING")
         assertThat(ChunkExecutionStatus.Succeeded.name).isEqualTo("SUCCEEDED")
         assertThat(ChunkExecutionStatus.FailedRetryable(null).name).isEqualTo("FAILED_RETRYABLE")

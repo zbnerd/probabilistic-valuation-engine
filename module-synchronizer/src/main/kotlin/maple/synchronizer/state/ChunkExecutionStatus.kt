@@ -16,12 +16,20 @@ sealed class ChunkExecutionStatus(val name: String) {
         const val FAILED_TERMINAL_NAME: String = "FAILED_TERMINAL"
 
         fun fromName(s: String): ChunkExecutionStatus = when (s) {
+            PENDING_NAME -> Pending
             PROCESSING_NAME -> Processing
             SUCCEEDED_NAME -> Succeeded
             FAILED_RETRYABLE_NAME -> FailedRetryable(null)
             FAILED_TERMINAL_NAME -> FailedTerminal(null)
             else -> throw IllegalArgumentException("Unknown ChunkExecutionStatus name: $s")
         }
+    }
+
+    /** Singleton — use `is Pending` checks, not `===`. */
+    object Pending : ChunkExecutionStatus(PENDING_NAME) {
+        override fun isTerminal(): Boolean = false
+        override fun shouldAckSkip(now: Instant): Boolean = false
+        override fun shouldPreserveKafkaRedelivery(now: Instant): Boolean = false
     }
 
     /** Singleton — use `is Processing` checks, not `===`. */

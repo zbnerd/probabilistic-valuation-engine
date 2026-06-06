@@ -40,7 +40,7 @@ class ChunkConsumerTemplate(
             return
         }
 
-        if (state.status.shouldAckSkip(Instant.now())) {
+        if (state.shouldAckSkip()) {
             request.log.info(
                 "[{}] skip chunk in terminal/current state: runId={} chunkId={} status={}",
                 request.logPrefix,
@@ -66,7 +66,7 @@ class ChunkConsumerTemplate(
         val claim = chunkExecutionRepository.claimProcessing(request.identity, properties.processingTimeout)
         if (claim == null) {
             request.processingPermit.release()
-            if (state.status.shouldPreserveKafkaRedelivery(Instant.now())) {
+            if (state.shouldPreserveKafkaRedelivery()) {
                 request.log.info(
                     "[{}] retryable chunk not due, leaving unacked for Kafka redelivery: runId={} chunkId={} nextRetryAt={}",
                     request.logPrefix,
@@ -269,6 +269,26 @@ class ChunkConsumerTemplate(
 
     private fun ChunkExecutionState.isReclaimedExpired(now: Instant): Boolean =
         (status as? ChunkExecutionStatus.Processing)?.isReclaimed(leaseUntil, now) == true
+
+    private fun ChunkExecutionState.shouldAckSkip(): Boolean {
+        val now = Instant.now()
+        return when (val s = status) {
+            // Terminal states: nothing more to do.
+            ChunkExecutionStatus.Succeeded,
+            is ChunkExecutionStatus.FailedTerminal -> true
+            // Failed retryable: skip only when retry window has passed.
+            is ChunkExecutionStatus.FailedRetryable -> s.nextRetryAt?.isAfter(now) != true
+            // Pending: claimable, not a skip.
+            ChunkExecutionStatus.Pending -> false
+            // Processing: skip only if lease is still active (another worker holds it).
+            ChunkExecutionStatus.Processing -> leaseUntil?.isAfter(now) == true
+        }
+    }
+
+    private fun ChunkExecutionState.shouldPreserveKafkaRedelivery(): Boolean {
+        val s = status as? ChunkExecutionStatus.FailedRetryable ?: return false
+        return s.nextRetryAt?.isAfter(Instant.now()) == true
+    }
 
     private fun ChunkConsumerRequest.toInsertCommand(): InsertChunkExecutionCommand =
         InsertChunkExecutionCommand(

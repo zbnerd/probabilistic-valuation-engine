@@ -1,40 +1,19 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.common.event.ChunkConsumedEvent
-import maple.expectation.common.event.ChunkExecutionIdentity
-import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.event.SnapshotChunkReadyEvent
-import maple.expectation.infrastructure.executor.TaskContext
-import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
-import maple.synchronizer.repository.CharacterBasicRepository
-import maple.synchronizer.repository.OcidMappingRepository
-import maple.synchronizer.storage.BasicChunkFileReader
-import maple.synchronizer.storage.BasicRecord
-import maple.synchronizer.storage.OcidMapping
-import org.slf4j.LoggerFactory
+import maple.synchronizer.service.BasicChunkIngestionService
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
-import org.springframework.beans.factory.annotation.Qualifier
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Semaphore
 
 @Component
 class BasicSnapshotChunkConsumer(
     private val objectMapper: ObjectMapper,
-    private val fileReader: BasicChunkFileReader,
-    private val repository: CharacterBasicRepository,
-    private val ocidMappingRepository: OcidMappingRepository,
-    private val chunkConsumerTemplate: ChunkConsumerTemplate,
-    private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
-    @Qualifier("basicSnapshotChunkExecutor") private val executor: ExecutorService,
+    private val ingestionService: BasicChunkIngestionService,
 ) {
-    private val log = LoggerFactory.getLogger(javaClass)
-    private val processingPermit = Semaphore(2)
-
     @KafkaListener(
         topics = ["\${synchronizer.kafka.basic-chunk-ready-topic}"],
         groupId = "\${synchronizer.kafka.basic-consumer-group-id}",
@@ -46,19 +25,9 @@ class BasicSnapshotChunkConsumer(
         @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) messageKey: String?,
     ) {
         val event = objectMapper.readValue(message, SnapshotChunkReadyEvent::class.java)
-
-        if (event.endpoint != "character-basic") {
+        if (!ingestionService.process(event, message, acknowledgment, topic, messageKey, urgent = false)) {
             acknowledgment.acknowledge()
-            return
         }
-
-        val runId = event.runId
-        val chunkId = event.chunkId
-
-        log.info("[BasicSync] received: runId={} chunkId={} objectKey={} records={}",
-            runId, chunkId, event.objectKey, event.recordCount)
-
-        submitBasicChunk(event, message, acknowledgment, topic, messageKey, urgent = false)
     }
 
     @KafkaListener(
@@ -72,97 +41,8 @@ class BasicSnapshotChunkConsumer(
         @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) messageKey: String?,
     ) {
         val event = objectMapper.readValue(message, SnapshotChunkReadyEvent::class.java)
-
-        if (event.endpoint != "character-basic") {
+        if (!ingestionService.process(event, message, acknowledgment, topic, messageKey, urgent = true)) {
             acknowledgment.acknowledge()
-            return
         }
-
-        val runId = event.runId
-        val chunkId = event.chunkId
-
-        log.info("[BasicSync] received URGENT: runId={} chunkId={} objectKey={} records={}",
-            runId, chunkId, event.objectKey, event.recordCount)
-
-        submitBasicChunk(event, message, acknowledgment, topic, messageKey, urgent = true)
     }
-
-    private fun submitBasicChunk(
-        event: SnapshotChunkReadyEvent,
-        eventPayloadJson: String,
-        acknowledgment: Acknowledgment,
-        topic: String?,
-        messageKey: String?,
-        urgent: Boolean,
-    ) {
-        val runId = event.runId
-        val chunkId = event.chunkId
-        val operation = if (urgent) "UrgentChunk" else "Chunk"
-        val identity = ChunkExecutionIdentity(
-            executionType = ChunkExecutionType.SYNCHRONIZER_BASIC_CHUNK,
-            runId = runId,
-            endpoint = event.endpoint,
-            chunkId = chunkId,
-        )
-
-        chunkConsumerTemplate.submit(
-            ChunkConsumerRequest(
-                logPrefix = "BasicSync",
-                log = log,
-                identity = identity,
-                topic = topic ?: event.eventType,
-                messageKey = messageKey ?: event.kafkaKey(),
-                eventType = event.eventType,
-                schemaVersion = event.schemaVersion,
-                eventPayloadJson = eventPayloadJson,
-                objectKey = event.objectKey,
-                acknowledgment = acknowledgment,
-                processingPermit = processingPermit,
-                executor = executor,
-                processContext = TaskContext.of("BasicSync", "${operation}Process", chunkId),
-                lifecycleContext = TaskContext.of("BasicSync", "${operation}Lifecycle", chunkId),
-                process = {
-                    var totalRecords = 0
-                    fileReader.readInBatches(event.objectKey) { batch ->
-                        repository.bulkUpsert(runId, chunkId, batch)
-                        if (urgent) {
-                            upsertOcidFromBasicRecords(batch)
-                        }
-                        totalRecords += batch.size
-                    }
-                    log.info(
-                        "[BasicSync] {}chunk processed: runId={} chunkId={} records={}",
-                        if (urgent) "urgent " else "",
-                        runId,
-                        chunkId,
-                        totalRecords,
-                    )
-                },
-                onSuccess = {
-                    consumedEventPublisher.publish(ChunkConsumedEvent(
-                        runId = runId,
-                        endpoint = event.endpoint,
-                        chunkId = chunkId,
-                        objectKey = event.objectKey,
-                    ))
-                },
-                onFailure = { ex ->
-                    log.error(
-                        "[BasicSync] {}chunk processing failed: runId={} chunkId={}",
-                        if (urgent) "urgent " else "",
-                        runId,
-                        chunkId,
-                        ex,
-                    )
-                },
-            ),
-        )
-    }
-
-    private fun upsertOcidFromBasicRecords(records: List<BasicRecord>) {
-        val mappings = records.map { OcidMapping(userIgn = it.userIgn, ocid = it.ocid) }
-        ocidMappingRepository.batchUpsert(mappings)
-        log.info("[BasicSync] batch upserted OCID mappings: count={}", mappings.size)
-    }
-
 }

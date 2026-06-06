@@ -33,6 +33,15 @@ import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 
+/** Emit a progress log every N items processed. 5,000 keeps log volume bounded for large fetches. */
+private const val PROGRESS_LOG_INTERVAL: Int = 5_000
+
+/** Fetch latency (ms) above which a single SnapshotFetch is treated as slow and logged. */
+private const val SLOW_FETCH_LATENCY_MS: Long = 500L
+
+/** Sink submit latency (ms) above which a single snapshot enqueue is treated as slow and logged. */
+private const val SLOW_SUBMIT_LATENCY_MS: Long = 100L
+
 data class SnapshotFetchConfig(
     val endpoint: String,
     val apiEndpoint: ExternalApiEndpoint,
@@ -210,7 +219,7 @@ class SnapshotFetchPhase(
             processed += permits
 
             val progress = successCount + failCount
-            if (progress - lastProgressLog >= 5000) {
+            if (progress - lastProgressLog >= PROGRESS_LOG_INTERVAL) {
                 lastProgressLog = progress
                 SchedulerPhaseUtils.logProgress(config.endpoint, progress, entries.size, successCount, failCount, start)
             }
@@ -253,7 +262,7 @@ class SnapshotFetchPhase(
                 )
                 val submitDuration = Duration.between(submitStart, Instant.now())
                 fetchMetrics.recordSinkSubmit(config.endpoint, submitDuration, queueDepthBeforeSubmit)
-                if (fetchDuration.toMillis() >= 500 || submitDuration.toMillis() >= 100) {
+                if (fetchDuration.toMillis() >= SLOW_FETCH_LATENCY_MS || submitDuration.toMillis() >= SLOW_SUBMIT_LATENCY_MS) {
                     log.info(
                         "[SnapshotFetchMetrics] fetch/sink: endpoint={}, ocid={}, responseBytes={}, fetchJoinMs={}, sinkSubmitMs={}, sinkQueueDepthBeforeSubmit={}",
                         config.endpoint,

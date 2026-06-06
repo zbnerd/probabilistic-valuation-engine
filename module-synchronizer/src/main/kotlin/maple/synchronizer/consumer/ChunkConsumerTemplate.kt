@@ -41,7 +41,7 @@ class ChunkConsumerTemplate(
             return
         }
 
-        if (state.shouldAckSkip()) {
+        if (state.shouldAcknowledge()) {
             request.log.info(
                 "[{}] skip chunk in terminal/current state: runId={} chunkId={} status={}",
                 request.logPrefix,
@@ -284,12 +284,24 @@ class ChunkConsumerTemplate(
     private fun ChunkExecutionState.isReclaimedExpired(now: Instant): Boolean =
         (status as? ChunkExecutionStatus.Processing)?.isReclaimed(leaseUntil, now) == true
 
-    private fun ChunkExecutionState.shouldAckSkip(): Boolean {
+    /**
+     * Whether the Kafka message should be acknowledged for this chunk state.
+     *
+     * State transition policy:
+     * - SUCCEEDED → ack. The work is complete and the chunk will not be reprocessed.
+     * - FAILED_TERMINAL → ack. Retries exhausted or non-retryable error; nothing more to do here.
+     * - FAILED_RETRYABLE with `nextRetryAt` in the future → do NOT ack. Another worker
+     *   will pick the chunk up when the backoff expires; preserve the message for redelivery.
+     * - FAILED_RETRYABLE with past or null `nextRetryAt` → ack. The retry window has
+     *   elapsed and the row is stale.
+     * - PROCESSING with an active lease (`leaseUntil` in the future) → ack. Another worker
+     *   is still processing this chunk; let it finish.
+     * - PROCESSING with expired or null lease → do NOT ack. The lease has timed out and
+     *   the chunk is reclaimable; preserve the message so the reclaim path runs.
+     * - PENDING → do NOT ack. The row was just inserted; a worker is about to claim it.
+     */
+    private fun ChunkExecutionState.shouldAcknowledge(): Boolean {
         val now = Instant.now()
-        // Note: PROCESSING + active lease returns TRUE (skip — another worker holds it).
-        // FAILED_RETRYABLE + future retry returns FALSE (don't skip — Kafka should redeliver later).
-        // This inversion is intentional: skip means "ack and move on", so we ack when the work
-        // is already done (terminal / leased) and leave unacked when Kafka should retry.
         return when (val s = status) {
             is ChunkExecutionStatus.Succeeded,
             is ChunkExecutionStatus.FailedTerminal -> true

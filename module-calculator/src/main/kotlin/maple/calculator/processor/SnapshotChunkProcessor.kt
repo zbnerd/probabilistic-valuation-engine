@@ -22,6 +22,9 @@ import maple.expectation.util.StringMaskingUtils
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
+/** Sample the first 10 records per chunk for debug logging. */
+private const val SAMPLE_LOG_LIMIT: Int = 10
+
 @Component
 class SnapshotChunkProcessor(
     private val objectStorage: ObjectStorage,
@@ -167,7 +170,7 @@ class SnapshotChunkProcessor(
     }
 
     private fun logSample(result: CalculationResult) {
-        if (sampleCount.incrementAndGet() <= 10) {
+        if (sampleCount.incrementAndGet() <= SAMPLE_LOG_LIMIT) {
             log.debug("[SAMPLE] {}", objectMapper.writeValueAsString(result))
         }
     }

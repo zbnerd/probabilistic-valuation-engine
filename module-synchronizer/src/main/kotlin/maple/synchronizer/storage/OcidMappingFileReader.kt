@@ -3,6 +3,8 @@ package maple.synchronizer.storage
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.expectation.error.CommonErrorCode
+import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.metrics.SynchronizerReaderMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -30,7 +32,7 @@ class OcidMappingFileReader(
     fun read(manifestPath: String): List<OcidMapping> {
         val path = Paths.get(storeBasePath, manifestPath)
         if (!Files.exists(path)) {
-            throw IllegalStateException("Ocid mapping file not found: $path")
+            throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "OcidMappingFileReader", path.toString())
         }
 
         val parseErrors = AtomicLong(0)

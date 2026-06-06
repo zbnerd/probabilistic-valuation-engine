@@ -28,6 +28,9 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 
+/** Emit a progress log every N items fetched. 10,000 chosen for ranking phase (lower call rate). */
+private const val PROGRESS_LOG_INTERVAL: Int = 10_000
+
 @Component
 @ConditionalOnProperty(name = ["external-api.ranking.enabled"], havingValue = "true", matchIfMissing = false)
 class RankingFetchPhase(
@@ -109,7 +112,7 @@ class RankingFetchPhase(
                 val count = submitRankingEntries(sink, bodyBytes, currentPage)
                 fetched += count
                 metrics.recordRankingFetched(count)
-                if (fetched % 10000 == 0) {
+                if (fetched % PROGRESS_LOG_INTERVAL == 0) {
                     log.info("[RankingFetch] progress: fetched={}, failed={}, page={}/{}", fetched, failed, currentPage, maxPages)
                 }
             } catch (ex: Throwable) {

@@ -212,3 +212,34 @@ core ← executor ← {pgmq, aop, security, monitoring, cache, persistence, exte
 2. `ExecutorPort` 정의 + `module-infra` adapter (port/interface 분리)
 3. 7개 후속 모듈별 별도 이슈 (각 PR 1-3건)
 4. `module-infra` 축소 트리거: fan-in 0 도달 시 facade 삭제
+
+---
+
+## Post-ADR Updates (2026-06-05)
+
+### 선행 작업 완료
+
+| 작업 | PR/이슈 | ADR-050 영향 |
+|------|---------|-------------|
+| ExecutorConfig → CoreExecutorConfig + InfraExecutorConfig 분리 | #1119 | `module-executor` 추출의 설정 분리 선제 완료 |
+| VT ExecutorManager inline → @Bean injection | #1120 | executor bean 관리 체계 정비 |
+| LogicExecutor/TaskContext core 승격 | #904 (closed — 위험 과대) | **선행 불필요로 판단** — #1119 분리로 충분 |
+| domain/v2 → infrastructure/persistence 이관 | #896 (#1148) | `module-persistence` 후보 파일 정리 완료 |
+| 동시성 어댑터 6종 도입 | #1157 | `module-aop` 후보에 concurrency 패키지 포함 |
+| 포트 인터페이스 기술명 제거 | #906 (#1146) | 모듈 분해 시 port 이름이 기술 중립적 |
+
+### 우선순위 재조정
+
+| 후보 | 기존 순위 | 변경 순위 | 이유 |
+|------|----------|----------|------|
+| `module-executor` | 1 | **2** | #1119 분리로 긴급도 하락. core 승격(#904) close |
+| `module-persistence` | 4 | **1** | #896 이관 완료, 파일 정리 상태 가장 좋음 |
+| `module-aop` (+concurrency) | 6 | **3** | #1157 어댑터 포함 필요 |
+| `module-cache` | 5 | **4** | 변동 없음 |
+
+### `module-executor` 추출 재평가
+
+#904(LogicExecutor core 승격) close로 인해 `module-executor` 독립 모듈 필요성 감소. 대신:
+- #1119 CoreExecutorConfig가 이미 `module-core` 인접 설정 담당
+- #1157 ConcurrencyConfiguration이 동시성 어댑터 wiring 담당
+- **권장**: `module-executor` 추출 보류, `module-persistence`를 1순위로 진행

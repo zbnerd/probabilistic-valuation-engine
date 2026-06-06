@@ -97,6 +97,7 @@ class CalculatorResultCleanupScheduler(
         if (!Files.exists(path)) return false
         val attrs = Files.readAttributes(path, BasicFileAttributes::class.java)
         val modifiedAt = Instant.ofEpochMilli(attrs.lastModifiedTime().toMillis())
+        // 1,800 seconds = 30 minutes — directory is considered "running" if modified within the last half hour.
         return modifiedAt.isAfter(Instant.now().minusSeconds(1800))
     }
 

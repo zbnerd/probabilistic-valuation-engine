@@ -16,6 +16,9 @@ import maple.calculator.storage.ObjectStorage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
+/** Two concurrent chunk processors — matches HikariCP `maximumPoolSize / 2` to avoid DB pool starvation. */
+private const val CONCURRENCY_PERMITS: Int = 2
+
 @Component
 class CalculatorChunkProcessingCoordinator(
     private val chunkProcessor: SnapshotChunkProcessor,
@@ -24,7 +27,7 @@ class CalculatorChunkProcessingCoordinator(
     private val metricsListener: CalculatorMetricsListener,
 ) {
     private val log = LoggerFactory.getLogger(CalculatorChunkProcessingCoordinator::class.java)
-    private val concurrency = Semaphore(2)
+    private val concurrency = Semaphore(CONCURRENCY_PERMITS)
 
     suspend fun handle(event: SnapshotChunkReadyEvent) {
         if (event.endpoint != "item-equipment") {

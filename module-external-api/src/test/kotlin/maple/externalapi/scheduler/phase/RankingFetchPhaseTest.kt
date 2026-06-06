@@ -8,7 +8,9 @@ import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotVolumeMetrics
+import maple.externalapi.parser.RankingEntryParser
 import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.snapshot.RankingSnapshotSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.NoOpSnapshotChunkEventPublisher
 import org.assertj.core.api.Assertions.assertThat
@@ -46,11 +48,14 @@ class RankingFetchPhaseTest {
         val registry = SimpleMeterRegistry()
         phase = RankingFetchPhase(
             clientPort = clientPort,
-            objectMapper = objectMapper,
-            chunkingProperties = SnapshotChunkingProperties(),
-            volumeMetrics = SnapshotVolumeMetrics(registry),
+            rankingEntryParser = RankingEntryParser(objectMapper),
             metrics = ExternalApiMetrics(registry),
-            rankingPublisher = NoOpSnapshotChunkEventPublisher(),
+            sinkFactory = RankingSnapshotSinkFactory(
+                objectMapper = objectMapper,
+                chunkingProperties = SnapshotChunkingProperties(),
+                volumeMetrics = SnapshotVolumeMetrics(registry),
+                rankingPublisher = NoOpSnapshotChunkEventPublisher(),
+            ),
             maxPages = 3,
             permitsPerSecond = 100,
             storeBasePath = storeBasePath,

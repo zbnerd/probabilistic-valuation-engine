@@ -1,6 +1,5 @@
 package maple.calculator.processor
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -11,6 +10,7 @@ import maple.calculator.config.PipelineProperties
 import maple.calculator.model.CalculationResult
 import maple.calculator.model.ChunkResult
 import maple.calculator.parser.SnapshotEquipmentParser
+import maple.calculator.parser.SnapshotLineParser
 import maple.calculator.reader.GzipJsonlSnapshotRecordReader
 import maple.calculator.storage.ObjectStorage
 import maple.calculator.writer.CalculationResultWriter
@@ -31,7 +31,8 @@ class SnapshotChunkProcessor(
     private val jsonlReader: GzipJsonlSnapshotRecordReader,
     private val equipmentParser: SnapshotEquipmentParser,
     private val calculationCache: CalculationCache,
-    private val objectMapper: ObjectMapper,
+    private val lineParser: SnapshotLineParser,
+    private val sampleLogSerializer: SampleLogSerializer,
     private val properties: PipelineProperties,
     private val resultWriter: CalculationResultWriter,
 ) {
@@ -119,11 +120,10 @@ class SnapshotChunkProcessor(
     ) {
         for (line in lineChannel) {
             recordCount.incrementAndGet()
-            val node = objectMapper.readTree(line)
-            if (node.path("status").asText() != "SUCCESS") continue
-            val body = node.path("body").takeIf { !it.isMissingNode && !it.isNull } ?: continue
-            val ocid = node.path("key").asText("")
+            val record = lineParser.parse(line) ?: continue
             successCount.incrementAndGet()
+            val ocid = record.ocid
+            val body = record.body
 
             for ((presetNo, items) in equipmentParser.parseAllPresets(body)) {
                 for (item in items) {
@@ -171,7 +171,7 @@ class SnapshotChunkProcessor(
 
     private fun logSample(result: CalculationResult) {
         if (sampleCount.incrementAndGet() <= SAMPLE_LOG_LIMIT) {
-            log.debug("[SAMPLE] {}", objectMapper.writeValueAsString(result))
+            log.debug("[SAMPLE] {}", sampleLogSerializer.serialize(result))
         }
     }
 }

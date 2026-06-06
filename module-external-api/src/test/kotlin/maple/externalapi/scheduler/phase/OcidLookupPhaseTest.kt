@@ -5,7 +5,9 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
+import maple.externalapi.parser.OcidResponseParser
 import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.reader.CharacterNameReader
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -38,7 +40,8 @@ class OcidLookupPhaseTest {
         clientPort = mock()
         phase = OcidLookupPhase(
             clientPort = clientPort,
-            objectMapper = objectMapper,
+            ocidResponseParser = OcidResponseParser(objectMapper),
+            characterNameReader = CharacterNameReader(objectMapper),
             ocidLookupPermitsPerSecond = 400,
             batchSize = 1000,
             storeBasePath = tempDir.resolve("store").toString(),

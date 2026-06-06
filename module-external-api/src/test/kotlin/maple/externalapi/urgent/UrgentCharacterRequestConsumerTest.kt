@@ -3,8 +3,11 @@ package maple.externalapi.urgent
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import maple.externalapi.artifact.UrgentChunkArtifactWriter
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
+import maple.externalapi.event.UrgentEventPublisher
+import maple.externalapi.parser.UrgentOcidResponseParser
 import maple.externalapi.port.out.ExternalApiClientPort
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
@@ -46,13 +49,23 @@ class UrgentCharacterRequestConsumerTest {
         objectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())
         kafkaTemplate = mock()
 
-        consumer = UrgentCharacterRequestConsumer(
-            clientPort = clientPort,
+        val ocidResponseParser = UrgentOcidResponseParser(objectMapper)
+        val chunkArtifactWriter = UrgentChunkArtifactWriter(
+            storeBasePath = tempDir.toString(),
             objectMapper = objectMapper,
+        )
+        val eventPublisher = UrgentEventPublisher(
             kafkaTemplate = kafkaTemplate,
+            objectMapper = objectMapper,
             notFoundTopic = "urgent-character-not-found",
             urgentChunkReadyTopic = "external-api.urgent.snapshot.chunk-ready",
-            storeBasePath = tempDir.toString(),
+        )
+
+        consumer = UrgentCharacterRequestConsumer(
+            clientPort = clientPort,
+            ocidResponseParser = ocidResponseParser,
+            chunkArtifactWriter = chunkArtifactWriter,
+            eventPublisher = eventPublisher,
             maxConcurrent = 30,
             executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
         )

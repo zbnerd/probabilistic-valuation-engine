@@ -3,7 +3,6 @@ package maple.externalapi.snapshot
 import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.util.CompressionUtils
 import maple.externalapi.metrics.SnapshotVolumeMetrics
-import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
@@ -27,7 +26,7 @@ class ChunkedSnapshotSink(
     private val maxUncompressedBytes: Long,
     private val queueCapacity: Int,
     private val objectMapper: ObjectMapper,
-    private val eventPublisher: SnapshotChunkEventPublisher,
+    private val eventPublisher: SinkEventPublisher,
     private val volumeMetrics: SnapshotVolumeMetrics,
     private val writerExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread.ofPlatform().name("snapshot-writer-$endpoint").unstarted(runnable)
@@ -243,15 +242,7 @@ class ChunkedSnapshotSink(
             compressedBytes = stats.compressedBytes,
             createdAt = Instant.now(),
         )
-        try {
-            eventPublisher.publishChunkReady(event)
-                .exceptionally { ex ->
-                    log.warn("[Sink] failed to publish chunk-ready event for chunkId={}: {}", event.chunkId, ex.message)
-                    null
-                }
-        } catch (ex: Exception) {
-            log.warn("[Sink] failed to publish chunk-ready event for chunkId={}: {}", event.chunkId, ex.message)
-        }
+        eventPublisher.publishChunkReady(event)
     }
 
     private fun publishRunCompleted() {
@@ -267,15 +258,7 @@ class ChunkedSnapshotSink(
             finishedAt = requireNotNull(manifest.finishedAt),
             createdAt = Instant.now(),
         )
-        try {
-            eventPublisher.publishRunCompleted(event)
-                .exceptionally { ex ->
-                    log.warn("[Sink] failed to publish run-completed event for runId={}: {}", manifest.runId, ex.message)
-                    null
-                }
-        } catch (ex: Exception) {
-            log.warn("[Sink] failed to publish run-completed event for runId={}: {}", manifest.runId, ex.message)
-        }
+        eventPublisher.publishRunCompleted(event)
     }
 
     private fun publishRunFailed(errorMessage: String) {
@@ -286,14 +269,6 @@ class ChunkedSnapshotSink(
             errorMessage = errorMessage,
             createdAt = Instant.now(),
         )
-        try {
-            eventPublisher.publishRunFailed(event)
-                .exceptionally { ex ->
-                    log.warn("[Sink] failed to publish run-failed event for runId={}: {}", manifest.runId, ex.message)
-                    null
-                }
-        } catch (ex: Exception) {
-            log.warn("[Sink] failed to publish run-failed event for runId={}: {}", manifest.runId, ex.message)
-        }
+        eventPublisher.publishRunFailed(event)
     }
 }

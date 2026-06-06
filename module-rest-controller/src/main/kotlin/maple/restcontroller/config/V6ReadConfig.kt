@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.popular.PopularCharacterService
+import maple.restcontroller.popular.port.out.PopularCharacterRedisPort
 import maple.restcontroller.ranking.EquipmentRankingCacheService
 import maple.restcontroller.ranking.EquipmentRankingQueryService
 import maple.restcontroller.ranking.EquipmentRankingService
@@ -73,8 +74,8 @@ class V6ReadConfig(
 
     @Bean
     fun popularCharacterService(
-        redisTemplate: StringRedisTemplate
-    ): PopularCharacterService = PopularCharacterService(redisTemplate, properties)
+        redisPort: PopularCharacterRedisPort
+    ): PopularCharacterService = PopularCharacterService(redisPort, properties)
 
     @Bean
     fun expectationReadFacade(
@@ -93,17 +94,29 @@ class V6ReadConfig(
     )
 
     @Bean
+    fun batchResolver(
+        cacheService: ReadModelCacheService,
+        registry: InflightRequestRegistry,
+        queryService: ReadModelQueryService,
+        v6ReadMetrics: V6ReadMetrics,
+        urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>
+    ): BatchResolver = BatchResolver(
+        cacheService,
+        registry,
+        queryService,
+        urgentPublisherProvider.ifAvailable,
+        properties,
+        v6ReadMetrics,
+    )
+
+    @Bean
     fun batchReadScheduler(
         buffer: LocalRequestBuffer,
         registry: InflightRequestRegistry,
-        queryService: ReadModelQueryService,
-        cacheService: ReadModelCacheService,
+        resolver: BatchResolver,
         v6ReadMetrics: V6ReadMetrics,
-        urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>
     ): BatchReadScheduler = BatchReadScheduler(
-        buffer, registry, queryService, cacheService,
-        urgentPublisherProvider.ifAvailable,
-        v6ReadMetrics, properties
+        buffer, registry, resolver, v6ReadMetrics, properties
     )
 
     @Bean

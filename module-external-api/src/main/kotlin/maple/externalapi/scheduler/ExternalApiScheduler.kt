@@ -3,9 +3,10 @@ package maple.externalapi.scheduler
 import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
+import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
+import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
-import maple.externalapi.scheduler.phase.SnapshotFetchPhase
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.externalapi.metrics.SchedulerMetrics
@@ -29,7 +30,8 @@ private const val DAILY_REFRESH_LOCK_TIMEOUT_MS: Long = 3_600_000L
 @Component
 class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
-    private val snapshotFetchPhase: SnapshotFetchPhase,
+    private val characterBasicFetchPhase: CharacterBasicFetchPhase,
+    private val itemEquipmentFetchPhase: ItemEquipmentFetchPhase,
     private val ocidCacheProvider: OcidCacheProvider,
     private val rankingFetchPhaseProvider: ObjectProvider<RankingFetchPhase>,
     private val runStatusTracker: RunStatusTracker,
@@ -103,7 +105,7 @@ class ExternalApiScheduler(
             .thenCompose { _ ->
                 val cache = ocidCacheProvider.refresh()
                 runStatusTracker.transitionPhase(PipelinePhase.CHARACTER_BASIC)
-                snapshotFetchPhase.executeCharacterBasic(executor, cache)
+                characterBasicFetchPhase.execute(executor, cache)
             }
             .whenComplete { _, ex ->
                 if (ex != null) {
@@ -162,7 +164,7 @@ class ExternalApiScheduler(
         schedulerMetrics.incrementLockAcquired("item_equipment")
 
         CompletableFuture.completedFuture(null)
-            .thenCompose { snapshotFetchPhase.executeItemEquipment(executor, entries) }
+            .thenCompose { itemEquipmentFetchPhase.execute(executor, entries) }
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)

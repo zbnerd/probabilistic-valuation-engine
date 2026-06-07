@@ -1,6 +1,7 @@
 package maple.synchronizer.repository
 
 import maple.synchronizer.storage.OcidMapping
+import org.springframework.stereotype.Component
 
 /**
  * Merge policy for OCID mapping writes.
@@ -9,6 +10,7 @@ import maple.synchronizer.storage.OcidMapping
  * stays focused on SQL execution. The policy is pure logic (no Spring, no JDBC,
  * no Redis) and is independently testable.
  */
+@Component
 class OcidMappingMergePolicy {
     /**
      * The split of a new mapping batch into:

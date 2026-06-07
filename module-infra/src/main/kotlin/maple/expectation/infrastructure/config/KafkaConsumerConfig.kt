@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory
 import org.springframework.kafka.core.ConsumerFactory
 import org.springframework.kafka.core.KafkaTemplate
+import org.springframework.kafka.listener.ContainerProperties
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer
 import org.springframework.kafka.listener.DefaultErrorHandler
 import org.springframework.util.backoff.FixedBackOff
@@ -23,9 +24,13 @@ class KafkaConsumerConfig {
     ): ConcurrentKafkaListenerContainerFactory<String, String> {
         val factory = ConcurrentKafkaListenerContainerFactory<String, String>()
         factory.consumerFactory = consumerFactory
+        factory.containerProperties.ackMode = ContainerProperties.AckMode.MANUAL
 
         val recoverer = DeadLetterPublishingRecoverer(kafkaTemplate) { record: ConsumerRecord<*, *>, ex: Exception ->
-            log.error("[DLQ] topic={} key={} offset={} error={}", record.topic(), record.key(), record.offset(), ex.message)
+            log.error(
+                "[DLQ] topic={} key={} offset={} error={}",
+                record.topic(), record.key(), record.offset(), ex.message, ex,
+            )
             TopicPartition("${record.topic()}.DLT", record.partition())
         }
         factory.setCommonErrorHandler(DefaultErrorHandler(recoverer, FixedBackOff(1000, 3)))

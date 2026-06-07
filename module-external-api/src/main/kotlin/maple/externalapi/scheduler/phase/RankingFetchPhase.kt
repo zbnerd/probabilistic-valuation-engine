@@ -43,19 +43,24 @@ class RankingFetchPhase(
     @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
     private val clock: Clock = Clock.systemUTC(),
+    private val runIdGenerator: RunIdGenerator,
+    private val runMarkerWriter: RunMarkerWriter,
+    private val schedulerRateLimiter: SchedulerRateLimiter,
+    private val schedulerProgressLogger: SchedulerProgressLogger,
+    private val httpStatusExtractor: HttpStatusExtractor,
 ) {
     private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
 
     fun execute(workerExecutor: ExecutorService): CompletableFuture<Path> {
-        val runId = SchedulerPhaseUtils.newRunId()
+        val runId = runIdGenerator.newRunId()
         val date = LocalDate.now(clock).minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
         val runDir: Path = Paths.get(storeBasePath, "runs", runId)
 
-        SchedulerPhaseUtils.writeRunningMarker(runDir)
+        runMarkerWriter.writeRunningMarker(runDir)
 
         val sink = sinkFactory.createForRanking(runDir)
 
-        val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
+        val rateLimiter = schedulerRateLimiter.newRateLimiter(permitsPerSecond)
         val start = Instant.now(clock)
         val dispatcher = workerExecutor.asCoroutineDispatcher()
 
@@ -64,7 +69,7 @@ class RankingFetchPhase(
         return CoroutineScope(dispatcher).future {
             try {
                 val (fetched, failed) = processPagesSuspend(sink, rateLimiter, date)
-                SchedulerPhaseUtils.logSummary("RankingFetch", fetched, fetched, fetched, failed, start)
+                schedulerProgressLogger.logSummary("RankingFetch", fetched, fetched, fetched, failed, start)
             } catch (ex: Throwable) {
                 log.error("[RankingFetch] failed: runId={}, error={}", runId, ex.message)
                 throw ex
@@ -89,7 +94,7 @@ class RankingFetchPhase(
         var currentPage = 1
 
         while (currentPage <= maxPages) {
-            val permits = SchedulerPhaseUtils.acquirePermitsSuspend(rateLimiter, 1, 1)
+            val permits = schedulerRateLimiter.acquirePermitsSuspend(rateLimiter, 1, 1)
             if (permits == 0) continue // acquirePermitsSuspend already delays 100ms
 
             val requestKey = "$date:$currentPage"
@@ -104,7 +109,7 @@ class RankingFetchPhase(
             } catch (ex: Throwable) {
                 failed++
                 metrics.recordRankingFailed()
-                val status = SchedulerPhaseUtils.extractHttpStatus(ex)
+                val status = httpStatusExtractor.extract(ex)
                 sink.submit(SnapshotChunkRecord.Failure(
                     key = requestKey,
                     endpoint = "ranking-overall",

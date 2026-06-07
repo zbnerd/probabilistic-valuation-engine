@@ -39,6 +39,9 @@ class ItemEquipmentFetchPhase(
     @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
     private val clock: Clock = Clock.systemUTC(),
+    private val runIdGenerator: RunIdGenerator,
+    private val runMarkerWriter: RunMarkerWriter,
+    private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentFetchPhase::class.java)
 
@@ -48,10 +51,10 @@ class ItemEquipmentFetchPhase(
             return CompletableFuture.completedFuture(Unit)
         }
 
-        val runId = SchedulerPhaseUtils.newRunId()
+        val runId = runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("item-equipment")
         val runDir = Paths.get(storeBasePath, "runs", runId)
-        SchedulerPhaseUtils.writeRunningMarker(runDir)
+        runMarkerWriter.writeRunningMarker(runDir)
         val sink = sinkFactory.createForItemEquipment(runDir)
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
@@ -77,7 +80,7 @@ class ItemEquipmentFetchPhase(
                 val (successCount, failCount) = batchSupport.processBatch(
                     rateLimiter, entries, batchSize, ctx, sink, runId, start,
                 )
-                SchedulerPhaseUtils.logSummary("item-equipment", entries.size, successCount, successCount, failCount, start)
+                schedulerProgressLogger.logSummary("item-equipment", entries.size, successCount, successCount, failCount, start)
             } finally {
                 sink.close()
                 metrics.itemEquipmentTimer().record(Duration.between(start, Instant.now(clock)))

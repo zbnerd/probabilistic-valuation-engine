@@ -41,6 +41,9 @@ class CharacterBasicFetchPhase(
     @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
     private val clock: Clock = Clock.systemUTC(),
+    private val runIdGenerator: RunIdGenerator,
+    private val runMarkerWriter: RunMarkerWriter,
+    private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(CharacterBasicFetchPhase::class.java)
 
@@ -57,10 +60,10 @@ class CharacterBasicFetchPhase(
             return CompletableFuture.completedFuture(Unit)
         }
 
-        val runId = SchedulerPhaseUtils.newRunId()
+        val runId = runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("character-basic")
         val runDir = Paths.get(storeBasePath, "runs", runId)
-        SchedulerPhaseUtils.writeRunningMarker(runDir)
+        runMarkerWriter.writeRunningMarker(runDir)
         val sink = sinkFactory.createForCharacterBasic(runDir)
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
@@ -86,7 +89,7 @@ class CharacterBasicFetchPhase(
                 val (successCount, failCount) = batchSupport.processBatch(
                     rateLimiter, entries, batchSize, ctx, sink, runId, start,
                 )
-                SchedulerPhaseUtils.logSummary("character-basic", entries.size, successCount, successCount, failCount, start)
+                schedulerProgressLogger.logSummary("character-basic", entries.size, successCount, successCount, failCount, start)
             } finally {
                 sink.close()
                 metrics.characterBasicTimer().record(Duration.between(start, Instant.now(clock)))

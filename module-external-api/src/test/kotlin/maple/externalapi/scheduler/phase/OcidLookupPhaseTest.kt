@@ -47,6 +47,9 @@ class OcidLookupPhaseTest {
             storeBasePath = tempDir.resolve("store").toString(),
             eventPublisher = maple.externalapi.snapshot.event.NoOpSnapshotChunkEventPublisher(),
             maxInFlight = 100,
+            runIdGenerator = RunIdGenerator(java.time.Clock.systemDefaultZone()),
+            schedulerRateLimiter = SchedulerRateLimiter(),
+            schedulerProgressLogger = SchedulerProgressLogger(java.time.Clock.systemDefaultZone()),
         )
         executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()
     }

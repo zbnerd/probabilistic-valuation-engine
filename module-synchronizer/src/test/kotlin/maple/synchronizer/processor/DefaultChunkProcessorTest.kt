@@ -1,95 +1,56 @@
 package maple.synchronizer.processor
 
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import maple.core.domain.chunk.ChunkProcessInput
+import maple.synchronizer.adapter.chunk.ChunkPipelineOrchestrator
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.ArtifactNotFoundException
-import maple.synchronizer.domain.CalculatedEquipmentItem
-import maple.synchronizer.domain.GroupedEquipmentResult
-import maple.synchronizer.metrics.SynchronizerMeterRegistry
-import maple.synchronizer.metrics.DocumentVolumeMetrics
-import maple.synchronizer.preparer.PreppedDocument
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
-import org.mockito.kotlin.doThrow
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import java.math.BigDecimal
 
 class DefaultChunkProcessorTest {
 
-    private val dataReader: ChunkDataReader = mock()
-    private val transformer: ChunkDocumentTransformer = mock()
-    private val writer: ChunkDocumentWriter = mock()
-    private val metrics = DocumentVolumeMetrics(SynchronizerMeterRegistry(SimpleMeterRegistry()))
-
+    private val orchestrator: ChunkPipelineOrchestrator = mock()
     private lateinit var chunkProcessor: DefaultChunkProcessor
 
     @BeforeEach
     fun setUp() {
-        chunkProcessor = DefaultChunkProcessor(dataReader, transformer, writer, metrics)
+        chunkProcessor = DefaultChunkProcessor(orchestrator)
     }
 
     @Test
-    fun `process - happy path returns result with correct counts`() {
+    fun `process - delegates to orchestrator and returns its result`() {
         val input = testInput()
-        val grouped = listOf(GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = listOf(testItem())))
-        val prepped = listOf<PreppedDocument>(mock())
-        val transformResult = TransformResult(documentCount = 1, itemCount = 1, prepped = prepped)
-
-        whenever(dataReader.read(any())).thenReturn(grouped)
-        whenever(transformer.transform(any(), any(), any())).thenReturn(transformResult)
+        val expected = ChunkProcessResult(documentCount = 5, itemCount = 9, jsonRowCount = 100L)
+        whenever(orchestrator.execute(any())).thenReturn(expected)
 
         val result = chunkProcessor.process(input)
 
-        assertThat(result.documentCount).isEqualTo(1)
-        assertThat(result.itemCount).isEqualTo(1)
-        assertThat(result.jsonRowCount).isEqualTo(input.resultCount.toLong())
+        assertThat(result).isSameAs(expected)
+        verify(orchestrator).execute(input)
     }
 
     @Test
-    fun `process - calls writer with prepped documents`() {
+    fun `process - propagates ArtifactNotFoundException from orchestrator`() {
         val input = testInput()
-        val grouped = listOf(GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = listOf(testItem())))
-        val prepped = listOf<PreppedDocument>(mock())
-        val transformResult = TransformResult(documentCount = 1, itemCount = 1, prepped = prepped)
-
-        whenever(dataReader.read(any())).thenReturn(grouped)
-        whenever(transformer.transform(any(), any(), any())).thenReturn(transformResult)
-
-        chunkProcessor.process(input)
-
-        verify(writer).write(eq(input.sourceRunId), eq(input.sourceChunkId), eq(prepped))
-    }
-
-    @Test
-    fun `process - file not found propagates ArtifactNotFoundException`() {
-        val input = testInput()
-        whenever(dataReader.read(any()))
+        whenever(orchestrator.execute(any()))
             .thenThrow(ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "ResultFileReader", "/tmp/missing"))
 
         assertThatThrownBy { chunkProcessor.process(input) }
             .isInstanceOf(ArtifactNotFoundException::class.java)
             .hasMessageContaining("ResultFileReader")
-            .hasMessageContaining("/tmp/missing")
     }
 
     @Test
-    fun `process - upsert failure propagates exception`() {
+    fun `process - propagates RuntimeException from orchestrator`() {
         val input = testInput()
-        val grouped = listOf(GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = listOf(testItem())))
-        val prepped = listOf<PreppedDocument>(mock())
-        val transformResult = TransformResult(documentCount = 1, itemCount = 1, prepped = prepped)
-
-        whenever(dataReader.read(any())).thenReturn(grouped)
-        whenever(transformer.transform(any(), any(), any())).thenReturn(transformResult)
-        doThrow(RuntimeException("DB connection failed"))
-            .whenever(writer).write(any(), any(), any())
+        whenever(orchestrator.execute(any())).thenThrow(RuntimeException("DB connection failed"))
 
         assertThatThrownBy { chunkProcessor.process(input) }
             .isInstanceOf(RuntimeException::class.java)
@@ -97,55 +58,20 @@ class DefaultChunkProcessorTest {
     }
 
     @Test
-    fun `process - multiple groups produce multiple documents`() {
-        val input = testInput(resultCount = 3)
-        val grouped = listOf(
-            GroupedEquipmentResult(readKey = "oc1:1", ocid = "oc1", presetNo = 1, items = listOf(testItem(ocid = "oc1"))),
-            GroupedEquipmentResult(readKey = "oc2:1", ocid = "oc2", presetNo = 1, items = listOf(testItem(ocid = "oc2"), testItem(ocid = "oc2"))),
-        )
-        val prepped = listOf<PreppedDocument>(mock(), mock())
-        val transformResult = TransformResult(documentCount = 2, itemCount = 3, prepped = prepped)
+    fun `process - calls execute exactly once per process call`() {
+        val input = testInput()
+        whenever(orchestrator.execute(any())).thenReturn(ChunkProcessResult(0, 0, 0L))
 
-        whenever(dataReader.read(any())).thenReturn(grouped)
-        whenever(transformer.transform(any(), any(), any())).thenReturn(transformResult)
+        chunkProcessor.process(input)
+        chunkProcessor.process(input)
 
-        val result = chunkProcessor.process(input)
-
-        assertThat(result.documentCount).isEqualTo(2)
-        assertThat(result.itemCount).isEqualTo(3)
+        verify(orchestrator, times(2)).execute(input)
     }
 
-    private fun testInput(
-        objectKey: String = "run1/chunk001.jsonl.gz",
-        resultCount: Int = 1,
-    ) = ChunkProcessInput(
-        objectKey = objectKey,
+    private fun testInput() = ChunkProcessInput(
+        objectKey = "run1/chunk001.jsonl.gz",
         sourceRunId = "run-1",
         sourceChunkId = "chunk-001",
-        resultCount = resultCount,
-    )
-
-    private fun testItem(
-        ocid: String = "oc1",
-        presetNo: Int = 1,
-    ) = CalculatedEquipmentItem(
-        ocid = ocid,
-        presetNo = presetNo,
-        itemName = "Test Sword",
-        itemLevel = 160,
-        itemPart = "Weapon",
-        itemEquipmentPart = "무기",
-        potentialGrade = "레전드리",
-        potentialOptions = listOf("공격력 +12%"),
-        additionalGrade = "에픽",
-        additionalOptions = listOf("STR +9%"),
-        currentStar = 17,
-        targetStar = 22,
-        status = "SUCCESS",
-        totalCost = BigDecimal("150000000000"),
-        blackCubeCost = BigDecimal("50000000000"),
-        additionalCubeCost = BigDecimal("30000000000"),
-        starforceCost = BigDecimal("70000000000"),
-        errorMessage = null,
+        resultCount = 1,
     )
 }

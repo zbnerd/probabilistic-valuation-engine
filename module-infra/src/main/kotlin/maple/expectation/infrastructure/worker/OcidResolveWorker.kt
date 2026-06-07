@@ -7,7 +7,8 @@ import maple.expectation.core.port.out.mq.ConsumeResult
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.external.NexonApiClient
-import maple.expectation.infrastructure.job.CalculationJobService
+import maple.expectation.infrastructure.job.ApiDataFetchOrchestrator
+import maple.expectation.infrastructure.job.OcidResolutionOrchestrator
 import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -30,7 +31,8 @@ import org.springframework.stereotype.Component
 class OcidResolveWorker(
     private val ocidResolveTopic: OcidResolveTopic,
     private val nexonApiClient: NexonApiClient,
-    private val jobService: CalculationJobService,
+    private val ocidOrchestrator: OcidResolutionOrchestrator,
+    private val apiOrchestrator: ApiDataFetchOrchestrator,
     private val executor: LogicExecutor,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -71,13 +73,13 @@ class OcidResolveWorker(
             .join()
 
         if (ocidResponse == null || ocidResponse.ocid.isBlank()) {
-            jobService.handleOcidFailure(jobId, "EMPTY_OCID", "Nexon API returned empty OCID")
+            ocidOrchestrator.handleOcidFailure(jobId, "EMPTY_OCID", "Nexon API returned empty OCID")
             return ConsumeResult.Ack
         }
 
-        val resolved = jobService.resolveOcidAndEnqueueApiData(jobId, ocidResponse.ocid)
+        val resolved = apiOrchestrator.resolveOcidAndEnqueueApiData(jobId, ocidResponse.ocid)
         if (!resolved) {
-            jobService.handleOcidFailure(jobId, "TRANSITION_FAILED", "Status transition failed after OCID resolve")
+            ocidOrchestrator.handleOcidFailure(jobId, "TRANSITION_FAILED", "Status transition failed after OCID resolve")
         }
         log.info("[jobId={}] OCID resolved: {}", jobId, ocidResponse.ocid)
         return ConsumeResult.Ack

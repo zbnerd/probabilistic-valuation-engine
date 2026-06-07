@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component
 import java.io.BufferedOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -51,6 +52,7 @@ class OcidLookupPhase(
     private val eventPublisher: SnapshotChunkEventPublisher,
     @Value("\${external-api.concurrency.max-in-flight:100}")
     maxInFlight: Int,
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
     private val semaphore = Semaphore(maxInFlight)
@@ -75,7 +77,7 @@ class OcidLookupPhase(
             igns.size, ocidLookupPermitsPerSecond, batchSize, maxInFlight, storeBasePath,
         )
 
-        val start = Instant.now()
+        val start = Instant.now(clock)
         val dispatcher = workerExecutor.asCoroutineDispatcher()
         val results = mutableListOf<String>()
 
@@ -94,8 +96,8 @@ class OcidLookupPhase(
                 totalFailed = failCount,
                 chunkCount = 1,
                 startedAt = start,
-                finishedAt = Instant.now(),
-                createdAt = Instant.now(),
+                finishedAt = Instant.now(clock),
+                createdAt = Instant.now(clock),
             ))
             outputPath
         }
@@ -114,7 +116,7 @@ class OcidLookupPhase(
         var successCount = 0
         var failCount = 0
         var lastProgressLog = 0
-        val start = Instant.now()
+        val start = Instant.now(clock)
 
         while (processed < igns.size) {
             val permits = SchedulerPhaseUtils.acquirePermitsSuspend(rateLimiter, batchSize, igns.size - processed)

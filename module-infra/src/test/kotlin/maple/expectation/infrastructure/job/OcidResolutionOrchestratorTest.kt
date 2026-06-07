@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.job
 
 import java.util.UUID
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
@@ -13,6 +14,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -43,7 +47,16 @@ class OcidResolutionOrchestratorTest {
 
         service.requestOcidResolve(jobId, "testIgn", 1)
 
-        verify(eventAppender).append(ocidResolveTopic, OcidResolveEventFactory.create(jobId.toString(), "testIgn", 1))
+        val captor = argumentCaptor<IntegrationEvent<*>>()
+        verify(eventAppender).append(eq(ocidResolveTopic), captor.capture())
+        val captured = captor.firstValue
+        assertThat(captured.eventType).isEqualTo("OCID_RESOLVE")
+        assertThat(captured.jobId).isEqualTo(jobId.toString())
+        @Suppress("UNCHECKED_CAST")
+        val payload = captured.payload as Map<String, Any>
+        assertThat(payload["jobId"]).isEqualTo(jobId.toString())
+        assertThat(payload["userIgn"]).isEqualTo("testIgn")
+        assertThat(payload["presetNo"]).isEqualTo(1)
     }
 
     @Test
@@ -54,7 +67,7 @@ class OcidResolutionOrchestratorTest {
 
         service.requestOcidResolve(jobId, "testIgn", 1)
 
-        verify(eventAppender, never()).append(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        verify(eventAppender, never()).append(any(), any())
     }
 
     @Test
@@ -69,7 +82,7 @@ class OcidResolutionOrchestratorTest {
         service.handleOcidFailure(jobId, "CODE", "boom")
 
         verify(jobPort).markFailed(jobId, "CODE", "boom")
-        verify(eventAppender, never()).append(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        verify(eventAppender, never()).append(any(), any())
     }
 
     @Test
@@ -84,7 +97,13 @@ class OcidResolutionOrchestratorTest {
 
         service.handleOcidFailure(jobId, "CODE", "boom")
 
-        verify(eventAppender).append(ocidResolveTopic, OcidResolveEventFactory.create(jobId.toString(), "ign", 1))
+        val captor = argumentCaptor<IntegrationEvent<*>>()
+        verify(eventAppender).append(eq(ocidResolveTopic), captor.capture())
+        @Suppress("UNCHECKED_CAST")
+        val payload = captor.firstValue.payload as Map<String, Any>
+        assertThat(payload["jobId"]).isEqualTo(jobId.toString())
+        assertThat(payload["userIgn"]).isEqualTo("ign")
+        assertThat(payload["presetNo"]).isEqualTo(1)
     }
 
     @Test

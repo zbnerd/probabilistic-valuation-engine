@@ -1,6 +1,7 @@
 package maple.expectation.infrastructure.job
 
 import java.util.UUID
+import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
@@ -17,6 +18,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -43,8 +47,13 @@ class ApiDataFetchOrchestratorTest {
         )
     }
 
-    private fun job(ocid: String? = "ocid-1", retryCount: Int = 0, maxRetries: Int = 5) = CalculationJob(
-        jobId = UUID.randomUUID(), ocid = ocid, userIgn = "ign", presetNo = 1,
+    private fun job(
+        jobId: UUID = UUID.randomUUID(),
+        ocid: String? = "ocid-1",
+        retryCount: Int = 0,
+        maxRetries: Int = 5,
+    ) = CalculationJob(
+        jobId = jobId, ocid = ocid, userIgn = "ign", presetNo = 1,
         status = CalculationJobStatus.API_REQUESTED, retryCount = retryCount, maxRetries = maxRetries,
     )
 
@@ -52,12 +61,22 @@ class ApiDataFetchOrchestratorTest {
     fun `resolveOcidAndEnqueueApiData enqueues API request on success`() {
         val jobId = UUID.randomUUID()
         whenever(jobPort.resolveOcidAndTransition(jobId, "ocid-1")).thenReturn(true)
-        whenever(jobPort.findJobById(jobId)).thenReturn(job())
+        whenever(jobPort.findJobById(jobId)).thenReturn(job(jobId = jobId))
 
         val result = service.resolveOcidAndEnqueueApiData(jobId, "ocid-1")
 
         assertThat(result).isTrue()
-        verify(eventAppender).append(nexonApiRequestTopic, NexonApiRequestEventFactory.create(jobId.toString(), "ocid-1", "ign", 1))
+        val captor = argumentCaptor<IntegrationEvent<*>>()
+        verify(eventAppender).append(eq(nexonApiRequestTopic), captor.capture())
+        val captured = captor.firstValue
+        assertThat(captured.eventType).isEqualTo("NEXON_API_REQUEST")
+        @Suppress("UNCHECKED_CAST")
+        val payload = captured.payload as Map<String, Any>
+        assertThat(payload["jobId"]).isEqualTo(jobId.toString())
+        assertThat(payload["ocid"]).isEqualTo("ocid-1")
+        assertThat(payload["userIgn"]).isEqualTo("ign")
+        assertThat(payload["presetNo"]).isEqualTo(1)
+        assertThat(payload["eventType"]).isEqualTo("FETCH_EQUIPMENT")
     }
 
     @Test
@@ -68,7 +87,7 @@ class ApiDataFetchOrchestratorTest {
         val result = service.resolveOcidAndEnqueueApiData(jobId, "ocid-1")
 
         assertThat(result).isFalse()
-        verify(eventAppender, never()).append(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        verify(eventAppender, never()).append(any(), any())
     }
 
     @Test
@@ -82,34 +101,52 @@ class ApiDataFetchOrchestratorTest {
             expiresAt = java.time.Instant.now().plusSeconds(3600),
         )
         whenever(jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)).thenReturn(true)
-        whenever(jobPort.findJobById(jobId)).thenReturn(job())
+        whenever(jobPort.findJobById(jobId)).thenReturn(job(jobId = jobId))
 
         val result = service.saveSnapshotAndMarkReady(entity, jobId, "obj/key")
 
         assertThat(result).isTrue()
         verify(snapshotRepository).save(entity)
-        verify(eventAppender).append(nexonApiResponseTopic, NexonApiResponseEventFactory.create(jobId.toString(), snapshotId.toString(), "obj/key", "ocid-1", "ign", 1))
+        val captor = argumentCaptor<IntegrationEvent<*>>()
+        verify(eventAppender).append(eq(nexonApiResponseTopic), captor.capture())
+        val captured = captor.firstValue
+        assertThat(captured.eventType).isEqualTo("NEXON_API_RESPONSE")
+        @Suppress("UNCHECKED_CAST")
+        val payload = captured.payload as Map<String, Any>
+        assertThat(payload["jobId"]).isEqualTo(jobId.toString())
+        assertThat(payload["snapshotId"]).isEqualTo(snapshotId.toString())
+        assertThat(payload["objectKey"]).isEqualTo("obj/key")
+        assertThat(payload["characterId"]).isEqualTo("ocid-1")
+        assertThat(payload["userIgn"]).isEqualTo("ign")
+        assertThat(payload["presetNo"]).isEqualTo(1)
     }
 
     @Test
     fun `handleApiFailure marks failed when max retries exceeded`() {
         val jobId = UUID.randomUUID()
-        whenever(jobPort.findJobById(jobId)).thenReturn(job(retryCount = 5, maxRetries = 5))
+        whenever(jobPort.findJobById(jobId)).thenReturn(job(jobId = jobId, retryCount = 5, maxRetries = 5))
 
         service.handleApiFailure(jobId, "CODE", "boom")
 
         verify(jobPort).markFailed(jobId, "CODE", "boom")
-        verify(eventAppender, never()).append(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        verify(eventAppender, never()).append(any(), any())
     }
 
     @Test
     fun `handleApiFailure re-enqueues API request on retry`() {
         val jobId = UUID.randomUUID()
-        whenever(jobPort.findJobById(jobId)).thenReturn(job(retryCount = 0, maxRetries = 5))
+        whenever(jobPort.findJobById(jobId)).thenReturn(job(jobId = jobId, retryCount = 0, maxRetries = 5))
         whenever(jobPort.incrementRetry(jobId, "CODE")).thenReturn(true)
 
         service.handleApiFailure(jobId, "CODE", "boom")
 
-        verify(eventAppender).append(nexonApiRequestTopic, NexonApiRequestEventFactory.create(jobId.toString(), "ocid-1", "ign", 1, eventType = "RETRY_FETCH"))
+        val captor = argumentCaptor<IntegrationEvent<*>>()
+        verify(eventAppender).append(eq(nexonApiRequestTopic), captor.capture())
+        val captured = captor.firstValue
+        @Suppress("UNCHECKED_CAST")
+        val payload = captured.payload as Map<String, Any>
+        assertThat(payload["eventType"]).isEqualTo("RETRY_FETCH")
+        assertThat(payload["ocid"]).isEqualTo("ocid-1")
+        assertThat(payload["userIgn"]).isEqualTo("ign")
     }
 }

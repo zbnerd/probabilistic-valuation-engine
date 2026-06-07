@@ -31,3 +31,6 @@ include 'module-rest-controller'
 
 // Auth module (login, JWT, session)
 include 'module-auth'
+
+// Cleanup module (Airflow-triggered disk GC, hosted as standalone Spring Boot app)
+include 'module-cleanup'

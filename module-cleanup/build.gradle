@@ -1,0 +1,47 @@
+// ========================================
+// Module-Cleanup: Airflow-triggered disk GC
+// Standalone Spring Boot app (port 8084). module-infra 변경 0.
+// Kafka consumer (inbox) + whole-run GC for runs/ + calculator/runs/.
+// ========================================
+
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.spring)
+    alias(libs.plugins.spring.boot)
+}
+
+dependencies {
+    implementation(project(":module-common"))
+    implementation(project(":module-infra"))
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation(libs.spring.kafka)
+    implementation(libs.jackson.module.kotlin)
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation(libs.mockito.kotlin)
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+kotlin {
+    jvmToolchain(21)
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+        freeCompilerArgs.add("-Xjsr305=strict")
+    }
+}
+
+// compileJava depends on compileKotlin (Kotlin → Java order)
+tasks.named('compileJava').configure { dependsOn(tasks.named('compileKotlin')) }
+
+// Plain JAR enabled for downstream module consumption
+tasks.named("jar") {
+    enabled = true
+    archiveClassifier = "plain"
+}
+
+springBoot {
+    mainClass.set("maple.cleanup.CleanupApplicationKt")
+}

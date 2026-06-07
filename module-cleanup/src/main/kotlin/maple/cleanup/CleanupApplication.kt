@@ -1,7 +1,7 @@
-package maple.calculator
+package maple.cleanup
 
-import maple.calculator.config.CalculatorEngineConfiguration
-import maple.calculator.config.PipelineProperties
+import maple.cleanup.config.CleanupProperties
+import maple.cleanup.inbox.InboxProperties
 import maple.expectation.infrastructure.config.KafkaConsumerConfig
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
@@ -9,14 +9,17 @@ import org.springframework.boot.actuate.autoconfigure.security.servlet.Managemen
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Import
-import org.springframework.scheduling.annotation.EnableScheduling
 
-@SpringBootApplication(exclude = [SecurityAutoConfiguration::class, ManagementWebSecurityAutoConfiguration::class])
-@EnableScheduling
-@EnableConfigurationProperties(PipelineProperties::class)
-@Import(CalculatorEngineConfiguration::class, KafkaConsumerConfig::class)
-class CalculatorApplication
+@SpringBootApplication(
+    exclude = [
+        SecurityAutoConfiguration::class,
+        ManagementWebSecurityAutoConfiguration::class,
+    ]
+)
+@Import(KafkaConsumerConfig::class)
+@EnableConfigurationProperties(CleanupProperties::class, InboxProperties::class)
+class CleanupApplication
 
 fun main(args: Array<String>) {
-    runApplication<CalculatorApplication>(*args)
+    runApplication<CleanupApplication>(*args)
 }

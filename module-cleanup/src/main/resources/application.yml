@@ -1,0 +1,30 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: cleanup
+  profiles:
+    active: local
+
+cleanup:
+  dry-run: true
+  runs:
+    keep-recent: 5
+    keep-within-hours: 48
+  max-delete-runs-per-cycle: 10
+  max-delete-bytes-per-cycle: 5368709120
+  max-runtime-seconds: 60
+  base-path: ../data
+
+cleanup-inbox:
+  topic: synchronizer.chunk.consumed
+  consumer-group: cleanup-inbox
+  base-path: ../data
+  max-pending: 10000
+  auto-start: true
+
+logging:
+  level:
+    maple.cleanup: INFO
+    maple.expectation.infrastructure: INFO

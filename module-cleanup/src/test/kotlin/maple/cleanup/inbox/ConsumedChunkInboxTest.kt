@@ -27,4 +27,41 @@ class ConsumedChunkInboxTest {
         val inbox = ConsumedChunkInbox(mapper, InboxProperties(maxPending = 100))
         assertEquals(emptyList(), inbox.drain())
     }
+
+    @Test
+    fun `consume skips malformed json and increments skipped counter`() {
+        val inbox = ConsumedChunkInbox(mapper, InboxProperties(maxPending = 100))
+        val ack = org.mockito.kotlin.mock<Acknowledgment>()
+        inbox.consume("not-json", ack)
+        assertEquals(0, inbox.size())
+        assertEquals(1L, inbox.skipped())
+    }
+
+    @Test
+    fun `drain returns all queued events and clears queue`() {
+        val inbox = ConsumedChunkInbox(mapper, InboxProperties(maxPending = 100))
+        val ack = org.mockito.kotlin.mock<Acknowledgment>()
+        inbox.consume(sampleEvent, ack)
+        inbox.consume(sampleEvent.replace("c1", "c2"), ack)
+        val drained = inbox.drain()
+        assertEquals(2, drained.size)
+        assertEquals(0, inbox.size())
+    }
+
+    @Test
+    fun `pending overflow drops oldest and counts drop`() {
+        val inbox = ConsumedChunkInbox(mapper, InboxProperties(maxPending = 2))
+        val ack = org.mockito.kotlin.mock<Acknowledgment>()
+        repeat(3) { i -> inbox.consume(sampleEvent.replace("c1", "c$i"), ack) }
+        assertEquals(2, inbox.size())
+        assertEquals(1L, inbox.dropped())
+    }
+
+    @Test
+    fun `autoStart false means consume is a no-op`() {
+        val inbox = ConsumedChunkInbox(mapper, InboxProperties(maxPending = 100, autoStart = false))
+        val ack = org.mockito.kotlin.mock<Acknowledgment>()
+        inbox.consume(sampleEvent, ack)
+        assertEquals(0, inbox.size())
+    }
 }

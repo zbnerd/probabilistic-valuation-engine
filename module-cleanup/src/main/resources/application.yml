@@ -8,13 +8,13 @@ spring:
     active: local
 
 cleanup:
-  dry-run: true
+  dry-run: false
   runs:
     keep-recent: 5
-    keep-within-hours: 48
-  max-delete-runs-per-cycle: 10
-  max-delete-bytes-per-cycle: 5368709120
-  max-runtime-seconds: 60
+    keep-within-hours: 6
+  max-delete-runs-per-cycle: 2147483647
+  max-delete-bytes-per-cycle: 322122547200
+  max-runtime-seconds: 86400
   base-path: ../data
 
 cleanup-inbox:

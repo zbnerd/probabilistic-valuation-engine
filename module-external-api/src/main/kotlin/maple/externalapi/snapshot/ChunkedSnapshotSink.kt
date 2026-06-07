@@ -1,17 +1,11 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.util.CompressionUtils
-import maple.externalapi.metrics.SnapshotVolumeMetrics
-import maple.expectation.common.event.SnapshotChunkReadyEvent
-import maple.expectation.common.event.SnapshotRunCompletedEvent
-import maple.expectation.common.event.SnapshotRunFailedEvent
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
-import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -27,8 +21,7 @@ class ChunkedSnapshotSink(
     private val maxUncompressedBytes: Long,
     private val queueCapacity: Int,
     private val objectMapper: ObjectMapper,
-    private val eventPublisher: SinkEventPublisher,
-    private val volumeMetrics: SnapshotVolumeMetrics,
+    private val eventPublisher: SnapshotSinkEventPublisher,
     private val writerExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread.ofPlatform().name("snapshot-writer-$endpoint").unstarted(runnable)
     },
@@ -108,7 +101,7 @@ class ChunkedSnapshotSink(
         val err = writerError.get()
         if (err != null) {
             cleanupOnFailure()
-            publishRunFailed(err.message ?: "unknown")
+            eventPublisher.publishRunFailed(manifest, endpoint, err.message ?: "unknown")
             throw RuntimeException("writer thread failed: ${err.message}", err)
         }
 
@@ -138,7 +131,7 @@ class ChunkedSnapshotSink(
         )
 
         // publish run completed (after _SUCCESS)
-        publishRunCompleted()
+        eventPublisher.publishRunCompleted(manifest, endpoint)
     }
 
     private fun runWriterLoop() {
@@ -193,7 +186,7 @@ class ChunkedSnapshotSink(
                 finishedAt = stats.finishedAt,
             )
             manifest.chunks.add(entry)
-            publishChunkReady(stats)
+            eventPublisher.publishChunkReady(stats, manifest.runId, endpoint)
         }
         currentWriter = newChunkWriter(nextPartIndex++)
     }
@@ -210,7 +203,7 @@ class ChunkedSnapshotSink(
                 finishedAt = stats.finishedAt,
             )
             manifest.chunks.add(entry)
-            publishChunkReady(stats)
+            eventPublisher.publishChunkReady(stats, manifest.runId, endpoint)
         }
     }
 
@@ -221,57 +214,4 @@ class ChunkedSnapshotSink(
 
     private fun newChunkWriter(partIndex: Int): GzipJsonlChunkWriter =
         GzipJsonlChunkWriter(chunksDir, partIndex, maxRecords, maxUncompressedBytes, objectMapper, clock)
-
-    private fun objectKeyFor(stats: ChunkStats): String =
-        "runs/${manifest.runId}/${endpoint}/${stats.path}"
-
-    private fun publishChunkReady(stats: ChunkStats) {
-        val chunkId = String.format("part-%06d", stats.partIndex)
-        val ratio = CompressionUtils.ratioString(stats.uncompressedBytes, stats.compressedBytes)
-        volumeMetrics.recordChunk(stats.compressedBytes, stats.uncompressedBytes, stats.recordCount.toLong())
-        log.info(
-            "[snapshotVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",
-            manifest.runId, chunkId, stats.compressedBytes, stats.uncompressedBytes, stats.recordCount, ratio,
-        )
-
-        val event = SnapshotChunkReadyEvent(
-            eventId = UUID.randomUUID().toString(),
-            runId = manifest.runId,
-            endpoint = endpoint,
-            chunkId = chunkId,
-            objectKey = objectKeyFor(stats),
-            recordCount = stats.recordCount,
-            uncompressedBytes = stats.uncompressedBytes,
-            compressedBytes = stats.compressedBytes,
-            createdAt = Instant.now(clock),
-        )
-        eventPublisher.publishChunkReady(event)
-    }
-
-    private fun publishRunCompleted() {
-        val event = SnapshotRunCompletedEvent(
-            eventId = UUID.randomUUID().toString(),
-            runId = manifest.runId,
-            endpoint = endpoint,
-            manifestPath = "runs/${manifest.runId}/${endpoint}/manifest.json",
-            totalRecords = manifest.totalRecords,
-            totalFailed = manifest.totalFailed,
-            chunkCount = manifest.chunks.size,
-            startedAt = manifest.startedAt,
-            finishedAt = requireNotNull(manifest.finishedAt),
-            createdAt = Instant.now(clock),
-        )
-        eventPublisher.publishRunCompleted(event)
-    }
-
-    private fun publishRunFailed(errorMessage: String) {
-        val event = SnapshotRunFailedEvent(
-            eventId = UUID.randomUUID().toString(),
-            runId = manifest.runId,
-            endpoint = endpoint,
-            errorMessage = errorMessage,
-            createdAt = Instant.now(clock),
-        )
-        eventPublisher.publishRunFailed(event)
-    }
 }

@@ -2,10 +2,10 @@
 Daily cleanup pipeline.
 
 Runs every 6 hours and after daily_collection_pipeline completion.
-Cleans up artifact runs, consumed chunks, and calculator results in parallel.
+Triggers module-cleanup to GC artifact runs, consumed chunks, and calculator results.
 
 Control Plane: Airflow schedules and triggers.
-Data Plane: Modules execute cleanup on virtual threads.
+Data Plane: module-cleanup (port 8084) executes cleanup on virtual threads.
 """
 
 from datetime import datetime, timedelta
@@ -15,16 +15,14 @@ from airflow.providers.http.operators.http import HttpOperator
 from airflow.providers.http.sensors.http import HttpSensor
 
 
-def is_accepted_response(response):
-    """Check if HTTP response indicates success or already-accepted state.
-    Handles 409 CONFLICT (already running/started) as acceptance.
+def is_cleanup_success(response):
+    """Cleanup module returns 200 + JSON body for any successful invocation.
+
+    module-cleanup is synchronous (not trigger-then-poll like daily_collection),
+    so any 2xx response means the cleanup completed. 409 is treated as success
+    in case a previous run is still draining the inbox.
     """
-    if response.status_code == 409:
-        return True
-    try:
-        return response.json().get("status") in ("UP", "STARTED")
-    except (ValueError, AttributeError):
-        return False
+    return response.status_code in (200, 409)
 
 
 default_args = {
@@ -42,41 +40,41 @@ with DAG(
     tags=["pipeline", "cleanup"],
 ) as dag:
 
-    check_external_api = HttpSensor(
-        task_id="check_external_api",
-        http_conn_id="external_api",
+    check_cleanup_module = HttpSensor(
+        task_id="check_cleanup_module",
+        http_conn_id="cleanup",
         endpoint="actuator/health",
         request_params={},
-        response_check=is_accepted_response,
+        response_check=lambda r: r.status_code == 200,
         poke_interval=30,
         timeout=120,
     )
 
-    trigger_artifact_cleanup = HttpOperator(
-        task_id="trigger_artifact_cleanup",
-        http_conn_id="external_api",
-        endpoint="api/internal/trigger/artifact-cleanup",
+    cleanup_artifact_runs = HttpOperator(
+        task_id="cleanup_artifact_runs",
+        http_conn_id="cleanup",
+        endpoint="api/internal/cleanup/runs",
         method="POST",
-        execution_timeout=timedelta(seconds=30),
-        response_check=is_accepted_response,
+        execution_timeout=timedelta(seconds=600),
+        response_check=is_cleanup_success,
     )
 
-    trigger_consumed_cleanup = HttpOperator(
-        task_id="trigger_consumed_cleanup",
-        http_conn_id="external_api",
-        endpoint="api/internal/trigger/consumed-cleanup",
+    cleanup_calculator_runs = HttpOperator(
+        task_id="cleanup_calculator_runs",
+        http_conn_id="cleanup",
+        endpoint="api/internal/cleanup/calculator-runs",
         method="POST",
-        execution_timeout=timedelta(seconds=30),
-        response_check=is_accepted_response,
+        execution_timeout=timedelta(seconds=600),
+        response_check=is_cleanup_success,
     )
 
-    trigger_result_cleanup = HttpOperator(
-        task_id="trigger_result_cleanup",
-        http_conn_id="calculator",
-        endpoint="api/internal/trigger/result-cleanup",
+    cleanup_consumed_inbox = HttpOperator(
+        task_id="cleanup_consumed_inbox",
+        http_conn_id="cleanup",
+        endpoint="api/internal/cleanup/inbox",
         method="POST",
-        execution_timeout=timedelta(seconds=30),
-        response_check=is_accepted_response,
+        execution_timeout=timedelta(seconds=300),
+        response_check=is_cleanup_success,
     )
 
-    check_external_api >> [trigger_artifact_cleanup, trigger_consumed_cleanup, trigger_result_cleanup]
+    check_cleanup_module >> [cleanup_artifact_runs, cleanup_calculator_runs, cleanup_consumed_inbox]

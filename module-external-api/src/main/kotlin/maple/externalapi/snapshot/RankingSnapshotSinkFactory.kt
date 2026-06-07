@@ -22,6 +22,10 @@ class RankingSnapshotSinkFactory(
 ) {
     fun create(runDir: Path, endpoint: String): ChunkedSnapshotSink {
         val endpointConfig = chunkingProperties.configFor(endpoint)
+        val sinkEventPublisher = SnapshotSinkEventPublisher(
+            eventPublisher = SinkEventPublisher(rankingPublisher),
+            volumeMetrics = volumeMetrics,
+        )
         return ChunkedSnapshotSink(
             runDir = runDir,
             endpoint = endpoint,
@@ -29,8 +33,7 @@ class RankingSnapshotSinkFactory(
             maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
             queueCapacity = chunkingProperties.queueCapacity,
             objectMapper = objectMapper,
-            eventPublisher = SinkEventPublisher(rankingPublisher),
-            volumeMetrics = volumeMetrics,
+            eventPublisher = sinkEventPublisher,
         )
     }
 }

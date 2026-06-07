@@ -30,13 +30,15 @@ class OcidLookupService(
         }
 
         repository.batchUpsert(mappings)
-        runCatching {
-            ocidMappingRedisWriter.writeOcidToRedis(mappings)
-        }.onFailure { ex ->
-            log.error(
-                "[OcidService] Redis write failed after DB upsert: runId={} mappings={} - {}. Redis may be stale until next run.",
-                event.runId, mappings.size, ex.message, ex,
-            )
+        if (mappings.isNotEmpty()) {
+            runCatching {
+                ocidMappingRedisWriter.writeOcidToRedis(mappings)
+            }.onFailure { ex ->
+                log.error(
+                    "[OcidService] Redis write failed after DB upsert: runId={} mappings={} - {}. Redis may be stale until next run.",
+                    event.runId, mappings.size, ex.message, ex,
+                )
+            }
         }
 
         log.info("[OcidService] completed: runId={} processed={}", event.runId, mappings.size)

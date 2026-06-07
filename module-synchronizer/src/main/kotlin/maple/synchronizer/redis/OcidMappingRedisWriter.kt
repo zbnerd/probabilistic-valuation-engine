@@ -16,11 +16,6 @@ class OcidMappingRedisWriter(
     }
 
     fun writeOcidToRedis(mappings: List<OcidMapping>) {
-        if (mappings.isEmpty()) {
-            redisTemplate.delete(REDIS_KEY)
-            log.info("[OcidMapping] Redis cleared: empty mappings")
-            return
-        }
         val tempKey = "$REDIS_KEY:tmp:${System.nanoTime()}"
         redisTemplate.executePipelined { connection ->
             for (mapping in mappings) {

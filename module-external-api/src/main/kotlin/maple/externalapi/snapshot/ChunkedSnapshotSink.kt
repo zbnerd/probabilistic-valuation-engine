@@ -9,6 +9,7 @@ import maple.expectation.common.event.SnapshotRunFailedEvent
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
@@ -31,6 +32,7 @@ class ChunkedSnapshotSink(
     private val writerExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread.ofPlatform().name("snapshot-writer-$endpoint").unstarted(runnable)
     },
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     private val log = LoggerFactory.getLogger(ChunkedSnapshotSink::class.java)
 
@@ -46,7 +48,7 @@ class ChunkedSnapshotSink(
     private val manifest = SnapshotChunkManifest(
         runId = runDir.fileName.toString(),
         endpoint = endpoint,
-        startedAt = Instant.now(),
+        startedAt = Instant.now(clock),
     )
 
     private val failedWriter = SnapshotFailedRecordWriter(failedPath, objectMapper)
@@ -72,6 +74,7 @@ class ChunkedSnapshotSink(
             throw IllegalStateException("sink is closed, cannot submit")
         }
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
+        // monotonic clock, not Clock-injected for perf
         while (System.nanoTime() < deadline) {
             writerError.get()?.let { err ->
                 throw IllegalStateException("sink closed due to writer error: ${err.message}", err)
@@ -116,7 +119,7 @@ class ChunkedSnapshotSink(
         manifest.totalFailed = failedWriter.count()
 
         // write manifest
-        manifest.finishedAt = Instant.now()
+        manifest.finishedAt = Instant.now(clock)
         val manifestWriter = SnapshotChunkManifestWriter(manifestPath, objectMapper)
         manifestWriter.write(manifest)
 
@@ -217,7 +220,7 @@ class ChunkedSnapshotSink(
     }
 
     private fun newChunkWriter(partIndex: Int): GzipJsonlChunkWriter =
-        GzipJsonlChunkWriter(chunksDir, partIndex, maxRecords, maxUncompressedBytes, objectMapper)
+        GzipJsonlChunkWriter(chunksDir, partIndex, maxRecords, maxUncompressedBytes, objectMapper, clock)
 
     private fun objectKeyFor(stats: ChunkStats): String =
         "runs/${manifest.runId}/${endpoint}/${stats.path}"
@@ -240,7 +243,7 @@ class ChunkedSnapshotSink(
             recordCount = stats.recordCount,
             uncompressedBytes = stats.uncompressedBytes,
             compressedBytes = stats.compressedBytes,
-            createdAt = Instant.now(),
+            createdAt = Instant.now(clock),
         )
         eventPublisher.publishChunkReady(event)
     }
@@ -256,7 +259,7 @@ class ChunkedSnapshotSink(
             chunkCount = manifest.chunks.size,
             startedAt = manifest.startedAt,
             finishedAt = requireNotNull(manifest.finishedAt),
-            createdAt = Instant.now(),
+            createdAt = Instant.now(clock),
         )
         eventPublisher.publishRunCompleted(event)
     }
@@ -267,7 +270,7 @@ class ChunkedSnapshotSink(
             runId = manifest.runId,
             endpoint = endpoint,
             errorMessage = errorMessage,
-            createdAt = Instant.now(),
+            createdAt = Instant.now(clock),
         )
         eventPublisher.publishRunFailed(event)
     }

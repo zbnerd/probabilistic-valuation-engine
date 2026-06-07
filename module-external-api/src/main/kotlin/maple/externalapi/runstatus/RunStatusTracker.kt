@@ -2,11 +2,14 @@ package maple.externalapi.runstatus
 
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicReference
 
 @Component
-class RunStatusTracker {
+class RunStatusTracker(
+    private val clock: Clock = Clock.systemUTC(),
+) {
 
     private val log = LoggerFactory.getLogger(javaClass)
     private val currentRun = AtomicReference<RunStatus>(null)
@@ -16,7 +19,8 @@ class RunStatusTracker {
         val status = RunStatus(
             runId = runId,
             phase = PipelinePhase.RANKING_FETCH,
-            startedAt = Instant.now(),
+            startedAt = Instant.now(clock),
+            updatedAt = Instant.now(clock),
         )
         currentRun.set(status)
         log.info("[RunStatus] started run={}", runId)
@@ -24,13 +28,13 @@ class RunStatusTracker {
 
     fun transitionPhase(phase: PipelinePhase) {
         currentRun.updateAndGet { current ->
-            current?.copy(phase = phase, updatedAt = Instant.now())
+            current?.copy(phase = phase, updatedAt = Instant.now(clock))
         }
         log.info("[RunStatus] phase={}", phase)
     }
 
     fun completeRun(runId: String, chunksProcessed: Int, recordsProcessed: Long) {
-        val now = Instant.now()
+        val now = Instant.now(clock)
         val completed = currentRun.updateAndGet { current ->
             if (current?.runId != runId) return@updateAndGet current
             current.copy(
@@ -46,7 +50,7 @@ class RunStatusTracker {
     }
 
     fun failRun(runId: String, errorMessage: String) {
-        val now = Instant.now()
+        val now = Instant.now(clock)
         val failed = currentRun.updateAndGet { current ->
             if (current?.runId != runId) return@updateAndGet current
             current.copy(

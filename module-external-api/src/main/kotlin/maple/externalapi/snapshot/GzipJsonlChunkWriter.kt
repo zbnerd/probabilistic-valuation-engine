@@ -6,6 +6,7 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.time.Clock
 import java.time.Instant
 
 data class ChunkStats(
@@ -24,8 +25,9 @@ class GzipJsonlChunkWriter(
     private val maxRecords: Int,
     private val maxUncompressedBytes: Long,
     private val objectMapper: ObjectMapper,
+    private val clock: Clock = Clock.systemUTC(),
 ) {
-    private val startedAt = Instant.now()
+    private val startedAt = Instant.now(clock)
     private val tmpFile: Path = chunksDir.resolve(String.format("part-%06d.jsonl.gz.tmp", partIndex))
     private val finalFile: Path = chunksDir.resolve(String.format("part-%06d.jsonl.gz", partIndex))
 
@@ -65,7 +67,7 @@ class GzipJsonlChunkWriter(
                 uncompressedBytes = 0,
                 compressedBytes = 0,
                 startedAt = startedAt,
-                finishedAt = Instant.now(),
+                finishedAt = Instant.now(clock),
             )
         }
 
@@ -79,7 +81,7 @@ class GzipJsonlChunkWriter(
             uncompressedBytes = uncompressedBytes,
             compressedBytes = compressedBytes,
             startedAt = startedAt,
-            finishedAt = Instant.now(),
+            finishedAt = Instant.now(clock),
         )
     }
 

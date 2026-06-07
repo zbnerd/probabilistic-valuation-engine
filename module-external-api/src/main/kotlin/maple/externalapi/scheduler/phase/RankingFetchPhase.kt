@@ -19,6 +19,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -41,12 +42,13 @@ class RankingFetchPhase(
     private val permitsPerSecond: Int,
     @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
 
     fun execute(workerExecutor: ExecutorService): CompletableFuture<Path> {
         val runId = SchedulerPhaseUtils.newRunId()
-        val date = LocalDate.now().minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val date = LocalDate.now(clock).minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
         val runDir: Path = Paths.get(storeBasePath, "runs", runId)
 
         SchedulerPhaseUtils.writeRunningMarker(runDir)
@@ -54,7 +56,7 @@ class RankingFetchPhase(
         val sink = sinkFactory.create(runDir, "ranking-overall")
 
         val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
-        val start = Instant.now()
+        val start = Instant.now(clock)
         val dispatcher = workerExecutor.asCoroutineDispatcher()
 
         log.info("[RankingFetch] starting: runId={}, date={}, maxPages={}, permitsPerSecond={}", runId, date, maxPages, permitsPerSecond)
@@ -108,7 +110,7 @@ class RankingFetchPhase(
                     endpoint = "ranking-overall",
                     keyType = KeyType.DATE_PAGE.name,
                     httpStatus = status,
-                    fetchedAt = Instant.now(),
+                    fetchedAt = Instant.now(clock),
                     errorMessage = ex.message ?: "unknown",
                 ))
                 log.warn("[RankingFetch] page failed: page={}, status={}, error={}", currentPage, status, ex.message)
@@ -137,7 +139,7 @@ class RankingFetchPhase(
                     endpoint = "ranking-overall",
                     keyType = KeyType.DATE_PAGE.name,
                     httpStatus = 200,
-                    fetchedAt = Instant.now(),
+                    fetchedAt = Instant.now(clock),
                 ),
             )
         }

@@ -1,27 +1,24 @@
 package maple.externalapi.scheduler
 
-import maple.externalapi.cache.OcidCacheProvider
-import maple.externalapi.runstatus.PipelinePhase
-import maple.externalapi.runstatus.RunStatusTracker
-import maple.externalapi.scheduler.phase.OcidLookupPhase
-import maple.externalapi.scheduler.phase.RankingFetchPhase
-import maple.externalapi.scheduler.phase.SnapshotFetchPhase
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
+import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.metrics.SchedulerMetrics
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.runstatus.RunStatusTracker
+import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
+import maple.externalapi.scheduler.phase.OcidLookupPhase
+import maple.externalapi.scheduler.phase.RankingFetchPhase
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
-import org.springframework.beans.factory.annotation.Qualifier
 import java.util.UUID
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantLock
 
 /** 1 hour — long enough for the full daily refresh pipeline (snapshot → ocid → ranking) to complete without contention, but bounded so a hung worker releases the lock within one refresh cycle. */
 private const val DAILY_REFRESH_LOCK_TIMEOUT_MS: Long = 3_600_000L
@@ -29,11 +26,12 @@ private const val DAILY_REFRESH_LOCK_TIMEOUT_MS: Long = 3_600_000L
 @Component
 class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
-    private val snapshotFetchPhase: SnapshotFetchPhase,
+    private val characterBasicFetchPhase: CharacterBasicFetchPhase,
     private val ocidCacheProvider: OcidCacheProvider,
     private val rankingFetchPhaseProvider: ObjectProvider<RankingFetchPhase>,
     private val runStatusTracker: RunStatusTracker,
     private val schedulerMetrics: SchedulerMetrics,
+    private val itemEquipmentLoop: ItemEquipmentContinuousLoop,
     @Value("\${external-api.schedule.enabled:false}")
     private val scheduleEnabled: Boolean,
     @Value("\${external-api.schedule.run-on-startup:false}")
@@ -43,11 +41,6 @@ class ExternalApiScheduler(
     @Qualifier("externalApiSchedulerExecutor") private val executor: ExecutorService,
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
-    private val running = AtomicBoolean(false)
-    private val shutdown = AtomicBoolean(false)
-    internal val itemEquipmentStarted = AtomicBoolean(false)
-    private val lock = ReentrantLock()
-    private val idle = lock.newCondition()
 
     @EventListener(ApplicationReadyEvent::class)
     fun onStartup() {
@@ -67,7 +60,7 @@ class ExternalApiScheduler(
 
     fun triggerDailyRefresh(externalRunId: String? = null) {
         try {
-            acquireLock("daily_refresh", DAILY_REFRESH_LOCK_TIMEOUT_MS)
+            itemEquipmentLoop.acquireSchedulerLock("daily_refresh", DAILY_REFRESH_LOCK_TIMEOUT_MS)
         } catch (ex: DistributedLockException) {
             log.error("[Scheduler] could not acquire lock for daily refresh, skipping until next cron", ex)
             return
@@ -76,16 +69,16 @@ class ExternalApiScheduler(
         if (skipCharacterBasic) {
             log.info("[Scheduler] skip-character-basic enabled, loading OCID cache from existing data")
             ocidCacheProvider.refresh()
-            releaseLock()
-            startItemEquipmentLoopOnce()
+            itemEquipmentLoop.releaseSchedulerLock()
+            itemEquipmentLoop.startItemEquipmentLoopOnce()
             return
         }
 
         val rankingPhase = rankingFetchPhaseProvider.ifAvailable
         if (rankingPhase == null) {
             log.error("[Scheduler] ranking fetch phase is required but not enabled")
-            releaseLock()
-            startItemEquipmentLoopOnce()
+            itemEquipmentLoop.releaseSchedulerLock()
+            itemEquipmentLoop.startItemEquipmentLoopOnce()
             return
         }
 
@@ -103,7 +96,7 @@ class ExternalApiScheduler(
             .thenCompose { _ ->
                 val cache = ocidCacheProvider.refresh()
                 runStatusTracker.transitionPhase(PipelinePhase.CHARACTER_BASIC)
-                snapshotFetchPhase.executeCharacterBasic(executor, cache)
+                characterBasicFetchPhase.execute(executor, cache)
             }
             .whenComplete { _, ex ->
                 if (ex != null) {
@@ -111,93 +104,20 @@ class ExternalApiScheduler(
                     val message = cause.message ?: cause::class.simpleName ?: "unknown error"
                     runStatusTracker.failRun(runId, message)
                     log.error("[Scheduler] daily refresh failed, runId={}", runId, cause)
-                    releaseLock()
+                    itemEquipmentLoop.releaseSchedulerLock()
                 } else {
                     runStatusTracker.completeRun(runId, 0, 0)
                     log.info("[Scheduler] daily refresh completed, runId={}", runId)
-                    releaseLock()
-                    startItemEquipmentLoopOnce()
+                    itemEquipmentLoop.releaseSchedulerLock()
+                    itemEquipmentLoop.startItemEquipmentLoopOnce()
                 }
             }
-    }
-
-    private fun startItemEquipmentLoopOnce() {
-        if (itemEquipmentStarted.compareAndSet(false, true)) {
-            executor.submit { runItemEquipmentLoop() }
-        }
-    }
-
-    private fun runItemEquipmentLoop() {
-        log.info("[Scheduler] ITEM_EQUIPMENT continuous loop started")
-        runItemEquipmentCycle()
-    }
-
-    private fun runItemEquipmentCycle() {
-        if (shutdown.get()) {
-            log.info("[Scheduler] ITEM_EQUIPMENT continuous loop stopped")
-            return
-        }
-
-        val entries = ocidCacheProvider.current().entries.toList()
-        if (entries.isEmpty()) {
-            log.warn("[Scheduler] OCID cache empty, waiting 30s")
-            executor.submit {
-                Thread.sleep(java.time.Duration.ofSeconds(30))
-                ocidCacheProvider.refresh()
-                runItemEquipmentCycle()
-            }
-            return
-        }
-
-        try {
-            acquireLock("item_equipment", 120_000)
-        } catch (ex: DistributedLockException) {
-            log.error("[Scheduler] could not acquire lock for ITEM_EQUIPMENT, scheduling single retry in 60s", ex)
-            executor.submit {
-                Thread.sleep(java.time.Duration.ofSeconds(60))
-                runItemEquipmentCycle()
-            }
-            return
-        }
-        schedulerMetrics.incrementLockAcquired("item_equipment")
-
-        CompletableFuture.completedFuture(null)
-            .thenCompose { snapshotFetchPhase.executeItemEquipment(executor, entries) }
-            .whenComplete { _, ex ->
-                if (ex != null) {
-                    log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)
-                }
-                releaseLock()
-                executor.submit { runItemEquipmentCycle() }
-            }
-    }
-
-    private fun acquireLock(phase: String, timeoutMs: Long) {
-        lock.lock()
-        try {
-            var remainingNanos = timeoutMs * 1_000_000L
-            while (!running.compareAndSet(false, true)) {
-                if (remainingNanos <= 0) {
-                    schedulerMetrics.incrementLockTimeout(phase)
-                    throw DistributedLockException("ExternalApiScheduler:$phase")
-                }
-                remainingNanos = idle.awaitNanos(remainingNanos)
-            }
-        } finally {
-            lock.unlock()
-        }
-    }
-
-    private fun releaseLock() {
-        running.set(false)
-        lock.lock()
-        try { idle.signalAll() } finally { lock.unlock() }
     }
 
     override val lifecyclePhase: Int = 100
 
     override fun stopLifecycle() {
         log.info("[Scheduler] shutdown requested")
-        shutdown.set(true)
+        itemEquipmentLoop.stop()
     }
 }

@@ -16,6 +16,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -36,6 +37,7 @@ class UrgentCharacterRequestConsumer(
     @Value("\${external-api.concurrency.urgent-max-concurrent:30}")
     maxConcurrent: Int,
     @Qualifier("urgentCharacterRequestExecutor") private val executor: ExecutorService,
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val semaphore = Semaphore(maxConcurrent)
@@ -142,7 +144,7 @@ class UrgentCharacterRequestConsumer(
                     endpoint = endpointDir,
                     keyType = keyType,
                     httpStatus = 200,
-                    fetchedAt = Instant.now(),
+                    fetchedAt = Instant.now(clock),
                     bodyBytes = data,
                 ),
             )
@@ -155,7 +157,7 @@ class UrgentCharacterRequestConsumer(
                 recordCount = 1,
                 uncompressedBytes = data.size.toLong(),
                 compressedBytes = -1L,
-                createdAt = Instant.now(),
+                createdAt = Instant.now(clock),
             )
         }, executor).thenCompose { event ->
             eventPublisher.publishChunkReady(event)
@@ -165,7 +167,7 @@ class UrgentCharacterRequestConsumer(
         eventPublisher.publishNotFound(
             userIgn = userIgn,
             reason = "OCID_NOT_FOUND",
-            occurredAt = Instant.now(),
+            occurredAt = Instant.now(clock),
         )
 }
 

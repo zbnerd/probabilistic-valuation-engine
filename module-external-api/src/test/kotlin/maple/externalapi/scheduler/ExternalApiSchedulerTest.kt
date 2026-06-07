@@ -4,9 +4,10 @@ import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
+import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
+import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
-import maple.externalapi.scheduler.phase.SnapshotFetchPhase
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -30,7 +31,8 @@ class ExternalApiSchedulerTest {
     lateinit var tempDir: Path
 
     private lateinit var ocidLookupPhase: OcidLookupPhase
-    private lateinit var snapshotFetchPhase: SnapshotFetchPhase
+    private lateinit var characterBasicFetchPhase: CharacterBasicFetchPhase
+    private lateinit var itemEquipmentFetchPhase: ItemEquipmentFetchPhase
     private lateinit var ocidCacheProvider: OcidCacheProvider
     private lateinit var rankingPhaseProvider: ObjectProvider<RankingFetchPhase>
     private lateinit var rankingPhase: RankingFetchPhase
@@ -38,11 +40,13 @@ class ExternalApiSchedulerTest {
     private lateinit var executor: ExecutorService
     private lateinit var scheduler: ExternalApiScheduler
     private lateinit var schedulerMetrics: SchedulerMetrics
+    private lateinit var itemEquipmentLoop: ItemEquipmentContinuousLoop
 
     @BeforeEach
     fun setUp() {
         ocidLookupPhase = mock()
-        snapshotFetchPhase = mock()
+        characterBasicFetchPhase = mock()
+        itemEquipmentFetchPhase = mock()
         ocidCacheProvider = mock()
         rankingPhase = mock()
         rankingPhaseProvider = mock()
@@ -53,13 +57,20 @@ class ExternalApiSchedulerTest {
 
         tracker = RunStatusTracker()
         executor = Executors.newSingleThreadExecutor()
+        itemEquipmentLoop = ItemEquipmentContinuousLoop(
+            itemEquipmentFetchPhase = itemEquipmentFetchPhase,
+            ocidCacheProvider = ocidCacheProvider,
+            schedulerMetrics = schedulerMetrics,
+            executor = executor,
+        )
         scheduler = ExternalApiScheduler(
             ocidLookupPhase = ocidLookupPhase,
-            snapshotFetchPhase = snapshotFetchPhase,
+            characterBasicFetchPhase = characterBasicFetchPhase,
             ocidCacheProvider = ocidCacheProvider,
             rankingFetchPhaseProvider = rankingPhaseProvider,
             runStatusTracker = tracker,
             schedulerMetrics = schedulerMetrics,
+            itemEquipmentLoop = itemEquipmentLoop,
             scheduleEnabled = false,
             runOnStartup = false,
             skipCharacterBasic = false,
@@ -82,13 +93,13 @@ class ExternalApiSchedulerTest {
         awaitChain()
 
         verify(ocidLookupPhase, never()).execute(any(), any())
-        verify(snapshotFetchPhase, never()).executeCharacterBasic(any(), any())
+        verify(characterBasicFetchPhase, never()).execute(any(), any())
 
         val last = tracker.getLastCompletedRun()
         assertThat(last).isNotNull
         assertThat(last!!.phase).isEqualTo(PipelinePhase.FAILED)
         assertThat(last.errorMessage).contains("nexon 503")
-        assertThat(scheduler.itemEquipmentStarted.get()).isFalse()
+        assertThat(itemEquipmentLoop.itemEquipmentStarted.get()).isFalse()
     }
 
     @Test
@@ -100,13 +111,13 @@ class ExternalApiSchedulerTest {
         awaitChain()
 
         verify(ocidLookupPhase, never()).execute(any(), any())
-        verify(snapshotFetchPhase, never()).executeCharacterBasic(any(), any())
+        verify(characterBasicFetchPhase, never()).execute(any(), any())
 
         val last = tracker.getLastCompletedRun()
         assertThat(last).isNotNull
         assertThat(last!!.phase).isEqualTo(PipelinePhase.FAILED)
         assertThat(last.errorMessage).contains("ranking fetch returned null runDir")
-        assertThat(scheduler.itemEquipmentStarted.get()).isFalse()
+        assertThat(itemEquipmentLoop.itemEquipmentStarted.get()).isFalse()
     }
 
     @Test
@@ -116,19 +127,19 @@ class ExternalApiSchedulerTest {
             .thenReturn(CompletableFuture.completedFuture(runDir))
         whenever(ocidLookupPhase.execute(executor, runDir))
             .thenReturn(CompletableFuture.completedFuture(runDir))
-        whenever(snapshotFetchPhase.executeCharacterBasic(executor, emptyMap()))
+        whenever(characterBasicFetchPhase.execute(executor, emptyMap()))
             .thenReturn(CompletableFuture.completedFuture(Unit))
 
         scheduler.triggerDailyRefresh("run-ok")
         awaitChain()
 
         verify(ocidLookupPhase).execute(executor, runDir)
-        verify(snapshotFetchPhase).executeCharacterBasic(executor, emptyMap())
+        verify(characterBasicFetchPhase).execute(executor, emptyMap())
 
         val last = tracker.getLastCompletedRun()
         assertThat(last).isNotNull
         assertThat(last!!.phase).isEqualTo(PipelinePhase.COMPLETED)
-        assertThat(scheduler.itemEquipmentStarted.get()).isTrue()
+        assertThat(itemEquipmentLoop.itemEquipmentStarted.get()).isTrue()
     }
 
     private fun awaitChain() {

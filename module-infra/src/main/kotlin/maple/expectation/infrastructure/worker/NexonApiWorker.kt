@@ -13,7 +13,7 @@ import maple.expectation.core.port.out.mq.ConsumeResult
 import maple.expectation.infrastructure.converter.EquipmentResponseToCalculationInputConverter
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.job.CalculationJobService
+import maple.expectation.infrastructure.job.ApiDataFetchOrchestrator
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiRequestTopic
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component
 class NexonApiWorker(
     private val nexonApiRequestTopic: NexonApiRequestTopic,
     private val snapshotStore: SnapshotObjectStore,
-    private val jobService: CalculationJobService,
+    private val apiOrchestrator: ApiDataFetchOrchestrator,
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor,
     private val equipmentFetchProvider: EquipmentFetchProvider,
@@ -48,7 +48,7 @@ class NexonApiWorker(
             { e ->
                 log.error("[jobId={}] API request failed: {}", jobId, e.message)
                 executor.executeVoid(
-                    { jobService.handleApiFailure(jobId, "API_ERROR", e.message?.take(200) ?: "Unknown") },
+                    { apiOrchestrator.handleApiFailure(jobId, "API_ERROR", e.message?.take(200) ?: "Unknown") },
                     context,
                 )
                 ConsumeResult.Ack
@@ -107,7 +107,7 @@ class NexonApiWorker(
             expiresAt = snapshot.expiresAt,
         )
 
-        jobService.saveSnapshotAndMarkReady(snapshotEntity, jobId, objectKey)
+        apiOrchestrator.saveSnapshotAndMarkReady(snapshotEntity, jobId, objectKey)
 
         log.info("[jobId={}] API request processed, snapshot saved: {}", jobId, objectKey)
         return ConsumeResult.Ack

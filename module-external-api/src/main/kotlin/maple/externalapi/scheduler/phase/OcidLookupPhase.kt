@@ -53,6 +53,9 @@ class OcidLookupPhase(
     @Value("\${external-api.concurrency.max-in-flight:100}")
     maxInFlight: Int,
     private val clock: Clock = Clock.systemUTC(),
+    private val runIdGenerator: RunIdGenerator,
+    private val schedulerRateLimiter: SchedulerRateLimiter,
+    private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
     private val semaphore = Semaphore(maxInFlight)
@@ -69,7 +72,7 @@ class OcidLookupPhase(
         }
         log.info("[Scheduler] read {} character names from ranking chunks: {}", igns.size, rankingRunDir)
 
-        val rateLimiter = SchedulerPhaseUtils.newRateLimiter(ocidLookupPermitsPerSecond)
+        val rateLimiter = schedulerRateLimiter.newRateLimiter(ocidLookupPermitsPerSecond)
 
         log.info("[Scheduler] ========== OCID lookup start ==========")
         log.info(
@@ -84,9 +87,9 @@ class OcidLookupPhase(
         return CoroutineScope(dispatcher).future {
             val (successCount, failCount) = processBatchSuspend(rateLimiter, igns, results)
 
-            val runId = SchedulerPhaseUtils.newRunId()
+            val runId = runIdGenerator.newRunId()
             val outputPath = writeGzipJsonl(mappingDir, results, runId)
-            SchedulerPhaseUtils.logSummary("OCID lookup", igns.size, successCount, successCount, failCount, start)
+            schedulerProgressLogger.logSummary("OCID lookup", igns.size, successCount, successCount, failCount, start)
             eventPublisher.publishRunCompleted(SnapshotRunCompletedEvent(
                 eventId = UUID.randomUUID().toString(),
                 runId = runId,
@@ -113,13 +116,10 @@ class OcidLookupPhase(
         results: MutableList<String>,
     ): Pair<Int, Int> {
         var processed = 0
-        var successCount = 0
-        var failCount = 0
-        var lastProgressLog = 0
-        val start = Instant.now(clock)
+        var progress = BatchProgress(start = Instant.now(clock))
 
         while (processed < igns.size) {
-            val permits = SchedulerPhaseUtils.acquirePermitsSuspend(rateLimiter, batchSize, igns.size - processed)
+            val permits = schedulerRateLimiter.acquirePermitsSuspend(rateLimiter, batchSize, igns.size - processed)
             if (permits == 0) continue // acquirePermitsSuspend already delays 100ms
 
             val chunk = igns.subList(processed, processed + permits)
@@ -133,18 +133,17 @@ class OcidLookupPhase(
 
             val batchSuccess = batchResults.filterNotNull()
             results.addAll(batchSuccess)
-            successCount += batchSuccess.size
-            failCount += chunk.size - batchSuccess.size
-
+            progress = progress
+                .addSuccess(batchSuccess.size)
+                .addFailure(chunk.size - batchSuccess.size)
             processed += permits
 
-            val progress = successCount + failCount
-            if (progress - lastProgressLog >= PROGRESS_LOG_INTERVAL) {
-                lastProgressLog = progress
-                SchedulerPhaseUtils.logProgress("OCID lookup", progress, igns.size, successCount, failCount, start)
+            if (progress.shouldLogProgress(PROGRESS_LOG_INTERVAL)) {
+                progress = progress.markLogged()
+                schedulerProgressLogger.logProgress("OCID lookup", progress.totalProcessed(), igns.size, progress.successCount, progress.failCount, progress.start)
             }
         }
-        return successCount to failCount
+        return progress.successCount to progress.failCount
     }
 
     /**

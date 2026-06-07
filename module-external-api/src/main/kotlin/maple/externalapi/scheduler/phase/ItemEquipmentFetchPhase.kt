@@ -1,17 +1,13 @@
 package maple.externalapi.scheduler.phase
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.future
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
-import maple.externalapi.metrics.SnapshotVolumeMetrics
-import maple.externalapi.snapshot.ChunkedSnapshotSink
-import maple.externalapi.snapshot.SinkEventPublisher
+import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
-import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -31,13 +27,11 @@ import java.util.concurrent.ExecutorService
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class ItemEquipmentFetchPhase(
-    private val objectMapper: ObjectMapper,
     private val chunkingProperties: SnapshotChunkingProperties,
-    private val volumeMetrics: SnapshotVolumeMetrics,
     private val metrics: ExternalApiMetrics,
     private val fetchMetrics: SnapshotFetchMetrics,
-    private val eventPublisher: SnapshotChunkEventPublisher,
     private val batchSupport: BatchFetchSupport,
+    private val sinkFactory: EndpointSinkFactory,
     @Value("\${external-api.rate-limit.permits-per-second:200}")
     private val permitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
@@ -45,6 +39,9 @@ class ItemEquipmentFetchPhase(
     @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
     private val clock: Clock = Clock.systemUTC(),
+    private val runIdGenerator: RunIdGenerator,
+    private val runMarkerWriter: RunMarkerWriter,
+    private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentFetchPhase::class.java)
 
@@ -54,21 +51,11 @@ class ItemEquipmentFetchPhase(
             return CompletableFuture.completedFuture(Unit)
         }
 
-        val runId = SchedulerPhaseUtils.newRunId()
+        val runId = runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("item-equipment")
         val runDir = Paths.get(storeBasePath, "runs", runId)
-        SchedulerPhaseUtils.writeRunningMarker(runDir)
-        val sink = ChunkedSnapshotSink(
-            runDir = runDir,
-            endpoint = "item-equipment",
-            maxRecords = chunkConfig.maxRecords,
-            maxUncompressedBytes = chunkConfig.maxUncompressedBytes,
-            queueCapacity = chunkingProperties.queueCapacity,
-            objectMapper = objectMapper,
-            eventPublisher = SinkEventPublisher(eventPublisher),
-            volumeMetrics = volumeMetrics,
-            clock = clock,
-        )
+        runMarkerWriter.writeRunningMarker(runDir)
+        val sink = sinkFactory.createForItemEquipment(runDir)
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
 
@@ -93,7 +80,7 @@ class ItemEquipmentFetchPhase(
                 val (successCount, failCount) = batchSupport.processBatch(
                     rateLimiter, entries, batchSize, ctx, sink, runId, start,
                 )
-                SchedulerPhaseUtils.logSummary("item-equipment", entries.size, successCount, successCount, failCount, start)
+                schedulerProgressLogger.logSummary("item-equipment", entries.size, successCount, successCount, failCount, start)
             } finally {
                 sink.close()
                 metrics.itemEquipmentTimer().record(Duration.between(start, Instant.now(clock)))

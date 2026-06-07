@@ -10,7 +10,7 @@ import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.ArtifactNotFoundException
-import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.synchronizer.metrics.ChunkExecutionMetrics
 import maple.synchronizer.repository.ChunkExecutionClaim
 import maple.synchronizer.repository.ChunkExecutionState
 import maple.synchronizer.repository.ChunkExecutionRepository
@@ -36,13 +36,13 @@ import java.util.concurrent.Semaphore
 class ChunkConsumerTemplateTest {
 
     private val repository = mock<ChunkExecutionRepository>()
-    private val metrics = mock<SynchronizerMetrics>()
+    private val executionMetrics = mock<ChunkExecutionMetrics>()
     private val acknowledgment = mock<Acknowledgment>()
     private val executor = Executor { command -> command.run() }
     private val template = ChunkConsumerTemplate(
         logicExecutor = ImmediateLogicExecutor(),
         chunkExecutionRepository = repository,
-        metrics = metrics,
+        executionMetrics = executionMetrics,
         properties = ChunkExecutionProperties(),
         stateMachine = ChunkExecutionStateMachine(ChunkExecutionProperties()),
     )

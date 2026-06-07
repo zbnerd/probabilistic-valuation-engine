@@ -55,13 +55,16 @@ class BatchFetchSupport(
     private val fetchMetrics: SnapshotFetchMetrics,
     @Value("\${external-api.concurrency.max-in-flight:100}")
     maxInFlight: Int,
+    private val schedulerRateLimiter: SchedulerRateLimiter,
+    private val schedulerProgressLogger: SchedulerProgressLogger,
+    private val httpStatusExtractor: HttpStatusExtractor,
 ) {
     private val log = LoggerFactory.getLogger(BatchFetchSupport::class.java)
     private val semaphore = Semaphore(maxInFlight)
 
     /** Construct a token-bucket rate limiter sized to `permitsPerSecond`. */
     fun newRateLimiter(permitsPerSecond: Int): Bucket =
-        SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
+        schedulerRateLimiter.newRateLimiter(permitsPerSecond)
 
     /**
      * Process a batch of (key, ocid) entries with rate-limit gated concurrency.
@@ -77,12 +80,10 @@ class BatchFetchSupport(
         start: Instant,
     ): Pair<Int, Int> {
         var processed = 0
-        var successCount = 0
-        var failCount = 0
-        var lastProgressLog = 0
+        var progress = BatchProgress(start = start)
 
         while (processed < entries.size) {
-            val permits = SchedulerPhaseUtils.acquirePermitsSuspend(rateLimiter, batchSize, entries.size - processed)
+            val permits = schedulerRateLimiter.acquirePermitsSuspend(rateLimiter, batchSize, entries.size - processed)
             if (permits == 0) continue
 
             val chunk = entries.subList(processed, processed + permits)
@@ -105,22 +106,22 @@ class BatchFetchSupport(
             if (batchWaitDuration.toMillis() >= SLOW_BATCH_WAIT_MS) {
                 log.info(
                     "[SnapshotFetchMetrics] batch wait: endpoint={}, runId={}, batchSize={}, durationMs={}, success={}, failed={}",
-                    ctx.endpoint, runId, chunk.size, batchWaitDuration.toMillis(), successCount, failCount,
+                    ctx.endpoint, runId, chunk.size, batchWaitDuration.toMillis(), progress.successCount, progress.failCount,
                 )
             }
 
             val batchSuccess = batchResults.filterNotNull().size
-            successCount += batchSuccess
-            failCount += chunk.size - batchSuccess
+            progress = progress
+                .addSuccess(batchSuccess)
+                .addFailure(chunk.size - batchSuccess)
             processed += permits
 
-            val progress = successCount + failCount
-            if (progress - lastProgressLog >= PROGRESS_LOG_INTERVAL) {
-                lastProgressLog = progress
-                SchedulerPhaseUtils.logProgress(ctx.endpoint, progress, entries.size, successCount, failCount, start)
+            if (progress.shouldLogProgress(PROGRESS_LOG_INTERVAL)) {
+                progress = progress.markLogged()
+                schedulerProgressLogger.logProgress(ctx.endpoint, progress.totalProcessed(), entries.size, progress.successCount, progress.failCount, progress.start)
             }
         }
-        return successCount to failCount
+        return progress.successCount to progress.failCount
     }
 
     private suspend fun fetchSingle(ocid: String, ctx: BatchFetchContext, sink: ChunkedSnapshotSink): Boolean {
@@ -164,7 +165,7 @@ class BatchFetchSupport(
     }
 
     private fun handleFailure(ocid: String, ctx: BatchFetchContext, sink: ChunkedSnapshotSink, ex: Throwable) {
-        val httpStatus = SchedulerPhaseUtils.extractHttpStatus(ex)
+        val httpStatus = httpStatusExtractor.extract(ex)
         sink.submit(
             SnapshotChunkRecord.Failure(
                 key = ocid,

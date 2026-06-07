@@ -10,7 +10,7 @@ import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.parser.RankingEntryParser
 import maple.externalapi.port.out.ExternalApiClientPort
-import maple.externalapi.snapshot.RankingSnapshotSinkFactory
+import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.NoOpSnapshotChunkEventPublisher
 import org.assertj.core.api.Assertions.assertThat
@@ -50,15 +50,21 @@ class RankingFetchPhaseTest {
             clientPort = clientPort,
             rankingEntryParser = RankingEntryParser(objectMapper),
             metrics = ExternalApiMetrics(registry),
-            sinkFactory = RankingSnapshotSinkFactory(
+            sinkFactory = EndpointSinkFactory(
                 objectMapper = objectMapper,
                 chunkingProperties = SnapshotChunkingProperties(),
                 volumeMetrics = SnapshotVolumeMetrics(registry),
+                characterBasicPublisher = NoOpSnapshotChunkEventPublisher(),
                 rankingPublisher = NoOpSnapshotChunkEventPublisher(),
             ),
             maxPages = 3,
             permitsPerSecond = 100,
             storeBasePath = storeBasePath,
+            runIdGenerator = RunIdGenerator(java.time.Clock.systemDefaultZone()),
+            runMarkerWriter = RunMarkerWriter(java.time.Clock.systemDefaultZone()),
+            schedulerRateLimiter = SchedulerRateLimiter(),
+            schedulerProgressLogger = SchedulerProgressLogger(java.time.Clock.systemDefaultZone()),
+            httpStatusExtractor = HttpStatusExtractor(),
         )
         executor = Executors.newVirtualThreadPerTaskExecutor()
     }

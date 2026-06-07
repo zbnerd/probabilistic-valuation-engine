@@ -12,7 +12,9 @@ class ExpectationReadFacade(
     private val registry: InflightRequestRegistry,
     private val buffer: RequestBuffer,
     private val metrics: V6ReadMetrics,
-    private val cacheService: ReadModelCacheService,
+    private val readModelCacheService: ReadModelCacheService,
+    private val negativeCacheService: NegativeCacheService,
+    private val urgentDedupService: UrgentDedupService,
     private val popularCharacterService: PopularCharacterService,
     private val properties: V6ReadProperties,
 ) {
@@ -56,7 +58,12 @@ class ExpectationReadFacade(
                 EnqueueResponseMapper.toTimeoutResponse(
                     userIgn = userIgn,
                     presetNo = presetNo,
-                    status = cacheService.status(userIgn, presetNo),
+                    status = urgentDedupService.status(
+                        userIgn = userIgn,
+                        presetNo = presetNo,
+                        hasReadyCache = readModelCacheService.hasReadyCache(userIgn, presetNo),
+                        hasNegativeCache = negativeCacheService.getNegativeCache(userIgn),
+                    ),
                     retryAfterSeconds = properties.statusRetryAfterSeconds,
                 )
             )

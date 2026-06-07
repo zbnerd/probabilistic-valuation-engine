@@ -18,7 +18,9 @@ import java.time.Duration
  * matching deferreds — see [ExpectationReadResponseMapper].
  */
 class BatchResolver(
-    private val cacheService: ReadModelCacheService,
+    private val readModelCacheService: ReadModelCacheService,
+    private val negativeCacheService: NegativeCacheService,
+    private val urgentDedupService: UrgentDedupService,
     private val queryService: ReadModelQueryService,
     private val urgentPublisher: UrgentTriggerPublisher?,
     private val properties: V6ReadProperties,
@@ -34,7 +36,7 @@ class BatchResolver(
         val resolved = mutableListOf<ResolvedItem>()
 
         // 1. Redis cache lookup — split hits / misses
-        val (cacheHits, cacheMisses) = cacheService.multiGet(requests)
+        val (cacheHits, cacheMisses) = readModelCacheService.multiGet(requests)
 
         // 2. Resolve cache hits
         cacheHits.forEach { (userIgn, response) ->
@@ -55,7 +57,7 @@ class BatchResolver(
             )
 
             // 4. Write DB results to Redis cache
-            cacheService.multiPut(dbResults)
+            readModelCacheService.multiPut(dbResults)
 
             // 5. Resolve miss deferreds
             cacheMisses.keys.forEach { userIgn ->
@@ -74,7 +76,7 @@ class BatchResolver(
                     metrics.recordMiss("read_model_empty")
 
                     // Check negative cache first (character previously confirmed not found by Nexon)
-                    if (cacheService.getNegativeCache(userIgn)) {
+                    if (negativeCacheService.getNegativeCache(userIgn)) {
                         resolved += ResolvedItem.NotFound(
                             userIgn = userIgn,
                             presetNo = presetNo,
@@ -83,7 +85,7 @@ class BatchResolver(
                     }
 
                     // Trigger urgent pipeline (with dedup via Redis SETNX)
-                    if (urgentPublisher != null && cacheService.tryMarkUrgentPending(userIgn)) {
+                    if (urgentPublisher != null && urgentDedupService.tryMarkUrgentPending(userIgn)) {
                         urgentPublisher.publish(UrgentCharacterRequest(userIgn = userIgn, presetNo = presetNo))
                         metrics.urgentTriggerTotal.increment()
                         log.info("Triggered urgent pipeline: userIgn={}", maskIgn(userIgn))

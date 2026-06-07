@@ -53,8 +53,20 @@ class V6ReadConfig(
     @Bean
     fun readModelCacheService(
         redisTemplate: StringRedisTemplate,
-        objectMapper: ObjectMapper
-    ): ReadModelCacheService = ReadModelCacheService(redisTemplate, objectMapper, properties)
+        objectMapper: ObjectMapper,
+        urgentDedupService: UrgentDedupService,
+    ): ReadModelCacheService = ReadModelCacheService(redisTemplate, objectMapper, properties, urgentDedupService)
+
+    @Bean
+    fun urgentDedupService(
+        redisTemplate: StringRedisTemplate,
+    ): UrgentDedupService = UrgentDedupService(redisTemplate, properties)
+
+    @Bean
+    fun negativeCacheService(
+        redisTemplate: StringRedisTemplate,
+        urgentDedupService: UrgentDedupService,
+    ): NegativeCacheService = NegativeCacheService(redisTemplate, urgentDedupService)
 
     @Bean
     fun equipmentRankingCacheService(
@@ -82,25 +94,33 @@ class V6ReadConfig(
         registry: InflightRequestRegistry,
         buffer: LocalRequestBuffer,
         metrics: V6ReadMetrics,
-        cacheService: ReadModelCacheService,
+        readModelCacheService: ReadModelCacheService,
+        negativeCacheService: NegativeCacheService,
+        urgentDedupService: UrgentDedupService,
         popularCharacterService: PopularCharacterService
     ): ExpectationReadFacade = ExpectationReadFacade(
         registry,
         buffer,
         metrics,
-        cacheService,
+        readModelCacheService,
+        negativeCacheService,
+        urgentDedupService,
         popularCharacterService,
         properties,
     )
 
     @Bean
     fun batchResolver(
-        cacheService: ReadModelCacheService,
+        readModelCacheService: ReadModelCacheService,
+        negativeCacheService: NegativeCacheService,
+        urgentDedupService: UrgentDedupService,
         queryService: ReadModelQueryService,
         v6ReadMetrics: V6ReadMetrics,
         urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>
     ): BatchResolver = BatchResolver(
-        cacheService,
+        readModelCacheService,
+        negativeCacheService,
+        urgentDedupService,
         queryService,
         urgentPublisherProvider.ifAvailable,
         properties,

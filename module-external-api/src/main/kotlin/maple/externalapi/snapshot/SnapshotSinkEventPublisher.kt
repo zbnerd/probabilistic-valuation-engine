@@ -1,6 +1,8 @@
 package maple.externalapi.snapshot
 
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.common.event.SnapshotRunCompletedEvent
+import maple.expectation.common.event.SnapshotRunFailedEvent
 import maple.expectation.util.CompressionUtils
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import org.slf4j.LoggerFactory
@@ -47,5 +49,39 @@ class SnapshotSinkEventPublisher(
             createdAt = java.time.Instant.now(clock),
         )
         eventPublisher.publishChunkReady(event)
+    }
+
+    /**
+     * Build [SnapshotRunCompletedEvent] from a finalized manifest and dispatch.
+     * Caller must have set `manifest.finishedAt` before invoking.
+     */
+    fun publishRunCompleted(manifest: SnapshotChunkManifest, endpoint: String) {
+        val event = SnapshotRunCompletedEvent(
+            eventId = UUID.randomUUID().toString(),
+            runId = manifest.runId,
+            endpoint = endpoint,
+            manifestPath = "runs/${manifest.runId}/$endpoint/manifest.json",
+            totalRecords = manifest.totalRecords,
+            totalFailed = manifest.totalFailed,
+            chunkCount = manifest.chunks.size,
+            startedAt = manifest.startedAt,
+            finishedAt = requireNotNull(manifest.finishedAt),
+            createdAt = java.time.Instant.now(clock),
+        )
+        eventPublisher.publishRunCompleted(event)
+    }
+
+    /**
+     * Build [SnapshotRunFailedEvent] carrying the writer-thread error message and dispatch.
+     */
+    fun publishRunFailed(manifest: SnapshotChunkManifest, endpoint: String, errorMessage: String) {
+        val event = SnapshotRunFailedEvent(
+            eventId = UUID.randomUUID().toString(),
+            runId = manifest.runId,
+            endpoint = endpoint,
+            errorMessage = errorMessage,
+            createdAt = java.time.Instant.now(clock),
+        )
+        eventPublisher.publishRunFailed(event)
     }
 }

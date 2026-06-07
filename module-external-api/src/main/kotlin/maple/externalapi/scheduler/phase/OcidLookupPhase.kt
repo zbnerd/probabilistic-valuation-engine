@@ -113,10 +113,7 @@ class OcidLookupPhase(
         results: MutableList<String>,
     ): Pair<Int, Int> {
         var processed = 0
-        var successCount = 0
-        var failCount = 0
-        var lastProgressLog = 0
-        val start = Instant.now(clock)
+        var progress = BatchProgress(start = Instant.now(clock))
 
         while (processed < igns.size) {
             val permits = SchedulerPhaseUtils.acquirePermitsSuspend(rateLimiter, batchSize, igns.size - processed)
@@ -133,18 +130,17 @@ class OcidLookupPhase(
 
             val batchSuccess = batchResults.filterNotNull()
             results.addAll(batchSuccess)
-            successCount += batchSuccess.size
-            failCount += chunk.size - batchSuccess.size
-
+            progress = progress
+                .addSuccess(batchSuccess.size)
+                .addFailure(chunk.size - batchSuccess.size)
             processed += permits
 
-            val progress = successCount + failCount
-            if (progress - lastProgressLog >= PROGRESS_LOG_INTERVAL) {
-                lastProgressLog = progress
-                SchedulerPhaseUtils.logProgress("OCID lookup", progress, igns.size, successCount, failCount, start)
+            if (progress.shouldLogProgress(PROGRESS_LOG_INTERVAL)) {
+                progress = progress.markLogged()
+                SchedulerPhaseUtils.logProgress("OCID lookup", progress.totalProcessed(), igns.size, progress.successCount, progress.failCount, progress.start)
             }
         }
-        return successCount to failCount
+        return progress.successCount to progress.failCount
     }
 
     /**

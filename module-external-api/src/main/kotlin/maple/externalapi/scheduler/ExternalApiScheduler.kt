@@ -106,8 +106,10 @@ class ExternalApiScheduler(
                     log.error("[Scheduler] daily refresh failed, runId={}", runId, cause)
                     itemEquipmentLoop.releaseSchedulerLock()
                 } else {
-                    runStatusTracker.completeRun(runId, 0, 0)
-                    log.info("[Scheduler] daily refresh completed, runId={}", runId)
+                    val chunks = schedulerMetrics.drainRunChunks().toInt()
+                    val records = schedulerMetrics.drainRunRecords()
+                    runStatusTracker.completeRun(runId, chunks, records)
+                    log.info("[Scheduler] daily refresh completed, runId={} chunks={} records={}", runId, chunks, records)
                     itemEquipmentLoop.releaseSchedulerLock()
                     itemEquipmentLoop.startItemEquipmentLoopOnce()
                 }

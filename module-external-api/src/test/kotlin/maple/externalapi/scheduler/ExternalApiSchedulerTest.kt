@@ -1,5 +1,6 @@
 package maple.externalapi.scheduler
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
@@ -50,7 +51,7 @@ class ExternalApiSchedulerTest {
         ocidCacheProvider = mock()
         rankingPhase = mock()
         rankingPhaseProvider = mock()
-        schedulerMetrics = mock()
+        schedulerMetrics = SchedulerMetrics(SimpleMeterRegistry())
 
         whenever(rankingPhaseProvider.ifAvailable).thenReturn(rankingPhase)
         whenever(ocidCacheProvider.refresh()).thenReturn(emptyMap())
@@ -140,6 +141,30 @@ class ExternalApiSchedulerTest {
         assertThat(last).isNotNull
         assertThat(last!!.phase).isEqualTo(PipelinePhase.COMPLETED)
         assertThat(itemEquipmentLoop.itemEquipmentStarted.get()).isTrue()
+    }
+
+    @Test
+    fun `completed run reports aggregated chunk and record counts from scheduler metrics`() {
+        val runDir = tempDir.resolve("runs/run-counts")
+        whenever(rankingPhase.execute(executor))
+            .thenReturn(CompletableFuture.completedFuture(runDir))
+        whenever(ocidLookupPhase.execute(executor, runDir))
+            .thenReturn(CompletableFuture.completedFuture(runDir))
+        whenever(characterBasicFetchPhase.execute(executor, emptyMap()))
+            .thenReturn(CompletableFuture.completedFuture(Unit))
+
+        // Simulate 8 chunks published during the run: 1 large + 4 medium + 3 small
+        schedulerMetrics.recordChunkPublished(records = 2000)
+        repeat(4) { schedulerMetrics.recordChunkPublished(records = 1000) }
+        repeat(3) { schedulerMetrics.recordChunkPublished(records = 500) }
+
+        scheduler.triggerDailyRefresh("run-counts")
+        awaitChain()
+
+        val last = tracker.getLastCompletedRun()
+        assertThat(last).isNotNull
+        assertThat(last!!.chunksProcessed).isEqualTo(8)
+        assertThat(last.recordsProcessed).isEqualTo(2000L + 4 * 1000L + 3 * 500L)
     }
 
     private fun awaitChain() {

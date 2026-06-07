@@ -1,6 +1,7 @@
 package maple.externalapi.snapshot.event
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.externalapi.metrics.SchedulerMetrics
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
@@ -33,6 +34,7 @@ class SnapshotEventPublisherConfig {
         kafkaTemplate: KafkaTemplate<String, String>,
         objectMapper: ObjectMapper,
         properties: SnapshotEventProperties,
+        schedulerMetrics: SchedulerMetrics,
     ): SnapshotChunkEventPublisher =
         KafkaSnapshotChunkEventPublisher(
             kafkaTemplate = kafkaTemplate,
@@ -40,6 +42,7 @@ class SnapshotEventPublisherConfig {
             chunkReadyTopic = properties.kafka.chunkReadyTopic,
             runCompletedTopic = properties.kafka.runCompletedTopic,
             runFailedTopic = properties.kafka.runFailedTopic,
+            schedulerMetrics = schedulerMetrics,
         )
 
     @Bean
@@ -64,6 +67,7 @@ class SnapshotEventPublisherConfig {
         kafkaTemplate: KafkaTemplate<String, String>,
         objectMapper: ObjectMapper,
         properties: SnapshotEventProperties,
+        schedulerMetrics: SchedulerMetrics,
     ): SnapshotChunkEventPublisher =
         KafkaSnapshotChunkEventPublisher(
             kafkaTemplate = kafkaTemplate,
@@ -71,6 +75,7 @@ class SnapshotEventPublisherConfig {
             chunkReadyTopic = properties.kafka.chunkReadyTopic,
             runCompletedTopic = properties.kafka.runCompletedTopic,
             runFailedTopic = properties.kafka.runFailedTopic,
+            schedulerMetrics = schedulerMetrics,
         )
 
     @Bean
@@ -95,6 +100,7 @@ class SnapshotEventPublisherConfig {
         kafkaTemplate: KafkaTemplate<String, String>,
         objectMapper: ObjectMapper,
         properties: SnapshotEventProperties,
+        schedulerMetrics: SchedulerMetrics,
     ): SnapshotChunkEventPublisher =
         KafkaSnapshotChunkEventPublisher(
             kafkaTemplate = kafkaTemplate,
@@ -102,6 +108,7 @@ class SnapshotEventPublisherConfig {
             chunkReadyTopic = properties.kafka.chunkReadyTopic,
             runCompletedTopic = properties.kafka.runCompletedTopic,
             runFailedTopic = properties.kafka.runFailedTopic,
+            schedulerMetrics = schedulerMetrics,
         )
 
     @Bean
@@ -126,6 +133,7 @@ class SnapshotEventPublisherConfig {
         kafkaTemplate: KafkaTemplate<String, String>,
         objectMapper: ObjectMapper,
         properties: SnapshotEventProperties,
+        schedulerMetrics: SchedulerMetrics,
     ): SnapshotChunkEventPublisher =
         KafkaSnapshotChunkEventPublisher(
             kafkaTemplate = kafkaTemplate,
@@ -133,5 +141,6 @@ class SnapshotEventPublisherConfig {
             chunkReadyTopic = properties.kafka.ocidLookupTopic,
             runCompletedTopic = properties.kafka.ocidLookupTopic,
             runFailedTopic = properties.kafka.runFailedTopic,
+            schedulerMetrics = schedulerMetrics,
         )
 }

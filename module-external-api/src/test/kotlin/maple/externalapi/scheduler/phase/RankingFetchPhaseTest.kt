@@ -60,6 +60,11 @@ class RankingFetchPhaseTest {
             maxPages = 3,
             permitsPerSecond = 100,
             storeBasePath = storeBasePath,
+            runIdGenerator = RunIdGenerator(java.time.Clock.systemDefaultZone()),
+            runMarkerWriter = RunMarkerWriter(java.time.Clock.systemDefaultZone()),
+            schedulerRateLimiter = SchedulerRateLimiter(),
+            schedulerProgressLogger = SchedulerProgressLogger(java.time.Clock.systemDefaultZone()),
+            httpStatusExtractor = HttpStatusExtractor(),
         )
         executor = Executors.newVirtualThreadPerTaskExecutor()
     }

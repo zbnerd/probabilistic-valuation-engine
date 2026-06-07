@@ -21,4 +21,10 @@ class ConsumedChunkInboxTest {
         inbox.consume(sampleEvent, ack)
         assertEquals(1, inbox.size())
     }
+
+    @Test
+    fun `drain on empty queue returns empty list`() {
+        val inbox = ConsumedChunkInbox(mapper, InboxProperties(maxPending = 100))
+        assertEquals(emptyList(), inbox.drain())
+    }
 }

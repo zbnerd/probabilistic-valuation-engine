@@ -34,4 +34,13 @@ class ConsumedChunkInbox(
     }
 
     fun size(): Int = queue.size
+
+    fun drain(): List<ChunkConsumedEvent> {
+        val out = mutableListOf<ChunkConsumedEvent>()
+        while (true) {
+            val event = queue.poll() ?: break
+            out.add(event)
+        }
+        return out
+    }
 }

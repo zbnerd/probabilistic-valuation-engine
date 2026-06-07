@@ -4,7 +4,7 @@
 
 **Goal:** Move event construction, volume metrics, and the `snapshotVolume` log line from `ChunkedSnapshotSink` into a new stateless `SnapshotSinkEventPublisher`. Sink delegates only.
 
-**Architecture:** New `@Component` class in `maple.externalapi.snapshot` that takes `SinkEventPublisher` (existing fire-and-forget wrapper) + `SnapshotVolumeMetrics` + `Clock`. Three methods: `publishChunkReady(stats, runId, endpoint)`, `publishRunCompleted(manifest, endpoint)`, `publishRunFailed(manifest, endpoint, errorMessage)`. The three construction sites (`RankingSnapshotSinkFactory`, `CharacterBasicFetchPhase`, `ItemEquipmentFetchPhase`) inject the new publisher bean instead of building `SinkEventPublisher` inline and passing `volumeMetrics` separately. No behavior change.
+**Architecture:** New plain class in `maple.externalapi.snapshot` (NOT a `@Component` — must be constructed per-endpoint to preserve per-endpoint `SinkEventPublisher` / Kafka routing). Takes `SinkEventPublisher` (existing fire-and-forget wrapper) + `SnapshotVolumeMetrics` + `Clock`. Three methods: `publishChunkReady(stats, runId, endpoint)`, `publishRunCompleted(manifest, endpoint)`, `publishRunFailed(manifest, endpoint, errorMessage)`. The three construction sites (`RankingSnapshotSinkFactory`, `CharacterBasicFetchPhase`, `ItemEquipmentFetchPhase`) build the new publisher inline (replacing the `SinkEventPublisher` wrap and the direct `volumeMetrics` pass-through to the sink). No behavior change.
 
 **Tech Stack:** Kotlin, Spring `@Component`, JUnit 5, AssertJ, Mockito-Kotlin, Jackson, Java `Clock`.
 
@@ -55,7 +55,6 @@ import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.util.CompressionUtils
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import java.time.Clock
 import java.util.UUID
 
@@ -63,10 +62,11 @@ import java.util.UUID
  * Owns snapshot-sink event DTO construction, volume-metrics recording, and
  * the `snapshotVolume` log line. Delegates the actual send to [SinkEventPublisher].
  *
- * Stateless — every method takes the current call-site context (runId, endpoint,
- * manifest) and returns nothing. Spring bean so it can be injected and mocked.
+ * Plain class (not a Spring bean) — each phase/factory constructs one with its
+ * own [SinkEventPublisher] so per-endpoint Kafka routing is preserved. Every
+ * method takes the call-site context (runId, endpoint, manifest) and returns
+ * nothing.
  */
-@Component
 class SnapshotSinkEventPublisher(
     private val eventPublisher: SinkEventPublisher,
     private val volumeMetrics: SnapshotVolumeMetrics,
@@ -502,6 +502,7 @@ Replace the entire `RankingSnapshotSinkFactory.kt` with:
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
@@ -516,12 +517,16 @@ import java.nio.file.Path
 class RankingSnapshotSinkFactory(
     private val objectMapper: ObjectMapper,
     private val chunkingProperties: SnapshotChunkingProperties,
-    private val sinkEventPublisher: SnapshotSinkEventPublisher,
+    private val volumeMetrics: SnapshotVolumeMetrics,
     @Qualifier("rankingSnapshotPublisher")
     private val rankingPublisher: SnapshotChunkEventPublisher,
 ) {
     fun create(runDir: Path, endpoint: String): ChunkedSnapshotSink {
         val endpointConfig = chunkingProperties.configFor(endpoint)
+        val sinkEventPublisher = SnapshotSinkEventPublisher(
+            eventPublisher = SinkEventPublisher(rankingPublisher),
+            volumeMetrics = volumeMetrics,
+        )
         return ChunkedSnapshotSink(
             runDir = runDir,
             endpoint = endpoint,
@@ -536,10 +541,9 @@ class RankingSnapshotSinkFactory(
 ```
 
 Changes:
-- Added `sinkEventPublisher: SnapshotSinkEventPublisher` as a constructor parameter
-- Removed `volumeMetrics: SnapshotVolumeMetrics` (no longer needed)
-- Dropped the `SinkEventPublisher(rankingPublisher)` wrap inside `create()` — that wrapper is now a dependency of `SnapshotSinkEventPublisher`, not the factory
-- Pass `sinkEventPublisher` directly as the sink's `eventPublisher` parameter
+- `volumeMetrics` injection kept (now passed to the new publisher, not the sink)
+- The `SinkEventPublisher(rankingPublisher)` wrap is moved inside `create()` so the new publisher wraps it
+- The sink no longer takes `volumeMetrics` — it gets `eventPublisher = sinkEventPublisher` instead
 
 - [ ] **Step 7.2: Compile**
 
@@ -566,25 +570,32 @@ git commit -m "refactor(external-api): RankingSnapshotSinkFactory injects Snapsh
 
 - [ ] **Step 8.1: Update imports**
 
-Remove these imports:
+Remove:
 ```kotlin
-import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.SinkEventPublisher
 ```
 
-- [ ] **Step 8.2: Update the constructor**
+Keep:
+```kotlin
+import maple.externalapi.metrics.SnapshotVolumeMetrics
+```
 
-Find the `CharacterBasicFetchPhase` class constructor. It currently has `private val volumeMetrics: SnapshotVolumeMetrics,` as one parameter. Replace it with `private val sinkEventPublisher: SnapshotSinkEventPublisher,` (or insert in a logical position — recommend alphabetical).
+- [ ] **Step 8.2: Keep the existing constructor parameters**
 
-The existing constructor also takes a raw `eventPublisher: SnapshotChunkEventPublisher` (the port). The new `SnapshotSinkEventPublisher` is a separate bean that internally wraps that port. So the constructor now takes both the new publisher AND keeps the underlying port (or, if the port is no longer used directly, drop it).
-
-Read the full file first to confirm what the raw `eventPublisher` is used for. If it is only used to build `SinkEventPublisher(eventPublisher)`, then both that parameter AND the `SinkEventPublisher` import can be removed; only `sinkEventPublisher` is needed.
+`CharacterBasicFetchPhase` keeps `volumeMetrics: SnapshotVolumeMetrics` and the raw `eventPublisher: SnapshotChunkEventPublisher` (port). Both are still needed — they get composed into a per-run `SnapshotSinkEventPublisher` inside `run()`.
 
 - [ ] **Step 8.3: Update the sink construction site**
 
-In the `run()` method, find the `ChunkedSnapshotSink(...)` call (around line 72). Replace its `eventPublisher = SinkEventPublisher(eventPublisher),` and `volumeMetrics = volumeMetrics,` lines with `eventPublisher = sinkEventPublisher,`.
+In the `run()` method, find the `ChunkedSnapshotSink(...)` call (around line 72). Replace the `eventPublisher = SinkEventPublisher(eventPublisher),` and `volumeMetrics = volumeMetrics,` lines with construction of a per-run `SnapshotSinkEventPublisher`:
 
-The new sink constructor (per Task 6) has no `volumeMetrics` parameter. The new `eventPublisher` is a `SnapshotSinkEventPublisher`.
+```kotlin
+            eventPublisher = SnapshotSinkEventPublisher(
+                eventPublisher = SinkEventPublisher(eventPublisher),
+                volumeMetrics = volumeMetrics,
+            ),
+```
+
+The sink no longer takes `volumeMetrics` directly; that goes into the new publisher. The new `eventPublisher` is a `SnapshotSinkEventPublisher`.
 
 - [ ] **Step 8.4: Compile**
 
@@ -613,13 +624,17 @@ git commit -m "refactor(external-api): CharacterBasicFetchPhase injects Snapshot
 
 Remove:
 ```kotlin
-import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.SinkEventPublisher
 ```
 
-- [ ] **Step 9.2: Update the constructor**
+Keep:
+```kotlin
+import maple.externalapi.metrics.SnapshotVolumeMetrics
+```
 
-Apply the same changes as Task 8.2 to `ItemEquipmentFetchPhase`.
+- [ ] **Step 9.2: Keep the existing constructor parameters**
+
+Same as Task 8.2 — keep `volumeMetrics` and the raw `eventPublisher` port.
 
 - [ ] **Step 9.3: Update the sink construction site**
 

@@ -1,13 +1,13 @@
 package maple.synchronizer.consumer
 
 import maple.expectation.common.event.ChunkExecutionIdentity
-import maple.expectation.error.exception.ArtifactNotFoundException
+import maple.synchronizer.state.ChunkExecutionStateMachine
 import maple.synchronizer.state.ChunkExecutionStatus
+import maple.synchronizer.state.FailureDecision
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.repository.ChunkExecutionClaim
-import maple.synchronizer.repository.ChunkExecutionState
 import maple.synchronizer.repository.ChunkExecutionRepository
 import maple.synchronizer.repository.InsertChunkExecutionCommand
 import org.slf4j.Logger
@@ -24,6 +24,7 @@ class ChunkConsumerTemplate(
     private val chunkExecutionRepository: ChunkExecutionRepository,
     private val metrics: SynchronizerMetrics,
     private val properties: ChunkExecutionProperties,
+    private val stateMachine: ChunkExecutionStateMachine,
 ) {
     fun submit(request: ChunkConsumerRequest) {
         if (chunkExecutionRepository.insertPendingIfAbsent(request.toInsertCommand())) {
@@ -41,7 +42,7 @@ class ChunkConsumerTemplate(
             return
         }
 
-        if (state.shouldAcknowledge()) {
+        if (stateMachine.shouldAcknowledge(state)) {
             request.log.info(
                 "[{}] skip chunk in terminal/current state: runId={} chunkId={} status={}",
                 request.logPrefix,
@@ -67,7 +68,7 @@ class ChunkConsumerTemplate(
         val claim = chunkExecutionRepository.claimProcessing(request.identity, properties.processingTimeout)
         if (claim == null) {
             request.processingPermit.release()
-            if (state.shouldPreserveKafkaRedelivery()) {
+            if (stateMachine.shouldPreserveKafkaRedelivery(state)) {
                 request.log.info(
                     "[{}] retryable chunk not due, leaving unacked for Kafka redelivery: runId={} chunkId={} nextRetryAt={}",
                     request.logPrefix,
@@ -89,7 +90,7 @@ class ChunkConsumerTemplate(
             return
         }
         metrics.recordChunkExecutionClaimed(request.identity.executionType)
-        if (state.isReclaimedExpired(Instant.now())) {
+        if (stateMachine.isReclaimedExpired(state, Instant.now())) {
             metrics.recordChunkExecutionReclaimedExpired(request.identity.executionType)
         }
 
@@ -192,7 +193,7 @@ class ChunkConsumerTemplate(
         claim: ChunkExecutionClaim,
         ex: Throwable,
     ) {
-        val decision = classifyFailure(ex, claim)
+        val decision = stateMachine.classifyFailure(ex, claim)
         val error = ex.message ?: ex.javaClass.simpleName
 
         val marked = when (decision) {
@@ -242,32 +243,6 @@ class ChunkConsumerTemplate(
         }
     }
 
-    private fun classifyFailure(
-        ex: Throwable,
-        claim: ChunkExecutionClaim,
-    ): FailureDecision {
-        val artifactMissing = ex is ArtifactNotFoundException
-        val maxAttempts = if (artifactMissing) {
-            properties.retry.artifactMissingMaxAttempts
-        } else {
-            properties.retry.maxAttempts
-        }
-        return if (claim.attemptCount >= maxAttempts) {
-            val terminalReason = if (artifactMissing) ARTIFACT_MISSING_MAX_ATTEMPTS else MAX_ATTEMPTS_EXCEEDED
-            FailureDecision.Terminal(
-                attemptCount = claim.attemptCount,
-                terminalReason = terminalReason,
-            )
-        } else {
-            FailureDecision.Retryable(
-                attemptCount = claim.attemptCount,
-                nextRetryAt = Instant.now().plus(
-                    properties.retryBaseBackoff.multipliedBy(claim.attemptCount.toLong()),
-                ),
-            )
-        }
-    }
-
     private fun logFailedStateWrite(
         request: ChunkConsumerRequest,
         claim: ChunkExecutionClaim,
@@ -281,41 +256,6 @@ class ChunkConsumerTemplate(
         )
     }
 
-    private fun ChunkExecutionState.isReclaimedExpired(now: Instant): Boolean =
-        (status as? ChunkExecutionStatus.Processing)?.isReclaimed(leaseUntil, now) == true
-
-    /**
-     * Whether the Kafka message should be acknowledged for this chunk state.
-     *
-     * State transition policy:
-     * - SUCCEEDED → ack. The work is complete and the chunk will not be reprocessed.
-     * - FAILED_TERMINAL → ack. Retries exhausted or non-retryable error; nothing more to do here.
-     * - FAILED_RETRYABLE with `nextRetryAt` in the future → do NOT ack. Another worker
-     *   will pick the chunk up when the backoff expires; preserve the message for redelivery.
-     * - FAILED_RETRYABLE with past or null `nextRetryAt` → ack. The retry window has
-     *   elapsed and the row is stale.
-     * - PROCESSING with an active lease (`leaseUntil` in the future) → ack. Another worker
-     *   is still processing this chunk; let it finish.
-     * - PROCESSING with expired or null lease → do NOT ack. The lease has timed out and
-     *   the chunk is reclaimable; preserve the message so the reclaim path runs.
-     * - PENDING → do NOT ack. The row was just inserted; a worker is about to claim it.
-     */
-    private fun ChunkExecutionState.shouldAcknowledge(): Boolean {
-        val now = Instant.now()
-        return when (val s = status) {
-            is ChunkExecutionStatus.Succeeded,
-            is ChunkExecutionStatus.FailedTerminal -> true
-            is ChunkExecutionStatus.FailedRetryable -> s.nextRetryAt?.isAfter(now) != true
-            ChunkExecutionStatus.Processing -> leaseUntil?.isAfter(now) == true
-            ChunkExecutionStatus.Pending -> false
-        }
-    }
-
-    private fun ChunkExecutionState.shouldPreserveKafkaRedelivery(): Boolean {
-        val s = status as? ChunkExecutionStatus.FailedRetryable ?: return false
-        return s.nextRetryAt?.isAfter(Instant.now()) == true
-    }
-
     private fun ChunkConsumerRequest.toInsertCommand(): InsertChunkExecutionCommand =
         InsertChunkExecutionCommand(
             identity = identity,
@@ -326,31 +266,9 @@ class ChunkConsumerTemplate(
             eventPayloadJson = eventPayloadJson,
         )
 
-    private sealed class FailureDecision {
-        abstract val attemptCount: Int
-        abstract val reason: String
-
-        data class Retryable(
-            override val attemptCount: Int,
-            val nextRetryAt: Instant,
-        ) : FailureDecision() {
-            override val reason: String = RETRYABLE_FAILURE
-        }
-
-        data class Terminal(
-            override val attemptCount: Int,
-            val terminalReason: String,
-        ) : FailureDecision() {
-            override val reason: String = terminalReason
-        }
-    }
-
     private companion object {
         private const val SUPPORTED_SCHEMA_VERSION = 1
         private const val UNSUPPORTED_SCHEMA_VERSION = "UNSUPPORTED_SCHEMA_VERSION"
-        private const val ARTIFACT_MISSING_MAX_ATTEMPTS = "ARTIFACT_MISSING_MAX_ATTEMPTS"
-        private const val MAX_ATTEMPTS_EXCEEDED = "MAX_ATTEMPTS_EXCEEDED"
-        private const val RETRYABLE_FAILURE = "RETRYABLE_FAILURE"
     }
 }
 

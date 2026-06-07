@@ -15,6 +15,7 @@ import maple.synchronizer.repository.ChunkExecutionClaim
 import maple.synchronizer.repository.ChunkExecutionState
 import maple.synchronizer.repository.ChunkExecutionRepository
 import maple.synchronizer.repository.InsertChunkExecutionCommand
+import maple.synchronizer.state.ChunkExecutionStateMachine
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -43,6 +44,7 @@ class ChunkConsumerTemplateTest {
         chunkExecutionRepository = repository,
         metrics = metrics,
         properties = ChunkExecutionProperties(),
+        stateMachine = ChunkExecutionStateMachine(ChunkExecutionProperties()),
     )
 
     @Test

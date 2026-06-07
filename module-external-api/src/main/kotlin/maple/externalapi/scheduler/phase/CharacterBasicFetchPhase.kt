@@ -12,6 +12,7 @@ import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import maple.externalapi.snapshot.ChunkedSnapshotSink
 import maple.externalapi.snapshot.SinkEventPublisher
 import maple.externalapi.snapshot.SnapshotChunkingProperties
+import maple.externalapi.snapshot.SnapshotSinkEventPublisher
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -76,8 +77,10 @@ class CharacterBasicFetchPhase(
             maxUncompressedBytes = chunkConfig.maxUncompressedBytes,
             queueCapacity = chunkingProperties.queueCapacity,
             objectMapper = objectMapper,
-            eventPublisher = SinkEventPublisher(eventPublisher),
-            volumeMetrics = volumeMetrics,
+            eventPublisher = SnapshotSinkEventPublisher(
+                eventPublisher = SinkEventPublisher(eventPublisher),
+                volumeMetrics = volumeMetrics,
+            ),
             clock = clock,
         )
 

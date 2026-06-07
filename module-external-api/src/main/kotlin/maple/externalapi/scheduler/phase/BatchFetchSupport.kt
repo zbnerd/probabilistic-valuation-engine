@@ -55,13 +55,16 @@ class BatchFetchSupport(
     private val fetchMetrics: SnapshotFetchMetrics,
     @Value("\${external-api.concurrency.max-in-flight:100}")
     maxInFlight: Int,
+    private val schedulerRateLimiter: SchedulerRateLimiter,
+    private val schedulerProgressLogger: SchedulerProgressLogger,
+    private val httpStatusExtractor: HttpStatusExtractor,
 ) {
     private val log = LoggerFactory.getLogger(BatchFetchSupport::class.java)
     private val semaphore = Semaphore(maxInFlight)
 
     /** Construct a token-bucket rate limiter sized to `permitsPerSecond`. */
     fun newRateLimiter(permitsPerSecond: Int): Bucket =
-        SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
+        schedulerRateLimiter.newRateLimiter(permitsPerSecond)
 
     /**
      * Process a batch of (key, ocid) entries with rate-limit gated concurrency.
@@ -80,7 +83,7 @@ class BatchFetchSupport(
         var progress = BatchProgress(start = start)
 
         while (processed < entries.size) {
-            val permits = SchedulerPhaseUtils.acquirePermitsSuspend(rateLimiter, batchSize, entries.size - processed)
+            val permits = schedulerRateLimiter.acquirePermitsSuspend(rateLimiter, batchSize, entries.size - processed)
             if (permits == 0) continue
 
             val chunk = entries.subList(processed, processed + permits)
@@ -115,7 +118,7 @@ class BatchFetchSupport(
 
             if (progress.shouldLogProgress(PROGRESS_LOG_INTERVAL)) {
                 progress = progress.markLogged()
-                SchedulerPhaseUtils.logProgress(ctx.endpoint, progress.totalProcessed(), entries.size, progress.successCount, progress.failCount, progress.start)
+                schedulerProgressLogger.logProgress(ctx.endpoint, progress.totalProcessed(), entries.size, progress.successCount, progress.failCount, progress.start)
             }
         }
         return progress.successCount to progress.failCount
@@ -162,7 +165,7 @@ class BatchFetchSupport(
     }
 
     private fun handleFailure(ocid: String, ctx: BatchFetchContext, sink: ChunkedSnapshotSink, ex: Throwable) {
-        val httpStatus = SchedulerPhaseUtils.extractHttpStatus(ex)
+        val httpStatus = httpStatusExtractor.extract(ex)
         sink.submit(
             SnapshotChunkRecord.Failure(
                 key = ocid,

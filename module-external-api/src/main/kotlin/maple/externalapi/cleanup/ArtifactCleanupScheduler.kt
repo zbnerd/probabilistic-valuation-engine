@@ -8,6 +8,7 @@ import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -31,6 +32,7 @@ class ArtifactCleanupScheduler(
     private val maxDeleteBytesPerCycle: Long,
     @Value("\${external-api.cleanup.max-runtime-seconds:60}")
     private val maxRuntimeSeconds: Long,
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     private val log = LoggerFactory.getLogger(ArtifactCleanupScheduler::class.java)
     private val cleanupExecutor = RunCleanupExecutor("Cleanup")
@@ -40,14 +42,14 @@ class ArtifactCleanupScheduler(
 
     fun cleanup() {
         val sample = io.micrometer.core.instrument.Timer.start()
-        val start = Instant.now()
+        val start = Instant.now(clock)
         log.info("[Cleanup] started: dryRun={}", dryRun)
 
         updateStorageMetrics()
 
         val result = runCatching { cleanupRuns(start) }
 
-        val durationMs = Instant.now().toEpochMilli() - start.toEpochMilli()
+        val durationMs = Instant.now(clock).toEpochMilli() - start.toEpochMilli()
         sample.stop(metrics.timer())
 
         result.onSuccess { res ->
@@ -93,7 +95,7 @@ class ArtifactCleanupScheduler(
             dryRun = dryRun,
             keepRecent = keepRecent,
             keepWithinHours = keepWithinHours,
-            now = Instant.now(),
+            now = Instant.now(clock),
             maxDeleteRunsPerCycle = maxDeleteRunsPerCycle,
             maxDeleteBytesPerCycle = maxDeleteBytesPerCycle,
             maxRuntimeSeconds = maxRuntimeSeconds,

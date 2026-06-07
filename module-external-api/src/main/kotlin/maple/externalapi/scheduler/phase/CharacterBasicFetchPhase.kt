@@ -80,6 +80,7 @@ class CharacterBasicFetchPhase(
             eventPublisher = SnapshotSinkEventPublisher(
                 eventPublisher = SinkEventPublisher(eventPublisher),
                 volumeMetrics = volumeMetrics,
+                clock = clock,
             ),
             clock = clock,
         )

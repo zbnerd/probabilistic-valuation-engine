@@ -6,7 +6,7 @@ import maple.synchronizer.state.ChunkExecutionStatus
 import maple.synchronizer.state.FailureDecision
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.synchronizer.metrics.ChunkExecutionMetrics
 import maple.synchronizer.repository.ChunkExecutionClaim
 import maple.synchronizer.repository.ChunkExecutionRepository
 import maple.synchronizer.repository.InsertChunkExecutionCommand
@@ -22,13 +22,13 @@ import java.util.concurrent.Semaphore
 class ChunkConsumerTemplate(
     private val logicExecutor: LogicExecutor,
     private val chunkExecutionRepository: ChunkExecutionRepository,
-    private val metrics: SynchronizerMetrics,
+    private val executionMetrics: ChunkExecutionMetrics,
     private val properties: ChunkExecutionProperties,
     private val stateMachine: ChunkExecutionStateMachine,
 ) {
     fun submit(request: ChunkConsumerRequest) {
         if (chunkExecutionRepository.insertPendingIfAbsent(request.toInsertCommand())) {
-            metrics.recordChunkExecutionInserted(request.identity.executionType)
+            executionMetrics.recordChunkExecutionInserted(request.identity.executionType)
         }
 
         val state = chunkExecutionRepository.findExecutionState(request.identity)
@@ -50,7 +50,7 @@ class ChunkConsumerTemplate(
                 request.chunkId,
                 state.status,
             )
-            metrics.recordChunkExecutionSkipped(request.identity.executionType, state.status)
+            executionMetrics.recordChunkExecutionSkipped(request.identity.executionType, state.status)
             request.acknowledgment.acknowledge()
             return
         }
@@ -85,13 +85,13 @@ class ChunkConsumerTemplate(
                 request.chunkId,
                 state.status,
             )
-            metrics.recordChunkExecutionSkipped(request.identity.executionType, state.status)
+            executionMetrics.recordChunkExecutionSkipped(request.identity.executionType, state.status)
             request.acknowledgment.acknowledge()
             return
         }
-        metrics.recordChunkExecutionClaimed(request.identity.executionType)
+        executionMetrics.recordChunkExecutionClaimed(request.identity.executionType)
         if (stateMachine.isReclaimedExpired(state, Instant.now())) {
-            metrics.recordChunkExecutionReclaimedExpired(request.identity.executionType)
+            executionMetrics.recordChunkExecutionReclaimedExpired(request.identity.executionType)
         }
 
         request.onAccepted()
@@ -142,7 +142,7 @@ class ChunkConsumerTemplate(
     ) {
         val marked = chunkExecutionRepository.markSucceeded(request.identity, claim.attemptCount)
         if (marked) {
-            metrics.recordChunkExecutionSucceeded(request.identity.executionType)
+            executionMetrics.recordChunkExecutionSucceeded(request.identity.executionType)
             request.onSuccess()
             request.acknowledgment.acknowledge()
             return
@@ -169,7 +169,7 @@ class ChunkConsumerTemplate(
             UNSUPPORTED_SCHEMA_VERSION,
         )
         if (marked) {
-            metrics.recordChunkExecutionFailed(
+            executionMetrics.recordChunkExecutionFailed(
                 request.identity.executionType,
                 ChunkExecutionStatus.FailedTerminal(UNSUPPORTED_SCHEMA_VERSION),
                 UNSUPPORTED_SCHEMA_VERSION,
@@ -220,7 +220,7 @@ class ChunkConsumerTemplate(
             is FailureDecision.Retryable -> ChunkExecutionStatus.FailedRetryable(decision.nextRetryAt)
             is FailureDecision.Terminal -> ChunkExecutionStatus.FailedTerminal(decision.terminalReason)
         }
-        metrics.recordChunkExecutionFailed(
+        executionMetrics.recordChunkExecutionFailed(
             request.identity.executionType,
             status,
             decision.reason,

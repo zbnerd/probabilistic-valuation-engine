@@ -28,6 +28,7 @@ import maple.expectation.infrastructure.external.NexonApiClient
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
 import maple.expectation.infrastructure.job.CalculationExecutionService
 import maple.expectation.infrastructure.job.CalculationJobService
+import maple.expectation.infrastructure.job.OcidResolutionOrchestrator
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
@@ -71,6 +72,7 @@ class ExternalApiWorker(
     private val equipmentFetchProvider: EquipmentFetchProvider,
     private val snapshotStore: SnapshotObjectStore,
     private val jobService: CalculationJobService,
+    private val ocidOrchestrator: OcidResolutionOrchestrator,
     private val executionService: CalculationExecutionService,
     private val objectMapper: ObjectMapper,
     private val converter: EquipmentResponseToCalculationInputConverter,
@@ -363,7 +365,7 @@ class ExternalApiWorker(
     ): CompletableFuture<Pair<String, EquipmentResponse>> {
         val cached = jobOcid ?: ocidPort.resolveOcid(userIgn)
         if (cached != null) {
-            jobService.resolveOcidInPlace(jobId, cached)
+            ocidOrchestrator.resolveOcidInPlace(jobId, cached)
             return CompletableFuture.supplyAsync({
                 Pair(cached, equipmentFetchProvider.fetchWithCache(cached))
             }, apiCallExec.executor)
@@ -384,7 +386,7 @@ class ExternalApiWorker(
                 response.ocid
             }
             .thenApply { ocid ->
-                jobService.resolveOcidInPlace(jobId, ocid)
+                ocidOrchestrator.resolveOcidInPlace(jobId, ocid)
                 ocid
             }
             .thenCompose { ocid ->

@@ -16,9 +16,12 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: earliest
       enable-auto-commit: false
+      max-poll-records: 50            # bound batch size; keeps poll loop responsive
+      max-poll-interval-ms: 10800000  # 3h; covers full item-equipment cycle (default 5min too tight)
     listener:
       ack-mode: manual
       concurrency: 4
+      missing-topics-fatal: false     # tolerate topic absent at startup
 
 calculator:
   kafka:

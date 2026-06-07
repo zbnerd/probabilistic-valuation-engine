@@ -6,12 +6,19 @@ import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.urgent.UrgentCharacterRequest
 import maple.restcontroller.urgent.UrgentTriggerPublisher
 import org.slf4j.LoggerFactory
-import org.springframework.http.ResponseEntity
 import java.time.Duration
 
+/**
+ * Resolves a batch of read requests against Redis cache and DB.
+ *
+ * Returns a typed [BatchResolveResult] describing which requests were answered
+ * (cache hit / DB hit / negative cache hit) and which were left pending (urgent
+ * pipeline triggered or no urgent publisher). The caller is responsible for
+ * mapping each [ResolvedItem] to a `ResponseEntity` and applying it to the
+ * matching deferreds — see [ExpectationReadResponseMapper].
+ */
 class BatchResolver(
     private val cacheService: ReadModelCacheService,
-    private val registry: InflightRequestRegistry,
     private val queryService: ReadModelQueryService,
     private val urgentPublisher: UrgentTriggerPublisher?,
     private val properties: V6ReadProperties,
@@ -20,22 +27,24 @@ class BatchResolver(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun resolveBatch(batch: List<ReadRequest>): Int {
-        if (batch.isEmpty()) return 0
+    fun resolveBatch(batch: List<ReadRequest>): BatchResolveResult {
+        if (batch.isEmpty()) return BatchResolveResult.AllResolved(emptyList())
 
         val requests = batch.associate { it.userIgn to it.presetNo }
-        var resolved = 0
+        val resolved = mutableListOf<ResolvedItem>()
 
         // 1. Redis cache lookup — split hits / misses
         val (cacheHits, cacheMisses) = cacheService.multiGet(requests)
 
-        // 2. Resolve cache hits directly
+        // 2. Resolve cache hits
         cacheHits.forEach { (userIgn, response) ->
-            val deferreds = registry.getAndRemove(userIgn, response.presetNo)
             metrics.recordHit()
             metrics.recordRedisHit()
-            deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
-            resolved++
+            resolved += ResolvedItem.Ok(
+                userIgn = userIgn,
+                presetNo = response.presetNo,
+                response = response,
+            )
         }
 
         // 3. DB batch query for cache misses, including urgent-pending keys.
@@ -51,24 +60,25 @@ class BatchResolver(
             // 5. Resolve miss deferreds
             cacheMisses.keys.forEach { userIgn ->
                 val presetNo = cacheMisses[userIgn] ?: 1
-                val deferreds = registry.getAndRemove(userIgn, presetNo)
                 val response = dbResults[userIgn]
 
                 if (response != null) {
                     metrics.recordHit()
                     metrics.recordDbHit()
-                    deferreds.forEach { it.setResult(ResponseEntity.ok(response)) }
-                    resolved++
+                    resolved += ResolvedItem.Ok(
+                        userIgn = userIgn,
+                        presetNo = presetNo,
+                        response = response,
+                    )
                 } else {
                     metrics.recordMiss("read_model_empty")
 
                     // Check negative cache first (character previously confirmed not found by Nexon)
                     if (cacheService.getNegativeCache(userIgn)) {
-                        val notFoundResponse = ResponseEntity.status(404)
-                            .header("X-Error-Reason", "character-not-found")
-                            .build<Any>()
-                        deferreds.forEach { it.setResult(notFoundResponse) }
-                        resolved++
+                        resolved += ResolvedItem.NotFound(
+                            userIgn = userIgn,
+                            presetNo = presetNo,
+                        )
                         return@forEach
                     }
 
@@ -84,6 +94,11 @@ class BatchResolver(
             }
         }
 
-        return resolved
+        val pendingCount = batch.size - resolved.size
+        return if (pendingCount == 0) {
+            BatchResolveResult.AllResolved(resolved)
+        } else {
+            BatchResolveResult.PartiallyResolved(resolved, pendingCount)
+        }
     }
 }

@@ -96,13 +96,11 @@ class V6ReadConfig(
     @Bean
     fun batchResolver(
         cacheService: ReadModelCacheService,
-        registry: InflightRequestRegistry,
         queryService: ReadModelQueryService,
         v6ReadMetrics: V6ReadMetrics,
         urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>
     ): BatchResolver = BatchResolver(
         cacheService,
-        registry,
         queryService,
         urgentPublisherProvider.ifAvailable,
         properties,

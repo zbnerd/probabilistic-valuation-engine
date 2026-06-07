@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.time.Clock
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -25,6 +26,7 @@ class ConsumedChunkCleanupScheduler(
     private val objectMapper: ObjectMapper,
     @Value("\${external-api.store.base-path:../data}") private val basePath: String,
     @Value("\${external-api.cleanup.consumed.max-pending:10000}") private val maxPending: Int, // 10,000 pending threshold
+    private val clock: Clock = Clock.systemUTC(),
 ) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(javaClass)
     private val pendingDeletions = ConcurrentLinkedQueue<ChunkConsumedEvent>()
@@ -74,6 +76,7 @@ class ConsumedChunkCleanupScheduler(
         if (batch.isEmpty()) return
 
         val start = System.nanoTime()
+        // monotonic clock, not Clock-injected for perf
         var deletedCount = 0
         var failedCount = 0
 

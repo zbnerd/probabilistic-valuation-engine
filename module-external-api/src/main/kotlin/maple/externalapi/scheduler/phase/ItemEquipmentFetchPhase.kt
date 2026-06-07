@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.nio.file.Paths
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
@@ -43,6 +44,7 @@ class ItemEquipmentFetchPhase(
     private val batchSize: Int,
     @Value("\${external-api.store.base-path:../data}")
     private val storeBasePath: String,
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentFetchPhase::class.java)
 
@@ -65,6 +67,7 @@ class ItemEquipmentFetchPhase(
             objectMapper = objectMapper,
             eventPublisher = SinkEventPublisher(eventPublisher),
             volumeMetrics = volumeMetrics,
+            clock = clock,
         )
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
@@ -76,7 +79,7 @@ class ItemEquipmentFetchPhase(
             chunkConfig.maxRecords, chunkConfig.maxUncompressedBytes, runId,
         )
 
-        val start = Instant.now()
+        val start = Instant.now(clock)
         val ctx = BatchFetchContext(
             endpoint = "item-equipment",
             apiEndpoint = ExternalApiEndpoint.ITEM_EQUIPMENT,
@@ -93,7 +96,7 @@ class ItemEquipmentFetchPhase(
                 SchedulerPhaseUtils.logSummary("item-equipment", entries.size, successCount, successCount, failCount, start)
             } finally {
                 sink.close()
-                metrics.itemEquipmentTimer().record(Duration.between(start, Instant.now()))
+                metrics.itemEquipmentTimer().record(Duration.between(start, Instant.now(clock)))
             }
         }
     }

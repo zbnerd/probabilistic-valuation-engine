@@ -77,9 +77,7 @@ class BatchFetchSupport(
         start: Instant,
     ): Pair<Int, Int> {
         var processed = 0
-        var successCount = 0
-        var failCount = 0
-        var lastProgressLog = 0
+        var progress = BatchProgress(start = start)
 
         while (processed < entries.size) {
             val permits = SchedulerPhaseUtils.acquirePermitsSuspend(rateLimiter, batchSize, entries.size - processed)
@@ -105,22 +103,22 @@ class BatchFetchSupport(
             if (batchWaitDuration.toMillis() >= SLOW_BATCH_WAIT_MS) {
                 log.info(
                     "[SnapshotFetchMetrics] batch wait: endpoint={}, runId={}, batchSize={}, durationMs={}, success={}, failed={}",
-                    ctx.endpoint, runId, chunk.size, batchWaitDuration.toMillis(), successCount, failCount,
+                    ctx.endpoint, runId, chunk.size, batchWaitDuration.toMillis(), progress.successCount, progress.failCount,
                 )
             }
 
             val batchSuccess = batchResults.filterNotNull().size
-            successCount += batchSuccess
-            failCount += chunk.size - batchSuccess
+            progress = progress
+                .addSuccess(batchSuccess)
+                .addFailure(chunk.size - batchSuccess)
             processed += permits
 
-            val progress = successCount + failCount
-            if (progress - lastProgressLog >= PROGRESS_LOG_INTERVAL) {
-                lastProgressLog = progress
-                SchedulerPhaseUtils.logProgress(ctx.endpoint, progress, entries.size, successCount, failCount, start)
+            if (progress.shouldLogProgress(PROGRESS_LOG_INTERVAL)) {
+                progress = progress.markLogged()
+                SchedulerPhaseUtils.logProgress(ctx.endpoint, progress.totalProcessed(), entries.size, progress.successCount, progress.failCount, progress.start)
             }
         }
-        return successCount to failCount
+        return progress.successCount to progress.failCount
     }
 
     private suspend fun fetchSingle(ocid: String, ctx: BatchFetchContext, sink: ChunkedSnapshotSink): Boolean {

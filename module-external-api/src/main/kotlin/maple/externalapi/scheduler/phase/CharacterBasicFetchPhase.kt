@@ -1,21 +1,15 @@
 package maple.externalapi.scheduler.phase
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.future
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
-import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.port.out.ExternalApiArtifactStorePort
-import maple.externalapi.snapshot.ChunkedSnapshotSink
-import maple.externalapi.snapshot.SinkEventPublisher
+import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
-import maple.externalapi.snapshot.SnapshotSinkEventPublisher
-import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
@@ -35,14 +29,11 @@ import java.util.concurrent.ExecutorService
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class CharacterBasicFetchPhase(
     private val artifactStore: ExternalApiArtifactStorePort,
-    private val objectMapper: ObjectMapper,
     private val chunkingProperties: SnapshotChunkingProperties,
-    private val volumeMetrics: SnapshotVolumeMetrics,
     private val metrics: ExternalApiMetrics,
     private val fetchMetrics: SnapshotFetchMetrics,
-    @Qualifier("characterBasicSnapshotPublisher")
-    private val eventPublisher: SnapshotChunkEventPublisher,
     private val batchSupport: BatchFetchSupport,
+    private val sinkFactory: EndpointSinkFactory,
     @Value("\${external-api.rate-limit.permits-per-second:200}")
     private val permitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
@@ -70,20 +61,7 @@ class CharacterBasicFetchPhase(
         val chunkConfig = chunkingProperties.configFor("character-basic")
         val runDir = Paths.get(storeBasePath, "runs", runId)
         SchedulerPhaseUtils.writeRunningMarker(runDir)
-        val sink = ChunkedSnapshotSink(
-            runDir = runDir,
-            endpoint = "character-basic",
-            maxRecords = chunkConfig.maxRecords,
-            maxUncompressedBytes = chunkConfig.maxUncompressedBytes,
-            queueCapacity = chunkingProperties.queueCapacity,
-            objectMapper = objectMapper,
-            eventPublisher = SnapshotSinkEventPublisher(
-                eventPublisher = SinkEventPublisher(eventPublisher),
-                volumeMetrics = volumeMetrics,
-                clock = clock,
-            ),
-            clock = clock,
-        )
+        val sink = sinkFactory.createForCharacterBasic(runDir)
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
 

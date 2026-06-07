@@ -11,7 +11,7 @@ import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.parser.RankingEntryParser
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.ChunkedSnapshotSink
-import maple.externalapi.snapshot.RankingSnapshotSinkFactory
+import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkRecord
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -35,7 +35,7 @@ class RankingFetchPhase(
     private val clientPort: ExternalApiClientPort,
     private val rankingEntryParser: RankingEntryParser,
     private val metrics: ExternalApiMetrics,
-    private val sinkFactory: RankingSnapshotSinkFactory,
+    private val sinkFactory: EndpointSinkFactory,
     @Value("\${external-api.ranking.max-pages:300}")
     private val maxPages: Int,
     @Value("\${external-api.ranking.permits-per-second:50}")
@@ -53,7 +53,7 @@ class RankingFetchPhase(
 
         SchedulerPhaseUtils.writeRunningMarker(runDir)
 
-        val sink = sinkFactory.create(runDir, "ranking-overall")
+        val sink = sinkFactory.createForRanking(runDir)
 
         val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
         val start = Instant.now(clock)

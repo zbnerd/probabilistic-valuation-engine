@@ -2,10 +2,6 @@ package maple.expectation.infrastructure.job
 
 import java.util.UUID
 import maple.expectation.core.port.out.CalculationJobPort
-import maple.expectation.core.port.out.mq.DomainEventAppender
-import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiRequestTopic
-import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
-import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
 import maple.expectation.infrastructure.persistence.repository.CalculationSnapshotRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -20,18 +16,8 @@ import org.mockito.kotlin.whenever
 class CalculationJobServiceTest {
 
     @Mock lateinit var jobPort: CalculationJobPort
-
-    @Mock lateinit var eventAppender: DomainEventAppender
-
-    @Mock lateinit var dispatchService: CalculationDispatchService
-
-    @Mock lateinit var ocidResolveTopic: OcidResolveTopic
-
-    @Mock lateinit var nexonApiRequestTopic: NexonApiRequestTopic
-
-    @Mock lateinit var nexonApiResponseTopic: NexonApiResponseTopic
-
     @Mock lateinit var snapshotRepository: CalculationSnapshotRepository
+    @Mock lateinit var dispatchService: CalculationDispatchService
 
     private lateinit var service: CalculationJobService
 
@@ -39,10 +25,6 @@ class CalculationJobServiceTest {
     fun setUp() {
         service = CalculationJobService(
             jobPort = jobPort,
-            eventAppender = eventAppender,
-            ocidResolveTopic = ocidResolveTopic,
-            nexonApiRequestTopic = nexonApiRequestTopic,
-            nexonApiResponseTopic = nexonApiResponseTopic,
             snapshotRepository = snapshotRepository,
             dispatchService = dispatchService,
         )

@@ -43,9 +43,10 @@ class BatchReadScheduler(
         var failed = 0
         while (!buffer.isEmpty() && System.nanoTime() < deadlineNanos) {
             val batch = buffer.drain(properties.maxBatchSize)
-            val resolved = resolver.resolveBatch(batch)
-            drained += resolved
-            failed += batch.size - resolved
+            val result = resolver.resolveBatch(batch)
+            applyToDeferreds(result, batch)
+            drained += result.resolvedCount
+            failed += batch.size - result.resolvedCount
         }
 
         // Resolve any drained-but-unhandled deferreds with 503
@@ -90,7 +91,24 @@ class BatchReadScheduler(
         if (batch.isEmpty()) return
 
         val sample = io.micrometer.core.instrument.Timer.start()
-        resolver.resolveBatch(batch)
+        val result = resolver.resolveBatch(batch)
+        applyToDeferreds(result, batch)
         sample.stop(metrics.batchLatency)
+    }
+
+    /**
+     * Apply a [BatchResolveResult] to its matching deferreds. Resolved items get
+     * the HTTP response from [ExpectationReadResponseMapper]; pending items are
+     * left alone so the deferred's timeout (wired by the facade) fires later.
+     */
+    private fun applyToDeferreds(result: BatchResolveResult, batch: List<ReadRequest>) {
+        val itemByKey = result.resolved.associateBy { it.userIgn to it.presetNo }
+        batch.forEach { request ->
+            val item = itemByKey[request.userIgn to request.presetNo] ?: return@forEach
+            val deferreds = registry.getAndRemove(request.userIgn, request.presetNo)
+            if (deferreds.isEmpty()) return@forEach
+            val response = ExpectationReadResponseMapper.toResponse(item)
+            deferreds.forEach { deferred -> deferred.setResult(response) }
+        }
     }
 }

@@ -2,6 +2,8 @@ package maple.restcontroller.controller
 
 import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.restcontroller.config.V6ReadProperties
+import maple.restcontroller.read.EnqueueResponseMapper
+import maple.restcontroller.read.EnqueueResult
 import maple.restcontroller.read.ExpectationReadFacade
 import maple.restcontroller.read.ReadModelCacheService
 import maple.restcontroller.read.ReadModelQueryService
@@ -38,7 +40,15 @@ class ExpectationV6Controller(
     ): DeferredResult<ResponseEntity<*>> {
         log.debug("V6 read request userIgn={} presetNo={}", maskIgn(userIgn), presetNo)
         val deferred = DeferredResult<ResponseEntity<*>>(properties.requestTimeoutMs)
-        facade.enqueue(userIgn, presetNo, deferred)
+        when (val result = facade.enqueue(userIgn, presetNo, deferred)) {
+            is EnqueueResult.ServiceUnavailable ->
+                deferred.setErrorResult(EnqueueResponseMapper.toServiceUnavailableResponse(result))
+            is EnqueueResult.Queued,
+            is EnqueueResult.AlreadyInFlight -> {
+                // Deferred stays open — facade wired onTimeout (202 via mapper)
+                // and onCompletion (registry cleanup) callbacks already.
+            }
+        }
         return deferred
     }
 

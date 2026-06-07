@@ -1,5 +1,8 @@
 package maple.cleanup.config
 
+import org.springframework.boot.context.properties.ConfigurationProperties
+
+@ConfigurationProperties(prefix = "cleanup")
 data class CleanupProperties(
     val dryRun: Boolean = true,
     val runs: Runs = Runs(),

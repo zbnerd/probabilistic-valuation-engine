@@ -30,7 +30,7 @@ class ItemEquipmentContinuousLoop(
     private val log = LoggerFactory.getLogger(ItemEquipmentContinuousLoop::class.java)
     private val running = AtomicBoolean(false)
     private val shutdown = AtomicBoolean(false)
-    private val itemEquipmentStarted = AtomicBoolean(false)
+    internal val itemEquipmentStarted = AtomicBoolean(false)
     private val lock = ReentrantLock()
     private val idle = lock.newCondition()
 

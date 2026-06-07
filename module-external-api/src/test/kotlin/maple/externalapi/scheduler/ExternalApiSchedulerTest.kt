@@ -40,6 +40,7 @@ class ExternalApiSchedulerTest {
     private lateinit var executor: ExecutorService
     private lateinit var scheduler: ExternalApiScheduler
     private lateinit var schedulerMetrics: SchedulerMetrics
+    private lateinit var itemEquipmentLoop: ItemEquipmentContinuousLoop
 
     @BeforeEach
     fun setUp() {
@@ -56,14 +57,20 @@ class ExternalApiSchedulerTest {
 
         tracker = RunStatusTracker()
         executor = Executors.newSingleThreadExecutor()
+        itemEquipmentLoop = ItemEquipmentContinuousLoop(
+            itemEquipmentFetchPhase = itemEquipmentFetchPhase,
+            ocidCacheProvider = ocidCacheProvider,
+            schedulerMetrics = schedulerMetrics,
+            executor = executor,
+        )
         scheduler = ExternalApiScheduler(
             ocidLookupPhase = ocidLookupPhase,
             characterBasicFetchPhase = characterBasicFetchPhase,
-            itemEquipmentFetchPhase = itemEquipmentFetchPhase,
             ocidCacheProvider = ocidCacheProvider,
             rankingFetchPhaseProvider = rankingPhaseProvider,
             runStatusTracker = tracker,
             schedulerMetrics = schedulerMetrics,
+            itemEquipmentLoop = itemEquipmentLoop,
             scheduleEnabled = false,
             runOnStartup = false,
             skipCharacterBasic = false,
@@ -92,7 +99,7 @@ class ExternalApiSchedulerTest {
         assertThat(last).isNotNull
         assertThat(last!!.phase).isEqualTo(PipelinePhase.FAILED)
         assertThat(last.errorMessage).contains("nexon 503")
-        assertThat(scheduler.itemEquipmentStarted.get()).isFalse()
+        assertThat(itemEquipmentLoop.itemEquipmentStarted.get()).isFalse()
     }
 
     @Test
@@ -110,7 +117,7 @@ class ExternalApiSchedulerTest {
         assertThat(last).isNotNull
         assertThat(last!!.phase).isEqualTo(PipelinePhase.FAILED)
         assertThat(last.errorMessage).contains("ranking fetch returned null runDir")
-        assertThat(scheduler.itemEquipmentStarted.get()).isFalse()
+        assertThat(itemEquipmentLoop.itemEquipmentStarted.get()).isFalse()
     }
 
     @Test
@@ -132,7 +139,7 @@ class ExternalApiSchedulerTest {
         val last = tracker.getLastCompletedRun()
         assertThat(last).isNotNull
         assertThat(last!!.phase).isEqualTo(PipelinePhase.COMPLETED)
-        assertThat(scheduler.itemEquipmentStarted.get()).isTrue()
+        assertThat(itemEquipmentLoop.itemEquipmentStarted.get()).isTrue()
     }
 
     private fun awaitChain() {

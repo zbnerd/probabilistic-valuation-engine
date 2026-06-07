@@ -42,19 +42,24 @@ class EndpointSinkFactory(
         publisher: SnapshotChunkEventPublisher,
     ): ChunkedSnapshotSink {
         val endpointConfig = chunkingProperties.configFor(endpoint)
-        return ChunkedSnapshotSink(
+        val fileManager = ChunkFileManager(
             runDir = runDir,
             endpoint = endpoint,
             maxRecords = endpointConfig.maxRecords,
             maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
-            queueCapacity = chunkingProperties.queueCapacity,
             objectMapper = objectMapper,
+            clock = clock,
+        )
+        return ChunkedSnapshotSink(
+            runDir = runDir,
+            endpoint = endpoint,
+            queueCapacity = chunkingProperties.queueCapacity,
+            fileManager = fileManager,
             eventPublisher = SnapshotSinkEventPublisher(
                 eventPublisher = SinkEventPublisher(publisher),
                 volumeMetrics = volumeMetrics,
                 clock = clock,
             ),
-            clock = clock,
         )
     }
 }

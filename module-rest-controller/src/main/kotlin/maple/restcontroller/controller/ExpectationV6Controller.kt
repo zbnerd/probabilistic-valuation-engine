@@ -5,8 +5,10 @@ import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.read.EnqueueResponseMapper
 import maple.restcontroller.read.EnqueueResult
 import maple.restcontroller.read.ExpectationReadFacade
+import maple.restcontroller.read.NegativeCacheService
 import maple.restcontroller.read.ReadModelCacheService
 import maple.restcontroller.read.ReadModelQueryService
+import maple.restcontroller.read.UrgentDedupService
 import maple.restcontroller.read.UrgentReadState
 import maple.restcontroller.validation.ValidUserIgn
 import org.slf4j.LoggerFactory
@@ -28,7 +30,9 @@ import java.time.Duration
 class ExpectationV6Controller(
     private val facade: ExpectationReadFacade,
     private val properties: V6ReadProperties,
-    private val cacheService: ReadModelCacheService,
+    private val readModelCacheService: ReadModelCacheService,
+    private val negativeCacheService: NegativeCacheService,
+    private val urgentDedupService: UrgentDedupService,
     private val queryService: ReadModelQueryService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -57,15 +61,15 @@ class ExpectationV6Controller(
         @PathVariable @ValidUserIgn userIgn: String,
         @RequestParam(defaultValue = "1") presetNo: Int,
     ): ResponseEntity<*> {
-        val current = cacheService.status(userIgn, presetNo)
+        val current = projectStatus(userIgn, presetNo)
         val status = if (current.state.shouldTryDb()) {
             val dbResult = queryService.batchQuery(
                 mapOf(userIgn to presetNo),
                 Duration.ofSeconds(properties.readModelFreshnessSeconds),
             )
             if (dbResult.isNotEmpty()) {
-                cacheService.multiPut(dbResult)
-                cacheService.status(userIgn, presetNo)
+                readModelCacheService.multiPut(dbResult)
+                projectStatus(userIgn, presetNo)
             } else {
                 current
             }
@@ -76,4 +80,12 @@ class ExpectationV6Controller(
             .header("Retry-After", status.retryAfterSeconds.toString())
             .body(status)
     }
+
+    private fun projectStatus(userIgn: String, presetNo: Int) =
+        urgentDedupService.status(
+            userIgn = userIgn,
+            presetNo = presetNo,
+            hasReadyCache = readModelCacheService.hasReadyCache(userIgn, presetNo),
+            hasNegativeCache = negativeCacheService.getNegativeCache(userIgn),
+        )
 }

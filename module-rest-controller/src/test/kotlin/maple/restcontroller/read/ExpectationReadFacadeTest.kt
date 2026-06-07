@@ -18,7 +18,9 @@ class ExpectationReadFacadeTest {
     private lateinit var registry: InflightRequestRegistry
     private lateinit var metrics: V6ReadMetrics
     private lateinit var facade: ExpectationReadFacade
-    private lateinit var cacheService: ReadModelCacheService
+    private lateinit var readModelCacheService: ReadModelCacheService
+    private lateinit var negativeCacheService: NegativeCacheService
+    private lateinit var urgentDedupService: UrgentDedupService
     private lateinit var popularCharacterService: PopularCharacterService
     private lateinit var properties: V6ReadProperties
 
@@ -27,10 +29,21 @@ class ExpectationReadFacadeTest {
         buffer = LocalRequestBuffer(100)
         registry = InflightRequestRegistry()
         metrics = V6ReadMetrics(meterRegistry, buffer, registry)
-        cacheService = mock()
+        readModelCacheService = mock()
+        negativeCacheService = mock()
+        urgentDedupService = mock()
         popularCharacterService = mock()
         properties = V6ReadProperties()
-        facade = ExpectationReadFacade(registry, buffer, metrics, cacheService, popularCharacterService, properties)
+        facade = ExpectationReadFacade(
+            registry,
+            buffer,
+            metrics,
+            readModelCacheService,
+            negativeCacheService,
+            urgentDedupService,
+            popularCharacterService,
+            properties,
+        )
     }
 
     private fun enqueue(ign: String, presetNo: Int = 1): DeferredResult<ResponseEntity<*>> {
@@ -67,7 +80,9 @@ class ExpectationReadFacadeTest {
             registry,
             smallBuffer,
             smallMetrics,
-            cacheService,
+            readModelCacheService,
+            negativeCacheService,
+            urgentDedupService,
             popularCharacterService,
             properties,
         )

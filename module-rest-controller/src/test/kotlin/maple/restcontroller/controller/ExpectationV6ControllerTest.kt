@@ -21,7 +21,9 @@ class ExpectationV6ControllerTest {
     private lateinit var buffer: LocalRequestBuffer
     private lateinit var registry: InflightRequestRegistry
     private lateinit var facade: ExpectationReadFacade
-    private lateinit var cacheService: ReadModelCacheService
+    private lateinit var readModelCacheService: ReadModelCacheService
+    private lateinit var negativeCacheService: NegativeCacheService
+    private lateinit var urgentDedupService: UrgentDedupService
     private lateinit var popularCharacterService: PopularCharacterService
     private lateinit var queryService: ReadModelQueryService
     private val properties = V6ReadProperties().apply {
@@ -37,13 +39,33 @@ class ExpectationV6ControllerTest {
         buffer = LocalRequestBuffer(properties.queueCapacity)
         registry = InflightRequestRegistry()
         val metrics = V6ReadMetrics(SimpleMeterRegistry(), buffer, registry)
-        cacheService = mock()
+        readModelCacheService = mock()
+        negativeCacheService = mock()
+        urgentDedupService = mock()
         popularCharacterService = mock()
         queryService = mock()
-        facade = ExpectationReadFacade(registry, buffer, metrics, cacheService, popularCharacterService, properties)
+        facade = ExpectationReadFacade(
+            registry,
+            buffer,
+            metrics,
+            readModelCacheService,
+            negativeCacheService,
+            urgentDedupService,
+            popularCharacterService,
+            properties,
+        )
 
         mockMvc = MockMvcBuilders
-            .standaloneSetup(ExpectationV6Controller(facade, properties, cacheService, queryService))
+            .standaloneSetup(
+                ExpectationV6Controller(
+                    facade,
+                    properties,
+                    readModelCacheService,
+                    negativeCacheService,
+                    urgentDedupService,
+                    queryService,
+                )
+            )
             .setControllerAdvice(RestControllerExceptionHandler())
             .build()
     }

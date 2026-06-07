@@ -1,8 +1,8 @@
 package maple.restcontroller.read
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
-import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.config.V6ReadProperties
+import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.popular.PopularCharacterService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -40,7 +40,7 @@ class ExpectationReadFacadeTest {
     }
 
     @Test
-    fun `enqueue dedup miss offers to buffer`() {
+    fun `enqueue dedup miss offers to buffer and returns Queued`() {
         val deferred = enqueue("진격캐넌")
 
         assertThat(deferred).isNotNull
@@ -60,7 +60,7 @@ class ExpectationReadFacadeTest {
     }
 
     @Test
-    fun `enqueue sets 503 error when buffer is full`() {
+    fun `enqueue returns ServiceUnavailable when buffer is full and caller maps to 503`() {
         val smallBuffer = LocalRequestBuffer(1)
         val smallMetrics = V6ReadMetrics(SimpleMeterRegistry(), smallBuffer, registry)
         val fullFacade = ExpectationReadFacade(
@@ -76,9 +76,12 @@ class ExpectationReadFacadeTest {
         fullFacade.enqueue("a", 1, d1)
 
         val d2 = DeferredResult<ResponseEntity<*>>()
-        fullFacade.enqueue("b", 1, d2)
+        val result = fullFacade.enqueue("b", 1, d2)
 
         assertThat(smallMetrics.bufferRejectedTotal.count()).isEqualTo(1.0)
+        assertThat(result).isInstanceOf(EnqueueResult.ServiceUnavailable::class.java)
+        // Caller (controller) maps the result to a ResponseEntity and applies it.
+        d2.setErrorResult(EnqueueResponseMapper.toServiceUnavailableResponse(result as EnqueueResult.ServiceUnavailable))
         assertThat(d2.result).isNotNull
     }
 
@@ -89,5 +92,16 @@ class ExpectationReadFacadeTest {
 
         assertThat(buffer.size()).isEqualTo(2)
         assertThat(registry.size()).isEqualTo(2)
+    }
+
+    @Test
+    fun `dedup hit returns AlreadyInFlight`() {
+        val d1 = DeferredResult<ResponseEntity<*>>()
+        val first = facade.enqueue("a", 1, d1)
+        val d2 = DeferredResult<ResponseEntity<*>>()
+        val second = facade.enqueue("a", 1, d2)
+
+        assertThat(first).isInstanceOf(EnqueueResult.Queued::class.java)
+        assertThat(second).isInstanceOf(EnqueueResult.AlreadyInFlight::class.java)
     }
 }

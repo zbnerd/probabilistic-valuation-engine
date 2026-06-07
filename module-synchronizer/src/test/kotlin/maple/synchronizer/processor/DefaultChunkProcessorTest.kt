@@ -7,7 +7,7 @@ import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
 import maple.synchronizer.metrics.SynchronizerMeterRegistry
-import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.synchronizer.metrics.DocumentVolumeMetrics
 import maple.synchronizer.preparer.PreppedDocument
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -26,7 +26,7 @@ class DefaultChunkProcessorTest {
     private val dataReader: ChunkDataReader = mock()
     private val transformer: ChunkDocumentTransformer = mock()
     private val writer: ChunkDocumentWriter = mock()
-    private val metrics = SynchronizerMetrics(SynchronizerMeterRegistry(SimpleMeterRegistry()))
+    private val metrics = DocumentVolumeMetrics(SynchronizerMeterRegistry(SimpleMeterRegistry()))
 
     private lateinit var chunkProcessor: DefaultChunkProcessor
 

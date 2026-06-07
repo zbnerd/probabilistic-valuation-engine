@@ -1,7 +1,7 @@
 package maple.synchronizer.processor
 
 import maple.core.domain.chunk.ChunkProcessInput
-import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.synchronizer.metrics.DocumentVolumeMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
@@ -10,7 +10,7 @@ class DefaultChunkProcessor(
     private val dataReader: ChunkDataReader,
     private val transformer: ChunkDocumentTransformer,
     private val writer: ChunkDocumentWriter,
-    private val metrics: SynchronizerMetrics,
+    private val volumeMetrics: DocumentVolumeMetrics,
 ) : ChunkProcessor {
 
     private val log = LoggerFactory.getLogger(DefaultChunkProcessor::class.java)
@@ -22,10 +22,10 @@ class DefaultChunkProcessor(
 
         log.info("[Synchronizer] grouped {} results into {} documents", input.resultCount, transformResult.documentCount)
 
-        metrics.incrementDocuments(transformResult.documentCount)
-        metrics.incrementItems(transformResult.itemCount)
-        metrics.recordChunkSize(transformResult.documentCount, transformResult.itemCount)
-        transformResult.prepped.forEach { metrics.recordDocumentEquipment(it.equipmentCount) }
+        volumeMetrics.incrementDocuments(transformResult.documentCount)
+        volumeMetrics.incrementItems(transformResult.itemCount)
+        volumeMetrics.recordChunkSize(transformResult.documentCount, transformResult.itemCount)
+        transformResult.prepped.forEach { volumeMetrics.recordDocumentEquipment(it.equipmentCount) }
 
         writer.write(input.sourceRunId, input.sourceChunkId, transformResult.prepped)
 

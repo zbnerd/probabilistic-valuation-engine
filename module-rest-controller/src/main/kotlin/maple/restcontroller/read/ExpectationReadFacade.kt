@@ -18,7 +18,21 @@ class ExpectationReadFacade(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun enqueue(userIgn: String, presetNo: Int, deferred: DeferredResult<ResponseEntity<*>>) {
+    /**
+     * Register a deferred and either offer to the buffer (first request) or
+     * join an in-flight peer (dedup hit). Returns a typed [EnqueueResult] that
+     * the controller maps to a [ResponseEntity] via [EnqueueResponseMapper].
+     *
+     * If the buffer is full, the deferred is cleaned up and
+     * [EnqueueResult.ServiceUnavailable] is returned; the caller is expected
+     * to fail the deferred (e.g. with a 503 response).
+     *
+     * For successful enqueues, this method also wires the deferred's timeout
+     * (→ 202 Accepted with status body) and completion (→ registry cleanup)
+     * callbacks. The 202 body is built by [EnqueueResponseMapper]; this method
+     * does not construct `ResponseEntity` instances directly.
+     */
+    fun enqueue(userIgn: String, presetNo: Int, deferred: DeferredResult<ResponseEntity<*>>): EnqueueResult {
         popularCharacterService.recordV6ExpectationRequest(userIgn)
         metrics.requestTotal.increment()
         val firstRequest = registry.register(userIgn, presetNo, deferred)
@@ -28,12 +42,7 @@ class ExpectationReadFacade(
                 metrics.bufferRejectedTotal.increment()
                 registry.cleanup(userIgn, presetNo, deferred)
                 log.warn("Buffer full, rejecting request userIgn={}", maskIgn(userIgn))
-                deferred.setErrorResult(
-                    ResponseEntity.status(503)
-                        .header("Retry-After", "1")
-                        .build<Any>(),
-                )
-                return
+                return EnqueueResult.ServiceUnavailable(reason = "buffer-full")
             }
             log.debug("Buffered read request userIgn={}", maskIgn(userIgn))
         } else {
@@ -44,14 +53,18 @@ class ExpectationReadFacade(
         deferred.onTimeout {
             metrics.timeoutTotal.increment()
             deferred.setErrorResult(
-                ResponseEntity.accepted()
-                    .header("Location", cacheService.statusUrl(userIgn, presetNo))
-                    .header("Retry-After", properties.statusRetryAfterSeconds.toString())
-                    .body(cacheService.status(userIgn, presetNo)),
+                EnqueueResponseMapper.toTimeoutResponse(
+                    userIgn = userIgn,
+                    presetNo = presetNo,
+                    status = cacheService.status(userIgn, presetNo),
+                    retryAfterSeconds = properties.statusRetryAfterSeconds,
+                )
             )
         }
         deferred.onCompletion {
             registry.cleanup(userIgn, presetNo, deferred)
         }
+
+        return if (firstRequest) EnqueueResult.Queued else EnqueueResult.AlreadyInFlight
     }
 }

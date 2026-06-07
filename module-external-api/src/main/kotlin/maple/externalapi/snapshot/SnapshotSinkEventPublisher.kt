@@ -13,8 +13,7 @@ import java.util.UUID
  *
  * Plain class (not a Spring bean) — each phase/factory constructs one with its
  * own [SinkEventPublisher] so per-endpoint Kafka routing is preserved. Every
- * method takes the call-site context (runId, endpoint, manifest) and returns
- * nothing.
+ * method takes the call-site context (runId, endpoint) and returns nothing.
  */
 class SnapshotSinkEventPublisher(
     private val eventPublisher: SinkEventPublisher,

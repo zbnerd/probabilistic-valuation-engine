@@ -1,6 +1,5 @@
 package maple.calculator
 
-import maple.calculator.config.CalculatorCleanupProperties
 import maple.calculator.config.CalculatorEngineConfiguration
 import maple.calculator.config.PipelineProperties
 import maple.expectation.infrastructure.config.KafkaConsumerConfig
@@ -14,7 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 
 @SpringBootApplication(exclude = [SecurityAutoConfiguration::class, ManagementWebSecurityAutoConfiguration::class])
 @EnableScheduling
-@EnableConfigurationProperties(PipelineProperties::class, CalculatorCleanupProperties::class)
+@EnableConfigurationProperties(PipelineProperties::class)
 @Import(CalculatorEngineConfiguration::class, KafkaConsumerConfig::class)
 class CalculatorApplication
 

@@ -7,7 +7,7 @@ data class RunStatus(
     val runId: String,
     val phase: PipelinePhase,
     val startedAt: Instant,
-    val updatedAt: Instant = Instant.now(),
+    val updatedAt: Instant? = null,
     val completedAt: Instant? = null,
     val chunksProcessed: Int = 0,
     val recordsProcessed: Long = 0,

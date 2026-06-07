@@ -3,7 +3,7 @@ package maple.synchronizer.adapter.chunk
 import maple.core.domain.chunk.ChunkProcessInput
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
-import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.synchronizer.metrics.DocumentVolumeMetrics
 import maple.synchronizer.preparer.PreppedDocument
 import maple.synchronizer.processor.ChunkDataReader
 import maple.synchronizer.processor.ChunkDocumentTransformer
@@ -25,13 +25,13 @@ class ChunkPipelineOrchestratorTest {
     private val dataReader: ChunkDataReader = mock()
     private val transformer: ChunkDocumentTransformer = mock()
     private val writer: ChunkDocumentWriter = mock()
-    private val metrics: SynchronizerMetrics = mock()
+    private val volumeMetrics: DocumentVolumeMetrics = mock()
 
     private lateinit var orchestrator: ChunkPipelineOrchestrator
 
     @BeforeEach
     fun setUp() {
-        orchestrator = ChunkPipelineOrchestrator(dataReader, transformer, writer, metrics)
+        orchestrator = ChunkPipelineOrchestrator(dataReader, transformer, writer, volumeMetrics)
     }
 
     @Test
@@ -78,10 +78,10 @@ class ChunkPipelineOrchestratorTest {
 
         orchestrator.execute(input)
 
-        verify(metrics).incrementDocuments(3)
-        verify(metrics).incrementItems(7L)
-        verify(metrics).recordChunkSize(3, 7L)
-        verify(metrics, org.mockito.kotlin.times(3))
+        verify(volumeMetrics).incrementDocuments(3)
+        verify(volumeMetrics).incrementItems(7L)
+        verify(volumeMetrics).recordChunkSize(3, 7L)
+        verify(volumeMetrics, org.mockito.kotlin.times(3))
             .recordDocumentEquipment(org.mockito.kotlin.any())
     }
 
@@ -120,10 +120,10 @@ class ChunkPipelineOrchestratorTest {
 
         assertThat(thrown).isSameAs(ex)
         verify(writer, org.mockito.kotlin.never()).write(any(), any(), any())
-        verify(metrics, org.mockito.kotlin.never()).incrementDocuments(any())
-        verify(metrics, org.mockito.kotlin.never()).incrementItems(any())
-        verify(metrics, org.mockito.kotlin.never()).recordChunkSize(any(), any())
-        verify(metrics, org.mockito.kotlin.never()).recordDocumentEquipment(any())
+        verify(volumeMetrics, org.mockito.kotlin.never()).incrementDocuments(any())
+        verify(volumeMetrics, org.mockito.kotlin.never()).incrementItems(any())
+        verify(volumeMetrics, org.mockito.kotlin.never()).recordChunkSize(any(), any())
+        verify(volumeMetrics, org.mockito.kotlin.never()).recordDocumentEquipment(any())
     }
 
     @Test
@@ -138,10 +138,10 @@ class ChunkPipelineOrchestratorTest {
 
         assertThat(result.documentCount).isEqualTo(0)
         assertThat(result.itemCount).isEqualTo(0L)
-        verify(metrics).incrementDocuments(0)
-        verify(metrics).incrementItems(0L)
-        verify(metrics).recordChunkSize(0, 0L)
-        verify(metrics, org.mockito.kotlin.never()).recordDocumentEquipment(any())
+        verify(volumeMetrics).incrementDocuments(0)
+        verify(volumeMetrics).incrementItems(0L)
+        verify(volumeMetrics).recordChunkSize(0, 0L)
+        verify(volumeMetrics, org.mockito.kotlin.never()).recordDocumentEquipment(any())
         verify(writer).write(any(), any(), any())
     }
 

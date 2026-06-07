@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component
 @Component
 class SynchronizerChunkMetricsListener(
     private val metrics: SynchronizerMetrics,
+    private val volumeMetrics: DocumentVolumeMetrics,
 ) {
     fun onEvent(event: ChunkLifecycleEvent) {
         when (event) {
@@ -26,7 +27,7 @@ class SynchronizerChunkMetricsListener(
         metrics.recordStatusTransition("SUCCESS")
         metrics.chunkTimer().record(java.time.Duration.ofNanos(event.durationNanos))
         metrics.recordChunkBytes(event.compressedBytes)
-        metrics.recordPreUpsertVolume(event.compressedBytes, event.uncompressedBytes, event.resultCount)
+        volumeMetrics.recordPreUpsertVolume(event.compressedBytes, event.uncompressedBytes, event.resultCount)
     }
 
     private fun onFailed(event: ChunkLifecycleEvent.Failed) {

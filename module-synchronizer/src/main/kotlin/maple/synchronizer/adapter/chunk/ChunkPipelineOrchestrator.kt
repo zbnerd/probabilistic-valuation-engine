@@ -1,7 +1,7 @@
 package maple.synchronizer.adapter.chunk
 
 import maple.core.domain.chunk.ChunkProcessInput
-import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.synchronizer.metrics.DocumentVolumeMetrics
 import maple.synchronizer.processor.ChunkDataReader
 import maple.synchronizer.processor.ChunkDocumentTransformer
 import maple.synchronizer.processor.ChunkDocumentWriter
@@ -15,14 +15,14 @@ import org.springframework.stereotype.Component
  *
  * Each stage is a Spring `@Component` injected as a constructor dependency. Stage-specific
  * timers stay inside the stages; this orchestrator records only the aggregate metrics
- * (documents, items, chunk size, per-document equipment).
+ * (documents, items, chunk size, per-document equipment) via [DocumentVolumeMetrics].
  */
 @Component
 class ChunkPipelineOrchestrator(
     private val dataReader: ChunkDataReader,
     private val transformer: ChunkDocumentTransformer,
     private val writer: ChunkDocumentWriter,
-    private val metrics: SynchronizerMetrics,
+    private val volumeMetrics: DocumentVolumeMetrics,
 ) {
     private val log = LoggerFactory.getLogger(ChunkPipelineOrchestrator::class.java)
 
@@ -37,10 +37,10 @@ class ChunkPipelineOrchestrator(
             transformResult.documentCount,
         )
 
-        metrics.incrementDocuments(transformResult.documentCount)
-        metrics.incrementItems(transformResult.itemCount)
-        metrics.recordChunkSize(transformResult.documentCount, transformResult.itemCount)
-        transformResult.prepped.forEach { metrics.recordDocumentEquipment(it.equipmentCount) }
+        volumeMetrics.incrementDocuments(transformResult.documentCount)
+        volumeMetrics.incrementItems(transformResult.itemCount)
+        volumeMetrics.recordChunkSize(transformResult.documentCount, transformResult.itemCount)
+        transformResult.prepped.forEach { volumeMetrics.recordDocumentEquipment(it.equipmentCount) }
 
         writer.write(input.sourceRunId, input.sourceChunkId, transformResult.prepped)
 

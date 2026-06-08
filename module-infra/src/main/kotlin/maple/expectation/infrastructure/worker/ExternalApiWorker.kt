@@ -47,6 +47,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.springframework.web.reactive.function.client.WebClientResponseException
 
 /**
@@ -292,46 +294,48 @@ class ExternalApiWorker(
     ) {
         val timer = StepTimer("ExternalApiWorker:PureCalculate", stepTraceThresholdMs, tags = mapOf("jobId" to jobId.toString()))
         try {
-            // Load input [DB read, no TX]
+            // Load input [DB read, no TX — VT]
             val input = stage("LoadInput", jobId.toString()) {
                 calculationInputPort.findByJobId(jobId) ?: error("Calculation input missing: $jobId")
             }
             timer.mark("loadInput")
 
-            // CPU-bound calculation [no TX]
-            val calcResult = stage("PureCalculate", payload.userIgn) {
-                pureCalculationPort.calculate(input)
+            // CPU section: calculate + serialize + gzip + SHA-256 on Dispatchers.Default
+            // Issue #1131: ItemCalculationExecutorConfig "VT rejected due to 3.5x latency regression on CPU-bound work" 원칙 적용.
+            val cpu = runBlocking(Dispatchers.Default) {
+                val calcResult = stage("PureCalculate", payload.userIgn) {
+                    pureCalculationPort.calculate(input)
+                }
+                timer.mark("pureCalculate")
+                val resultBytes = stage("SerializeResult", payload.userIgn) {
+                    objectMapper.writeValueAsString(calcResult).toByteArray()
+                }
+                timer.mark("serializeResult")
+                val gzipData = stage("GzipResult", payload.userIgn) {
+                    compress(resultBytes)
+                }
+                timer.mark("gzipResult")
+                val hash = stage("HashResult", payload.userIgn) {
+                    sha256Hex(resultBytes)
+                }
+                timer.mark("hashResult")
+                CalcCpuResult(calcResult, resultBytes, gzipData, hash)
             }
-            timer.mark("pureCalculate")
 
-            // Serialize + gzip + hash [CPU, no TX]
-            val resultBytes = stage("SerializeResult", payload.userIgn) {
-                objectMapper.writeValueAsString(calcResult).toByteArray()
-            }
-            timer.mark("serializeResult")
-            val gzipData = stage("GzipResult", payload.userIgn) {
-                compress(resultBytes)
-            }
-            timer.mark("gzipResult")
-            val hash = stage("HashResult", payload.userIgn) {
-                sha256Hex(resultBytes)
-            }
-            timer.mark("hashResult")
-
-            // Result write [TX: SNAPSHOT_READY → COMPLETED + result save + outbox insert]
+            // Result write [TX: SNAPSHOT_READY → COMPLETED + result save + outbox insert — VT]
             stage("CompleteCalculation", jobId.toString()) {
                 executionService.completeCalculation(
                     jobId = jobId,
-                    gzipData = gzipData,
-                    hash = hash,
-                    originalSize = resultBytes.size,
-                    compressedSize = gzipData.size,
+                    gzipData = cpu.gzipData,
+                    hash = cpu.hash,
+                    originalSize = cpu.resultBytes.size,
+                    compressedSize = cpu.gzipData.size,
                     characterClass = characterClass,
                     presetNo = payload.presetNo,
                     characterId = characterId,
-                    totalExpectedCost = calcResult.totalExpectedCost.toLong(),
-                    maxPresetNo = calcResult.maxPresetNo,
-                    presetsJson = objectMapper.writeValueAsString(calcResult.presets),
+                    totalExpectedCost = cpu.calcResult.totalExpectedCost.toLong(),
+                    maxPresetNo = cpu.calcResult.maxPresetNo,
+                    presetsJson = objectMapper.writeValueAsString(cpu.calcResult.presets),
                 )
             }
             timer.mark("completeCalculation")
@@ -339,6 +343,14 @@ class ExternalApiWorker(
             timer.close(log)
         }
     }
+
+    // Issue #1131: CPU section 의 4 result 를 묶어 caller 로 전달.
+    private data class CalcCpuResult(
+        val calcResult: PureCalculationResult,
+        val resultBytes: ByteArray,
+        val gzipData: ByteArray,
+        val hash: String,
+    )
 
     private fun convertItems(equipmentResponse: EquipmentResponse): List<EquipmentItem> {
         val items = equipmentResponse.itemEquipment ?: return emptyList()

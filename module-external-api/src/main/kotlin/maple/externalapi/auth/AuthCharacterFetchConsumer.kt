@@ -1,7 +1,9 @@
 package maple.externalapi.auth
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
+import kotlinx.coroutines.Dispatchers
 import maple.expectation.core.auth.event.CharacterFetchRequest
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.expectation.infrastructure.external.NexonAuthClient
@@ -91,10 +93,18 @@ class AuthCharacterFetchConsumer(
     }
 
     private fun publishResponse(response: CharacterFetchResponse) {
-        val json = objectMapper.writeValueAsString(response)
-        kafkaTemplate.send(responseTopic, response.kafkaKey(), json).whenComplete { _, ex ->
+        // Issue #1128: CPU offload — JSON serialize on Dispatchers.Default.
+        CompletableFuture.supplyAsync({
+            objectMapper.writeValueAsString(response)
+        }, Dispatchers.Default.asExecutor()).whenComplete { json, ex ->
             if (ex != null) {
-                log.error("[AuthFetch] failed to publish response: eventId={}", response.eventId, ex)
+                log.error("[AuthFetch] failed to serialize response: eventId={}", response.eventId, ex)
+            } else if (json != null) {
+                kafkaTemplate.send(responseTopic, response.kafkaKey(), json).whenComplete { _, sendEx ->
+                    if (sendEx != null) {
+                        log.error("[AuthFetch] failed to publish response: eventId={}", response.eventId, sendEx)
+                    }
+                }
             }
         }
     }

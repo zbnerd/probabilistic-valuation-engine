@@ -1,47 +1,46 @@
 package maple.externalapi.scheduler.phase
 
-import java.io.BufferedOutputStream
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.util.UUID
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
-import java.util.zip.GZIPOutputStream
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.asCoroutineDispatcher
+import maple.externalapi.domain.ExternalApiEndpoint
+import maple.externalapi.domain.ExternalApiProvider
+import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.expectation.common.event.SnapshotRunCompletedEvent
+import com.fasterxml.jackson.databind.ObjectMapper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
-import kotlinx.coroutines.future.future
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withTimeoutOrNull
-import maple.expectation.common.event.SnapshotRunCompletedEvent
-import maple.expectation.util.StringMaskingUtils.maskIgn
-import maple.externalapi.domain.ExternalApiEndpoint
-import maple.externalapi.domain.ExternalApiProvider
-import maple.externalapi.parser.OcidResponseParser
-import maple.externalapi.port.out.ExternalApiClientPort
-import maple.externalapi.reader.CharacterNameReader
-import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Instant
+import java.util.Collections
+import java.util.UUID
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
-/** Emit a progress log every N items processed. 5,000 chosen to keep log volume under ~3 lines/sec/chunk. */
-private const val PROGRESS_LOG_INTERVAL: Int = 5_000
-
+/**
+ * OCID lookup phase scheduler (Issue #1128).
+ *
+ * <p>CPU-bound 작업 (JSON parse/serialize, GZIP decompress) 을 `Dispatchers.Default` 로 offload.
+ * `readCharacterNamesFromChunks()` + `processBatch()` + `fetchAndCollectOcidAsync()` 는 `suspend fun` 으로 refactor.
+ * Caller (ExternalApiScheduler) 는 `runBlocking { ocidLookupPhase.execute(workerExecutor, rankingRunDir) }` (multi-threaded VT, short-lived).
+ */
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class OcidLookupPhase(
     private val clientPort: ExternalApiClientPort,
-    private val ocidResponseParser: OcidResponseParser,
-    private val characterNameReader: CharacterNameReader,
+    private val objectMapper: ObjectMapper,
     @Value("\${external-api.rate-limit.ocid-lookup-permits-per-second:400}")
     private val ocidLookupPermitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
@@ -50,133 +49,101 @@ class OcidLookupPhase(
     private val storeBasePath: String,
     @Qualifier("ocidLookupSnapshotPublisher")
     private val eventPublisher: SnapshotChunkEventPublisher,
-    @Value("\${external-api.concurrency.max-in-flight:100}")
-    maxInFlight: Int,
-    private val clock: Clock = Clock.systemUTC(),
-    private val runIdGenerator: RunIdGenerator,
-    private val schedulerRateLimiter: SchedulerRateLimiter,
-    private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
-    private val semaphore = Semaphore(maxInFlight)
-    private val maxInFlight = maxInFlight
 
-    fun execute(workerExecutor: ExecutorService, rankingRunDir: Path): CompletableFuture<Path?> {
+    /**
+     * External entry point. Caller (ExternalApiScheduler) uses:
+     * `runBlocking { ocidLookupPhase.execute(workerExecutor, rankingRunDir) }`
+     */
+    suspend fun execute(workerExecutor: ExecutorService, rankingRunDir: Path): Path? {
         val mappingDir = Path.of(storeBasePath).resolve("ocid-mapping")
         deleteOldMappingFiles(mappingDir)
 
         val igns = readCharacterNamesFromChunks(rankingRunDir)
         if (igns.isEmpty()) {
             log.warn("[Scheduler] no character names from ranking chunks: {}", rankingRunDir)
-            return CompletableFuture.completedFuture(null)
+            return null
         }
         log.info("[Scheduler] read {} character names from ranking chunks: {}", igns.size, rankingRunDir)
 
-        val rateLimiter = schedulerRateLimiter.newRateLimiter(ocidLookupPermitsPerSecond)
+        val rateLimiter = SchedulerPhaseUtils.newRateLimiter(ocidLookupPermitsPerSecond)
 
         log.info("[Scheduler] ========== OCID lookup start ==========")
         log.info(
-            "[Scheduler] config: total={}, rate={}/s, batchSize={}, maxInFlight={}, store={}",
-            igns.size,
-            ocidLookupPermitsPerSecond,
-            batchSize,
-            maxInFlight,
-            storeBasePath,
+            "[Scheduler] config: total={}, rate={}/s, batchSize={}, store={}",
+            igns.size, ocidLookupPermitsPerSecond, batchSize, storeBasePath,
         )
 
-        val start = Instant.now(clock)
-        val dispatcher = workerExecutor.asCoroutineDispatcher()
-        val results = mutableListOf<String>()
+        val start = Instant.now()
+        val successCount = AtomicInteger(0)
+        val failCount = AtomicInteger(0)
+        val lastProgressLog = AtomicInteger(0)
+        val results: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
-        return CoroutineScope(dispatcher).future {
-            val (successCount, failCount) = processBatchSuspend(rateLimiter, igns, results)
+        processBatch(
+            workerExecutor = workerExecutor,
+            rateLimiter = rateLimiter,
+            igns = igns,
+            processed = 0,
+            successCount = successCount,
+            failCount = failCount,
+            lastProgressLog = lastProgressLog,
+            results = results,
+            start = start,
+        )
 
-            val runId = runIdGenerator.newRunId()
-            val outputPath = writeGzipJsonl(mappingDir, results, runId)
-            schedulerProgressLogger.logSummary("OCID lookup", igns.size, successCount, successCount, failCount, start)
-            eventPublisher.publishRunCompleted(
-                SnapshotRunCompletedEvent(
-                    eventId = UUID.randomUUID().toString(),
-                    runId = runId,
-                    endpoint = "ocid-lookup",
-                    manifestPath = "ocid-mapping/${outputPath.fileName}",
-                    totalRecords = results.size,
-                    totalFailed = failCount,
-                    chunkCount = 1,
-                    startedAt = start,
-                    finishedAt = Instant.now(clock),
-                    createdAt = Instant.now(clock),
-                ),
-            )
-            outputPath
-        }
+        val runId = SchedulerPhaseUtils.newRunId()
+        val outputPath = writeGzipJsonl(mappingDir, results, runId)
+        SchedulerPhaseUtils.logSummary(
+            "OCID lookup",
+            igns.size,
+            successCount.get(),
+            successCount.get(),
+            failCount.get(),
+            start,
+        )
+        eventPublisher.publishRunCompleted(
+            SnapshotRunCompletedEvent(
+                eventId = UUID.randomUUID().toString(),
+                runId = runId,
+                endpoint = "ocid-lookup",
+                manifestPath = "ocid-mapping/${outputPath.fileName}",
+                totalRecords = results.size,
+                totalFailed = failCount.get(),
+                chunkCount = 1,
+                startedAt = start,
+                finishedAt = Instant.now(),
+                createdAt = Instant.now(),
+            ),
+        )
+        return outputPath
     }
 
     /**
-     * Batch processing with coroutine-based parallelism and semaphore-gated concurrency.
-     * Replaces recursive CF chain + AtomicInteger with while loop + local accumulators.
+     * GZIP decompress + per-line JSON parse. CPU-bound → `Dispatchers.Default`.
      */
-    private suspend fun processBatchSuspend(
-        rateLimiter: io.github.bucket4j.Bucket,
-        igns: List<String>,
-        results: MutableList<String>,
-    ): Pair<Int, Int> {
-        var processed = 0
-        var progress = BatchProgress(start = Instant.now(clock))
-
-        while (processed < igns.size) {
-            val permits = schedulerRateLimiter.acquirePermitsSuspend(rateLimiter, batchSize, igns.size - processed)
-            if (permits == 0) continue // acquirePermitsSuspend already delays 100ms
-
-            val chunk = igns.subList(processed, processed + permits)
-            val batchResults = coroutineScope {
-                chunk.map { ign ->
-                    async {
-                        runCatching { fetchOcid(ign) }.getOrNull()
-                    }
-                }.awaitAll()
-            }
-
-            val batchSuccess = batchResults.filterNotNull()
-            results.addAll(batchSuccess)
-            progress = progress
-                .addSuccess(batchSuccess.size)
-                .addFailure(chunk.size - batchSuccess.size)
-            processed += permits
-
-            if (progress.shouldLogProgress(PROGRESS_LOG_INTERVAL)) {
-                progress = progress.markLogged()
-                schedulerProgressLogger.logProgress("OCID lookup", progress.totalProcessed(), igns.size, progress.successCount, progress.failCount, progress.start)
-            }
-        }
-        return progress.successCount to progress.failCount
-    }
-
-    /**
-     * Fetches OCID for a single IGN. Coroutine Semaphore gates concurrency with
-     * 10s timeout to prevent indefinite hang on semaphore acquisition.
-     * Replaces tryAcquireWithBackoff() + Thread.sleep with structured suspension.
-     */
-    private suspend fun fetchOcid(ign: String): String? = withTimeoutOrNull(10_000L) {
-        semaphore.withPermit {
-            val data = clientPort.fetch(
-                ExternalApiProvider.NEXON,
-                ExternalApiEndpoint.OCID_LOOKUP,
-                ign,
-            ).await()
-            val ocid = ocidResponseParser.extractOcid(String(data))
-            if (ocid != null) {
-                String(ocidResponseParser.serializeMapping(ign, ocid), Charsets.UTF_8)
-            } else {
-                log.warn("[OCID] null ocid for ign={}", maskIgn(ign))
-                null
-            }
-        }
-    }
-
-    fun readCharacterNamesFromChunks(runDir: Path): List<String> {
+    suspend fun readCharacterNamesFromChunks(runDir: Path): List<String> = withContext(Dispatchers.Default) {
         val chunksDir = runDir.resolve("ranking-overall").resolve("chunks")
-        return characterNameReader.readDistinctKeys(chunksDir)
+        if (!Files.exists(chunksDir)) return@withContext emptyList()
+
+        val names = linkedSetOf<String>()
+        Files.list(chunksDir).use { stream ->
+            stream.filter { it.toString().endsWith(".jsonl.gz") }
+                .sorted()
+                .forEach { chunkFile ->
+                    GZIPInputStream(BufferedInputStream(Files.newInputStream(chunkFile))).bufferedReader().use { reader ->
+                        reader.lineSequence().forEach { line ->
+                            if (line.isNotBlank()) {
+                                val node = objectMapper.readTree(line)
+                                val key = node.get("key")?.asText()
+                                if (key != null) names.add(key)
+                            }
+                        }
+                    }
+                }
+        }
+        names.toList()
     }
 
     private fun deleteOldMappingFiles(mappingDir: Path) {
@@ -206,5 +173,94 @@ class OcidLookupPhase(
         val size = Files.size(outputPath)
         log.info("[Scheduler] wrote {} OCID mappings to {} ({} bytes)", results.size, outputPath, size)
         return outputPath
+    }
+
+    /**
+     * Recursive batch processor. async + awaitAll for parallel CPU offload.
+     * Each `async` runs on caller dispatcher (IO from runBlocking → no explicit = inherited).
+     * CPU work inside `fetchAndCollectOcidAsync` switches to `Dispatchers.Default`.
+     */
+    private suspend fun processBatch(
+        workerExecutor: ExecutorService,
+        rateLimiter: io.github.bucket4j.Bucket,
+        igns: List<String>,
+        processed: Int,
+        successCount: AtomicInteger,
+        failCount: AtomicInteger,
+        lastProgressLog: AtomicInteger,
+        results: MutableList<String>,
+        start: Instant,
+    ) {
+        if (processed >= igns.size) return
+
+        val permits = SchedulerPhaseUtils.acquirePermits(rateLimiter, batchSize, igns.size - processed)
+        if (permits == 0) {
+            return processBatch(
+                workerExecutor, rateLimiter, igns, processed,
+                successCount, failCount, lastProgressLog, results, start,
+            )
+        }
+
+        val chunk = igns.subList(processed, processed + permits)
+        coroutineScope {
+            chunk.map { ign ->
+                async(Dispatchers.IO) {
+                    fetchAndCollectOcidAsync(ign, workerExecutor, successCount, failCount, results)
+                }
+            }.awaitAll()
+        }
+
+        val progress = successCount.get() + failCount.get()
+        if (progress - lastProgressLog.get() >= 5000) {
+            lastProgressLog.set(progress)
+            SchedulerPhaseUtils.logProgress(
+                "OCID lookup", progress, igns.size,
+                successCount.get(), failCount.get(), start,
+            )
+        }
+        processBatch(
+            workerExecutor, rateLimiter, igns, processed + permits,
+            successCount, failCount, lastProgressLog, results, start,
+        )
+    }
+
+    /**
+     * Per-ign OCID fetch + JSON parse/serialize. HTTP call on IO, CPU offload via withContext(Default).
+     */
+    private suspend fun fetchAndCollectOcidAsync(
+        ign: String,
+        workerExecutor: ExecutorService,
+        successCount: AtomicInteger,
+        failCount: AtomicInteger,
+        results: MutableList<String>,
+    ) {
+        try {
+            val data = withContext(Dispatchers.IO) {
+                clientPort.fetch(
+                    ExternalApiProvider.NEXON,
+                    ExternalApiEndpoint.OCID_LOOKUP,
+                    ign,
+                ).await()
+            }
+
+            val (ocid, json) = withContext(Dispatchers.Default) {
+                val ocidVal = objectMapper.readTree(data).get("ocid")?.asText()
+                if (ocidVal != null) {
+                    val jsonVal = String(
+                        objectMapper.writeValueAsBytes(mapOf("userIgn" to ign, "ocid" to ocidVal)),
+                    )
+                    ocidVal to jsonVal
+                } else {
+                    null to null
+                }
+            }
+
+            if (ocid != null && json != null) {
+                results.add(json)
+                successCount.incrementAndGet()
+            }
+        } catch (ex: Exception) {
+            failCount.incrementAndGet()
+        }
     }
 }

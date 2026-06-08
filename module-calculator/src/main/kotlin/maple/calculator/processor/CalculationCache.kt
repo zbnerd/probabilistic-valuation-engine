@@ -48,6 +48,18 @@ class CalculationCache(
         .recordStats()
         .build()
 
+    /**
+     * Live [Cache] handle for metrics-only access. Do not call [Cache.get] from
+     * metrics paths — use [com.github.benmanes.caffeine.cache.stats.CacheStats]
+     * via [stats] to avoid mutating counters.
+     */
+    fun cache(): Cache<CacheKey, ComponentCosts> = cache
+
+    fun stats(): String {
+        val s = cache.stats()
+        return "size=${cache.estimatedSize()} hits=${s.hitCount()} misses=${s.missCount()} hitRate=${"%.1f%%".format(s.hitRate() * 100)}"
+    }
+
     fun calculate(input: EquipmentCalculationInput): ComponentCosts {
         val key = CacheKey(
             itemName = input.itemName,
@@ -69,10 +81,5 @@ class CalculationCache(
                 starforceCost = details.starforceCost,
             )
         }
-    }
-
-    fun stats(): String {
-        val s = cache.stats()
-        return "size=${cache.estimatedSize()} hits=${s.hitCount()} misses=${s.missCount()} hitRate=${"%.1f%%".format(s.hitRate() * 100)}"
     }
 }

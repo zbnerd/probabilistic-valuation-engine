@@ -1,15 +1,17 @@
 package maple.externalapi.cache
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import kotlinx.coroutines.Dispatchers
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Component
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.GZIPInputStream
-import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
 
 @Component
 class OcidCacheProvider(
@@ -26,7 +28,8 @@ class OcidCacheProvider(
             return cacheRef.get()
         }
 
-        val loaded = loadFromGzipJsonl(mappingFile)
+        // Issue #1128: CPU offload — GZIP decompress + per-line JSON parse on Dispatchers.Default.
+        val loaded = loadFromGzipJsonlAsync(mappingFile).join()
         cacheRef.set(loaded)
         log.info("[OcidCache] loaded: {} entries from {}", loaded.size, mappingFile.fileName)
         return loaded
@@ -72,4 +75,13 @@ class OcidCacheProvider(
         }
         return cache
     }
+
+    /**
+     * Issue #1128: GZIP decompress + per-line JSON parse on `Dispatchers.Default`.
+     * Caller may `.join()` (sync block) or chain via `.thenCompose()`.
+     */
+    private fun loadFromGzipJsonlAsync(path: Path): CompletableFuture<Map<String, String>> =
+        CompletableFuture.supplyAsync({
+            loadFromGzipJsonl(path)
+        }, Dispatchers.Default.asExecutor())
 }

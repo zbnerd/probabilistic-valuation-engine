@@ -16,7 +16,9 @@ import org.mockito.kotlin.whenever
 class CalculationJobServiceTest {
 
     @Mock lateinit var jobPort: CalculationJobPort
+
     @Mock lateinit var snapshotRepository: CalculationSnapshotRepository
+
     @Mock lateinit var dispatchService: CalculationDispatchService
 
     private lateinit var service: CalculationJobService

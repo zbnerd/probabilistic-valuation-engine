@@ -1,7 +1,7 @@
 package maple.synchronizer.event
 
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 class ResultChunkEventPathBuilderTest {
     private val builder = ResultChunkEventPathBuilder()

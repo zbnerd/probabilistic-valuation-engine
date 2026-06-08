@@ -71,19 +71,16 @@ class CoreExecutorConfig(
     @Bean
     @Primary
     @ConditionalOnMissingBean(LogicExecutor::class)
-    fun logicExecutor(pipeline: ExecutionPipeline, translator: ExceptionTranslator): LogicExecutor =
-        DefaultLogicExecutor(pipeline, translator)
+    fun logicExecutor(pipeline: ExecutionPipeline, translator: ExceptionTranslator): LogicExecutor = DefaultLogicExecutor(pipeline, translator)
 
     @Bean(name = ["checkedLogicExecutor"])
     @ConditionalOnMissingBean(CheckedLogicExecutor::class)
-    fun checkedLogicExecutor(pipeline: ExecutionPipeline): CheckedLogicExecutor =
-        DefaultCheckedLogicExecutor(pipeline)
+    fun checkedLogicExecutor(pipeline: ExecutionPipeline): CheckedLogicExecutor = DefaultCheckedLogicExecutor(pipeline)
 
     // ==================== Helper Factory Beans ====================
 
     @Bean
-    fun contextPropagatingDecorator(): TaskDecorator =
-        taskDecoratorFactory().createContextPropagatingDecorator()
+    fun contextPropagatingDecorator(): TaskDecorator = taskDecoratorFactory().createContextPropagatingDecorator()
 
     @Bean
     fun rejectionPolicyFactory(): RejectionPolicyFactory = RejectionPolicyFactory(meterRegistry)

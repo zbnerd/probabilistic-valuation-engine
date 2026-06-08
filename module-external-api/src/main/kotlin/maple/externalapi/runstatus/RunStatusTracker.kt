@@ -1,10 +1,10 @@
 package maple.externalapi.runstatus
 
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicReference
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 
 @Component
 class RunStatusTracker(

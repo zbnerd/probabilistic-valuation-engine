@@ -1,8 +1,9 @@
 package maple.externalapi.auth
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.core.auth.event.CharacterFetchResponse
+import java.util.concurrent.ExecutorService
 import maple.expectation.core.auth.event.CharacterFetchRequest
+import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.expectation.infrastructure.external.NexonAuthClient
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -13,7 +14,6 @@ import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
-import java.util.concurrent.ExecutorService
 
 @Component
 class AuthCharacterFetchConsumer(

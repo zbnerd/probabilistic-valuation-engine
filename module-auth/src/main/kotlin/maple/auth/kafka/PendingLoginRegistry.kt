@@ -1,11 +1,11 @@
 package maple.auth.kafka
 
-import maple.expectation.core.auth.event.CharacterFetchResponse
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import maple.expectation.core.auth.event.CharacterFetchResponse
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 
 @Component
 class PendingLoginRegistry {

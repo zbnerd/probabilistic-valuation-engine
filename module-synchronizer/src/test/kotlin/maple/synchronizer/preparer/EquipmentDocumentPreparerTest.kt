@@ -3,13 +3,13 @@ package maple.synchronizer.preparer
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import java.math.BigDecimal
+import java.time.Instant
 import maple.synchronizer.domain.EquipmentReadDocument
 import maple.synchronizer.domain.EquipmentReadMetadata
 import maple.synchronizer.domain.EquipmentSummary
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import java.math.BigDecimal
-import java.time.Instant
 
 class EquipmentDocumentPreparerTest {
 

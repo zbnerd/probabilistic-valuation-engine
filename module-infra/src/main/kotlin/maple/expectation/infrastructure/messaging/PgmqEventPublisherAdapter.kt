@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.messaging
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.core.port.out.EventPublisher
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -12,7 +13,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.util.concurrent.Executor
 
 /**
  * PGMQ-based EventPublisher adapter.

@@ -1,11 +1,11 @@
 package maple.calculator.config
 
 import jakarta.annotation.PreDestroy
+import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import java.util.concurrent.Executors
 
 /**
  * Coroutine dispatcher for blocking IO in the calculator pipeline.

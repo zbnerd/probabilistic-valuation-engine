@@ -19,6 +19,5 @@ class DefaultChunkProcessor(
     private val orchestrator: ChunkPipelineOrchestrator,
 ) : ChunkProcessor {
 
-    override fun process(input: ChunkProcessInput): ChunkProcessResult =
-        orchestrator.execute(input)
+    override fun process(input: ChunkProcessInput): ChunkProcessResult = orchestrator.execute(input)
 }

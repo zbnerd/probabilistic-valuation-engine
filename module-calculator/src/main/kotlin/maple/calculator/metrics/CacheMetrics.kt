@@ -28,9 +28,9 @@ class CacheMetrics(
             .register(registry)
 
         Gauge.builder("calculator_cache_hit_rate") {
-                val s = cache.stats()
-                if (s.requestCount() == 0L) 0.0 else s.hitRate() * 100.0
-            }
+            val s = cache.stats()
+            if (s.requestCount() == 0L) 0.0 else s.hitRate() * 100.0
+        }
             .description("Cache hit rate (percent) since JVM start")
             .register(registry)
 

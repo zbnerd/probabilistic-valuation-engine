@@ -1,7 +1,5 @@
 package maple.calculator.event
 
-import maple.calculator.model.ChunkResult
-
 sealed interface ChunkProcessingEvent {
     val runId: String
     val chunkId: String

@@ -1,5 +1,7 @@
 package maple.restcontroller.controller.v6
 
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 import maple.expectation.core.domain.model.security.AuthenticatedUser
 import maple.expectation.core.port.inbound.LikeTogglePort
 import maple.restcontroller.auth.JwtAuthInterceptor
@@ -7,8 +9,6 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
 
 @RestController
 @RequestMapping("/api/v6/characters")
@@ -29,7 +29,7 @@ class LikeController(
                 targetUserIgn = userIgn,
                 liked = result.result == maple.expectation.core.domain.model.like.LikeToggleResult.LIKED,
                 likeCount = result.likeCount,
-            )
+            ),
         )
     }, executor)
 

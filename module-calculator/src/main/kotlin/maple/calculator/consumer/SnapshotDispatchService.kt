@@ -50,13 +50,22 @@ class SnapshotDispatchService(
                 if (attempt > maxRetries) {
                     log.error(
                         "[{}] Exhausted {} retries, propagating to DLT: runId={} chunkId={}",
-                        label, maxRetries, event.runId, event.chunkId, e,
+                        label,
+                        maxRetries,
+                        event.runId,
+                        event.chunkId,
+                        e,
                     )
                     throw e
                 }
                 log.warn(
                     "[{}] Retry {}/{}: runId={} chunkId={}",
-                    label, attempt, maxRetries, event.runId, event.chunkId, e,
+                    label,
+                    attempt,
+                    maxRetries,
+                    event.runId,
+                    event.chunkId,
+                    e,
                 )
                 delay(retryBackoffMs)
             }

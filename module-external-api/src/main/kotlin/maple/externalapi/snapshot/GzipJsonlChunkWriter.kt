@@ -49,8 +49,7 @@ class GzipJsonlChunkWriter(
         uncompressedBytes += line.size
     }
 
-    fun shouldRotate(): Boolean =
-        recordCount >= maxRecords || uncompressedBytes >= maxUncompressedBytes
+    fun shouldRotate(): Boolean = recordCount >= maxRecords || uncompressedBytes >= maxUncompressedBytes
 
     fun close(): ChunkStats {
         gzip.finish()

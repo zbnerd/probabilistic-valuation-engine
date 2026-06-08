@@ -1,5 +1,8 @@
 package maple.cleanup.controller
 
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import maple.cleanup.inbox.ConsumedChunkInbox
 import maple.cleanup.inbox.InboxProperties
 import maple.cleanup.service.RunCleanupService
@@ -9,9 +12,6 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
 
 /**
  * HTTP endpoints for Airflow-triggered cleanup.

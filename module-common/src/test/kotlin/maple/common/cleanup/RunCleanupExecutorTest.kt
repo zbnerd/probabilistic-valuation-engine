@@ -1,9 +1,9 @@
 package maple.common.cleanup
 
-import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
 
 class RunCleanupExecutorTest {
 
@@ -91,13 +91,12 @@ class RunCleanupExecutorTest {
         assertThat(errors).containsExactly("run-1")
     }
 
-    private fun oldRuns(count: Int): List<RunInfo> =
-        (0 until count).map { i ->
-            RunInfo(
-                runId = "run-$i",
-                createdAt = now.minus(72, ChronoUnit.HOURS).plusSeconds(i.toLong()),
-                isRunning = false,
-                sizeBytes = 1_000L,
-            )
-        }
+    private fun oldRuns(count: Int): List<RunInfo> = (0 until count).map { i ->
+        RunInfo(
+            runId = "run-$i",
+            createdAt = now.minus(72, ChronoUnit.HOURS).plusSeconds(i.toLong()),
+            isRunning = false,
+            sizeBytes = 1_000L,
+        )
+    }
 }

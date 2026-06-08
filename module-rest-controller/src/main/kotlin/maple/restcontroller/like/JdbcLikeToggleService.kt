@@ -21,8 +21,7 @@ class JdbcLikeToggleService(
         private val log = LoggerFactory.getLogger(JdbcLikeToggleService::class.java)
     }
 
-    override fun toggleLike(targetUserIgn: String, likerAccountId: String, myOcids: Set<String>): LikeToggleResult =
-        toggleLikeWithCount(targetUserIgn, likerAccountId, myOcids).result
+    override fun toggleLike(targetUserIgn: String, likerAccountId: String, myOcids: Set<String>): LikeToggleResult = toggleLikeWithCount(targetUserIgn, likerAccountId, myOcids).result
 
     @Transactional("transactionManager")
     override fun toggleLikeWithCount(

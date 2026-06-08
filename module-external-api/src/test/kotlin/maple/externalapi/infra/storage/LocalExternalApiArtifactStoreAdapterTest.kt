@@ -1,12 +1,12 @@
 package maple.externalapi.infra.storage
 
-import maple.externalapi.domain.ExternalApiEndpoint
+import java.nio.file.Path
 import maple.expectation.error.exception.ArtifactNotFoundException
+import maple.externalapi.domain.ExternalApiEndpoint
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import java.nio.file.Path
 
 class LocalExternalApiArtifactStoreAdapterTest {
 

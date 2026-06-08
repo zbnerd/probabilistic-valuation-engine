@@ -5,9 +5,7 @@ import org.junit.jupiter.api.Test
 
 class LocalRequestBufferTest {
 
-    private fun createBuffer(capacity: Int = 10): LocalRequestBuffer {
-        return LocalRequestBuffer(capacity)
-    }
+    private fun createBuffer(capacity: Int = 10): LocalRequestBuffer = LocalRequestBuffer(capacity)
 
     private fun request(ign: String) = ReadRequest(userIgn = ign)
 

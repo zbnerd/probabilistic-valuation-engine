@@ -1,8 +1,8 @@
 package maple.externalapi.scheduler.phase
 
+import java.util.concurrent.CompletionException
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClientResponseException
-import java.util.concurrent.CompletionException
 
 @Component
 class HttpStatusExtractor {

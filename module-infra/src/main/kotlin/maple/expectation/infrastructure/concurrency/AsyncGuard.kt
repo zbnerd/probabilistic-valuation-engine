@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.concurrency
 
-import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import org.slf4j.LoggerFactory
 
 interface AsyncGuard {
     fun <T> guard(name: String, timeoutMs: Long, chain: CompletableFuture<T>): CompletableFuture<T>
@@ -21,8 +21,11 @@ class DefaultAsyncGuard : AsyncGuard {
         val guarded = CompletableFuture<T>()
 
         chain.whenComplete { result, ex ->
-            if (ex != null) guarded.completeExceptionally(ex)
-            else guarded.complete(result)
+            if (ex != null) {
+                guarded.completeExceptionally(ex)
+            } else {
+                guarded.complete(result)
+            }
         }
 
         scheduler.schedule<Unit>({

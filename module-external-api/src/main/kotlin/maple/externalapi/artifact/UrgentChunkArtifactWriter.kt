@@ -1,12 +1,12 @@
 package maple.externalapi.artifact
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.nio.file.Files
+import java.nio.file.Path
 import maple.externalapi.snapshot.GzipJsonlChunkWriter
 import maple.externalapi.snapshot.SnapshotChunkRecord
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.nio.file.Files
-import java.nio.file.Path
 
 /**
  * Writes a single urgent chunk record as a GZIP JSONL file under the artifact

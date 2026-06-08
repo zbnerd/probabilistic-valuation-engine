@@ -2,15 +2,15 @@ package maple.restcontroller.auth
 
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
+import java.nio.charset.StandardCharsets
+import java.time.Instant
+import java.util.Optional
+import javax.crypto.SecretKey
 import maple.expectation.core.auth.JwtParserPort
 import maple.expectation.core.auth.JwtPayload
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.nio.charset.StandardCharsets
-import java.time.Instant
-import java.util.Optional
-import javax.crypto.SecretKey
 
 @Component
 class JwtParserAdapter(
@@ -49,7 +49,7 @@ class JwtParserAdapter(
                 userIgn = claims[CLAIM_USER_IGN, String::class.java] ?: "",
                 issuedAt = issuedAt,
                 expiration = expiration,
-            )
+            ),
         )
     }.getOrElse { ex ->
         log.debug("JWT parse failed: {}", ex.message)

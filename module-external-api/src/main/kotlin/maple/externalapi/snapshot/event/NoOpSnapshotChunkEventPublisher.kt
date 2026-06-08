@@ -1,10 +1,10 @@
 package maple.externalapi.snapshot.event
 
+import java.util.concurrent.CompletableFuture
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
 import org.slf4j.LoggerFactory
-import java.util.concurrent.CompletableFuture
 
 class NoOpSnapshotChunkEventPublisher : SnapshotChunkEventPublisher {
     private val log = LoggerFactory.getLogger(NoOpSnapshotChunkEventPublisher::class.java)

@@ -1,11 +1,11 @@
 package maple.synchronizer.state
 
+import java.time.Instant
 import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.consumer.ChunkExecutionProperties
 import maple.synchronizer.repository.ChunkExecutionClaim
 import maple.synchronizer.repository.ChunkExecutionState
 import org.springframework.stereotype.Component
-import java.time.Instant
 
 /**
  * Owns state-machine decisions for chunk execution. The consumer template
@@ -35,14 +35,14 @@ class ChunkExecutionStateMachine(
      *   the chunk is reclaimable; preserve the message so the reclaim path runs.
      * - PENDING → do NOT ack. The row was just inserted; a worker is about to claim it.
      */
-    fun shouldAcknowledge(state: ChunkExecutionState, now: Instant = Instant.now()): Boolean =
-        when (val s = state.status) {
-            is ChunkExecutionStatus.Succeeded,
-            is ChunkExecutionStatus.FailedTerminal -> true
-            is ChunkExecutionStatus.FailedRetryable -> s.nextRetryAt?.isAfter(now) != true
-            ChunkExecutionStatus.Processing -> state.leaseUntil?.isAfter(now) == true
-            ChunkExecutionStatus.Pending -> false
-        }
+    fun shouldAcknowledge(state: ChunkExecutionState, now: Instant = Instant.now()): Boolean = when (val s = state.status) {
+        is ChunkExecutionStatus.Succeeded,
+        is ChunkExecutionStatus.FailedTerminal,
+        -> true
+        is ChunkExecutionStatus.FailedRetryable -> s.nextRetryAt?.isAfter(now) != true
+        ChunkExecutionStatus.Processing -> state.leaseUntil?.isAfter(now) == true
+        ChunkExecutionStatus.Pending -> false
+    }
 
     /** Whether the message should be left unacked for Kafka redelivery. */
     fun shouldPreserveKafkaRedelivery(state: ChunkExecutionState, now: Instant = Instant.now()): Boolean {
@@ -51,8 +51,7 @@ class ChunkExecutionStateMachine(
     }
 
     /** True when the processing lease has expired or was never set — this chunk is reclaimable. */
-    fun isReclaimedExpired(state: ChunkExecutionState, now: Instant): Boolean =
-        (state.status as? ChunkExecutionStatus.Processing)?.isReclaimed(state.leaseUntil, now) == true
+    fun isReclaimedExpired(state: ChunkExecutionState, now: Instant): Boolean = (state.status as? ChunkExecutionStatus.Processing)?.isReclaimed(state.leaseUntil, now) == true
 
     /** Classify a failure as retryable or terminal. */
     fun classifyFailure(

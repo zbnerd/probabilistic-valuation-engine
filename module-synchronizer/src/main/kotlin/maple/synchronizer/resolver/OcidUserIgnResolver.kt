@@ -27,8 +27,13 @@ class OcidUserIgnResolver(
         val excluded = mapping.filterValues { it.isEmpty() }
         val result = mapping.filterValues { it.isNotEmpty() }
         if (excluded.isNotEmpty()) {
-            log.debug("Resolved {} of {} ocids; excluded {} with empty user_ign (sample: {})",
-                result.size, ocids.size, excluded.size, excluded.keys.take(5))
+            log.debug(
+                "Resolved {} of {} ocids; excluded {} with empty user_ign (sample: {})",
+                result.size,
+                ocids.size,
+                excluded.size,
+                excluded.keys.take(5),
+            )
         } else {
             log.debug("Resolved {} of {} ocids to userIgn", result.size, ocids.size)
         }

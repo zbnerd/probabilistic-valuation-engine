@@ -1,6 +1,5 @@
 package maple.externalapi.metrics
 
-import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
@@ -35,5 +34,7 @@ class CleanupMetrics(registry: MeterRegistry) {
     fun recordSkippedActive() = skippedActive.increment()
     fun recordThrottled(count: Int) = throttledRuns.increment(count.toDouble())
     fun timer(): Timer = durationTimer
-    fun updateStorageUsed(bytes: Long) { storageUsedBytes = bytes }
+    fun updateStorageUsed(bytes: Long) {
+        storageUsedBytes = bytes
+    }
 }

@@ -3,6 +3,7 @@ package maple.calculator.consumer
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import maple.calculator.parser.SnapshotEventParser
 import maple.expectation.common.event.SnapshotChunkReadyEvent
@@ -14,7 +15,6 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.springframework.kafka.support.Acknowledgment
-import java.time.Instant
 
 @ExtendWith(MockitoExtension::class)
 class KafkaSnapshotChunkReadyConsumerTest {

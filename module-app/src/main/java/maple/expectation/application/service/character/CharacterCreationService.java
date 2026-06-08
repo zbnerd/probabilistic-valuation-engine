@@ -6,7 +6,6 @@ import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import maple.expectation.core.domain.model.character.GameCharacter;
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import maple.expectation.error.exception.ApiTimeoutException;
 import maple.expectation.error.exception.CharacterNotFoundException;
 import maple.expectation.error.exception.InternalSystemException;
@@ -15,6 +14,7 @@ import maple.expectation.infrastructure.character.notify.CharacterCreationNotifi
 import maple.expectation.infrastructure.executor.LogicExecutor;
 import maple.expectation.infrastructure.executor.TaskContext;
 import maple.expectation.infrastructure.external.NexonApiClient;
+import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository;
 import maple.expectation.util.ExceptionUtils;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;

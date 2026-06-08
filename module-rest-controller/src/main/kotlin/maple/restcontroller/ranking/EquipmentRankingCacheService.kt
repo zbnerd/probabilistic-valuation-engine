@@ -36,6 +36,5 @@ class EquipmentRankingCacheService(
         return entries
     }
 
-    private fun rankingKey(presetNo: Int): String =
-        "${properties.ranking.redisKeyPrefix}:preset:$presetNo"
+    private fun rankingKey(presetNo: Int): String = "${properties.ranking.redisKeyPrefix}:preset:$presetNo"
 }

@@ -22,10 +22,8 @@ class UrgentOcidResponseParser(
     }
 
     /** Byte-array overload for callers that received a raw HTTP body. */
-    fun extractOcid(responseBody: ByteArray): String? =
-        extractOcid(responseBody.toString(Charsets.UTF_8))
+    fun extractOcid(responseBody: ByteArray): String? = extractOcid(responseBody.toString(Charsets.UTF_8))
 
     /** Decodes an urgent request Kafka message body. */
-    fun parseRequest(message: String): UrgentCharacterRequest =
-        objectMapper.readValue(message, UrgentCharacterRequest::class.java)
+    fun parseRequest(message: String): UrgentCharacterRequest = objectMapper.readValue(message, UrgentCharacterRequest::class.java)
 }

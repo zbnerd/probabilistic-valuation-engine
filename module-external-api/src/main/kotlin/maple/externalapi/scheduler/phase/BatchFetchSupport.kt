@@ -1,6 +1,8 @@
 package maple.externalapi.scheduler.phase
 
 import io.github.bucket4j.Bucket
+import java.time.Duration
+import java.time.Instant
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -17,8 +19,6 @@ import maple.externalapi.snapshot.SnapshotChunkRecord
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.time.Duration
-import java.time.Instant
 
 /** Emit a progress log every N items processed. 5,000 keeps log volume bounded for large fetches. */
 private const val PROGRESS_LOG_INTERVAL: Int = 5_000
@@ -63,8 +63,7 @@ class BatchFetchSupport(
     private val semaphore = Semaphore(maxInFlight)
 
     /** Construct a token-bucket rate limiter sized to `permitsPerSecond`. */
-    fun newRateLimiter(permitsPerSecond: Int): Bucket =
-        schedulerRateLimiter.newRateLimiter(permitsPerSecond)
+    fun newRateLimiter(permitsPerSecond: Int): Bucket = schedulerRateLimiter.newRateLimiter(permitsPerSecond)
 
     /**
      * Process a batch of (key, ocid) entries with rate-limit gated concurrency.
@@ -106,7 +105,12 @@ class BatchFetchSupport(
             if (batchWaitDuration.toMillis() >= SLOW_BATCH_WAIT_MS) {
                 log.info(
                     "[SnapshotFetchMetrics] batch wait: endpoint={}, runId={}, batchSize={}, durationMs={}, success={}, failed={}",
-                    ctx.endpoint, runId, chunk.size, batchWaitDuration.toMillis(), progress.successCount, progress.failCount,
+                    ctx.endpoint,
+                    runId,
+                    chunk.size,
+                    batchWaitDuration.toMillis(),
+                    progress.successCount,
+                    progress.failCount,
                 )
             }
 
@@ -124,45 +128,47 @@ class BatchFetchSupport(
         return progress.successCount to progress.failCount
     }
 
-    private suspend fun fetchSingle(ocid: String, ctx: BatchFetchContext, sink: ChunkedSnapshotSink): Boolean {
-        return withTimeoutOrNull(SINGLE_FETCH_TIMEOUT_MS) {
-            semaphore.withPermit {
-                val fetchStart = Instant.now()
-                val bodyBytes = clientPort.fetch(
-                    ExternalApiProvider.NEXON,
-                    ctx.apiEndpoint,
+    private suspend fun fetchSingle(ocid: String, ctx: BatchFetchContext, sink: ChunkedSnapshotSink): Boolean = withTimeoutOrNull(SINGLE_FETCH_TIMEOUT_MS) {
+        semaphore.withPermit {
+            val fetchStart = Instant.now()
+            val bodyBytes = clientPort.fetch(
+                ExternalApiProvider.NEXON,
+                ctx.apiEndpoint,
+                ocid,
+            ).await()
+
+            val fetchDuration = Duration.between(fetchStart, Instant.now())
+            fetchMetrics.recordFetchJoin(ctx.endpoint, fetchDuration)
+
+            val queueDepthBeforeSubmit = sink.queueDepth()
+            val submitStart = Instant.now()
+            sink.submit(
+                SnapshotChunkRecord.Success(
+                    key = ocid,
+                    endpoint = ctx.endpoint,
+                    keyType = "OCID",
+                    httpStatus = 200,
+                    fetchedAt = Instant.now(),
+                    bodyBytes = bodyBytes,
+                ),
+            )
+            val submitDuration = Duration.between(submitStart, Instant.now())
+            fetchMetrics.recordSinkSubmit(ctx.endpoint, submitDuration, queueDepthBeforeSubmit)
+            if (fetchDuration.toMillis() >= SLOW_FETCH_LATENCY_MS || submitDuration.toMillis() >= SLOW_SUBMIT_LATENCY_MS) {
+                log.info(
+                    "[SnapshotFetchMetrics] fetch/sink: endpoint={}, ocid={}, responseBytes={}, fetchJoinMs={}, sinkSubmitMs={}, sinkQueueDepthBeforeSubmit={}",
+                    ctx.endpoint,
                     ocid,
-                ).await()
-
-                val fetchDuration = Duration.between(fetchStart, Instant.now())
-                fetchMetrics.recordFetchJoin(ctx.endpoint, fetchDuration)
-
-                val queueDepthBeforeSubmit = sink.queueDepth()
-                val submitStart = Instant.now()
-                sink.submit(
-                    SnapshotChunkRecord.Success(
-                        key = ocid,
-                        endpoint = ctx.endpoint,
-                        keyType = "OCID",
-                        httpStatus = 200,
-                        fetchedAt = Instant.now(),
-                        bodyBytes = bodyBytes,
-                    ),
+                    bodyBytes.size,
+                    fetchDuration.toMillis(),
+                    submitDuration.toMillis(),
+                    queueDepthBeforeSubmit,
                 )
-                val submitDuration = Duration.between(submitStart, Instant.now())
-                fetchMetrics.recordSinkSubmit(ctx.endpoint, submitDuration, queueDepthBeforeSubmit)
-                if (fetchDuration.toMillis() >= SLOW_FETCH_LATENCY_MS || submitDuration.toMillis() >= SLOW_SUBMIT_LATENCY_MS) {
-                    log.info(
-                        "[SnapshotFetchMetrics] fetch/sink: endpoint={}, ocid={}, responseBytes={}, fetchJoinMs={}, sinkSubmitMs={}, sinkQueueDepthBeforeSubmit={}",
-                        ctx.endpoint, ocid, bodyBytes.size, fetchDuration.toMillis(),
-                        submitDuration.toMillis(), queueDepthBeforeSubmit,
-                    )
-                }
-                ctx.onFetched()
-                true
             }
-        } ?: false
-    }
+            ctx.onFetched()
+            true
+        }
+    } ?: false
 
     private fun handleFailure(ocid: String, ctx: BatchFetchContext, sink: ChunkedSnapshotSink, ex: Throwable) {
         val httpStatus = httpStatusExtractor.extract(ex)

@@ -1,5 +1,6 @@
 package maple.restcontroller.controller
 
+import java.time.Duration
 import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.read.EnqueueResponseMapper
@@ -9,7 +10,6 @@ import maple.restcontroller.read.NegativeCacheService
 import maple.restcontroller.read.ReadModelCacheService
 import maple.restcontroller.read.ReadModelQueryService
 import maple.restcontroller.read.UrgentDedupService
-import maple.restcontroller.read.UrgentReadState
 import maple.restcontroller.validation.ValidUserIgn
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.context.request.async.DeferredResult
-import java.time.Duration
 
 @RestController
 @RequestMapping("/api/v6/characters")
@@ -48,7 +47,8 @@ class ExpectationV6Controller(
             is EnqueueResult.ServiceUnavailable ->
                 deferred.setErrorResult(EnqueueResponseMapper.toServiceUnavailableResponse(result))
             is EnqueueResult.Queued,
-            is EnqueueResult.AlreadyInFlight -> {
+            is EnqueueResult.AlreadyInFlight,
+            -> {
                 // Deferred stays open — facade wired onTimeout (202 via mapper)
                 // and onCompletion (registry cleanup) callbacks already.
             }
@@ -81,11 +81,10 @@ class ExpectationV6Controller(
             .body(status)
     }
 
-    private fun projectStatus(userIgn: String, presetNo: Int) =
-        urgentDedupService.status(
-            userIgn = userIgn,
-            presetNo = presetNo,
-            hasReadyCache = readModelCacheService.hasReadyCache(userIgn, presetNo),
-            hasNegativeCache = negativeCacheService.getNegativeCache(userIgn),
-        )
+    private fun projectStatus(userIgn: String, presetNo: Int) = urgentDedupService.status(
+        userIgn = userIgn,
+        presetNo = presetNo,
+        hasReadyCache = readModelCacheService.hasReadyCache(userIgn, presetNo),
+        hasNegativeCache = negativeCacheService.getNegativeCache(userIgn),
+    )
 }

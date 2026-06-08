@@ -484,7 +484,10 @@ abstract class PgmqWorker<T : Any>(
         if (remaining.isNotEmpty()) {
             log.warn("[{}] Shutdown with {} items in pipeline buffer, draining", queueName, remaining.size)
             executor.executeOrDefault(
-                { batchWrite(remaining); true },
+                {
+                    batchWrite(remaining)
+                    true
+                },
                 false,
                 TaskContext.of(queueName, "PipelineBufferDrain"),
             )

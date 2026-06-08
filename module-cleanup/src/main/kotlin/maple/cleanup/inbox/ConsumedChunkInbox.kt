@@ -1,14 +1,14 @@
 package maple.cleanup.inbox
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import maple.expectation.common.event.ChunkConsumedEvent
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Event-driven inbox for synchronizer's CHUNK_CONSUMED events.

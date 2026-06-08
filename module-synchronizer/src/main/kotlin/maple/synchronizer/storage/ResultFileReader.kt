@@ -1,16 +1,16 @@
 package maple.synchronizer.storage
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.math.BigDecimal
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.util.zip.GZIPInputStream
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.math.BigDecimal
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.util.zip.GZIPInputStream
 
 @Component
 class ResultFileReader(

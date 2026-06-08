@@ -44,11 +44,13 @@ class EquipmentReadModelRepository(
     fun bulkUpsert(runId: String, chunkId: String, documents: List<PreppedDocument>) {
         val compSizes = documents.map { it.compressed.size }
 
-        log.info("[Synchronizer] upsert start: docs={} batches={} batchSize={} " +
-            "compressedBytes avg={} max={} total={} : runId={} chunkId={}",
+        log.info(
+            "[Synchronizer] upsert start: docs={} batches={} batchSize={} " +
+                "compressedBytes avg={} max={} total={} : runId={} chunkId={}",
             documents.size, documents.chunked(SUB_BATCH_SIZE).size, SUB_BATCH_SIZE,
             compSizes.average().toInt(), compSizes.max(), compSizes.sum(),
-            runId, chunkId)
+            runId, chunkId,
+        )
 
         batchExecutor.execute(
             label = "Synchronizer",
@@ -61,22 +63,18 @@ class EquipmentReadModelRepository(
         )
     }
 
-    private fun upsertBatch(runId: String, chunkId: String, batch: List<PreppedDocument>): Int {
-        return jdbc.update(UPSERT_SQL, buildUpsertParams(runId, chunkId, batch))
-    }
+    private fun upsertBatch(runId: String, chunkId: String, batch: List<PreppedDocument>): Int = jdbc.update(UPSERT_SQL, buildUpsertParams(runId, chunkId, batch))
 
-    private fun buildUpsertParams(runId: String, chunkId: String, batch: List<PreppedDocument>): MapSqlParameterSource {
-        return MapSqlParameterSource()
-            .addValue("runId", runId)
-            .addValue("chunkId", chunkId)
-            .addValue("readKeys", batch.map { it.readKey }.toTypedArray())
-            .addValue("ocids", batch.map { it.ocid }.toTypedArray())
-            .addValue("presetNos", batch.map { it.presetNo }.toTypedArray())
-            .addValue("userIgns", batch.map { it.userIgn }.toTypedArray())
-            .addValue("documents", batch.map { it.compressed }.toTypedArray())
-            .addValue("documentHashes", batch.map { it.documentHash }.toTypedArray())
-            .addValue("totalCosts", batch.map { it.totalCost }.toTypedArray())
-            .addValue("equipmentCounts", batch.map { it.equipmentCount }.toTypedArray())
-            .addValue("calculatedAts", batch.map { it.calculatedAt }.toTypedArray())
-    }
+    private fun buildUpsertParams(runId: String, chunkId: String, batch: List<PreppedDocument>): MapSqlParameterSource = MapSqlParameterSource()
+        .addValue("runId", runId)
+        .addValue("chunkId", chunkId)
+        .addValue("readKeys", batch.map { it.readKey }.toTypedArray())
+        .addValue("ocids", batch.map { it.ocid }.toTypedArray())
+        .addValue("presetNos", batch.map { it.presetNo }.toTypedArray())
+        .addValue("userIgns", batch.map { it.userIgn }.toTypedArray())
+        .addValue("documents", batch.map { it.compressed }.toTypedArray())
+        .addValue("documentHashes", batch.map { it.documentHash }.toTypedArray())
+        .addValue("totalCosts", batch.map { it.totalCost }.toTypedArray())
+        .addValue("equipmentCounts", batch.map { it.equipmentCount }.toTypedArray())
+        .addValue("calculatedAts", batch.map { it.calculatedAt }.toTypedArray())
 }

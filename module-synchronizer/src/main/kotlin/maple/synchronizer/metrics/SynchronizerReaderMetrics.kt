@@ -25,7 +25,7 @@ class SynchronizerReaderMetrics(private val registry: MeterRegistry) {
 
     fun incrementFiltered(reader: String, reason: String) {
         filteredCounters
-            .getOrPut("${reader}:${reason}") {
+            .getOrPut("$reader:$reason") {
                 registry.counter("synchronizer_reader_filtered_total", "reader", reader, "reason", reason)
             }
             .increment()

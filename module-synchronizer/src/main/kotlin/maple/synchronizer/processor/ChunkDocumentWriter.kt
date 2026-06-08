@@ -14,9 +14,11 @@ class ChunkDocumentWriter(
 ) {
 
     fun write(runId: String, chunkId: String, prepped: List<PreppedDocument>) {
-        metrics.mainUpsertTimer().record(Runnable {
-            readModelRepository.bulkUpsert(runId, chunkId, prepped)
-        })
+        metrics.mainUpsertTimer().record(
+            Runnable {
+                readModelRepository.bulkUpsert(runId, chunkId, prepped)
+            },
+        )
         rankingWriter.update(prepped)
     }
 }

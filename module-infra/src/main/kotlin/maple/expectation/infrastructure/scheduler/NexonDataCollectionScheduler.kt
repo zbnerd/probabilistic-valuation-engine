@@ -1,9 +1,9 @@
 package maple.expectation.infrastructure.scheduler
 
 import maple.expectation.core.port.out.NexonDataCollectorPort
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.scheduling.annotation.Scheduled

@@ -3,8 +3,8 @@ package maple.externalapi.metrics
 import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
-import org.springframework.stereotype.Component
 import java.time.Duration
+import org.springframework.stereotype.Component
 
 @Component
 class SnapshotFetchMetrics(private val registry: MeterRegistry) {
@@ -40,13 +40,11 @@ class SnapshotFetchMetrics(private val registry: MeterRegistry) {
             .record(size.toDouble())
     }
 
-    private fun timer(name: String, endpoint: String): Timer =
-        Timer.builder(name)
-            .tag("endpoint", endpoint)
-            .register(registry)
+    private fun timer(name: String, endpoint: String): Timer = Timer.builder(name)
+        .tag("endpoint", endpoint)
+        .register(registry)
 
-    private fun summary(name: String, endpoint: String): DistributionSummary =
-        DistributionSummary.builder(name)
-            .tag("endpoint", endpoint)
-            .register(registry)
+    private fun summary(name: String, endpoint: String): DistributionSummary = DistributionSummary.builder(name)
+        .tag("endpoint", endpoint)
+        .register(registry)
 }

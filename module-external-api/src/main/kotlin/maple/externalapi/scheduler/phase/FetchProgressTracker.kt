@@ -1,8 +1,8 @@
 package maple.externalapi.scheduler.phase
 
+import java.time.Duration
 import maple.externalapi.metrics.SnapshotFetchMetrics
 import org.slf4j.LoggerFactory
-import java.time.Duration
 
 /**
  * Per-fetch progress tracker wrapping [BatchProgress] with the API surface called out by

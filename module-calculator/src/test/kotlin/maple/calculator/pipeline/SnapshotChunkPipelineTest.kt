@@ -1,5 +1,6 @@
 package maple.calculator.pipeline
 
+import java.util.Collections
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
@@ -8,14 +9,13 @@ import maple.calculator.config.PipelineProperties
 import maple.calculator.model.CalculationResult
 import maple.calculator.parser.FlatItem
 import maple.calculator.parser.SnapshotChunkParser
+import maple.expectation.core.dto.v4.AddOption
+import maple.expectation.core.dto.v4.EquipmentItem
+import maple.expectation.core.dto.v4.EquipmentPart
+import maple.expectation.core.dto.v4.EquipmentSlot
+import maple.expectation.core.dto.v4.StarforceScrollFlag
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import java.util.Collections
-import maple.expectation.core.dto.v4.EquipmentItem
-import maple.expectation.core.dto.v4.EquipmentSlot
-import maple.expectation.core.dto.v4.EquipmentPart
-import maple.expectation.core.dto.v4.StarforceScrollFlag
-import maple.expectation.core.dto.v4.AddOption
 
 class SnapshotChunkPipelineTest {
 

@@ -7,7 +7,6 @@ import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.PureCalculationPort
-import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationJobService
@@ -19,6 +18,7 @@ import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
+import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.util.GzipUtils.compress
 import maple.expectation.util.HashUtils.sha256Hex
 import org.slf4j.LoggerFactory
@@ -135,7 +135,6 @@ class CalculationRequestedWorker(
         { block() },
         TaskContext.of("CalculationWorker", name, key),
     )
-
 
     companion object {
         private val log = LoggerFactory.getLogger(CalculationRequestedWorker::class.java)

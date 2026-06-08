@@ -3,6 +3,7 @@ package maple.expectation.infrastructure.monitoring.copilot.pipeline
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.github.benmanes.caffeine.cache.stats.CacheStats
+import jakarta.annotation.PostConstruct
 import java.nio.file.Path
 import java.time.Duration
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -10,7 +11,6 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.monitoring.copilot.ingestor.GrafanaJsonIngestor
 import maple.expectation.infrastructure.monitoring.copilot.model.SignalDefinition
 import org.slf4j.LoggerFactory
-import jakarta.annotation.PostConstruct
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service

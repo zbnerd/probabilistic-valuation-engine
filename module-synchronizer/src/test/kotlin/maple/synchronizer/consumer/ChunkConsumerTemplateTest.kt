@@ -1,21 +1,24 @@
 package maple.synchronizer.consumer
 
+import java.time.Instant
+import java.util.concurrent.Executor
+import java.util.concurrent.Semaphore
 import maple.expectation.common.event.ChunkExecutionIdentity
-import maple.synchronizer.state.ChunkExecutionStatus
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.function.ThrowingSupplier
+import maple.expectation.error.CommonErrorCode
+import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
-import maple.expectation.error.CommonErrorCode
-import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.metrics.ChunkExecutionMetrics
 import maple.synchronizer.repository.ChunkExecutionClaim
-import maple.synchronizer.repository.ChunkExecutionState
 import maple.synchronizer.repository.ChunkExecutionRepository
+import maple.synchronizer.repository.ChunkExecutionState
 import maple.synchronizer.repository.InsertChunkExecutionCommand
 import maple.synchronizer.state.ChunkExecutionStateMachine
+import maple.synchronizer.state.ChunkExecutionStatus
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -28,10 +31,6 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.support.Acknowledgment
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.Executor
-import java.util.concurrent.Semaphore
 
 class ChunkConsumerTemplateTest {
 
@@ -241,8 +240,7 @@ class ChunkConsumerTemplateTest {
             return result
         }
 
-        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T =
-            runCatching { task.get() }.getOrDefault(defaultValue)
+        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = runCatching { task.get() }.getOrDefault(defaultValue)
 
         override fun <T> executeWithTranslation(
             task: ThrowingSupplier<T>,

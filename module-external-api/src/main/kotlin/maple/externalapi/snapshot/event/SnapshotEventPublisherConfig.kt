@@ -20,8 +20,7 @@ class SnapshotEventPublisherConfig {
         havingValue = "false",
         matchIfMissing = true,
     )
-    fun noOpSnapshotChunkEventPublisher(): SnapshotChunkEventPublisher =
-        NoOpSnapshotChunkEventPublisher()
+    fun noOpSnapshotChunkEventPublisher(): SnapshotChunkEventPublisher = NoOpSnapshotChunkEventPublisher()
 
     @Bean
     @Primary
@@ -35,15 +34,14 @@ class SnapshotEventPublisherConfig {
         objectMapper: ObjectMapper,
         properties: SnapshotEventProperties,
         schedulerMetrics: SchedulerMetrics,
-    ): SnapshotChunkEventPublisher =
-        KafkaSnapshotChunkEventPublisher(
-            kafkaTemplate = kafkaTemplate,
-            objectMapper = objectMapper,
-            chunkReadyTopic = properties.kafka.chunkReadyTopic,
-            runCompletedTopic = properties.kafka.runCompletedTopic,
-            runFailedTopic = properties.kafka.runFailedTopic,
-            schedulerMetrics = schedulerMetrics,
-        )
+    ): SnapshotChunkEventPublisher = KafkaSnapshotChunkEventPublisher(
+        kafkaTemplate = kafkaTemplate,
+        objectMapper = objectMapper,
+        chunkReadyTopic = properties.kafka.chunkReadyTopic,
+        runCompletedTopic = properties.kafka.runCompletedTopic,
+        runFailedTopic = properties.kafka.runFailedTopic,
+        schedulerMetrics = schedulerMetrics,
+    )
 
     @Bean
     @Qualifier("characterBasicSnapshotPublisher")
@@ -53,8 +51,7 @@ class SnapshotEventPublisherConfig {
         havingValue = "false",
         matchIfMissing = true,
     )
-    fun noOpCharacterBasicSnapshotPublisher(): SnapshotChunkEventPublisher =
-        NoOpSnapshotChunkEventPublisher()
+    fun noOpCharacterBasicSnapshotPublisher(): SnapshotChunkEventPublisher = NoOpSnapshotChunkEventPublisher()
 
     @Bean
     @Qualifier("characterBasicSnapshotPublisher")
@@ -68,15 +65,14 @@ class SnapshotEventPublisherConfig {
         objectMapper: ObjectMapper,
         properties: SnapshotEventProperties,
         schedulerMetrics: SchedulerMetrics,
-    ): SnapshotChunkEventPublisher =
-        KafkaSnapshotChunkEventPublisher(
-            kafkaTemplate = kafkaTemplate,
-            objectMapper = objectMapper,
-            chunkReadyTopic = properties.kafka.chunkReadyTopic,
-            runCompletedTopic = properties.kafka.runCompletedTopic,
-            runFailedTopic = properties.kafka.runFailedTopic,
-            schedulerMetrics = schedulerMetrics,
-        )
+    ): SnapshotChunkEventPublisher = KafkaSnapshotChunkEventPublisher(
+        kafkaTemplate = kafkaTemplate,
+        objectMapper = objectMapper,
+        chunkReadyTopic = properties.kafka.chunkReadyTopic,
+        runCompletedTopic = properties.kafka.runCompletedTopic,
+        runFailedTopic = properties.kafka.runFailedTopic,
+        schedulerMetrics = schedulerMetrics,
+    )
 
     @Bean
     @Qualifier("rankingSnapshotPublisher")
@@ -86,8 +82,7 @@ class SnapshotEventPublisherConfig {
         havingValue = "false",
         matchIfMissing = true,
     )
-    fun noOpRankingSnapshotPublisher(): SnapshotChunkEventPublisher =
-        NoOpSnapshotChunkEventPublisher()
+    fun noOpRankingSnapshotPublisher(): SnapshotChunkEventPublisher = NoOpSnapshotChunkEventPublisher()
 
     @Bean
     @Qualifier("rankingSnapshotPublisher")
@@ -101,15 +96,14 @@ class SnapshotEventPublisherConfig {
         objectMapper: ObjectMapper,
         properties: SnapshotEventProperties,
         schedulerMetrics: SchedulerMetrics,
-    ): SnapshotChunkEventPublisher =
-        KafkaSnapshotChunkEventPublisher(
-            kafkaTemplate = kafkaTemplate,
-            objectMapper = objectMapper,
-            chunkReadyTopic = properties.kafka.chunkReadyTopic,
-            runCompletedTopic = properties.kafka.runCompletedTopic,
-            runFailedTopic = properties.kafka.runFailedTopic,
-            schedulerMetrics = schedulerMetrics,
-        )
+    ): SnapshotChunkEventPublisher = KafkaSnapshotChunkEventPublisher(
+        kafkaTemplate = kafkaTemplate,
+        objectMapper = objectMapper,
+        chunkReadyTopic = properties.kafka.chunkReadyTopic,
+        runCompletedTopic = properties.kafka.runCompletedTopic,
+        runFailedTopic = properties.kafka.runFailedTopic,
+        schedulerMetrics = schedulerMetrics,
+    )
 
     @Bean
     @Qualifier("ocidLookupSnapshotPublisher")
@@ -119,8 +113,7 @@ class SnapshotEventPublisherConfig {
         havingValue = "false",
         matchIfMissing = true,
     )
-    fun noOpOcidLookupSnapshotPublisher(): SnapshotChunkEventPublisher =
-        NoOpSnapshotChunkEventPublisher()
+    fun noOpOcidLookupSnapshotPublisher(): SnapshotChunkEventPublisher = NoOpSnapshotChunkEventPublisher()
 
     @Bean
     @Qualifier("ocidLookupSnapshotPublisher")
@@ -134,13 +127,12 @@ class SnapshotEventPublisherConfig {
         objectMapper: ObjectMapper,
         properties: SnapshotEventProperties,
         schedulerMetrics: SchedulerMetrics,
-    ): SnapshotChunkEventPublisher =
-        KafkaSnapshotChunkEventPublisher(
-            kafkaTemplate = kafkaTemplate,
-            objectMapper = objectMapper,
-            chunkReadyTopic = properties.kafka.ocidLookupTopic,
-            runCompletedTopic = properties.kafka.ocidLookupTopic,
-            runFailedTopic = properties.kafka.runFailedTopic,
-            schedulerMetrics = schedulerMetrics,
-        )
+    ): SnapshotChunkEventPublisher = KafkaSnapshotChunkEventPublisher(
+        kafkaTemplate = kafkaTemplate,
+        objectMapper = objectMapper,
+        chunkReadyTopic = properties.kafka.ocidLookupTopic,
+        runCompletedTopic = properties.kafka.ocidLookupTopic,
+        runFailedTopic = properties.kafka.runFailedTopic,
+        schedulerMetrics = schedulerMetrics,
+    )
 }

@@ -1,6 +1,5 @@
 package maple.calculator.processor
 
-import maple.calculator.model.CalculationResult
 import maple.expectation.core.dto.cube.CubeCalculationInput
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
@@ -11,52 +10,78 @@ class EquipmentCalculationInputConverterTest {
 
     private val converter = EquipmentCalculationInputConverter
 
-    private fun cubeInput(block: CubeCalculationInput.() -> Unit): CubeCalculationInput =
-        CubeCalculationInput().apply(block)
+    private fun cubeInput(block: CubeCalculationInput.() -> Unit): CubeCalculationInput = CubeCalculationInput().apply(block)
 
     @Nested
     inner class TargetStarTest {
 
         @Test
         fun `returns 0 when starforce is 0`() {
-            val input = cubeInput { starforce = 0; itemName = "소드"; level = 150 }
+            val input = cubeInput {
+                starforce = 0
+                itemName = "소드"
+                level = 150
+            }
             assertThat(converter.targetStar(input)).isEqualTo(0)
         }
 
         @Test
         fun `returns 0 when starforce is negative`() {
-            val input = cubeInput { starforce = -1; itemName = "소드"; level = 150 }
+            val input = cubeInput {
+                starforce = -1
+                itemName = "소드"
+                level = 150
+            }
             assertThat(converter.targetStar(input)).isEqualTo(0)
         }
 
         @Test
         fun `returns 0 when itemName is null`() {
-            val input = cubeInput { starforce = 17; itemName = null; level = 150 }
+            val input = cubeInput {
+                starforce = 17
+                itemName = null
+                level = 150
+            }
             assertThat(converter.targetStar(input)).isEqualTo(0)
         }
 
         @Test
         fun `returns 0 when itemName is blank`() {
-            val input = cubeInput { starforce = 17; itemName = "  "; level = 150 }
+            val input = cubeInput {
+                starforce = 17
+                itemName = "  "
+                level = 150
+            }
             assertThat(converter.targetStar(input)).isEqualTo(0)
         }
 
         @Test
         fun `returns 0 when level is 0`() {
-            val input = cubeInput { starforce = 17; itemName = "소드"; level = 0 }
+            val input = cubeInput {
+                starforce = 17
+                itemName = "소드"
+                level = 0
+            }
             assertThat(converter.targetStar(input)).isEqualTo(0)
         }
 
         @Test
         fun `returns starforce for normal equipment`() {
-            val input = cubeInput { starforce = 17; itemName = "소드"; level = 150 }
+            val input = cubeInput {
+                starforce = 17
+                itemName = "소드"
+                level = 150
+            }
             assertThat(converter.targetStar(input)).isEqualTo(17)
         }
 
         @Test
         fun `caps at MAX_NOLJANG_STAR for noljang equipment`() {
             val input = cubeInput {
-                starforce = 25; itemName = "소드"; level = 150; starforceScrollFlag = "사용"
+                starforce = 25
+                itemName = "소드"
+                level = 150
+                starforceScrollFlag = "사용"
             }
             assertThat(converter.targetStar(input)).isEqualTo(15)
         }
@@ -64,7 +89,10 @@ class EquipmentCalculationInputConverterTest {
         @Test
         fun `returns starforce for noljang equipment below cap`() {
             val input = cubeInput {
-                starforce = 10; itemName = "소드"; level = 150; starforceScrollFlag = "사용"
+                starforce = 10
+                itemName = "소드"
+                level = 150
+                starforceScrollFlag = "사용"
             }
             assertThat(converter.targetStar(input)).isEqualTo(10)
         }
@@ -76,11 +104,17 @@ class EquipmentCalculationInputConverterTest {
         @Test
         fun `maps all fields for normal equipment`() {
             val cubeInput = cubeInput {
-                itemName = "아케인소드"; level = 200; part = "무기"
-                itemEquipmentPart = "한손검"; itemIcon = "https://icon.url"
-                grade = "유니크"; options = mutableListOf("공격력 +6%", "보스 공격력 +30%", null)
-                additionalGrade = "에픽"; additionalOptions = mutableListOf("올스탯 +3%")
-                starforce = 17; starforceScrollFlag = "미사용"
+                itemName = "아케인소드"
+                level = 200
+                part = "무기"
+                itemEquipmentPart = "한손검"
+                itemIcon = "https://icon.url"
+                grade = "유니크"
+                options = mutableListOf("공격력 +6%", "보스 공격력 +30%", null)
+                additionalGrade = "에픽"
+                additionalOptions = mutableListOf("올스탯 +3%")
+                starforce = 17
+                starforceScrollFlag = "미사용"
             }
 
             val result = converter.toCalculationInput(cubeInput, presetNo = 2)
@@ -102,25 +136,37 @@ class EquipmentCalculationInputConverterTest {
 
         @Test
         fun `resolves potentialPart for force shield`() {
-            val cubeInput = cubeInput { part = "보조무기"; itemEquipmentPart = "포스실드" }
+            val cubeInput = cubeInput {
+                part = "보조무기"
+                itemEquipmentPart = "포스실드"
+            }
             assertThat(converter.toCalculationInput(cubeInput, 1).itemPart).isEqualTo("포스실드")
         }
 
         @Test
         fun `resolves potentialPart for soul ring`() {
-            val cubeInput = cubeInput { part = "보조무기"; itemEquipmentPart = "소울링" }
+            val cubeInput = cubeInput {
+                part = "보조무기"
+                itemEquipmentPart = "소울링"
+            }
             assertThat(converter.toCalculationInput(cubeInput, 1).itemPart).isEqualTo("포스실드")
         }
 
         @Test
         fun `resolves potentialPart for standard secondary weapon`() {
-            val cubeInput = cubeInput { part = "보조무기"; itemEquipmentPart = "블레이드" }
+            val cubeInput = cubeInput {
+                part = "보조무기"
+                itemEquipmentPart = "블레이드"
+            }
             assertThat(converter.toCalculationInput(cubeInput, 1).itemPart).isEqualTo("보조무기")
         }
 
         @Test
         fun `leaves part unchanged for non-secondary weapon`() {
-            val cubeInput = cubeInput { part = "모자"; itemEquipmentPart = "모자" }
+            val cubeInput = cubeInput {
+                part = "모자"
+                itemEquipmentPart = "모자"
+            }
             assertThat(converter.toCalculationInput(cubeInput, 1).itemPart).isEqualTo("모자")
         }
 
@@ -139,8 +185,14 @@ class EquipmentCalculationInputConverterTest {
         @Test
         fun `handles all null fields`() {
             val cubeInput = cubeInput {
-                itemName = null; part = null; itemEquipmentPart = null; itemIcon = null
-                grade = null; options = mutableListOf(); additionalGrade = null; additionalOptions = mutableListOf()
+                itemName = null
+                part = null
+                itemEquipmentPart = null
+                itemIcon = null
+                grade = null
+                options = mutableListOf()
+                additionalGrade = null
+                additionalOptions = mutableListOf()
             }
 
             val result = converter.toCalculationInput(cubeInput, 1)
@@ -158,13 +210,21 @@ class EquipmentCalculationInputConverterTest {
         @Test
         fun `maps all fields with SUCCESS status and costs`() {
             val cubeInput = cubeInput {
-                itemName = "아케인소드"; level = 200; part = "무기"; itemEquipmentPart = "한손검"
-                grade = "유니크"; options = mutableListOf("공격력 +6%", "보스 공격력 +30%", "공격력 +9%")
-                additionalGrade = "에픽"; additionalOptions = mutableListOf("올스탯 +3%", "올스탯 +3%", "올스탯 +3%")
-                starforce = 17; starforceScrollFlag = "미사용"
+                itemName = "아케인소드"
+                level = 200
+                part = "무기"
+                itemEquipmentPart = "한손검"
+                grade = "유니크"
+                options = mutableListOf("공격력 +6%", "보스 공격력 +30%", "공격력 +9%")
+                additionalGrade = "에픽"
+                additionalOptions = mutableListOf("올스탯 +3%", "올스탯 +3%", "올스탯 +3%")
+                starforce = 17
+                starforceScrollFlag = "미사용"
             }
             val costs = CalculationCache.ComponentCosts(
-                blackCubeCost = 1.23, additionalCubeCost = 4.56, starforceCost = 7.89,
+                blackCubeCost = 1.23,
+                additionalCubeCost = 4.56,
+                starforceCost = 7.89,
             )
 
             val result = converter.toCalculationResult("abc123", 3, cubeInput, costs, "SUCCESS", null)
@@ -191,7 +251,11 @@ class EquipmentCalculationInputConverterTest {
 
         @Test
         fun `maps ERROR status with message and empty costs`() {
-            val cubeInput = cubeInput { itemName = "소드"; level = 150; part = "무기" }
+            val cubeInput = cubeInput {
+                itemName = "소드"
+                level = 150
+                part = "무기"
+            }
 
             val result = converter.toCalculationResult("abc", 1, cubeInput, CalculationCache.ComponentCosts.empty(), "ERROR", "calculation failed")
 
@@ -202,7 +266,12 @@ class EquipmentCalculationInputConverterTest {
 
         @Test
         fun `maps SKIPPED status with empty costs`() {
-            val cubeInput = cubeInput { itemName = "소드"; level = 150; part = "모자"; starforce = 0 }
+            val cubeInput = cubeInput {
+                itemName = "소드"
+                level = 150
+                part = "모자"
+                starforce = 0
+            }
 
             val result = converter.toCalculationResult("xyz", 1, cubeInput, CalculationCache.ComponentCosts.empty(), "SKIPPED", null)
 
@@ -213,8 +282,12 @@ class EquipmentCalculationInputConverterTest {
         @Test
         fun `handles null cubeInput fields`() {
             val cubeInput = cubeInput {
-                itemName = null; part = null; grade = null
-                options = mutableListOf(); additionalGrade = null; additionalOptions = mutableListOf()
+                itemName = null
+                part = null
+                grade = null
+                options = mutableListOf()
+                additionalGrade = null
+                additionalOptions = mutableListOf()
             }
 
             val result = converter.toCalculationResult("abc", 1, cubeInput, CalculationCache.ComponentCosts.empty(), "SKIPPED", null)

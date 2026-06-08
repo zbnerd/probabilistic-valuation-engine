@@ -17,7 +17,6 @@ import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.PureCalculationPort
-import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.core.port.out.SnapshotObjectStore
 import maple.expectation.error.exception.CharacterNotFoundException
 import maple.expectation.infrastructure.converter.EquipmentResponseToCalculationInputConverter
@@ -40,6 +39,7 @@ import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
+import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.util.ExceptionUtils
 import maple.expectation.util.GzipUtils.compress
 import maple.expectation.util.HashUtils.sha256Hex
@@ -438,7 +438,6 @@ class ExternalApiWorker(
             else -> "EXTERNAL_API_ERROR"
         }
     }
-
 
     private fun generateObjectKey(jobId: UUID): String {
         val now = Instant.now()

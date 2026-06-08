@@ -1,13 +1,13 @@
 package maple.externalapi.scheduler.phase
 
+import java.time.Duration
+import java.time.Instant
 import maple.externalapi.metrics.SnapshotFetchMetrics
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
-import java.time.Duration
-import java.time.Instant
 
 class FetchProgressTrackerTest {
 

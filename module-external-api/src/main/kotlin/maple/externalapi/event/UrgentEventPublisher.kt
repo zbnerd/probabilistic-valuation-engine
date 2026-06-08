@@ -1,14 +1,14 @@
 package maple.externalapi.event
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.time.Instant
+import java.util.concurrent.CompletableFuture
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.util.StringMaskingUtils.maskIgn
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Component
-import java.time.Instant
-import java.util.concurrent.CompletableFuture
 
 /**
  * Serializes urgent domain events to JSON and publishes them to Kafka. The

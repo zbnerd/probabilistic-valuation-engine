@@ -1,9 +1,9 @@
 package maple.restcontroller.read
 
-import org.springframework.http.ResponseEntity
-import org.springframework.web.context.request.async.DeferredResult
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import org.springframework.http.ResponseEntity
+import org.springframework.web.context.request.async.DeferredResult
 
 class InflightRequestRegistry {
 
@@ -15,9 +15,7 @@ class InflightRequestRegistry {
         return list.size == 1
     }
 
-    fun getAndRemove(userIgn: String, presetNo: Int): List<DeferredResult<ResponseEntity<*>>> {
-        return registry.remove(key(userIgn, presetNo)) ?: emptyList()
-    }
+    fun getAndRemove(userIgn: String, presetNo: Int): List<DeferredResult<ResponseEntity<*>>> = registry.remove(key(userIgn, presetNo)) ?: emptyList()
 
     fun cleanup(userIgn: String, presetNo: Int, deferred: DeferredResult<ResponseEntity<*>>) {
         registry.computeIfPresent(key(userIgn, presetNo)) { _, list ->

@@ -4,10 +4,10 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
-import maple.synchronizer.state.ChunkExecutionStatus
-import maple.expectation.common.event.ChunkExecutionType
-import org.springframework.stereotype.Component
 import java.util.concurrent.atomic.AtomicInteger
+import maple.expectation.common.event.ChunkExecutionType
+import maple.synchronizer.state.ChunkExecutionStatus
+import org.springframework.stereotype.Component
 
 @Component
 class SynchronizerMeterRegistry(private val registry: MeterRegistry) {
@@ -82,36 +82,32 @@ class SynchronizerMeterRegistry(private val registry: MeterRegistry) {
         .register(registry)
 
     // Status / execution factory methods — these create per-tag meters on demand
-    fun statusCounter(status: String): Counter =
-        registry.counter("synchronizer_chunk_status_transition_total", "status", status)
+    fun statusCounter(status: String): Counter = registry.counter("synchronizer_chunk_status_transition_total", "status", status)
 
-    fun chunkExecutionCounter(name: String, executionType: ChunkExecutionType): Counter =
-        registry.counter(name, "execution_type", executionType.name)
+    fun chunkExecutionCounter(name: String, executionType: ChunkExecutionType): Counter = registry.counter(name, "execution_type", executionType.name)
 
     fun chunkExecutionSkippedCounter(
         executionType: ChunkExecutionType,
         status: ChunkExecutionStatus,
-    ): Counter =
-        registry.counter(
-            "chunk_execution_skipped_total",
-            "execution_type",
-            executionType.name,
-            "status",
-            status.name,
-        )
+    ): Counter = registry.counter(
+        "chunk_execution_skipped_total",
+        "execution_type",
+        executionType.name,
+        "status",
+        status.name,
+    )
 
     fun chunkExecutionFailedCounter(
         executionType: ChunkExecutionType,
         status: ChunkExecutionStatus,
         reason: String,
-    ): Counter =
-        registry.counter(
-            "chunk_execution_failed_total",
-            "execution_type",
-            executionType.name,
-            "status",
-            status.name,
-            "reason",
-            reason,
-        )
+    ): Counter = registry.counter(
+        "chunk_execution_failed_total",
+        "execution_type",
+        executionType.name,
+        "status",
+        status.name,
+        "reason",
+        reason,
+    )
 }

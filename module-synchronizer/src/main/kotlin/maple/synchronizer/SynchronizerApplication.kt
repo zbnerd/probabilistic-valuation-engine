@@ -9,10 +9,12 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Import
 
-@SpringBootApplication(scanBasePackages = [
-    "maple.synchronizer",
-    "maple.expectation.infrastructure.executor",
-])
+@SpringBootApplication(
+    scanBasePackages = [
+        "maple.synchronizer",
+        "maple.expectation.infrastructure.executor",
+    ],
+)
 @EnableConfigurationProperties(EquipmentRankingProperties::class, ChunkExecutionProperties::class)
 @Import(
     maple.expectation.infrastructure.config.CoreExecutorConfig::class,

@@ -1,5 +1,7 @@
 package maple.externalapi.scheduler
 
+import java.util.UUID
+import java.util.concurrent.ExecutorService
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.externalapi.cache.OcidCacheProvider
@@ -17,8 +19,6 @@ import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
-import java.util.UUID
-import java.util.concurrent.ExecutorService
 
 /** 1 hour — long enough for the full daily refresh pipeline (snapshot → ocid → ranking) to complete without contention, but bounded so a hung worker releases the lock within one refresh cycle. */
 private const val DAILY_REFRESH_LOCK_TIMEOUT_MS: Long = 3_600_000L

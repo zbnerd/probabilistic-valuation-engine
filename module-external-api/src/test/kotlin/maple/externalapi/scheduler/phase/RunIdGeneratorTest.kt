@@ -1,10 +1,10 @@
 package maple.externalapi.scheduler.phase
 
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertEquals
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 class RunIdGeneratorTest {
     @Test

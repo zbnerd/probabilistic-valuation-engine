@@ -3,6 +3,10 @@ package maple.synchronizer.storage
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicLong
+import java.util.zip.GZIPInputStream
 import maple.expectation.util.GzipUtils
 import maple.expectation.util.HashUtils
 import maple.synchronizer.metrics.SynchronizerReaderMetrics
@@ -10,10 +14,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.util.concurrent.atomic.AtomicLong
-import java.util.zip.GZIPInputStream
 
 data class BasicRecord(
     val userIgn: String,
@@ -198,11 +198,18 @@ class BasicChunkFileReader(
         when {
             parseErrors > 0 -> log.error(
                 "[BasicChunkFileReader] parseErrors={} missingFields={} filtered={} parsed={} from {}",
-                parseErrors, missingFields, filtered, records, objectKey,
+                parseErrors,
+                missingFields,
+                filtered,
+                records,
+                objectKey,
             )
             missingFields > 0 || filtered > 0 -> log.warn(
                 "[BasicChunkFileReader] missingFields={} filtered={} parsed={} from {}",
-                missingFields, filtered, records, objectKey,
+                missingFields,
+                filtered,
+                records,
+                objectKey,
             )
             else -> log.info("[BasicChunkFileReader] parsed {} records from {}", records, objectKey)
         }

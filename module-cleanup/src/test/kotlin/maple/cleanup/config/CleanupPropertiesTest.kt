@@ -1,11 +1,11 @@
 package maple.cleanup.config
 
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.boot.context.properties.bind.Binder
 import org.springframework.boot.context.properties.source.ConfigurationPropertySource
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class CleanupPropertiesTest {
     @Test
@@ -27,7 +27,7 @@ class CleanupPropertiesTest {
                 "cleanup.runs.keep-recent" to "3",
                 "cleanup.runs.keep-within-hours" to "12",
                 "cleanup.max-delete-runs-per-cycle" to "20",
-            )
+            ),
         )
         val bound: CleanupProperties = Binder(source)
             .bind("cleanup", CleanupProperties::class.java)

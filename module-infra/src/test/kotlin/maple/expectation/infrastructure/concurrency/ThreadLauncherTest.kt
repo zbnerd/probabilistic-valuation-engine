@@ -1,10 +1,10 @@
 package maple.expectation.infrastructure.concurrency
 
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertTrue
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 class ThreadLauncherTest {
     @Test

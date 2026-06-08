@@ -1,8 +1,12 @@
 package maple.synchronizer.repository
 
+import java.sql.Timestamp
+import java.time.Duration
+import java.time.Instant
+import javax.sql.DataSource
 import maple.expectation.common.event.ChunkExecutionIdentity
-import maple.synchronizer.state.ChunkExecutionStatus
 import maple.expectation.common.event.ChunkExecutionType
+import maple.synchronizer.state.ChunkExecutionStatus
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -17,10 +21,6 @@ import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.wait.strategy.Wait
 import org.testcontainers.utility.DockerImageName
-import java.sql.Timestamp
-import java.time.Duration
-import java.time.Instant
-import javax.sql.DataSource
 
 class ChunkExecutionRepositoryTest {
 
@@ -208,12 +208,10 @@ class ChunkExecutionRepositoryTest {
         eventPayloadJson = """{"runId":"run-1"}""",
     )
 
-    private fun rowCount(): Int =
-        jdbcTemplate.queryForObject("SELECT COUNT(*) FROM chunk_execution", Int::class.java) ?: 0
+    private fun rowCount(): Int = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM chunk_execution", Int::class.java) ?: 0
 
-    private fun row(): ChunkExecutionRow =
-        namedJdbc.query(
-            """
+    private fun row(): ChunkExecutionRow = namedJdbc.query(
+        """
             SELECT
                 status,
                 attempt_count,
@@ -228,20 +226,20 @@ class ChunkExecutionRepositoryTest {
               AND run_id = :runId
               AND endpoint = :endpoint
               AND chunk_id = :chunkId
-            """.trimIndent(),
-            identityParams(),
-        ) { rs, _ ->
-            ChunkExecutionRow(
-                status = rs.getString("status"),
-                attemptCount = rs.getInt("attempt_count"),
-                nextRetryAt = rs.getTimestamp("next_retry_at"),
-                firstFailedAt = rs.getTimestamp("first_failed_at"),
-                lastFailedAt = rs.getTimestamp("last_failed_at"),
-                lastError = rs.getString("last_error"),
-                terminalReason = rs.getString("terminal_reason"),
-                leaseUntil = rs.getTimestamp("lease_until"),
-            )
-        }.first()
+        """.trimIndent(),
+        identityParams(),
+    ) { rs, _ ->
+        ChunkExecutionRow(
+            status = rs.getString("status"),
+            attemptCount = rs.getInt("attempt_count"),
+            nextRetryAt = rs.getTimestamp("next_retry_at"),
+            firstFailedAt = rs.getTimestamp("first_failed_at"),
+            lastFailedAt = rs.getTimestamp("last_failed_at"),
+            lastError = rs.getString("last_error"),
+            terminalReason = rs.getString("terminal_reason"),
+            leaseUntil = rs.getTimestamp("lease_until"),
+        )
+    }.first()
 
     private fun expireLease() {
         namedJdbc.update(
@@ -271,12 +269,11 @@ class ChunkExecutionRepositoryTest {
         )
     }
 
-    private fun identityParams(): MapSqlParameterSource =
-        MapSqlParameterSource()
-            .addValue("executionType", identity.executionType.name)
-            .addValue("runId", identity.runId)
-            .addValue("endpoint", identity.endpoint)
-            .addValue("chunkId", identity.chunkId)
+    private fun identityParams(): MapSqlParameterSource = MapSqlParameterSource()
+        .addValue("executionType", identity.executionType.name)
+        .addValue("runId", identity.runId)
+        .addValue("endpoint", identity.endpoint)
+        .addValue("chunkId", identity.chunkId)
 
     private data class ChunkExecutionRow(
         val status: String,
@@ -289,8 +286,7 @@ class ChunkExecutionRepositoryTest {
         val leaseUntil: Timestamp?,
     )
 
-    private class PostgresTestContainer :
-        GenericContainer<PostgresTestContainer>(DockerImageName.parse("postgres:17-alpine"))
+    private class PostgresTestContainer : GenericContainer<PostgresTestContainer>(DockerImageName.parse("postgres:17-alpine"))
 
     private companion object {
         private val identity = ChunkExecutionIdentity(
@@ -332,30 +328,27 @@ class ChunkExecutionRepositoryTest {
             return localDataSource()
         }
 
-        private fun tryContainerDataSource(): DataSource? {
-            return runCatching {
-                val container = PostgresTestContainer()
-                    .withEnv("POSTGRES_DB", "testdb")
-                    .withEnv("POSTGRES_USER", "test")
-                    .withEnv("POSTGRES_PASSWORD", "test")
-                    .withExposedPorts(5432)
-                    .waitingFor(Wait.forListeningPort())
-                container.start()
-                postgres = container
-                schemaDataSource(
-                    baseUrl = "jdbc:postgresql://${container.host}:${container.getMappedPort(5432)}/testdb",
-                    username = "test",
-                    password = "test",
-                )
-            }.getOrNull()
-        }
-
-        private fun localDataSource(): DataSource =
+        private fun tryContainerDataSource(): DataSource? = runCatching {
+            val container = PostgresTestContainer()
+                .withEnv("POSTGRES_DB", "testdb")
+                .withEnv("POSTGRES_USER", "test")
+                .withEnv("POSTGRES_PASSWORD", "test")
+                .withExposedPorts(5432)
+                .waitingFor(Wait.forListeningPort())
+            container.start()
+            postgres = container
             schemaDataSource(
-                baseUrl = "jdbc:postgresql://${env("PGHOST", "localhost")}:${env("PGPORT", "5432")}/${env("PGDATABASE", "postgres")}",
-                username = env("PGUSER", System.getProperty("user.name")),
-                password = env("PGPASSWORD", ""),
+                baseUrl = "jdbc:postgresql://${container.host}:${container.getMappedPort(5432)}/testdb",
+                username = "test",
+                password = "test",
             )
+        }.getOrNull()
+
+        private fun localDataSource(): DataSource = schemaDataSource(
+            baseUrl = "jdbc:postgresql://${env("PGHOST", "localhost")}:${env("PGPORT", "5432")}/${env("PGDATABASE", "postgres")}",
+            username = env("PGUSER", System.getProperty("user.name")),
+            password = env("PGPASSWORD", ""),
+        )
 
         private fun schemaDataSource(baseUrl: String, username: String, password: String): DataSource {
             val baseDataSource = driverManagerDataSource(baseUrl, username, password)
@@ -363,13 +356,12 @@ class ChunkExecutionRepositoryTest {
             return driverManagerDataSource("$baseUrl?currentSchema=$TEST_SCHEMA", username, password)
         }
 
-        private fun driverManagerDataSource(url: String, username: String, password: String): DataSource =
-            DriverManagerDataSource().apply {
-                setDriverClassName("org.postgresql.Driver")
-                this.url = url
-                this.username = username
-                this.password = password
-            }
+        private fun driverManagerDataSource(url: String, username: String, password: String): DataSource = DriverManagerDataSource().apply {
+            setDriverClassName("org.postgresql.Driver")
+            this.url = url
+            this.username = username
+            this.password = password
+        }
 
         private fun env(name: String, fallback: String): String = System.getenv(name) ?: fallback
     }

@@ -14,22 +14,19 @@ class ConcurrencyConfiguration {
             ExecutorQualifier.IO to namedExecutor("io", 8, 16),
             ExecutorQualifier.SCHEDULER to namedExecutor("scheduler", 2, 4),
             ExecutorQualifier.CHUNK to namedExecutor("chunk", 2, 4),
-            ExecutorQualifier.BACKFILL to namedExecutor("backfill", 2, 4)
+            ExecutorQualifier.BACKFILL to namedExecutor("backfill", 2, 4),
         )
         return ExecutorRegistry(map)
     }
 
     @Bean
-    fun executorSelector(registry: ExecutorRegistry): ExecutorSelector =
-        DefaultExecutorSelector(registry)
+    fun executorSelector(registry: ExecutorRegistry): ExecutorSelector = DefaultExecutorSelector(registry)
 
     @Bean
-    fun threadLauncher(registry: ExecutorRegistry): ThreadLauncher =
-        DefaultThreadLauncher(registry.get(ExecutorQualifier.BACKFILL))
+    fun threadLauncher(registry: ExecutorRegistry): ThreadLauncher = DefaultThreadLauncher(registry.get(ExecutorQualifier.BACKFILL))
 
     @Bean
-    fun backpressureLimiter(): BackpressureLimiter =
-        DefaultBackpressureLimiter(permits = 16, component = "default")
+    fun backpressureLimiter(): BackpressureLimiter = DefaultBackpressureLimiter(permits = 16, component = "default")
 
     @Bean
     fun asyncGuard(): AsyncGuard = DefaultAsyncGuard()

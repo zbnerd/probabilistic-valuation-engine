@@ -4,9 +4,9 @@ import maple.expectation.core.domain.model.Page
 import maple.expectation.core.domain.model.PageRequest
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.core.port.out.QueueWriterPort
-import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.persistence.repository.GameCharacterRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty

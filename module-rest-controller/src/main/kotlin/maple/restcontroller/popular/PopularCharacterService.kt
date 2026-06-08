@@ -1,11 +1,11 @@
 package maple.restcontroller.popular
 
+import java.time.Duration
+import java.time.Instant
 import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.popular.port.out.PopularCharacterRedisPort
 import org.slf4j.LoggerFactory
-import java.time.Duration
-import java.time.Instant
 
 class PopularCharacterService(
     private val redisPort: PopularCharacterRedisPort,
@@ -69,8 +69,7 @@ class PopularCharacterService(
         }
     }
 
-    private fun effectiveWindowHours(windowHours: Int?): Int =
-        (windowHours ?: properties.popular.defaultWindowHours)
-            .coerceAtLeast(1)
-            .coerceAtMost(properties.popular.maxWindowHours.coerceAtLeast(1))
+    private fun effectiveWindowHours(windowHours: Int?): Int = (windowHours ?: properties.popular.defaultWindowHours)
+        .coerceAtLeast(1)
+        .coerceAtMost(properties.popular.maxWindowHours.coerceAtLeast(1))
 }

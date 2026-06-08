@@ -13,7 +13,8 @@ object EquipmentCalculationInputConverter {
         presetNo: Int,
     ): EquipmentCalculationInput {
         val potentialPart = SecondaryWeaponCategory.resolvePotentialPart(
-            cubeInput.part, cubeInput.itemEquipmentPart,
+            cubeInput.part,
+            cubeInput.itemEquipmentPart,
         )
         return EquipmentCalculationInput.builder()
             .itemName(cubeInput.itemName ?: "")

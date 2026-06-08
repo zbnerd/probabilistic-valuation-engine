@@ -1,8 +1,8 @@
 package maple.externalapi.scheduler.phase
 
+import java.time.Instant
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import java.time.Instant
 
 class BatchProgressTest {
 
@@ -57,6 +57,6 @@ class BatchProgressTest {
 
         assertThat(updated.successCount).isEqualTo(3)
         assertThat(updated.failCount).isEqualTo(1)
-        assertThat(progress.successCount).isZero()  // original unchanged
+        assertThat(progress.successCount).isZero() // original unchanged
     }
 }

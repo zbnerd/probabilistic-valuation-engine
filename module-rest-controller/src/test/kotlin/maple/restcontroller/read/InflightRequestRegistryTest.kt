@@ -9,8 +9,7 @@ class InflightRequestRegistryTest {
 
     private val registry = InflightRequestRegistry()
 
-    private fun deferred(): DeferredResult<ResponseEntity<*>> =
-        DeferredResult()
+    private fun deferred(): DeferredResult<ResponseEntity<*>> = DeferredResult()
 
     @Test
     fun `register returns true for first request (dedup miss)`() {

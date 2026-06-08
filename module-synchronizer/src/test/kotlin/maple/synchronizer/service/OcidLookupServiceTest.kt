@@ -1,5 +1,6 @@
 package maple.synchronizer.service
 
+import java.time.Instant
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.synchronizer.redis.OcidMappingRedisWriter
 import maple.synchronizer.repository.OcidMappingRepository
@@ -11,7 +12,6 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import java.time.Instant
 
 class OcidLookupServiceTest {
     private val fileReader = mock<OcidMappingFileReader>()

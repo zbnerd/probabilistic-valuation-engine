@@ -1,5 +1,13 @@
 package maple.externalapi.scheduler.phase
 
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.time.Clock
+import java.time.Instant
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.await
@@ -17,14 +25,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.nio.file.Path
-import java.nio.file.Paths
-import java.time.Clock
-import java.time.Instant
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
 
 /** Emit a progress log every N items fetched. 10,000 chosen for ranking phase (lower call rate). */
 private const val PROGRESS_LOG_INTERVAL: Int = 10_000
@@ -110,14 +110,16 @@ class RankingFetchPhase(
                 failed++
                 metrics.recordRankingFailed()
                 val status = httpStatusExtractor.extract(ex)
-                sink.submit(SnapshotChunkRecord.Failure(
-                    key = requestKey,
-                    endpoint = "ranking-overall",
-                    keyType = KeyType.DATE_PAGE.name,
-                    httpStatus = status,
-                    fetchedAt = Instant.now(clock),
-                    errorMessage = ex.message ?: "unknown",
-                ))
+                sink.submit(
+                    SnapshotChunkRecord.Failure(
+                        key = requestKey,
+                        endpoint = "ranking-overall",
+                        keyType = KeyType.DATE_PAGE.name,
+                        httpStatus = status,
+                        fetchedAt = Instant.now(clock),
+                        errorMessage = ex.message ?: "unknown",
+                    ),
+                )
                 log.warn("[RankingFetch] page failed: page={}, status={}, error={}", currentPage, status, ex.message)
             }
             currentPage++

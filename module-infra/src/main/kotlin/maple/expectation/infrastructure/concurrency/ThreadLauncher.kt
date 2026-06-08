@@ -8,12 +8,11 @@ interface ThreadLauncher {
 }
 
 class DefaultThreadLauncher(private val executor: Executor) : ThreadLauncher {
-    override fun launch(name: String, block: () -> Unit): Future<*> =
-        when (executor) {
-            is java.util.concurrent.ExecutorService -> executor.submit {
-                Thread.currentThread().name = name
-                block()
-            }
-            else -> throw IllegalArgumentException("ThreadLauncher requires ExecutorService, got ${executor::class}")
+    override fun launch(name: String, block: () -> Unit): Future<*> = when (executor) {
+        is java.util.concurrent.ExecutorService -> executor.submit {
+            Thread.currentThread().name = name
+            block()
         }
+        else -> throw IllegalArgumentException("ThreadLauncher requires ExecutorService, got ${executor::class}")
+    }
 }

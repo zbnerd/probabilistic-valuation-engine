@@ -38,11 +38,10 @@ class EquipmentRankingServiceTest {
         assertThat(result.rankings).isEqualTo(db)
     }
 
-    private fun entry(userIgn: String, presetNo: Int, totalCost: String): EquipmentRankingEntry =
-        EquipmentRankingEntry(
-            rank = 1,
-            userIgn = userIgn,
-            presetNo = presetNo,
-            totalCost = totalCost.toLong(),
-        )
+    private fun entry(userIgn: String, presetNo: Int, totalCost: String): EquipmentRankingEntry = EquipmentRankingEntry(
+        rank = 1,
+        userIgn = userIgn,
+        presetNo = presetNo,
+        totalCost = totalCost.toLong(),
+    )
 }

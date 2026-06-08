@@ -5,15 +5,15 @@ import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import maple.expectation.common.event.CalculatorResultChunkReadyEvent
-import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.calculator.event.ChunkProcessingEvent
-import maple.expectation.util.CompressionUtils
 import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.storage.ObjectStorage
+import maple.expectation.common.event.CalculatorResultChunkReadyEvent
+import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.util.CompressionUtils
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
@@ -70,8 +70,7 @@ class CalculatorChunkProcessingCoordinator(
         }
     }
 
-    fun resultObjectKeyFor(event: SnapshotChunkReadyEvent): String =
-        "calculator/runs/${event.runId}/${event.endpoint}/chunks/result-${event.chunkId}.jsonl.gz"
+    fun resultObjectKeyFor(event: SnapshotChunkReadyEvent): String = "calculator/runs/${event.runId}/${event.endpoint}/chunks/result-${event.chunkId}.jsonl.gz"
 
     private suspend fun republishExistingResult(event: SnapshotChunkReadyEvent, resultObjectKey: String) {
         log.info("[Coordinator] result already exists, republishing: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, resultObjectKey)
@@ -123,8 +122,13 @@ class CalculatorChunkProcessingCoordinator(
         )
         log.info(
             "[Coordinator] processed chunk: runId={} chunkId={} records={} success={} items={} results={} errors={}",
-            event.runId, event.chunkId,
-            result.recordCount, result.successCount, result.totalItems, result.resultCount, result.errorCount,
+            event.runId,
+            event.chunkId,
+            result.recordCount,
+            result.successCount,
+            result.totalItems,
+            result.resultCount,
+            result.errorCount,
         )
         val ratio = CompressionUtils.ratioString(result.resultUncompressedBytes, result.resultCompressedBytes)
         log.info(
@@ -132,27 +136,32 @@ class CalculatorChunkProcessingCoordinator(
             event.runId, event.chunkId, event.compressedBytes, event.uncompressedBytes,
             result.resultCompressedBytes, result.resultUncompressedBytes, result.resultCount, ratio,
         )
-        metricsListener.onEvent(ChunkProcessingEvent.Completed(
-            runId = event.runId,
-            chunkId = event.chunkId,
-            recordCount = result.recordCount,
-            totalItems = result.totalItems,
-            resultCount = result.resultCount,
-            errorCount = result.errorCount,
-            inputCompressedBytes = event.compressedBytes,
-            inputUncompressedBytes = event.uncompressedBytes,
-            resultCompressedBytes = result.resultCompressedBytes,
-            resultUncompressedBytes = result.resultUncompressedBytes,
-            durationNanos = System.nanoTime() - startNanos,
-        ))
+        metricsListener.onEvent(
+            ChunkProcessingEvent.Completed(
+                runId = event.runId,
+                chunkId = event.chunkId,
+                recordCount = result.recordCount,
+                totalItems = result.totalItems,
+                resultCount = result.resultCount,
+                errorCount = result.errorCount,
+                inputCompressedBytes = event.compressedBytes,
+                inputUncompressedBytes = event.uncompressedBytes,
+                resultCompressedBytes = result.resultCompressedBytes,
+                resultUncompressedBytes = result.resultUncompressedBytes,
+                durationNanos = System.nanoTime() - startNanos,
+            ),
+        )
     }
 
-    private suspend fun <T> withMdc(event: SnapshotChunkReadyEvent, block: suspend () -> T): T =
-        withContext(MDCContext(mapOf(
-            "runId" to event.runId,
-            "chunkId" to event.chunkId,
-            "kafkaTopic" to "external-api.snapshot.chunk-ready",
-        ))) { block() }
+    private suspend fun <T> withMdc(event: SnapshotChunkReadyEvent, block: suspend () -> T): T = withContext(
+        MDCContext(
+            mapOf(
+                "runId" to event.runId,
+                "chunkId" to event.chunkId,
+                "kafkaTopic" to "external-api.snapshot.chunk-ready",
+            ),
+        ),
+    ) { block() }
 }
 
 private const val CHUNK_PROCESS_PERMITS: Int = 4

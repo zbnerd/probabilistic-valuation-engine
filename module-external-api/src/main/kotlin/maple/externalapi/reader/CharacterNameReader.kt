@@ -1,11 +1,11 @@
 package maple.externalapi.reader
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.springframework.stereotype.Component
 import java.io.BufferedInputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.zip.GZIPInputStream
+import org.springframework.stereotype.Component
 
 /**
  * Reads GZIP-compressed JSONL ranking-chunk files and returns the distinct set

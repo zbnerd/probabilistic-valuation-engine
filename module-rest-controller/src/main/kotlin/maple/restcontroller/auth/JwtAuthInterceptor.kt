@@ -60,7 +60,9 @@ class JwtAuthInterceptor(
         val header = request.getHeader("Authorization") ?: return null
         return if (header.startsWith(BEARER_PREFIX, ignoreCase = true)) {
             header.substring(BEARER_PREFIX_LENGTH).trim().takeIf { it.isNotBlank() }
-        } else null
+        } else {
+            null
+        }
     }
 
     private fun sendUnauthorized(response: HttpServletResponse, message: String) {

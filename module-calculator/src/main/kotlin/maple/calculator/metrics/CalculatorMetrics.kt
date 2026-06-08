@@ -1,6 +1,5 @@
 package maple.calculator.metrics
 
-import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
@@ -24,6 +23,7 @@ class CalculatorMetrics(registry: MeterRegistry) {
         .register(registry)
 
     @Volatile private var lastChunkUsersPerSec = 0.0
+
     @Volatile private var lastChunkItemsPerSec = 0.0
 
     init {

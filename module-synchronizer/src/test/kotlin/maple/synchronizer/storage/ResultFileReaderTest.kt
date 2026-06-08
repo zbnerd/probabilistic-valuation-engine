@@ -2,11 +2,11 @@ package maple.synchronizer.storage
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import java.math.BigDecimal
 import maple.expectation.error.exception.ArtifactNotFoundException
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
-import java.math.BigDecimal
 
 class ResultFileReaderTest {
 

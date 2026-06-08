@@ -1,19 +1,19 @@
 package maple.restcontroller.read
 
+import java.util.concurrent.TimeUnit
 import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.metrics.V6ReadMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.http.ResponseEntity
 import org.springframework.scheduling.annotation.Scheduled
-import java.util.concurrent.TimeUnit
 
 class BatchReadScheduler(
     private val buffer: LocalRequestBuffer,
     private val registry: InflightRequestRegistry,
     private val resolver: BatchResolver,
     private val metrics: V6ReadMetrics,
-    private val properties: V6ReadProperties
+    private val properties: V6ReadProperties,
 ) : SmartLifecycle {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -62,7 +62,7 @@ class BatchReadScheduler(
             registry.failAll(
                 ResponseEntity.status(503)
                     .header("Retry-After", "1")
-                    .build<Any>()
+                    .build<Any>(),
             )
         }
 

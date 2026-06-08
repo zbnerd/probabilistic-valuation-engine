@@ -1,12 +1,12 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.nio.file.Path
+import java.time.Clock
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
-import java.nio.file.Path
-import java.time.Clock
 
 /**
  * Single factory for [ChunkedSnapshotSink] across all endpoint phases.
@@ -27,14 +27,11 @@ class EndpointSinkFactory(
     private val rankingPublisher: SnapshotChunkEventPublisher,
     private val clock: Clock = Clock.systemUTC(),
 ) {
-    fun createForCharacterBasic(runDir: Path): ChunkedSnapshotSink =
-        build(runDir, "character-basic", characterBasicPublisher)
+    fun createForCharacterBasic(runDir: Path): ChunkedSnapshotSink = build(runDir, "character-basic", characterBasicPublisher)
 
-    fun createForItemEquipment(runDir: Path): ChunkedSnapshotSink =
-        build(runDir, "item-equipment", characterBasicPublisher)
+    fun createForItemEquipment(runDir: Path): ChunkedSnapshotSink = build(runDir, "item-equipment", characterBasicPublisher)
 
-    fun createForRanking(runDir: Path): ChunkedSnapshotSink =
-        build(runDir, "ranking-overall", rankingPublisher)
+    fun createForRanking(runDir: Path): ChunkedSnapshotSink = build(runDir, "ranking-overall", rankingPublisher)
 
     private fun build(
         runDir: Path,

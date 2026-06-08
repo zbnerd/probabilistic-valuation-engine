@@ -69,17 +69,15 @@ class CharacterBasicRepository(
         return jdbc.update(UPSERT_SQL, buildUpsertParams(runId, chunkId, batch))
     }
 
-    private fun buildUpsertParams(runId: String, chunkId: String, batch: List<BasicRecord>): MapSqlParameterSource {
-        return MapSqlParameterSource()
-            .addValue("runId", runId)
-            .addValue("chunkId", chunkId)
-            .addValue("userIgns", batch.map { it.userIgn }.toTypedArray())
-            .addValue("ocids", batch.map { it.ocid }.toTypedArray())
-            .addValue("worldNames", batch.map { it.worldName }.toTypedArray())
-            .addValue("characterClasses", batch.map { it.characterClass }.toTypedArray())
-            .addValue("characterLevels", batch.map { it.characterLevel }.toTypedArray())
-            .addValue("guildNames", batch.map { it.guildName }.toTypedArray())
-            .addValue("basicData", batch.map { it.compressedBody }.toTypedArray())
-            .addValue("documentHashes", batch.map { it.bodyHash }.toTypedArray())
-    }
+    private fun buildUpsertParams(runId: String, chunkId: String, batch: List<BasicRecord>): MapSqlParameterSource = MapSqlParameterSource()
+        .addValue("runId", runId)
+        .addValue("chunkId", chunkId)
+        .addValue("userIgns", batch.map { it.userIgn }.toTypedArray())
+        .addValue("ocids", batch.map { it.ocid }.toTypedArray())
+        .addValue("worldNames", batch.map { it.worldName }.toTypedArray())
+        .addValue("characterClasses", batch.map { it.characterClass }.toTypedArray())
+        .addValue("characterLevels", batch.map { it.characterLevel }.toTypedArray())
+        .addValue("guildNames", batch.map { it.guildName }.toTypedArray())
+        .addValue("basicData", batch.map { it.compressedBody }.toTypedArray())
+        .addValue("documentHashes", batch.map { it.bodyHash }.toTypedArray())
 }

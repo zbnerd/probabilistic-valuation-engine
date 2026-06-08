@@ -1,12 +1,12 @@
 package maple.auth.session
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.time.Duration
 import maple.expectation.core.domain.auth.Session
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Component
-import java.time.Duration
 
 @Component
 class SessionCacheService(

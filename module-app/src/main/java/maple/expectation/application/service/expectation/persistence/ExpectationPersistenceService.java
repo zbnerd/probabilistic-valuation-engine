@@ -71,15 +71,18 @@ public class ExpectationPersistenceService {
    */
   public void saveResultsSync(Long characterId, List<PresetExpectation> presets) {
     for (PresetExpectation preset : presets) {
-      maple.expectation.infrastructure.persistence.entity.EquipmentExpectationSummaryEntity summary =
-          maple.expectation.infrastructure.persistence.entity.EquipmentExpectationSummaryEntity.create(
-              characterId,
-              Integer.valueOf(preset.getPresetNo()),
-              java.math.BigDecimal.valueOf(preset.getTotalExpectedCost()),
-              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getBlackCubeCost()),
-              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getRedCubeCost()),
-              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getAdditionalCubeCost()),
-              java.math.BigDecimal.valueOf(preset.getCostBreakdown().getStarforceCost()));
+      maple.expectation.infrastructure.persistence.entity.EquipmentExpectationSummaryEntity
+          summary =
+              maple.expectation.infrastructure.persistence.entity.EquipmentExpectationSummaryEntity
+                  .create(
+                      characterId,
+                      Integer.valueOf(preset.getPresetNo()),
+                      java.math.BigDecimal.valueOf(preset.getTotalExpectedCost()),
+                      java.math.BigDecimal.valueOf(preset.getCostBreakdown().getBlackCubeCost()),
+                      java.math.BigDecimal.valueOf(preset.getCostBreakdown().getRedCubeCost()),
+                      java.math.BigDecimal.valueOf(
+                          preset.getCostBreakdown().getAdditionalCubeCost()),
+                      java.math.BigDecimal.valueOf(preset.getCostBreakdown().getStarforceCost()));
       summaryRepository.save(summary);
     }
     log.debug("[V4] 동기 DB 저장 완료: characterId={}, presets={}", characterId, presets.size());

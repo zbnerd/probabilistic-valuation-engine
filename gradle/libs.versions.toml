@@ -69,7 +69,7 @@ langchain4j = "0.29.0"
 gradle-test-retry = "1.6.0"
 spotbugs = "6.0.25"
 spotless = "6.25.0"
-foojay-resolver = "0.8.0"
+foojay-resolver = "0.10.0"
 
 # Jacoco
 jacoco = "0.8.11"

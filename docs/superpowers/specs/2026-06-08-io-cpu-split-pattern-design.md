@@ -4,7 +4,7 @@
 - Date: 2026-06-08
 - Owner: zbnerd
 - Issue: #1125
-- Related ADR: ADR-720
+- Related ADR: ADR-723
 - Blocks: #1128, #1129, #1130, #1131
 
 ## Goal
@@ -104,7 +104,7 @@ Phase 2.5: Virtual Thread + Semaphore(64) → CPU-bound에서 3.5× 회귀
 
 | 파일 | 형식 | 위치 |
 |---|---|---|
-| `ADR-720_io-cpu-split-pattern.md` | adr-conventions.md 5섹션 | `docs/01_ADR/` |
+| `ADR-723_io-cpu-split-pattern.md` | adr-conventions.md 5섹션 | `docs/01_ADR/` |
 | `async-concurrency.md` patch | §23 섹션 추가 | `docs/03_Technical_Guides/` |
 | (이 spec doc) | brainstorming 산출물 | `docs/superpowers/specs/2026-06-08-io-cpu-split-pattern-design.md` |
 
@@ -115,6 +115,7 @@ Phase 2.5: Virtual Thread + Semaphore(64) → CPU-bound에서 3.5× 회귀
 | IO/CPU 분리 패턴이 코드 컨벤션 또는 유틸리티로 정의됨 | Guide §23.1, §23.3 |
 | 기존 `Dispatchers.Default` 올바른 사용 사례를 참고 패턴으로 문서화 | Guide §23.4 |
 | 각 모듈에 적용 가능한 래핑 방식(withContext vs runBlocking)이 명확히 구분됨 | Guide §23.3 표 |
+| Saturation metric trigger (follow-up) | ADR §4 Result, 별도 issue |
 | 3.5x 회귀 선례 근거 | ADR §1 (Background) |
 | CPU-bound 분류 기준 | Guide §23.2 |
 | 안티 사례 | Guide §23.5 |
@@ -123,11 +124,13 @@ Phase 2.5: Virtual Thread + Semaphore(64) → CPU-bound에서 3.5× 회귀
 
 - **단위 테스트 없음** — 이 이슈는 문서/ADR만. 코드 변경 없음.
 - **검증 절차:**
-  1. `git log -- docs/01_ADR/ADR-720_io-cpu-split-pattern.md` — 파일 존재
+  1. `git log -- docs/01_ADR/ADR-723_io-cpu-split-pattern.md` — 파일 존재
   2. `git log -- docs/03_Technical_Guides/async-concurrency.md` — §23 섹션 추가
   3. 후속 이슈(1128-1131) PR 본문에 "References #1125, applies §23" 명시
   4. 부하테스트는 4개 머지 후 cold-miss 시나리오로 비교
      (RESET_VIEWS=1 + RESET_ACTIVE_JOBS=1, baseline 대비 throughput/latency)
+  5. Saturation metric trigger (ADR §4 Result/Evidence) 명시:
+     "ForkJoinPool.commonPool().activeThreadCount > coreCount * 2 지속 시 dedicated executor 분리 검토"
 
 ### PR Review Checklist
 
@@ -174,3 +177,4 @@ CPU-bound 코드 발췌 발견 시 → reviewer가 §23.2 표에 따라 offload 
 2. **#1128-#1131** — 4개 모듈에 §23 적용
 3. **#1127** — calculator parse/calc worker count 독립화 (1125와 디커플)
 4. (후속 ADR 후보) Dispatchers.Default saturation 측정 후 dedicated executor 분리 검토
+5. (후속 issue) `ForkJoinPool.commonPool()` active thread count → Prometheus expose (saturation metric)

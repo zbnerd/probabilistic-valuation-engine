@@ -7,6 +7,8 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.GZIPInputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import maple.expectation.util.GzipUtils
 import maple.expectation.util.HashUtils
 import maple.synchronizer.metrics.SynchronizerReaderMetrics
@@ -48,7 +50,8 @@ class BasicChunkFileReader(
         private const val DEFAULT_BATCH_SIZE = 1000
     }
 
-    fun read(objectKey: String): List<BasicRecord> {
+    // Issue #1129: CPU offload — JSON parse + GZIP compress + SHA-256 on Dispatchers.Default.
+    fun read(objectKey: String): List<BasicRecord> = runBlocking(Dispatchers.Default) {
         val path = Paths.get(basePath, objectKey)
         if (!Files.exists(path)) throw IllegalStateException("Chunk file not found: $path")
 
@@ -66,7 +69,7 @@ class BasicChunkFileReader(
             }
         }
         logChunkSummary(objectKey, records.size, parseErrors.get(), missingFields.get(), filtered.get())
-        return records
+        records
     }
 
     fun readInBatches(
@@ -80,31 +83,35 @@ class BasicChunkFileReader(
         val parseErrors = AtomicLong(0)
         val missingFields = AtomicLong(0)
         val filtered = AtomicLong(0)
-        GZIPInputStream(Files.newInputStream(path)).bufferedReader().use { reader ->
-            val batch = mutableListOf<BasicRecord>()
-            val seenOcids = mutableSetOf<String>()
-            var totalCount = 0
-            var line: String? = reader.readLine()
-            while (line != null) {
-                if (line.isNotBlank()) {
-                    val record = parseRecord(line, parseErrors, missingFields, filtered)
-                    if (record != null && seenOcids.add(record.ocid)) {
-                        batch.add(record)
-                        if (batch.size >= batchSize) {
-                            totalCount += batch.size
-                            handler(batch.toList())
-                            batch.clear()
+        // CPU section: parse + compress + hash on Dispatchers.Default. DB write (handler) on caller thread.
+        val (records, totalCount) = runBlocking(Dispatchers.Default) {
+            GZIPInputStream(Files.newInputStream(path)).bufferedReader().use { reader ->
+                val batch = mutableListOf<BasicRecord>()
+                val seenOcids = mutableSetOf<String>()
+                var totalCountInner = 0
+                var line: String? = reader.readLine()
+                while (line != null) {
+                    if (line.isNotBlank()) {
+                        val record = parseRecord(line, parseErrors, missingFields, filtered)
+                        if (record != null && seenOcids.add(record.ocid)) {
+                            batch.add(record)
+                            if (batch.size >= batchSize) {
+                                totalCountInner += batch.size
+                                handler(batch.toList())  // DB write on caller thread (not inside runBlocking)
+                                batch.clear()
+                            }
                         }
                     }
+                    line = reader.readLine()
                 }
-                line = reader.readLine()
+                if (batch.isNotEmpty()) {
+                    totalCountInner += batch.size
+                    handler(batch)
+                }
+                batch to totalCountInner
             }
-            if (batch.isNotEmpty()) {
-                totalCount += batch.size
-                handler(batch)
-            }
-            logChunkSummary(objectKey, totalCount, parseErrors.get(), missingFields.get(), filtered.get())
         }
+        logChunkSummary(objectKey, totalCount, parseErrors.get(), missingFields.get(), filtered.get())
     }
 
     private fun parseRecord(

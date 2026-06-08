@@ -1,5 +1,6 @@
 package maple.calculator
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.calculator.event.ChunkProcessingEvent
@@ -44,7 +45,11 @@ class CalculatorChunkProcessingCoordinatorTest {
     @BeforeEach
     fun setUp() {
         coordinator = CalculatorChunkProcessingCoordinator(
-            chunkProcessor, resultEventPublisher, objectStorage, metricsListener,
+            chunkProcessor = chunkProcessor,
+            resultEventPublisher = resultEventPublisher,
+            objectStorage = objectStorage,
+            metricsListener = metricsListener,
+            vtDispatcher = Dispatchers.Unconfined,
         )
     }
 

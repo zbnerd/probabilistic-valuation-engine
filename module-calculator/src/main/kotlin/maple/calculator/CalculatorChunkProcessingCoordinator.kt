@@ -1,8 +1,7 @@
 package maple.calculator
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.slf4j.MDCContext
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.SnapshotChunkReadyEvent
@@ -14,20 +13,26 @@ import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.storage.ObjectStorage
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
 
-/** Two concurrent chunk processors — assumes HikariCP `maximumPoolSize >= 4` to leave headroom for other DB-bound work. */
-private const val CONCURRENCY_PERMITS: Int = 2
-
+/**
+ * Coordinates chunk processing for calculator.
+ *
+ * Concurrency is bounded upstream by the listener container (4 threads) and by
+ * the pipeline's channel capacities; no internal Semaphore is required. Blocking
+ * disk-stat calls ([ObjectStorage.exists]) are wrapped in [withContext] on the
+ * virtual-thread dispatcher so they do not pin the Kafka listener platform thread.
+ */
 @Component
 class CalculatorChunkProcessingCoordinator(
     private val chunkProcessor: SnapshotChunkProcessor,
     private val resultEventPublisher: KafkaResultEventPublisher,
     private val objectStorage: ObjectStorage,
     private val metricsListener: CalculatorMetricsListener,
+    @Qualifier("vtDispatcher") private val vtDispatcher: CoroutineDispatcher,
 ) {
     private val log = LoggerFactory.getLogger(CalculatorChunkProcessingCoordinator::class.java)
-    private val concurrency = Semaphore(CONCURRENCY_PERMITS)
 
     suspend fun handle(event: SnapshotChunkReadyEvent) {
         if (event.endpoint != "item-equipment") {
@@ -37,21 +42,19 @@ class CalculatorChunkProcessingCoordinator(
         }
 
         withMdc(event) {
-            concurrency.withPermit {
-                if (!objectStorage.exists(event.objectKey)) {
-                    log.error("[Coordinator] source chunk not found: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, event.objectKey)
-                    metricsListener.onEvent(ChunkProcessingEvent.Skipped(event.runId, event.chunkId, "source_not_found"))
-                    return@withPermit
-                }
-
-                val resultObjectKey = resultObjectKeyFor(event)
-                if (objectStorage.exists(resultObjectKey)) {
-                    republishExistingResult(event, resultObjectKey)
-                    return@withPermit
-                }
-
-                executeChunk(event, resultObjectKey)
+            if (!withContext(vtDispatcher) { objectStorage.exists(event.objectKey) }) {
+                log.error("[Coordinator] source chunk not found: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, event.objectKey)
+                metricsListener.onEvent(ChunkProcessingEvent.Skipped(event.runId, event.chunkId, "source_not_found"))
+                return@withMdc
             }
+
+            val resultObjectKey = resultObjectKeyFor(event)
+            if (withContext(vtDispatcher) { objectStorage.exists(resultObjectKey) }) {
+                republishExistingResult(event, resultObjectKey)
+                return@withMdc
+            }
+
+            executeChunk(event, resultObjectKey)
         }
     }
 

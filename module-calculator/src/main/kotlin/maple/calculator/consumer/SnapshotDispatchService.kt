@@ -2,7 +2,6 @@ package maple.calculator.consumer
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import maple.calculator.CalculatorChunkProcessingCoordinator
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import org.slf4j.LoggerFactory
@@ -14,9 +13,9 @@ import org.springframework.stereotype.Service
  * Owns ACK/retry decisions for incoming snapshot chunks. The Kafka consumer
  * delegates here after deserialization so transport and policy are separate.
  *
- * `runBlocking` bridges the suspend `coordinator.handle` call from this
- * non-suspend dispatcher method. Blocking is bounded by
- * maxRetries × retryBackoffMs.
+ * Suspend (not runBlocking) so blocking file IO inside [coordinator.handle] can
+ * park the underlying virtual thread instead of pinning a Kafka listener
+ * platform thread. The retry loop is bounded by maxRetries × retryBackoffMs.
  */
 @Service
 class SnapshotDispatchService(
@@ -34,35 +33,33 @@ class SnapshotDispatchService(
      * If dispatch throws (retries exhausted), the exception propagates to Spring Kafka
      * DefaultErrorHandler → DLT. ACK is intentionally skipped in that case.
      */
-    fun dispatch(event: SnapshotChunkReadyEvent, ack: Acknowledgment?, label: String) {
-        runBlocking {
-            var attempt = 0
-            while (true) {
-                try {
-                    coordinator.handle(event)
-                    return@runBlocking
-                } catch (e: CancellationException) {
-                    // Per Kotlin coroutine convention: never swallow CancellationException.
-                    // Propagates to runBlocking → Spring (redelivery, not DLT).
-                    throw e
-                } catch (e: Exception) {
-                    attempt++
-                    if (attempt > maxRetries) {
-                        log.error(
-                            "[{}] Exhausted {} retries, propagating to DLT: runId={} chunkId={}",
-                            label, maxRetries, event.runId, event.chunkId, e,
-                        )
-                        throw e
-                    }
-                    log.warn(
-                        "[{}] Retry {}/{}: runId={} chunkId={}",
-                        label, attempt, maxRetries, event.runId, event.chunkId, e,
+    suspend fun dispatch(event: SnapshotChunkReadyEvent, ack: Acknowledgment?, label: String) {
+        var attempt = 0
+        while (true) {
+            try {
+                coordinator.handle(event)
+                runCatching { ack?.acknowledge() }
+                    .onFailure { log.warn("[{}] ACK failed: runId={} chunkId={}", label, event.runId, event.chunkId) }
+                return
+            } catch (e: CancellationException) {
+                // Per Kotlin coroutine convention: never swallow CancellationException.
+                // Propagates to Spring (redelivery, not DLT).
+                throw e
+            } catch (e: Exception) {
+                attempt++
+                if (attempt > maxRetries) {
+                    log.error(
+                        "[{}] Exhausted {} retries, propagating to DLT: runId={} chunkId={}",
+                        label, maxRetries, event.runId, event.chunkId, e,
                     )
-                    delay(retryBackoffMs)
+                    throw e
                 }
+                log.warn(
+                    "[{}] Retry {}/{}: runId={} chunkId={}",
+                    label, attempt, maxRetries, event.runId, event.chunkId, e,
+                )
+                delay(retryBackoffMs)
             }
         }
-        runCatching { ack?.acknowledge() }
-            .onFailure { log.warn("[{}] ACK failed: runId={} chunkId={}", label, event.runId, event.chunkId) }
     }
 }

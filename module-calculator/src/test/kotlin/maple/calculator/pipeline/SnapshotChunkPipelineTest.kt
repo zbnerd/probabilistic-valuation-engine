@@ -20,7 +20,7 @@ import maple.expectation.core.dto.v4.AddOption
 class SnapshotChunkPipelineTest {
 
     private val properties = PipelineProperties(workerCount = 2, channelCapacity = 16)
-    private val pipeline = SnapshotChunkPipeline(properties)
+    private val pipeline = SnapshotChunkPipeline(properties, kotlinx.coroutines.Dispatchers.Unconfined)
 
     @Test
     fun `run processes all lines and emits one result per FlatItem`() = runTest {

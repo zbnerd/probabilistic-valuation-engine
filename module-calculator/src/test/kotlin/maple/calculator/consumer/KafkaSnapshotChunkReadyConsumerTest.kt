@@ -3,6 +3,7 @@ package maple.calculator.consumer
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import kotlinx.coroutines.runBlocking
 import maple.calculator.parser.SnapshotEventParser
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import org.junit.jupiter.api.BeforeEach
@@ -51,14 +52,14 @@ class KafkaSnapshotChunkReadyConsumerTest {
     }
 
     @Test
-    fun `consume parses and delegates to dispatchService with Consumer label`() {
+    fun `consume parses and delegates to dispatchService with Consumer label`() = runBlocking {
         consumer.consume(messageJson, acknowledgment)
 
         verify(dispatchService, times(1)).dispatch(event, acknowledgment, "Consumer")
     }
 
     @Test
-    fun `consumeUrgent parses and delegates to dispatchService with URGENT label`() {
+    fun `consumeUrgent parses and delegates to dispatchService with URGENT label`() = runBlocking {
         consumer.consumeUrgent(messageJson, acknowledgment)
 
         verify(dispatchService, times(1)).dispatch(event, acknowledgment, "URGENT")

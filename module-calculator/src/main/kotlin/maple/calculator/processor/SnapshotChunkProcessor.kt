@@ -2,9 +2,11 @@ package maple.calculator.processor
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import maple.calculator.model.CalculationResult
 import maple.calculator.model.ChunkResult
 import maple.calculator.parser.FlatItem
@@ -18,6 +20,7 @@ import maple.expectation.core.dto.cube.CubeCalculationInput
 import maple.expectation.core.dto.v4.EquipmentItemConverter
 import maple.expectation.util.StringMaskingUtils
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
 
 @Component
@@ -30,6 +33,7 @@ class SnapshotChunkProcessor(
     private val objectMapper: ObjectMapper,
     private val sampleLogSerializer: SampleLogSerializer,
     private val resultWriter: CalculationResultWriter,
+    @Qualifier("vtDispatcher") private val vtDispatcher: CoroutineDispatcher,
 ) {
     private val log = LoggerFactory.getLogger(SnapshotChunkProcessor::class.java)
     private val sampleCount = AtomicInteger(0)
@@ -41,9 +45,12 @@ class SnapshotChunkProcessor(
         val calculatedCount = AtomicInteger(0)
         val errorCount = AtomicInteger(0)
 
+        // Stage 1 file read — blocking IO, parks a virtual thread instead of the listener
         val source: Flow<String> = flow {
-            objectStorage.openInputStream(event.objectKey).use { stream ->
-                emitAll(jsonlReader.readLines(stream))
+            withContext(vtDispatcher) {
+                objectStorage.openInputStream(event.objectKey).use { stream ->
+                    emitAll(jsonlReader.readLines(stream))
+                }
             }
         }
 
@@ -63,7 +70,10 @@ class SnapshotChunkProcessor(
             calculate = { flatItem -> calculateItem(flatItem, calculatedCount, errorCount) },
         )
 
-        val writeResult = resultWriter.write(resultObjectKey, resultFlow)
+        // Stage 4 file write — gzip-compress + disk IO on a virtual thread
+        val writeResult = withContext(vtDispatcher) {
+            resultWriter.write(resultObjectKey, resultFlow)
+        }
 
         return ChunkResult(
             recordCount = recordCount.get(),

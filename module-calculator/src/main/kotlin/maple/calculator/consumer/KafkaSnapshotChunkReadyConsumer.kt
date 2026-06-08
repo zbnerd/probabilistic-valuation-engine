@@ -18,7 +18,7 @@ class KafkaSnapshotChunkReadyConsumer(
         topics = ["\${calculator.kafka.snapshot-chunk-ready-topic}"],
         groupId = "\${calculator.kafka.consumer-group-id}",
     )
-    fun consume(message: String, acknowledgment: Acknowledgment) {
+    suspend fun consume(message: String, acknowledgment: Acknowledgment) {
         val event = eventParser.parse(message)
         log.info(
             "[Consumer] received chunk-ready: runId={} endpoint={} chunkId={} objectKey={} recordCount={}",
@@ -31,7 +31,7 @@ class KafkaSnapshotChunkReadyConsumer(
         topics = ["\${calculator.kafka.urgent-snapshot-chunk-ready-topic}"],
         groupId = "\${calculator.kafka.urgent-consumer-group-id}",
     )
-    fun consumeUrgent(message: String, acknowledgment: Acknowledgment) {
+    suspend fun consumeUrgent(message: String, acknowledgment: Acknowledgment) {
         val event = eventParser.parse(message)
         log.info(
             "[URGENT] received chunk-ready: runId={} endpoint={} chunkId={} objectKey={} recordCount={}",

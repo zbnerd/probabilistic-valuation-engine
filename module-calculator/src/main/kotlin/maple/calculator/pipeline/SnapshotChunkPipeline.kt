@@ -1,5 +1,6 @@
 package maple.calculator.pipeline
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -10,11 +11,13 @@ import maple.calculator.config.PipelineProperties
 import maple.calculator.model.CalculationResult
 import maple.calculator.parser.FlatItem
 import maple.calculator.parser.SnapshotChunkParser
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
 
 @Component
 class SnapshotChunkPipeline(
     private val properties: PipelineProperties,
+    @Qualifier("vtDispatcher") private val vtDispatcher: CoroutineDispatcher,
 ) {
 
     private val workerCount: Int = requireNotNull(properties.workerCount.takeIf { it > 0 }) {
@@ -25,7 +28,7 @@ class SnapshotChunkPipeline(
      * 3-stage coroutine pipeline: source (Flow<String>) → parse → calculate → Flow<CalculationResult>.
      *
      * Stages:
-     *  - Stage 1 (IO): reads from `source`, sends lines to internal lineChannel
+     *  - Stage 1 (IO via VT): reads from `source` (gzip + disk), sends lines to internal lineChannel
      *  - Stage 2 (Default, `workerCount` parallel): parses each line, sends FlatItems to itemChannel
      *  - Stage 3 (Default, `workerCount` parallel): calculates each item, sends results to resultChannel
      *
@@ -40,7 +43,7 @@ class SnapshotChunkPipeline(
         val itemChannel = Channel<FlatItem>(properties.channelCapacity)
         val resultChannel = Channel<CalculationResult>(properties.channelCapacity)
 
-        launch(Dispatchers.IO) {
+        launch(vtDispatcher) {
             source.collect { line -> lineChannel.send(line) }
             lineChannel.close()
         }

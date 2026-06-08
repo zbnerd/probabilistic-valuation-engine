@@ -39,9 +39,14 @@ class SnapshotChunkPipeline(
         parse: suspend (String) -> SnapshotChunkParser.Outcome,
         calculate: suspend (FlatItem) -> CalculationResult,
     ): Flow<CalculationResult> = coroutineScope {
-        val lineChannel = Channel<String>(properties.channelCapacity)
-        val itemChannel = Channel<FlatItem>(properties.channelCapacity)
-        val resultChannel = Channel<CalculationResult>(properties.channelCapacity)
+        // Unbounded channels: the consumer (resultWriter.write) is started AFTER this
+        // coroutineScope returns, so a bounded resultChannel would block stage 3 on send
+        // before the consumer exists, deadlocking the whole pipeline. Bounded would be
+        // safe only if the consumer subscribed before the producer stages — they don't
+        // here. Each chunk is bounded by recordCount (~500), so memory cost is small.
+        val lineChannel = Channel<String>(Channel.UNLIMITED)
+        val itemChannel = Channel<FlatItem>(Channel.UNLIMITED)
+        val resultChannel = Channel<CalculationResult>(Channel.UNLIMITED)
 
         launch(vtDispatcher) {
             source.collect { line -> lineChannel.send(line) }

@@ -69,7 +69,7 @@ data class ExecutorProperties(
     @DefaultValue val equipment: PoolConfig = PoolConfig(),
     @DefaultValue val preset: PoolConfig = PoolConfig(),
     @DefaultValue val alert: PoolConfig = PoolConfig(),
-    @DefaultValue val expectation: PoolConfig = PoolConfig(),
+    @DefaultValue val expectation: ExpectationConfig = ExpectationConfig(),
     @DefaultValue val async: PoolConfig = PoolConfig(),
     @DefaultValue val operational: PoolConfig = PoolConfig(),
     @DefaultValue val backfill: PoolConfig = PoolConfig(),
@@ -103,6 +103,34 @@ data class ExecutorProperties(
     }
 
     /**
+     * Expectation compute executor 설정 wrapper (IO + CPU 분리)
+     *
+     * <p>기존 `expectation: PoolConfig` 를 두 개의 sub-pool 로 분리:
+     * <ul>
+     *   <li>computeIo: IO-bound 외부 호출/DB read/write (legacy sizing 유지)
+     *   <li>computeCpu: CPU-bound JSON parse/serialization/계산
+     * </ul>
+     *
+     * <p>YAML:
+     * <pre>
+     * executor:
+     *   expectation:
+     *     compute-io:
+     *       core-pool-size: 4
+     *       max-pool-size: 8
+     *       queue-capacity: 200
+     *     compute-cpu:
+     *       core-pool-size: 4
+     *       max-pool-size: 8
+     *       queue-capacity: 1000
+     * </pre>
+     */
+    data class ExpectationConfig(
+        @DefaultValue val computeIo: PoolConfig = PoolConfig(corePoolSize = 4, maxPoolSize = 8, queueCapacity = 200),
+        @DefaultValue val computeCpu: PoolConfig = PoolConfig(corePoolSize = 4, maxPoolSize = 8, queueCapacity = 1000),
+    )
+
+    /**
      * 전체 설정 검증 (P2-25)
      *
      * @throws IllegalStateException 비율 위반 시
@@ -111,7 +139,8 @@ data class ExecutorProperties(
         equipment.validateRatio("equipment")
         preset.validateRatio("preset")
         alert.validateRatio("alert")
-        expectation.validateRatio("expectation")
+        expectation.computeIo.validateRatio("expectation.compute-io")
+        expectation.computeCpu.validateRatio("expectation.compute-cpu")
         async.validateRatio("async")
         operational.validateRatio("operational")
         backfill.validateRatio("backfill")

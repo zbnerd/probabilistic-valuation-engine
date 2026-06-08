@@ -226,7 +226,7 @@ Expected: 정확히 5개 매치 (1. Background / Problem, 2. Decision, 3. Trade-
 
 Run:
 ```bash
-grep -E "^### (Sensitivity|Trade-off|Risk|Non-Risk|Metrics|Observed Result)$" docs/01_ADR/ADR-723_io-cpu-split-pattern.md
+grep -E "^### (Sensitivity|Trade-off|Risk|Non-Risk|Metrics|Observed Result)" docs/01_ADR/ADR-723_io-cpu-split-pattern.md
 ```
 
 Expected: 6개 매치.

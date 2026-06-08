@@ -86,7 +86,7 @@ Phase 2.5: Virtual Thread + Semaphore(64) → CPU-bound에서 3.5× 회귀
 
 ### Non-Risk
 
-* **CPU 분류 모호성** — Algorithm-based threshold 표로 해결.
+* **CPU 분류 모호성** — Algorithm-based threshold 표 (async-concurrency.md §23.2 참조) 로 해결.
 * **이미 올바른 사례 부재** — `ResultReadyProjectionWorker.kt:123-130`, `SnapshotChunkProcessor.kt:60-75` 가 reference 로 존재.
 
 ---

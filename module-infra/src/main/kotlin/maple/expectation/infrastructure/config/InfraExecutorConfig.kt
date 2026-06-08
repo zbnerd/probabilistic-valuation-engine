@@ -26,7 +26,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
  * <p>포함 Bean:
  * <ul>
  *   <li>alertTaskExecutor, aiTaskExecutor, asyncExecutor (VT)
- *   <li>expectationComputeExecutor, operationalExecutor, backfillExecutor
+ *   <li>expectationComputeIoExecutor, expectationComputeCpuExecutor, operationalExecutor, backfillExecutor
  * </ul>
  *
  * @see CoreExecutorConfig
@@ -95,15 +95,15 @@ class InfraExecutorConfig(
     @Bean(name = ["asyncExecutor"])
     fun asyncExecutor(): ExecutorService = asyncVtExecutor
 
-    @Bean(name = ["expectationComputeExecutor"])
-    @ConditionalOnMissingBean(name = ["expectationComputeExecutor"])
-    fun expectationComputeExecutor(contextPropagatingDecorator: TaskDecorator, rejectionPolicyFactory: RejectionPolicyFactory, executorMetricsConfigurator: ExecutorMetricsConfigurator): Executor {
-        val config = executorProperties.expectation
+    @Bean(name = ["expectationComputeIoExecutor"])
+    @ConditionalOnMissingBean(name = ["expectationComputeIoExecutor"])
+    fun expectationComputeIoExecutor(contextPropagatingDecorator: TaskDecorator, rejectionPolicyFactory: RejectionPolicyFactory, executorMetricsConfigurator: ExecutorMetricsConfigurator): Executor {
+        val config = executorProperties.expectation.computeIo
         val executor = ThreadPoolTaskExecutor()
         executor.corePoolSize = config.corePoolSize
         executor.maxPoolSize = config.maxPoolSize
         executor.queueCapacity = config.queueCapacity
-        executor.setThreadNamePrefix("expectation-")
+        executor.setThreadNamePrefix("expectation-io-")
         executor.setAllowCoreThreadTimeOut(true)
         executor.setKeepAliveSeconds(30)
 
@@ -113,9 +113,33 @@ class InfraExecutorConfig(
         executor.setAwaitTerminationSeconds(30)
 
         executor.initialize()
-        executorMetricsConfigurator.registerExecutorMetrics(executor, "expectation.compute")
+        executorMetricsConfigurator.registerExecutorMetrics(executor, "expectation.compute-io")
 
-        log.info("[InfraExecutorConfig] expectationComputeExecutor initialized: core={}, max={}, queue={}", config.corePoolSize, config.maxPoolSize, config.queueCapacity)
+        log.info("[InfraExecutorConfig] expectationComputeIoExecutor initialized: core={}, max={}, queue={}", config.corePoolSize, config.maxPoolSize, config.queueCapacity)
+        return executor
+    }
+
+    @Bean(name = ["expectationComputeCpuExecutor"])
+    @ConditionalOnMissingBean(name = ["expectationComputeCpuExecutor"])
+    fun expectationComputeCpuExecutor(contextPropagatingDecorator: TaskDecorator, rejectionPolicyFactory: RejectionPolicyFactory, executorMetricsConfigurator: ExecutorMetricsConfigurator): Executor {
+        val config = executorProperties.expectation.computeCpu
+        val executor = ThreadPoolTaskExecutor()
+        executor.corePoolSize = config.corePoolSize
+        executor.maxPoolSize = config.maxPoolSize
+        executor.queueCapacity = config.queueCapacity
+        executor.setThreadNamePrefix("expectation-cpu-")
+        executor.setAllowCoreThreadTimeOut(true)
+        executor.setKeepAliveSeconds(30)
+
+        executor.setTaskDecorator(contextPropagatingDecorator)
+        executor.setRejectedExecutionHandler(rejectionPolicyFactory.createExpectationAbortPolicy())
+        executor.setWaitForTasksToCompleteOnShutdown(true)
+        executor.setAwaitTerminationSeconds(30)
+
+        executor.initialize()
+        executorMetricsConfigurator.registerExecutorMetrics(executor, "expectation.compute-cpu")
+
+        log.info("[InfraExecutorConfig] expectationComputeCpuExecutor initialized: core={}, max={}, queue={}", config.corePoolSize, config.maxPoolSize, config.queueCapacity)
         return executor
     }
 

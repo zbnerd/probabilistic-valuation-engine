@@ -66,7 +66,7 @@ module-infra config/
 | `defaultAsyncExecutor` | 4 | 8 | 200 | `@Async` fire-and-forget (기존 `async` 설정) |
 | `restApiControllerExecutor` | 4 | 8 | 200 | controller dispatch (default async 동일) |
 | `expectationComputeIoExecutor` | 4 | 8 | 5000 | IO-bound bulkhead (기존 `expectation` 설정) |
-| `expectationComputeCpuExecutor` | `availableProcessors` (default 4) | `availableProcessors` (default 4) | 1000 | CPU-bound (ItemCalculationExecutorConfig sizing 동일) |
+| `expectationComputeCpuExecutor` | `availableProcessors` (default 4) | `availableProcessors` * 2 (default 8) | 1000 | CPU-bound (ItemCalculationExecutorConfig sizing 동일) |
 
 ### Application YAML 변경
 
@@ -79,7 +79,7 @@ executor:
       queue-capacity: 5000
     compute-cpu:
       core-pool-size: ${availableProcessors:4}    # t3.small 2 vCPU → 4 fallback
-      max-pool-size: ${availableProcessors:4}     # conservative for prod
+      max-pool-size: ${availableProcessors:8}     # 1:2 ratio with core
       queue-capacity: 1000
   # (기존 async, alert, operational, backfill 변경 없음)
 ```

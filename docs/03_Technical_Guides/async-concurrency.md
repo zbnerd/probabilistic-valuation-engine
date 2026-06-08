@@ -326,7 +326,7 @@ CPU-bound 작업이 VT executor 의 carrier thread 를 pinning 하여 IO-bound V
 | 모듈 | 호출 컨텍스트 | 권장 패턴 |
 |---|---|---|
 | `module-external-api` | `CoroutineScope(dispatcher).future { ... }` 안 | `withContext(Dispatchers.Default) { cpuWork() }` |
-| `module-calculator` | `launch(Dispatchers.Default) { ... }` 안 (coroutine) | `withContext(Dispatchers.Default) { cpuWork() }` |
+| `module-calculator` | `launch(Dispatchers.Default) { ... }` 안 (coroutine) | `withContext(Dispatchers.Default) { cpuWork() }` (또는 YAML `parse-dispatcher`/`calc-dispatcher` override — `CoroutineDispatcherConverter` 경유, Issue #1127) |
 | `module-synchronizer` | VT-only, no CoroutineScope | `runBlocking(Dispatchers.Default) { cpuWork() }` |
 | `module-rest-controller` | `CompletableFuture.supplyAsync(..., executor)` | 컨텍스트 따라 위 1·2·3행 중 선택 |
 

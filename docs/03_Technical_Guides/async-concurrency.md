@@ -401,18 +401,24 @@ val results: List<CalculationResult> = runBlocking(Dispatchers.IO) {
 
 #### Anti-B: VT 에서 inline CPU-heavy
 
-**파일:** `module-external-api/src/main/kotlin/maple/externalapi/phase/OcidLookupPhase.kt:149-185` (참고용, #1128 에서 수정)
+**파일:** `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt:185-205` (참고용, #1128 에서 수정)
 
 ```kotlin
-// BAD: VT carrier 에서 JSON parse + GZIP 직접 실행
-fun fetchOcid(data: ByteArray): Ocid = executor.execute {
-    val tree = objectMapper.readTree(data)   // CPU pinning
-    val bytes = objectMapper.writeValueAsBytes(tree)  // CPU pinning
-    Ocid.from(tree)
-}
+// BAD: thenAcceptAsync callback 안에서 CPU-bound JSON parse + 직렬화
+private fun fetchAndCollectOcidAsync(
+    ign: String,
+    workerExecutor: ExecutorService,
+    ...
+): CompletableFuture<Void> =
+    clientPort.fetch(...)
+        .thenAcceptAsync({ data ->
+            val ocid = objectMapper.readTree(data).get("ocid")?.asText()  // CPU pinning
+            val json = String(objectMapper.writeValueAsBytes(mapOf(...)))  // CPU pinning
+            results.add(json)
+        }, workerExecutor)  // workerExecutor 는 VT executor
 ```
 
-**Fix:** `withContext(Dispatchers.Default) { ... }` 로 wrap
+**Fix:** `thenAcceptAsync` callback 전체를 `withContext(Dispatchers.Default) { ... }` 로 wrap 하거나, callback 안의 `objectMapper.*` 호출만 별도 `withContext` 로 offload.
 
 ### §23.6 PR Review Checklist
 

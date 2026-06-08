@@ -2,6 +2,8 @@ package maple.calculator
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.slf4j.MDCContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.SnapshotChunkReadyEvent
@@ -19,10 +21,17 @@ import org.springframework.stereotype.Component
 /**
  * Coordinates chunk processing for calculator.
  *
- * Concurrency is bounded upstream by the listener container (4 threads) and by
- * the pipeline's channel capacities; no internal Semaphore is required. Blocking
- * disk-stat calls ([ObjectStorage.exists]) are wrapped in [withContext] on the
- * virtual-thread dispatcher so they do not pin the Kafka listener platform thread.
+ * Caps in-flight chunk processing at [CHUNK_PROCESS_PERMITS] (= 4) to bound
+ * heap pressure. The Kafka listener container pulls up to 50 records per poll
+ * across 4 listener threads (200 chunks in flight at the transport level), but
+ * each chunk holds ~12 MB of pipeline state (Flow buffers + parsed objects +
+ * Caffeine entries + intermediate calc maps). Without this cap, 200 × 12 MB
+ * overflows the 2 GB JVM heap within minutes of restart.
+ *
+ * Disk-stat calls ([ObjectStorage.exists]) are wrapped in [withContext] on the
+ * virtual-thread dispatcher so they do not pin a Kafka listener platform
+ * thread. The semaphore is acquired only for the actual chunk processing, not
+ * for the cheap disk stats, so the stat check does not contend with the pipeline.
  */
 @Component
 class CalculatorChunkProcessingCoordinator(
@@ -33,6 +42,7 @@ class CalculatorChunkProcessingCoordinator(
     @Qualifier("vtDispatcher") private val vtDispatcher: CoroutineDispatcher,
 ) {
     private val log = LoggerFactory.getLogger(CalculatorChunkProcessingCoordinator::class.java)
+    private val pipelinePermits = Semaphore(CHUNK_PROCESS_PERMITS)
 
     suspend fun handle(event: SnapshotChunkReadyEvent) {
         if (event.endpoint != "item-equipment") {
@@ -54,7 +64,9 @@ class CalculatorChunkProcessingCoordinator(
                 return@withMdc
             }
 
-            executeChunk(event, resultObjectKey)
+            pipelinePermits.withPermit {
+                executeChunk(event, resultObjectKey)
+            }
         }
     }
 
@@ -142,3 +154,5 @@ class CalculatorChunkProcessingCoordinator(
             "kafkaTopic" to "external-api.snapshot.chunk-ready",
         ))) { block() }
 }
+
+private const val CHUNK_PROCESS_PERMITS: Int = 4

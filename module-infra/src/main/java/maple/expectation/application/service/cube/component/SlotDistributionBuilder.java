@@ -93,8 +93,9 @@ public class SlotDistributionBuilder {
         repository.findProbabilitiesByVersion(cubeType, level, part, grade, slot, tableVersion);
 
     // P0-3: 빈 테이블 = 해당 부위에서 해당 스탯 미지원 → 기여도 0 확률 100% 분포 반환
+    // Debug-level: called ~25,000 times per chunk; WARN dominated I/O and masked real warnings
     if (probs.isEmpty()) {
-      log.warn(
+      log.debug(
           "[DistBuilder] 데이터 없음: cubeType={}, level={}, part={}, grade={}, slot={}, stat={} → 기여도 0 분포 반환",
           cubeType,
           level,

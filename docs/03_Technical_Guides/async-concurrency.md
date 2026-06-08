@@ -444,6 +444,8 @@ CPU-bound 코드 발췌 발견 시 → reviewer 가 §23.2 표에 따라 offload
 - Spec: `docs/superpowers/specs/2026-06-08-io-cpu-split-pattern-design.md`
 - 후속: #1128 (external-api), #1129 (synchronizer), #1130 (rest-controller), #1131 (infra worker)
 
+---
+
 ## Technical Validity Check
 
 This guide would be invalidated if:

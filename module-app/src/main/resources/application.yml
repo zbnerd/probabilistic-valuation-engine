@@ -53,8 +53,6 @@ adaptive-micro-batch:
   batch-max-size: 50         # 배치 최대 크기
   chunk-size: 100            # IN 쿼리 최대 파라미터 수
   request-timeout-ms: 500    # 요청 타임아웃 (ms)
-  batch-channel-capacity: 200  # Batch Lane 채널 용량 (UNLIMITED → BUFFERED)
-  max-in-flight: 1000          # in-flight 최대 개수 (fail-fast 임계치)
 
 management:
   endpoints:
@@ -560,9 +558,14 @@ executor:
     max-pool-size: 4
     queue-capacity: 200
   expectation:
-    core-pool-size: 4
-    max-pool-size: 8
-    queue-capacity: 200
+    compute-io:
+      core-pool-size: 4
+      max-pool-size: 8
+      queue-capacity: 200
+    compute-cpu:
+      core-pool-size: 4
+      max-pool-size: 8
+      queue-capacity: 1000
   async:
     core-pool-size: 4
     max-pool-size: 8

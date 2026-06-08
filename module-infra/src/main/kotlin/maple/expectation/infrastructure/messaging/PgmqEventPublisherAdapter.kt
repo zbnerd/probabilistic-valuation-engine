@@ -32,7 +32,7 @@ class PgmqEventPublisherAdapter(
     private val pgmqClient: PgmqClient,
     private val executor: LogicExecutor,
     private val objectMapper: ObjectMapper,
-    @Qualifier("taskExecutor") private val taskExecutor: Executor,
+    @Qualifier("defaultAsyncExecutor") private val taskExecutor: Executor,
 ) : EventPublisher {
 
     override fun publish(topic: String, event: IntegrationEvent<*>) {

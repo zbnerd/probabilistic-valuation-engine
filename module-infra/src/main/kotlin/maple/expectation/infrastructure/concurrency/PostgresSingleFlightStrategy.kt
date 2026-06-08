@@ -51,7 +51,7 @@ class PostgresSingleFlightStrategy(
     @Qualifier("lockJdbcTemplate")
     private val jdbcTemplate: JdbcTemplate,
     private val logicExecutor: LogicExecutor,
-    @Qualifier("taskExecutor") private val taskExecutor: Executor,
+    @Qualifier("defaultAsyncExecutor") private val taskExecutor: Executor,
     @Qualifier("lockTransactionTemplate")
     private val lockTransactionTemplate: TransactionTemplate,
     private val lockMetrics: LockMetrics,

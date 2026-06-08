@@ -39,7 +39,7 @@ import org.springframework.stereotype.Component
 class EquipmentDataResolver(
     private val dataProvider: EquipmentDataProvider,
     private val dbWorker: EquipmentDbWorker,
-    @Qualifier("expectationComputeExecutor") private val expectationExecutor: Executor,
+    @Qualifier("expectationComputeIoExecutor") private val expectationExecutor: Executor,
     private val executor: LogicExecutor,
     meterRegistry: MeterRegistry,
 ) {

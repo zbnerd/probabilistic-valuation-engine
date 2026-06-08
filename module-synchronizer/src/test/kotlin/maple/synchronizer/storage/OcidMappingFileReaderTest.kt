@@ -2,7 +2,11 @@ package maple.synchronizer.storage
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import maple.expectation.error.exception.ArtifactNotFoundException
+import maple.synchronizer.metrics.SynchronizerReaderMetrics
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -22,9 +26,11 @@ class OcidMappingFileReaderTest {
 
     @BeforeEach
     fun setUp() {
+        val registry = SimpleMeterRegistry()
         reader = OcidMappingFileReader(
             storeBasePath = tempDir.toString(),
             objectMapper = objectMapper,
+            readerMetrics = SynchronizerReaderMetrics(registry),
         )
     }
 
@@ -46,13 +52,15 @@ class OcidMappingFileReaderTest {
     }
 
     @Test
-    fun `read returns empty list when file not found`() {
-        val mappings = reader.read("nonexistent/path.jsonl.gz")
-        assertThat(mappings).isEmpty()
+    fun `read throws ArtifactNotFoundException when file not found`() {
+        assertThatThrownBy { reader.read("nonexistent/path.jsonl.gz") }
+            .isInstanceOf(ArtifactNotFoundException::class.java)
+            .hasMessageContaining("OcidMappingFileReader")
+            .hasMessageContaining("nonexistent/path.jsonl.gz")
     }
 
     @Test
-    fun `read skips blank and malformed lines`() {
+    fun `read skips blank lines and counts records with missing fields`() {
         val gzPath = tempDir.resolve("test-mixed.jsonl.gz")
         writeGzipJsonl(gzPath, listOf(
             """{"userIgn":"PlayerA","ocid":"ocid-a"}""",
@@ -67,6 +75,18 @@ class OcidMappingFileReaderTest {
         assertThat(mappings).hasSize(2)
         assertThat(mappings[0].userIgn).isEqualTo("PlayerA")
         assertThat(mappings[1].userIgn).isEqualTo("PlayerB")
+    }
+
+    @Test
+    fun `read throws JsonProcessingException on malformed line`() {
+        val gzPath = tempDir.resolve("test-malformed.jsonl.gz")
+        writeGzipJsonl(gzPath, listOf(
+            """{"userIgn":"PlayerA","ocid":"ocid-a"}""",
+            """{not valid json""",
+        ))
+
+        assertThatThrownBy { reader.read("test-malformed.jsonl.gz") }
+            .isInstanceOf(com.fasterxml.jackson.core.JsonProcessingException::class.java)
     }
 
     private fun writeGzipJsonl(path: Path, lines: List<String>) {

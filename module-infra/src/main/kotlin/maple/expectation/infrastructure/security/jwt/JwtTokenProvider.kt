@@ -9,6 +9,8 @@ import java.time.Instant
 import java.util.Date
 import java.util.Optional
 import javax.crypto.SecretKey
+import maple.expectation.core.auth.JwtGeneratorPort
+import maple.expectation.core.auth.JwtParserPort
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
@@ -33,7 +35,7 @@ class JwtTokenProvider(
     @Value("\${auth.jwt.expiration}") private val expirationSeconds: Long,
     private val environment: Environment,
     private val executor: LogicExecutor,
-) {
+) : JwtParserPort, JwtGeneratorPort {
     private lateinit var secretKey: SecretKey
 
     companion object {
@@ -133,7 +135,7 @@ class JwtTokenProvider(
      * @param payload 토큰에 담을 페이로드
      * @return 생성된 JWT 토큰 문자열
      */
-    fun generateToken(payload: JwtPayload): String = Jwts.builder()
+    override fun generateToken(payload: JwtPayload): String = Jwts.builder()
         .issuer(ISSUER)
         .subject(payload.sessionId)
         .claim(CLAIM_FINGERPRINT, payload.fingerprint)
@@ -166,7 +168,7 @@ class JwtTokenProvider(
      * @param userIgn 캐릭터 닉네임
      * @return 생성된 JWT 토큰 문자열
      */
-    fun generateToken(sessionId: String, fingerprint: String, role: String, userIgn: String): String {
+    override fun generateToken(sessionId: String, fingerprint: String, role: String, userIgn: String): String {
         val payload = JwtPayload.of(sessionId, fingerprint, role, expirationSeconds, userIgn)
         return generateToken(payload)
     }
@@ -177,7 +179,7 @@ class JwtTokenProvider(
      * @param token JWT 토큰 문자열
      * @return 파싱된 JwtPayload (Optional)
      */
-    fun parseToken(token: String?): Optional<JwtPayload> = executor.executeOrDefault(
+    override fun parseToken(token: String?): Optional<JwtPayload> = executor.executeOrDefault(
         { parseTokenInternal(token) },
         Optional.empty(),
         TaskContext.of("JWT", "ParseToken", maskToken(token)),
@@ -280,7 +282,7 @@ class JwtTokenProvider(
      * @param token JWT 토큰 문자열
      * @return 유효 여부
      */
-    fun validateToken(token: String?): Boolean = parseToken(token).isPresent
+    override fun validateToken(token: String?): Boolean = parseToken(token).isPresent
 
     /**
      * 토큰의 기본 만료 시간(초)을 반환합니다.

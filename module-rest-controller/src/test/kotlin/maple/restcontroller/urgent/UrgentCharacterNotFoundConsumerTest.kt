@@ -1,6 +1,6 @@
 package maple.restcontroller.urgent
 
-import maple.restcontroller.read.ReadModelCacheService
+import maple.restcontroller.read.NegativeCacheService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import org.junit.jupiter.api.Test
@@ -9,10 +9,10 @@ import org.springframework.kafka.support.Acknowledgment
 
 class UrgentCharacterNotFoundConsumerTest {
 
-    private val cacheService: ReadModelCacheService = mock()
+    private val negativeCacheService: NegativeCacheService = mock()
     private val objectMapper = ObjectMapper().registerKotlinModule()
     private val acknowledgment: Acknowledgment = mock()
-    private val consumer = UrgentCharacterNotFoundConsumer(cacheService, objectMapper, 3600L)
+    private val consumer = UrgentCharacterNotFoundConsumer(negativeCacheService, objectMapper, 3600L)
 
     @Test
     fun `consume sets negative cache and acknowledges`() {
@@ -20,7 +20,7 @@ class UrgentCharacterNotFoundConsumerTest {
 
         consumer.consume(message, acknowledgment)
 
-        verify(cacheService).setNegativeCache("unknownChar", 3600L)
+        verify(negativeCacheService).setNegativeCache("unknownChar", 3600L)
         verify(acknowledgment).acknowledge()
     }
 
@@ -30,7 +30,7 @@ class UrgentCharacterNotFoundConsumerTest {
 
         consumer.consume(message, acknowledgment)
 
-        verify(cacheService, never()).setNegativeCache(any(), any())
+        verify(negativeCacheService, never()).setNegativeCache(any(), any())
         verify(acknowledgment).acknowledge()
     }
 }

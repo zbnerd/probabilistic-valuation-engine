@@ -1,36 +1,39 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import io.micrometer.core.instrument.Timer
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
+import maple.expectation.common.event.ChunkConsumedEvent
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
+import maple.synchronizer.event.ResultChunkEventPathBuilder
+import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
 import maple.synchronizer.metrics.SynchronizerMetrics
-import maple.synchronizer.processor.ChunkProcessInput
+import maple.core.domain.chunk.ChunkProcessInput
 import maple.synchronizer.processor.ChunkProcessor
-import maple.expectation.common.event.ChunkConsumedEvent
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
-import java.util.concurrent.Executors
+import maple.expectation.util.CompressionUtils
+import org.springframework.beans.factory.annotation.Qualifier
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Semaphore
 
 @Component
 class KafkaResultChunkConsumer(
     private val objectMapper: ObjectMapper,
     private val chunkProcessor: ChunkProcessor,
-    private val metrics: SynchronizerMetrics,
+    private val chunkMetricsListener: SynchronizerChunkMetricsListener,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
     private val consumedEventPublisher: KafkaChunkConsumedEventPublisher,
-) : ManagedLifecycle {
+    private val eventPathBuilder: ResultChunkEventPathBuilder,
+    @Qualifier("kafkaResultChunkExecutor") private val executor: ExecutorService,
+) {
     private val log = LoggerFactory.getLogger(KafkaResultChunkConsumer::class.java)
-    private val vtExecutor = Executors.newVirtualThreadPerTaskExecutor()
     private val processingPermit = Semaphore(2)
 
     @KafkaListener(
@@ -56,7 +59,7 @@ class KafkaResultChunkConsumer(
         log.info("[Synchronizer] received: runId={} chunkId={} objectKey={} results={}",
             runId, chunkId, event.objectKey, event.resultCount)
 
-        var chunkSample: Timer.Sample? = null
+        var startNanos: Long = 0
         chunkConsumerTemplate.submit(
             ChunkConsumerRequest(
                 logPrefix = "Synchronizer",
@@ -70,7 +73,7 @@ class KafkaResultChunkConsumer(
                 objectKey = event.objectKey,
                 acknowledgment = acknowledgment,
                 processingPermit = processingPermit,
-                executor = vtExecutor,
+                executor = executor,
                 processContext = TaskContext.of("Synchronizer", "ChunkProcess", chunkId),
                 lifecycleContext = TaskContext.of("Synchronizer", "ChunkLifecycle", chunkId),
                 mdcValues = mapOf("kafkaTopic" to (topic ?: event.eventType)),
@@ -83,49 +86,48 @@ class KafkaResultChunkConsumer(
                     ))
                 },
                 onAccepted = {
-                    chunkSample = Timer.start()
-                    metrics.incrementReceived()
-                    metrics.incrementProcessing()
+                    startNanos = System.nanoTime()
+                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Accepted(runId, chunkId))
                 },
                 onSuccess = {
-                    metrics.incrementProcessed()
-                    metrics.recordStatusTransition("SUCCESS")
-                    chunkSample?.stop(metrics.chunkTimer())
-                    metrics.recordChunkBytes(event.compressedBytes)
-                    recordPreUpsertVolume(event)
+                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Succeeded(
+                        runId = runId,
+                        chunkId = chunkId,
+                        compressedBytes = event.compressedBytes,
+                        uncompressedBytes = event.uncompressedBytes,
+                        resultCount = event.resultCount.toLong(),
+                        durationNanos = System.nanoTime() - startNanos,
+                    ))
+                    logPreUpsertVolume(event)
                     consumedEventPublisher.publish(ChunkConsumedEvent(
                         runId = runId,
                         endpoint = event.sourceEndpoint.ifBlank { "result" },
                         chunkId = chunkId,
                         objectKey = event.objectKey,
-                        sourceObjectKey = "runs/${runId}/${event.sourceEndpoint}/chunks/${chunkId}.jsonl.gz",
+                        sourceObjectKey = eventPathBuilder.sourceObjectKey(
+                            runId = runId,
+                            sourceEndpoint = event.sourceEndpoint.ifBlank { "result" },
+                            chunkId = chunkId,
+                        ),
                     ))
                 },
                 onFailure = { ex ->
-                    metrics.incrementFailed()
-                    metrics.recordStatusTransition("FAILED")
+                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Failed(runId, chunkId))
                     log.error("[Synchronizer] chunk processing failed: runId={} chunkId={}", runId, chunkId, ex)
                 },
-                onFinally = { metrics.decrementProcessing() },
+                onFinally = {
+                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Finally(runId, chunkId))
+                },
             ),
         )
     }
 
-    private fun recordPreUpsertVolume(event: CalculatorResultChunkReadyEvent) {
-        metrics.recordPreUpsertVolume(event.compressedBytes, event.uncompressedBytes, event.resultCount.toLong())
-        val ratio = if (event.compressedBytes > 0)
-            "%.2f".format(event.uncompressedBytes.toDouble() / event.compressedBytes.toDouble())
-        else "N/A"
+    private fun logPreUpsertVolume(event: CalculatorResultChunkReadyEvent) {
+        val ratio = CompressionUtils.ratioString(event.uncompressedBytes, event.compressedBytes)
         log.info(
             "[preUpsertVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",
             event.sourceRunId, event.sourceChunkId, event.compressedBytes, event.uncompressedBytes,
             event.resultCount, ratio,
         )
-    }
-
-    override val lifecyclePhase: Int = 100
-
-    override fun stopLifecycle() {
-        vtExecutor.close()
     }
 }

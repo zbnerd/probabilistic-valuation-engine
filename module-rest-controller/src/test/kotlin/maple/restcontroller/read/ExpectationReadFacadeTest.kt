@@ -1,8 +1,8 @@
 package maple.restcontroller.read
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
-import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.config.V6ReadProperties
+import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.popular.PopularCharacterService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -18,7 +18,9 @@ class ExpectationReadFacadeTest {
     private lateinit var registry: InflightRequestRegistry
     private lateinit var metrics: V6ReadMetrics
     private lateinit var facade: ExpectationReadFacade
-    private lateinit var cacheService: ReadModelCacheService
+    private lateinit var readModelCacheService: ReadModelCacheService
+    private lateinit var negativeCacheService: NegativeCacheService
+    private lateinit var urgentDedupService: UrgentDedupService
     private lateinit var popularCharacterService: PopularCharacterService
     private lateinit var properties: V6ReadProperties
 
@@ -27,10 +29,21 @@ class ExpectationReadFacadeTest {
         buffer = LocalRequestBuffer(100)
         registry = InflightRequestRegistry()
         metrics = V6ReadMetrics(meterRegistry, buffer, registry)
-        cacheService = mock()
+        readModelCacheService = mock()
+        negativeCacheService = mock()
+        urgentDedupService = mock()
         popularCharacterService = mock()
         properties = V6ReadProperties()
-        facade = ExpectationReadFacade(registry, buffer, metrics, cacheService, popularCharacterService, properties)
+        facade = ExpectationReadFacade(
+            registry,
+            buffer,
+            metrics,
+            readModelCacheService,
+            negativeCacheService,
+            urgentDedupService,
+            popularCharacterService,
+            properties,
+        )
     }
 
     private fun enqueue(ign: String, presetNo: Int = 1): DeferredResult<ResponseEntity<*>> {
@@ -40,7 +53,7 @@ class ExpectationReadFacadeTest {
     }
 
     @Test
-    fun `enqueue dedup miss offers to buffer`() {
+    fun `enqueue dedup miss offers to buffer and returns Queued`() {
         val deferred = enqueue("진격캐넌")
 
         assertThat(deferred).isNotNull
@@ -60,14 +73,16 @@ class ExpectationReadFacadeTest {
     }
 
     @Test
-    fun `enqueue sets 503 error when buffer is full`() {
+    fun `enqueue returns ServiceUnavailable when buffer is full and caller maps to 503`() {
         val smallBuffer = LocalRequestBuffer(1)
         val smallMetrics = V6ReadMetrics(SimpleMeterRegistry(), smallBuffer, registry)
         val fullFacade = ExpectationReadFacade(
             registry,
             smallBuffer,
             smallMetrics,
-            cacheService,
+            readModelCacheService,
+            negativeCacheService,
+            urgentDedupService,
             popularCharacterService,
             properties,
         )
@@ -76,9 +91,12 @@ class ExpectationReadFacadeTest {
         fullFacade.enqueue("a", 1, d1)
 
         val d2 = DeferredResult<ResponseEntity<*>>()
-        fullFacade.enqueue("b", 1, d2)
+        val result = fullFacade.enqueue("b", 1, d2)
 
         assertThat(smallMetrics.bufferRejectedTotal.count()).isEqualTo(1.0)
+        assertThat(result).isInstanceOf(EnqueueResult.ServiceUnavailable::class.java)
+        // Caller (controller) maps the result to a ResponseEntity and applies it.
+        d2.setErrorResult(EnqueueResponseMapper.toServiceUnavailableResponse(result as EnqueueResult.ServiceUnavailable))
         assertThat(d2.result).isNotNull
     }
 
@@ -89,5 +107,16 @@ class ExpectationReadFacadeTest {
 
         assertThat(buffer.size()).isEqualTo(2)
         assertThat(registry.size()).isEqualTo(2)
+    }
+
+    @Test
+    fun `dedup hit returns AlreadyInFlight`() {
+        val d1 = DeferredResult<ResponseEntity<*>>()
+        val first = facade.enqueue("a", 1, d1)
+        val d2 = DeferredResult<ResponseEntity<*>>()
+        val second = facade.enqueue("a", 1, d2)
+
+        assertThat(first).isInstanceOf(EnqueueResult.Queued::class.java)
+        assertThat(second).isInstanceOf(EnqueueResult.AlreadyInFlight::class.java)
     }
 }

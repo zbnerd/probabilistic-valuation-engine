@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
+import maple.externalapi.metrics.SchedulerMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.core.KafkaTemplate
 import java.util.concurrent.CompletableFuture
@@ -14,6 +15,7 @@ class KafkaSnapshotChunkEventPublisher(
     private val chunkReadyTopic: String,
     private val runCompletedTopic: String,
     private val runFailedTopic: String,
+    private val schedulerMetrics: SchedulerMetrics,
 ) : SnapshotChunkEventPublisher {
     private val log = LoggerFactory.getLogger(KafkaSnapshotChunkEventPublisher::class.java)
 
@@ -21,6 +23,7 @@ class KafkaSnapshotChunkEventPublisher(
         val payload = objectMapper.writeValueAsString(event)
         return kafkaTemplate.send(chunkReadyTopic, event.kafkaKey(), payload)
             .thenAccept {
+                schedulerMetrics.recordChunkPublished(event.recordCount)
                 log.info(
                     "[Event] published chunk-ready: runId={} endpoint={} chunkId={}",
                     event.runId,

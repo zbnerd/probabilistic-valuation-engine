@@ -11,7 +11,7 @@ import maple.expectation.infrastructure.ratelimit.ConsumeResult
 import maple.expectation.infrastructure.ratelimit.RateLimitContext
 import maple.expectation.infrastructure.ratelimit.RateLimitingFacade
 import maple.expectation.infrastructure.ratelimit.config.RateLimitProperties
-import maple.expectation.infrastructure.security.AuthenticatedUser
+import maple.expectation.core.domain.model.security.AuthenticatedUser
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder

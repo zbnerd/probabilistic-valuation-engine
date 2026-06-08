@@ -1,7 +1,9 @@
 package maple.expectation.infrastructure.config
 
 import io.micrometer.core.instrument.MeterRegistry
+import jakarta.annotation.PreDestroy
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.Semaphore
@@ -49,6 +51,8 @@ import org.springframework.context.annotation.Configuration
 class EventConsumerConfig {
 
     private val log = LoggerFactory.getLogger(EventConsumerConfig::class.java)
+    private val highPriorityVtExecutor: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
+    private val lowPriorityVtExecutor: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
     /**
      * Properties for high-priority event consumer.
@@ -111,7 +115,6 @@ class EventConsumerConfig {
         logicExecutor: LogicExecutor,
     ): Executor {
         val semaphore = Semaphore(props.maxConcurrent)
-        val virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor()
 
         return Executor { runnable ->
             var acquired = false
@@ -126,7 +129,7 @@ class EventConsumerConfig {
                         )
                         throw RejectedExecutionException("High priority event semaphore timeout")
                     }
-                    virtualThreadExecutor.execute(runnable)
+                    highPriorityVtExecutor.execute(runnable)
                     null
                 },
                 Runnable {
@@ -158,7 +161,6 @@ class EventConsumerConfig {
         logicExecutor: LogicExecutor,
     ): Executor {
         val semaphore = Semaphore(props.maxConcurrent)
-        val virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor()
 
         return Executor { runnable ->
             var acquired = false
@@ -173,7 +175,7 @@ class EventConsumerConfig {
                         )
                         throw RejectedExecutionException("Low priority event semaphore timeout")
                     }
-                    virtualThreadExecutor.execute(runnable)
+                    lowPriorityVtExecutor.execute(runnable)
                     null
                 },
                 Runnable {
@@ -184,5 +186,17 @@ class EventConsumerConfig {
                 TaskContext.of("EventConsumer", "LowPrioritySubmit"),
             )
         }
+    }
+
+    @PreDestroy
+    fun shutdownEventExecutors() {
+        listOf(highPriorityVtExecutor, lowPriorityVtExecutor).forEach { es ->
+            es.shutdown()
+            if (!es.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("[EventConsumerConfig] VT executor did not terminate in 5s, forcing shutdown")
+                es.shutdownNow()
+            }
+        }
+        log.info("[EventConsumerConfig] Event consumer executors shut down")
     }
 }

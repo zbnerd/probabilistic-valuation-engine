@@ -1,12 +1,11 @@
 package maple.calculator
 
-import io.micrometer.core.instrument.Timer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.calculator.event.ChunkProcessingEvent
 import maple.calculator.event.KafkaResultEventPublisher
-import maple.calculator.metrics.CalculatorMetrics
-import maple.calculator.metrics.CalculatorVolumeMetrics
+import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.storage.ObjectStorage
@@ -18,12 +17,12 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.check
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import java.time.Duration
 import java.time.Instant
 
 @ExtendWith(MockitoExtension::class)
@@ -39,20 +38,18 @@ class CalculatorChunkProcessingCoordinatorTest {
     private lateinit var objectStorage: ObjectStorage
 
     @Mock
-    private lateinit var metrics: CalculatorMetrics
-
-    @Mock
-    private lateinit var volumeMetrics: CalculatorVolumeMetrics
-
-    @Mock
-    private lateinit var chunkTimer: Timer
+    private lateinit var metricsListener: CalculatorMetricsListener
 
     private lateinit var coordinator: CalculatorChunkProcessingCoordinator
 
     @BeforeEach
     fun setUp() {
         coordinator = CalculatorChunkProcessingCoordinator(
-            chunkProcessor, resultEventPublisher, objectStorage, metrics, volumeMetrics,
+            chunkProcessor = chunkProcessor,
+            resultEventPublisher = resultEventPublisher,
+            objectStorage = objectStorage,
+            metricsListener = metricsListener,
+            vtDispatcher = Dispatchers.Unconfined,
         )
     }
 
@@ -88,7 +85,6 @@ class CalculatorChunkProcessingCoordinatorTest {
         whenever(objectStorage.exists(event.objectKey)).thenReturn(true)
         whenever(objectStorage.exists(coordinator.resultObjectKeyFor(event))).thenReturn(false)
         whenever(chunkProcessor.process(any(), any())).thenReturn(chunkResult())
-        whenever(metrics.timer()).thenReturn(chunkTimer)
     }
 
     @Test
@@ -98,7 +94,10 @@ class CalculatorChunkProcessingCoordinatorTest {
         coordinator.handle(event)
 
         verify(chunkProcessor, never()).process(any(), any())
-        verify(metrics).recordChunkSkippedEndpoint()
+        val captor = argumentCaptor<ChunkProcessingEvent>()
+        verify(metricsListener).onEvent(captor.capture())
+        assertThat(captor.firstValue).isInstanceOf(ChunkProcessingEvent.Skipped::class.java)
+        assertThat((captor.firstValue as ChunkProcessingEvent.Skipped).reason).isEqualTo("endpoint_mismatch")
     }
 
     @Test
@@ -109,7 +108,10 @@ class CalculatorChunkProcessingCoordinatorTest {
         coordinator.handle(event)
 
         verify(chunkProcessor, never()).process(any(), any())
-        verify(metrics).recordChunkSkippedNotFound()
+        val captor = argumentCaptor<ChunkProcessingEvent>()
+        verify(metricsListener).onEvent(captor.capture())
+        assertThat(captor.firstValue).isInstanceOf(ChunkProcessingEvent.Skipped::class.java)
+        assertThat((captor.firstValue as ChunkProcessingEvent.Skipped).reason).isEqualTo("source_not_found")
     }
 
     @Test
@@ -121,7 +123,10 @@ class CalculatorChunkProcessingCoordinatorTest {
         coordinator.handle(event)
 
         verify(chunkProcessor, never()).process(any(), any())
-        verify(metrics).recordChunkSkippedIdempotent()
+        val captor = argumentCaptor<ChunkProcessingEvent>()
+        verify(metricsListener).onEvent(captor.capture())
+        assertThat(captor.firstValue).isInstanceOf(ChunkProcessingEvent.Skipped::class.java)
+        assertThat((captor.firstValue as ChunkProcessingEvent.Skipped).reason).isEqualTo("result_exists")
         verify(resultEventPublisher).publishChunkReady(any())
     }
 
@@ -134,39 +139,34 @@ class CalculatorChunkProcessingCoordinatorTest {
 
         verify(chunkProcessor).process(any(), any())
         verify(resultEventPublisher).publishChunkReady(any())
-        verify(metrics).recordChunkProcessed()
-        verify(chunkTimer).record(any<Duration>())
+        val captor = argumentCaptor<ChunkProcessingEvent>()
+        verify(metricsListener).onEvent(captor.capture())
+        assertThat(captor.firstValue).isInstanceOf(ChunkProcessingEvent.Completed::class.java)
     }
 
     @Test
-    fun `records volume metrics on success`() = runBlocking {
+    fun `completed event contains correct volume and processing data`() = runBlocking {
         val event = testEvent()
         val result = chunkResult()
         setupHappyPath(event)
 
         coordinator.handle(event)
 
-        verify(volumeMetrics).recordInput(event.compressedBytes, event.uncompressedBytes)
-        verify(volumeMetrics).recordResult(result.resultCompressedBytes, result.resultUncompressedBytes, result.resultCount.toLong())
+        val captor = argumentCaptor<ChunkProcessingEvent>()
+        verify(metricsListener).onEvent(captor.capture())
+        val completed = captor.firstValue as ChunkProcessingEvent.Completed
+        assertThat(completed.recordCount).isEqualTo(100)
+        assertThat(completed.totalItems).isEqualTo(500)
+        assertThat(completed.resultCount).isEqualTo(480)
+        assertThat(completed.errorCount).isEqualTo(20)
+        assertThat(completed.inputCompressedBytes).isEqualTo(1000L)
+        assertThat(completed.inputUncompressedBytes).isEqualTo(5000L)
+        assertThat(completed.resultCompressedBytes).isEqualTo(2000L)
+        assertThat(completed.resultUncompressedBytes).isEqualTo(10000L)
     }
 
     @Test
-    fun `records chunk-level metrics on success`() = runBlocking {
-        val event = testEvent()
-        setupHappyPath(event)
-
-        coordinator.handle(event)
-
-        verify(metrics).recordChunkProcessed()
-        verify(metrics).recordUsers(100)
-        verify(metrics).recordItems(500)
-        verify(metrics).recordCalculated(480)
-        verify(metrics).recordErrors(20)
-        verify(metrics).recordChunkRates(any(), any(), any())
-    }
-
-    @Test
-    fun `records failure metric when processor throws`() = runBlocking {
+    fun `records failure event when processor throws`() = runBlocking {
         val event = testEvent()
         whenever(objectStorage.exists(event.objectKey)).thenReturn(true)
         whenever(objectStorage.exists(coordinator.resultObjectKeyFor(event))).thenReturn(false)
@@ -177,9 +177,10 @@ class CalculatorChunkProcessingCoordinatorTest {
         }.isInstanceOf(RuntimeException::class.java)
             .hasMessage("boom")
 
-        verify(metrics).recordChunkFailed()
+        val captor = argumentCaptor<ChunkProcessingEvent>()
+        verify(metricsListener).onEvent(captor.capture())
+        assertThat(captor.firstValue).isInstanceOf(ChunkProcessingEvent.Failed::class.java)
         verify(resultEventPublisher, never()).publishChunkReady(any())
-        verify(metrics, never()).recordChunkProcessed()
     }
 
     @Test

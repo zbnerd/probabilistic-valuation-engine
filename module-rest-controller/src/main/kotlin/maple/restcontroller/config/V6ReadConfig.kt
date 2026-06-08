@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import maple.restcontroller.metrics.V6ReadMetrics
 import maple.restcontroller.popular.PopularCharacterService
+import maple.restcontroller.popular.port.out.PopularCharacterRedisPort
 import maple.restcontroller.ranking.EquipmentRankingCacheService
 import maple.restcontroller.ranking.EquipmentRankingQueryService
 import maple.restcontroller.ranking.EquipmentRankingService
@@ -46,14 +47,26 @@ class V6ReadConfig(
     @Bean
     fun readModelQueryService(
         jdbc: NamedParameterJdbcTemplate,
-        objectMapper: ObjectMapper
-    ): ReadModelQueryService = ReadModelQueryService(jdbc, objectMapper)
+        documentExtractor: ReadModelDocumentExtractor,
+    ): ReadModelQueryService = ReadModelQueryService(jdbc, documentExtractor)
 
     @Bean
     fun readModelCacheService(
         redisTemplate: StringRedisTemplate,
-        objectMapper: ObjectMapper
-    ): ReadModelCacheService = ReadModelCacheService(redisTemplate, objectMapper, properties)
+        objectMapper: ObjectMapper,
+        urgentDedupService: UrgentDedupService,
+    ): ReadModelCacheService = ReadModelCacheService(redisTemplate, objectMapper, properties, urgentDedupService)
+
+    @Bean
+    fun urgentDedupService(
+        redisTemplate: StringRedisTemplate,
+    ): UrgentDedupService = UrgentDedupService(redisTemplate, properties)
+
+    @Bean
+    fun negativeCacheService(
+        redisTemplate: StringRedisTemplate,
+        urgentDedupService: UrgentDedupService,
+    ): NegativeCacheService = NegativeCacheService(redisTemplate, urgentDedupService)
 
     @Bean
     fun equipmentRankingCacheService(
@@ -73,37 +86,55 @@ class V6ReadConfig(
 
     @Bean
     fun popularCharacterService(
-        redisTemplate: StringRedisTemplate
-    ): PopularCharacterService = PopularCharacterService(redisTemplate, properties)
+        redisPort: PopularCharacterRedisPort
+    ): PopularCharacterService = PopularCharacterService(redisPort, properties)
 
     @Bean
     fun expectationReadFacade(
         registry: InflightRequestRegistry,
         buffer: LocalRequestBuffer,
         metrics: V6ReadMetrics,
-        cacheService: ReadModelCacheService,
+        readModelCacheService: ReadModelCacheService,
+        negativeCacheService: NegativeCacheService,
+        urgentDedupService: UrgentDedupService,
         popularCharacterService: PopularCharacterService
     ): ExpectationReadFacade = ExpectationReadFacade(
         registry,
         buffer,
         metrics,
-        cacheService,
+        readModelCacheService,
+        negativeCacheService,
+        urgentDedupService,
         popularCharacterService,
         properties,
+    )
+
+    @Bean
+    fun batchResolver(
+        readModelCacheService: ReadModelCacheService,
+        negativeCacheService: NegativeCacheService,
+        urgentDedupService: UrgentDedupService,
+        queryService: ReadModelQueryService,
+        v6ReadMetrics: V6ReadMetrics,
+        urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>
+    ): BatchResolver = BatchResolver(
+        readModelCacheService,
+        negativeCacheService,
+        urgentDedupService,
+        queryService,
+        urgentPublisherProvider.ifAvailable,
+        properties,
+        v6ReadMetrics,
     )
 
     @Bean
     fun batchReadScheduler(
         buffer: LocalRequestBuffer,
         registry: InflightRequestRegistry,
-        queryService: ReadModelQueryService,
-        cacheService: ReadModelCacheService,
+        resolver: BatchResolver,
         v6ReadMetrics: V6ReadMetrics,
-        urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>
     ): BatchReadScheduler = BatchReadScheduler(
-        buffer, registry, queryService, cacheService,
-        urgentPublisherProvider.ifAvailable,
-        v6ReadMetrics, properties
+        buffer, registry, resolver, v6ReadMetrics, properties
     )
 
     @Bean

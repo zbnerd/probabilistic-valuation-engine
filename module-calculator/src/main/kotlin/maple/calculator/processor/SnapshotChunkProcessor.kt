@@ -2,87 +2,80 @@ package maple.calculator.processor
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-import maple.calculator.config.PipelineProperties
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import maple.calculator.model.CalculationResult
 import maple.calculator.model.ChunkResult
-import maple.calculator.parser.SnapshotEquipmentParser
+import maple.calculator.parser.FlatItem
+import maple.calculator.parser.SnapshotChunkParser
+import maple.calculator.pipeline.SnapshotChunkPipeline
 import maple.calculator.reader.GzipJsonlSnapshotRecordReader
 import maple.calculator.storage.ObjectStorage
 import maple.calculator.writer.CalculationResultWriter
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.core.dto.cube.CubeCalculationInput
-import maple.expectation.core.dto.v4.EquipmentItem
 import maple.expectation.core.dto.v4.EquipmentItemConverter
 import maple.expectation.util.StringMaskingUtils
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
 
 @Component
 class SnapshotChunkProcessor(
     private val objectStorage: ObjectStorage,
     private val jsonlReader: GzipJsonlSnapshotRecordReader,
-    private val equipmentParser: SnapshotEquipmentParser,
+    private val parser: SnapshotChunkParser,
+    private val pipeline: SnapshotChunkPipeline,
     private val calculationCache: CalculationCache,
     private val objectMapper: ObjectMapper,
-    private val properties: PipelineProperties,
+    private val sampleLogSerializer: SampleLogSerializer,
     private val resultWriter: CalculationResultWriter,
+    @Qualifier("vtDispatcher") private val vtDispatcher: CoroutineDispatcher,
 ) {
     private val log = LoggerFactory.getLogger(SnapshotChunkProcessor::class.java)
     private val sampleCount = AtomicInteger(0)
-    private val workerCount: Int = requireNotNull(properties.workerCount.takeIf { it > 0 }) {
-        "calculator.pipeline.worker-count must be positive: ${properties.workerCount}"
-    }
 
-    data class FlatItem(
-        val ocid: String,
-        val presetNo: Int,
-        val item: EquipmentItem,
-    )
-
-    suspend fun process(event: SnapshotChunkReadyEvent, resultObjectKey: String): ChunkResult = coroutineScope {
-        val lineChannel = Channel<String>(properties.channelCapacity)
-        val itemChannel = Channel<FlatItem>(properties.channelCapacity)
-        val resultChannel = Channel<CalculationResult>(properties.channelCapacity)
+    suspend fun process(event: SnapshotChunkReadyEvent, resultObjectKey: String): ChunkResult {
         val recordCount = AtomicInteger(0)
         val successCount = AtomicInteger(0)
         val totalItems = AtomicInteger(0)
         val calculatedCount = AtomicInteger(0)
         val errorCount = AtomicInteger(0)
 
-        launch(Dispatchers.IO) { readLines(event.objectKey, lineChannel) }
-
-        launch {
-            coroutineScope {
-                repeat(workerCount) {
-                    launch(Dispatchers.Default) {
-                        parseLines(lineChannel, itemChannel, recordCount, successCount, totalItems)
-                    }
+        // Stage 1 file read — blocking IO, parks a virtual thread instead of the listener
+        val source: Flow<String> = flow {
+            withContext(vtDispatcher) {
+                objectStorage.openInputStream(event.objectKey).use { stream ->
+                    emitAll(jsonlReader.readLines(stream))
                 }
             }
-            itemChannel.close()
         }
 
-        launch {
-            coroutineScope {
-                repeat(workerCount) {
-                    launch(Dispatchers.Default) {
-                        processItems(itemChannel, resultChannel, calculatedCount, errorCount)
+        val resultFlow = pipeline.run(
+            source = source,
+            parse = { line ->
+                recordCount.incrementAndGet()
+                when (val outcome = parser.parse(line)) {
+                    SnapshotChunkParser.Outcome.Skipped -> outcome
+                    is SnapshotChunkParser.Outcome.Parsed -> {
+                        successCount.incrementAndGet()
+                        totalItems.addAndGet(outcome.items.size)
+                        outcome
                     }
                 }
-            }
-            resultChannel.close()
+            },
+            calculate = { flatItem -> calculateItem(flatItem, calculatedCount, errorCount) },
+        )
+
+        // Stage 4 file write — gzip-compress + disk IO on a virtual thread
+        val writeResult = withContext(vtDispatcher) {
+            resultWriter.write(resultObjectKey, resultFlow)
         }
 
-        val writeResult = async(Dispatchers.IO) {
-            resultWriter.write(resultObjectKey, resultChannel)
-        }.await()
-
-        ChunkResult(
+        return ChunkResult(
             recordCount = recordCount.get(),
             successCount = successCount.get(),
             totalItems = totalItems.get(),
@@ -95,70 +88,35 @@ class SnapshotChunkProcessor(
         )
     }
 
-    private suspend fun readLines(
-        objectKey: String,
-        channel: Channel<String>,
-    ) {
-        objectStorage.openInputStream(objectKey).use { stream ->
-            jsonlReader.readLines(stream).collect { line ->
-                channel.send(line)
-            }
-        }
-        channel.close()
-    }
-
-    private suspend fun parseLines(
-        lineChannel: Channel<String>,
-        itemChannel: Channel<FlatItem>,
-        recordCount: AtomicInteger,
-        successCount: AtomicInteger,
-        totalItems: AtomicInteger,
-    ) {
-        for (line in lineChannel) {
-            recordCount.incrementAndGet()
-            val node = objectMapper.readTree(line)
-            if (node.path("status").asText() != "SUCCESS") continue
-            val body = node.path("body").takeIf { !it.isMissingNode && !it.isNull } ?: continue
-            val ocid = node.path("key").asText("")
-            successCount.incrementAndGet()
-
-            for ((presetNo, items) in equipmentParser.parseAllPresets(body)) {
-                for (item in items) {
-                    totalItems.incrementAndGet()
-                    itemChannel.send(FlatItem(ocid, presetNo, item))
-                }
-            }
-        }
-    }
-
-    private suspend fun processItems(
-        itemChannel: Channel<FlatItem>,
-        resultChannel: Channel<CalculationResult>,
+    private fun calculateItem(
+        flatItem: FlatItem,
         calculatedCount: AtomicInteger,
         errorCount: AtomicInteger,
-    ) {
-        for (flatItem in itemChannel) {
-            val result = calculateItem(flatItem)
-            if (result.status == "ERROR") {
-                errorCount.incrementAndGet()
-            } else {
-                calculatedCount.incrementAndGet()
-            }
-            resultChannel.send(result)
+    ): CalculationResult {
+        val result = runCatching {
+            val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
+            val componentCosts = calculateComponentCosts(cubeInput, flatItem.presetNo)
+            val status = if (componentCosts.hasAnyCost) "SUCCESS" else "SKIPPED"
+            val successResult = EquipmentCalculationInputConverter.toCalculationResult(
+                flatItem.ocid, flatItem.presetNo, cubeInput, componentCosts, status, null,
+            )
+            logSample(successResult)
+            successResult
+        }.getOrElse { ex ->
+            val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
+            log.warn(
+                "Calculation error: ocid={} preset={}: {}",
+                StringMaskingUtils.maskOcid(flatItem.ocid),
+                flatItem.presetNo,
+                ex.message,
+            )
+            EquipmentCalculationInputConverter.toCalculationResult(
+                flatItem.ocid, flatItem.presetNo, cubeInput, CalculationCache.ComponentCosts.empty(), "ERROR", ex.message,
+            )
         }
-    }
 
-    private fun calculateItem(flatItem: FlatItem): CalculationResult = runCatching {
-        val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
-        val componentCosts = calculateComponentCosts(cubeInput, flatItem.presetNo)
-        val status = if (componentCosts.hasAnyCost) "SUCCESS" else "SKIPPED"
-        val result = EquipmentCalculationInputConverter.toCalculationResult(flatItem.ocid, flatItem.presetNo, cubeInput, componentCosts, status, null)
-        logSample(result)
-        result
-    }.getOrElse { ex ->
-        val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
-        log.warn("Calculation error: ocid={} preset={}: {}", StringMaskingUtils.maskOcid(flatItem.ocid), flatItem.presetNo, ex.message)
-        EquipmentCalculationInputConverter.toCalculationResult(flatItem.ocid, flatItem.presetNo, cubeInput, CalculationCache.ComponentCosts.empty(), "ERROR", ex.message)
+        if (result.status == "ERROR") errorCount.incrementAndGet() else calculatedCount.incrementAndGet()
+        return result
     }
 
     private fun calculateComponentCosts(cubeInput: CubeCalculationInput, presetNo: Int): CalculationCache.ComponentCosts {
@@ -168,7 +126,7 @@ class SnapshotChunkProcessor(
 
     private fun logSample(result: CalculationResult) {
         if (sampleCount.incrementAndGet() <= 10) {
-            log.debug("[SAMPLE] {}", objectMapper.writeValueAsString(result))
+            log.debug("[SAMPLE] {}", sampleLogSerializer.serialize(result))
         }
     }
 }

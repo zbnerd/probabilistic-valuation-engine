@@ -107,19 +107,12 @@ class DlqReplayWorker(
 
         if (untracked.isEmpty()) return
 
-        for (msgId in untracked) {
-            insertTracking(queueName, msgId)
-        }
+        jdbcTemplate.batchUpdate(
+            "INSERT INTO dlq_replay_meta (queue_name, message_id, replay_count, first_failed_at) VALUES (?, ?, 0, NOW()) ON CONFLICT DO NOTHING",
+            untracked.map { arrayOf<Any>(queueName, it) },
+        )
 
         log.info("[DlqReplayWorker] Discovered {} new DLQ messages in {}", untracked.size, queueName)
-    }
-
-    private fun insertTracking(queueName: String, messageId: Long) {
-        jdbcTemplate.update(
-            "INSERT INTO dlq_replay_meta (queue_name, message_id, replay_count, first_failed_at) VALUES (?, ?, 0, NOW()) ON CONFLICT DO NOTHING",
-            queueName,
-            messageId,
-        )
     }
 
     /**

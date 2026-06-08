@@ -1,7 +1,7 @@
 package maple.expectation.integration.repository
 
-import maple.expectation.domain.repository.MemberRepository
-import maple.expectation.domain.v2.Member
+import maple.expectation.infrastructure.persistence.repository.MemberRepository
+import maple.expectation.infrastructure.persistence.entity.MemberEntity
 import maple.expectation.test.RepositoryIntegrationTestBase
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
@@ -282,8 +282,8 @@ class MemberRepositoryIntegrationTest : RepositoryIntegrationTestBase() {
      *
      * <p>Member의 private constructor에 접근하기 위해 리플렉션 사용
      */
-    private fun createTestMember(uuid: String, initialPoint: Long): Member {
-        val constructor = Member::class.java.getDeclaredConstructor(String::class.java, Long::class.java)
+    private fun createTestMember(uuid: String, initialPoint: Long): MemberEntity {
+        val constructor = MemberEntity::class.java.getDeclaredConstructor(String::class.java, Long::class.java)
         constructor.isAccessible = true
         return constructor.newInstance(uuid, initialPoint)
     }

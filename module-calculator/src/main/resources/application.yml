@@ -2,6 +2,8 @@ server:
   port: 8082
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 6m
   application:
     name: calculator
   main:
@@ -14,8 +16,12 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: earliest
       enable-auto-commit: false
+      max-poll-records: 50            # bound batch size; keeps poll loop responsive
+      max-poll-interval-ms: 10800000  # 3h; covers full item-equipment cycle (default 5min too tight)
     listener:
       ack-mode: manual
+      concurrency: 4
+      missing-topics-fatal: false     # tolerate topic absent at startup
 
 calculator:
   kafka:
@@ -24,6 +30,8 @@ calculator:
     consumer-group-id: calculator-snapshot-chunk-processor
     urgent-snapshot-chunk-ready-topic: external-api.urgent.snapshot.chunk-ready
     urgent-consumer-group-id: calculator-urgent-chunk-processor
+    consumer-max-retries: 3
+    consumer-retry-backoff-ms: 500
   store:
     input-base-path: ../data
   cleanup:

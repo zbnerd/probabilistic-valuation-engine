@@ -1,16 +1,17 @@
 package maple.expectation.infrastructure.event
 
+import jakarta.annotation.PreDestroy
 import java.lang.reflect.Method
 import java.util.ArrayList
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
-import java.util.concurrent.Executors
 import maple.expectation.core.domain.event.IntegrationEvent
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.EventProcessingException
 import maple.expectation.event.EventHandler
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -21,7 +22,8 @@ class EventDispatcher(
     @Value("\${app.event.dispatcher.async:true}") private val enableAsync: Boolean,
 ) {
     private val logger = LoggerFactory.getLogger(EventDispatcher::class.java)
-    private val virtualThreadExecutor: Executor = if (enableAsync) Executors.newVirtualThreadPerTaskExecutor() else Executor { it.run() }
+    private val exec = if (enableAsync) VirtualThreadExecutorManager("EventDispatcher") else null
+    private val virtualThreadExecutor: Executor = exec?.executor ?: Executor { it.run() }
     private val handlers: MutableMap<Class<*>, MutableList<HandlerMethod>> = ConcurrentHashMap()
 
     init {
@@ -172,4 +174,7 @@ class EventDispatcher(
             method.isAccessible = true
         }
     }
+
+    @PreDestroy
+    fun shutdown() = exec?.shutdown()
 }

@@ -2,6 +2,8 @@ server:
   port: 8081
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 6m
   application:
     name: external-api-collector
   main:
@@ -33,19 +35,22 @@ external-api:
   rate-limit:
     permits-per-second: ${EXTERNAL_API_RATE_LIMIT_PERMITS_PER_SECOND:250}
     ocid-lookup-permits-per-second: 400
+  concurrency:
+    max-in-flight: ${EXTERNAL_API_CONCURRENCY_MAX_IN_FLIGHT:100}
+    urgent-max-concurrent: ${EXTERNAL_API_URGENT_MAX_CONCURRENT:30}
   batch-size: 1000
   store:
     base-path: ../data
   cleanup:
-    enabled: false                    # enable to activate cleanup scheduler
+    enabled: true                     # enable to activate cleanup scheduler
     dry-run: false                    # true = log candidates without deleting
     interval-ms: 21600000             # 6 hours between cleanup cycles
     max-delete-runs-per-cycle: 10     # max runs deleted per cycle
     max-delete-bytes-per-cycle: 53687091200  # 50GB max deleted per cycle
     max-runtime-seconds: 300          # hard wall-clock limit per cycle
     runs:
-      keep-recent: 5                  # always keep the 5 most recent runs
-      keep-within-hours: 12           # keep runs newer than 12 hours
+      keep-recent: 2                  # always keep the 2 most recent runs
+      keep-within-hours: 3            # keep runs newer than 3 hours
     consumed:
       enabled: true                   # enable consumed-chunk auto-deletion
       interval-ms: 3600000            # 1 hour between batch deletes
@@ -84,6 +89,12 @@ external-api:
     enabled: true
     max-pages: 3000
     permits-per-second: 50
+
+auth:
+  kafka:
+    character-fetch-request-topic: auth-character-fetch-request
+    character-fetch-response-topic: auth-character-fetch-response
+    request-consumer-group-id: module-external-api-auth-consumer
 
 management:
   endpoints:

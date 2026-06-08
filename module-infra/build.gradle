@@ -98,6 +98,9 @@ dependencies {
 	// Spring Batch (for equipment refresh job)
 	implementation(libs.spring.boot.starter.batch)
 
+	// Spring Kafka
+	implementation 'org.springframework.kafka:spring-kafka'
+
 	// JWT
 	implementation(libs.jjwt.api)
 	runtimeOnly(libs.jjwt.impl)
@@ -105,6 +108,7 @@ dependencies {
 
 	testImplementation(libs.spring.boot.starter.test)
 	testImplementation(libs.mockito.kotlin)
+	testImplementation(libs.kotlinx.coroutines.test)
 
 	// Integration Test Dependencies
 	integrationTestImplementation(libs.spring.boot.starter.test)

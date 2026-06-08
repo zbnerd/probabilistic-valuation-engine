@@ -3,13 +3,10 @@ package maple.expectation.infrastructure.alert.channel
 import maple.expectation.infrastructure.alert.factory.MessageFactory
 import maple.expectation.infrastructure.alert.message.AlertMessage
 import maple.expectation.infrastructure.config.AlertFeatureProperties
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.MediaType
-import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.WebClientRequestException
@@ -49,7 +46,6 @@ import org.springframework.web.reactive.function.client.WebClientRequestExceptio
 )
 class DiscordAlertChannel(
     @Qualifier("alertWebClient") private val alertWebClient: WebClient,
-    private val executor: LogicExecutor,
     private val alertFeatureProperties: AlertFeatureProperties,
     private val messageFactory: MessageFactory,
 ) : AlertChannel {
@@ -63,63 +59,45 @@ class DiscordAlertChannel(
             return false
         }
 
-        return executor.executeWithFallback(
-            { sendToDiscord(message) },
-            { e -> handleWebClientException(message, e) },
-            TaskContext.of("AlertChannel", "Discord", message.getTitle()),
-        )
+        sendToDiscord(message)
+        return true // fire-and-forget
     }
 
     /**
-     * Send alert to Discord webhook.
+     * Send alert to Discord webhook (fire-and-forget).
      *
-     * <p>Wrapped by LogicExecutor.executeWithFallback() which handles WebClientRequestException with
-     * logging and returns false.
-     *
-     * <p>ADR-039 Fix: Added {@code ContentType.APPLICATION_JSON} to match Discord webhook wire
-     * format.
+     * Uses .subscribe() for non-blocking async publish.
+     * Success/failure handled via subscribe callbacks.
      */
-    private fun sendToDiscord(message: AlertMessage): Boolean {
-        val response: ResponseEntity<Void>? = alertWebClient
+    private fun sendToDiscord(message: AlertMessage) {
+        alertWebClient
             .post()
             .uri(message.getWebhookUrl())
-            .contentType(MediaType.APPLICATION_JSON) // ADR-039 Fix
+            .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(messageFactory.toDiscordPayload(message))
             .retrieve()
             .toBodilessEntity()
-            .block()
-
-        val success = response?.statusCode?.is2xxSuccessful == true
-
-        if (success && log.isInfoEnabled) {
-            log.info(
-                "[DiscordAlertChannel] Alert sent successfully to {}: {}",
-                message.getTitle(),
-                response.statusCode,
+            .subscribe(
+                { response ->
+                    if (response.statusCode.is2xxSuccessful) {
+                        log.info("[DiscordAlertChannel] Alert sent successfully to {}: {}", message.getTitle(), response.statusCode)
+                    } else {
+                        log.warn("[DiscordAlertChannel] Alert failed with status {}: {}", message.getTitle(), response.statusCode)
+                    }
+                },
+                { error -> handleWebClientException(message, error) },
             )
-        } else if (!success && log.isWarnEnabled) {
-            log.warn(
-                "[DiscordAlertChannel] Alert failed with status {}: {}",
-                message.getTitle(),
-                response?.statusCode,
-            )
-        }
-
-        return success
     }
 
     /**
-     * Recovery handler for WebClient exceptions.
-     *
-     * <p>Called by LogicExecutor.executeWithFallback() when an exception occurs.
+     * Error handler for Discord webhook failures.
      */
-    private fun handleWebClientException(message: AlertMessage, e: Throwable): Boolean {
+    private fun handleWebClientException(message: AlertMessage, e: Throwable) {
         if (e is WebClientRequestException) {
             log.warn("[DiscordAlertChannel] Discord webhook request failed: {}", e.message)
         } else {
             log.error("[DiscordAlertChannel] Unexpected error sending alert: {}", e.message, e)
         }
-        return false
     }
 
     override fun getChannelName(): String = "discord"

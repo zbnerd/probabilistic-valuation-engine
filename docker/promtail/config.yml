@@ -1,28 +1,59 @@
+# Promtail config for main pipeline stack
+# Pushes to Loki. Source: logstash_json-encoded Spring Boot logs.
+
 server:
   http_listen_port: 9080
   grpc_listen_port: 0
+  log_level: info
 
 positions:
   filename: /tmp/positions.yaml
 
 clients:
   - url: http://loki:3100/loki/api/v1/push
+    batchwait: 1s
+    batchsize: 1048576
 
 scrape_configs:
-  - job_name: maple_logs
+  # 3 active Spring Boot modules (external-api, calculator, synchronizer)
+  # host mount: . -> /var/log/app, so module-{name}/logs/*.log
+  - job_name: module_logs
     static_configs:
-      - targets:
-          - localhost
+      - targets: [localhost]
         labels:
+          job: module-logs
           app: maple-expectation
-          job: varlogs
-          __path__: /var/log/app/*.log
+          __path__: /var/log/app/module-*/logs/*.log
+    pipeline_stages:
+      # Extract module name from path → label
+      - regex:
+          expression: '/var/log/app/(?P<module>module-[a-z-]+)/logs/.*'
+      - labels:
+          module:
+      # Parse logstash JSON encoder output
+      - json:
+          expressions:
+            level: level
+            logger_name: logger_name
+            thread_name: thread_name
+            timestamp: timestamp
+            message: message
+      - labels:
+          level:
+          logger_name:
+          thread_name:
+      - timestamp:
+          source: timestamp
+          format: '2006-01-02T15:04:05.999999999Z07:00'
+      # Optional: drop noisy stacktrace-only lines, keep message as the line content
+      - output:
+          source: message
 
-  - job_name: mysql_slow_query
+  # Pipeline artifact run logs (if external-api writes per-run logs)
+  - job_name: artifact_logs
     static_configs:
-      - targets:
-          - localhost
+      - targets: [localhost]
         labels:
-          app: mysql-db
-          job: slow-query
-          __path__: /var/log/mysql/mysql-slow.log
+          job: artifact-logs
+          app: maple-expectation
+          __path__: /var/log/data/runs/**/*.log

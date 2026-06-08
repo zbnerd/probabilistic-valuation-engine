@@ -6,46 +6,9 @@ import maple.expectation.core.domain.event.IntegrationEvent
 /**
  * Strategy interface for event publishing.
  *
- * <p><strong>Strategy Pattern:</strong> Concrete implementations (PGMQ, Kafka) are interchangeable
- * via configuration. This enables OCP compliance - open for extension (new publishers), closed for
- * modification (existing code unchanged).
- *
- * <p><strong>DIP Compliance:</strong> Business logic depends on this abstraction, not concrete
- * PGMQ/Kafka implementations.
- *
- * <p><strong>Usage Example:</strong>
- *
- * <pre>{@code
- * // Business code (depends on abstraction)
- * @Service
- * class NexonDataCollector {
- *     private val eventPublisher: EventPublisher  // Interface, not concrete class
- *
- *     fun collect(ocid: String) {
- *         val event: IntegrationEvent<CharacterData> = ...
- *         eventPublisher.publish("character-data", event)  // Polymorphic call
- *     }
- * }
- *
- * // Configuration (selects implementation)
- * @Configuration
- * class MessagingConfig {
- *     @Bean
- *     @ConditionalOnProperty(name = ["app.event-publisher.type"], havingValue = "pgmq")
- *     fun pgmqEventPublisher(): EventPublisher {
- *         return PgmqEventPublisher(...)
- *     }
- *
- *     @Bean
- *     @ConditionalOnProperty(name = ["app.event-publisher.type"], havingValue = "kafka")
- *     fun kafkaEventPublisher(): EventPublisher {
- *         return KafkaEventPublisher(...)
- *     }
- * }
- * }</pre>
- *
- * @see maple.expectation.infrastructure.messaging.PgmqStreamPublisher
- * @see ADR-018 Strategy Pattern for ACL
+ * <p>Concrete adapters (any message broker) are interchangeable via
+ * configuration. Business logic depends on this abstraction, not on
+ * concrete publisher implementations.
  */
 interface EventPublisher {
 
@@ -85,5 +48,5 @@ interface EventPublisher {
      * @param event Event to publish
      * @return CompletableFuture that completes when published
      */
-    fun publishAsync(topic: String, event: IntegrationEvent<*>): CompletableFuture<Void> = CompletableFuture.runAsync { publish(topic, event) }
+    fun publishAsync(topic: String, event: IntegrationEvent<*>): CompletableFuture<Void>
 }

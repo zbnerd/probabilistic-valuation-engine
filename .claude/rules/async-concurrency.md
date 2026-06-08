@@ -41,3 +41,22 @@
 - Advisory/distributed lock은 보호할 작업이 완료될 때까지 유지
 - `executeWithLock`에서 `CompletableFuture` 반환하면 lock이 async 작업 전에 해제됨
 - 항상 확인: unlock 시점이 비즈니스 효과 발생 **이후**인가?
+
+## Concurrency Adapter Rule
+
+새 코드에서 동시성 기본형(primitive)이 필요하면 `module-infra/concurrency/` 어댑터 사용:
+
+| 필요 | 어댑터 |
+|------|--------|
+| @PreDestroy / drain / shutdown | `LifecycleComponent` |
+| 과부하 시 fast-fail | `BackpressureLimiter` |
+| 동시 실행 N개 제한 | `BoundedSemaphore` |
+| 특정 executor에 작업 제출 | `ExecutorSelector` |
+| Fire-and-forget 스레드 | `ThreadLauncher` |
+| 느린 async chain 감지 | `AsyncGuard` |
+
+**호출부에서 금지** (리뷰어가 확인):
+- `new Thread()` / `Thread.ofPlatform().start { }`
+- `ForkJoinPool.commonPool()` 직접 사용
+- `Executors.newXxx()` 직접 사용 (`ConcurrencyConfiguration` 경유)
+- `@PreDestroy` 직접 작성 (`LifecycleComponent` 상속)

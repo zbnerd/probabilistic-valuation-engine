@@ -62,3 +62,16 @@ expectation:
       not-found-topic: urgent-character-not-found
       negative-cache-ttl-seconds: 3600            # 1 hour
       pending-ttl-seconds: 30                     # urgent dedup TTL
+
+auth:
+  kafka:
+    character-fetch-request-topic: auth-character-fetch-request
+    character-fetch-response-topic: auth-character-fetch-response
+    response-consumer-group-id: module-auth-response-consumer
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: 3600
+  fingerprint:
+    secret: ${AUTH_FINGERPRINT_SECRET:default-dev-secret-change-me}
+  session:
+    ttl-seconds: 3600

@@ -7,7 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import maple.expectation.application.service.calculator.PotentialCalculator;
 import maple.expectation.core.domain.model.AlertMessage;
 import maple.expectation.core.domain.model.AlertPriority;
-import maple.expectation.core.domain.model.CharacterId;
+import maple.expectation.core.domain.model.character.CharacterId;
 import maple.expectation.core.domain.model.CubeRate;
 import maple.expectation.core.domain.model.PotentialStat;
 import maple.expectation.core.domain.model.equipment.CharacterEquipment;
@@ -18,9 +18,9 @@ import maple.expectation.core.port.out.EquipmentDataPort;
 import maple.expectation.core.port.out.ItemPricePort;
 import maple.expectation.core.port.out.PotentialStatPort;
 import maple.expectation.core.port.out.ShutdownDataPersistencePort;
-import maple.expectation.domain.repository.CharacterEquipmentRepository;
-import maple.expectation.domain.repository.CubeProbabilityRepository;
-import maple.expectation.domain.v2.CubeProbability;
+import maple.expectation.infrastructure.persistence.repository.CharacterEquipmentRepository;
+import maple.expectation.infrastructure.persistence.repository.CubeProbabilityRepository;
+import maple.expectation.infrastructure.persistence.entity.CubeProbability;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -84,7 +84,7 @@ public class CorePortAdapterConfig {
             .map(
                 p ->
                     new CubeRate(
-                        mapToCoreCubeType(p.getCubeType()),
+                        p.getCubeType(),
                         p.getOptionName(),
                         p.getRate(),
                         p.getSlot(),
@@ -100,7 +100,7 @@ public class CorePortAdapterConfig {
             .map(
                 p ->
                     new CubeRate(
-                        mapToCoreCubeType(p.getCubeType()),
+                        p.getCubeType(),
                         p.getOptionName(),
                         p.getRate(),
                         p.getSlot(),
@@ -266,10 +266,5 @@ public class CorePortAdapterConfig {
   private static maple.expectation.core.domain.model.character.CharacterId mapToLegacyCharacterId(
       CharacterId coreId) {
     return maple.expectation.core.domain.model.character.CharacterId.of(coreId.value());
-  }
-
-  private static maple.expectation.core.domain.model.CubeType mapToCoreCubeType(
-      maple.expectation.domain.v2.CubeType legacyType) {
-    return legacyType.toCore();
   }
 }

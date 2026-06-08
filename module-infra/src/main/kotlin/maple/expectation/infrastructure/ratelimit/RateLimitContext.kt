@@ -1,7 +1,7 @@
 package maple.expectation.infrastructure.ratelimit
 
 import java.util.Optional
-import maple.expectation.infrastructure.security.AuthenticatedUser
+import maple.expectation.core.domain.model.security.AuthenticatedUser
 
 data class RateLimitContext(
     val clientIp: String,

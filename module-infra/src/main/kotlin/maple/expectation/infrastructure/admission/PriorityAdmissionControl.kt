@@ -148,10 +148,8 @@ class PriorityAdmissionControl(
         }
 
         // 🔥 PRIORITY QUEUE: Higher priority items processed first
-        val offered = admissionQueue.offer(request)
-
-        if (!offered) {
-            // 🔥 CRITICAL: Queue full → FAST REJECT (no blocking)
+        // Size check before offer — PriorityBlockingQueue.offer() never returns false (grows unbounded)
+        if (admissionQueue.size >= properties.maxQueueSize) {
             queueFullCounter.increment()
             admissionRejectedCounter.increment()
             future.completeExceptionally(
@@ -161,6 +159,7 @@ class PriorityAdmissionControl(
             return future
         }
 
+        admissionQueue.offer(request)
         return future
     }
 

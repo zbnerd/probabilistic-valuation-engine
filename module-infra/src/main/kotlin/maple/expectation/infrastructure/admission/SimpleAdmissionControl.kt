@@ -10,6 +10,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import jakarta.annotation.PreDestroy
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
@@ -143,31 +144,35 @@ class SimpleAdmissionControl(
                 // 🔥 SEMAPHORE: Limit in-flight executions
                 semaphore.acquire()
                 inFlight.incrementAndGet()
-
-                executeTask(task)
+                try {
+                    executeTask(task)
+                } finally {
+                    semaphore.release()
+                    inFlight.decrementAndGet()
+                }
             }, TaskContext.of("SimpleAdmissionControl", "Worker"))
         }
     }
 
     private fun <T> executeTask(task: AdmissionTask<T>) {
-        executor.executeWithFinally(
-            {
+        executor.executeOrDefault({
+            try {
                 @Suppress("UNCHECKED_CAST")
                 val result = task.callable.call() as Any
                 @Suppress("UNCHECKED_CAST")
                 (task.future as CompletableFuture<Any>).complete(result)
-            },
-            {
-                semaphore.release()
-                inFlight.decrementAndGet()
-            },
-            TaskContext.of("SimpleAdmissionControl", "ExecuteTask"),
-        )
+            } catch (e: Throwable) {
+                @Suppress("UNCHECKED_CAST")
+                (task.future as CompletableFuture<Any>).completeExceptionally(e)
+            }
+            null
+        }, null, TaskContext.of("SimpleAdmissionControl", "ExecuteTask"))
     }
 
     /**
      * 🔥 SHUTDOWN: Graceful shutdown
      */
+    @PreDestroy
     fun shutdown() {
         log.info("[SimpleAdmissionControl] Shutting down...")
         workerPool.shutdown()

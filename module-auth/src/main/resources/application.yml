@@ -1,0 +1,12 @@
+auth:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: ${AUTH_JWT_EXPIRATION:3600}
+  fingerprint:
+    secret: ${AUTH_FINGERPRINT_SECRET:default-dev-secret-change-me}
+  session:
+    ttl-seconds: ${AUTH_SESSION_TTL:3600}
+  kafka:
+    character-fetch-request-topic: ${AUTH_KAFKA_REQUEST_TOPIC:auth-character-fetch-request}
+    character-fetch-response-topic: ${AUTH_KAFKA_RESPONSE_TOPIC:auth-character-fetch-response}
+    response-consumer-group-id: ${AUTH_KAFKA_RESPONSE_GROUP:module-auth-response-consumer}

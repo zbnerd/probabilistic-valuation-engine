@@ -92,7 +92,7 @@ class RealNexonAuthClient(
                 Mono.error(ex)
             }
             .timeout(timeoutProperties.apiCall)
-            .block()
+            .block(java.time.Duration.ofSeconds(5))
 
         return Optional.ofNullable(response)
             .filter { r -> r.accountList != null && requireNotNull(r.accountList).isNotEmpty() }

@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 
 /**
  * V5 CQRS Query Side Service - PostgreSQL Read Operations
@@ -42,6 +43,7 @@ class CharacterViewQueryServicePostgres(
     private val executor: LogicExecutor,
     private val meterRegistry: MeterRegistry,
     private val jdbc: NamedParameterJdbcTemplate,
+    private val transactionTemplate: TransactionTemplate,
     @Qualifier("asyncExecutor") private val asyncExecutor: ExecutorService,
     @Value("\${app.slow-task.step-trace.threshold-ms:500}") private val stepTraceThresholdMs: Long,
 ) {
@@ -52,7 +54,6 @@ class CharacterViewQueryServicePostgres(
     @Transactional(value = "transactionManager", readOnly = true)
     fun findByUserIgn(userIgn: String): CharacterValuationViewEntity? = findByUserIgnEntity(userIgn)
 
-    @Transactional(value = "transactionManager", readOnly = false)
     fun upsertFromCalculation(
         userIgn: String,
         messageId: String?,
@@ -64,34 +65,40 @@ class CharacterViewQueryServicePostgres(
         presetNo: Int,
         presetsJson: String,
     ) {
-        val context = TaskContext.of("PostgresQuery", "UpsertFromCalculation", userIgn)
-        executor.executeVoid({
-            val presets: List<CharacterValuationViewEntity.PresetView>? = executor.executeOrDefault(
-                {
-                    objectMapper.readValue(
-                        presetsJson,
-                        objectMapper.typeFactory.constructCollectionType(List::class.java, CharacterValuationViewEntity.PresetView::class.java),
-                    )
-                },
-                null,
-                TaskContext.of("PostgresQuery", "ParsePresets", userIgn),
-            )
-            val entity = CharacterValuationViewEntity(
-                userIgn = userIgn,
-                messageId = messageId,
-                characterOcid = characterOcid,
-                characterClass = characterClass,
-                characterLevel = characterLevel,
-                totalExpectedCost = totalExpectedCost,
-                maxPresetNo = maxPresetNo,
-                presetNo = presetNo,
-                presets = presets,
-                calculatedAt = java.time.Instant.now(),
-                fromCache = false,
-                version = System.currentTimeMillis(),
-            )
-            upsert(entity)
-        }, context)
+        // CPU-bound JSON parse outside transaction boundary
+        val parseContext = TaskContext.of("PostgresQuery", "ParsePresets", userIgn)
+        val presets: List<CharacterValuationViewEntity.PresetView>? = executor.executeOrDefault(
+            {
+                objectMapper.readValue(
+                    presetsJson,
+                    objectMapper.typeFactory.constructCollectionType(List::class.java, CharacterValuationViewEntity.PresetView::class.java),
+                )
+            },
+            null,
+            parseContext,
+        )
+
+        // Entity build + upsert inside transaction
+        transactionTemplate.executeWithoutResult {
+            val context = TaskContext.of("PostgresQuery", "UpsertFromCalculation", userIgn)
+            executor.executeVoid({
+                val entity = CharacterValuationViewEntity(
+                    userIgn = userIgn,
+                    messageId = messageId,
+                    characterOcid = characterOcid,
+                    characterClass = characterClass,
+                    characterLevel = characterLevel,
+                    totalExpectedCost = totalExpectedCost,
+                    maxPresetNo = maxPresetNo,
+                    presetNo = presetNo,
+                    presets = presets,
+                    calculatedAt = java.time.Instant.now(),
+                    fromCache = false,
+                    version = System.currentTimeMillis(),
+                )
+                upsert(entity)
+            }, context)
+        }
     }
 
     @Transactional(value = "transactionManager", readOnly = false)

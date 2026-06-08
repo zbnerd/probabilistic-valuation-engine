@@ -171,4 +171,83 @@ class RejectionPolicyFactory(
             throw RejectedExecutionException("ExpectationExecutor queue full (capacity exceeded)")
         }
     }
+
+    /**
+     * Async Executor용 AbortPolicy (CallerRunsPolicy 대체)
+     *
+     * CallerRunsPolicy는 큐 포화 시 호출자 스레드에서 작업을 실행하여
+     * 요청 스레드 블로킹 → 전체 API 마비 위험.
+     */
+    fun createAsyncAbortPolicy(): RejectedExecutionHandler {
+        val asyncRejectedCounter = Counter.builder("executor.rejected")
+            .tag("name", "async")
+            .description("Number of tasks rejected due to queue full")
+            .register(meterRegistry)
+
+        val lastNanos = AtomicLong(0)
+        val droppedCount = AtomicLong(0)
+
+        return RejectedExecutionHandler { _, executor ->
+            asyncRejectedCounter.increment()
+
+            if (executor.isShutdown || executor.isTerminating) {
+                throw RejectedExecutionException("AsyncExecutor rejected (shutdown in progress)")
+            }
+
+            val dropped = droppedCount.incrementAndGet()
+            val now = System.nanoTime()
+            val prev = lastNanos.get()
+
+            if (now - prev >= REJECT_LOG_INTERVAL_NANOS && lastNanos.compareAndSet(prev, now)) {
+                val count = droppedCount.getAndSet(0)
+                log.warn(
+                    "[AsyncExecutor] Task rejected (queue full). droppedInLastWindow={}, poolSize={}, activeCount={}, queueSize={}",
+                    count,
+                    executor.poolSize,
+                    executor.activeCount,
+                    executor.queue.size,
+                )
+            }
+
+            throw RejectedExecutionException("AsyncExecutor queue full (dropped=$dropped)")
+        }
+    }
+
+    /**
+     * Backfill Executor용 AbortPolicy (CallerRunsPolicy 대체)
+     */
+    fun createBackfillAbortPolicy(): RejectedExecutionHandler {
+        val backfillRejectedCounter = Counter.builder("executor.rejected")
+            .tag("name", "backfill")
+            .description("Number of tasks rejected due to queue full")
+            .register(meterRegistry)
+
+        val lastNanos = AtomicLong(0)
+        val droppedCount = AtomicLong(0)
+
+        return RejectedExecutionHandler { _, executor ->
+            backfillRejectedCounter.increment()
+
+            if (executor.isShutdown || executor.isTerminating) {
+                throw RejectedExecutionException("BackfillExecutor rejected (shutdown in progress)")
+            }
+
+            val dropped = droppedCount.incrementAndGet()
+            val now = System.nanoTime()
+            val prev = lastNanos.get()
+
+            if (now - prev >= REJECT_LOG_INTERVAL_NANOS && lastNanos.compareAndSet(prev, now)) {
+                val count = droppedCount.getAndSet(0)
+                log.warn(
+                    "[BackfillExecutor] Task rejected (queue full). droppedInLastWindow={}, poolSize={}, activeCount={}, queueSize={}",
+                    count,
+                    executor.poolSize,
+                    executor.activeCount,
+                    executor.queue.size,
+                )
+            }
+
+            throw RejectedExecutionException("BackfillExecutor queue full (dropped=$dropped)")
+        }
+    }
 }

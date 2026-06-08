@@ -71,8 +71,8 @@ public class ExpectationPersistenceService {
    */
   public void saveResultsSync(Long characterId, List<PresetExpectation> presets) {
     for (PresetExpectation preset : presets) {
-      maple.expectation.domain.v2.EquipmentExpectationSummary summary =
-          maple.expectation.domain.v2.EquipmentExpectationSummary.create(
+      maple.expectation.infrastructure.persistence.entity.EquipmentExpectationSummaryEntity summary =
+          maple.expectation.infrastructure.persistence.entity.EquipmentExpectationSummaryEntity.create(
               characterId,
               Integer.valueOf(preset.getPresetNo()),
               java.math.BigDecimal.valueOf(preset.getTotalExpectedCost()),

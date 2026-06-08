@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Arrays;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.domain.v2.CubeType;
+import maple.expectation.core.domain.model.CubeType;
 import maple.expectation.core.dto.cube.CubeCalculationInput;
 import maple.expectation.service.v2.CubeTrialsProvider;
 import maple.expectation.support.EnableTimeLogging;

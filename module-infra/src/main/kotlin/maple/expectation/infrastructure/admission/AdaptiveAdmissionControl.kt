@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import jakarta.annotation.PreDestroy
 import maple.expectation.infrastructure.config.GlobalAdmissionProperties
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -56,6 +57,9 @@ class AdaptiveAdmissionControl(
     // 🔥 REAL BOUNDED QUEUE
     private val admissionQueue: BlockingQueue<AdmissionRequest<*>> =
         ArrayBlockingQueue(properties.maxQueueSize)
+
+    // CPU monitor executor (promoted from local for lifecycle management)
+    private var cpuMonitorExecutor: java.util.concurrent.ScheduledExecutorService? = null
 
     // Metrics
     private val queueTimeoutCounter: Counter
@@ -177,13 +181,14 @@ class AdaptiveAdmissionControl(
      * 🔥 CPU MONITOR: Adjust admission limits based on CPU load
      */
     private fun startCpuMonitor() {
-        val cpuMonitorExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
+        val executor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
             Thread.ofVirtual().name("adaptive-admission-cpu-monitor").unstarted(runnable)
         }
+        cpuMonitorExecutor = executor
 
-        cpuMonitorExecutor.scheduleAtFixedRate(
+        executor.scheduleAtFixedRate(
             {
-                executor.executeVoid(
+                this.executor.executeVoid(
                     { adjustLimitsBasedOnCpu() },
                     TaskContext.of("AdaptiveAdmissionControl", "CpuMonitor"),
                 )
@@ -320,6 +325,18 @@ class AdaptiveAdmissionControl(
             },
             TaskContext.of("AdaptiveAdmissionControl", "Execute", request.key),
         )
+    }
+
+    @PreDestroy
+    fun shutdown() {
+        cpuMonitorExecutor?.let { executor ->
+            log.info("[AdaptiveAdmissionControl] Shutting down CPU monitor")
+            executor.shutdown()
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("[AdaptiveAdmissionControl] CPU monitor did not terminate in 5s, forcing")
+                executor.shutdownNow()
+            }
+        }
     }
 
     data class AdmissionRequest<T>(

@@ -2,10 +2,9 @@ package maple.expectation.infrastructure.worker
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
-import maple.expectation.core.port.inbound.BatchComputeBuffer
+import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
 import maple.expectation.core.port.inbound.ExpectationV4Port
-import maple.expectation.core.port.out.CharacterOcidPort
 import maple.expectation.core.port.out.GameCharacterPort
 import maple.expectation.infrastructure.cache.tiered.L2CacheStrategy
 import maple.expectation.infrastructure.config.CacheProperties
@@ -33,7 +32,6 @@ abstract class AbstractExpectationCalcWorker(
     queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val expectationPort: ExpectationV4Port,
-    private val characterOcidPort: CharacterOcidPort,
     // Two-phase batch processing dependencies
     private val gameCharacterPort: GameCharacterPort,
     private val l2CacheStrategy: L2CacheStrategy,
@@ -42,7 +40,6 @@ abstract class AbstractExpectationCalcWorker(
     private val viewQueryPort: CharacterViewQueryPort,
     private val batchRepo: CharacterViewBatchRepository,
     private val objectMapper: ObjectMapper,
-    private val computeBuffer: BatchComputeBuffer,
     private val jobService: CalculationJobService,
 ) : PgmqWorker<ExpectationCalcMessage>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
@@ -161,9 +158,9 @@ abstract class AbstractExpectationCalcWorker(
         // 3. Bulk upsert — 3 queries total (SELECT + batch UPDATE/INSERT)
         batchRepo.bulkUpsert(parsed)
 
-        // 4. Sync read model for query-server
-        parsed.forEach { view ->
-            viewQueryPort.upsertFromCalculation(
+        // 4. Sync read model for query-server — batch upsert (was N+1)
+        val commands = parsed.map { view ->
+            CharacterViewProjectionCommand(
                 userIgn = view.userIgn,
                 messageId = view.messageId,
                 characterOcid = view.characterOcid,
@@ -175,6 +172,7 @@ abstract class AbstractExpectationCalcWorker(
                 presetsJson = view.presetsJson,
             )
         }
+        viewQueryPort.batchUpsertFromCalculations(commands)
     }
 
     private fun batchL2CachePut(results: List<CalculationResult>) {

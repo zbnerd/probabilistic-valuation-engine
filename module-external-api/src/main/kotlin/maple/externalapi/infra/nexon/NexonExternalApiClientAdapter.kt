@@ -1,6 +1,7 @@
 package maple.externalapi.infra.nexon
 
 import io.netty.channel.ChannelOption
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
@@ -22,12 +23,16 @@ import org.springframework.web.util.DefaultUriBuilderFactory
 import reactor.netty.http.client.HttpClient
 import reactor.netty.resources.ConnectionProvider
 
+/** Per-request HTTP call timeout for the Nexon API — bounds slow upstream responses. */
+private val HTTP_CALL_TIMEOUT: Duration = Duration.ofSeconds(10)
+
 @Component
 class NexonExternalApiClientAdapter(
     @Value("\${nexon.api.key}")
     private val apiKey: String,
     private val properties: NexonHttpClientProperties,
     private val fetchMetrics: SnapshotFetchMetrics,
+    private val clock: Clock = Clock.systemUTC(),
 ) : ExternalApiClientPort {
 
     private val log = LoggerFactory.getLogger(NexonExternalApiClientAdapter::class.java)
@@ -73,7 +78,7 @@ class NexonExternalApiClientAdapter(
         endpoint: ExternalApiEndpoint,
         requestKey: String,
     ): CompletableFuture<ByteArray> {
-        val startedAt = Instant.now()
+        val startedAt = Instant.now(clock)
         return webClient.get()
             .uri { builder ->
                 val pathBuilder = builder.path(endpoint.path)
@@ -92,7 +97,7 @@ class NexonExternalApiClientAdapter(
             .retrieve()
             .bodyToMono(ByteArray::class.java)
             .doOnNext { bodyBytes ->
-                val elapsed = Duration.between(startedAt, Instant.now())
+                val elapsed = Duration.between(startedAt, Instant.now(clock))
                 fetchMetrics.recordNexonBodyReceived(endpoint.name, elapsed, bodyBytes.size)
                 log.debug(
                     "[NexonAdapter] body received: endpoint={}, key={}, bytes={}, durationMs={}",
@@ -104,7 +109,7 @@ class NexonExternalApiClientAdapter(
             }
             .doOnError { ex ->
                 if (ex !is WebClientResponseException) {
-                    val elapsed = Duration.between(startedAt, Instant.now())
+                    val elapsed = Duration.between(startedAt, Instant.now(clock))
                     fetchMetrics.recordNexonFailure(endpoint.name, elapsed)
                     log.warn(
                         "[NexonAdapter] fetch failed: endpoint={}, key={}, durationMs={}, error={}",
@@ -116,11 +121,11 @@ class NexonExternalApiClientAdapter(
                 }
             }
             .onErrorResume(WebClientResponseException::class.java) { ex ->
-                fetchMetrics.recordNexonFailure(endpoint.name, Duration.between(startedAt, Instant.now()))
+                fetchMetrics.recordNexonFailure(endpoint.name, Duration.between(startedAt, Instant.now(clock)))
                 log.warn("[NexonAdapter] fetch failed: endpoint={}, key={}, status={}, body={}", endpoint.name, requestKey, ex.statusCode, ex.responseBodyAsString)
                 throw ex
             }
-            .timeout(Duration.ofSeconds(10))
+            .timeout(HTTP_CALL_TIMEOUT)
             .toFuture()
     }
 }

@@ -84,13 +84,13 @@ class AdaptiveMicroBatchUserService<T : Any>(
     private val semaphore = Semaphore(properties.semaphorePermits)
 
     /** Batch Channel: Batch Lane 요청 큐 */
-    private val batchChannel = Channel<BatchRequest<T>>(Channel.UNLIMITED)
+    private val batchChannel = Channel<BatchRequest<T>>(properties.batchChannelCapacity)
 
     /** Request Coalescing: 진행 중인 요청 맵 (CompletableFuture 기반) */
     private val inFlightRequests = ConcurrentHashMap<String, CompletableFuture<T?>>()
 
     /** Backpressure: in-flight 최대 개수 (초과 시 fail-fast) */
-    private val MAX_IN_FLIGHT = 1000
+    private val maxInFlight = properties.maxInFlight
 
     /** Coroutine Scope: 백그라운드 워커 실행용 */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -197,7 +197,7 @@ class AdaptiveMicroBatchUserService<T : Any>(
         }
 
         // Step 2.5: Backpressure — only reject NEW keys after coalescing check
-        if (inFlightRequests.size > MAX_IN_FLIGHT) {
+        if (inFlightRequests.size > maxInFlight) {
             inFlightRequests.remove(key, newFuture)
             rejectedCounter.increment()
             log.warn { "[AdaptiveMicroBatch] Rejected: inFlight=${inFlightRequests.size}, key=$key" }
@@ -229,7 +229,7 @@ class AdaptiveMicroBatchUserService<T : Any>(
         }
 
         // Step 2.5: Backpressure — only reject NEW keys after coalescing check
-        if (inFlightRequests.size > MAX_IN_FLIGHT) {
+        if (inFlightRequests.size > maxInFlight) {
             inFlightRequests.remove(key, newFuture)
             rejectedCounter.increment()
             log.warn { "[AdaptiveMicroBatch] Rejected: inFlight=${inFlightRequests.size}, key=$key" }

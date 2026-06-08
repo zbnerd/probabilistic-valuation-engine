@@ -7,7 +7,7 @@ import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationInputPort
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.PureCalculationPort
-import maple.expectation.core.port.out.QueueNames
+import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationJobService
@@ -19,6 +19,8 @@ import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
+import maple.expectation.util.GzipUtils.compress
+import maple.expectation.util.HashUtils.sha256Hex
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
@@ -92,7 +94,7 @@ class CalculationRequestedWorker(
             objectMapper.writeValueAsString(calcResult).toByteArray()
         }
         val gzipData = stage("GzipResult", payload.userIgn) {
-            gzipCompress(resultBytes)
+            compress(resultBytes)
         }
         val hash = stage("HashResult", payload.userIgn) {
             sha256Hex(resultBytes)
@@ -134,16 +136,6 @@ class CalculationRequestedWorker(
         TaskContext.of("CalculationWorker", name, key),
     )
 
-    private fun gzipCompress(data: ByteArray): ByteArray {
-        val bos = java.io.ByteArrayOutputStream()
-        java.util.zip.GZIPOutputStream(bos).use { it.write(data) }
-        return bos.toByteArray()
-    }
-
-    private fun sha256Hex(data: ByteArray): String {
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-        return digest.digest(data).joinToString("") { "%02x".format(it) }
-    }
 
     companion object {
         private val log = LoggerFactory.getLogger(CalculationRequestedWorker::class.java)

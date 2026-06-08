@@ -1,6 +1,6 @@
 package maple.expectation.application.service.cube.component;
 
-import maple.expectation.domain.v2.CubeType;
+import maple.expectation.core.domain.model.CubeType;
 import org.springframework.stereotype.Component;
 
 /**

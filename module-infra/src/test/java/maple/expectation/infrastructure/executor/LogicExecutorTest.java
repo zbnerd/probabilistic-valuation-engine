@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import org.junit.jupiter.api.Tag;
+
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -695,6 +697,7 @@ class LogicExecutorTest {
   }
 
   @Test
+  @Tag("flaky")
   @DisplayName("Performance: executeOrDefault vs try-catch comparison")
   @SuppressWarnings("unchecked")
   void testPerformance_ExecuteOrDefaultVsTryCatch() throws Throwable {

@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.LockSupport
+import jakarta.annotation.PreDestroy
 import maple.expectation.core.port.out.CacheWarmupPort
 import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer
 import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheStrategy
@@ -69,10 +70,11 @@ class BulkLoaderService(
         private const val BACKPRESSURE_THRESHOLD = 1000
         private const val PROGRESS_LOG_INTERVAL = 100
         private const val CHECKPOINT_INTERVAL = 500
+    }
 
-        // Bounded executor for bulk loading - prevents ForkJoinPool exhaustion
-        // 10 threads: matches semaphore permits to avoid Nexon API rate limiting
-        private val BULK_EXECUTOR: ExecutorService = Executors.newFixedThreadPool(10)
+    // Bounded executor for bulk loading - prevents ForkJoinPool exhaustion
+    private val bulkExecutor: ExecutorService = Executors.newFixedThreadPool(10) { runnable ->
+        Thread.ofVirtual().name("bulk-loader").unstarted(runnable)
     }
 
     // State
@@ -271,7 +273,7 @@ class BulkLoaderService(
                 } finally {
                     semaphore.release()
                 }
-            }, BULK_EXECUTOR) // Use bounded executor instead of ForkJoinPool
+            }, bulkExecutor) // Use bounded executor instead of ForkJoinPool
             futures.add(future)
         }
 
@@ -489,6 +491,16 @@ class BulkLoaderService(
                 0
             },
         )
+    }
+
+    @PreDestroy
+    fun shutdown() {
+        log.info("[BulkLoaderService] Shutting down bulk executor")
+        bulkExecutor.shutdown()
+        if (!bulkExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+            log.warn("[BulkLoaderService] Executor did not terminate in 5s, forcing")
+            bulkExecutor.shutdownNow()
+        }
     }
 
     fun stop() {

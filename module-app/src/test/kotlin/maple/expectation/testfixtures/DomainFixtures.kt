@@ -4,7 +4,7 @@ import java.util.UUID
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.character.GameCharacter
 import maple.expectation.core.domain.model.character.UserIgn
-import maple.expectation.domain.v2.Member
+import maple.expectation.infrastructure.persistence.entity.MemberEntity
 
 /**
  * Test fixtures for domain entities
@@ -38,9 +38,9 @@ object MemberFixture {
     fun createGuest(
         uuid: String = UUID.randomUUID().toString(),
         initialPoint: Long = 1000L,
-    ): Member {
+    ): MemberEntity {
         // Use reflection to access private constructor
-        val constructor = Member::class.java.getDeclaredConstructor(String::class.java, Long::class.java)
+        val constructor = MemberEntity::class.java.getDeclaredConstructor(String::class.java, Long::class.java)
         constructor.isAccessible = true
         return constructor.newInstance(uuid, initialPoint)
     }

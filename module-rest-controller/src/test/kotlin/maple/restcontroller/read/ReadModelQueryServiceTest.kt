@@ -16,7 +16,8 @@ class ReadModelQueryServiceTest {
 
     private val jdbc: NamedParameterJdbcTemplate = mock()
     private val objectMapper = ObjectMapper()
-    private val service = ReadModelQueryService(jdbc, objectMapper)
+    private val documentExtractor = ReadModelDocumentExtractor(objectMapper)
+    private val service = ReadModelQueryService(jdbc, documentExtractor)
 
     @Test
     fun `should return empty map for empty requests`() {

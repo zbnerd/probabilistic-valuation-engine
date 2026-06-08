@@ -38,9 +38,11 @@ class EquipmentRankingRedisWriter(
 
     private fun updatePreset(documents: List<PreppedDocument>): Int {
         var updated = 0
+        val key = rankingKey(documents.first().presetNo.toInt()).toByteArray(StandardCharsets.UTF_8)
+        val keepFrom = properties.topSize.coerceAtLeast(1).toLong()
+
         documents.chunked(properties.batchSize.coerceAtLeast(1)).forEach { batch ->
             redisTemplate.executePipelined { connection ->
-                val key = rankingKey(documents.first().presetNo.toInt()).toByteArray(StandardCharsets.UTF_8)
                 batch.forEach { document ->
                     val userIgn = document.userIgn ?: return@forEach
                     connection.zSetCommands().zAdd(
@@ -50,10 +52,16 @@ class EquipmentRankingRedisWriter(
                     )
                     updated += 1
                 }
-                connection.zSetCommands().zRemRange(key, 0, -properties.topSize.coerceAtLeast(1).toLong() - 1)
                 null
             }
         }
+
+        // Trim once after all batches — removes all members ranked below top N
+        redisTemplate.executePipelined { connection ->
+            connection.zSetCommands().zRemRange(key, 0, -(keepFrom + 1))
+            null
+        }
+
         return updated
     }
 

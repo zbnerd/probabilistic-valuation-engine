@@ -1,18 +1,21 @@
 package maple.synchronizer.consumer
 
 import maple.expectation.common.event.ChunkExecutionIdentity
-import maple.expectation.common.event.ChunkExecutionStatus
+import maple.synchronizer.state.ChunkExecutionStatus
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.function.ThrowingRunnable
 import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
-import maple.synchronizer.metrics.SynchronizerMetrics
+import maple.expectation.error.CommonErrorCode
+import maple.expectation.error.exception.ArtifactNotFoundException
+import maple.synchronizer.metrics.ChunkExecutionMetrics
 import maple.synchronizer.repository.ChunkExecutionClaim
 import maple.synchronizer.repository.ChunkExecutionState
 import maple.synchronizer.repository.ChunkExecutionRepository
 import maple.synchronizer.repository.InsertChunkExecutionCommand
+import maple.synchronizer.state.ChunkExecutionStateMachine
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -33,23 +36,21 @@ import java.util.concurrent.Semaphore
 class ChunkConsumerTemplateTest {
 
     private val repository = mock<ChunkExecutionRepository>()
-    private val metrics = mock<SynchronizerMetrics>()
+    private val executionMetrics = mock<ChunkExecutionMetrics>()
     private val acknowledgment = mock<Acknowledgment>()
     private val executor = Executor { command -> command.run() }
     private val template = ChunkConsumerTemplate(
         logicExecutor = ImmediateLogicExecutor(),
         chunkExecutionRepository = repository,
-        metrics = metrics,
-        processingTimeout = Duration.ofSeconds(600),
-        retryBaseBackoff = Duration.ofSeconds(60),
-        maxAttempts = 5,
-        artifactMissingMaxAttempts = 2,
+        executionMetrics = executionMetrics,
+        properties = ChunkExecutionProperties(),
+        stateMachine = ChunkExecutionStateMachine(ChunkExecutionProperties()),
     )
 
     @Test
     fun `first consume inserts pending claims processes marks success then acks`() {
         val events = mutableListOf<String>()
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.PENDING))
+        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
         whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 1))
         whenever(repository.markSucceeded(identity, 1)).thenReturn(true)
 
@@ -66,7 +67,7 @@ class ChunkConsumerTemplateTest {
 
     @Test
     fun `succeeded chunk skips processing and acks`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.SUCCEEDED))
+        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Succeeded))
 
         template.submit(request(process = { error("must not process") }))
 
@@ -79,7 +80,7 @@ class ChunkConsumerTemplateTest {
     fun `processing with active lease acks without permit or claim`() {
         val permit = Semaphore(0)
         whenever(repository.findExecutionState(identity)).thenReturn(
-            state(ChunkExecutionStatus.PROCESSING, leaseUntil = Instant.now().plusSeconds(60)),
+            state(ChunkExecutionStatus.Processing, leaseUntil = Instant.now().plusSeconds(60)),
         )
 
         template.submit(request(processingPermit = permit, process = { error("must not process") }))
@@ -92,7 +93,7 @@ class ChunkConsumerTemplateTest {
     fun `retryable failure not due does not ack without permit or claim`() {
         val permit = Semaphore(0)
         whenever(repository.findExecutionState(identity)).thenReturn(
-            state(ChunkExecutionStatus.FAILED_RETRYABLE, nextRetryAt = Instant.now().plusSeconds(60)),
+            state(ChunkExecutionStatus.FailedRetryable(nextRetryAt = Instant.now().plusSeconds(60)), nextRetryAt = Instant.now().plusSeconds(60)),
         )
 
         template.submit(request(processingPermit = permit, process = { error("must not process") }))
@@ -104,7 +105,7 @@ class ChunkConsumerTemplateTest {
     @Test
     fun `pending chunk with busy permit does not ack or claim`() {
         val permit = Semaphore(0)
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.PENDING))
+        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
 
         template.submit(request(processingPermit = permit, process = { error("must not process") }))
 
@@ -113,21 +114,21 @@ class ChunkConsumerTemplateTest {
     }
 
     @Test
-    fun `due retryable failure with busy permit does not ack or claim`() {
+    fun `due retryable failure with busy permit ack-skips (no waiting)`() {
         val permit = Semaphore(0)
         whenever(repository.findExecutionState(identity)).thenReturn(
-            state(ChunkExecutionStatus.FAILED_RETRYABLE, nextRetryAt = Instant.now().minusSeconds(60)),
+            state(ChunkExecutionStatus.FailedRetryable(nextRetryAt = Instant.now().minusSeconds(60)), nextRetryAt = Instant.now().minusSeconds(60)),
         )
 
         template.submit(request(processingPermit = permit, process = { error("must not process") }))
 
         verify(repository, never()).claimProcessing(any(), any())
-        verify(acknowledgment, never()).acknowledge()
+        verify(acknowledgment).acknowledge()
     }
 
     @Test
     fun `business failure writes retryable failure and preserves Kafka redelivery`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.PENDING))
+        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
         whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 1))
         whenever(repository.markFailedRetryable(eq(identity), eq(1), any(), any())).thenReturn(true)
 
@@ -140,7 +141,7 @@ class ChunkConsumerTemplateTest {
 
     @Test
     fun `failed state write does not ack`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.PENDING))
+        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
         whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 1))
         whenever(repository.markSucceeded(identity, 1)).thenReturn(false)
 
@@ -151,7 +152,7 @@ class ChunkConsumerTemplateTest {
 
     @Test
     fun `unsupported schema marks terminal before business process`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.PENDING))
+        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
         whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 1))
         whenever(repository.markFailedTerminal(eq(identity), eq(1), any(), eq("UNSUPPORTED_SCHEMA_VERSION"))).thenReturn(true)
 
@@ -164,11 +165,11 @@ class ChunkConsumerTemplateTest {
 
     @Test
     fun `artifact missing becomes terminal after artifact missing max attempts`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.PENDING))
+        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
         whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 2))
         whenever(repository.markFailedTerminal(eq(identity), eq(2), any(), eq("ARTIFACT_MISSING_MAX_ATTEMPTS"))).thenReturn(true)
 
-        template.submit(request(process = { throw IllegalStateException("Result file not found: /tmp/missing") }))
+        template.submit(request(process = { throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "ResultFileReader", "/tmp/missing") }))
 
         verify(repository).markFailedTerminal(eq(identity), eq(2), any(), eq("ARTIFACT_MISSING_MAX_ATTEMPTS"))
         verify(acknowledgment).acknowledge()
@@ -176,7 +177,7 @@ class ChunkConsumerTemplateTest {
 
     @Test
     fun `request insert command carries kafka and event metadata`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.SUCCEEDED))
+        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Succeeded))
 
         template.submit(request())
 

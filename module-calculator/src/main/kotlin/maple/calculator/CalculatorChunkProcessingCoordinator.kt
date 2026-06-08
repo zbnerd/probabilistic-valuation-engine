@@ -1,53 +1,70 @@
 package maple.calculator
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.calculator.event.ChunkProcessingEvent
+import maple.expectation.util.CompressionUtils
 import maple.calculator.event.KafkaResultEventPublisher
-import maple.calculator.metrics.CalculatorMetrics
+import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
-import maple.calculator.metrics.CalculatorVolumeMetrics
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.storage.ObjectStorage
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
-import java.time.Duration
 
+/**
+ * Coordinates chunk processing for calculator.
+ *
+ * Caps in-flight chunk processing at [CHUNK_PROCESS_PERMITS] (= 4) to bound
+ * heap pressure. The Kafka listener container pulls up to 50 records per poll
+ * across 4 listener threads (200 chunks in flight at the transport level), but
+ * each chunk holds ~12 MB of pipeline state (Flow buffers + parsed objects +
+ * Caffeine entries + intermediate calc maps). Without this cap, 200 × 12 MB
+ * overflows the 2 GB JVM heap within minutes of restart.
+ *
+ * Disk-stat calls ([ObjectStorage.exists]) are wrapped in [withContext] on the
+ * virtual-thread dispatcher so they do not pin a Kafka listener platform
+ * thread. The semaphore is acquired only for the actual chunk processing, not
+ * for the cheap disk stats, so the stat check does not contend with the pipeline.
+ */
 @Component
 class CalculatorChunkProcessingCoordinator(
     private val chunkProcessor: SnapshotChunkProcessor,
     private val resultEventPublisher: KafkaResultEventPublisher,
     private val objectStorage: ObjectStorage,
-    private val metrics: CalculatorMetrics,
-    private val volumeMetrics: CalculatorVolumeMetrics,
+    private val metricsListener: CalculatorMetricsListener,
+    @Qualifier("vtDispatcher") private val vtDispatcher: CoroutineDispatcher,
 ) {
     private val log = LoggerFactory.getLogger(CalculatorChunkProcessingCoordinator::class.java)
-    private val concurrency = Semaphore(2)
+    private val pipelinePermits = Semaphore(CHUNK_PROCESS_PERMITS)
 
     suspend fun handle(event: SnapshotChunkReadyEvent) {
         if (event.endpoint != "item-equipment") {
             log.info("[Coordinator] skipping non-item-equipment endpoint: {}", event.endpoint)
-            metrics.recordChunkSkippedEndpoint()
-            return
-        }
-
-        if (!objectStorage.exists(event.objectKey)) {
-            log.error("[Coordinator] source chunk not found: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, event.objectKey)
-            metrics.recordChunkSkippedNotFound()
-            return
-        }
-
-        val resultObjectKey = resultObjectKeyFor(event)
-        if (objectStorage.exists(resultObjectKey)) {
-            republishExistingResult(event, resultObjectKey)
+            metricsListener.onEvent(ChunkProcessingEvent.Skipped(event.runId, event.chunkId, "endpoint_mismatch"))
             return
         }
 
         withMdc(event) {
-            concurrency.withPermit {
+            if (!withContext(vtDispatcher) { objectStorage.exists(event.objectKey) }) {
+                log.error("[Coordinator] source chunk not found: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, event.objectKey)
+                metricsListener.onEvent(ChunkProcessingEvent.Skipped(event.runId, event.chunkId, "source_not_found"))
+                return@withMdc
+            }
+
+            val resultObjectKey = resultObjectKeyFor(event)
+            if (withContext(vtDispatcher) { objectStorage.exists(resultObjectKey) }) {
+                republishExistingResult(event, resultObjectKey)
+                return@withMdc
+            }
+
+            pipelinePermits.withPermit {
                 executeChunk(event, resultObjectKey)
             }
         }
@@ -58,7 +75,7 @@ class CalculatorChunkProcessingCoordinator(
 
     private suspend fun republishExistingResult(event: SnapshotChunkReadyEvent, resultObjectKey: String) {
         log.info("[Coordinator] result already exists, republishing: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, resultObjectKey)
-        metrics.recordChunkSkippedIdempotent()
+        metricsListener.onEvent(ChunkProcessingEvent.Skipped(event.runId, event.chunkId, "result_exists"))
         resultEventPublisher.publishChunkReady(
             CalculatorResultChunkReadyEvent(
                 sourceRunId = event.runId,
@@ -78,11 +95,10 @@ class CalculatorChunkProcessingCoordinator(
         val start = System.nanoTime()
         runCatching {
             val result = chunkProcessor.process(event, resultObjectKey)
-            metrics.timer().record(Duration.ofNanos(System.nanoTime() - start))
             onChunkProcessed(event, result, start)
         }.onFailure { ex ->
             log.error("[Coordinator] chunk processing failed: runId={} chunkId={}: {}", event.runId, event.chunkId, ex.message, ex)
-            metrics.recordChunkFailed()
+            metricsListener.onEvent(ChunkProcessingEvent.Failed(event.runId, event.chunkId))
             throw ex
         }
     }
@@ -110,21 +126,25 @@ class CalculatorChunkProcessingCoordinator(
             event.runId, event.chunkId,
             result.recordCount, result.successCount, result.totalItems, result.resultCount, result.errorCount,
         )
-        volumeMetrics.recordInput(event.compressedBytes, event.uncompressedBytes)
-        volumeMetrics.recordResult(result.resultCompressedBytes, result.resultUncompressedBytes, result.resultCount.toLong())
-        val ratio = if (result.resultCompressedBytes > 0) "%.2f".format(result.resultUncompressedBytes.toDouble() / result.resultCompressedBytes.toDouble()) else "N/A"
+        val ratio = CompressionUtils.ratioString(result.resultUncompressedBytes, result.resultCompressedBytes)
         log.info(
             "[calculatorArtifactVolume] runId={} chunkId={} inputCompressedBytes={} inputUncompressedBytes={} resultCompressedBytes={} resultUncompressedBytes={} resultJsonRows={} resultCompressionRatio={}",
             event.runId, event.chunkId, event.compressedBytes, event.uncompressedBytes,
             result.resultCompressedBytes, result.resultUncompressedBytes, result.resultCount, ratio,
         )
-        metrics.recordChunkProcessed()
-        metrics.recordUsers(result.recordCount)
-        metrics.recordItems(result.totalItems)
-        metrics.recordCalculated(result.resultCount)
-        metrics.recordErrors(result.errorCount)
-        val durationSec = (System.nanoTime() - startNanos) / 1_000_000_000.0
-        metrics.recordChunkRates(result.recordCount, result.totalItems, durationSec)
+        metricsListener.onEvent(ChunkProcessingEvent.Completed(
+            runId = event.runId,
+            chunkId = event.chunkId,
+            recordCount = result.recordCount,
+            totalItems = result.totalItems,
+            resultCount = result.resultCount,
+            errorCount = result.errorCount,
+            inputCompressedBytes = event.compressedBytes,
+            inputUncompressedBytes = event.uncompressedBytes,
+            resultCompressedBytes = result.resultCompressedBytes,
+            resultUncompressedBytes = result.resultUncompressedBytes,
+            durationNanos = System.nanoTime() - startNanos,
+        ))
     }
 
     private suspend fun <T> withMdc(event: SnapshotChunkReadyEvent, block: suspend () -> T): T =
@@ -134,3 +154,5 @@ class CalculatorChunkProcessingCoordinator(
             "kafkaTopic" to "external-api.snapshot.chunk-ready",
         ))) { block() }
 }
+
+private const val CHUNK_PROCESS_PERMITS: Int = 4

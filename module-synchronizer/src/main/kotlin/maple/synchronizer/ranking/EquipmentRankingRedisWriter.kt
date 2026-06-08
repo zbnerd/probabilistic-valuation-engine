@@ -1,6 +1,8 @@
 package maple.synchronizer.ranking
 
 import java.nio.charset.StandardCharsets
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.synchronizer.preparer.PreppedDocument
@@ -19,15 +21,20 @@ class EquipmentRankingRedisWriter(
     fun update(documents: List<PreppedDocument>) {
         if (!properties.enabled || documents.isEmpty()) return
 
-        val rankable = documents.filter { it.userIgn?.isNotBlank() == true }
+        // Issue #1129: CPU offload — filter + groupBy on Dispatchers.Default.
+        // Redis pipelined ZADD (updatePreset) on caller executor (LogicExecutor).
+        val rankable = runBlocking(Dispatchers.Default) {
+            documents.filter { it.userIgn?.isNotBlank() == true }
+        }
         if (rankable.isEmpty()) return
+
+        val grouped = runBlocking(Dispatchers.Default) {
+            rankable.groupBy { it.presetNo.toInt() }
+        }
 
         val updated = executor.executeOrDefault(
             {
-                rankable
-                    .groupBy { it.presetNo.toInt() }
-                    .values
-                    .sumOf(::updatePreset)
+                grouped.values.sumOf(::updatePreset)
             },
             0,
             TaskContext.of("Synchronizer", "UpdateEquipmentRanking"),

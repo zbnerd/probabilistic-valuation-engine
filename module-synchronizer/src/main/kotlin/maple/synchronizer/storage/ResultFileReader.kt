@@ -5,6 +5,8 @@ import java.math.BigDecimal
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.zip.GZIPInputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.domain.CalculatedEquipmentItem
@@ -20,7 +22,9 @@ class ResultFileReader(
     private val maxRowsPerChunk: Int,
     private val objectMapper: ObjectMapper,
 ) {
-    fun readAndGroupByCompositeKey(objectKey: String): List<GroupedEquipmentResult> {
+    // Issue #1129: CPU offload — GZIP decompress + per-line JSON parse + map grouping
+    // on Dispatchers.Default. File read IO wrapped inside (small file, short read).
+    fun readAndGroupByCompositeKey(objectKey: String): List<GroupedEquipmentResult> = runBlocking(Dispatchers.Default) {
         val path = Paths.get(basePath, objectKey)
         if (!Files.exists(path)) {
             throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "ResultFileReader", path.toString())
@@ -43,7 +47,7 @@ class ResultFileReader(
                 line = reader.readLine()
             }
 
-            return grouped.map { (readKey, group) ->
+            grouped.map { (readKey, group) ->
                 GroupedEquipmentResult(
                     readKey = readKey,
                     ocid = group.first().ocid,

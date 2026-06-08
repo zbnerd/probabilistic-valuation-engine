@@ -1,9 +1,9 @@
 package maple.synchronizer.processor
 
 import maple.core.domain.chunk.ChunkProcessInput
-import maple.synchronizer.adapter.chunk.ChunkPipelineOrchestrator
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.ArtifactNotFoundException
+import maple.synchronizer.adapter.chunk.ChunkPipelineOrchestrator
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach

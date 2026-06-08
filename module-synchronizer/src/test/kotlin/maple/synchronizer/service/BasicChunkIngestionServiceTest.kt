@@ -1,5 +1,7 @@
 package maple.synchronizer.service
 
+import java.time.Instant
+import java.util.concurrent.ExecutorService
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.synchronizer.consumer.ChunkConsumerTemplate
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
@@ -14,8 +16,6 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.springframework.kafka.support.Acknowledgment
-import java.time.Instant
-import java.util.concurrent.ExecutorService
 
 class BasicChunkIngestionServiceTest {
     private val fileReader = mock<BasicChunkFileReader>()
@@ -68,16 +68,15 @@ class BasicChunkIngestionServiceTest {
         verify(template).submit(any())
     }
 
-    private fun makeEvent(endpoint: String): SnapshotChunkReadyEvent =
-        SnapshotChunkReadyEvent(
-            eventId = "event-1",
-            runId = "run-1",
-            endpoint = endpoint,
-            chunkId = "chunk-1",
-            objectKey = "object-key",
-            recordCount = 10,
-            uncompressedBytes = 100L,
-            compressedBytes = 50L,
-            createdAt = Instant.parse("2026-06-06T00:00:00Z"),
-        )
+    private fun makeEvent(endpoint: String): SnapshotChunkReadyEvent = SnapshotChunkReadyEvent(
+        eventId = "event-1",
+        runId = "run-1",
+        endpoint = endpoint,
+        chunkId = "chunk-1",
+        objectKey = "object-key",
+        recordCount = 10,
+        uncompressedBytes = 100L,
+        compressedBytes = 50L,
+        createdAt = Instant.parse("2026-06-06T00:00:00Z"),
+    )
 }

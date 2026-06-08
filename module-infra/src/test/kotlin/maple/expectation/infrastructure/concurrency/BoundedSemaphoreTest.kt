@@ -1,12 +1,12 @@
 package maple.expectation.infrastructure.concurrency
 
-import kotlinx.coroutines.test.runTest
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
-import org.junit.jupiter.api.Test
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
-import java.util.concurrent.atomic.AtomicInteger
+import org.junit.jupiter.api.Test
 
 class BoundedSemaphoreTest {
     @Test

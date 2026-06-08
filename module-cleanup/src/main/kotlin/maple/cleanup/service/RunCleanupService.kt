@@ -1,5 +1,10 @@
 package maple.cleanup.service
 
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import maple.cleanup.config.CleanupProperties
 import maple.common.cleanup.RunCleanupExecutor
 import maple.common.cleanup.RunCleanupResult
@@ -7,11 +12,6 @@ import maple.common.cleanup.RunInfo
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /**
  * Whole-run GC. Wraps the shared RunCleanupExecutor with a path prefix so the same

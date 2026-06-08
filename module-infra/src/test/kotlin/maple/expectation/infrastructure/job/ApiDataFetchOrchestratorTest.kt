@@ -6,8 +6,6 @@ import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.mq.DomainEventAppender
-import maple.expectation.infrastructure.mq.event.NexonApiRequestEventFactory
-import maple.expectation.infrastructure.mq.event.NexonApiResponseEventFactory
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiRequestTopic
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
@@ -29,9 +27,13 @@ import org.mockito.kotlin.whenever
 class ApiDataFetchOrchestratorTest {
 
     @Mock lateinit var jobPort: CalculationJobPort
+
     @Mock lateinit var eventAppender: DomainEventAppender
+
     @Mock lateinit var snapshotRepository: CalculationSnapshotRepository
+
     @Mock lateinit var nexonApiRequestTopic: NexonApiRequestTopic
+
     @Mock lateinit var nexonApiResponseTopic: NexonApiResponseTopic
 
     private lateinit var service: ApiDataFetchOrchestrator
@@ -53,8 +55,13 @@ class ApiDataFetchOrchestratorTest {
         retryCount: Int = 0,
         maxRetries: Int = 5,
     ) = CalculationJob(
-        jobId = jobId, ocid = ocid, userIgn = "ign", presetNo = 1,
-        status = CalculationJobStatus.API_REQUESTED, retryCount = retryCount, maxRetries = maxRetries,
+        jobId = jobId,
+        ocid = ocid,
+        userIgn = "ign",
+        presetNo = 1,
+        status = CalculationJobStatus.API_REQUESTED,
+        retryCount = retryCount,
+        maxRetries = maxRetries,
     )
 
     @Test
@@ -143,6 +150,7 @@ class ApiDataFetchOrchestratorTest {
         val captor = argumentCaptor<IntegrationEvent<*>>()
         verify(eventAppender).append(eq(nexonApiRequestTopic), captor.capture())
         val captured = captor.firstValue
+
         @Suppress("UNCHECKED_CAST")
         val payload = captured.payload as Map<String, Any>
         assertThat(payload["eventType"]).isEqualTo("RETRY_FETCH")

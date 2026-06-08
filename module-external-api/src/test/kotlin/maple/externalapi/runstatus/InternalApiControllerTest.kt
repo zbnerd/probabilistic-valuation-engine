@@ -3,6 +3,7 @@ package maple.externalapi.runstatus
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import java.time.Instant
 import maple.externalapi.scheduler.ExternalApiScheduler
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -14,7 +15,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup
-import java.time.Instant
 
 class InternalApiControllerTest {
 
@@ -91,8 +91,10 @@ class InternalApiControllerTest {
 
     @Test
     fun `POST trigger daily uses X-Airflow-Run-Id header`() {
-        mockMvc.perform(post("/api/internal/trigger/daily")
-                .header("X-Airflow-Run-Id", "airflow-run-42"))
+        mockMvc.perform(
+            post("/api/internal/trigger/daily")
+                .header("X-Airflow-Run-Id", "airflow-run-42"),
+        )
             .andExpect(status().isAccepted)
             .andExpect(jsonPath("$.runId").value("airflow-run-42"))
 
@@ -102,7 +104,7 @@ class InternalApiControllerTest {
     @Test
     fun `POST trigger daily returns 409 when already running`() {
         whenever(runStatusTracker.getCurrentStatus()).thenReturn(
-            RunStatus(runId = "run-1", phase = PipelinePhase.RANKING_FETCH, startedAt = Instant.now())
+            RunStatus(runId = "run-1", phase = PipelinePhase.RANKING_FETCH, startedAt = Instant.now()),
         )
 
         mockMvc.perform(post("/api/internal/trigger/daily"))

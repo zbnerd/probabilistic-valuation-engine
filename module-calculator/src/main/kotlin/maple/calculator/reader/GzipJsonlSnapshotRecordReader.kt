@@ -1,11 +1,11 @@
 package maple.calculator.reader
 
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import org.springframework.stereotype.Component
 import java.io.BufferedInputStream
 import java.io.InputStream
 import java.util.zip.GZIPInputStream
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import org.springframework.stereotype.Component
 
 @Component
 class GzipJsonlSnapshotRecordReader {

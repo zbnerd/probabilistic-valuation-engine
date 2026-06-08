@@ -17,8 +17,7 @@ data class BatchProgress(
 ) {
     fun totalProcessed(): Int = successCount + failCount
 
-    fun shouldLogProgress(logInterval: Int): Boolean =
-        totalProcessed() - lastProgressLog >= logInterval
+    fun shouldLogProgress(logInterval: Int): Boolean = totalProcessed() - lastProgressLog >= logInterval
 
     fun markLogged(): BatchProgress = copy(lastProgressLog = totalProcessed())
 

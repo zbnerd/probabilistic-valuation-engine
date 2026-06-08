@@ -35,33 +35,27 @@ class VtExecutorConfig {
 
     @Bean(name = ["externalApiSchedulerExecutor"])
     @ConditionalOnMissingBean(name = ["externalApiSchedulerExecutor"])
-    fun externalApiSchedulerExecutor(): ExecutorService =
-        createTrackedExecutor("ExternalApiScheduler")
+    fun externalApiSchedulerExecutor(): ExecutorService = createTrackedExecutor("ExternalApiScheduler")
 
     @Bean(name = ["authCharacterFetchExecutor"])
     @ConditionalOnMissingBean(name = ["authCharacterFetchExecutor"])
-    fun authCharacterFetchExecutor(): ExecutorService =
-        createTrackedExecutor("AuthCharacterFetchConsumer")
+    fun authCharacterFetchExecutor(): ExecutorService = createTrackedExecutor("AuthCharacterFetchConsumer")
 
     @Bean(name = ["internalApiExecutor"])
     @ConditionalOnMissingBean(name = ["internalApiExecutor"])
-    fun internalApiExecutor(): ExecutorService =
-        createTrackedExecutor("InternalApiController")
+    fun internalApiExecutor(): ExecutorService = createTrackedExecutor("InternalApiController")
 
     @Bean(name = ["urgentCharacterRequestExecutor"])
     @ConditionalOnMissingBean(name = ["urgentCharacterRequestExecutor"])
-    fun urgentCharacterRequestExecutor(): ExecutorService =
-        createTrackedExecutor("UrgentCharacterRequestConsumer")
+    fun urgentCharacterRequestExecutor(): ExecutorService = createTrackedExecutor("UrgentCharacterRequestConsumer")
 
     @Bean(name = ["kafkaResultChunkExecutor"])
     @ConditionalOnMissingBean(name = ["kafkaResultChunkExecutor"])
-    fun kafkaResultChunkExecutor(): ExecutorService =
-        createTrackedExecutor("KafkaResultChunkConsumer")
+    fun kafkaResultChunkExecutor(): ExecutorService = createTrackedExecutor("KafkaResultChunkConsumer")
 
     @Bean(name = ["basicSnapshotChunkExecutor"])
     @ConditionalOnMissingBean(name = ["basicSnapshotChunkExecutor"])
-    fun basicSnapshotChunkExecutor(): ExecutorService =
-        createTrackedExecutor("BasicSnapshotChunkConsumer")
+    fun basicSnapshotChunkExecutor(): ExecutorService = createTrackedExecutor("BasicSnapshotChunkConsumer")
 
     private fun createTrackedExecutor(name: String): ExecutorService {
         val es = Executors.newVirtualThreadPerTaskExecutor()

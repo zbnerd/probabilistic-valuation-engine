@@ -3,6 +3,14 @@ package maple.externalapi.scheduler.phase
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.parser.OcidResponseParser
@@ -15,14 +23,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
-import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
-import java.io.FileOutputStream
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.concurrent.CompletableFuture
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
 
 class OcidLookupPhaseTest {
 

@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.security
 
-import java.nio.charset.StandardCharsets
 import maple.expectation.common.util.FingerprintUtil
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext

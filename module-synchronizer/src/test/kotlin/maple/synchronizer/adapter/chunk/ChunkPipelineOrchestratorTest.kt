@@ -1,5 +1,6 @@
 package maple.synchronizer.adapter.chunk
 
+import java.math.BigDecimal
 import maple.core.domain.chunk.ChunkProcessInput
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
@@ -18,7 +19,6 @@ import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import java.math.BigDecimal
 
 class ChunkPipelineOrchestratorTest {
 

@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class LocalRequestBuffer(
-    private val maxCapacity: Int
+    private val maxCapacity: Int,
 ) : RequestBuffer {
 
     private val queue = ConcurrentLinkedQueue<ReadRequest>()

@@ -1,14 +1,15 @@
 package maple.calculator
 
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.calculator.event.ChunkProcessingEvent
 import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.storage.ObjectStorage
+import maple.expectation.common.event.SnapshotChunkReadyEvent
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
@@ -23,7 +24,6 @@ import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import java.time.Instant
 
 @ExtendWith(MockitoExtension::class)
 class CalculatorChunkProcessingCoordinatorTest {
@@ -210,16 +210,18 @@ class CalculatorChunkProcessingCoordinatorTest {
 
         coordinator.handle(event)
 
-        verify(resultEventPublisher).publishChunkReady(check { published ->
-            assertThat(published.sourceRunId).isEqualTo("run-abc")
-            assertThat(published.sourceChunkId).isEqualTo("chunk-xyz")
-            assertThat(published.objectKey)
-                .isEqualTo("calculator/runs/run-abc/item-equipment/chunks/result-chunk-xyz.jsonl.gz")
-            assertThat(published.resultCount).isEqualTo(0)
-            assertThat(published.errorCount).isEqualTo(0)
-            assertThat(published.uncompressedBytes).isEqualTo(0)
-            assertThat(published.compressedBytes).isEqualTo(0)
-        })
+        verify(resultEventPublisher).publishChunkReady(
+            check { published ->
+                assertThat(published.sourceRunId).isEqualTo("run-abc")
+                assertThat(published.sourceChunkId).isEqualTo("chunk-xyz")
+                assertThat(published.objectKey)
+                    .isEqualTo("calculator/runs/run-abc/item-equipment/chunks/result-chunk-xyz.jsonl.gz")
+                assertThat(published.resultCount).isEqualTo(0)
+                assertThat(published.errorCount).isEqualTo(0)
+                assertThat(published.uncompressedBytes).isEqualTo(0)
+                assertThat(published.compressedBytes).isEqualTo(0)
+            },
+        )
     }
 
     @Test
@@ -230,16 +232,18 @@ class CalculatorChunkProcessingCoordinatorTest {
 
         coordinator.handle(event)
 
-        verify(resultEventPublisher).publishChunkReady(check { published ->
-            assertThat(published.sourceRunId).isEqualTo("run-1")
-            assertThat(published.sourceEndpoint).isEqualTo("item-equipment")
-            assertThat(published.sourceChunkId).isEqualTo("chunk-1")
-            assertThat(published.objectKey).isEqualTo(result.resultObjectKey)
-            assertThat(published.sourceRecordCount).isEqualTo(100)
-            assertThat(published.resultCount).isEqualTo(480)
-            assertThat(published.errorCount).isEqualTo(20)
-            assertThat(published.uncompressedBytes).isEqualTo(10000)
-            assertThat(published.compressedBytes).isEqualTo(2000)
-        })
+        verify(resultEventPublisher).publishChunkReady(
+            check { published ->
+                assertThat(published.sourceRunId).isEqualTo("run-1")
+                assertThat(published.sourceEndpoint).isEqualTo("item-equipment")
+                assertThat(published.sourceChunkId).isEqualTo("chunk-1")
+                assertThat(published.objectKey).isEqualTo(result.resultObjectKey)
+                assertThat(published.sourceRecordCount).isEqualTo(100)
+                assertThat(published.resultCount).isEqualTo(480)
+                assertThat(published.errorCount).isEqualTo(20)
+                assertThat(published.uncompressedBytes).isEqualTo(10000)
+                assertThat(published.compressedBytes).isEqualTo(2000)
+            },
+        )
     }
 }

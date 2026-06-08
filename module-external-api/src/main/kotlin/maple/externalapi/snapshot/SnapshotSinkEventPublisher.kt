@@ -1,13 +1,13 @@
 package maple.externalapi.snapshot
 
+import java.time.Clock
+import java.util.UUID
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
 import maple.expectation.util.CompressionUtils
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import org.slf4j.LoggerFactory
-import java.time.Clock
-import java.util.UUID
 
 /**
  * Owns snapshot-sink event DTO construction, volume-metrics recording, and
@@ -34,7 +34,12 @@ class SnapshotSinkEventPublisher(
         volumeMetrics.recordChunk(stats.compressedBytes, stats.uncompressedBytes, stats.recordCount.toLong())
         log.info(
             "[snapshotVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",
-            runId, chunkId, stats.compressedBytes, stats.uncompressedBytes, stats.recordCount, ratio,
+            runId,
+            chunkId,
+            stats.compressedBytes,
+            stats.uncompressedBytes,
+            stats.recordCount,
+            ratio,
         )
 
         val event = SnapshotChunkReadyEvent(

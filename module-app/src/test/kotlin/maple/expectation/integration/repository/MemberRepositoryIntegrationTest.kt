@@ -1,7 +1,7 @@
 package maple.expectation.integration.repository
 
-import maple.expectation.infrastructure.persistence.repository.MemberRepository
 import maple.expectation.infrastructure.persistence.entity.MemberEntity
+import maple.expectation.infrastructure.persistence.repository.MemberRepository
 import maple.expectation.test.RepositoryIntegrationTestBase
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName

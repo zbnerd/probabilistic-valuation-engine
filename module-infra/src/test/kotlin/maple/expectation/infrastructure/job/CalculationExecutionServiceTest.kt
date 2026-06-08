@@ -4,10 +4,10 @@ import java.util.UUID
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CalculationResultPort
-import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.core.port.out.mq.DomainEventAppender
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import maple.expectation.infrastructure.pgmq.PgmqClient
+import maple.expectation.infrastructure.queue.QueueNames
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

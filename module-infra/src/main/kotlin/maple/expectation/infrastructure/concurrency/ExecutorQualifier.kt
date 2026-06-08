@@ -5,5 +5,5 @@ enum class ExecutorQualifier {
     IO,
     SCHEDULER,
     CHUNK,
-    BACKFILL
+    BACKFILL,
 }

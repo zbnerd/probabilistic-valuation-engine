@@ -17,6 +17,5 @@ class PopularCharacterController(
     @GetMapping("/top10")
     fun top10(
         @RequestParam(required = false) windowHours: Int?,
-    ): ResponseEntity<*> =
-        ResponseEntity.ok(popularCharacterService.top(windowHours))
+    ): ResponseEntity<*> = ResponseEntity.ok(popularCharacterService.top(windowHours))
 }

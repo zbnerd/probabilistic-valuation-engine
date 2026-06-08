@@ -6,7 +6,6 @@ import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.mq.DomainEventAppender
-import maple.expectation.infrastructure.mq.event.OcidResolveEventFactory
 import maple.expectation.infrastructure.mq.pgmq.topic.OcidResolveTopic
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -25,7 +24,9 @@ import org.mockito.kotlin.whenever
 class OcidResolutionOrchestratorTest {
 
     @Mock lateinit var jobPort: CalculationJobPort
+
     @Mock lateinit var eventAppender: DomainEventAppender
+
     @Mock lateinit var ocidResolveTopic: OcidResolveTopic
 
     private lateinit var service: OcidResolutionOrchestrator
@@ -74,8 +75,13 @@ class OcidResolutionOrchestratorTest {
     fun `handleOcidFailure marks failed when max retries exceeded`() {
         val jobId = UUID.randomUUID()
         val job = CalculationJob(
-            jobId = jobId, ocid = null, userIgn = "ign", presetNo = 1,
-            status = CalculationJobStatus.OCID_RESOLVING, retryCount = 5, maxRetries = 5,
+            jobId = jobId,
+            ocid = null,
+            userIgn = "ign",
+            presetNo = 1,
+            status = CalculationJobStatus.OCID_RESOLVING,
+            retryCount = 5,
+            maxRetries = 5,
         )
         whenever(jobPort.findJobById(jobId)).thenReturn(job)
 
@@ -89,8 +95,13 @@ class OcidResolutionOrchestratorTest {
     fun `handleOcidFailure re-enqueues OCID resolve on retry`() {
         val jobId = UUID.randomUUID()
         val job = CalculationJob(
-            jobId = jobId, ocid = null, userIgn = "ign", presetNo = 1,
-            status = CalculationJobStatus.OCID_RESOLVING, retryCount = 0, maxRetries = 5,
+            jobId = jobId,
+            ocid = null,
+            userIgn = "ign",
+            presetNo = 1,
+            status = CalculationJobStatus.OCID_RESOLVING,
+            retryCount = 0,
+            maxRetries = 5,
         )
         whenever(jobPort.findJobById(jobId)).thenReturn(job)
         whenever(jobPort.incrementRetryForOcid(jobId, "CODE")).thenReturn(true)

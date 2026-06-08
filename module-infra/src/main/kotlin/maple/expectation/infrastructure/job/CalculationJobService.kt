@@ -49,11 +49,9 @@ class CalculationJobService(
         return jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)
     }
 
-    fun retryOcidResolvingJob(jobId: UUID, userIgn: String, presetNo: Int): Boolean =
-        dispatchService.retryOcidResolvingJob(jobId, userIgn, presetNo)
+    fun retryOcidResolvingJob(jobId: UUID, userIgn: String, presetNo: Int): Boolean = dispatchService.retryOcidResolvingJob(jobId, userIgn, presetNo)
 
-    fun retryApiRequestedJob(jobId: UUID, userIgn: String, presetNo: Int): Boolean =
-        dispatchService.retryApiRequestedJob(jobId, userIgn, presetNo)
+    fun retryApiRequestedJob(jobId: UUID, userIgn: String, presetNo: Int): Boolean = dispatchService.retryApiRequestedJob(jobId, userIgn, presetNo)
 
     fun dispatchToExternalApi(jobId: UUID, userIgn: String, presetNo: Int) {
         dispatchService.dispatchToExternalApi(jobId, userIgn, presetNo)
@@ -70,6 +68,5 @@ class CalculationJobService(
         payload: CalculationRequestedPayload,
     ): Boolean = dispatchService.saveInputSnapshotAndDispatchCalculation(snapshotEntity, jobId, snapshotId, payload)
 
-    fun retryExternalApiJob(jobId: UUID, errorCode: String = "EXTERNAL_API_ERROR"): Boolean =
-        dispatchService.retryExternalApiJob(jobId, errorCode)
+    fun retryExternalApiJob(jobId: UUID, errorCode: String = "EXTERNAL_API_ERROR"): Boolean = dispatchService.retryExternalApiJob(jobId, errorCode)
 }

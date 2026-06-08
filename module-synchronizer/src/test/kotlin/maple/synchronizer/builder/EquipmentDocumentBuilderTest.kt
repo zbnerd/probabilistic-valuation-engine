@@ -1,10 +1,10 @@
 package maple.synchronizer.builder
 
+import java.math.BigDecimal
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.GroupedEquipmentResult
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import java.math.BigDecimal
 
 class EquipmentDocumentBuilderTest {
 
@@ -27,7 +27,7 @@ class EquipmentDocumentBuilderTest {
                     totalCost = BigDecimal.ZERO, blackCubeCost = BigDecimal.ZERO,
                     additionalCubeCost = BigDecimal.ZERO, starforceCost = BigDecimal.ZERO,
                     errorMessage = null,
-                )
+                ),
             ),
         )
 

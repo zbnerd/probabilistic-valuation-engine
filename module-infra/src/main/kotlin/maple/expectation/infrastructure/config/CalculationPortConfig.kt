@@ -28,37 +28,23 @@ class CalculationPortConfig {
     }
 
     @Bean
-    fun flameDpCalculator(): FlameDpCalculator {
-        return FlameDpCalculator()
-    }
+    fun flameDpCalculator(): FlameDpCalculator = FlameDpCalculator()
 
     @Bean
-    fun flameScoreCalculator(): FlameScoreCalculator {
-        return FlameScoreCalculator()
-    }
+    fun flameScoreCalculator(): FlameScoreCalculator = FlameScoreCalculator()
 
     @Bean
-    fun cubeRateCalculator(): CubeRateCalculator {
-        return CubeRateCalculator()
-    }
+    fun cubeRateCalculator(): CubeRateCalculator = CubeRateCalculator()
 
     @Bean
-    fun statParser(): StatParser {
-        return StatParser()
-    }
+    fun statParser(): StatParser = StatParser()
 
     @Bean
-    fun probabilityConvolver(): ProbabilityConvolver {
-        return ProbabilityConvolver()
-    }
+    fun probabilityConvolver(): ProbabilityConvolver = ProbabilityConvolver()
 
     @Bean
-    fun tailProbabilityCalculator(): TailProbabilityCalculator {
-        return TailProbabilityCalculator()
-    }
+    fun tailProbabilityCalculator(): TailProbabilityCalculator = TailProbabilityCalculator()
 
     @Bean
-    fun flameScoreResolver(): FlameScoreResolver {
-        return FlameScoreResolver
-    }
+    fun flameScoreResolver(): FlameScoreResolver = FlameScoreResolver
 }

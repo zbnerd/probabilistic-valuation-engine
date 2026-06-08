@@ -23,10 +23,12 @@ class OcidUserIgnResolverTest {
     fun `should resolve ocids to userIgn map`() {
         @Suppress("UNCHECKED_CAST")
         whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>()))
-            .thenReturn(listOf(
-                mapOf("ocid" to "ocid1", "user_ign" to "아델"),
-                mapOf("ocid" to "ocid2", "user_ign" to "강은호")
-            ))
+            .thenReturn(
+                listOf(
+                    mapOf("ocid" to "ocid1", "user_ign" to "아델"),
+                    mapOf("ocid" to "ocid2", "user_ign" to "강은호"),
+                ),
+            )
 
         val result = resolver.resolve(setOf("ocid1", "ocid2"))
         assertThat(result).hasSize(2)
@@ -38,9 +40,11 @@ class OcidUserIgnResolverTest {
     fun `should handle partial miss — return only found mappings`() {
         @Suppress("UNCHECKED_CAST")
         whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>()))
-            .thenReturn(listOf(
-                mapOf("ocid" to "ocid1", "user_ign" to "아델")
-            ))
+            .thenReturn(
+                listOf(
+                    mapOf("ocid" to "ocid1", "user_ign" to "아델"),
+                ),
+            )
 
         val result = resolver.resolve(setOf("ocid1", "ocid_not_found"))
         assertThat(result).containsEntry("ocid1", "아델")

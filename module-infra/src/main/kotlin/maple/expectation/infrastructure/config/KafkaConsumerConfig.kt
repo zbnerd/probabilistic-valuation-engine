@@ -29,7 +29,11 @@ class KafkaConsumerConfig {
         val recoverer = DeadLetterPublishingRecoverer(kafkaTemplate) { record: ConsumerRecord<*, *>, ex: Exception ->
             log.error(
                 "[DLQ] topic={} key={} offset={} error={}",
-                record.topic(), record.key(), record.offset(), ex.message, ex,
+                record.topic(),
+                record.key(),
+                record.offset(),
+                ex.message,
+                ex,
             )
             TopicPartition("${record.topic()}.DLT", record.partition())
         }

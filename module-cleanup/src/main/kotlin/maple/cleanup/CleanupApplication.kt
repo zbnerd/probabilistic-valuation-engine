@@ -3,9 +3,9 @@ package maple.cleanup
 import maple.cleanup.config.CleanupProperties
 import maple.cleanup.inbox.InboxProperties
 import maple.expectation.infrastructure.config.KafkaConsumerConfig
+import org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
-import org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Import
@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Import
     exclude = [
         SecurityAutoConfiguration::class,
         ManagementWebSecurityAutoConfiguration::class,
-    ]
+    ],
 )
 @Import(KafkaConsumerConfig::class)
 @EnableConfigurationProperties(CleanupProperties::class, InboxProperties::class)

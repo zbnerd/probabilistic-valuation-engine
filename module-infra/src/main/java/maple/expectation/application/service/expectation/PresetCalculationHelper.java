@@ -113,9 +113,7 @@ public class PresetCalculationHelper {
 
     // .join() justified: calculatePreset is sync, called from worker thread
     List<ItemExpectationV4> results =
-        futures.stream()
-            .map(CompletableFuture::join)
-            .collect(Collectors.toList());
+        futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
 
     // 비용 누적은 순서 무관
     KahanSummation costAcc = new KahanSummation();

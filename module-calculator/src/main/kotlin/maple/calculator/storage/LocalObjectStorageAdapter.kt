@@ -47,17 +47,20 @@ class LocalObjectStorageAdapter(
         val dir = Paths.get(basePath, prefix)
         if (!Files.exists(dir)) return 0L
         var deletedBytes = 0L
-        Files.walkFileTree(dir, object : SimpleFileVisitor<Path>() {
-            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                deletedBytes += attrs.size()
-                Files.delete(file)
-                return FileVisitResult.CONTINUE
-            }
-            override fun postVisitDirectory(dir: Path, exc: java.io.IOException?): FileVisitResult {
-                Files.delete(dir)
-                return FileVisitResult.CONTINUE
-            }
-        })
+        Files.walkFileTree(
+            dir,
+            object : SimpleFileVisitor<Path>() {
+                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    deletedBytes += attrs.size()
+                    Files.delete(file)
+                    return FileVisitResult.CONTINUE
+                }
+                override fun postVisitDirectory(dir: Path, exc: java.io.IOException?): FileVisitResult {
+                    Files.delete(dir)
+                    return FileVisitResult.CONTINUE
+                }
+            },
+        )
         return deletedBytes
     }
 

@@ -1,5 +1,11 @@
 package maple.externalapi.scheduler.phase
 
+import java.nio.file.Paths
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.future
@@ -12,12 +18,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.nio.file.Paths
-import java.time.Clock
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
 
 /**
  * ITEM_EQUIPMENT snapshot fetch phase. Driven by ExternalApiScheduler's
@@ -62,8 +62,12 @@ class ItemEquipmentFetchPhase(
         log.info("[Scheduler] ========== item-equipment lookup start ==========")
         log.info(
             "[Scheduler] config: total={}, rate={}/s, batchSize={}, chunk={}records/{}bytes, runId={}",
-            entries.size, permitsPerSecond, batchSize,
-            chunkConfig.maxRecords, chunkConfig.maxUncompressedBytes, runId,
+            entries.size,
+            permitsPerSecond,
+            batchSize,
+            chunkConfig.maxRecords,
+            chunkConfig.maxUncompressedBytes,
+            runId,
         )
 
         val start = Instant.now(clock)
@@ -78,7 +82,13 @@ class ItemEquipmentFetchPhase(
         return CoroutineScope(dispatcher).future {
             try {
                 val (successCount, failCount) = batchSupport.processBatch(
-                    rateLimiter, entries, batchSize, ctx, sink, runId, start,
+                    rateLimiter,
+                    entries,
+                    batchSize,
+                    ctx,
+                    sink,
+                    runId,
+                    start,
                 )
                 schedulerProgressLogger.logSummary("item-equipment", entries.size, successCount, successCount, failCount, start)
             } finally {

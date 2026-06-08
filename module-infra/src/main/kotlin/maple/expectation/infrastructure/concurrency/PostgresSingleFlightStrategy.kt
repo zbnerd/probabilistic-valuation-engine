@@ -70,18 +70,16 @@ class PostgresSingleFlightStrategy(
     /** Completed result cache for followers (short-lived, ~30s). */
     private val resultCache = ConcurrentHashMap<String, CompletableFuture<Any>>()
 
-    override fun <T> execute(key: String, supplier: Supplier<T>): T {
-        return try {
-            executeAsync(key) { CompletableFuture.supplyAsync(supplier, taskExecutor) }
-                .orTimeout(DEFAULT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
-                .join()
-        } catch (ex: CompletionException) {
-            if (ex.cause is TimeoutException) {
-                log.warn("[SingleFlight] Timeout waiting for result: key={}", maskKey(key))
-                throw ex
-            }
+    override fun <T> execute(key: String, supplier: Supplier<T>): T = try {
+        executeAsync(key) { CompletableFuture.supplyAsync(supplier, taskExecutor) }
+            .orTimeout(DEFAULT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+            .join()
+    } catch (ex: CompletionException) {
+        if (ex.cause is TimeoutException) {
+            log.warn("[SingleFlight] Timeout waiting for result: key={}", maskKey(key))
             throw ex
         }
+        throw ex
     }
 
     override fun <T> executeAsync(key: String, asyncSupplier: Supplier<CompletableFuture<T>>): CompletableFuture<T> {

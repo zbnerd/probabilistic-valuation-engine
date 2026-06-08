@@ -1,13 +1,12 @@
 package maple.externalapi.runstatus
 
+import java.util.UUID
+import java.util.concurrent.ExecutorService
 import maple.externalapi.scheduler.ExternalApiScheduler
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import java.util.UUID
-import java.util.concurrent.ExecutorService
 
 @RestController
 @RequestMapping("/api/internal")

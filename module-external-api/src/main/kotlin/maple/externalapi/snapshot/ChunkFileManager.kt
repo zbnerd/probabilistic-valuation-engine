@@ -1,11 +1,11 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
+import org.slf4j.LoggerFactory
 
 /**
  * Owns every filesystem concern of a snapshot-sink run:
@@ -106,8 +106,7 @@ class ChunkFileManager(
 
     fun manifest(): SnapshotChunkManifest = manifest
 
-    private fun newChunkWriter(partIndex: Int): GzipJsonlChunkWriter =
-        GzipJsonlChunkWriter(chunksDir, partIndex, maxRecords, maxUncompressedBytes, objectMapper, clock)
+    private fun newChunkWriter(partIndex: Int): GzipJsonlChunkWriter = GzipJsonlChunkWriter(chunksDir, partIndex, maxRecords, maxUncompressedBytes, objectMapper, clock)
 
     private fun toEntry(stats: ChunkStats): ChunkEntry = ChunkEntry(
         path = stats.path,

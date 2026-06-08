@@ -4,12 +4,11 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.application.service.calculator.PotentialCalculator;
 import maple.expectation.core.domain.model.AlertMessage;
 import maple.expectation.core.domain.model.AlertPriority;
-import maple.expectation.core.domain.model.character.CharacterId;
 import maple.expectation.core.domain.model.CubeRate;
 import maple.expectation.core.domain.model.PotentialStat;
+import maple.expectation.core.domain.model.character.CharacterId;
 import maple.expectation.core.domain.model.equipment.CharacterEquipment;
 import maple.expectation.core.domain.model.equipment.EquipmentData;
 import maple.expectation.core.port.out.AlertPort;
@@ -18,9 +17,9 @@ import maple.expectation.core.port.out.EquipmentDataPort;
 import maple.expectation.core.port.out.ItemPricePort;
 import maple.expectation.core.port.out.PotentialStatPort;
 import maple.expectation.core.port.out.ShutdownDataPersistencePort;
+import maple.expectation.infrastructure.persistence.entity.CubeProbability;
 import maple.expectation.infrastructure.persistence.repository.CharacterEquipmentRepository;
 import maple.expectation.infrastructure.persistence.repository.CubeProbabilityRepository;
-import maple.expectation.infrastructure.persistence.entity.CubeProbability;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -57,15 +56,12 @@ public class CorePortAdapterConfig {
   private final CharacterEquipmentRepository characterEquipmentRepository;
 
   /**
-  public PotentialCalculator potentialCalculator(
-      maple.expectation.core.domain.stat.StatParser statParser,
-      maple.expectation.infrastructure.executor.LogicExecutor logicExecutor) {
-    log.info("[CorePortAdapter] Initializing PotentialCalculator bean");
-    return new PotentialCalculator(statParser, logicExecutor);
-  }
-
-  /**
-   * CubeRate Port Adapter
+   * public PotentialCalculator potentialCalculator( maple.expectation.core.domain.stat.StatParser
+   * statParser, maple.expectation.infrastructure.executor.LogicExecutor logicExecutor) {
+   * log.info("[CorePortAdapter] Initializing PotentialCalculator bean"); return new
+   * PotentialCalculator(statParser, logicExecutor); }
+   *
+   * <p>/** CubeRate Port Adapter
    *
    * <p>Maps legacy {@link CubeProbability} entities to core {@link CubeRate} domain models.
    *

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.CompletableFuture
 import maple.expectation.core.domain.model.character.CharacterId
 import maple.expectation.core.domain.model.equipment.CharacterEquipment
-import maple.expectation.infrastructure.persistence.repository.CharacterEquipmentRepository
 import maple.expectation.error.exception.CharacterNotFoundException
 import maple.expectation.error.exception.EquipmentDataProcessingException
 import maple.expectation.error.exception.ExternalServiceException
@@ -13,6 +12,7 @@ import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.executor.classifier.CircuitBreakerClassification
 import maple.expectation.infrastructure.executor.classifier.ExceptionClassifier
 import maple.expectation.infrastructure.external.dto.v2.EquipmentResponse
+import maple.expectation.infrastructure.persistence.repository.CharacterEquipmentRepository
 import maple.expectation.util.ExceptionUtils
 import org.slf4j.LoggerFactory
 import org.springframework.web.reactive.function.client.WebClientResponseException

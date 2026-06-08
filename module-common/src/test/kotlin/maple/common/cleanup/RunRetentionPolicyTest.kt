@@ -1,9 +1,9 @@
 package maple.common.cleanup
 
-import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
 
 class RunRetentionPolicyTest {
 
@@ -12,7 +12,7 @@ class RunRetentionPolicyTest {
         val now = Instant.now()
         val runs = (0..9).map { i ->
             RunInfo(
-                runId = "run-${i}",
+                runId = "run-$i",
                 createdAt = now.minus(49, ChronoUnit.HOURS).plusSeconds(i.toLong()),
                 isRunning = false,
                 sizeBytes = 1024L,
@@ -25,7 +25,11 @@ class RunRetentionPolicyTest {
             now = now,
         )
         assertThat(toDelete.map { it.runId }).containsExactly(
-            "run-0", "run-1", "run-2", "run-3", "run-4",
+            "run-0",
+            "run-1",
+            "run-2",
+            "run-3",
+            "run-4",
         )
     }
 

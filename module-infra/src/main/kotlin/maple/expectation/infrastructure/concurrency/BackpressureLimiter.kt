@@ -9,7 +9,7 @@ interface BackpressureLimiter {
 
 class DefaultBackpressureLimiter(
     private val permits: Int,
-    private val component: String = "unknown"
+    private val component: String = "unknown",
 ) : BackpressureLimiter {
     private val sem = Semaphore(permits)
 

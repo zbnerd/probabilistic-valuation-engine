@@ -1,8 +1,8 @@
 package maple.expectation.infrastructure.concurrency
 
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 class LifecycleComponentTest {
     @Test
@@ -21,6 +21,8 @@ class LifecycleComponentTest {
     private class TestComponent(val name: String) : LifecycleComponent {
         var drainCalled = false
         override fun componentName() = name
-        override suspend fun drain() { drainCalled = true }
+        override suspend fun drain() {
+            drainCalled = true
+        }
     }
 }

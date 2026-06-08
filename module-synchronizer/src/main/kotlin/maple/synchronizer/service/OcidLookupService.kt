@@ -20,7 +20,9 @@ class OcidLookupService(
 
         log.info(
             "[OcidService] received: runId={} totalRecords={} manifestPath={}",
-            event.runId, event.totalRecords, event.manifestPath,
+            event.runId,
+            event.totalRecords,
+            event.manifestPath,
         )
 
         val mappings = fileReader.read(event.manifestPath)
@@ -36,7 +38,10 @@ class OcidLookupService(
             }.onFailure { ex ->
                 log.error(
                     "[OcidService] Redis write failed after DB upsert: runId={} mappings={} - {}. Redis may be stale until next run.",
-                    event.runId, mappings.size, ex.message, ex,
+                    event.runId,
+                    mappings.size,
+                    ex.message,
+                    ex,
                 )
             }
         }

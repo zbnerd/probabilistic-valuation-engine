@@ -1,10 +1,9 @@
 package maple.restcontroller.read
 
-import maple.expectation.util.StringMaskingUtils.maskIgn
+import java.time.Duration
 import maple.restcontroller.config.V6ReadProperties
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
-import java.time.Duration
 
 /**
  * Urgent-pipeline deduplication and status projection.
@@ -46,8 +45,7 @@ class UrgentDedupService(
         return result == true
     }
 
-    fun isUrgentPending(userIgn: String): Boolean =
-        redisTemplate.hasKey(urgentPendingKey(userIgn))
+    fun isUrgentPending(userIgn: String): Boolean = redisTemplate.hasKey(urgentPendingKey(userIgn))
 
     fun clearUrgentPending(userIgn: String) {
         redisTemplate.delete(urgentPendingKey(userIgn))
@@ -87,8 +85,7 @@ class UrgentDedupService(
         )
     }
 
-    private fun queuePosition(userIgn: String): Long? =
-        redisTemplate.opsForZSet().rank(URGENT_STATUS_QUEUE_KEY, userIgn)?.plus(1)
+    private fun queuePosition(userIgn: String): Long? = redisTemplate.opsForZSet().rank(URGENT_STATUS_QUEUE_KEY, userIgn)?.plus(1)
 
     private fun estimateWaitSeconds(queuePosition: Long): Long {
         val throughput = properties.statusEstimatedThroughputPerSecond.takeIf { it > 0.0 } ?: 1.0

@@ -1,12 +1,12 @@
 package maple.synchronizer.builder
 
+import java.math.BigDecimal
+import java.time.Instant
 import maple.synchronizer.domain.CalculatedEquipmentItem
 import maple.synchronizer.domain.EquipmentReadDocument
 import maple.synchronizer.domain.EquipmentReadMetadata
 import maple.synchronizer.domain.EquipmentSummary
 import maple.synchronizer.domain.GroupedEquipmentResult
-import java.math.BigDecimal
-import java.time.Instant
 
 class EquipmentDocumentBuilder {
 

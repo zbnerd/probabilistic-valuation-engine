@@ -17,6 +17,5 @@ class EquipmentRankingController(
     @GetMapping("/total-cost/top10")
     fun topTotalCost(
         @RequestParam(defaultValue = "1") presetNo: Int,
-    ): ResponseEntity<*> =
-        ResponseEntity.ok(rankingService.topByTotalCost(presetNo))
+    ): ResponseEntity<*> = ResponseEntity.ok(rankingService.topByTotalCost(presetNo))
 }

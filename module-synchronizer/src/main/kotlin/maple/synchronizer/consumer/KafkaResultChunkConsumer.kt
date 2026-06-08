@@ -1,27 +1,26 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Semaphore
+import maple.core.domain.chunk.ChunkProcessInput
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.ChunkConsumedEvent
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.infrastructure.executor.TaskContext
+import maple.expectation.util.CompressionUtils
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.event.ResultChunkEventPathBuilder
 import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
-import maple.synchronizer.metrics.SynchronizerMetrics
-import maple.core.domain.chunk.ChunkProcessInput
 import maple.synchronizer.processor.ChunkProcessor
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
-import maple.expectation.util.CompressionUtils
-import org.springframework.beans.factory.annotation.Qualifier
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Semaphore
 
 @Component
 class KafkaResultChunkConsumer(
@@ -56,8 +55,13 @@ class KafkaResultChunkConsumer(
             chunkId = chunkId,
         )
 
-        log.info("[Synchronizer] received: runId={} chunkId={} objectKey={} results={}",
-            runId, chunkId, event.objectKey, event.resultCount)
+        log.info(
+            "[Synchronizer] received: runId={} chunkId={} objectKey={} results={}",
+            runId,
+            chunkId,
+            event.objectKey,
+            event.resultCount,
+        )
 
         var startNanos: Long = 0
         chunkConsumerTemplate.submit(
@@ -78,38 +82,44 @@ class KafkaResultChunkConsumer(
                 lifecycleContext = TaskContext.of("Synchronizer", "ChunkLifecycle", chunkId),
                 mdcValues = mapOf("kafkaTopic" to (topic ?: event.eventType)),
                 process = {
-                    chunkProcessor.process(ChunkProcessInput(
-                        objectKey = event.objectKey,
-                        sourceRunId = runId,
-                        sourceChunkId = chunkId,
-                        resultCount = event.resultCount,
-                    ))
+                    chunkProcessor.process(
+                        ChunkProcessInput(
+                            objectKey = event.objectKey,
+                            sourceRunId = runId,
+                            sourceChunkId = chunkId,
+                            resultCount = event.resultCount,
+                        ),
+                    )
                 },
                 onAccepted = {
                     startNanos = System.nanoTime()
                     chunkMetricsListener.onEvent(ChunkLifecycleEvent.Accepted(runId, chunkId))
                 },
                 onSuccess = {
-                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Succeeded(
-                        runId = runId,
-                        chunkId = chunkId,
-                        compressedBytes = event.compressedBytes,
-                        uncompressedBytes = event.uncompressedBytes,
-                        resultCount = event.resultCount.toLong(),
-                        durationNanos = System.nanoTime() - startNanos,
-                    ))
-                    logPreUpsertVolume(event)
-                    consumedEventPublisher.publish(ChunkConsumedEvent(
-                        runId = runId,
-                        endpoint = event.sourceEndpoint.ifBlank { "result" },
-                        chunkId = chunkId,
-                        objectKey = event.objectKey,
-                        sourceObjectKey = eventPathBuilder.sourceObjectKey(
+                    chunkMetricsListener.onEvent(
+                        ChunkLifecycleEvent.Succeeded(
                             runId = runId,
-                            sourceEndpoint = event.sourceEndpoint.ifBlank { "result" },
                             chunkId = chunkId,
+                            compressedBytes = event.compressedBytes,
+                            uncompressedBytes = event.uncompressedBytes,
+                            resultCount = event.resultCount.toLong(),
+                            durationNanos = System.nanoTime() - startNanos,
                         ),
-                    ))
+                    )
+                    logPreUpsertVolume(event)
+                    consumedEventPublisher.publish(
+                        ChunkConsumedEvent(
+                            runId = runId,
+                            endpoint = event.sourceEndpoint.ifBlank { "result" },
+                            chunkId = chunkId,
+                            objectKey = event.objectKey,
+                            sourceObjectKey = eventPathBuilder.sourceObjectKey(
+                                runId = runId,
+                                sourceEndpoint = event.sourceEndpoint.ifBlank { "result" },
+                                chunkId = chunkId,
+                            ),
+                        ),
+                    )
                 },
                 onFailure = { ex ->
                     chunkMetricsListener.onEvent(ChunkLifecycleEvent.Failed(runId, chunkId))
@@ -126,8 +136,12 @@ class KafkaResultChunkConsumer(
         val ratio = CompressionUtils.ratioString(event.uncompressedBytes, event.compressedBytes)
         log.info(
             "[preUpsertVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",
-            event.sourceRunId, event.sourceChunkId, event.compressedBytes, event.uncompressedBytes,
-            event.resultCount, ratio,
+            event.sourceRunId,
+            event.sourceChunkId,
+            event.compressedBytes,
+            event.uncompressedBytes,
+            event.resultCount,
+            ratio,
         )
     }
 }

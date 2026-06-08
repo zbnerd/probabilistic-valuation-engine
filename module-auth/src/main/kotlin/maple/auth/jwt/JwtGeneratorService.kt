@@ -2,13 +2,13 @@ package maple.auth.jwt
 
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
-import maple.expectation.core.auth.JwtPayload
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.Date
 import javax.crypto.SecretKey
+import maple.expectation.core.auth.JwtPayload
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Component
 
 @Component
 class JwtGeneratorService(

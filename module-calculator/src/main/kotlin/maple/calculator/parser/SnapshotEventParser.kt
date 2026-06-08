@@ -13,6 +13,5 @@ import org.springframework.stereotype.Component
 class SnapshotEventParser(
     private val objectMapper: ObjectMapper,
 ) {
-    fun parse(message: String): SnapshotChunkReadyEvent =
-        objectMapper.readValue(message, SnapshotChunkReadyEvent::class.java)
+    fun parse(message: String): SnapshotChunkReadyEvent = objectMapper.readValue(message, SnapshotChunkReadyEvent::class.java)
 }

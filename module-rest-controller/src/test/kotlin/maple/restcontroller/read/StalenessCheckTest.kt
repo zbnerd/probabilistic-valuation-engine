@@ -1,10 +1,10 @@
 package maple.restcontroller.read
 
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 import java.sql.Timestamp
 import java.time.Instant
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 class StalenessCheckTest {
     private val now = Instant.parse("2026-06-06T12:00:00Z")

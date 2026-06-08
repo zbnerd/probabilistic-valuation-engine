@@ -1,16 +1,16 @@
 package maple.auth.login
 
-import maple.expectation.core.auth.event.CharacterFetchRequest
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import maple.auth.fingerprint.FingerprintService
 import maple.auth.jwt.JwtGeneratorService
 import maple.auth.kafka.AuthEventPublisher
 import maple.auth.kafka.PendingLoginRegistry
 import maple.auth.session.SessionCacheService
+import maple.expectation.core.auth.event.CharacterFetchRequest
 import maple.expectation.core.domain.auth.Session
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.util.UUID
-import java.util.concurrent.CompletableFuture
 
 class LoginRejectedException(val statusCode: Int, message: String) : RuntimeException(message)
 

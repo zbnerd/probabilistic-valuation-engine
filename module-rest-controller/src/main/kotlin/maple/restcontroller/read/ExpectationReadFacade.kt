@@ -65,7 +65,7 @@ class ExpectationReadFacade(
                         hasNegativeCache = negativeCacheService.getNegativeCache(userIgn),
                     ),
                     retryAfterSeconds = properties.statusRetryAfterSeconds,
-                )
+                ),
             )
         }
         deferred.onCompletion {

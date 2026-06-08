@@ -35,7 +35,8 @@ class JwtTokenProvider(
     @Value("\${auth.jwt.expiration}") private val expirationSeconds: Long,
     private val environment: Environment,
     private val executor: LogicExecutor,
-) : JwtParserPort, JwtGeneratorPort {
+) : JwtParserPort,
+    JwtGeneratorPort {
     private lateinit var secretKey: SecretKey
 
     companion object {

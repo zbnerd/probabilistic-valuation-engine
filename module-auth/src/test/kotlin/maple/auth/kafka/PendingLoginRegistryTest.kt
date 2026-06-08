@@ -1,9 +1,9 @@
 package maple.auth.kafka
 
+import java.util.concurrent.TimeUnit
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import java.util.concurrent.TimeUnit
 
 class PendingLoginRegistryTest {
     private val registry = PendingLoginRegistry()

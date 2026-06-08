@@ -1,13 +1,13 @@
 package maple.restcontroller.popular.adapter.out
 
+import java.time.Duration
+import java.time.Instant
 import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.popular.port.out.PopularCharacterRedisPort
 import maple.restcontroller.popular.port.out.PopularCharacterScoreEntry
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ZSetOperations
 import org.springframework.stereotype.Component
-import java.time.Duration
-import java.time.Instant
 
 /**
  * Redis adapter — only file in module-rest-controller that touches
@@ -63,15 +63,12 @@ class PopularCharacterRedisAdapter(
     }
 
     /** Per-IGN hour bucket key. Format: `<prefix>:hour:<epochHour>`. */
-    private fun bucketKey(epochHour: Long): String =
-        "${properties.popular.redisKeyPrefix}:hour:$epochHour"
+    private fun bucketKey(epochHour: Long): String = "${properties.popular.redisKeyPrefix}:hour:$epochHour"
 
     /** Rolling read destination key. Format: `<prefix>:rolling:<windowHours>h:<epochHour>`. */
-    private fun rollingKey(epochHour: Long, windowHours: Int): String =
-        "${properties.popular.redisKeyPrefix}:rolling:${windowHours}h:$epochHour"
+    private fun rollingKey(epochHour: Long, windowHours: Int): String = "${properties.popular.redisKeyPrefix}:rolling:${windowHours}h:$epochHour"
 
-    private fun epochHourOf(at: Instant): Long =
-        at.epochSecond / SECONDS_PER_HOUR
+    private fun epochHourOf(at: Instant): Long = at.epochSecond / SECONDS_PER_HOUR
 
     private companion object {
         const val SECONDS_PER_HOUR = 3600L

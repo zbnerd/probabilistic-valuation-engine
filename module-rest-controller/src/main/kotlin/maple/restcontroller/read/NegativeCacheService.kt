@@ -1,9 +1,9 @@
 package maple.restcontroller.read
 
+import java.time.Duration
 import maple.expectation.util.StringMaskingUtils.maskIgn
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
-import java.time.Duration
 
 /**
  * Negative cache for characters confirmed not found by the upstream API.
@@ -26,8 +26,7 @@ class NegativeCacheService(
 
     fun negativeCacheKey(userIgn: String): String = "$KEY_PREFIX:$userIgn"
 
-    fun getNegativeCache(userIgn: String): Boolean =
-        redisTemplate.hasKey(negativeCacheKey(userIgn))
+    fun getNegativeCache(userIgn: String): Boolean = redisTemplate.hasKey(negativeCacheKey(userIgn))
 
     fun setNegativeCache(userIgn: String, ttlSeconds: Long) {
         redisTemplate.opsForValue().set(negativeCacheKey(userIgn), "NOT_FOUND", Duration.ofSeconds(ttlSeconds))

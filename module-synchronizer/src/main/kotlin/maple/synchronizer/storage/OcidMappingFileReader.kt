@@ -3,17 +3,17 @@ package maple.synchronizer.storage
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.io.BufferedInputStream
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicLong
+import java.util.zip.GZIPInputStream
 import maple.expectation.error.CommonErrorCode
 import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.metrics.SynchronizerReaderMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.io.BufferedInputStream
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.util.concurrent.atomic.AtomicLong
-import java.util.zip.GZIPInputStream
 
 data class OcidMapping(
     val userIgn: String,
@@ -48,10 +48,19 @@ class OcidMappingFileReader(
         val pe = parseErrors.get()
         val mf = missingFields.get()
         when {
-            pe > 0 -> log.error("[OcidMappingFileReader] parseErrors={} missingFields={} parsed={} from {}",
-                pe, mf, mappings.size, manifestPath)
-            mf > 0 -> log.warn("[OcidMappingFileReader] missingFields={} parsed={} from {}",
-                mf, mappings.size, manifestPath)
+            pe > 0 -> log.error(
+                "[OcidMappingFileReader] parseErrors={} missingFields={} parsed={} from {}",
+                pe,
+                mf,
+                mappings.size,
+                manifestPath,
+            )
+            mf > 0 -> log.warn(
+                "[OcidMappingFileReader] missingFields={} parsed={} from {}",
+                mf,
+                mappings.size,
+                manifestPath,
+            )
             else -> log.info("[OcidMappingFileReader] parsed {} mappings from {}", mappings.size, manifestPath)
         }
         return mappings

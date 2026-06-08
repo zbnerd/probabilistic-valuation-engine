@@ -1,11 +1,11 @@
 package maple.expectation.infrastructure.lifecycle
 
+import java.util.concurrent.atomic.AtomicBoolean
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component
-import java.util.concurrent.atomic.AtomicBoolean
 
 @Component
 class ManagedLifecycleCoordinator(

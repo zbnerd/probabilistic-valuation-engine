@@ -1,7 +1,7 @@
 package maple.synchronizer.consumer
 
-import org.springframework.boot.context.properties.ConfigurationProperties
 import java.time.Duration
+import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties("chunk-execution")
 data class ChunkExecutionProperties(

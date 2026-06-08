@@ -4,7 +4,6 @@ import io.micrometer.core.instrument.MeterRegistry
 import java.util.UUID
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
-import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.job.CalculationExecutionService
@@ -15,6 +14,7 @@ import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
+import maple.expectation.infrastructure.queue.QueueNames
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component

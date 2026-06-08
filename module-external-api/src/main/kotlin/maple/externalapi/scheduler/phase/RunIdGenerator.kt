@@ -1,8 +1,8 @@
 package maple.externalapi.scheduler.phase
 
-import org.springframework.stereotype.Component
 import java.time.Clock
 import java.time.format.DateTimeFormatter
+import org.springframework.stereotype.Component
 
 @Component
 class RunIdGenerator(private val clock: Clock) {

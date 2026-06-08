@@ -1,6 +1,5 @@
 package maple.externalapi.snapshot
 
-import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ExecutorService
@@ -9,6 +8,7 @@ import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import org.slf4j.LoggerFactory
 
 class ChunkedSnapshotSink(
     private val runDir: Path,
@@ -87,7 +87,10 @@ class ChunkedSnapshotSink(
 
         log.info(
             "[Sink] closed: endpoint={}, chunks={}, records={}, failed={}",
-            endpoint, manifest.chunks.size, manifest.totalRecords, manifest.totalFailed,
+            endpoint,
+            manifest.chunks.size,
+            manifest.totalRecords,
+            manifest.totalFailed,
         )
 
         // publish run completed (after _SUCCESS)

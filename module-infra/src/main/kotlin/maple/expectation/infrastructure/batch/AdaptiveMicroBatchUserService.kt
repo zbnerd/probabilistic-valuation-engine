@@ -79,7 +79,7 @@ class AdaptiveMicroBatchUserService<T : Any>(
     private val cache: Cache,
     private val singleLoader: (String) -> T?,
     private val batchLoader: (List<String>) -> CompletableFuture<Map<String, T>>,
-	) : ManagedLifecycle {
+) : ManagedLifecycle {
     /** Semaphore: Fast Lane 동시 실행 제한 */
     private val semaphore = Semaphore(properties.semaphorePermits)
 

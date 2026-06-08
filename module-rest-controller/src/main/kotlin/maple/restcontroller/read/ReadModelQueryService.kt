@@ -1,9 +1,9 @@
 package maple.restcontroller.read
 
-import org.slf4j.LoggerFactory
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import java.time.Duration
 import java.time.Instant
+import org.slf4j.LoggerFactory
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 
 class ReadModelQueryService(
     private val jdbc: NamedParameterJdbcTemplate,

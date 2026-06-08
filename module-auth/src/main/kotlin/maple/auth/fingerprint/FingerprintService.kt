@@ -10,6 +10,5 @@ class FingerprintService(
 ) {
     fun generate(apiKey: String): String = FingerprintUtil.generate(apiKey, serverSecret)
 
-    fun verify(apiKey: String, fingerprint: String): Boolean =
-        FingerprintUtil.verify(apiKey, fingerprint, serverSecret)
+    fun verify(apiKey: String, fingerprint: String): Boolean = FingerprintUtil.verify(apiKey, fingerprint, serverSecret)
 }

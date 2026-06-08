@@ -1,5 +1,6 @@
 package maple.expectation.infrastructure.bulk
 
+import jakarta.annotation.PreDestroy
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.file.Files
@@ -17,7 +18,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.LockSupport
-import jakarta.annotation.PreDestroy
 import maple.expectation.core.port.out.CacheWarmupPort
 import maple.expectation.infrastructure.buffer.ExpectationWriteBackBuffer
 import maple.expectation.infrastructure.cache.tiered.PostgresL2CacheStrategy

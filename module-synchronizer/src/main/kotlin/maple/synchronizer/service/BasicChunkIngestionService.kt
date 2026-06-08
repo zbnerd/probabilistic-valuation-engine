@@ -1,5 +1,7 @@
 package maple.synchronizer.service
 
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Semaphore
 import maple.expectation.common.event.ChunkConsumedEvent
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
@@ -17,8 +19,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Service
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Semaphore
 
 @Service
 class BasicChunkIngestionService(
@@ -88,12 +88,14 @@ class BasicChunkIngestionService(
                     )
                 },
                 onSuccess = {
-                    consumedEventPublisher.publish(ChunkConsumedEvent(
-                        runId = runId,
-                        endpoint = event.endpoint,
-                        chunkId = chunkId,
-                        objectKey = event.objectKey,
-                    ))
+                    consumedEventPublisher.publish(
+                        ChunkConsumedEvent(
+                            runId = runId,
+                            endpoint = event.endpoint,
+                            chunkId = chunkId,
+                            objectKey = event.objectKey,
+                        ),
+                    )
                 },
                 onFailure = { ex ->
                     log.error(

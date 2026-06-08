@@ -64,7 +64,7 @@ class ExpectationV6ControllerTest {
                     negativeCacheService,
                     urgentDedupService,
                     queryService,
-                )
+                ),
             )
             .setControllerAdvice(RestControllerExceptionHandler())
             .build()
@@ -72,8 +72,10 @@ class ExpectationV6ControllerTest {
 
     @Test
     fun `should buffer valid request`() {
-        mockMvc.perform(get("/api/v6/characters/{userIgn}/expectation", "진격캐넌")
-            .param("presetNo", "1"))
+        mockMvc.perform(
+            get("/api/v6/characters/{userIgn}/expectation", "진격캐넌")
+                .param("presetNo", "1"),
+        )
             .andExpect(status().isOk)
 
         assertThat(buffer.size()).isEqualTo(1)

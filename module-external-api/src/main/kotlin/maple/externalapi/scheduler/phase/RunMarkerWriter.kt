@@ -1,10 +1,10 @@
 package maple.externalapi.scheduler.phase
 
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 
 @Component
 class RunMarkerWriter(private val clock: Clock) {

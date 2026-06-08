@@ -1,11 +1,13 @@
 package maple.auth.login
 
-import maple.expectation.core.auth.event.CharacterFetchResponse
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
 import maple.auth.fingerprint.FingerprintService
 import maple.auth.jwt.JwtGeneratorService
 import maple.auth.kafka.AuthEventPublisher
 import maple.auth.kafka.PendingLoginRegistry
 import maple.auth.session.SessionCacheService
+import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.expectation.core.domain.auth.Session
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -16,21 +18,27 @@ import org.mockito.Captor
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutionException
 
 @ExtendWith(MockitoExtension::class)
 class LoginServiceTest {
     @Mock private lateinit var fingerprintService: FingerprintService
+
     @Mock private lateinit var sessionCacheService: SessionCacheService
+
     @Mock private lateinit var authEventPublisher: AuthEventPublisher
+
     @Mock private lateinit var pendingLoginRegistry: PendingLoginRegistry
+
     @Mock private lateinit var jwtGeneratorService: JwtGeneratorService
 
     @Captor private lateinit var requestCaptor: ArgumentCaptor<maple.expectation.core.auth.event.CharacterFetchRequest>
 
     private fun createService() = LoginService(
-        fingerprintService, sessionCacheService, authEventPublisher, pendingLoginRegistry, jwtGeneratorService
+        fingerprintService,
+        sessionCacheService,
+        authEventPublisher,
+        pendingLoginRegistry,
+        jwtGeneratorService,
     )
 
     @Test
@@ -48,7 +56,7 @@ class LoginServiceTest {
             characterOcidMap = mapOf("User1" to "ocid-1"),
         )
         whenever(pendingLoginRegistry.register(any())).thenReturn(
-            CompletableFuture.completedFuture(response)
+            CompletableFuture.completedFuture(response),
         )
 
         val result = service.login("key", "User1").get()
@@ -71,7 +79,7 @@ class LoginServiceTest {
             characterOcidMap = mapOf("User1" to "ocid-1", "User2" to "ocid-2"),
         )
         whenever(pendingLoginRegistry.register(any())).thenReturn(
-            CompletableFuture.completedFuture(response)
+            CompletableFuture.completedFuture(response),
         )
 
         val result = service.login("key", "User1").get()
@@ -94,7 +102,7 @@ class LoginServiceTest {
             errorMessage = "Invalid API key",
         )
         whenever(pendingLoginRegistry.register(any())).thenReturn(
-            CompletableFuture.completedFuture(response)
+            CompletableFuture.completedFuture(response),
         )
 
         val future = service.login("key", "User1")
@@ -117,7 +125,7 @@ class LoginServiceTest {
             characterOcidMap = mapOf("OtherChar" to "ocid-1"),
         )
         whenever(pendingLoginRegistry.register(any())).thenReturn(
-            CompletableFuture.completedFuture(response)
+            CompletableFuture.completedFuture(response),
         )
 
         val future = service.login("key", "User1")

@@ -98,7 +98,12 @@ class SnapshotChunkProcessor(
             val componentCosts = calculateComponentCosts(cubeInput, flatItem.presetNo)
             val status = if (componentCosts.hasAnyCost) "SUCCESS" else "SKIPPED"
             val successResult = EquipmentCalculationInputConverter.toCalculationResult(
-                flatItem.ocid, flatItem.presetNo, cubeInput, componentCosts, status, null,
+                flatItem.ocid,
+                flatItem.presetNo,
+                cubeInput,
+                componentCosts,
+                status,
+                null,
             )
             logSample(successResult)
             successResult
@@ -111,7 +116,12 @@ class SnapshotChunkProcessor(
                 ex.message,
             )
             EquipmentCalculationInputConverter.toCalculationResult(
-                flatItem.ocid, flatItem.presetNo, cubeInput, CalculationCache.ComponentCosts.empty(), "ERROR", ex.message,
+                flatItem.ocid,
+                flatItem.presetNo,
+                cubeInput,
+                CalculationCache.ComponentCosts.empty(),
+                "ERROR",
+                ex.message,
             )
         }
 

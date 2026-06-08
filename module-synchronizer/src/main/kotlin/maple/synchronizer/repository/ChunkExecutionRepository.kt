@@ -1,13 +1,13 @@
 package maple.synchronizer.repository
 
+import java.sql.Timestamp
+import java.time.Duration
+import java.time.Instant
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.synchronizer.state.ChunkExecutionStatus
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
-import java.sql.Timestamp
-import java.time.Duration
-import java.time.Instant
 
 data class InsertChunkExecutionCommand(
     val identity: ChunkExecutionIdentity,
@@ -228,22 +228,20 @@ class ChunkExecutionRepository(
         ) > 0
     }
 
-    private fun InsertChunkExecutionCommand.toParams(): MapSqlParameterSource =
-        identity.toParams()
-            .addValue("topic", topic)
-            .addValue("messageKey", messageKey)
-            .addValue("eventType", eventType)
-            .addValue("schemaVersion", schemaVersion)
-            .addValue("eventPayloadJson", eventPayloadJson)
-            .addValue("status", ChunkExecutionStatus.PENDING_NAME)
-            .addValue("attemptCount", 0)
+    private fun InsertChunkExecutionCommand.toParams(): MapSqlParameterSource = identity.toParams()
+        .addValue("topic", topic)
+        .addValue("messageKey", messageKey)
+        .addValue("eventType", eventType)
+        .addValue("schemaVersion", schemaVersion)
+        .addValue("eventPayloadJson", eventPayloadJson)
+        .addValue("status", ChunkExecutionStatus.PENDING_NAME)
+        .addValue("attemptCount", 0)
 
-    private fun ChunkExecutionIdentity.toParams(): MapSqlParameterSource =
-        MapSqlParameterSource()
-            .addValue("executionType", executionType.name)
-            .addValue("runId", runId)
-            .addValue("endpoint", endpoint)
-            .addValue("chunkId", chunkId)
+    private fun ChunkExecutionIdentity.toParams(): MapSqlParameterSource = MapSqlParameterSource()
+        .addValue("executionType", executionType.name)
+        .addValue("runId", runId)
+        .addValue("endpoint", endpoint)
+        .addValue("chunkId", chunkId)
 
     private fun String.safeError(): String = take(MAX_ERROR_LENGTH)
 

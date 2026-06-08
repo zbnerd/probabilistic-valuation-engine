@@ -1,9 +1,9 @@
 package maple.synchronizer.state
 
+import java.time.Instant
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.time.Instant
 
 class ChunkExecutionStatusTest {
 

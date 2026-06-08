@@ -1,11 +1,11 @@
 package maple.externalapi.snapshot
 
+import java.util.concurrent.CompletableFuture
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.slf4j.LoggerFactory
-import java.util.concurrent.CompletableFuture
 
 /**
  * Wraps [SnapshotChunkEventPublisher] with a fire-and-forget pattern.
@@ -17,14 +17,11 @@ class SinkEventPublisher(
 ) {
     private val log = LoggerFactory.getLogger(SinkEventPublisher::class.java)
 
-    fun publishChunkReady(event: SnapshotChunkReadyEvent): CompletableFuture<*> =
-        publishSafely("SnapshotChunkReady") { publisher.publishChunkReady(event) }
+    fun publishChunkReady(event: SnapshotChunkReadyEvent): CompletableFuture<*> = publishSafely("SnapshotChunkReady") { publisher.publishChunkReady(event) }
 
-    fun publishRunCompleted(event: SnapshotRunCompletedEvent): CompletableFuture<*> =
-        publishSafely("RunCompleted") { publisher.publishRunCompleted(event) }
+    fun publishRunCompleted(event: SnapshotRunCompletedEvent): CompletableFuture<*> = publishSafely("RunCompleted") { publisher.publishRunCompleted(event) }
 
-    fun publishRunFailed(event: SnapshotRunFailedEvent): CompletableFuture<*> =
-        publishSafely("RunFailed") { publisher.publishRunFailed(event) }
+    fun publishRunFailed(event: SnapshotRunFailedEvent): CompletableFuture<*> = publishSafely("RunFailed") { publisher.publishRunFailed(event) }
 
     private fun publishSafely(
         name: String,

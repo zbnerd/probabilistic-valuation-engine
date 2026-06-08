@@ -1,5 +1,9 @@
 package maple.externalapi.scheduler
 
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
 import maple.expectation.error.exception.DistributedLockException
 import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.metrics.SchedulerMetrics
@@ -7,10 +11,6 @@ import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantLock
 
 /**
  * Owns the continuous ITEM_EQUIPMENT fetch loop and the shared scheduler lock.
@@ -104,7 +104,11 @@ class ItemEquipmentContinuousLoop(
     private fun releaseLock() {
         running.set(false)
         lock.lock()
-        try { idle.signalAll() } finally { lock.unlock() }
+        try {
+            idle.signalAll()
+        } finally {
+            lock.unlock()
+        }
     }
 
     /** Acquire the shared scheduler lock. Used by [ExternalApiScheduler] for the daily refresh. */

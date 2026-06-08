@@ -50,8 +50,7 @@ class ApiDataFetchOrchestrator(
     }
 
     @Transactional(value = "transactionManager", readOnly = false)
-    fun markSnapshotReady(jobId: UUID, snapshotId: UUID, objectKey: String): Boolean =
-        markSnapshotReadyInternal(jobId, snapshotId, objectKey)
+    fun markSnapshotReady(jobId: UUID, snapshotId: UUID, objectKey: String): Boolean = markSnapshotReadyInternal(jobId, snapshotId, objectKey)
 
     private fun markSnapshotReadyInternal(jobId: UUID, snapshotId: UUID, objectKey: String): Boolean {
         val ready = jobPort.markSnapshotReady(jobId, snapshotId, CalculationJobStatus.API_REQUESTED)

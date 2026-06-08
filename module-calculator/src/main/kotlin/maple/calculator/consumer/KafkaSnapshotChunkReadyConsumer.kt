@@ -1,7 +1,6 @@
 package maple.calculator.consumer
 
 import maple.calculator.parser.SnapshotEventParser
-import maple.expectation.common.event.SnapshotChunkReadyEvent
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
@@ -22,7 +21,11 @@ class KafkaSnapshotChunkReadyConsumer(
         val event = eventParser.parse(message)
         log.info(
             "[Consumer] received chunk-ready: runId={} endpoint={} chunkId={} objectKey={} recordCount={}",
-            event.runId, event.endpoint, event.chunkId, event.objectKey, event.recordCount,
+            event.runId,
+            event.endpoint,
+            event.chunkId,
+            event.objectKey,
+            event.recordCount,
         )
         dispatchService.dispatch(event, acknowledgment, label = "Consumer")
     }
@@ -35,7 +38,11 @@ class KafkaSnapshotChunkReadyConsumer(
         val event = eventParser.parse(message)
         log.info(
             "[URGENT] received chunk-ready: runId={} endpoint={} chunkId={} objectKey={} recordCount={}",
-            event.runId, event.endpoint, event.chunkId, event.objectKey, event.recordCount,
+            event.runId,
+            event.endpoint,
+            event.chunkId,
+            event.objectKey,
+            event.recordCount,
         )
         dispatchService.dispatch(event, acknowledgment, label = "URGENT")
     }

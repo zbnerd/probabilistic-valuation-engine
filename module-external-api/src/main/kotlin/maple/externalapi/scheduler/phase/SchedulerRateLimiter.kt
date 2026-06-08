@@ -2,9 +2,9 @@ package maple.externalapi.scheduler.phase
 
 import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.Bucket
+import java.time.Duration
 import kotlinx.coroutines.delay
 import org.springframework.stereotype.Component
-import java.time.Duration
 
 @Component
 class SchedulerRateLimiter {

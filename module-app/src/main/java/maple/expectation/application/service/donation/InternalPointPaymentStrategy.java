@@ -2,9 +2,9 @@ package maple.expectation.application.service.donation;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import maple.expectation.infrastructure.persistence.repository.MemberRepository;
 import maple.expectation.error.exception.AdminMemberNotFoundException;
 import maple.expectation.error.exception.SenderMemberNotFoundException;
+import maple.expectation.infrastructure.persistence.repository.MemberRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,8 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <h3>원자적 쿼리 전략</h3>
  *
  * <ul>
- *   <li><b>Sender (발신자)</b>: 원자적 UPDATE (memberRepository.decreasePointByUuid()) - 잔액 부족 시 0건 반환
- *       - WHERE point >= :amount 조건으로 Lost Update 방지
+ *   <li><b>Sender (발신자)</b>: 원자적 UPDATE (memberRepository.decreasePointByUuid()) - 잔액 부족 시 0건 반환 -
+ *       WHERE point >= :amount 조건으로 Lost Update 방지
  *   <li><b>Receiver (Admin)</b>: 원자적 쿼리 (memberRepository.increasePointByUuid()) - Hot Key 문제: 모든
  *       후원이 단일 Admin으로 집중됨 - 100명 동시 요청 시 원자적 UPDATE로 Lost Update 방지
  * </ul>

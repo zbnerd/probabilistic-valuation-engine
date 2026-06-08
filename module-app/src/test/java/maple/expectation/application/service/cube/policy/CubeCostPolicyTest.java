@@ -3,8 +3,8 @@ package maple.expectation.application.service.cube.policy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import maple.expectation.core.port.out.PolicyPort;
 import maple.expectation.core.domain.model.CubeType;
+import maple.expectation.core.port.out.PolicyPort;
 import maple.expectation.error.exception.InvalidPotentialGradeException;
 import maple.expectation.infrastructure.adapter.policy.PolicyAdapter;
 import org.junit.jupiter.api.BeforeEach;

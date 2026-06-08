@@ -1,22 +1,22 @@
 package maple.synchronizer.consumer
 
+import java.time.Instant
+import java.util.concurrent.Executor
+import java.util.concurrent.Semaphore
 import maple.expectation.common.event.ChunkExecutionIdentity
-import maple.synchronizer.state.ChunkExecutionStateMachine
-import maple.synchronizer.state.ChunkExecutionStatus
-import maple.synchronizer.state.FailureDecision
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.synchronizer.metrics.ChunkExecutionMetrics
 import maple.synchronizer.repository.ChunkExecutionClaim
 import maple.synchronizer.repository.ChunkExecutionRepository
 import maple.synchronizer.repository.InsertChunkExecutionCommand
+import maple.synchronizer.state.ChunkExecutionStateMachine
+import maple.synchronizer.state.ChunkExecutionStatus
+import maple.synchronizer.state.FailureDecision
 import org.slf4j.Logger
 import org.slf4j.MDC
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
-import java.time.Instant
-import java.util.concurrent.Executor
-import java.util.concurrent.Semaphore
 
 @Component
 class ChunkConsumerTemplate(
@@ -256,15 +256,14 @@ class ChunkConsumerTemplate(
         )
     }
 
-    private fun ChunkConsumerRequest.toInsertCommand(): InsertChunkExecutionCommand =
-        InsertChunkExecutionCommand(
-            identity = identity,
-            topic = topic,
-            messageKey = messageKey,
-            eventType = eventType,
-            schemaVersion = schemaVersion,
-            eventPayloadJson = eventPayloadJson,
-        )
+    private fun ChunkConsumerRequest.toInsertCommand(): InsertChunkExecutionCommand = InsertChunkExecutionCommand(
+        identity = identity,
+        topic = topic,
+        messageKey = messageKey,
+        eventType = eventType,
+        schemaVersion = schemaVersion,
+        eventPayloadJson = eventPayloadJson,
+    )
 
     private companion object {
         private const val SUPPORTED_SCHEMA_VERSION = 1

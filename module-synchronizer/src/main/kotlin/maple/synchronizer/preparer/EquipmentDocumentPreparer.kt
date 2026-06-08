@@ -1,16 +1,14 @@
 package maple.synchronizer.preparer
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.sql.Timestamp
 import maple.expectation.util.GzipUtils
 import maple.expectation.util.HashUtils
 import maple.synchronizer.domain.EquipmentReadDocument
-import java.sql.Timestamp
 
 class EquipmentDocumentPreparer(private val objectMapper: ObjectMapper) {
 
-    fun prepare(documents: List<EquipmentReadDocument>): List<PreppedDocument> {
-        return documents.map { prepareOne(it) }
-    }
+    fun prepare(documents: List<EquipmentReadDocument>): List<PreppedDocument> = documents.map { prepareOne(it) }
 
     private fun prepareOne(doc: EquipmentReadDocument): PreppedDocument {
         val bytes = objectMapper.writeValueAsBytes(doc)

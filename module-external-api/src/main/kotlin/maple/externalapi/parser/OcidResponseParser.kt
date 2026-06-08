@@ -20,14 +20,12 @@ class OcidResponseParser(
     }
 
     /** Byte-array overload for callers that received a raw HTTP body. */
-    fun extractOcid(responseBody: ByteArray): String? =
-        extractOcid(responseBody.toString(Charsets.UTF_8))
+    fun extractOcid(responseBody: ByteArray): String? = extractOcid(responseBody.toString(Charsets.UTF_8))
 
     /**
      * Serialize a single (userIgn, ocid) mapping as a JSON line. Matches the
      * output shape that downstream consumers (e.g. `CharacterNameReader`
      * consumers) expect: `{"userIgn":"...","ocid":"..."}`.
      */
-    fun serializeMapping(userIgn: String, ocid: String): ByteArray =
-        objectMapper.writeValueAsBytes(mapOf("userIgn" to userIgn, "ocid" to ocid))
+    fun serializeMapping(userIgn: String, ocid: String): ByteArray = objectMapper.writeValueAsBytes(mapOf("userIgn" to userIgn, "ocid" to ocid))
 }

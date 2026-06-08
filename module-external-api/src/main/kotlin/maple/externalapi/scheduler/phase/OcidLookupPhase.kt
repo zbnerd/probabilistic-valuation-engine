@@ -1,5 +1,14 @@
 package maple.externalapi.scheduler.phase
 
+import java.io.BufferedOutputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
@@ -10,28 +19,19 @@ import kotlinx.coroutines.future.future
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import maple.expectation.common.event.SnapshotRunCompletedEvent
+import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.parser.OcidResponseParser
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.reader.CharacterNameReader
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
-import maple.expectation.common.event.SnapshotRunCompletedEvent
-import maple.expectation.util.StringMaskingUtils.maskIgn
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.io.BufferedOutputStream
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.util.UUID
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
-import java.util.zip.GZIPOutputStream
 
 /** Emit a progress log every N items processed. 5,000 chosen to keep log volume under ~3 lines/sec/chunk. */
 private const val PROGRESS_LOG_INTERVAL: Int = 5_000
@@ -77,7 +77,11 @@ class OcidLookupPhase(
         log.info("[Scheduler] ========== OCID lookup start ==========")
         log.info(
             "[Scheduler] config: total={}, rate={}/s, batchSize={}, maxInFlight={}, store={}",
-            igns.size, ocidLookupPermitsPerSecond, batchSize, maxInFlight, storeBasePath,
+            igns.size,
+            ocidLookupPermitsPerSecond,
+            batchSize,
+            maxInFlight,
+            storeBasePath,
         )
 
         val start = Instant.now(clock)
@@ -90,18 +94,20 @@ class OcidLookupPhase(
             val runId = runIdGenerator.newRunId()
             val outputPath = writeGzipJsonl(mappingDir, results, runId)
             schedulerProgressLogger.logSummary("OCID lookup", igns.size, successCount, successCount, failCount, start)
-            eventPublisher.publishRunCompleted(SnapshotRunCompletedEvent(
-                eventId = UUID.randomUUID().toString(),
-                runId = runId,
-                endpoint = "ocid-lookup",
-                manifestPath = "ocid-mapping/${outputPath.fileName}",
-                totalRecords = results.size,
-                totalFailed = failCount,
-                chunkCount = 1,
-                startedAt = start,
-                finishedAt = Instant.now(clock),
-                createdAt = Instant.now(clock),
-            ))
+            eventPublisher.publishRunCompleted(
+                SnapshotRunCompletedEvent(
+                    eventId = UUID.randomUUID().toString(),
+                    runId = runId,
+                    endpoint = "ocid-lookup",
+                    manifestPath = "ocid-mapping/${outputPath.fileName}",
+                    totalRecords = results.size,
+                    totalFailed = failCount,
+                    chunkCount = 1,
+                    startedAt = start,
+                    finishedAt = Instant.now(clock),
+                    createdAt = Instant.now(clock),
+                ),
+            )
             outputPath
         }
     }
@@ -151,21 +157,19 @@ class OcidLookupPhase(
      * 10s timeout to prevent indefinite hang on semaphore acquisition.
      * Replaces tryAcquireWithBackoff() + Thread.sleep with structured suspension.
      */
-    private suspend fun fetchOcid(ign: String): String? {
-        return withTimeoutOrNull(10_000L) {
-            semaphore.withPermit {
-                val data = clientPort.fetch(
-                    ExternalApiProvider.NEXON,
-                    ExternalApiEndpoint.OCID_LOOKUP,
-                    ign,
-                ).await()
-                val ocid = ocidResponseParser.extractOcid(String(data))
-                if (ocid != null) {
-                    String(ocidResponseParser.serializeMapping(ign, ocid), Charsets.UTF_8)
-                } else {
-                    log.warn("[OCID] null ocid for ign={}", maskIgn(ign))
-                    null
-                }
+    private suspend fun fetchOcid(ign: String): String? = withTimeoutOrNull(10_000L) {
+        semaphore.withPermit {
+            val data = clientPort.fetch(
+                ExternalApiProvider.NEXON,
+                ExternalApiEndpoint.OCID_LOOKUP,
+                ign,
+            ).await()
+            val ocid = ocidResponseParser.extractOcid(String(data))
+            if (ocid != null) {
+                String(ocidResponseParser.serializeMapping(ign, ocid), Charsets.UTF_8)
+            } else {
+                log.warn("[OCID] null ocid for ign={}", maskIgn(ign))
+                null
             }
         }
     }

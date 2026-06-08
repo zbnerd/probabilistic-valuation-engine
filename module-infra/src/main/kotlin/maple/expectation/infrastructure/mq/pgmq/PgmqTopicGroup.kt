@@ -24,7 +24,8 @@ abstract class PgmqTopicGroup(
     private val lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val queueMetrics: WorkerQueueMetrics,
     private val config: PgmqTopicConfig,
-	) : MQTopicGroup, ManagedLifecycle {
+) : MQTopicGroup,
+    ManagedLifecycle {
 
     private val log = LoggerFactory.getLogger(javaClass)
     private val metrics by lazy { queueMetrics.forQueue(name) }

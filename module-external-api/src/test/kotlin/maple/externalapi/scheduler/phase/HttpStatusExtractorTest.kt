@@ -1,10 +1,10 @@
 package maple.externalapi.scheduler.phase
 
-import org.junit.jupiter.api.Test
+import java.util.concurrent.CompletionException
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 import org.springframework.http.HttpStatus
 import org.springframework.web.reactive.function.client.WebClientResponseException
-import java.util.concurrent.CompletionException
 
 class HttpStatusExtractorTest {
     private val extractor = HttpStatusExtractor()

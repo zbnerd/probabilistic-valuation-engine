@@ -2,7 +2,6 @@ package maple.restcontroller.read
 
 import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonValue
-import java.time.Instant
 
 sealed class UrgentReadState(@get:JsonValue val name: String) {
     abstract fun retryAfterSeconds(configDefault: Long): Long

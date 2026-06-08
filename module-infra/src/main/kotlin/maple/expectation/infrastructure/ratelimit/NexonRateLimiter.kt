@@ -28,6 +28,7 @@ class NexonRateLimiter(
 ) {
     private val lock = ReentrantLock()
     private val notFull = lock.newCondition()
+
     @Volatile private var permits = maxConcurrent
     private val maxPermits = maxConcurrent
 

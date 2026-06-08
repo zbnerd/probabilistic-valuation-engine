@@ -15,10 +15,9 @@ import org.springframework.http.ResponseEntity
 object EnqueueResponseMapper {
 
     /** Buffer full / system cannot accept the request. */
-    fun toServiceUnavailableResponse(result: EnqueueResult.ServiceUnavailable): ResponseEntity<*> =
-        ResponseEntity.status(SERVICE_UNAVAILABLE_STATUS)
-            .header("Retry-After", RETRY_AFTER_ONE_SECOND)
-            .build<Any>()
+    fun toServiceUnavailableResponse(result: EnqueueResult.ServiceUnavailable): ResponseEntity<*> = ResponseEntity.status(SERVICE_UNAVAILABLE_STATUS)
+        .header("Retry-After", RETRY_AFTER_ONE_SECOND)
+        .build<Any>()
 
     /** Deferred timed out before the batch scheduler could resolve it. */
     fun toTimeoutResponse(

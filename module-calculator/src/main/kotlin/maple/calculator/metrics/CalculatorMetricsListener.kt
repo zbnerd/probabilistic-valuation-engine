@@ -1,8 +1,8 @@
 package maple.calculator.metrics
 
+import java.time.Duration
 import maple.calculator.event.ChunkProcessingEvent
 import org.springframework.stereotype.Component
-import java.time.Duration
 
 @Component
 class CalculatorMetricsListener(

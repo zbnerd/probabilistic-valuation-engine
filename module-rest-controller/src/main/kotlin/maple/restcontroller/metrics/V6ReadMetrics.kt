@@ -10,7 +10,7 @@ import maple.restcontroller.read.LocalRequestBuffer
 class V6ReadMetrics(
     meterRegistry: MeterRegistry,
     requestBuffer: LocalRequestBuffer,
-    inflightRegistry: InflightRequestRegistry
+    inflightRegistry: InflightRequestRegistry,
 ) {
     val requestTotal: Counter = Counter.builder("v6_request_total")
         .description("Total V6 read requests")

@@ -25,8 +25,7 @@ class ReadModelCacheService(
         private const val KEY_PREFIX = "v6:read"
     }
 
-    fun cacheKey(userIgn: String, presetNo: Int): String =
-        "$KEY_PREFIX:$userIgn:$presetNo"
+    fun cacheKey(userIgn: String, presetNo: Int): String = "$KEY_PREFIX:$userIgn:$presetNo"
 
     /**
      * True iff a ready value exists in the read-model cache. Used by
@@ -34,15 +33,14 @@ class ReadModelCacheService(
      * status projection knows whether the request can be answered from
      * cache without falling through to urgent dedup state.
      */
-    fun hasReadyCache(userIgn: String, presetNo: Int): Boolean =
-        redisTemplate.hasKey(cacheKey(userIgn, presetNo))
+    fun hasReadyCache(userIgn: String, presetNo: Int): Boolean = redisTemplate.hasKey(cacheKey(userIgn, presetNo))
 
     /**
      * Redis multiGet for partial cache lookup.
      * @return Pair of (cacheHits: userIgn -> V6ExpectationResponse, cacheMissKeys: userIgn -> presetNo)
      */
     fun multiGet(
-        requests: Map<String, Int>
+        requests: Map<String, Int>,
     ): Pair<Map<String, V6ExpectationResponse>, Map<String, Int>> {
         if (requests.isEmpty()) return emptyMap<String, V6ExpectationResponse>() to emptyMap()
 

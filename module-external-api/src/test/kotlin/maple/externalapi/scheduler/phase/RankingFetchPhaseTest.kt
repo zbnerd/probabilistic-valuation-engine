@@ -4,6 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.metrics.ExternalApiMetrics
@@ -20,12 +26,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
 
 class RankingFetchPhaseTest {
 

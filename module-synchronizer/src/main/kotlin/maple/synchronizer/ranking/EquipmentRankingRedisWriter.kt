@@ -1,12 +1,12 @@
 package maple.synchronizer.ranking
 
+import java.nio.charset.StandardCharsets
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.synchronizer.preparer.PreppedDocument
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Component
-import java.nio.charset.StandardCharsets
 
 @Component
 class EquipmentRankingRedisWriter(
@@ -65,6 +65,5 @@ class EquipmentRankingRedisWriter(
         return updated
     }
 
-    private fun rankingKey(presetNo: Int): String =
-        "${properties.keyPrefix}:preset:$presetNo"
+    private fun rankingKey(presetNo: Int): String = "${properties.keyPrefix}:preset:$presetNo"
 }

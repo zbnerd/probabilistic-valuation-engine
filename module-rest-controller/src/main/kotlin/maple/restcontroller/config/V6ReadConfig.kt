@@ -27,21 +27,19 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @EnableConfigurationProperties(V6ReadProperties::class)
 class V6ReadConfig(
     private val properties: V6ReadProperties,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
 ) {
 
     @Bean
-    fun localRequestBuffer(): LocalRequestBuffer =
-        LocalRequestBuffer(properties.queueCapacity)
+    fun localRequestBuffer(): LocalRequestBuffer = LocalRequestBuffer(properties.queueCapacity)
 
     @Bean
-    fun inflightRequestRegistry(): InflightRequestRegistry =
-        InflightRequestRegistry()
+    fun inflightRequestRegistry(): InflightRequestRegistry = InflightRequestRegistry()
 
     @Bean
     fun v6ReadMetrics(
         buffer: LocalRequestBuffer,
-        registry: InflightRequestRegistry
+        registry: InflightRequestRegistry,
     ): V6ReadMetrics = V6ReadMetrics(meterRegistry, buffer, registry)
 
     @Bean
@@ -70,23 +68,23 @@ class V6ReadConfig(
 
     @Bean
     fun equipmentRankingCacheService(
-        redisTemplate: StringRedisTemplate
+        redisTemplate: StringRedisTemplate,
     ): EquipmentRankingCacheService = EquipmentRankingCacheService(redisTemplate, properties)
 
     @Bean
     fun equipmentRankingQueryService(
-        jdbc: NamedParameterJdbcTemplate
+        jdbc: NamedParameterJdbcTemplate,
     ): EquipmentRankingQueryService = EquipmentRankingQueryService(jdbc)
 
     @Bean
     fun equipmentRankingService(
         cacheService: EquipmentRankingCacheService,
-        queryService: EquipmentRankingQueryService
+        queryService: EquipmentRankingQueryService,
     ): EquipmentRankingService = EquipmentRankingService(cacheService, queryService, properties)
 
     @Bean
     fun popularCharacterService(
-        redisPort: PopularCharacterRedisPort
+        redisPort: PopularCharacterRedisPort,
     ): PopularCharacterService = PopularCharacterService(redisPort, properties)
 
     @Bean
@@ -97,7 +95,7 @@ class V6ReadConfig(
         readModelCacheService: ReadModelCacheService,
         negativeCacheService: NegativeCacheService,
         urgentDedupService: UrgentDedupService,
-        popularCharacterService: PopularCharacterService
+        popularCharacterService: PopularCharacterService,
     ): ExpectationReadFacade = ExpectationReadFacade(
         registry,
         buffer,
@@ -116,7 +114,7 @@ class V6ReadConfig(
         urgentDedupService: UrgentDedupService,
         queryService: ReadModelQueryService,
         v6ReadMetrics: V6ReadMetrics,
-        urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>
+        urgentPublisherProvider: ObjectProvider<UrgentTriggerPublisher>,
     ): BatchResolver = BatchResolver(
         readModelCacheService,
         negativeCacheService,
@@ -134,7 +132,11 @@ class V6ReadConfig(
         resolver: BatchResolver,
         v6ReadMetrics: V6ReadMetrics,
     ): BatchReadScheduler = BatchReadScheduler(
-        buffer, registry, resolver, v6ReadMetrics, properties
+        buffer,
+        registry,
+        resolver,
+        v6ReadMetrics,
+        properties,
     )
 
     @Bean
@@ -142,6 +144,6 @@ class V6ReadConfig(
     fun urgentTriggerPublisher(
         kafkaTemplate: KafkaTemplate<String, String>,
         objectMapper: ObjectMapper,
-        @Value("\${expectation.v6.urgent.request-topic}") topic: String
+        @Value("\${expectation.v6.urgent.request-topic}") topic: String,
     ): UrgentTriggerPublisher = UrgentTriggerPublisher(kafkaTemplate, objectMapper, topic)
 }

@@ -6,15 +6,15 @@ import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.core.port.out.CalculationResultData
 import maple.expectation.core.port.out.CalculationResultPort
-import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.core.port.out.mq.DomainEventAppender
 import maple.expectation.infrastructure.mq.event.NexonApiResponseEventFactory
 import maple.expectation.infrastructure.mq.pgmq.topic.NexonApiResponseTopic
 import maple.expectation.infrastructure.pgmq.PgmqClient
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Service
+import maple.expectation.infrastructure.queue.QueueNames
 import maple.expectation.util.GzipUtils.compress as gzipCompress
 import maple.expectation.util.HashUtils.sha256Hex
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 @Service
@@ -329,5 +329,4 @@ class CalculationExecutionService(
         val baseSeconds = 30L
         return minOf(baseSeconds * (1L shl retryCount), 600L)
     }
-
 }

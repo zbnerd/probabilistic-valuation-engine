@@ -1,16 +1,16 @@
 package maple.synchronizer.service
 
 import maple.expectation.common.event.SnapshotRunCompletedEvent
+import maple.expectation.core.port.out.ChunkFileReaderPort
 import maple.synchronizer.redis.OcidMappingRedisWriter
 import maple.synchronizer.repository.OcidMappingRepository
 import maple.synchronizer.domain.OcidMapping
-import maple.synchronizer.storage.OcidMappingFileReader
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 @Component
 class OcidLookupService(
-    private val fileReader: OcidMappingFileReader,
+    private val chunkFileReader: ChunkFileReaderPort,
     private val repository: OcidMappingRepository,
     private val ocidMappingRedisWriter: OcidMappingRedisWriter,
 ) {
@@ -26,7 +26,7 @@ class OcidLookupService(
             event.manifestPath,
         )
 
-        val mappings = fileReader.read(event.manifestPath)
+        val mappings = chunkFileReader.readOcidMapping(event.manifestPath)
         if (mappings.isEmpty()) {
             log.warn("[OcidService] no mappings found in: {}", event.manifestPath)
             return

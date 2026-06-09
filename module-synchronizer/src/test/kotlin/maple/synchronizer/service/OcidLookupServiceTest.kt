@@ -2,10 +2,10 @@ package maple.synchronizer.service
 
 import java.time.Instant
 import maple.expectation.common.event.SnapshotRunCompletedEvent
+import maple.expectation.core.port.out.ChunkFileReaderPort
 import maple.synchronizer.redis.OcidMappingRedisWriter
 import maple.synchronizer.repository.OcidMappingRepository
 import maple.synchronizer.domain.OcidMapping
-import maple.synchronizer.storage.OcidMappingFileReader
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.mock
@@ -14,11 +14,11 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 class OcidLookupServiceTest {
-    private val fileReader = mock<OcidMappingFileReader>()
+    private val chunkFileReader = mock<ChunkFileReaderPort>()
     private val repository = mock<OcidMappingRepository>()
     private val redisWriter = mock<OcidMappingRedisWriter>()
 
-    private val service = OcidLookupService(fileReader, repository, redisWriter)
+    private val service = OcidLookupService(chunkFileReader, repository, redisWriter)
 
     @Test
     fun `ingest reads file, upserts db, writes redis on ocid-lookup endpoint`() {
@@ -38,13 +38,13 @@ class OcidLookupServiceTest {
             OcidMapping(userIgn = "f***l", ocid = "ocid-1"),
             OcidMapping(userIgn = "s***d", ocid = "ocid-2"),
         )
-        whenever(fileReader.read(event.manifestPath)).thenReturn(mappings)
+        whenever(chunkFileReader.readOcidMapping(event.manifestPath)).thenReturn(mappings)
         doNothing().whenever(repository).batchUpsert(mappings)
         doNothing().whenever(redisWriter).writeOcidToRedis(mappings)
 
         service.ingest(event)
 
-        verify(fileReader).read(event.manifestPath)
+        verify(chunkFileReader).readOcidMapping(event.manifestPath)
         verify(repository).batchUpsert(mappings)
         verify(redisWriter).writeOcidToRedis(mappings)
     }
@@ -63,11 +63,11 @@ class OcidLookupServiceTest {
             finishedAt = Instant.parse("2026-01-01T00:01:00Z"),
             createdAt = Instant.parse("2026-01-01T00:01:00Z"),
         )
-        whenever(fileReader.read(event.manifestPath)).thenReturn(emptyList())
+        whenever(chunkFileReader.readOcidMapping(event.manifestPath)).thenReturn(emptyList())
 
         service.ingest(event)
 
-        verify(fileReader).read(event.manifestPath)
+        verify(chunkFileReader).readOcidMapping(event.manifestPath)
         verify(repository, never()).batchUpsert(org.mockito.kotlin.any())
         verify(redisWriter, never()).writeOcidToRedis(org.mockito.kotlin.any())
     }
@@ -87,7 +87,7 @@ class OcidLookupServiceTest {
             createdAt = Instant.parse("2026-01-01T00:01:00Z"),
         )
         val mappings = listOf(OcidMapping(userIgn = "f***l", ocid = "ocid-1"))
-        whenever(fileReader.read(event.manifestPath)).thenReturn(mappings)
+        whenever(chunkFileReader.readOcidMapping(event.manifestPath)).thenReturn(mappings)
         doNothing().whenever(repository).batchUpsert(mappings)
         whenever(redisWriter.writeOcidToRedis(mappings)).thenThrow(RuntimeException("redis down"))
 
@@ -114,7 +114,7 @@ class OcidLookupServiceTest {
 
         service.ingest(event)
 
-        verify(fileReader, never()).read(org.mockito.kotlin.any())
+        verify(chunkFileReader, never()).readOcidMapping(org.mockito.kotlin.any())
         verify(repository, never()).batchUpsert(org.mockito.kotlin.any())
         verify(redisWriter, never()).writeOcidToRedis(org.mockito.kotlin.any())
     }

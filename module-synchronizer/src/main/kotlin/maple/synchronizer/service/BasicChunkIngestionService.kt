@@ -13,8 +13,8 @@ import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.repository.OcidMappingRepository
 import maple.synchronizer.storage.BasicChunkFileReader
-import maple.synchronizer.storage.BasicRecord
-import maple.synchronizer.storage.OcidMapping
+import maple.synchronizer.domain.BasicRecord
+import maple.synchronizer.domain.OcidMapping
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.kafka.support.Acknowledgment

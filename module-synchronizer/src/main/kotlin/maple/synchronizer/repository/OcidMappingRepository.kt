@@ -1,6 +1,6 @@
 package maple.synchronizer.repository
 
-import maple.synchronizer.storage.OcidMapping
+import maple.synchronizer.domain.OcidMapping
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate

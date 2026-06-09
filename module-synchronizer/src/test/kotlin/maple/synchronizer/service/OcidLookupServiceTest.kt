@@ -4,7 +4,7 @@ import java.time.Instant
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.synchronizer.redis.OcidMappingRedisWriter
 import maple.synchronizer.repository.OcidMappingRepository
-import maple.synchronizer.storage.OcidMapping
+import maple.synchronizer.domain.OcidMapping
 import maple.synchronizer.storage.OcidMappingFileReader
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.doNothing

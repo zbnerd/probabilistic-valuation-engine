@@ -35,7 +35,7 @@ class InternalApiController(
         }
 
         val runId = airflowRunId ?: UUID.randomUUID().toString()
-        executor.submit { scheduler.triggerDailyRefresh() }
+        executor.submit { scheduler.triggerDailyRefresh(runId) }
         return ResponseEntity.accepted().body(mapOf("status" to "STARTED", "runId" to runId))
     }
 }

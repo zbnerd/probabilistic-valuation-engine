@@ -31,6 +31,10 @@ dependencies {
 	// Redis for V6 read model cache
 	implementation(libs.spring.boot.starter.data.redis)
 
+	// Kotlin coroutines for CompletableFuture<->suspend interop (IO/CPU offload)
+	implementation(libs.kotlinx.coroutines.core)
+	implementation(libs.kotlinx.coroutines.jdk8)
+
 	// Kafka for urgent pipeline trigger
 	implementation(libs.spring.kafka)
 

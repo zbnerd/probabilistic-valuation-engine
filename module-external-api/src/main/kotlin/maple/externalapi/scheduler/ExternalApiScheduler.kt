@@ -41,17 +41,17 @@ class ExternalApiScheduler(
         ocidCacheProvider.refresh()
         if (runOnStartup) {
             log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
-            triggerDailyRefresh()
+            triggerDailyRefresh(null)
         }
         executor.submit { runItemEquipmentLoop() }
     }
 
     @Scheduled(cron = "\${external-api.schedule.daily-cron:0 0 3 * * *}")
     fun scheduledDailyRefresh() {
-        triggerDailyRefresh()
+        triggerDailyRefresh(null)
     }
 
-    fun triggerDailyRefresh() {
+    fun triggerDailyRefresh(airflowRunId: String?) {
         if (!acquireLock(3_600_000)) {
             log.warn("[Scheduler] could not acquire lock for daily refresh, skipping")
             return

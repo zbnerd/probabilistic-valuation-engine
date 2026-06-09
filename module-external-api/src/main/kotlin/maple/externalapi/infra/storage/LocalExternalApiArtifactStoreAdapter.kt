@@ -23,6 +23,15 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 
 @Component
+/**
+ * @deprecated Replaced by `LocalFsObjectStorage` (VS1). This adapter
+ *   is unused after VS2's migration of all callers to ObjectStorage.
+ *   Removal is planned in issue #1221.
+ */
+@Deprecated(
+    message = "Replaced by LocalFsObjectStorage in module-infra. " +
+        "Unused after VS2 caller migration. Removal planned in #1221.",
+)
 class LocalExternalApiArtifactStoreAdapter(
     @Value("\${external-api.store.base-path:../data}")
     private val basePath: String,

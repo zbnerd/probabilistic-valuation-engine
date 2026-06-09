@@ -65,3 +65,15 @@ logging:
     maple.calculator: INFO
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+storage:
+  backend: ${STORAGE_BACKEND:local}
+  local:
+    base-path: ${STORE_BASE_PATH:../data}
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://minio:9000}
+    region: ${MINIO_REGION:us-east-1}
+    access-key: ${MINIO_ACCESS_KEY:}
+    secret-key: ${MINIO_SECRET_KEY:}
+    bucket: ${MINIO_BUCKET:maple-expectation}
+    path-style-access: true

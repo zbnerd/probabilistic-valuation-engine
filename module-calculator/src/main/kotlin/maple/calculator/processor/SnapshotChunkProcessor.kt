@@ -14,7 +14,7 @@ import maple.calculator.model.CalculationResult
 import maple.calculator.model.ChunkResult
 import maple.calculator.parser.SnapshotEquipmentParser
 import maple.calculator.reader.GzipJsonlSnapshotRecordReader
-import maple.calculator.storage.ObjectStorage
+import maple.expectation.common.storage.ObjectStorage
 import maple.calculator.writer.CalculationResultWriter
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.core.dto.cube.CubeCalculationInput
@@ -104,7 +104,7 @@ class SnapshotChunkProcessor(
         objectKey: String,
         channel: Channel<String>,
     ) {
-        objectStorage.openInputStream(objectKey).use { stream ->
+        objectStorage.getStream(objectKey).use { stream ->
             jsonlReader.readLines(stream).collect { line ->
                 channel.send(line)
             }

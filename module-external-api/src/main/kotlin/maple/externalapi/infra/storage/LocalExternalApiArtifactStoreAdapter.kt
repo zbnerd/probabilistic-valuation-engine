@@ -62,9 +62,9 @@ class LocalExternalApiArtifactStoreAdapter(
     override fun read(
         endpoint: ExternalApiEndpoint,
         key: String,
-    ): ByteArray? {
+    ): ByteArray {
         val filePath = resolvePath(endpoint, key)
-        if (!Files.exists(filePath)) return null
+        if (!Files.exists(filePath)) return ByteArray(0)
         return GZIPInputStream(Files.readAllBytes(filePath).inputStream()).use { it.readAllBytes() }
     }
 

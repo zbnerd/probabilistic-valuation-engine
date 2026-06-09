@@ -3,7 +3,6 @@ package maple.externalapi.scheduler
 import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
-import maple.externalapi.scheduler.phase.SnapshotFetchPhase
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
@@ -23,7 +22,6 @@ import java.util.concurrent.locks.ReentrantLock
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
-    private val snapshotFetchPhase: SnapshotFetchPhase,
     private val ocidCacheProvider: OcidCacheProvider,
     private val rankingFetchPhaseProvider: ObjectProvider<RankingFetchPhase>,
     @Value("\${external-api.schedule.run-on-startup:false}")
@@ -93,8 +91,11 @@ class ExternalApiScheduler(
                 }
             }
             .thenCompose {
-                val cache = ocidCacheProvider.refresh()
-                snapshotFetchPhase.executeCharacterBasic(executor, cache)
+                // TODO(#1217 pre-existing): re-enable character basic / item equipment
+                // fetches when SnapshotFetchPhase is reintroduced. For now, only OCID
+                // lookup runs as part of the daily refresh.
+                ocidCacheProvider.refresh()
+                CompletableFuture.completedFuture(null)
             }
             .whenComplete { _, ex ->
                 if (ex != null) {
@@ -135,7 +136,8 @@ class ExternalApiScheduler(
         }
 
         CompletableFuture.completedFuture(null)
-            .thenCompose { snapshotFetchPhase.executeItemEquipment(executor, entries) }
+            // TODO(#1217 pre-existing): re-enable item equipment fetch when
+            // SnapshotFetchPhase is reintroduced.
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)

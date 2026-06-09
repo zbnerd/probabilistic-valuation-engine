@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 import maple.expectation.core.auth.event.CharacterFetchRequest
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.expectation.infrastructure.external.NexonAuthClient

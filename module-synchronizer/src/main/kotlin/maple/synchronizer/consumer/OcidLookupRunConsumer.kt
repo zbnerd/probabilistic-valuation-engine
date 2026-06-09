@@ -40,12 +40,10 @@ class OcidLookupRunConsumer(
                 }
                 // IO (ingest) on caller thread.
                 ocidLookupService.ingest(event)
-            }.whenComplete { _, ex ->
-                if (ex != null) {
-                    logger.error("[OcidLookupRun] consume failed", ex)
-                }
-                runCatching { acknowledgment.acknowledge() }
+            }.onFailure { ex ->
+                logger.error("[OcidLookupRun] consume failed", ex)
             }
+            runCatching { acknowledgment.acknowledge() }
         }
     }
 

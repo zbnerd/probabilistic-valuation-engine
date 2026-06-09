@@ -6,6 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import maple.calculator.config.PipelineProperties
 import maple.calculator.model.CalculationResult
@@ -82,7 +84,7 @@ class SnapshotChunkProcessor(
         }
 
         val writeResult = async(Dispatchers.IO) {
-            resultWriter.write(resultObjectKey, resultChannel)
+            resultWriter.write(resultObjectKey, channelAsFlow(resultChannel))
         }.await()
 
         ChunkResult(
@@ -172,6 +174,13 @@ class SnapshotChunkProcessor(
     private fun logSample(result: CalculationResult) {
         if (sampleCount.incrementAndGet() <= 10) {
             log.debug("[SAMPLE] {}", objectMapper.writeValueAsString(result))
+        }
+    }
+
+    /** Convert a Channel<T> to Flow<T> for consumers that need a Flow (e.g. write()). */
+    private fun <T> channelAsFlow(channel: Channel<T>): Flow<T> = flow {
+        for (e in channel) {
+            emit(e)
         }
     }
 }

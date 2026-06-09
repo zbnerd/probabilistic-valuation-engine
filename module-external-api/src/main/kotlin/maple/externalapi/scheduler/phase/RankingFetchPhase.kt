@@ -2,16 +2,18 @@ package maple.externalapi.scheduler.phase
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.domain.KeyType
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.snapshot.ChunkFileManager
 import maple.externalapi.snapshot.ChunkedSnapshotSink
 import maple.externalapi.snapshot.SnapshotChunkRecord
 import maple.externalapi.snapshot.SnapshotChunkingProperties
-import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.externalapi.snapshot.SnapshotSinkEventPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -35,7 +37,7 @@ class RankingFetchPhase(
     private val volumeMetrics: SnapshotVolumeMetrics,
     private val metrics: ExternalApiMetrics,
     @Qualifier("rankingSnapshotPublisher")
-    private val rankingPublisher: SnapshotChunkEventPublisher,
+    private val rankingPublisher: SnapshotSinkEventPublisher,
     @Value("\${external-api.ranking.max-pages:300}")
     private val maxPages: Int,
     @Value("\${external-api.ranking.permits-per-second:50}")
@@ -56,12 +58,16 @@ class RankingFetchPhase(
         val sink = ChunkedSnapshotSink(
             runDir = runDir,
             endpoint = "ranking-overall",
-            maxRecords = endpointConfig.maxRecords,
-            maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
             queueCapacity = chunkingProperties.queueCapacity,
-            objectMapper = objectMapper,
+            fileManager = ChunkFileManager(
+                runDir = runDir,
+                endpoint = "ranking-overall",
+                maxRecords = endpointConfig.maxRecords,
+                maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
+                objectMapper = objectMapper,
+                clock = java.time.Clock.systemUTC(),
+            ),
             eventPublisher = rankingPublisher,
-            volumeMetrics = volumeMetrics,
         )
 
         val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)

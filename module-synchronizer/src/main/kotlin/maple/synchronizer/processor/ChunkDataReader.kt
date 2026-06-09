@@ -1,22 +1,22 @@
 package maple.synchronizer.processor
 
 import io.micrometer.core.instrument.Timer
+import maple.expectation.core.port.out.ChunkFileReaderPort
 import maple.synchronizer.domain.GroupedEquipmentResult
 import maple.synchronizer.metrics.SynchronizerMetrics
 import maple.synchronizer.resolver.OcidUserIgnResolver
-import maple.synchronizer.storage.ResultFileReader
 import org.springframework.stereotype.Component
 
 @Component
 class ChunkDataReader(
-    private val resultFileReader: ResultFileReader,
+    private val chunkFileReader: ChunkFileReaderPort,
     private val ocidUserIgnResolver: OcidUserIgnResolver,
     private val metrics: SynchronizerMetrics,
 ) {
 
     fun read(objectKey: String): List<GroupedEquipmentResult> {
         val grouped = timed(metrics.fileReadTimer()) {
-            resultFileReader.readAndGroupByCompositeKey(objectKey)
+            chunkFileReader.readResultChunk(objectKey)
         }
 
         val ocids = grouped.map { it.ocid }.toSet()

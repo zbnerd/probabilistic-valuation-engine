@@ -1,5 +1,6 @@
 package maple.restcontroller.read
 
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.metrics.V6ReadMetrics
@@ -40,35 +41,54 @@ class BatchReadScheduler(
             TimeUnit.SECONDS.toNanos(properties.shutdownDrainTimeoutSeconds)
 
         var drained = 0
-        var failed = 0
+        val pendingFutures = mutableListOf<CompletableFuture<*>>()
         while (!buffer.isEmpty() && System.nanoTime() < deadlineNanos) {
             val batch = buffer.drain(properties.maxBatchSize)
-            val result = resolver.resolveBatch(batch)
-            applyToDeferreds(result, batch)
-            drained += result.resolvedCount
-            failed += batch.size - result.resolvedCount
+            val future = resolver.resolveBatch(batch)
+            pendingFutures += future
+            future.whenComplete { result, ex ->
+                if (ex != null) {
+                    log.error("Shutdown drain resolveBatch failed: batchSize={}", batch.size, ex)
+                    return@whenComplete
+                }
+                applyToDeferreds(result, batch)
+            }
+            drained += batch.size
         }
 
-        // Resolve any drained-but-unhandled deferreds with 503
-        val serviceUnavailable = ResponseEntity.status(503)
-            .header("Retry-After", "1")
-            .build<Any>()
-        registry.failAll(serviceUnavailable)
-
-        val remaining = buffer.size()
-        if (remaining > 0) {
-            log.warn("Shutdown deadline reached — failing {} pending requests", remaining)
-            buffer.failAllPending()
-            registry.failAll(
-                ResponseEntity.status(503)
-                    .header("Retry-After", "1")
-                    .build<Any>(),
-            )
+        // Wait for in-flight resolveBatch to complete so deferreds get 200/404/503.
+        // SmartLifecycle.stop(callback) contract: callback is invoked when stop is done.
+        // We use the composite future's own whenComplete to drive the callback — no `.join()`.
+        val onShutdownComplete = Runnable {
+            // Resolve any deferreds the in-flight futures didn't get to (timeout, failure)
+            registry.failAll(serviceUnavailable())
+            val remaining = buffer.size()
+            if (remaining > 0) {
+                log.warn("Shutdown deadline reached — failing {} pending requests", remaining)
+                buffer.failAllPending()
+                registry.failAll(serviceUnavailable())
+            }
+            log.info("BatchReadScheduler stopped — drained={}, remaining={}", drained, remaining)
+            callback.run()
         }
 
-        log.info("BatchReadScheduler stopped — resolved={}, failed={}, remaining={}", drained, failed, remaining)
-        callback.run()
+        if (pendingFutures.isEmpty()) {
+            onShutdownComplete.run()
+        } else {
+            CompletableFuture.allOf(*pendingFutures.toTypedArray())
+                .orTimeout(properties.shutdownDrainTimeoutSeconds, TimeUnit.SECONDS)
+                .whenComplete { _, ex ->
+                    if (ex != null) {
+                        log.warn("Some drain futures did not complete: {}", ex.message)
+                    }
+                    onShutdownComplete.run()
+                }
+        }
     }
+
+    private fun serviceUnavailable(): ResponseEntity<Any> = ResponseEntity.status(503)
+        .header("Retry-After", "1")
+        .build()
 
     override fun isRunning(): Boolean = running
 
@@ -91,9 +111,14 @@ class BatchReadScheduler(
         if (batch.isEmpty()) return
 
         val sample = io.micrometer.core.instrument.Timer.start()
-        val result = resolver.resolveBatch(batch)
-        applyToDeferreds(result, batch)
-        sample.stop(metrics.batchLatency)
+        resolver.resolveBatch(batch).whenComplete { result, ex ->
+            sample.stop(metrics.batchLatency)
+            if (ex != null) {
+                log.error("scheduledDrain resolveBatch failed: batchSize={}", batch.size, ex)
+                return@whenComplete
+            }
+            applyToDeferreds(result, batch)
+        }
     }
 
     /**

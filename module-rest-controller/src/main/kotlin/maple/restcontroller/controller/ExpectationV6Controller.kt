@@ -11,6 +11,7 @@ import maple.restcontroller.read.NegativeCacheService
 import maple.restcontroller.read.ReadModelCacheService
 import maple.restcontroller.read.ReadModelQueryService
 import maple.restcontroller.read.UrgentDedupService
+import maple.restcontroller.read.UrgentReadStatusResponse
 import maple.restcontroller.validation.ValidUserIgn
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -85,7 +86,7 @@ class ExpectationV6Controller(
         }
     }
 
-    private fun buildStatusResponse(status: UrgentReadStatus): ResponseEntity<*> =
+    private fun buildStatusResponse(status: UrgentReadStatusResponse): ResponseEntity<*> =
         ResponseEntity.ok()
             .header("Retry-After", status.retryAfterSeconds.toString())
             .body(status)

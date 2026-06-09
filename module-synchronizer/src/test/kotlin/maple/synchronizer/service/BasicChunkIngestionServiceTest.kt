@@ -3,11 +3,11 @@ package maple.synchronizer.service
 import java.time.Instant
 import java.util.concurrent.ExecutorService
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.core.port.out.ChunkFileReaderPort
 import maple.synchronizer.consumer.ChunkConsumerTemplate
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.repository.OcidMappingRepository
-import maple.synchronizer.storage.BasicChunkFileReader
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -18,7 +18,7 @@ import org.mockito.kotlin.verify
 import org.springframework.kafka.support.Acknowledgment
 
 class BasicChunkIngestionServiceTest {
-    private val fileReader = mock<BasicChunkFileReader>()
+    private val chunkFileReader = mock<ChunkFileReaderPort>()
     private val repository = mock<CharacterBasicRepository>()
     private val ocidRepo = mock<OcidMappingRepository>()
     private val template = mock<ChunkConsumerTemplate>()
@@ -26,7 +26,7 @@ class BasicChunkIngestionServiceTest {
     private val executor = mock<ExecutorService>()
 
     private val service = BasicChunkIngestionService(
-        fileReader = fileReader,
+        chunkFileReader = chunkFileReader,
         repository = repository,
         ocidMappingRepository = ocidRepo,
         chunkConsumerTemplate = template,

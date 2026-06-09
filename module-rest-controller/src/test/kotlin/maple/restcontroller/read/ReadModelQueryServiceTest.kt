@@ -5,6 +5,8 @@ import java.math.BigDecimal
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.runBlocking
 import maple.expectation.util.GzipUtils
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -20,13 +22,13 @@ class ReadModelQueryServiceTest {
     private val service = ReadModelQueryService(jdbc, documentExtractor)
 
     @Test
-    fun `should return empty map for empty requests`() {
-        val result = service.batchQuery(emptyMap())
+    fun `should return empty map for empty requests`() = runBlocking {
+        val result = service.batchQuery(emptyMap()).await()
         assertThat(result).isEmpty()
     }
 
     @Test
-    fun `should decompress and parse read model rows`() {
+    fun `should decompress and parse read model rows`() = runBlocking {
         val now = Instant.parse("2026-01-01T00:00:00Z")
         val docJson = objectMapper.writeValueAsBytes(
             mapOf(
@@ -54,7 +56,7 @@ class ReadModelQueryServiceTest {
             )
 
         val requests = mapOf("아델" to 1)
-        val result = service.batchQuery(requests)
+        val result = service.batchQuery(requests).await()
 
         assertThat(result).hasSize(1)
         assertThat(result).containsKey("아델")
@@ -69,18 +71,18 @@ class ReadModelQueryServiceTest {
     }
 
     @Test
-    fun `should return empty when no rows match`() {
+    fun `should return empty when no rows match`() = runBlocking {
         whenever(jdbc.queryForList(any<String>(), any<MapSqlParameterSource>()))
             .thenReturn(emptyList())
 
         val requests = mapOf("존재하지않는닉네임" to 1)
-        val result = service.batchQuery(requests)
+        val result = service.batchQuery(requests).await()
 
         assertThat(result).isEmpty()
     }
 
     @Test
-    fun `should handle multiple users`() {
+    fun `should handle multiple users`() = runBlocking {
         val now = Instant.parse("2026-01-01T00:00:00Z")
         val doc1 = objectMapper.writeValueAsBytes(
             mapOf(
@@ -124,7 +126,7 @@ class ReadModelQueryServiceTest {
             )
 
         val requests = mapOf("아델" to 1, "진격캐넌" to 2)
-        val result = service.batchQuery(requests)
+        val result = service.batchQuery(requests).await()
 
         assertThat(result).hasSize(2)
         assertThat(result["아델"]!!.presetNo).isEqualTo(1)
@@ -133,7 +135,7 @@ class ReadModelQueryServiceTest {
     }
 
     @Test
-    fun `should treat stale updatedAt as cache miss`() {
+    fun `should treat stale updatedAt as cache miss`() = runBlocking {
         val now = Instant.now()
         val docJson = objectMapper.writeValueAsBytes(
             mapOf(
@@ -159,7 +161,7 @@ class ReadModelQueryServiceTest {
                 ),
             )
 
-        val result = service.batchQuery(mapOf("아델" to 1), Duration.ofMinutes(30))
+        val result = service.batchQuery(mapOf("아델" to 1), Duration.ofMinutes(30)).await()
 
         assertThat(result).isEmpty()
     }

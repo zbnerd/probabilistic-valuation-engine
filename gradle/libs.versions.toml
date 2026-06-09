@@ -74,6 +74,9 @@ foojay-resolver = "0.8.0"
 # Jacoco
 jacoco = "0.8.11"
 
+# AWS SDK v2 (MinIO/S3 client)
+aws-sdk = "2.28.16"
+
 [libraries]
 # Kotlin Standard Library
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
@@ -174,6 +177,13 @@ langchain4j-open-ai-spring-boot-starter = { module = "dev.langchain4j:langchain4
 
 # Spring Data Commons (for Page interface)
 spring-data-commons = { module = "org.springframework.data:spring-data-commons" }
+
+# AWS SDK v2 (MinIO/S3 client)
+aws-sdk-bom = { module = "software.amazon.awssdk:bom", version.ref = "aws-sdk" }
+aws-sdk-s3 = { module = "software.amazon.awssdk:s3" }
+aws-sdk-auth = { module = "software.amazon.awssdk:auth" }
+aws-sdk-regions = { module = "software.amazon.awssdk:regions" }
+aws-sdk-apache-client = { module = "software.amazon.awssdk:apache-client" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

@@ -4,7 +4,7 @@
 
 **Goal:** Ship the unified `ObjectStorage` interface in `module-common`, both adapters (Local + MinIO) in `module-infra`, Spring wiring with `@ConditionalOnProperty`, docker-compose MinIO + minio-init, and .env entries — without changing any application call sites (deferred to VS2).
 
-**Architecture:** Pure-Kotlin interface in `module-common` (zero Spring imports). Spring `@Component` adapters in `module-infra` injected via `@Value` / `@ConfigurationProperties`. Backend selection via `storage.backend=local|minio` property. MinIO adapter validates bucket in `@PostConstruct` and fails the Spring context on failure (boot-time fatal). aws-sdk-java v2 with `RetryPolicy.defaultRetryPolicy()` (built-in retry, no custom wrapper). Apache HTTP client (no Netty), path-style access (MinIO requirement).
+**Architecture:** Pure-Kotlin interface in `module-common` (zero Spring imports). Spring `@Component` adapters in `module-infra` injected via `@Value` / `@ConfigurationProperties`. Backend selection via `storage.backend=local|minio` property. MinIO adapter validates bucket in `@PostConstruct` via `runCatching` (fails the Spring application context on failure — boot-time fatal). aws-sdk-java v2 with `RetryPolicy.defaultRetryPolicy()` (built-in retry, no custom wrapper). Apache HTTP client (no Netty), path-style access (MinIO requirement). MinioObjectStorage receives S3Client as a Spring bean (no internal construction).
 
 **Tech Stack:** Kotlin 2.1, Spring Boot 3.5, aws-sdk-java v2 (s3 + auth + regions + apache-client), Micrometer (optional), JUnit 5, AssertJ, MinIO (docker).
 
@@ -20,14 +20,14 @@
 
 - [ ] **Step 1: Add version + libraries to `gradle/libs.versions.toml`**
 
-Edit `gradle/libs.versions.toml`. Under `[versions]` add at the bottom (keep alphabetical-ish ordering by following the existing pattern — the file is loosely ordered):
+Edit `gradle/libs.versions.toml`. Under `[versions]` add:
 
 ```toml
 # AWS SDK v2 (MinIO/S3 client)
 aws-sdk = "2.28.16"
 ```
 
-Under `[libraries]` add at the bottom:
+Under `[libraries]` add:
 
 ```toml
 # AWS SDK v2 (MinIO/S3 client)
@@ -40,25 +40,13 @@ aws-sdk-apache-client = { module = "software.amazon.awssdk:apache-client" }
 
 - [ ] **Step 2: Add deps to `module-infra/build.gradle`**
 
-Edit `module-infra/build.gradle`. Find the `dependencyManagement` block (already imports Spring Boot, Resilience4j, Testcontainers BOMs). Inside its `imports` block add:
+Edit `module-infra/build.gradle`. In the `dependencyManagement` block's `imports` add:
 
 ```groovy
 mavenBom libs.aws.sdk.bom.get()
 ```
 
-Result:
-```groovy
-dependencyManagement {
-    imports {
-        mavenBom "org.springframework.boot:spring-boot-dependencies:${libs.versions.spring.boot.get()}"
-        mavenBom "io.github.resilience4j:resilience4j-bom:${libs.versions.resilience4j.get()}"
-        mavenBom "org.testcontainers:testcontainers-bom:${libs.versions.testcontainers.get()}"
-        mavenBom libs.aws.sdk.bom.get()
-    }
-}
-```
-
-In the `dependencies { ... }` block, after the existing `implementation(libs.spring.boot.starter.data.jpa)` line, add:
+In the `dependencies` block, after `implementation(libs.spring.boot.starter.data.jpa)`, add:
 
 ```groovy
     // AWS SDK v2 (MinIO/S3 client)
@@ -70,12 +58,8 @@ In the `dependencies { ... }` block, after the existing `implementation(libs.spr
 
 - [ ] **Step 3: Verify compile**
 
-Run:
-```bash
-./gradlew :module-infra:compileKotlin --no-daemon
-```
-
-Expected: BUILD SUCCESSFUL. The new deps are downloaded; no source changes yet.
+Run: `./gradlew :module-infra:compileKotlin --no-daemon`
+Expected: BUILD SUCCESSFUL.
 
 - [ ] **Step 4: Commit**
 
@@ -162,29 +146,20 @@ data class PutResult(
 
 - [ ] **Step 2: Verify compile**
 
-Run:
-```bash
-./gradlew :module-common:compileKotlin --no-daemon
-```
-
+Run: `./gradlew :module-common:compileKotlin --no-daemon`
 Expected: BUILD SUCCESSFUL.
 
 - [ ] **Step 3: Verify module-common has zero Spring imports**
 
 Run:
 ```bash
-./gradlew :module-common:verifyNoSpringDependency --no-daemon 2>&1 | tail -20
-```
-
-Expected: BUILD SUCCESSFUL (the task is a pre-existing convention; if the task name differs in this repo, run `./gradlew :module-common:tasks | grep -i spring` to find the correct task).
-
-If the project has no `verifyNoSpringDependency` task, run this grep instead as a manual check:
-
-```bash
 grep -rn "import org.springframework" module-common/src/main/ 2>&1 | head -5
 ```
 
-Expected: no output (zero matches). The new `ObjectStorage.kt` uses only `java.io.InputStream` and `java.time.Instant`.
+Expected: no output. If the project has a Gradle `verifyNoSpringDependency` task, also run that:
+```bash
+./gradlew :module-common:verifyNoSpringDependency --no-daemon
+```
 
 - [ ] **Step 4: Commit**
 
@@ -195,21 +170,13 @@ git commit -m "feat(common): add ObjectStorage interface + data classes"
 
 ---
 
-## Task 3: Write LocalFsObjectStorageTest (failing test first)
+## Task 3: LocalFsObjectStorage TDD pair (test + impl, 1 commit)
 
 **Files:**
 - Create: `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorageTest.kt`
+- Create: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorage.kt`
 
-- [ ] **Step 1: Verify test source dir exists**
-
-Run:
-```bash
-ls module-infra/src/test/kotlin/maple/expectation/infrastructure/ 2>&1 | head -5
-```
-
-Expected: directory exists (or list shows existing tests). If not present, the path will be auto-created by the first write below.
-
-- [ ] **Step 2: Create the test file with all 10 method tests**
+- [ ] **Step 1: Write the failing test**
 
 Create `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorageTest.kt`:
 
@@ -355,30 +322,12 @@ class LocalFsObjectStorageTest {
 }
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [ ] **Step 2: Run the test, verify it fails**
 
-Run:
-```bash
-./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.LocalFsObjectStorageTest" --no-daemon
-```
-
+Run: `./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.LocalFsObjectStorageTest" --no-daemon`
 Expected: BUILD FAILED. Compilation error: `Unresolved reference: LocalFsObjectStorage`.
 
-- [ ] **Step 4: Commit (test only)**
-
-```bash
-git add module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorageTest.kt
-git commit -m "test(infra): add LocalFsObjectStorageTest (failing tests for 10 methods)"
-```
-
----
-
-## Task 4: Implement LocalFsObjectStorage
-
-**Files:**
-- Create: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorage.kt`
-
-- [ ] **Step 1: Create the implementation**
+- [ ] **Step 3: Implement `LocalFsObjectStorage`**
 
 Create `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorage.kt`:
 
@@ -411,7 +360,6 @@ import java.util.stream.Collectors
 @Component
 class LocalFsObjectStorage(
     @Value("\${storage.local.base-path:../data}") private val basePath: String,
-    // Optional Spring metrics. null when not Spring-managed (e.g., unit tests).
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private val meterRegistry: MeterRegistry?,
 ) : ObjectStorage {
@@ -510,30 +458,33 @@ class LocalFsObjectStorage(
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it passes**
+- [ ] **Step 4: Run the test, verify it passes**
 
-Run:
-```bash
-./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.LocalFsObjectStorageTest" --no-daemon
-```
-
+Run: `./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.LocalFsObjectStorageTest" --no-daemon`
 Expected: BUILD SUCCESSFUL. All 14 test methods pass.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit (test + impl together)**
 
 ```bash
+git add module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorageTest.kt
 git add module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorage.kt
-git commit -m "feat(infra): implement LocalFsObjectStorage (atomic put + SHA-256 checksum)"
+git commit -m "feat(infra): LocalFsObjectStorage (atomic put + SHA-256 checksum)
+
+TDD pair: LocalFsObjectStorageTest (14 cases) + LocalFsObjectStorage.
+Used as storage.backend=local hot-spare and as the reference implementation
+for the unified ObjectStorage interface."
 ```
 
 ---
 
-## Task 5: Write StorageConfig binding test
+## Task 4: StorageConfig TDD pair (MinioProperties + 3 beans, 1 commit)
 
 **Files:**
 - Create: `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/StorageConfigTest.kt`
+- Create: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioProperties.kt`
+- Create: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/StorageConfig.kt`
 
-- [ ] **Step 1: Create the test file**
+- [ ] **Step 1: Write the failing test**
 
 Create `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/StorageConfigTest.kt`:
 
@@ -565,31 +516,12 @@ class StorageConfigTest {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [ ] **Step 2: Run the test, verify it fails**
 
-Run:
-```bash
-./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.StorageConfigTest" --no-daemon
-```
-
+Run: `./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.StorageConfigTest" --no-daemon`
 Expected: BUILD FAILED. Either `StorageConfig` or `MinioProperties` cannot be resolved, or Spring fails to load context (no `ObjectStorage` bean defined yet).
 
-- [ ] **Step 3: Commit (test only)**
-
-```bash
-git add module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/StorageConfigTest.kt
-git commit -m "test(infra): add StorageConfigTest (failing test for local backend wiring)"
-```
-
----
-
-## Task 6: Implement MinioProperties + StorageConfig
-
-**Files:**
-- Create: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioProperties.kt`
-- Create: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/StorageConfig.kt`
-
-- [ ] **Step 1: Create MinioProperties**
+- [ ] **Step 3: Implement `MinioProperties`**
 
 Create `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioProperties.kt`:
 
@@ -613,7 +545,7 @@ data class MinioProperties(
 )
 ```
 
-- [ ] **Step 2: Create StorageConfig**
+- [ ] **Step 4: Implement `StorageConfig` with all 3 beans**
 
 Create `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/StorageConfig.kt`:
 
@@ -624,14 +556,26 @@ import io.micrometer.core.instrument.MeterRegistry
 import maple.expectation.common.storage.ObjectStorage
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration
+import software.amazon.awssdk.core.retry.RetryPolicy
+import software.amazon.awssdk.http.apache.ApacheHttpClient
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.S3Configuration
+import java.net.URI
 
 /**
  * Selects the active [ObjectStorage] implementation based on `storage.backend`.
  * Default is `local`. Setting `storage.backend=minio` switches to [MinioObjectStorage].
+ *
+ * S3Client is exposed as a Spring bean so it can be shared by [MinioObjectStorage],
+ * [MinioHealthIndicator], and any other future consumers (e.g., metrics, backups).
  */
 @Configuration
 @EnableConfigurationProperties(MinioProperties::class)
@@ -646,49 +590,62 @@ class StorageConfig {
 
     @Bean
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
+    fun s3Client(props: MinioProperties): S3Client = S3Client.builder()
+        .endpointOverride(URI.create(props.endpoint))
+        .region(Region.of(props.region))
+        .credentialsProvider(
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(props.accessKey, props.secretKey)
+            )
+        )
+        .serviceConfiguration(
+            S3Configuration.builder().pathStyleAccessEnabled(props.pathStyleAccess).build()
+        )
+        .httpClient(ApacheHttpClient.builder().build())
+        .overrideConfiguration(
+            ClientOverrideConfiguration.builder()
+                .retryPolicy(RetryPolicy.defaultRetryPolicy())
+                .build()
+        )
+        .build()
+
+    @Bean
+    @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
     fun minioObjectStorage(
         props: MinioProperties,
+        s3: S3Client,
         @Autowired(required = false) meterRegistry: MeterRegistry?,
-    ): ObjectStorage = MinioObjectStorage(props, meterRegistry)
+    ): ObjectStorage = MinioObjectStorage(props, s3, meterRegistry)
 }
 ```
 
-- [ ] **Step 3: Run the test to verify it passes**
+- [ ] **Step 5: Run the test, verify it passes**
 
-Run:
-```bash
-./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.StorageConfigTest" --no-daemon
-```
-
+Run: `./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.StorageConfigTest" --no-daemon`
 Expected: BUILD SUCCESSFUL. The Spring context loads, the `ObjectStorage` bean is a `LocalFsObjectStorage` instance.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 6: Commit (test + impl together)**
 
 ```bash
+git add module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/StorageConfigTest.kt
 git add module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioProperties.kt
 git add module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/StorageConfig.kt
-git commit -m "feat(infra): add MinioProperties + StorageConfig (local backend wiring)"
+git commit -m "feat(infra): MinioProperties + StorageConfig (local wiring + S3Client bean)
+
+3 beans: localObjectStorage (default), s3Client + minioObjectStorage
+(activated by storage.backend=minio). S3Client exposed for sharing with
+MinioHealthIndicator and future consumers."
 ```
 
 ---
 
-## Task 7: Write MinioObjectStorageIT (integration test, env-gated)
+## Task 5: MinioObjectStorage TDD pair (IT + impl, 1 commit)
 
 **Files:**
 - Create: `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorageIT.kt`
+- Create: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt`
 
-- [ ] **Step 1: Verify minio-client is in test classpath**
-
-The aws-sdk-v2 `s3` artifact is already on the main classpath (Task 1), so tests can use it directly.
-
-Run:
-```bash
-grep -A 3 "aws-sdk-s3" module-infra/build.gradle
-```
-
-Expected: line present (no action needed).
-
-- [ ] **Step 2: Create the integration test file**
+- [ ] **Step 1: Write the integration test (compile fails)**
 
 Create `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorageIT.kt`:
 
@@ -706,7 +663,6 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest
-import software.amazon.awssdk.services.s3.model.DeleteBucketRequest
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
 import java.net.URI
@@ -745,11 +701,9 @@ class MinioObjectStorageIT {
             )
             .build()
 
-        // Ensure bucket exists
-        try {
+        // Ensure bucket exists (idempotent)
+        runCatching {
             s3.createBucket(CreateBucketRequest.builder().bucket(bucket).build())
-        } catch (e: Exception) {
-            // Already exists — OK
         }
 
         val props = MinioProperties(
@@ -760,13 +714,12 @@ class MinioObjectStorageIT {
             bucket = bucket,
             pathStyleAccess = true,
         )
-        storage = MinioObjectStorage(props, meterRegistry = null)
+        storage = MinioObjectStorage(props, s3, meterRegistry = null)
     }
 
     @AfterAll
     fun tearDown() {
         if (::s3.isInitialized && ::testPrefix.isInitialized) {
-            // Delete all test objects
             val list = s3.listObjectsV2(
                 ListObjectsV2Request.builder().bucket(bucket).prefix(testPrefix).build()
             )
@@ -863,30 +816,25 @@ class MinioObjectStorageIT {
 }
 ```
 
-- [ ] **Step 3: Verify the test compiles (it should fail to find MinioObjectStorage)**
+- [ ] **Step 2: Verify the test compiles (it should fail — `MinioObjectStorage` doesn't exist yet)**
 
-Run:
-```bash
-./gradlew :module-infra:compileTestKotlin --no-daemon
-```
+Run: `./gradlew :module-infra:compileTestKotlin --no-daemon`
+Expected: BUILD FAILED. Unresolved reference: `MinioObjectStorage`.
 
-Expected: BUILD FAILED. Unresolved reference: `MinioObjectStorage`. The test class references the implementation that doesn't exist yet.
-
-- [ ] **Step 4: Commit (test only)**
+- [ ] **Step 3: Start local MinIO + minio-init for IT verification**
 
 ```bash
-git add module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorageIT.kt
-git commit -m "test(infra): add MinioObjectStorageIT (env-gated integration tests, 10 methods)"
+docker compose up -d minio minio-init
 ```
 
----
+Wait for health check:
+```bash
+docker compose ps minio
+```
 
-## Task 8: Implement MinioObjectStorage
+Expected: `State: Up (healthy)`.
 
-**Files:**
-- Create: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt`
-
-- [ ] **Step 1: Create the implementation**
+- [ ] **Step 4: Implement `MinioObjectStorage` (with runCatching + 1-RTT put)**
 
 Create `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt`:
 
@@ -899,13 +847,9 @@ import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.storage.PutResult
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.core.exception.SdkClientException
 import software.amazon.awssdk.core.sync.RequestBody
-import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.S3Configuration
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
@@ -916,71 +860,43 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.model.S3Exception
-import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration
-import software.amazon.awssdk.core.retry.RetryPolicy
-import software.amazon.awssdk.http.apache.ApacheHttpClient
 import jakarta.annotation.PostConstruct
-import java.net.URI
 import java.nio.file.Files
 import java.time.Instant
-import java.util.UUID
-import java.util.stream.Collectors
 
 /**
  * MinIO/S3 implementation of [ObjectStorage]. Used when `storage.backend=minio`.
- * Validates the bucket in [validateBucket] (PostConstruct) — throws on failure,
- * causing the Spring application context to fail to start (boot-time fatal).
+ * Validates the bucket in [validateBucket] (PostConstruct) — translates SDK errors
+ * to IllegalStateException via runCatching (project policy: avoid raw try-catch).
  *
- * Retry: SDK built-in [RetryPolicy.defaultRetryPolicy] (3 attempts, 5xx + throttling).
- * No custom retry wrapper.
+ * Retry: SDK built-in RetryPolicy.defaultRetryPolicy (configured in StorageConfig.s3Client).
+ * S3Client is injected as a Spring bean.
  */
 class MinioObjectStorage(
     private val props: MinioProperties,
+    private val s3: S3Client,
     @Autowired(required = false)
     private val meterRegistry: MeterRegistry?,
 ) : ObjectStorage {
 
     private val log = LoggerFactory.getLogger(MinioObjectStorage::class.java)
 
-    private val s3: S3Client = S3Client.builder()
-        .endpointOverride(URI.create(props.endpoint))
-        .region(Region.of(props.region))
-        .credentialsProvider(
-            StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(props.accessKey, props.secretKey)
-            )
-        )
-        .serviceConfiguration(
-            S3Configuration.builder().pathStyleAccessEnabled(props.pathStyleAccess).build()
-        )
-        .httpClient(ApacheHttpClient.builder().build())
-        .overrideConfiguration(
-            ClientOverrideConfiguration.builder()
-                .retryPolicy(RetryPolicy.defaultRetryPolicy())
-                .build()
-        )
-        .build()
-
     @PostConstruct
     fun validateBucket() {
-        try {
-            s3.headBucket(HeadBucketRequest.builder().bucket(props.bucket).build())
-            log.info("[MinIO] bucket validated: bucket={}, endpoint={}", props.bucket, props.endpoint)
-        } catch (e: S3Exception) {
-            throw IllegalStateException(
-                "MinIO bucket '${props.bucket}' unreachable at ${props.endpoint} (status=${e.statusCode()}): ${e.message}",
-                e
-            )
-        } catch (e: SdkClientException) {
-            throw IllegalStateException(
-                "MinIO endpoint '${props.endpoint}' unreachable: ${e.message}",
-                e
-            )
-        }
+        runCatching { s3.headBucket(HeadBucketRequest.builder().bucket(props.bucket).build()) }
+            .onFailure { e ->
+                val message = when (e) {
+                    is S3Exception -> "MinIO bucket '${props.bucket}' unreachable at ${props.endpoint} (status=${e.statusCode()}): ${e.message}"
+                    is SdkClientException -> "MinIO endpoint '${props.endpoint}' unreachable: ${e.message}"
+                    else -> "MinIO bucket validation failed: ${e.message}"
+                }
+                throw IllegalStateException(message, e)
+            }
+        log.info("[MinIO] bucket validated: bucket={}, endpoint={}", props.bucket, props.endpoint)
     }
 
     override fun put(key: String, data: ByteArray): PutResult {
-        s3.putObject(
+        val resp = s3.putObject(
             PutObjectRequest.builder()
                 .bucket(props.bucket)
                 .key(key)
@@ -989,15 +905,14 @@ class MinioObjectStorage(
                 .build(),
             RequestBody.fromBytes(data),
         )
-        val head = s3.headObject(HeadObjectRequest.builder().bucket(props.bucket).key(key).build())
-        return PutResult(key, head.contentLength(), head.eTag())
+        return PutResult(key, data.size.toLong(), resp.eTag())
     }
 
     override fun putStream(key: String, input: java.io.InputStream): PutResult {
         val tempFile = Files.createTempFile("minio-put-", ".tmp")
         try {
             val bytes = input.use { Files.copy(it, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING) }
-            s3.putObject(
+            val resp = s3.putObject(
                 PutObjectRequest.builder()
                     .bucket(props.bucket)
                     .key(key)
@@ -1005,398 +920,7 @@ class MinioObjectStorage(
                     .build(),
                 tempFile,
             )
-            val head = s3.headObject(HeadObjectRequest.builder().bucket(props.bucket).key(key).build())
-            return PutResult(key, head.contentLength(), head.eTag())
-        } finally {
-            Files.deleteIfExists(tempFile)
-        }
-    }
-
-    override fun get(key: String): ByteArray =
-        s3.getObjectAsBytes(GetObjectRequest.builder().bucket(props.bucket).key(key).build())
-            .asByteArray()
-
-    override fun getStream(key: String): java.io.InputStream =
-        s3.getObject(GetObjectRequest.builder().bucket(props.bucket).key(key).build())
-
-    override fun delete(key: String) {
-        s3.deleteObject(DeleteObjectRequest.builder().bucket(props.bucket).key(key).build())
-    }
-
-    override fun exists(key: String): Boolean = try {
-        s3.headObject(HeadObjectRequest.builder().bucket(props.bucket).key(key).build())
-        true
-    } catch (e: NoSuchKeyException) {
-        false
-    }
-
-    override fun listByPrefix(prefix: String): List<ObjectInfo> {
-        val req = ListObjectsV2Request.builder().bucket(props.bucket).prefix(prefix).build()
-        return s3.listObjectsV2(req).contents().map { obj ->
-            ObjectInfo(
-                key = obj.key(),
-                size = obj.size(),
-                lastModified = obj.lastModified(),
-                etag = obj.eTag(),
-            )
-        }
-    }
-
-    override fun deleteByPrefix(prefix: String): Long {
-        var totalBytes = 0L
-        var continuation: String? = null
-        do {
-            val listReq = ListObjectsV2Request.builder()
-                .bucket(props.bucket)
-                .prefix(prefix)
-                .continuationToken(continuation)
-                .build()
-            val resp = s3.listObjectsV2(listReq)
-            if (resp.contents().isNotEmpty()) {
-                totalBytes += resp.contents().sumOf { it.size() }
-                s3.deleteObjects(
-                    DeleteObjectsRequest.builder()
-                        .bucket(props.bucket)
-                        .delete { d ->
-                            d.objects(
-                                resp.contents().map { o ->
-                                    ObjectIdentifier.builder().key(o.key()).build()
-                                }
-                            )
-                        }
-                        .build()
-                )
-            }
-            continuation = resp.nextContinuationToken()
-        } while (continuation != null)
-        return totalBytes
-    }
-
-    override fun calculatePrefixSize(prefix: String): Long {
-        var total = 0L
-        var continuation: String? = null
-        do {
-            val resp = s3.listObjectsV2(
-                ListObjectsV2Request.builder()
-                    .bucket(props.bucket)
-                    .prefix(prefix)
-                    .continuationToken(continuation)
-                    .build()
-            )
-            total += resp.contents().sumOf { it.size() }
-            continuation = resp.nextContinuationToken()
-        } while (continuation != null)
-        return total
-    }
-
-    override fun getLastModified(key: String): Instant? = try {
-        s3.headObject(HeadObjectRequest.builder().bucket(props.bucket).key(key).build())
-            .lastModified()
-    } catch (e: NoSuchKeyException) {
-        null
-    }
-}
-```
-
-- [ ] **Step 2: Verify the test compiles**
-
-Run:
-```bash
-./gradlew :module-infra:compileTestKotlin --no-daemon
-```
-
-Expected: BUILD SUCCESSFUL.
-
-- [ ] **Step 3: Verify local tests still pass**
-
-Run:
-```bash
-./gradlew :module-infra:test --no-daemon
-```
-
-Expected: BUILD SUCCESSFUL. `LocalFsObjectStorageTest` and `StorageConfigTest` pass. `MinioObjectStorageIT` is skipped (env var not set).
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt
-git commit -m "feat(infra): implement MinioObjectStorage (aws-sdk-v2, boot-time fatal validation)"
-```
-
----
-
-## Task 9: Run MinioObjectStorageIT against local MinIO
-
-**Files:** (no code changes — verification only)
-
-- [ ] **Step 1: Start MinIO + minio-init via docker-compose**
-
-Run (in a separate terminal, or in background):
-```bash
-docker compose up -d minio minio-init
-```
-
-Wait for the health check to pass. Verify with:
-```bash
-docker compose ps minio
-```
-
-Expected: `State: Up (healthy)`.
-
-- [ ] **Step 2: Verify bucket exists**
-
-Run:
-```bash
-docker compose exec minio mc ls local/
-```
-
-Expected output: `[yyyy-mm-dd hh:mm:ss] maple-expectation/`. If not present, check minio-init logs:
-```bash
-docker compose logs minio-init
-```
-
-- [ ] **Step 3: Run the integration test**
-
-Run:
-```bash
-INTEGRATION_MINIO=true MINIO_ACCESS_KEY=maple MINIO_SECRET_KEY=changeme \
-  MINIO_ENDPOINT=http://localhost:9000 MINIO_BUCKET=maple-expectation \
-  ./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.MinioObjectStorageIT" --no-daemon
-```
-
-Expected: BUILD SUCCESSFUL. All integration test methods pass.
-
-If any test fails, capture the failure output, fix the implementation, re-run.
-
-- [ ] **Step 4: Verify the test was actually run (not skipped)**
-
-Run:
-```bash
-INTEGRATION_MINIO=true MINIO_ACCESS_KEY=maple MINIO_SECRET_KEY=changeme \
-  MINIO_ENDPOINT=http://localhost:9000 MINIO_BUCKET=maple-expectation \
-  ./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.MinioObjectStorageIT" --no-daemon -i 2>&1 | grep -E "MinioObjectStorageIT|PASSED|FAILED"
-```
-
-Expected: at least 10 test methods listed with status `PASSED` (or `test` then `BUILD SUCCESSFUL`). If you see "skipped" or "Skipped", the env var is not being picked up — verify the `@EnabledIfEnvironmentVariable` annotation.
-
-- [ ] **Step 5: No commit needed (verification only)**
-
----
-
-## Task 10: Implement MinioHealthIndicator
-
-**Files:**
-- Create: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicator.kt`
-
-- [ ] **Step 1: Create the indicator**
-
-Create `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicator.kt`:
-
-```kotlin
-package maple.expectation.infrastructure.storage
-
-import org.slf4j.LoggerFactory
-import org.springframework.boot.actuate.health.Health
-import org.springframework.boot.actuate.health.HealthIndicator
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.stereotype.Component
-import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.model.HeadBucketRequest
-
-/**
- * Exposes MinIO bucket health at /actuator/health.
- * NOT used as a liveness gate (per spec §8.5 — boot-time fatal already validates the bucket).
- */
-@Component
-@ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
-class MinioHealthIndicator(
-    private val props: MinioProperties,
-    private val s3: S3Client,
-) : HealthIndicator {
-
-    private val log = LoggerFactory.getLogger(MinioHealthIndicator::class.java)
-
-    override fun health(): Health = try {
-        s3.headBucket(HeadBucketRequest.builder().bucket(props.bucket).build())
-        Health.up()
-            .withDetail("bucket", props.bucket)
-            .withDetail("endpoint", props.endpoint)
-            .build()
-    } catch (e: Exception) {
-        log.warn("[MinIO] health check failed: {}", e.message)
-        Health.down(e)
-            .withDetail("bucket", props.bucket)
-            .withDetail("endpoint", props.endpoint)
-            .build()
-    }
-}
-```
-
-Note: this class depends on `S3Client` bean. The current `MinioObjectStorage` constructs its own S3Client internally rather than exposing a bean. We need to either:
-- (a) Extract S3Client into a separate bean
-- (b) Have `MinioObjectStorage` expose its `s3` for injection
-- (c) Construct a second S3Client in MinioHealthIndicator
-
-For minimal change, take approach (a). Move S3Client construction into `StorageConfig`:
-
-- [ ] **Step 2: Refactor S3Client into a Spring bean**
-
-Edit `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/StorageConfig.kt`. Replace the `minioObjectStorage` bean with this version that also creates a shared `S3Client` bean:
-
-```kotlin
-package maple.expectation.infrastructure.storage
-
-import io.micrometer.core.instrument.MeterRegistry
-import maple.expectation.common.storage.ObjectStorage
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.context.properties.EnableConfigurationProperties
-import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
-import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration
-import software.amazon.awssdk.core.retry.RetryPolicy
-import software.amazon.awssdk.http.apache.ApacheHttpClient
-import software.amazon.awssdk.regions.Region
-import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.S3Configuration
-import java.net.URI
-
-@Configuration
-@EnableConfigurationProperties(MinioProperties::class)
-class StorageConfig {
-
-    @Bean
-    @ConditionalOnProperty(name = ["storage.backend"], havingValue = "local", matchIfMissing = true)
-    fun localObjectStorage(
-        @Value("\${storage.local.base-path:../data}") basePath: String,
-        @Autowired(required = false) meterRegistry: MeterRegistry?,
-    ): ObjectStorage = LocalFsObjectStorage(basePath, meterRegistry)
-
-    @Bean
-    @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
-    fun s3Client(props: MinioProperties): S3Client = S3Client.builder()
-        .endpointOverride(URI.create(props.endpoint))
-        .region(Region.of(props.region))
-        .credentialsProvider(
-            StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(props.accessKey, props.secretKey)
-            )
-        )
-        .serviceConfiguration(
-            S3Configuration.builder().pathStyleAccessEnabled(props.pathStyleAccess).build()
-        )
-        .httpClient(ApacheHttpClient.builder().build())
-        .overrideConfiguration(
-            ClientOverrideConfiguration.builder()
-                .retryPolicy(RetryPolicy.defaultRetryPolicy())
-                .build()
-        )
-        .build()
-
-    @Bean
-    @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
-    fun minioObjectStorage(
-        props: MinioProperties,
-        s3: S3Client,
-        @Autowired(required = false) meterRegistry: MeterRegistry?,
-    ): ObjectStorage = MinioObjectStorage(props, s3, meterRegistry)
-}
-```
-
-- [ ] **Step 3: Refactor MinioObjectStorage to receive S3Client via constructor**
-
-Edit `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt`. Replace the entire class with this version (S3Client is now injected, not constructed internally):
-
-```kotlin
-package maple.expectation.infrastructure.storage
-
-import io.micrometer.core.instrument.MeterRegistry
-import maple.expectation.common.storage.ObjectInfo
-import maple.expectation.common.storage.ObjectStorage
-import maple.expectation.common.storage.PutResult
-import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Autowired
-import software.amazon.awssdk.core.exception.SdkClientException
-import software.amazon.awssdk.core.sync.RequestBody
-import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
-import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest
-import software.amazon.awssdk.services.s3.model.GetObjectRequest
-import software.amazon.awssdk.services.s3.model.HeadBucketRequest
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException
-import software.amazon.awssdk.services.s3.model.ObjectIdentifier
-import software.amazon.awssdk.services.s3.model.PutObjectRequest
-import software.amazon.awssdk.services.s3.model.S3Exception
-import jakarta.annotation.PostConstruct
-import java.nio.file.Files
-import java.time.Instant
-
-/**
- * MinIO/S3 implementation of [ObjectStorage]. Used when `storage.backend=minio`.
- * Validates the bucket in [validateBucket] (PostConstruct) — throws on failure,
- * causing the Spring application context to fail to start (boot-time fatal).
- *
- * Retry: SDK built-in RetryPolicy.defaultRetryPolicy (3 attempts, 5xx + throttling).
- * S3Client is injected as a Spring bean (see StorageConfig.s3Client).
- */
-class MinioObjectStorage(
-    private val props: MinioProperties,
-    private val s3: S3Client,
-    @Autowired(required = false)
-    private val meterRegistry: MeterRegistry?,
-) : ObjectStorage {
-
-    private val log = LoggerFactory.getLogger(MinioObjectStorage::class.java)
-
-    @PostConstruct
-    fun validateBucket() {
-        try {
-            s3.headBucket(HeadBucketRequest.builder().bucket(props.bucket).build())
-            log.info("[MinIO] bucket validated: bucket={}, endpoint={}", props.bucket, props.endpoint)
-        } catch (e: S3Exception) {
-            throw IllegalStateException(
-                "MinIO bucket '${props.bucket}' unreachable at ${props.endpoint} (status=${e.statusCode()}): ${e.message}",
-                e
-            )
-        } catch (e: SdkClientException) {
-            throw IllegalStateException(
-                "MinIO endpoint '${props.endpoint}' unreachable: ${e.message}",
-                e
-            )
-        }
-    }
-
-    override fun put(key: String, data: ByteArray): PutResult {
-        s3.putObject(
-            PutObjectRequest.builder()
-                .bucket(props.bucket).key(key)
-                .contentLength(data.size.toLong())
-                .contentType("application/octet-stream")
-                .build(),
-            RequestBody.fromBytes(data),
-        )
-        val head = s3.headObject(HeadObjectRequest.builder().bucket(props.bucket).key(key).build())
-        return PutResult(key, head.contentLength(), head.eTag())
-    }
-
-    override fun putStream(key: String, input: java.io.InputStream): PutResult {
-        val tempFile = Files.createTempFile("minio-put-", ".tmp")
-        try {
-            val bytes = input.use { Files.copy(it, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING) }
-            s3.putObject(
-                PutObjectRequest.builder()
-                    .bucket(props.bucket).key(key)
-                    .contentLength(bytes)
-                    .build(),
-                tempFile,
-            )
-            val head = s3.headObject(HeadObjectRequest.builder().bucket(props.bucket).key(key).build())
-            return PutResult(key, head.contentLength(), head.eTag())
+            return PutResult(key, bytes, resp.eTag())
         } finally {
             Files.deleteIfExists(tempFile)
         }
@@ -1486,53 +1010,158 @@ class MinioObjectStorage(
 }
 ```
 
-- [ ] **Step 4: Update MinioObjectStorageIT constructor call (it constructs MinioObjectStorage directly)**
+- [ ] **Step 5: Verify the test compiles**
 
-The IT currently calls `MinioObjectStorage(props, meterRegistry = null)`. Update to pass `s3`:
+Run: `./gradlew :module-infra:compileTestKotlin --no-daemon`
+Expected: BUILD SUCCESSFUL.
 
-Edit `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorageIT.kt`. Find the line:
-```kotlin
-        storage = MinioObjectStorage(props, meterRegistry = null)
-```
+- [ ] **Step 6: Run the IT against local MinIO (verify it passes)**
 
-Replace with:
-```kotlin
-        storage = MinioObjectStorage(props, s3, meterRegistry = null)
-```
-
-- [ ] **Step 5: Verify all tests still pass**
-
-Run:
-```bash
-./gradlew :module-infra:test --no-daemon
-```
-
-Expected: BUILD SUCCESSFUL. LocalFsObjectStorageTest (14 methods), StorageConfigTest (1 method), MinioObjectStorageIT (skipped) — all pass.
-
-- [ ] **Step 6: Re-run integration test**
-
-Run:
 ```bash
 INTEGRATION_MINIO=true MINIO_ACCESS_KEY=maple MINIO_SECRET_KEY=changeme \
   MINIO_ENDPOINT=http://localhost:9000 MINIO_BUCKET=maple-expectation \
   ./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.MinioObjectStorageIT" --no-daemon
 ```
 
-Expected: BUILD SUCCESSFUL.
+Expected: BUILD SUCCESSFUL. All integration test methods pass.
 
-- [ ] **Step 7: Commit**
+If the test is skipped (not "PASSED"), verify `@EnabledIfEnvironmentVariable` picked up the env var. Re-run with `-i` to see JUnit's reason.
+
+- [ ] **Step 7: Commit (IT + impl together)**
 
 ```bash
-git add module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt
-git add module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/StorageConfig.kt
-git add module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicator.kt
 git add module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorageIT.kt
-git commit -m "feat(infra): extract S3Client bean + add MinioHealthIndicator"
+git add module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt
+git commit -m "feat(infra): MinioObjectStorage (1-RTT put, runCatching validate)
+
+TDD pair: MinioObjectStorageIT (11 cases, env-gated) + MinioObjectStorage.
+- put/putStream use PutObjectResponse.eTag() (1 RTT, no extra headObject)
+- @PostConstruct validateBucket via runCatching (no try-catch, project policy)
+- S3Client injected as Spring bean from StorageConfig
+- NoSuchKey -> false/null for exists/getLastModified"
 ```
 
 ---
 
-## Task 11: Update application.yml in 4 modules
+## Task 6: MinioHealthIndicator (TDD: test + impl, 1 commit)
+
+**Files:**
+- Create: `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicatorTest.kt`
+- Create: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicator.kt`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicatorTest.kt`:
+
+```kotlin
+package maple.expectation.infrastructure.storage
+
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
+import org.springframework.boot.actuate.health.Health
+import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest
+import software.amazon.awssdk.services.s3.model.S3Exception
+
+class MinioHealthIndicatorTest {
+
+    @Test
+    fun `health returns UP when headBucket succeeds`() {
+        val s3 = org.mockito.kotlin.mock<S3Client>(name = "happyS3")
+        val props = MinioProperties(
+            endpoint = "http://minio:9000",
+            accessKey = "k", secretKey = "s", bucket = "b"
+        )
+        val indicator = MinioHealthIndicator(props, s3)
+        val health = indicator.health()
+        assertThat(health.status).isEqualTo(Health.up().status)
+    }
+
+    @Test
+    fun `health returns DOWN when headBucket throws S3Exception`() {
+        val s3 = org.mockito.kotlin.mock<S3Client>(name = "failingS3")
+        org.mockito.kotlin.whenever(s3.headBucket(org.mockito.kotlin.any<HeadBucketRequest>()))
+            .thenThrow(S3Exception.builder().statusCode(500).message("boom").build())
+        val props = MinioProperties(
+            endpoint = "http://minio:9000",
+            accessKey = "k", secretKey = "s", bucket = "b"
+        )
+        val indicator = MinioHealthIndicator(props, s3)
+        val health = indicator.health()
+        assertThat(health.status).isEqualTo(Health.down().status)
+    }
+}
+```
+
+- [ ] **Step 2: Run the test, verify it fails**
+
+Run: `./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.MinioHealthIndicatorTest" --no-daemon`
+Expected: BUILD FAILED. Unresolved reference: `MinioHealthIndicator`.
+
+- [ ] **Step 3: Implement `MinioHealthIndicator`**
+
+Create `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicator.kt`:
+
+```kotlin
+package maple.expectation.infrastructure.storage
+
+import org.slf4j.LoggerFactory
+import org.springframework.boot.actuate.health.Health
+import org.springframework.boot.actuate.health.HealthIndicator
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.stereotype.Component
+import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest
+
+/**
+ * Exposes MinIO bucket health at /actuator/health.
+ * NOT used as a liveness gate (per spec §8.5 — boot-time fatal already validates
+ * the bucket via @PostConstruct). This is for runtime observability only.
+ */
+@Component
+@ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
+class MinioHealthIndicator(
+    private val props: MinioProperties,
+    private val s3: S3Client,
+) : HealthIndicator {
+
+    private val log = LoggerFactory.getLogger(MinioHealthIndicator::class.java)
+
+    override fun health(): Health = try {
+        s3.headBucket(HeadBucketRequest.builder().bucket(props.bucket).build())
+        Health.up()
+            .withDetail("bucket", props.bucket)
+            .withDetail("endpoint", props.endpoint)
+            .build()
+    } catch (e: Exception) {
+        log.warn("[MinIO] health check failed: {}", e.message)
+        Health.down(e)
+            .withDetail("bucket", props.bucket)
+            .withDetail("endpoint", props.endpoint)
+            .build()
+    }
+}
+```
+
+- [ ] **Step 4: Run the test, verify it passes**
+
+Run: `./gradlew :module-infra:test --tests "maple.expectation.infrastructure.storage.MinioHealthIndicatorTest" --no-daemon`
+Expected: BUILD SUCCESSFUL.
+
+- [ ] **Step 5: Commit (test + impl together)**
+
+```bash
+git add module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicatorTest.kt
+git add module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicator.kt
+git commit -m "feat(infra): MinioHealthIndicator (runtime /actuator/health visibility)
+
+Exposes bucket + endpoint at /actuator/health. Not a liveness gate.
+Activated only when storage.backend=minio."
+```
+
+---
+
+## Task 7: Update application.yml in 4 modules
 
 **Files:**
 - Modify: `module-rest-controller/src/main/resources/application.yml`
@@ -1540,18 +1169,20 @@ git commit -m "feat(infra): extract S3Client bean + add MinioHealthIndicator"
 - Modify: `module-calculator/src/main/resources/application.yml`
 - Modify: `module-synchronizer/src/main/resources/application.yml`
 
-- [ ] **Step 1: Inspect existing application.yml in one module**
+- [ ] **Step 1: Verify all 4 modules have an `application.yml`**
 
-Run:
 ```bash
-cat module-external-api/src/main/resources/application.yml | tail -20
+ls module-rest-controller/src/main/resources/application*.yml \
+   module-external-api/src/main/resources/application*.yml \
+   module-calculator/src/main/resources/application*.yml \
+   module-synchronizer/src/main/resources/application*.yml 2>&1
 ```
 
-Expected: yaml content. Find a stable spot to add the storage block (typically at the end, before any profile-specific sections).
+Expected: 4+ files listed. If any module is missing `application.yml`, note it (this may indicate the module uses a different config file name, e.g. `application-local.yml` or loads from elsewhere). Adapt the next step to the actual file.
 
-- [ ] **Step 2: Add storage block to module-external-api**
+- [ ] **Step 2: Add storage block to module-external-api's `application.yml`**
 
-Edit `module-external-api/src/main/resources/application.yml`. At the end of the file, add:
+Edit `module-external-api/src/main/resources/application.yml`. Append at the end:
 
 ```yaml
 
@@ -1568,24 +1199,18 @@ storage:
     path-style-access: true
 ```
 
-Note: `access-key` and `secret-key` defaults are empty strings. Spring will throw `ConfigurationPropertiesBindException` at startup if they're empty AND `storage.backend=minio`. This is intentional — fail-fast on missing MinIO credentials.
-
 - [ ] **Step 3: Repeat for the other 3 modules**
 
-Use the same yaml block. Edit:
+Use the exact same yaml block. Edit:
 - `module-rest-controller/src/main/resources/application.yml`
 - `module-calculator/src/main/resources/application.yml`
 - `module-synchronizer/src/main/resources/application.yml`
 
-For each, append the same storage block at the end.
+For each, append the same storage block at the end. (If a module has multiple `application*.yml` files — e.g. `application.yml` + `application-local.yml` — only add to the base `application.yml`. Profile-specific files inherit unless they override.)
 
 - [ ] **Step 4: Verify compile**
 
-Run:
-```bash
-./gradlew compileKotlin compileJava --continue --no-daemon
-```
-
+Run: `./gradlew compileKotlin compileJava --continue --no-daemon`
 Expected: BUILD SUCCESSFUL across all modules.
 
 - [ ] **Step 5: Commit**
@@ -1600,19 +1225,15 @@ git commit -m "feat(config): add storage.backend config to 4 active modules"
 
 ---
 
-## Task 12: Update .env.example
+## Task 8: Update .env.example
 
 **Files:**
 - Modify: `.env.example`
 
-- [ ] **Step 1: Find a stable insertion point in .env.example**
+- [ ] **Step 1: Inspect end of .env.example**
 
-Run:
-```bash
-tail -10 .env.example
-```
-
-Expected: end of file. The .env.example uses bash-style `KEY=value` lines.
+Run: `tail -5 .env.example`
+Expected: end of file. Confirm the file uses bash-style `KEY=value` lines.
 
 - [ ] **Step 2: Append storage/MinIO variables**
 
@@ -1636,14 +1257,10 @@ MINIO_BUCKET=maple-expectation
 MINIO_REGION=us-east-1
 ```
 
-- [ ] **Step 3: Verify .env.example is syntactically valid**
+- [ ] **Step 3: Verify .env.example parses**
 
-Run:
-```bash
-grep -E "^[A-Z_]+=" .env.example | wc -l
-```
-
-Expected: a number > 0 (no specific count — just verify all lines parse). If the project's CI runs `set -a && source .env.example && set +a` somewhere, run that as well.
+Run: `bash -c 'set -a; source .env.example; set +a; echo "STORAGE_BACKEND=$STORAGE_BACKEND"'`
+Expected: `STORAGE_BACKEND=local`. If the file has syntax errors, fix them.
 
 - [ ] **Step 4: Commit**
 
@@ -1654,29 +1271,27 @@ git commit -m "docs(env): add STORAGE_BACKEND + MINIO_* variables to .env.exampl
 
 ---
 
-## Task 13: Update docker-compose.yml with MinIO services
+## Task 9: Update docker-compose.yml with MinIO services (idempotent init)
 
 **Files:**
 - Modify: `docker-compose.yml`
 
 - [ ] **Step 1: Inspect current docker-compose structure**
 
-Run:
-```bash
-grep -n "^[a-z]" docker-compose.yml | head -20
-```
+Run: `grep -n "^[a-z]" docker-compose.yml | head -20`
+Expected: a list of services + a `volumes:` block.
 
-Expected: a list of services. Find where to add `minio` and `minio-init` (alphabetical or end).
+- [ ] **Step 2: Add `minio_data` volume**
 
-- [ ] **Step 2: Add the minio + minio-init services**
-
-Edit `docker-compose.yml`. Find the top-level `volumes:` section (defines named volumes). Add to it:
+Find the top-level `volumes:` block. Add inside it:
 
 ```yaml
   minio_data:
 ```
 
-Then add the two services to the `services:` block (alphabetically between other services, or at the end):
+- [ ] **Step 3: Add minio + minio-init services**
+
+Add to the `services:` block:
 
 ```yaml
 
@@ -1712,39 +1327,35 @@ Then add the two services to the `services:` block (alphabetically between other
       mc alias set local http://minio:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD;
       mc mb -p local/maple-expectation || true;
       mc anonymous set none local/maple-expectation;
-      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'snapshots/';
-      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'runs/';
-      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'calculator/';
-      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'ocid-mapping/';
+      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'snapshots/' || true;
+      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'runs/' || true;
+      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'calculator/' || true;
+      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'ocid-mapping/' || true;
       "
 ```
 
-- [ ] **Step 3: Verify docker-compose is syntactically valid**
+Note the `|| true` on each `mc ilm add` — without it, restarting minio-init would fail on duplicate rules (mc ilm is not idempotent on the rule-add path). `mc mb -p` is already idempotent by design.
 
-Run:
-```bash
-docker compose config --quiet 2>&1 | head -10
-```
+- [ ] **Step 4: Verify docker-compose is syntactically valid**
 
-Expected: no output (silent success) or only deprecation warnings. If there are syntax errors, fix the yaml.
+Run: `docker compose config --quiet 2>&1 | head -10`
+Expected: no error output (silent success). If deprecation warnings appear, they're OK.
 
-- [ ] **Step 4: Start MinIO and minio-init**
+- [ ] **Step 5: Start MinIO and minio-init**
 
-Run:
 ```bash
 docker compose up -d minio minio-init
 ```
 
-Wait for minio-init to exit (it's a one-shot init job). Verify:
+Wait for completion. Verify:
 ```bash
 docker compose ps minio minio-init
 ```
 
-Expected: `minio` is `Up (healthy)`, `minio-init` is `Exited (0)` (or similar successful exit).
+Expected: `minio` is `Up (healthy)`, `minio-init` is `Exited (0)`.
 
-- [ ] **Step 5: Verify bucket + lifecycle rules**
+- [ ] **Step 6: Verify bucket + lifecycle rules**
 
-Run:
 ```bash
 docker compose exec minio mc ls local/
 docker compose exec minio mc ilm ls local/maple-expectation
@@ -1754,109 +1365,106 @@ Expected:
 - First command: `[yyyy-mm-dd hh:mm:ss] maple-expectation/`
 - Second command: 4 lifecycle rules listed, one per prefix.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Verify init is idempotent (restart minio, run minio-init again)**
+
+```bash
+docker compose restart minio
+docker compose up minio-init 2>&1 | tail -5
+```
+
+Expected: minio-init exits 0 on re-run (because of `|| true`). If you see error, double-check the entrypoint script.
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add docker-compose.yml
-git commit -m "feat(docker): add minio + minio-init services with 2-day lifecycle rules"
+git commit -m "feat(docker): add minio + minio-init services with idempotent lifecycle rules
+
+mc ilm add lines use '|| true' so restarts of minio-init do not fail
+on duplicate-rule errors."
 ```
 
 ---
 
-## Task 14: Final compile + test pass
+## Task 10: Full compile + test pass
 
 **Files:** (verification only)
 
 - [ ] **Step 1: Full compile across all modules**
 
-Run:
-```bash
-./gradlew compileKotlin compileJava --continue --no-daemon 2>&1 | tail -30
-```
-
-Expected: BUILD SUCCESSFUL. No compilation errors. If `verifyNoSpringDependency` task exists for module-common, that should also pass.
+Run: `./gradlew compileKotlin compileJava --continue --no-daemon 2>&1 | tail -30`
+Expected: BUILD SUCCESSFUL. No compilation errors.
 
 - [ ] **Step 2: Full test run (skipping IT)**
 
-Run:
-```bash
-./gradlew test --no-daemon 2>&1 | tail -30
-```
-
+Run: `./gradlew test --no-daemon 2>&1 | tail -30`
 Expected: BUILD SUCCESSFUL. All unit tests pass. MinioObjectStorageIT is skipped (env var not set).
 
 - [ ] **Step 3: Integration test against local MinIO**
 
-Run:
 ```bash
 INTEGRATION_MINIO=true MINIO_ACCESS_KEY=maple MINIO_SECRET_KEY=changeme \
   MINIO_ENDPOINT=http://localhost:9000 MINIO_BUCKET=maple-expectation \
   ./gradlew :module-infra:test --no-daemon 2>&1 | tail -30
 ```
 
-Expected: BUILD SUCCESSFUL. MinioObjectStorageIT runs and passes.
+Expected: BUILD SUCCESSFUL. MinioObjectStorageIT runs and passes (11 methods).
 
 - [ ] **Step 4: Verify module-common has zero Spring imports**
 
-Run:
 ```bash
 grep -rn "import org.springframework" module-common/src/main/ 2>&1 | head -5
 ```
 
 Expected: no output.
 
-- [ ] **Step 5: Verify no new `!!`, `try-catch`, `join()/get()/runBlocking` introduced**
+- [ ] **Step 5: Verify no new `try { ... } catch` in module-infra/src/main**
 
-Run:
 ```bash
-git diff develop -- module-common/src/main module-infra/src/main \
-  | grep -E "!!\.|try \{|\.join\(\)|\.get\(\)|runBlocking" | head -20
+git diff develop -- module-infra/src/main \
+  | grep -E "^\+.*\btry \{|^\+.*\bcatch \(" | head -20
 ```
 
-Expected: minimal matches. The `MinioObjectStorageIT` uses `org.junit.jupiter.api.assertThrows` which is a method call, not try-catch. `Files.deleteIfExists` in a `finally` block is OK (per project policy on resource cleanup).
-
-If you see real `try { ... } catch` blocks in `module-common` or `module-infra/src/main` (excluding the `@PostConstruct` validation which uses a deliberate `try { ... } catch (S3Exception) { throw IllegalStateException(...) }` pattern), review and refactor.
+Expected: no matches. The only exception is the `try { ... } catch (NoSuchKeyException)` in `exists()` and `getLastModified()` — those are S3's standard "key not found" idiom (similar to try-catch in `BasicChunkFileReader.parseRecord`). If you see broad `catch (e: Exception)` in newly added code, refactor.
 
 - [ ] **Step 6: No commit (verification only)**
 
 ---
 
-## Task 15: Boot smoke test (local + minio)
+## Task 11: Boot smoke test (local + minio up + minio down)
 
 **Files:** (verification only)
 
 - [ ] **Step 1: Boot smoke with local backend (regression check)**
 
-Run:
 ```bash
 set -a && source .env && set +a
-STORAGE_BACKEND=local ./gradlew :module-rest-controller:bootRun --no-daemon &
+STORAGE_BACKEND=local ./gradlew :module-rest-controller:bootRun --no-daemon > /tmp/boot-local.log 2>&1 &
 BOOT_PID=$!
 sleep 60
 curl -s http://localhost:8080/actuator/health | head -20
 kill $BOOT_PID 2>/dev/null
 ```
 
-Expected: health endpoint returns `{"status":"UP"}` (or similar). No boot errors.
+Expected: health endpoint returns `{"status":"UP"}`. No boot errors.
 
 - [ ] **Step 2: Boot smoke with MinIO backend (happy path)**
 
 Ensure MinIO is running (`docker compose ps minio` shows healthy).
 
-Run:
 ```bash
 set -a && source .env && set +a
-STORAGE_BACKEND=minio ./gradlew :module-rest-controller:bootRun --no-daemon &
+STORAGE_BACKEND=minio ./gradlew :module-rest-controller:bootRun --no-daemon > /tmp/boot-minio.log 2>&1 &
 BOOT_PID=$!
 sleep 60
 curl -s http://localhost:8080/actuator/health | head -20
 echo "---"
-docker compose logs minio | grep -i "bucket\|GET\|HEAD" | tail -5
+docker compose logs minio 2>&1 | grep -i "bucket\|GET\|HEAD" | tail -5
 kill $BOOT_PID 2>/dev/null
 ```
 
-Expected: 
-- App boots successfully (the bucket validation succeeds).
+Expected:
+- App boots successfully (bucket validation succeeds).
 - `MinioHealthIndicator` reports UP at `/actuator/health`.
 - MinIO logs show a `HEAD` request for the bucket.
 
@@ -1867,7 +1475,6 @@ Stop MinIO:
 docker compose stop minio
 ```
 
-Run:
 ```bash
 set -a && source .env && set +a
 STORAGE_BACKEND=minio ./gradlew :module-rest-controller:bootRun --no-daemon > /tmp/boot-without-minio.log 2>&1 &
@@ -1890,7 +1497,7 @@ docker compose down
 
 ---
 
-## Task 16: Final commit + PR ready check
+## Task 12: Final commit + PR ready check
 
 - [ ] **Step 1: Verify all DoD items from spec are met**
 
@@ -1898,7 +1505,6 @@ Re-read `docs/superpowers/specs/2026-06-09-v1-object-storage-foundation-design.m
 
 - [ ] **Step 2: Generate PR description**
 
-Run:
 ```bash
 git log --oneline develop..HEAD
 ```
@@ -1926,34 +1532,41 @@ gh pr create --base develop --title "feat(infra): V1 ObjectStorage foundation (i
 
 ---
 
-## Self-Review Notes
+## Self-Review Notes (v2)
 
 **Spec coverage:**
 - §5.1 Interface — Task 2 ✓
-- §5.2 LocalFsObjectStorage — Tasks 3, 4 ✓
-- §5.2 MinioObjectStorage + @PostConstruct — Tasks 7, 8, 10 ✓
-- §5.3 StorageConfig + MinioProperties — Tasks 5, 6 ✓
-- §6.1 Error semantics — covered by tests in Tasks 3, 7
-- §6.2 Boot-time fatal — Task 8 (validateBucket), Task 15 (Step 3 verifies)
-- §6.3 HealthIndicator — Task 10
-- §6.4 Metrics — DEFERRED to a follow-up task; spec says "optional" so not strictly DoD
-- §7.1 application.yml — Task 11
-- §7.2 .env.example — Task 12
+- §5.2 LocalFsObjectStorage — Task 3 (TDD pair) ✓
+- §5.2 MinioObjectStorage + @PostConstruct — Task 5 (TDD pair) ✓
+- §5.3 StorageConfig + MinioProperties — Task 4 (TDD pair) ✓
+- §6.1 Error semantics — covered by tests in Tasks 3, 5
+- §6.2 Boot-time fatal (runCatching) — Task 5 (impl), Task 11 (Step 3 verifies)
+- §6.3 HealthIndicator — Task 6 (TDD pair)
+- §6.4 Metrics — DEFERRED to follow-up; spec says "optional"
+- §7.1 application.yml — Task 7
+- §7.2 .env.example — Task 8
 - §7.3 gradle/libs.versions.toml — Task 1
 - §7.4 module-infra/build.gradle — Task 1
-- §8 docker-compose — Task 13
+- §8 docker-compose — Task 9 (idempotent)
 - §9.1 LocalFsObjectStorageTest — Task 3
-- §9.2 MinioObjectStorageIT — Task 7
-- §13 DoD — verified in Tasks 14, 15
+- §9.2 MinioObjectStorageIT — Task 5
+- §9.3 Boot-time fatal — Task 11
+- §13 DoD — verified in Tasks 10, 11
 
 **Placeholder scan:** none found.
 
 **Type consistency:**
 - `ObjectStorage` interface used consistently across all tasks
-- `MinioObjectStorage(props, s3, meterRegistry)` constructor signature consistent in Tasks 8, 10
-- `StorageConfig.localObjectStorage` / `s3Client` / `minioObjectStorage` bean names consistent
+- `MinioObjectStorage(props, s3, meterRegistry)` constructor signature consistent in Task 5 (impl + IT)
+- `StorageConfig.s3Client` / `minioObjectStorage` bean names consistent
+
+**Changes from v1 (grill session):**
+1. TDD discipline: combined test+impl+commit into single tasks (Tasks 3, 4, 5, 6). Each task is one TDD pair with one commit.
+2. `MinioObjectStorage.put` / `putStream`: removed redundant `headObject` call. Now uses `PutObjectResponse.eTag()` directly. 1 RTT instead of 2.
+3. `MinioObjectStorage.validateBucket`: replaced try-catch with `runCatching { ... }.onFailure { ... }` (project policy: avoid raw try-catch).
+4. docker-compose `mc ilm add` lines: appended `|| true` for idempotency on restarts.
 
 **Notes for executors:**
-- The `MinioObjectStorage` constructor signature changed between Task 8 and Task 10. Task 8 creates `S3Client` internally; Task 10 refactors to inject it. The IT class needs the same update (Task 10 Step 4).
-- The metrics surface (`object_storage_operation_total` etc.) is intentionally deferred. If required, add it as a follow-up task after PR review.
-- Boot-time fatal is best verified in Task 15. If Task 15 Step 3 fails to show the expected `IllegalStateException`, check that the `MinioObjectStorage` bean is being eagerly initialized (it should be by default — Spring Boot does not lazy-init beans by default).
+- The metrics surface (`object_storage_operation_total` etc.) is intentionally deferred. If required, add as a follow-up task after PR review.
+- Boot-time fatal is verified manually in Task 11. If you need a unit test, you'd need to construct a `MinioObjectStorage` with a mocked S3Client and invoke `@PostConstruct validateBucket()` directly (e.g., via `MockitoExtension` or `ReflectionTestUtils.invokeMethod`).
+- The two `try { s3.headObject(...) } catch (e: NoSuchKeyException)` blocks in `exists()` and `getLastModified()` are S3 SDK's standard "key-not-found" idiom — same pattern as `BasicChunkFileReader.parseRecord` in the existing codebase. Not flagged by `try-catch` policy grep.

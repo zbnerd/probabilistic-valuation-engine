@@ -4,12 +4,14 @@
 
 | 항목 | 값 |
 |------|-----|
-| 상태 | 수락됨 (Accepted) |
+| 상태 | **Deprecated (2026-06-09)** |
 | 결정일 | 2026-03-11 |
+| 폐기일 | 2026-06-09 |
 | 결정자 | probabilistic-valuation-engine Team |
 | 검토자 | Architecture Review Board |
 | 관련 이슈 | #589 |
 | 선행 ADR | ADR-003 PostgreSQL Redis 대체 전략 |
+| 후속 결정 | 없음 (supersede ADR 미작성) |
 
 ---
 
@@ -239,3 +241,29 @@ Redis/Redisson 의존성과 관련 코드가 여전히 존재하여 다음 문�
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
 | 2026-03-11 | ADR 초안 작성 | Claude (Ralph) |
+| 2026-06-09 | Status: Accepted → **Deprecated**. 결정 폐기 — Redis 재도입 허용. 근거: module-rest-controller V6 read cache (`PopularCharacterRedisAdapter`, `UrgentDedupService`, `NegativeCacheService`, `ReadModelCacheService`, `EquipmentRankingCacheService`) 가 Redis 를 live 로 사용 중. `docker-compose.yml` 에 `redis:7-alpine` 서비스 운영. module-calculator multi-instance scale-out 시 L2 cache 로 Redis 도입 가능성 검토. **supersede ADR 미작성** (사용자 결정). 코드 변경 없음 — 모듈-앱/인프라 의 redisson 제거는 그대로 유지. | maple |
+
+---
+
+## 10. 폐기 노트 (2026-06-09)
+
+### 폐기 사유
+
+ADR-022 가 의도한 "Redis 완전 제거" 는 **부분적으로만 실행** 됨:
+
+- ✅ `module-app`, `module-infra`, `module-chaos-test` — redisson·bucket4j-redisson 제거, PostgreSQL 로 대체 (PostgresAdvisoryLockStrategy, PGMQ, TieredCacheManager UNLOGGED L2, PostgresNotifySubscriber, PostgresSingleFlightStrategy)
+- ❌ `module-rest-controller` — `spring-boot-starter-data-redis` 유지. V6 read API 가 `PopularCharacterRedisAdapter`, `UrgentDedupService`, `NegativeCacheService`, `ReadModelCacheService`, `EquipmentRankingCacheService` 에서 Redis live 사용. `docker-compose.yml:100-108` 의 `maple-redis` 서비스 운영 중.
+
+이 ADR 의 정책 ("Redis 완전 제거") 은 **현실과 괴리**. 2026-06-09 정책 폐기.
+
+### 향후 방향
+
+- Redis 사용은 허용. `module-rest-controller` 의 기존 Redis 사용은 변경 없음.
+- 신규 Redis 도입 시 별도 ADR 불필요 (이 폐기로 정책 해제).
+- `module-calculator` 의 L2 cache 로 Redis 도입 가능성 있음 (L1 Caffeine 의 multi-instance hit rate 분산 대응). 도입 시 별도 ADR 권장.
+- 모듈-앱/인프라 의 redisson-free 상태는 유지 (롤백 안 함).
+
+### 비고
+
+- supersede ADR 미작성 (사용자 명시 결정).
+- `docs/16_Guardrails/`, `docs/Portfolio_Book/` 의 ADR-022 인용은 history-only 로 유효 (이전 결정의 실행 사실). 현재 정책과 다름.

@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.TimeUnit
 import maple.expectation.core.dto.v4.CalculationInput
+import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4
 import maple.expectation.core.dto.v4.EquipmentItem
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.model.snapshot.CalculationSnapshot
@@ -346,7 +347,7 @@ class ExternalApiWorker(
 
     // Issue #1131: CPU section 의 4 result 를 묶어 caller 로 전달.
     private data class CalcCpuResult(
-        val calcResult: PureCalculationResult,
+        val calcResult: EquipmentExpectationResponseV4,
         val resultBytes: ByteArray,
         val gzipData: ByteArray,
         val hash: String,

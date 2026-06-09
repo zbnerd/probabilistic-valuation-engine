@@ -36,7 +36,7 @@ class ForkJoinPoolMetrics(meterRegistry: MeterRegistry) {
             .description("ForkJoinPool.commonPool() active thread count (CPU work in flight)")
             .register(meterRegistry)
 
-        Gauge.builder("forkjoinpool.queued.tasks") { pool.queueSize.toDouble() }
+        Gauge.builder("forkjoinpool.queued.tasks") { pool.queuedTaskCount.toDouble() }
             .description("ForkJoinPool.commonPool() queued task count (Dispatchers.Default saturation indicator)")
             .register(meterRegistry)
 

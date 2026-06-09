@@ -3,6 +3,7 @@ package maple.synchronizer.service
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.synchronizer.redis.OcidMappingRedisWriter
 import maple.synchronizer.repository.OcidMappingRepository
+import maple.synchronizer.domain.OcidMapping
 import maple.synchronizer.storage.OcidMappingFileReader
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component

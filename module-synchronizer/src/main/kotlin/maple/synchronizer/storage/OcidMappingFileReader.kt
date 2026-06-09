@@ -13,12 +13,8 @@ import maple.expectation.error.exception.ArtifactNotFoundException
 import maple.synchronizer.metrics.SynchronizerReaderMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import maple.synchronizer.domain.OcidMapping
 import org.springframework.stereotype.Component
-
-data class OcidMapping(
-    val userIgn: String,
-    val ocid: String,
-)
 
 @Component
 class OcidMappingFileReader(

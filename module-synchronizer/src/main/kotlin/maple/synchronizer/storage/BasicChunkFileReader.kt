@@ -10,26 +10,13 @@ import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import maple.expectation.util.GzipUtils
+import maple.synchronizer.domain.BasicRecord
 import maple.expectation.util.HashUtils
 import maple.synchronizer.metrics.SynchronizerReaderMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-
-data class BasicRecord(
-    val userIgn: String,
-    val ocid: String,
-    val worldName: String?,
-    val characterClass: String?,
-    val characterLevel: Int?,
-    val guildName: String?,
-    val compressedBody: ByteArray,
-    val bodyHash: String,
-) {
-    override fun equals(other: Any?): Boolean = this === other
-    override fun hashCode(): Int = System.identityHashCode(this)
-}
 
 @Component
 class BasicChunkFileReader(

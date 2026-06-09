@@ -8,7 +8,7 @@ import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
-import maple.calculator.storage.ObjectStorage
+import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy

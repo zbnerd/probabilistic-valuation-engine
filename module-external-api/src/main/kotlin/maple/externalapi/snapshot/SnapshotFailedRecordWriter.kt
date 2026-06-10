@@ -1,39 +1,32 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardOpenOption
+import maple.expectation.common.storage.ObjectStorage
+import java.io.ByteArrayOutputStream
 
+/**
+ * Read-modify-write of `runs/$runKey/failed.jsonl`. S3 has no native append,
+ * so we read the existing object, append a line, and put it back. Acceptable
+ * for low volume (failures are rare in healthy runs).
+ */
 class SnapshotFailedRecordWriter(
-    private val filePath: Path,
+    private val runKey: String,
     private val objectMapper: ObjectMapper,
+    private val objectStorage: ObjectStorage,
 ) {
-    private var count = 0
+    private val key = "$runKey/failed.jsonl"
+    private var count: Int = 0
 
     fun append(record: SnapshotChunkRecord.Failure) {
-        val line = buildFailureLine(record)
-        Files.write(filePath, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+        val existing = runCatching { objectStorage.get(key) }.getOrDefault(ByteArray(0))
+        val out = ByteArrayOutputStream(existing.size + 256)
+        out.write(existing)
+        if (existing.isNotEmpty() && existing.last() != '\n'.code.toByte()) out.write('\n'.code)
+        out.write(objectMapper.writeValueAsBytes(record))
+        out.write('\n'.code)
+        objectStorage.put(key, out.toByteArray())
         count++
     }
 
     fun count(): Int = count
-
-    private fun buildFailureLine(record: SnapshotChunkRecord.Failure): ByteArray {
-        val buf = java.io.ByteArrayOutputStream()
-        buf.write("{\"endpoint\":".toByteArray())
-        buf.write(objectMapper.writeValueAsBytes(record.endpoint))
-        buf.write(",\"keyType\":".toByteArray())
-        buf.write(objectMapper.writeValueAsBytes(record.keyType))
-        buf.write(",\"key\":".toByteArray())
-        buf.write(objectMapper.writeValueAsBytes(record.key))
-        buf.write(",\"status\":\"FAILURE\",\"httpStatus\":".toByteArray())
-        buf.write(record.httpStatus.toString().toByteArray())
-        buf.write(",\"fetchedAt\":".toByteArray())
-        buf.write(objectMapper.writeValueAsBytes(record.fetchedAt.toString()))
-        buf.write(",\"error\":".toByteArray())
-        buf.write(objectMapper.writeValueAsBytes(record.errorMessage))
-        buf.write("}\n".toByteArray())
-        return buf.toByteArray()
-    }
 }

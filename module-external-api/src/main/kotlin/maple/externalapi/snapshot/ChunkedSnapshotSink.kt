@@ -1,6 +1,5 @@
 package maple.externalapi.snapshot
 
-import java.nio.file.Path
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -11,7 +10,6 @@ import java.util.concurrent.atomic.AtomicReference
 import org.slf4j.LoggerFactory
 
 class ChunkedSnapshotSink(
-    private val runDir: Path,
     private val endpoint: String,
     private val queueCapacity: Int,
     private val fileManager: ChunkFileManager,

@@ -1,8 +1,8 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.nio.file.Path
 import java.time.Clock
+import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.springframework.beans.factory.annotation.Qualifier
@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component
 
 /**
  * Single factory for [ChunkedSnapshotSink] across all endpoint phases.
- * Owns [ObjectMapper], [SnapshotChunkingProperties], [SnapshotVolumeMetrics], and [Clock]
- * so callers do not have to thread them through their constructors.
+ * Owns [ObjectMapper], [SnapshotChunkingProperties], [SnapshotVolumeMetrics], [Clock],
+ * and [ObjectStorage] so callers do not have to thread them through their constructors.
  *
  * Replaces [RankingSnapshotSinkFactory] (now removed). Each endpoint has its own
  * publisher qualifier wired by Spring.
@@ -25,30 +25,31 @@ class EndpointSinkFactory(
     private val characterBasicPublisher: SnapshotChunkEventPublisher,
     @Qualifier("rankingSnapshotPublisher")
     private val rankingPublisher: SnapshotChunkEventPublisher,
+    private val objectStorage: ObjectStorage,
     private val clock: Clock = Clock.systemUTC(),
 ) {
-    fun createForCharacterBasic(runDir: Path): ChunkedSnapshotSink = build(runDir, "character-basic", characterBasicPublisher)
+    fun createForCharacterBasic(runKey: String): ChunkedSnapshotSink = build(runKey, "character-basic", characterBasicPublisher)
 
-    fun createForItemEquipment(runDir: Path): ChunkedSnapshotSink = build(runDir, "item-equipment", characterBasicPublisher)
+    fun createForItemEquipment(runKey: String): ChunkedSnapshotSink = build(runKey, "item-equipment", characterBasicPublisher)
 
-    fun createForRanking(runDir: Path): ChunkedSnapshotSink = build(runDir, "ranking-overall", rankingPublisher)
+    fun createForRanking(runKey: String): ChunkedSnapshotSink = build(runKey, "ranking-overall", rankingPublisher)
 
     private fun build(
-        runDir: Path,
+        runKey: String,
         endpoint: String,
         publisher: SnapshotChunkEventPublisher,
     ): ChunkedSnapshotSink {
         val endpointConfig = chunkingProperties.configFor(endpoint)
         val fileManager = ChunkFileManager(
-            runDir = runDir,
+            runKey = runKey,
             endpoint = endpoint,
             maxRecords = endpointConfig.maxRecords,
             maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
             objectMapper = objectMapper,
             clock = clock,
+            objectStorage = objectStorage,
         )
         return ChunkedSnapshotSink(
-            runDir = runDir,
             endpoint = endpoint,
             queueCapacity = chunkingProperties.queueCapacity,
             fileManager = fileManager,

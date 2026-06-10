@@ -1,20 +1,21 @@
 package maple.externalapi.scheduler.phase
 
-import java.nio.file.Files
-import java.nio.file.Path
+import maple.expectation.common.storage.ObjectStorage
 import java.time.Clock
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 
-@Component
-class RunMarkerWriter(private val clock: Clock) {
-    fun writeRunningMarker(runDir: Path) {
-        val marker = runDir.resolve("_RUNNING")
-        Files.createDirectories(runDir)
-        Files.writeString(marker, clock.instant().toString())
-        log.info("[Scheduler] wrote _RUNNING marker: {}", marker)
-    }
-    companion object {
-        private val log = LoggerFactory.getLogger(RunMarkerWriter::class.java)
+/**
+ * Writes a `_RUNNING` marker object for an in-progress run.
+ * Stored as a small text object (`<runKey>/_RUNNING` containing the
+ * `Clock.instant().toString()`). Existence is checked via
+ * `ObjectStorage.exists()`; the content is informational only.
+ */
+class RunMarkerWriter(
+    private val clock: Clock,
+    private val objectStorage: ObjectStorage,
+) {
+    fun writeRunMarker(runKey: String) {
+        val markerKey = "$runKey/_RUNNING"
+        val payload = clock.instant().toString().toByteArray()
+        objectStorage.put(markerKey, payload)
     }
 }

@@ -1,6 +1,5 @@
 package maple.externalapi.scheduler.phase
 
-import java.nio.file.Paths
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -36,8 +35,6 @@ class ItemEquipmentFetchPhase(
     private val permitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
-    @Value("\${external-api.store.base-path:../data}")
-    private val storeBasePath: String,
     private val clock: Clock = Clock.systemUTC(),
     private val runIdGenerator: RunIdGenerator,
     private val runMarkerWriter: RunMarkerWriter,
@@ -53,9 +50,9 @@ class ItemEquipmentFetchPhase(
 
         val runId = runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("item-equipment")
-        val runDir = Paths.get(storeBasePath, "runs", runId)
-        runMarkerWriter.writeRunningMarker(runDir)
-        val sink = sinkFactory.createForItemEquipment(runDir)
+        val runKey = "runs/$runId/item-equipment"
+        runMarkerWriter.writeRunMarker(runKey)
+        val sink = sinkFactory.createForItemEquipment(runKey)
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
 

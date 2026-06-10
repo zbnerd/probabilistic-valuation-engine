@@ -1,6 +1,5 @@
 package maple.externalapi.scheduler.phase
 
-import java.nio.file.Paths
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -38,8 +37,6 @@ class CharacterBasicFetchPhase(
     private val permitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
-    @Value("\${external-api.store.base-path:../data}")
-    private val storeBasePath: String,
     private val clock: Clock = Clock.systemUTC(),
     private val runIdGenerator: RunIdGenerator,
     private val runMarkerWriter: RunMarkerWriter,
@@ -62,9 +59,9 @@ class CharacterBasicFetchPhase(
 
         val runId = runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("character-basic")
-        val runDir = Paths.get(storeBasePath, "runs", runId)
-        runMarkerWriter.writeRunningMarker(runDir)
-        val sink = sinkFactory.createForCharacterBasic(runDir)
+        val runKey = "runs/$runId/character-basic"
+        runMarkerWriter.writeRunMarker(runKey)
+        val sink = sinkFactory.createForCharacterBasic(runKey)
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
 

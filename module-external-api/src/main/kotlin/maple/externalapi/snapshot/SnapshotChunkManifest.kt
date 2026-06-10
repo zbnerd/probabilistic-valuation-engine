@@ -1,8 +1,7 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.nio.file.Files
-import java.nio.file.Path
+import maple.expectation.common.storage.ObjectStorage
 import java.time.Instant
 
 data class SnapshotChunkManifest(
@@ -25,11 +24,12 @@ data class ChunkEntry(
 )
 
 class SnapshotChunkManifestWriter(
-    private val manifestPath: Path,
     private val objectMapper: ObjectMapper,
+    private val objectStorage: ObjectStorage,
 ) {
-    fun write(manifest: SnapshotChunkManifest) {
-        val json = objectMapper.writeValueAsBytes(manifest)
-        Files.write(manifestPath, json)
+    fun write(runKey: String, manifest: SnapshotChunkManifest) {
+        val manifestKey = "$runKey/manifest.json"
+        val bytes = objectMapper.writeValueAsBytes(manifest)
+        objectStorage.put(manifestKey, bytes)
     }
 }

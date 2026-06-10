@@ -1,0 +1,54 @@
+{
+  "validationId": "vs3-2026-06-10T05-04-14",
+  "gitSha": "77cb77e15",
+  "storageBackend": "minio",
+  "minio": {
+    "endpoint": "http://localhost:9000",
+    "bucket": "maple-expectation",
+    "consoleUrl": "http://localhost:9001"
+  },
+  "checks": [
+    { "name": "mc_ready", "status": "pass", "durationMs": 50, "extra": "http://localhost:9000/minio/health/ready -> 200" },
+    { "name": "bucket_exists", "status": "pass", "durationMs": 120, "extra": "local/maple-expectation/" },
+    { "name": "lifecycle_rules_4", "status": "pass", "durationMs": 80, "extra": "8 rules present (need >= 4)" },
+    { "name": "modules_health", "status": "fail", "durationMs": 600000, "extra": "5/5 modules DOWN — env has minimal .env (no DB_URL, no DB_ROOT_PASSWORD); Spring Boot cannot boot 5 service modules from this worktree without parent .env" },
+    { "name": "expectation_api", "status": "skipped", "durationMs": 0, "extra": "blocked by modules_health failure (port 8080 not bound)" },
+    { "name": "calculation_completed", "status": "skipped", "durationMs": 0, "extra": "blocked by modules_health failure (no calculator log produced)" },
+    { "name": "no_error_logs", "status": "skipped", "durationMs": 0, "extra": "blocked by modules_health failure (no module logs produced)" },
+    { "name": "prefix_snapshots", "status": "skipped", "durationMs": 0, "extra": "blocked by smoke failure (bucket empty — no real E2E ran)" },
+    { "name": "prefix_runs", "status": "skipped", "durationMs": 0, "extra": "blocked by smoke failure (bucket empty — no real E2E ran)" },
+    { "name": "prefix_ocid-mapping", "status": "skipped", "durationMs": 0, "extra": "blocked by smoke failure (bucket empty — no real E2E ran)" },
+    { "name": "prefix_calculator/runs", "status": "skipped", "durationMs": 0, "extra": "blocked by smoke failure (bucket empty — no real E2E ran)" },
+    { "name": "chaos", "status": "skipped", "durationMs": 0, "extra": "blocked by smoke failure (chaos test requires 5/5 modules UP)" }
+  ],
+  "loadTest": { "status": "manual_pending", "rps": null, "p99Ms": null, "note": "Baseline comparison N/A" },
+  "manualSteps": ["minio_console_visual_inspect", "snapshot_resume_retry", "load_test_run"],
+  "result": "fail",
+  "exitCode": 4,
+  "exitCodeReason": "validate-minio-vs3.sh cmd_smoke returned exit 4: check_all_modules_health failed (all 5 module ports unbound). cmd_env passed; cmd_chaos was not reached.",
+  "env": {
+    "preflightEnvFile": "/tmp/vs3-preflight.env",
+    "preflightEnvKeys": ["MINIO_HEALTH_KEY", "SNAPSHOT_RESUME_METHOD", "SNAPSHOT_RESUME_CMD", "CLEANUP_TRIGGER_METHOD", "CLEANUP_TRIGGER_CMD", "VS3_MODULE_COUNT"],
+    "worktreeEnv": "/home/maple/probabilistic-valuation-engine/.worktrees/vs3-minio-dev-cutover/.env (minimal: STORAGE_BACKEND + MINIO_* only)",
+    "minioContainer": "vs3-test-minio (minio/minio:latest, host ports 9000/9001)",
+    "minioInit": "could not run via `docker compose up minio-init` — network conflict (maple-network already owns 172.20.0.0/16). Bootstrap done directly via `mc` CLI (alias, mb, ilm add x4).",
+    "modulePorts": { "8080": "free", "8081": "free", "8082": "free", "8083": "free", "8084": "free" }
+  },
+  "whatWasValidated": [
+    "MinIO readiness (HTTP 200 on /minio/health/ready)",
+    "Bucket existence (local/maple-expectation/)",
+    "Lifecycle rules count (8 prefix-rule rows in `mc ilm ls` output; >= 4 required)"
+  ],
+  "whatWasNotValidated": [
+    "5-module actuator/health UP status (no bootRun in this session; minimal .env cannot boot Spring)",
+    "E2E expectation API 202/200 (port 8080 unbound)",
+    "Calculator 'Calculation completed with result saved' log (no calculator process)",
+    "MinIO prefix non-empty checks under maple-expectation/{snapshots,runs,ocid-mapping,calculator/runs}/ (bucket is empty; no E2E flow ran)",
+    "Chaos test (stop/down/start/up recovery) — requires 5/5 modules UP first"
+  ],
+  "deferredToManual": {
+    "minio_console_visual_inspect": "Open http://localhost:9001 and verify objects under maple-expectation/{snapshots,runs,ocid-mapping,calculator/runs}/ once a real E2E has run",
+    "load_test_run": "./load-test/run-v5-db-throughput.sh — record raw RPS, p99 to MD report",
+    "snapshot_resume_retry": "Eval SNAPSHOT_RESUME_CMD (from /tmp/vs3-preflight.env) once a real runId/chunkId is available"
+  }
+}

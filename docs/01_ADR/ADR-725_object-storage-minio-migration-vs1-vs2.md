@@ -115,3 +115,27 @@ Application code had 3 legacy port interfaces (`SnapshotObjectStore`, `ExternalA
 ## 5. Summary
 
 > Single `ObjectStorage` port + 2 adapters; application migrated; legacy readers deleted; default local; MinIO cutover deferred to VS3+VS4.
+
+---
+
+## ⚠️ Supersede Note (2026-06-10)
+
+**Original VS3 scope** (this file, Section 3 Risk): "VS3 = dry-run (write to MinIO but read from local)".
+
+**Revised VS3 scope** (per issue #1218 acceptance criteria + #1218 dev validation):
+- VS3 = **full dev cutover**. `STORAGE_BACKEND=minio` set in dev; 5 modules restart cleanly (external-api, calculator, synchronizer, rest-controller, cleanup); e2e smoke, load-test, chaos test all run against MinIO.
+- VS4 = **production cutover** (atomic flip of `storage.backend` in prod compose).
+
+**Why scope expanded:** The dry-run was a defensive option chosen in VS2 to limit blast radius. Issue #1218 reframed VS3 as a real validation gate ("proves VS1+VS2 work end-to-end with S3-compatible backend, before production cutover"). A dry-run would not exercise the read path on MinIO and would leave the read-path risk un-validated until VS4.
+
+**Implications:**
+- **Section 3 (Trade-offs), Risk** item "VS3+VS4 cutover regressions": now VS3 is the read-path validation; VS4 inherits the production-only risks (network latency to S3, IAM, prod bucket policy).
+- **Section 4 (Result/Evidence)**: superseded by VS3 validation report at `docs/reports/vs3-validation-{ts}.json` (issue #1218 deliverable).
+- **Section 3, Non-Risk "Production cutover"**: re-categorized — VS3 owns dev cutover risk; VS4 owns prod cutover risk.
+
+**Decisions unchanged:**
+- Single `ObjectStorage` interface (module-common).
+- `LocalFsObjectStorage` and `MinioObjectStorage` adapters.
+- `SnapshotObjectStore` port preserved via adapter.
+- `ChunkFileReaderPort` with IO/CPU 분리.
+- `storageType` field semantics.

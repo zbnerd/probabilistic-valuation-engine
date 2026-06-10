@@ -14,7 +14,7 @@
 
 VS1 (PR #1222) shipped the unified `ObjectStorage` interface with two adapters (`LocalFsObjectStorage`, `MinioObjectStorage`). VS2 (PR #1217) migrated the four application modules to the unified interface and introduced `SnapshotObjectStoreAdapter` + `ChunkFileReaderPort` (with IO/CPU 분리). Default backend in VS2 is `local`.
 
-ADR-725 originally scoped VS3 as a **dry-run** (write to MinIO, read from local). Issue #1218 reframes VS3 as a **full dev cutover** (`STORAGE_BACKEND=minio` in dev; 4 modules restart; e2e smoke + load-test + chaos all run against MinIO). A dry-run would not exercise the read path on MinIO, leaving the read-path risk un-validated until VS4 (prod cutover). Issue #1218 also acts as a manual gate — VS1+VS2 cannot be production-cut over without this gate.
+ADR-725 originally scoped VS3 as a **dry-run** (write to MinIO, read from local). Issue #1218 reframes VS3 as a **full dev cutover** (`STORAGE_BACKEND=minio` in dev; 5 modules restart; e2e smoke + load-test + chaos all run against MinIO). A dry-run would not exercise the read path on MinIO, leaving the read-path risk un-validated until VS4 (prod cutover). Issue #1218 also acts as a manual gate — VS1+VS2 cannot be production-cut over without this gate.
 
 VS3 is a **manual validation gate**, not a code-change slice. Deliverables: a wrapper script, a modified `pipeline-test` skill with MinIO awareness, a validation report (JSON + Markdown), and an ADR-725 supersede note. Application code remains unchanged in this slice.
 
@@ -24,7 +24,7 @@ Add a `scripts/validate-minio-vs3.sh` wrapper with subcommands `env`, `smoke`, `
 
 ## 3. Goals
 
-1. `STORAGE_BACKEND=minio` works end-to-end in the dev environment for the 4 Spring Boot modules (`module-external-api`, `module-calculator`, `module-synchronizer`, `module-rest-controller`).
+1. `STORAGE_BACKEND=minio` works end-to-end in the dev environment for the 5 Spring Boot modules (`module-external-api`, `module-calculator`, `module-synchronizer`, `module-rest-controller`, `module-cleanup`).
 2. All 12 acceptance criteria in issue #1218 are checkable via a single wrapper script invocation (`./scripts/validate-minio-vs3.sh all`) or via its subcommands.
 3. The `pipeline-test` skill remains backward-compatible with `STORAGE_BACKEND=local` and gains MinIO-specific checks when `STORAGE_BACKEND=minio` is set.
 4. The wrapper script is **re-runnable**: each invocation overwrites the prior report (timestamped file name); failures are diagnosable from the report + per-module log files.
@@ -50,7 +50,7 @@ scripts/
   validate-minio-vs3.sh             # main entry, subcommand router
   lib/
     minio-checks.sh                 # mc CLI wrappers (bucket, lifecycle, health, prefix list)
-    module-health.sh                # 4 modules /actuator/health polling + MinioHealthIndicator verify
+    module-health.sh                # 5 modules /actuator/health polling + MinioHealthIndicator verify
     chaos-minio.sh                  # docker stop/start + DOWN/UP verification
 docs/
   reports/
@@ -74,8 +74,8 @@ docs/reports/vs3-validation-TEMPLATE.md                          # NEW (template
 |-----------|----------------|-----------|
 | `validate-minio-vs3.sh` | subcommand routing, `.env` load, exit code aggregation, JSON+Markdown report generation | `env\|smoke\|chaos\|all` |
 | `lib/minio-checks.sh` | mc CLI calls, JSON parsing via `jq` | `check_minio_ready`, `check_bucket`, `check_lifecycle_rules`, `list_prefix` |
-| `lib/module-health.sh` | poll 4 modules' `/actuator/health`; when `STORAGE_BACKEND=minio`, assert `components.minio.status=UP` | `check_module_health <module>` |
-| `lib/chaos-minio.sh` | `docker compose stop minio` → poll DOWN → `docker compose start minio` → poll UP | `chaos_test [--chaos-timeout=30s]` |
+| `lib/module-health.sh` | poll 5 modules' `/actuator/health`; when `STORAGE_BACKEND=minio`, assert `components.minioHealthIndicator.status=UP` | `check_module_health <module>` |
+| `lib/chaos-minio.sh` | `docker compose stop minio` → poll 5 modules DOWN → `docker compose start minio` → poll 5 modules UP | `chaos_test [--chaos-timeout=30s]` |
 | `pipeline-test` skill | (modified) storage-backend aware smoke E2E: MinIO pre-check, health indicator, prefix list post-check | existing interface |
 
 ### 5.3 Subcommand sequence (`all` mode)
@@ -92,21 +92,22 @@ docs/reports/vs3-validation-TEMPLATE.md                          # NEW (template
    ├─ mc ls local/maple-expectation/    → bucket exists
    └─ mc ilm ls local/maple-expectation/→ 4 rules present (snapshots/, runs/, calculator/, ocid-mapping/, 2-day expiry)
 
-3. boot 4 modules (issue #1218 specifies 4; module-cleanup + Airflow are NOT in scope for VS3)
+3. boot 5 modules (external-api, calculator, synchronizer, rest-controller, cleanup; Airflow NOT booted)
    ├─ ./gradlew :module-external-api:bootRun (background → logs/vs3-validation-{ts}-external-api.log)
    ├─ ./gradlew :module-calculator:bootRun (background)
    ├─ ./gradlew :module-synchronizer:bootRun (background)
-   └─ ./gradlew :module-rest-controller:bootRun (background)
+   ├─ ./gradlew :module-rest-controller:bootRun (background)
+   └─ ./gradlew :module-cleanup:bootRun (background) — needed for item 9 (cleanup dry-run); cleanup schedulers were consolidated here, not in the 4 data modules
    └─ poll /actuator/health for each until UP (timeout 120s, 1 auto-retry on early fail)
-   └─ module-cleanup (8084) and Airflow (8180) are skipped: cleanup schedulers run inside the 4 booted modules' scheduler beans, and Airflow is not required for storage validation. pipeline-test skill is modified to make cleanup + Airflow optional via STORAGE_BACKEND detection (see §6.7).
+   └─ Airflow (8180) is skipped: storage validation does not require the control plane. pipeline-test skill is modified to make Airflow optional via STORAGE_BACKEND detection (see §6.7).
 
 4. health check (item 4)
-   ├─ for each of 4 modules: /actuator/health → status=UP
-   └─ for each of 4 modules: components.minio.status=UP (or `components.minioHealthIndicator.status=UP`; exact key resolved during implementation by reading /actuator/health JSON once on first run — see §6.3 TBD callout)
+   ├─ for each of 5 modules: /actuator/health → status=UP
+   └─ for each of 5 modules: components.minioHealthIndicator.status=UP (verified at runtime — Spring derives bean name in lowerCamelCase; see §6.3)
 
-5. smoke E2E (items 5-6, 8) — delegates to pipeline-test skill (with cleanup + Airflow skipped per §6.7)
+5. smoke E2E (items 5-6, 8) — delegates to pipeline-test skill (with Airflow skipped per §6.7)
    ├─ invoke pipeline-test skill (with MinIO env pre-loaded)
-   │     skill runs: 4 modules already up → run-on-startup pipeline → snapshot consume → calculator
+   │     skill runs: 5 modules already up → run-on-startup pipeline → snapshot consume → calculator
    ├─ assert pipeline-test result == pass
    ├─ assert: tail logs/ until "Calculation completed with result saved" (timeout 5m)
    ├─ assert: grep ERROR module-*/logs/ → 0 lines
@@ -116,10 +117,11 @@ docs/reports/vs3-validation-TEMPLATE.md                          # NEW (template
    ├─ echo manual command (user runs ./load-test/run-v5-db-throughput.sh)
    └─ user records raw RPS, p99 in Markdown report; no baseline comparison
 
-7. cleanup scheduler dry-run (item 9)
-   ├─ cleanup schedulers run inside the 4 booted modules (e.g. `CalculatorResultCleanupScheduler` in calculator, `ArtifactCleanupScheduler`/`ConsumedChunkCleanupScheduler` in external-api) — module-cleanup is NOT booted for VS3
-   ├─ trigger cleanup cycle: wait for next scheduled tick (default 1m) OR invoke actuator endpoint if exposed
-   └─ verify scheduler logs ran without error in calculator/external-api logs (look for "cleanup" + "dry-run" / "scanned" lines, no ERROR)
+7. cleanup dry-run (item 9)
+   ├─ module-cleanup is now booted (Step 3 includes it), so the HTTP-trigger cleanup endpoint is reachable
+   ├─ trigger: `curl -X POST "http://localhost:8084/api/internal/cleanup/runs?dry-run=true"` (per `module-cleanup/.../controller/CleanupController.kt`)
+   ├─ verify response is 2xx and module-cleanup logs show dry-run scan completed (look for "scanned" / "dry-run" / "would-delete" lines, no ERROR)
+   └─ if module-cleanup endpoint signature differs at implementation time, fall back to per-event cleanup via `POST /api/internal/cleanup/inbox?dry-run=true`
 
 8. snapshot resume (item 10) — semi-automated
    ├─ trigger mechanism: TBD-during-impl. Candidate options (resolved at implementation time by inspecting the existing snapshot retry path):
@@ -131,9 +133,9 @@ docs/reports/vs3-validation-TEMPLATE.md                          # NEW (template
 
 9. chaos (item 11)
    ├─ docker compose stop minio
-   ├─ sleep 30, poll 4 modules /actuator/health → all DOWN (60s timeout, 3 retries)
+   ├─ sleep 30, poll 5 modules /actuator/health → all DOWN (60s timeout, 3 retries)
    ├─ docker compose start minio
-   ├─ poll 2m, expect 4 modules back to UP
+   ├─ poll 2m, expect 5 modules back to UP
    └─ if DOWN > 5m → fail
 
 10. shutdown
@@ -263,15 +265,14 @@ done
 
 When `STORAGE_BACKEND` is unset or `local`, all new MinIO checks are skipped; existing local behavior is unchanged. The skill's existing pre-check (local PostgreSQL) takes precedence.
 
-### 6.7 Module-cleanup + Airflow skip rule (VS3-specific)
+### 6.7 Airflow skip rule (VS3-specific)
 
 When `STORAGE_BACKEND=minio` is set, the pipeline-test skill modifies its workflow:
-- **Skip module-cleanup boot** (port 8084) — its schedulers run inside the 4 VS3 modules' scheduler beans. Booting a 5th module is out of issue #1218 scope.
 - **Skip Airflow** (port 8180) — storage validation does not require the control plane. `run-on-startup: true` in local profile starts the pipeline immediately on boot, which is sufficient for the smoke E2E.
-- **Skip `module-cleanup` references** in post-checks (Step 7 in §5.3 targets the right per-module scheduler logs, not a cleanup module log).
+- **Keep module-cleanup boot** (port 8084) — cleanup logic is consolidated there; the VS3 wrapper exercises the cleanup endpoint in step 7. (This is a deviation from the original plan's "skip module-cleanup" assumption, made after pre-flight code analysis revealed cleanup schedulers no longer live in the 4 data modules.)
 
 Detection: `STORAGE_BACKEND=minio` env var is the trigger. No new flag is introduced. The behavior is:
-- `STORAGE_BACKEND=minio` → skip cleanup + Airflow (this slice's use case)
+- `STORAGE_BACKEND=minio` → boot 5 modules (incl. cleanup), skip Airflow (this slice's use case)
 - `STORAGE_BACKEND=local` (or unset) → existing behavior (boot all 5 modules + Airflow)
 
 DB selection: when `STORAGE_BACKEND=minio`, the skill uses `DB_URL` from `.env` (which points to the dev/staging DB). When `STORAGE_BACKEND=local`, the existing local PostgreSQL hardcoded path (`localhost:5432/maple_expectation`) is kept for local development. This split prevents the dev cloud DB from being polluted by local-only test runs.
@@ -288,7 +289,7 @@ Append to `docs/01_ADR/ADR-725_object-storage-minio-migration-vs1-vs2.md` head m
 **Original VS3 scope** (this file, Section 3 Risk): "VS3 = dry-run (write to MinIO but read from local)".
 
 **Revised VS3 scope** (per issue #1218 acceptance criteria + #1218 dev validation):
-- VS3 = **full dev cutover**. `STORAGE_BACKEND=minio` set in dev; 4 modules restart cleanly; e2e smoke, load-test, chaos test all run against MinIO.
+- VS3 = **full dev cutover**. `STORAGE_BACKEND=minio` set in dev; 5 modules restart cleanly; e2e smoke, load-test, chaos test all run against MinIO.
 - VS4 = **production cutover** (atomic flip of `storage.backend` in prod compose).
 
 **Why scope expanded:** The dry-run was a defensive option chosen in VS2 to limit blast radius. Issue #1218 reframed VS3 as a real validation gate ("proves VS1+VS2 work end-to-end with S3-compatible backend, before production cutover"). A dry-run would not exercise the read path on MinIO and would leave the read-path risk un-validated until VS4.

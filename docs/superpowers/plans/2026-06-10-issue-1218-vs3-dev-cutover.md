@@ -4,7 +4,7 @@
 
 **Goal:** Manually validate VS1+VS2 with `STORAGE_BACKEND=minio` in dev; close issue #1218 with a wrapper script, MinIO-aware `pipeline-test` skill, JSON+Markdown validation report, and ADR-725 supersede note.
 
-**Architecture:** A shell wrapper `scripts/validate-minio-vs3.sh` orchestrates env checks, 4-module boot, smoke E2E (delegated to `pipeline-test` skill), chaos test, and report generation. The `pipeline-test` skill is modified to be storage-backend aware — it adds MinIO pre-checks, MinioHealthIndicator verification, and prefix list post-checks when `STORAGE_BACKEND=minio` is set; module-cleanup and Airflow are skipped in that mode. ADR-725 gets a supersede note reframing VS3 as dev full cutover (not dry-run).
+**Architecture:** A shell wrapper `scripts/validate-minio-vs3.sh` orchestrates env checks, 5-module boot (incl. module-cleanup on 8084), smoke E2E (delegated to `pipeline-test` skill), chaos test, and report generation. The `pipeline-test` skill is modified to be storage-backend aware — it adds MinIO pre-checks, MinioHealthIndicator verification, and prefix list post-checks when `STORAGE_BACKEND=minio` is set; Airflow is skipped but module-cleanup stays. ADR-725 gets a supersede note reframing VS3 as dev full cutover (not dry-run).
 
 **Tech Stack:** Bash 4+, `jq`, `mc` (MinIO client), `docker compose`, `curl`, `lsof`. No application code change. No new Gradle dependencies.
 
@@ -21,7 +21,7 @@
 | `scripts/lib/module-health.sh` | Create | 4-module `/actuator/health` polling + `MinioHealthIndicator` key verification |
 | `scripts/lib/chaos-minio.sh` | Create | `docker compose stop/start` + DOWN/UP polling |
 | `docs/reports/vs3-validation-TEMPLATE.md` | Create | 12 acceptance criteria table template |
-| `.claude/skills/pipeline-test/SKILL.md` | Modify | Add §6.1-6.7 MinIO awareness; skip module-cleanup + Airflow when `STORAGE_BACKEND=minio` |
+| `.claude/skills/pipeline-test/SKILL.md` | Modify | Add §6.1-6.7 MinIO awareness; skip Airflow only (module-cleanup stays) when `STORAGE_BACKEND=minio` |
 | `docs/01_ADR/ADR-725_object-storage-minio-migration-vs1-vs2.md` | Modify | Append supersede note (§7 in spec) |
 | `docs/reports/vs3-validation-{timestamp}.{json,md}` | Created at runtime | Validation report |
 | `logs/vs3-validation-{timestamp}-*.log` | Created at runtime | Per-module logs |
@@ -129,7 +129,7 @@ cat >> docs/01_ADR/ADR-725_object-storage-minio-migration-vs1-vs2.md <<'EOF'
 **Original VS3 scope** (this file, Section 3 Risk): "VS3 = dry-run (write to MinIO but read from local)".
 
 **Revised VS3 scope** (per issue #1218 acceptance criteria + #1218 dev validation):
-- VS3 = **full dev cutover**. `STORAGE_BACKEND=minio` set in dev; 4 modules restart cleanly; e2e smoke, load-test, chaos test all run against MinIO.
+- VS3 = **full dev cutover**. `STORAGE_BACKEND=minio` set in dev; 5 modules restart cleanly; e2e smoke, load-test, chaos test all run against MinIO.
 - VS4 = **production cutover** (atomic flip of `storage.backend` in prod compose).
 
 **Why scope expanded:** The dry-run was a defensive option chosen in VS2 to limit blast radius. Issue #1218 reframed VS3 as a real validation gate ("proves VS1+VS2 work end-to-end with S3-compatible backend, before production cutover"). A dry-run would not exercise the read path on MinIO and would leave the read-path risk un-validated until VS4.
@@ -321,6 +321,7 @@ declare -A MODULE_PORTS=(
   [calculator]=8082
   [synchronizer]=8083
   [rest-controller]=8080
+  [cleanup]=8084
 )
 
 # Poll /actuator/health until status=UP and minio component=UP, or timeout.
@@ -354,16 +355,16 @@ check_module_health() {
   return 4
 }
 
-# Returns 0 if all 4 modules are healthy; non-zero with summary on first failure.
+# Returns 0 if all 5 modules are healthy; non-zero with summary on first failure.
 check_all_modules_health() {
   local failed=()
-  for module in external-api calculator synchronizer rest-controller; do
+  for module in external-api calculator synchronizer rest-controller cleanup; do
     if ! check_module_health "${module}" 120; then
       failed+=("${module}")
     fi
   done
   if [ "${#failed[@]}" -eq 0 ]; then
-    echo "✅ all_modules_health: 4/4 UP"
+    echo "✅ all_modules_health: 5/5 UP"
     return 0
   fi
   echo "❌ all_modules_health: failed modules: ${failed[*]}"
@@ -379,14 +380,14 @@ chmod +x scripts/lib/module-health.sh
 
 - [ ] **Step 3: Verify L1 (no modules running → timeout per module)**
 
-This is a slow test (120s × 4 modules). Use a short timeout to keep it fast:
+This is a slow test (120s × 5 modules). Use a short timeout to keep it fast:
 
 ```bash
-# All 4 modules are NOT running yet. Override timeout to 5s.
+# All 5 modules are NOT running yet. Override timeout to 5s.
 set -a && source .env && set +a
 source /tmp/vs3-preflight.env  # exports MINIO_HEALTH_KEY
 . scripts/lib/module-health.sh
-for m in external-api calculator synchronizer rest-controller; do
+for m in external-api calculator synchronizer rest-controller cleanup; do
   check_module_health "${m}" 5 || echo "EXPECTED FAIL: ${m}"
 done
 ```
@@ -396,16 +397,17 @@ Expected: 4 `❌` lines, each followed by `EXPECTED FAIL: <module>`.
 - [ ] **Step 4: Verify L1 (modules up → all pass)**
 
 ```bash
-# Boot the 4 modules in background (assumes Task 0 step 1's preflight is cleaned up)
+# Boot the 5 modules in background (assumes Task 0 step 1's preflight is cleaned up)
 ./gradlew :module-external-api:bootRun > /tmp/health-ext-api.log 2>&1 &
 ./gradlew :module-calculator:bootRun > /tmp/health-calc.log 2>&1 &
 ./gradlew :module-synchronizer:bootRun > /tmp/health-sync.log 2>&1 &
 ./gradlew :module-rest-controller:bootRun > /tmp/health-rest.log 2>&1 &
+./gradlew :module-cleanup:bootRun > /tmp/health-cleanup.log 2>&1 &
 
 check_all_modules_health
 ```
 
-Expected: 4 `✅ <module>_health` lines + `✅ all_modules_health: 4/4 UP`.
+Expected: 4 `✅ <module>_health` lines + `✅ all_modules_health: 5/5 UP`.
 
 If any module fails, check `/tmp/health-*.log` and the MinioHealthIndicator key — the wrong `MINIO_HEALTH_KEY` would cause `MISSING` rather than `UP`.
 
@@ -419,7 +421,7 @@ git commit -m "feat(scripts): 4-module health polling with MinioHealthIndicator
 
 check_module_health <module> [timeout] — polls /actuator/health until
 overall=UP and components.${MINIO_HEALTH_KEY}.status=UP.
-check_all_modules_health — 4/4 gate.
+check_all_modules_health — 5/5 gate.
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```
@@ -435,7 +437,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ```bash
 #!/usr/bin/env bash
-# Chaos test: stop MinIO → verify all 4 modules' health turn DOWN → start
+# Chaos test: stop MinIO → verify all 5 modules' health turn DOWN → start
 # MinIO → verify they recover to UP.
 
 set -euo pipefail
@@ -444,9 +446,9 @@ source "$(dirname "$0")/module-health.sh"
 
 # Args:
 #   $1 = down timeout (default 30s) — how long to wait after stopping minio
-#        before asserting all 4 modules are DOWN.
+#        before asserting all 5 modules are DOWN.
 #   $2 = recovery timeout (default 120s) — how long to wait after starting
-#        minio for all 4 modules to recover to UP.
+#        minio for all 5 modules to recover to UP.
 chaos_test() {
   local down_timeout="${1:-30}"
   local recovery_timeout="${2:-120}"
@@ -454,11 +456,11 @@ chaos_test() {
   echo "🔥 chaos: stopping minio..."
   docker compose stop minio
 
-  echo "⏳ chaos: waiting ${down_timeout}s for 4 modules to turn DOWN..."
+  echo "⏳ chaos: waiting ${down_timeout}s for 5 modules to turn DOWN..."
   sleep "${down_timeout}"
 
   local down_count=0
-  for module in external-api calculator synchronizer rest-controller; do
+  for module in external-api calculator synchronizer rest-controller cleanup; do
     local port="${MODULE_PORTS[${module}]}"
     local status
     status=$(curl -s "http://localhost:${port}/actuator/health" 2>/dev/null | jq -r '.status // "UNKNOWN"')
@@ -468,22 +470,22 @@ chaos_test() {
     echo "  ${module}: status=${status}"
   done
 
-  if [ "${down_count}" -ne 4 ]; then
-    echo "❌ chaos_down: only ${down_count}/4 modules DOWN"
+  if [ "${down_count}" -ne 5 ]; then
+    echo "❌ chaos_down: only ${down_count}/5 modules DOWN"
     docker compose start minio
     return 6
   fi
-  echo "✅ chaos_down: 4/4 modules DOWN"
+  echo "✅ chaos_down: 5/5 modules DOWN"
 
   echo "🔥 chaos: starting minio..."
   docker compose start minio
 
-  echo "⏳ chaos: waiting up to ${recovery_timeout}s for 4 modules to recover..."
+  echo "⏳ chaos: waiting up to ${recovery_timeout}s for 5 modules to recover..."
   local deadline=$((SECONDS + recovery_timeout))
   local up_count=0
-  while [ "${SECONDS}" -lt "${deadline}" ] && [ "${up_count}" -lt 4 ]; do
+  while [ "${SECONDS}" -lt "${deadline}" ] && [ "${up_count}" -lt 5 ]; do
     up_count=0
-    for module in external-api calculator synchronizer rest-controller; do
+    for module in external-api calculator synchronizer rest-controller cleanup; do
       local port="${MODULE_PORTS[${module}]}"
       local status
       status=$(curl -s "http://localhost:${port}/actuator/health" 2>/dev/null | jq -r '.status // "UNKNOWN"')
@@ -491,16 +493,16 @@ chaos_test() {
         up_count=$((up_count + 1))
       fi
     done
-    if [ "${up_count}" -lt 4 ]; then
+    if [ "${up_count}" -lt 5 ]; then
       sleep 5
     fi
   done
 
-  if [ "${up_count}" -eq 4 ]; then
-    echo "✅ chaos_recovery: 4/4 modules UP"
+  if [ "${up_count}" -eq 5 ]; then
+    echo "✅ chaos_recovery: 5/5 modules UP"
     return 0
   fi
-  echo "❌ chaos_recovery: only ${up_count}/4 modules UP after ${recovery_timeout}s"
+  echo "❌ chaos_recovery: only ${up_count}/5 modules UP after ${recovery_timeout}s"
   return 6
 }
 ```
@@ -522,7 +524,7 @@ source /tmp/vs3-preflight.env
 chaos_test 5 60
 ```
 
-Expected: `🔥 chaos: stopping minio...` → `⏳ chaos: waiting 5s...` → `✅ chaos_down: 4/4 modules DOWN` → `🔥 chaos: starting minio...` → `✅ chaos_recovery: 4/4 modules UP`.
+Expected: `🔥 chaos: stopping minio...` → `⏳ chaos: waiting 5s...` → `✅ chaos_down: 5/5 modules DOWN` → `🔥 chaos: starting minio...` → `✅ chaos_recovery: 5/5 modules UP`.
 
 If any module does not go DOWN within 5s, increase the down_timeout to 10s and re-verify.
 
@@ -608,12 +610,12 @@ cmd_env() {
 }
 
 cmd_smoke() {
-  echo "=== smoke: 4 modules + MinIO E2E ==="
+  echo "=== smoke: 5 modules + MinIO E2E ==="
   source "${LIB_DIR}/module-health.sh"
 
-  echo "⏳ smoke: waiting for 4 modules to be healthy..."
+  echo "⏳ smoke: waiting for 5 modules to be healthy..."
   check_all_modules_health || { record_check "modules_health" "fail" 0 "see logs"; exit 4; }
-  record_check "modules_health" "pass" 0 "4/4 UP"
+  record_check "modules_health" "pass" 0 "5/5 UP"
 
   # Run a single E2E via the existing /api/v5/characters endpoint.
   # Use 아델 as a known-good IGN.
@@ -804,10 +806,10 @@ template + the runtime JSON.
 
 | # | Criterion | Status | Evidence |
 |---|-----------|--------|----------|
-| 1 | STORAGE_BACKEND=minio set; 4 modules restart cleanly | ☐ |  |
+| 1 | STORAGE_BACKEND=minio set; 5 modules restart cleanly | ☐ |  |
 | 2 | `mc ls local/maple-expectation/` confirms bucket; 4 lifecycle rules | ☐ |  |
 | 3 | `curl :9000/minio/health/ready` returns 200 | ☐ |  |
-| 4 | All 4 modules' `/actuator/health` UP including `MinioHealthIndicator` | ☐ |  |
+| 4 | All 5 modules' `/actuator/health` UP including `MinioHealthIndicator` | ☐ |  |
 | 5 | E2E: 202 → `Calculation completed with result saved` → 0 ERROR | ☐ |  |
 | 6 | MinIO console shows objects under expected prefixes | ☐ |  |
 | 7 | Load-test: RPS + p99 recorded (no baseline comparison) | ☐ |  |
@@ -884,10 +886,10 @@ Find the line in the existing skill that asserts `/api/internal/run-status` (aro
 ```markdown
 #### 4a. MinIO health indicator (only when `STORAGE_BACKEND=minio`)
 
-For each of the 4 modules (8081, 8082, 8083, 8080), the `/actuator/health` response must contain `status: "UP"` AND a MinioHealthIndicator component with `status: "UP"`. The exact JSON key is verified at runtime (the key is the Spring bean name, e.g. `minio` or `minioHealthIndicator`).
+For each of the 5 modules (8081, 8082, 8083, 8080, 8084), the `/actuator/health` response must contain `status: "UP"` AND a MinioHealthIndicator component with `status: "UP"`. The exact JSON key is verified at runtime (the key is the Spring bean name, e.g. `minio` or `minioHealthIndicator`).
 
 \`\`\`bash
-for port in 8081 8082 8083 8080; do
+for port in 8081 8082 8083 8080 8084; do
   body=$(curl -s "http://localhost:${port}/actuator/health")
   overall=$(echo "${body}" | jq -r '.status')
   # Find any key under .components that contains "minio" (case-insensitive)
@@ -922,7 +924,7 @@ done
 \`\`\`
 ```
 
-- [ ] **Step 4: Append module-cleanup + Airflow skip rule at the end of the skill**
+- [ ] **Step 4: Append Airflow skip rule at the end of the skill (module-cleanup stays)**
 
 After the existing "Notes" section, append:
 
@@ -932,9 +934,9 @@ After the existing "Notes" section, append:
 When `STORAGE_BACKEND=minio` is set, this skill:
 
 1. **Runs the MinIO pre-check** (step 1a above) — `mc ready`, bucket existence, lifecycle rules count.
-2. **Verifies `MinioHealthIndicator` in module health** (step 4a above) — all 4 modules must report UP for the MinioHealthIndicator component.
+2. **Verifies `MinioHealthIndicator` in module health** (step 4a above) — all 5 modules must report UP for the MinioHealthIndicator component (`minioHealthIndicator` key confirmed at pre-flight).
 3. **Inspects MinIO prefixes after the E2E** (step 9a above) — `snapshots/`, `runs/`, `ocid-mapping/`, `calculator/runs/` must be non-empty.
-4. **Skips `module-cleanup`** (port 8084) — its schedulers run inside the 4 VS3 modules' scheduler beans. Booting a 5th module is outside issue #1218 scope.
+4. **Boots `module-cleanup`** (port 8084) — cleanup logic is consolidated there; the VS3 wrapper exercises the cleanup endpoint in step 7. (Original plan assumed cleanup was in the 4 data modules; pre-flight code analysis revealed the consolidation into module-cleanup.)
 5. **Skips Airflow** (port 8180) — storage validation does not require the control plane. `run-on-startup: true` in local profile starts the pipeline immediately on boot, sufficient for the smoke E2E.
 6. **Uses `.env` `DB_URL`** (not the local `localhost:5432/maple_expectation` hardcoded path) — VS3 runs against the dev cloud DB, not local. This split prevents local-only test runs from polluting the dev cloud DB.
 
@@ -961,7 +963,7 @@ When STORAGE_BACKEND=minio is set:
 - MinIO pre-check (mc ready, bucket, lifecycle rules >= 4)
 - MinioHealthIndicator verification in /actuator/health
 - MinIO prefix list post-check (snapshots/, runs/, ocid-mapping/, calculator/runs/)
-- Skip module-cleanup (port 8084) and Airflow (port 8180)
+- Skip Airflow (port 8180) only — module-cleanup (port 8084) is kept booted
 - Use .env DB_URL instead of local PostgreSQL
 
 Backward compatible: STORAGE_BACKEND=local keeps existing behavior.
@@ -995,7 +997,7 @@ sleep 5
 
 Expected:
 - `=== env: MinIO + bucket + lifecycle ===` block, 3 `✅` lines, exit 0
-- `=== smoke: 4 modules + MinIO E2E ===` block, multiple `✅` lines, exit 0
+- `=== smoke: 5 modules + MinIO E2E ===` block, multiple `✅` lines, exit 0
 - `=== chaos: MinIO stop/down/start/up ===` block, `✅ chaos_down` + `✅ chaos_recovery`, exit 0
 - Final `📄 reports: docs/reports/vs3-validation-{ts}.json + .md`
 - Overall exit 0
@@ -1123,11 +1125,11 @@ Per issue #1218: this is a manual validation gate, not a code-change slice. All 
 `docs/reports/vs3-validation-{ts}.json` shows:
 - 9/12 criteria automated-pass (criteria 1-5, 8, 9, 11)
 - 3/12 criteria manual-confirmed (criteria 6, 7, 10)
-- Chaos test: stop MinIO → 4 modules DOWN → start MinIO → 4 modules UP within 2m
+- Chaos test: stop MinIO → 5 modules DOWN → start MinIO → 5 modules UP within 2m
 
 ## Test plan
 
-- [x] L1 (lib functions): 4/4 unit-equivalent tests pass in Task 2-4
+- [x] L1 (lib functions): 5/5 unit-equivalent tests pass in Task 2-4
 - [x] L2 (env subcommand): pass + fail paths verified
 - [x] L3 (`all` mode full validation): pass
 - [x] Manual: console inspect, load-test raw RPS/p99, snapshot resume

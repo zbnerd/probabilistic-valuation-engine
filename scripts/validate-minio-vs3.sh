@@ -170,9 +170,19 @@ write_report() {
 }
 
 cmd_all() {
+  # Trap ERR + EXIT so the report is written on failure too.
+  # On success, exit_code stays 0; on any earlier exit, EXIT trap fires
+  # with the actual failure code (2/4/5/6/7).
+  local exit_code=0
+  trap 'exit_code=$?; write_report "${exit_code}"; exit "${exit_code}"' EXIT
+  trap 'exit_code=$?; write_report "${exit_code}"; exit "${exit_code}"' ERR
+
   cmd_env
   cmd_smoke
   cmd_chaos
+
+  # Success path: clear traps and write the report explicitly
+  trap - EXIT ERR
   write_report 0
 }
 

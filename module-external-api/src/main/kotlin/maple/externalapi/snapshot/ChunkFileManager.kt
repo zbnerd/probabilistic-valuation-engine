@@ -1,58 +1,60 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.nio.file.Files
-import java.nio.file.Path
+import maple.expectation.common.storage.ObjectStorage
 import java.time.Clock
 import java.time.Instant
 import org.slf4j.LoggerFactory
 
 /**
- * Owns every filesystem concern of a snapshot-sink run:
- *  - chunk directory layout (chunks/, failed.jsonl, manifest.json, _SUCCESS, _RUNNING)
+ * Owns every object-storage concern of a snapshot-sink run:
+ *  - chunk object keys (`{runKey}/part-NNNNNN.jsonl.gz`)
+ *  - failed record key (`{runKey}/failed.jsonl`)
+ *  - manifest key (`{runKey}/manifest.json`)
  *  - the [SnapshotChunkManifest] for the run
  *  - the active [GzipJsonlChunkWriter] and rotation
- *  - the [SnapshotFailedRecordWriter] for failure records
+ *
+ * Failure records are appended as JSONL lines to the failed-key object
+ * using [ObjectStorage] directly. [SnapshotFailedRecordWriter] migration to
+ * ObjectStorage is handled in a later task.
  *
  * **Thread-affinity:** NOT thread-safe. All methods must be called from the
  * sink's single writer thread. The class does not perform its own locking.
  *
- * @param runDir  the run directory (e.g. `runs/<runId>`)
- * @param endpoint the API endpoint name (used as subdirectory)
+ * @param runKey  the run key prefix in object storage (e.g. `runs/<runId>/<endpoint>`)
+ * @param endpoint the API endpoint name (used for log lines and manifest)
  * @param maxRecords max records per chunk before rotation
  * @param maxUncompressedBytes hard cap per uncompressed chunk
  * @param objectMapper Jackson mapper for manifest and failure lines
  * @param clock injected clock for deterministic timestamps
+ * @param objectStorage backend for chunk / manifest / failed-record writes
  */
 class ChunkFileManager(
-    private val runDir: Path,
+    private val runKey: String,
     private val endpoint: String,
     private val maxRecords: Int,
     private val maxUncompressedBytes: Long,
     private val objectMapper: ObjectMapper,
     private val clock: Clock = Clock.systemUTC(),
+    private val objectStorage: ObjectStorage,
 ) {
     private val log = LoggerFactory.getLogger(ChunkFileManager::class.java)
 
-    val chunksDir: Path = runDir.resolve(endpoint).resolve("chunks")
-    private val failedPath: Path = runDir.resolve(endpoint).resolve("failed.jsonl")
-    private val manifestPath: Path = runDir.resolve(endpoint).resolve("manifest.json")
-    private val successPath: Path = runDir.resolve(endpoint).resolve("_SUCCESS")
-    private val runningMarker: Path = runDir.resolve("_RUNNING")
+    private val failedKey: String = "$runKey/failed.jsonl"
+    private val manifestKey: String = "$runKey/manifest.json"
+    private val successKey: String = "$runKey/_SUCCESS"
 
     private val manifest = SnapshotChunkManifest(
-        runId = runDir.fileName.toString(),
+        runId = runKey.substringAfter("runs/").substringBefore('/'),
         endpoint = endpoint,
         startedAt = Instant.now(clock),
     )
 
-    private val failedWriter = SnapshotFailedRecordWriter(failedPath, objectMapper)
+    private var failedCount: Int = 0
     private var currentWriter: GzipJsonlChunkWriter
     private var nextPartIndex = 2
 
     init {
-        Files.createDirectories(chunksDir)
-        Files.createDirectories(failedPath.parent)
         currentWriter = newChunkWriter(1)
     }
 
@@ -66,7 +68,9 @@ class ChunkFileManager(
     }
 
     fun appendFailure(record: SnapshotChunkRecord.Failure) {
-        failedWriter.append(record)
+        val line = buildFailureLine(record)
+        objectStorage.put(failedKey, line)
+        failedCount++
     }
 
     fun rotateChunk(): ChunkStats? {
@@ -86,27 +90,46 @@ class ChunkFileManager(
         return stats.takeIf { it.recordCount > 0 }
     }
 
-    fun cleanupOnFailure() {
-        currentWriter.deleteTmp()
-        log.warn("[ChunkFileManager] cleaned up .tmp files after failure")
-    }
-
     fun writeManifestAndSuccessMarker() {
-        manifest.totalFailed = failedWriter.count()
+        manifest.totalFailed = failedCount
         manifest.finishedAt = Instant.now(clock)
-        SnapshotChunkManifestWriter(manifestPath, objectMapper).write(manifest)
-        Files.writeString(successPath, "")
-    }
-
-    fun deleteRunningMarker() {
-        if (Files.exists(runningMarker)) {
-            Files.delete(runningMarker)
-        }
+        val manifestJson = objectMapper.writeValueAsBytes(manifest)
+        objectStorage.put(manifestKey, manifestJson)
+        objectStorage.put(successKey, ByteArray(0))
     }
 
     fun manifest(): SnapshotChunkManifest = manifest
 
-    private fun newChunkWriter(partIndex: Int): GzipJsonlChunkWriter = GzipJsonlChunkWriter(chunksDir, partIndex, maxRecords, maxUncompressedBytes, objectMapper, clock)
+    private fun newChunkWriter(partIndex: Int): GzipJsonlChunkWriter {
+        val chunkKey = "$runKey/part-${String.format("%06d", partIndex)}.jsonl.gz"
+        return GzipJsonlChunkWriter(
+            chunkKey = chunkKey,
+            partIndex = partIndex,
+            maxRecords = maxRecords,
+            maxUncompressedBytes = maxUncompressedBytes,
+            objectMapper = objectMapper,
+            objectStorage = objectStorage,
+            clock = clock,
+        )
+    }
+
+    private fun buildFailureLine(record: SnapshotChunkRecord.Failure): ByteArray {
+        val buf = java.io.ByteArrayOutputStream()
+        buf.write("{\"endpoint\":".toByteArray())
+        buf.write(objectMapper.writeValueAsBytes(record.endpoint))
+        buf.write(",\"keyType\":".toByteArray())
+        buf.write(objectMapper.writeValueAsBytes(record.keyType))
+        buf.write(",\"key\":".toByteArray())
+        buf.write(objectMapper.writeValueAsBytes(record.key))
+        buf.write(",\"status\":\"FAILURE\",\"httpStatus\":".toByteArray())
+        buf.write(record.httpStatus.toString().toByteArray())
+        buf.write(",\"fetchedAt\":".toByteArray())
+        buf.write(objectMapper.writeValueAsBytes(record.fetchedAt.toString()))
+        buf.write(",\"error\":".toByteArray())
+        buf.write(objectMapper.writeValueAsBytes(record.errorMessage))
+        buf.write("}\n".toByteArray())
+        return buf.toByteArray()
+    }
 
     private fun toEntry(stats: ChunkStats): ChunkEntry = ChunkEntry(
         path = stats.path,

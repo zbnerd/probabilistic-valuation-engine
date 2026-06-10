@@ -128,7 +128,9 @@ module-common
 
 ### Observed Result
 
-*Pipeline test verification (post-migration):*
+Three-layer verification (smoke is layer 1; dataflow test adds layers 2-3).
+
+#### Layer 1: smoke E2E (pipeline-test skill)
 
 ```bash
 # MinIO mode
@@ -147,6 +149,63 @@ done
 ./gradlew :module-{external-api,calculator,synchronizer,cleanup}:test
 # → 0 fail
 ```
+
+#### Layer 2: fixture-based dataflow test
+
+**Goal**: verify that data written by ext-api is *exactly* the data calculator/sync consume — content round-trip, not just object presence.
+
+```bash
+# Fixture: 5 known IGNs (deterministic, replayable)
+FIXTURE_IGNS=("테스트캐릭터1" "테스트캐릭터2" "테스트캐릭터3" "테스트캐릭터4" "테스트캐릭터5")
+
+# 1) ext-api writes chunks to MinIO
+# 2) Calculator reads from MinIO, processes, writes results
+# 3) Synchronizer upserts read model
+
+# Verify content round-trip:
+for ign in "${FIXTURE_IGNS[@]}"; do
+  # ext-api wrote: runs/$runId/ranking-overall/part-*.jsonl.gz (contains $ign)
+  result=$(zcat $(mc ls --recursive "local/${MINIO_BUCKET}/runs/$runId/ranking-overall/" | grep part- | head -1) | grep "$ign")
+  [ -n "$result" ] || fail "ext-api did not write $ign to MinIO"
+
+  # calculator read from MinIO + wrote result
+  calc_result=$(mc cat "local/${MINIO_BUCKET}/calculator/runs/$runId/result-${ign}.json")
+  echo "$calc_result" | jq -e ".userIgn == \"$ign\"" > /dev/null || fail "calculator result for $ign missing or malformed"
+
+  # synchronizer upserted to read model
+  psql -t -A -c "SELECT count(*) FROM character_valuation_views WHERE user_ign = '$ign'" | grep -q "^[1-9]" || fail "sync did not upsert $ign"
+done
+```
+
+Layer 2 runs **after** Layer 1 passes. Reuses the pipeline-test's run (same runId), so no second pipeline boot.
+
+#### Layer 3: schema validation at each data boundary
+
+Per boundary (chunk, manifest, OCID mapping, calculator result), assert schema invariants:
+
+| Boundary | Validation |
+| -------- | ---------- |
+| chunk bytes (MinIO) | gzip decode → line count > 0 → each line is valid JSON → required fields (`character_name` for ranking, `ocid` for character-basic) |
+| manifest (MinIO) | JSON parse → required fields (`runId`, `totalRecords`, `chunks[]`, `startedAt`, `finishedAt`) → `chunks[].path` is reachable (put-then-get) |
+| OCID mapping (MinIO) | gzip decode → JSON Lines → each line has `userIgn` + `ocid` → ocid format matches `^[a-f0-9]{40}$` |
+| calculator result (MinIO) | JSON parse → required fields (`userIgn`, `ocid`, `presetNo`, `cubes[]`, `result`) → `cubes[].score` is numeric |
+| synchronizer read model (PostgreSQL) | `character_valuation_views.user_ign` indexed lookup → row exists for each fixture IGN → non-null `expected_value` |
+
+Implementation:
+- `module-calculator` + `module-synchronizer` already have unit tests for schema parsing (keep).
+- New: **`DataflowContractTest` in `module-external-api` test sources** (since ext-api is the writer). Loads fixture IGNs, runs `RankingFetchPhase` + `OcidLookupPhase` against a mock `NexonApiClient` that returns canned responses, then asserts every byte put to `ObjectStorage` round-trips through `get()` and parses to the expected schema.
+- `DataflowContractTest` runs in unit test suite (`./gradlew :module-external-api:test`).
+- Pipeline test (`STORAGE_BACKEND=minio`) runs Layer 2 against the live MinIO + local PG — confirms real-world schema conformance.
+
+#### Why not pure integration tests
+
+Project rule: "통합테스트 금지 (Testcontainers 포함) - Issue #207". Layer 2 is end-to-end but uses local infra (MinIO + local PG already running), not Testcontainers. Layer 3 is unit + live-MinIO combined — same exclusion.
+
+---
+
+## 5. Summary
+
+> ext-api (8 files) + cleanup (2 files) use `ObjectStorage` exclusively. Inter-phase API is `runKey: String` (not `Path`). Deprecated adapter removed. MinIO is the production default; local mode stays regression-free. Verification: unit + smoke + fixture-based dataflow + per-boundary schema — all atomic single PR.
 
 ---
 

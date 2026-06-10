@@ -46,7 +46,7 @@ class UrgentChunkArtifactWriterTest {
                 bodyBytes = objectMapper.writeValueAsBytes(mapOf("character_name" to "user1")),
                 key = "user1",
                 endpoint = "ranking-overall",
-                keyType = KeyType.IGN.name,
+                keyType = KeyType.USER_IGN.name,
                 httpStatus = 200,
                 fetchedAt = Instant.parse("2026-06-10T00:00:00Z"),
             ),

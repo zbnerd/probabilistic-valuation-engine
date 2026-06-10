@@ -26,7 +26,7 @@ class UrgentChunkArtifactWriter(
         endpointDir: String,
         record: SnapshotChunkRecord.Success,
     ): String {
-        val chunkKey = "runs/$runId/$endpointDir/chunks/part-000001"
+        val chunkKey = "runs/$runId/$endpointDir/chunks/part-000001.jsonl.gz"
         val writer = GzipJsonlChunkWriter(
             chunkKey = chunkKey,
             partIndex = 1,

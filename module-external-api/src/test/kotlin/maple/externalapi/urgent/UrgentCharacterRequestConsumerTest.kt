@@ -7,6 +7,7 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import maple.expectation.infrastructure.storage.LocalFsObjectStorage
 import maple.externalapi.artifact.UrgentChunkArtifactWriter
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
@@ -42,17 +43,19 @@ class UrgentCharacterRequestConsumerTest {
     private lateinit var objectMapper: ObjectMapper
     private lateinit var kafkaTemplate: KafkaTemplate<String, String>
     private lateinit var consumer: UrgentCharacterRequestConsumer
+    private lateinit var objectStorage: LocalFsObjectStorage
 
     @BeforeEach
     fun setUp() {
         clientPort = mock()
         objectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())
         kafkaTemplate = mock()
+        objectStorage = LocalFsObjectStorage(basePath = tempDir.toString(), meterRegistry = null)
 
         val ocidResponseParser = UrgentOcidResponseParser(objectMapper)
         val chunkArtifactWriter = UrgentChunkArtifactWriter(
-            storeBasePath = tempDir.toString(),
             objectMapper = objectMapper,
+            objectStorage = objectStorage,
         )
         val eventPublisher = UrgentEventPublisher(
             kafkaTemplate = kafkaTemplate,
@@ -129,15 +132,25 @@ class UrgentCharacterRequestConsumerTest {
         val endpoints = chunkEvents.map { it["endpoint"].asText() }.toSet()
         assertThat(endpoints).containsExactlyInAnyOrder("character-basic", "item-equipment")
 
-        // Verify chunk files exist on disk (consumer creates tempDir/runs/urgent-xxx/...)
-        val runsDir = tempDir.resolve("runs").toFile()
-        assertThat(runsDir.exists()).isTrue()
-        val urgentDirs = runsDir.listFiles()?.filter { it.isDirectory && it.name.startsWith("urgent-") }
-        assertThat(urgentDirs).isNotEmpty
+        // Verify chunk objects exist in ObjectStorage (consumer creates runs/urgent-xxx/...).
+        // The consume() call returns synchronously but the underlying fetch + publish chain is async;
+        // poll for the keys to appear (the kafkaTemplate.send verification above already waits 5s).
+        val urgentKeys = awaitKeys("runs/", "urgent-", ".jsonl.gz", expected = 2, timeoutMs = 5_000)
+        assertThat(urgentKeys).hasSize(2)
+    }
 
-        val runDir = urgentDirs!!.first()
-        val chunksFiles = runDir.walkTopDown().filter { it.extension == "gz" }.toList()
-        assertThat(chunksFiles).hasSize(2)
+    private fun awaitKeys(prefix: String, mustContain: String, suffix: String, expected: Int, timeoutMs: Long): List<String> {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val keys = objectStorage.listByPrefix(prefix)
+                .map { it.key }
+                .filter { it.contains(mustContain) && it.endsWith(suffix) }
+            if (keys.size >= expected) return keys
+            Thread.sleep(50)
+        }
+        return objectStorage.listByPrefix(prefix)
+            .map { it.key }
+            .filter { it.contains(mustContain) && it.endsWith(suffix) }
     }
 
     @Test
@@ -176,8 +189,7 @@ class UrgentCharacterRequestConsumerTest {
         assertThat(notFoundEvent["userIgn"].asText()).isEqualTo(userIgn)
         assertThat(notFoundEvent["reason"].asText()).isEqualTo("OCID_NOT_FOUND")
 
-        // No chunk files created
-        val runsDir = tempDir.resolve("runs").toFile()
-        assertThat(runsDir.exists()).isFalse()
+        // No chunk objects created
+        assertThat(objectStorage.listByPrefix("runs/")).isEmpty()
     }
 }

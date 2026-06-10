@@ -1,6 +1,7 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.kotlinModule
 import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.storage.PutResult
@@ -19,7 +20,9 @@ import java.util.zip.GZIPInputStream
 
 class GzipJsonlChunkWriterTest {
 
-    private val objectMapper = ObjectMapper().registerModule(kotlinModule())
+    private val objectMapper = ObjectMapper()
+        .registerModule(kotlinModule())
+        .registerModule(JavaTimeModule())
     private val fixedClock = Clock.fixed(Instant.parse("2026-06-10T00:00:00Z"), ZoneOffset.UTC)
 
     @Test
@@ -74,7 +77,12 @@ class GzipJsonlChunkWriterTest {
         assertThat(lines).hasSize(3)
         lines.forEach { line ->
             val node = objectMapper.readTree(line)
-            assertThat(node.has("character_name")).isTrue()
+            // Writer serializes the full SnapshotChunkRecord.Success envelope; the original
+            // bodyBytes is base64-encoded under "bodyBytes".
+            assertThat(node.has("key")).isTrue()
+            assertThat(node.has("bodyBytes")).isTrue()
+            val decoded = String(java.util.Base64.getDecoder().decode(node.get("bodyBytes").asText()))
+            assertThat(decoded).contains("\"character_name\"")
         }
     }
 }

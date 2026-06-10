@@ -111,18 +111,23 @@ class RankingFetchPhase(
 
         val requestKey = "$date:$currentPage"
         return clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, requestKey)
-            .thenAcceptAsync({ bodyBytes ->
+            .thenComposeAsync({ bodyBytes ->
+                // Issue #1217 follow-up: chain the submission CF so the outer await sees it.
+                // Previously used thenAcceptAsync + inner whenComplete which was fire-and-forget —
+                // the outer chain could reach sink.close() before the submission completed,
+                // dropping the page's records. The submission is CPU-bound (Dispatchers.Default);
+                // chaining ensures backpressure: pages are not fetched faster than we can submit.
                 submitRankingEntriesAsync(sink, bodyBytes, currentPage)
-                    .whenComplete { count, ex ->
-                        if (ex == null && count != null) {
-                            fetched.addAndGet(count)
-                            metrics.recordRankingFetched(count)
-                            if (fetched.get() % 10000 == 0) {
-                                log.info("[RankingFetch] progress: fetched={}, failed={}, page={}/{}", fetched.get(), failed.get(), currentPage, maxPages)
-                            }
-                        }
-                    }
             }, workerExecutor)
+            .whenComplete { count, ex ->
+                if (ex == null && count != null) {
+                    fetched.addAndGet(count)
+                    metrics.recordRankingFetched(count)
+                    if (fetched.get() % 10000 == 0) {
+                        log.info("[RankingFetch] progress: fetched={}, failed={}, page={}/{}", fetched.get(), failed.get(), currentPage, maxPages)
+                    }
+                }
+            }
             .handle { _, ex ->
                 if (ex != null) {
                     failed.incrementAndGet()

@@ -2,6 +2,7 @@ package maple.externalapi.scheduler
 
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
+import kotlinx.coroutines.runBlocking
 import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.RunStatusTracker
@@ -58,7 +59,9 @@ class ExternalApiSchedulerTest {
         // The OCID lookup phase is invoked from a runBlocking on the virtual-thread executor.
         // Wait up to 5s for the async chain to settle and capture the runKey argument.
         val runKeyCaptor = argumentCaptor<String>()
-        verify(ocidLookupPhase, timeout(5_000)).execute(any<ExecutorService>(), runKeyCaptor.capture())
+        runBlocking {
+            verify(ocidLookupPhase, timeout(5_000)).execute(any<ExecutorService>(), runKeyCaptor.capture())
+        }
         assertThat(runKeyCaptor.firstValue).isEqualTo("runs/20260610-xyz")
 
         // The runId passed to startRun is the segment after "runs/".

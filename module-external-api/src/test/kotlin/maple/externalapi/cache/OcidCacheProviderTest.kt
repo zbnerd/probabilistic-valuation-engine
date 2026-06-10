@@ -1,5 +1,7 @@
 package maple.externalapi.cache
 
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
@@ -7,8 +9,6 @@ import org.mockito.kotlin.whenever
 import maple.expectation.common.storage.ObjectInfo
 import maple.expectation.common.storage.ObjectStorage
 import java.time.Instant
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class OcidCacheProviderTest {
 

@@ -4,7 +4,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
-import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
 
 /**
  * Auth executor configuration (Issue #1206).
@@ -28,7 +28,7 @@ class AuthExecutorConfig {
     private val log = LoggerFactory.getLogger(AuthExecutorConfig::class.java)
 
     @Bean(name = ["authCharacterFetchExecutor"])
-    fun authCharacterFetchExecutor(): Executor {
+    fun authCharacterFetchExecutor(): ExecutorService {
         val executor = ThreadPoolTaskExecutor()
         executor.corePoolSize = 2
         executor.maxPoolSize = 4
@@ -40,6 +40,6 @@ class AuthExecutorConfig {
         executor.setAwaitTerminationSeconds(30)
         executor.initialize()
         log.info("[AuthExecutorConfig] authCharacterFetchExecutor initialized: core=2, max=4, queue=100")
-        return executor
+        return executor as ExecutorService
     }
 }

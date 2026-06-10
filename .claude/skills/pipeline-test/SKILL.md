@@ -40,11 +40,14 @@ Airflow (Control Plane)          Spring Boot Services (Data Plane)
 
 ## Prerequisites
 
-- `.env` file exists with DB_URL, NEXON_API_KEY, etc.
+- `.env` file exists with DB_URL, NEXON_API_KEY, STORAGE_BACKEND, MINIO_* vars
 - No existing processes on ports 8081, 8082, 8083, 8084, 8180
-- PostgreSQL accessible at `localhost:5432/maple_expectation` (local profile)
-- Docker Compose v2 for Airflow services
+- MinIO server running (default `http://localhost:9000` from `docker compose up minio`)
+- PostgreSQL accessible at the URL in `.env` `DB_URL` (uses `.env`, not hardcoded local)
+- Docker Compose v2 for MinIO + Airflow services
 - Data directory `../data` clean for fresh runs
+
+**Storage backend**: pipeline test uses MinIO by default (`STORAGE_BACKEND=minio`). MinIO is required because the VS2 ObjectStorage migration consolidated all artifact storage to a single backend, and the pipeline test verifies that backend end-to-end.
 
 ## Workflow
 
@@ -64,16 +67,16 @@ done
 test -f .env || { echo "ERROR: .env not found"; exit 1; }
 ```
 
-#### 1a. MinIO pre-check (only when `STORAGE_BACKEND=minio`)
+#### 1a. MinIO pre-check (required)
 
-Skip this section entirely if `STORAGE_BACKEND` is unset or `local`.
+Pipeline test uses MinIO. All four env vars must be set and MinIO must be reachable.
 
 ```bash
 # MinIO env vars must be set
-: "${MINIO_ENDPOINT:?MINIO_ENDPOINT required when STORAGE_BACKEND=minio}"
-: "${MINIO_ROOT_USER:?MINIO_ROOT_USER required when STORAGE_BACKEND=minio}"
-: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD required when STORAGE_BACKEND=minio}"
-: "${MINIO_BUCKET:?MINIO_BUCKET required when STORAGE_BACKEND=minio}"
+: "${MINIO_ENDPOINT:?MINIO_ENDPOINT required for pipeline test}"
+: "${MINIO_ROOT_USER:?MINIO_ROOT_USER required for pipeline test}"
+: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD required for pipeline test}"
+: "${MINIO_BUCKET:?MINIO_BUCKET required for pipeline test}"
 
 # MinIO ready
 curl -sf "${MINIO_ENDPOINT}/minio/health/ready" > /dev/null || { echo "MinIO not ready"; exit 2; }
@@ -84,6 +87,8 @@ mc ls "local/${MINIO_BUCKET}/" >/dev/null || { echo "Bucket ${MINIO_BUCKET} miss
 rule_count=$(mc ilm ls "local/${MINIO_BUCKET}/" 2>&1 | grep -cE "(Enabled|Disabled)" || true)
 [ "${rule_count}" -ge 4 ] || { echo "Need >= 4 lifecycle rules, found ${rule_count}"; exit 2; }
 ```
+
+**Local storage (legacy)**: Set `STORAGE_BACKEND=local` in `.env` to fall back to the local filesystem backend. The MinIO pre-check above is skipped, and module health will not show `minioHealthIndicator`. The MinIO prefix + storage-error verifications (steps 4a, 9a) are also skipped.
 
 ### 2. Build JARs
 
@@ -98,12 +103,9 @@ JAR locations: `module-{name}/build/libs/module-{name}-0.0.1-SNAPSHOT.jar`
 ```bash
 set -a && source .env && set +a && export SPRING_PROFILES_ACTIVE=local && export MALLOC_ARENA_MAX=1
 
-# Force local DB regardless of .env (dev cloud DB is for prod/prod-like envs only).
-# Pipeline test runs against the local dev PostgreSQL on this host.
-export DB_URL='jdbc:postgresql://localhost:5432/maple_expectation'
-export SPRING_DATASOURCE_URL="$DB_URL"
-export SPRING_DATASOURCE_USERNAME=maple
-export SPRING_DATASOURCE_PASSWORD=maple123
+# Use .env DB_URL directly — VS3 / MinIO pipeline test runs against whichever DB
+# .env points at (typically the dev cloud DB for shared MinIO validation).
+# No local PostgreSQL override.
 
 # 1) External API (8081)
 nohup java -Xms512m -Xmx1g -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
@@ -164,7 +166,7 @@ curl -s -X POST http://localhost:8081/api/internal/trigger/daily \
 # 409 if already running: {"status": "ALREADY_RUNNING", "runId": "..."}
 ```
 
-#### 4a. MinioHealthIndicator verification (only when `STORAGE_BACKEND=minio`)
+#### 4a. MinioHealthIndicator verification (required)
 
 For each of the 5 modules (8081, 8082, 8083, 8080, 8084), the `/actuator/health` response must contain `status: "UP"` AND a `minioHealthIndicator` component with `status: "UP"`. The JSON key is verified at pre-flight (Spring derives the bean name in lowerCamelCase from `@Component class MinioHealthIndicator`).
 
@@ -172,12 +174,17 @@ For each of the 5 modules (8081, 8082, 8083, 8080, 8084), the `/actuator/health`
 for port in 8081 8082 8083 8080 8084; do
   body=$(curl -s "http://localhost:${port}/actuator/health")
   overall=$(echo "${body}" | jq -r '.status')
-  minio_status=$(echo "${body}" | jq -r '.components.minioHealthIndicator.status // "MISSING"')
+  # When @Import'd, the bean name is FQCN-based and Spring trims "HealthIndicator"
+  # suffix for the JSON key. Look up the actual key dynamically instead of hardcoding.
+  minio_key=$(echo "${body}" | jq -r '.components | keys[] | select(test("Minio"))' 2>/dev/null | head -1)
+  minio_status=$(echo "${body}" | jq -r ".components[\"${minio_key}\"].status // \"MISSING\"")
   if [ "${overall}" != "UP" ] || [ "${minio_status}" != "UP" ]; then
-    echo "Module on port ${port}: overall=${overall}, minioHealthIndicator=${minio_status}"; exit 4
+    echo "Module on port ${port}: overall=${overall}, minio=${minio_status}"; exit 4
   fi
 done
 ```
+
+If `STORAGE_BACKEND=local`, this step is skipped.
 
 ### 5. Start Airflow
 
@@ -395,7 +402,7 @@ for module in external-api calculator synchronizer; do
 done
 ```
 
-#### 9a. MinIO prefix + storage-error verification (only when `STORAGE_BACKEND=minio`)
+#### 9a. MinIO prefix + storage-error verification (required)
 
 After the E2E returns 200/202, verify the expected objects exist under MinIO prefixes:
 
@@ -451,21 +458,23 @@ docker compose -f docker-compose.yml -f docker-compose.airflow.yml stop airflow-
 - OCID JSONL file written to `../data/ocid-mapping/` after OCID lookup completes (~594K entries).
 - Item equipment cycles take ~35 minutes per full run. Lock timeout is 1 hour.
 - Do NOT run load tests alongside this pipeline test.
-- Local profile DB is `localhost:5432/maple_expectation` (hardcoded in application-local.yml), NOT the remote DB from .env.
+- Local profile DB: when `STORAGE_BACKEND=local`, the hardcoded `localhost:5432/maple_expectation` from `application-local.yml` is used. When `STORAGE_BACKEND=minio`, `.env` `DB_URL` is used directly (typically the dev cloud DB).
 - `run-on-startup: true` in local profile starts pipeline immediately. When Airflow controls scheduling in production, set `run-on-startup: false` and `external-api.schedule.enabled: true` to keep the bean but disable auto-trigger.
 - Airflow connects via `host.docker.internal` (Docker→host). This is transitional until services are containerized.
 
-## MinIO mode (storage-backend awareness)
+## Storage backend
 
-When `STORAGE_BACKEND=minio` is set, this skill:
+Pipeline test uses MinIO by default (`STORAGE_BACKEND=minio`). The flow:
 
-1. **Runs the MinIO pre-check** (step 1a above) — `mc ready`, bucket existence, lifecycle rules count >= 4.
-2. **Verifies `MinioHealthIndicator` in module health** (step 4a above) — all 5 modules must report UP for the `minioHealthIndicator` component (key confirmed at pre-flight).
-3. **Inspects MinIO prefixes after the E2E** (step 9a above) — `snapshots/`, `runs/`, `ocid-mapping/`, `calculator/runs/` must be non-empty.
-4. **Boots `module-cleanup`** (port 8084) — cleanup logic is consolidated there; the VS3 wrapper exercises the cleanup endpoint in step 7. (Original plan assumed cleanup was in the 4 data modules; pre-flight code analysis revealed the consolidation into module-cleanup.)
-5. **Skips Airflow** (port 8180) — storage validation does not require the control plane. `run-on-startup: true` in local profile starts the pipeline immediately on boot, sufficient for the smoke E2E.
-6. **Uses `.env` `DB_URL`** (not the local `localhost:5432/maple_expectation` hardcoded path) — VS3 runs against the dev cloud DB, not local. This split prevents local-only test runs from polluting the dev cloud DB.
+1. **MinIO pre-check** (step 1a) — `mc ready`, bucket existence, lifecycle rules count >= 4.
+2. **MinioHealthIndicator in module health** (step 4a) — all 5 modules must report UP for the `minioHealthIndicator` component (key confirmed at pre-flight).
+3. **MinIO prefixes after the E2E** (step 9a) — `snapshots/`, `runs/`, `ocid-mapping/`, `calculator/runs/` must be non-empty.
+4. **Boots `module-cleanup`** (port 8084) — cleanup logic is consolidated there.
+5. **Airflow is part of the workflow** (step 5) — the control plane still runs. `run-on-startup: true` in local profile starts the pipeline immediately on boot, sufficient for both smoke and full E2E.
+6. **`.env` `DB_URL`** is used directly (no local PostgreSQL override) — VS3 / MinIO pipeline test runs against whichever DB `.env` points at (typically the dev cloud DB for shared MinIO validation).
 
-Detection: `STORAGE_BACKEND=minio` env var is the trigger. No new flag is introduced.
+### Local mode (legacy fallback)
 
-When `STORAGE_BACKEND` is unset or `local`: all new MinIO checks are skipped; the existing local behavior (5 modules + Airflow + local PostgreSQL) is unchanged. Backward compatible.
+Set `STORAGE_BACKEND=local` in `.env` to opt out of MinIO. All MinIO-specific steps (1a, 4a, 9a) are skipped, and module health will not show `minioHealthIndicator`. Local mode exists for the legacy pre-VS2 workflow; for the canonical pipeline test, use MinIO.
+
+Detection: `STORAGE_BACKEND` env var. Default = `minio` for pipeline test, no flag needed.

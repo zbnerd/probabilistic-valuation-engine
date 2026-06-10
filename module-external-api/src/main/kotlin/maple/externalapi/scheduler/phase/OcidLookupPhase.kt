@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -176,9 +177,13 @@ class OcidLookupPhase(
     }
 
     /**
-     * Recursive batch processor. async + awaitAll for parallel CPU offload.
+     * Iterative batch processor. async + awaitAll for parallel CPU offload.
      * Each `async` runs on caller dispatcher (IO from runBlocking → no explicit = inherited).
      * CPU work inside `fetchAndCollectOcidAsync` switches to `Dispatchers.Default`.
+     *
+     * <p>Originally recursive (0344c62b7). Reverted to iteration: recursive call on
+     * rate-limiter permit exhaustion caused StackOverflowError when the bucket drained
+     * faster than the refill window (#1217 follow-up).
      */
     private suspend fun processBatch(
         workerExecutor: ExecutorService,
@@ -191,37 +196,36 @@ class OcidLookupPhase(
         results: MutableList<String>,
         start: Instant,
     ) {
-        if (processed >= igns.size) return
+        var current = processed
+        while (current < igns.size) {
+            val permits = SchedulerPhaseUtils.acquirePermits(rateLimiter, batchSize, igns.size - current)
+            if (permits == 0) {
+                // bucket drained — yield to dispatcher so other coroutines run,
+                // then retry on next iteration (no artificial delay)
+                yield()
+                continue
+            }
 
-        val permits = SchedulerPhaseUtils.acquirePermits(rateLimiter, batchSize, igns.size - processed)
-        if (permits == 0) {
-            return processBatch(
-                workerExecutor, rateLimiter, igns, processed,
-                successCount, failCount, lastProgressLog, results, start,
-            )
-        }
+            val chunk = igns.subList(current, current + permits)
+            coroutineScope {
+                chunk.map { ign ->
+                    async(Dispatchers.IO) {
+                        fetchAndCollectOcidAsync(ign, workerExecutor, successCount, failCount, results)
+                    }
+                }.awaitAll()
+            }
 
-        val chunk = igns.subList(processed, processed + permits)
-        coroutineScope {
-            chunk.map { ign ->
-                async(Dispatchers.IO) {
-                    fetchAndCollectOcidAsync(ign, workerExecutor, successCount, failCount, results)
-                }
-            }.awaitAll()
-        }
+            current += permits
 
-        val progress = successCount.get() + failCount.get()
-        if (progress - lastProgressLog.get() >= 5000) {
-            lastProgressLog.set(progress)
-            SchedulerPhaseUtils.logProgress(
-                "OCID lookup", progress, igns.size,
-                successCount.get(), failCount.get(), start,
-            )
+            val progress = successCount.get() + failCount.get()
+            if (progress - lastProgressLog.get() >= 5000) {
+                lastProgressLog.set(progress)
+                SchedulerPhaseUtils.logProgress(
+                    "OCID lookup", progress, igns.size,
+                    successCount.get(), failCount.get(), start,
+                )
+            }
         }
-        processBatch(
-            workerExecutor, rateLimiter, igns, processed + permits,
-            successCount, failCount, lastProgressLog, results, start,
-        )
     }
 
     /**

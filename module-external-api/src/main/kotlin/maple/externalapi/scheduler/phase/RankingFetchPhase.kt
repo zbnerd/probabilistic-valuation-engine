@@ -3,6 +3,7 @@ package maple.externalapi.scheduler.phase
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
+import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.domain.KeyType
@@ -21,8 +22,6 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.nio.file.Path
-import java.nio.file.Paths
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -44,30 +43,31 @@ class RankingFetchPhase(
     private val maxPages: Int,
     @Value("\${external-api.ranking.permits-per-second:50}")
     private val permitsPerSecond: Int,
-    @Value("\${external-api.store.base-path:../data}")
-    private val storeBasePath: String,
+    private val runMarkerWriter: RunMarkerWriter,
+    private val objectStorage: ObjectStorage,
 ) {
     private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
 
-    fun execute(workerExecutor: ExecutorService): CompletableFuture<Path> {
+    fun execute(workerExecutor: ExecutorService): CompletableFuture<String> {
         val runId = SchedulerPhaseUtils.newRunId()
         val date = LocalDate.now().minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val runDir: Path = Paths.get(storeBasePath, "runs", runId)
+        val runKey = "runs/$runId"
         val endpointConfig = chunkingProperties.configFor("ranking-overall")
 
-        SchedulerPhaseUtils.writeRunningMarker(runDir)
+        runMarkerWriter.writeRunMarker(runKey)
 
         val sink = ChunkedSnapshotSink(
-            runDir = runDir,
+            runDir = java.nio.file.Paths.get(runKey),
             endpoint = "ranking-overall",
             queueCapacity = chunkingProperties.queueCapacity,
             fileManager = ChunkFileManager(
-                runDir = runDir,
+                runKey = "$runKey/ranking-overall",
                 endpoint = "ranking-overall",
                 maxRecords = endpointConfig.maxRecords,
                 maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
                 objectMapper = objectMapper,
                 clock = java.time.Clock.systemUTC(),
+                objectStorage = objectStorage,
             ),
             eventPublisher = SnapshotSinkEventPublisher(
                 eventPublisher = SinkEventPublisher(rankingPublisher),
@@ -92,7 +92,7 @@ class RankingFetchPhase(
                     SchedulerPhaseUtils.logSummary("RankingFetch", fetched.get(), fetched.get(), fetched.get(), failed.get(), start)
                 }
             }
-            .thenApply { runDir }
+            .thenApply { runKey }
     }
 
     private fun processPages(

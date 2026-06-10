@@ -63,8 +63,8 @@ class ChunkFileManagerTest {
         // record 3 goes into part-000002 which is then closed above.
         val capturedKeys = keyCaptor.allValues
         assertThat(capturedKeys).hasSize(2)
-        assertThat(capturedKeys[0]).isEqualTo("runs/testrun/ranking-overall/part-000001.jsonl.gz")
-        assertThat(capturedKeys[1]).isEqualTo("runs/testrun/ranking-overall/part-000002.jsonl.gz")
+        assertThat(capturedKeys[0]).isEqualTo("runs/testrun/ranking-overall/chunks/part-000001.jsonl.gz")
+        assertThat(capturedKeys[1]).isEqualTo("runs/testrun/ranking-overall/chunks/part-000002.jsonl.gz")
         verify(storage, org.mockito.kotlin.times(2)).put(any<String>(), any<ByteArray>())
     }
 }

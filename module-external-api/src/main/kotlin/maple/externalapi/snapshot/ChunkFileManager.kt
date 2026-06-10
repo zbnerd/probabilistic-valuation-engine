@@ -101,7 +101,7 @@ class ChunkFileManager(
     fun manifest(): SnapshotChunkManifest = manifest
 
     private fun newChunkWriter(partIndex: Int): GzipJsonlChunkWriter {
-        val chunkKey = "$runKey/part-${String.format("%06d", partIndex)}.jsonl.gz"
+        val chunkKey = "$runKey/chunks/part-${String.format("%06d", partIndex)}.jsonl.gz"
         return GzipJsonlChunkWriter(
             chunkKey = chunkKey,
             partIndex = partIndex,

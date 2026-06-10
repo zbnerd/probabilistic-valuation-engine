@@ -50,7 +50,7 @@ check_module_health() {
   return 4
 }
 
-# Returns 0 if all 5 modules are healthy; non-zero with summary on first failure.
+# Returns 0 if all 5 modules are healthy; non-zero with summary of all failed modules.
 check_all_modules_health() {
   local failed=()
   for module in external-api calculator synchronizer rest-controller cleanup; do

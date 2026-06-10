@@ -77,18 +77,18 @@ class ExternalApiScheduler(
 
         log.info("[Scheduler] starting ranking fetch phase")
         rankingPhase.execute(executor)
-            .handle { runDir, ex ->
+            .handle { runKey, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ranking fetch failed, cannot proceed with OCID lookup", ex)
-                } else if (runDir != null) {
-                    // Extract runId from the run directory (RankingFetchPhase places runId as the last path segment)
-                    val runId = runDir.fileName?.toString() ?: return@handle runDir
+                } else if (runKey != null) {
+                    // runKey is "runs/<runId>"; extract runId for the status tracker.
+                    val runId = runKey.removePrefix("runs/")
                     runStatusTracker.startRun(runId)
                 }
-                runDir
+                runKey
             }
-            .thenCompose { runDir ->
-                if (runDir == null) {
+            .thenCompose { runKey ->
+                if (runKey == null) {
                     CompletableFuture.completedFuture(null)
                 } else {
                     runStatusTracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
@@ -96,7 +96,7 @@ class ExternalApiScheduler(
                     // Caller thread is multi-threaded VT (Executors.newVirtualThreadPerTaskExecutor).
                     // runBlocking bridges to Default dispatcher for CPU offload.
                     // Single submit thread blocked for OCID lookup duration; no other submit affected.
-                    runBlocking { ocidLookupPhase.execute(executor, runDir) }
+                    runBlocking { ocidLookupPhase.execute(executor, runKey) }
                         .let { CompletableFuture.completedFuture(it) }
                 }
             }

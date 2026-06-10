@@ -1,6 +1,9 @@
 package maple.externalapi.scheduler
 
 import maple.externalapi.cache.OcidCacheProvider
+import maple.externalapi.metrics.SchedulerMetrics
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
@@ -24,6 +27,8 @@ class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
     private val ocidCacheProvider: OcidCacheProvider,
     private val rankingFetchPhaseProvider: ObjectProvider<RankingFetchPhase>,
+    private val runStatusTracker: RunStatusTracker,
+    private val schedulerMetrics: SchedulerMetrics,
     @Value("\${external-api.schedule.run-on-startup:false}")
     private val runOnStartup: Boolean,
     @Value("\${external-api.schedule.skip-character-basic:false}")
@@ -75,6 +80,10 @@ class ExternalApiScheduler(
             .handle { runDir, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ranking fetch failed, cannot proceed with OCID lookup", ex)
+                } else if (runDir != null) {
+                    // Extract runId from the run directory (RankingFetchPhase places runId as the last path segment)
+                    val runId = runDir.fileName?.toString() ?: return@handle runDir
+                    runStatusTracker.startRun(runId)
                 }
                 runDir
             }
@@ -82,6 +91,7 @@ class ExternalApiScheduler(
                 if (runDir == null) {
                     CompletableFuture.completedFuture(null)
                 } else {
+                    runStatusTracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
                     // OcidLookupPhase.execute() is now suspend fun (Issue #1128).
                     // Caller thread is multi-threaded VT (Executors.newVirtualThreadPerTaskExecutor).
                     // runBlocking bridges to Default dispatcher for CPU offload.
@@ -100,6 +110,16 @@ class ExternalApiScheduler(
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] daily refresh failed", ex)
+                    runStatusTracker.getCurrentStatus()?.runId?.let { runId ->
+                        runStatusTracker.failRun(runId, ex.message ?: "unknown")
+                    }
+                } else {
+                    val chunks = schedulerMetrics.drainRunChunks().toInt()
+                    val records = schedulerMetrics.drainRunRecords()
+                    runStatusTracker.getCurrentStatus()?.runId?.let { runId ->
+                        runStatusTracker.completeRun(runId, chunks, records)
+                    }
+                    log.info("[Scheduler] daily refresh completed, chunks={} records={}", chunks, records)
                 }
                 releaseLock()
             }

@@ -2,7 +2,7 @@ package maple.externalapi.auth
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import maple.expectation.core.auth.event.CharacterFetchRequest
@@ -24,7 +24,7 @@ class AuthCharacterFetchConsumer(
     private val kafkaTemplate: KafkaTemplate<String, String>,
     private val objectMapper: ObjectMapper,
     @Value("\${auth.kafka.character-fetch-response-topic}") private val responseTopic: String,
-    @Qualifier("authCharacterFetchExecutor") private val executor: ExecutorService,
+    @Qualifier("authCharacterFetchExecutor") private val executor: Executor,
 ) {
 
     @KafkaListener(
@@ -39,13 +39,13 @@ class AuthCharacterFetchConsumer(
         val request = objectMapper.readValue(message, CharacterFetchRequest::class.java)
         log.info("[AuthFetch] processing: eventId={}, userIgn={}", request.eventId, request.userIgn)
 
-        executor.submit {
+        executor.execute {
             runCatching {
                 val characterListOpt = nexonAuthClient.getCharacterList(request.apiKey)
 
                 if (characterListOpt.isEmpty) {
                     publishError(request, "Invalid API key or Nexon API error (OPENAPI00004)")
-                    return@submit
+                    return@execute
                 }
 
                 val resp = characterListOpt.get()

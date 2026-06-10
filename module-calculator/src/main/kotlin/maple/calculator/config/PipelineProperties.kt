@@ -1,7 +1,5 @@
 package maple.calculator.config
 
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 
@@ -32,6 +30,6 @@ data class PipelineProperties(
     val channelCapacity: Int = 500,
     @DefaultValue("4") val parseWorkers: Int = 4,
     @DefaultValue("4") val calcWorkers: Int = 4,
-    @DefaultValue val parseDispatcher: CoroutineDispatcher = Dispatchers.Default,
-    @DefaultValue val calcDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    @DefaultValue("default") val parseDispatcher: String = "default",
+    @DefaultValue("default") val calcDispatcher: String = "default",
 )

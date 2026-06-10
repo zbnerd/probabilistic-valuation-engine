@@ -13,7 +13,7 @@ import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
-import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executor
 
 @Component
 @ConditionalOnProperty(name = ["synchronizer.kafka.ocid-lookup-enabled"], havingValue = "true")
@@ -21,7 +21,7 @@ class OcidLookupRunConsumer(
     private val ocidLookupService: OcidLookupService,
     private val objectMapper: ObjectMapper,
     // Issue #1129: dispatch to executor (default async, post-#1126 rename). Decouples Kafka poll from processing.
-    @Qualifier("defaultAsyncExecutor") private val executor: ExecutorService,
+    @Qualifier("defaultAsyncExecutor") private val executor: Executor,
 ) {
     @KafkaListener(
         topics = ["\${synchronizer.kafka.ocid-lookup-topic}"],
@@ -32,7 +32,7 @@ class OcidLookupRunConsumer(
         acknowledgment: Acknowledgment,
         @Header(name = KafkaHeaders.RECEIVED_TOPIC, required = false) topic: String?,
     ) {
-        executor.submit {
+        executor.execute {
             runCatching {
                 // CPU offload: JSON parse on Dispatchers.Default.
                 val event = runBlocking(Dispatchers.Default) {

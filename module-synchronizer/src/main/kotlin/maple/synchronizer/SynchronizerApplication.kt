@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Import
 @Import(
     maple.expectation.infrastructure.config.CoreExecutorConfig::class,
     maple.expectation.infrastructure.config.VtExecutorConfig::class,
+    maple.expectation.infrastructure.storage.StorageConfig::class,
     KafkaConsumerConfig::class,
     ManagedLifecycleCoordinator::class,
 )

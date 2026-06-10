@@ -3,35 +3,36 @@ package maple.externalapi.cache
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
-import maple.expectation.common.storage.ObjectInfo
-import maple.expectation.common.storage.ObjectStorage
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.GZIPInputStream
 
 @Component
 class OcidCacheProvider(
-    private val objectStorage: ObjectStorage,
     private val objectMapper: ObjectMapper,
+    @Value("\${external-api.store.base-path:../data}") private val storeBasePath: String,
 ) {
     private val log = LoggerFactory.getLogger(OcidCacheProvider::class.java)
     private val cacheRef = AtomicReference<Map<String, String>>(emptyMap())
 
     fun refresh(): Map<String, String> {
-        val latest = findLatestOcidMapping()
-        if (latest == null) {
+        val mappingFile = findLatestOcidMappingFile()
+        if (mappingFile == null) {
             log.info("[OcidCache] no ocid-mapping file found, keeping current cache")
             return cacheRef.get()
         }
 
         // Issue #1128: CPU offload — GZIP decompress + per-line JSON parse on Dispatchers.Default.
-        val loaded = loadFromGzipJsonlAsync(latest).join()
+        val loaded = loadFromGzipJsonlAsync(mappingFile).join()
         cacheRef.set(loaded)
-        log.info("[OcidCache] loaded: {} entries from {}", loaded.size, latest.key.substringAfterLast('/'))
+        log.info("[OcidCache] loaded: {} entries from {}", loaded.size, mappingFile.fileName)
         return loaded
     }
 
@@ -39,30 +40,37 @@ class OcidCacheProvider(
 
     fun isEmpty(): Boolean = cacheRef.get().isEmpty()
 
-    private fun findLatestOcidMapping(): ObjectInfo? {
-        val all = objectStorage.listByPrefix("ocid-mapping/")
-        return all
-            .filter { it.key.endsWith(".jsonl.gz") }
-            .maxByOrNull { it.lastModified }
+    private fun findLatestOcidMappingFile(): Path? {
+        val dir = Path.of(storeBasePath, "ocid-mapping")
+        if (!Files.isDirectory(dir)) {
+            log.info("[OcidCache] directory not found: {}", dir)
+            return null
+        }
+
+        Files.list(dir).use { stream ->
+            val files = stream
+                .filter { path -> path.toString().endsWith(".jsonl.gz") }
+                .sorted()
+                .toList()
+            return files.lastOrNull()
+        }
     }
 
-    private fun loadFromGzipJsonl(info: ObjectInfo): Map<String, String> {
+    private fun loadFromGzipJsonl(path: Path): Map<String, String> {
         val cache = mutableMapOf<String, String>()
-        objectStorage.getStream(info.key).use { stream ->
-            GZIPInputStream(stream).use { gzipIn ->
-                BufferedReader(InputStreamReader(gzipIn, Charsets.UTF_8)).use { reader ->
-                    var line: String? = reader.readLine()
-                    while (line != null) {
-                        if (line.isNotBlank()) {
-                            val node = objectMapper.readTree(line)
-                            val userIgn = node.get("userIgn")?.asText()
-                            val ocid = node.get("ocid")?.asText()
-                            if (userIgn != null && ocid != null) {
-                                cache[userIgn] = ocid
-                            }
+        GZIPInputStream(Files.newInputStream(path)).use { gzipIn ->
+            BufferedReader(InputStreamReader(gzipIn, Charsets.UTF_8)).use { reader ->
+                var line: String? = reader.readLine()
+                while (line != null) {
+                    if (line.isNotBlank()) {
+                        val node = objectMapper.readTree(line)
+                        val userIgn = node.get("userIgn")?.asText()
+                        val ocid = node.get("ocid")?.asText()
+                        if (userIgn != null && ocid != null) {
+                            cache[userIgn] = ocid
                         }
-                        line = reader.readLine()
                     }
+                    line = reader.readLine()
                 }
             }
         }
@@ -73,8 +81,8 @@ class OcidCacheProvider(
      * Issue #1128: GZIP decompress + per-line JSON parse on `Dispatchers.Default`.
      * Caller may `.join()` (sync block) or chain via `.thenCompose()`.
      */
-    private fun loadFromGzipJsonlAsync(info: ObjectInfo): CompletableFuture<Map<String, String>> =
+    private fun loadFromGzipJsonlAsync(path: Path): CompletableFuture<Map<String, String>> =
         CompletableFuture.supplyAsync({
-            loadFromGzipJsonl(info)
+            loadFromGzipJsonl(path)
         }, Dispatchers.Default.asExecutor())
 }

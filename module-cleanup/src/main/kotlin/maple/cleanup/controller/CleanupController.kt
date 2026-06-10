@@ -1,12 +1,10 @@
 package maple.cleanup.controller
 
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
 import maple.cleanup.inbox.ConsumedChunkInbox
 import maple.cleanup.inbox.InboxProperties
 import maple.cleanup.service.RunCleanupService
 import maple.common.cleanup.RunCleanupResult
+import maple.expectation.common.storage.ObjectStorage
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
@@ -18,9 +16,11 @@ import org.springframework.web.bind.annotation.RestController
  *
  * - POST /api/internal/cleanup/runs            → whole-run GC for runs/
  * - POST /api/internal/cleanup/calculator-runs  → whole-run GC for calculator/runs/
- * - POST /api/internal/cleanup/inbox           → drain event queue + delete file per event
+ * - POST /api/internal/cleanup/inbox           → drain event queue + delete per event
  *
- * Inbox deleteFile uses InboxProperties.basePath (NOT hardcoded).
+ * Inbox deletion uses ObjectStorage (object keys are absolute storage keys, not
+ * filesystem paths). InboxProperties.basePath is retained for backward compat
+ * with existing YAML, but is no longer used for deletion.
  */
 @RestController
 @RequestMapping("/api/internal/cleanup")
@@ -28,6 +28,7 @@ class CleanupController(
     private val runCleanupService: RunCleanupService,
     private val inbox: ConsumedChunkInbox,
     private val inboxProperties: InboxProperties,
+    private val objectStorage: ObjectStorage,
 ) {
     private val log = LoggerFactory.getLogger(CleanupController::class.java)
 
@@ -50,17 +51,17 @@ class CleanupController(
         var deleted = 0
         var failed = 0
         events.forEach { event ->
-            if (deleteFile(event.objectKey)) deleted++ else failed++
-            event.sourceObjectKey?.let { if (deleteFile(it)) deleted++ else failed++ }
+            if (deleteObject(event.objectKey)) deleted++ else failed++
+            event.sourceObjectKey?.let { if (deleteObject(it)) deleted++ else failed++ }
         }
         log.info("[CleanupController] inbox: drained={} deleted={} failed={}", events.size, deleted, failed)
         return ResponseEntity.ok(InboxCleanupResponse(drained = events.size, deleted = deleted, failed = failed))
     }
 
-    private fun deleteFile(objectKey: String): Boolean = try {
-        val path: Path = Paths.get(inboxProperties.basePath, objectKey)
-        Files.deleteIfExists(path)
-    } catch (ex: java.io.IOException) {
+    private fun deleteObject(objectKey: String): Boolean = try {
+        objectStorage.delete(objectKey)
+        true
+    } catch (ex: Exception) {
         log.error("[CleanupController] delete failed: {} - {}", objectKey, ex.message, ex)
         false
     }

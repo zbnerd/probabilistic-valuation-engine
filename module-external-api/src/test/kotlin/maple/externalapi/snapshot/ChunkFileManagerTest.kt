@@ -25,6 +25,49 @@ class ChunkFileManagerTest {
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 
     @Test
+    fun `cleanupOnFailure deletes all objects under runKey prefix and the running marker`() {
+        val storage = mock<ObjectStorage>()
+        val prefixCaptor = argumentCaptor<String>()
+        whenever(storage.deleteByPrefix(prefixCaptor.capture())).thenReturn(5L)
+
+        val manager = ChunkFileManager(
+            runKey = "runs/abc/ranking-overall",
+            endpoint = "ranking-overall",
+            maxRecords = 100,
+            maxUncompressedBytes = 1_000_000,
+            objectMapper = objectMapper,
+            clock = Clock.systemUTC(),
+            objectStorage = storage,
+        )
+
+        manager.cleanupOnFailure()
+
+        assertThat(prefixCaptor.firstValue).isEqualTo("runs/abc/ranking-overall")
+        verify(storage).delete("runs/abc/ranking-overall/_RUNNING")
+    }
+
+    @Test
+    fun `deleteRunningMarker removes the running marker under runKey`() {
+        val storage = mock<ObjectStorage>()
+        val keyCaptor = argumentCaptor<String>()
+
+        val manager = ChunkFileManager(
+            runKey = "runs/abc/ranking-overall",
+            endpoint = "ranking-overall",
+            maxRecords = 100,
+            maxUncompressedBytes = 1_000_000,
+            objectMapper = objectMapper,
+            clock = Clock.systemUTC(),
+            objectStorage = storage,
+        )
+
+        manager.deleteRunningMarker()
+
+        verify(storage).delete(keyCaptor.capture())
+        assertThat(keyCaptor.firstValue).isEqualTo("runs/abc/ranking-overall/_RUNNING")
+    }
+
+    @Test
     fun `appendSuccess accumulates records and rotates when limit hit`() {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()

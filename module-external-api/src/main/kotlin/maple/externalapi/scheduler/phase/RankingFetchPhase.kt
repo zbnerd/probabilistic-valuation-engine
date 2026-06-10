@@ -57,7 +57,6 @@ class RankingFetchPhase(
         runMarkerWriter.writeRunMarker(runKey)
 
         val sink = ChunkedSnapshotSink(
-            runDir = java.nio.file.Paths.get(runKey),
             endpoint = "ranking-overall",
             queueCapacity = chunkingProperties.queueCapacity,
             fileManager = ChunkFileManager(

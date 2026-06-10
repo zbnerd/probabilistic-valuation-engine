@@ -100,6 +100,20 @@ class ChunkFileManager(
 
     fun manifest(): SnapshotChunkManifest = manifest
 
+    /**
+     * Best-effort cleanup after a failed run. Removes all chunk / manifest / failed-record
+     * objects under [runKey] and the `_RUNNING` marker. Called from the sink's failure path.
+     */
+    fun cleanupOnFailure() {
+        objectStorage.deleteByPrefix(runKey)
+        objectStorage.delete("$runKey/_RUNNING")
+    }
+
+    /** Remove the `_RUNNING` marker after a successful run finalizes. */
+    fun deleteRunningMarker() {
+        objectStorage.delete("$runKey/_RUNNING")
+    }
+
     private fun newChunkWriter(partIndex: Int): GzipJsonlChunkWriter {
         val chunkKey = "$runKey/chunks/part-${String.format("%06d", partIndex)}.jsonl.gz"
         return GzipJsonlChunkWriter(

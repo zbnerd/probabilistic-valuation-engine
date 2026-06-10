@@ -98,6 +98,13 @@ JAR locations: `module-{name}/build/libs/module-{name}-0.0.1-SNAPSHOT.jar`
 ```bash
 set -a && source .env && set +a && export SPRING_PROFILES_ACTIVE=local && export MALLOC_ARENA_MAX=1
 
+# Force local DB regardless of .env (dev cloud DB is for prod/prod-like envs only).
+# Pipeline test runs against the local dev PostgreSQL on this host.
+export DB_URL='jdbc:postgresql://localhost:5432/maple_expectation'
+export SPRING_DATASOURCE_URL="$DB_URL"
+export SPRING_DATASOURCE_USERNAME=maple
+export SPRING_DATASOURCE_PASSWORD=maple123
+
 # 1) External API (8081)
 nohup java -Xms512m -Xmx1g -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
 until curl -sf http://localhost:8081/actuator/health > /dev/null 2>&1; do sleep 2; done

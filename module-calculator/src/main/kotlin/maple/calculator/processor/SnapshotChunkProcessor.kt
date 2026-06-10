@@ -2,6 +2,7 @@ package maple.calculator.processor
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -9,6 +10,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import maple.calculator.config.CoroutineDispatcherConverter
 import maple.calculator.config.PipelineProperties
 import maple.calculator.model.CalculationResult
 import maple.calculator.model.ChunkResult
@@ -42,6 +44,9 @@ class SnapshotChunkProcessor(
     private val calcWorkerCount: Int = requireNotNull(properties.calcWorkers.takeIf { it > 0 }) {
         "calculator.pipeline.calc-workers must be positive: ${properties.calcWorkers}"
     }
+    private val dispatcherConverter = CoroutineDispatcherConverter()
+    private val parseDispatcher: CoroutineDispatcher = dispatcherConverter.convert(properties.parseDispatcher)
+    private val calcDispatcher: CoroutineDispatcher = dispatcherConverter.convert(properties.calcDispatcher)
 
     data class FlatItem(
         val ocid: String,
@@ -64,7 +69,7 @@ class SnapshotChunkProcessor(
         launch {
             coroutineScope {
                 repeat(parseWorkerCount) {
-                    launch(properties.parseDispatcher) {
+                    launch(this@SnapshotChunkProcessor.parseDispatcher) {
                         parseLines(lineChannel, itemChannel, recordCount, successCount, totalItems)
                     }
                 }
@@ -75,7 +80,7 @@ class SnapshotChunkProcessor(
         launch {
             coroutineScope {
                 repeat(calcWorkerCount) {
-                    launch(properties.calcDispatcher) {
+                    launch(this@SnapshotChunkProcessor.calcDispatcher) {
                         processItems(itemChannel, resultChannel, calculatedCount, errorCount)
                     }
                 }

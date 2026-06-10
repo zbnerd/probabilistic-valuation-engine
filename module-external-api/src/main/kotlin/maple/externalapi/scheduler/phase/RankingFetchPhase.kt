@@ -11,9 +11,11 @@ import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.ChunkFileManager
 import maple.externalapi.snapshot.ChunkedSnapshotSink
+import maple.externalapi.snapshot.SinkEventPublisher
 import maple.externalapi.snapshot.SnapshotChunkRecord
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.SnapshotSinkEventPublisher
+import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -37,7 +39,7 @@ class RankingFetchPhase(
     private val volumeMetrics: SnapshotVolumeMetrics,
     private val metrics: ExternalApiMetrics,
     @Qualifier("rankingSnapshotPublisher")
-    private val rankingPublisher: SnapshotSinkEventPublisher,
+    private val rankingPublisher: SnapshotChunkEventPublisher,
     @Value("\${external-api.ranking.max-pages:300}")
     private val maxPages: Int,
     @Value("\${external-api.ranking.permits-per-second:50}")
@@ -67,7 +69,11 @@ class RankingFetchPhase(
                 objectMapper = objectMapper,
                 clock = java.time.Clock.systemUTC(),
             ),
-            eventPublisher = rankingPublisher,
+            eventPublisher = SnapshotSinkEventPublisher(
+                eventPublisher = SinkEventPublisher(rankingPublisher),
+                volumeMetrics = volumeMetrics,
+                clock = java.time.Clock.systemUTC(),
+            ),
         )
 
         val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)

@@ -1,24 +1,32 @@
 package maple.externalapi.scheduler.phase
 
-import java.nio.file.Files
-import java.nio.file.Path
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
+import maple.expectation.common.storage.ObjectStorage
+import maple.expectation.common.storage.PutResult
+import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Instant
-import java.time.ZoneId
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.io.TempDir
+import java.time.ZoneOffset
+import kotlin.test.assertEquals
 
 class RunMarkerWriterTest {
+
     @Test
-    fun `writeRunningMarker creates dir and writes clock instant`(@TempDir tempDir: Path) {
-        val fixed = Clock.fixed(Instant.parse("2026-06-06T12:00:00Z"), ZoneId.of("UTC"))
-        val writer = RunMarkerWriter(fixed)
-        val runDir = tempDir.resolve("runs/run-1")
+    fun `writeRunMarker puts marker to ObjectStorage with run key prefix`() {
+        val storage = mockk<ObjectStorage>()
+        val key = slot<String>()
+        val bytes = slot<ByteArray>()
+        every { storage.put(capture(key), capture(bytes)) } returns PutResult("k", 0, null)
 
-        writer.writeRunningMarker(runDir)
+        val clock = Clock.fixed(Instant.parse("2026-06-10T12:00:00Z"), ZoneOffset.UTC)
+        val writer = RunMarkerWriter(clock, storage)
+        writer.writeRunMarker("runs/20260610-120000-abc123")
 
-        val marker = runDir.resolve("_RUNNING")
-        assertEquals(Instant.parse("2026-06-06T12:00:00Z").toString(), Files.readString(marker))
+        verify(exactly = 1) { storage.put(any(), any()) }
+        assertEquals("runs/20260610-120000-abc123/_RUNNING", key.captured)
+        assertEquals("2026-06-10T12:00:00Z", String(bytes.captured))
     }
 }

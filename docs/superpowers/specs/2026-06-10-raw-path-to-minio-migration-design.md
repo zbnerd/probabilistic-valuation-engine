@@ -2,7 +2,7 @@
 
 - **Status**: Draft (brainstorming complete, awaiting user review)
 - **Date**: 2026-06-10
-- **Owner**: TBD
+- **Owner**: ext-api squad (calculator + synchronizer owners consulted for objectKey compat)
 
 ---
 
@@ -206,9 +206,3 @@ Project rule: "통합테스트 금지 (Testcontainers 포함) - Issue #207". Lay
 ## 5. Summary
 
 > ext-api (8 files) + cleanup (2 files) use `ObjectStorage` exclusively. Inter-phase API is `runKey: String` (not `Path`). Deprecated adapter removed. MinIO is the production default; local mode stays regression-free. Verification: unit + smoke + fixture-based dataflow + per-boundary schema — all atomic single PR.
-
----
-
-## 5. Summary
-
-> ext-api (8 files) + cleanup (2 files) use `ObjectStorage` exclusively. Inter-phase API is `runKey: String` (not `Path`). Deprecated adapter removed. MinIO is the production default; local mode stays regression-free. Single atomic PR.

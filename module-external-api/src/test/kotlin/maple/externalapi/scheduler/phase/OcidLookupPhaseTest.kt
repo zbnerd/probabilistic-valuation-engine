@@ -6,22 +6,24 @@ import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import maple.expectation.common.storage.ObjectInfo
 import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.storage.PutResult
 import maple.expectation.infrastructure.external.NexonAuthClient
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import java.io.InputStream
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
+import java.util.zip.GZIPInputStream
 
 class OcidLookupPhaseTest {
 
     @Test
-    fun `execute writes OCID mapping gzipped to ObjectStorage under ocid-mapping key`() {
+    fun `execute streams OCID mapping gzipped to ObjectStorage under ocid-mapping key`() {
         val storage = mock<ObjectStorage>()
         val nexonClient = mock<NexonAuthClient>()
         val objectMapper = ObjectMapper().registerModule(kotlinModule())
@@ -29,7 +31,6 @@ class OcidLookupPhaseTest {
         whenever(storage.listByPrefix(any())).thenReturn(listOf(
             ObjectInfo("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz", 100, Instant.now())
         ))
-        // Chunk files are gzipped JSONL on disk; produce a gzipped fixture.
         val chunkBytes = run {
             val out = java.io.ByteArrayOutputStream()
             java.util.zip.GZIPOutputStream(out).use { gz ->
@@ -40,7 +41,6 @@ class OcidLookupPhaseTest {
         whenever(storage.getStream("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz"))
             .thenReturn(chunkBytes.inputStream())
 
-        // clientPort is used for the per-IGN OCID lookup. Stub it to return an ocid JSON for each IGN.
         val clientPort = mock<maple.externalapi.port.out.ExternalApiClientPort>()
         whenever(clientPort.fetch(any(), any(), any())).thenAnswer { invocation ->
             val ign = invocation.getArgument<String>(2)
@@ -48,10 +48,16 @@ class OcidLookupPhaseTest {
             CompletableFuture.completedFuture(payload.toByteArray())
         }
 
-        val mappingKeyCaptor = argumentCaptor<String>()
-        val mappingBytesCaptor = argumentCaptor<ByteArray>()
-        whenever(storage.put(mappingKeyCaptor.capture(), mappingBytesCaptor.capture()))
-            .thenReturn(PutResult("k", 0, null))
+        // Collect streamed bytes (replaces the previous put() call). This
+        // is exactly the path MinioObjectStorage.putStream takes: it drains
+        // the input to a temp file, then puts that file to S3.
+        val collectedBytes = java.util.concurrent.atomic.AtomicReference<ByteArray>()
+        whenever(storage.putStream(any(), any())).thenAnswer { invocation ->
+            val input = invocation.getArgument<InputStream>(1)
+            val bytes = input.readBytes()
+            collectedBytes.set(bytes)
+            PutResult(invocation.getArgument<String>(0), bytes.size.toLong(), null)
+        }
 
         val phase = OcidLookupPhase(
             clientPort = clientPort,
@@ -70,6 +76,9 @@ class OcidLookupPhaseTest {
             )
         }
 
+        // Verify the streaming putStream was called with the right key.
+        val mappingKeyCaptor = argumentCaptor<String>()
+        verify(storage).putStream(mappingKeyCaptor.capture(), any())
         val mappingKey = mappingKeyCaptor.firstValue
         assertNotNull(mappingKey)
         assertTrue(
@@ -81,10 +90,12 @@ class OcidLookupPhaseTest {
             "expected mapping key to end with '.jsonl.gz' but was '$mappingKey'",
         )
 
-        // Verify the captured bytes are a valid gzip stream
-        val captured = mappingBytesCaptor.firstValue
-        assertTrue(captured.isNotEmpty(), "mapping bytes should not be empty")
-        val decompressed = java.util.zip.GZIPInputStream(captured.inputStream())
+        // The streamed bytes should be a non-empty valid gzip containing the
+        // expected userIgn/ocid pairs.
+        val bytes = collectedBytes.get()
+        assertNotNull(bytes, "putStream should have been called")
+        assertTrue(bytes!!.isNotEmpty(), "streamed bytes should not be empty")
+        val decompressed = GZIPInputStream(bytes.inputStream())
             .bufferedReader().readText()
         assertTrue(
             decompressed.contains("user1") && decompressed.contains("ocid-for-user1"),

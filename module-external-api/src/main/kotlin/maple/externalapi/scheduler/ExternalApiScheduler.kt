@@ -4,6 +4,7 @@ import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
+import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
@@ -27,6 +28,8 @@ class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
     private val ocidCacheProvider: OcidCacheProvider,
     private val rankingFetchPhaseProvider: ObjectProvider<RankingFetchPhase>,
+    private val characterBasicPhaseProvider: ObjectProvider<CharacterBasicFetchPhase>,
+    private val itemEquipmentContinuousLoop: ItemEquipmentContinuousLoop,
     private val runStatusTracker: RunStatusTracker,
     private val schedulerMetrics: SchedulerMetrics,
     @Value("\${external-api.schedule.run-on-startup:false}")
@@ -48,7 +51,7 @@ class ExternalApiScheduler(
             log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
             triggerDailyRefresh(null)
         }
-        executor.submit { runItemEquipmentLoop() }
+        itemEquipmentContinuousLoop.startItemEquipmentLoopOnce()
     }
 
     @Scheduled(cron = "\${external-api.schedule.daily-cron:0 0 3 * * *}")
@@ -101,11 +104,22 @@ class ExternalApiScheduler(
                 }
             }
             .thenCompose {
-                // TODO(#1217 pre-existing): re-enable character basic / item equipment
-                // fetches when SnapshotFetchPhase is reintroduced. For now, only OCID
-                // lookup runs as part of the daily refresh.
                 ocidCacheProvider.refresh()
-                CompletableFuture.completedFuture(null)
+                runStatusTracker.transitionPhase(PipelinePhase.CHARACTER_BASIC)
+                val charBasicPhase = characterBasicPhaseProvider.ifAvailable
+                if (charBasicPhase == null) {
+                    log.warn("[Scheduler] character-basic phase not enabled, skipping")
+                    CompletableFuture.completedFuture(null)
+                } else {
+                    val ocidCache = ocidCacheProvider.current()
+                    if (ocidCache.isEmpty()) {
+                        log.warn("[Scheduler] OCID cache empty after OCID lookup, skipping character-basic")
+                        CompletableFuture.completedFuture(null)
+                    } else {
+                        log.info("[Scheduler] starting character-basic fetch ({} entries)", ocidCache.size)
+                        charBasicPhase.execute(executor, ocidCache)
+                    }
+                }
             }
             .whenComplete { _, ex ->
                 if (ex != null) {
@@ -122,48 +136,6 @@ class ExternalApiScheduler(
                     log.info("[Scheduler] daily refresh completed, chunks={} records={}", chunks, records)
                 }
                 releaseLock()
-            }
-    }
-
-    private fun runItemEquipmentLoop() {
-        log.info("[Scheduler] ITEM_EQUIPMENT continuous loop started")
-        runItemEquipmentCycle()
-    }
-
-    private fun runItemEquipmentCycle() {
-        if (shutdown.get()) {
-            log.info("[Scheduler] ITEM_EQUIPMENT continuous loop stopped")
-            return
-        }
-
-        val entries = ocidCacheProvider.current().entries.toList()
-        if (entries.isEmpty()) {
-            log.warn("[Scheduler] OCID cache empty, waiting 30s")
-            executor.submit {
-                Thread.sleep(java.time.Duration.ofSeconds(30))
-                ocidCacheProvider.refresh()
-                runItemEquipmentCycle()
-            }
-            return
-        }
-
-        if (!acquireLock(120_000)) {
-            executor.submit {
-                Thread.sleep(java.time.Duration.ofSeconds(5))
-                runItemEquipmentCycle()
-            }
-            return
-        }
-
-        CompletableFuture.completedFuture(null)
-            // TODO(#1217 pre-existing): re-enable item equipment fetch when
-            // SnapshotFetchPhase is reintroduced.
-            .whenComplete { _, ex ->
-                if (ex != null) {
-                    log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)
-                }
-                releaseLock()
-                executor.submit { runItemEquipmentCycle() }
             }
     }
 
@@ -193,5 +165,6 @@ class ExternalApiScheduler(
         log.info("[Scheduler] shutdown requested")
         shutdown.set(true)
         executor.close()
+        itemEquipmentContinuousLoop.stop()
     }
 }

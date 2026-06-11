@@ -127,8 +127,17 @@ class SnapshotChunkProcessor(
         for (line in lineChannel) {
             recordCount.incrementAndGet()
             val node = objectMapper.readTree(line)
-            if (node.path("status").asText() != "SUCCESS") continue
-            val body = node.path("body").takeIf { !it.isMissingNode && !it.isNull } ?: continue
+            // Recent chunk writes carry the response body as a base64-encoded
+            // ByteArray field `bodyBytes` (Jackson serializes ByteArray as
+            // base64). Older writes inlined the body as a nested `body` JSON
+            // object. Accept either shape; absent both, treat the record as
+            // missing payload and skip.
+            val status = node.path("status").asText("")
+            val httpStatus = node.path("httpStatus").asInt(0)
+            val isSuccess = status == "SUCCESS" || (status.isBlank() && httpStatus == 200)
+            if (!isSuccess) continue
+
+            val body = extractBody(node) ?: continue
             val ocid = node.path("key").asText("")
             successCount.incrementAndGet()
 
@@ -139,6 +148,27 @@ class SnapshotChunkProcessor(
                 }
             }
         }
+    }
+
+    /**
+     * Return the response body node, accepting both:
+     *  - inline `body` JSON object (older writes)
+     *  - `bodyBytes` (base64-encoded JSON bytes) — Jackson default for ByteArray
+     *
+     * Returns null if neither is present, or if the bodyBytes base64 decode /
+     * JSON parse fails.
+     */
+    private fun extractBody(node: com.fasterxml.jackson.databind.JsonNode): com.fasterxml.jackson.databind.JsonNode? {
+        val inline = node.path("body")
+        if (!inline.isMissingNode && !inline.isNull) return inline
+        val bodyBytesField = node.path("bodyBytes")
+        if (bodyBytesField.isMissingNode || bodyBytesField.isNull) return null
+        val b64 = bodyBytesField.asText("")
+        if (b64.isBlank()) return null
+        return runCatching {
+            val raw = java.util.Base64.getDecoder().decode(b64)
+            objectMapper.readTree(raw)
+        }.getOrNull()
     }
 
     private suspend fun processItems(

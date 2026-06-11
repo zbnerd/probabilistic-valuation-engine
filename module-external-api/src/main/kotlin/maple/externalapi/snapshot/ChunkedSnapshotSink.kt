@@ -112,7 +112,14 @@ class ChunkedSnapshotSink(
                     is SnapshotChunkRecord.CloseSignal -> return
                 }
             }
-        } catch (ex: Exception) {
+        } catch (ex: Throwable) {
+            // Catch Throwable (not Exception) so heap pressure / VM-level
+            // failures (OutOfMemoryError, StackOverflowError, etc.) are
+            // recorded in writerError instead of letting the writer thread
+            // die silently. Without this, a subsequent submit() would only
+            // see writerFuture.isDone = true and throw the vague
+            // "sink writer thread is not alive" message, losing the
+            // original cause.
             writerError.set(ex)
             accepting.set(false)
             log.error("[Sink] writer thread error: {}", ex.message, ex)

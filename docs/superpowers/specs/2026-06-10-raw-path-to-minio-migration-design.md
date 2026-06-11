@@ -110,11 +110,11 @@ module-common
 
 | Artifact | Key |
 | -- | -- |
-| chunk | `runs/$runId/$endpoint/part-XXXXXX.jsonl.gz` |
+| chunk | `runs/$runId/$endpoint/chunks/part-XXXXXX.jsonl.gz` |
 | manifest | `runs/$runId/$endpoint/manifest.json` |
 | _RUNNING marker | `runs/$runId/_RUNNING` |
 | OCID mapping | `ocid-mapping/ocid-mapping-$runId.jsonl.gz` |
-| failed records | `runs/$runId/$endpoint/failed.jsonl` |
+| failed records | `runs/$runId/failed.jsonl` |
 
 ### Metrics
 

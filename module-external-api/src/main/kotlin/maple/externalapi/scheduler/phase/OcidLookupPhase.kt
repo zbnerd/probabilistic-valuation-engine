@@ -149,8 +149,8 @@ class OcidLookupPhase(
     }
 
     private fun deleteOldMappingFiles(mappingDir: String) {
-        val total = objectStorage.deleteByPrefix(mappingDir)
-        log.info("[Scheduler] deleted {} old OCID mapping objects in {}", total, mappingDir)
+        val total = objectStorage.deleteByPrefix("$mappingDir/")
+        log.info("[Scheduler] deleted {} old OCID mapping objects in {}/", total, mappingDir)
     }
 
     private fun writeMappingGzipped(mappingDir: String, results: List<String>, runId: String) {

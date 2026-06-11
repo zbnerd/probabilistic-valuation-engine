@@ -1,10 +1,9 @@
 package maple.externalapi.scheduler.phase
 
+import maple.expectation.common.storage.ObjectInfo
 import maple.expectation.common.storage.ObjectStorage
-import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
-import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -14,6 +13,7 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.time.Clock
+import java.time.Instant
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -25,8 +25,8 @@ class CharacterBasicFetchPhaseTest {
 
     @Test
     fun `execute writes running marker with runs slash prefix when no existing keys`() {
-        val artifactStore = mock<ExternalApiArtifactStorePort>()
-        whenever(artifactStore.listStoredKeys(ExternalApiEndpoint.CHARACTER_BASIC))
+        val objectStorage = mock<ObjectStorage>()
+        whenever(objectStorage.listByPrefix("character-basic/"))
             .thenReturn(emptyList())
 
         val batchSupport = mock<BatchFetchSupport>()
@@ -45,7 +45,7 @@ class CharacterBasicFetchPhaseTest {
         val externalApiMetrics = mock<ExternalApiMetrics>()
 
         val phase = CharacterBasicFetchPhase(
-            artifactStore = artifactStore,
+            objectStorage = objectStorage,
             chunkingProperties = SnapshotChunkingProperties(),
             metrics = externalApiMetrics,
             fetchMetrics = mock<SnapshotFetchMetrics>(),
@@ -63,10 +63,9 @@ class CharacterBasicFetchPhaseTest {
         val ocidCache = mapOf("ign" to "ocid")
         try {
             // Just invoke the marker write + skip path branch — we don't need the
-            // full batch to run. The listStoredKeys is empty, so the skip
-            // branch is not taken. To make the test deterministic without
-            // driving the full batch, we let it fail at the sinkFactory call
-            // (which is mocked) and assert the marker was written first.
+            // full batch to run. listByPrefix is empty, so the skip branch is
+            // not taken. Let it fail at the sinkFactory call (mocked) and
+            // assert the marker was written first.
             runCatching { phase.execute(executor, ocidCache).get(5, TimeUnit.SECONDS) }
         } finally {
             executor.shutdownNow()

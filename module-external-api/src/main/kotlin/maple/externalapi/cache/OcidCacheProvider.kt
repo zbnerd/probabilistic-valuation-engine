@@ -1,6 +1,8 @@
 package maple.externalapi.cache
 
 import maple.expectation.common.storage.ObjectStorage
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -8,13 +10,18 @@ import java.util.concurrent.atomic.AtomicReference
  * `ocid-mapping/ocid-mapping-*.jsonl.gz` object in ObjectStorage.
  * Picked by `ObjectInfo.lastModified` (max).
  */
+@Component
 class OcidCacheProvider(private val objectStorage: ObjectStorage) {
 
+    private val log = LoggerFactory.getLogger(OcidCacheProvider::class.java)
     private val cacheRef = AtomicReference<Map<String, String>>(emptyMap())
 
     fun refresh(): Map<String, String> {
         val objects = objectStorage.listByPrefix("ocid-mapping/")
-        val latest = objects.maxByOrNull { it.lastModified } ?: return emptyMap()
+        val latest = objects.maxByOrNull { it.lastModified } ?: run {
+            log.info("[OcidCache] no ocid-mapping objects found, cache remains empty")
+            return emptyMap()
+        }
         objectStorage.getStream(latest.key).bufferedReader().useLines { lines ->
             val map = HashMap<String, String>()
             for (line in lines) {
@@ -23,6 +30,7 @@ class OcidCacheProvider(private val objectStorage: ObjectStorage) {
                 if (parts.size >= 2) map[parts[0]] = parts[1]
             }
             cacheRef.set(map)
+            log.info("[OcidCache] refreshed: {} entries from {}", map.size, latest.key)
             return map
         }
     }

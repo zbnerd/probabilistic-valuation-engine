@@ -1,5 +1,6 @@
 package maple.externalapi.scheduler.phase
 
+import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
 import maple.externalapi.snapshot.EndpointSinkFactory
@@ -23,6 +24,8 @@ class ItemEquipmentFetchPhaseTest {
 
     @Test
     fun `execute writes running marker with runs slash prefix when entries are non-empty`() {
+        val objectStorage = mock<ObjectStorage>()
+
         val batchSupport = mock<BatchFetchSupport>()
         whenever(batchSupport.newRateLimiter(any()))
             .thenReturn(io.github.bucket4j.Bucket.builder()
@@ -38,6 +41,7 @@ class ItemEquipmentFetchPhaseTest {
         val externalApiMetrics = mock<ExternalApiMetrics>()
 
         val phase = ItemEquipmentFetchPhase(
+            objectStorage = objectStorage,
             chunkingProperties = SnapshotChunkingProperties(),
             metrics = externalApiMetrics,
             fetchMetrics = mock<SnapshotFetchMetrics>(),

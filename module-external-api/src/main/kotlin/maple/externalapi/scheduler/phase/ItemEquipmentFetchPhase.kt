@@ -8,6 +8,7 @@ import java.util.concurrent.ExecutorService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.future
+import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Component
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class ItemEquipmentFetchPhase(
+    private val objectStorage: ObjectStorage,
     private val chunkingProperties: SnapshotChunkingProperties,
     private val metrics: ExternalApiMetrics,
     private val fetchMetrics: SnapshotFetchMetrics,

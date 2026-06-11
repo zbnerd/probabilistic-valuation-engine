@@ -18,15 +18,16 @@ class UrgentChunkArtifactWriter(
 ) {
     /**
      * Appends [record] to a fresh chunk object under
-     * `runs/{runId}/{endpointDir}/chunks/part-000001.jsonl.gz` and returns
-     * the object key `runs/{runId}/{endpointDir}/chunks/part-000001.jsonl.gz`.
+     * `runs/{runId}/{endpointDir}/chunks/part-{uuid}.jsonl.gz` and returns
+     * the object key. UUID suffix prevents concurrent urgent writes for the
+     * same runId/endpoint from clobbering each other on the same key.
      */
     fun writeChunk(
         runId: String,
         endpointDir: String,
         record: SnapshotChunkRecord.Success,
     ): String {
-        val chunkKey = "runs/$runId/$endpointDir/chunks/part-000001.jsonl.gz"
+        val chunkKey = "runs/$runId/$endpointDir/chunks/part-${java.util.UUID.randomUUID()}.jsonl.gz"
         val writer = GzipJsonlChunkWriter(
             chunkKey = chunkKey,
             partIndex = 1,
@@ -36,7 +37,7 @@ class UrgentChunkArtifactWriter(
             objectStorage = objectStorage,
         )
         writer.append(record)
-        val stats = writer.close()
-        return "runs/$runId/$endpointDir/chunks/${stats.path}"
+        writer.close()
+        return chunkKey
     }
 }

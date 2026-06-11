@@ -58,41 +58,48 @@ class ChunkedSnapshotSink(
 
     fun close() {
         accepting.set(false)
-        if (!queue.offer(SnapshotChunkRecord.CloseSignal, 30, java.util.concurrent.TimeUnit.SECONDS)) {
-            throw IllegalStateException("failed to enqueue close signal after 30s")
+        try {
+            if (!queue.offer(SnapshotChunkRecord.CloseSignal, 30, java.util.concurrent.TimeUnit.SECONDS)) {
+                throw IllegalStateException("failed to enqueue close signal after 30s")
+            }
+
+            writerExecutor.shutdown()
+            if (!writerExecutor.awaitTermination(60, TimeUnit.SECONDS)) {
+                log.warn("[Sink] writer executor did not terminate within 60s, forcing shutdown")
+                writerExecutor.shutdownNow()
+            }
+
+            val err = writerError.get()
+            val manifest = fileManager.manifest()
+            if (err != null) {
+                fileManager.cleanupOnFailure()
+                eventPublisher.publishRunFailed(manifest, endpoint, err.message ?: "unknown")
+                throw RuntimeException("writer thread failed: ${err.message}", err)
+            }
+
+            // close current chunk and write manifest + _SUCCESS marker
+            fileManager.closeCurrentChunk()?.let { stats ->
+                eventPublisher.publishChunkReady(stats, manifest.runId, endpoint)
+            }
+            fileManager.writeManifestAndSuccessMarker()
+            fileManager.deleteRunningMarker()
+
+            log.info(
+                "[Sink] closed: endpoint={}, chunks={}, records={}, failed={}",
+                endpoint,
+                manifest.chunks.size,
+                manifest.totalRecords,
+                manifest.totalFailed,
+            )
+
+            // publish run completed (after _SUCCESS)
+            eventPublisher.publishRunCompleted(manifest, endpoint)
+        } finally {
+            // Ensure writerExecutor is fully terminated even if an earlier step throws.
+            if (!writerExecutor.isTerminated) {
+                writerExecutor.shutdownNow()
+            }
         }
-
-        writerExecutor.shutdown()
-        if (!writerExecutor.awaitTermination(60, TimeUnit.SECONDS)) {
-            log.warn("[Sink] writer executor did not terminate within 60s, forcing shutdown")
-            writerExecutor.shutdownNow()
-        }
-
-        val err = writerError.get()
-        val manifest = fileManager.manifest()
-        if (err != null) {
-            fileManager.cleanupOnFailure()
-            eventPublisher.publishRunFailed(manifest, endpoint, err.message ?: "unknown")
-            throw RuntimeException("writer thread failed: ${err.message}", err)
-        }
-
-        // close current chunk and write manifest + _SUCCESS marker
-        fileManager.closeCurrentChunk()?.let { stats ->
-            eventPublisher.publishChunkReady(stats, manifest.runId, endpoint)
-        }
-        fileManager.writeManifestAndSuccessMarker()
-        fileManager.deleteRunningMarker()
-
-        log.info(
-            "[Sink] closed: endpoint={}, chunks={}, records={}, failed={}",
-            endpoint,
-            manifest.chunks.size,
-            manifest.totalRecords,
-            manifest.totalFailed,
-        )
-
-        // publish run completed (after _SUCCESS)
-        eventPublisher.publishRunCompleted(manifest, endpoint)
     }
 
     private fun runWriterLoop() {

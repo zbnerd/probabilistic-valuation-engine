@@ -1,6 +1,7 @@
 package maple.externalapi.scheduler.phase
 
 import maple.expectation.common.storage.ObjectStorage
+import org.springframework.stereotype.Component
 import java.time.Clock
 
 /**
@@ -9,6 +10,7 @@ import java.time.Clock
  * `Clock.instant().toString()`). Existence is checked via
  * `ObjectStorage.exists()`; the content is informational only.
  */
+@Component
 class RunMarkerWriter(
     private val clock: Clock,
     private val objectStorage: ObjectStorage,

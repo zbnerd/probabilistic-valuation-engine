@@ -4,9 +4,10 @@ import java.io.InputStream
 import java.time.Instant
 
 /**
- * Unified object storage abstraction. Replaces the three local filesystem port
- * interfaces (SnapshotObjectStore, ExternalApiArtifactStorePort, calculator's
- * local ObjectStorage) plus direct Paths.get() access in synchronizer readers.
+ * Unified object storage abstraction. Replaces the deprecated per-module
+ * filesystem port interfaces (SnapshotObjectStore, ExternalApiArtifactStorePort)
+ * and the calculator's local ObjectStorage, plus direct Paths.get() access
+ * in synchronizer readers.
  *
  * Implementations: LocalFsObjectStorage (module-infra), MinioObjectStorage (module-infra).
  * Selected at boot via storage.backend=local|minio property.

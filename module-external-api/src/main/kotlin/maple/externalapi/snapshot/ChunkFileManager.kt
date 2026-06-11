@@ -44,6 +44,12 @@ class ChunkFileManager(
     private val manifestKey: String = "$runKey/manifest.json"
     private val successKey: String = "$runKey/_SUCCESS"
 
+    private val failedWriter = SnapshotFailedRecordWriter(
+        runKey = runKey,
+        objectMapper = objectMapper,
+        objectStorage = objectStorage,
+    )
+
     private val manifest = SnapshotChunkManifest(
         runId = runKey.substringAfter("runs/").substringBefore('/'),
         endpoint = endpoint,
@@ -68,8 +74,7 @@ class ChunkFileManager(
     }
 
     fun appendFailure(record: SnapshotChunkRecord.Failure) {
-        val line = buildFailureLine(record)
-        objectStorage.put(failedKey, line)
+        failedWriter.append(record)
         failedCount++
     }
 
@@ -125,24 +130,6 @@ class ChunkFileManager(
             objectStorage = objectStorage,
             clock = clock,
         )
-    }
-
-    private fun buildFailureLine(record: SnapshotChunkRecord.Failure): ByteArray {
-        val buf = java.io.ByteArrayOutputStream()
-        buf.write("{\"endpoint\":".toByteArray())
-        buf.write(objectMapper.writeValueAsBytes(record.endpoint))
-        buf.write(",\"keyType\":".toByteArray())
-        buf.write(objectMapper.writeValueAsBytes(record.keyType))
-        buf.write(",\"key\":".toByteArray())
-        buf.write(objectMapper.writeValueAsBytes(record.key))
-        buf.write(",\"status\":\"FAILURE\",\"httpStatus\":".toByteArray())
-        buf.write(record.httpStatus.toString().toByteArray())
-        buf.write(",\"fetchedAt\":".toByteArray())
-        buf.write(objectMapper.writeValueAsBytes(record.fetchedAt.toString()))
-        buf.write(",\"error\":".toByteArray())
-        buf.write(objectMapper.writeValueAsBytes(record.errorMessage))
-        buf.write("}\n".toByteArray())
-        return buf.toByteArray()
     }
 
     private fun toEntry(stats: ChunkStats): ChunkEntry = ChunkEntry(

@@ -86,8 +86,15 @@ class DefaultChunkFileReader(
             throw ex
         }
 
+        // Recent chunk writes carry the response body as a base64-encoded
+        // ByteArray field `bodyBytes` (Jackson serializes ByteArray as
+        // base64). Older writes inlined the body as a nested `body` JSON
+        // object. Accept either shape so the sync does not silently drop
+        // every record from the new format.
         val status = node.get("status")?.asText()
-        if (status != "SUCCESS") {
+        val httpStatus = node.get("httpStatus")?.asInt(0) ?: 0
+        val isSuccess = status == "SUCCESS" || (status.isNullOrBlank() && httpStatus == 200)
+        if (!isSuccess) {
             filtered.incrementAndGet()
             readerMetrics.incrementFiltered("basic_chunk", "status")
             return null
@@ -107,7 +114,7 @@ class DefaultChunkFileReader(
             }
             return null
         }
-        val body = node.get("body") ?: run {
+        val body = extractBody(node) ?: run {
             missingFields.incrementAndGet()
             readerMetrics.incrementMissingField("basic_chunk")
             if (missingFields.get() > missingFieldThreshold) {
@@ -133,6 +140,26 @@ class DefaultChunkFileReader(
             compressedBody = maple.expectation.util.GzipUtils.compress(bodyBytes),
             bodyHash = maple.expectation.util.HashUtils.sha256Hex(bodyBytes),
         )
+    }
+
+    /**
+     * Return the response body node, accepting both:
+     *  - inline `body` JSON object (older writes)
+     *  - `bodyBytes` (base64-encoded JSON bytes) — Jackson default for ByteArray
+     *
+     * Returns null if neither is present, or if bodyBytes base64 / JSON parse fails.
+     */
+    private fun extractBody(node: com.fasterxml.jackson.databind.JsonNode): com.fasterxml.jackson.databind.JsonNode? {
+        val inline = node.get("body")
+        if (inline != null && !inline.isMissingNode && !inline.isNull) return inline
+        val bodyBytesField = node.get("bodyBytes")
+        if (bodyBytesField == null || bodyBytesField.isMissingNode || bodyBytesField.isNull) return null
+        val b64 = bodyBytesField.asText("")
+        if (b64.isBlank()) return null
+        return runCatching {
+            val raw = java.util.Base64.getDecoder().decode(b64)
+            objectMapper.readTree(raw)
+        }.getOrNull()
     }
 
     private fun parseResultChunk(rawBytes: ByteArray, objectKey: String): List<GroupedEquipmentResult> {

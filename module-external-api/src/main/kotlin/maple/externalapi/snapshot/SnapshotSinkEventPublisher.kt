@@ -47,7 +47,13 @@ class SnapshotSinkEventPublisher(
             runId = runId,
             endpoint = endpoint,
             chunkId = chunkId,
-            objectKey = "runs/$runId/$endpoint/${stats.path}",
+            // Writer (ChunkFileManager.newChunkWriter) puts chunks under
+            // `$runKey/chunks/...`. event.objectKey must match that path so
+            // the calculator/sync consumers can resolve the chunk via
+            // objectStorage.exists(event.objectKey). Without the /chunks/
+            // segment the consumers see "source chunk not found" even
+            // though the object exists.
+            objectKey = "runs/$runId/$endpoint/chunks/${stats.path}",
             recordCount = stats.recordCount,
             uncompressedBytes = stats.uncompressedBytes,
             compressedBytes = stats.compressedBytes,

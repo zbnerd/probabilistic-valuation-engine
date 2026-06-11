@@ -10,14 +10,16 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import maple.expectation.common.storage.ObjectInfo
 import maple.expectation.common.storage.ObjectStorage
+import java.io.ByteArrayOutputStream
 import java.time.Instant
+import java.util.zip.GZIPOutputStream
 
 class OcidCacheProviderTest {
 
     private val objectMapper = ObjectMapper().registerModule(kotlinModule())
 
     @Test
-    fun `refresh picks latest mapping by lastModified and parses JSONL entries`() {
+    fun `refresh picks latest mapping by lastModified and parses gzipped JSONL entries`() {
         val storage = mock<ObjectStorage>()
         whenever(storage.listByPrefix("ocid-mapping/")).thenReturn(listOf(
             ObjectInfo("ocid-mapping/ocid-mapping-20260609-090000.jsonl.gz", 100, Instant.parse("2026-06-09T09:00:00Z")),
@@ -28,7 +30,7 @@ class OcidCacheProviderTest {
             {"userIgn":"캐릭터A","ocid":"ocid-aaaa"}
             {"userIgn":"캐릭터B","ocid":"ocid-bbbb"}
         """.trimIndent()
-        whenever(storage.getStream(any())).thenReturn(jsonl.byteInputStream())
+        whenever(storage.getStream(any())).thenReturn(gzip(jsonl).inputStream())
 
         val provider = OcidCacheProvider(storage, objectMapper)
         val cache = provider.refresh()
@@ -52,7 +54,7 @@ class OcidCacheProviderTest {
             {"userIgn":"캐릭터B"}
             {"userIgn":"","ocid":"ocid-cccc"}
         """.trimIndent()
-        whenever(storage.getStream(any())).thenReturn(jsonl.byteInputStream())
+        whenever(storage.getStream(any())).thenReturn(gzip(jsonl).inputStream())
 
         val provider = OcidCacheProvider(storage, objectMapper)
         val cache = provider.refresh()
@@ -70,5 +72,11 @@ class OcidCacheProviderTest {
         val cache = provider.refresh()
 
         assertTrue(cache.isEmpty())
+    }
+
+    private fun gzip(input: String): ByteArray {
+        val out = ByteArrayOutputStream()
+        GZIPOutputStream(out).use { it.write(input.toByteArray(Charsets.UTF_8)) }
+        return out.toByteArray()
     }
 }

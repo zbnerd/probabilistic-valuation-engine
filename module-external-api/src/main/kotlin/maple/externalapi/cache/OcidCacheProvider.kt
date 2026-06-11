@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.common.storage.ObjectStorage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.io.BufferedInputStream
 import java.util.concurrent.atomic.AtomicReference
+import java.util.zip.GZIPInputStream
 
 /**
  * In-memory cache of userIgn → ocid, loaded from the latest
@@ -12,9 +14,9 @@ import java.util.concurrent.atomic.AtomicReference
  * Picked by `ObjectInfo.lastModified` (max).
  *
  * Each line of the gzipped JSONL is a `{"userIgn":"...","ocid":"..."}` object
- * (matching the writer in [OcidLookupPhase.writeMappingGzipped]). Earlier
- * revisions of this reader split on `\t` and silently dropped all lines; the
- * parser below restores the JSON contract.
+ * (matching the writer in [OcidLookupPhase.writeMappingGzipped]). The reader
+ * wraps the stream in [GZIPInputStream] because the ObjectStorage impls do
+ * not auto-decompress (same as the read path in [OcidLookupPhase]).
  */
 @Component
 class OcidCacheProvider(
@@ -31,7 +33,7 @@ class OcidCacheProvider(
             log.info("[OcidCache] no ocid-mapping objects found, cache remains empty")
             return emptyMap()
         }
-        objectStorage.getStream(latest.key).bufferedReader().useLines { lines ->
+        GZIPInputStream(BufferedInputStream(objectStorage.getStream(latest.key))).bufferedReader().useLines { lines ->
             val map = HashMap<String, String>()
             var parseErrors = 0
             for (line in lines) {

@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.RunStatusTracker
+import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
 import org.assertj.core.api.Assertions.assertThat
@@ -44,10 +45,17 @@ class ExternalApiSchedulerTest {
         val rankingProvider = mock<ObjectProvider<RankingFetchPhase>>()
         whenever(rankingProvider.ifAvailable).thenReturn(rankingPhase)
 
+        val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
+        whenever(charBasicProvider.ifAvailable).thenReturn(null)
+
+        val itemEquipmentLoop = mock<ItemEquipmentContinuousLoop>()
+
         val scheduler = ExternalApiScheduler(
             ocidLookupPhase = ocidLookupPhase,
             ocidCacheProvider = ocidCache,
             rankingFetchPhaseProvider = rankingProvider,
+            characterBasicPhaseProvider = charBasicProvider,
+            itemEquipmentContinuousLoop = itemEquipmentLoop,
             runStatusTracker = runStatusTracker,
             schedulerMetrics = schedulerMetrics,
             runOnStartup = false,

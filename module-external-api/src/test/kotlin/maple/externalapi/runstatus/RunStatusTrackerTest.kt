@@ -58,6 +58,20 @@ class RunStatusTrackerTest {
     }
 
     @Test
+    fun `CHARACTER_BASIC_DONE is non-terminal`() {
+        // Regression: the new intermediate phase must NOT be reported as terminal
+        // by the run-status API; otherwise /api/internal/run-status shows
+        // terminal=true while ITEM_EQUIPMENT is still in flight.
+        tracker.startRun("run-1")
+        tracker.transitionPhase(PipelinePhase.CHARACTER_BASIC)
+        tracker.transitionPhase(PipelinePhase.CHARACTER_BASIC_DONE)
+
+        val status = tracker.getCurrentStatus()!!
+        assertThat(status.phase).isEqualTo(PipelinePhase.CHARACTER_BASIC_DONE)
+        assertThat(status.isTerminal).isFalse()
+    }
+
+    @Test
     fun `getLastCompletedRun returns most recent completed`() {
         tracker.startRun("run-1")
         tracker.completeRun("run-1", 10, 1000L)

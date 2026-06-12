@@ -1,7 +1,6 @@
 package maple.externalapi.scheduler
 
 import maple.externalapi.cache.OcidCacheProvider
-import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
@@ -31,7 +30,6 @@ class ExternalApiScheduler(
     private val characterBasicPhaseProvider: ObjectProvider<CharacterBasicFetchPhase>,
     private val itemEquipmentContinuousLoop: ItemEquipmentContinuousLoop,
     private val runStatusTracker: RunStatusTracker,
-    private val schedulerMetrics: SchedulerMetrics,
     @Value("\${external-api.schedule.run-on-startup:false}")
     private val runOnStartup: Boolean,
     @Value("\${external-api.schedule.skip-character-basic:false}")
@@ -128,12 +126,14 @@ class ExternalApiScheduler(
                         runStatusTracker.failRun(runId, ex.message ?: "unknown")
                     }
                 } else {
-                    val chunks = schedulerMetrics.drainRunChunks().toInt()
-                    val records = schedulerMetrics.drainRunRecords()
-                    runStatusTracker.getCurrentStatus()?.runId?.let { runId ->
-                        runStatusTracker.completeRun(runId, chunks, records)
-                    }
-                    log.info("[Scheduler] daily refresh completed, chunks={} records={}", chunks, records)
+                    // Char-basic finished; item-equipment runs in a SEPARATE continuous loop
+                    // (ItemEquipmentContinuousLoop) and signals run completion there. Marking
+                    // CHARACTER_BASIC_DONE here so observers (Airflow sensor, /run-status API)
+                    // can distinguish "char-basic finished, item-equipment still in flight"
+                    // from "fully completed." ItemEquipmentContinuousLoop's whenComplete
+                    // checks this phase and only then calls completeRun.
+                    runStatusTracker.transitionPhase(PipelinePhase.CHARACTER_BASIC_DONE)
+                    log.info("[Scheduler] char-basic finished, item-equipment in continuous loop")
                 }
                 releaseLock()
             }

@@ -6,6 +6,7 @@ enum class PipelinePhase {
     OCID_LOOKUP,
     OCID_CACHE_REFRESH,
     CHARACTER_BASIC,
+    CHARACTER_BASIC_DONE,
     ITEM_EQUIPMENT,
     COMPLETED,
     FAILED,

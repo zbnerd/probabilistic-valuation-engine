@@ -34,7 +34,10 @@ class SnapshotSinkEventPublisherTest {
         whenever(sinkEventPublisher.publishChunkReady(any())).thenReturn(CompletableFuture.completedFuture(null))
 
         val stats = ChunkStats(
-            path = "chunks/part-000001.jsonl.gz",
+            // GzipJsonlChunkWriter.close() stores `chunkKey.substringAfterLast('/')`
+            // in stats.path — i.e. the filename only. The publisher prepends the
+            // `runs/{runId}/{endpoint}/chunks/` segment.
+            path = "part-000001.jsonl.gz",
             partIndex = 1,
             recordCount = 42,
             uncompressedBytes = 1000L,

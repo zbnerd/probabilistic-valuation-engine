@@ -10,6 +10,7 @@ import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
+import maple.externalapi.scheduler.phase.RunIdGenerator
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
@@ -34,6 +35,7 @@ class ItemEquipmentContinuousLoop(
     private val ocidCacheProvider: OcidCacheProvider,
     private val schedulerMetrics: SchedulerMetrics,
     private val runStatusTracker: RunStatusTracker,
+    private val runIdGenerator: RunIdGenerator,
     @Qualifier("externalApiSchedulerExecutor") private val executor: ExecutorService,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentContinuousLoop::class.java)
@@ -83,8 +85,17 @@ class ItemEquipmentContinuousLoop(
         }
         schedulerMetrics.incrementLockAcquired("item_equipment")
 
+        // Generate a per-cycle runId and tell the run-status tracker. The
+        // item-equipment loop runs indefinitely across multiple "runs" of
+        // ranking→ocid→character-basic (each of which writes a fresh OCID
+        // mapping file). Without this, the previous run's FAILED status
+        // would stay on /api/internal/run-status even though a brand-new
+        // cycle is in flight under a new runId.
+        val cycleRunId = runIdGenerator.newRunId()
+        runStatusTracker.startRun(cycleRunId)
+
         CompletableFuture.completedFuture(null)
-            .thenCompose { itemEquipmentFetchPhase.execute(executor, entries) }
+            .thenCompose { itemEquipmentFetchPhase.execute(executor, entries, cycleRunId) }
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)

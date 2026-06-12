@@ -89,7 +89,7 @@ class RankingFetchPhaseTest {
             objectStorage = storage,
         )
 
-        val result: CompletableFuture<String> = phase.execute(Executors.newSingleThreadExecutor())
+        val result: CompletableFuture<String> = phase.execute(Executors.newSingleThreadExecutor(), "20260610-xyz")
         val runKey = result.get(15, TimeUnit.SECONDS)
 
         assertTrue(

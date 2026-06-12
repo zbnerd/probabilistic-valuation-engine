@@ -166,7 +166,7 @@ class DataflowContractTest {
         val executor = Executors.newSingleThreadExecutor { runnable ->
             Thread.ofPlatform().name("ranking-worker").unstarted(runnable)
         }
-        val runKey: String = rankingPhase.execute(executor).get(30, TimeUnit.SECONDS)
+        val runKey: String = rankingPhase.execute(executor, "20260610-xyz").get(30, TimeUnit.SECONDS)
         assertThat(runKey).startsWith("runs/")
 
         // act: run OCID lookup — it's suspend, so wrap in runBlocking

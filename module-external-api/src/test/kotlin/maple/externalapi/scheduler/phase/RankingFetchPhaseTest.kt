@@ -16,11 +16,13 @@ import maple.externalapi.snapshot.SinkEventPublisher
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.SnapshotSinkEventPublisher
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.expectation.common.storage.PutResult
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
+import java.io.InputStream
 import java.time.Clock
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
@@ -35,6 +37,22 @@ class RankingFetchPhaseTest {
     @Test
     fun `execute returns runKey as String starting with runs slash`() {
         val storage = mock<ObjectStorage>()
+        // RankingFetchPhase writes a single empty chunk (empty ranking array) at
+        // close via the new GzipJsonlChunkWriter → putStream path. Mock it so
+        // close() returns a non-null PutResult.
+        whenever(storage.putStream(any<String>(), any<InputStream>()))
+            .thenAnswer { invocation ->
+                val key: String = invocation.getArgument(0)
+                val input: InputStream = invocation.getArgument(1)
+                PutResult(key, input.readBytes().size.toLong(), null)
+            }
+        whenever(storage.put(any<String>(), any<ByteArray>()))
+            .thenAnswer { invocation ->
+                val key: String = invocation.getArgument(0)
+                val bytes: ByteArray = invocation.getArgument(1)
+                PutResult(key, bytes.size.toLong(), null)
+            }
+
         val objectMapper = ObjectMapper()
             .registerModule(kotlinModule())
             .registerModule(JavaTimeModule())
@@ -71,7 +89,7 @@ class RankingFetchPhaseTest {
             objectStorage = storage,
         )
 
-        val result: CompletableFuture<String> = phase.execute(Executors.newSingleThreadExecutor())
+        val result: CompletableFuture<String> = phase.execute(Executors.newSingleThreadExecutor(), "20260610-xyz")
         val runKey = result.get(15, TimeUnit.SECONDS)
 
         assertTrue(

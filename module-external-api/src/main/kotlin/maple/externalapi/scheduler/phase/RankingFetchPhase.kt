@@ -48,8 +48,7 @@ class RankingFetchPhase(
 ) {
     private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
 
-    fun execute(workerExecutor: ExecutorService): CompletableFuture<String> {
-        val runId = SchedulerPhaseUtils.newRunId()
+    fun execute(workerExecutor: ExecutorService, runId: String): CompletableFuture<String> {
         val date = LocalDate.now().minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
         val runKey = "runs/$runId"
         val endpointConfig = chunkingProperties.configFor("ranking-overall")

@@ -34,10 +34,11 @@ class EndpointSinkFactoryTest {
     fun `createForCharacterBasic produces a sink whose chunk keys live under the supplied runKey`() {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
-        whenever(storage.put(keyCaptor.capture(), any<ByteArray>()))
+        whenever(storage.putStream(keyCaptor.capture(), any<java.io.InputStream>()))
             .thenAnswer { invocation ->
                 val key: String = invocation.getArgument(0)
-                PutResult(key, 0L, null)
+                val input: java.io.InputStream = invocation.getArgument(1)
+                PutResult(key, input.readBytes().size.toLong(), null)
             }
 
         val characterBasicPublisher = mock<SnapshotChunkEventPublisher>()

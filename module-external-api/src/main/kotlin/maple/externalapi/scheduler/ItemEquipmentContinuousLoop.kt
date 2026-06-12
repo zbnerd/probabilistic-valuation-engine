@@ -7,6 +7,8 @@ import java.util.concurrent.locks.ReentrantLock
 import maple.expectation.error.exception.DistributedLockException
 import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.metrics.SchedulerMetrics
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -17,6 +19,12 @@ import org.springframework.stereotype.Component
  * Separated from [ExternalApiScheduler] so the scheduler can focus on the daily
  * pipeline trigger + lifecycle, and this class focuses on the long-running cycle.
  *
+ * Run-completion signal: ExternalApiScheduler transitions the run to
+ * [PipelinePhase.CHARACTER_BASIC_DONE] when char-basic ends. The first item-equipment
+ * cycle that completes AFTER that phase transition signals full run completion
+ * (sink closed, manifest + _SUCCESS marker written) via RunStatusTracker.completeRun.
+ * The phase guard prevents subsequent cycles from re-completing the same run.
+ *
  * State: one `ReentrantLock` + condition for the distributed mutex, and three
  * `AtomicBoolean`s for "loop started", "loop running", and "shutdown requested".
  */
@@ -25,6 +33,7 @@ class ItemEquipmentContinuousLoop(
     private val itemEquipmentFetchPhase: ItemEquipmentFetchPhase,
     private val ocidCacheProvider: OcidCacheProvider,
     private val schedulerMetrics: SchedulerMetrics,
+    private val runStatusTracker: RunStatusTracker,
     @Qualifier("externalApiSchedulerExecutor") private val executor: ExecutorService,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentContinuousLoop::class.java)
@@ -79,6 +88,23 @@ class ItemEquipmentContinuousLoop(
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)
+                } else {
+                    // Cycle finished cleanly (sink closed, manifest + _SUCCESS written).
+                    // If char-basic has already finished for the current run, this cycle
+                    // represents run completion. Guarded by phase to make it idempotent —
+                    // subsequent cycles see COMPLETED and skip the completeRun call.
+                    val current = runStatusTracker.getCurrentStatus()
+                    if (current != null &&
+                        current.phase == PipelinePhase.CHARACTER_BASIC_DONE
+                    ) {
+                        val chunks = schedulerMetrics.drainRunChunks().toInt()
+                        val records = schedulerMetrics.drainRunRecords()
+                        runStatusTracker.completeRun(current.runId, chunks, records)
+                        log.info(
+                            "[Scheduler] run completed, runId={} chunks={} records={}",
+                            current.runId, chunks, records,
+                        )
+                    }
                 }
                 releaseLock()
                 executor.submit { runItemEquipmentCycle() }

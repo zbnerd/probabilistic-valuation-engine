@@ -17,9 +17,11 @@ import org.mockito.kotlin.whenever
 import java.time.Instant
 
 /**
- * Migration Task 8: writer must put a single chunk at
- * `runs/{runId}/{endpointDir}/chunks/part-000001.jsonl.gz` and return
- * that key (not a local filesystem path).
+ * Migration Task 8: writer must put a single chunk under
+ * `runs/{runId}/{endpointDir}/chunks/` and return that key (not a local
+ * filesystem path). The part suffix is a UUID, not a counter — this prevents
+ * concurrent urgent writes for the same runId/endpoint from clobbering each
+ * other on the same key.
  */
 class UrgentChunkArtifactWriterTest {
 
@@ -28,7 +30,7 @@ class UrgentChunkArtifactWriterTest {
         .registerModule(JavaTimeModule())
 
     @Test
-    fun `writeChunk returns runs slash runId slash endpoint slash chunks slash part key and puts to ObjectStorage`() {
+    fun `writeChunk returns runs slash runId slash endpoint slash chunks slash part uuid key and puts to ObjectStorage`() {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
         val bytesCaptor = argumentCaptor<ByteArray>()
@@ -52,7 +54,7 @@ class UrgentChunkArtifactWriterTest {
             ),
         )
 
-        assertThat(key).isEqualTo("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz")
+        assertThat(key).matches("^runs/abc/ranking-overall/chunks/part-[0-9a-f-]{36}\\.jsonl\\.gz$")
         assertThat(keyCaptor.firstValue).isEqualTo(key)
         assertThat(bytesCaptor.firstValue).isNotEmpty
         verify(storage).put(any<String>(), any<ByteArray>())

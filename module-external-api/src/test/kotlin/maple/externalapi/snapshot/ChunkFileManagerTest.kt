@@ -14,6 +14,7 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import java.io.InputStream
 import java.time.Clock
 import java.time.Instant
 
@@ -71,10 +72,12 @@ class ChunkFileManagerTest {
     fun `appendSuccess accumulates records and rotates when limit hit`() {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
-        whenever(storage.put(keyCaptor.capture(), any<ByteArray>()))
+        whenever(storage.putStream(keyCaptor.capture(), any<InputStream>()))
             .thenAnswer { invocation ->
                 val key: String = invocation.getArgument(0)
-                PutResult(key, 0L, null)
+                val input: InputStream = invocation.getArgument(1)
+                val bytes = input.readBytes()
+                PutResult(key, bytes.size.toLong(), null)
             }
 
         val manager = ChunkFileManager(
@@ -108,6 +111,6 @@ class ChunkFileManagerTest {
         assertThat(capturedKeys).hasSize(2)
         assertThat(capturedKeys[0]).isEqualTo("runs/testrun/ranking-overall/chunks/part-000001.jsonl.gz")
         assertThat(capturedKeys[1]).isEqualTo("runs/testrun/ranking-overall/chunks/part-000002.jsonl.gz")
-        verify(storage, org.mockito.kotlin.times(2)).put(any<String>(), any<ByteArray>())
+        verify(storage, org.mockito.kotlin.times(2)).putStream(any<String>(), any<InputStream>())
     }
 }

@@ -50,7 +50,6 @@ class ItemEquipmentFetchPhaseTest {
             permitsPerSecond = 1000,
             batchSize = 10,
             clock = Clock.systemUTC(),
-            runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runMarkerWriter = runMarkerWriter,
             schedulerProgressLogger = mock<SchedulerProgressLogger>(),
         )
@@ -61,7 +60,9 @@ class ItemEquipmentFetchPhaseTest {
             // We don't need the full batch to run — the marker is written
             // before the batch loop. Allow the rest to fail at the mocked
             // sinkFactory; the marker write is what we assert.
-            runCatching { phase.execute(executor, entries).get(5, TimeUnit.SECONDS) }
+            runCatching {
+                phase.execute(executor, entries, "20260612-test-000000000").get(5, TimeUnit.SECONDS)
+            }
         } finally {
             executor.shutdownNow()
         }

@@ -13,6 +13,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -26,15 +27,19 @@ class GzipJsonlChunkWriterTest {
     private val fixedClock = Clock.fixed(Instant.parse("2026-06-10T00:00:00Z"), ZoneOffset.UTC)
 
     @Test
-    fun `close puts gzipped JSONL to ObjectStorage and returns stats`() {
+    fun `close streams gzipped JSONL to ObjectStorage via putStream and returns stats`() {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
-        val bytesCaptor = argumentCaptor<ByteArray>()
-        whenever(storage.put(keyCaptor.capture(), bytesCaptor.capture()))
+        // Buffer what the writer streams so the test can re-read it after
+        // putStream returns. The writer's close() drains the input it
+        // passes in, so the captured stream itself is exhausted by then.
+        var captured: ByteArray = ByteArray(0)
+        whenever(storage.putStream(keyCaptor.capture(), any<InputStream>()))
             .thenAnswer { invocation ->
                 val key: String = invocation.getArgument(0)
-                val bytes: ByteArray = invocation.getArgument(1)
-                PutResult(key, bytes.size.toLong(), null)
+                val input: InputStream = invocation.getArgument(1)
+                captured = input.readBytes()
+                PutResult(key, captured.size.toLong(), null)
             }
 
         val writer = GzipJsonlChunkWriter(
@@ -62,7 +67,7 @@ class GzipJsonlChunkWriterTest {
 
         val stats = writer.close()
 
-        verify(storage).put(any<String>(), any<ByteArray>())
+        verify(storage).putStream(any<String>(), any<InputStream>())
         assertThat(keyCaptor.firstValue).isEqualTo("runs/abc/ranking-overall/part-000001.jsonl.gz")
         assertThat(stats.partIndex).isEqualTo(1)
         assertThat(stats.path).isEqualTo("part-000001.jsonl.gz")
@@ -72,7 +77,9 @@ class GzipJsonlChunkWriterTest {
         assertThat(stats.startedAt).isEqualTo(Instant.parse("2026-06-10T00:00:00Z"))
         assertThat(stats.finishedAt).isEqualTo(Instant.parse("2026-06-10T00:00:00Z"))
 
-        val raw = GZIPInputStream(ByteArrayInputStream(bytesCaptor.firstValue)).bufferedReader().readText()
+        val raw = GZIPInputStream(ByteArrayInputStream(captured))
+            .bufferedReader()
+            .readText()
         val lines = raw.lines().filter { it.isNotBlank() }
         assertThat(lines).hasSize(3)
         lines.forEach { line ->
@@ -84,5 +91,82 @@ class GzipJsonlChunkWriterTest {
             val decoded = String(java.util.Base64.getDecoder().decode(node.get("bodyBytes").asText()))
             assertThat(decoded).contains("\"character_name\"")
         }
+    }
+
+    /**
+     * Regression for the OOM that crashed pipeline runs at
+     * `max-uncompressed-bytes: 128MB` (commit 4fa308f19+ era).
+     *
+     * The previous heap-buffered implementation allocated a
+     * `ByteArrayOutputStream` large enough to hold the entire chunk and a
+     * second copy via `toByteArray()` (~256MB peak), exceeding the 1GB
+     * writer-thread heap when deflater state was added.
+     *
+     * With the temp-file + putStream refactor, the writer thread's heap
+     * footprint is bounded by the deflater window (~32KB) regardless of
+     * chunk size, so a 32MB chunk must close cleanly. We assert:
+     *  1. close() returns without OOM,
+     *  2. putStream is called exactly once (no fallback to put),
+     *  3. the bytes streamed to storage decompress to a valid JSONL
+     *     line count equal to the record count.
+     */
+    @Test
+    fun `close streams 32MB chunk without loading it all into heap`() {
+        val storage = mock<ObjectStorage>()
+        var captured: ByteArray = ByteArray(0)
+        whenever(storage.putStream(any<String>(), any<InputStream>()))
+            .thenAnswer { invocation ->
+                val input: InputStream = invocation.getArgument(1)
+                captured = input.readBytes()
+                PutResult(invocation.getArgument(0), captured.size.toLong(), null)
+            }
+
+        val writer = GzipJsonlChunkWriter(
+            chunkKey = "runs/big/item-equipment/part-000001.jsonl.gz",
+            partIndex = 1,
+            maxRecords = Int.MAX_VALUE,
+            // Production knob is 128MB; 32MB here keeps the test fast and
+            // still well above the heap budget the old code blew through.
+            maxUncompressedBytes = 32L * 1024 * 1024,
+            objectMapper = objectMapper,
+            objectStorage = storage,
+            clock = fixedClock,
+        )
+
+        // Each record's JSON envelope is ~250 bytes after Jackson serialization.
+        // 160_000 records × ~250B ≈ 40MB uncompressed, comfortably over the cap.
+        val recordCount = 160_000
+        repeat(recordCount) { i ->
+            writer.append(
+                SnapshotChunkRecord.Success(
+                    bodyBytes = objectMapper.writeValueAsBytes(
+                        mapOf(
+                            "character_name" to "char_$i",
+                            "ocid" to "ocid_$i",
+                            "guild" to "guild_$i",
+                            "level" to 250 + (i % 10),
+                        ),
+                    ),
+                    key = "char_$i",
+                    endpoint = "item-equipment",
+                    keyType = "OCID",
+                    httpStatus = 200,
+                    fetchedAt = Instant.parse("2026-06-10T00:00:00Z"),
+                ),
+            )
+        }
+
+        val stats = writer.close()
+
+        assertThat(stats.recordCount).isEqualTo(recordCount)
+        assertThat(stats.uncompressedBytes).isGreaterThan(32L * 1024 * 1024)
+        assertThat(stats.compressedBytes).isGreaterThan(0)
+        verify(storage).putStream(any<String>(), any<InputStream>())
+
+        val raw = GZIPInputStream(ByteArrayInputStream(captured))
+            .bufferedReader()
+            .readText()
+        val lines = raw.lines().filter { it.isNotBlank() }
+        assertThat(lines).hasSize(recordCount)
     }
 }

@@ -14,7 +14,8 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import java.io.ByteArrayInputStream
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Instant
 
 /**
@@ -35,14 +36,11 @@ class UrgentChunkArtifactWriterTest {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
         var captured: ByteArray = ByteArray(0)
-        whenever(storage.putStream(keyCaptor.capture(), any<java.io.InputStream>()))
+        whenever(storage.putFile(keyCaptor.capture(), any<Path>()))
             .thenAnswer { invocation ->
                 val key: String = invocation.getArgument(0)
-                val input: java.io.InputStream = invocation.getArgument(1)
-                // SnapshotFailedRecordWriter streams through putStream; for
-                // the urgent single-record writer, decompress to verify gzip
-                // contents. Use raw readBytes for simplicity.
-                captured = input.readBytes()
+                val path: Path = invocation.getArgument(1)
+                captured = Files.readAllBytes(path)
                 PutResult(key, captured.size.toLong(), null)
             }
 
@@ -66,6 +64,6 @@ class UrgentChunkArtifactWriterTest {
         assertThat(key).matches("^runs/abc/ranking-overall/chunks/part-[0-9a-f-]{36}\\.jsonl\\.gz$")
         assertThat(keyCaptor.firstValue).isEqualTo(key)
         assertThat(captured).isNotEmpty
-        verify(storage).putStream(any<String>(), any<java.io.InputStream>())
+        verify(storage).putFile(any<String>(), any<Path>())
     }
 }

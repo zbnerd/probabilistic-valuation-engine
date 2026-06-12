@@ -13,7 +13,8 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.io.ByteArrayInputStream
-import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -27,18 +28,16 @@ class GzipJsonlChunkWriterTest {
     private val fixedClock = Clock.fixed(Instant.parse("2026-06-10T00:00:00Z"), ZoneOffset.UTC)
 
     @Test
-    fun `close streams gzipped JSONL to ObjectStorage via putStream and returns stats`() {
+    fun `close uploads gzipped JSONL via putFile and returns stats`() {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
-        // Buffer what the writer streams so the test can re-read it after
-        // putStream returns. The writer's close() drains the input it
-        // passes in, so the captured stream itself is exhausted by then.
+        val pathCaptor = argumentCaptor<Path>()
         var captured: ByteArray = ByteArray(0)
-        whenever(storage.putStream(keyCaptor.capture(), any<InputStream>()))
+        whenever(storage.putFile(keyCaptor.capture(), pathCaptor.capture()))
             .thenAnswer { invocation ->
                 val key: String = invocation.getArgument(0)
-                val input: InputStream = invocation.getArgument(1)
-                captured = input.readBytes()
+                val path: Path = invocation.getArgument(1)
+                captured = Files.readAllBytes(path)
                 PutResult(key, captured.size.toLong(), null)
             }
 
@@ -67,8 +66,12 @@ class GzipJsonlChunkWriterTest {
 
         val stats = writer.close()
 
-        verify(storage).putStream(any<String>(), any<InputStream>())
+        verify(storage).putFile(any<String>(), any<Path>())
         assertThat(keyCaptor.firstValue).isEqualTo("runs/abc/ranking-overall/part-000001.jsonl.gz")
+        // The Path argument is captured; its underlying file is deleted by
+        // the writer after putFile returns, so we cannot assert existence
+        // here. The path is verified by the captured bytes being
+        // successfully decompressed (below).
         assertThat(stats.partIndex).isEqualTo(1)
         assertThat(stats.path).isEqualTo("part-000001.jsonl.gz")
         assertThat(stats.recordCount).isEqualTo(3)
@@ -95,29 +98,29 @@ class GzipJsonlChunkWriterTest {
 
     /**
      * Regression for the OOM that crashed pipeline runs at
-     * `max-uncompressed-bytes: 128MB` (commit 4fa308f19+ era).
+     * `max-uncompressed-bytes: 128MB`.
      *
      * The previous heap-buffered implementation allocated a
      * `ByteArrayOutputStream` large enough to hold the entire chunk and a
      * second copy via `toByteArray()` (~256MB peak), exceeding the 1GB
      * writer-thread heap when deflater state was added.
      *
-     * With the temp-file + putStream refactor, the writer thread's heap
+     * With the temp-file + putFile refactor, the writer thread's heap
      * footprint is bounded by the deflater window (~32KB) regardless of
      * chunk size, so a 32MB chunk must close cleanly. We assert:
      *  1. close() returns without OOM,
-     *  2. putStream is called exactly once (no fallback to put),
-     *  3. the bytes streamed to storage decompress to a valid JSONL
+     *  2. putFile is called exactly once (no fallback to put/putStream),
+     *  3. the bytes uploaded to storage decompress to a valid JSONL
      *     line count equal to the record count.
      */
     @Test
-    fun `close streams 32MB chunk without loading it all into heap`() {
+    fun `close uploads 32MB chunk via putFile without loading it all into heap`() {
         val storage = mock<ObjectStorage>()
         var captured: ByteArray = ByteArray(0)
-        whenever(storage.putStream(any<String>(), any<InputStream>()))
+        whenever(storage.putFile(any<String>(), any<Path>()))
             .thenAnswer { invocation ->
-                val input: InputStream = invocation.getArgument(1)
-                captured = input.readBytes()
+                val path: Path = invocation.getArgument(1)
+                captured = Files.readAllBytes(path)
                 PutResult(invocation.getArgument(0), captured.size.toLong(), null)
             }
 
@@ -161,7 +164,7 @@ class GzipJsonlChunkWriterTest {
         assertThat(stats.recordCount).isEqualTo(recordCount)
         assertThat(stats.uncompressedBytes).isGreaterThan(32L * 1024 * 1024)
         assertThat(stats.compressedBytes).isGreaterThan(0)
-        verify(storage).putStream(any<String>(), any<InputStream>())
+        verify(storage).putFile(any<String>(), any<Path>())
 
         val raw = GZIPInputStream(ByteArrayInputStream(captured))
             .bufferedReader()

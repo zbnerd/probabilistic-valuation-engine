@@ -85,4 +85,39 @@ class RunStatusTrackerTest {
         assertThat(last.runId).isEqualTo("run-1")
         assertThat(last.phase).isEqualTo(PipelinePhase.COMPLETED)
     }
+
+    @Test
+    fun `startItemEquipmentCycle sets initial phase to ITEM_EQUIPMENT not RANKING_FETCH`() {
+        // Regression for the bug where ItemEquipmentContinuousLoop called
+        // startRun(), which hardcoded phase=RANKING_FETCH, leaving the
+        // run-status API displaying a misleading "ranking" label for the
+        // entire item-equipment cycle.
+        val runId = "item-equip-cycle-1"
+        tracker.startItemEquipmentCycle(runId)
+
+        val status = tracker.getCurrentStatus()!!
+        assertThat(status.runId).isEqualTo(runId)
+        assertThat(status.phase).isEqualTo(PipelinePhase.ITEM_EQUIPMENT)
+        assertThat(status.isTerminal).isFalse()
+    }
+
+    @Test
+    fun `startItemEquipmentCycle replaces a previous run-status cleanly`() {
+        // Multiple item-equipment cycles run sequentially; each new cycle
+        // must overwrite the previous run-status so /run-status reflects
+        // the in-flight cycle, not the previous one's terminal state.
+        tracker.startItemEquipmentCycle("cycle-1")
+        tracker.transitionPhase(PipelinePhase.ITEM_EQUIPMENT)
+        tracker.completeRun("cycle-1", 50, 100000L)
+
+        val last = tracker.getLastCompletedRun()!!
+        assertThat(last.runId).isEqualTo("cycle-1")
+        assertThat(last.phase).isEqualTo(PipelinePhase.COMPLETED)
+
+        tracker.startItemEquipmentCycle("cycle-2")
+        val current = tracker.getCurrentStatus()!!
+        assertThat(current.runId).isEqualTo("cycle-2")
+        assertThat(current.phase).isEqualTo(PipelinePhase.ITEM_EQUIPMENT)
+        assertThat(current.isTerminal).isFalse()
+    }
 }

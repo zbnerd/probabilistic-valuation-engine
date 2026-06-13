@@ -26,6 +26,28 @@ class RunStatusTracker(
         log.info("[RunStatus] started run={}", runId)
     }
 
+    /**
+     * Mark the start of a standalone item-equipment cycle within the
+     * continuous loop. Sets the initial phase to [PipelinePhase.ITEM_EQUIPMENT]
+     * (not RANKING_FETCH) so /api/internal/run-status reflects what the
+     * loop is actually doing.
+     *
+     * The continuous loop calls this at the top of each cycle because the
+     * full ExternalApiScheduler pipeline (ranking → ocid → character-basic
+     * → item-equipment) has already finished its earlier phases; the loop
+     * is running item-equipment independently on the latest OCID mapping.
+     */
+    fun startItemEquipmentCycle(runId: String) {
+        val status = RunStatus(
+            runId = runId,
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            startedAt = Instant.now(clock),
+            updatedAt = Instant.now(clock),
+        )
+        currentRun.set(status)
+        log.info("[RunStatus] item-equipment cycle started run={}", runId)
+    }
+
     fun transitionPhase(phase: PipelinePhase) {
         currentRun.updateAndGet { current ->
             current?.copy(phase = phase, updatedAt = Instant.now(clock))

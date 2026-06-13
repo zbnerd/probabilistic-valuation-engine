@@ -6,6 +6,7 @@ import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.storage.PutResult
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.exception.SdkClientException
 import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.services.s3.S3Client
@@ -19,9 +20,13 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.model.S3Exception
+import software.amazon.awssdk.transfer.s3.S3TransferManager
+import software.amazon.awssdk.transfer.s3.model.Upload
+import software.amazon.awssdk.transfer.s3.model.UploadRequest
 import jakarta.annotation.PostConstruct
 import java.nio.file.Files
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 
 /**
  * MinIO/S3 implementation of [ObjectStorage]. Used when `storage.backend=minio`.
@@ -34,6 +39,7 @@ import java.time.Instant
 class MinioObjectStorage(
     private val props: MinioProperties,
     private val s3: S3Client,
+    private val transferManager: S3TransferManager,
     @Autowired(required = false)
     private val meterRegistry: MeterRegistry?,
 ) : ObjectStorage {
@@ -103,6 +109,37 @@ class MinioObjectStorage(
             path,
         )
         return PutResult(key, size, resp.eTag())
+    }
+
+    override fun putFileAsync(key: String, path: java.nio.file.Path): CompletableFuture<PutResult> {
+        // Use S3TransferManager for parallel multipart upload (5MB parts by
+        // default). On a 128MB chunk, this is ~5-10x faster than the sync
+        // single-threaded s3.putObject used in putFile() above — and the
+        // writer doesn't block on the upload at all, so subsequent chunks
+        // can start ingesting immediately while this one streams to MinIO.
+        //
+        // TransferManager's default thread pool (50 threads) handles many
+        // concurrent uploads; backpressure comes from the bounded queue
+        // used by ChunkFileManager.awaitAllUploads() at sink close.
+        require(Files.exists(path)) { "putFileAsync source does not exist: $path" }
+        val size = Files.size(path)
+        val putObjectRequest = PutObjectRequest.builder()
+            .bucket(props.bucket)
+            .key(key)
+            .contentLength(size)
+            .contentType("application/octet-stream")
+            .build()
+        val uploadRequest = UploadRequest.builder()
+            .putObjectRequest(putObjectRequest)
+            .requestBody(AsyncRequestBody.fromFile(path))
+            .build()
+        val upload: Upload = transferManager.upload(uploadRequest)
+        return upload.completionFuture().thenApply { completed ->
+            // CompletedUpload.response() returns the underlying PutObjectResponse
+            // (with multipart-upload, this is CompleteMultipartUploadResponse).
+            // Both expose eTag().
+            PutResult(key, size, completed.response().eTag())
+        }
     }
 
     override fun get(key: String): ByteArray =

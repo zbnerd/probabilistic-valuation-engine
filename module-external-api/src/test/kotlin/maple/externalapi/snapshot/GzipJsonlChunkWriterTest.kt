@@ -28,17 +28,22 @@ class GzipJsonlChunkWriterTest {
     private val fixedClock = Clock.fixed(Instant.parse("2026-06-10T00:00:00Z"), ZoneOffset.UTC)
 
     @Test
-    fun `close uploads gzipped JSONL via putFile and returns stats`() {
+    fun `close uploads gzipped JSONL via putFileAsync and returns stats`() {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
         val pathCaptor = argumentCaptor<Path>()
         var captured: ByteArray = ByteArray(0)
-        whenever(storage.putFile(keyCaptor.capture(), pathCaptor.capture()))
+        // putFileAsync returns immediately with a CompletableFuture; the
+        // mock simulates a completed-future upload by reading the temp file
+        // synchronously inside the thenAnswer body.
+        whenever(storage.putFileAsync(keyCaptor.capture(), pathCaptor.capture()))
             .thenAnswer { invocation ->
                 val key: String = invocation.getArgument(0)
                 val path: Path = invocation.getArgument(1)
                 captured = Files.readAllBytes(path)
-                PutResult(key, captured.size.toLong(), null)
+                java.util.concurrent.CompletableFuture.completedFuture(
+                    PutResult(key, captured.size.toLong(), null),
+                )
             }
 
         val writer = GzipJsonlChunkWriter(
@@ -66,7 +71,7 @@ class GzipJsonlChunkWriterTest {
 
         val stats = writer.close()
 
-        verify(storage).putFile(any<String>(), any<Path>())
+        verify(storage).putFileAsync(any<String>(), any<Path>())
         assertThat(keyCaptor.firstValue).isEqualTo("runs/abc/ranking-overall/part-000001.jsonl.gz")
         // The Path argument is captured; its underlying file is deleted by
         // the writer after putFile returns, so we cannot assert existence
@@ -114,14 +119,16 @@ class GzipJsonlChunkWriterTest {
      *     line count equal to the record count.
      */
     @Test
-    fun `close uploads 32MB chunk via putFile without loading it all into heap`() {
+    fun `close uploads 32MB chunk via putFileAsync without loading it all into heap`() {
         val storage = mock<ObjectStorage>()
         var captured: ByteArray = ByteArray(0)
-        whenever(storage.putFile(any<String>(), any<Path>()))
+        whenever(storage.putFileAsync(any<String>(), any<Path>()))
             .thenAnswer { invocation ->
                 val path: Path = invocation.getArgument(1)
                 captured = Files.readAllBytes(path)
-                PutResult(invocation.getArgument(0), captured.size.toLong(), null)
+                java.util.concurrent.CompletableFuture.completedFuture(
+                    PutResult(invocation.getArgument(0), captured.size.toLong(), null),
+                )
             }
 
         val writer = GzipJsonlChunkWriter(
@@ -164,7 +171,7 @@ class GzipJsonlChunkWriterTest {
         assertThat(stats.recordCount).isEqualTo(recordCount)
         assertThat(stats.uncompressedBytes).isGreaterThan(32L * 1024 * 1024)
         assertThat(stats.compressedBytes).isGreaterThan(0)
-        verify(storage).putFile(any<String>(), any<Path>())
+        verify(storage).putFileAsync(any<String>(), any<Path>())
 
         val raw = GZIPInputStream(ByteArrayInputStream(captured))
             .bufferedReader()

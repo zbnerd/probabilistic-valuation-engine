@@ -17,6 +17,7 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import java.util.stream.Collectors
 
 /**
@@ -59,6 +60,13 @@ class LocalFsObjectStorage(
         Files.move(path, dest, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         val hash = sha256Hex(Files.readAllBytes(dest))
         return PutResult(key, Files.size(dest), hash)
+    }
+
+    override fun putFileAsync(key: String, path: java.nio.file.Path): CompletableFuture<PutResult> {
+        // LocalFs has no network latency to overlap — the sync putFile is
+        // a single Files.move call. But we still need the future contract
+        // so the writer's hot path stays symmetric across backends.
+        return CompletableFuture.completedFuture(putFile(key, path))
     }
 
     override fun get(key: String): ByteArray = Files.readAllBytes(resolve(key))

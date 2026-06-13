@@ -3,6 +3,7 @@ package maple.expectation.common.storage
 import java.io.InputStream
 import java.nio.file.Path
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 
 /**
  * Unified object storage abstraction. Replaces the deprecated per-module
@@ -31,6 +32,26 @@ interface ObjectStorage {
      * Throws if [path] does not exist.
      */
     fun putFile(key: String, path: Path): PutResult
+
+    /**
+     * Async variant of [putFile] — returns immediately with a future that
+     * completes when the upload finishes. Used by the writer hot path to
+     * overlap multiple 128MB chunk uploads (each takes 5-10s on MinIO)
+     * with subsequent record ingestion. The caller MUST treat [path] as
+     * transferred to the storage backend (no delete, no rewrite) once
+     * this method returns.
+     *
+     * Implementations:
+     * - Minio: backed by [software.amazon.awssdk.transfer.s3.S3TransferManager]
+     *   (parallel multipart, 5MB parts). The default TransferManager thread
+     *   pool handles uploads in parallel.
+     * - LocalFs: runs the sync [putFile] on a virtual-thread executor and
+     *   returns the resulting future.
+     *
+     * On failure the future completes exceptionally; the impl does NOT
+     * silently delete the source file.
+     */
+    fun putFileAsync(key: String, path: Path): CompletableFuture<PutResult>
 
     /** Get object as bytes. Throws if key not found. */
     fun get(key: String): ByteArray

@@ -134,13 +134,21 @@ with DAG(
     wait_for_completion = PythonOperator(
         task_id="wait_for_completion",
         python_callable=poll_run_completion,
-        execution_timeout=timedelta(hours=2),
+        # 2h wasn't enough: the full daily pipeline (ranking 4m → ocid 25m
+        # → char-basic 40m → item-equipment 35m) takes ~1.75h, leaving
+        # almost no margin. With 120 retries × 60s, the sensor exhausts
+        # retries at 2h and the DAG is marked FAILED even though the
+        # pipeline is healthy. 4h gives a comfortable buffer for slow
+        # days (Nexon API rate-limiting, GC pause spikes, etc.).
+        execution_timeout=timedelta(hours=4),
     )
 
     wait_ie_cycle = PythonOperator(
         task_id="wait_for_item_equipment_cycle",
         python_callable=wait_for_item_equipment_cycle,
-        execution_timeout=timedelta(hours=1),
+        # Same reasoning — item-equipment cycle can take ~35 min on
+        # a fresh OCID cache; doubling the buffer.
+        execution_timeout=timedelta(hours=2),
         retries=1,
     )
 

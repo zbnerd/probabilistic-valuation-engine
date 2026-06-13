@@ -92,7 +92,12 @@ class ItemEquipmentContinuousLoop(
         // would stay on /api/internal/run-status even though a brand-new
         // cycle is in flight under a new runId.
         val cycleRunId = runIdGenerator.newRunId()
-        runStatusTracker.startRun(cycleRunId)
+        // Use startItemEquipmentCycle (not startRun) so the initial phase
+        // is ITEM_EQUIPMENT. startRun would set RANKING_FETCH, which is
+        // misleading — the full ranking→ocid→char-basic chain has already
+        // finished in ExternalApiScheduler; the loop is only running
+        // item-equipment.
+        runStatusTracker.startItemEquipmentCycle(cycleRunId)
 
         CompletableFuture.completedFuture(null)
             .thenCompose { itemEquipmentFetchPhase.execute(executor, entries, cycleRunId) }

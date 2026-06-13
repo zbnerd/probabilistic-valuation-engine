@@ -14,6 +14,8 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Instant
 
 /**
@@ -33,9 +35,14 @@ class UrgentChunkArtifactWriterTest {
     fun `writeChunk returns runs slash runId slash endpoint slash chunks slash part uuid key and puts to ObjectStorage`() {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
-        val bytesCaptor = argumentCaptor<ByteArray>()
-        whenever(storage.put(keyCaptor.capture(), bytesCaptor.capture()))
-            .thenReturn(PutResult("k", 0, null))
+        var captured: ByteArray = ByteArray(0)
+        whenever(storage.putFile(keyCaptor.capture(), any<Path>()))
+            .thenAnswer { invocation ->
+                val key: String = invocation.getArgument(0)
+                val path: Path = invocation.getArgument(1)
+                captured = Files.readAllBytes(path)
+                PutResult(key, captured.size.toLong(), null)
+            }
 
         val writer = UrgentChunkArtifactWriter(
             objectMapper = objectMapper,
@@ -56,7 +63,7 @@ class UrgentChunkArtifactWriterTest {
 
         assertThat(key).matches("^runs/abc/ranking-overall/chunks/part-[0-9a-f-]{36}\\.jsonl\\.gz$")
         assertThat(keyCaptor.firstValue).isEqualTo(key)
-        assertThat(bytesCaptor.firstValue).isNotEmpty
-        verify(storage).put(any<String>(), any<ByteArray>())
+        assertThat(captured).isNotEmpty
+        verify(storage).putFile(any<String>(), any<Path>())
     }
 }

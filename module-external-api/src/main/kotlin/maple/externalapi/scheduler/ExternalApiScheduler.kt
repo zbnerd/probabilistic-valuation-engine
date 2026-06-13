@@ -6,6 +6,7 @@ import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
+import maple.externalapi.scheduler.phase.RunIdGenerator
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
@@ -30,6 +31,7 @@ class ExternalApiScheduler(
     private val characterBasicPhaseProvider: ObjectProvider<CharacterBasicFetchPhase>,
     private val itemEquipmentContinuousLoop: ItemEquipmentContinuousLoop,
     private val runStatusTracker: RunStatusTracker,
+    private val runIdGenerator: RunIdGenerator,
     @Value("\${external-api.schedule.run-on-startup:false}")
     private val runOnStartup: Boolean,
     @Value("\${external-api.schedule.skip-character-basic:false}")
@@ -76,15 +78,23 @@ class ExternalApiScheduler(
             return
         }
 
-        log.info("[Scheduler] starting ranking fetch phase")
-        rankingPhase.execute(executor)
+        // Generate the runId here, BEFORE the async chain starts, so the
+        // run-status tracker transitions to RANKING_FETCH for the new run
+        // immediately. Previously this happened inside the .handle callback
+        // of ranking.execute(), which meant a new pipeline cycle would leave
+        // the previous run's FAILED status visible on /api/internal/run-status
+        // until ranking.fetch completed — and any failure before that
+        // (e.g. ItemEquipmentContinuousLoop picking up a fresh OCID mapping
+        // written by a sibling process) would never transition the tracker
+        // at all. See bug repro in commit a4f380f1d.
+        val runId = runIdGenerator.newRunId()
+        runStatusTracker.startRun(runId)
+
+        log.info("[Scheduler] starting ranking fetch phase: runId={}", runId)
+        rankingPhase.execute(executor, runId)
             .handle { runKey, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ranking fetch failed, cannot proceed with OCID lookup", ex)
-                } else if (runKey != null) {
-                    // runKey is "runs/<runId>"; extract runId for the status tracker.
-                    val runId = runKey.removePrefix("runs/")
-                    runStatusTracker.startRun(runId)
                 }
                 runKey
             }

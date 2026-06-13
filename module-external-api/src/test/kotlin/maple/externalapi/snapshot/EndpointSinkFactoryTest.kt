@@ -15,6 +15,8 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -34,10 +36,11 @@ class EndpointSinkFactoryTest {
     fun `createForCharacterBasic produces a sink whose chunk keys live under the supplied runKey`() {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
-        whenever(storage.put(keyCaptor.capture(), any<ByteArray>()))
+        whenever(storage.putFile(keyCaptor.capture(), any<Path>()))
             .thenAnswer { invocation ->
                 val key: String = invocation.getArgument(0)
-                PutResult(key, 0L, null)
+                val path: Path = invocation.getArgument(1)
+                PutResult(key, Files.size(path), null)
             }
 
         val characterBasicPublisher = mock<SnapshotChunkEventPublisher>()

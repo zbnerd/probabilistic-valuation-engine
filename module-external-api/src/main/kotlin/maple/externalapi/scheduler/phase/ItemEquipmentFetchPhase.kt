@@ -38,19 +38,17 @@ class ItemEquipmentFetchPhase(
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
     private val clock: Clock = Clock.systemUTC(),
-    private val runIdGenerator: RunIdGenerator,
     private val runMarkerWriter: RunMarkerWriter,
     private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentFetchPhase::class.java)
 
-    fun execute(workerExecutor: ExecutorService, entries: List<Map.Entry<String, String>>): CompletableFuture<Unit> {
+    fun execute(workerExecutor: ExecutorService, entries: List<Map.Entry<String, String>>, runId: String): CompletableFuture<Unit> {
         if (entries.isEmpty()) {
             log.warn("[Scheduler] OCID cache empty, skipping item-equipment")
             return CompletableFuture.completedFuture(Unit)
         }
 
-        val runId = runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("item-equipment")
         val runKey = "runs/$runId/item-equipment"
         runMarkerWriter.writeRunMarker(runKey)

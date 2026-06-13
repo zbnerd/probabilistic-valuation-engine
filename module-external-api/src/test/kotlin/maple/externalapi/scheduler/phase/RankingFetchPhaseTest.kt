@@ -16,18 +16,21 @@ import maple.externalapi.snapshot.SinkEventPublisher
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.SnapshotSinkEventPublisher
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.expectation.common.storage.PutResult
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Clock
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * Migration Task 8: `execute(workerExecutor)` must return `CompletableFuture<String>`
+ * Migration Task 8: `execute(workerExecutor, runId)` must return `CompletableFuture<String>`
  * whose value is the runKey (e.g. `runs/20260610-...`) — not a Path.
  */
 class RankingFetchPhaseTest {
@@ -35,6 +38,22 @@ class RankingFetchPhaseTest {
     @Test
     fun `execute returns runKey as String starting with runs slash`() {
         val storage = mock<ObjectStorage>()
+        // RankingFetchPhase writes a single empty chunk (empty ranking array) at
+        // close via GzipJsonlChunkWriter → putFile. Mock it so close() returns
+        // a non-null PutResult.
+        whenever(storage.putFile(any<String>(), any<Path>()))
+            .thenAnswer { invocation ->
+                val key: String = invocation.getArgument(0)
+                val path: Path = invocation.getArgument(1)
+                PutResult(key, Files.size(path), null)
+            }
+        whenever(storage.put(any<String>(), any<ByteArray>()))
+            .thenAnswer { invocation ->
+                val key: String = invocation.getArgument(0)
+                val bytes: ByteArray = invocation.getArgument(1)
+                PutResult(key, bytes.size.toLong(), null)
+            }
+
         val objectMapper = ObjectMapper()
             .registerModule(kotlinModule())
             .registerModule(JavaTimeModule())
@@ -71,7 +90,7 @@ class RankingFetchPhaseTest {
             objectStorage = storage,
         )
 
-        val result: CompletableFuture<String> = phase.execute(Executors.newSingleThreadExecutor())
+        val result: CompletableFuture<String> = phase.execute(Executors.newSingleThreadExecutor(), "20260610-xyz")
         val runKey = result.get(15, TimeUnit.SECONDS)
 
         assertTrue(

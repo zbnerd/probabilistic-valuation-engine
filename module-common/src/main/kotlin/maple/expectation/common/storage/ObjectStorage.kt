@@ -1,6 +1,7 @@
 package maple.expectation.common.storage
 
 import java.io.InputStream
+import java.nio.file.Path
 import java.time.Instant
 
 /**
@@ -18,6 +19,18 @@ interface ObjectStorage {
 
     /** Put data from a stream. Caller is responsible for closing `input`. */
     fun putStream(key: String, input: InputStream): PutResult
+
+    /**
+     * Put a pre-existing file at [path] under [key]. Avoids the double-spool
+     * of [putStream] for callers that already have the bytes on disk (e.g.
+     * [maple.externalapi.snapshot.GzipJsonlChunkWriter] which writes each
+     * chunk to a temp file before upload). The caller relinquishes the file —
+     * implementations move or upload it, and the caller MUST NOT delete the
+     * file or write to it again after this call returns.
+     *
+     * Throws if [path] does not exist.
+     */
+    fun putFile(key: String, path: Path): PutResult
 
     /** Get object as bytes. Throws if key not found. */
     fun get(key: String): ByteArray

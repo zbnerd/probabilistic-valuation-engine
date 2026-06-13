@@ -49,6 +49,18 @@ class LocalFsObjectStorage(
         return PutResult(key, bytes, hash)
     }
 
+    override fun putFile(key: String, path: java.nio.file.Path): PutResult {
+        // The caller's file becomes the destination — atomic rename, no copy.
+        // Saves 128MB of disk I/O per chunk versus putStream's
+        // Files.copy(input, temp) + move(temp, dest) on hot paths.
+        val dest = resolve(key)
+        dest.parent.toFile().mkdirs()
+        require(Files.exists(path)) { "putFile source does not exist: $path" }
+        Files.move(path, dest, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        val hash = sha256Hex(Files.readAllBytes(dest))
+        return PutResult(key, Files.size(dest), hash)
+    }
+
     override fun get(key: String): ByteArray = Files.readAllBytes(resolve(key))
 
     override fun getStream(key: String): java.io.InputStream = Files.newInputStream(resolve(key))

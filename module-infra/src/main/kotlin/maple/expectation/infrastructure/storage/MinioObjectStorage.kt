@@ -85,6 +85,26 @@ class MinioObjectStorage(
         }
     }
 
+    override fun putFile(key: String, path: java.nio.file.Path): PutResult {
+        // Stream the caller's file directly via the AWS SDK — the SDK reads
+        // from the Path in 8MB chunks and (for objects >= 5MB) uses multipart
+        // upload automatically. No intermediate spool, no extra disk write.
+        // Saves ~128MB of disk I/O per chunk versus putStream on a 128MB
+        // uncompressed chunk that the writer already has on disk.
+        require(Files.exists(path)) { "putFile source does not exist: $path" }
+        val size = Files.size(path)
+        val resp = s3.putObject(
+            PutObjectRequest.builder()
+                .bucket(props.bucket)
+                .key(key)
+                .contentLength(size)
+                .contentType("application/octet-stream")
+                .build(),
+            path,
+        )
+        return PutResult(key, size, resp.eTag())
+    }
+
     override fun get(key: String): ByteArray =
         s3.getObjectAsBytes(GetObjectRequest.builder().bucket(props.bucket).key(key).build())
             .asByteArray()

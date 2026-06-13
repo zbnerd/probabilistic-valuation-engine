@@ -10,6 +10,7 @@ import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
+import maple.externalapi.scheduler.phase.RunIdGenerator
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
@@ -34,6 +35,7 @@ class ItemEquipmentContinuousLoop(
     private val ocidCacheProvider: OcidCacheProvider,
     private val schedulerMetrics: SchedulerMetrics,
     private val runStatusTracker: RunStatusTracker,
+    private val runIdGenerator: RunIdGenerator,
     @Qualifier("externalApiSchedulerExecutor") private val executor: ExecutorService,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentContinuousLoop::class.java)
@@ -83,8 +85,33 @@ class ItemEquipmentContinuousLoop(
         }
         schedulerMetrics.incrementLockAcquired("item_equipment")
 
+        // Generate a per-cycle runId. The run-status tracker is updated
+        // ONLY if no daily pipeline is currently in flight — otherwise we
+        // would overwrite the daily run's runId and break the Airflow
+        // sensor (which expects the daily runId throughout the poll).
+        // The previous bug: PR #1278 unconditionally called
+        // startItemEquipmentCycle on every cycle, which clobbered the
+        // daily trigger's runId mid-pipeline and caused the Airflow
+        // sensor to mark the DAG FAILED after 2h of "mismatch" retries.
+        val cycleRunId = runIdGenerator.newRunId()
+        val current = runStatusTracker.getCurrentStatus()
+        if (current == null || current.isTerminal) {
+            // Either no run is tracked yet, or the last tracked run
+            // (daily or earlier cycle) has reached a terminal state.
+            // Safe to register this cycle's runId in /run-status.
+            // Initial phase is ITEM_EQUIPMENT, not RANKING_FETCH — the
+            // full ranking→ocid→char-basic chain (if any) is long over.
+            runStatusTracker.startItemEquipmentCycle(cycleRunId)
+        }
+        // else: a daily pipeline is in flight (RANKING_FETCH →
+        // CHARACTER_BASIC_DONE). The loop's per-cycle runId stays a
+        // log-correlation handle only; /run-status continues to show the
+        // daily runId. When the daily completes via the completeRun
+        // guard below, the next loop cycle will start a fresh
+        // ITEM_EQUIPMENT-status run.
+
         CompletableFuture.completedFuture(null)
-            .thenCompose { itemEquipmentFetchPhase.execute(executor, entries) }
+            .thenCompose { itemEquipmentFetchPhase.execute(executor, entries, cycleRunId) }
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)

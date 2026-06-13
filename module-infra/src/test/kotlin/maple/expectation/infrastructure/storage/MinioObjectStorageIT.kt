@@ -9,10 +9,12 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
+import software.amazon.awssdk.transfer.s3.S3TransferManager
 import java.net.URI
 import java.util.UUID
 
@@ -26,6 +28,8 @@ import java.util.UUID
 class MinioObjectStorageIT {
 
     private lateinit var s3: S3Client
+    private lateinit var s3Async: S3AsyncClient
+    private lateinit var transferManager: S3TransferManager
     private lateinit var bucket: String
     private lateinit var testPrefix: String
     private lateinit var storage: MinioObjectStorage
@@ -48,6 +52,18 @@ class MinioObjectStorageIT {
                     .pathStyleAccessEnabled(true).build()
             )
             .build()
+        s3Async = S3AsyncClient.builder()
+            .endpointOverride(URI.create(endpoint))
+            .region(Region.of(region))
+            .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
+            .serviceConfiguration(
+                software.amazon.awssdk.services.s3.S3Configuration.builder()
+                    .pathStyleAccessEnabled(true).build()
+            )
+            .build()
+        transferManager = S3TransferManager.builder()
+            .s3Client(s3Async)
+            .build()
 
         // Ensure bucket exists (idempotent)
         runCatching {
@@ -62,7 +78,7 @@ class MinioObjectStorageIT {
             bucket = bucket,
             pathStyleAccess = true,
         )
-        storage = MinioObjectStorage(props, s3, meterRegistry = null)
+        storage = MinioObjectStorage(props, s3, transferManager, meterRegistry = null)
     }
 
     @AfterAll

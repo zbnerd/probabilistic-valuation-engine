@@ -2,9 +2,12 @@ package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import maple.expectation.common.storage.ObjectStorage
+import maple.expectation.common.storage.PutResult
+import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.Instant
-import org.slf4j.LoggerFactory
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 /**
  * Owns every object-storage concern of a snapshot-sink run:
@@ -60,6 +63,16 @@ class ChunkFileManager(
     private var currentWriter: GzipJsonlChunkWriter
     private var nextPartIndex = 2
 
+    /**
+     * In-flight chunk uploads fired by [rotateChunk] and [closeCurrentChunk].
+     * Each entry is a fire-and-forget future returned by
+     * [ObjectStorage.putFileAsync]. The sink awaits ALL of these before
+     * writing the manifest, to guarantee that every chunk the manifest
+     * references is actually present in storage when the manifest is
+     * published.
+     */
+    private val inFlightUploads: MutableList<CompletableFuture<PutResult>> = mutableListOf()
+
     init {
         currentWriter = newChunkWriter(1)
     }
@@ -80,6 +93,7 @@ class ChunkFileManager(
 
     fun rotateChunk(): ChunkStats? {
         val stats = currentWriter.close()
+        registerUpload(stats)
         if (stats.recordCount > 0) {
             manifest.chunks.add(toEntry(stats))
         }
@@ -89,11 +103,51 @@ class ChunkFileManager(
 
     fun closeCurrentChunk(): ChunkStats? {
         val stats = currentWriter.close()
+        registerUpload(stats)
         if (stats.recordCount > 0) {
             manifest.chunks.add(toEntry(stats))
         }
         return stats.takeIf { it.recordCount > 0 }
     }
+
+    private fun registerUpload(stats: ChunkStats) {
+        // [ChunkStats.uploadFuture] is non-null when the writer used the
+        // async path. Sync writers (legacy tests, LocalFs when running
+        // on the host) may have a completed-future instead. Either way we
+        // track and await it before writing the manifest.
+        stats.uploadFuture?.let { inFlightUploads.add(it) }
+    }
+
+    /**
+     * Block until all in-flight chunk uploads complete, with a hard timeout
+     * to avoid hanging the sink close forever on a stuck MinIO. Returns
+     * `true` on success, `false` on timeout. Errors raised by individual
+     * uploads are logged but not rethrown — the sink's run-completed event
+     * is the place to surface them.
+     */
+    fun awaitAllUploads(timeoutMs: Long = 600_000L): Boolean {
+        if (inFlightUploads.isEmpty()) return true
+        val all = CompletableFuture.allOf(*inFlightUploads.toTypedArray())
+        return try {
+            all.get(timeoutMs, TimeUnit.MILLISECONDS)
+            true
+        } catch (ex: java.util.concurrent.TimeoutException) {
+            log.error(
+                "[ChunkFileManager] awaitAllUploads timed out after {}ms (in-flight: {})",
+                timeoutMs,
+                inFlightUploads.size,
+            )
+            false
+        } catch (ex: Exception) {
+            // At least one upload failed. The first failing future's
+            // exception is wrapped in ExecutionException; we just want
+            // a non-zero return so the sink can decide whether to fail-fast.
+            log.error("[ChunkFileManager] awaitAllUploads failed: {}", ex.message, ex)
+            false
+        }
+    }
+
+    fun inFlightUploadCount(): Int = inFlightUploads.size
 
     fun writeManifestAndSuccessMarker() {
         manifest.totalFailed = failedCount

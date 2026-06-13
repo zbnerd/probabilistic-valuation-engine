@@ -59,6 +59,7 @@ dependencies {
 
 	// AWS SDK v2 (MinIO/S3 client)
 	implementation(libs.aws.sdk.s3)
+	implementation(libs.aws.sdk.s3.transfer.manager)
 	implementation(libs.aws.sdk.auth)
 	implementation(libs.aws.sdk.regions)
 	implementation(libs.aws.sdk.apache.client)

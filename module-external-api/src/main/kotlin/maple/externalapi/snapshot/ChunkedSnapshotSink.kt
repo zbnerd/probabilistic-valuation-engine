@@ -81,6 +81,21 @@ class ChunkedSnapshotSink(
             fileManager.closeCurrentChunk()?.let { stats ->
                 eventPublisher.publishChunkReady(stats, manifest.runId, endpoint)
             }
+
+            // Wait for all fire-and-forget chunk uploads to complete
+            // BEFORE writing the manifest. Otherwise the manifest would
+            // reference chunks that haven't arrived in MinIO yet, and the
+            // downstream calculator/synchronizer could read incomplete data.
+            // 10 minutes is generous for 128MB × N chunks on a healthy
+            // MinIO; the ChunkFileManager logs the actual timeout.
+            if (!fileManager.awaitAllUploads(600_000L)) {
+                // Uploads timed out or failed — fail the run loudly.
+                val msg = "chunk uploads did not complete in time (in-flight=${fileManager.inFlightUploadCount()})"
+                fileManager.cleanupOnFailure()
+                eventPublisher.publishRunFailed(manifest, endpoint, msg)
+                throw RuntimeException(msg)
+            }
+
             fileManager.writeManifestAndSuccessMarker()
             fileManager.deleteRunningMarker()
 

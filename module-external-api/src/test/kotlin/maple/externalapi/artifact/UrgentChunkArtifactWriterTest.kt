@@ -36,12 +36,14 @@ class UrgentChunkArtifactWriterTest {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
         var captured: ByteArray = ByteArray(0)
-        whenever(storage.putFile(keyCaptor.capture(), any<Path>()))
+        whenever(storage.putFileAsync(keyCaptor.capture(), any<Path>()))
             .thenAnswer { invocation ->
                 val key: String = invocation.getArgument(0)
                 val path: Path = invocation.getArgument(1)
                 captured = Files.readAllBytes(path)
-                PutResult(key, captured.size.toLong(), null)
+                java.util.concurrent.CompletableFuture.completedFuture(
+                    PutResult(key, captured.size.toLong(), null),
+                )
             }
 
         val writer = UrgentChunkArtifactWriter(
@@ -64,6 +66,6 @@ class UrgentChunkArtifactWriterTest {
         assertThat(key).matches("^runs/abc/ranking-overall/chunks/part-[0-9a-f-]{36}\\.jsonl\\.gz$")
         assertThat(keyCaptor.firstValue).isEqualTo(key)
         assertThat(captured).isNotEmpty
-        verify(storage).putFile(any<String>(), any<Path>())
+        verify(storage).putFileAsync(any<String>(), any<Path>())
     }
 }

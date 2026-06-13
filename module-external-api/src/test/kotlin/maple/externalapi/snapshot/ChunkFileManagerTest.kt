@@ -73,12 +73,14 @@ class ChunkFileManagerTest {
     fun `appendSuccess accumulates records and rotates when limit hit`() {
         val storage = mock<ObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
-        whenever(storage.putFile(keyCaptor.capture(), any<Path>()))
+        whenever(storage.putFileAsync(keyCaptor.capture(), any<Path>()))
             .thenAnswer { invocation ->
                 val key: String = invocation.getArgument(0)
                 val path: Path = invocation.getArgument(1)
                 val bytes = Files.readAllBytes(path)
-                PutResult(key, bytes.size.toLong(), null)
+                java.util.concurrent.CompletableFuture.completedFuture(
+                    PutResult(key, bytes.size.toLong(), null),
+                )
             }
 
         val manager = ChunkFileManager(
@@ -112,6 +114,6 @@ class ChunkFileManagerTest {
         assertThat(capturedKeys).hasSize(2)
         assertThat(capturedKeys[0]).isEqualTo("runs/testrun/ranking-overall/chunks/part-000001.jsonl.gz")
         assertThat(capturedKeys[1]).isEqualTo("runs/testrun/ranking-overall/chunks/part-000002.jsonl.gz")
-        verify(storage, org.mockito.kotlin.times(2)).putFile(any<String>(), any<Path>())
+        verify(storage, org.mockito.kotlin.times(2)).putFileAsync(any<String>(), any<Path>())
     }
 }

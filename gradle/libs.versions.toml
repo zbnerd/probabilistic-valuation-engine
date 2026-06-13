@@ -182,6 +182,7 @@ spring-data-commons = { module = "org.springframework.data:spring-data-commons" 
 # AWS SDK v2 (MinIO/S3 client)
 aws-sdk-bom = { module = "software.amazon.awssdk:bom", version.ref = "aws-sdk" }
 aws-sdk-s3 = { module = "software.amazon.awssdk:s3" }
+aws-sdk-s3-transfer-manager = { module = "software.amazon.awssdk:s3-transfer-manager" }
 aws-sdk-auth = { module = "software.amazon.awssdk:auth" }
 aws-sdk-regions = { module = "software.amazon.awssdk:regions" }
 aws-sdk-apache-client = { module = "software.amazon.awssdk:apache-client" }

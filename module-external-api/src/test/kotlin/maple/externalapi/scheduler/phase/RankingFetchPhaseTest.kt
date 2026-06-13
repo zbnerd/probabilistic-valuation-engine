@@ -41,11 +41,13 @@ class RankingFetchPhaseTest {
         // RankingFetchPhase writes a single empty chunk (empty ranking array) at
         // close via GzipJsonlChunkWriter → putFile. Mock it so close() returns
         // a non-null PutResult.
-        whenever(storage.putFile(any<String>(), any<Path>()))
+        whenever(storage.putFileAsync(any<String>(), any<Path>()))
             .thenAnswer { invocation ->
                 val key: String = invocation.getArgument(0)
                 val path: Path = invocation.getArgument(1)
-                PutResult(key, Files.size(path), null)
+                java.util.concurrent.CompletableFuture.completedFuture(
+                    PutResult(key, Files.size(path), null),
+                )
             }
         whenever(storage.put(any<String>(), any<ByteArray>()))
             .thenAnswer { invocation ->

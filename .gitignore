@@ -70,6 +70,8 @@ docs/99_Archive/
 scripts/*
 !scripts/check-before-commit.sh
 !scripts/install-git-hooks.sh
+!scripts/validate-minio-vs3.sh
+!scripts/lib/
 /.claude/settings.json
 /docker/logs/mysql/slow.log
 /.claude/ralph-loop.local.md

@@ -1,6 +1,5 @@
 package maple.externalapi.scheduler.phase
 
-import java.nio.file.Paths
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -9,6 +8,7 @@ import java.util.concurrent.ExecutorService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.future
+import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class ItemEquipmentFetchPhase(
+    private val objectStorage: ObjectStorage,
     private val chunkingProperties: SnapshotChunkingProperties,
     private val metrics: ExternalApiMetrics,
     private val fetchMetrics: SnapshotFetchMetrics,
@@ -36,26 +37,22 @@ class ItemEquipmentFetchPhase(
     private val permitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
-    @Value("\${external-api.store.base-path:../data}")
-    private val storeBasePath: String,
     private val clock: Clock = Clock.systemUTC(),
-    private val runIdGenerator: RunIdGenerator,
     private val runMarkerWriter: RunMarkerWriter,
     private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentFetchPhase::class.java)
 
-    fun execute(workerExecutor: ExecutorService, entries: List<Map.Entry<String, String>>): CompletableFuture<Unit> {
+    fun execute(workerExecutor: ExecutorService, entries: List<Map.Entry<String, String>>, runId: String): CompletableFuture<Unit> {
         if (entries.isEmpty()) {
             log.warn("[Scheduler] OCID cache empty, skipping item-equipment")
             return CompletableFuture.completedFuture(Unit)
         }
 
-        val runId = runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("item-equipment")
-        val runDir = Paths.get(storeBasePath, "runs", runId)
-        runMarkerWriter.writeRunningMarker(runDir)
-        val sink = sinkFactory.createForItemEquipment(runDir)
+        val runKey = "runs/$runId/item-equipment"
+        runMarkerWriter.writeRunMarker(runKey)
+        val sink = sinkFactory.createForItemEquipment(runKey)
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
 

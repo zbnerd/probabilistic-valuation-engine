@@ -1,7 +1,7 @@
 package maple.synchronizer.repository
 
 import maple.synchronizer.repository.ChunkWriteConstants.SUB_BATCH_SIZE
-import maple.synchronizer.storage.BasicRecord
+import maple.synchronizer.domain.BasicRecord
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository

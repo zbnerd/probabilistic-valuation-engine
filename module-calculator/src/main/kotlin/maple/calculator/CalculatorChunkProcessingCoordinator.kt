@@ -10,7 +10,8 @@ import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
-import maple.calculator.storage.ObjectStorage
+import maple.calculator.runstate.CalculatorCurrentRunIdHolder
+import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.util.CompressionUtils
@@ -39,6 +40,7 @@ class CalculatorChunkProcessingCoordinator(
     private val resultEventPublisher: KafkaResultEventPublisher,
     private val objectStorage: ObjectStorage,
     private val metricsListener: CalculatorMetricsListener,
+    private val currentRunIdHolder: CalculatorCurrentRunIdHolder,
     @Qualifier("vtDispatcher") private val vtDispatcher: CoroutineDispatcher,
 ) {
     private val log = LoggerFactory.getLogger(CalculatorChunkProcessingCoordinator::class.java)
@@ -48,6 +50,24 @@ class CalculatorChunkProcessingCoordinator(
         if (event.endpoint != "item-equipment") {
             log.info("[Coordinator] skipping non-item-equipment endpoint: {}", event.endpoint)
             metricsListener.onEvent(ChunkProcessingEvent.Skipped(event.runId, event.chunkId, "endpoint_mismatch"))
+            return
+        }
+
+        // Drop chunk-ready events whose runId does not match the current ext-api
+        // run. Such events are leftovers from a prior failed run; the source
+        // chunks no longer exist in object storage and processing them only
+        // produces a NoSuchKey 404 retry loop. Holder returns null when the
+        // runId is unknown (first poll, or ext-api down) — we let those pass
+        // to avoid losing new work; the holder becomes authoritative once
+        // it has polled successfully at least once.
+        //
+        // Urgent-path chunks use the `urgent-<UUID>` prefix; they are
+        // ephemeral (one per request) and are always accepted.
+        val current = currentRunIdHolder.currentRunIdOrNull()
+        val isUrgent = event.runId.startsWith("urgent-")
+        if (!isUrgent && current != null && current != event.runId) {
+            log.warn("[Coordinator] stale runId dropped: eventRunId={} currentRunId={} chunkId={}", event.runId, current, event.chunkId)
+            metricsListener.onEvent(ChunkProcessingEvent.Skipped(event.runId, event.chunkId, "stale_run"))
             return
         }
 

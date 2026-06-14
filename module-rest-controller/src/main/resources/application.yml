@@ -75,3 +75,15 @@ auth:
     secret: ${AUTH_FINGERPRINT_SECRET:default-dev-secret-change-me}
   session:
     ttl-seconds: 3600
+
+storage:
+  backend: ${STORAGE_BACKEND:local}
+  local:
+    base-path: ${STORE_BASE_PATH:../data}
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://minio:9000}
+    region: ${MINIO_REGION:us-east-1}
+    access-key: ${MINIO_ACCESS_KEY:}
+    secret-key: ${MINIO_SECRET_KEY:}
+    bucket: ${MINIO_BUCKET:maple-expectation}
+    path-style-access: true

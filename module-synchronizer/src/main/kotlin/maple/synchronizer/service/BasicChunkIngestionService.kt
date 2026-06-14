@@ -6,15 +6,15 @@ import maple.expectation.common.event.ChunkConsumedEvent
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.core.port.out.ChunkFileReaderPort
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.synchronizer.consumer.ChunkConsumerRequest
 import maple.synchronizer.consumer.ChunkConsumerTemplate
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.repository.OcidMappingRepository
-import maple.synchronizer.storage.BasicChunkFileReader
-import maple.synchronizer.storage.BasicRecord
-import maple.synchronizer.storage.OcidMapping
+import maple.synchronizer.domain.BasicRecord
+import maple.synchronizer.domain.OcidMapping
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.kafka.support.Acknowledgment
@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service
 
 @Service
 class BasicChunkIngestionService(
-    private val fileReader: BasicChunkFileReader,
+    private val chunkFileReader: ChunkFileReaderPort,
     private val repository: CharacterBasicRepository,
     private val ocidMappingRepository: OcidMappingRepository,
     private val chunkConsumerTemplate: ChunkConsumerTemplate,
@@ -72,13 +72,15 @@ class BasicChunkIngestionService(
                 lifecycleContext = TaskContext.of("BasicSync", "${operation}Lifecycle", chunkId),
                 process = {
                     var totalRecords = 0
-                    fileReader.readInBatches(event.objectKey) { batch ->
-                        repository.bulkUpsert(runId, chunkId, batch)
-                        if (urgent) {
-                            upsertOcidFromBasicRecords(batch)
+                    chunkFileReader.readBasicChunk(event.objectKey)
+                        .chunked(BATCH_SIZE)
+                        .forEach { batch ->
+                            repository.bulkUpsert(runId, chunkId, batch)
+                            if (urgent) {
+                                upsertOcidFromBasicRecords(batch)
+                            }
+                            totalRecords += batch.size
                         }
-                        totalRecords += batch.size
-                    }
                     log.info(
                         "[BasicSync] {}chunk processed: runId={} chunkId={} records={}",
                         if (urgent) "urgent " else "",
@@ -115,5 +117,9 @@ class BasicChunkIngestionService(
         val mappings = records.map { OcidMapping(userIgn = it.userIgn, ocid = it.ocid) }
         ocidMappingRepository.batchUpsert(mappings)
         log.info("[BasicSync] batch upserted OCID mappings: count={}", mappings.size)
+    }
+
+    companion object {
+        private const val BATCH_SIZE = 1000
     }
 }

@@ -48,7 +48,7 @@ import org.springframework.stereotype.Component
 @Component
 class EquipmentFetchProvider(
     private val nexonApiClient: NexonApiClient,
-    @Qualifier("taskExecutor") private val executor: Executor,
+    @Qualifier("defaultAsyncExecutor") private val executor: Executor,
 ) {
     private val logger = org.slf4j.LoggerFactory.getLogger(EquipmentFetchProvider::class.java)
 

@@ -1,6 +1,5 @@
 package maple.externalapi.scheduler.phase
 
-import java.nio.file.Paths
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -9,10 +8,10 @@ import java.util.concurrent.ExecutorService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.future
+import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
-import maple.externalapi.port.out.ExternalApiArtifactStorePort
 import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import org.slf4j.LoggerFactory
@@ -28,7 +27,7 @@ import org.springframework.stereotype.Component
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class CharacterBasicFetchPhase(
-    private val artifactStore: ExternalApiArtifactStorePort,
+    private val objectStorage: ObjectStorage,
     private val chunkingProperties: SnapshotChunkingProperties,
     private val metrics: ExternalApiMetrics,
     private val fetchMetrics: SnapshotFetchMetrics,
@@ -38,8 +37,6 @@ class CharacterBasicFetchPhase(
     private val permitsPerSecond: Int,
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
-    @Value("\${external-api.store.base-path:../data}")
-    private val storeBasePath: String,
     private val clock: Clock = Clock.systemUTC(),
     private val runIdGenerator: RunIdGenerator,
     private val runMarkerWriter: RunMarkerWriter,
@@ -48,7 +45,7 @@ class CharacterBasicFetchPhase(
     private val log = LoggerFactory.getLogger(CharacterBasicFetchPhase::class.java)
 
     fun execute(workerExecutor: ExecutorService, ocidCache: Map<String, String>): CompletableFuture<Unit> {
-        val existing = artifactStore.listStoredKeys(ExternalApiEndpoint.CHARACTER_BASIC)
+        val existing = objectStorage.listByPrefix("character-basic/")
         if (existing.isNotEmpty()) {
             log.info("[Scheduler] character-basic already done ({} files), skipping", existing.size)
             return CompletableFuture.completedFuture(Unit)
@@ -62,9 +59,9 @@ class CharacterBasicFetchPhase(
 
         val runId = runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("character-basic")
-        val runDir = Paths.get(storeBasePath, "runs", runId)
-        runMarkerWriter.writeRunningMarker(runDir)
-        val sink = sinkFactory.createForCharacterBasic(runDir)
+        val runKey = "runs/$runId/character-basic"
+        runMarkerWriter.writeRunMarker(runKey)
+        val sink = sinkFactory.createForCharacterBasic(runKey)
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
 

@@ -1,6 +1,7 @@
 package maple.restcontroller.controller
 
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.read.EnqueueResponseMapper
@@ -10,6 +11,7 @@ import maple.restcontroller.read.NegativeCacheService
 import maple.restcontroller.read.ReadModelCacheService
 import maple.restcontroller.read.ReadModelQueryService
 import maple.restcontroller.read.UrgentDedupService
+import maple.restcontroller.read.UrgentReadStatusResponse
 import maple.restcontroller.validation.ValidUserIgn
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -57,29 +59,37 @@ class ExpectationV6Controller(
     }
 
     @GetMapping("/{userIgn}/status")
+    // Issue #1130: CompletableFuture 반환. queryService.batchQuery() 의 CPU (gzip+JSON) 가
+    // Dispatchers.Default 에서 실행. Tomcat thread block 시간 감소.
     fun getStatus(
         @PathVariable @ValidUserIgn userIgn: String,
         @RequestParam(defaultValue = "1") presetNo: Int,
-    ): ResponseEntity<*> {
+    ): CompletableFuture<ResponseEntity<*>> {
         val current = projectStatus(userIgn, presetNo)
-        val status = if (current.state.shouldTryDb()) {
-            val dbResult = queryService.batchQuery(
-                mapOf(userIgn to presetNo),
-                Duration.ofSeconds(properties.readModelFreshnessSeconds),
-            )
+        if (!current.state.shouldTryDb()) {
+            return CompletableFuture.completedFuture(buildStatusResponse(current))
+        }
+        return queryService.batchQuery(
+            mapOf(userIgn to presetNo),
+            Duration.ofSeconds(properties.readModelFreshnessSeconds),
+        ).thenApply { dbResult ->
             if (dbResult.isNotEmpty()) {
                 readModelCacheService.multiPut(dbResult)
                 projectStatus(userIgn, presetNo)
             } else {
                 current
             }
-        } else {
-            current
+        }.thenApply { status ->
+            ResponseEntity.ok()
+                .header("Retry-After", status.retryAfterSeconds.toString())
+                .body(status)
         }
-        return ResponseEntity.ok()
+    }
+
+    private fun buildStatusResponse(status: UrgentReadStatusResponse): ResponseEntity<*> =
+        ResponseEntity.ok()
             .header("Retry-After", status.retryAfterSeconds.toString())
             .body(status)
-    }
 
     private fun projectStatus(userIgn: String, presetNo: Int) = urgentDedupService.status(
         userIgn = userIgn,

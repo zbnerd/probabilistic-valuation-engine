@@ -53,7 +53,7 @@ class GlobalAdmissionControl(
     private val properties: GlobalAdmissionProperties,
     private val meterRegistry: MeterRegistry,
     private val logicExecutor: LogicExecutor,
-    @org.springframework.beans.factory.annotation.Qualifier("taskExecutor")
+    @org.springframework.beans.factory.annotation.Qualifier("defaultAsyncExecutor")
     private val workerExecutor: Executor,
 ) {
     private val log = LoggerFactory.getLogger(GlobalAdmissionControl::class.java)

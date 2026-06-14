@@ -1,116 +1,109 @@
 package maple.externalapi.scheduler.phase
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
-import java.io.FileOutputStream
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.concurrent.CompletableFuture
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
-import maple.externalapi.domain.ExternalApiEndpoint
-import maple.externalapi.domain.ExternalApiProvider
-import maple.externalapi.parser.OcidResponseParser
-import maple.externalapi.port.out.ExternalApiClientPort
-import maple.externalapi.reader.CharacterNameReader
-import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
+import com.fasterxml.jackson.module.kotlin.kotlinModule
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.io.TempDir
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import maple.expectation.common.storage.ObjectInfo
+import maple.expectation.common.storage.ObjectStorage
+import maple.expectation.common.storage.PutResult
+import maple.expectation.infrastructure.external.NexonAuthClient
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import java.io.InputStream
+import java.time.Instant
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
+import java.util.zip.GZIPInputStream
 
 class OcidLookupPhaseTest {
 
-    @TempDir
-    lateinit var tempDir: Path
+    @Test
+    fun `execute streams OCID mapping gzipped to ObjectStorage under ocid-mapping key`() {
+        val storage = mock<ObjectStorage>()
+        val nexonClient = mock<NexonAuthClient>()
+        val objectMapper = ObjectMapper().registerModule(kotlinModule())
 
-    private lateinit var objectMapper: ObjectMapper
-    private lateinit var clientPort: ExternalApiClientPort
-    private lateinit var phase: OcidLookupPhase
-    private lateinit var executor: java.util.concurrent.ExecutorService
-
-    @BeforeEach
-    fun setUp() {
-        objectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())
-        clientPort = mock()
-        phase = OcidLookupPhase(
-            clientPort = clientPort,
-            ocidResponseParser = OcidResponseParser(objectMapper),
-            characterNameReader = CharacterNameReader(objectMapper),
-            ocidLookupPermitsPerSecond = 400,
-            batchSize = 1000,
-            storeBasePath = tempDir.resolve("store").toString(),
-            eventPublisher = maple.externalapi.snapshot.event.NoOpSnapshotChunkEventPublisher(),
-            maxInFlight = 100,
-            runIdGenerator = RunIdGenerator(java.time.Clock.systemDefaultZone()),
-            schedulerRateLimiter = SchedulerRateLimiter(),
-            schedulerProgressLogger = SchedulerProgressLogger(java.time.Clock.systemDefaultZone()),
-        )
-        executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()
-    }
-
-    @AfterEach
-    fun tearDown() {
-        executor.close()
-    }
-
-    private fun writeGzipJsonl(chunkFilePath: Path, keys: List<String>) {
-        Files.createDirectories(chunkFilePath.parent)
-        GZIPOutputStream(BufferedOutputStream(FileOutputStream(chunkFilePath.toFile()))).use { gzip ->
-            for (key in keys) {
-                val line = """{"endpoint":"ranking-overall","keyType":"DATE_PAGE","key":"$key","status":"SUCCESS","httpStatus":200,"fetchedAt":"2026-05-20T02:00:00Z","body":{"character_name":"$key"}}"""
-                gzip.write((line + "\n").toByteArray())
+        whenever(storage.listByPrefix(any())).thenReturn(listOf(
+            ObjectInfo("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz", 100, Instant.now())
+        ))
+        val chunkBytes = run {
+            val out = java.io.ByteArrayOutputStream()
+            java.util.zip.GZIPOutputStream(out).use { gz ->
+                gz.write("{\"key\":\"user1\"}\n{\"key\":\"user2\"}\n".toByteArray())
             }
+            out.toByteArray()
         }
-    }
+        whenever(storage.getStream("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz"))
+            .thenReturn(chunkBytes.inputStream())
 
-    @Test
-    fun `readCharacterNamesFromChunks extracts distinct keys from gzip JSONL`() {
-        val chunksDir = tempDir.resolve("runs").resolve("20260520-030000-123").resolve("ranking-overall").resolve("chunks")
-        writeGzipJsonl(chunksDir.resolve("part-000001.jsonl.gz"), listOf("PlayerA", "PlayerB", "PlayerC"))
-        writeGzipJsonl(chunksDir.resolve("part-000002.jsonl.gz"), listOf("PlayerC", "PlayerD"))
+        val clientPort = mock<maple.externalapi.port.out.ExternalApiClientPort>()
+        whenever(clientPort.fetch(any(), any(), any())).thenAnswer { invocation ->
+            val ign = invocation.getArgument<String>(2)
+            val payload = "{\"ocid\":\"ocid-for-$ign\"}"
+            CompletableFuture.completedFuture(payload.toByteArray())
+        }
 
-        val names = phase.readCharacterNamesFromChunks(tempDir.resolve("runs").resolve("20260520-030000-123"))
+        // Collect streamed bytes (replaces the previous put() call). This
+        // is exactly the path MinioObjectStorage.putStream takes: it drains
+        // the input to a temp file, then puts that file to S3.
+        val collectedBytes = java.util.concurrent.atomic.AtomicReference<ByteArray>()
+        whenever(storage.putStream(any(), any())).thenAnswer { invocation ->
+            val input = invocation.getArgument<InputStream>(1)
+            val bytes = input.readBytes()
+            collectedBytes.set(bytes)
+            PutResult(invocation.getArgument<String>(0), bytes.size.toLong(), null)
+        }
 
-        assertThat(names).containsExactlyInAnyOrder("PlayerA", "PlayerB", "PlayerC", "PlayerD")
-    }
+        val phase = OcidLookupPhase(
+            clientPort = clientPort,
+            objectMapper = objectMapper,
+            ocidLookupPermitsPerSecond = 100,
+            batchSize = 100,
+            eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
+            objectStorage = storage,
+            nexonAuthClient = nexonClient,
+        )
 
-    @Test
-    fun `readCharacterNamesFromChunks returns empty list when no chunk files`() {
-        val runDir = tempDir.resolve("runs").resolve("empty-run")
+        kotlinx.coroutines.runBlocking {
+            phase.execute(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                runKey = "runs/abc",
+            )
+        }
 
-        val names = phase.readCharacterNamesFromChunks(runDir)
+        // Verify the streaming putStream was called with the right key.
+        val mappingKeyCaptor = argumentCaptor<String>()
+        verify(storage).putStream(mappingKeyCaptor.capture(), any())
+        val mappingKey = mappingKeyCaptor.firstValue
+        assertNotNull(mappingKey)
+        assertTrue(
+            mappingKey.startsWith("ocid-mapping/ocid-mapping-"),
+            "expected mapping key to start with 'ocid-mapping/ocid-mapping-' but was '$mappingKey'",
+        )
+        assertTrue(
+            mappingKey.endsWith(".jsonl.gz"),
+            "expected mapping key to end with '.jsonl.gz' but was '$mappingKey'",
+        )
 
-        assertThat(names).isEmpty()
-    }
-
-    @Test
-    fun `execute writes only valid ocids when one Nexon response lacks ocid field`() {
-        val runDir = tempDir.resolve("runs").resolve("20260604-140000-001")
-        val chunksDir = runDir.resolve("ranking-overall").resolve("chunks")
-        writeGzipJsonl(chunksDir.resolve("part-000001.jsonl.gz"), listOf("PlayerValid", "PlayerNullOcid"))
-
-        whenever(
-            clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.OCID_LOOKUP, "PlayerValid"),
-        ).thenReturn(CompletableFuture.completedFuture("""{"ocid":"abc123"}""".toByteArray()))
-        whenever(
-            clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.OCID_LOOKUP, "PlayerNullOcid"),
-        ).thenReturn(CompletableFuture.completedFuture("""{"character_name":"x"}""".toByteArray()))
-
-        val outputPath = requireNotNull(phase.execute(executor, runDir).get()) { "execute returned null path" }
-
-        assertThat(Files.exists(outputPath)).isTrue
-
-        val lines = GZIPInputStream(BufferedInputStream(Files.newInputStream(outputPath)))
-            .bufferedReader()
-            .readLines()
-            .filter { it.isNotBlank() }
-        assertThat(lines).hasSize(1)
-        assertThat(lines[0]).contains("\"ocid\":\"abc123\"").contains("\"userIgn\":\"PlayerValid\"")
+        // The streamed bytes should be a non-empty valid gzip containing the
+        // expected userIgn/ocid pairs.
+        val bytes = collectedBytes.get()
+        assertNotNull(bytes, "putStream should have been called")
+        assertTrue(bytes!!.isNotEmpty(), "streamed bytes should not be empty")
+        val decompressed = GZIPInputStream(bytes.inputStream())
+            .bufferedReader().readText()
+        assertTrue(
+            decompressed.contains("user1") && decompressed.contains("ocid-for-user1"),
+            "expected mapping to contain user1/ocid pair, got: $decompressed",
+        )
+        assertTrue(
+            decompressed.contains("user2") && decompressed.contains("ocid-for-user2"),
+            "expected mapping to contain user2/ocid pair, got: $decompressed",
+        )
     }
 }

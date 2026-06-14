@@ -372,11 +372,14 @@ abstract class PgmqWorker<T : Any>(
      * Coroutine-parallel chunk processing: all messages in a chunk processed concurrently.
      * Replaces sequential for-loop with coroutine async/awaitAll for ~2-3x per-chunk speedup.
      * Multiple chunks still run in parallel across workerPoolSize threads.
+     *
+     * Issue #1131: outer runBlocking + inner async on Dispatchers.Default (CPU work = calculateOnly).
+     * Old: Dispatchers.IO (64 thread limit, CPU 점유 시 IO starvation 위험).
      */
     private fun processSequentialBatch(messages: List<PgmqMessage<T>>) {
-        val results: List<CalculationResult> = runBlocking(Dispatchers.IO) {
+        val results: List<CalculationResult> = runBlocking(Dispatchers.Default) {
             messages.map { message ->
-                async(Dispatchers.IO) {
+                async(Dispatchers.Default) {
                     metrics.concurrentIncrement()
                     val context = TaskContext.of("PgmqWorker", "CoroutineCalc", "$queueName:${message.messageId}")
                     val result = executor.executeOrDefault(

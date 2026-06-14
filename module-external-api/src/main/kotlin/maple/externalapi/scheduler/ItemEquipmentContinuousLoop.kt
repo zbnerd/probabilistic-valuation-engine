@@ -7,7 +7,10 @@ import java.util.concurrent.locks.ReentrantLock
 import maple.expectation.error.exception.DistributedLockException
 import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.metrics.SchedulerMetrics
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
+import maple.externalapi.scheduler.phase.RunIdGenerator
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
@@ -17,6 +20,12 @@ import org.springframework.stereotype.Component
  * Separated from [ExternalApiScheduler] so the scheduler can focus on the daily
  * pipeline trigger + lifecycle, and this class focuses on the long-running cycle.
  *
+ * Run-completion signal: ExternalApiScheduler transitions the run to
+ * [PipelinePhase.CHARACTER_BASIC_DONE] when char-basic ends. The first item-equipment
+ * cycle that completes AFTER that phase transition signals full run completion
+ * (sink closed, manifest + _SUCCESS marker written) via RunStatusTracker.completeRun.
+ * The phase guard prevents subsequent cycles from re-completing the same run.
+ *
  * State: one `ReentrantLock` + condition for the distributed mutex, and three
  * `AtomicBoolean`s for "loop started", "loop running", and "shutdown requested".
  */
@@ -25,6 +34,8 @@ class ItemEquipmentContinuousLoop(
     private val itemEquipmentFetchPhase: ItemEquipmentFetchPhase,
     private val ocidCacheProvider: OcidCacheProvider,
     private val schedulerMetrics: SchedulerMetrics,
+    private val runStatusTracker: RunStatusTracker,
+    private val runIdGenerator: RunIdGenerator,
     @Qualifier("externalApiSchedulerExecutor") private val executor: ExecutorService,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentContinuousLoop::class.java)
@@ -74,11 +85,53 @@ class ItemEquipmentContinuousLoop(
         }
         schedulerMetrics.incrementLockAcquired("item_equipment")
 
+        // Generate a per-cycle runId. The run-status tracker is updated
+        // ONLY if no daily pipeline is currently in flight — otherwise we
+        // would overwrite the daily run's runId and break the Airflow
+        // sensor (which expects the daily runId throughout the poll).
+        // The previous bug: PR #1278 unconditionally called
+        // startItemEquipmentCycle on every cycle, which clobbered the
+        // daily trigger's runId mid-pipeline and caused the Airflow
+        // sensor to mark the DAG FAILED after 2h of "mismatch" retries.
+        val cycleRunId = runIdGenerator.newRunId()
+        val current = runStatusTracker.getCurrentStatus()
+        if (current == null || current.isTerminal) {
+            // Either no run is tracked yet, or the last tracked run
+            // (daily or earlier cycle) has reached a terminal state.
+            // Safe to register this cycle's runId in /run-status.
+            // Initial phase is ITEM_EQUIPMENT, not RANKING_FETCH — the
+            // full ranking→ocid→char-basic chain (if any) is long over.
+            runStatusTracker.startItemEquipmentCycle(cycleRunId)
+        }
+        // else: a daily pipeline is in flight (RANKING_FETCH →
+        // CHARACTER_BASIC_DONE). The loop's per-cycle runId stays a
+        // log-correlation handle only; /run-status continues to show the
+        // daily runId. When the daily completes via the completeRun
+        // guard below, the next loop cycle will start a fresh
+        // ITEM_EQUIPMENT-status run.
+
         CompletableFuture.completedFuture(null)
-            .thenCompose { itemEquipmentFetchPhase.execute(executor, entries) }
+            .thenCompose { itemEquipmentFetchPhase.execute(executor, entries, cycleRunId) }
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] ITEM_EQUIPMENT cycle failed", ex)
+                } else {
+                    // Cycle finished cleanly (sink closed, manifest + _SUCCESS written).
+                    // If char-basic has already finished for the current run, this cycle
+                    // represents run completion. Guarded by phase to make it idempotent —
+                    // subsequent cycles see COMPLETED and skip the completeRun call.
+                    val current = runStatusTracker.getCurrentStatus()
+                    if (current != null &&
+                        current.phase == PipelinePhase.CHARACTER_BASIC_DONE
+                    ) {
+                        val chunks = schedulerMetrics.drainRunChunks().toInt()
+                        val records = schedulerMetrics.drainRunRecords()
+                        runStatusTracker.completeRun(current.runId, chunks, records)
+                        log.info(
+                            "[Scheduler] run completed, runId={} chunks={} records={}",
+                            current.runId, chunks, records,
+                        )
+                    }
                 }
                 releaseLock()
                 executor.submit { runItemEquipmentCycle() }

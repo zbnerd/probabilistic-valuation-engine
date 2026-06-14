@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component
 class KafkaEventPublisher(
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor,
-    @Qualifier("taskExecutor") private val taskExecutor: Executor,
+    @Qualifier("defaultAsyncExecutor") private val taskExecutor: Executor,
 ) : EventPublisher {
 
     private val logger = LoggerFactory.getLogger(KafkaEventPublisher::class.java)

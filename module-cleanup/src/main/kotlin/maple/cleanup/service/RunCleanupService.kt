@@ -1,7 +1,5 @@
 package maple.cleanup.service
 
-import java.nio.file.Files
-import java.nio.file.Paths
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -9,13 +7,14 @@ import maple.cleanup.config.CleanupProperties
 import maple.common.cleanup.RunCleanupExecutor
 import maple.common.cleanup.RunCleanupResult
 import maple.common.cleanup.RunInfo
+import maple.expectation.common.storage.ObjectStorage
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 
 /**
- * Whole-run GC. Wraps the shared RunCleanupExecutor with a path prefix so the same
- * service can target either runs/ (ext source) or calculator/runs/ (calc result).
+ * Whole-run GC. Wraps the shared RunCleanupExecutor with an object-storage
+ * prefix so the same service can target either runs/ (ext source) or
+ * calculator/runs/ (calc result).
  *
  * runId format: yyyyMMdd-HHmmss-{nanoseconds}. Timestamp is parsed from the runId
  * (not filesystem ctime, which on Linux is inode creation time and not reliable).
@@ -24,8 +23,8 @@ import org.springframework.stereotype.Service
  */
 @Service
 class RunCleanupService(
-    @Value("\${cleanup.base-path:../data}") private val basePath: String,
     private val properties: CleanupProperties,
+    private val objectStorage: ObjectStorage,
 ) {
     private val log = LoggerFactory.getLogger(RunCleanupService::class.java)
     private val cleanupExecutor = RunCleanupExecutor("Cleanup")
@@ -35,49 +34,43 @@ class RunCleanupService(
     fun cleanupRuns(): RunCleanupResult = cleanupPrefix("runs")
     fun cleanupCalculatorRuns(): RunCleanupResult = cleanupPrefix("calculator/runs")
 
-    fun cleanupPrefix(prefix: String): RunCleanupResult {
+    fun cleanupPrefix(prefix: String, now: Instant = Instant.now()): RunCleanupResult {
         val startedAt = Instant.now()
         log.info("[Cleanup] started prefix={} dryRun={}", prefix, properties.dryRun)
 
-        val runDirs = listRunDirs(prefix)
-        if (runDirs.isEmpty()) {
-            log.info("[Cleanup] no runs found at {}/{}", basePath, prefix)
+        val runIds = listRunIds(prefix)
+        if (runIds.isEmpty()) {
+            log.info("[Cleanup] no runs found at prefix={}", prefix)
             return RunCleanupResult.ZERO
         }
 
-        val runInfos = runDirs.mapNotNull { runId -> parseRunInfo(prefix, runId) }
+        val runInfos = runIds.mapNotNull { runId -> parseRunInfo(prefix, runId) }
 
         return cleanupExecutor.cleanup(
             runs = runInfos,
             dryRun = properties.dryRun,
             keepRecent = properties.runs.keepRecent,
             keepWithinHours = properties.runs.keepWithinHours,
-            now = Instant.now(),
+            now = now,
             maxDeleteRunsPerCycle = properties.maxDeleteRunsPerCycle,
             maxDeleteBytesPerCycle = properties.maxDeleteBytesPerCycle,
             maxRuntimeSeconds = properties.maxRuntimeSeconds,
             startedAt = startedAt,
-            deleteRun = { run -> deleteDirectory("$prefix/${run.runId}") },
+            deleteRun = { run -> deleteRun(prefix, run.runId) },
         )
     }
 
-    private fun listRunDirs(prefix: String): List<String> {
-        val path = Paths.get(basePath, prefix)
-        if (!Files.exists(path)) return emptyList()
-        return Files.list(path).use { stream ->
-            stream.filter { Files.isDirectory(it) }
-                .map { it.fileName.toString() }
-                .sorted()
-                .toList()
-        }
+    private fun listRunIds(prefix: String): List<String> {
+        val keys = objectStorage.listByPrefix("$prefix/").map { it.key }
+        return keys.mapNotNull { key ->
+            val remainder = key.removePrefix(prefix).trimStart('/')
+            remainder.substringBefore('/').takeIf { it.isNotEmpty() }
+        }.distinct().sorted()
     }
 
     private fun parseRunInfo(prefix: String, runId: String): RunInfo? {
-        val fullPath = "$prefix/$runId"
-        val runPath = Paths.get(basePath, fullPath)
-        if (!Files.exists(runPath)) return null
-        val runningMarker = Paths.get(basePath, "$fullPath/_RUNNING")
-        if (Files.exists(runningMarker)) {
+        val runKey = "$prefix/$runId"
+        if (objectStorage.exists("$runKey/_RUNNING")) {
             log.info("[Cleanup] skipping active run: {}", runId)
             return null
         }
@@ -87,7 +80,7 @@ class RunCleanupService(
                 log.warn("[Cleanup] skipping unparseable runId: {}", runId)
                 return null
             }
-        val sizeBytes = calculateDirectorySize(fullPath)
+        val sizeBytes = objectStorage.calculatePrefixSize(runKey)
         return RunInfo(
             runId = runId,
             createdAt = createdAt,
@@ -96,26 +89,10 @@ class RunCleanupService(
         )
     }
 
-    private fun calculateDirectorySize(relativePath: String): Long {
-        val path = Paths.get(basePath, relativePath)
-        if (!Files.exists(path)) return 0L
-        var total = 0L
-        Files.walk(path).use { stream ->
-            stream.filter(Files::isRegularFile).forEach { total += Files.size(it) }
-        }
-        return total
-    }
-
-    private fun deleteDirectory(relativePath: String): Long {
-        val path = Paths.get(basePath, relativePath)
-        if (!Files.exists(path)) return 0L
-        var total = 0L
-        Files.walk(path).use { stream ->
-            stream.sorted(Comparator.reverseOrder()).forEach {
-                if (Files.isRegularFile(it)) total += Files.size(it)
-                Files.deleteIfExists(it)
-            }
-        }
-        return total
+    private fun deleteRun(prefix: String, runId: String): Long {
+        val runKey = "$prefix/$runId"
+        val size = objectStorage.calculatePrefixSize(runKey)
+        objectStorage.deleteByPrefix(runKey)
+        return size
     }
 }

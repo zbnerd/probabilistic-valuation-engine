@@ -1,6 +1,7 @@
 package maple.restcontroller.read
 
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import maple.expectation.util.StringMaskingUtils.maskIgn
 import maple.restcontroller.config.V6ReadProperties
 import maple.restcontroller.metrics.V6ReadMetrics
@@ -16,6 +17,10 @@ import org.slf4j.LoggerFactory
  * pipeline triggered or no urgent publisher). The caller is responsible for
  * mapping each [ResolvedItem] to a `ResponseEntity` and applying it to the
  * matching deferreds — see [ExpectationReadResponseMapper].
+ *
+ * The DB query path returns [CompletableFuture] so JDBC IO and CPU (gzip+JSON)
+ * stay off the caller's thread (per #1130). Callers chain with
+ * `.whenComplete { result, ex -> ... }` — no `.join()`.
  */
 class BatchResolver(
     private val readModelCacheService: ReadModelCacheService,
@@ -29,8 +34,10 @@ class BatchResolver(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun resolveBatch(batch: List<ReadRequest>): BatchResolveResult {
-        if (batch.isEmpty()) return BatchResolveResult.AllResolved(emptyList())
+    fun resolveBatch(batch: List<ReadRequest>): CompletableFuture<BatchResolveResult> {
+        if (batch.isEmpty()) {
+            return CompletableFuture.completedFuture(BatchResolveResult.AllResolved(emptyList()))
+        }
 
         val requests = batch.associate { it.userIgn to it.presetNo }
         val resolved = mutableListOf<ResolvedItem>()
@@ -49,17 +56,22 @@ class BatchResolver(
             )
         }
 
-        // 3. DB batch query for cache misses, including urgent-pending keys.
-        if (cacheMisses.isNotEmpty()) {
-            val dbResults = queryService.batchQuery(
-                cacheMisses,
-                Duration.ofSeconds(properties.readModelFreshnessSeconds),
+        // 3. If no cache misses, short-circuit
+        if (cacheMisses.isEmpty()) {
+            return CompletableFuture.completedFuture(
+                BatchResolveResult.AllResolved(resolved),
             )
+        }
 
-            // 4. Write DB results to Redis cache
+        // 4. DB batch query for cache misses (async IO/CPU offload)
+        return queryService.batchQuery(
+            cacheMisses,
+            Duration.ofSeconds(properties.readModelFreshnessSeconds),
+        ).thenApply { dbResults ->
+            // 5. Write DB results to Redis cache
             readModelCacheService.multiPut(dbResults)
 
-            // 5. Resolve miss deferreds
+            // 6. Resolve miss deferreds
             cacheMisses.keys.forEach { userIgn ->
                 val presetNo = cacheMisses[userIgn] ?: 1
                 val response = dbResults[userIgn]
@@ -94,13 +106,13 @@ class BatchResolver(
                     // Otherwise DeferredResult will time out → 202 Accepted
                 }
             }
-        }
 
-        val pendingCount = batch.size - resolved.size
-        return if (pendingCount == 0) {
-            BatchResolveResult.AllResolved(resolved)
-        } else {
-            BatchResolveResult.PartiallyResolved(resolved, pendingCount)
+            val pendingCount = batch.size - resolved.size
+            if (pendingCount == 0) {
+                BatchResolveResult.AllResolved(resolved)
+            } else {
+                BatchResolveResult.PartiallyResolved(resolved, pendingCount)
+            }
         }
     }
 }

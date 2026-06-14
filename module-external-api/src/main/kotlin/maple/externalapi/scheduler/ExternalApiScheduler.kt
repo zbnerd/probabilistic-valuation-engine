@@ -1,125 +1,180 @@
 package maple.externalapi.scheduler
 
-import java.util.UUID
-import java.util.concurrent.ExecutorService
-import maple.expectation.error.exception.DistributedLockException
-import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import maple.externalapi.cache.OcidCacheProvider
-import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
+import maple.externalapi.scheduler.phase.RunIdGenerator
+import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
-
-/** 1 hour — long enough for the full daily refresh pipeline (snapshot → ocid → ranking) to complete without contention, but bounded so a hung worker releases the lock within one refresh cycle. */
-private const val DAILY_REFRESH_LOCK_TIMEOUT_MS: Long = 3_600_000L
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
 
 @Component
+@ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
 class ExternalApiScheduler(
     private val ocidLookupPhase: OcidLookupPhase,
-    private val characterBasicFetchPhase: CharacterBasicFetchPhase,
     private val ocidCacheProvider: OcidCacheProvider,
     private val rankingFetchPhaseProvider: ObjectProvider<RankingFetchPhase>,
+    private val characterBasicPhaseProvider: ObjectProvider<CharacterBasicFetchPhase>,
+    private val itemEquipmentContinuousLoop: ItemEquipmentContinuousLoop,
     private val runStatusTracker: RunStatusTracker,
-    private val schedulerMetrics: SchedulerMetrics,
-    private val itemEquipmentLoop: ItemEquipmentContinuousLoop,
-    @Value("\${external-api.schedule.enabled:false}")
-    private val scheduleEnabled: Boolean,
+    private val runIdGenerator: RunIdGenerator,
     @Value("\${external-api.schedule.run-on-startup:false}")
     private val runOnStartup: Boolean,
     @Value("\${external-api.schedule.skip-character-basic:false}")
     private val skipCharacterBasic: Boolean,
-    @Qualifier("externalApiSchedulerExecutor") private val executor: ExecutorService,
-) : ManagedLifecycle {
+	) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
+    private val running = AtomicBoolean(false)
+    private val shutdown = AtomicBoolean(false)
+    private val executor = Executors.newVirtualThreadPerTaskExecutor()
+    private val lock = ReentrantLock()
+    private val idle = lock.newCondition()
 
     @EventListener(ApplicationReadyEvent::class)
     fun onStartup() {
-        if (!scheduleEnabled) return
         ocidCacheProvider.refresh()
         if (runOnStartup) {
             log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
-            triggerDailyRefresh()
+            triggerDailyRefresh(null)
         }
+        itemEquipmentContinuousLoop.startItemEquipmentLoopOnce()
     }
 
     @Scheduled(cron = "\${external-api.schedule.daily-cron:0 0 3 * * *}")
     fun scheduledDailyRefresh() {
-        if (!scheduleEnabled) return
-        triggerDailyRefresh()
+        triggerDailyRefresh(null)
     }
 
-    fun triggerDailyRefresh(externalRunId: String? = null) {
-        try {
-            itemEquipmentLoop.acquireSchedulerLock("daily_refresh", DAILY_REFRESH_LOCK_TIMEOUT_MS)
-        } catch (ex: DistributedLockException) {
-            log.error("[Scheduler] could not acquire lock for daily refresh, skipping until next cron", ex)
+    fun triggerDailyRefresh(airflowRunId: String?) {
+        if (!acquireLock(3_600_000)) {
+            log.warn("[Scheduler] could not acquire lock for daily refresh, skipping")
             return
         }
-        schedulerMetrics.incrementLockAcquired("daily_refresh")
         if (skipCharacterBasic) {
             log.info("[Scheduler] skip-character-basic enabled, loading OCID cache from existing data")
             ocidCacheProvider.refresh()
-            itemEquipmentLoop.releaseSchedulerLock()
-            itemEquipmentLoop.startItemEquipmentLoopOnce()
+            releaseLock()
             return
         }
 
         val rankingPhase = rankingFetchPhaseProvider.ifAvailable
         if (rankingPhase == null) {
             log.error("[Scheduler] ranking fetch phase is required but not enabled")
-            itemEquipmentLoop.releaseSchedulerLock()
-            itemEquipmentLoop.startItemEquipmentLoopOnce()
+            releaseLock()
             return
         }
 
-        val runId = externalRunId ?: UUID.randomUUID().toString()
+        // Generate the runId here, BEFORE the async chain starts, so the
+        // run-status tracker transitions to RANKING_FETCH for the new run
+        // immediately. Previously this happened inside the .handle callback
+        // of ranking.execute(), which meant a new pipeline cycle would leave
+        // the previous run's FAILED status visible on /api/internal/run-status
+        // until ranking.fetch completed — and any failure before that
+        // (e.g. ItemEquipmentContinuousLoop picking up a fresh OCID mapping
+        // written by a sibling process) would never transition the tracker
+        // at all. See bug repro in commit a4f380f1d.
+        val runId = runIdGenerator.newRunId()
         runStatusTracker.startRun(runId)
 
-        log.info("[Scheduler] starting ranking fetch phase, runId={}", runId)
-        runStatusTracker.transitionPhase(PipelinePhase.RANKING_FETCH)
-        rankingPhase.execute(executor)
-            .thenCompose { runDir ->
-                val resolved = runDir ?: error("ranking fetch returned null runDir")
-                runStatusTracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
-                ocidLookupPhase.execute(executor, resolved)
+        log.info("[Scheduler] starting ranking fetch phase: runId={}", runId)
+        rankingPhase.execute(executor, runId)
+            .handle { runKey, ex ->
+                if (ex != null) {
+                    log.error("[Scheduler] ranking fetch failed, cannot proceed with OCID lookup", ex)
+                }
+                runKey
             }
-            .thenCompose { _ ->
-                val cache = ocidCacheProvider.refresh()
+            .thenCompose { runKey ->
+                if (runKey == null) {
+                    CompletableFuture.completedFuture(null)
+                } else {
+                    runStatusTracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
+                    // OcidLookupPhase.execute() is now suspend fun (Issue #1128).
+                    // Caller thread is multi-threaded VT (Executors.newVirtualThreadPerTaskExecutor).
+                    // runBlocking bridges to Default dispatcher for CPU offload.
+                    // Single submit thread blocked for OCID lookup duration; no other submit affected.
+                    runBlocking { ocidLookupPhase.execute(executor, runKey) }
+                        .let { CompletableFuture.completedFuture(it) }
+                }
+            }
+            .thenCompose {
+                ocidCacheProvider.refresh()
                 runStatusTracker.transitionPhase(PipelinePhase.CHARACTER_BASIC)
-                characterBasicFetchPhase.execute(executor, cache)
+                val charBasicPhase = characterBasicPhaseProvider.ifAvailable
+                if (charBasicPhase == null) {
+                    log.warn("[Scheduler] character-basic phase not enabled, skipping")
+                    CompletableFuture.completedFuture(null)
+                } else {
+                    val ocidCache = ocidCacheProvider.current()
+                    if (ocidCache.isEmpty()) {
+                        log.warn("[Scheduler] OCID cache empty after OCID lookup, skipping character-basic")
+                        CompletableFuture.completedFuture(null)
+                    } else {
+                        log.info("[Scheduler] starting character-basic fetch ({} entries)", ocidCache.size)
+                        charBasicPhase.execute(executor, ocidCache)
+                    }
+                }
             }
             .whenComplete { _, ex ->
                 if (ex != null) {
-                    val cause = ex.cause ?: ex
-                    val message = cause.message ?: cause::class.simpleName ?: "unknown error"
-                    runStatusTracker.failRun(runId, message)
-                    log.error("[Scheduler] daily refresh failed, runId={}", runId, cause)
-                    itemEquipmentLoop.releaseSchedulerLock()
+                    log.error("[Scheduler] daily refresh failed", ex)
+                    runStatusTracker.getCurrentStatus()?.runId?.let { runId ->
+                        runStatusTracker.failRun(runId, ex.message ?: "unknown")
+                    }
                 } else {
-                    val chunks = schedulerMetrics.drainRunChunks().toInt()
-                    val records = schedulerMetrics.drainRunRecords()
-                    runStatusTracker.completeRun(runId, chunks, records)
-                    log.info("[Scheduler] daily refresh completed, runId={} chunks={} records={}", runId, chunks, records)
-                    itemEquipmentLoop.releaseSchedulerLock()
-                    itemEquipmentLoop.startItemEquipmentLoopOnce()
+                    // Char-basic finished; item-equipment runs in a SEPARATE continuous loop
+                    // (ItemEquipmentContinuousLoop) and signals run completion there. Marking
+                    // CHARACTER_BASIC_DONE here so observers (Airflow sensor, /run-status API)
+                    // can distinguish "char-basic finished, item-equipment still in flight"
+                    // from "fully completed." ItemEquipmentContinuousLoop's whenComplete
+                    // checks this phase and only then calls completeRun.
+                    runStatusTracker.transitionPhase(PipelinePhase.CHARACTER_BASIC_DONE)
+                    log.info("[Scheduler] char-basic finished, item-equipment in continuous loop")
                 }
+                releaseLock()
             }
+    }
+
+    private fun acquireLock(timeoutMs: Long): Boolean {
+        lock.lock()
+        try {
+            var remainingNanos = timeoutMs * 1_000_000L
+            while (!running.compareAndSet(false, true)) {
+                if (remainingNanos <= 0) return false
+                remainingNanos = idle.awaitNanos(remainingNanos)
+            }
+            return true
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    private fun releaseLock() {
+        running.set(false)
+        lock.lock()
+        try { idle.signalAll() } finally { lock.unlock() }
     }
 
     override val lifecyclePhase: Int = 100
 
     override fun stopLifecycle() {
         log.info("[Scheduler] shutdown requested")
-        itemEquipmentLoop.stop()
+        shutdown.set(true)
+        executor.close()
+        itemEquipmentContinuousLoop.stop()
     }
 }

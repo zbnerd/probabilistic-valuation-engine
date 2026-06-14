@@ -143,9 +143,14 @@ executor:
     max-pool-size: 4
     queue-capacity: 200
   expectation:
-    core-pool-size: 4     # Compute: I/O-bound × 2 (파싱/계산/외부 호출)
-    max-pool-size: 8
-    queue-capacity: 200
+    compute-io:
+      core-pool-size: 4     # IO-bound: 파싱/계산/외부 호출
+      max-pool-size: 8
+      queue-capacity: 200
+    compute-cpu:
+      core-pool-size: 4     # CPU-bound: JSON parse/serialization/계산
+      max-pool-size: 8
+      queue-capacity: 1000
   async:
     core-pool-size: 4     # @Async methods: 1:2 ratio
     max-pool-size: 8

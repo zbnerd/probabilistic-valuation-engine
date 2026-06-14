@@ -31,7 +31,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
  *   <li>ExceptionTranslator, LoggingPolicy
  *   <li>contextPropagatingDecorator, taskDecoratorFactory
  *   <li>rejectionPolicyFactory, executorMetricsConfigurator
- *   <li>taskExecutor (기본 @Async용)
+ *   <li>defaultAsyncExecutor (기본 @Async용)
  * </ul>
  *
  * @see InfraExecutorConfig
@@ -93,9 +93,9 @@ class CoreExecutorConfig(
 
     // ==================== Default TaskExecutor ====================
 
-    @Bean(name = ["taskExecutor"])
-    @ConditionalOnMissingBean(name = ["taskExecutor"])
-    fun taskExecutor(contextPropagatingDecorator: TaskDecorator): java.util.concurrent.Executor {
+    @Bean(name = ["defaultAsyncExecutor"])
+    @ConditionalOnMissingBean(name = ["defaultAsyncExecutor"])
+    fun defaultAsyncExecutor(contextPropagatingDecorator: TaskDecorator): java.util.concurrent.Executor {
         val config = executorProperties.async
         val executor = ThreadPoolTaskExecutor()
         executor.corePoolSize = config.corePoolSize
@@ -113,7 +113,7 @@ class CoreExecutorConfig(
         executor.initialize()
         executorMetricsConfigurator().registerExecutorMetrics(executor, "async")
 
-        log.info("[CoreExecutorConfig] taskExecutor initialized: core={}, max={}, queue={}", config.corePoolSize, config.maxPoolSize, config.queueCapacity)
+        log.info("[CoreExecutorConfig] defaultAsyncExecutor initialized: core={}, max={}, queue={}", config.corePoolSize, config.maxPoolSize, config.queueCapacity)
         return executor
     }
 }

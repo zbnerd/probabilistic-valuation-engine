@@ -144,6 +144,44 @@ services:
       loki:
         condition: service_healthy
 
+  # MinIO object storage (V1 / issue #1216)
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    networks:
+      - maple-network
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - maple-network
+    entrypoint: |
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD;
+      mc mb -p local/maple-expectation || true;
+      mc anonymous set none local/maple-expectation;
+      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'snapshots/' || true;
+      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'runs/' || true;
+      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'calculator/' || true;
+      mc ilm add local/maple-expectation --expiry-days 2 --prefix 'ocid-mapping/' || true;
+      "
+
 networks:
   maple-network:
     driver: bridge
@@ -154,6 +192,7 @@ networks:
 volumes:
   prometheus_data:
   grafana_data:
+  minio_data:
   postgres_data:
   kafka_data:
   redis_data:

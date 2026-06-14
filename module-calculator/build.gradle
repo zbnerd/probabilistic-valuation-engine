@@ -19,8 +19,8 @@ dependencies {
 	implementation(libs.kotlin.logging.jvm)
 	implementation(libs.kotlinx.coroutines.core)
 	implementation(libs.kotlinx.coroutines.jdk8)
-	implementation(libs.kotlinx.coroutines.reactor)
 	implementation(libs.kotlinx.coroutines.slf4j)
+	implementation(libs.kotlinx.coroutines.reactor)
 
 	// Spring
 	implementation(libs.spring.boot)

@@ -48,6 +48,7 @@ allprojects {
 	        mavenBom "org.springframework.boot:spring-boot-dependencies:${libs.versions.spring.boot.get()}"
 	        mavenBom "io.github.resilience4j:resilience4j-bom:${libs.versions.resilience4j.get()}"
 	        mavenBom "org.testcontainers:testcontainers-bom:${libs.versions.testcontainers.get()}"
+	        mavenBom "software.amazon.awssdk:bom:${libs.versions.aws.sdk.get()}"
 	    }
 	}
 

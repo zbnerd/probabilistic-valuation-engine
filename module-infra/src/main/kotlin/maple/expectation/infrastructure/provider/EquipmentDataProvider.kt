@@ -21,7 +21,7 @@ class EquipmentDataProvider(
     private val objectMapper: ObjectMapper,
     private val executor: LogicExecutor,
     @Value("\${app.optimization.use-compression:true}") private val useCompression: Boolean,
-    @Qualifier("taskExecutor") private val taskExecutor: Executor,
+    @Qualifier("defaultAsyncExecutor") private val taskExecutor: Executor,
 ) {
     private val logger = LoggerFactory.getLogger(EquipmentDataProvider::class.java)
 

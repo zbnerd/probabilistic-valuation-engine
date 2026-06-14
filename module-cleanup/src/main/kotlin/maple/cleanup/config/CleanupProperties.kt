@@ -10,6 +10,7 @@ data class CleanupProperties(
     /** 5 GB hard cap on bytes deleted per cleanup cycle. */
     val maxDeleteBytesPerCycle: Long = 5L * 1024 * 1024 * 1024,
     val maxRuntimeSeconds: Long = 60,
+    val kafkaBootstrapServers: String = "localhost:9092",
 ) {
     data class Runs(
         val keepRecent: Int = 5,

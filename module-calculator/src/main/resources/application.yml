@@ -32,6 +32,10 @@ calculator:
     urgent-consumer-group-id: calculator-urgent-chunk-processor
     consumer-max-retries: 3
     consumer-retry-backoff-ms: 500
+  external-api:
+    base-url: ${CALCULATOR_EXTERNAL_API_BASE_URL:http://localhost:8081}
+  run-id-tracker:
+    poll-interval-ms: 30000
   store:
     input-base-path: ../data
   cleanup:

@@ -11,6 +11,7 @@ class CalculatorMetrics(registry: MeterRegistry) {
     private val chunksSkipped = registry.counter("calculator_chunks_skipped_total", "reason", "endpoint_mismatch")
     private val chunksNotFound = registry.counter("calculator_chunks_skipped_total", "reason", "source_not_found")
     private val chunksIdempotent = registry.counter("calculator_chunks_skipped_total", "reason", "result_exists")
+    private val chunksStaleRun = registry.counter("calculator_chunks_skipped_total", "reason", "stale_run")
     private val chunksFailed = registry.counter("calculator_chunks_failed_total")
 
     private val usersProcessed = registry.counter("calculator_users_processed_total")
@@ -39,6 +40,7 @@ class CalculatorMetrics(registry: MeterRegistry) {
     fun recordChunkSkippedEndpoint() = chunksSkipped.increment()
     fun recordChunkSkippedNotFound() = chunksNotFound.increment()
     fun recordChunkSkippedIdempotent() = chunksIdempotent.increment()
+    fun recordChunkSkippedStaleRun() = chunksStaleRun.increment()
     fun recordChunkFailed() = chunksFailed.increment()
 
     fun recordUsers(count: Int) = usersProcessed.increment(count.toDouble())

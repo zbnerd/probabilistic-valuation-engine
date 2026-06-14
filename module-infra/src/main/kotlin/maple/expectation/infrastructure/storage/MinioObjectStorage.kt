@@ -161,15 +161,33 @@ class MinioObjectStorage(
     }
 
     override fun listByPrefix(prefix: String): List<ObjectInfo> {
-        val req = ListObjectsV2Request.builder().bucket(props.bucket).prefix(prefix).build()
-        return s3.listObjectsV2(req).contents().map { obj ->
-            ObjectInfo(
-                key = obj.key(),
-                size = obj.size(),
-                lastModified = obj.lastModified(),
-                etag = obj.eTag(),
-            )
-        }
+        // Paginate via continuationToken. S3 ListObjectsV2 caps each page at
+        // 1000 keys by default; without the loop we silently dropped any
+        // keys past the first page. Module-cleanup's RunCleanupService
+        // extracts runIds from these keys; truncated listings made the
+        // cleanup return "no runs to delete" even when dozens of old runs
+        // were eligible (e.g., 76 runs, only the first 2 runIds visible).
+        val results = mutableListOf<ObjectInfo>()
+        var continuation: String? = null
+        do {
+            val req = ListObjectsV2Request.builder()
+                .bucket(props.bucket).prefix(prefix)
+                .continuationToken(continuation)
+                .build()
+            val resp = s3.listObjectsV2(req)
+            resp.contents().forEach { obj ->
+                results.add(
+                    ObjectInfo(
+                        key = obj.key(),
+                        size = obj.size(),
+                        lastModified = obj.lastModified(),
+                        etag = obj.eTag(),
+                    )
+                )
+            }
+            continuation = resp.nextContinuationToken()
+        } while (continuation != null)
+        return results
     }
 
     override fun deleteByPrefix(prefix: String): Long {

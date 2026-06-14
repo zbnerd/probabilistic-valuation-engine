@@ -1,6 +1,7 @@
 package maple.calculator
 
 import maple.calculator.config.CalculatorEngineConfiguration
+import maple.calculator.config.ExternalApiRunStatusProperties
 import maple.calculator.config.PipelineProperties
 import maple.expectation.infrastructure.config.KafkaConsumerConfig
 import org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
@@ -13,7 +14,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 
 @SpringBootApplication(exclude = [SecurityAutoConfiguration::class, ManagementWebSecurityAutoConfiguration::class])
 @EnableScheduling
-@EnableConfigurationProperties(PipelineProperties::class)
+@EnableConfigurationProperties(PipelineProperties::class, ExternalApiRunStatusProperties::class)
 @Import(CalculatorEngineConfiguration::class, KafkaConsumerConfig::class, maple.expectation.infrastructure.storage.StorageConfig::class, maple.expectation.infrastructure.storage.MinioHealthIndicator::class)
 class CalculatorApplication
 

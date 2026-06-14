@@ -3,6 +3,7 @@ package maple.cleanup.controller
 import maple.cleanup.inbox.ConsumedChunkInbox
 import maple.cleanup.inbox.InboxProperties
 import maple.cleanup.service.RunCleanupService
+import maple.cleanup.service.StaleKafkaSkipService
 import maple.common.cleanup.RunCleanupResult
 import maple.expectation.common.storage.ObjectStorage
 import org.slf4j.LoggerFactory
@@ -29,6 +30,7 @@ class CleanupController(
     private val inbox: ConsumedChunkInbox,
     private val inboxProperties: InboxProperties,
     private val objectStorage: ObjectStorage,
+    private val staleKafkaSkipService: StaleKafkaSkipService,
 ) {
     private val log = LoggerFactory.getLogger(CleanupController::class.java)
 
@@ -37,6 +39,27 @@ class CleanupController(
         log.info("[CleanupController] POST /runs")
         return ResponseEntity.ok(runCleanupService.cleanupRuns())
     }
+
+    @PostMapping("/stale-kafka")
+    fun scanStaleKafka(
+        @org.springframework.web.bind.annotation.RequestBody request: StaleKafkaRequest,
+    ): ResponseEntity<List<StaleKafkaSkipService.ScanResult>> {
+        log.info("[CleanupController] POST /stale-kafka topics={} keepRunIds={}", request.topics, request.keepRunIds)
+        val results = request.topics.map { topic ->
+            staleKafkaSkipService.scanForStaleMessages(
+                topic = topic,
+                consumerGroup = request.consumerGroup,
+                keepRunIds = request.keepRunIds.toSet(),
+            )
+        }
+        return ResponseEntity.ok(results)
+    }
+
+    data class StaleKafkaRequest(
+        val topics: List<String>,
+        val consumerGroup: String,
+        val keepRunIds: List<String>,
+    )
 
     @PostMapping("/calculator-runs")
     fun cleanupCalculatorRuns(): ResponseEntity<RunCleanupResult> {

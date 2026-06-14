@@ -123,7 +123,13 @@ until curl -sf http://localhost:8083/actuator/health > /dev/null 2>&1; do sleep 
 echo "synchronizer ready on 8083"
 
 # 4) Cleanup (8084) — consumes synchronizer.chunk.consumed + runs artifact GC
-nohup java -Xms512m -Xmx1g -jar module-cleanup/build/libs/module-cleanup-0.0.1-SNAPSHOT.jar > logs/pipeline-test-cleanup.log 2>&1 &
+# -Dstorage.backend=minio is REQUIRED: StorageConfig's @ConditionalOnProperty
+# has matchIfMissing=true, so a missing/unset property silently falls back to
+# LocalFsObjectStorage which reads from ../data/runs/ (empty when MinIO is
+# active). Symptom: cleanup endpoint returns runsDeleted=0 / "no runs found"
+# while the MinIO bucket actually holds hundreds of old runs. The explicit
+# -D flag prevents env-var propagation failures from breaking cleanup silently.
+nohup java -Xms512m -Xmx1g -Dstorage.backend=minio -jar module-cleanup/build/libs/module-cleanup-0.0.1-SNAPSHOT.jar > logs/pipeline-test-cleanup.log 2>&1 &
 until curl -sf http://localhost:8084/actuator/health > /dev/null 2>&1; do sleep 2; done
 echo "cleanup ready on 8084"
 ```
@@ -185,6 +191,28 @@ done
 ```
 
 If `STORAGE_BACKEND=local`, this step is skipped.
+
+#### 4b. Cleanup module storage backend verification (required)
+
+`module-cleanup` can silently fall back to `LocalFsObjectStorage` (which reads from an empty `../data/runs/`) even when the rest of the pipeline writes to MinIO. After step 4a, hit the cleanup endpoint and inspect the log — `runsDeleted=0` alone is NOT a failure (keep-recent=5 may legitimately keep everything), but `no runs found at prefix=runs` in the log is the LocalFs fallback signature.
+
+```bash
+# Trigger one cleanup cycle, then inspect the log for the fallback signature.
+curl -s -X POST http://localhost:8084/api/internal/cleanup/runs > /dev/null
+sleep 3
+# Healthy: log shows "started prefix=runs dryRun=false" followed by either
+#          "candidates: N of M scanned" (M >= 1) or "no runs to delete"
+#          (M > 0 scanned, keep-recent=5 holds everything — normal).
+# Broken:  log shows "no runs found at prefix=runs" — LocalFs reading empty
+#          ../data/runs/ (StorageConfig matchIfMissing=true default).
+last=$(grep -E "started prefix=|candidates:|no runs" logs/pipeline-test-cleanup.log | tail -3)
+echo "${last}"
+if echo "${last}" | grep -q "no runs found at prefix=runs"; then
+  echo "Cleanup fell back to LocalFsObjectStorage (StorageConfig matchIfMissing=true)"
+  echo "Fix: restart module-cleanup with -Dstorage.backend=minio (step 3)"
+  exit 4
+fi
+```
 
 ### 5. Start Airflow
 
@@ -450,6 +478,7 @@ docker compose -f docker-compose.yml -f docker-compose.airflow.yml stop airflow-
 | Airflow can't reach services | Verify `host.docker.internal` in docker-compose.airflow.yml, check services are running on host |
 | Airflow sensor false positive | Verify runId correlation — sensor checks `current.runId` matches trigger response |
 | Airflow DB connection failed | Ensure maple-network exists: `docker network create maple-network` |
+| Cleanup returns 0 / "no runs found" while MinIO has old runs | `module-cleanup` defaulted to `LocalFsObjectStorage` (reads empty `../data/runs/`). Restart with `-Dstorage.backend=minio` JVM flag. StorageConfig's `@ConditionalOnProperty` has `matchIfMissing=true` so an unset property silently picks local. |
 
 ## Notes
 

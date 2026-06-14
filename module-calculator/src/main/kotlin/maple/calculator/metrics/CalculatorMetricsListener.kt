@@ -22,6 +22,7 @@ class CalculatorMetricsListener(
             "endpoint_mismatch" -> metrics.recordChunkSkippedEndpoint()
             "source_not_found" -> metrics.recordChunkSkippedNotFound()
             "result_exists" -> metrics.recordChunkSkippedIdempotent()
+            "stale_run" -> metrics.recordChunkSkippedStaleRun()
         }
     }
 

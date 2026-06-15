@@ -48,6 +48,13 @@ docs/agents/
 .env.*.local
 .env.production
 .env.staging
+
+# MinIO per-service-account env files
+.env.bootstrap
+.env.ext-api
+.env.calculator
+.env.synchronizer
+.env.cleanup
 mysql_data/
 /redis_data/
 /logs/
@@ -69,6 +76,7 @@ temp_*.txt
 docs/99_Archive/
 scripts/*
 !scripts/check-before-commit.sh
+!scripts/dev-bootstrap.sh
 !scripts/install-git-hooks.sh
 !scripts/validate-minio-vs3.sh
 !scripts/lib/

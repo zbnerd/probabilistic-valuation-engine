@@ -11,6 +11,7 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.model.S3Exception
@@ -158,6 +159,19 @@ class MinioPolicyScopeIT {
                 RequestBody.fromBytes("should-fail".toByteArray())
             )
             org.junit.jupiter.api.Assertions.fail("expected 403 on synchronizer writing ocid-mapping")
+        } catch (e: S3Exception) {
+            assertThat(e.statusCode()).isEqualTo(403)
+        }
+
+        // synchronizer has no ListBucket → listByPrefix on ocid-mapping must 403
+        try {
+            client.listObjectsV2(
+                ListObjectsV2Request.builder()
+                    .bucket(bucket)
+                    .prefix("ocid-mapping/")
+                    .build()
+            )
+            org.junit.jupiter.api.Assertions.fail("expected 403 on synchronizer listByPrefix")
         } catch (e: S3Exception) {
             assertThat(e.statusCode()).isEqualTo(403)
         }

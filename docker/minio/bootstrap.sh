@@ -15,12 +15,23 @@ mc anonymous set none local/maple-expectation
 
 # ILM: list, remove all existing rules for the prefix, add one fresh rule.
 # mc ilm add is NOT idempotent — without this loop, re-runs duplicate rules.
+# The minio/mc Alpine image has no jq/awk/grep/sed. We strip the box-drawing
+# chars with tr, then use bash read+positional params to extract (ID, PREFIX).
+# We disable -u locally because some stripped lines have <3 tokens and
+# accessing $2/$3 under set -u would fail.
 for prefix in snapshots/ runs/ calculator/ ocid-mapping/; do
-  existing=$(mc ilm ls --json local/maple-expectation 2>/dev/null | \
-    jq -r --arg p "$prefix" '.["maple-expectation"][]? | select(.Prefix == $p) | .ID' || true)
-  for rule_id in $existing; do
-    [ -n "$rule_id" ] && mc ilm rm --id "$rule_id" local/maple-expectation || true
-  done
+  while read -r rule_id matched_prefix; do
+    [ "$matched_prefix" = "$prefix" ] && [ -n "$rule_id" ] && \
+      mc ilm rm --id "$rule_id" local/maple-expectation
+  done < <(mc ilm ls local/maple-expectation 2>/dev/null | \
+           tr -d "│" | \
+           ( set +u
+             while read -r line; do
+               set -- $line
+               # Only lines with "Enabled" + a 3rd token (the PREFIX) are real rules.
+               [ "${2:-}" = "Enabled" ] && [ -n "${3:-}" ] && echo "$1 $3"
+             done
+           ))
   mc ilm add --expiry-days 2 --prefix "$prefix" local/maple-expectation
 done
 

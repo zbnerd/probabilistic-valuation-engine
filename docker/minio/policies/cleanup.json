@@ -3,20 +3,16 @@
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:ListBucket",
-        "s3:DeleteObject"
-      ],
+      "Action": ["s3:ListBucket", "s3:HeadBucket"],
+      "Resource": ["arn:aws:s3:::maple-expectation"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:DeleteObject"],
       "Resource": [
         "arn:aws:s3:::maple-expectation/runs/*",
         "arn:aws:s3:::maple-expectation/calculator/runs/*"
       ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": ["s3:HeadBucket"],
-      "Resource": ["arn:aws:s3:::maple-expectation"]
     }
   ]
 }

@@ -3,6 +3,11 @@
   "Statement": [
     {
       "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:HeadBucket"],
+      "Resource": ["arn:aws:s3:::maple-expectation"]
+    },
+    {
+      "Effect": "Allow",
       "Action": ["s3:GetObject"],
       "Resource": [
         "arn:aws:s3:::maple-expectation/runs/*",
@@ -15,11 +20,6 @@
       "Resource": [
         "arn:aws:s3:::maple-expectation/calculator/runs/*"
       ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": ["s3:HeadBucket", "s3:ListBucket"],
-      "Resource": ["arn:aws:s3:::maple-expectation"]
     }
   ]
 }

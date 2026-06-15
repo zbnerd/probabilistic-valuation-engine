@@ -22,6 +22,16 @@ cd "$(dirname "$0")/.."
 : "${MINIO_ROOT_USER:=minioadmin}"
 : "${MINIO_ROOT_PASSWORD:=minioadmin}"
 
+# Warn before overwriting existing .env.bootstrap (which would rotate all SA keys)
+if [ -f .env.bootstrap ] && [ -z "${MINIO_BOOTSTRAP_FORCE:-}" ]; then
+  echo "WARNING: .env.bootstrap already exists. Regenerating will rotate all 4 SA keys." >&2
+  echo "  MinIO SAs registered with the previous keys will need re-sync:" >&2
+  echo "    docker compose run --rm minio-bootstrap /bin/sh -c 'for sa in ext-api calculator synchronizer cleanup; do mc admin user remove local \$sa 2>/dev/null; done'" >&2
+  echo "    docker compose up minio-bootstrap" >&2
+  echo "  Or simply: MINIO_BOOTSTRAP_FORCE=1 ./scripts/dev-bootstrap.sh" >&2
+  read -r -p "  Press enter to continue, or Ctrl+C to abort: "
+fi
+
 cat > .env.bootstrap <<EOF
 MINIO_ENDPOINT=http://localhost:9000
 MINIO_ROOT_USER=${MINIO_ROOT_USER}

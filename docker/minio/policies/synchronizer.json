@@ -3,15 +3,16 @@
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Action": ["s3:GetObject"],
       "Resource": [
         "arn:aws:s3:::maple-expectation/runs/*",
-        "arn:aws:s3:::maple-expectation/calculator/runs/*"
+        "arn:aws:s3:::maple-expectation/calculator/runs/*",
+        "arn:aws:s3:::maple-expectation/ocid-mapping/*"
       ]
     },
     {
       "Effect": "Allow",
-      "Action": ["s3:HeadBucket"],
+      "Action": ["s3:HeadBucket", "s3:ListBucket"],
       "Resource": ["arn:aws:s3:::maple-expectation"]
     }
   ]

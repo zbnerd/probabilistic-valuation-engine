@@ -14,7 +14,7 @@ import java.nio.file.Paths
  * - has Version 2012-10-17
  * - has at least one Allow statement
  * - never grants s3:DeleteObject in a wildcard-resource statement
- * - ext-api owns ocid-mapping and synchronizer does not
+ * - ext-api writes ocid-mapping; synchronizer reads it but does not write
  *
  * Runs on every build. No env var gate.
  *
@@ -92,7 +92,7 @@ class MinioPolicyJsonTest {
     }
 
     @Test
-    fun `ext-api owns ocid-mapping and synchronizer does not`() {
+    fun `ext-api writes ocid-mapping and synchronizer reads it but does not write`() {
         val ext = mapper.readTree(policiesDir.resolve("ext-api.json").toFile())
         val sync = mapper.readTree(policiesDir.resolve("synchronizer.json").toFile())
 
@@ -103,12 +103,25 @@ class MinioPolicyJsonTest {
                 else listOf(res.asText())
             }
 
+        fun actions(tree: JsonNode): List<String> =
+            (0 until tree.get("Statement").size()).flatMap { i ->
+                val act = tree.get("Statement").get(i).get("Action")
+                if (act.isArray) (0 until act.size()).map { act.get(it).asText() }
+                else listOf(act.asText())
+            }
+
+        // ext-api must have ocid-mapping in its resources
         assertThat(resources(ext))
-            .describedAs("ext-api must own ocid-mapping/*")
+            .describedAs("ext-api must have ocid-mapping/* in resources")
             .anyMatch { it.contains("ocid-mapping") }
 
+        // synchronizer has ocid-mapping in resources (READ) but NOT s3:PutObject
         assertThat(resources(sync))
-            .describedAs("synchronizer must NOT own ocid-mapping/* (ext-api is the sole owner)")
-            .noneMatch { it.contains("ocid-mapping") }
+            .describedAs("synchronizer must have ocid-mapping/* in resources (read)")
+            .anyMatch { it.contains("ocid-mapping") }
+
+        assertThat(actions(sync))
+            .describedAs("synchronizer must NOT have s3:PutObject (ext-api is the sole writer)")
+            .doesNotContain("s3:PutObject")
     }
 }

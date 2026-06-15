@@ -132,6 +132,38 @@ class MinioPolicyScopeIT {
     }
 
     @Test
+    fun `synchronizer can read runs calculator and ocid-mapping and cannot write ocid-mapping`() {
+        putSeed("runs/20260615-120000-000004/ocid-lookup/manifest.jsonl")
+        putSeed("calculator/runs/20260615-120000-000004/result.jsonl.gz")
+        putSeed("ocid-mapping/2026-06-15.jsonl.gz")
+        putSeed("ocid-mapping/other-prefix/test.gz")  // should be allowed (ocid-mapping/* matches)
+
+        val client = saClient("synchronizer", saSecret("SA_SYNCHRONIZER_SECRET_KEY"))
+
+        // in-scope: read all 3 expected prefixes
+        assertThat(client.getObjectAsBytes(
+            GetObjectRequest.builder().bucket(bucket).key("runs/20260615-120000-000004/ocid-lookup/manifest.jsonl").build()
+        ).asByteArray().toString(Charsets.UTF_8)).isEqualTo("seed")
+        assertThat(client.getObjectAsBytes(
+            GetObjectRequest.builder().bucket(bucket).key("calculator/runs/20260615-120000-000004/result.jsonl.gz").build()
+        ).asByteArray().toString(Charsets.UTF_8)).isEqualTo("seed")
+        assertThat(client.getObjectAsBytes(
+            GetObjectRequest.builder().bucket(bucket).key("ocid-mapping/2026-06-15.jsonl.gz").build()
+        ).asByteArray().toString(Charsets.UTF_8)).isEqualTo("seed")
+
+        // in-scope: cannot write to ocid-mapping (ext-api is the sole writer)
+        try {
+            client.putObject(
+                PutObjectRequest.builder().bucket(bucket).key("ocid-mapping/sync-attempt.jsonl.gz").build(),
+                RequestBody.fromBytes("should-fail".toByteArray())
+            )
+            org.junit.jupiter.api.Assertions.fail("expected 403 on synchronizer writing ocid-mapping")
+        } catch (e: S3Exception) {
+            assertThat(e.statusCode()).isEqualTo(403)
+        }
+    }
+
+    @Test
     fun `cleanup can delete runs prefix - denied on ocid-mapping and snapshots`() {
         putSeed("runs/20260615-120000-000003/chunk.jsonl.gz")
         putSeed("ocid-mapping/2026-06-15.json")

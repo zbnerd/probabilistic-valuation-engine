@@ -4,7 +4,7 @@
 - **Date**: 2026-06-15
 - **Owner**: solo dev
 
-> **Revision (2026-06-15):** Q4 dropped `read-api` SA after codebase audit showed rest-controller and module-app have no ObjectStorage caller. Q5 reassigned `ocid-mapping/*` ownership from synchronizer to external-api after OcidLookupPhase write path discovery. CI strategy (Q6) and dev ergonomics (Q7) added to the plan only. See end of this spec for revision history.
+> **Revision (2026-06-15):** Q4 dropped `read-api` SA after codebase audit showed rest-controller and module-app have no ObjectStorage caller. Q5 reassigned `ocid-mapping/*` write-ownership to external-api (sole writer) after OcidLookupPhase write path discovery. Final-review correction (2026-06-15 PM): synchronizer also needs READ access to `ocid-mapping/*` because `OcidLookupService.kt:29` consumes `ocid-mapping/ocid-mapping-<runId>.jsonl.gz` produced by ext-api. The security invariant is write-ownership, not read-ownership: ext-api is the sole WRITER; synchronizer is a READER. CI strategy (Q6) and dev ergonomics (Q7) added to the plan only. See end of this spec for revision history.
 
 ---
 
@@ -57,7 +57,7 @@ Service Accounts (4)
   ├─ ext-api       → Get/Put  runs/*, snapshots/*, ocid-mapping/*
   ├─ calculator    → Get      runs/*, data/snapshots/*
   │                → Put      calculator/runs/*
-  ├─ synchronizer  → Get/List runs/*, calculator/runs/*
+  ├─ synchronizer  → Get/List runs/*, calculator/runs/*, ocid-mapping/* (read; consumed by OcidLookupService)
   └─ cleanup       → Get/List/Delete runs/*, calculator/runs/*  (prefix-scoped, no wildcard)
 
 Modules with NO MinIO credential
@@ -94,7 +94,7 @@ CI
 
 - **Prefix convention drift** — If a future module introduces a new top-level prefix, its SA policy must be updated. Mitigated by centralising prefix documentation in this spec and adding a bootstrap-time assertion that each SA can read its expected prefix.
 - **Bootstrap idempotency** — Re-running the bootstrap container must not fail or duplicate users OR ILM rules. The script uses `mc admin user add` guarded by `mc admin user info $name`, `mc admin policy create` guarded by `mc admin policy info`, and `mc ilm add` guarded by `mc ilm ls` (with `mc ilm rm` for the 1-or-N existing rule case) so the invariant is "exactly 1 ILM rule per managed prefix after every run".
-- **ocid-mapping/* ownership** — `OcidLookupPhase` (external-api) WRITES `ocid-mapping/ocid-mapping-*.jsonl.gz` via `objectStorage.putStream`. `OcidCacheProvider` (external-api) READS the same prefix. `synchronizer` does not touch this prefix. Owner is exclusively external-api; cleanup excludes it (ILM expiry is the only deletion path).
+- **ocid-mapping/* ownership** — `OcidLookupPhase` (external-api) WRITES `ocid-mapping/ocid-mapping-*.jsonl.gz` via `objectStorage.putStream`. `OcidCacheProvider` (external-api) and `OcidLookupService` (synchronizer) both READ the same prefix. The security invariant is **write-ownership**, not read-ownership: external-api is the sole WRITER; synchronizer is a READER. cleanup excludes it (ILM expiry is the only deletion path).
 - **`validateBucket()` boot smoke** — `MinioObjectStorage.@PostConstruct` calls `headBucket`. Each SA needs at least `s3:ListBucket` (or `s3:HeadBucket` via `s3:GetBucket*`) for the bucket to pass startup. Policies include the minimum IAM action set required for the SDK calls the storage layer issues.
 - **Env file duplication** — 4 env files (one per module) replace one shared file. Drift risk: a rotation in one file does not propagate. Mitigated by treating each env file as the module's only source of truth, with no shared symlinks. `scripts/dev-bootstrap.sh` regenerates the full set in one call.
 - **CI ephemeral secret handling** — Per-job ephemeral MinIO + random SA keys. No long-lived SA keys in GitHub Secrets. Job duration ≈ 10 min; secrets die with the container.
@@ -197,7 +197,7 @@ Action sets per SA (Resource lists in §2):
 
 `cleanup` is split into two statements internally: `Get` + `List` on `runs/*` and `calculator/runs/*`, then `Delete` on the same resources. The split is for policy readability, not access separation. `s3:HeadObject` is required for `ObjectStorage.exists()` and `getLastModified()` in module-infra.
 
-synchronizer's `ocid-mapping/*` resource was originally listed here, but post-audit (revision 2026-06-15) it was dropped — `ocid-mapping/*` is owned exclusively by external-api.
+synchronizer's `ocid-mapping/*` resource was originally listed here and was incorrectly dropped during the post-audit (revision 2026-06-15 AM). Re-added in the final review (revision 2026-06-15 PM) after re-reading `OcidLookupService.kt:29`: synchronizer reads `ocid-mapping/ocid-mapping-*.jsonl.gz` to populate its in-memory state. The correct invariant is **write-ownership, not read-ownership**: external-api is the sole WRITER of `ocid-mapping/*`; synchronizer is a READER.
 
 ---
 
@@ -283,6 +283,7 @@ echo "[bootstrap] complete"
 |---|---|---|
 | 2026-06-15 | Initial draft | Brainstorming session |
 | 2026-06-15 | Q4: dropped `read-api` SA (rest-controller and module-app have no ObjectStorage caller) | Codebase audit |
-| 2026-06-15 | Q5: reassigned `ocid-mapping/*` ownership from synchronizer to external-api | OcidLookupPhase write path discovery |
+| 2026-06-15 | Q5: reassigned `ocid-mapping/*` write-ownership to external-api (sole writer) | OcidLookupPhase write path discovery |
+| 2026-06-15 | Final-review correction: synchronizer re-granted READ access to `ocid-mapping/*` (was incorrectly dropped) | Re-reading `OcidLookupService.kt:29` showed synchronizer consumes `ocid-mapping/ocid-mapping-*.jsonl.gz` |
 | 2026-06-15 | Q6: CI uses ephemeral MinIO + random SA keys (no GitHub Secrets) | User preference for zero long-lived CI secrets |
 | 2026-06-15 | Q7: local dev uses `scripts/dev-bootstrap.sh` (one-liner) instead of README 5-step | User preference for automated onboarding |

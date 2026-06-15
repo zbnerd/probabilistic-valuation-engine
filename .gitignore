@@ -76,6 +76,7 @@ temp_*.txt
 docs/99_Archive/
 scripts/*
 !scripts/check-before-commit.sh
+!scripts/dev-bootstrap.sh
 !scripts/install-git-hooks.sh
 !scripts/validate-minio-vs3.sh
 !scripts/lib/

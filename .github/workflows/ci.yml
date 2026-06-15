@@ -269,11 +269,21 @@ jobs:
 
       - name: Verify SAs and ILM
         run: |
-          docker run --rm --network host \
+          set -euo pipefail
+          SAs=$(docker run --rm --network host \
             -e MINIO_ENDPOINT=http://localhost:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/mc:latest admin user list local
+            minio/mc:latest admin user list local 2>/dev/null)
+          echo "Users returned by MinIO:"
+          echo "$SAs"
+          for sa in ext-api calculator synchronizer cleanup; do
+            if ! echo "$SAs" | grep -q "^$sa$"; then
+              echo "ERROR: expected SA '$sa' missing from MinIO user list"
+              exit 1
+            fi
+          done
+          echo "All 4 SAs verified."
 
       - name: Run IT (boot smoke + scope + structural)
         env:

@@ -10,6 +10,7 @@ Data Plane: Kafka handles chunk processing, retry, backpressure.
 from datetime import datetime, timedelta
 
 import json
+import os
 
 import requests
 from airflow import DAG
@@ -151,7 +152,7 @@ def wait_for_item_equipment_cycle(**context):
 
     consumer = KafkaConsumer(
         "synchronizer.chunk.consumed",
-        bootstrap_servers="host.docker.internal:9092",
+        bootstrap_servers=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
         auto_offset_reset="latest",
         enable_auto_commit=False,
         group_id=f"airflow-ie-cycle-waiter-{run_id[:8]}",

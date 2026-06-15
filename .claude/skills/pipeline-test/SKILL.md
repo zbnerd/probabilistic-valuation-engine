@@ -49,6 +49,16 @@ Airflow (Control Plane)          Spring Boot Services (Data Plane)
 
 **Storage backend**: pipeline test uses MinIO by default (`STORAGE_BACKEND=minio`). MinIO is required because the VS2 ObjectStorage migration consolidated all artifact storage to a single backend, and the pipeline test verifies that backend end-to-end.
 
+## Startup mode
+
+The skill supports two ways to start the Spring Boot modules:
+
+- **`nohup` (default)**: spawns `java -jar` directly via `nohup`, logs to `logs/pipeline-test-*.log`. Self-contained, no systemd. Best for local dev / disposable test environments.
+
+- **`systemd`**: uses the pre-installed `maple-{module}.service` units. Modules run as `maple` user, log to `/var/log/maple/`. Best for persistent / production-like environments.
+
+Set `START_MODE=systemd` to switch. Default is `nohup` for backward compat. The systemd units assume a previous `scripts/install-systemd-units.sh` run; see `scripts/systemd/` for the unit files.
+
 ## Workflow
 
 ### 1. Pre-check
@@ -101,38 +111,54 @@ JAR locations: `module-{name}/build/libs/module-{name}-0.0.1-SNAPSHOT.jar`
 ### 3. Start modules (sequential, wait for health check)
 
 ```bash
-set -a && source .env && set +a && export SPRING_PROFILES_ACTIVE=local && export MALLOC_ARENA_MAX=1
+START_MODE="${START_MODE:-nohup}"
 
-# Use .env DB_URL directly — VS3 / MinIO pipeline test runs against whichever DB
-# .env points at (typically the dev cloud DB for shared MinIO validation).
-# No local PostgreSQL override.
+if [ "${START_MODE}" = "nohup" ]; then
+  set -a && source .env && set +a && export SPRING_PROFILES_ACTIVE=local && export MALLOC_ARENA_MAX=1
 
-# 1) External API (8081)
-nohup java -Xms512m -Xmx1g -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
-until curl -sf http://localhost:8081/actuator/health > /dev/null 2>&1; do sleep 2; done
-echo "external-api ready on 8081"
+  # Use .env DB_URL directly — VS3 / MinIO pipeline test runs against whichever DB
+  # .env points at (typically the dev cloud DB for shared MinIO validation).
+  # No local PostgreSQL override.
 
-# 2) Calculator (8082)
-nohup java -Xms512m -Xmx1g -jar module-calculator/build/libs/module-calculator-0.0.1-SNAPSHOT.jar > logs/pipeline-test-calculator.log 2>&1 &
-until curl -sf http://localhost:8082/actuator/health > /dev/null 2>&1; do sleep 2; done
-echo "calculator ready on 8082"
+  # 1) External API (8081)
+  nohup java -Xms512m -Xmx1g -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
+  until curl -sf http://localhost:8081/actuator/health > /dev/null 2>&1; do sleep 2; done
+  echo "external-api ready on 8081"
 
-# 3) Synchronizer (8083)
-nohup java -Xms512m -Xmx1g -jar module-synchronizer/build/libs/module-synchronizer-0.0.1-SNAPSHOT.jar > logs/pipeline-test-synchronizer.log 2>&1 &
-until curl -sf http://localhost:8083/actuator/health > /dev/null 2>&1; do sleep 2; done
-echo "synchronizer ready on 8083"
+  # 2) Calculator (8082)
+  nohup java -Xms512m -Xmx1g -jar module-calculator/build/libs/module-calculator-0.0.1-SNAPSHOT.jar > logs/pipeline-test-calculator.log 2>&1 &
+  until curl -sf http://localhost:8082/actuator/health > /dev/null 2>&1; do sleep 2; done
+  echo "calculator ready on 8082"
 
-# 4) Cleanup (8084) — consumes synchronizer.chunk.consumed + runs artifact GC
-# -Dstorage.backend=minio is REQUIRED: StorageConfig's @ConditionalOnProperty
-# has matchIfMissing=true, so a missing/unset property silently falls back to
-# LocalFsObjectStorage which reads from ../data/runs/ (empty when MinIO is
-# active). Symptom: cleanup endpoint returns runsDeleted=0 / "no runs found"
-# while the MinIO bucket actually holds hundreds of old runs. The explicit
-# -D flag prevents env-var propagation failures from breaking cleanup silently.
-nohup java -Xms512m -Xmx1g -Dstorage.backend=minio -jar module-cleanup/build/libs/module-cleanup-0.0.1-SNAPSHOT.jar > logs/pipeline-test-cleanup.log 2>&1 &
-until curl -sf http://localhost:8084/actuator/health > /dev/null 2>&1; do sleep 2; done
-echo "cleanup ready on 8084"
+  # 3) Synchronizer (8083)
+  nohup java -Xms512m -Xmx1g -jar module-synchronizer/build/libs/module-synchronizer-0.0.1-SNAPSHOT.jar > logs/pipeline-test-synchronizer.log 2>&1 &
+  until curl -sf http://localhost:8083/actuator/health > /dev/null 2>&1; do sleep 2; done
+  echo "synchronizer ready on 8083"
+
+  # 4) Cleanup (8084) — consumes synchronizer.chunk.consumed + runs artifact GC
+  # -Dstorage.backend=minio is REQUIRED: StorageConfig's @ConditionalOnProperty
+  # has matchIfMissing=true, so a missing/unset property silently falls back to
+  # LocalFsObjectStorage which reads from ../data/runs/ (empty when MinIO is
+  # active). Symptom: cleanup endpoint returns runsDeleted=0 / "no runs found"
+  # while the MinIO bucket actually holds hundreds of old runs. The explicit
+  # -D flag prevents env-var propagation failures from breaking cleanup silently.
+  nohup java -Xms512m -Xmx1g -Dstorage.backend=minio -jar module-cleanup/build/libs/module-cleanup-0.0.1-SNAPSHOT.jar > logs/pipeline-test-cleanup.log 2>&1 &
+  until curl -sf http://localhost:8084/actuator/health > /dev/null 2>&1; do sleep 2; done
+  echo "cleanup ready on 8084"
+else
+  # systemd mode — units are pre-installed (see scripts/systemd/ + install-systemd-units.sh)
+  # -Dstorage.backend=minio is baked into maple-cleanup.service ExecStart, so not passed here.
+  for svc in maple-external-api maple-calculator maple-synchronizer maple-cleanup; do
+    sudo systemctl start "${svc}"
+  done
+  for port in 8081 8082 8083 8084; do
+    until curl -sf "http://localhost:${port}/actuator/health" > /dev/null 2>&1; do sleep 2; done
+  done
+  echo "all 4 modules ready (systemd mode)"
+fi
 ```
+
+In systemd mode, the `-Dstorage.backend=minio` flag is baked into the `maple-cleanup.service` unit (ExecStart), so it's not passed at runtime.
 
 **Why `java -jar` not `bootRun`:** `bootRun` inherits Gradle daemon lifecycle — can SIGKILL after long runs (exit 137). `java -jar` is stable for multi-hour pipeline runs. `-Xmx1g` prevents OOM when running 4 JVMs concurrently (~4GB total vs default ~17GB).
 
@@ -453,9 +479,15 @@ done
 
 ```bash
 # Stop Spring Boot services
-for port in 8081 8082 8083 8084; do
-  kill $(lsof -ti:$port) 2>/dev/null
-done
+if [ "${START_MODE:-nohup}" = "nohup" ]; then
+  for port in 8081 8082 8083 8084; do
+    kill $(lsof -ti:$port) 2>/dev/null
+  done
+else
+  for svc in maple-external-api maple-calculator maple-synchronizer maple-cleanup; do
+    sudo systemctl stop "${svc}"
+  done
+fi
 
 # Stop Airflow
 docker compose -f docker-compose.yml -f docker-compose.airflow.yml stop airflow-webserver airflow-scheduler

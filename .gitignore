@@ -78,16 +78,19 @@ scripts/*
 !scripts/check-before-commit.sh
 !scripts/dev-bootstrap.sh
 !scripts/install-git-hooks.sh
+!scripts/install-systemd-units.sh
 !scripts/validate-minio-vs3.sh
 !scripts/lib/
+!scripts/systemd/
 /.claude/settings.json
 /docker/logs/mysql/slow.log
 /.claude/ralph-loop.local.md
 
-# Claude Code - ignore everything except rules and hooks
+# Claude Code - ignore everything except rules, hooks, and skills
 .claude/*
 !.claude/rules/
 !.claude/hooks/
+!.claude/skills/
 
 # Claude Code OMC state files
 .omc/

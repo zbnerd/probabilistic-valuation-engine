@@ -124,4 +124,18 @@ class MinioPolicyJsonTest {
             .describedAs("synchronizer must NOT have s3:PutObject (ext-api is the sole writer)")
             .doesNotContain("s3:PutObject")
     }
+
+    @Test
+    fun `cleanup policy grants DeleteObject on prefix resources`() {
+        val file = policiesDir.resolve("cleanup.json").toFile()
+        val tree: JsonNode = mapper.readTree(file)
+        val allActions = (0 until tree.get("Statement").size()).flatMap { i ->
+            val act = tree.get("Statement").get(i).get("Action")
+            if (act.isArray) (0 until act.size()).map { act.get(it).asText() }
+            else listOf(act.asText())
+        }
+        assertThat(allActions)
+            .describedAs("cleanup policy must grant s3:DeleteObject to actually clean up")
+            .contains("s3:DeleteObject")
+    }
 }

@@ -52,10 +52,13 @@ fi
 install -d -o maple -g maple -m 0755 /var/log/maple
 log "/var/log/maple ready (maple:maple 0755)"
 
-# 4. Copy unit files to /etc/systemd/system/
+# 4. Copy unit files to /etc/systemd/system/ (with /opt/maple → MAPLE_HOME substitution)
 for u in "${UNITS[@]}"; do
-  install -m 0644 "${UNIT_SRC}/${u}" "/etc/systemd/system/${u}"
-  log "installed /etc/systemd/system/${u}"
+  staged="$(mktemp)"
+  sed "s|/opt/maple|${MAPLE_HOME}|g" "${UNIT_SRC}/${u}" > "${staged}"
+  install -m 0644 "${staged}" "/etc/systemd/system/${u}"
+  rm -f "${staged}"
+  log "installed /etc/systemd/system/${u} (paths → ${MAPLE_HOME})"
 done
 
 # 5. Reload systemd daemon

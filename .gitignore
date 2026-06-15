@@ -86,11 +86,11 @@ scripts/*
 /docker/logs/mysql/slow.log
 /.claude/ralph-loop.local.md
 
-# Claude Code - ignore everything except rules, hooks, and skills
+# Claude Code - ignore everything except rules, hooks, and the pipeline-test skill
 .claude/*
 !.claude/rules/
 !.claude/hooks/
-!.claude/skills/
+!.claude/skills/pipeline-test/
 
 # Claude Code OMC state files
 .omc/

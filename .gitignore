@@ -48,6 +48,13 @@ docs/agents/
 .env.*.local
 .env.production
 .env.staging
+
+# MinIO per-service-account env files
+.env.bootstrap
+.env.ext-api
+.env.calculator
+.env.synchronizer
+.env.cleanup
 mysql_data/
 /redis_data/
 /logs/

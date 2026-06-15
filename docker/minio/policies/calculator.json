@@ -3,7 +3,7 @@
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:HeadObject"],
+      "Action": ["s3:GetObject"],
       "Resource": [
         "arn:aws:s3:::maple-expectation/runs/*",
         "arn:aws:s3:::maple-expectation/data/snapshots/*"

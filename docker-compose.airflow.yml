@@ -1,27 +1,5 @@
 version: '3.8'
 
-x-airflow-common: &airflow-common
-  image: apache/airflow:2.10.5-python3.12
-  restart: always
-  environment:
-    AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
-    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
-    AIRFLOW__WEBSERVER__WEB_SERVER_PORT: 8080
-    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
-    AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 30
-  volumes:
-    - ./docker/airflow/dags:/opt/airflow/dags:ro
-  networks:
-    - maple-network
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
-  depends_on:
-    airflow-db:
-      condition: service_healthy
-
 services:
   airflow-db:
     image: postgres:17-alpine
@@ -42,13 +20,26 @@ services:
       retries: 5
 
   airflow-webserver:
-    <<: *airflow-common
+    image: apache/airflow:2.10.5-python3.12
     container_name: maple-airflow-webserver
-    ports:
-      - "8180:8080"
+    restart: always
+    network_mode: host
+    user: "0:0"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@172.20.0.2:5432/airflow
+      AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8180"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"
+      KAFKA_BOOTSTRAP_SERVERS: "172.20.0.4:9092"
+    volumes:
+      - ./docker/airflow/dags:/opt/airflow/dags:ro
     command: webserver
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "--fail", "http://localhost:8180/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -57,14 +48,32 @@ services:
         condition: service_healthy
 
   airflow-scheduler:
-    <<: *airflow-common
+    image: apache/airflow:2.10.5-python3.12
     container_name: maple-airflow-scheduler
+    restart: always
+    network_mode: host
+    user: "0:0"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@172.20.0.2:5432/airflow
+      AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8180"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"
+      KAFKA_BOOTSTRAP_SERVERS: "172.20.0.4:9092"
+    volumes:
+      - ./docker/airflow/dags:/opt/airflow/dags:ro
     command: scheduler
     healthcheck:
       test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname '$$(hostname)'"]
       interval: 30s
       timeout: 10s
       retries: 3
+    depends_on:
+      airflow-db:
+        condition: service_healthy
 
 networks:
   maple-network:

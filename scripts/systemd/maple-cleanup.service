@@ -1,0 +1,27 @@
+[Unit]
+Description=Maple Pipeline - Cleanup (port 8084)
+Documentation=https://github.com/zbnerd/probabilistic-valuation-engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=maple
+Group=maple
+WorkingDirectory=/opt/maple
+EnvironmentFile=/opt/maple/.env
+EnvironmentFile=/opt/maple/.env.cleanup
+ExecStart=/usr/bin/java -Xms512m -Xmx1g -Dstorage.backend=minio -jar /opt/maple/module-cleanup/build/libs/module-cleanup-0.0.1-SNAPSHOT.jar
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+
+StandardOutput=append:/var/log/maple/cleanup.log
+StandardError=append:/var/log/maple/cleanup-error.log
+
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

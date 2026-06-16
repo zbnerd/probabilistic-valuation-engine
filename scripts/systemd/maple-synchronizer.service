@@ -1,0 +1,27 @@
+[Unit]
+Description=Maple Pipeline - Synchronizer (port 8083)
+Documentation=https://github.com/zbnerd/probabilistic-valuation-engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=maple
+Group=maple
+WorkingDirectory=/opt/maple
+EnvironmentFile=/opt/maple/.env
+EnvironmentFile=/opt/maple/.env.synchronizer
+ExecStart=/usr/bin/java -Xms512m -Xmx1g -jar /opt/maple/module-synchronizer/build/libs/module-synchronizer-0.0.1-SNAPSHOT.jar
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+
+StandardOutput=append:/var/log/maple/synchronizer.log
+StandardError=append:/var/log/maple/synchronizer-error.log
+
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

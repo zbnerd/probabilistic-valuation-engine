@@ -11,6 +11,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  * #1202: `parse-dispatcher`/`calc-dispatcher` 가 named Spring bean 으로 wiring 가능
  *         (e.g. `calculatorParseDispatcher` bean name). 기존 String (default/io/unconfined) 도 호환.
  *
+ * <p>Issue #20260615-source-race: source chunk exists() 가 MinIO race 로 ~10% 확률로
+ *        false 반환. `source-chunk-retry-delays-ms` 로 backoff schedule 설정.
+ *        첫 element 가 0 이면 즉시 시도, 나머지는 각 재시도 사이의 delay (ms).
+ *
  * <h3>YAML</h3>
  * <pre>
  * calculator:
@@ -21,6 +25,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  *     calc-workers: 4                # default = 4
  *     parse-dispatcher: default      # String (default/io/unconfined) or bean name
  *     calc-dispatcher: default       # String (default/io/unconfined) or bean name
+ *     source-chunk-retry-delays-ms: [0, 100, 300, 1000, 3000]   # default = 5 attempts, ~4.4s
  * </pre>
  */
 @ConfigurationProperties("calculator.pipeline")
@@ -32,4 +37,6 @@ data class PipelineProperties(
     @DefaultValue("4") val calcWorkers: Int = 4,
     @DefaultValue("default") val parseDispatcher: String = "default",
     @DefaultValue("default") val calcDispatcher: String = "default",
+    @DefaultValue("0,100,300,1000,3000")
+    val sourceChunkRetryDelaysMs: List<Long> = listOf(0L, 100L, 300L, 1000L, 3000L),
 )

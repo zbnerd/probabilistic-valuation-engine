@@ -74,21 +74,39 @@ class MinioObjectStorage(
     }
 
     override fun putStream(key: String, input: java.io.InputStream): PutResult {
-        val tempFile = Files.createTempFile("minio-put-", ".tmp")
-        try {
-            val bytes = input.use { Files.copy(it, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING) }
-            val resp = s3.putObject(
-                PutObjectRequest.builder()
-                    .bucket(props.bucket)
-                    .key(key)
-                    .contentLength(bytes)
-                    .build(),
-                tempFile,
-            )
-            return PutResult(key, bytes, resp.eTag())
-        } finally {
-            Files.deleteIfExists(tempFile)
-        }
+        // In-memory buffering — no temp file, no double-spool.
+        //
+        // Why not RequestBody.fromInputStream(input, -1L): sync S3Client.putObject
+        // marshals Content-Length from RequestBody.contentLength(); the marshaller
+        // throws IAE("Content-length must not be negative") for unknown length.
+        // Chunked transfer (which allows length=-1) is async-only (S3AsyncClient +
+        // AwsChunkedEncodingInputStream) and is not exposed through sync putObject.
+        // Verified by attempt: every chunk failed with "Content-length must not be
+        // negative", calculator_chunks_failed_total=1133 in <90s after the change.
+        //
+        // Why not temp file: Files.createTempFile + Files.copy + s3.putObject +
+        // Files.deleteIfExists = 4 round-trips per chunk (disk read + disk write +
+        // network read from disk + disk cleanup). 4 concurrent chunks contended
+        // for /tmp I/O and stalled the writer.
+        //
+        // Current design: drain stream into a ByteArray, then use
+        // RequestBody.fromByteArray with KNOWN length. Single network PUT, zero
+        // disk I/O. Callers in this codebase already buffer the chunk in memory
+        // (CalculationResultWriter builds ByteArrayOutputStream, then wraps in
+        // ByteArrayInputStream to call putStream), so the buffer exists either way.
+        // For callers with truly large streams, prefer putFileAsync (transfer
+        // manager multipart, no memory pressure).
+        val bytes = input.readBytes()
+        val resp = s3.putObject(
+            PutObjectRequest.builder()
+                .bucket(props.bucket)
+                .key(key)
+                .contentLength(bytes.size.toLong())
+                .contentType("application/octet-stream")
+                .build(),
+            RequestBody.fromBytes(bytes),
+        )
+        return PutResult(key, bytes.size.toLong(), resp.eTag())
     }
 
     override fun putFile(key: String, path: java.nio.file.Path): PutResult {

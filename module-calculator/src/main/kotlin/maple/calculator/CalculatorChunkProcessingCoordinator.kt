@@ -1,10 +1,12 @@
 package maple.calculator
 
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import maple.calculator.config.PipelineProperties
 import maple.calculator.event.ChunkProcessingEvent
 import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.metrics.CalculatorMetricsListener
@@ -33,6 +35,14 @@ import org.springframework.stereotype.Component
  * virtual-thread dispatcher so they do not pin a Kafka listener platform
  * thread. The semaphore is acquired only for the actual chunk processing, not
  * for the cheap disk stats, so the stat check does not contend with the pipeline.
+ *
+ * Source-chunk existence is verified with retry/backoff per
+ * [PipelineProperties.sourceChunkRetryDelaysMs]. The previous single-shot
+ * check observed ~10% spurious NoSuchKeyException under load (MinIO headObject
+ * race against ext-api's PUT), causing most chunks to be dropped as
+ * `source_not_found` even though the chunk was on disk. The retry schedule
+ * (default `[0, 100, 300, 1000, 3000]` ms — 5 attempts over ~4.4s) recovers
+ * most race victims without changing ext-api's write-then-publish order.
  */
 @Component
 class CalculatorChunkProcessingCoordinator(
@@ -41,6 +51,7 @@ class CalculatorChunkProcessingCoordinator(
     private val objectStorage: ObjectStorage,
     private val metricsListener: CalculatorMetricsListener,
     private val currentRunIdHolder: CalculatorCurrentRunIdHolder,
+    private val pipelineProperties: PipelineProperties,
     @Qualifier("vtDispatcher") private val vtDispatcher: CoroutineDispatcher,
 ) {
     private val log = LoggerFactory.getLogger(CalculatorChunkProcessingCoordinator::class.java)
@@ -53,27 +64,22 @@ class CalculatorChunkProcessingCoordinator(
             return
         }
 
-        // Drop chunk-ready events whose runId does not match the current ext-api
-        // run. Such events are leftovers from a prior failed run; the source
-        // chunks no longer exist in object storage and processing them only
-        // produces a NoSuchKey 404 retry loop. Holder returns null when the
-        // runId is unknown (first poll, or ext-api down) — we let those pass
-        // to avoid losing new work; the holder becomes authoritative once
-        // it has polled successfully at least once.
+        // runId tracking is intentionally not enforced here. Two valid runId
+        // sources exist:
+        //  - daily runId (polled from ext-api /api/internal/run-status)
+        //  - per-cycle runIds emitted by ext-api's `ItemEquipmentContinuousLoop`
+        //    (a different ID per cycle, designed as a log-correlation handle)
+        // The current policy is: trust the source chunk's existence as the
+        // sole ground truth. A missing chunk → source_not_found. A present
+        // chunk → process (the result_exists check below makes this safe
+        // for events that arrive twice or after a replay).
         //
-        // Urgent-path chunks use the `urgent-<UUID>` prefix; they are
-        // ephemeral (one per request) and are always accepted.
-        val current = currentRunIdHolder.currentRunIdOrNull()
-        val isUrgent = event.runId.startsWith("urgent-")
-        if (!isUrgent && current != null && current != event.runId) {
-            log.warn("[Coordinator] stale runId dropped: eventRunId={} currentRunId={} chunkId={}", event.runId, current, event.chunkId)
-            metricsListener.onEvent(ChunkProcessingEvent.Skipped(event.runId, event.chunkId, "stale_run"))
-            return
-        }
-
+        // Urgent-path chunks (runId prefix `urgent-`) follow the same path;
+        // they always have a corresponding chunk since the urgent producer
+        // writes synchronously before publishing the event.
         withMdc(event) {
-            if (!withContext(vtDispatcher) { objectStorage.exists(event.objectKey) }) {
-                log.error("[Coordinator] source chunk not found: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, event.objectKey)
+            if (!waitForSourceChunk(event.objectKey)) {
+                log.error("[Coordinator] source chunk not found after retries: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, event.objectKey)
                 metricsListener.onEvent(ChunkProcessingEvent.Skipped(event.runId, event.chunkId, "source_not_found"))
                 return@withMdc
             }
@@ -91,6 +97,35 @@ class CalculatorChunkProcessingCoordinator(
     }
 
     fun resultObjectKeyFor(event: SnapshotChunkReadyEvent): String = "calculator/runs/${event.runId}/${event.endpoint}/chunks/result-${event.chunkId}.jsonl.gz"
+
+    /**
+     * Probe the source chunk with retry/backoff. Returns true as soon as a
+     * probe succeeds. The schedule is configurable via
+     * [PipelineProperties.sourceChunkRetryDelaysMs] — each entry is a delay
+     * in ms applied before that attempt (the first entry should be 0 for
+     * "try immediately"). The total worst-case wait is the sum of all delays.
+     *
+     * Rationale: MinIO headObject can return NoSuchKeyException transiently
+     * for an object that does exist on disk, when the producer's PUT is in
+     * flight. Retrying resolves the race in well under a second for the
+     * vast majority of cases; only true missing chunks exhaust the schedule.
+     */
+    private suspend fun waitForSourceChunk(objectKey: String): Boolean {
+        val delays = pipelineProperties.sourceChunkRetryDelaysMs
+        for ((attempt, delayMs) in delays.withIndex()) {
+            if (delayMs > 0) delay(delayMs)
+            if (withContext(vtDispatcher) { objectStorage.exists(objectKey) }) {
+                if (attempt > 0) {
+                    log.info(
+                        "[Coordinator] source chunk found after {} retries: key={} (delaysMs={})",
+                        attempt, objectKey, delays,
+                    )
+                }
+                return true
+            }
+        }
+        return false
+    }
 
     private suspend fun republishExistingResult(event: SnapshotChunkReadyEvent, resultObjectKey: String) {
         log.info("[Coordinator] result already exists, republishing: runId={} chunkId={} objectKey={}", event.runId, event.chunkId, resultObjectKey)

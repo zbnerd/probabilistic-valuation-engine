@@ -79,7 +79,7 @@ class ChunkedSnapshotSink(
 
             // close current chunk and write manifest + _SUCCESS marker
             fileManager.closeCurrentChunk()?.let { stats ->
-                eventPublisher.publishChunkReady(stats, manifest.runId, endpoint)
+                publishWhenUploaded(stats)
             }
 
             // Wait for all fire-and-forget chunk uploads to complete
@@ -145,7 +145,7 @@ class ChunkedSnapshotSink(
         try {
             val stats = fileManager.appendSuccess(record)
             if (stats != null) {
-                eventPublisher.publishChunkReady(stats, fileManager.manifest().runId, endpoint)
+                publishWhenUploaded(stats)
             }
         } catch (ex: Exception) {
             log.warn("[Sink] invalid bodyBytes for key={}, treating as failure: {}", record.key, ex.message)
@@ -159,6 +159,46 @@ class ChunkedSnapshotSink(
                     errorMessage = "invalid body: ${ex.message}",
                 ),
             )
+        }
+    }
+
+    /**
+     * Publish chunk-ready AFTER the underlying PUT completes. Restores the
+     * pre-94cdd5685 ordering where publish strictly follows successful upload,
+     * but without blocking the writer thread.
+     *
+     * Why whenComplete (callback) and not join():
+     * - whenComplete runs on the transfer-manager's completion thread, NOT
+     *   on the writer thread. Writer thread returns immediately after
+     *   registering the callback, so per-chunk latency is the gzip+close
+     *   time only (~50ms), not gzip+upload.
+     * - join() would block the writer for 1-4s per chunk (upload duration),
+     *   serializing the writer on the slowest in-flight upload. That's the
+     *   throughput cap.
+     * - Race is closed by ordering: the publish only fires after the
+     *   upload future completes successfully. Calculator's first head()
+     *   on the object key will see the chunk in MinIO.
+     *
+     * If the upload fails, the chunk-ready event is skipped (calculator
+     * would 404 anyway). The run-failed path at sink close surfaces the
+     * error.
+     */
+    private fun publishWhenUploaded(stats: ChunkStats) {
+        val future = stats.uploadFuture
+        if (future == null) {
+            eventPublisher.publishChunkReady(stats, fileManager.manifest().runId, endpoint)
+            return
+        }
+        future.whenComplete { _, ex ->
+            if (ex != null) {
+                log.warn(
+                    "[Sink] chunk upload failed, skipping chunk-ready publish: chunk={} error={}",
+                    stats.path,
+                    ex.message,
+                )
+                return@whenComplete
+            }
+            eventPublisher.publishChunkReady(stats, fileManager.manifest().runId, endpoint)
         }
     }
 }

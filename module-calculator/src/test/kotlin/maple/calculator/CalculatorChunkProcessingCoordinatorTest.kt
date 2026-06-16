@@ -3,11 +3,13 @@ package maple.calculator
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import maple.calculator.config.PipelineProperties
 import maple.calculator.event.ChunkProcessingEvent
 import maple.calculator.event.KafkaResultEventPublisher
 import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
+import maple.calculator.runstate.CalculatorCurrentRunIdHolder
 import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import org.assertj.core.api.Assertions.assertThat
@@ -40,15 +42,32 @@ class CalculatorChunkProcessingCoordinatorTest {
     @Mock
     private lateinit var metricsListener: CalculatorMetricsListener
 
+    @Mock
+    private lateinit var currentRunIdHolder: CalculatorCurrentRunIdHolder
+
+    // No delay → retry gives the chunk an immediate second/third/... attempt
+    // before declaring source_not_found. This keeps the existing "happy path"
+    // tests fast (no real time elapses) while exercising the retry probe.
+    private val pipelineProperties: PipelineProperties = PipelineProperties(
+        sourceChunkRetryDelaysMs = listOf(0L, 0L, 0L, 0L, 0L),
+    )
+
     private lateinit var coordinator: CalculatorChunkProcessingCoordinator
 
     @BeforeEach
     fun setUp() {
+        // Default: holder has no daily runId and no known cycles — first poll /
+        // ext-api down. With currentRunIdOrNull() == null, the coordinator's
+        // runId check at the top of handle() is short-circuited, so the
+        // `isKnownRunId` stub isn't reached. Tests that need the runId
+        // branches override these stubs explicitly.
         coordinator = CalculatorChunkProcessingCoordinator(
             chunkProcessor = chunkProcessor,
             resultEventPublisher = resultEventPublisher,
             objectStorage = objectStorage,
             metricsListener = metricsListener,
+            currentRunIdHolder = currentRunIdHolder,
+            pipelineProperties = pipelineProperties,
             vtDispatcher = Dispatchers.Unconfined,
         )
     }
@@ -245,5 +264,112 @@ class CalculatorChunkProcessingCoordinatorTest {
                 assertThat(published.compressedBytes).isEqualTo(2000)
             },
         )
+    }
+
+    // --- Regression: cycle runId emitted by ItemEquipmentContinuousLoop ---
+    //
+    // ext-api generates a per-cycle runId for item-equipment chunks
+    // (separate from the daily runId). The coordinator previously dropped
+    // these as `stale_run` because the cycle runId didn't match the daily
+    // runId polled from /api/internal/run-status. The fix: trust the source
+    // chunk's existence as the sole ground truth. Any chunk in storage
+    // is processed, regardless of runId. The result_exists check makes
+    // this safe for events that arrive twice or after a replay.
+    //
+    // The previous design (lazy discovery via a double-exists pattern)
+    // proved brittle: MinIO headObject can return NoSuchKeyException
+    // transiently under concurrent load, and the discovery branch
+    // sometimes raced the writer's PUT. The single-exists approach is
+    // both simpler and correct.
+
+    @Test
+    fun `processes chunk from cycle runId without consulting currentRunIdHolder`() = runBlocking {
+        val cycle = "20260615-153236-842732622"
+        val event = testEvent(runId = cycle, chunkId = "part-000001")
+        whenever(objectStorage.exists(event.objectKey)).thenReturn(true)
+        whenever(objectStorage.exists(coordinator.resultObjectKeyFor(event))).thenReturn(false)
+        whenever(chunkProcessor.process(any(), any())).thenReturn(chunkResult())
+
+        coordinator.handle(event)
+
+        // Holder is never consulted for runId gating; only the source-chunk
+        // existence matters. A cycle runId different from the daily runId
+        // is processed the same way as a matching one.
+        verify(currentRunIdHolder, never()).currentRunIdOrNull()
+        verify(currentRunIdHolder, never()).isKnownRunId(any())
+        verify(currentRunIdHolder, never()).discoverCycleRunId(any())
+        verify(chunkProcessor).process(any(), any())
+        verify(resultEventPublisher).publishChunkReady(any())
+        val captor = argumentCaptor<ChunkProcessingEvent>()
+        verify(metricsListener).onEvent(captor.capture())
+        assertThat(captor.firstValue).isInstanceOf(ChunkProcessingEvent.Completed::class.java)
+    }
+
+    @Test
+    fun `missing chunk from any runId is reported as source_not_found`() = runBlocking {
+        val stale = "20260615-130329-724573504" // prior failed run, chunks gone
+        val event = testEvent(runId = stale, chunkId = "part-000001")
+        whenever(objectStorage.exists(event.objectKey)).thenReturn(false)
+
+        coordinator.handle(event)
+
+        verify(chunkProcessor, never()).process(any(), any())
+        verify(currentRunIdHolder, never()).currentRunIdOrNull()
+        val captor = argumentCaptor<ChunkProcessingEvent>()
+        verify(metricsListener).onEvent(captor.capture())
+        assertThat(captor.firstValue).isInstanceOf(ChunkProcessingEvent.Skipped::class.java)
+        assertThat((captor.firstValue as ChunkProcessingEvent.Skipped).reason).isEqualTo("source_not_found")
+    }
+
+    // --- Regression: MinIO headObject race ---
+    //
+    // MinIO `s3.headObject` can return NoSuchKeyException transiently for an
+    // object that does exist on disk, when the producer's PUT is in flight.
+    // Single-shot existence check observed ~10% miss rate; the previous
+    // pipeline dropped 83/84 chunks as `source_not_found` even though the
+    // chunks were already on disk. The fix: retry the existence probe
+    // with backoff before declaring source_not_found. Default schedule
+    // (`[0, 100, 300, 1000, 3000]` ms) recovers most race victims.
+    //
+    // The test uses a zero-delay schedule to keep the test fast; the
+    // behavior under real delays is exercised in production.
+
+    @Test
+    fun `retries source chunk existence and processes on eventual visibility`() = runBlocking {
+        val event = testEvent(chunkId = "part-race")
+        // First two probes fail (simulating the race), the third succeeds.
+        whenever(objectStorage.exists(event.objectKey))
+            .thenReturn(false)   // attempt 1
+            .thenReturn(false)   // attempt 2
+            .thenReturn(true)    // attempt 3 — chunk became visible
+        whenever(objectStorage.exists(coordinator.resultObjectKeyFor(event))).thenReturn(false)
+        whenever(chunkProcessor.process(any(), any())).thenReturn(chunkResult())
+
+        coordinator.handle(event)
+
+        verify(objectStorage, times(3)).exists(event.objectKey)
+        verify(chunkProcessor).process(any(), any())
+        verify(resultEventPublisher).publishChunkReady(any())
+        val captor = argumentCaptor<ChunkProcessingEvent>()
+        verify(metricsListener, times(2)).onEvent(captor.capture())
+        // No Skipped for source_not_found — last event is the Completed.
+        assertThat(captor.allValues.last()).isInstanceOf(ChunkProcessingEvent.Completed::class.java)
+    }
+
+    @Test
+    fun `gives up on source chunk after exhausting retry schedule`() = runBlocking {
+        val event = testEvent(chunkId = "part-truly-missing")
+        // All five probes fail. Coordinator should give up and report
+        // source_not_found, not loop forever.
+        whenever(objectStorage.exists(event.objectKey)).thenReturn(false)
+
+        coordinator.handle(event)
+
+        verify(objectStorage, times(5)).exists(event.objectKey)
+        verify(chunkProcessor, never()).process(any(), any())
+        val captor = argumentCaptor<ChunkProcessingEvent>()
+        verify(metricsListener).onEvent(captor.capture())
+        assertThat(captor.firstValue).isInstanceOf(ChunkProcessingEvent.Skipped::class.java)
+        assertThat((captor.firstValue as ChunkProcessingEvent.Skipped).reason).isEqualTo("source_not_found")
     }
 }

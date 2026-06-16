@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:HeadBucket"],
+      "Resource": ["arn:aws:s3:::maple-expectation"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": [
+        "arn:aws:s3:::maple-expectation/runs/*",
+        "arn:aws:s3:::maple-expectation/data/snapshots/*",
+        "arn:aws:s3:::maple-expectation/calculator/runs/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject"],
+      "Resource": [
+        "arn:aws:s3:::maple-expectation/calculator/runs/*"
+      ]
+    }
+  ]
+}

@@ -179,3 +179,126 @@ jobs:
           name: dependency-report
           path: dependencies.txt
           retention-days: 7
+
+
+  # ==========================================================================
+  # JOB 4: MinIO SA-scope IT (Ephemeral)
+  # ==========================================================================
+  # Plan: docs/superpowers/plans/2026-06-15-minio-operations.md (Task 13)
+  # Spins up an ephemeral MinIO service container and generates per-job random
+  # SA keys via openssl — no long-lived secrets in GitHub.
+  minio-it:
+    name: MinIO SA scope IT (ephemeral)
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 15
+
+    services:
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "mc ready local"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      INTEGRATION_MINIO: "true"
+      MINIO_ENDPOINT: http://localhost:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      # Per-job random SA keys (set in the gen-keys step below)
+      SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}
+      SA_CALCULATOR_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CALCULATOR_SECRET_KEY }}
+      SA_SYNCHRONIZER_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_SYNCHRONIZER_SECRET_KEY }}
+      SA_CLEANUP_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CLEANUP_SECRET_KEY }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      # Per-job random SA keys. Never stored in GitHub Secrets.
+      - name: Generate ephemeral SA keys
+        id: gen-keys
+        run: |
+          SA_EXT_API_SECRET_KEY=$(openssl rand -hex 16)
+          SA_CALCULATOR_SECRET_KEY=$(openssl rand -hex 16)
+          SA_SYNCHRONIZER_SECRET_KEY=$(openssl rand -hex 16)
+          SA_CLEANUP_SECRET_KEY=$(openssl rand -hex 16)
+          echo "SA_EXT_API_SECRET_KEY=$SA_EXT_API_SECRET_KEY" >> "$GITHUB_OUTPUT"
+          echo "SA_CALCULATOR_SECRET_KEY=$SA_CALCULATOR_SECRET_KEY" >> "$GITHUB_OUTPUT"
+          echo "SA_SYNCHRONIZER_SECRET_KEY=$SA_SYNCHRONIZER_SECRET_KEY" >> "$GITHUB_OUTPUT"
+          echo "SA_CLEANUP_SECRET_KEY=$SA_CLEANUP_SECRET_KEY" >> "$GITHUB_OUTPUT"
+
+      # Bootstrap: create bucket, ILM, 4 SAs, 4 policies.
+      # Uses --network host so the bootstrap container can reach the service
+      # container's MinIO on localhost:9000.
+      - name: Run bootstrap
+        env:
+          SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}
+          SA_CALCULATOR_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CALCULATOR_SECRET_KEY }}
+          SA_SYNCHRONIZER_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_SYNCHRONIZER_SECRET_KEY }}
+          SA_CLEANUP_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CLEANUP_SECRET_KEY }}
+        run: |
+          docker run --rm \
+            --network host \
+            -e MINIO_ENDPOINT=http://localhost:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            -e "SA_EXT_API_SECRET_KEY=${SA_EXT_API_SECRET_KEY}" \
+            -e "SA_CALCULATOR_SECRET_KEY=${SA_CALCULATOR_SECRET_KEY}" \
+            -e "SA_SYNCHRONIZER_SECRET_KEY=${SA_SYNCHRONIZER_SECRET_KEY}" \
+            -e "SA_CLEANUP_SECRET_KEY=${SA_CLEANUP_SECRET_KEY}" \
+            -v "${{ github.workspace }}/docker/minio:/scripts:ro" \
+            minio/mc:latest \
+            /bin/sh /scripts/bootstrap.sh
+
+      - name: Verify SAs and ILM
+        run: |
+          set -euo pipefail
+          SAs=$(docker run --rm --network host \
+            -e MINIO_ENDPOINT=http://localhost:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/mc:latest admin user list local 2>/dev/null)
+          echo "Users returned by MinIO:"
+          echo "$SAs"
+          for sa in ext-api calculator synchronizer cleanup; do
+            if ! echo "$SAs" | grep -q "^$sa$"; then
+              echo "ERROR: expected SA '$sa' missing from MinIO user list"
+              exit 1
+            fi
+          done
+          echo "All 4 SAs verified."
+
+      - name: Run IT (boot smoke + scope + structural)
+        env:
+          INTEGRATION_MINIO: "true"
+          SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}
+          SA_CALCULATOR_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CALCULATOR_SECRET_KEY }}
+          SA_SYNCHRONIZER_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_SYNCHRONIZER_SECRET_KEY }}
+          SA_CLEANUP_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CLEANUP_SECRET_KEY }}
+        run: |
+          ./gradlew :module-infra:test \
+            --tests "*BootSmokeIT*" \
+            --tests "*MinioPolicyScopeIT*" \
+            --tests "*MinioPolicyJsonTest*" \
+            -PintegrationTest \
+            -DINTEGRATION_MINIO=true \
+            --rerun-tasks \
+            --no-daemon \
+            --stacktrace

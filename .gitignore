@@ -48,6 +48,13 @@ docs/agents/
 .env.*.local
 .env.production
 .env.staging
+
+# MinIO per-service-account env files
+.env.bootstrap
+.env.ext-api
+.env.calculator
+.env.synchronizer
+.env.cleanup
 mysql_data/
 /redis_data/
 /logs/
@@ -69,17 +76,21 @@ temp_*.txt
 docs/99_Archive/
 scripts/*
 !scripts/check-before-commit.sh
+!scripts/dev-bootstrap.sh
 !scripts/install-git-hooks.sh
+!scripts/install-systemd-units.sh
 !scripts/validate-minio-vs3.sh
 !scripts/lib/
+!scripts/systemd/
 /.claude/settings.json
 /docker/logs/mysql/slow.log
 /.claude/ralph-loop.local.md
 
-# Claude Code - ignore everything except rules and hooks
+# Claude Code - ignore everything except rules, hooks, and the pipeline-test skill
 .claude/*
 !.claude/rules/
 !.claude/hooks/
+!.claude/skills/pipeline-test/
 
 # Claude Code OMC state files
 .omc/

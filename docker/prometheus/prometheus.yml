@@ -24,10 +24,7 @@ scrape_configs:
     scrape_timeout: 3s
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['external-api:8081']
-        labels:
-          application: 'external-api'
-      - targets: ['host.docker.internal:8081']
+      - targets: ['localhost:8081']
         labels:
           application: 'external-api'
 
@@ -36,10 +33,7 @@ scrape_configs:
     scrape_timeout: 3s
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['calculator:8082']
-        labels:
-          application: 'calculator'
-      - targets: ['host.docker.internal:8082']
+      - targets: ['localhost:8082']
         labels:
           application: 'calculator'
 
@@ -48,10 +42,7 @@ scrape_configs:
     scrape_timeout: 3s
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['synchronizer:8083']
-        labels:
-          application: 'synchronizer'
-      - targets: ['host.docker.internal:8083']
+      - targets: ['localhost:8083']
         labels:
           application: 'synchronizer'
 
@@ -60,10 +51,7 @@ scrape_configs:
     scrape_timeout: 3s
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['rest-controller:8084']
-        labels:
-          application: 'rest-controller'
-      - targets: ['host.docker.internal:8084']
+      - targets: ['localhost:8084']
         labels:
           application: 'rest-controller'
 

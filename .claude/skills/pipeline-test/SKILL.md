@@ -120,8 +120,11 @@ if [ "${START_MODE}" = "nohup" ]; then
   # .env points at (typically the dev cloud DB for shared MinIO validation).
   # No local PostgreSQL override.
 
-  # 1) External API (8081)
-  nohup java -Xms512m -Xmx1g -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
+  # 1) External API (8081) — heap budget is the tightest of the four modules.
+  # char-basic + item-equipment phases run concurrently with the OCID lookup
+  # cache. Heap benchmark: -Xmx1g → major GC fires every 2.4s, 22% CPU on GC,
+  # 102 files/s; -Xmx2g → GC 7%, 150 files/s. Verified 2026-06-16.
+  nohup java -Xms512m -Xmx2g -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
   until curl -sf http://localhost:8081/actuator/health > /dev/null 2>&1; do sleep 2; done
   echo "external-api ready on 8081"
 
@@ -160,7 +163,7 @@ fi
 
 In systemd mode, the `-Dstorage.backend=minio` flag is baked into the `maple-cleanup.service` unit (ExecStart), so it's not passed at runtime.
 
-**Why `java -jar` not `bootRun`:** `bootRun` inherits Gradle daemon lifecycle — can SIGKILL after long runs (exit 137). `java -jar` is stable for multi-hour pipeline runs. `-Xmx1g` prevents OOM when running 4 JVMs concurrently (~4GB total vs default ~17GB).
+**Why `java -jar` not `bootRun`:** `bootRun` inherits Gradle daemon lifecycle — can SIGKILL after long runs (exit 137). `java -jar` is stable for multi-hour pipeline runs. Heap budget: ext-api gets `-Xmx2g` (GC-bound at 1g, verified 2026-06-16), the other three stay at `-Xmx1g`. Total ~5GB across 4 JVMs vs default ~17GB.
 
 ### 4. Verify internal API endpoints
 

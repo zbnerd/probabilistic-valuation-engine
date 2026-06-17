@@ -173,6 +173,10 @@ services:
       - maple-network
     env_file:
       - .env.bootstrap
+    environment:
+      # Override .env.bootstrap MINIO_ENDPOINT for in-container DNS.
+      # .env.bootstrap keeps localhost:9000 so host-side tooling works.
+      MINIO_ENDPOINT: http://minio:9000
     volumes:
       - ./docker/minio:/scripts:ro
     entrypoint: /bin/sh /scripts/bootstrap.sh

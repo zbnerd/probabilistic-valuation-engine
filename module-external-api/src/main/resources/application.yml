@@ -23,7 +23,7 @@ nexon:
     key: ${NEXON_API_KEY}
   http-client:
     pool-name: ${NEXON_HTTP_POOL_NAME:nexon-pool}
-    max-connections: ${NEXON_HTTP_MAX_CONNECTIONS:150}
+    max-connections: ${NEXON_HTTP_MAX_CONNECTIONS:250}
     pending-acquire-max-count: ${NEXON_HTTP_PENDING_ACQUIRE_MAX_COUNT:1000}
     pending-acquire-timeout-ms: ${NEXON_HTTP_PENDING_ACQUIRE_TIMEOUT_MS:5000}
     connect-timeout-ms: ${NEXON_HTTP_CONNECT_TIMEOUT_MS:3000}

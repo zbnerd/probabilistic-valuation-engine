@@ -264,12 +264,26 @@ docker exec maple-airflow-scheduler airflow users create \
   --username admin --password admin --firstname Admin --lastname Admin --role Admin --email admin@example.com
 
 # Connections (idempotent — delete first to avoid duplicates)
+#
+# Why `localhost` not `host.docker.internal`: maple-airflow-* containers use
+# `network_mode: host` (see docker-compose.airflow.yml). In host network mode
+# the container shares the host's network namespace, so `localhost` IS the
+# host. `host.docker.internal` is a Docker-bridge-only DNS entry and does not
+# resolve in host-mode containers. Verified 2026-06-17: setting host to
+# host.docker.internal makes HttpSensor return HTTP 000 → DAG fails. Setting
+# to localhost returns HTTP 200 → DAG succeeds.
 docker exec maple-airflow-scheduler airflow connections delete external_api 2>/dev/null
 docker exec maple-airflow-scheduler airflow connections add external_api \
-  --conn-type http --conn-host host.docker.internal --conn-port 8081 --conn-schema http
+  --conn-type http --conn-host localhost --conn-port 8081 --conn-schema http
 docker exec maple-airflow-scheduler airflow connections delete calculator 2>/dev/null
 docker exec maple-airflow-scheduler airflow connections add calculator \
-  --conn-type http --conn-host host.docker.internal --conn-port 8082 --conn-schema http
+  --conn-type http --conn-host localhost --conn-port 8082 --conn-schema http
+# cleanup connection — REQUIRED for daily_cleanup_pipeline's HttpSensor.
+# Without it, the sensor pokes fail and the entire DAG marks failed
+# (all 3 cleanup tasks go upstream_failed). Verified 2026-06-17.
+docker exec maple-airflow-scheduler airflow connections delete cleanup 2>/dev/null
+docker exec maple-airflow-scheduler airflow connections add cleanup \
+  --conn-type http --conn-host localhost --conn-port 8084 --conn-schema http
 
 # Unpause all DAGs
 docker exec maple-airflow-scheduler airflow dags unpause daily_collection_pipeline

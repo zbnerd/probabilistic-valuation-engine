@@ -8,6 +8,7 @@ import maple.externalapi.cache.OcidCacheProvider
 import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
+import maple.externalapi.scheduler.PhaseStopSignal
 import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
 import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
@@ -102,6 +103,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         scheduler.triggerDailyRefresh(null).get()
@@ -180,6 +182,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         scheduler.triggerDailyRefresh(null).get()
@@ -242,6 +245,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         try {
@@ -296,6 +300,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         scheduler.runRankingPhase("run-r-1", null).get()
@@ -346,6 +351,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         scheduler.runOcidPhase("run-o-1", "run-r-1").get()
@@ -391,6 +397,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         try {
@@ -438,6 +445,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         try {
@@ -490,6 +498,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         scheduler.runCharBasicPhase("run-cb-1", "run-o-1").get()
@@ -536,6 +545,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         scheduler.runCharBasicPhase("run-cb-2", "run-o-empty").get()
@@ -586,6 +596,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         scheduler.runItemEquipmentPhase("run-ie-1", "run-cb-1").get()
@@ -636,6 +647,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         scheduler.runItemEquipmentPhase("run-ie-1", "run-cb-1").get()
@@ -680,6 +692,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         scheduler.triggerPhase(PipelinePhase.RANKING_FETCH, "run-r-1", null).get()
@@ -708,6 +721,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         val result = scheduler.triggerPhase(PipelinePhase.IDLE, "run-x", null)
@@ -768,6 +782,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         scheduler.triggerDailyRefresh("daily-run-1").get()
@@ -802,6 +817,7 @@ class ExternalApiSchedulerTest {
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
             skipCharacterBasic = false,
+            stopSignal = PhaseStopSignal(),
         )
 
         val ex = try {

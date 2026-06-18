@@ -37,6 +37,7 @@ class ExternalApiScheduler(
     private val runOnStartup: Boolean,
     @Value("\${external-api.schedule.skip-character-basic:false}")
     private val skipCharacterBasic: Boolean,
+    private val stopSignal: PhaseStopSignal,
 	) : ManagedLifecycle {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
@@ -156,13 +157,23 @@ class ExternalApiScheduler(
         }
         return future
             .whenComplete { _, ex ->
-                if (ex != null) {
-                    log.error("[Scheduler] runRankingPhase failed runId={}", runId, ex)
-                    runStatusTracker.failRun(PipelinePhase.RANKING_FETCH, runId, ex.message ?: "unknown")
-                    runStatusTracker.releasePhaseSlot(PipelinePhase.RANKING_FETCH, runId)
-                } else {
-                    runStatusTracker.completeRun(PipelinePhase.RANKING_FETCH, runId, 0, 0)
-                    // do NOT release — terminal record persists for /run-status
+                when {
+                    ex is PhaseStoppedException -> {
+                        log.info("[Scheduler] runRankingPhase stopped runId={} phase={}", runId, ex.phase)
+                        runStatusTracker.stopRun(PipelinePhase.RANKING_FETCH, runId, 0, 0)
+                        stopSignal.clear(PipelinePhase.RANKING_FETCH)
+                    }
+                    ex != null -> {
+                        log.error("[Scheduler] runRankingPhase failed runId={}", runId, ex)
+                        runStatusTracker.failRun(PipelinePhase.RANKING_FETCH, runId, ex.message ?: "unknown")
+                        runStatusTracker.releasePhaseSlot(PipelinePhase.RANKING_FETCH, runId)
+                        stopSignal.clear(PipelinePhase.RANKING_FETCH)
+                    }
+                    else -> {
+                        runStatusTracker.completeRun(PipelinePhase.RANKING_FETCH, runId, 0, 0)
+                        // do NOT release — terminal record persists for /run-status
+                        stopSignal.clear(PipelinePhase.RANKING_FETCH)
+                    }
                 }
             }
             .thenRun { }
@@ -193,12 +204,22 @@ class ExternalApiScheduler(
         }
         return future
             .whenComplete { _, ex ->
-                if (ex != null) {
-                    log.error("[Scheduler] runOcidPhase failed runId={} upstreamRunId={}", runId, upstreamRunId, ex)
-                    runStatusTracker.failRun(PipelinePhase.OCID_LOOKUP, runId, ex.message ?: "unknown")
-                    runStatusTracker.releasePhaseSlot(PipelinePhase.OCID_LOOKUP, runId)
-                } else {
-                    runStatusTracker.completeRun(PipelinePhase.OCID_LOOKUP, runId, 0, 0)
+                when {
+                    ex is PhaseStoppedException -> {
+                        log.info("[Scheduler] runOcidPhase stopped runId={} phase={}", runId, ex.phase)
+                        runStatusTracker.stopRun(PipelinePhase.OCID_LOOKUP, runId, 0, 0)
+                        stopSignal.clear(PipelinePhase.OCID_LOOKUP)
+                    }
+                    ex != null -> {
+                        log.error("[Scheduler] runOcidPhase failed runId={} upstreamRunId={}", runId, upstreamRunId, ex)
+                        runStatusTracker.failRun(PipelinePhase.OCID_LOOKUP, runId, ex.message ?: "unknown")
+                        runStatusTracker.releasePhaseSlot(PipelinePhase.OCID_LOOKUP, runId)
+                        stopSignal.clear(PipelinePhase.OCID_LOOKUP)
+                    }
+                    else -> {
+                        runStatusTracker.completeRun(PipelinePhase.OCID_LOOKUP, runId, 0, 0)
+                        stopSignal.clear(PipelinePhase.OCID_LOOKUP)
+                    }
                 }
             }
             .thenRun { }
@@ -244,12 +265,22 @@ class ExternalApiScheduler(
         }
         return future
             .whenComplete { _, ex ->
-                if (ex != null) {
-                    log.error("[Scheduler] runCharBasicPhase failed runId={}", runId, ex)
-                    runStatusTracker.failRun(PipelinePhase.CHARACTER_BASIC, runId, ex.message ?: "unknown")
-                    runStatusTracker.releasePhaseSlot(PipelinePhase.CHARACTER_BASIC, runId)
-                } else {
-                    runStatusTracker.completeRun(PipelinePhase.CHARACTER_BASIC, runId, 0, 0)
+                when {
+                    ex is PhaseStoppedException -> {
+                        log.info("[Scheduler] runCharBasicPhase stopped runId={} phase={}", runId, ex.phase)
+                        runStatusTracker.stopRun(PipelinePhase.CHARACTER_BASIC, runId, 0, 0)
+                        stopSignal.clear(PipelinePhase.CHARACTER_BASIC)
+                    }
+                    ex != null -> {
+                        log.error("[Scheduler] runCharBasicPhase failed runId={}", runId, ex)
+                        runStatusTracker.failRun(PipelinePhase.CHARACTER_BASIC, runId, ex.message ?: "unknown")
+                        runStatusTracker.releasePhaseSlot(PipelinePhase.CHARACTER_BASIC, runId)
+                        stopSignal.clear(PipelinePhase.CHARACTER_BASIC)
+                    }
+                    else -> {
+                        runStatusTracker.completeRun(PipelinePhase.CHARACTER_BASIC, runId, 0, 0)
+                        stopSignal.clear(PipelinePhase.CHARACTER_BASIC)
+                    }
                 }
             }
             .thenRun { }
@@ -297,17 +328,47 @@ class ExternalApiScheduler(
         }
         return future
             .whenComplete { _, ex ->
-                if (ex != null) {
-                    log.error("[Scheduler] runItemEquipmentPhase failed runId={}", runId, ex)
-                    runStatusTracker.failRun(PipelinePhase.ITEM_EQUIPMENT, runId, ex.message ?: "unknown")
-                    runStatusTracker.releasePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, runId)
-                } else {
-                    val chunks = schedulerMetrics.drainRunChunks().toInt()
-                    val records = schedulerMetrics.drainRunRecords()
-                    runStatusTracker.completeRun(PipelinePhase.ITEM_EQUIPMENT, runId, chunks, records)
+                when {
+                    ex is PhaseStoppedException -> {
+                        log.info("[Scheduler] runItemEquipmentPhase stopped runId={} phase={}", runId, ex.phase)
+                        val chunks = schedulerMetrics.drainRunChunks().toInt()
+                        val records = schedulerMetrics.drainRunRecords()
+                        runStatusTracker.stopRun(PipelinePhase.ITEM_EQUIPMENT, runId, chunks, records)
+                        stopSignal.clear(PipelinePhase.ITEM_EQUIPMENT)
+                    }
+                    ex != null -> {
+                        log.error("[Scheduler] runItemEquipmentPhase failed runId={}", runId, ex)
+                        runStatusTracker.failRun(PipelinePhase.ITEM_EQUIPMENT, runId, ex.message ?: "unknown")
+                        runStatusTracker.releasePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, runId)
+                        stopSignal.clear(PipelinePhase.ITEM_EQUIPMENT)
+                    }
+                    else -> {
+                        val chunks = schedulerMetrics.drainRunChunks().toInt()
+                        val records = schedulerMetrics.drainRunRecords()
+                        runStatusTracker.completeRun(PipelinePhase.ITEM_EQUIPMENT, runId, chunks, records)
+                        stopSignal.clear(PipelinePhase.ITEM_EQUIPMENT)
+                    }
                 }
             }
             .thenRun { }
+    }
+
+    /**
+     * Set the stop flag for [phase] if and only if its slot currently holds a
+     * non-terminal run. Returns true if a stop was applied (either just now or
+     * already applied — flag is idempotent); false if there is nothing to stop.
+     *
+     * Cross-phase safe: only the named phase's flag is set. Other phases
+     * continue uninterrupted.
+     */
+    fun requestPhaseStop(phase: PipelinePhase): Boolean {
+        val hadNonTerminal = runStatusTracker.hasNonTerminalRun(phase) != null
+        if (hadNonTerminal) {
+            stopSignal.requestStop(phase)
+            log.info("[Scheduler] stop requested phase={} runId={}",
+                phase, runStatusTracker.getPhaseStatus(phase)?.runId)
+        }
+        return hadNonTerminal || stopSignal.isStopRequested(phase)
     }
 
     /**

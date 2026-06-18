@@ -202,3 +202,51 @@ def make_stop_task(phase: str) -> PythonOperator:
         execution_timeout=timedelta(seconds=60),
         do_xcom_push=True,
     )
+
+
+def make_is_phase_terminal(phase: str):
+    """PythonSensor callable: returns True when triggered runId reaches terminal.
+
+    Gates on scope first: if phase not in scope, returns True (skip).
+    FAILED phase → RuntimeError (hard-fail DAG).
+    Transient HTTP → False (reschedule).
+    """
+    task_id = f"per_phase_trigger_{phase.lower()}"
+
+    def _poke(**ctx):
+        scope = parse_scope(ctx["dag_run"].conf or {})
+        if phase not in scope:
+            return True
+
+        xcom_val = ctx["ti"].xcom_pull(task_ids=task_id)
+        if isinstance(xcom_val, str):
+            xcom_val = json.loads(xcom_val)
+        run_id = (xcom_val or {}).get("runId")
+        if not run_id:
+            raise RuntimeError(
+                f"Sensor for {phase} triggered but trigger xcom returned no runId "
+                f"— config error"
+            )
+
+        try:
+            resp = requests.get(
+                f"{get_external_api_base()}/api/internal/run-status",
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except (requests.RequestException, ValueError):
+            return False
+
+        current = data.get("current")
+        if not current or current.get("runId") != run_id:
+            return False
+
+        if current.get("phase") == "FAILED":
+            raise RuntimeError(
+                f"Run {run_id} failed: {current.get('errorMessage', 'unknown')}"
+            )
+
+        return bool(current.get("terminal", False))
+
+    return _poke

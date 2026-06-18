@@ -3,6 +3,7 @@ package maple.externalapi.runstatus
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.atomic.AtomicLong
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
@@ -11,6 +12,16 @@ class RunStatusTrackerTest {
     private val fixedInstant = Instant.parse("2026-06-18T05:00:00Z")
     private val clock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
     private val tracker = RunStatusTracker(clock)
+
+    private fun advancingTracker(): RunStatusTracker {
+        val nanos = AtomicLong(0L)
+        val advancingClock = object : Clock() {
+            override fun getZone(): ZoneOffset = ZoneOffset.UTC
+            override fun withZone(zone: java.time.ZoneId?): Clock = this
+            override fun instant(): Instant = Instant.ofEpochMilli(1_000_000L + nanos.incrementAndGet())
+        }
+        return RunStatusTracker(advancingClock)
+    }
 
     @Test
     fun `all slots empty initially`() {
@@ -124,8 +135,8 @@ class RunStatusTrackerTest {
 
     @Test
     fun `getCurrentStatus returns the most recently started non-terminal run across phases`() {
+        val tracker = advancingTracker()
         tracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r")
-        Thread.sleep(5)
         tracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o")
         val current = tracker.getCurrentStatus()
         assertThat(current?.runId).isEqualTo("run-o")
@@ -133,9 +144,9 @@ class RunStatusTrackerTest {
 
     @Test
     fun `getLastCompletedRun returns the most recent terminal run across phases`() {
+        val tracker = advancingTracker()
         tracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r")
         tracker.completeRun(PipelinePhase.RANKING_FETCH, "run-r", 10, 1_000L)
-        Thread.sleep(5)
         tracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o")
         tracker.completeRun(PipelinePhase.OCID_LOOKUP, "run-o", 20, 2_000L)
         val last = tracker.getLastCompletedRun()

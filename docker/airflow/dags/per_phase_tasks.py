@@ -16,18 +16,20 @@ from airflow.operators.python import PythonOperator
 from airflow.sensors.python import PythonSensor
 
 
-# Allowed scope values. RANKING_FETCH_LOOP intentionally excluded — ext-api
-# PhaseLoopController.loopablePhases from #1291 excludes RANKING_FETCH.
+# Allowed scope values. RANKING_FETCH_LOOP and OCID_LOOKUP_LOOP excluded —
+# ext-api PhaseLoopController.loopablePhases only allows CHARACTER_BASIC and
+# ITEM_EQUIPMENT (verified against module-external-api/.../loop/PhaseLoopController.kt
+# on 2026-06-18; spec §2.3 mentioned OCID_LOOKUP but impl didn't include it).
 ALLOWED_SCOPES = frozenset({
     "RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT",
-    "OCID_LOOKUP_LOOP", "CHARACTER_BASIC_LOOP", "ITEM_EQUIPMENT_LOOP",
+    "CHARACTER_BASIC_LOOP", "ITEM_EQUIPMENT_LOOP",
     "RANKING_FETCH_STOP", "OCID_LOOKUP_STOP",
     "CHARACTER_BASIC_STOP", "ITEM_EQUIPMENT_STOP",
 })
 
 # Phase lists for fan-out
 TRIGGER_PHASES = ["RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"]
-LOOP_PHASES = ["OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"]
+LOOP_PHASES = ["CHARACTER_BASIC", "ITEM_EQUIPMENT"]
 STOP_PHASES = ["RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"]
 
 

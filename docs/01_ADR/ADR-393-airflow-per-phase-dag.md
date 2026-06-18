@@ -33,7 +33,7 @@ check_external_api
         ├── trigger_daily_collection → ... → trigger_cleanup  (FULL_DAILY)
         └── per_phase_join
               ├── per_phase_trigger_<PHASE> (×4) → per_phase_wait_<PHASE> (×4)
-              ├── per_phase_loop_<PHASE> (×3)    [fire-and-forget]
+              ├── per_phase_loop_<PHASE> (×2)    [fire-and-forget; CHARACTER_BASIC, ITEM_EQUIPMENT only]
               └── per_phase_stop_<PHASE> (×4)    [fire-and-forget]
 ```
 
@@ -78,10 +78,12 @@ We picked **Shape A + per-task gate + `/stop/phase` reuse**.
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| New task definitions | 17 | 4 trigger + 4 sensor + 3 loop + 4 stop + 1 branch + 1 join |
+| New task definitions | 16 | 4 trigger + 4 sensor + 2 loop + 4 stop + 1 branch + 1 join |
 | New files | 3 | per_phase_tasks.py, tests/__init__.py, tests/test_per_phase_tasks.py |
-| Modified files | 1 | daily_collection_pipeline.py (+60 lines) |
+| Modified files | 2 | daily_collection_pipeline.py (+60 lines), pipeline-test/SKILL.md (step 10a added) |
 | Existing daily chain | unchanged | verified by DagBag parse test |
+
+> LOOP_PHASES reduced from 3 to 2 (OCID_LOOKUP removed) after runtime verification on 2026-06-18: ext-api PhaseLoopController.loopablePhases only accepts CHARACTER_BASIC + ITEM_EQUIPMENT despite the #1291 spec mentioning OCID_LOOKUP.
 
 ### Observed Result
 

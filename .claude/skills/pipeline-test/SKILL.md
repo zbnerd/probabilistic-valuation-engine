@@ -536,9 +536,12 @@ done
 [ "${phase}" = "ITEM_EQUIPMENT" ] || { echo "ITEM_EQUIPMENT scope trigger failed"; exit 6; }
 ```
 
-**10a.2 — Loop start:**
+****10a.2 — Loop start:**
 ```bash
-# Start a continuous loop for ITEM_EQUIPMENT
+# Start a continuous loop for ITEM_EQUIPMENT.
+# Note: OCID_LOOKUP_LOOP is rejected by ext-api (400 INVALID_PHASE) despite
+# earlier #1291 spec mention — only CHARACTER_BASIC and ITEM_EQUIPMENT are
+# accepted by PhaseLoopController.loopablePhases (verified 2026-06-18).
 docker exec maple-airflow-scheduler airflow dags trigger daily_collection_pipeline \
   -c '{"scope": ["ITEM_EQUIPMENT_LOOP"]}'
 

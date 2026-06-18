@@ -37,7 +37,9 @@ def test_parse_scope_valid(conf, expected):
     "conf",
     [
         {"scope": "RANKING_FETCH_LOOP"},          # not in loopable set
+        {"scope": "OCID_LOOKUP_LOOP"},            # not in ext-api impl loopable set
         {"scope": ["RANKING_FETCH_LOOP"]},        # list with invalid
+        {"scope": ["OCID_LOOKUP_LOOP"]},          # list with non-loopable
         {"scope": "INVALID"},                     # unknown value
         {"scope": ["INVALID"]},                   # list with unknown
         {"scope": ["ITEM_EQUIPMENT", "FOO"]},     # partial list with one invalid
@@ -52,7 +54,7 @@ def test_allowed_scopes_constant_matches_spec():
     """Guard: if spec adds a scope value, this test forces an update."""
     expected = {
         "RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT",
-        "OCID_LOOKUP_LOOP", "CHARACTER_BASIC_LOOP", "ITEM_EQUIPMENT_LOOP",
+        "CHARACTER_BASIC_LOOP", "ITEM_EQUIPMENT_LOOP",
         "RANKING_FETCH_STOP", "OCID_LOOKUP_STOP",
         "CHARACTER_BASIC_STOP", "ITEM_EQUIPMENT_STOP",
     }
@@ -435,7 +437,7 @@ def test_branch_on_scope_task_exists():
 
 
 def test_all_per_phase_tasks_present():
-    """11 per-phase task definitions expected."""
+    """10 per-phase task definitions expected."""
     from airflow.models import DagBag
     import os
     dag_folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -447,8 +449,7 @@ def test_all_per_phase_tasks_present():
         "per_phase_trigger_ocid_lookup",
         "per_phase_trigger_character_basic",
         "per_phase_trigger_item_equipment",
-        # 3 loop (RANKING_FETCH_LOOP excluded)
-        "per_phase_loop_ocid_lookup",
+        # 2 loop (matches ext-api loopablePhases: CHARACTER_BASIC, ITEM_EQUIPMENT)
         "per_phase_loop_character_basic",
         "per_phase_loop_item_equipment",
         # 4 stop

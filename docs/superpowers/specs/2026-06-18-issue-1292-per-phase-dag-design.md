@@ -14,7 +14,7 @@ Extend the Airflow control plane so operators can trigger / loop / stop a single
 
 **Use cases**
 - Hot-loop `ITEM_EQUIPMENT` to pick up fresh gear data without waiting for the daily 18:00 UTC trigger.
-- Stop a runaway `OCID_LOOKUP_LOOP` without restarting ext-api.
+- Stop a runaway `CHARACTER_BASIC_LOOP` / `ITEM_EQUIPMENT_LOOP` without restarting ext-api.
 - Run a single phase (e.g. `CHARACTER_BASIC`) ad-hoc after a config change.
 
 ---
@@ -33,7 +33,7 @@ Pure helpers — no DAG object. Three factories + one parser:
 | `make_stop_task(phase: str) -> PythonOperator` | Stop via `/stop/phase/{phase}`. 200 NOT_RUNNING → idempotent success. |
 | `make_is_phase_terminal(phase: str) -> Callable` | PythonSensor callable — same logic as existing `_is_run_terminal` but phase-filtered. |
 | `TRIGGER_PHASES = ["RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"]` | Frozen list. |
-| `LOOP_PHASES = ["OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"]` | Excludes RANKING_FETCH (matches #1291 `loopablePhases`). |
+| `LOOP_PHASES = ["CHARACTER_BASIC", "ITEM_EQUIPMENT"]` | Matches ext-api `loopablePhases` (verified 2026-06-18 against `PhaseLoopController.kt`). |
 | `STOP_PHASES = ["RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"]` | All 4 phases; single-phase stop endpoint from #1290 halts loops too. |
 
 ### 2.2 `daily_collection_pipeline.py` (extend)
@@ -50,7 +50,7 @@ check_external_api
               └── per_phase_stop_<PHASE>       (×4) → (no sensor; fire-and-forget)
 ```
 
-11 per-phase tasks materialized in graph: 4 trigger (`RANKING_FETCH`, `OCID_LOOKUP`, `CHARACTER_BASIC`, `ITEM_EQUIPMENT`) + 3 loop (`OCID_LOOKUP_LOOP`, `CHARACTER_BASIC_LOOP`, `ITEM_EQUIPMENT_LOOP`; excludes `RANKING_FETCH_LOOP`) + 4 stop (`RANKING_FETCH_STOP`, `OCID_LOOKUP_STOP`, `CHARACTER_BASIC_STOP`, `ITEM_EQUIPMENT_STOP`). Per-task callable gates execution on `dag_run.conf['scope']`.
+10 per-phase tasks materialized in graph: 4 trigger (`RANKING_FETCH`, `OCID_LOOKUP`, `CHARACTER_BASIC`, `ITEM_EQUIPMENT`) + 2 loop (`CHARACTER_BASIC_LOOP`, `ITEM_EQUIPMENT_LOOP`; OCID_LOOKUP_LOOP rejected by ext-api despite earlier spec mention) + 4 stop (`RANKING_FETCH_STOP`, `OCID_LOOKUP_STOP`, `CHARACTER_BASIC_STOP`, `ITEM_EQUIPMENT_STOP`). Per-task callable gates execution on `dag_run.conf['scope']`.
 
 ### 2.3 Routing rule
 
@@ -72,14 +72,14 @@ def route_scope(**ctx) -> str:
 ALLOWED_SCOPES = frozenset({
     # bare phase → single-shot trigger
     "RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT",
-    # _LOOP suffix → start loop
-    "OCID_LOOKUP_LOOP", "CHARACTER_BASIC_LOOP", "ITEM_EQUIPMENT_LOOP",
+    # _LOOP suffix → start loop (only ext-api loopablePhases)
+    "CHARACTER_BASIC_LOOP", "ITEM_EQUIPMENT_LOOP",
     # _STOP suffix → graceful stop
     "RANKING_FETCH_STOP", "OCID_LOOKUP_STOP", "CHARACTER_BASIC_STOP", "ITEM_EQUIPMENT_STOP",
 })
 ```
 
-Total 11 valid scope values (4 + 3 + 4).
+Total 10 valid scope values (4 + 2 + 4).
 
 ### 3.2 Examples
 
@@ -93,7 +93,8 @@ Total 11 valid scope values (4 + 3 + 4).
 | `{"scope": ["RANKING_FETCH", "OCID_LOOKUP"]}` | trigger 2 phases in parallel |
 | `{"scope": ["ITEM_EQUIPMENT_LOOP", "OCID_LOOKUP_STOP"]}` | mixed actions in parallel |
 | `{"scope": "INVALID"}` | raise `AirflowException` |
-| `{"scope": ["RANKING_FETCH_LOOP"]}` | raise `AirflowException` (not in #1291 loopablePhases) |
+| `{"scope": ["RANKING_FETCH_LOOP"]}` | raise `AirflowException` (not in ext-api `loopablePhases`) |
+| `{"scope": ["OCID_LOOKUP_LOOP"]}` | raise `AirflowException` (also not in ext-api `loopablePhases` despite spec §2.3 mention) |
 
 ---
 
@@ -284,7 +285,7 @@ per_phase_join >> per_phase_loop_tasks
 per_phase_join >> per_phase_stop_tasks
 ```
 
-Total task count in DAG graph: 4 trigger + 4 sensor + 3 loop + 4 stop + 1 branch + 1 join = 17 new task definitions added.
+Total task count in DAG graph: 4 trigger + 4 sensor + 2 loop + 4 stop + 1 branch + 1 join = 16 new task definitions added.
 
 ---
 

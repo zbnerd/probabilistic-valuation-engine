@@ -132,8 +132,8 @@ class ExternalApiScheduler(
      * or fails+releases slot on exception. [upstreamRunId] is unused for
      * ranking (no upstream).
      */
-    fun runRankingPhase(runId: String, upstreamRunId: String?): CompletableFuture<Void> {
-        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, runId)
+    fun runRankingPhase(runId: String, upstreamRunId: String?, loopId: String? = null): CompletableFuture<Void> {
+        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, runId, loopId)
         if (acquired == null) {
             return CompletableFuture.failedFuture(
                 IllegalStateException("RANKING_FETCH slot occupied")
@@ -162,6 +162,7 @@ class ExternalApiScheduler(
                     phaseLabel = "runRankingPhase",
                     runId = runId,
                     ex = ex,
+                    loopId = loopId,
                 )
             }
             .thenRun { }
@@ -173,9 +174,9 @@ class ExternalApiScheduler(
      * file. Acquires OCID_LOOKUP slot; completes on success (terminal
      * record persists), fails+releases on exception.
      */
-    fun runOcidPhase(runId: String, upstreamRunId: String?): CompletableFuture<Void> {
+    fun runOcidPhase(runId: String, upstreamRunId: String?, loopId: String? = null): CompletableFuture<Void> {
         require(upstreamRunId != null) { "OCID_LOOKUP requires upstreamRunId" }
-        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, runId)
+        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, runId, loopId)
         if (acquired == null) {
             return CompletableFuture.failedFuture(
                 IllegalStateException("OCID_LOOKUP slot occupied")
@@ -197,6 +198,7 @@ class ExternalApiScheduler(
                     phaseLabel = "runOcidPhase",
                     runId = runId,
                     ex = ex,
+                    loopId = loopId,
                     failureLogContext = { "upstreamRunId={$upstreamRunId}" },
                 )
             }
@@ -210,9 +212,9 @@ class ExternalApiScheduler(
      * loaded cache is empty, the phase short-circuits (consistent with
      * daily-refresh behavior).
      */
-    fun runCharBasicPhase(runId: String, upstreamRunId: String?): CompletableFuture<Void> {
+    fun runCharBasicPhase(runId: String, upstreamRunId: String?, loopId: String? = null): CompletableFuture<Void> {
         require(upstreamRunId != null) { "CHARACTER_BASIC requires upstreamRunId" }
-        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.CHARACTER_BASIC, runId)
+        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.CHARACTER_BASIC, runId, loopId)
         if (acquired == null) {
             return CompletableFuture.failedFuture(
                 IllegalStateException("CHARACTER_BASIC slot occupied")
@@ -248,6 +250,7 @@ class ExternalApiScheduler(
                     phaseLabel = "runCharBasicPhase",
                     runId = runId,
                     ex = ex,
+                    loopId = loopId,
                 )
             }
             .thenRun { }
@@ -261,9 +264,9 @@ class ExternalApiScheduler(
      * Single-shot: does not loop. Caller (controller or triggerPhase)
      * decides how often to invoke.
      */
-    fun runItemEquipmentPhase(runId: String, upstreamRunId: String?): CompletableFuture<Void> {
+    fun runItemEquipmentPhase(runId: String, upstreamRunId: String?, loopId: String? = null): CompletableFuture<Void> {
         require(upstreamRunId != null) { "ITEM_EQUIPMENT requires upstreamRunId" }
-        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, runId)
+        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, runId, loopId)
         if (acquired == null) {
             return CompletableFuture.failedFuture(
                 IllegalStateException("ITEM_EQUIPMENT slot occupied")
@@ -300,6 +303,7 @@ class ExternalApiScheduler(
                     phaseLabel = "runItemEquipmentPhase",
                     runId = runId,
                     ex = ex,
+                    loopId = loopId,
                     drainMetrics = { schedulerMetrics.drainRunChunks().toInt() to schedulerMetrics.drainRunRecords() },
                 )
             }
@@ -334,12 +338,17 @@ class ExternalApiScheduler(
      * are not valid standalone triggers — they are intermediate states. Returns
      * a failed future for these.
      */
-    fun triggerPhase(phase: PipelinePhase, runId: String, upstreamRunId: String?): CompletableFuture<Void> {
+    fun triggerPhase(
+        phase: PipelinePhase,
+        runId: String,
+        upstreamRunId: String?,
+        loopId: String? = null,
+    ): CompletableFuture<Void> {
         return when (phase) {
-            PipelinePhase.RANKING_FETCH -> runRankingPhase(runId, upstreamRunId)
-            PipelinePhase.OCID_LOOKUP -> runOcidPhase(runId, upstreamRunId)
-            PipelinePhase.CHARACTER_BASIC -> runCharBasicPhase(runId, upstreamRunId)
-            PipelinePhase.ITEM_EQUIPMENT -> runItemEquipmentPhase(runId, upstreamRunId)
+            PipelinePhase.RANKING_FETCH -> runRankingPhase(runId, upstreamRunId, loopId)
+            PipelinePhase.OCID_LOOKUP -> runOcidPhase(runId, upstreamRunId, loopId)
+            PipelinePhase.CHARACTER_BASIC -> runCharBasicPhase(runId, upstreamRunId, loopId)
+            PipelinePhase.ITEM_EQUIPMENT -> runItemEquipmentPhase(runId, upstreamRunId, loopId)
             else -> CompletableFuture.failedFuture(
                 IllegalArgumentException("Phase $phase is not a standalone-triggerable phase")
             )
@@ -364,27 +373,32 @@ class ExternalApiScheduler(
         phaseLabel: String,
         runId: String,
         ex: Throwable?,
+        loopId: String? = null,
         drainMetrics: () -> Pair<Int, Long> = { 0 to 0L },
         failureLogContext: () -> String? = { null },
     ) {
+        // Loop iterations preserve the stop signal so a stop request that
+        // arrived between iterations is still visible at the next runIteration
+        // top check. Single-shot (loopId == null) clears on every terminal.
+        val clearSignal = loopId == null
         when {
             ex is PhaseStoppedException -> {
                 log.info("[Scheduler] {} stopped runId={} phase={}", phaseLabel, runId, ex.phase)
                 val (chunks, records) = drainMetrics()
                 runStatusTracker.stopRun(phase, runId, chunks, records)
-                stopSignal.clear(phase)
+                if (clearSignal) stopSignal.clear(phase)
             }
             ex != null -> {
                 val extra = failureLogContext()?.let { " $it" } ?: ""
                 log.error("[Scheduler] {} failed runId={}$extra", phaseLabel, runId, ex)
                 runStatusTracker.failRun(phase, runId, ex.message ?: "unknown")
                 runStatusTracker.releasePhaseSlot(phase, runId)
-                stopSignal.clear(phase)
+                if (clearSignal) stopSignal.clear(phase)
             }
             else -> {
                 val (chunks, records) = drainMetrics()
                 runStatusTracker.completeRun(phase, runId, chunks, records)
-                stopSignal.clear(phase)
+                if (clearSignal) stopSignal.clear(phase)
             }
         }
     }

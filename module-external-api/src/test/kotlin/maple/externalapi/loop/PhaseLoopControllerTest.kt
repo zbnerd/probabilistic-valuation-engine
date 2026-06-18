@@ -47,7 +47,7 @@ class PhaseLoopControllerTest {
     @Test
     fun `startLoop on ITEM_EQUIPMENT returns LoopState with RUNNING status and submits first iteration`() {
         whenever(scheduler.triggerPhase(eq(PipelinePhase.ITEM_EQUIPMENT), any(), anyOrNull(), anyOrNull()))
-            .thenReturn(CompletableFuture<Unit>())
+            .thenReturn(CompletableFuture<Void>().also { it.complete(null) })
 
         val state = controller().startLoop(PipelinePhase.ITEM_EQUIPMENT)
 
@@ -61,7 +61,7 @@ class PhaseLoopControllerTest {
     @Test
     fun `startLoop on duplicate phase returns existing state without resubmit`() {
         whenever(scheduler.triggerPhase(any(), any(), anyOrNull(), anyOrNull()))
-            .thenReturn(CompletableFuture<Unit>())
+            .thenReturn(CompletableFuture<Void>().also { it.complete(null) })
 
         val ctrl = controller()
         val first = ctrl.startLoop(PipelinePhase.ITEM_EQUIPMENT)
@@ -83,7 +83,7 @@ class PhaseLoopControllerTest {
     @Test
     fun `hasActiveLoop true while RUNNING, false after STOPPED`() {
         whenever(scheduler.triggerPhase(any(), any(), anyOrNull(), anyOrNull()))
-            .thenReturn(CompletableFuture<Unit>())
+            .thenReturn(CompletableFuture<Void>().also { it.complete(null) })
 
         val ctrl = controller()
         assertFalse(ctrl.hasActiveLoop(PipelinePhase.ITEM_EQUIPMENT))
@@ -102,8 +102,10 @@ class PhaseLoopControllerTest {
 
     @Test
     fun `startLoop returns iterationCount=0 and lastRunId null`() {
+        // Pending future: keeps whenComplete from firing inline, so we observe
+        // the state right after startLoop returns, before any iteration completes.
         whenever(scheduler.triggerPhase(eq(PipelinePhase.ITEM_EQUIPMENT), any(), anyOrNull(), anyOrNull()))
-            .thenReturn(CompletableFuture<Unit>())
+            .thenReturn(CompletableFuture<Void>())
 
         val state = controller().startLoop(PipelinePhase.ITEM_EQUIPMENT)
         assertEquals(0, state.iterationCount)
@@ -136,7 +138,7 @@ class PhaseLoopControllerTest {
     @Test
     fun `stopLoop on active loop sets stopSignal and returns existing state`() {
         whenever(scheduler.triggerPhase(any(), any(), anyOrNull(), anyOrNull()))
-            .thenReturn(CompletableFuture<Unit>())
+            .thenReturn(CompletableFuture<Void>().also { it.complete(null) })
 
         val ctrl = controller()
         val state = ctrl.startLoop(PipelinePhase.ITEM_EQUIPMENT)
@@ -155,7 +157,7 @@ class PhaseLoopControllerTest {
     @Test
     fun `finalize clears stopSignal and transitions status to STOPPED`() {
         whenever(scheduler.triggerPhase(any(), any(), anyOrNull(), anyOrNull()))
-            .thenReturn(CompletableFuture<Unit>())
+            .thenReturn(CompletableFuture<Void>().also { it.complete(null) })
 
         val ctrl = controller()
         val state = ctrl.startLoop(PipelinePhase.ITEM_EQUIPMENT)
@@ -172,9 +174,9 @@ class PhaseLoopControllerTest {
     }
 
     @Test
-    fun `shutdown trips stopSignal for all active loops and transitions to STOPPED`() {
+    fun `shutdown transitions all active loops to STOPPED and clears stopSignal`() {
         whenever(scheduler.triggerPhase(any(), any(), anyOrNull(), anyOrNull()))
-            .thenReturn(CompletableFuture<Unit>())
+            .thenReturn(CompletableFuture<Void>().also { it.complete(null) })
 
         val ctrl = controller()
         val ieState = ctrl.startLoop(PipelinePhase.ITEM_EQUIPMENT)
@@ -185,8 +187,10 @@ class PhaseLoopControllerTest {
 
         ctrl.shutdown()
 
-        assertTrue(stopSignal.isStopRequested(PipelinePhase.ITEM_EQUIPMENT))
-        assertTrue(stopSignal.isStopRequested(PipelinePhase.CHARACTER_BASIC))
+        // shutdown() trips signal AND calls finalize(), which clears the signal.
+        // So after shutdown, signal is cleared and state is STOPPED.
+        assertFalse(stopSignal.isStopRequested(PipelinePhase.ITEM_EQUIPMENT))
+        assertFalse(stopSignal.isStopRequested(PipelinePhase.CHARACTER_BASIC))
         assertEquals(LoopStatus.STOPPED, ieState.status)
         assertEquals(LoopStatus.STOPPED, cbState.status)
         val fresh = ctrl.startLoop(PipelinePhase.ITEM_EQUIPMENT)
@@ -196,7 +200,7 @@ class PhaseLoopControllerTest {
     @Test
     fun `concurrent startLoop on same phase — only one wins`() {
         whenever(scheduler.triggerPhase(any(), any(), anyOrNull(), anyOrNull()))
-            .thenReturn(CompletableFuture<Unit>())
+            .thenReturn(CompletableFuture<Void>().also { it.complete(null) })
 
         val ctrl = controller()
         val states = (1..10).map {

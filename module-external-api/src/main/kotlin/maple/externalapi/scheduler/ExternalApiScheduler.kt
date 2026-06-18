@@ -157,24 +157,12 @@ class ExternalApiScheduler(
         }
         return future
             .whenComplete { _, ex ->
-                when {
-                    ex is PhaseStoppedException -> {
-                        log.info("[Scheduler] runRankingPhase stopped runId={} phase={}", runId, ex.phase)
-                        runStatusTracker.stopRun(PipelinePhase.RANKING_FETCH, runId, 0, 0)
-                        stopSignal.clear(PipelinePhase.RANKING_FETCH)
-                    }
-                    ex != null -> {
-                        log.error("[Scheduler] runRankingPhase failed runId={}", runId, ex)
-                        runStatusTracker.failRun(PipelinePhase.RANKING_FETCH, runId, ex.message ?: "unknown")
-                        runStatusTracker.releasePhaseSlot(PipelinePhase.RANKING_FETCH, runId)
-                        stopSignal.clear(PipelinePhase.RANKING_FETCH)
-                    }
-                    else -> {
-                        runStatusTracker.completeRun(PipelinePhase.RANKING_FETCH, runId, 0, 0)
-                        // do NOT release — terminal record persists for /run-status
-                        stopSignal.clear(PipelinePhase.RANKING_FETCH)
-                    }
-                }
+                handlePhaseTerminal(
+                    phase = PipelinePhase.RANKING_FETCH,
+                    phaseLabel = "runRankingPhase",
+                    runId = runId,
+                    ex = ex,
+                )
             }
             .thenRun { }
     }
@@ -204,23 +192,13 @@ class ExternalApiScheduler(
         }
         return future
             .whenComplete { _, ex ->
-                when {
-                    ex is PhaseStoppedException -> {
-                        log.info("[Scheduler] runOcidPhase stopped runId={} phase={}", runId, ex.phase)
-                        runStatusTracker.stopRun(PipelinePhase.OCID_LOOKUP, runId, 0, 0)
-                        stopSignal.clear(PipelinePhase.OCID_LOOKUP)
-                    }
-                    ex != null -> {
-                        log.error("[Scheduler] runOcidPhase failed runId={} upstreamRunId={}", runId, upstreamRunId, ex)
-                        runStatusTracker.failRun(PipelinePhase.OCID_LOOKUP, runId, ex.message ?: "unknown")
-                        runStatusTracker.releasePhaseSlot(PipelinePhase.OCID_LOOKUP, runId)
-                        stopSignal.clear(PipelinePhase.OCID_LOOKUP)
-                    }
-                    else -> {
-                        runStatusTracker.completeRun(PipelinePhase.OCID_LOOKUP, runId, 0, 0)
-                        stopSignal.clear(PipelinePhase.OCID_LOOKUP)
-                    }
-                }
+                handlePhaseTerminal(
+                    phase = PipelinePhase.OCID_LOOKUP,
+                    phaseLabel = "runOcidPhase",
+                    runId = runId,
+                    ex = ex,
+                    failureLogContext = { "upstreamRunId={$upstreamRunId}" },
+                )
             }
             .thenRun { }
     }
@@ -265,23 +243,12 @@ class ExternalApiScheduler(
         }
         return future
             .whenComplete { _, ex ->
-                when {
-                    ex is PhaseStoppedException -> {
-                        log.info("[Scheduler] runCharBasicPhase stopped runId={} phase={}", runId, ex.phase)
-                        runStatusTracker.stopRun(PipelinePhase.CHARACTER_BASIC, runId, 0, 0)
-                        stopSignal.clear(PipelinePhase.CHARACTER_BASIC)
-                    }
-                    ex != null -> {
-                        log.error("[Scheduler] runCharBasicPhase failed runId={}", runId, ex)
-                        runStatusTracker.failRun(PipelinePhase.CHARACTER_BASIC, runId, ex.message ?: "unknown")
-                        runStatusTracker.releasePhaseSlot(PipelinePhase.CHARACTER_BASIC, runId)
-                        stopSignal.clear(PipelinePhase.CHARACTER_BASIC)
-                    }
-                    else -> {
-                        runStatusTracker.completeRun(PipelinePhase.CHARACTER_BASIC, runId, 0, 0)
-                        stopSignal.clear(PipelinePhase.CHARACTER_BASIC)
-                    }
-                }
+                handlePhaseTerminal(
+                    phase = PipelinePhase.CHARACTER_BASIC,
+                    phaseLabel = "runCharBasicPhase",
+                    runId = runId,
+                    ex = ex,
+                )
             }
             .thenRun { }
     }
@@ -328,27 +295,13 @@ class ExternalApiScheduler(
         }
         return future
             .whenComplete { _, ex ->
-                when {
-                    ex is PhaseStoppedException -> {
-                        log.info("[Scheduler] runItemEquipmentPhase stopped runId={} phase={}", runId, ex.phase)
-                        val chunks = schedulerMetrics.drainRunChunks().toInt()
-                        val records = schedulerMetrics.drainRunRecords()
-                        runStatusTracker.stopRun(PipelinePhase.ITEM_EQUIPMENT, runId, chunks, records)
-                        stopSignal.clear(PipelinePhase.ITEM_EQUIPMENT)
-                    }
-                    ex != null -> {
-                        log.error("[Scheduler] runItemEquipmentPhase failed runId={}", runId, ex)
-                        runStatusTracker.failRun(PipelinePhase.ITEM_EQUIPMENT, runId, ex.message ?: "unknown")
-                        runStatusTracker.releasePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, runId)
-                        stopSignal.clear(PipelinePhase.ITEM_EQUIPMENT)
-                    }
-                    else -> {
-                        val chunks = schedulerMetrics.drainRunChunks().toInt()
-                        val records = schedulerMetrics.drainRunRecords()
-                        runStatusTracker.completeRun(PipelinePhase.ITEM_EQUIPMENT, runId, chunks, records)
-                        stopSignal.clear(PipelinePhase.ITEM_EQUIPMENT)
-                    }
-                }
+                handlePhaseTerminal(
+                    phase = PipelinePhase.ITEM_EQUIPMENT,
+                    phaseLabel = "runItemEquipmentPhase",
+                    runId = runId,
+                    ex = ex,
+                    drainMetrics = { schedulerMetrics.drainRunChunks().toInt() to schedulerMetrics.drainRunRecords() },
+                )
             }
             .thenRun { }
     }
@@ -390,6 +343,49 @@ class ExternalApiScheduler(
             else -> CompletableFuture.failedFuture(
                 IllegalArgumentException("Phase $phase is not a standalone-triggerable phase")
             )
+        }
+    }
+
+    /**
+     * Terminal-state handler shared by all per-phase `runXxxPhase` methods.
+     *
+     * Behavior is identical to the original inline `whenComplete` blocks:
+     * - [PhaseStoppedException]: INFO log, [RunStatusTracker.stopRun], clear stop signal
+     * - other [Throwable]: ERROR log, [RunStatusTracker.failRun], release slot, clear stop signal
+     * - success: [RunStatusTracker.completeRun], clear stop signal (terminal record persists)
+     *
+     * [drainMetrics] is only called on the stop and success branches (matching
+     * the original behavior — failure branch intentionally does not drain).
+     * [failureLogContext] is appended to the ERROR log line for phases that
+     * carry extra context (e.g. OCID_LOOKUP's upstreamRunId).
+     */
+    private fun handlePhaseTerminal(
+        phase: PipelinePhase,
+        phaseLabel: String,
+        runId: String,
+        ex: Throwable?,
+        drainMetrics: () -> Pair<Int, Long> = { 0 to 0L },
+        failureLogContext: () -> String? = { null },
+    ) {
+        when {
+            ex is PhaseStoppedException -> {
+                log.info("[Scheduler] {} stopped runId={} phase={}", phaseLabel, runId, ex.phase)
+                val (chunks, records) = drainMetrics()
+                runStatusTracker.stopRun(phase, runId, chunks, records)
+                stopSignal.clear(phase)
+            }
+            ex != null -> {
+                val extra = failureLogContext()?.let { " $it" } ?: ""
+                log.error("[Scheduler] {} failed runId={}$extra", phaseLabel, runId, ex)
+                runStatusTracker.failRun(phase, runId, ex.message ?: "unknown")
+                runStatusTracker.releasePhaseSlot(phase, runId)
+                stopSignal.clear(phase)
+            }
+            else -> {
+                val (chunks, records) = drainMetrics()
+                runStatusTracker.completeRun(phase, runId, chunks, records)
+                stopSignal.clear(phase)
+            }
         }
     }
 

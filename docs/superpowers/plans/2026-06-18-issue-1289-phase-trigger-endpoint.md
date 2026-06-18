@@ -1524,3 +1524,227 @@ After implementation:
    - **Open Item 3 (legacy `current` field):** Kept as deprecated alias in `RunStatusResponse` (Task 3).
 
 Plan complete.
+
+---
+
+## Plan Revisions (post-grilling)
+
+5 gaps resolved via `/grill-me` skill. Apply during implementation:
+
+### Revision 1: Slot lifecycle semantics (Gap C)
+
+**Affects:** Task 2 (tracker), Tasks 4-6 (per-phase methods).
+
+`acquirePhaseSlot` accepts slots whose current value is `null` OR terminal (CAS-replace). `completeRun` leaves the slot populated with `phase=COMPLETED`. `releasePhaseSlot` is called **only on FAILED**, never on success. This preserves the last-completed record across phases.
+
+Replace Task 2 step 3 `acquirePhaseSlot`:
+
+```kotlin
+fun acquirePhaseSlot(phase: PipelinePhase, runId: String): RunStatus? {
+    val slot = slots.computeIfAbsent(phase) { AtomicReference(null) }
+    val now = Instant.now(clock)
+    val candidate = RunStatus(
+        runId = runId,
+        phase = phase,
+        triggeredPhase = phase,
+        startedAt = now,
+        updatedAt = now,
+    )
+    return slot.updateAndGet { current ->
+        if (current == null || current.isTerminal) candidate else current
+    }.let { result ->
+        if (result.runId == runId && result.startedAt == now) {
+            log.info("[RunStatus] phase-slot acquired phase={} runId={}", phase, runId)
+            result
+        } else {
+            log.warn("[RunStatus] phase-slot occupied phase={} existingRunId={}", phase, result.runId)
+            null
+        }
+    }
+}
+```
+
+In Tasks 4-6 `whenComplete` blocks: drop `releasePhaseSlot` from the success path. Keep it in the failure path:
+
+```kotlin
+.whenComplete { _, ex ->
+    if (ex != null) {
+        runStatusTracker.failRun(phase, runId, ex.message ?: "unknown")
+        runStatusTracker.releasePhaseSlot(phase, runId)
+    } else {
+        runStatusTracker.completeRun(phase, runId, 0, 0)
+        // do NOT release — slot keeps COMPLETED record for /run-status
+    }
+}
+```
+
+### Revision 2: Controller `triggerDailyRefresh` call (Gap B)
+
+**Affects:** Task 7 + Task 8 controller wiring.
+
+In `InternalApiController.triggerDailyRefresh`, change:
+
+```kotlin
+executor.submit { scheduler.triggerDailyRefresh(runId).join() }
+```
+
+(`triggerDailyRefresh` returns `CompletableFuture<Void>`; the lambda must adapt to `Runnable`. `.join()` runs the chain on the executor thread. Acceptable per async-patterns.md — controller executor thread is fair game.)
+
+### Revision 3: `OcidCacheProvider.loadFromRun(runId)` for char-basic / item-equipment (Gap A)
+
+**Affects:** New sub-task in Task 5 (between steps 1 and 5).
+
+Add to `module-external-api/src/main/kotlin/maple/externalapi/cache/OcidCacheProvider.kt`:
+
+```kotlin
+/**
+ * Load OCID mapping from a specific prior run. Used by standalone char-basic
+ * and item-equipment triggers to consume a known upstream's OCID file rather
+ * than the most-recent one. Key format: `ocid-mapping/ocid-mapping-{runId}.jsonl.gz`.
+ * Returns the loaded map and updates the cache reference.
+ */
+fun loadFromRun(runId: String): Map<String, String> {
+    val key = "ocid-mapping/ocid-mapping-$runId.jsonl.gz"
+    val map = HashMap<String, String>()
+    var parseErrors = 0
+    try {
+        GZIPInputStream(BufferedInputStream(objectStorage.getStream(key))).bufferedReader().useLines { lines ->
+            for (line in lines) {
+                if (line.isBlank()) continue
+                val entry = parseLine(line)
+                if (entry != null) {
+                    map[entry.first] = entry.second
+                } else {
+                    parseErrors++
+                }
+            }
+        }
+    } catch (ex: Exception) {
+        log.error("[OcidCache] loadFromRun failed runId={} key={}", runId, key, ex)
+        return emptyMap()
+    }
+    cacheRef.set(map)
+    if (parseErrors > 0) {
+        log.warn("[OcidCache] loaded from runId={}: {} entries ({} parse errors)", runId, map.size, parseErrors)
+    } else {
+        log.info("[OcidCache] loaded from runId={}: {} entries", runId, map.size)
+    }
+    return map
+}
+```
+
+Use in `runCharBasicPhase` (Task 5 step 5) and `runItemEquipmentPhase` (Task 5 step 6):
+
+```kotlin
+val ocidCache = if (upstreamRunId != null) {
+    val loaded = ocidCacheProvider.loadFromRun(upstreamRunId)
+    if (loaded.isEmpty()) {
+        log.warn("[Scheduler] upstream OCID mapping empty for runId={} upstreamRunId={}", runId, upstreamRunId)
+    }
+    loaded
+} else {
+    ocidCacheProvider.current()
+}
+```
+
+### Revision 4: `runId` parameter on phase beans (Gap D)
+
+**Affects:** Task 5 step 5 + Task 5 step 6.
+
+Modify `CharacterBasicFetchPhase.execute` and `ItemEquipmentFetchPhase.execute` to accept an explicit `runId` parameter. When the scheduler passes the slot's `runId`, the bean uses it; when `runIdGenerator.newRunId()` is the fallback (existing daily-refresh behavior), it's preserved by leaving the parameter nullable with a fallback.
+
+In `CharacterBasicFetchPhase.execute`:
+
+```kotlin
+fun execute(workerExecutor: ExecutorService, ocidCache: Map<String, String>, runId: String? = null): CompletableFuture<Unit> {
+    val existing = objectStorage.listByPrefix("character-basic/")
+    if (existing.isNotEmpty()) {
+        log.info("[Scheduler] character-basic already done ({} files), skipping", existing.size)
+        return CompletableFuture.completedFuture(Unit)
+    }
+
+    val entries = ocidCache.entries.toList()
+    if (entries.isEmpty()) {
+        log.warn("[Scheduler] OCID cache empty, skipping character-basic")
+        return CompletableFuture.completedFuture(Unit)
+    }
+
+    val effectiveRunId = runId ?: runIdGenerator.newRunId()
+    val chunkConfig = chunkingProperties.configFor("character-basic")
+    val runKey = "runs/$effectiveRunId/character-basic"
+    runMarkerWriter.writeRunMarker(runKey)
+    val sink = sinkFactory.createForCharacterBasic(runKey)
+    // ... rest unchanged, use effectiveRunId instead of runId
+}
+```
+
+In `ItemEquipmentFetchPhase.execute`:
+
+```kotlin
+fun execute(workerExecutor: ExecutorService, entries: List<Map.Entry<String, String>>, runId: String? = null): CompletableFuture<Unit> {
+    // ... existing early returns ...
+    val effectiveRunId = runId ?: "ie-${UUID.randomUUID().toString().take(8)}"  // preserve existing fallback
+    val chunkConfig = chunkingProperties.configFor("item-equipment")
+    val runKey = "runs/$effectiveRunId/item-equipment"
+    // ... rest unchanged, use effectiveRunId
+}
+```
+
+Note: `ItemEquipmentFetchPhase` previously did not generate its own runId (loop always passed one). The fallback preserves that behavior. Verify the existing fallback in the production code path before changing — read the full file.
+
+### Revision 5: `OcidLookupPhase.deleteOldMappingFiles` filter by current runId (Gap E)
+
+**Affects:** Task 4 step 3 `runOcidPhase`.
+
+Modify `OcidLookupPhase.deleteOldMappingFiles` to accept a `currentRunId` and skip that file:
+
+```kotlin
+private fun deleteOldMappingFiles(mappingDir: String, currentRunId: String) {
+    val prefix = "$mappingDir/"
+    val total = objectStorage.deleteByPrefix(prefix)
+    // Re-write the current run's mapping file if it was accidentally deleted above
+    // (defensive — the writer coroutine below re-creates it anyway)
+    log.info("[Scheduler] deleted {} old OCID mapping objects in {}/ (current runId={} preserved by re-write)",
+        total, mappingDir, currentRunId)
+}
+```
+
+Wait — `deleteByPrefix` deletes ALL objects including the current runId's. The writer coroutine in `OcidLookupPhase.execute` writes the current run's mapping AFTER the delete. So the current run's mapping is the freshly-written one. But if a CONCURRENT standalone trigger is mid-write, the daily's `deleteByPrefix` clobbers it.
+
+Fix: skip current runId in the delete loop. Replace `deleteByPrefix` with explicit per-object delete filtered by name:
+
+```kotlin
+private fun deleteOldMappingFiles(mappingDir: String, currentRunId: String) {
+    val prefix = "$mappingDir/"
+    val objects = objectStorage.listByPrefix(prefix)
+    val toDelete = objects.filter { !it.key.endsWith("ocid-mapping-$currentRunId.jsonl.gz") }
+    var deleted = 0
+    for (obj in toDelete) {
+        if (objectStorage.delete(obj.key)) deleted++
+    }
+    log.info("[Scheduler] deleted {} old OCID mapping objects in {}/ (preserved current runId={})",
+        deleted, mappingDir, currentRunId)
+}
+```
+
+(Verify `ObjectStorage` has a per-key `delete(key)` method; if not, fall back to `deleteByPrefix` with explicit exclusion list management. Read `ObjectStorage` interface before implementing.)
+
+Update `OcidLookupPhase.execute` to pass `runId`:
+
+```kotlin
+suspend fun execute(workerExecutor: ExecutorService, runKey: String, runId: String) {
+    val mappingDir = "ocid-mapping"
+    deleteOldMappingFiles(mappingDir, runId)  // pass runId
+    // ... rest unchanged
+}
+```
+
+Update `runOcidPhase` (Task 4 step 3) to extract runId from upstreamRunId and pass it:
+
+```kotlin
+val upstreamKey = "runs/$upstreamRunId"
+return runBlocking { ocidLookupPhase.execute(executor, upstreamKey, upstreamRunId) }
+    // ... rest unchanged
+```
+
+(Note: `runKey` is `runs/$upstreamRunId`. The OCID mapping file written by this phase is `ocid-mapping/ocid-mapping-{runId}.jsonl.gz` where `runId = runKey.removePrefix("runs/").substringBefore('/')` = upstreamRunId. So the daily path passes the char-basic runId. Standalone OCID_LOOKUP passes the upstream runId. Verify this matches the existing extraction in OcidLookupPhase line 100: `val runId = runKey.removePrefix("runs/").substringBefore('/')`. So `runKey = runs/<X>` → runId = X. When called standalone with upstreamRunId=X, runKey=`runs/X`, runId=X. Correct.)

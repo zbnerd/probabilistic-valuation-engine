@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.batch
 
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.domain.model.AlertMessage
 import maple.expectation.core.port.out.AlertPort
 import maple.expectation.core.port.out.SystemMetricsPort
@@ -59,9 +60,13 @@ class MonitoringReportJob(
             return
         }
 
-        // Leader Election: xact-scoped lock으로 단일 인스턴스만 실행 (#628)
-        lockStrategy.executeWithLock(REPORT_LOCK_KEY, 10, LOCK_LEASE_SECONDS.toLong()) {
-            generateAndSendReport(reportType)
+        // Leader Election: session-scoped async lock으로 단일 인스턴스만 실행 (#628)
+        lockStrategy.executeWithLockAsync(REPORT_LOCK_KEY, 10, LOCK_LEASE_SECONDS.toLong()) {
+            CompletableFuture.completedFuture(generateAndSendReport(reportType))
+        }.whenComplete { _, ex ->
+            if (ex != null) {
+                log.error("[MonitoringReport] {} 리포트 실행 실패: {}", reportType, ex.cause ?: ex.message)
+            }
         }
     }
 

@@ -113,7 +113,7 @@ class BulkLoaderService(
         val actualPath = csvPath ?: properties.csvPath
         val path = resolvePath(actualPath)
 
-        return lockStrategy.executeWithLock(
+        return lockStrategy.executeWithLockAsync(
             LOCK_KEY,
             LOCK_WAIT_TIME_SECONDS,
             LOCK_LEASE_TIME_SECONDS,
@@ -132,12 +132,12 @@ class BulkLoaderService(
             log.info("[BulkLoaderService] Read {} characters from CSV", total)
 
             if (total == 0) {
-                return@executeWithLock CompletableFuture.completedFuture(
+                CompletableFuture.completedFuture(
                     LoadResult(0, 0, 0, 0, 0),
                 )
+            } else {
+                processBatch(ignList, emptySet(), 0, total, start, force)
             }
-
-            processBatch(ignList, emptySet(), 0, total, start, force)
         }
     }
 
@@ -150,7 +150,7 @@ class BulkLoaderService(
     )
 
     private fun resumeInternal(): CompletableFuture<LoadResult> {
-        return lockStrategy.executeWithLock(
+        return lockStrategy.executeWithLockAsync(
             LOCK_KEY,
             LOCK_WAIT_TIME_SECONDS,
             LOCK_LEASE_TIME_SECONDS,
@@ -160,41 +160,41 @@ class BulkLoaderService(
             val checkpoint = checkpointManager.load()
             if (checkpoint == null) {
                 log.warn("[BulkLoaderService] No checkpoint found, starting fresh")
-                return@executeWithLock loadAllInternal(null, false)
-            }
+                loadAllInternal(null, false)
+            } else {
+                val path = resolvePath(properties.csvPath)
+                val start = Instant.now()
+                startTime.set(start)
+                stopRequested.set(false)
+                isRunning.set(true)
 
-            val path = resolvePath(properties.csvPath)
-            val start = Instant.now()
-            startTime.set(start)
-            stopRequested.set(false)
-            isRunning.set(true)
+                val ignList = readCsvFile(path)
+                val remainingList = ignList.drop(checkpoint.lastProcessedIndex + 1)
+                val remainingCount = remainingList.size
+                val skippedCount = checkpoint.completedIgnSet.size
 
-            val ignList = readCsvFile(path)
-            val remainingList = ignList.drop(checkpoint.lastProcessedIndex + 1)
-            val remainingCount = remainingList.size
-            val skippedCount = checkpoint.completedIgnSet.size
-
-            log.info(
-                "[BulkLoaderService] Resuming from index {}: {} remaining, {} skipped",
-                checkpoint.lastProcessedIndex,
-                remainingCount,
-                skippedCount,
-            )
-
-            if (remainingCount == 0) {
-                return@executeWithLock CompletableFuture.completedFuture(
-                    LoadResult(checkpoint.totalCharacters, skippedCount, 0, skippedCount, 0),
+                log.info(
+                    "[BulkLoaderService] Resuming from index {}: {} remaining, {} skipped",
+                    checkpoint.lastProcessedIndex,
+                    remainingCount,
+                    skippedCount,
                 )
-            }
 
-            processBatch(
-                remainingList,
-                checkpoint.completedIgnSet,
-                checkpoint.lastProcessedIndex + 1,
-                checkpoint.totalCharacters,
-                start,
-                false,
-            )
+                if (remainingCount == 0) {
+                    CompletableFuture.completedFuture(
+                        LoadResult(checkpoint.totalCharacters, skippedCount, 0, skippedCount, 0),
+                    )
+                } else {
+                    processBatch(
+                        remainingList,
+                        checkpoint.completedIgnSet,
+                        checkpoint.lastProcessedIndex + 1,
+                        checkpoint.totalCharacters,
+                        start,
+                        false,
+                    )
+                }
+            }
         }
     }
 
@@ -207,7 +207,7 @@ class BulkLoaderService(
     )
 
     private fun retryFailedInternal(): CompletableFuture<LoadResult> {
-        return lockStrategy.executeWithLock(
+        return lockStrategy.executeWithLockAsync(
             "$LOCK_KEY:retry",
             LOCK_WAIT_TIME_SECONDS,
             LOCK_LEASE_TIME_SECONDS,
@@ -219,26 +219,26 @@ class BulkLoaderService(
 
             if (failedIgnSet.isEmpty()) {
                 log.info("[BulkLoaderService] No failed characters to retry")
-                return@executeWithLock CompletableFuture.completedFuture(
+                CompletableFuture.completedFuture(
                     LoadResult(0, 0, 0, 0, 0),
                 )
+            } else {
+                log.info("[BulkLoaderService] Retrying {} failed characters", failedIgnSet.size)
+
+                // Clear failed tracker for fresh start
+                failedTracker.clear()
+
+                val start = Instant.now()
+                startTime.set(start)
+                stopRequested.set(false)
+                isRunning.set(true)
+
+                val total = failedIgnSet.size
+                totalCharacters.set(total.toLong())
+
+                val ignList = failedIgnSet.toList()
+                processBatch(ignList, emptySet(), 0, total, start, true)
             }
-
-            log.info("[BulkLoaderService] Retrying {} failed characters", failedIgnSet.size)
-
-            // Clear failed tracker for fresh start
-            failedTracker.clear()
-
-            val start = Instant.now()
-            startTime.set(start)
-            stopRequested.set(false)
-            isRunning.set(true)
-
-            val total = failedIgnSet.size
-            totalCharacters.set(total.toLong())
-
-            val ignList = failedIgnSet.toList()
-            processBatch(ignList, emptySet(), 0, total, start, true)
         }
     }
 

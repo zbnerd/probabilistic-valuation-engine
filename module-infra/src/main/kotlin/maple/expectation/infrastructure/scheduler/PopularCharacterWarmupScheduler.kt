@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import jakarta.annotation.PostConstruct
 import java.time.LocalDateTime
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.LockSupport
@@ -68,28 +69,33 @@ class PopularCharacterWarmupScheduler(
 
         executor.executeOrCatch(
             {
-                lockStrategy.executeWithLock(
+                lockStrategy.executeWithLockAsync(
                     "popular-warmup-lock",
                     0,
                     300,
                 ) {
-                    doWarmup(warmupType)
-                    null
+                    CompletableFuture.completedFuture(doWarmup(warmupType))
+                }.whenComplete { _, ex ->
+                    if (ex != null) handleWarmupFailure(warmupType, ex.cause ?: ex)
                 }
                 null
             },
             { e ->
-                if (e is DistributedLockException) {
-                    log.debug("[Warmup] {} skipped: another instance is warming up", warmupType)
-                } else {
-                    log.error("[Warmup] {} failed: {}", warmupType, e.message)
-                    meterRegistry.counter("warmup.execution", "type", warmupType, "status", "error")
-                        .increment()
-                }
+                handleWarmupFailure(warmupType, e)
                 null
             },
             context,
         )
+    }
+
+    private fun handleWarmupFailure(warmupType: String, e: Throwable) {
+        if (e is DistributedLockException) {
+            log.debug("[Warmup] {} skipped: another instance is warming up", warmupType)
+        } else {
+            log.error("[Warmup] {} failed: {}", warmupType, e.message)
+            meterRegistry.counter("warmup.execution", "type", warmupType, "status", "error")
+                .increment()
+        }
     }
 
     private fun doWarmup(warmupType: String) {

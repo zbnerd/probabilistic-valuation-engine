@@ -2,6 +2,8 @@ package maple.expectation.infrastructure.worker
 
 import io.micrometer.core.instrument.MeterRegistry
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 import maple.expectation.core.model.job.CalculationJobStatus
 import maple.expectation.core.port.out.CalculationJobPort
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -13,9 +15,11 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.pgmq.ProcessOutcome
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.queue.QueueNames
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
@@ -30,12 +34,38 @@ class CalculationCompletedWorker(
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val jobPort: CalculationJobPort,
     private val executionService: CalculationExecutionService,
+    @Qualifier("expectationComputeCpuExecutor") private val cpuExecutor: Executor,
 ) : PgmqWorker<CalculationCompletedPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val queueName: String = QueueNames.CALCULATION_COMPLETED
     override val payloadClass: Class<CalculationCompletedPayload> = CalculationCompletedPayload::class.java
     override val workerSettings: PgmqWorkerConfig.WorkerSettings = workerConfig.calculationCompleted
 
+    /**
+     * Async variant of [process]. Wraps the existing synchronous [process] in
+     * [CompletableFuture.supplyAsync] on the dedicated CPU executor so the PGMQ
+     * scheduler is never blocked on a synchronous call site.
+     *
+     * Matches sync semantics: [ProcessOutcome.Ack] when sync returns true (archive),
+     * [ProcessOutcome.Nack] with `retryable=true` when sync returns false (retryable).
+     */
+    override fun processAsync(message: PgmqMessage<CalculationCompletedPayload>): CompletableFuture<ProcessOutcome> =
+        CompletableFuture.supplyAsync(
+            {
+                if (process(message)) ProcessOutcome.Ack
+                else ProcessOutcome.Nack(retryable = true)
+            },
+            cpuExecutor,
+        )
+
+    /**
+     * Test bridge — exposes the [processAsync] method (protected in PgmqWorker) to unit tests.
+     * Internal visibility keeps it out of the public server API surface.
+     */
+    internal fun callProcessAsync(message: PgmqMessage<CalculationCompletedPayload>): CompletableFuture<ProcessOutcome> =
+        processAsync(message)
+
+    @Deprecated("Use processAsync", ReplaceWith("processAsync(message).get() == ProcessOutcome.Ack"))
     override fun process(message: PgmqMessage<CalculationCompletedPayload>): Boolean {
         val payload = message.payload
         val jobId = UUID.fromString(payload.jobId)

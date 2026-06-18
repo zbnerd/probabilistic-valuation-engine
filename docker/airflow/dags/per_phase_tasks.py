@@ -61,3 +61,58 @@ def parse_scope(conf: dict) -> list:
             f"Allowed: {sorted(ALLOWED_SCOPES)}"
         )
     return list(scope)
+
+
+def make_trigger_task(phase: str) -> PythonOperator:
+    """Single-shot phase trigger via /trigger/phase/{phase}.
+
+    Gates on scope: returns None (Airflow skip) if bare phase not in scope.
+    200/202 → return response JSON for xcom correlation.
+    409 → idempotent: discover active runId from /run-status, mark ALREADY_ACTIVE.
+    Other → AirflowException.
+    """
+    def _trigger(**ctx):
+        scope = parse_scope(ctx["dag_run"].conf or {})
+        if phase not in scope:
+            return None
+        base = get_external_api_base()
+        try:
+            resp = requests.post(
+                f"{base}/api/internal/trigger/phase/{phase}", timeout=30
+            )
+        except requests.RequestException as exc:
+            raise AirflowException(f"Trigger {phase} failed: {exc}") from exc
+
+        if resp.status_code in (200, 202):
+            return resp.json()
+
+        if resp.status_code == 409:
+            try:
+                status_resp = requests.get(
+                    f"{base}/api/internal/run-status", timeout=10
+                )
+                status_resp.raise_for_status()
+                data = status_resp.json()
+            except (requests.RequestException, ValueError) as exc:
+                raise AirflowException(
+                    f"409 from trigger {phase} but /run-status fetch failed: {exc}"
+                ) from exc
+            current = data.get("current") or {}
+            return {
+                "runId": current.get("runId"),
+                "phase": phase,
+                "status": "ALREADY_ACTIVE",
+            }
+
+        raise AirflowException(
+            f"Trigger {phase} failed: HTTP {resp.status_code} "
+            f"{resp.reason}: {resp.text[:500]}"
+        )
+
+    return PythonOperator(
+        task_id=f"per_phase_trigger_{phase.lower()}",
+        python_callable=_trigger,
+        retries=0,
+        execution_timeout=timedelta(seconds=60),
+        do_xcom_push=True,
+    )

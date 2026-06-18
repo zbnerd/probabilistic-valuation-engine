@@ -156,6 +156,7 @@ class DataflowContractTest {
             eventPublisher = ocidPublisher,
             objectStorage = objectStorage,
             nexonAuthClient = nexonAuthClient,
+            stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
         )
 
         // act: run ranking

@@ -21,6 +21,7 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.timeout
 import org.mockito.kotlin.times
@@ -772,7 +773,12 @@ class ExternalApiSchedulerTest {
         scheduler.triggerDailyRefresh("daily-run-1").get()
 
         // Daily chain generates 4 distinct runIds internally; slot acquire called for each phase
-        verify(runStatusTracker, times(4)).acquirePhaseSlot(any(), any<String>())
+        inOrder(runStatusTracker).run {
+            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), any<String>())
+            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), any<String>())
+            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.CHARACTER_BASIC), any<String>())
+            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.ITEM_EQUIPMENT), any<String>())
+        }
     }
 
     @Test

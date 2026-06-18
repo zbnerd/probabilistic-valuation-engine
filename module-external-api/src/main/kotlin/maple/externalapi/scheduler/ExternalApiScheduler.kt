@@ -73,8 +73,14 @@ class ExternalApiScheduler(
     fun triggerDailyRefresh(airflowRunId: String?): CompletableFuture<Void> {
         if (skipCharacterBasic) {
             log.info("[Scheduler] skip-character-basic enabled, loading OCID cache from existing data")
-            ocidCacheProvider.refresh()
-            return CompletableFuture.completedFuture(null)
+            return runCatching { ocidCacheProvider.refresh() }
+                .fold(
+                    onSuccess = { CompletableFuture.completedFuture(null) },
+                    onFailure = { ex ->
+                        log.error("[Scheduler] skip-character-basic refresh failed", ex)
+                        CompletableFuture.failedFuture<Void>(ex)
+                    },
+                )
         }
 
         val rankingPhase = rankingFetchPhaseProvider.ifAvailable
@@ -111,7 +117,8 @@ class ExternalApiScheduler(
             }
             .whenComplete { _, ex ->
                 if (ex != null) {
-                    log.error("[Scheduler] daily chain failed airflowRunId={}", airflowRunId, ex)
+                    log.error("[Scheduler] daily chain failed airflowRunId={} r={} o={} cb={} ie={}",
+                        airflowRunId, rRunId, oRunId, cbRunId, ieRunId, ex)
                 } else {
                     log.info("[Scheduler] daily chain completed airflowRunId={} r={} o={} cb={} ie={}",
                         airflowRunId, rRunId, oRunId, cbRunId, ieRunId)

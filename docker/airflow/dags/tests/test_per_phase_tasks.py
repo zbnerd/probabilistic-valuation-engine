@@ -9,7 +9,7 @@ import pytest
 import requests
 from airflow.exceptions import AirflowException
 
-from per_phase_tasks import parse_scope, ALLOWED_SCOPES, make_trigger_task
+from per_phase_tasks import parse_scope, ALLOWED_SCOPES, make_trigger_task, make_loop_task
 
 
 @pytest.mark.parametrize(
@@ -141,4 +141,87 @@ def test_make_trigger_task_network_error_raises(mock_external_api_conn):
         mock_post.side_effect = requests.RequestException("connection refused")
 
         with pytest.raises(AirflowException, match="Trigger ITEM_EQUIPMENT failed"):
+            task.python_callable(**ctx)
+
+
+# ─── make_loop_task (Task 8 RED) ───────────────────────────────────────────
+
+
+def test_make_loop_task_skips_when_scope_empty(mock_external_api_conn):
+    """If {phase}_LOOP not in scope, returns None."""
+    task = make_loop_task("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["ITEM_EQUIPMENT"]})  # bare, not _LOOP
+    assert task.python_callable(**ctx) is None
+
+
+def test_make_loop_task_happy_path(mock_external_api_conn):
+    """202 → returns response JSON with loopId."""
+    task = make_loop_task("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["ITEM_EQUIPMENT_LOOP"]})
+
+    with patch("per_phase_tasks.requests.post") as mock_post:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 202
+        mock_resp.json.return_value = {
+            "status": "LOOP_STARTED",
+            "phase": "ITEM_EQUIPMENT",
+            "loopId": "loop-1",
+            "iterationCount": 0,
+        }
+        mock_post.return_value = mock_resp
+
+        result = task.python_callable(**ctx)
+
+    assert result["loopId"] == "loop-1"
+    assert "/loop/phase/ITEM_EQUIPMENT" in mock_post.call_args[0][0]
+
+
+def test_make_loop_task_409_idempotent(mock_external_api_conn):
+    """409 → push existing loopId with ALREADY_LOOPING status."""
+    task = make_loop_task("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["ITEM_EQUIPMENT_LOOP"]})
+
+    with patch("per_phase_tasks.requests.post") as mock_post:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 409
+        mock_resp.json.return_value = {
+            "status": "LOOP_ALREADY_ACTIVE",
+            "phase": "ITEM_EQUIPMENT",
+            "loopId": "loop-existing",
+        }
+        mock_post.return_value = mock_resp
+
+        result = task.python_callable(**ctx)
+
+    assert result["loopId"] == "loop-existing"
+    assert result["status"] == "ALREADY_LOOPING"
+
+
+def test_make_loop_task_400_invalid_phase_raises(mock_external_api_conn):
+    """400 → AirflowException (config error)."""
+    task = make_loop_task("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["ITEM_EQUIPMENT_LOOP"]})
+
+    with patch("per_phase_tasks.requests.post") as mock_post:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.json.return_value = {"error": "INVALID_PHASE"}
+        mock_post.return_value = mock_resp
+
+        with pytest.raises(AirflowException, match="INVALID_PHASE"):
+            task.python_callable(**ctx)
+
+
+def test_make_loop_task_500_raises(mock_external_api_conn):
+    """500 → AirflowException (not config error)."""
+    task = make_loop_task("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["ITEM_EQUIPMENT_LOOP"]})
+
+    with patch("per_phase_tasks.requests.post") as mock_post:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.text = "boom"
+        mock_post.return_value = mock_resp
+
+        with pytest.raises(AirflowException, match="Loop start ITEM_EQUIPMENT failed"):
             task.python_callable(**ctx)

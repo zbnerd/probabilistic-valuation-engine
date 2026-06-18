@@ -1,6 +1,8 @@
 package maple.expectation.infrastructure.worker
 
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 import maple.expectation.core.port.out.AlertPublisher
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
@@ -10,9 +12,11 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.pgmq.ProcessOutcome
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.queue.pgmq.DonationQueueProducer
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 
@@ -45,12 +49,39 @@ class DonationWorker(
     queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val alertPublisher: AlertPublisher,
+    @Qualifier("expectationComputeCpuExecutor")
+    private val cpuExecutor: Executor,
 ) : PgmqWorker<DonationRequest>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val queueName: String = DonationQueueProducer.QUEUE_NAME
     override val payloadClass: Class<DonationRequest> = DonationRequest::class.java
     override val workerSettings: PgmqWorkerConfig.WorkerSettings = config.donation
 
+    /**
+     * Async variant of [process]. Wraps the existing synchronous [process] in
+     * [CompletableFuture.supplyAsync] on the dedicated CPU executor so the PGMQ
+     * scheduler is never blocked on a synchronous call site.
+     *
+     * Matches sync semantics: [ProcessOutcome.Ack] when sync returns true (archive),
+     * [ProcessOutcome.Nack] with `retryable=true` when sync returns false (retryable).
+     */
+    override fun processAsync(message: PgmqMessage<DonationRequest>): CompletableFuture<ProcessOutcome> =
+        CompletableFuture.supplyAsync(
+            {
+                if (process(message)) ProcessOutcome.Ack
+                else ProcessOutcome.Nack(retryable = true)
+            },
+            cpuExecutor,
+        )
+
+    /**
+     * Test bridge — exposes the [processAsync] method (protected in PgmqWorker) to unit tests.
+     * Internal visibility keeps it out of the public server API surface.
+     */
+    internal fun callProcessAsync(message: PgmqMessage<DonationRequest>): CompletableFuture<ProcessOutcome> =
+        processAsync(message)
+
+    @Deprecated("Use processAsync", ReplaceWith("processAsync(message).get() == ProcessOutcome.Ack"))
     override fun process(message: PgmqMessage<DonationRequest>): Boolean {
         val request = message.payload
         val context = TaskContext.of("DonationWorker", "Process", "donation=${request.donationId}")

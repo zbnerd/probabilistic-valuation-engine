@@ -28,7 +28,11 @@ class RunStatusTracker(
      * returns null if slot occupied by a non-terminal run.
      * Used by ExternalApiScheduler.triggerPhase and the /api/internal/trigger/phase controller.
      */
-    fun acquirePhaseSlot(phase: PipelinePhase, runId: String): RunStatus? {
+    fun acquirePhaseSlot(
+        phase: PipelinePhase,
+        runId: String,
+        loopId: String? = null,
+    ): RunStatus? {
         val slot = slots.computeIfAbsent(phase) { AtomicReference(null) }
         val now = Instant.now(clock)
         val candidate = RunStatus(
@@ -37,12 +41,14 @@ class RunStatusTracker(
             triggeredPhase = phase,
             startedAt = now,
             updatedAt = now,
+            loopId = loopId,
         )
         val result = slot.updateAndGet { current ->
             if (current == null || current.isTerminal) candidate else current
         }
         return if (result.runId == runId) {
-            log.info("[RunStatus] phase-slot acquired phase={} runId={}", phase, runId)
+            log.info("[RunStatus] phase-slot acquired phase={} runId={} loopId={}",
+                phase, runId, loopId ?: "-")
             result
         } else {
             log.warn("[RunStatus] phase-slot occupied phase={} existingRunId={}", phase, result.runId)

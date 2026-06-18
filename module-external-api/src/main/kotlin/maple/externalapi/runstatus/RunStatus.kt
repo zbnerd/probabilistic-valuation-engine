@@ -13,6 +13,7 @@ data class RunStatus(
     val chunksProcessed: Int = 0,
     val recordsProcessed: Long = 0,
     val errorMessage: String? = null,
+    val loopId: String? = null,
 ) {
     @get:JsonProperty("terminal")
     val isTerminal: Boolean

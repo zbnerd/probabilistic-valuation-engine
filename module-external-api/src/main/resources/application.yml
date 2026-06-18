@@ -60,6 +60,14 @@ external-api:
     enabled: true
     run-on-startup: true
     skip-character-basic: false
+  loop:
+    executor:
+      core-pool-size: 4
+      max-pool-size: 16
+      queue-capacity: 64
+      thread-name-prefix: ext-api-loop-
+      virtual-threads: true
+      await-termination-seconds: 30
   urgent:
     enabled: false                                    # feature flag for urgent pipeline
     request-topic: urgent-character-request

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.time.Instant
+import maple.externalapi.loop.PhaseLoopController
 import maple.externalapi.scheduler.ExternalApiScheduler
 import maple.externalapi.scheduler.PhaseStopSignal
 import org.assertj.core.api.Assertions.assertThat
@@ -30,6 +31,7 @@ class InternalApiControllerTest {
     private lateinit var runStatusTracker: RunStatusTracker
     private lateinit var scheduler: ExternalApiScheduler
     private lateinit var stopSignal: PhaseStopSignal
+    private lateinit var phaseLoopController: PhaseLoopController
     private lateinit var controller: InternalApiController
     private val objectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())
 
@@ -38,6 +40,11 @@ class InternalApiControllerTest {
         runStatusTracker = mock()
         scheduler = mock()
         stopSignal = PhaseStopSignal()
+        phaseLoopController = mock()
+        // Default: no active loops
+        whenever(phaseLoopController.hasActiveLoop(any())).thenReturn(false)
+        whenever(phaseLoopController.getLoopState(any())).thenReturn(null)
+        whenever(phaseLoopController.activeLoops()).thenReturn(emptyList())
         // Wire scheduler.requestPhaseStop so it actually trips the shared stopSignal.
         whenever(scheduler.requestPhaseStop(any())).thenAnswer { invocation ->
             val phase = invocation.getArgument<maple.externalapi.runstatus.PipelinePhase>(0)
@@ -47,7 +54,12 @@ class InternalApiControllerTest {
             }
             hadNonTerminal || stopSignal.isStopRequested(phase)
         }
-        controller = InternalApiController(runStatusTracker, scheduler, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor())
+        controller = InternalApiController(
+            runStatusTracker,
+            scheduler,
+            java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
+            phaseLoopController,
+        )
         mockMvc = standaloneSetup(controller)
             .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
             .build()
@@ -195,6 +207,7 @@ class InternalApiControllerTest {
     fun `POST trigger phase returns 202 with runId when slot empty`() {
         val runStatusTracker = mock<RunStatusTracker>()
         val scheduler = mock<ExternalApiScheduler>()
+        val phaseLoopController = mock<PhaseLoopController>()
         whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.RANKING_FETCH)).thenReturn(null)
         val syncExecutor: java.util.concurrent.ExecutorService = object : java.util.concurrent.AbstractExecutorService() {
             override fun shutdown() {}
@@ -206,7 +219,7 @@ class InternalApiControllerTest {
                 command.run()
             }
         }
-        val controller = InternalApiController(runStatusTracker, scheduler, syncExecutor)
+        val controller = InternalApiController(runStatusTracker, scheduler, syncExecutor, phaseLoopController)
 
         val response = controller.triggerPhase("RANKING_FETCH", null, null)
         assertThat(response.statusCode).isEqualTo(HttpStatus.ACCEPTED)
@@ -355,5 +368,147 @@ class InternalApiControllerTest {
         // OCID_LOOKUP is not running → NOT_RUNNING, and ITEM_EQUIPMENT flag not set
         assertFalse(stopSignal.isStopRequested(PipelinePhase.ITEM_EQUIPMENT))
         assertFalse(stopSignal.isStopRequested(PipelinePhase.OCID_LOOKUP))
+    }
+
+    @Test
+    fun `POST loop phase ITEM_EQUIPMENT returns 202 LOOP_STARTED with generated loopId`() {
+        whenever(phaseLoopController.startLoop(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(
+            LoopState(
+                loopId = "L-1",
+                phase = PipelinePhase.ITEM_EQUIPMENT,
+                startedAt = Instant.now(),
+            ),
+        )
+
+        mockMvc.perform(post("/api/internal/loop/phase/ITEM_EQUIPMENT"))
+            .andExpect(status().isAccepted)
+            .andExpect(jsonPath("$.status").value("LOOP_STARTED"))
+            .andExpect(jsonPath("$.phase").value("ITEM_EQUIPMENT"))
+            .andExpect(jsonPath("$.loopId").value("L-1"))
+            .andExpect(jsonPath("$.iterationCount").value(0))
+    }
+
+    @Test
+    fun `POST loop phase RANKING_FETCH returns 400 INVALID_PHASE`() {
+        mockMvc.perform(post("/api/internal/loop/phase/RANKING_FETCH"))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("INVALID_PHASE"))
+    }
+
+    @Test
+    fun `POST loop phase BOGUS returns 400 INVALID_PHASE`() {
+        mockMvc.perform(post("/api/internal/loop/phase/BOGUS"))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("INVALID_PHASE"))
+    }
+
+    @Test
+    fun `POST stop loop phase ITEM_EQUIPMENT while loop active returns 202 STOP_REQUESTED`() {
+        val state = LoopState(
+            loopId = "L-1",
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            startedAt = Instant.now(),
+            iterationCount = 3,
+            lastRunId = "run-3",
+        )
+        whenever(phaseLoopController.stopLoop(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(state)
+
+        mockMvc.perform(post("/api/internal/stop/loop/phase/ITEM_EQUIPMENT"))
+            .andExpect(status().isAccepted)
+            .andExpect(jsonPath("$.status").value("STOP_REQUESTED"))
+            .andExpect(jsonPath("$.phase").value("ITEM_EQUIPMENT"))
+            .andExpect(jsonPath("$.loopId").value("L-1"))
+            .andExpect(jsonPath("$.iterationCount").value(3))
+    }
+
+    @Test
+    fun `POST stop loop phase ITEM_EQUIPMENT while no loop returns 200 NOT_LOOPING`() {
+        whenever(phaseLoopController.stopLoop(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(null)
+
+        mockMvc.perform(post("/api/internal/stop/loop/phase/ITEM_EQUIPMENT"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("NOT_LOOPING"))
+            .andExpect(jsonPath("$.phase").value("ITEM_EQUIPMENT"))
+    }
+
+    @Test
+    fun `POST stop loop phase RANKING_FETCH returns 400 INVALID_PHASE`() {
+        mockMvc.perform(post("/api/internal/stop/loop/phase/RANKING_FETCH"))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("INVALID_PHASE"))
+    }
+
+    @Test
+    fun `POST trigger phase ITEM_EQUIPMENT while loop active returns 409 LOOP_ACTIVE`() {
+        whenever(phaseLoopController.hasActiveLoop(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(true)
+        whenever(phaseLoopController.getLoopState(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(
+            LoopState(loopId = "L-9", phase = PipelinePhase.ITEM_EQUIPMENT, startedAt = Instant.now()),
+        )
+
+        mockMvc.perform(
+            post("/api/internal/trigger/phase/ITEM_EQUIPMENT").header("X-Upstream-Run-Id", "u-1"),
+        )
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value("LOOP_ACTIVE"))
+            .andExpect(jsonPath("$.phase").value("ITEM_EQUIPMENT"))
+            .andExpect(jsonPath("$.loopId").value("L-9"))
+    }
+
+    @Test
+    fun `POST trigger daily while any loop active returns 409 LOOP_ACTIVE for first looped phase`() {
+        whenever(phaseLoopController.hasActiveLoop(PipelinePhase.RANKING_FETCH)).thenReturn(false)
+        whenever(phaseLoopController.hasActiveLoop(PipelinePhase.OCID_LOOKUP)).thenReturn(false)
+        whenever(phaseLoopController.hasActiveLoop(PipelinePhase.CHARACTER_BASIC)).thenReturn(true)
+        whenever(phaseLoopController.hasActiveLoop(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(false)
+        whenever(phaseLoopController.getLoopState(PipelinePhase.CHARACTER_BASIC)).thenReturn(
+            LoopState(loopId = "L-CB", phase = PipelinePhase.CHARACTER_BASIC, startedAt = Instant.now()),
+        )
+
+        mockMvc.perform(post("/api/internal/trigger/daily"))
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value("LOOP_ACTIVE"))
+            .andExpect(jsonPath("$.loopId").value("L-CB"))
+    }
+
+    @Test
+    fun `GET run-status with active loop decorates response with loopSummaries`() {
+        val itemLoop = LoopState(
+            loopId = "L-1",
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            startedAt = Instant.parse("2026-06-19T00:00:00Z"),
+            iterationCount = 5,
+            lastRunId = "run-5",
+        )
+        val itemSlot = RunStatus(
+            runId = "run-5",
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            triggeredPhase = PipelinePhase.ITEM_EQUIPMENT,
+            startedAt = Instant.parse("2026-06-19T00:01:00Z"),
+            loopId = "L-1",
+        )
+
+        stubEmptyPerPhaseLookups()
+        whenever(phaseLoopController.activeLoops()).thenReturn(listOf(itemLoop))
+        whenever(phaseLoopController.hasActiveLoop(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(true)
+        whenever(phaseLoopController.getLoopState(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(itemLoop)
+        whenever(runStatusTracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(itemSlot)
+
+        mockMvc.perform(get("/api/internal/run-status"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.loopSummaries.ITEM_EQUIPMENT.loopId").value("L-1"))
+            .andExpect(jsonPath("$.loopSummaries.ITEM_EQUIPMENT.iterationCount").value(5))
+            .andExpect(jsonPath("$.loopSummaries.ITEM_EQUIPMENT.status").value("RUNNING"))
+            .andExpect(jsonPath("$.slots.ITEM_EQUIPMENT.loopId").value("L-1"))
+    }
+
+    @Test
+    fun `GET run-status with no active loops returns empty loopSummaries`() {
+        stubEmptyPerPhaseLookups()
+        whenever(phaseLoopController.activeLoops()).thenReturn(emptyList())
+
+        mockMvc.perform(get("/api/internal/run-status"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.loopSummaries").isMap)
+            .andExpect(jsonPath("$.loopSummaries.ITEM_EQUIPMENT").doesNotExist())
     }
 }

@@ -294,4 +294,56 @@ class ExternalApiSchedulerStopTest {
             stopSignal = stopSignal,
         )
     }
+
+    @Test
+    fun `triggerPhase with loopId propagates loopId to acquirePhaseSlot`() {
+        val runStatusTracker = realRunStatusTracker()
+        val stopSignal = PhaseStopSignal()
+        val itemEquipmentPhase = mock<ItemEquipmentFetchPhase>()
+        whenever(itemEquipmentPhase.execute(any<ExecutorService>(), any<List<Map.Entry<String, String>>>(), any<String>()))
+            .thenReturn(CompletableFuture.completedFuture(Unit))
+
+        val scheduler = itemEquipmentScheduler(runStatusTracker, stopSignal, itemEquipmentPhase, ocidEntries = mapOf("ign1" to "ocid1"))
+
+        scheduler.triggerPhase(PipelinePhase.ITEM_EQUIPMENT, "run-1", "upstream", "L-1").join()
+
+        val status = runStatusTracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)
+        assertEquals("L-1", status?.loopId)
+    }
+
+    @Test
+    fun `triggerPhase with loopId does NOT clear stopSignal on success`() {
+        val runStatusTracker = realRunStatusTracker()
+        val stopSignal = PhaseStopSignal()
+        val itemEquipmentPhase = mock<ItemEquipmentFetchPhase>()
+        whenever(itemEquipmentPhase.execute(any<ExecutorService>(), any<List<Map.Entry<String, String>>>(), any<String>()))
+            .thenReturn(CompletableFuture.completedFuture(Unit))
+
+        val scheduler = itemEquipmentScheduler(runStatusTracker, stopSignal, itemEquipmentPhase, ocidEntries = mapOf("ign1" to "ocid1"))
+
+        stopSignal.requestStop(PipelinePhase.ITEM_EQUIPMENT)
+        assertTrue(stopSignal.isStopRequested(PipelinePhase.ITEM_EQUIPMENT))
+
+        scheduler.triggerPhase(PipelinePhase.ITEM_EQUIPMENT, "run-1", "upstream", "L-1").join()
+
+        assertTrue(stopSignal.isStopRequested(PipelinePhase.ITEM_EQUIPMENT),
+            "loop iteration must preserve stop signal so next iteration can see it")
+    }
+
+    @Test
+    fun `triggerPhase without loopId clears stopSignal on success (single-shot path preserved)`() {
+        val runStatusTracker = realRunStatusTracker()
+        val stopSignal = PhaseStopSignal()
+        val itemEquipmentPhase = mock<ItemEquipmentFetchPhase>()
+        whenever(itemEquipmentPhase.execute(any<ExecutorService>(), any<List<Map.Entry<String, String>>>(), any<String>()))
+            .thenReturn(CompletableFuture.completedFuture(Unit))
+
+        val scheduler = itemEquipmentScheduler(runStatusTracker, stopSignal, itemEquipmentPhase, ocidEntries = mapOf("ign1" to "ocid1"))
+
+        stopSignal.requestStop(PipelinePhase.ITEM_EQUIPMENT)
+
+        scheduler.triggerPhase(PipelinePhase.ITEM_EQUIPMENT, "run-1", "upstream", null).join()
+
+        assertFalse(stopSignal.isStopRequested(PipelinePhase.ITEM_EQUIPMENT))
+    }
 }

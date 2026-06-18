@@ -1,6 +1,8 @@
 package maple.expectation.infrastructure.lock
 
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.LockSupport
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -48,6 +50,8 @@ class PostgresLockStrategy(
     private val lockMetrics: LockMetrics,
     @Qualifier("taskScheduler")
     private val leaseScheduler: ThreadPoolTaskScheduler,
+    @Qualifier("defaultAsyncExecutor")
+    private val lockExecutor: Executor,
 ) : AbstractLockStrategy(executor) {
 
     /**
@@ -55,6 +59,14 @@ class PostgresLockStrategy(
      * Key: advisory lock ID (Long), Value: lease 만료 시간 (Long, epoch millis)
      */
     private val acquiredLocks: ThreadLocal<MutableMap<Long, Long>> = ThreadLocal.withInitial { ConcurrentHashMap() }
+
+    /**
+     * Session-scoped lock registry: maps logical key -> generated lockId so that
+     * [unlockAsync] knows which PG advisory lock to release for [tryLockImmediatelyAsync].
+     * Session-scoped locks require explicit [pg_advisory_unlock]; xact-scoped locks
+     * do not (auto-released on tx commit/rollback).
+     */
+    private val lockSessionRegistry = ConcurrentHashMap<String, Long>()
 
     /**
      * Lock acquisition order tracking for deadlock prevention
@@ -372,8 +384,89 @@ class PostgresLockStrategy(
             .onFailure { log.warn("[Postgres Lock] Failed to release lock during error recovery: {}", it.message) }
     }
 
+    /**
+     * [SESSION-SCOPED] Async: Poll for advisory lock acquisition on a JDBC-bound executor.
+     * Returns the lockId on success, or null on timeout.
+     */
+    override fun tryAcquireSessionLockAsync(
+        lockKey: String,
+        waitTime: Long,
+        leaseTime: Long,
+        ctx: TaskContext,
+    ): CompletableFuture<Long?> = CompletableFuture.supplyAsync({
+        val deadline = System.currentTimeMillis() + waitTime * 1000L
+        while (System.currentTimeMillis() < deadline) {
+            if (Thread.currentThread().isInterrupted) {
+                throw maple.expectation.error.exception.DistributedLockException(
+                    "Interrupted while waiting for lock: $lockKey",
+                )
+            }
+            val lockId = tryAcquireSessionLockOnce(lockKey, leaseTime)
+            if (lockId != null) {
+                return@supplyAsync lockId
+            }
+            // VT-friendly: Thread.sleep on virtual thread does not pin carrier.
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+        null
+    }, lockExecutor)
+
+    /**
+     * [SESSION-SCOPED] Async: Release previously acquired session-scoped lock.
+     * Called from whenComplete — must never throw.
+     *
+     * Justified: this function is invoked from `whenComplete` callbacks inside
+     * CompletableFuture chains. LogicExecutor cannot be used inside `whenComplete`
+     * (it expects a synchronous caller context), so the JDBC exception must be
+     * handled inline. A thrown exception from `whenComplete` would complete the
+     * outer CF exceptionally AFTER the supplier has already returned, corrupting
+     * the CF chain. Logging + swallow is the only safe action.
+     */
+    override fun releaseSessionLockAsync(
+        lockKey: String,
+        lockId: Long?,
+        ctx: TaskContext,
+    ): CompletableFuture<Void> = CompletableFuture.runAsync({
+        val actualLockId = lockId ?: lockSessionRegistry.remove(lockKey) ?: return@runAsync
+        lockSessionRegistry.remove(lockKey, actualLockId)
+        try {
+            lockJdbcTemplate.queryForObject(
+                "SELECT pg_advisory_unlock(?)",
+                Boolean::class.java,
+                actualLockId,
+            )
+            lockMetrics.recordLockReleased("postgres")
+            log.debug("🔓 [Postgres Lock] Unlocked key: {}", lockKey)
+        } catch (e: Exception) {
+            log.warn("[Postgres Lock] Failed to release session lock: key={}, lockId={}", lockKey, actualLockId, e)
+        }
+    }, lockExecutor)
+
+    /**
+     * Try once to acquire `pg_try_advisory_lock`. On success, registers the lockId
+     * in [lockSessionRegistry] so that [releaseSessionLockAsync] can release the
+     * same lock. Returns null on contention.
+     */
+    private fun tryAcquireSessionLockOnce(lockKey: String, leaseTime: Long): Long? {
+        val lockId = toAdvisoryLockId(lockKey)
+        val acquired: Boolean? = lockJdbcTemplate.queryForObject(
+            "SELECT pg_try_advisory_lock(?)",
+            Boolean::class.java,
+            lockId,
+        )
+        return if (acquired == true) {
+            lockSessionRegistry[lockKey] = lockId
+            lockMetrics.recordLockAcquired("postgres")
+            log.debug("[Postgres Lock] Acquired session lock for key='{}' (id={}, lease={}s)", lockKey, lockId, leaseTime)
+            lockId
+        } else {
+            null
+        }
+    }
+
     companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(PostgresLockStrategy::class.java)
+        private const val POLL_INTERVAL_MS = 100L
     }
 
     /**

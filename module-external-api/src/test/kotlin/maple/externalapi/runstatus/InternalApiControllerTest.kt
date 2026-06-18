@@ -5,9 +5,14 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.time.Instant
 import maple.externalapi.scheduler.ExternalApiScheduler
+import maple.externalapi.scheduler.PhaseStopSignal
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -24,13 +29,25 @@ class InternalApiControllerTest {
     private lateinit var mockMvc: MockMvc
     private lateinit var runStatusTracker: RunStatusTracker
     private lateinit var scheduler: ExternalApiScheduler
+    private lateinit var stopSignal: PhaseStopSignal
+    private lateinit var controller: InternalApiController
     private val objectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())
 
     @BeforeEach
     fun setUp() {
-        runStatusTracker = org.mockito.kotlin.mock()
-        scheduler = org.mockito.kotlin.mock()
-        val controller = InternalApiController(runStatusTracker, scheduler, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor())
+        runStatusTracker = mock()
+        scheduler = mock()
+        stopSignal = PhaseStopSignal()
+        // Wire scheduler.requestPhaseStop so it actually trips the shared stopSignal.
+        whenever(scheduler.requestPhaseStop(any())).thenAnswer { invocation ->
+            val phase = invocation.getArgument<maple.externalapi.runstatus.PipelinePhase>(0)
+            val hadNonTerminal = runStatusTracker.hasNonTerminalRun(phase) != null
+            if (hadNonTerminal) {
+                stopSignal.requestStop(phase)
+            }
+            hadNonTerminal || stopSignal.isStopRequested(phase)
+        }
+        controller = InternalApiController(runStatusTracker, scheduler, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor())
         mockMvc = standaloneSetup(controller)
             .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
             .build()
@@ -232,5 +249,111 @@ class InternalApiControllerTest {
             .andExpect(status().isConflict)
             .andExpect(jsonPath("$.status").value("ALREADY_RUNNING"))
             .andExpect(jsonPath("$.runId").value("existing-run"))
+    }
+
+    @Test
+    fun `POST stop phase returns 202 STOP_REQUESTED when phase is running`() {
+        val slot = RunStatus(
+            runId = "run-1",
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            triggeredPhase = PipelinePhase.ITEM_EQUIPMENT,
+            startedAt = Instant.now(),
+        )
+        runStatusTracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-1")
+        whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(slot)
+        whenever(runStatusTracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(slot)
+
+        val response = controller.stopPhase(
+            phaseName = "ITEM_EQUIPMENT",
+            airflowRunId = "airflow-corr-1",
+        )
+
+        assertEquals(HttpStatus.ACCEPTED, response.statusCode)
+        val body = response.body!!
+        assertEquals("STOP_REQUESTED", body["status"])
+        assertEquals("ITEM_EQUIPMENT", body["phase"])
+        assertEquals("run-1", body["runId"])
+        assertEquals("airflow-corr-1", body["airflowRunId"])
+        assertTrue(stopSignal.isStopRequested(PipelinePhase.ITEM_EQUIPMENT))
+    }
+
+    @Test
+    fun `POST stop phase returns 200 NOT_RUNNING when slot empty`() {
+        whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(null)
+        whenever(runStatusTracker.getLastCompletedForPhase(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(null)
+
+        val response = controller.stopPhase(
+            phaseName = "ITEM_EQUIPMENT",
+            airflowRunId = null,
+        )
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        val body = response.body!!
+        assertEquals("NOT_RUNNING", body["status"])
+        assertEquals("ITEM_EQUIPMENT", body["phase"])
+    }
+
+    @Test
+    fun `POST stop phase returns 200 NOT_RUNNING when slot is terminal`() {
+        val terminal = RunStatus(
+            runId = "run-old",
+            phase = PipelinePhase.COMPLETED,
+            triggeredPhase = PipelinePhase.ITEM_EQUIPMENT,
+            startedAt = Instant.now().minusSeconds(60),
+            completedAt = Instant.now(),
+        )
+        runStatusTracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-old")
+        runStatusTracker.completeRun(PipelinePhase.ITEM_EQUIPMENT, "run-old", 0, 0L)
+        whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(null)
+        whenever(runStatusTracker.getLastCompletedForPhase(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(terminal)
+
+        val response = controller.stopPhase(
+            phaseName = "ITEM_EQUIPMENT",
+            airflowRunId = null,
+        )
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        assertEquals("NOT_RUNNING", response.body!!["status"])
+    }
+
+    @Test
+    fun `POST stop phase returns 400 INVALID_PHASE for unknown name`() {
+        val response = controller.stopPhase(
+            phaseName = "BOGUS",
+            airflowRunId = null,
+        )
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
+        assertEquals("INVALID_PHASE", response.body!!["error"])
+    }
+
+    @Test
+    fun `POST stop phase returns 400 INVALID_PHASE for non-triggerable phase`() {
+        val response = controller.stopPhase(
+            phaseName = "COMPLETED",
+            airflowRunId = null,
+        )
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
+        assertEquals("INVALID_PHASE", response.body!!["error"])
+    }
+
+    @Test
+    fun `POST stop phase on phase A does not affect phase B running`() {
+        val slot = RunStatus(
+            runId = "run-1",
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            triggeredPhase = PipelinePhase.ITEM_EQUIPMENT,
+            startedAt = Instant.now(),
+        )
+        runStatusTracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-1")
+        whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(slot)
+        whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.OCID_LOOKUP)).thenReturn(null)
+
+        controller.stopPhase(phaseName = "OCID_LOOKUP", airflowRunId = null)
+
+        // OCID_LOOKUP is not running → NOT_RUNNING, and ITEM_EQUIPMENT flag not set
+        assertFalse(stopSignal.isStopRequested(PipelinePhase.ITEM_EQUIPMENT))
+        assertFalse(stopSignal.isStopRequested(PipelinePhase.OCID_LOOKUP))
     }
 }

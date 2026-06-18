@@ -15,5 +15,8 @@ data class RunStatus(
     val errorMessage: String? = null,
 ) {
     @get:JsonProperty("terminal")
-    val isTerminal: Boolean get() = phase == PipelinePhase.COMPLETED || phase == PipelinePhase.FAILED
+    val isTerminal: Boolean
+        get() = phase == PipelinePhase.COMPLETED
+            || phase == PipelinePhase.FAILED
+            || phase == PipelinePhase.STOPPED
 }

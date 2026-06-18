@@ -10,4 +10,5 @@ enum class PipelinePhase {
     ITEM_EQUIPMENT,
     COMPLETED,
     FAILED,
+    STOPPED,
 }

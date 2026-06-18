@@ -145,6 +145,7 @@ class DataflowContractTest {
             permitsPerSecond = 1000,
             runMarkerWriter = runMarkerWriter,
             objectStorage = objectStorage,
+            stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
         )
 
         val ocidPhase = OcidLookupPhase(
@@ -155,6 +156,7 @@ class DataflowContractTest {
             eventPublisher = ocidPublisher,
             objectStorage = objectStorage,
             nexonAuthClient = nexonAuthClient,
+            stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
         )
 
         // act: run ranking

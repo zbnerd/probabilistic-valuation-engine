@@ -14,6 +14,9 @@ import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.metrics.SnapshotFetchMetrics
 import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.scheduler.PhaseStopSignal
+import maple.externalapi.scheduler.PhaseStoppedException
 import maple.externalapi.snapshot.ChunkedSnapshotSink
 import maple.externalapi.snapshot.SnapshotChunkRecord
 import org.slf4j.LoggerFactory
@@ -38,6 +41,7 @@ private const val SLOW_BATCH_WAIT_MS: Long = 1_000L
 /** Endpoint-scoped fetch context shared by processBatch / fetchSingle / handleFailure. */
 data class BatchFetchContext(
     val endpoint: String,
+    val phase: PipelinePhase,
     val apiEndpoint: ExternalApiEndpoint,
     val onFetched: () -> Unit,
     val onFailed: () -> Unit,
@@ -58,6 +62,7 @@ class BatchFetchSupport(
     private val schedulerRateLimiter: SchedulerRateLimiter,
     private val schedulerProgressLogger: SchedulerProgressLogger,
     private val httpStatusExtractor: HttpStatusExtractor,
+    private val stopSignal: PhaseStopSignal,
 ) {
     private val log = LoggerFactory.getLogger(BatchFetchSupport::class.java)
     private val semaphore = Semaphore(maxInFlight)
@@ -82,6 +87,9 @@ class BatchFetchSupport(
         var progress = BatchProgress(start = start)
 
         while (processed < entries.size) {
+            if (stopSignal.isStopRequested(ctx.phase)) {
+                throw PhaseStoppedException(ctx.phase)
+            }
             val permits = schedulerRateLimiter.acquirePermitsSuspend(rateLimiter, batchSize, entries.size - processed)
             if (permits == 0) continue
 

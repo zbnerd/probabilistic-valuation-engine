@@ -10,6 +10,9 @@ import maple.externalapi.domain.KeyType
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.scheduler.PhaseStopSignal
+import maple.externalapi.scheduler.PhaseStoppedException
 import maple.externalapi.snapshot.ChunkFileManager
 import maple.externalapi.snapshot.ChunkedSnapshotSink
 import maple.externalapi.snapshot.SinkEventPublisher
@@ -45,10 +48,14 @@ class RankingFetchPhase(
     private val permitsPerSecond: Int,
     private val runMarkerWriter: RunMarkerWriter,
     private val objectStorage: ObjectStorage,
+    private val stopSignal: PhaseStopSignal,
 ) {
     private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
 
     fun execute(workerExecutor: ExecutorService, runId: String): CompletableFuture<String> {
+        if (stopSignal.isStopRequested(PipelinePhase.RANKING_FETCH)) {
+            throw PhaseStoppedException(PipelinePhase.RANKING_FETCH)
+        }
         val date = LocalDate.now().minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
         val runKey = "runs/$runId"
         val endpointConfig = chunkingProperties.configFor("ranking-overall")

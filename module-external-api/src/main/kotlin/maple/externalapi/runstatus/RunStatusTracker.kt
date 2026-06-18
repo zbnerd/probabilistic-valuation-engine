@@ -107,6 +107,28 @@ class RunStatusTracker(
     }
 
     /**
+     * Mark phase slot's run as STOPPED with chunks/records counts. Slot record
+     * persists (NOT cleared). Next acquire on the same phase will overwrite the
+     * STOPPED terminal record (terminal-overwrite CAS). Use this when a phase run
+     * ended because a stop request was detected at a chunk/page boundary.
+     */
+    fun stopRun(phase: PipelinePhase, runId: String, chunksProcessed: Int, recordsProcessed: Long) {
+        val now = Instant.now(clock)
+        slots[phase]?.updateAndGet { current ->
+            if (current == null || current.runId != runId) return@updateAndGet current
+            current.copy(
+                phase = PipelinePhase.STOPPED,
+                updatedAt = now,
+                completedAt = now,
+                chunksProcessed = chunksProcessed,
+                recordsProcessed = recordsProcessed,
+            )
+        }
+        log.info("[RunStatus] phase-slot stopped phase={} runId={} chunks={} records={}",
+            phase, runId, chunksProcessed, recordsProcessed)
+    }
+
+    /**
      * Clear slot if runId matches. Idempotent. Call only on FAILED (or operator override).
      * Successful runs keep their COMPLETED record in the slot until next acquire.
      */

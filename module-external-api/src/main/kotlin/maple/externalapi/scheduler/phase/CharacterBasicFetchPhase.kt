@@ -12,6 +12,7 @@ import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
+import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import org.slf4j.LoggerFactory
@@ -79,6 +80,7 @@ class CharacterBasicFetchPhase(
         val start = Instant.now(clock)
         val ctx = BatchFetchContext(
             endpoint = "character-basic",
+            phase = PipelinePhase.CHARACTER_BASIC,
             apiEndpoint = ExternalApiEndpoint.CHARACTER_BASIC,
             onFetched = { metrics.recordCharacterBasicFetched() },
             onFailed = { metrics.recordCharacterBasicFailed() },

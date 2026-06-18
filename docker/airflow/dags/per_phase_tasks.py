@@ -163,3 +163,42 @@ def make_loop_task(phase: str) -> PythonOperator:
         execution_timeout=timedelta(seconds=60),
         do_xcom_push=True,
     )
+
+
+def make_stop_task(phase: str) -> PythonOperator:
+    """Stop via /stop/phase/{phase}.
+
+    Single endpoint halts both single-shot runs and loops (per #1290 spec §5.3).
+    Gates on scope: returns None if {phase}_STOP not in scope.
+    202 → STOP_REQUESTED; 200 → NOT_RUNNING (idempotent).
+    """
+    def _stop(**ctx):
+        scope = parse_scope(ctx["dag_run"].conf or {})
+        if f"{phase}_STOP" not in scope:
+            return None
+        base = get_external_api_base()
+        try:
+            resp = requests.post(
+                f"{base}/api/internal/stop/phase/{phase}", timeout=30
+            )
+        except requests.RequestException as exc:
+            raise AirflowException(f"Stop {phase} failed: {exc}") from exc
+
+        if resp.status_code == 202:
+            return {**resp.json(), "status": "STOP_REQUESTED"}
+
+        if resp.status_code == 200:
+            return {"phase": phase, "status": "NOT_RUNNING"}
+
+        raise AirflowException(
+            f"Stop {phase} failed: HTTP {resp.status_code} "
+            f"{resp.reason}: {resp.text[:500]}"
+        )
+
+    return PythonOperator(
+        task_id=f"per_phase_stop_{phase.lower()}",
+        python_callable=_stop,
+        retries=0,
+        execution_timeout=timedelta(seconds=60),
+        do_xcom_push=True,
+    )

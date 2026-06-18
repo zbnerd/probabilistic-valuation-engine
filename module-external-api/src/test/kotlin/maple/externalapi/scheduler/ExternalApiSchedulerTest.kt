@@ -14,6 +14,7 @@ import maple.externalapi.scheduler.phase.RunIdGenerator
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argThat
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.doReturn
@@ -301,5 +302,96 @@ class ExternalApiSchedulerTest {
             verify(ocidLookupPhase).execute(any<ExecutorService>(), eq("runs/run-r-1"), eq("run-o-1"))
         }
         verify(runStatusTracker).completeRun(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"), any(), any())
+    }
+
+    @Test
+    fun `runRankingPhase releases slot on phase execution failure`() {
+        val rankingPhase = mock<RankingFetchPhase>()
+        whenever(rankingPhase.execute(any<ExecutorService>(), any<String>()))
+            .thenReturn(CompletableFuture.failedFuture(RuntimeException("nexon api down")))
+
+        val ocidLookupPhase = mock<OcidLookupPhase>()
+        val ocidCache = mock<OcidCacheProvider>()
+        val runStatusTracker = mock<RunStatusTracker>()
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1")))
+            .thenReturn(
+                maple.externalapi.runstatus.RunStatus(
+                    runId = "run-r-1",
+                    phase = PipelinePhase.RANKING_FETCH,
+                    triggeredPhase = PipelinePhase.RANKING_FETCH,
+                    startedAt = java.time.Instant.now(),
+                )
+            )
+        val rankingProvider = mock<ObjectProvider<RankingFetchPhase>>()
+        whenever(rankingProvider.ifAvailable).thenReturn(rankingPhase)
+        val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
+        whenever(charBasicProvider.ifAvailable).thenReturn(null)
+
+        val scheduler = ExternalApiScheduler(
+            ocidLookupPhase = ocidLookupPhase,
+            ocidCacheProvider = ocidCache,
+            rankingFetchPhaseProvider = rankingProvider,
+            characterBasicPhaseProvider = charBasicProvider,
+            itemEquipmentContinuousLoop = mock(),
+            runStatusTracker = runStatusTracker,
+            runIdGenerator = RunIdGenerator(Clock.systemUTC()),
+            runOnStartup = false,
+            skipCharacterBasic = false,
+        )
+
+        try {
+            scheduler.runRankingPhase("run-r-1", null).get()
+        } catch (ex: Exception) {
+            // Expected: phase execution failure surfaces as a failed future.
+        }
+
+        verify(runStatusTracker).failRun(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1"), argThat<String> { contains("nexon api down") })
+        verify(runStatusTracker).releasePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r-1")
+    }
+
+    @Test
+    fun `runOcidPhase releases slot on phase execution failure`() {
+        val ocidLookupPhase = mock<OcidLookupPhase>()
+        // Suspend fun throws synchronously when called via runBlocking
+        runBlocking {
+            whenever(ocidLookupPhase.execute(any<ExecutorService>(), any<String>(), any<String>()))
+                .thenThrow(RuntimeException("object storage timeout"))
+        }
+
+        val ocidCache = mock<OcidCacheProvider>()
+        val runStatusTracker = mock<RunStatusTracker>()
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1")))
+            .thenReturn(
+                maple.externalapi.runstatus.RunStatus(
+                    runId = "run-o-1",
+                    phase = PipelinePhase.OCID_LOOKUP,
+                    triggeredPhase = PipelinePhase.OCID_LOOKUP,
+                    startedAt = java.time.Instant.now(),
+                )
+            )
+        val rankingProvider = mock<ObjectProvider<RankingFetchPhase>>()
+        val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
+        whenever(charBasicProvider.ifAvailable).thenReturn(null)
+
+        val scheduler = ExternalApiScheduler(
+            ocidLookupPhase = ocidLookupPhase,
+            ocidCacheProvider = ocidCache,
+            rankingFetchPhaseProvider = rankingProvider,
+            characterBasicPhaseProvider = charBasicProvider,
+            itemEquipmentContinuousLoop = mock(),
+            runStatusTracker = runStatusTracker,
+            runIdGenerator = RunIdGenerator(Clock.systemUTC()),
+            runOnStartup = false,
+            skipCharacterBasic = false,
+        )
+
+        try {
+            scheduler.runOcidPhase("run-o-1", "run-r-1").get()
+        } catch (ex: Exception) {
+            // Expected: phase execution failure surfaces as a failed future.
+        }
+
+        verify(runStatusTracker).failRun(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"), argThat<String> { contains("object storage timeout") })
+        verify(runStatusTracker).releasePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o-1")
     }
 }

@@ -192,7 +192,13 @@ class ExternalApiScheduler(
             )
         }
 
-        return rankingPhase.execute(executor, runId)
+        val future = try {
+            rankingPhase.execute(executor, runId)
+        } catch (ex: Throwable) {
+            log.error("[Scheduler] runRankingPhase sync failure runId={}", runId, ex)
+            CompletableFuture.failedFuture<Void>(ex)
+        }
+        return future
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] runRankingPhase failed runId={}", runId, ex)
@@ -203,7 +209,7 @@ class ExternalApiScheduler(
                     // do NOT release — terminal record persists for /run-status
                 }
             }
-            .thenAccept { }
+            .thenRun { }
     }
 
     /**
@@ -222,8 +228,14 @@ class ExternalApiScheduler(
         }
 
         val runKey = "runs/$upstreamRunId"
-        return runBlocking { ocidLookupPhase.execute(executor, runKey, runId) }
-            .let { CompletableFuture.completedFuture(it) }
+        val future = runCatching {
+            runBlocking { ocidLookupPhase.execute(executor, runKey, runId) }
+                .let { CompletableFuture.completedFuture(it) }
+        }.getOrElse { ex ->
+            log.error("[Scheduler] runOcidPhase sync failure runId={} upstreamRunId={}", runId, upstreamRunId, ex)
+            CompletableFuture.failedFuture<Void>(ex)
+        }
+        return future
             .whenComplete { _, ex ->
                 if (ex != null) {
                     log.error("[Scheduler] runOcidPhase failed runId={} upstreamRunId={}", runId, upstreamRunId, ex)
@@ -233,7 +245,7 @@ class ExternalApiScheduler(
                     runStatusTracker.completeRun(PipelinePhase.OCID_LOOKUP, runId, 0, 0)
                 }
             }
-            .thenAccept { }
+            .thenRun { }
     }
 
     override val lifecyclePhase: Int = 100

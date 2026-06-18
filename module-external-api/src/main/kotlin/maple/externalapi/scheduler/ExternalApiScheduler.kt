@@ -321,7 +321,7 @@ class ExternalApiScheduler(
             log.info("[Scheduler] stop requested phase={} runId={}",
                 phase, runStatusTracker.getPhaseStatus(phase)?.runId)
         }
-        return hadNonTerminal || stopSignal.isStopRequested(phase)
+        return hadNonTerminal
     }
 
     /**

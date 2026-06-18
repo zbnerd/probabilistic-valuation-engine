@@ -16,10 +16,22 @@ import requests
 from airflow import DAG
 from airflow.exceptions import AirflowException
 from airflow.hooks.base import BaseHook
-from airflow.operators.python import PythonOperator
+from airflow.operators.empty import EmptyOperator
+from airflow.operators.python import BranchPythonOperator, PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.http.sensors.http import HttpSensor
 from airflow.sensors.python import PythonSensor
+
+from per_phase_tasks import (
+    LOOP_PHASES,
+    STOP_PHASES,
+    TRIGGER_PHASES,
+    make_is_phase_terminal,
+    make_loop_task,
+    make_stop_task,
+    make_trigger_task,
+    parse_scope,
+)
 
 
 def is_health_up(response):
@@ -235,4 +247,43 @@ with DAG(
         wait_for_completion=False,
     )
 
-    check_external_api >> trigger_daily_collection >> wait_for_completion >> wait_ie_cycle >> trigger_cleanup
+    # Per-phase branch (issue #1292). Activated when dag_run.conf['scope']
+    # is set to a list of action values (see per_phase_tasks.ALLOWED_SCOPES).
+    branch_on_scope = BranchPythonOperator(
+        task_id="branch_on_scope",
+        python_callable=lambda **ctx: (
+            "trigger_daily_collection"
+            if parse_scope(ctx["dag_run"].conf or {}) == ["FULL_DAILY"]
+            else "per_phase_join"
+        ),
+    )
+
+    per_phase_join = EmptyOperator(
+        task_id="per_phase_join",
+        trigger_rule="none_failed_min_one_success",
+    )
+
+    per_phase_trigger_tasks = [make_trigger_task(p) for p in TRIGGER_PHASES]
+    per_phase_loop_tasks = [make_loop_task(p) for p in LOOP_PHASES]
+    per_phase_stop_tasks = [make_stop_task(p) for p in STOP_PHASES]
+
+    per_phase_trigger_sensors = [
+        PythonSensor(
+            task_id=f"per_phase_wait_{p.lower()}_completion",
+            python_callable=make_is_phase_terminal(p),
+            mode="reschedule",
+            poke_interval=60,
+            timeout=60 * 60 * 4,
+        )
+        for p in TRIGGER_PHASES
+    ]
+
+    check_external_api >> branch_on_scope
+    branch_on_scope >> trigger_daily_collection
+    branch_on_scope >> per_phase_join
+    per_phase_join >> per_phase_trigger_tasks
+    per_phase_join >> per_phase_loop_tasks
+    per_phase_join >> per_phase_stop_tasks
+    for trig, sens in zip(per_phase_trigger_tasks, per_phase_trigger_sensors):
+        trig >> sens
+    trigger_daily_collection >> wait_for_completion >> wait_ie_cycle >> trigger_cleanup

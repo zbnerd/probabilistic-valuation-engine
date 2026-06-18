@@ -359,6 +359,28 @@ class ExternalApiScheduler(
             .thenRun { }
     }
 
+    /**
+     * Public entry point. Dispatches to the right per-phase method based on [phase].
+     * Returns a CompletableFuture that completes when the phase reaches terminal
+     * state (COMPLETED or FAILED). The /api/internal/trigger/phase controller
+     * and triggerDailyRefresh both call this.
+     *
+     * Phases IDLE, OCID_CACHE_REFRESH, CHARACTER_BASIC_DONE, COMPLETED, FAILED
+     * are not valid standalone triggers — they are intermediate states. Returns
+     * a failed future for these.
+     */
+    fun triggerPhase(phase: PipelinePhase, runId: String, upstreamRunId: String?): CompletableFuture<Void> {
+        return when (phase) {
+            PipelinePhase.RANKING_FETCH -> runRankingPhase(runId, upstreamRunId)
+            PipelinePhase.OCID_LOOKUP -> runOcidPhase(runId, upstreamRunId)
+            PipelinePhase.CHARACTER_BASIC -> runCharBasicPhase(runId, upstreamRunId)
+            PipelinePhase.ITEM_EQUIPMENT -> runItemEquipmentPhase(runId, upstreamRunId)
+            else -> CompletableFuture.failedFuture(
+                IllegalArgumentException("Phase $phase is not a standalone-triggerable phase")
+            )
+        }
+    }
+
     override val lifecyclePhase: Int = 100
 
     override fun stopLifecycle() {

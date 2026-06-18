@@ -1,6 +1,8 @@
 package maple.expectation.infrastructure.worker
 
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 import kotlin.math.ceil
 import kotlin.random.Random
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -12,10 +14,12 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.pgmq.ProcessOutcome
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
 import maple.expectation.infrastructure.queue.pgmq.FanOutQueueProducer
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 
@@ -53,12 +57,41 @@ class NexonFanOutWorker(
     queueMetrics: WorkerQueueMetrics,
     lifecycleWrapper: ScheduledTaskLifecycleWrapper,
     private val fetchProvider: EquipmentFetchProvider,
+    @Qualifier("expectationComputeCpuExecutor") private val cpuExecutor: Executor,
 ) : PgmqWorker<FanOutRequest>(pgmqClient, executor, config, meterRegistry, queueMetrics, lifecycleWrapper) {
 
     override val queueName: String = FanOutQueueProducer.QUEUE_NAME
     override val payloadClass: Class<FanOutRequest> = FanOutRequest::class.java
     override val workerSettings: PgmqWorkerConfig.WorkerSettings = config.nexonFanout
 
+    /**
+     * Async variant of [process]. Wraps the existing synchronous [process] in
+     * [CompletableFuture.supplyAsync] on the dedicated CPU executor so the PGMQ
+     * scheduler is never blocked on a synchronous call site.
+     *
+     * Matches sync semantics: [ProcessOutcome.Ack] when sync returns true (archive),
+     * [ProcessOutcome.Nack] with `retryable=true` when sync returns false. The 429
+     * visibility-reset (1.0~1.3s jitter) is still applied by [onProcessingFailed] via
+     * the legacy `process()` path; for the async path the visibilityReset is left null
+     * so the base class default visibility is used.
+     */
+    override fun processAsync(message: PgmqMessage<FanOutRequest>): CompletableFuture<ProcessOutcome> =
+        CompletableFuture.supplyAsync(
+            {
+                if (process(message)) ProcessOutcome.Ack
+                else ProcessOutcome.Nack(retryable = true)
+            },
+            cpuExecutor,
+        )
+
+    /**
+     * Test bridge — exposes the [processAsync] method (protected in PgmqWorker) to unit tests.
+     * Internal visibility keeps it out of the public server API surface.
+     */
+    internal fun callProcessAsync(message: PgmqMessage<FanOutRequest>): CompletableFuture<ProcessOutcome> =
+        processAsync(message)
+
+    @Deprecated("Use processAsync", ReplaceWith("processAsync(message).get() == ProcessOutcome.Ack"))
     override fun process(message: PgmqMessage<FanOutRequest>): Boolean {
         val request = message.payload
         val context = TaskContext.of("NexonFanOutWorker", "Process", request.ocid)

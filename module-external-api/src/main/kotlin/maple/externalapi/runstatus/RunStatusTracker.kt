@@ -19,6 +19,7 @@ class RunStatusTracker(
         val status = RunStatus(
             runId = runId,
             phase = PipelinePhase.RANKING_FETCH,
+            triggeredPhase = PipelinePhase.RANKING_FETCH,
             startedAt = Instant.now(clock),
             updatedAt = Instant.now(clock),
         )
@@ -41,6 +42,7 @@ class RunStatusTracker(
         val status = RunStatus(
             runId = runId,
             phase = PipelinePhase.ITEM_EQUIPMENT,
+            triggeredPhase = PipelinePhase.ITEM_EQUIPMENT,
             startedAt = Instant.now(clock),
             updatedAt = Instant.now(clock),
         )

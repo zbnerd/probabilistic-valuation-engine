@@ -120,4 +120,11 @@ class RunStatusTrackerTest {
         assertThat(current.phase).isEqualTo(PipelinePhase.ITEM_EQUIPMENT)
         assertThat(current.isTerminal).isFalse()
     }
+
+    @Test
+    fun `RunStatus carries triggeredPhase field set on startRun`() {
+        tracker.startRun("run-1")
+        val status = tracker.getCurrentStatus()!!
+        assertThat(status.triggeredPhase).isEqualTo(PipelinePhase.RANKING_FETCH)
+    }
 }

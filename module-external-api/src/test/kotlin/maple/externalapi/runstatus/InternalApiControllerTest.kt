@@ -49,6 +49,7 @@ class InternalApiControllerTest {
         val status = RunStatus(
             runId = "run-123",
             phase = PipelinePhase.OCID_LOOKUP,
+            triggeredPhase = PipelinePhase.OCID_LOOKUP,
             startedAt = Instant.now(),
         )
         whenever(runStatusTracker.getCurrentStatus()).thenReturn(status)
@@ -66,6 +67,7 @@ class InternalApiControllerTest {
         val completed = RunStatus(
             runId = "run-122",
             phase = PipelinePhase.COMPLETED,
+            triggeredPhase = PipelinePhase.RANKING_FETCH,
             startedAt = Instant.now().minusSeconds(3600),
             completedAt = Instant.now(),
             chunksProcessed = 800,
@@ -104,7 +106,7 @@ class InternalApiControllerTest {
     @Test
     fun `POST trigger daily returns 409 when already running`() {
         whenever(runStatusTracker.getCurrentStatus()).thenReturn(
-            RunStatus(runId = "run-1", phase = PipelinePhase.RANKING_FETCH, startedAt = Instant.now()),
+            RunStatus(runId = "run-1", phase = PipelinePhase.RANKING_FETCH, triggeredPhase = PipelinePhase.RANKING_FETCH, startedAt = Instant.now()),
         )
 
         mockMvc.perform(post("/api/internal/trigger/daily"))

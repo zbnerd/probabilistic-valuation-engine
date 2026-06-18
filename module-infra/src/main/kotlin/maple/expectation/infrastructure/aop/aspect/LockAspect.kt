@@ -61,7 +61,9 @@ class LockAspect(
     }
 
     private fun handleLockFailure(joinPoint: ProceedingJoinPoint, key: String, e: Throwable): Any? {
-        if (e is DistributedLockException) {
+        // cf.get() wraps the original cause in ExecutionException; unwrap for the type check.
+        val cause = e.cause ?: e
+        if (e is DistributedLockException || cause is DistributedLockException) {
             log.warn("⏭️ [Locked Timeout] {} - 락 획득 실패. 직접 조회를 시도합니다.", key)
             return proceedWithoutLock(joinPoint, key)
         }

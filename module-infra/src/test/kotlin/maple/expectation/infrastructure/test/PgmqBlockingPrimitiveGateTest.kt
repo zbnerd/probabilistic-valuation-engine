@@ -17,9 +17,6 @@ import java.io.File
  * - `Thread.sleep(` (sleeping inside async pipeline is always wrong)
  *
  * Allowlist rationale (each entry is a documented exception, not a free pass):
- * - `PgmqWorker.kt`: legacy `processSequentialBatch` still uses `runBlocking` —
- *   migration tracked separately (CPU-bound `calculateOnly` per Issue #1131).
- *   Path-level allowlist covers all `runBlocking` lines in this file.
  * - Lines containing `@Deprecated`: shim bodies of `process(): Boolean` in
  *   migrated workers (`ExternalApiWorker`, `CalculationWorker`, etc.) that
  *   call `processAsync(message).get()` to bridge async → sync. These are
@@ -90,12 +87,11 @@ class PgmqBlockingPrimitiveGateTest {
             .isEmpty()
     }
 
-    /** PgmqWorker.processSequentialBatch keeps runBlocking; legacy migration path. */
+    /** No `runBlocking` sites are allowlisted as of Task 10.5 — PgmqWorker migrated to CF allOf. */
     private fun isRunBlockingAllowlisted(file: File, text: String): Boolean {
         val isComment = isCommentLine(text)
         val isDeprecatedLine = isDeprecationLine(text)
-        val isLegacyPgmqRunBlocking = file.absolutePath.contains("/pgmq/PgmqWorker.kt")
-        return isComment || isDeprecatedLine || isLegacyPgmqRunBlocking
+        return isComment || isDeprecatedLine
     }
 
     /** CF-→-sync `.join()` in topic subscriber (OcidResolve) and loadAndWait (ExternalApi). */

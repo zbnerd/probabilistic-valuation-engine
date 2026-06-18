@@ -102,6 +102,22 @@ abstract class PgmqWorker<T : Any>(
     protected abstract fun process(message: PgmqMessage<T>): Boolean
 
     /**
+     * Async variant of [process]. Default implementation wraps [process] in [CompletableFuture.supplyAsync]
+     * via the worker pool. Override to delegate directly to an async pipeline (eliminates blocking sites).
+     *
+     * Returning [ProcessOutcome.Ack] triggers archive; [ProcessOutcome.Nack] triggers retry or DLQ;
+     * [ProcessOutcome.DeadLetter] triggers DLQ.
+     */
+    protected open fun processAsync(message: PgmqMessage<T>): CompletableFuture<ProcessOutcome> =
+        CompletableFuture.supplyAsync(
+            {
+                if (process(message)) ProcessOutcome.Ack
+                else ProcessOutcome.Nack(retryable = true)
+            },
+            workerPool,
+        )
+
+    /**
      * 메시지 처리 실패 시 후처리 훅 (선택적 오버라이드)
      *
      * <p>process()가 false를 반환하거나 예외 발생 시 호출.

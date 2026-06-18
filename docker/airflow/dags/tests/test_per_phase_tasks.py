@@ -9,7 +9,11 @@ import pytest
 import requests
 from airflow.exceptions import AirflowException
 
-from per_phase_tasks import parse_scope, ALLOWED_SCOPES, make_trigger_task, make_loop_task, make_stop_task
+from per_phase_tasks import (
+    parse_scope, ALLOWED_SCOPES,
+    make_trigger_task, make_loop_task, make_stop_task,
+    make_is_phase_terminal,
+)
 
 
 @pytest.mark.parametrize(
@@ -299,3 +303,108 @@ def test_make_stop_task_network_error_raises(mock_external_api_conn):
 
         with pytest.raises(AirflowException, match="Stop ITEM_EQUIPMENT failed"):
             task.python_callable(**ctx)
+
+
+# ─── make_is_phase_terminal (Task 12 RED) ──────────────────────────────────
+
+
+def test_sensor_returns_true_when_scope_excludes_phase(mock_external_api_conn):
+    """If phase not in scope, sensor returns True (skip)."""
+    sensor = make_is_phase_terminal("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["OCID_LOOKUP"]})
+    assert sensor(**ctx) is True
+
+
+def test_sensor_returns_true_when_terminal(mock_external_api_conn):
+    """runId matches + current.terminal=True → True."""
+    sensor = make_is_phase_terminal("ITEM_EQUIPMENT")
+    ctx = _make_ctx(
+        {"scope": ["ITEM_EQUIPMENT"]},
+        xcom_value={"runId": "r-1", "phase": "ITEM_EQUIPMENT"},
+    )
+
+    with patch("per_phase_tasks.requests.get") as mock_get:
+        status_resp = MagicMock()
+        status_resp.status_code = 200
+        status_resp.json.return_value = {
+            "current": {
+                "runId": "r-1",
+                "phase": "ITEM_EQUIPMENT",
+                "terminal": True,
+            }
+        }
+        status_resp.raise_for_status = MagicMock()
+        mock_get.return_value = status_resp
+
+        assert sensor(**ctx) is True
+
+
+def test_sensor_raises_when_run_failed(mock_external_api_conn):
+    """current.phase == FAILED → RuntimeError."""
+    sensor = make_is_phase_terminal("ITEM_EQUIPMENT")
+    ctx = _make_ctx(
+        {"scope": ["ITEM_EQUIPMENT"]},
+        xcom_value={"runId": "r-1"},
+    )
+
+    with patch("per_phase_tasks.requests.get") as mock_get:
+        status_resp = MagicMock()
+        status_resp.status_code = 200
+        status_resp.json.return_value = {
+            "current": {
+                "runId": "r-1",
+                "phase": "FAILED",
+                "errorMessage": "boom",
+            }
+        }
+        status_resp.raise_for_status = MagicMock()
+        mock_get.return_value = status_resp
+
+        with pytest.raises(RuntimeError, match="Run r-1 failed"):
+            sensor(**ctx)
+
+
+def test_sensor_returns_false_on_transient_http(mock_external_api_conn):
+    """Network error → False (reschedule)."""
+    sensor = make_is_phase_terminal("ITEM_EQUIPMENT")
+    ctx = _make_ctx(
+        {"scope": ["ITEM_EQUIPMENT"]},
+        xcom_value={"runId": "r-1"},
+    )
+
+    with patch("per_phase_tasks.requests.get") as mock_get:
+        mock_get.side_effect = requests.RequestException("connection refused")
+
+        assert sensor(**ctx) is False
+
+
+def test_sensor_returns_false_when_runid_mismatch(mock_external_api_conn):
+    """current.runId != trigger's runId → False."""
+    sensor = make_is_phase_terminal("ITEM_EQUIPMENT")
+    ctx = _make_ctx(
+        {"scope": ["ITEM_EQUIPMENT"]},
+        xcom_value={"runId": "r-1"},
+    )
+
+    with patch("per_phase_tasks.requests.get") as mock_get:
+        status_resp = MagicMock()
+        status_resp.status_code = 200
+        status_resp.json.return_value = {
+            "current": {"runId": "r-other", "phase": "ITEM_EQUIPMENT"}
+        }
+        status_resp.raise_for_status = MagicMock()
+        mock_get.return_value = status_resp
+
+        assert sensor(**ctx) is False
+
+
+def test_sensor_raises_when_xcom_missing_runid(mock_external_api_conn):
+    """If xcom has no runId, RuntimeError (config error, fail-fast)."""
+    sensor = make_is_phase_terminal("ITEM_EQUIPMENT")
+    ctx = _make_ctx(
+        {"scope": ["ITEM_EQUIPMENT"]},
+        xcom_value={"phase": "ITEM_EQUIPMENT"},  # no runId
+    )
+
+    with pytest.raises(RuntimeError, match="no runId"):
+        sensor(**ctx)

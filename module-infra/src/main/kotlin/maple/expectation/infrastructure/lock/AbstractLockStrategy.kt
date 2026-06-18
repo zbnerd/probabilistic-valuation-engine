@@ -27,18 +27,24 @@ abstract class AbstractLockStrategy(protected val executor: LogicExecutor) : Loc
         val context = TaskContext.of("Lock", "ExecuteAsync", key)
 
         return tryAcquireSessionLockAsync(lockKey, waitTime, leaseTime, context)
-            .thenCompose { lockId ->
-                if (lockId == null) {
-                    onLockFailed(lockKey)
-                    CompletableFuture.failedFuture(createLockFailureException(lockKey))
-                } else {
-                    onLockAcquired(lockKey)
-                    supplier().whenComplete { _, _ ->
-                        releaseSessionLockAsync(lockKey, lockId, context)
-                    }
-                }
-            }
+            .thenCompose { lockId -> executeSuppliedTask(lockKey, lockId, supplier, context) }
     }
+
+    private fun <T> executeSuppliedTask(
+        lockKey: String,
+        lockId: Long?,
+        supplier: () -> CompletableFuture<T>,
+        context: TaskContext,
+    ): CompletableFuture<T> =
+        if (lockId == null) {
+            onLockFailed(lockKey)
+            CompletableFuture.failedFuture(createLockFailureException(lockKey))
+        } else {
+            onLockAcquired(lockKey)
+            supplier().whenComplete { _, _ ->
+                releaseSessionLockAsync(lockKey, lockId, context)
+            }
+        }
 
     override fun <T> executeWithLockAsync(
         key: String,

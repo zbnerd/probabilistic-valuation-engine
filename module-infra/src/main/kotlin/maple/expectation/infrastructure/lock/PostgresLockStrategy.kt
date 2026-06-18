@@ -148,6 +148,17 @@ class PostgresLockStrategy(
      * @param lockKey 락 키
      */
     override fun unlockInternal(lockKey: String) {
+        // Note: session registry may have an entry if the lock was acquired via the
+        // *Async path. Clear it here so legacy sync unlock() doesn't leak.
+        val sessionLockId = lockSessionRegistry.remove(lockKey)
+        if (sessionLockId != null) {
+            try {
+                lockJdbcTemplate.update("SELECT pg_advisory_unlock(?)", sessionLockId)
+            } catch (e: Exception) {
+                log.warn("[PostgresLock] Failed to release async session lock during sync unlockInternal: key={}, lockId={}", lockKey, sessionLockId, e)
+            }
+        }
+
         val advisoryLockId = toAdvisoryLockId(lockKey)
         val locks = acquiredLocks.get()
 
@@ -304,9 +315,6 @@ class PostgresLockStrategy(
      * @return 64bit 정수
      */
     private fun toAdvisoryLockId(key: String): Long {
-        val FNV_64_OFFSET_BASIS = -0x3c2d2f0705b7b401L // 14695981039346656037
-        val FNV_64_PRIME = 0x100000001b3L // 1099511628211
-
         var hash = FNV_64_OFFSET_BASIS
         for (byte in key.toByteArray()) {
             hash = hash xor (byte.toLong() and 0xFF)
@@ -467,6 +475,8 @@ class PostgresLockStrategy(
     companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(PostgresLockStrategy::class.java)
         private const val POLL_INTERVAL_MS = 100L
+        private const val FNV_64_OFFSET_BASIS = -0x3c2d2f0705b7b401L // 14695981039346656037
+        private const val FNV_64_PRIME = 0x100000001b3L // 1099511628211
     }
 
     /**

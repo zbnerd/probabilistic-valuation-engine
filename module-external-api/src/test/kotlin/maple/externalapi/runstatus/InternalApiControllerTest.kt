@@ -170,4 +170,48 @@ class InternalApiControllerTest {
         mockMvc.perform(post("/api/internal/trigger/daily"))
             .andExpect(status().isAccepted)
     }
+
+    @Test
+    fun `POST trigger phase returns 202 with runId when slot empty`() {
+        whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.RANKING_FETCH)).thenReturn(null)
+
+        mockMvc.perform(post("/api/internal/trigger/phase/RANKING_FETCH"))
+            .andExpect(status().isAccepted)
+            .andExpect(jsonPath("$.status").value("STARTED"))
+            .andExpect(jsonPath("$.runId").isString)
+    }
+
+    @Test
+    fun `POST trigger phase returns 400 for invalid phase name`() {
+        mockMvc.perform(post("/api/internal/trigger/phase/BOGUS_PHASE"))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("INVALID_PHASE"))
+    }
+
+    @Test
+    fun `POST trigger phase returns 400 for OCID_LOOKUP without upstreamRunId`() {
+        mockMvc.perform(post("/api/internal/trigger/phase/OCID_LOOKUP"))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("MISSING_UPSTREAM"))
+    }
+
+    @Test
+    fun `POST trigger phase returns 409 when slot occupied`() {
+        whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.CHARACTER_BASIC)).thenReturn(
+            RunStatus(
+                runId = "existing-run",
+                phase = PipelinePhase.CHARACTER_BASIC,
+                triggeredPhase = PipelinePhase.CHARACTER_BASIC,
+                startedAt = Instant.now(),
+            ),
+        )
+
+        mockMvc.perform(
+            post("/api/internal/trigger/phase/CHARACTER_BASIC")
+                .header("X-Upstream-Run-Id", "upstream"),
+        )
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value("ALREADY_RUNNING"))
+            .andExpect(jsonPath("$.runId").value("existing-run"))
+    }
 }

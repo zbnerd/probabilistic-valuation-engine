@@ -3,6 +3,7 @@ package maple.externalapi.runstatus
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import maple.externalapi.scheduler.ExternalApiScheduler
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -15,6 +16,7 @@ class InternalApiController(
     private val scheduler: ExternalApiScheduler,
     @Qualifier("internalApiExecutor") private val executor: ExecutorService,
 ) {
+    private val log = LoggerFactory.getLogger(InternalApiController::class.java)
     @GetMapping("/run-status")
     fun getRunStatus(): ResponseEntity<RunStatusResponse> {
         val phases = listOf(
@@ -81,6 +83,38 @@ class InternalApiController(
         val runId = airflowRunId ?: UUID.randomUUID().toString()
         executor.submit { scheduler.triggerPhase(phase, runId, upstreamRunId).join() }
         return ResponseEntity.accepted().body(mapOf("status" to "STARTED", "runId" to runId))
+    }
+
+    @PostMapping("/stop/phase/{phaseName}")
+    fun stopPhase(
+        @PathVariable phaseName: String,
+        @RequestHeader("X-Airflow-Run-Id", required = false) airflowRunId: String?,
+    ): ResponseEntity<Map<String, String>> {
+        val phase = runCatching { PipelinePhase.valueOf(phaseName) }.getOrNull()
+        if (phase == null || phase !in triggerablePhases) {
+            return badRequestInvalidPhase()
+        }
+        val wasRunning = scheduler.requestPhaseStop(phase)
+        if (wasRunning) {
+            val runId = runStatusTracker.getPhaseStatus(phase)?.runId ?: ""
+            log.info(
+                "[InternalApi] stop requested phase={} runId={} airflowRunId={}",
+                phase, runId, airflowRunId,
+            )
+            return ResponseEntity.accepted().body(mapOf(
+                "status" to "STOP_REQUESTED",
+                "phase" to phase.name,
+                "runId" to runId,
+                "airflowRunId" to (airflowRunId ?: ""),
+            ))
+        }
+        val lastRunId = runStatusTracker.getLastCompletedForPhase(phase)?.runId ?: ""
+        return ResponseEntity.ok().body(mapOf(
+            "status" to "NOT_RUNNING",
+            "phase" to phase.name,
+            "runId" to lastRunId,
+            "airflowRunId" to (airflowRunId ?: ""),
+        ))
     }
 
     private fun badRequestInvalidPhase(): ResponseEntity<Map<String, String>> =

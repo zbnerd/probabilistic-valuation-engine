@@ -44,6 +44,7 @@ class PostgresAdvisoryLockStrategyAsyncTest {
         executor = executor,
         lockTransactionTemplate = lockTransactionTemplate,
         lockMetrics = lockMetrics(),
+        lockExecutor = java.util.concurrent.ForkJoinPool.commonPool(),
     )
 
     @Test

@@ -47,6 +47,8 @@ class PostgresAdvisoryLockStrategy(
     @Qualifier("lockTransactionTemplate")
     private val lockTransactionTemplate: TransactionTemplate,
     private val lockMetrics: LockMetrics,
+    @org.springframework.beans.factory.annotation.Qualifier("defaultAsyncExecutor")
+    private val lockExecutor: Executor,
 ) : LockStrategy,
     LeaderElectionStrategy {
 
@@ -57,15 +59,6 @@ class PostgresAdvisoryLockStrategy(
      * do not (auto-released on tx commit/rollback).
      */
     private val lockSessionRegistry = ConcurrentHashMap<String, Long>()
-
-    /**
-     * Executor for short-lived JDBC round-trips in async paths.
-     * Uses the common ForkJoinPool; this is fine because each call is a brief
-     * blocking JDBC query (HikariCP connection check-out + single SQL round-trip),
-     * not a long-running compute task. Spring `@Async` is not appropriate here
-     * because the lock acquisition polling is in-process and bounded by waitTime.
-     */
-    private val jdbcExecutor: Executor = java.util.concurrent.ForkJoinPool.commonPool()
 
     // ==================== Async Lock Methods (preferred) ====================
 
@@ -104,7 +97,7 @@ class PostgresAdvisoryLockStrategy(
      * MUST call [unlockAsync] explicitly to release.
      */
     override fun tryLockImmediatelyAsync(key: String, leaseTime: Long): CompletableFuture<Boolean> =
-        CompletableFuture.supplyAsync({ tryAcquireSessionLockOnce(key, leaseTime) != null }, jdbcExecutor)
+        CompletableFuture.supplyAsync({ tryAcquireSessionLockOnce(key, leaseTime) != null }, lockExecutor)
 
     /**
      * [SESSION-SCOPED] Async: Release previously acquired session-scoped lock.
@@ -112,7 +105,7 @@ class PostgresAdvisoryLockStrategy(
     override fun unlockAsync(key: String): CompletableFuture<Void> {
         val lockId = lockSessionRegistry.remove(key)
             ?: return CompletableFuture.completedFuture(null)
-        return CompletableFuture.runAsync({ releaseSessionLock(key, lockId) }, jdbcExecutor)
+        return CompletableFuture.runAsync({ releaseSessionLock(key, lockId) }, lockExecutor)
     }
 
     /**
@@ -371,7 +364,7 @@ class PostgresAdvisoryLockStrategy(
             Thread.sleep(POLL_INTERVAL_MS)
         }
         null
-    }, jdbcExecutor)
+    }, lockExecutor)
 
     /**
      * Try once to acquire `pg_try_advisory_lock`. On success, registers the lockId
@@ -397,6 +390,15 @@ class PostgresAdvisoryLockStrategy(
     /**
      * Release the session-scoped lock acquired by [tryAcquireSessionLockOnce].
      * Called from `whenComplete` — must never throw.
+     *
+     * Justified: this function is invoked from `whenComplete` callbacks inside
+     * CompletableFuture chains. LogicExecutor cannot be used inside `whenComplete`
+     * (it expects a synchronous caller context), so the JDBC exception must be
+     * handled inline. The `try/catch` here is the documented exception to the
+     * no-try-catch rule in `code-rules.md` §5 — a thrown exception from
+     * `whenComplete` would complete the outer CF exceptionally AFTER the supplier
+     * has already returned, corrupting the CF chain. Logging + swallow is the only
+     * safe action.
      */
     private fun releaseSessionLock(key: String, lockId: Long) {
         lockSessionRegistry.remove(key, lockId)
@@ -448,7 +450,7 @@ class PostgresAdvisoryLockStrategy(
                 Thread.sleep(POLL_INTERVAL_MS)
             }
             log.warn("⏰ [Follower] Timed out waiting for leader: key={}, timeout={}s", key, waitTimeSeconds)
-        }, jdbcExecutor)
+        }, lockExecutor)
 
     companion object {
         private val log = LoggerFactory.getLogger(PostgresAdvisoryLockStrategy::class.java)

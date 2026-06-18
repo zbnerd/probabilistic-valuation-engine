@@ -170,7 +170,8 @@ class DataflowContractTest {
         assertThat(runKey).startsWith("runs/")
 
         // act: run OCID lookup — it's suspend, so wrap in runBlocking
-        runBlocking { ocidPhase.execute(executor, runKey) }
+        val ocidRunId = "20260610-xyz"
+        runBlocking { ocidPhase.execute(executor, runKey, ocidRunId) }
 
         // assert: chunk schema
         val chunkKeys = objectStorage.listByPrefix("$runKey/ranking-overall/chunks")

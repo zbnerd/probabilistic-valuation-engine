@@ -73,6 +73,7 @@ class OcidLookupPhaseTest {
             phase.execute(
                 workerExecutor = Executors.newSingleThreadExecutor(),
                 runKey = "runs/abc",
+                runId = "abc",
             )
         }
 

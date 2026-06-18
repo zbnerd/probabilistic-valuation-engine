@@ -107,7 +107,7 @@ class ExternalApiScheduler(
                     // Caller thread is multi-threaded VT (Executors.newVirtualThreadPerTaskExecutor).
                     // runBlocking bridges to Default dispatcher for CPU offload.
                     // Single submit thread blocked for OCID lookup duration; no other submit affected.
-                    runBlocking { ocidLookupPhase.execute(executor, runKey) }
+                    runBlocking { ocidLookupPhase.execute(executor, runKey, runId) }
                         .let { CompletableFuture.completedFuture(it) }
                 }
             }
@@ -167,6 +167,73 @@ class ExternalApiScheduler(
         running.set(false)
         lock.lock()
         try { idle.signalAll() } finally { lock.unlock() }
+    }
+
+    /**
+     * Run RANKING_FETCH phase standalone. Acquires RANKING_FETCH slot, calls
+     * ranking phase bean, completes slot on success (terminal record persists)
+     * or fails+releases slot on exception. [upstreamRunId] is unused for
+     * ranking (no upstream).
+     */
+    fun runRankingPhase(runId: String, upstreamRunId: String?): CompletableFuture<Void> {
+        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, runId)
+        if (acquired == null) {
+            return CompletableFuture.failedFuture(
+                IllegalStateException("RANKING_FETCH slot occupied")
+            )
+        }
+
+        val rankingPhase = rankingFetchPhaseProvider.ifAvailable
+        if (rankingPhase == null) {
+            runStatusTracker.failRun(PipelinePhase.RANKING_FETCH, runId, "ranking fetch phase not enabled")
+            runStatusTracker.releasePhaseSlot(PipelinePhase.RANKING_FETCH, runId)
+            return CompletableFuture.failedFuture(
+                IllegalStateException("ranking fetch phase not enabled")
+            )
+        }
+
+        return rankingPhase.execute(executor, runId)
+            .whenComplete { _, ex ->
+                if (ex != null) {
+                    log.error("[Scheduler] runRankingPhase failed runId={}", runId, ex)
+                    runStatusTracker.failRun(PipelinePhase.RANKING_FETCH, runId, ex.message ?: "unknown")
+                    runStatusTracker.releasePhaseSlot(PipelinePhase.RANKING_FETCH, runId)
+                } else {
+                    runStatusTracker.completeRun(PipelinePhase.RANKING_FETCH, runId, 0, 0)
+                    // do NOT release — terminal record persists for /run-status
+                }
+            }
+            .thenAccept { }
+    }
+
+    /**
+     * Run OCID_LOOKUP phase standalone. Reads character names from
+     * [upstreamRunId]'s ranking chunks, fetches OCIDs, writes ocid-mapping
+     * file. Acquires OCID_LOOKUP slot; completes on success (terminal
+     * record persists), fails+releases on exception.
+     */
+    fun runOcidPhase(runId: String, upstreamRunId: String?): CompletableFuture<Void> {
+        require(upstreamRunId != null) { "OCID_LOOKUP requires upstreamRunId" }
+        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, runId)
+        if (acquired == null) {
+            return CompletableFuture.failedFuture(
+                IllegalStateException("OCID_LOOKUP slot occupied")
+            )
+        }
+
+        val runKey = "runs/$upstreamRunId"
+        return runBlocking { ocidLookupPhase.execute(executor, runKey, upstreamRunId) }
+            .let { CompletableFuture.completedFuture(it) }
+            .whenComplete { _, ex ->
+                if (ex != null) {
+                    log.error("[Scheduler] runOcidPhase failed runId={} upstreamRunId={}", runId, upstreamRunId, ex)
+                    runStatusTracker.failRun(PipelinePhase.OCID_LOOKUP, runId, ex.message ?: "unknown")
+                    runStatusTracker.releasePhaseSlot(PipelinePhase.OCID_LOOKUP, runId)
+                } else {
+                    runStatusTracker.completeRun(PipelinePhase.OCID_LOOKUP, runId, 0, 0)
+                }
+            }
+            .thenAccept { }
     }
 
     override val lifecyclePhase: Int = 100

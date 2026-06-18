@@ -17,6 +17,7 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verify
@@ -84,7 +85,7 @@ class ExternalApiSchedulerTest {
         // Wait up to 5s for the async chain to settle and capture the runKey argument.
         val runKeyCaptor = argumentCaptor<String>()
         runBlocking {
-            verify(ocidLookupPhase, timeout(5_000)).execute(any<ExecutorService>(), runKeyCaptor.capture())
+            verify(ocidLookupPhase, timeout(5_000)).execute(any<ExecutorService>(), runKeyCaptor.capture(), any())
         }
 
         // The runId passed to startRun is the SAME one passed to ranking.execute.
@@ -112,7 +113,7 @@ class ExternalApiSchedulerTest {
 
         val ocidLookupPhase = mock<OcidLookupPhase>()
         runBlocking {
-            whenever(ocidLookupPhase.execute(any<ExecutorService>(), any<String>()))
+            whenever(ocidLookupPhase.execute(any<ExecutorService>(), any<String>(), any<String>()))
                 .thenReturn(Unit)
         }
 
@@ -208,5 +209,97 @@ class ExternalApiSchedulerTest {
         // failure meant the tracker never transitioned — the previous run's
         // FAILED status would remain visible on /api/internal/run-status.
         verify(runStatusTracker, timeout(2_000)).startRun(any<String>())
+    }
+
+    @Test
+    fun `runRankingPhase acquires RANKING_FETCH slot and calls rankingFetchPhaseProvider execute`() {
+        val rankingPhase = mock<RankingFetchPhase>()
+        whenever(rankingPhase.execute(any<ExecutorService>(), any<String>()))
+            .thenReturn(CompletableFuture.completedFuture("runs/run-r-1"))
+
+        val ocidLookupPhase = mock<OcidLookupPhase>()
+        val ocidCache = mock<OcidCacheProvider>()
+        val runStatusTracker = mock<RunStatusTracker>()
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1")))
+            .thenReturn(
+                maple.externalapi.runstatus.RunStatus(
+                    runId = "run-r-1",
+                    phase = PipelinePhase.RANKING_FETCH,
+                    triggeredPhase = PipelinePhase.RANKING_FETCH,
+                    startedAt = java.time.Instant.now(),
+                )
+            )
+        val rankingProvider = mock<ObjectProvider<RankingFetchPhase>>()
+        whenever(rankingProvider.ifAvailable).thenReturn(rankingPhase)
+        val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
+        whenever(charBasicProvider.ifAvailable).thenReturn(null)
+        val itemEquipmentLoop = mock<ItemEquipmentContinuousLoop>()
+
+        val scheduler = ExternalApiScheduler(
+            ocidLookupPhase = ocidLookupPhase,
+            ocidCacheProvider = ocidCache,
+            rankingFetchPhaseProvider = rankingProvider,
+            characterBasicPhaseProvider = charBasicProvider,
+            itemEquipmentContinuousLoop = itemEquipmentLoop,
+            runStatusTracker = runStatusTracker,
+            runIdGenerator = RunIdGenerator(Clock.systemUTC()),
+            runOnStartup = false,
+            skipCharacterBasic = false,
+        )
+
+        scheduler.runRankingPhase("run-r-1", null).get()
+
+        verify(rankingPhase).execute(any<ExecutorService>(), eq("run-r-1"))
+        verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1"))
+        verify(runStatusTracker).completeRun(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1"), any(), any())
+    }
+
+    @Test
+    fun `runOcidPhase acquires OCID_LOOKUP slot and forwards upstreamRunId to OcidLookupPhase execute`() {
+        val rankingPhase = mock<RankingFetchPhase>()
+        val ocidLookupPhase = mock<OcidLookupPhase>()
+        // Suspend fun returns Unit; stub via runBlocking so the suspend bridge is wired up.
+        // Then the runBlocking inside runOcidPhase resumes Unit and the whenComplete fires completeRun.
+        runBlocking {
+            whenever(ocidLookupPhase.execute(any<ExecutorService>(), any<String>(), any<String>()))
+                .thenReturn(Unit)
+        }
+
+        val ocidCache = mock<OcidCacheProvider>()
+        val runStatusTracker = mock<RunStatusTracker>()
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1")))
+            .thenReturn(
+                maple.externalapi.runstatus.RunStatus(
+                    runId = "run-o-1",
+                    phase = PipelinePhase.OCID_LOOKUP,
+                    triggeredPhase = PipelinePhase.OCID_LOOKUP,
+                    startedAt = java.time.Instant.now(),
+                )
+            )
+        val rankingProvider = mock<ObjectProvider<RankingFetchPhase>>()
+        whenever(rankingProvider.ifAvailable).thenReturn(null)
+        val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
+        whenever(charBasicProvider.ifAvailable).thenReturn(null)
+        val itemEquipmentLoop = mock<ItemEquipmentContinuousLoop>()
+
+        val scheduler = ExternalApiScheduler(
+            ocidLookupPhase = ocidLookupPhase,
+            ocidCacheProvider = ocidCache,
+            rankingFetchPhaseProvider = rankingProvider,
+            characterBasicPhaseProvider = charBasicProvider,
+            itemEquipmentContinuousLoop = itemEquipmentLoop,
+            runStatusTracker = runStatusTracker,
+            runIdGenerator = RunIdGenerator(Clock.systemUTC()),
+            runOnStartup = false,
+            skipCharacterBasic = false,
+        )
+
+        scheduler.runOcidPhase("run-o-1", "run-r-1").get()
+
+        verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"))
+        runBlocking {
+            verify(ocidLookupPhase).execute(any<ExecutorService>(), eq("runs/run-r-1"), eq("run-r-1"))
+        }
+        verify(runStatusTracker).completeRun(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"), any(), any())
     }
 }

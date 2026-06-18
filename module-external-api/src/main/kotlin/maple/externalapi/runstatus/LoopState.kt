@@ -4,19 +4,24 @@ import java.time.Instant
 
 /**
  * Mutable per-loop state held by PhaseLoopController. Stored under
- * AtomicReference<LoopState> for lock-free updates from iteration
- * whenComplete callbacks.
+ * AtomicReference<LoopState> for the startLoop CAS race.
  *
- * iterationCount and lastRunId reflect the most recent completed iteration
- * (see PhaseLoopController.handleIterationEnd); they are advisory, not
- * transactional.
+ * The mutable fields are annotated `@Volatile` for cross-thread visibility
+ * (status written from request thread via stopLoop/shutdown; iterationCount
+ * and lastRunId written from the loopExecutor thread via handleIterationEnd).
+ *
+ * Concurrency invariant: handleIterationEnd is single-threaded per phase
+ * (iterations chain serially through loopExecutor). stopLoop/shutdown only
+ * write `status`, not `iterationCount`. So `iterationCount += 1` is safe by
+ * construction — the only contended write is on `status`, where the final
+ * value is idempotent (STOPPING in both writers).
  */
 data class LoopState(
     val loopId: String,
     val phase: PipelinePhase,
     val startedAt: Instant,
-    var status: LoopStatus = LoopStatus.RUNNING,
-    var iterationCount: Int = 0,
-    var lastRunId: String? = null,
-    var lastError: String? = null,
+    @Volatile var status: LoopStatus = LoopStatus.RUNNING,
+    @Volatile var iterationCount: Int = 0,
+    @Volatile var lastRunId: String? = null,
+    @Volatile var lastError: String? = null,
 )

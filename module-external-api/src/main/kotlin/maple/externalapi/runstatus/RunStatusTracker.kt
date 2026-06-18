@@ -148,31 +148,4 @@ class RunStatusTracker(
         val slot = slots[phase]?.get() ?: return null
         return if (slot.isTerminal) slot else null
     }
-
-    // Legacy methods retained for code paths not yet migrated (Task 3+ will replace).
-    @Deprecated("Use acquirePhaseSlot(phase, runId) instead")
-    fun startRun(runId: String) {
-        acquirePhaseSlot(PipelinePhase.RANKING_FETCH, runId)
-    }
-
-    @Deprecated("Use acquirePhaseSlot(ITEM_EQUIPMENT, runId) instead")
-    fun startItemEquipmentCycle(runId: String) {
-        acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, runId)
-    }
-
-    @Deprecated("Use completeRun(phase, runId, chunks, records) instead")
-    fun completeRun(runId: String, chunksProcessed: Int, recordsProcessed: Long) {
-        val phase = inferPhaseFromCurrentRun(runId) ?: PipelinePhase.ITEM_EQUIPMENT
-        completeRun(phase, runId, chunksProcessed, recordsProcessed)
-    }
-
-    @Deprecated("Use failRun(phase, runId, errorMessage) instead")
-    fun failRun(runId: String, errorMessage: String) {
-        val phase = inferPhaseFromCurrentRun(runId) ?: PipelinePhase.RANKING_FETCH
-        failRun(phase, runId, errorMessage)
-    }
-
-    private fun inferPhaseFromCurrentRun(runId: String): PipelinePhase? {
-        return slots.entries.firstOrNull { it.value.get()?.runId == runId }?.key
-    }
 }

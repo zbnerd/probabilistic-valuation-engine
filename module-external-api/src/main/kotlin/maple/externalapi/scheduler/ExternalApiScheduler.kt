@@ -48,7 +48,6 @@ class ExternalApiScheduler(
             log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
             triggerDailyRefresh(null)
         }
-        // ItemEquipmentContinuousLoop removed; item-equipment now runs via HTTP trigger.
     }
 
     @Scheduled(cron = "\${external-api.schedule.daily-cron:0 0 3 * * *}")
@@ -257,14 +256,12 @@ class ExternalApiScheduler(
     }
 
     /**
-     * Run ITEM_EQUIPMENT phase standalone. Folds in the body of the legacy
-     * ItemEquipmentContinuousLoop single cycle: loads OCID cache from
+     * Run ITEM_EQUIPMENT phase standalone. Loads OCID cache from
      * [upstreamRunId], calls itemEquipmentFetchPhase bean, drains
      * SchedulerMetrics for chunks/records, completes slot.
      *
      * Single-shot: does not loop. Caller (controller or triggerPhase)
-     * decides how often to invoke. The continuous-loop auto-resume on
-     * startup is gone.
+     * decides how often to invoke.
      */
     fun runItemEquipmentPhase(runId: String, upstreamRunId: String?): CompletableFuture<Void> {
         require(upstreamRunId != null) { "ITEM_EQUIPMENT requires upstreamRunId" }

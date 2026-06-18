@@ -38,8 +38,8 @@ import org.springframework.beans.factory.ObjectProvider
  *
  * Run-status wiring: when char-basic ends, ExternalApiScheduler must transition
  * to [PipelinePhase.CHARACTER_BASIC_DONE] — NOT [PipelinePhase.COMPLETED] — because
- * item-equipment runs in a SEPARATE continuous loop
- * ([ItemEquipmentContinuousLoop]) and signals full completion from there.
+ * item-equipment is invoked as a SEPARATE per-phase run via
+ * [ExternalApiScheduler.runItemEquipmentPhase] and signals full completion from there.
  */
 class ExternalApiSchedulerTest {
 

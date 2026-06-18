@@ -198,9 +198,9 @@ class OcidLookupPhase(
      *
      * Previously this called `deleteByPrefix("$mappingDir/")` which deleted ALL
      * objects including the file we were about to write, causing a race where
-     * sibling processes (e.g. ItemEquipmentContinuousLoop) would see an empty
-     * mapping directory mid-run. Now we list-then-delete-per-key, skipping the
-     * key that ends with `ocid-mapping-$currentRunId.jsonl.gz`.
+     * sibling processes would see an empty mapping directory mid-run. Now we
+     * list-then-delete-per-key, skipping the key that ends with
+     * `ocid-mapping-$currentRunId.jsonl.gz`.
      */
     private fun deleteOldMappingFiles(mappingDir: String, currentRunId: String) {
         val prefix = "$mappingDir/"

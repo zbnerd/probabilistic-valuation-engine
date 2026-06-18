@@ -9,6 +9,7 @@ import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.junit.jupiter.MockitoSettings
 import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
 import org.mockito.quality.Strictness
 import org.springframework.jdbc.core.JdbcTemplate
@@ -50,8 +51,8 @@ class PostgresAdvisoryLockStrategyAsyncTest {
     @Test
     fun `executeWithLockAsync returns CompletableFuture without blocking caller`() {
         // Arrange: hashtext() returns a deterministic lockId, pg_try_advisory_lock returns true
-        whenever(jdbcTemplate.queryForObject("SELECT hashtext(?)", Long::class.java, any())).thenReturn(123L)
-        whenever(jdbcTemplate.queryForObject("SELECT pg_try_advisory_lock(?)", Boolean::class.java, 123L))
+        whenever(jdbcTemplate.queryForObject(eq("SELECT hashtext(?)"), eq(Long::class.java), any())).thenReturn(123L)
+        whenever(jdbcTemplate.queryForObject(eq("SELECT pg_try_advisory_lock(?)"), eq(Boolean::class.java), eq(123L)))
             .thenReturn(true)
 
         // Act
@@ -67,8 +68,8 @@ class PostgresAdvisoryLockStrategyAsyncTest {
 
     @Test
     fun `executeWithLockAsync convenience overload returns CompletableFuture`() {
-        whenever(jdbcTemplate.queryForObject("SELECT hashtext(?)", Long::class.java, any())).thenReturn(456L)
-        whenever(jdbcTemplate.queryForObject("SELECT pg_try_advisory_lock(?)", Boolean::class.java, 456L))
+        whenever(jdbcTemplate.queryForObject(eq("SELECT hashtext(?)"), eq(Long::class.java), any())).thenReturn(456L)
+        whenever(jdbcTemplate.queryForObject(eq("SELECT pg_try_advisory_lock(?)"), eq(Boolean::class.java), eq(456L)))
             .thenReturn(true)
 
         val result = strategy().executeWithLockAsync("test-key") {
@@ -81,8 +82,8 @@ class PostgresAdvisoryLockStrategyAsyncTest {
 
     @Test
     fun `tryLockImmediatelyAsync returns CompletableFuture with Boolean`() {
-        whenever(jdbcTemplate.queryForObject("SELECT hashtext(?)", Long::class.java, any())).thenReturn(789L)
-        whenever(jdbcTemplate.queryForObject("SELECT pg_try_advisory_lock(?)", Boolean::class.java, 789L))
+        whenever(jdbcTemplate.queryForObject(eq("SELECT hashtext(?)"), eq(Long::class.java), any())).thenReturn(789L)
+        whenever(jdbcTemplate.queryForObject(eq("SELECT pg_try_advisory_lock(?)"), eq(Boolean::class.java), eq(789L)))
             .thenReturn(true)
 
         val result = strategy().tryLockImmediatelyAsync("key", 20L)
@@ -93,10 +94,10 @@ class PostgresAdvisoryLockStrategyAsyncTest {
 
     @Test
     fun `unlockAsync returns CompletableFuture Void`() {
-        whenever(jdbcTemplate.queryForObject("SELECT hashtext(?)", Long::class.java, any())).thenReturn(321L)
-        whenever(jdbcTemplate.queryForObject("SELECT pg_try_advisory_lock(?)", Boolean::class.java, 321L))
+        whenever(jdbcTemplate.queryForObject(eq("SELECT hashtext(?)"), eq(Long::class.java), any())).thenReturn(321L)
+        whenever(jdbcTemplate.queryForObject(eq("SELECT pg_try_advisory_lock(?)"), eq(Boolean::class.java), eq(321L)))
             .thenReturn(true)
-        whenever(jdbcTemplate.queryForObject("SELECT pg_advisory_unlock(?)", Boolean::class.java, 321L))
+        whenever(jdbcTemplate.queryForObject(eq("SELECT pg_advisory_unlock(?)"), eq(Boolean::class.java), eq(321L)))
             .thenReturn(true)
 
         val s = strategy()
@@ -109,8 +110,8 @@ class PostgresAdvisoryLockStrategyAsyncTest {
 
     @Test
     fun `executeWithLeaderElectionAsync returns CompletableFuture`() {
-        whenever(jdbcTemplate.queryForObject("SELECT hashtext(?)", Long::class.java, any())).thenReturn(654L)
-        whenever(jdbcTemplate.queryForObject("SELECT pg_try_advisory_lock(?)", Boolean::class.java, 654L))
+        whenever(jdbcTemplate.queryForObject(eq("SELECT hashtext(?)"), eq(Long::class.java), any())).thenReturn(654L)
+        whenever(jdbcTemplate.queryForObject(eq("SELECT pg_try_advisory_lock(?)"), eq(Boolean::class.java), eq(654L)))
             .thenReturn(true)
 
         val result = strategy().executeWithLeaderElectionAsync(

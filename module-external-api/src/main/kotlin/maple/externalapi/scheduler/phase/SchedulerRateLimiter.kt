@@ -12,7 +12,7 @@ class SchedulerRateLimiter {
         .addLimit(
             Bandwidth.builder()
                 .capacity(permits.toLong())
-                .refillIntervally(permits.toLong(), Duration.ofSeconds(1))
+                .refillGreedy(permits.toLong(), Duration.ofSeconds(1))
                 .build(),
         )
         .build()

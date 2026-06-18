@@ -74,6 +74,36 @@ class OcidCacheProviderTest {
         assertTrue(cache.isEmpty())
     }
 
+    @Test
+    fun `loadFromRun reads specific OCID mapping file`() {
+        val storage = mock<ObjectStorage>()
+        val jsonl = """{"userIgn":"ign1","ocid":"ocid1"}
+{"userIgn":"ign2","ocid":"ocid2"}
+"""
+        whenever(storage.getStream("ocid-mapping/ocid-mapping-run-o-1.jsonl.gz"))
+            .thenReturn(gzip(jsonl).inputStream())
+
+        val provider = OcidCacheProvider(storage, objectMapper)
+        val result = provider.loadFromRun("run-o-1")
+
+        assertEquals(2, result.size)
+        assertEquals("ocid1", result["ign1"])
+        assertEquals("ocid2", result["ign2"])
+        assertEquals(result, provider.current())
+    }
+
+    @Test
+    fun `loadFromRun returns empty map when stream fetch fails`() {
+        val storage = mock<ObjectStorage>()
+        whenever(storage.getStream("ocid-mapping/ocid-mapping-missing.jsonl.gz"))
+            .thenThrow(RuntimeException("object storage unavailable"))
+
+        val provider = OcidCacheProvider(storage, objectMapper)
+        val result = provider.loadFromRun("missing")
+
+        assertTrue(result.isEmpty())
+    }
+
     private fun gzip(input: String): ByteArray {
         val out = ByteArrayOutputStream()
         GZIPOutputStream(out).use { it.write(input.toByteArray(Charsets.UTF_8)) }

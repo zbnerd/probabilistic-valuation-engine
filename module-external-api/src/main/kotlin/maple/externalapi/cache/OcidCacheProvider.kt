@@ -73,4 +73,40 @@ class OcidCacheProvider(
     fun current(): Map<String, String> = cacheRef.get()
 
     fun isEmpty(): Boolean = cacheRef.get().isEmpty()
+
+    /**
+     * Load OCID mapping from a specific prior run. Used by standalone
+     * char-basic and item-equipment triggers to consume a known upstream's
+     * OCID file rather than the most-recent one.
+     * Key format: `ocid-mapping/ocid-mapping-{runId}.jsonl.gz`.
+     * Returns the loaded map and updates the cache reference.
+     */
+    fun loadFromRun(runId: String): Map<String, String> {
+        val key = "ocid-mapping/ocid-mapping-$runId.jsonl.gz"
+        val map = HashMap<String, String>()
+        var parseErrors = 0
+        try {
+            GZIPInputStream(BufferedInputStream(objectStorage.getStream(key))).bufferedReader().useLines { lines ->
+                for (line in lines) {
+                    if (line.isBlank()) continue
+                    val entry = parseLine(line)
+                    if (entry != null) {
+                        map[entry.first] = entry.second
+                    } else {
+                        parseErrors++
+                    }
+                }
+            }
+        } catch (ex: Exception) {
+            log.error("[OcidCache] loadFromRun failed runId={} key={}", runId, key, ex)
+            return emptyMap()
+        }
+        cacheRef.set(map)
+        if (parseErrors > 0) {
+            log.warn("[OcidCache] loaded from runId={}: {} entries ({} parse errors)", runId, map.size, parseErrors)
+        } else {
+            log.info("[OcidCache] loaded from runId={}: {} entries", runId, map.size)
+        }
+        return map
+    }
 }

@@ -6,6 +6,7 @@ import java.time.Instant
 data class RunStatus(
     val runId: String,
     val phase: PipelinePhase,
+    val triggeredPhase: PipelinePhase,
     val startedAt: Instant,
     val updatedAt: Instant? = null,
     val completedAt: Instant? = null,

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import maple.expectation.common.storage.ObjectInfo
@@ -73,6 +74,7 @@ class OcidLookupPhaseTest {
             phase.execute(
                 workerExecutor = Executors.newSingleThreadExecutor(),
                 runKey = "runs/abc",
+                runId = "abc",
             )
         }
 
@@ -105,5 +107,66 @@ class OcidLookupPhaseTest {
             decompressed.contains("user2") && decompressed.contains("ocid-for-user2"),
             "expected mapping to contain user2/ocid pair, got: $decompressed",
         )
+    }
+
+    @Test
+    fun `execute preserves current runId's OCID mapping while deleting others`() {
+        val storage = mock<ObjectStorage>()
+        val nexonClient = mock<NexonAuthClient>()
+        val objectMapper = ObjectMapper().registerModule(kotlinModule())
+
+        val now = Instant.now()
+        // Pre-existing OCID mappings: one for the current runId + two for prior runs
+        whenever(storage.listByPrefix("ocid-mapping/")).thenReturn(listOf(
+            ObjectInfo("ocid-mapping/ocid-mapping-abc.jsonl.gz", 100, now),        // current runId
+            ObjectInfo("ocid-mapping/ocid-mapping-old1.jsonl.gz", 100, now),
+            ObjectInfo("ocid-mapping/ocid-mapping-old2.jsonl.gz", 100, now),
+        ))
+        // Ranking chunks from the upstream run
+        whenever(storage.listByPrefix("runs/abc/ranking-overall/chunks")).thenReturn(listOf(
+            ObjectInfo("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz", 100, now)
+        ))
+        val chunkBytes = run {
+            val out = java.io.ByteArrayOutputStream()
+            java.util.zip.GZIPOutputStream(out).use { gz ->
+                gz.write("{\"key\":\"user1\"}\n".toByteArray())
+            }
+            out.toByteArray()
+        }
+        whenever(storage.getStream("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz"))
+            .thenReturn(chunkBytes.inputStream())
+
+        val clientPort = mock<maple.externalapi.port.out.ExternalApiClientPort>()
+        whenever(clientPort.fetch(any(), any(), any())).thenAnswer { invocation ->
+            val ign = invocation.getArgument<String>(2)
+            CompletableFuture.completedFuture("{\"ocid\":\"ocid-for-$ign\"}".toByteArray())
+        }
+        whenever(storage.putStream(any(), any())).thenAnswer { invocation ->
+            val input = invocation.getArgument<InputStream>(1)
+            PutResult(invocation.getArgument<String>(0), input.readBytes().size.toLong(), null)
+        }
+
+        val phase = OcidLookupPhase(
+            clientPort = clientPort,
+            objectMapper = objectMapper,
+            ocidLookupPermitsPerSecond = 100,
+            batchSize = 100,
+            eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
+            objectStorage = storage,
+            nexonAuthClient = nexonClient,
+        )
+
+        kotlinx.coroutines.runBlocking {
+            phase.execute(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                runKey = "runs/abc",
+                runId = "abc",
+            )
+        }
+
+        // deleteOldMappingFiles: per-key delete for old runs, current run preserved
+        verify(storage).delete("ocid-mapping/ocid-mapping-old1.jsonl.gz")
+        verify(storage).delete("ocid-mapping/ocid-mapping-old2.jsonl.gz")
+        verify(storage, never()).delete("ocid-mapping/ocid-mapping-abc.jsonl.gz")
     }
 }

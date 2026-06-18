@@ -266,7 +266,7 @@ class CalculatorChunkProcessingCoordinatorTest {
         )
     }
 
-    // --- Regression: cycle runId emitted by ItemEquipmentContinuousLoop ---
+    // --- Regression: cycle runId emitted by ExternalApiScheduler.runItemEquipmentPhase ---
     //
     // ext-api generates a per-cycle runId for item-equipment chunks
     // (separate from the daily runId). The coordinator previously dropped

@@ -38,19 +38,21 @@ class ItemEquipmentFetchPhase(
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
     private val clock: Clock = Clock.systemUTC(),
+    private val runIdGenerator: RunIdGenerator,
     private val runMarkerWriter: RunMarkerWriter,
     private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentFetchPhase::class.java)
 
-    fun execute(workerExecutor: ExecutorService, entries: List<Map.Entry<String, String>>, runId: String): CompletableFuture<Unit> {
+    fun execute(workerExecutor: ExecutorService, entries: List<Map.Entry<String, String>>, runId: String? = null): CompletableFuture<Unit> {
         if (entries.isEmpty()) {
             log.warn("[Scheduler] OCID cache empty, skipping item-equipment")
             return CompletableFuture.completedFuture(Unit)
         }
 
+        val effectiveRunId = runId ?: runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("item-equipment")
-        val runKey = "runs/$runId/item-equipment"
+        val runKey = "runs/$effectiveRunId/item-equipment"
         runMarkerWriter.writeRunMarker(runKey)
         val sink = sinkFactory.createForItemEquipment(runKey)
 
@@ -64,7 +66,7 @@ class ItemEquipmentFetchPhase(
             batchSize,
             chunkConfig.maxRecords,
             chunkConfig.maxUncompressedBytes,
-            runId,
+            effectiveRunId,
         )
 
         val start = Instant.now(clock)
@@ -84,7 +86,7 @@ class ItemEquipmentFetchPhase(
                     batchSize,
                     ctx,
                     sink,
-                    runId,
+                    effectiveRunId,
                     start,
                 )
                 schedulerProgressLogger.logSummary("item-equipment", entries.size, successCount, successCount, failCount, start)

@@ -67,7 +67,7 @@ class CalculatorChunkProcessingCoordinator(
         // runId tracking is intentionally not enforced here. Two valid runId
         // sources exist:
         //  - daily runId (polled from ext-api /api/internal/run-status)
-        //  - per-cycle runIds emitted by ext-api's `ItemEquipmentContinuousLoop`
+        //  - per-cycle runIds emitted by ext-api's `ExternalApiScheduler.runItemEquipmentPhase`
         //    (a different ID per cycle, designed as a log-correlation handle)
         // The current policy is: trust the source chunk's existence as the
         // sole ground truth. A missing chunk → source_not_found. A present

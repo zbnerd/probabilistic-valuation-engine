@@ -72,11 +72,11 @@ class OcidLookupPhase(
 
     /**
      * External entry point. Caller (ExternalApiScheduler) uses:
-     * `runBlocking { ocidLookupPhase.execute(workerExecutor, runKey) }`
+     * `runBlocking { ocidLookupPhase.execute(workerExecutor, runKey, runId) }`
      */
-    suspend fun execute(workerExecutor: ExecutorService, runKey: String) {
+    suspend fun execute(workerExecutor: ExecutorService, runKey: String, runId: String) {
         val mappingDir = "ocid-mapping"
-        deleteOldMappingFiles(mappingDir)
+        deleteOldMappingFiles(mappingDir, runId)
 
         val igns = readCharacterNamesFromChunks(runKey)
         if (igns.isEmpty()) {
@@ -97,7 +97,6 @@ class OcidLookupPhase(
         val successCount = AtomicInteger(0)
         val failCount = AtomicInteger(0)
         val lastProgressLog = AtomicInteger(0)
-        val runId = runKey.removePrefix("runs/").substringBefore('/')
         val key = "$mappingDir/ocid-mapping-$runId.jsonl.gz"
 
         // Channel + writer coroutine: producers (per-ign fetch) send strings,
@@ -193,9 +192,31 @@ class OcidLookupPhase(
         names.toList()
     }
 
-    private fun deleteOldMappingFiles(mappingDir: String) {
-        val total = objectStorage.deleteByPrefix("$mappingDir/")
-        log.info("[Scheduler] deleted {} old OCID mapping objects in {}/", total, mappingDir)
+    /**
+     * Delete old OCID mapping objects under [mappingDir], but PRESERVE the
+     * current run's mapping file (Revision 5 of phase-trigger-endpoint plan).
+     *
+     * Previously this called `deleteByPrefix("$mappingDir/")` which deleted ALL
+     * objects including the file we were about to write, causing a race where
+     * sibling processes would see an empty mapping directory mid-run. Now we
+     * list-then-delete-per-key, skipping the key that ends with
+     * `ocid-mapping-$currentRunId.jsonl.gz`.
+     */
+    private fun deleteOldMappingFiles(mappingDir: String, currentRunId: String) {
+        val prefix = "$mappingDir/"
+        val preserveKey = "$mappingDir/ocid-mapping-$currentRunId.jsonl.gz"
+        val objects = objectStorage.listByPrefix(prefix)
+        var deleted = 0
+        for (obj in objects) {
+            if (obj.key == preserveKey) {
+                log.info("[Scheduler] preserving current runId={} mapping {}", currentRunId, obj.key)
+                continue
+            }
+            objectStorage.delete(obj.key)
+            deleted++
+        }
+        log.info("[Scheduler] deleted {} old OCID mapping objects in {}/ (preserved current runId={})",
+            deleted, mappingDir, currentRunId)
     }
 
     /**

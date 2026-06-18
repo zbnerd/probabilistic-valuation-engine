@@ -314,8 +314,13 @@ class OrderedLockExecutor(
 
     /**
      * Async internal: 진입점. 정렬 후 iterative/nested 전략 분기.
-     * Caller thread는 block되지 않는다. Strategy detection은 sync path와 동일하게
-     * [requiresNestedStrategy]의 cached 값을 사용한다.
+     *
+     * Note: The first call to this method (cold path) invokes
+     * `requiresNestedStrategy()`, which probes `lockStrategy.tryLockImmediately(...)`
+     * synchronously. After the first call, the result is cached in
+     * `nestedStrategyRequired` (AtomicReference) and the probe does not run again.
+     * Therefore the cold-path call may briefly block on the strategy probe, but
+     * subsequent calls are fully non-blocking.
      */
     private fun <T> executeWithOrderedLocksInternalAsync(
         keys: List<String>,
@@ -360,9 +365,18 @@ class OrderedLockExecutor(
     }
 
     /**
-     * 순차 락 획득 → 마지막 락에서 supplier 실행. 각 단계는 `thenCompose`로
-     * 체이닝되어 CF가 완료된 후 다음 락 획득을 시도한다. 중간에 실패하면
-     * `whenComplete`로 acquiredLocks를 LIFO 해제.
+     * Async iterative lock acquisition.
+     *
+     * Note: This implementation relies on the fact that `tryLockImmediatelyAsync`
+     * returns a `CompletableFuture` that is already complete (no async chain
+     * downstream). This is the case for the current LockStrategy implementations
+     * (PostgresAdvisoryLockStrategy, PostgresLockStrategy, GuavaLockStrategy).
+     *
+     * If a future LockStrategy implementation ever returns a non-complete CF from
+     * `tryLockImmediatelyAsync`, the `acquiredLocks.add(...)` mutation may race
+     * because the `thenCompose` chain stages could execute on different threads.
+     * In that case, switch to `AtomicReference<List<String>>` updated via
+     * `updateAndGet`.
      */
     private fun <T> acquireLocksAndExecuteAsync(
         sortedKeys: java.util.List<String>,
@@ -410,7 +424,7 @@ class OrderedLockExecutor(
                                     supplier()
                                 } else {
                                     @Suppress("UNCHECKED_CAST")
-                                    (CompletableFuture.completedFuture(null) as CompletableFuture<T>)
+                                    (EMPTY_FUTURE as CompletableFuture<T>)
                                 }
                             }
                         }
@@ -492,6 +506,7 @@ class OrderedLockExecutor(
     companion object {
         private const val MAX_NESTED_DEPTH = 10 // P1-YELLOW-01: 스택 깊이 제한
         private val log = org.slf4j.LoggerFactory.getLogger(OrderedLockExecutor::class.java)
+        private val EMPTY_FUTURE: CompletableFuture<*> = CompletableFuture.completedFuture(null)
     }
 
     // P1-BLUE-01: 전략 캐싱 (Lock-Free 초기화)

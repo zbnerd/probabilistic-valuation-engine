@@ -211,6 +211,30 @@ class PhaseLoopControllerTest {
         assertEquals(1, distinctLoopIds.size, "all concurrent startLoop calls must share one loopId")
     }
 
+    @Test
+    fun `loop dies on first iteration if slot is occupied by an external one-shot`() {
+        // Race: an external one-shot has already acquired the slot when the
+        // loop's iter 1 calls acquirePhaseSlot. The scheduler returns a failed
+        // future (mimicking runXxxPhase's slot-occupied path).
+        val externalRunId = "external-run-1"
+        runStatusTracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, externalRunId)
+
+        whenever(scheduler.triggerPhase(eq(PipelinePhase.ITEM_EQUIPMENT), any(), anyOrNull(), anyOrNull()))
+            .thenReturn(CompletableFuture.failedFuture(
+                IllegalStateException("ITEM_EQUIPMENT slot occupied"),
+            ))
+
+        // Inline executor so the failed-future's whenComplete fires immediately.
+        val ctrl = controller(OneShotInlineExecutor())
+        val state = ctrl.startLoop(PipelinePhase.ITEM_EQUIPMENT)
+
+        // Loop finalizes on first iteration failure (spec §11: no retry).
+        assertEquals(LoopStatus.STOPPED, state.status)
+        assertEquals(1, state.iterationCount)
+        assertNotNull(state.lastError)
+        assertTrue(state.lastError!!.contains("slot occupied"))
+    }
+
     private class OneShotInlineExecutor : AsyncTaskExecutor {
         private var used = false
         override fun execute(task: Runnable) {

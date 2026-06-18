@@ -1,9 +1,11 @@
 package maple.externalapi.scheduler
 
 import maple.externalapi.cache.OcidCacheProvider
+import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
+import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
 import maple.externalapi.scheduler.phase.RunIdGenerator
@@ -29,7 +31,8 @@ class ExternalApiScheduler(
     private val ocidCacheProvider: OcidCacheProvider,
     private val rankingFetchPhaseProvider: ObjectProvider<RankingFetchPhase>,
     private val characterBasicPhaseProvider: ObjectProvider<CharacterBasicFetchPhase>,
-    private val itemEquipmentContinuousLoop: ItemEquipmentContinuousLoop,
+    private val itemEquipmentFetchPhaseProvider: ObjectProvider<ItemEquipmentFetchPhase>,
+    private val schedulerMetrics: SchedulerMetrics,
     private val runStatusTracker: RunStatusTracker,
     private val runIdGenerator: RunIdGenerator,
     @Value("\${external-api.schedule.run-on-startup:false}")
@@ -51,7 +54,7 @@ class ExternalApiScheduler(
             log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
             triggerDailyRefresh(null)
         }
-        itemEquipmentContinuousLoop.startItemEquipmentLoopOnce()
+        // ItemEquipmentContinuousLoop removed; item-equipment now runs via HTTP trigger.
     }
 
     @Scheduled(cron = "\${external-api.schedule.daily-cron:0 0 3 * * *}")
@@ -248,12 +251,119 @@ class ExternalApiScheduler(
             .thenRun { }
     }
 
+    /**
+     * Run CHARACTER_BASIC phase standalone. Loads OCID cache from
+     * [upstreamRunId]'s mapping file (Revision 3), calls char-basic phase
+     * bean with the loaded cache. [upstreamRunId] is required; if the
+     * loaded cache is empty, the phase short-circuits (consistent with
+     * daily-refresh behavior).
+     */
+    fun runCharBasicPhase(runId: String, upstreamRunId: String?): CompletableFuture<Void> {
+        require(upstreamRunId != null) { "CHARACTER_BASIC requires upstreamRunId" }
+        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.CHARACTER_BASIC, runId)
+        if (acquired == null) {
+            return CompletableFuture.failedFuture(
+                IllegalStateException("CHARACTER_BASIC slot occupied")
+            )
+        }
+
+        val charBasicPhase = characterBasicPhaseProvider.ifAvailable
+        if (charBasicPhase == null) {
+            runStatusTracker.failRun(PipelinePhase.CHARACTER_BASIC, runId, "character-basic phase not enabled")
+            runStatusTracker.releasePhaseSlot(PipelinePhase.CHARACTER_BASIC, runId)
+            return CompletableFuture.failedFuture(
+                IllegalStateException("character-basic phase not enabled")
+            )
+        }
+
+        val ocidCache = ocidCacheProvider.loadFromRun(upstreamRunId)
+        if (ocidCache.isEmpty()) {
+            log.warn("[Scheduler] OCID cache empty for upstreamRunId={}, skipping character-basic runId={}", upstreamRunId, runId)
+            runStatusTracker.completeRun(PipelinePhase.CHARACTER_BASIC, runId, 0, 0)
+            return CompletableFuture.completedFuture(null)
+        }
+
+        val future = try {
+            charBasicPhase.execute(executor, ocidCache, runId)
+        } catch (ex: Throwable) {
+            log.error("[Scheduler] runCharBasicPhase sync failure runId={}", runId, ex)
+            CompletableFuture.failedFuture<Void>(ex)
+        }
+        return future
+            .whenComplete { _, ex ->
+                if (ex != null) {
+                    log.error("[Scheduler] runCharBasicPhase failed runId={}", runId, ex)
+                    runStatusTracker.failRun(PipelinePhase.CHARACTER_BASIC, runId, ex.message ?: "unknown")
+                    runStatusTracker.releasePhaseSlot(PipelinePhase.CHARACTER_BASIC, runId)
+                } else {
+                    runStatusTracker.completeRun(PipelinePhase.CHARACTER_BASIC, runId, 0, 0)
+                }
+            }
+            .thenRun { }
+    }
+
+    /**
+     * Run ITEM_EQUIPMENT phase standalone. Folds in the body of the legacy
+     * ItemEquipmentContinuousLoop single cycle: loads OCID cache from
+     * [upstreamRunId], calls itemEquipmentFetchPhase bean, drains
+     * SchedulerMetrics for chunks/records, completes slot.
+     *
+     * Single-shot: does not loop. Caller (controller or triggerPhase)
+     * decides how often to invoke. The continuous-loop auto-resume on
+     * startup is gone.
+     */
+    fun runItemEquipmentPhase(runId: String, upstreamRunId: String?): CompletableFuture<Void> {
+        require(upstreamRunId != null) { "ITEM_EQUIPMENT requires upstreamRunId" }
+        val acquired = runStatusTracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, runId)
+        if (acquired == null) {
+            return CompletableFuture.failedFuture(
+                IllegalStateException("ITEM_EQUIPMENT slot occupied")
+            )
+        }
+
+        val itemEquipmentPhase = itemEquipmentFetchPhaseProvider.ifAvailable
+        if (itemEquipmentPhase == null) {
+            runStatusTracker.failRun(PipelinePhase.ITEM_EQUIPMENT, runId, "item-equipment phase not enabled")
+            runStatusTracker.releasePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, runId)
+            return CompletableFuture.failedFuture(
+                IllegalStateException("item-equipment phase not enabled")
+            )
+        }
+
+        val ocidCache = ocidCacheProvider.loadFromRun(upstreamRunId)
+        val entries = ocidCache.entries.toList()
+        if (entries.isEmpty()) {
+            log.warn("[Scheduler] OCID cache empty for upstreamRunId={}, skipping item-equipment runId={}", upstreamRunId, runId)
+            runStatusTracker.completeRun(PipelinePhase.ITEM_EQUIPMENT, runId, 0, 0)
+            return CompletableFuture.completedFuture(null)
+        }
+
+        val future = try {
+            itemEquipmentPhase.execute(executor, entries, runId)
+        } catch (ex: Throwable) {
+            log.error("[Scheduler] runItemEquipmentPhase sync failure runId={}", runId, ex)
+            CompletableFuture.failedFuture<Void>(ex)
+        }
+        return future
+            .whenComplete { _, ex ->
+                if (ex != null) {
+                    log.error("[Scheduler] runItemEquipmentPhase failed runId={}", runId, ex)
+                    runStatusTracker.failRun(PipelinePhase.ITEM_EQUIPMENT, runId, ex.message ?: "unknown")
+                    runStatusTracker.releasePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, runId)
+                } else {
+                    val chunks = schedulerMetrics.drainRunChunks().toInt()
+                    val records = schedulerMetrics.drainRunRecords()
+                    runStatusTracker.completeRun(PipelinePhase.ITEM_EQUIPMENT, runId, chunks, records)
+                }
+            }
+            .thenRun { }
+    }
+
     override val lifecyclePhase: Int = 100
 
     override fun stopLifecycle() {
         log.info("[Scheduler] shutdown requested")
         shutdown.set(true)
         executor.close()
-        itemEquipmentContinuousLoop.stop()
     }
 }

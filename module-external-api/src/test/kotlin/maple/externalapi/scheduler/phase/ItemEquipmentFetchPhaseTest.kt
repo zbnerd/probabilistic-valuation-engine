@@ -50,6 +50,7 @@ class ItemEquipmentFetchPhaseTest {
             permitsPerSecond = 1000,
             batchSize = 10,
             clock = Clock.systemUTC(),
+            runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runMarkerWriter = runMarkerWriter,
             schedulerProgressLogger = mock<SchedulerProgressLogger>(),
         )

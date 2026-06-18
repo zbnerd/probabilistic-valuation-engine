@@ -5,9 +5,11 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import kotlinx.coroutines.runBlocking
 import maple.externalapi.cache.OcidCacheProvider
+import maple.externalapi.metrics.SchedulerMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.runstatus.RunStatusTracker
 import maple.externalapi.scheduler.phase.CharacterBasicFetchPhase
+import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
 import maple.externalapi.scheduler.phase.RunIdGenerator
@@ -62,7 +64,9 @@ class ExternalApiSchedulerTest {
         val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
         whenever(charBasicProvider.ifAvailable).thenReturn(null)
 
-        val itemEquipmentLoop = mock<ItemEquipmentContinuousLoop>()
+        val itemEquipmentProvider = mock<ObjectProvider<ItemEquipmentFetchPhase>>()
+        whenever(itemEquipmentProvider.ifAvailable).thenReturn(null)
+        val schedulerMetrics = mock<SchedulerMetrics>()
 
         val runIdCaptor = argumentCaptor<String>()
         // startRun is a void method so we use doNothing for the mock.
@@ -73,7 +77,8 @@ class ExternalApiSchedulerTest {
             ocidCacheProvider = ocidCache,
             rankingFetchPhaseProvider = rankingProvider,
             characterBasicPhaseProvider = charBasicProvider,
-            itemEquipmentContinuousLoop = itemEquipmentLoop,
+            itemEquipmentFetchPhaseProvider = itemEquipmentProvider,
+            schedulerMetrics = schedulerMetrics,
             runStatusTracker = runStatusTracker,
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
@@ -131,14 +136,17 @@ class ExternalApiSchedulerTest {
         // so the whenComplete fires and we can assert the phase transition.
         whenever(charBasicProvider.ifAvailable).thenReturn(null)
 
-        val itemEquipmentLoop = mock<ItemEquipmentContinuousLoop>()
+        val itemEquipmentProvider = mock<ObjectProvider<ItemEquipmentFetchPhase>>()
+        whenever(itemEquipmentProvider.ifAvailable).thenReturn(null)
+        val schedulerMetrics = mock<SchedulerMetrics>()
 
         val scheduler = ExternalApiScheduler(
             ocidLookupPhase = ocidLookupPhase,
             ocidCacheProvider = ocidCache,
             rankingFetchPhaseProvider = rankingProvider,
             characterBasicPhaseProvider = charBasicProvider,
-            itemEquipmentContinuousLoop = itemEquipmentLoop,
+            itemEquipmentFetchPhaseProvider = itemEquipmentProvider,
+            schedulerMetrics = schedulerMetrics,
             runStatusTracker = runStatusTracker,
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
@@ -189,14 +197,17 @@ class ExternalApiSchedulerTest {
         val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
         whenever(charBasicProvider.ifAvailable).thenReturn(null)
 
-        val itemEquipmentLoop = mock<ItemEquipmentContinuousLoop>()
+        val itemEquipmentProvider = mock<ObjectProvider<ItemEquipmentFetchPhase>>()
+        whenever(itemEquipmentProvider.ifAvailable).thenReturn(null)
+        val schedulerMetrics = mock<SchedulerMetrics>()
 
         val scheduler = ExternalApiScheduler(
             ocidLookupPhase = ocidLookupPhase,
             ocidCacheProvider = ocidCache,
             rankingFetchPhaseProvider = rankingProvider,
             characterBasicPhaseProvider = charBasicProvider,
-            itemEquipmentContinuousLoop = itemEquipmentLoop,
+            itemEquipmentFetchPhaseProvider = itemEquipmentProvider,
+            schedulerMetrics = schedulerMetrics,
             runStatusTracker = runStatusTracker,
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
@@ -234,14 +245,17 @@ class ExternalApiSchedulerTest {
         whenever(rankingProvider.ifAvailable).thenReturn(rankingPhase)
         val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
         whenever(charBasicProvider.ifAvailable).thenReturn(null)
-        val itemEquipmentLoop = mock<ItemEquipmentContinuousLoop>()
+        val itemEquipmentProvider = mock<ObjectProvider<ItemEquipmentFetchPhase>>()
+        whenever(itemEquipmentProvider.ifAvailable).thenReturn(null)
+        val schedulerMetrics = mock<SchedulerMetrics>()
 
         val scheduler = ExternalApiScheduler(
             ocidLookupPhase = ocidLookupPhase,
             ocidCacheProvider = ocidCache,
             rankingFetchPhaseProvider = rankingProvider,
             characterBasicPhaseProvider = charBasicProvider,
-            itemEquipmentContinuousLoop = itemEquipmentLoop,
+            itemEquipmentFetchPhaseProvider = itemEquipmentProvider,
+            schedulerMetrics = schedulerMetrics,
             runStatusTracker = runStatusTracker,
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
@@ -281,14 +295,17 @@ class ExternalApiSchedulerTest {
         whenever(rankingProvider.ifAvailable).thenReturn(null)
         val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
         whenever(charBasicProvider.ifAvailable).thenReturn(null)
-        val itemEquipmentLoop = mock<ItemEquipmentContinuousLoop>()
+        val itemEquipmentProvider = mock<ObjectProvider<ItemEquipmentFetchPhase>>()
+        whenever(itemEquipmentProvider.ifAvailable).thenReturn(null)
+        val schedulerMetrics = mock<SchedulerMetrics>()
 
         val scheduler = ExternalApiScheduler(
             ocidLookupPhase = ocidLookupPhase,
             ocidCacheProvider = ocidCache,
             rankingFetchPhaseProvider = rankingProvider,
             characterBasicPhaseProvider = charBasicProvider,
-            itemEquipmentContinuousLoop = itemEquipmentLoop,
+            itemEquipmentFetchPhaseProvider = itemEquipmentProvider,
+            schedulerMetrics = schedulerMetrics,
             runStatusTracker = runStatusTracker,
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
@@ -332,7 +349,8 @@ class ExternalApiSchedulerTest {
             ocidCacheProvider = ocidCache,
             rankingFetchPhaseProvider = rankingProvider,
             characterBasicPhaseProvider = charBasicProvider,
-            itemEquipmentContinuousLoop = mock(),
+            itemEquipmentFetchPhaseProvider = mock(),
+            schedulerMetrics = mock(),
             runStatusTracker = runStatusTracker,
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
@@ -378,7 +396,8 @@ class ExternalApiSchedulerTest {
             ocidCacheProvider = ocidCache,
             rankingFetchPhaseProvider = rankingProvider,
             characterBasicPhaseProvider = charBasicProvider,
-            itemEquipmentContinuousLoop = mock(),
+            itemEquipmentFetchPhaseProvider = mock(),
+            schedulerMetrics = mock(),
             runStatusTracker = runStatusTracker,
             runIdGenerator = RunIdGenerator(Clock.systemUTC()),
             runOnStartup = false,
@@ -393,5 +412,200 @@ class ExternalApiSchedulerTest {
 
         verify(runStatusTracker).failRun(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"), argThat<String> { contains("object storage timeout") })
         verify(runStatusTracker).releasePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o-1")
+    }
+
+    @Test
+    fun `runCharBasicPhase loads OCID cache from upstreamRunId and invokes charBasicPhase`() {
+        val ocidCache = mock<OcidCacheProvider>()
+        val ocidMap = mapOf("ign1" to "ocid1", "ign2" to "ocid2")
+        whenever(ocidCache.loadFromRun("run-o-1")).thenReturn(ocidMap)
+
+        val charBasicPhase = mock<CharacterBasicFetchPhase>()
+        whenever(charBasicPhase.execute(any<ExecutorService>(), any<Map<String, String>>(), any<String>()))
+            .thenReturn(CompletableFuture.completedFuture(Unit))
+
+        val ocidLookupPhase = mock<OcidLookupPhase>()
+        val runStatusTracker = mock<RunStatusTracker>()
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.CHARACTER_BASIC), eq("run-cb-1")))
+            .thenReturn(
+                maple.externalapi.runstatus.RunStatus(
+                    runId = "run-cb-1",
+                    phase = PipelinePhase.CHARACTER_BASIC,
+                    triggeredPhase = PipelinePhase.CHARACTER_BASIC,
+                    startedAt = java.time.Instant.now(),
+                )
+            )
+        val rankingProvider = mock<ObjectProvider<RankingFetchPhase>>()
+        whenever(rankingProvider.ifAvailable).thenReturn(null)
+        val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
+        whenever(charBasicProvider.ifAvailable).thenReturn(charBasicPhase)
+        val itemEquipmentProvider = mock<ObjectProvider<ItemEquipmentFetchPhase>>()
+        whenever(itemEquipmentProvider.ifAvailable).thenReturn(null)
+        val schedulerMetrics = mock<SchedulerMetrics>()
+
+        val scheduler = ExternalApiScheduler(
+            ocidLookupPhase = ocidLookupPhase,
+            ocidCacheProvider = ocidCache,
+            rankingFetchPhaseProvider = rankingProvider,
+            characterBasicPhaseProvider = charBasicProvider,
+            itemEquipmentFetchPhaseProvider = itemEquipmentProvider,
+            schedulerMetrics = schedulerMetrics,
+            runStatusTracker = runStatusTracker,
+            runIdGenerator = RunIdGenerator(Clock.systemUTC()),
+            runOnStartup = false,
+            skipCharacterBasic = false,
+        )
+
+        scheduler.runCharBasicPhase("run-cb-1", "run-o-1").get()
+
+        verify(ocidCache).loadFromRun("run-o-1")
+        verify(charBasicPhase).execute(any<ExecutorService>(), eq(ocidMap), eq("run-cb-1"))
+        verify(runStatusTracker).completeRun(eq(PipelinePhase.CHARACTER_BASIC), eq("run-cb-1"), any(), any())
+    }
+
+    @Test
+    fun `runCharBasicPhase short-circuits when loadFromRun returns empty cache`() {
+        val ocidCache = mock<OcidCacheProvider>()
+        whenever(ocidCache.loadFromRun("run-o-empty")).thenReturn(emptyMap())
+
+        val charBasicPhase = mock<CharacterBasicFetchPhase>()
+
+        val ocidLookupPhase = mock<OcidLookupPhase>()
+        val runStatusTracker = mock<RunStatusTracker>()
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.CHARACTER_BASIC), eq("run-cb-2")))
+            .thenReturn(
+                maple.externalapi.runstatus.RunStatus(
+                    runId = "run-cb-2",
+                    phase = PipelinePhase.CHARACTER_BASIC,
+                    triggeredPhase = PipelinePhase.CHARACTER_BASIC,
+                    startedAt = java.time.Instant.now(),
+                )
+            )
+        val rankingProvider = mock<ObjectProvider<RankingFetchPhase>>()
+        whenever(rankingProvider.ifAvailable).thenReturn(null)
+        val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
+        whenever(charBasicProvider.ifAvailable).thenReturn(charBasicPhase)
+        val itemEquipmentProvider = mock<ObjectProvider<ItemEquipmentFetchPhase>>()
+        whenever(itemEquipmentProvider.ifAvailable).thenReturn(null)
+        val schedulerMetrics = mock<SchedulerMetrics>()
+
+        val scheduler = ExternalApiScheduler(
+            ocidLookupPhase = ocidLookupPhase,
+            ocidCacheProvider = ocidCache,
+            rankingFetchPhaseProvider = rankingProvider,
+            characterBasicPhaseProvider = charBasicProvider,
+            itemEquipmentFetchPhaseProvider = itemEquipmentProvider,
+            schedulerMetrics = schedulerMetrics,
+            runStatusTracker = runStatusTracker,
+            runIdGenerator = RunIdGenerator(Clock.systemUTC()),
+            runOnStartup = false,
+            skipCharacterBasic = false,
+        )
+
+        scheduler.runCharBasicPhase("run-cb-2", "run-o-empty").get()
+
+        verify(charBasicPhase, org.mockito.kotlin.never()).execute(any<ExecutorService>(), any<Map<String, String>>(), any<String>())
+        verify(runStatusTracker).completeRun(eq(PipelinePhase.CHARACTER_BASIC), eq("run-cb-2"), eq(0), eq(0L))
+    }
+
+    @Test
+    fun `runItemEquipmentPhase loads OCID cache from upstreamRunId and invokes itemEquipmentPhase`() {
+        val ocidCache = mock<OcidCacheProvider>()
+        val ocidMap = mapOf("ign1" to "ocid1")
+        whenever(ocidCache.loadFromRun("run-cb-1")).thenReturn(ocidMap)
+
+        val itemEquipmentPhase = mock<ItemEquipmentFetchPhase>()
+        whenever(itemEquipmentPhase.execute(any<ExecutorService>(), any<List<Map.Entry<String, String>>>(), any<String>()))
+            .thenReturn(CompletableFuture.completedFuture(Unit))
+
+        val ocidLookupPhase = mock<OcidLookupPhase>()
+        val runStatusTracker = mock<RunStatusTracker>()
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.ITEM_EQUIPMENT), eq("run-ie-1")))
+            .thenReturn(
+                maple.externalapi.runstatus.RunStatus(
+                    runId = "run-ie-1",
+                    phase = PipelinePhase.ITEM_EQUIPMENT,
+                    triggeredPhase = PipelinePhase.ITEM_EQUIPMENT,
+                    startedAt = java.time.Instant.now(),
+                )
+            )
+        val schedulerMetrics = mock<SchedulerMetrics>()
+        whenever(schedulerMetrics.drainRunChunks()).thenReturn(50L)
+        whenever(schedulerMetrics.drainRunRecords()).thenReturn(100_000L)
+        val rankingProvider = mock<ObjectProvider<RankingFetchPhase>>()
+        whenever(rankingProvider.ifAvailable).thenReturn(null)
+        val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
+        whenever(charBasicProvider.ifAvailable).thenReturn(null)
+        val itemEquipmentProvider = mock<ObjectProvider<ItemEquipmentFetchPhase>>()
+        whenever(itemEquipmentProvider.ifAvailable).thenReturn(itemEquipmentPhase)
+
+        val scheduler = ExternalApiScheduler(
+            ocidLookupPhase = ocidLookupPhase,
+            ocidCacheProvider = ocidCache,
+            rankingFetchPhaseProvider = rankingProvider,
+            characterBasicPhaseProvider = charBasicProvider,
+            itemEquipmentFetchPhaseProvider = itemEquipmentProvider,
+            schedulerMetrics = schedulerMetrics,
+            runStatusTracker = runStatusTracker,
+            runIdGenerator = RunIdGenerator(Clock.systemUTC()),
+            runOnStartup = false,
+            skipCharacterBasic = false,
+        )
+
+        scheduler.runItemEquipmentPhase("run-ie-1", "run-cb-1").get()
+
+        verify(ocidCache).loadFromRun("run-cb-1")
+        verify(itemEquipmentPhase).execute(any<ExecutorService>(), any<List<Map.Entry<String, String>>>(), eq("run-ie-1"))
+        verify(runStatusTracker).completeRun(eq(PipelinePhase.ITEM_EQUIPMENT), eq("run-ie-1"), eq(50), eq(100_000L))
+    }
+
+    @Test
+    fun `runItemEquipmentPhase drains scheduler metrics on success`() {
+        val ocidCache = mock<OcidCacheProvider>()
+        whenever(ocidCache.loadFromRun("run-cb-1")).thenReturn(mapOf("ign1" to "ocid1"))
+
+        val itemEquipmentPhase = mock<ItemEquipmentFetchPhase>()
+        whenever(itemEquipmentPhase.execute(any<ExecutorService>(), any<List<Map.Entry<String, String>>>(), any<String>()))
+            .thenReturn(CompletableFuture.completedFuture(Unit))
+
+        val ocidLookupPhase = mock<OcidLookupPhase>()
+        val runStatusTracker = mock<RunStatusTracker>()
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.ITEM_EQUIPMENT), eq("run-ie-1")))
+            .thenReturn(
+                maple.externalapi.runstatus.RunStatus(
+                    runId = "run-ie-1",
+                    phase = PipelinePhase.ITEM_EQUIPMENT,
+                    triggeredPhase = PipelinePhase.ITEM_EQUIPMENT,
+                    startedAt = java.time.Instant.now(),
+                )
+            )
+        val schedulerMetrics = mock<SchedulerMetrics>()
+        whenever(schedulerMetrics.drainRunChunks()).thenReturn(7L)
+        whenever(schedulerMetrics.drainRunRecords()).thenReturn(42L)
+        val rankingProvider = mock<ObjectProvider<RankingFetchPhase>>()
+        whenever(rankingProvider.ifAvailable).thenReturn(null)
+        val charBasicProvider = mock<ObjectProvider<CharacterBasicFetchPhase>>()
+        whenever(charBasicProvider.ifAvailable).thenReturn(null)
+        val itemEquipmentProvider = mock<ObjectProvider<ItemEquipmentFetchPhase>>()
+        whenever(itemEquipmentProvider.ifAvailable).thenReturn(itemEquipmentPhase)
+
+        val scheduler = ExternalApiScheduler(
+            ocidLookupPhase = ocidLookupPhase,
+            ocidCacheProvider = ocidCache,
+            rankingFetchPhaseProvider = rankingProvider,
+            characterBasicPhaseProvider = charBasicProvider,
+            itemEquipmentFetchPhaseProvider = itemEquipmentProvider,
+            schedulerMetrics = schedulerMetrics,
+            runStatusTracker = runStatusTracker,
+            runIdGenerator = RunIdGenerator(Clock.systemUTC()),
+            runOnStartup = false,
+            skipCharacterBasic = false,
+        )
+
+        scheduler.runItemEquipmentPhase("run-ie-1", "run-cb-1").get()
+
+        verify(schedulerMetrics).drainRunChunks()
+        verify(schedulerMetrics).drainRunRecords()
+        verify(runStatusTracker).completeRun(eq(PipelinePhase.ITEM_EQUIPMENT), eq("run-ie-1"), eq(7), eq(42L))
     }
 }

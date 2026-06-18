@@ -17,7 +17,19 @@ class InternalApiController(
 ) {
     @GetMapping("/run-status")
     fun getRunStatus(): ResponseEntity<RunStatusResponse> {
+        val phases = listOf(
+            PipelinePhase.RANKING_FETCH,
+            PipelinePhase.OCID_LOOKUP,
+            PipelinePhase.CHARACTER_BASIC,
+            PipelinePhase.ITEM_EQUIPMENT,
+        )
+        val slots = phases.associateWith { runStatusTracker.getPhaseStatus(it) }
+        val lastCompletedByPhase = phases.associateWith {
+            runStatusTracker.getLastCompletedForPhase(it)
+        }
         val response = RunStatusResponse(
+            slots = slots,
+            lastCompletedByPhase = lastCompletedByPhase,
             current = runStatusTracker.getCurrentStatus(),
             lastCompleted = runStatusTracker.getLastCompletedRun(),
         )
@@ -28,10 +40,10 @@ class InternalApiController(
     fun triggerDailyRefresh(
         @RequestHeader("X-Airflow-Run-Id", required = false) airflowRunId: String?,
     ): ResponseEntity<Map<String, String>> {
-        val current = runStatusTracker.getCurrentStatus()
-        if (current != null && !current.isTerminal) {
+        val existing = runStatusTracker.hasNonTerminalRun(PipelinePhase.RANKING_FETCH)
+        if (existing != null) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(mapOf("status" to "ALREADY_RUNNING", "runId" to current.runId))
+                .body(mapOf("status" to "ALREADY_RUNNING", "runId" to existing.runId))
         }
 
         val runId = airflowRunId ?: UUID.randomUUID().toString()
@@ -39,8 +51,3 @@ class InternalApiController(
         return ResponseEntity.accepted().body(mapOf("status" to "STARTED", "runId" to runId))
     }
 }
-
-data class RunStatusResponse(
-    val current: RunStatus?,
-    val lastCompleted: RunStatus?,
-)

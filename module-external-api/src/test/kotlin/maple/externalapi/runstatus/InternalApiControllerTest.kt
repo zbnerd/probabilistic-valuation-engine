@@ -33,15 +33,26 @@ class InternalApiControllerTest {
             .build()
     }
 
-    @Test
-    fun `GET run-status returns 200 with null when no run`() {
+    private fun stubEmptyPerPhaseLookups() {
+        whenever(runStatusTracker.getPhaseStatus(org.mockito.kotlin.any())).thenReturn(null)
+        whenever(runStatusTracker.getLastCompletedForPhase(org.mockito.kotlin.any())).thenReturn(null)
         whenever(runStatusTracker.getCurrentStatus()).thenReturn(null)
         whenever(runStatusTracker.getLastCompletedRun()).thenReturn(null)
+    }
+
+    @Test
+    fun `GET run-status returns 200 with null when no run`() {
+        stubEmptyPerPhaseLookups()
 
         mockMvc.perform(get("/api/internal/run-status"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.current").isEmpty)
             .andExpect(jsonPath("$.lastCompleted").isEmpty)
+            .andExpect(jsonPath("$.slots.RANKING_FETCH").isEmpty)
+            .andExpect(jsonPath("$.slots.OCID_LOOKUP").isEmpty)
+            .andExpect(jsonPath("$.slots.CHARACTER_BASIC").isEmpty)
+            .andExpect(jsonPath("$.slots.ITEM_EQUIPMENT").isEmpty)
+            .andExpect(jsonPath("$.lastCompletedByPhase.RANKING_FETCH").isEmpty)
     }
 
     @Test
@@ -52,8 +63,8 @@ class InternalApiControllerTest {
             triggeredPhase = PipelinePhase.OCID_LOOKUP,
             startedAt = Instant.now(),
         )
+        stubEmptyPerPhaseLookups()
         whenever(runStatusTracker.getCurrentStatus()).thenReturn(status)
-        whenever(runStatusTracker.getLastCompletedRun()).thenReturn(null)
 
         mockMvc.perform(get("/api/internal/run-status"))
             .andExpect(status().isOk)
@@ -73,7 +84,7 @@ class InternalApiControllerTest {
             chunksProcessed = 800,
             recordsProcessed = 600000,
         )
-        whenever(runStatusTracker.getCurrentStatus()).thenReturn(null)
+        stubEmptyPerPhaseLookups()
         whenever(runStatusTracker.getLastCompletedRun()).thenReturn(completed)
 
         mockMvc.perform(get("/api/internal/run-status"))
@@ -81,6 +92,38 @@ class InternalApiControllerTest {
             .andExpect(jsonPath("$.lastCompleted.runId").value("run-122"))
             .andExpect(jsonPath("$.lastCompleted.phase").value("COMPLETED"))
             .andExpect(jsonPath("$.lastCompleted.chunksProcessed").value(800))
+    }
+
+    @Test
+    fun `GET run-status returns slots map with all 4 triggerable phases populated`() {
+        val itemSlot = RunStatus(
+            runId = "run-200",
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            triggeredPhase = PipelinePhase.ITEM_EQUIPMENT,
+            startedAt = Instant.now(),
+        )
+        val rankingCompleted = RunStatus(
+            runId = "run-201",
+            phase = PipelinePhase.COMPLETED,
+            triggeredPhase = PipelinePhase.RANKING_FETCH,
+            startedAt = Instant.now().minusSeconds(120),
+            completedAt = Instant.now().minusSeconds(60),
+            chunksProcessed = 10,
+            recordsProcessed = 1000,
+        )
+        stubEmptyPerPhaseLookups()
+        whenever(runStatusTracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(itemSlot)
+        whenever(runStatusTracker.getLastCompletedForPhase(PipelinePhase.RANKING_FETCH)).thenReturn(rankingCompleted)
+
+        mockMvc.perform(get("/api/internal/run-status"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.slots.RANKING_FETCH").isEmpty)
+            .andExpect(jsonPath("$.slots.OCID_LOOKUP").isEmpty)
+            .andExpect(jsonPath("$.slots.CHARACTER_BASIC").isEmpty)
+            .andExpect(jsonPath("$.slots.ITEM_EQUIPMENT.runId").value("run-200"))
+            .andExpect(jsonPath("$.slots.ITEM_EQUIPMENT.phase").value("ITEM_EQUIPMENT"))
+            .andExpect(jsonPath("$.lastCompletedByPhase.RANKING_FETCH.runId").value("run-201"))
+            .andExpect(jsonPath("$.lastCompletedByPhase.ITEM_EQUIPMENT").isEmpty)
     }
 
     @Test
@@ -104,12 +147,27 @@ class InternalApiControllerTest {
     }
 
     @Test
-    fun `POST trigger daily returns 409 when already running`() {
-        whenever(runStatusTracker.getCurrentStatus()).thenReturn(
-            RunStatus(runId = "run-1", phase = PipelinePhase.RANKING_FETCH, triggeredPhase = PipelinePhase.RANKING_FETCH, startedAt = Instant.now()),
+    fun `POST trigger daily returns 409 when RANKING_FETCH slot is occupied`() {
+        whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.RANKING_FETCH)).thenReturn(
+            RunStatus(
+                runId = "run-1",
+                phase = PipelinePhase.RANKING_FETCH,
+                triggeredPhase = PipelinePhase.RANKING_FETCH,
+                startedAt = Instant.now(),
+            ),
         )
 
         mockMvc.perform(post("/api/internal/trigger/daily"))
             .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value("ALREADY_RUNNING"))
+            .andExpect(jsonPath("$.runId").value("run-1"))
+    }
+
+    @Test
+    fun `POST trigger daily allows new run when RANKING_FETCH slot is empty`() {
+        whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.RANKING_FETCH)).thenReturn(null)
+
+        mockMvc.perform(post("/api/internal/trigger/daily"))
+            .andExpect(status().isAccepted)
     }
 }

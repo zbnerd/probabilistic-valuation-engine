@@ -103,7 +103,7 @@ Slot record persists. `releasePhaseSlot` NOT called.
 
 | Condition | HTTP | Body |
 |-----------|------|------|
-| Phase slot has non-terminal run | 202 | `{"status":"STOP_REQUESTED","phase":"ITEM_EQUIPMENT","runId":"<running-runId>"}` |
+| Phase slot has non-terminal run | 202 | `{"status":"STOP_REQUESTED","phase":"ITEM_EQUIPMENT","runId":"<running-runId>","airflowRunId":"<echoed-from-header>"}` |
 | Phase slot empty or terminal | 200 | `{"status":"NOT_RUNNING","phase":"ITEM_EQUIPMENT","runId":null}` (or last-known runId from `getLastCompletedForPhase`) |
 | `phaseName` not in triggerable set | 400 | `{"error":"INVALID_PHASE","allowed":"RANKING_FETCH,OCID_LOOKUP,CHARACTER_BASIC,ITEM_EQUIPMENT"}` |
 

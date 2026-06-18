@@ -1272,7 +1272,9 @@ Same pattern, replace the `.whenComplete { _, ex -> ... }.thenRun { }` block. Pr
                 when {
                     ex is PhaseStoppedException -> {
                         log.info("[Scheduler] runItemEquipmentPhase stopped runId={} phase={}", runId, ex.phase)
-                        runStatusTracker.stopRun(PipelinePhase.ITEM_EQUIPMENT, runId, 0, 0)
+                        val chunks = schedulerMetrics.drainRunChunks().toInt()
+                        val records = schedulerMetrics.drainRunRecords()
+                        runStatusTracker.stopRun(PipelinePhase.ITEM_EQUIPMENT, runId, chunks, records)
                         stopSignal.clear(PipelinePhase.ITEM_EQUIPMENT)
                     }
                     ex != null -> {
@@ -1358,6 +1360,7 @@ Append the following tests:
         assertEquals("STOP_REQUESTED", body["status"])
         assertEquals("ITEM_EQUIPMENT", body["phase"])
         assertEquals("run-1", body["runId"])
+        assertEquals("airflow-corr-1", body["airflowRunId"])
         assertTrue(stopSignal.isStopRequested(PipelinePhase.ITEM_EQUIPMENT))
     }
 
@@ -1455,6 +1458,7 @@ In `module-external-api/src/main/kotlin/maple/externalapi/runstatus/InternalApiC
                 "status" to "STOP_REQUESTED",
                 "phase" to phase.name,
                 "runId" to runId,
+                "airflowRunId" to (airflowRunId ?: ""),
             ))
         }
         val lastRunId = runStatusTracker.getLastCompletedForPhase(phase)?.runId ?: ""
@@ -1462,6 +1466,7 @@ In `module-external-api/src/main/kotlin/maple/externalapi/runstatus/InternalApiC
             "status" to "NOT_RUNNING",
             "phase" to phase.name,
             "runId" to lastRunId,
+            "airflowRunId" to (airflowRunId ?: ""),
         ))
     }
 ```

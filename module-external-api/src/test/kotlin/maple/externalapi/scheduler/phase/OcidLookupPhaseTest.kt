@@ -13,7 +13,11 @@ import maple.expectation.common.storage.ObjectInfo
 import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.storage.PutResult
 import maple.expectation.infrastructure.external.NexonAuthClient
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.scheduler.PhaseStopSignal
+import maple.externalapi.scheduler.PhaseStoppedException
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import java.io.InputStream
 import java.time.Instant
@@ -68,6 +72,7 @@ class OcidLookupPhaseTest {
             eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
             objectStorage = storage,
             nexonAuthClient = nexonClient,
+            stopSignal = PhaseStopSignal(),
         )
 
         kotlinx.coroutines.runBlocking {
@@ -154,6 +159,7 @@ class OcidLookupPhaseTest {
             eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
             objectStorage = storage,
             nexonAuthClient = nexonClient,
+            stopSignal = PhaseStopSignal(),
         )
 
         kotlinx.coroutines.runBlocking {
@@ -168,5 +174,49 @@ class OcidLookupPhaseTest {
         verify(storage).delete("ocid-mapping/ocid-mapping-old1.jsonl.gz")
         verify(storage).delete("ocid-mapping/ocid-mapping-old2.jsonl.gz")
         verify(storage, never()).delete("ocid-mapping/ocid-mapping-abc.jsonl.gz")
+    }
+
+    @Test
+    fun `execute throws PhaseStoppedException when stop requested before processBatch`() {
+        val storage = mock<ObjectStorage>()
+        val nexonClient = mock<NexonAuthClient>()
+        val objectMapper = ObjectMapper().registerModule(kotlinModule())
+        val stopSignal = PhaseStopSignal()
+        stopSignal.requestStop(PipelinePhase.OCID_LOOKUP)
+
+        val now = Instant.now()
+        whenever(storage.listByPrefix("runs/abc/ranking-overall/chunks")).thenReturn(listOf(
+            ObjectInfo("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz", 100, now)
+        ))
+        val chunkBytes = run {
+            val out = java.io.ByteArrayOutputStream()
+            java.util.zip.GZIPOutputStream(out).use { gz ->
+                gz.write("{\"key\":\"user1\"}\n".toByteArray())
+            }
+            out.toByteArray()
+        }
+        whenever(storage.getStream("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz"))
+            .thenReturn(chunkBytes.inputStream())
+        whenever(storage.listByPrefix("ocid-mapping/")).thenReturn(emptyList())
+
+        val clientPort = mock<maple.externalapi.port.out.ExternalApiClientPort>()
+        whenever(clientPort.fetch(any(), any(), any())).thenReturn(CompletableFuture.completedFuture(ByteArray(0)))
+
+        val phase = OcidLookupPhase(
+            clientPort = clientPort,
+            objectMapper = objectMapper,
+            ocidLookupPermitsPerSecond = 100,
+            batchSize = 100,
+            eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
+            objectStorage = storage,
+            nexonAuthClient = nexonClient,
+            stopSignal = stopSignal,
+        )
+
+        assertThrows(PhaseStoppedException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                phase.execute(Executors.newSingleThreadExecutor(), "runs/abc", "abc")
+            }
+        }
     }
 }

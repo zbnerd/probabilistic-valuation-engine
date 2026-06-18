@@ -7,6 +7,9 @@ import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.infrastructure.external.NexonAuthClient
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.scheduler.PhaseStopSignal
+import maple.externalapi.scheduler.PhaseStoppedException
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -67,6 +70,7 @@ class OcidLookupPhase(
     private val eventPublisher: SnapshotChunkEventPublisher,
     private val objectStorage: ObjectStorage,
     private val nexonAuthClient: NexonAuthClient,
+    private val stopSignal: PhaseStopSignal,
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
 
@@ -242,6 +246,9 @@ class OcidLookupPhase(
     ) {
         var current = processed
         while (current < igns.size) {
+            if (stopSignal.isStopRequested(PipelinePhase.OCID_LOOKUP)) {
+                throw PhaseStoppedException(PipelinePhase.OCID_LOOKUP)
+            }
             val permits = SchedulerPhaseUtils.acquirePermits(rateLimiter, batchSize, igns.size - current)
             if (permits == 0) {
                 yield()

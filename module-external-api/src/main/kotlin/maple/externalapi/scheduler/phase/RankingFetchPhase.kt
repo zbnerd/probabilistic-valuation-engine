@@ -53,6 +53,9 @@ class RankingFetchPhase(
     private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
 
     fun execute(workerExecutor: ExecutorService, runId: String): CompletableFuture<String> {
+        if (stopSignal.isStopRequested(PipelinePhase.RANKING_FETCH)) {
+            throw PhaseStoppedException(PipelinePhase.RANKING_FETCH)
+        }
         val date = LocalDate.now().minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
         val runKey = "runs/$runId"
         val endpointConfig = chunkingProperties.configFor("ranking-overall")
@@ -108,9 +111,6 @@ class RankingFetchPhase(
     ): CompletableFuture<Void> {
         if (currentPage > maxPages) {
             return CompletableFuture.completedFuture(null)
-        }
-        if (stopSignal.isStopRequested(PipelinePhase.RANKING_FETCH)) {
-            throw PhaseStoppedException(PipelinePhase.RANKING_FETCH)
         }
 
         SchedulerPhaseUtils.acquirePermits(rateLimiter, 1, 1)

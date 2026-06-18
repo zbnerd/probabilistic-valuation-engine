@@ -408,3 +408,68 @@ def test_sensor_raises_when_xcom_missing_runid(mock_external_api_conn):
 
     with pytest.raises(RuntimeError, match="no runId"):
         sensor(**ctx)
+
+
+# ─── DAG loader integration (Task 14 RED) ─────────────────────────────────
+
+
+def test_daily_collection_pipeline_parses():
+    """DAG parses without import errors (regression guard for rewire)."""
+    from airflow.models import DagBag
+    import os
+    dag_folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dagbag = DagBag(dag_folder=dag_folder, include_examples=False)
+    assert "daily_collection_pipeline" in dagbag.dags, (
+        f"DAG missing. Errors: {dagbag.import_errors}"
+    )
+    assert dagbag.import_errors == {}, f"Import errors: {dagbag.import_errors}"
+
+
+def test_branch_on_scope_task_exists():
+    from airflow.models import DagBag
+    import os
+    dag_folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dagbag = DagBag(dag_folder=dag_folder, include_examples=False)
+    dag = dagbag.dags["daily_collection_pipeline"]
+    assert "branch_on_scope" in dag.task_ids
+
+
+def test_all_per_phase_tasks_present():
+    """11 per-phase task definitions expected."""
+    from airflow.models import DagBag
+    import os
+    dag_folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dagbag = DagBag(dag_folder=dag_folder, include_examples=False)
+    dag = dagbag.dags["daily_collection_pipeline"]
+    expected = {
+        # 4 trigger
+        "per_phase_trigger_ranking_fetch",
+        "per_phase_trigger_ocid_lookup",
+        "per_phase_trigger_character_basic",
+        "per_phase_trigger_item_equipment",
+        # 3 loop (RANKING_FETCH_LOOP excluded)
+        "per_phase_loop_ocid_lookup",
+        "per_phase_loop_character_basic",
+        "per_phase_loop_item_equipment",
+        # 4 stop
+        "per_phase_stop_ranking_fetch",
+        "per_phase_stop_ocid_lookup",
+        "per_phase_stop_character_basic",
+        "per_phase_stop_item_equipment",
+    }
+    assert expected.issubset(set(dag.task_ids)), (
+        f"Missing tasks: {expected - set(dag.task_ids)}"
+    )
+
+
+def test_branch_downstream_includes_both_paths():
+    """branch_on_scope must route to both trigger_daily_collection AND per_phase_join."""
+    from airflow.models import DagBag
+    import os
+    dag_folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dagbag = DagBag(dag_folder=dag_folder, include_examples=False)
+    dag = dagbag.dags["daily_collection_pipeline"]
+    branch_task = dag.get_task("branch_on_scope")
+    downstream_ids = {t.task_id for t in branch_task.downstream_list}
+    assert "trigger_daily_collection" in downstream_ids
+    assert "per_phase_join" in downstream_ids

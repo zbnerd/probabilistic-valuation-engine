@@ -255,7 +255,7 @@ class ExternalApiSchedulerTest {
     }
 
     @Test
-    fun `runOcidPhase acquires OCID_LOOKUP slot and forwards upstreamRunId to OcidLookupPhase execute`() {
+    fun `runOcidPhase acquires OCID_LOOKUP slot and forwards phase's own runId (not upstreamRunId) to OcidLookupPhase execute`() {
         val rankingPhase = mock<RankingFetchPhase>()
         val ocidLookupPhase = mock<OcidLookupPhase>()
         // Suspend fun returns Unit; stub via runBlocking so the suspend bridge is wired up.
@@ -298,7 +298,7 @@ class ExternalApiSchedulerTest {
 
         verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"))
         runBlocking {
-            verify(ocidLookupPhase).execute(any<ExecutorService>(), eq("runs/run-r-1"), eq("run-r-1"))
+            verify(ocidLookupPhase).execute(any<ExecutorService>(), eq("runs/run-r-1"), eq("run-o-1"))
         }
         verify(runStatusTracker).completeRun(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"), any(), any())
     }

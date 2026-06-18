@@ -222,7 +222,7 @@ class ExternalApiScheduler(
         }
 
         val runKey = "runs/$upstreamRunId"
-        return runBlocking { ocidLookupPhase.execute(executor, runKey, upstreamRunId) }
+        return runBlocking { ocidLookupPhase.execute(executor, runKey, runId) }
             .let { CompletableFuture.completedFuture(it) }
             .whenComplete { _, ex ->
                 if (ex != null) {

@@ -90,6 +90,7 @@ class RankingFetchPhaseTest {
             permitsPerSecond = 1000,
             runMarkerWriter = RunMarkerWriter(Clock.systemUTC(), storage),
             objectStorage = storage,
+            stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
         )
 
         val result: CompletableFuture<String> = phase.execute(Executors.newSingleThreadExecutor(), "20260610-xyz")

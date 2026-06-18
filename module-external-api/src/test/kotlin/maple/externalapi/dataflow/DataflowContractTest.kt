@@ -145,6 +145,7 @@ class DataflowContractTest {
             permitsPerSecond = 1000,
             runMarkerWriter = runMarkerWriter,
             objectStorage = objectStorage,
+            stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
         )
 
         val ocidPhase = OcidLookupPhase(

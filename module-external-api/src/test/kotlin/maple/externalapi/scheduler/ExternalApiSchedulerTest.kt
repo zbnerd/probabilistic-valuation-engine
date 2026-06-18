@@ -17,6 +17,7 @@ import maple.externalapi.scheduler.phase.RunIdGenerator
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argThat
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doNothing
@@ -70,7 +71,7 @@ class ExternalApiSchedulerTest {
         whenever(ocidCache.loadFromRun(any<String>())).thenReturn(emptyMap())
         val runStatusTracker = mock<RunStatusTracker>()
         // Stub acquirePhaseSlot to return a valid RunStatus for any phase/runId
-        whenever(runStatusTracker.acquirePhaseSlot(any(), any<String>()))
+        whenever(runStatusTracker.acquirePhaseSlot(any(), any<String>(), anyOrNull()))
             .thenAnswer { invocation ->
                 val runId = invocation.getArgument<String>(1)
                 val phase = invocation.getArgument<PipelinePhase>(0)
@@ -146,7 +147,7 @@ class ExternalApiSchedulerTest {
         whenever(ocidCache.loadFromRun(any<String>())).thenReturn(mapOf("ign1" to "ocid1"))
 
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(any(), any<String>()))
+        whenever(runStatusTracker.acquirePhaseSlot(any(), any<String>(), anyOrNull()))
             .thenAnswer { invocation ->
                 val runId = invocation.getArgument<String>(1)
                 val phase = invocation.getArgument<PipelinePhase>(0)
@@ -213,7 +214,7 @@ class ExternalApiSchedulerTest {
         val ocidLookupPhase = mock<OcidLookupPhase>()
         val ocidCache = mock<OcidCacheProvider>()
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), any<String>()))
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), any<String>(), anyOrNull()))
             .thenAnswer { invocation ->
                 val runId = invocation.getArgument<String>(1)
                 maple.externalapi.runstatus.RunStatus(
@@ -258,7 +259,7 @@ class ExternalApiSchedulerTest {
         // runId before ranking.execute returns. The slot is then released by
         // runRankingPhase's whenComplete handler.
         verify(runStatusTracker, timeout(2_000))
-            .acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), any<String>())
+            .acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), any<String>(), anyOrNull())
         verify(runStatusTracker, timeout(2_000))
             .releasePhaseSlot(eq(PipelinePhase.RANKING_FETCH), any<String>())
     }
@@ -272,7 +273,7 @@ class ExternalApiSchedulerTest {
         val ocidLookupPhase = mock<OcidLookupPhase>()
         val ocidCache = mock<OcidCacheProvider>()
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1")))
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1"), anyOrNull()))
             .thenReturn(
                 maple.externalapi.runstatus.RunStatus(
                     runId = "run-r-1",
@@ -306,7 +307,7 @@ class ExternalApiSchedulerTest {
         scheduler.runRankingPhase("run-r-1", null).get()
 
         verify(rankingPhase).execute(any<ExecutorService>(), eq("run-r-1"))
-        verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1"))
+        verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1"), anyOrNull())
         verify(runStatusTracker).completeRun(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1"), any(), any())
     }
 
@@ -323,7 +324,7 @@ class ExternalApiSchedulerTest {
 
         val ocidCache = mock<OcidCacheProvider>()
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1")))
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"), anyOrNull()))
             .thenReturn(
                 maple.externalapi.runstatus.RunStatus(
                     runId = "run-o-1",
@@ -356,7 +357,7 @@ class ExternalApiSchedulerTest {
 
         scheduler.runOcidPhase("run-o-1", "run-r-1").get()
 
-        verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"))
+        verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"), anyOrNull())
         runBlocking {
             verify(ocidLookupPhase).execute(any<ExecutorService>(), eq("runs/run-r-1"), eq("run-o-1"))
         }
@@ -372,7 +373,7 @@ class ExternalApiSchedulerTest {
         val ocidLookupPhase = mock<OcidLookupPhase>()
         val ocidCache = mock<OcidCacheProvider>()
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1")))
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1"), anyOrNull()))
             .thenReturn(
                 maple.externalapi.runstatus.RunStatus(
                     runId = "run-r-1",
@@ -421,7 +422,7 @@ class ExternalApiSchedulerTest {
 
         val ocidCache = mock<OcidCacheProvider>()
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1")))
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"), anyOrNull()))
             .thenReturn(
                 maple.externalapi.runstatus.RunStatus(
                     runId = "run-o-1",
@@ -470,7 +471,7 @@ class ExternalApiSchedulerTest {
 
         val ocidLookupPhase = mock<OcidLookupPhase>()
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.CHARACTER_BASIC), eq("run-cb-1")))
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.CHARACTER_BASIC), eq("run-cb-1"), anyOrNull()))
             .thenReturn(
                 maple.externalapi.runstatus.RunStatus(
                     runId = "run-cb-1",
@@ -517,7 +518,7 @@ class ExternalApiSchedulerTest {
 
         val ocidLookupPhase = mock<OcidLookupPhase>()
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.CHARACTER_BASIC), eq("run-cb-2")))
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.CHARACTER_BASIC), eq("run-cb-2"), anyOrNull()))
             .thenReturn(
                 maple.externalapi.runstatus.RunStatus(
                     runId = "run-cb-2",
@@ -566,7 +567,7 @@ class ExternalApiSchedulerTest {
 
         val ocidLookupPhase = mock<OcidLookupPhase>()
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.ITEM_EQUIPMENT), eq("run-ie-1")))
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.ITEM_EQUIPMENT), eq("run-ie-1"), anyOrNull()))
             .thenReturn(
                 maple.externalapi.runstatus.RunStatus(
                     runId = "run-ie-1",
@@ -617,7 +618,7 @@ class ExternalApiSchedulerTest {
 
         val ocidLookupPhase = mock<OcidLookupPhase>()
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.ITEM_EQUIPMENT), eq("run-ie-1")))
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.ITEM_EQUIPMENT), eq("run-ie-1"), anyOrNull()))
             .thenReturn(
                 maple.externalapi.runstatus.RunStatus(
                     runId = "run-ie-1",
@@ -665,7 +666,7 @@ class ExternalApiSchedulerTest {
         val ocidLookupPhase = mock<OcidLookupPhase>()
         val ocidCache = mock<OcidCacheProvider>()
         val runStatusTracker = mock<RunStatusTracker>()
-        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1")))
+        whenever(runStatusTracker.acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), eq("run-r-1"), anyOrNull()))
             .thenReturn(
                 maple.externalapi.runstatus.RunStatus(
                     runId = "run-r-1",
@@ -759,7 +760,7 @@ class ExternalApiSchedulerTest {
 
         // Stub acquirePhaseSlot to return a non-null RunStatus for any phase/runId
         // so each triggerPhase call in the chain proceeds.
-        whenever(runStatusTracker.acquirePhaseSlot(any(), any<String>()))
+        whenever(runStatusTracker.acquirePhaseSlot(any(), any<String>(), anyOrNull()))
             .thenAnswer { invocation ->
                 val runId = invocation.getArgument<String>(1)
                 val phase = invocation.getArgument<PipelinePhase>(0)
@@ -789,10 +790,10 @@ class ExternalApiSchedulerTest {
 
         // Daily chain generates 4 distinct runIds internally; slot acquire called for each phase
         inOrder(runStatusTracker).run {
-            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), any<String>())
-            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), any<String>())
-            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.CHARACTER_BASIC), any<String>())
-            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.ITEM_EQUIPMENT), any<String>())
+            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.RANKING_FETCH), any<String>(), anyOrNull())
+            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), any<String>(), anyOrNull())
+            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.CHARACTER_BASIC), any<String>(), anyOrNull())
+            verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.ITEM_EQUIPMENT), any<String>(), anyOrNull())
         }
     }
 

@@ -1,12 +1,14 @@
 package maple.expectation.monitoring;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.util.concurrent.CompletableFuture;
 import maple.expectation.core.port.out.BufferStatusQuery;
 import maple.expectation.infrastructure.alert.StatelessAlertService;
 import maple.expectation.infrastructure.config.MonitoringThresholdProperties;
@@ -104,7 +106,8 @@ class MonitoringAlertServiceUnitTest {
   @DisplayName("리더 권한을 획득하고 전역 임계치를 초과하면 알림을 발송한다")
   void leaderSuccess_OverThreshold_SendAlert() {
     // given
-    given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
+    given(lockStrategy.tryLockImmediatelyAsync(eq("global-monitoring-lock"), eq(4L)))
+        .willReturn(CompletableFuture.completedFuture(true));
     given(bufferStatus.getTotalPendingCount()).willReturn(6000L);
     given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
@@ -119,7 +122,8 @@ class MonitoringAlertServiceUnitTest {
   @DisplayName("전역 임계치 이하일 때는 리더 권한이 있어도 알림을 보내지 않는다")
   void leaderSuccess_UnderThreshold_NoAlert() {
     // given
-    given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
+    given(lockStrategy.tryLockImmediatelyAsync(eq("global-monitoring-lock"), eq(4L)))
+        .willReturn(CompletableFuture.completedFuture(true));
     given(bufferStatus.getTotalPendingCount()).willReturn(3000L);
     given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
@@ -134,7 +138,8 @@ class MonitoringAlertServiceUnitTest {
   @DisplayName("리더 선출 실패 시 모니터링을 스킵한다")
   void follower_SkipMonitoring() {
     // given
-    given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(false);
+    given(lockStrategy.tryLockImmediatelyAsync(eq("global-monitoring-lock"), eq(4L)))
+        .willReturn(CompletableFuture.completedFuture(false));
 
     // when
     monitoringAlertService.checkBufferSaturation();
@@ -149,7 +154,8 @@ class MonitoringAlertServiceUnitTest {
   @DisplayName("정확히 임계값(5000)을 초과하면 알림을 발송한다")
   void exactlyAtThreshold_SendAlert() {
     // given
-    given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
+    given(lockStrategy.tryLockImmediatelyAsync(eq("global-monitoring-lock"), eq(4L)))
+        .willReturn(CompletableFuture.completedFuture(true));
     given(bufferStatus.getTotalPendingCount()).willReturn(5001L);
     given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
@@ -164,7 +170,8 @@ class MonitoringAlertServiceUnitTest {
   @DisplayName("버퍼가 비어있을 때는 알림을 보내지 않는다")
   void bufferZero_NoAlert() {
     // given
-    given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(true);
+    given(lockStrategy.tryLockImmediatelyAsync(eq("global-monitoring-lock"), eq(4L)))
+        .willReturn(CompletableFuture.completedFuture(true));
     given(bufferStatus.getTotalPendingCount()).willReturn(0L);
     given(thresholdProperties.getBufferSaturationCount()).willReturn(5000L);
 
@@ -179,7 +186,8 @@ class MonitoringAlertServiceUnitTest {
   @DisplayName("복구 가능한 분산 락 획득 실패 시 재시도하지 않고 스킵한다")
   void lockAcquisitionFailure_SkipMonitoring() {
     // given
-    given(lockStrategy.tryLockImmediately(eq("global-monitoring-lock"), eq(4L))).willReturn(false);
+    given(lockStrategy.tryLockImmediatelyAsync(eq("global-monitoring-lock"), eq(4L)))
+        .willReturn(CompletableFuture.completedFuture(false));
 
     // when
     monitoringAlertService.checkBufferSaturation();

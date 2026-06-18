@@ -3,10 +3,13 @@
 Per TDD anti-pattern: tests for ONE behavior at a time.
 Other factories (trigger/loop/stop/sensor) get their own RED→GREEN cycles.
 """
+from unittest.mock import MagicMock, patch
+
 import pytest
+import requests
 from airflow.exceptions import AirflowException
 
-from per_phase_tasks import parse_scope, ALLOWED_SCOPES
+from per_phase_tasks import parse_scope, ALLOWED_SCOPES, make_trigger_task
 
 
 @pytest.mark.parametrize(
@@ -50,3 +53,92 @@ def test_allowed_scopes_constant_matches_spec():
         "CHARACTER_BASIC_STOP", "ITEM_EQUIPMENT_STOP",
     }
     assert set(ALLOWED_SCOPES) == expected
+
+
+# ─── make_trigger_task (Task 6 RED) ───────────────────────────────────────
+
+
+def _make_ctx(conf, xcom_value=None):
+    """Build a minimal Airflow task context dict."""
+    dag_run = MagicMock()
+    dag_run.conf = conf
+    ti = MagicMock()
+    ti.xcom_pull.return_value = xcom_value
+    return {"dag_run": dag_run, "ti": ti}
+
+
+def test_make_trigger_task_skips_when_scope_empty(mock_external_api_conn):
+    """If phase not in scope, callable returns None (Airflow marks skipped)."""
+    task = make_trigger_task("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["OCID_LOOKUP"]})
+    assert task.python_callable(**ctx) is None
+
+
+def test_make_trigger_task_happy_path(mock_external_api_conn):
+    """200 → returns response JSON, no exception."""
+    task = make_trigger_task("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["ITEM_EQUIPMENT"]})
+    with patch("per_phase_tasks.requests.post") as mock_post:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 202
+        mock_resp.json.return_value = {"runId": "r-1", "phase": "ITEM_EQUIPMENT"}
+        mock_post.return_value = mock_resp
+
+        result = task.python_callable(**ctx)
+
+    assert result == {"runId": "r-1", "phase": "ITEM_EQUIPMENT"}
+    mock_post.assert_called_once()
+    assert "/trigger/phase/ITEM_EQUIPMENT" in mock_post.call_args[0][0]
+
+
+def test_make_trigger_task_409_discovers_active_run(mock_external_api_conn):
+    """409 → fetch /run-status, return active runId with ALREADY_ACTIVE status."""
+    task = make_trigger_task("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["ITEM_EQUIPMENT"]})
+
+    with patch("per_phase_tasks.requests.post") as mock_post, \
+         patch("per_phase_tasks.requests.get") as mock_get:
+        trigger_resp = MagicMock()
+        trigger_resp.status_code = 409
+        mock_post.return_value = trigger_resp
+
+        status_resp = MagicMock()
+        status_resp.status_code = 200
+        status_resp.json.return_value = {"current": {"runId": "r-active"}}
+        status_resp.raise_for_status = MagicMock()
+        mock_get.return_value = status_resp
+
+        result = task.python_callable(**ctx)
+
+    assert result == {
+        "runId": "r-active",
+        "phase": "ITEM_EQUIPMENT",
+        "status": "ALREADY_ACTIVE",
+    }
+
+
+def test_make_trigger_task_500_raises(mock_external_api_conn):
+    """500 → AirflowException."""
+    task = make_trigger_task("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["ITEM_EQUIPMENT"]})
+
+    with patch("per_phase_tasks.requests.post") as mock_post:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.text = "boom"
+        mock_post.return_value = mock_resp
+
+        with pytest.raises(AirflowException):
+            task.python_callable(**ctx)
+
+
+def test_make_trigger_task_network_error_raises(mock_external_api_conn):
+    """requests.RequestException → AirflowException with chained cause."""
+    task = make_trigger_task("ITEM_EQUIPMENT")
+    ctx = _make_ctx({"scope": ["ITEM_EQUIPMENT"]})
+
+    with patch("per_phase_tasks.requests.post") as mock_post:
+        mock_post.side_effect = requests.RequestException("connection refused")
+
+        with pytest.raises(AirflowException, match="Trigger ITEM_EQUIPMENT failed"):
+            task.python_callable(**ctx)

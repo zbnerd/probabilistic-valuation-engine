@@ -41,7 +41,7 @@ class RunStatusTracker(
         val result = slot.updateAndGet { current ->
             if (current == null || current.isTerminal) candidate else current
         }
-        return if (result.runId == runId && result.startedAt == now) {
+        return if (result.runId == runId) {
             log.info("[RunStatus] phase-slot acquired phase={} runId={}", phase, runId)
             result
         } else {
@@ -51,15 +51,21 @@ class RunStatusTracker(
     }
 
     /**
-     * Transition the run in [phase] slot. No-op if slot empty or runId mismatch.
+     * Transition the run in [phase] slot to a new phase. When [runId] is null,
+     * the slot's current runId is trusted (legacy single-slot pattern — used
+     * by code paths that haven't migrated to per-phase slots yet). When [runId]
+     * is provided, the transition is a no-op if the slot's current runId differs.
+     * No-op entirely if the slot is empty.
      */
     fun transitionPhase(phase: PipelinePhase, runId: String? = null) {
-        slots[phase]?.updateAndGet { current ->
+        val updated = slots[phase]?.updateAndGet { current ->
             if (current == null) return@updateAndGet null
             if (runId != null && current.runId != runId) return@updateAndGet current
             current.copy(phase = phase, updatedAt = Instant.now(clock))
         }
-        log.info("[RunStatus] phase-slot transition phase={} runId={}", phase, runId)
+        if (updated != null && updated.phase == phase) {
+            log.info("[RunStatus] phase-slot transition phase={} runId={}", phase, updated.runId)
+        }
     }
 
     /**
@@ -105,10 +111,13 @@ class RunStatusTracker(
      * Successful runs keep their COMPLETED record in the slot until next acquire.
      */
     fun releasePhaseSlot(phase: PipelinePhase, runId: String) {
-        slots[phase]?.updateAndGet { current ->
+        val prev = slots[phase]?.get()
+        val updated = slots[phase]?.updateAndGet { current ->
             if (current?.runId == runId) null else current
         }
-        log.info("[RunStatus] phase-slot released phase={} runId={}", phase, runId)
+        if (prev != null && updated == null) {
+            log.info("[RunStatus] phase-slot released phase={} runId={}", phase, runId)
+        }
     }
 
     /**

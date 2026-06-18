@@ -469,4 +469,46 @@ class InternalApiControllerTest {
             .andExpect(jsonPath("$.status").value("LOOP_ACTIVE"))
             .andExpect(jsonPath("$.loopId").value("L-CB"))
     }
+
+    @Test
+    fun `GET run-status with active loop decorates response with loopSummaries`() {
+        val itemLoop = LoopState(
+            loopId = "L-1",
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            startedAt = Instant.parse("2026-06-19T00:00:00Z"),
+            iterationCount = 5,
+            lastRunId = "run-5",
+        )
+        val itemSlot = RunStatus(
+            runId = "run-5",
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            triggeredPhase = PipelinePhase.ITEM_EQUIPMENT,
+            startedAt = Instant.parse("2026-06-19T00:01:00Z"),
+            loopId = "L-1",
+        )
+
+        stubEmptyPerPhaseLookups()
+        whenever(phaseLoopController.activeLoops()).thenReturn(listOf(itemLoop))
+        whenever(phaseLoopController.hasActiveLoop(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(true)
+        whenever(phaseLoopController.getLoopState(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(itemLoop)
+        whenever(runStatusTracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)).thenReturn(itemSlot)
+
+        mockMvc.perform(get("/api/internal/run-status"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.loopSummaries.ITEM_EQUIPMENT.loopId").value("L-1"))
+            .andExpect(jsonPath("$.loopSummaries.ITEM_EQUIPMENT.iterationCount").value(5))
+            .andExpect(jsonPath("$.loopSummaries.ITEM_EQUIPMENT.status").value("RUNNING"))
+            .andExpect(jsonPath("$.slots.ITEM_EQUIPMENT.loopId").value("L-1"))
+    }
+
+    @Test
+    fun `GET run-status with no active loops returns empty loopSummaries`() {
+        stubEmptyPerPhaseLookups()
+        whenever(phaseLoopController.activeLoops()).thenReturn(emptyList())
+
+        mockMvc.perform(get("/api/internal/run-status"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.loopSummaries").isMap)
+            .andExpect(jsonPath("$.loopSummaries.ITEM_EQUIPMENT").doesNotExist())
+    }
 }

@@ -36,11 +36,23 @@ class InternalApiController(
         val lastCompletedByPhase = phases.associateWith {
             runStatusTracker.getLastCompletedForPhase(it)
         }
+        val loopSummaries = phaseLoopController.activeLoops().associate { state ->
+            state.phase.name to LoopSummaryView(
+                loopId = state.loopId,
+                phase = state.phase.name,
+                startedAt = state.startedAt,
+                iterationCount = state.iterationCount,
+                lastRunId = state.lastRunId,
+                status = state.status.name,
+                lastError = state.lastError,
+            )
+        }
         val response = RunStatusResponse(
             slots = slots,
             lastCompletedByPhase = lastCompletedByPhase,
             current = runStatusTracker.getCurrentStatus(),
             lastCompleted = runStatusTracker.getLastCompletedRun(),
+            loopSummaries = loopSummaries,
         )
         return ResponseEntity.ok(response)
     }

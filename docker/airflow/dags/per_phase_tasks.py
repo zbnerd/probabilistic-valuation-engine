@@ -116,3 +116,50 @@ def make_trigger_task(phase: str) -> PythonOperator:
         execution_timeout=timedelta(seconds=60),
         do_xcom_push=True,
     )
+
+
+def make_loop_task(phase: str) -> PythonOperator:
+    """Start loop via /loop/phase/{phase}.
+
+    Gates on scope: returns None if {phase}_LOOP not in scope.
+    202 → return response JSON (loopId, iterationCount).
+    409 → idempotent: mark ALREADY_LOOPING, preserve existing loopId.
+    400 → AirflowException (config error, e.g. RANKING_FETCH_LOOP).
+    Other → AirflowException.
+    """
+    def _loop(**ctx):
+        scope = parse_scope(ctx["dag_run"].conf or {})
+        if f"{phase}_LOOP" not in scope:
+            return None
+        base = get_external_api_base()
+        try:
+            resp = requests.post(
+                f"{base}/api/internal/loop/phase/{phase}", timeout=30
+            )
+        except requests.RequestException as exc:
+            raise AirflowException(f"Loop start {phase} failed: {exc}") from exc
+
+        if resp.status_code == 202:
+            return resp.json()
+
+        if resp.status_code == 409:
+            body = resp.json()
+            return {**body, "status": "ALREADY_LOOPING"}
+
+        if resp.status_code == 400:
+            raise AirflowException(
+                f"Loop start {phase} rejected (INVALID_PHASE): {resp.text[:500]}"
+            )
+
+        raise AirflowException(
+            f"Loop start {phase} failed: HTTP {resp.status_code} "
+            f"{resp.reason}: {resp.text[:500]}"
+        )
+
+    return PythonOperator(
+        task_id=f"per_phase_loop_{phase.lower()}",
+        python_callable=_loop,
+        retries=0,
+        execution_timeout=timedelta(seconds=60),
+        do_xcom_push=True,
+    )

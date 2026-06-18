@@ -5,10 +5,13 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.time.Instant
 import maple.externalapi.scheduler.ExternalApiScheduler
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import org.springframework.http.HttpStatus
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -173,12 +176,28 @@ class InternalApiControllerTest {
 
     @Test
     fun `POST trigger phase returns 202 with runId when slot empty`() {
+        val runStatusTracker = mock<RunStatusTracker>()
+        val scheduler = mock<ExternalApiScheduler>()
         whenever(runStatusTracker.hasNonTerminalRun(PipelinePhase.RANKING_FETCH)).thenReturn(null)
+        val syncExecutor: java.util.concurrent.ExecutorService = object : java.util.concurrent.AbstractExecutorService() {
+            override fun shutdown() {}
+            override fun shutdownNow(): MutableList<Runnable> = mutableListOf()
+            override fun isShutdown(): Boolean = false
+            override fun isTerminated(): Boolean = false
+            override fun awaitTermination(timeout: Long, unit: java.util.concurrent.TimeUnit): Boolean = true
+            override fun execute(command: Runnable) {
+                command.run()
+            }
+        }
+        val controller = InternalApiController(runStatusTracker, scheduler, syncExecutor)
 
-        mockMvc.perform(post("/api/internal/trigger/phase/RANKING_FETCH"))
-            .andExpect(status().isAccepted)
-            .andExpect(jsonPath("$.status").value("STARTED"))
-            .andExpect(jsonPath("$.runId").isString)
+        val response = controller.triggerPhase("RANKING_FETCH", null, null)
+        assertThat(response.statusCode).isEqualTo(HttpStatus.ACCEPTED)
+        assertThat(response.body?.get("status")).isEqualTo("STARTED")
+        assertThat(response.body?.get("runId")).isNotNull
+
+        val runId = response.body?.get("runId")!!
+        verify(scheduler).triggerPhase(PipelinePhase.RANKING_FETCH, runId, null)
     }
 
     @Test

@@ -64,31 +64,12 @@ class InternalApiController(
         @RequestHeader("X-Airflow-Run-Id", required = false) airflowRunId: String?,
         @RequestHeader("X-Upstream-Run-Id", required = false) upstreamRunId: String?,
     ): ResponseEntity<Map<String, String>> {
-        val phase = try {
-            PipelinePhase.valueOf(phaseName)
-        } catch (ex: IllegalArgumentException) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(
-                    mapOf(
-                        "error" to "INVALID_PHASE",
-                        "allowed" to triggerablePhases.joinToString(",") { it.name },
-                    ),
-                )
+        val phase = runCatching { PipelinePhase.valueOf(phaseName) }.getOrNull()
+        if (phase == null || phase !in triggerablePhases) {
+            return badRequestInvalidPhase()
         }
-
-        if (phase !in triggerablePhases) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(
-                    mapOf(
-                        "error" to "INVALID_PHASE",
-                        "allowed" to triggerablePhases.joinToString(",") { it.name },
-                    ),
-                )
-        }
-
         if (phase != PipelinePhase.RANKING_FETCH && upstreamRunId.isNullOrBlank()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(mapOf("error" to "MISSING_UPSTREAM", "phase" to phase.name))
+            return badRequestMissingUpstream(phase)
         }
 
         val existing = runStatusTracker.hasNonTerminalRun(phase)
@@ -101,4 +82,15 @@ class InternalApiController(
         executor.submit { scheduler.triggerPhase(phase, runId, upstreamRunId).join() }
         return ResponseEntity.accepted().body(mapOf("status" to "STARTED", "runId" to runId))
     }
+
+    private fun badRequestInvalidPhase(): ResponseEntity<Map<String, String>> =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(mapOf(
+                "error" to "INVALID_PHASE",
+                "allowed" to triggerablePhases.joinToString(",") { it.name },
+            ))
+
+    private fun badRequestMissingUpstream(phase: PipelinePhase): ResponseEntity<Map<String, String>> =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(mapOf("error" to "MISSING_UPSTREAM", "phase" to phase.name))
 }

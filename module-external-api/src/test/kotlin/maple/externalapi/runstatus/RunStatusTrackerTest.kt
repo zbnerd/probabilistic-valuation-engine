@@ -204,4 +204,36 @@ class RunStatusTrackerTest {
         tracker.stopRun(PipelinePhase.RANKING_FETCH, "phantom", 0, 0L)
         assertThat(tracker.getPhaseStatus(PipelinePhase.RANKING_FETCH)).isNull()
     }
+
+    @Test
+    fun `acquirePhaseSlot with loopId stores loopId on slot record`() {
+        val acquired = tracker.acquirePhaseSlot(
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            runId = "run-1",
+            loopId = "L-1",
+        )
+        assertThat(acquired).isNotNull
+        assertThat(acquired!!.loopId).isEqualTo("L-1")
+        assertThat(tracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)?.loopId).isEqualTo("L-1")
+    }
+
+    @Test
+    fun `acquirePhaseSlot without loopId leaves loopId null on slot record`() {
+        val acquired = tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-1")
+        assertThat(acquired).isNotNull
+        assertThat(acquired!!.loopId).isNull()
+    }
+
+    @Test
+    fun `acquirePhaseSlot overwrites loopId on terminal-overwrite acquire`() {
+        // First loop iteration completes; terminal record persists with loopId
+        tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-1", "L-1")
+        tracker.completeRun(PipelinePhase.ITEM_EQUIPMENT, "run-1", 0, 0L)
+
+        // Next iteration within same loop overwrites the terminal record
+        val next = tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-2", "L-1")
+        assertThat(next).isNotNull
+        assertThat(next!!.loopId).isEqualTo("L-1")
+        assertThat(next.runId).isEqualTo("run-2")
+    }
 }

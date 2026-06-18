@@ -4,16 +4,20 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import maple.externalapi.loop.PhaseLoopController
 import maple.externalapi.scheduler.ExternalApiScheduler
 import maple.externalapi.scheduler.PhaseStopSignal
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -201,6 +205,124 @@ class InternalApiControllerTest {
 
         mockMvc.perform(post("/api/internal/trigger/daily"))
             .andExpect(status().isAccepted)
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    fun `POST trigger daily returns 202 immediately without blocking on phase completion`() {
+        // Capture the Future returned by submit() and assert it completes
+        // within a short window. With the .join() bug, the runnable blocks
+        // on a never-completing CF, so the Future never completes.
+        val capturedFutures = java.util.concurrent.ConcurrentLinkedQueue<java.util.concurrent.Future<*>>()
+        val capturingExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread(r, "test-capturing").apply { isDaemon = true }
+        }
+        // Wrap submit via reflection-free override: use a delegating executor.
+        // Easiest path: subclass to override submit(Runnable).
+        val instrumentedExecutor = object : java.util.concurrent.AbstractExecutorService() {
+            override fun shutdown() = capturingExecutor.shutdown()
+            override fun shutdownNow(): MutableList<Runnable> = capturingExecutor.shutdownNow()
+            override fun isShutdown(): Boolean = capturingExecutor.isShutdown
+            override fun isTerminated(): Boolean = capturingExecutor.isTerminated
+            override fun awaitTermination(timeout: Long, unit: java.util.concurrent.TimeUnit): Boolean =
+                capturingExecutor.awaitTermination(timeout, unit)
+            override fun execute(command: Runnable) {
+                capturedFutures.add(capturingExecutor.submit(command))
+            }
+        }
+        try {
+            val neverCompleting = CompletableFuture<Void>()
+            // triggerDailyRefresh takes 1 arg (airflowRunId: String?). any() matches non-null,
+            // so we don't need anyOrNull here — but the controller may pass null when no
+            // X-Airflow-Run-Id header is set, so we use anyOrNull for safety.
+            whenever(scheduler.triggerDailyRefresh(anyOrNull())).thenReturn(neverCompleting)
+
+            val syncController = InternalApiController(
+                runStatusTracker, scheduler, instrumentedExecutor, phaseLoopController,
+            )
+            val syncMockMvc = standaloneSetup(syncController)
+                .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
+                .build()
+
+            syncMockMvc.perform(post("/api/internal/trigger/daily"))
+                .andExpect(status().isAccepted)
+                .andExpect(jsonPath("$.status").value("STARTED"))
+
+            val future = capturedFutures.peek()
+                ?: error("expected exactly one submitted task; queue was empty")
+            // Fire-and-forget: the runnable must return quickly. With .join()
+            // on a never-completing CF, the runnable blocks indefinitely.
+            val completed = try {
+                future.get(500, TimeUnit.MILLISECONDS)
+                true
+            } catch (ex: java.util.concurrent.TimeoutException) {
+                false
+            }
+            assertThat(completed)
+                .withFailMessage(
+                    "executor.submit() future should be done immediately (fire-and-forget); " +
+                        "it never completed, which means the controller still .join()s on the phase CF."
+                )
+                .isTrue()
+        } finally {
+            capturingExecutor.shutdownNow()
+        }
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    fun `POST trigger phase returns 202 immediately without blocking on phase completion`() {
+        val capturedFutures = java.util.concurrent.ConcurrentLinkedQueue<java.util.concurrent.Future<*>>()
+        val capturingExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread(r, "test-capturing").apply { isDaemon = true }
+        }
+        val instrumentedExecutor = object : java.util.concurrent.AbstractExecutorService() {
+            override fun shutdown() = capturingExecutor.shutdown()
+            override fun shutdownNow(): MutableList<Runnable> = capturingExecutor.shutdownNow()
+            override fun isShutdown(): Boolean = capturingExecutor.isShutdown
+            override fun isTerminated(): Boolean = capturingExecutor.isTerminated
+            override fun awaitTermination(timeout: Long, unit: java.util.concurrent.TimeUnit): Boolean =
+                capturingExecutor.awaitTermination(timeout, unit)
+            override fun execute(command: Runnable) {
+                capturedFutures.add(capturingExecutor.submit(command))
+            }
+        }
+        try {
+            val neverCompleting = CompletableFuture<Void>()
+            // Stub: any 4-arg call (with loopId defaulting to null) returns never-completing CF
+            whenever(scheduler.triggerPhase(any(), any(), any(), anyOrNull())).thenReturn(neverCompleting)
+
+            val syncController = InternalApiController(
+                runStatusTracker, scheduler, instrumentedExecutor, phaseLoopController,
+            )
+            val syncMockMvc = standaloneSetup(syncController)
+                .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
+                .build()
+
+            syncMockMvc.perform(
+                post("/api/internal/trigger/phase/RANKING_FETCH")
+                    .header("X-Upstream-Run-Id", "u-1"),
+            )
+                .andExpect(status().isAccepted)
+                .andExpect(jsonPath("$.status").value("STARTED"))
+
+            val future = capturedFutures.peek()
+                ?: error("expected exactly one submitted task; queue was empty")
+            val completed = try {
+                future.get(500, TimeUnit.MILLISECONDS)
+                true
+            } catch (ex: java.util.concurrent.TimeoutException) {
+                false
+            }
+            assertThat(completed)
+                .withFailMessage(
+                    "executor.submit() future should be done immediately (fire-and-forget); " +
+                        "it never completed, which means the controller still .join()s on the phase CF."
+                )
+                .isTrue()
+        } finally {
+            capturingExecutor.shutdownNow()
+        }
     }
 
     @Test

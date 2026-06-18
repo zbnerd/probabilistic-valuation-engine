@@ -41,7 +41,7 @@ private const val SLOW_BATCH_WAIT_MS: Long = 1_000L
 /** Endpoint-scoped fetch context shared by processBatch / fetchSingle / handleFailure. */
 data class BatchFetchContext(
     val endpoint: String,
-    val phase: PipelinePhase = PipelinePhase.IDLE,
+    val phase: PipelinePhase,
     val apiEndpoint: ExternalApiEndpoint,
     val onFetched: () -> Unit,
     val onFailed: () -> Unit,

@@ -57,7 +57,11 @@ class PhaseLoopController(
         val newLoopId = UUID.randomUUID().toString()
 
         val created = ref.updateAndGet { current ->
-            if (current != null && current.status != LoopStatus.STOPPED) {
+            // Only block a fresh startLoop if a loop is truly running.
+            // STOPPING/STOPPED allow a fresh loop with a new loopId — the
+            // previous iteration's finalization happens out-of-band and
+            // may briefly race the new iteration's acquirePhaseSlot.
+            if (current != null && current.status == LoopStatus.RUNNING) {
                 current
             } else {
                 LoopState(

@@ -212,6 +212,23 @@ class PhaseLoopControllerTest {
     }
 
     @Test
+    fun `startLoop after stopLoop allocates a fresh loopId even if previous is still STOPPING`() {
+        whenever(scheduler.triggerPhase(any(), any(), anyOrNull(), anyOrNull()))
+            .thenReturn(CompletableFuture<Void>().also { it.complete(null) })
+
+        val ctrl = controller()
+        val first = ctrl.startLoop(PipelinePhase.ITEM_EQUIPMENT)
+        ctrl.stopLoop(PipelinePhase.ITEM_EQUIPMENT)
+        // status is now STOPPING, but iteration handleIterationEnd hasn't run yet.
+        assertEquals(LoopStatus.STOPPING, first.status)
+
+        val second = ctrl.startLoop(PipelinePhase.ITEM_EQUIPMENT)
+        // New loopId even though first is still STOPPING.
+        assertNotEquals(first.loopId, second.loopId)
+        assertEquals(LoopStatus.RUNNING, second.status)
+    }
+
+    @Test
     fun `loop dies on first iteration if slot is occupied by an external one-shot`() {
         // Race: an external one-shot has already acquired the slot when the
         // loop's iter 1 calls acquirePhaseSlot. The scheduler returns a failed

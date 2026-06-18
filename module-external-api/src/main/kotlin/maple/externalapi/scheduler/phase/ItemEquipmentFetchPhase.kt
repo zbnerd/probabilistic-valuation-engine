@@ -12,6 +12,7 @@ import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
+import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import org.slf4j.LoggerFactory
@@ -72,6 +73,7 @@ class ItemEquipmentFetchPhase(
         val start = Instant.now(clock)
         val ctx = BatchFetchContext(
             endpoint = "item-equipment",
+            phase = PipelinePhase.ITEM_EQUIPMENT,
             apiEndpoint = ExternalApiEndpoint.ITEM_EQUIPMENT,
             onFetched = { metrics.recordItemEquipmentFetched() },
             onFailed = { metrics.recordItemEquipmentFailed() },

@@ -5,10 +5,6 @@ import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.zip.GZIPInputStream
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
 import maple.expectation.core.model.job.CalculationJob
 import maple.expectation.core.port.inbound.CharacterViewProjectionCommand
 import maple.expectation.core.port.inbound.CharacterViewQueryPort
@@ -63,78 +59,88 @@ class ResultReadyProjectionWorker(
         if (messages.isEmpty()) return
 
         val context = TaskContext.of("ResultProjection", "ProjectBatch", messages.size.toString())
-        executor.executeVoid({ projectPgmqBatch(messages) }, context)
+        executor.executeVoid(
+            {
+                projectPgmqBatch(messages).whenComplete { _, ex ->
+                    if (ex != null) {
+                        log.error("[ResultReadyProjection] batch failed: {}", ex.cause ?: ex, ex)
+                    }
+                }
+            },
+            context,
+        )
     }
 
-    private fun projectPgmqBatch(messages: List<PgmqMessage<Map<*, *>>>) {
-        val timer = StepTimer("ResultProjection:ProjectBatch", stepTraceThresholdMs, tags = mapOf("batchSize" to messages.size.toString()))
-        try {
-            val archiveIds = mutableListOf<Long>()
-            val parsed = messages.mapNotNull { parsePgmqMessage(it, archiveIds) }
-            timer.mark("parseMessages")
-            if (parsed.isEmpty()) {
-                archiveIfNeeded(archiveIds)
-                return
-            }
+    internal fun callProjectPgmqBatch(messages: List<PgmqMessage<Map<*, *>>>): CompletableFuture<Void> =
+        projectPgmqBatch(messages)
 
-            val jobIds = parsed.map { it.jobId }.distinct()
-            val jobsFuture = CompletableFuture.supplyAsync(
-                { jobPort.findJobsByIds(jobIds).associateBy { it.jobId } },
-                asyncExecutor,
-            )
-            val lightResultsFuture = CompletableFuture.supplyAsync(
-                { resultPort.findByJobIdsLight(jobIds).associateBy { it.jobId } },
-                asyncExecutor,
-            )
-            val jobsById = jobsFuture.join()
-            val lightByJobId = lightResultsFuture.join()
+    private fun projectPgmqBatch(messages: List<PgmqMessage<Map<*, *>>>): CompletableFuture<Void> {
+        val timer = StepTimer(
+            "ResultProjection:ProjectBatch",
+            stepTraceThresholdMs,
+            tags = mapOf("batchSize" to messages.size.toString()),
+        )
+        val archiveIds = mutableListOf<Long>()
+        val parsed = messages.mapNotNull { parsePgmqMessage(it, archiveIds) }
+        timer.mark("parseMessages")
+        if (parsed.isEmpty()) {
+            archiveIfNeeded(archiveIds)
+            return CompletableFuture.completedFuture<Void>(null).whenComplete { _, _ -> timer.close(log) }
+        }
+
+        val jobIds = parsed.map { it.jobId }.distinct()
+        val jobsByIdFuture = CompletableFuture.supplyAsync(
+            { jobPort.findJobsByIds(jobIds).associateBy { it.jobId } },
+            asyncExecutor,
+        )
+        val lightByJobIdFuture = CompletableFuture.supplyAsync(
+            { resultPort.findByJobIdsLight(jobIds).associateBy { it.jobId } },
+            asyncExecutor,
+        )
+
+        return jobsByIdFuture.thenCombine(lightByJobIdFuture) { jobsById, lightByJobId ->
             timer.mark("loadCalculationResults")
-
             val fallbackIds = lightByJobId.values
                 .filter { it.totalExpectedCost == null || it.maxPresetNo == null || it.presetsJson == null }
                 .map { it.jobId }
             val fallbackByJobId = if (fallbackIds.isNotEmpty()) {
                 resultPort.findByJobIdsWithBody(fallbackIds).associateBy { it.jobId }
             } else {
-                emptyMap()
+                emptyMap<UUID, CalculationResultData>()
             }
 
-            val outcomes = buildPgmqProjectionCommands(parsed, jobsById, lightByJobId, fallbackByJobId)
-            timer.mark("buildViewRows")
-            val commands = outcomes.mapNotNull { it.command }
-            archiveIds += outcomes.filter { it.archive }.map { it.messageId }
-
-            if (commands.isNotEmpty()) {
-                viewQueryPort.batchUpsertFromCalculations(commands)
+            val projectionFutures = parsed.map { message ->
+                CompletableFuture.supplyAsync(
+                    {
+                        val job = jobsById[message.jobId]
+                        val light = lightByJobId[message.jobId]
+                        when {
+                            job == null || light == null -> PgmqProjectionOutcome(message.messageId, archive = true)
+                            else -> PgmqProjectionOutcome(
+                                messageId = message.messageId,
+                                command = toPgmqProjectionCommand(message, job, light, fallbackByJobId[message.jobId]),
+                                archive = true,
+                            )
+                        }
+                    },
+                    asyncExecutor,
+                )
             }
-            timer.mark("batchUpsertViews")
-            archiveIfNeeded(archiveIds)
-            timer.mark("archiveMessages")
-        } finally {
-            timer.close(log)
-        }
-    }
-
-    private fun buildPgmqProjectionCommands(
-        parsed: List<PgmqProjectionMessage>,
-        jobsById: Map<UUID, CalculationJob>,
-        lightByJobId: Map<UUID, CalculationResultLight>,
-        fallbackByJobId: Map<UUID, CalculationResultData>,
-    ): List<PgmqProjectionOutcome> = runBlocking(Dispatchers.Default) {
-        parsed.map { message ->
-            async(Dispatchers.Default) {
-                val job = jobsById[message.jobId]
-                val light = lightByJobId[message.jobId]
-                when {
-                    job == null || light == null -> PgmqProjectionOutcome(message.messageId, archive = true)
-                    else -> PgmqProjectionOutcome(
-                        messageId = message.messageId,
-                        command = toPgmqProjectionCommand(message, job, light, fallbackByJobId[message.jobId]),
-                        archive = true,
-                    )
+            CompletableFuture.allOf(*projectionFutures.toTypedArray())
+                .thenApply { projectionFutures.map { it.get() } }
+        }.thenCompose { outcomesFuture ->
+            outcomesFuture.thenAccept { outcomes ->
+                timer.mark("buildViewRows")
+                val commands = outcomes.mapNotNull { it.command }
+                archiveIds += outcomes.filter { it.archive }.map { it.messageId }
+                if (commands.isNotEmpty()) {
+                    viewQueryPort.batchUpsertFromCalculations(commands)
                 }
+                timer.mark("batchUpsertViews")
+                archiveIfNeeded(archiveIds)
+                timer.mark("archiveMessages")
             }
-        }.awaitAll()
+        }.whenComplete { _, _ -> timer.close(log) }
     }
 
     private fun parsePgmqMessage(message: PgmqMessage<Map<*, *>>, archiveIds: MutableList<Long>): PgmqProjectionMessage? {

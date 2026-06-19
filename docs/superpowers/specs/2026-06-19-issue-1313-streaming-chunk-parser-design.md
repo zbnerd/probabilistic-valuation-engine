@@ -133,11 +133,42 @@ Files:
 
 ### 4.3 Call-site refactors
 
-| File | Change |
-|------|--------|
-| `module-external-api/.../reader/CharacterNameReader.kt` | Inject `StreamingChunkParser`. Replace `Files.list → GZIPInputStream → readTree(line)` with `parser.parse(input).map { it["key"] }`. Collect to `List<String>` to preserve signature. |
-| `module-external-api/.../cache/OcidCacheProvider.kt` | Same: replace per-line `parseLine(line)` with `parser.parse(input).mapNotNull { it.toUserIgnOcid() }`. |
-| `module-calculator/.../reader/GzipJsonlSnapshotRecordReader.kt` | Switch from `Flow<String>` to `Flow<Map<String, Any>>`. Update downstream consumers of this reader (search for `GzipJsonlSnapshotRecordReader` injection sites). |
+| File | Path | Change |
+|------|------|--------|
+| `OcidLookupPhase.readCharacterNamesFromChunks` | `module-external-api/.../scheduler/phase/OcidLookupPhase.kt:181` | Hot path. Already `suspend fun ... = withContext(Dispatchers.Default)`. Replace inlined `GZIPInputStream + lineSequence + readTree` loop with `streamingChunkParser.parse(stream).toList()`. Inject `StreamingChunkParser` + `ChunkParserMetrics`. Signature unchanged: `suspend fun ... : List<String>`. |
+| `OcidCacheProvider.refresh` / `loadFromRun` | `module-external-api/.../cache/OcidCacheProvider.kt` | Cold path. Replace per-line `parseLine(line)` with `runBlocking { parser.parse(stream).toList() }`. `runBlocking` here mirrors `ExternalApiScheduler.kt:188` pattern (cold / non-VT trigger). Public API unchanged. |
+| `GzipJsonlSnapshotRecordReader.readRecords` | `module-calculator/.../reader/GzipJsonlSnapshotRecordReader.kt` | Switch from `Flow<String>` to `Flow<Map<String, Any>>`. Downstream consumers of this reader (search for `GzipJsonlSnapshotRecordReader` injection sites) extract fields directly from `Map` instead of re-parsing each line via `objectMapper.readTree`. |
+
+**Not modified:** `module-external-api/.../reader/CharacterNameReader.kt` is pre-existing dead code (no production injection; only a code comment in `OcidResponseParser.kt:27` references it). Per CLAUDE.md §3 ("Touch only what you must"), it is preserved as-is. A follow-up cleanup issue may delete it.
+
+### 4.4 Feature flag
+
+The ext-api hot-path swap is gated behind a feature flag for rollback:
+
+```yaml
+externalapi:
+  parser:
+    streaming:
+      enabled: true   # default true post-deploy; set false to fall back to inlined readTree
+```
+
+```kotlin
+@Configuration
+@ConditionalOnProperty(
+    name = ["externalapi.parser.streaming.enabled"],
+    havingValue = "true",
+    matchIfMissing = true,
+)
+class StreamingChunkParserConfig {
+    @Bean
+    fun streamingChunkParser(objectMapper: ObjectMapper): StreamingChunkParser =
+        StreamingChunkParser(objectMapper, skipMalformed = true)
+}
+```
+
+When `enabled=false`, the bean is not created. `OcidLookupPhase` and `OcidCacheProvider` must check bean presence (or the configuration must gate the constructor injection via `@Autowired(required=false)`). Implementation choice: use `@Autowired(required=false) lateinit var streamingChunkParser` with fallback to legacy inline path, OR refactor hot path to delegate to a strategy bean selected by the flag.
+
+Calculator has no feature flag (no `runBlocking` introduction; if regression occurs, revert is a one-line change in `GzipJsonlSnapshotRecordReader`).
 
 ---
 
@@ -240,12 +271,17 @@ curl -s 'http://localhost:9090/api/v1/query?query=rate(external_api_users_fetche
 |------|--------|-------|
 | `module-common/src/main/kotlin/maple/common/parser/StreamingChunkParser.kt` | NEW | parser |
 | `module-common/src/test/kotlin/maple/common/parser/StreamingChunkParserTest.kt` | NEW | unit tests |
-| `module-external-api/src/main/kotlin/maple/externalapi/config/ChunkParserConfig.kt` | NEW | @Bean exposure |
-| `module-external-api/src/main/kotlin/maple/externalapi/reader/CharacterNameReader.kt` | MODIFY | swap to parser |
-| `module-external-api/src/main/kotlin/maple/externalapi/cache/OcidCacheProvider.kt` | MODIFY | swap to parser |
+| `module-external-api/src/main/kotlin/maple/externalapi/config/StreamingChunkParserConfig.kt` | NEW | `@Bean` exposure, gated by `@ConditionalOnProperty` |
+| `module-external-api/src/main/kotlin/maple/externalapi/metrics/ChunkParserMetrics.kt` | NEW | counters + timer (ext-api) |
+| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt` | MODIFY | replace `readCharacterNamesFromChunks` body (line 181) |
+| `module-external-api/src/main/kotlin/maple/externalapi/cache/OcidCacheProvider.kt` | MODIFY | swap to parser (cold path) |
 | `module-calculator/src/main/kotlin/maple/calculator/config/ChunkParserConfig.kt` | NEW | @Bean exposure |
+| `module-calculator/src/main/kotlin/maple/calculator/metrics/ChunkParserMetrics.kt` | NEW | counters + timer (calculator) |
 | `module-calculator/src/main/kotlin/maple/calculator/reader/GzipJsonlSnapshotRecordReader.kt` | MODIFY | Flow<Map> signature change |
 | `module-calculator/src/main/kotlin/.../<downstream consumer>.kt` | MODIFY | update for Flow<Map> |
+| `module-external-api/src/main/resources/application.yml` | MODIFY | add `externalapi.parser.streaming.enabled: true` |
+
+**Pre-existing dead code, NOT modified:** `module-external-api/.../reader/CharacterNameReader.kt` (no production injection). Follow-up cleanup issue may delete.
 
 (Final downstream consumer file in calculator to be identified during implementation — search for `GzipJsonlSnapshotRecordReader` injections.)
 
@@ -293,6 +329,8 @@ curl -s 'http://localhost:9090/api/v1/query?query=rate(external_api_users_fetche
 - `JsonParser.readValueAsTree()` throw 후 cursor 위치 정확도 — Jackson 버전 의존. **Mitigation**: unit test with malformed middle record (test case 2) asserts skip 동작. `skipChildren()` 후 명시적 resync.
 - downstream calculator consumer `GzipJsonlSnapshotRecordReader` 변경이 다른 호출부에 영향 — **Mitigation**: implementation 단계에서 모든 injection site grep 후 함께 업데이트.
 - 메트릭 라벨 cardinality 증가 — `source` 라벨을 enum으로 제한.
+- 핫 경로 (`OcidLookupPhase`) 회귀 시 즉시 롤백 필요 — **Mitigation**: §4.4 feature flag. `externalapi.parser.streaming.enabled=false`로 legacy inline `readTree` 경로 복귀 가능, 코드 revert 불필요.
+- `OcidLookupPhase` constructor param 추가 (`streamingChunkParser`, `chunkParserMetrics`)로 테스트 mock 깨짐 — **Mitigation**: 구현 시 `ExternalApiSchedulerTest` 등 mock 추가.
 
 ### Non-Risk
 

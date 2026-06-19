@@ -98,4 +98,21 @@ class OrphanTempFileCleanupHookTest {
         assertThat(Files.exists(plainTxt)).isTrue
         assertThat(Files.exists(olderPrefix)).isTrue
     }
+
+    @Test
+    fun `continues after individual delete failure`() {
+        val good = createOrphan("gzip-chunk-uuid4-part-000004-.jsonl.gz.tmp", ageHours = 2)
+        val held = createOrphan("gzip-chunk-uuid5-part-000005-.jsonl.gz.tmp", ageHours = 2)
+        // Make the file un-deletable on POSIX. Test is no-op on Windows.
+        held.toFile().setReadable(false)
+        held.toFile().setWritable(false)
+
+        makeHook().run(mock())
+
+        assertThat(Files.exists(good)).isFalse // sibling cleaned up despite held failing
+        // held may or may not still exist depending on OS; what matters is the loop didn't bail
+        // and the summary log reflects the failure. Cleanup perm for next test:
+        held.toFile().setReadable(true)
+        held.toFile().setWritable(true)
+    }
 }

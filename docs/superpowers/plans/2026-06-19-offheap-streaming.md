@@ -395,21 +395,214 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
-## Task 3: Phase 3 — Streaming Calculator Writer
+## Task 3: Phase 3 — Streaming Calculator Writer (CF-chain, S3AsyncClient)
+
+**Design rationale:** Plan originally proposed reusing `ObjectStorage.putStream` with a `PipedInputStream` bridge. Rejected after code review: `MinioObjectStorage.putStream` itself calls `input.readBytes()` (full ByteArray drain — see `MinioObjectStorage.kt:76-110`), so the pipe gives zero heap reduction. New design adds `putStreamMultipart(key, input): CompletableFuture<PutResult>` that uses `S3AsyncClient.putObject(... RequestBody.fromInputStream(input, -1L))` (chunked transfer encoding, async-only per existing comment). The calculator writer becomes a CF chain: producer-coroutine → gzip → pipe → `putStreamMultipart` → `thenCombine` → `WriteResult`. No `join`/`get`/`await`/`runBlocking` — uses `CoroutineScope.future {}` to bridge Flow → CF.
 
 **Files:**
-- Modify: `module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriter.kt`
+- Modify: `module-common/src/main/kotlin/maple/expectation/common/storage/ObjectStorage.kt` — add `putStreamMultipart`
+- Modify: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt` — impl with `S3AsyncClient`
+- Modify: `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorage.kt` — impl using temp file + `putFile` on virtual-thread executor
+- Modify: `module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriter.kt` — return `CompletableFuture<WriteResult>`, use CF chain
+- Create: `module-calculator/src/main/kotlin/maple/calculator/writer/WriteCounters.kt`
+- Create: `module-calculator/src/main/kotlin/maple/calculator/writer/CountingOutputStream.kt` (if not exists)
 - Create: `module-calculator/src/test/kotlin/maple/calculator/writer/CalculationResultWriterTest.kt`
+- Modify: `module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriterCaller.kt` (or wherever `write()` is awaited) — return `WriteResult` from `thenApply`, no `.join()/.get()`
 
 - [ ] **Step 3.1: Find current writer logic**
 
 ```bash
-sed -n '1,80p' module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriter.kt
+sed -n '1,100p' module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriter.kt
 ```
 
-Note: the comment at line 33 says "Buffer the gzipped bytes in memory (chunk size 1.4-10 MB, acceptable)". We are changing this.
+Note the existing `ByteArrayOutputStream` buffering pattern. Also find every caller of `write()`:
 
-- [ ] **Step 3.2: Write failing bytewise-equivalence test**
+```bash
+grep -rn "CalculationResultWriter\.write\|writer\.write\|calculatorWriter" module-calculator/src/main/kotlin/ --include="*.kt" | grep -v Test
+```
+
+Record callers — they currently suspend on `write()`. After Task 3 they receive `CompletableFuture<WriteResult>` instead.
+
+- [ ] **Step 3.2: Add `putStreamMultipart` to `ObjectStorage` interface**
+
+Edit `module-common/src/main/kotlin/maple/expectation/common/storage/ObjectStorage.kt`. Add after the existing `putFileAsync` (line 54):
+
+```kotlin
+/**
+ * Async streaming upload. The implementation accepts an InputStream of
+ * arbitrary length and uploads without buffering the full content in heap.
+ *
+ * Used by the calculator result writer to avoid materializing a full chunk
+ * ByteArray per concurrent upload. Implementations:
+ * - Minio: S3AsyncClient.putObject with chunked transfer encoding
+ *   (RequestBody.fromInputStream(input, -1L)).
+ * - LocalFs: drain input to a temp file, then putFile on the virtual-thread
+ *   executor; delete the temp file on completion.
+ *
+ * Returns when the upload completes. On failure the future completes
+ * exceptionally. Caller closes the stream.
+ */
+fun putStreamMultipart(key: String, input: InputStream): CompletableFuture<PutResult>
+```
+
+- [ ] **Step 3.3: Implement `putStreamMultipart` in `MinioObjectStorage`**
+
+Edit `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt`. Add a constructor parameter for `S3AsyncClient`:
+
+```kotlin
+class MinioObjectStorage(
+    private val s3: S3Client,
+    private val s3Async: S3AsyncClient,  // <-- new
+    private val props: MinioProperties,
+) : ObjectStorage {
+    // existing fields...
+```
+
+(In the existing `@Bean MinioObjectStorage(...)` wiring in `StorageConfig.kt`, add `s3AsyncClient = s3AsyncClient`. Note: `s3AsyncClient` is the existing bean from `StorageConfig.kt:64`.)
+
+Add the method:
+
+```kotlin
+override fun putStreamMultipart(
+    key: String,
+    input: InputStream,
+): CompletableFuture<PutResult> {
+    // Async chunked transfer: S3AsyncClient.putObject with
+    // RequestBody.fromInputStream(input, -1L) sends chunks without
+    // knowing total length. The 5MB part size + TransferManager-style
+    // multipart pipeline keeps heap bounded. Verified 2026-06-19:
+    // previously putStream used sync putObject with readBytes() which
+    // forced full-chunk ByteArray drain — this method avoids that.
+    val req = PutObjectRequest.builder()
+        .bucket(props.bucket)
+        .key(key)
+        .contentType("application/octet-stream")
+        .build()
+
+    return s3Async.putObject(req, AsyncRequestBody.fromInputStream(input, -1L))
+        .handleAsync { resp, err ->
+            if (err != null) {
+                throw RuntimeException("putStreamMultipart failed for key=$key", err)
+            }
+            PutResult(key, -1L, resp.eTag())  // size unknown with chunked transfer
+        }
+}
+```
+
+Add import at top of file: `software.amazon.awssdk.services.s3.model.PutObjectResponse`, `software.amazon.awssdk.core.async.AsyncRequestBody`, `java.util.concurrent.CompletableFuture`.
+
+- [ ] **Step 3.4: Wire `S3AsyncClient` into the `MinioObjectStorage` bean**
+
+In `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/StorageConfig.kt`, find the `MinioObjectStorage` bean and add `s3AsyncClient` parameter:
+
+```kotlin
+@Bean
+@ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
+fun minioObjectStorage(
+    @Qualifier("s3Client") s3: S3Client,
+    s3AsyncClient: S3AsyncClient,  // existing bean (line 64)
+    props: MinioProperties,
+): MinioObjectStorage = MinioObjectStorage(s3, s3AsyncClient, props)
+```
+
+Add `@Qualifier` import if needed.
+
+- [ ] **Step 3.5: Implement `putStreamMultipart` in `LocalFsObjectStorage`**
+
+Edit `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorage.kt`. Add:
+
+```kotlin
+override fun putStreamMultipart(
+    key: String,
+    input: InputStream,
+): CompletableFuture<PutResult> {
+    // Drain InputStream to temp file (bounded heap), then putFile on
+    // virtual-thread executor. Returns CF for chain-composability.
+    val tempFile = Files.createTempFile("objstore-", ".tmp")
+    return CompletableFuture.runAsync({
+        Files.copy(input, tempFile, StandardCopyOption.REPLACE_EXISTING)
+        val result = putFile(key, tempFile)
+        Files.deleteIfExists(tempFile)
+        result
+    }, uploadExecutor).handleAsync { result, err ->
+        Files.deleteIfExists(tempFile)  // cleanup on any error
+        if (err != null) throw RuntimeException("putStreamMultipart failed", err.cause ?: err)
+        result
+    }
+}
+```
+
+`uploadExecutor` should be a virtual-thread executor (referenced from `ConcurrencyConfiguration` per project conventions). Add `@Qualifier` if the existing field is named.
+
+- [ ] **Step 3.6: Verify module-infra builds**
+
+```bash
+./gradlew :module-infra:compileKotlin :module-infra:compileJava --continue
+```
+
+Expected: BUILD SUCCESSFUL.
+
+- [ ] **Step 3.7: Create `CountingOutputStream` (if not present)**
+
+Check first:
+
+```bash
+find module-calculator/src/main/kotlin -name "CountingOutputStream.kt"
+```
+
+If absent, create `module-calculator/src/main/kotlin/maple/calculator/writer/CountingOutputStream.kt`:
+
+```kotlin
+package maple.calculator.writer
+
+import java.io.OutputStream
+
+/**
+ * OutputStream that counts bytes written. Thread-safe via synchronized write().
+ */
+class CountingOutputStream(
+    private val delegate: OutputStream,
+    private val counter: java.util.concurrent.atomic.AtomicLong =
+        java.util.concurrent.atomic.AtomicLong(0),
+) : OutputStream() {
+
+    override fun write(b: Int) {
+        delegate.write(b)
+        counter.incrementAndGet()
+    }
+
+    override fun write(b: ByteArray, off: Int, len: Int) {
+        delegate.write(b, off, len)
+        counter.addAndGet(len.toLong())
+    }
+
+    override fun flush() = delegate.flush()
+    override fun close() = delegate.close()
+}
+```
+
+- [ ] **Step 3.8: Create `WriteCounters`**
+
+Create `module-calculator/src/main/kotlin/maple/calculator/writer/WriteCounters.kt`:
+
+```kotlin
+package maple.calculator.writer
+
+import java.util.concurrent.atomic.AtomicLong
+
+/**
+ * Thread-safe counters for streaming write. AtomicLong fields allow
+ * producer (Flow.collect on dedicated dispatcher) and consumer (CF
+ * callback) to update independently without locks.
+ */
+class WriteCounters {
+    val records: AtomicLong = AtomicLong(0)
+    val uncompressedBytes: AtomicLong = AtomicLong(0)
+    val compressedBytes: AtomicLong = AtomicLong(0)
+}
+```
+
+- [ ] **Step 3.9: Write failing bytewise-equivalence test**
 
 Create `module-calculator/src/test/kotlin/maple/calculator/writer/CalculationResultWriterTest.kt`:
 
@@ -419,158 +612,252 @@ package maple.calculator.writer
 import kotlinx.coroutines.flow.flowOf
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.CompletableFuture
 import java.util.zip.GZIPInputStream
 
 class CalculationResultWriterTest {
 
     @Test
-    fun `streaming gzip output decompresses to expected JSONL`() = kotlinx.coroutines.runBlocking {
+    fun `streaming gzip output decompresses to expected JSONL`() {
         val results = flowOf(
             mapOf("ign" to "f***l", "score" to 100),
             mapOf("ign" to "a***b", "score" to 200),
         )
-        val out = ByteArrayOutputStream()
-        val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+        // Use a stub ObjectStorage that captures the stream and returns CF.
+        val captured = ByteArrayOutputStream()
+        val stub = object : StubObjectStorage() {
+            override fun putStreamMultipart(key: String, input: java.io.InputStream) =
+                CompletableFuture.completedFuture(
+                    run {
+                        input.copyTo(captured)
+                        ObjectStorage.PutResult(key, captured.size().toLong(), "stub-etag")
+                    }
+                )
+        }
 
-        // Hypothetical streaming write API (will be implemented in Step 3.4)
-        StreamingResultUploader.writeToStream(
-            results = results,
-            objectMapper = objectMapper,
-            sink = out,
-        )
+        val writer = CalculationResultWriter(stub, objectMapper)
+        val cf = writer.write("test.jsonl.gz", results)
 
-        // Decompress and verify content
-        val decompressed = GZIPInputStream(out.toByteArray().inputStream())
-            .bufferedReader().readText()
-        assertTrue(decompressed.contains("\"ign\":\"f***l\""))
-        assertTrue(decompressed.contains("\"ign\":\"a***b\""))
+        // CF chain — assert via thenAccept, no join/get/await
+        cf.thenAccept { writeResult ->
+            assertEquals(2L, writeResult.recordCount)
+            val decompressed = GZIPInputStream(captured.toByteArray().inputStream())
+                .bufferedReader().readText()
+            assertTrue(decompressed.contains("\"ign\":\"f***l\""))
+            assertTrue(decompressed.contains("\"ign\":\"a***b\""))
+        }.get()  // .get() in test only is OK; production code uses thenApply
     }
 
     @Test
-    fun `streaming write with empty flow produces valid gzip header`() {
-        val out = ByteArrayOutputStream()
-        val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
-        StreamingResultUploader.writeToStream(
-            results = kotlinx.coroutines.flow.emptyFlow(),
-            objectMapper = objectMapper,
-            sink = out,
-        )
-        // gzip magic number 1f 8b
-        assertEquals(0x1f.toByte(), out.toByteArray()[0])
-        assertEquals(0x8b.toByte(), out.toByteArray()[1])
+    fun `streaming write with empty flow still produces gzip header`() {
+        val captured = ByteArrayOutputStream()
+        val stub = object : StubObjectStorage() {
+            override fun putStreamMultipart(key: String, input: java.io.InputStream) =
+                CompletableFuture.completedFuture(
+                    run {
+                        input.copyTo(captured)
+                        ObjectStorage.PutResult(key, captured.size().toLong(), "stub-etag")
+                    }
+                )
+        }
+        val writer = CalculationResultWriter(stub, objectMapper)
+        cf = writer.write("empty.jsonl.gz", kotlinx.coroutines.flow.emptyFlow())
+
+        cf.thenAccept {
+            // gzip magic 1f 8b
+            assertEquals(0x1f.toByte(), captured.toByteArray()[0])
+            assertEquals(0x8b.toByte(), captured.toByteArray()[1])
+        }.get()
+    }
+
+    companion object {
+        // Spring auto-configured ObjectMapper (avoids code-style rule against
+        // direct ObjectMapper() construction).
+        private val objectMapper = maple.expectation.common.config.JacksonConfig().objectMapper()
     }
 }
 ```
 
-- [ ] **Step 3.3: Run tests to verify they fail**
+Create `module-calculator/src/test/kotlin/maple/calculator/writer/StubObjectStorage.kt` (test fixture):
 
-```bash
-docker exec maple-calculator bash -c "cd /opt/calculator && ./gradlew test --tests 'maple.calculator.writer.CalculationResultWriterTest' 2>&1 | tail -10"
+```kotlin
+package maple.calculator.writer
+
+import maple.expectation.common.storage.ObjectStorage
+import java.io.InputStream
+import java.nio.file.Path
+import java.time.Instant
+
+/**
+ * Stub ObjectStorage for unit tests. Default impl throws — tests override
+ * only the methods they need. This avoids mocking framework dependency.
+ */
+open class StubObjectStorage : ObjectStorage {
+    override fun put(key: String, data: ByteArray) = throw NotImplementedError()
+    override fun putStream(key: String, input: InputStream) = throw NotImplementedError()
+    override fun putStreamMultipart(key: String, input: InputStream) = throw NotImplementedError()
+    override fun putFile(key: String, path: Path) = throw NotImplementedError()
+    override fun putFileAsync(key: String, path: Path) = throw NotImplementedError()
+    override fun get(key: String) = throw NotImplementedError()
+    override fun getStream(key: String): InputStream = throw NotImplementedError()
+    override fun delete(key: String) {}
+    override fun exists(key: String) = false
+    override fun listByPrefix(prefix: String) = emptyList<ObjectStorage.ObjectInfo>()
+    override fun deleteByPrefix(prefix: String) = 0L
+    override fun calculatePrefixSize(prefix: String) = 0L
+    override fun getLastModified(key: String) = Instant.EPOCH
+}
 ```
 
-(Or use local gradlew if not running in container.) Expected: compilation failure on `StreamingResultUploader`.
+- [ ] **Step 3.10: Run tests to verify they fail**
 
-- [ ] **Step 3.4: Create `StreamingResultUploader`**
+```bash
+./gradlew :module-calculator:test --tests "maple.calculator.writer.CalculationResultWriterTest"
+```
 
-Create `module-calculator/src/main/kotlin/maple/calculator/writer/StreamingResultUploader.kt`:
+Expected: compilation failure on `CalculationResultWriter` constructor (takes suspend fun `write`, will be replaced with CF).
+
+- [ ] **Step 3.11: Rewrite `CalculationResultWriter.write` as CF chain**
+
+Replace the `write()` function body in `CalculationResultWriter.kt`:
 
 ```kotlin
 package maple.calculator.writer
 
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.databind.ObjectMapper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
-import java.io.OutputStream
+import kotlinx.coroutines.future.future
+import maple.calculator.domain.CalculationResult
+import maple.expectation.common.storage.ObjectStorage
+import maple.expectation.infrastructure.task.LogicExecutor
+import maple.expectation.infrastructure.task.TaskContext
+import org.slf4j.LoggerFactory
+import java.io.PipedInputStream
+import java.io.PipedOutputStream
+import java.util.concurrent.CompletableFuture
 import java.util.zip.GZIPOutputStream
 
-/**
- * Streaming gzip → sink for calculation results.
- *
- * Replaces the legacy in-memory buffer approach (full chunk in
- * ByteArrayOutputStream before upload) with a streaming pipe:
- *   results → JsonGenerator → CountingOutputStream → GZIPOutputStream → sink
- *
- * Bounded by the upstream backpressure (CalculatorChunkProcessingCoordinator's
- * Semaphore(CHUNK_PROCESS_PERMITS)); no full-chunk heap accumulation.
- */
-object StreamingResultUploader {
+class CalculationResultWriter(
+    private val objectStorage: ObjectStorage,
+    private val objectMapper: ObjectMapper,
+    private val logicExecutor: LogicExecutor? = null,
+    private val producerScope: CoroutineScope =
+        CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob()),
+) {
+    private val log = LoggerFactory.getLogger(CalculationResultWriter::class.java)
 
-    suspend fun writeToStream(
-        results: Flow<Map<String, Any>>,
-        objectMapper: ObjectMapper,
-        sink: OutputStream,
-    ) {
-        sink.use { out ->
-            GZIPOutputStream(out).use { gz ->
-                objectMapper.factory.createGenerator(gz).use { gen ->
-                    results.collect { result ->
-                        gen.writeObject(result)
-                        gen.writeRaw('\n')
+    data class WriteResult(
+        val recordCount: Long,
+        val uncompressedBytes: Long,
+        val compressedBytes: Long,
+        val etag: String?,
+    )
+
+    /**
+     * Stream calculation results through gzip → S3 multipart upload.
+     *
+     * Flow:
+     *   results.collect → JsonGenerator → CountingOutputStream →
+     *     GZIPOutputStream → pipeOutput → (8MB pipe) →
+     *     putStreamMultipart → S3AsyncClient chunked transfer.
+     *
+     * Producer runs in `producerScope` (IO dispatcher). Consumer is the
+     * S3 async client. The pipe provides natural backpressure: when full,
+     * the producer's `pipeOutput.write()` blocks → the producer's
+     * gzipOutputStream.write() blocks → the JsonGenerator's collect
+     * suspends → no more results are pulled until the consumer drains.
+     *
+     * Returns CompletableFuture<WriteResult>. Callers MUST chain via
+     * thenApply/thenCompose — no .join()/.get()/.await().
+     */
+    fun write(
+        objectKey: String,
+        results: Flow<CalculationResult>,
+    ): CompletableFuture<WriteResult> {
+        val pipeInput = PipedInputStream(8 * 1024 * 1024)
+        val pipeOutput = PipedOutputStream(pipeInput)
+        val counters = WriteCounters()
+
+        // Producer CF: collect Flow → write to pipe. CF chain, no runBlocking.
+        val producerFuture: CompletableFuture<Unit> = producerScope.future {
+            try {
+                GZIPOutputStream(pipeOutput).use { gz ->
+                    CountingOutputStream(gz, counters.compressedBytes).use { cgz ->
+                        objectMapper.factory.createGenerator(cgz).use { gen ->
+                            results.collect { result ->
+                                counters.records.incrementAndGet()
+                                gen.writeObject(result)
+                                gen.writeRaw('\n')
+                            }
+                        }
                     }
                 }
+                Unit
+            } finally {
+                runCatching { pipeOutput.close() }  // signal EOF to consumer
             }
+        }
+
+        // Consumer CF: pipeInput → S3 multipart (chunked encoding).
+        val uploadFuture = objectStorage.putStreamMultipart(objectKey, pipeInput)
+
+        // Compose: producer done + upload done → WriteResult
+        val composed = producerFuture.thenCombine(uploadFuture) { _, putResult ->
+            WriteResult(
+                recordCount = counters.records.get(),
+                uncompressedBytes = counters.uncompressedBytes.get(),
+                compressedBytes = counters.compressedBytes.get(),
+                etag = putResult.checksum,
+            )
+        }
+
+        // Cleanup pipe on any path (success or failure).
+        return composed.whenComplete { _, _ ->
+            runCatching { pipeInput.close() }
+        }.exceptionally { err ->
+            log.error(
+                "[CalculationResultWriter] write failed for key={}",
+                objectKey, err,
+            )
+            throw RuntimeException("streaming write failed for key=$objectKey", err)
         }
     }
 }
 ```
 
-- [ ] **Step 3.5: Run tests to verify they pass**
+**Adapt the constructor signature to match the existing class.** The original takes `objectStorage` only; preserve any additional dependencies. Keep logic executor / task context integration if present (wrap with `logicExecutor.execute(task, ctx) { ... }` for error handling per project convention).
 
-```bash
-./gradlew :module-calculator:test --tests "maple.calculator.writer.CalculationResultWriterTest"
-```
+- [ ] **Step 3.12: Update all callers to use CF chain**
 
-Expected: 2 tests pass.
-
-- [ ] **Step 3.6: Refactor `CalculationResultWriter` to use `StreamingResultUploader`**
-
-Replace the body of `write(objectKey, results)` (the old `ByteArrayOutputStream` path) with a streaming upload via the existing `ObjectStorage.putStream(key, inputStream)`:
+For every caller found in Step 3.1:
 
 ```kotlin
-suspend fun write(
-    objectKey: String,
-    results: Flow<CalculationResult>,
-): WriteResult {
-    val uncompressedCounter = CountingOutputStream.NullCounter
-    val compressedCounter = CountingOutputStream.NullCounter
+// Before (suspend):
+val writeResult = writer.write(key, results)
+someMethod(writeResult)
 
-    val pipeInput = PipedInputStream(8 * 1024 * 1024)  // 8MB streaming buffer
-    val pipeOutput = PipedOutputStream(pipeInput)
-
-    // Producer: collect results → gzip → pipe
-    val producerJob = kotlinx.coroutines.GlobalScope.launch {
-        StreamingResultUploader.writeToStream(
-            results = results.map { it.toMap() },
-            objectMapper = objectMapper,
-            sink = pipeOutput,
-        )
-    }
-
-    // Consumer: upload pipe → MinIO S3
-    val writeResult = objectStorage.putStream(objectKey, pipeInput)
-
-    producerJob.join()
-    return WriteResult(
-        recordCount = compressedCounter.count,
-        uncompressedBytes = uncompressedCounter.count,
-        compressedBytes = compressedCounter.count,
-    )
-}
+// After (CF chain — no .join/.get/.await):
+writer.write(key, results)
+    .thenAccept { writeResult -> someMethod(writeResult) }
+    .exceptionally { err -> logger.error("write failed", err); null }
 ```
 
-(Adapt `toMap()` and counters to match the existing types. The key change: NO `ByteArrayOutputStream` intermediate.)
+If a caller genuinely needs to wait (e.g., HTTP response that must include the result), chain inside the same CF that handles the HTTP response — never `.join()` on the writer CF.
 
-- [ ] **Step 3.7: Run full calculator test suite**
+- [ ] **Step 3.13: Run full calculator test suite**
 
 ```bash
 ./gradlew :module-calculator:test
 ```
 
-Expected: all tests pass.
+Expected: all tests pass (legacy tests for the suspend variant, plus new CF-chain tests).
 
-- [ ] **Step 3.8: Smoke test (live) — bytewise equivalence**
+- [ ] **Step 3.14: Smoke test (live) — bytewise equivalence**
 
 Run the pipeline once with the new writer. Capture the gz output:
 
@@ -578,26 +865,34 @@ Run the pipeline once with the new writer. Capture the gz output:
 mc cp local/maple-expectation/calculator/runs/<runId>/<chunk>.jsonl.gz /tmp/new_run.jsonl.gz
 ```
 
-Compare with a reference run (saved from the previous pipeline test):
+Compare with a reference run (saved from a previous pipeline test):
 
 ```bash
 diff <(gunzip -c /tmp/new_run.jsonl.gz | head -1000) <(gunzip -c /tmp/reference_run.jsonl.gz | head -1000)
 ```
 
-Expected: no diff.
+Expected: no diff. (Full diff on larger samples recommended.)
 
-- [ ] **Step 3.9: Commit**
+- [ ] **Step 3.15: Commit**
 
 ```bash
-git add module-calculator/src/main/kotlin/maple/calculator/writer/ \
+git add module-common/src/main/kotlin/maple/expectation/common/storage/ObjectStorage.kt \
+  module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/ \
+  module-calculator/src/main/kotlin/maple/calculator/writer/ \
   module-calculator/src/test/kotlin/maple/calculator/writer/
-git commit -m "perf(calculator): streaming gzip → S3 in result writer
+git commit -m "perf(calculator): streaming gzip → S3 via async chunked transfer
 
-Replaces full-chunk ByteArrayOutputStream intermediate with a
-8MB PipedInputStream/OutputStream pipe. Heap reduction: ~40MB
-(4 concurrent chunks × 10MB buffer eliminated).
+Adds putStreamMultipart(key, input): CompletableFuture<PutResult> to
+ObjectStorage, backed by S3AsyncClient.putObject with chunked encoding
+(RequestBody.fromInputStream(input, -1L)). Replaces the legacy
+full-chunk ByteArrayOutputStream buffering.
 
-Bytewise-equivalence test ensures gz output identical to legacy.
+CalculationResultWriter.write() now returns CompletableFuture<WriteResult>
+via a CF chain: producer-coroutine → gzip → pipe (8MB backpressure) →
+putStreamMultipart → thenCombine → result. No join/get/await/runBlocking.
+
+Heap reduction: ~40MB (4 concurrent chunks × 10MB buffer eliminated).
+Caller API: chain via thenApply/thenAccept.
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```

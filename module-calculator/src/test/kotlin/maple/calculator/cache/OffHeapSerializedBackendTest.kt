@@ -89,9 +89,8 @@ class OffHeapSerializedBackendTest {
         backend.put("b", "2")
         backend.put("c", "3")
         assertThat(backend.size()).isEqualTo(3L)
-        backend.put("d", "4") // evicts oldest (a)
+        backend.put("d", "4")
         assertThat(backend.size()).isEqualTo(3L)
-        // 'a' was oldest, should be gone; 'd' should be present.
         assertThat(backend.get("a")).isNull()
         assertThat(backend.get("d")).isEqualTo("4")
     }
@@ -100,11 +99,30 @@ class OffHeapSerializedBackendTest {
     fun `stores values off-heap via direct ByteBuffer`() {
         backend = OffHeapSerializedBackend(CacheConfig())
         backend.put("k", "v")
-        val buf = (backend as OffHeapSerializedBackend<String, String>).let {
-            // Use reflection-free access via stats; verify via size > 0
-            // (proves ByteBuffer was allocated, since no POJO is stored).
-            it.size()
+        assertThat(backend.size()).isEqualTo(1L)
+    }
+
+    @Test
+    fun `hash collision does not silently overwrite distinct keys`() {
+        // Regression: ConcurrentHashMap<Int, V> allows hash collisions to overwrite silently.
+        // Fix: store key reference + verify key.equals() on get().
+        backend = OffHeapSerializedBackend(CacheConfig())
+        val keyA = object {
+            override fun hashCode() = 0xCAFEBABE.toInt()
+            override fun toString() = "A"
+            override fun equals(other: Any?): Boolean = this === other
         }
-        assertThat(buf).isEqualTo(1L)
+        val keyB = object {
+            override fun hashCode() = 0xCAFEBABE.toInt()
+            override fun toString() = "B"
+            override fun equals(other: Any?): Boolean = this === other
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val typedBackend = backend as OffHeapSerializedBackend<Any, String>
+        typedBackend.put(keyA, "valueA")
+        typedBackend.put(keyB, "valueB")
+        assertThat(typedBackend.get(keyA)).isEqualTo("valueA")
+        assertThat(typedBackend.get(keyB)).isEqualTo("valueB")
     }
 }

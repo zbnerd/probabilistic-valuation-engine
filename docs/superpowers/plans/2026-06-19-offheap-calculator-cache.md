@@ -4,9 +4,9 @@
 
 **Goal:** Replace the 100K-entry Caffeine OCID lookup cache in `module-calculator` with Chronicle Map (off-heap KV), behind a profile switch. Caffeine remains as the default and as the auto-fallback when Chronicle init fails. Reduces calculator heap by 30–50MB without changing call-site code.
 
-**Architecture:** `OffHeapCacheBackend<K, V>` interface in `module-calculator/.../cache/`. Two impls: `CaffeineCacheBackend` (existing logic, refactored) and `ChronicleMapBackend` (new). `CacheBackendFactory` selects impl from `calculator.cache.backend` profile property (`caffeine` default, `chronicle` opt-in). `CalculationCache` refactored to depend on the interface; callers (`SnapshotChunkProcessor`) untouched. Chronicle uses pinned patch `3.21ea11`; init failure auto-falls-back to Caffeine + WARN log.
+**Architecture:** `OffHeapCacheBackend<K, V>` interface in `module-calculator/.../cache/`. Two impls: `CaffeineCacheBackend` (existing logic, refactored) and `ChronicleMapBackend` (new). `CacheBackendFactory` selects impl from `calculator.cache.backend` profile property (`caffeine` default, `chronicle` opt-in). `CalculationCache` refactored to depend on the interface; callers (`SnapshotChunkProcessor`) untouched. Chronicle Map pinned to exact stable version `3.26.8`; init failure auto-falls-back to Caffeine + WARN log.
 
-**Tech Stack:** Kotlin (JVM 21), Spring Boot, Chronicle Map 3.21ea11, Caffeine 3.1.8 (existing), Micrometer/Prometheus.
+**Tech Stack:** Kotlin (JVM 21), Spring Boot, Chronicle Map 3.26.8, Caffeine 3.1.8 (existing), Micrometer/Prometheus.
 
 **Spec:** [`docs/superpowers/specs/2026-06-19-offheap-calculator-cache-design.md`](../specs/2026-06-19-offheap-calculator-cache-design.md)
 
@@ -46,7 +46,7 @@ Edit `gradle/libs.versions.toml`. Find the `[versions]` block and the `[librarie
 
 ```toml
 # In [versions]
-chronicle-map = "3.21ea11"
+chronicle-map = "3.26.8"
 ```
 
 ```toml
@@ -72,7 +72,7 @@ Run:
 ./gradlew :module-calculator:dependencies --configuration runtimeClasspath | grep chronicle
 ```
 
-Expected: One line containing `net.openhft:chronicle-map:3.21ea11`.
+Expected: One line containing `net.openhft:chronicle-map:3.26.8`.
 
 - [ ] **Step 1.4: Verify the module still compiles**
 
@@ -87,10 +87,10 @@ Expected: BUILD SUCCESSFUL. No new errors. (Existing code is untouched in this t
 
 ```bash
 git add gradle/libs.versions.toml module-calculator/build.gradle
-git commit -m "build(calculator): add chronicle-map 3.21ea11 dependency
+git commit -m "build(calculator): add chronicle-map 3.26.8 dependency
 
 Pinned exact patch for off-heap OCID cache (issue #1311, Phase 2).
-Chronicle Map file format is version-sensitive; pin required."
+Chronicle Map 3.26.8 (latest stable, Dec 2025). File format version-sensitive; pin required."
 ```
 
 ---
@@ -562,7 +562,7 @@ class CacheBackendFactoryTest {
 
     @Test
     fun `chronicle profile returns ChronicleMapBackend when available`() {
-        // Smoke test: Chronicle Map 3.21ea11 should be on the test classpath.
+        // Smoke test: Chronicle Map 3.26.8 should be on the test classpath.
         // If init fails for any reason (e.g., test env lacks tmp dir), this test fails loudly.
         val b = track(CacheBackendFactory.create("chronicle", CacheConfig(maxEntries = 100L), String::class.java, String::class.java))
         assertEquals("chronicle", b.name)

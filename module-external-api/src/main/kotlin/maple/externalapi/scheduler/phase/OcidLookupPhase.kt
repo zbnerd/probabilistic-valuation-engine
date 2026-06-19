@@ -53,11 +53,16 @@ import java.util.zip.GZIPOutputStream
  *
  * <p>Streaming write: each successful mapping is pushed to a [Channel] and consumed by a
  * single writer coroutine that pipes bytes into a GZIPOutputStream wrapping
- * [ObjectStorage.putStream]. The previous implementation accumulated all 600K+ entries in a
- * `MutableList<String>` until the end of the phase — that held ~120MB of JSON strings in heap
- * for the entire OCID run and pushed the JVM over its 1GB ceiling when combined with other
- * in-flight state. Streaming keeps the heap footprint bounded to the pipe buffer (64KB) plus
- * the GZIPOutputStream internal buffer.
+ * [ObjectStorage.putStreamMultipart]. The previous implementation accumulated all 600K+
+ * entries in a `MutableList<String>` until the end of the phase — that held ~120MB of JSON
+ * strings in heap for the entire OCID run and pushed the JVM over its 1GB ceiling when
+ * combined with other in-flight state. Streaming keeps the heap footprint bounded to the
+ * pipe buffer (64KB) plus the GZIPOutputStream internal buffer.
+ *
+ * <p>Issue #1319: migrated from deprecated `putStream` (heap-draining `readBytes()` inside
+ * the impl) to `putStreamMultipart` (S3AsyncClient chunked transfer on Minio, temp-file +
+ * `putFile` on LocalFs virtual-thread). Heap peak: bounded to pipe (64KB) instead of the
+ * full OCID mapping chunk (~120MB).
  */
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
@@ -113,15 +118,24 @@ class OcidLookupPhase(
         val resultsChannel = Channel<String>(Channel.BUFFERED)
 
         // Pipe: producer writes to pipeOut (GZIPOutputStream), consumer reads
-        // from pipeIn (ObjectStorage.putStream). Buffer of 64KB caps JVM heap
-        // use from the pipe itself.
+        // from pipeIn (ObjectStorage.putStreamMultipart). Buffer of 64KB caps
+        // JVM heap use from the pipe itself.
         val pipeOut = PipedOutputStream()
         val pipeIn = PipedInputStream(pipeOut, 65_536)
 
         coroutineScope {
-            val putJob = async(Dispatchers.IO) { objectStorage.putStream(key, pipeIn) }
+            // putStreamMultipart returns CompletableFuture<PutResult> — no async
+            // wrapper needed; the S3AsyncClient / LocalFs-virtual-thread
+            // implementation handles concurrency. The CF chain runs in the
+            // background while the writer coroutine pumps bytes into the pipe.
+            val uploadFuture = objectStorage.putStreamMultipart(key, pipeIn)
 
-            val writerJob = launch(Dispatchers.IO) {
+            // Writer: CPU-bound (GZIPOutputStream.compress) on
+            // Dispatchers.Default per architecture-guardrails.md rule 9.
+            // pipeOut.write is blocking but bounded by the 64KB pipe
+            // buffer, so the natural backpressure makes the CPU work the
+            // bottleneck — Default pool is the right home.
+            val writerJob = launch(Dispatchers.Default) {
                 val gz = GZIPOutputStream(BufferedOutputStream(pipeOut))
                 try {
                     for (entry in resultsChannel) {
@@ -149,7 +163,10 @@ class OcidLookupPhase(
 
             resultsChannel.close()
             writerJob.join()
-            putJob.await()
+            // Single .await() at the coroutine→CF boundary. Equivalent to the
+            // previous putJob.await() but avoids the async wrapper (the
+            // uploadFuture is already running on the S3/LocalFs executor).
+            uploadFuture.await()
         }
         log.info(
             "[Scheduler] streamed {} OCID mappings to {} (heap-bounded via pipe)",

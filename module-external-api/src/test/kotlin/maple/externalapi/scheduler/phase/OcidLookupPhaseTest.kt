@@ -57,14 +57,17 @@ class OcidLookupPhaseTest {
         }
 
         // Collect streamed bytes (replaces the previous put() call). This
-        // is exactly the path MinioObjectStorage.putStream takes: it drains
-        // the input to a temp file, then puts that file to S3.
+        // is exactly the path MinioObjectStorage.putStreamMultipart takes: it
+        // streams the input through the S3AsyncClient chunked transfer. The
+        // mock drains it to bytes for assertion.
         val collectedBytes = java.util.concurrent.atomic.AtomicReference<ByteArray>()
-        whenever(storage.putStream(any(), any())).thenAnswer { invocation ->
+        whenever(storage.putStreamMultipart(any(), any())).thenAnswer { invocation ->
             val input = invocation.getArgument<InputStream>(1)
             val bytes = input.readBytes()
             collectedBytes.set(bytes)
-            PutResult(invocation.getArgument<String>(0), bytes.size.toLong(), null)
+            CompletableFuture.completedFuture(
+                PutResult(invocation.getArgument<String>(0), bytes.size.toLong(), null),
+            )
         }
 
         val phase = OcidLookupPhase(
@@ -88,9 +91,9 @@ class OcidLookupPhaseTest {
             )
         }
 
-        // Verify the streaming putStream was called with the right key.
+        // Verify the streaming putStreamMultipart was called with the right key.
         val mappingKeyCaptor = argumentCaptor<String>()
-        verify(storage).putStream(mappingKeyCaptor.capture(), any())
+        verify(storage).putStreamMultipart(mappingKeyCaptor.capture(), any())
         val mappingKey = mappingKeyCaptor.firstValue
         assertNotNull(mappingKey)
         assertTrue(
@@ -105,7 +108,7 @@ class OcidLookupPhaseTest {
         // The streamed bytes should be a non-empty valid gzip containing the
         // expected userIgn/ocid pairs.
         val bytes = collectedBytes.get()
-        assertNotNull(bytes, "putStream should have been called")
+        assertNotNull(bytes, "putStreamMultipart should have been called")
         assertTrue(bytes!!.isNotEmpty(), "streamed bytes should not be empty")
         val decompressed = GZIPInputStream(bytes.inputStream())
             .bufferedReader().readText()
@@ -151,9 +154,12 @@ class OcidLookupPhaseTest {
             val ign = invocation.getArgument<String>(2)
             CompletableFuture.completedFuture("{\"ocid\":\"ocid-for-$ign\"}".toByteArray())
         }
-        whenever(storage.putStream(any(), any())).thenAnswer { invocation ->
+        whenever(storage.putStreamMultipart(any(), any())).thenAnswer { invocation ->
             val input = invocation.getArgument<InputStream>(1)
-            PutResult(invocation.getArgument<String>(0), input.readBytes().size.toLong(), null)
+            val bytes = input.readBytes()
+            CompletableFuture.completedFuture(
+                PutResult(invocation.getArgument<String>(0), bytes.size.toLong(), null),
+            )
         }
 
         val phase = OcidLookupPhase(

@@ -65,6 +65,64 @@ def parse_scope(conf: dict) -> list:
     return list(scope)
 
 
+# Phase sets for sequence-steps validation (spec §3.2)
+_TRIGGERABLE_PHASES = {"RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"}
+_LOOPABLE_PHASES = {"CHARACTER_BASIC", "ITEM_EQUIPMENT"}
+_STEP_ACTIONS = {"trigger", "loop"}
+
+
+def parse_steps(conf: dict) -> list:
+    """Validate dag_run.conf['steps']. Returns list of step dicts.
+
+    Rules (per spec §3.2):
+      - 'steps' missing → return [] (caller falls back to FULL_DAILY / scope path).
+      - 'steps' and 'scope' both set → AirflowException (mutually exclusive).
+      - Each step is {action, phase}. action ∈ {trigger, loop}; phase ∈ _TRIGGERABLE_PHASES.
+      - action=loop requires phase ∈ _LOOPABLE_PHASES (else fail-fast).
+      - Empty list → AirflowException.
+      - Non-list, non-dict → AirflowException.
+    """
+    if "scope" in conf and "steps" in conf:
+        raise AirflowException(
+            "dag_run.conf 'scope' and 'steps' are mutually exclusive. "
+            "Use one or the other."
+        )
+    if "steps" not in conf:
+        return []
+
+    steps = conf["steps"]
+    if not isinstance(steps, list):
+        raise AirflowException(
+            f"'steps' must be a list, got {type(steps).__name__}"
+        )
+    if not steps:
+        raise AirflowException("'steps' is empty — omit the field for FULL_DAILY")
+
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict):
+            raise AirflowException(
+                f"steps[{i}] must be a dict, got {type(step).__name__}"
+            )
+        action = step.get("action")
+        phase = step.get("phase")
+        if action not in _STEP_ACTIONS:
+            raise AirflowException(
+                f"steps[{i}].action='{action}' invalid. "
+                f"Allowed: {sorted(_STEP_ACTIONS)}"
+            )
+        if phase not in _TRIGGERABLE_PHASES:
+            raise AirflowException(
+                f"steps[{i}].phase='{phase}' invalid. "
+                f"Allowed: {sorted(_TRIGGERABLE_PHASES)}"
+            )
+        if action == "loop" and phase not in _LOOPABLE_PHASES:
+            raise AirflowException(
+                f"steps[{i}]: loop not allowed on {phase}. "
+                f"Loopable: {sorted(_LOOPABLE_PHASES)}"
+            )
+    return list(steps)
+
+
 def make_trigger_task(phase: str) -> PythonOperator:
     """Single-shot phase trigger via /trigger/phase/{phase}.
 

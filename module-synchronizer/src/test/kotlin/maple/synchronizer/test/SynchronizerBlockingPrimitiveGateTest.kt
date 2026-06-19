@@ -1,11 +1,11 @@
-package maple.externalapi.test
+package maple.synchronizer.test
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.io.File
 
 // CI gate: fails the build if blocking primitives reappear in
-// module-external-api runstatus/, scheduler/, snapshot/, or urgent/ main sources.
+// module-synchronizer consumer/, ranking/, or preparer/ main sources.
 //
 // Blocking primitives checked:
 // - .join() on a CompletableFuture chain (sync coercion of async pipeline)
@@ -14,21 +14,26 @@ import java.io.File
 // - Thread.sleep( (sleeping inside async pipeline is always wrong)
 //
 // Allowlist rationale (each entry is a documented exception, not a free pass):
-// - ExternalApiScheduler.kt runBlocking: documented acceptable VT-carrier
-//   bridge per async-patterns.md (see audit + ADR-blocking-async-contract-cf-chain).
-//   Path-level allowlist for runBlocking ONLY - must NOT introduce .join(),
-//   Thread.sleep, or Task.join().
-// - Coroutine Job.join() (e.g. writerJob.join()) inside the documented
-//   runBlocking block: legitimate Kotlin coroutine bridge.
+// - OcidLookupRunConsumer.kt runBlocking: REMOVED in Sub-PR 5 (now uses
+//   CompletableFuture.supplyAsync on executor). No allowlist needed.
+// - EquipmentRankingRedisWriter.kt runBlocking: REMOVED in Sub-PR 5 (now uses
+//   LogicExecutor.executeOrDefault). No allowlist needed.
+// - EquipmentDocumentPreparer.prepare runBlocking: kept temporarily (sync caller
+//   path in ChunkDocumentTransformer). Documented acceptable VT-carrier bridge;
+//   tracked for follow-up PR. Path-level allowlist for runBlocking ONLY.
+// - DefaultChunkFileReader.runBlocking (readBasicChunk/readResultChunk/readOcidMapping):
+//   kept temporarily — these are port interface implementations that port consumers
+//   call synchronously. Documented acceptable VT-carrier bridge; tracked for
+//   follow-up PR. Path-level allowlist for runBlocking ONLY.
 // - Comments and Deprecated shim bodies: not new blocking code.
-class ExtApiBlockingPrimitiveGateTest {
+class SynchronizerBlockingPrimitiveGateTest {
     @Test
-    fun `no blocking primitives in module-external-api runstatus scheduler snapshot or urgent main sources`() {
+    fun `no blocking primitives in module-synchronizer consumer ranking or preparer main sources`() {
         val srcRoots = listOf(
-            File("src/main/kotlin/maple/externalapi/runstatus"),
-            File("src/main/kotlin/maple/externalapi/scheduler"),
-            File("src/main/kotlin/maple/externalapi/snapshot"),
-            File("src/main/kotlin/maple/externalapi/urgent"),
+            File("src/main/kotlin/maple/synchronizer/consumer"),
+            File("src/main/kotlin/maple/synchronizer/ranking"),
+            File("src/main/kotlin/maple/synchronizer/preparer"),
+            File("src/main/kotlin/maple/synchronizer/storage"),
         )
 
         val violations = mutableListOf<String>()
@@ -66,13 +71,25 @@ class ExtApiBlockingPrimitiveGateTest {
             text.startsWith("/*")
         val isDeprecatedLine = text.contains("@Deprecated")
 
-        // ExternalApiScheduler.kt runBlocking: documented acceptable VT-carrier bridge
-        val isLegacyRunBlocking = path.contains("ExternalApiScheduler") &&
+        // EquipmentDocumentPreparer.prepare runBlocking: documented acceptable
+        // VT-carrier bridge; tracked for follow-up PR. runBlocking ONLY — must NOT
+        // introduce .join(), Thread.sleep, or Task.join().
+        val isPreparerRunBlocking = path.contains("EquipmentDocumentPreparer") &&
+            text.contains("runBlocking")
+
+        // DefaultChunkFileReader.runBlocking (port interface implementations called
+        // synchronously by port consumers): documented acceptable VT-carrier
+        // bridge; tracked for follow-up PR. runBlocking ONLY.
+        val isChunkReaderRunBlocking = path.contains("DefaultChunkFileReader") &&
             text.contains("runBlocking")
 
         // Coroutine Job.join() (e.g. writerJob.join()) inside the documented runBlocking block
         val isCoroutineJobJoin = text.matches(Regex("""[a-zA-Z_][a-zA-Z0-9_]*Job\.join\(\).*"""))
 
-        return isComment || isDeprecatedLine || isLegacyRunBlocking || isCoroutineJobJoin
+        return isComment ||
+            isDeprecatedLine ||
+            isPreparerRunBlocking ||
+            isChunkReaderRunBlocking ||
+            isCoroutineJobJoin
     }
 }

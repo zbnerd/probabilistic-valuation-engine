@@ -100,7 +100,8 @@ class StorageConfig {
     fun minioObjectStorage(
         props: MinioProperties,
         s3: S3Client,
+        s3AsyncClient: S3AsyncClient,
         transferManager: S3TransferManager,
         @Autowired(required = false) meterRegistry: MeterRegistry?,
-    ): ObjectStorage = MinioObjectStorage(props, s3, transferManager, meterRegistry)
+    ): ObjectStorage = MinioObjectStorage(props, s3, s3AsyncClient, transferManager, meterRegistry)
 }

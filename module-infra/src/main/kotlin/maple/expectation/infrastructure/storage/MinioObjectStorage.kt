@@ -129,6 +129,19 @@ class MinioObjectStorage(
         return PutResult(key, size, resp.eTag())
     }
 
+    override fun putStreamMultipart(
+        key: String,
+        input: java.io.InputStream,
+    ): CompletableFuture<PutResult> {
+        // TODO(Task 6): replace with S3AsyncClient.putObject +
+        // AsyncRequestBody.fromInputStream(input, -1L). This stub
+        // exists only to satisfy the interface contract until Task 6
+        // lands. It must not ship.
+        throw UnsupportedOperationException(
+            "MinioObjectStorage.putStreamMultipart is not yet implemented (Task 6)"
+        )
+    }
+
     override fun putFileAsync(key: String, path: java.nio.file.Path): CompletableFuture<PutResult> {
         // Use S3TransferManager for parallel multipart upload (5MB parts by
         // default). On a 128MB chunk, this is ~5-10x faster than the sync

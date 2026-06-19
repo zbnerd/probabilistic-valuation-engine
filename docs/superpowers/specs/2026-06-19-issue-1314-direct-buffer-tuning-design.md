@@ -117,7 +117,7 @@ spring:
 
 ### 4.4 `module-calculator/src/main/resources/application.yml`
 
-Extend existing `spring.kafka.consumer` block (lines 13-20) with `properties`. Add new `spring.kafka.producer` block (does not exist yet — calculator produces `calculator.result.chunk-ready` events):
+Extend existing `spring.kafka.consumer` block (lines 13-20) with `properties`. Add minimal `spring.kafka.producer` block (does not exist yet — calculator produces `calculator.result.chunk-ready` events via `KafkaResultEventPublisher`'s `KafkaTemplate<String, String>`, currently auto-configured by Spring Boot):
 
 ```yaml
 spring:
@@ -134,9 +134,9 @@ spring:
       properties:
         buffer.memory: ${KAFKA_BUFFER_MEMORY:67108864}  # 64MB (issue #1314)
     producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-      acks: all
+      # Minimal block: only override buffer.memory. Spring Boot auto-config
+      # keeps StringSerializer (matches KafkaTemplate<String, String>), acks=1,
+      # retries=0, etc. — preserving current producer behavior.
       properties:
         buffer.memory: ${KAFKA_BUFFER_MEMORY:67108864}  # 64MB (issue #1314)
     listener:

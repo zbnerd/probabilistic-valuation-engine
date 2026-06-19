@@ -158,4 +158,35 @@ class OrphanTempFileCleanupHookTest {
         assertThat(msg).contains("bytes_freed=1024")
         assertThat(msg).contains("failed=0")
     }
+
+    @Test
+    fun `runWithDeadline logs WARN and cancels when timeout fires`() {
+        // Executor that never invokes the task — future stays pending.
+        // timeoutSeconds = 0 → future.get(0, SECONDS) throws TimeoutException immediately.
+        // runWithDeadline must catch it, log WARN, and cancel the future.
+        val neverRunsExecutor = Executor { /* drop the command */ }
+        val hook = makeHook(asyncExecutor = neverRunsExecutor, timeoutSeconds = 0)
+
+        hook.runWithDeadline()
+
+        val warn = logAppender.list
+            .firstOrNull { it.formattedMessage.contains("cleanup exceeded 0s") }
+        assertThat(warn).isNotNull
+        assertThat(warn!!.level).isEqualTo(Level.WARN)
+    }
+
+    @Test
+    fun `runWithDeadline logs ERROR when submit fails`() {
+        // Executor that throws on submit — runAsync never creates the future; submit-fail
+        // path runs and logs the consolidated ERROR message.
+        val throwingExecutor = Executor { throw RuntimeException("simulated submit failure") }
+        val hook = makeHook(asyncExecutor = throwingExecutor)
+
+        hook.runWithDeadline()
+
+        val err = logAppender.list
+            .firstOrNull { it.formattedMessage.contains("cleanup submit failed") }
+        assertThat(err).isNotNull
+        assertThat(err!!.level).isEqualTo(Level.ERROR)
+    }
 }

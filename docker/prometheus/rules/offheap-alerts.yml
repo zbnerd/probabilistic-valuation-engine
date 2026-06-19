@@ -1,0 +1,18 @@
+# Off-heap Direct Buffer Memory Cap Alerts (Issue #1310)
+# -XX:MaxDirectMemorySize=512m applied to module-external-api + module-calculator.
+# 80% threshold = 410MB. Sustained 10m → warning. OutOfMemoryError: Direct buffer memory risk.
+
+groups:
+  - name: offheap-direct-buffer
+    interval: 15s
+    rules:
+      - alert: DirectBufferNearCap
+        expr: jvm_memory_used_bytes{area="direct"} / 1024 / 1024 > 410
+        for: 10m
+        labels:
+          severity: warning
+          category: jvm-offheap
+          issue: "1310"
+        annotations:
+          summary: "Direct buffer memory approaching 512MB cap on {{ $labels.instance }}"
+          description: "Off-heap direct buffer usage is {{ $value | printf \"%.0f\" }}MB (>410MB / 80% of 512MB cap) for more than 10 minutes. Risk of OutOfMemoryError: Direct buffer memory. Check Netty PooledByteBufAllocator and Kafka buffer pool."

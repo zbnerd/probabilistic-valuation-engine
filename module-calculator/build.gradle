@@ -56,6 +56,15 @@ bootJar {
 	mainClass.set("maple.calculator.CalculatorApplicationKt")
 }
 
+// Cap JVM direct buffer memory at 512MB (issue #1310).
+// Bounds Netty PooledByteBufAllocator + Kafka buffer pool off-heap gap.
+// Alert threshold 410MB (80%) in docker/prometheus/rules/offheap-alerts.yml.
+tasks.named("bootRun") {
+	jvmArgs = [
+		"-XX:MaxDirectMemorySize=512m",
+	]
+}
+
 tasks.named("jar") {
 	enabled = true
 	archiveClassifier = "plain"

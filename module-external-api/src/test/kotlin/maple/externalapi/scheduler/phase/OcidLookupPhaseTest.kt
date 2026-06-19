@@ -9,13 +9,16 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import maple.common.parser.StreamingChunkParser
 import maple.expectation.common.storage.ObjectInfo
 import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.storage.PutResult
 import maple.expectation.infrastructure.external.NexonAuthClient
+import maple.externalapi.metrics.ChunkParserMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.scheduler.PhaseStopSignal
 import maple.externalapi.scheduler.PhaseStoppedException
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -73,6 +76,8 @@ class OcidLookupPhaseTest {
             objectStorage = storage,
             nexonAuthClient = nexonClient,
             stopSignal = PhaseStopSignal(),
+            streamingChunkParser = StreamingChunkParser(objectMapper),
+            chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
         )
 
         kotlinx.coroutines.runBlocking {
@@ -160,6 +165,8 @@ class OcidLookupPhaseTest {
             objectStorage = storage,
             nexonAuthClient = nexonClient,
             stopSignal = PhaseStopSignal(),
+            streamingChunkParser = StreamingChunkParser(objectMapper),
+            chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
         )
 
         kotlinx.coroutines.runBlocking {
@@ -211,6 +218,8 @@ class OcidLookupPhaseTest {
             objectStorage = storage,
             nexonAuthClient = nexonClient,
             stopSignal = stopSignal,
+            streamingChunkParser = StreamingChunkParser(objectMapper),
+            chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
         )
 
         assertThrows(PhaseStoppedException::class.java) {

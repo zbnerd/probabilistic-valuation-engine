@@ -125,7 +125,7 @@ class ChunkFileManager(
      * uploads are logged but not rethrown — the sink's run-completed event
      * is the place to surface them.
      */
-    fun awaitAllUploads(timeoutMs: Long = 600_000L): Boolean {
+    fun awaitAllUploads(timeoutMs: Long = DEFAULT_AWAIT_TIMEOUT_MS): Boolean {
         if (inFlightUploads.isEmpty()) return true
         val all = CompletableFuture.allOf(*inFlightUploads.toTypedArray())
         return try {
@@ -145,6 +145,38 @@ class ChunkFileManager(
             log.error("[ChunkFileManager] awaitAllUploads failed: {}", ex.message, ex)
             false
         }
+    }
+
+    /**
+     * Async variant of [awaitAllUploads]. Returns a [CompletableFuture] that
+     * completes with `true` when all in-flight uploads succeed and `false` on
+     * timeout or individual upload failure. Never blocks the calling thread
+     * — callers chain via `thenCompose` / `whenComplete` to keep the writer
+     * thread (or the scheduler's CF chain) free.
+     *
+     * @param timeoutMs hard timeout (default 10 minutes, matches sync variant)
+     */
+    fun awaitAllUploadsAsync(
+        timeoutMs: Long = DEFAULT_AWAIT_TIMEOUT_MS,
+    ): CompletableFuture<Boolean> {
+        if (inFlightUploads.isEmpty()) return CompletableFuture.completedFuture(true)
+        val all = CompletableFuture.allOf(*inFlightUploads.toTypedArray())
+        return all
+            .thenApply { true }
+            .orTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .exceptionally { ex ->
+                val cause = ex.cause ?: ex
+                if (cause is java.util.concurrent.TimeoutException) {
+                    log.error(
+                        "[ChunkFileManager] awaitAllUploadsAsync timed out after {}ms (in-flight: {})",
+                        timeoutMs,
+                        inFlightUploads.size,
+                    )
+                } else {
+                    log.error("[ChunkFileManager] awaitAllUploadsAsync failed: {}", cause.message, cause)
+                }
+                false
+            }
     }
 
     fun inFlightUploadCount(): Int = inFlightUploads.size
@@ -194,4 +226,12 @@ class ChunkFileManager(
         startedAt = stats.startedAt,
         finishedAt = stats.finishedAt,
     )
+
+    companion object {
+        /**
+         * Default hard timeout for [awaitAllUploads] / [awaitAllUploadsAsync].
+         * 10 minutes is generous for 128MB × N chunks on a healthy MinIO.
+         */
+        const val DEFAULT_AWAIT_TIMEOUT_MS: Long = 600_000L
+    }
 }

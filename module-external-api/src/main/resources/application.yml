@@ -62,6 +62,9 @@ external-api:
     enabled: true
     run-on-startup: true
     skip-character-basic: false
+  parser:
+    streaming:
+      enabled: true                # false = fall back to legacy in-memory parser
   loop:
     executor:
       core-pool-size: 4

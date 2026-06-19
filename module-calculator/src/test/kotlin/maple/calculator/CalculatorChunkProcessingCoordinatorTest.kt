@@ -10,8 +10,8 @@ import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.runstate.CalculatorCurrentRunIdHolder
-import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.common.storage.ObjectStorage
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
@@ -339,9 +339,9 @@ class CalculatorChunkProcessingCoordinatorTest {
         val event = testEvent(chunkId = "part-race")
         // First two probes fail (simulating the race), the third succeeds.
         whenever(objectStorage.exists(event.objectKey))
-            .thenReturn(false)   // attempt 1
-            .thenReturn(false)   // attempt 2
-            .thenReturn(true)    // attempt 3 — chunk became visible
+            .thenReturn(false) // attempt 1
+            .thenReturn(false) // attempt 2
+            .thenReturn(true) // attempt 3 — chunk became visible
         whenever(objectStorage.exists(coordinator.resultObjectKeyFor(event))).thenReturn(false)
         whenever(chunkProcessor.process(any(), any())).thenReturn(chunkResult())
 

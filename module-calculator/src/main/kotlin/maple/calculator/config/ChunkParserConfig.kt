@@ -1,7 +1,7 @@
 package maple.calculator.config
 
-import maple.common.parser.StreamingChunkParser
 import com.fasterxml.jackson.databind.ObjectMapper
+import maple.common.parser.StreamingChunkParser
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -9,6 +9,5 @@ import org.springframework.context.annotation.Configuration
 class ChunkParserConfig {
 
     @Bean
-    fun streamingChunkParser(objectMapper: ObjectMapper): StreamingChunkParser =
-        StreamingChunkParser(objectMapper, skipMalformed = true)
+    fun streamingChunkParser(objectMapper: ObjectMapper): StreamingChunkParser = StreamingChunkParser(objectMapper, skipMalformed = true)
 }

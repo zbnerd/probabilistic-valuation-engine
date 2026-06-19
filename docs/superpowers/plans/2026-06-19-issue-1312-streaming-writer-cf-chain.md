@@ -309,21 +309,59 @@ In `module-common/src/main/kotlin/maple/expectation/common/storage/ObjectStorage
     fun putStreamMultipart(key: String, input: InputStream): CompletableFuture<PutResult>
 ```
 
-- [ ] **Step 3.3: Verify module-common compiles**
+- [ ] **Step 3.3: Deprecate the existing `putStream`**
+
+The existing `putStream` (line 22 of `ObjectStorage.kt`) buffers the full stream in heap via `readBytes()`. Mark it `@Deprecated` to signal the correct path for new code, but keep it binary-compatible for the one remaining legacy caller (`module-external-api/.../OcidLookupPhase.kt:118` — out of scope for this issue).
+
+Replace the existing declaration at line 22:
+
+```kotlin
+    /** Put data from a stream. Caller is responsible for closing `input`. */
+    fun putStream(key: String, input: InputStream): PutResult
+```
+
+with:
+
+```kotlin
+    /**
+     * Put data from a stream. Caller is responsible for closing `input`.
+     *
+     * **Deprecated** since issue #1312. Buffers the full stream in heap
+     * via `readBytes()` (see `MinioObjectStorage.putStream` and
+     * `LocalFsObjectStorage.putStream` for the heap-drain paths),
+     * defeating the purpose of streaming uploads for chunks > 1MB.
+     * Use [putStreamMultipart] instead, which uses S3 chunked transfer
+     * encoding (Minio) or temp-file + putFile (LocalFs) with bounded
+     * heap.
+     *
+     * The remaining legacy caller is
+     * `module-external-api/.../OcidLookupPhase.kt:118` which has the
+     * same heap problem and should migrate to `putStreamMultipart` in a
+     * separate follow-up issue.
+     */
+    @Deprecated(
+        message = "Buffers full stream in heap. Use putStreamMultipart for chunks > 1MB.",
+        replaceWith = ReplaceWith("putStreamMultipart"),
+    )
+    fun putStream(key: String, input: InputStream): PutResult
+```
+
+- [ ] **Step 3.4: Verify module-common compiles**
 
 Run: `./gradlew :module-common:compileKotlin :module-common:compileJava --continue 2>&1 | tail -10`
 
 Expected: BUILD SUCCESSFUL. (The interface is additive; existing impls in module-infra will fail to compile until Task 10 wires them.)
 
-- [ ] **Step 3.4: Commit**
+- [ ] **Step 3.5: Commit**
 
 ```bash
 git add module-common/src/main/kotlin/maple/expectation/common/storage/ObjectStorage.kt
-git commit -m "feat(storage): add putStreamMultipart to ObjectStorage
+git commit -m "feat(storage): add putStreamMultipart + deprecate putStream
 
-Async streaming upload for chunked transfer (S3) or temp-file
-(LocalFs). Caller-provided InputStream is consumed without buffering
-the full content in heap. Additive — existing putStream retained.
+Adds CompletableFuture<PutResult> putStreamMultipart(key, input)
+using S3AsyncClient chunked transfer (Minio) or temp-file + putFile
+(LocalFs). Additive — existing putStream retained but marked
+@Deprecated with explanation + OcidLookupPhase follow-up note.
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```

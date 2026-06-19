@@ -3,11 +3,17 @@ package maple.externalapi.snapshot
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.slf4j.LoggerFactory
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
@@ -40,6 +46,25 @@ class OrphanTempFileCleanupHookTest {
     // CompletableFuture.runAsync uses this to start cleanup; the future then completes
     // synchronously. runWithDeadline's future.get(timeout) returns immediately.
     private val syncAsyncExecutor: Executor = Executor { it.run() }
+
+    private lateinit var logAppender: ListAppender<ILoggingEvent>
+    private var originalLevel: Level? = null
+
+    @BeforeEach
+    fun attachAppender() {
+        val logger = LoggerFactory.getLogger(OrphanTempFileCleanupHook::class.java) as Logger
+        originalLevel = logger.level
+        logger.level = Level.INFO
+        logAppender = ListAppender<ILoggingEvent>().apply { start() }
+        logger.addAppender(logAppender)
+    }
+
+    @AfterEach
+    fun detachAppender() {
+        val logger = LoggerFactory.getLogger(OrphanTempFileCleanupHook::class.java) as Logger
+        logger.detachAppender(logAppender)
+        logger.level = originalLevel
+    }
 
     private fun makeHook(
         clock: Clock = this.clock,
@@ -114,5 +139,23 @@ class OrphanTempFileCleanupHookTest {
         // and the summary log reflects the failure. Cleanup perm for next test:
         held.toFile().setReadable(true)
         held.toFile().setWritable(true)
+    }
+
+    @Test
+    fun `logs scanned deleted bytes_freed at INFO`() {
+        createOrphan("gzip-chunk-uuid6-part-000006-.jsonl.gz.tmp", size = 1024, ageHours = 2)
+        createOrphan("gzip-chunk-uuid7-part-000007-.jsonl.gz.tmp", size = 512, ageHours = 0) // skipped (active)
+
+        makeHook().run(mock())
+
+        val summary = logAppender.list
+            .firstOrNull { it.formattedMessage.startsWith("[OrphanTempFileCleanup] scanned=") }
+        assertThat(summary).isNotNull
+        assertThat(summary!!.level).isEqualTo(Level.INFO)
+        val msg = summary.formattedMessage
+        assertThat(msg).contains("scanned=2")
+        assertThat(msg).contains("deleted=1")
+        assertThat(msg).contains("bytes_freed=1024")
+        assertThat(msg).contains("failed=0")
     }
 }

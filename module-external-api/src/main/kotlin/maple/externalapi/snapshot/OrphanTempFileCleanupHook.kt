@@ -22,7 +22,7 @@ import java.util.concurrent.TimeoutException
 @Component
 class OrphanTempFileCleanupHook(
     private val executor: LogicExecutor,
-    @Qualifier("applicationTaskExecutor")
+    @Qualifier("loopExecutor")
     private val asyncExecutor: Executor,
     private val clock: Clock = Clock.systemUTC(),
     private val scanDir: Path = Paths.get(System.getProperty("java.io.tmpdir")),

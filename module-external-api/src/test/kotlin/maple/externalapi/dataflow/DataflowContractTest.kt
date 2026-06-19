@@ -157,6 +157,10 @@ class DataflowContractTest {
             objectStorage = objectStorage,
             nexonAuthClient = nexonAuthClient,
             stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
+            streamingChunkParser = maple.common.parser.StreamingChunkParser(objectMapper),
+            chunkParserMetrics = maple.externalapi.metrics.ChunkParserMetrics(
+                io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+            ),
         )
 
         // act: run ranking

@@ -29,7 +29,7 @@ Chronicle Map stores entries in mapped native memory (`mmap`-backed file), not J
 **Risk drivers (parent spec §11):**
 - Chronicle Map file format changes between minor versions → must pin exact patch.
 - Cache miss storm on first deploy → cold start with 100% miss rate for one chunk cycle.
-- Library availability — Chronicle Map 3.21ea11 is Apache 2.0, mature (10+ years), but third-party dependency.
+- Library availability — Chronicle Map 3.26.8 is Apache 2.0, mature (10+ years), but third-party dependency.
 
 ---
 
@@ -62,7 +62,7 @@ Both already satisfy `<K : Any, V : Any>` non-null bound — values are nullable
 | Class | Backing | Use case |
 |-------|---------|----------|
 | `CaffeineCacheBackend` | `com.github.ben-manes.caffeine:caffeine` (existing dep) | Default (test + prod until cutover) |
-| `ChronicleMapBackend` | `net.openhft:chronicle-map:3.21ea11` | Production after canary |
+| `ChronicleMapBackend` | `net.openhft:chronicle-map:3.26.8` | Production after canary |
 
 Both wrap the same `OffHeapCacheBackend<K, V>` interface.
 
@@ -103,7 +103,7 @@ All cache classes live in `module-calculator/.../cache/`. No `module-common` pol
 `module-calculator/build.gradle.kts`:
 ```kotlin
 dependencies {
-    implementation("net.openhft:chronicle-map:3.21ea11")
+    implementation("net.openhft:chronicle-map:3.26.8")
 }
 ```
 
@@ -215,7 +215,7 @@ Targets (per parent spec §8 Phase 2):
 
 ### 7.1 Phase 1 — Deploy dependency (zero behavior change)
 
-1. Add `net.openhft:chronicle-map:3.21ea11` to `module-calculator/build.gradle.kts`.
+1. Add `net.openhft:chronicle-map:3.26.8` to `module-calculator/build.gradle.kts`.
 2. Refactor existing Caffeine usage to wrap in `OffHeapCacheBackend` interface (no functional change).
 3. Deploy with `calculator.cache.backend: caffeine` (default).
 4. Verify in prod: hit rate identical to pre-refactor.
@@ -278,7 +278,7 @@ Issue AC says "default caffeine for test envs". Verify: unit tests cover both im
 
 | File | Change |
 |------|--------|
-| `module-calculator/build.gradle.kts` | Add `net.openhft:chronicle-map:3.21ea11` |
+| `module-calculator/build.gradle.kts` | Add `net.openhft:chronicle-map:3.26.8` |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/OffHeapCacheBackend.kt` | New interface |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/CaffeineCacheBackend.kt` | New — wraps existing Caffeine cache |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/ChronicleMapBackend.kt` | New — Chronicle Map impl |
@@ -320,4 +320,4 @@ Mapping to issue #1311 AC:
 
 ## 12. Summary
 
-Replace Caffeine with Chronicle Map for the OCID lookup cache via a profile switch (default caffeine). Pin exact patch 3.21ea11 for file format stability. Cold-start on first deploy is acceptable. Caffeine stays in code as permanent fallback. Expected heap reduction 30–50MB.
+Replace Caffeine with Chronicle Map for the OCID lookup cache via a profile switch (default caffeine). Pin exact patch 3.26.8 for file format stability. Cold-start on first deploy is acceptable. Caffeine stays in code as permanent fallback. Expected heap reduction 30–50MB.

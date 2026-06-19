@@ -53,7 +53,10 @@ Kafka buffer memory rationale: producer/consumer `buffer.memory` defaults to 32M
 │   Override: -Pnetty.numDirectArenas=8                        │
 │   ↓                                                          │
 │   module-external-api/build.gradle jvmArgs:                  │
-│     -Dio.netty.allocator.numDirectArenas=<resolved value>    │
+│     providers.gradleProperty("netty.numDirectArenas")        │
+│       .orElse("4")                                           │
+│       .map { "-Dio.netty.allocator.numDirectArenas=$it" }    │
+│       .get()    ← lazy Provider chain, honors -P at runtime  │
 └─────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────┐
 │ Runtime (YAML)                                                │
@@ -78,13 +81,16 @@ Calculator uses `spring-boot-starter-web` (servlet stack) — no Netty dependenc
 
 ### 4.1 `module-external-api/build.gradle`
 
-Modify existing `tasks.named("bootRun")` block (lines 64-68). Add second JVM arg:
+Modify existing `tasks.named("bootRun")` block (lines 64-68). Add second JVM arg using `providers.gradleProperty()` for lazy evaluation (correctly honors `-P` override at task-execution time, unlike GString `${}` which can be eagerly evaluated at configuration):
 
 ```groovy
 tasks.named("bootRun") {
     jvmArgs = [
         "-XX:MaxDirectMemorySize=512m",
-        "-Dio.netty.allocator.numDirectArenas=${project.findProperty('netty.numDirectArenas') ?: '4'}",
+        providers.gradleProperty("netty.numDirectArenas")
+            .orElse("4")
+            .map { "-Dio.netty.allocator.numDirectArenas=$it" }
+            .get(),
     ]
 }
 ```

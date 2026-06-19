@@ -18,6 +18,12 @@ spring:
       enable-auto-commit: false
       max-poll-records: 50            # bound batch size; keeps poll loop responsive
       max-poll-interval-ms: 10800000  # 3h; covers full item-equipment cycle (default 5min too tight)
+    producer:
+      # Minimal block: only override buffer.memory. Spring Boot auto-config
+      # keeps StringSerializer (matches KafkaTemplate<String, String>), acks=1,
+      # retries=0, etc. — preserving current producer behavior.
+      properties:
+        buffer.memory: ${KAFKA_BUFFER_MEMORY:67108864}  # 64MB (issue #1314)
     listener:
       ack-mode: manual
       concurrency: 4

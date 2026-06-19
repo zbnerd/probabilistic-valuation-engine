@@ -8,6 +8,7 @@ ADR: docs/01_ADR/ADR-393-airflow-per-phase-dag.md
 """
 from datetime import timedelta
 import json
+import time
 
 import requests
 from airflow.exceptions import AirflowException
@@ -31,6 +32,13 @@ ALLOWED_SCOPES = frozenset({
 TRIGGER_PHASES = ["RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"]
 LOOP_PHASES = ["CHARACTER_BASIC", "ITEM_EQUIPMENT"]
 STOP_PHASES = ["RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"]
+
+# Phase sets for sequence-steps validation (spec §3.2).
+# Derived from TRIGGER_PHASES/LOOP_PHASES so adding a new phase only requires
+# updating the lists above.
+_TRIGGERABLE_PHASES = frozenset(TRIGGER_PHASES)
+_LOOPABLE_PHASES = frozenset(LOOP_PHASES)
+_STEP_ACTIONS = frozenset({"trigger", "loop"})
 
 
 def get_external_api_base() -> str:
@@ -63,6 +71,130 @@ def parse_scope(conf: dict) -> list:
             f"Allowed: {sorted(ALLOWED_SCOPES)}"
         )
     return list(scope)
+
+
+def parse_steps(conf: dict) -> list:
+    """Validate dag_run.conf['steps']. Returns list of step dicts.
+
+    Rules (per spec §3.2):
+      - 'steps' missing → return [] (caller falls back to FULL_DAILY / scope path).
+      - 'steps' and 'scope' both set → AirflowException (mutually exclusive).
+      - Each step is {action, phase}. action ∈ {trigger, loop}; phase ∈ _TRIGGERABLE_PHASES.
+      - action=loop requires phase ∈ _LOOPABLE_PHASES (else fail-fast).
+      - Empty list → AirflowException.
+      - Non-list, non-dict → AirflowException.
+    """
+    if "scope" in conf and "steps" in conf:
+        raise AirflowException(
+            "dag_run.conf 'scope' and 'steps' are mutually exclusive. "
+            "Use one or the other."
+        )
+    if "steps" not in conf:
+        return []
+
+    steps = conf["steps"]
+    if not isinstance(steps, list):
+        raise AirflowException(
+            f"'steps' must be a list, got {type(steps).__name__}"
+        )
+    if not steps:
+        raise AirflowException("'steps' is empty — omit the field for FULL_DAILY")
+
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict):
+            raise AirflowException(
+                f"steps[{i}] must be a dict, got {type(step).__name__}"
+            )
+        action = step.get("action")
+        phase = step.get("phase")
+        if action not in _STEP_ACTIONS:
+            raise AirflowException(
+                f"steps[{i}].action='{action}' invalid. "
+                f"Allowed: {sorted(_STEP_ACTIONS)}"
+            )
+        if phase not in _TRIGGERABLE_PHASES:
+            raise AirflowException(
+                f"steps[{i}].phase='{phase}' invalid. "
+                f"Allowed: {sorted(_TRIGGERABLE_PHASES)}"
+            )
+        if action == "loop" and phase not in _LOOPABLE_PHASES:
+            raise AirflowException(
+                f"steps[{i}]: loop not allowed on {phase}. "
+                f"Loopable: {sorted(_LOOPABLE_PHASES)}"
+            )
+    return list(steps)
+
+
+def wait_for_phase_terminal(
+    phase: str,
+    run_id: str,
+    timeout_seconds: int = 60 * 60 * 4,  # 4h per spec §4.1
+    poll_interval: int = 30,
+) -> None:
+    """Poll /run-status until the specified phase's runId reaches terminal.
+
+    The runId match uses the run-group PREFIX (date-time portion), because
+    each phase of a daily run gets its own runId with a different nano-time
+    suffix. The trigger response carries the first phase's runId; we derive
+    the prefix once and match any phase whose runId starts with it.
+
+    Args:
+      phase: pipeline phase whose slot/lastCompleted we check.
+      run_id: any runId from the run group (typically from trigger response).
+      timeout_seconds: max time to wait before raising TimeoutError.
+      poll_interval: seconds between polls.
+
+    Raises:
+      RuntimeError: phase reached FAILED with errorMessage.
+      TimeoutError: phase did not reach terminal within timeout_seconds.
+      requests.RequestException: network error not retried (caller decides).
+    """
+    run_group_prefix = "-".join(run_id.split("-")[:2]) + "-"
+    base = get_external_api_base()
+    deadline = time.monotonic() + timeout_seconds
+
+    def _belongs(phase_status):
+        if not phase_status:
+            return False
+        rid = phase_status.get("runId") or ""
+        return rid.startswith(run_group_prefix)
+
+    while True:
+        resp = requests.get(f"{base}/api/internal/run-status", timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Check slots first (active), then lastCompletedByPhase (cleared).
+        phase_status = (
+            (data.get("slots") or {}).get(phase)
+            or (data.get("lastCompletedByPhase") or {}).get(phase)
+        )
+
+        if not _belongs(phase_status):
+            # Phase hasn't acquired our runId yet (still on a prior run).
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Phase {phase} did not acquire runId {run_id} "
+                    f"(prefix {run_group_prefix}) within {timeout_seconds}s"
+                )
+            time.sleep(poll_interval)
+            continue
+
+        if phase_status.get("phase") == "FAILED":
+            raise RuntimeError(
+                f"Run {run_group_prefix}* phase {phase} failed: "
+                f"{phase_status.get('errorMessage', 'unknown')}"
+            )
+
+        if phase_status.get("terminal"):
+            return
+
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"Phase {phase} did not reach terminal within "
+                f"{timeout_seconds}s (run group {run_group_prefix})"
+            )
+        time.sleep(poll_interval)
 
 
 def make_trigger_task(phase: str) -> PythonOperator:

@@ -1,7 +1,11 @@
 """Unit tests for parse_steps (sequence validator)."""
+import time
+from unittest.mock import MagicMock, patch
+
 import pytest
+import requests
 from airflow.exceptions import AirflowException
-from per_phase_tasks import parse_steps
+from per_phase_tasks import parse_steps, wait_for_phase_terminal
 
 
 def test_parse_steps_valid_4step_chain():
@@ -80,3 +84,93 @@ def test_parse_steps_rejects_non_dict_step():
     conf = {"steps": ["RANKING_FETCH"]}
     with pytest.raises(AirflowException, match="must be a dict"):
         parse_steps(conf)
+
+
+def test_wait_for_phase_terminal_returns_on_terminal_true():
+    """Polls once, finds terminal=True, returns."""
+    with patch("per_phase_tasks.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "slots": {
+                "RANKING_FETCH": {
+                    "runId": "20260619-100000-100",
+                    "phase": "COMPLETED",
+                    "terminal": True,
+                }
+            },
+            "lastCompletedByPhase": {},
+        }
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+        wait_for_phase_terminal("RANKING_FETCH", "20260619-100000-100")
+
+
+def test_wait_for_phase_terminal_uses_run_group_prefix():
+    """runId's date-time prefix identifies the run across 4 phases."""
+    with patch("per_phase_tasks.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "slots": {
+                "RANKING_FETCH": {
+                    "runId": "20260619-100000-200",  # different phase same prefix
+                    "phase": "IN_PROGRESS",
+                    "terminal": False,
+                },
+                "OCID_LOOKUP": {
+                    "runId": "20260619-100000-100",  # our run
+                    "phase": "COMPLETED",
+                    "terminal": True,
+                },
+            },
+            "lastCompletedByPhase": {},
+        }
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+        wait_for_phase_terminal("OCID_LOOKUP", "20260619-100000-100")
+
+
+def test_wait_for_phase_terminal_raises_on_failed():
+    """FAILED phase → RuntimeError."""
+    with patch("per_phase_tasks.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "slots": {
+                "RANKING_FETCH": {
+                    "runId": "20260619-100000-100",
+                    "phase": "FAILED",
+                    "terminal": True,
+                    "errorMessage": "boom",
+                }
+            },
+            "lastCompletedByPhase": {},
+        }
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+        with pytest.raises(RuntimeError, match="boom"):
+            wait_for_phase_terminal("RANKING_FETCH", "20260619-100000-100")
+
+
+def test_wait_for_phase_terminal_times_out():
+    """If phase never reaches terminal within timeout, raise."""
+    with patch("per_phase_tasks.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "slots": {
+                "RANKING_FETCH": {
+                    "runId": "20260619-100000-100",
+                    "phase": "IN_PROGRESS",
+                    "terminal": False,
+                }
+            },
+            "lastCompletedByPhase": {},
+        }
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+        # poll_interval=0 so we don't actually wait; just check the loop logic.
+        with pytest.raises(TimeoutError, match="did not reach terminal"):
+            wait_for_phase_terminal(
+                "RANKING_FETCH",
+                "20260619-100000-100",
+                timeout_seconds=0.1,
+                poll_interval=0.05,
+            )

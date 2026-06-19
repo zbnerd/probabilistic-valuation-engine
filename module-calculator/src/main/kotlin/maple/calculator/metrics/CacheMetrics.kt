@@ -2,48 +2,56 @@ package maple.calculator.metrics
 
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
+import maple.calculator.cache.OffHeapCacheBackend
 import maple.calculator.processor.CalculationCache
 import org.springframework.stereotype.Component
 
 /**
- * Prometheus gauges for the Caffeine [CalculationCache].
+ * Prometheus metrics for the calculation cache backend (issue #1311, Phase 2).
  *
- * Caffeine's `recordStats()` produces a live snapshot on every call;
- * Micrometer's [Gauge.builder] re-reads the supplier on each Prometheus scrape, so
- * the metrics are always current without a scheduled task. Cache hit rate is the
- * primary signal: a low rate means the Caffeine max-size (100K) is too small for
- * the working set, or items are random enough that L2 (PostgreSQL UNLOGGED)
- * is needed for cross-JVM caching.
+ * Reads from [OffHeapCacheBackend.stats] which returns an immutable snapshot.
+ * Micrometer's [Gauge.builder] re-reads the supplier on each Prometheus scrape
+ * so values are always current.
+ *
+ * Tag `cache={caffeine,chronicle}` lets us compare hit rates across backends
+ * during the canary rollout (spec §7.2).
  */
 @Component
 class CacheMetrics(
     registry: MeterRegistry,
-    private val calculationCache: CalculationCache,
+    calculationCache: CalculationCache,
 ) {
-    private val cache = calculationCache.cache()
+    private val backend: OffHeapCacheBackend<*, *> = calculationCache.backend()
 
     init {
-        Gauge.builder("calculator_cache_size") { cache.estimatedSize().toDouble() }
-            .description("Current entries in the Caffeine calculation cache")
+        val cacheName = backend.name
+
+        Gauge.builder("calculator_cache_size") { backend.size().toDouble() }
+            .description("Current entries in the calculation cache")
+            .tag("cache", cacheName)
             .register(registry)
 
         Gauge.builder("calculator_cache_hit_rate") {
-            val s = cache.stats()
-            if (s.requestCount() == 0L) 0.0 else s.hitRate() * 100.0
+            val s = backend.stats()
+            s.hitRatePercent
         }
             .description("Cache hit rate (percent) since JVM start")
+            .tag("cache", cacheName)
             .register(registry)
 
-        Gauge.builder("calculator_cache_hits_total") { cache.stats().hitCount().toDouble() }
+        Gauge.builder("calculator_cache_hits_total") { backend.stats().hits.toDouble() }
             .description("Cumulative cache hits since JVM start")
+            .tag("cache", cacheName)
             .register(registry)
 
-        Gauge.builder("calculator_cache_misses_total") { cache.stats().missCount().toDouble() }
+        Gauge.builder("calculator_cache_misses_total") { backend.stats().misses.toDouble() }
             .description("Cumulative cache misses since JVM start")
+            .tag("cache", cacheName)
             .register(registry)
 
-        Gauge.builder("calculator_cache_evictions_total") { cache.stats().evictionCount().toDouble() }
-            .description("Cumulative cache evictions since JVM start")
+        Gauge.builder("calculator_cache_errors_total") { backend.stats().errors.toDouble() }
+            .description("Cumulative cache backend errors since JVM start (per spec §5)")
+            .tag("cache", cacheName)
             .register(registry)
     }
 }

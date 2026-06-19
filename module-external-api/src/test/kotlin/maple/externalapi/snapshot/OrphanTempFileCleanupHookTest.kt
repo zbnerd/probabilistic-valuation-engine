@@ -81,4 +81,21 @@ class OrphanTempFileCleanupHookTest {
         makeHook().run(mock())
         assertThat(Files.exists(file)).isTrue
     }
+
+    @Test
+    fun `ignores non-matching filenames`() {
+        val unrelated = createOrphan("urgent-chunk-uuid-part-000001-.jsonl.gz.tmp", ageHours = 24)
+        val plainTxt = tmp.resolve("notes.txt")
+        Files.write(plainTxt, ByteArray(10))
+        plainTxt.setLastModifiedTime(FileTime.from(fixedNow.minusSeconds(24 * 3600)))
+        val olderPrefix = tmp.resolve("gzip-archive.jsonl.gz") // not tmp suffix
+        Files.write(olderPrefix, ByteArray(10))
+        olderPrefix.setLastModifiedTime(FileTime.from(fixedNow.minusSeconds(24 * 3600)))
+
+        makeHook().run(mock())
+
+        assertThat(Files.exists(unrelated)).isTrue
+        assertThat(Files.exists(plainTxt)).isTrue
+        assertThat(Files.exists(olderPrefix)).isTrue
+    }
 }

@@ -67,4 +67,18 @@ class OrphanTempFileCleanupHookTest {
         makeHook().run(mock())
         assertThat(Files.exists(file)).isFalse
     }
+
+    @Test
+    fun `preserves files newer than 1 hour (active writer)`() {
+        val file = createOrphan("gzip-chunk-uuid2-part-000002-.jsonl.gz.tmp", ageHours = 0)
+        makeHook().run(mock())
+        assertThat(Files.exists(file)).isTrue
+    }
+
+    @Test
+    fun `preserves file exactly 1 hour old (cutoff boundary)`() {
+        val file = createOrphan("gzip-chunk-uuid3-part-000003-.jsonl.gz.tmp", ageHours = 1)
+        makeHook().run(mock())
+        assertThat(Files.exists(file)).isTrue
+    }
 }

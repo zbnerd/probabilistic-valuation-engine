@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
+import maple.common.parser.StreamingChunkParser
 import maple.expectation.common.storage.ObjectInfo
 import maple.expectation.common.storage.ObjectStorage
 import java.io.ByteArrayOutputStream
@@ -17,6 +18,7 @@ import java.util.zip.GZIPOutputStream
 class OcidCacheProviderTest {
 
     private val objectMapper = ObjectMapper().registerModule(kotlinModule())
+    private val streamingChunkParser = StreamingChunkParser(objectMapper)
 
     @Test
     fun `refresh picks latest mapping by lastModified and parses gzipped JSONL entries`() {
@@ -32,7 +34,7 @@ class OcidCacheProviderTest {
         """.trimIndent()
         whenever(storage.getStream(any())).thenReturn(gzip(jsonl).inputStream())
 
-        val provider = OcidCacheProvider(storage, objectMapper)
+        val provider = OcidCacheProvider(storage, streamingChunkParser)
         val cache = provider.refresh()
 
         assertEquals(2, cache.size)
@@ -56,7 +58,7 @@ class OcidCacheProviderTest {
         """.trimIndent()
         whenever(storage.getStream(any())).thenReturn(gzip(jsonl).inputStream())
 
-        val provider = OcidCacheProvider(storage, objectMapper)
+        val provider = OcidCacheProvider(storage, streamingChunkParser)
         val cache = provider.refresh()
 
         assertEquals(1, cache.size)
@@ -68,7 +70,7 @@ class OcidCacheProviderTest {
         val storage = mock<ObjectStorage>()
         whenever(storage.listByPrefix("ocid-mapping/")).thenReturn(emptyList())
 
-        val provider = OcidCacheProvider(storage, objectMapper)
+        val provider = OcidCacheProvider(storage, streamingChunkParser)
         val cache = provider.refresh()
 
         assertTrue(cache.isEmpty())
@@ -83,7 +85,7 @@ class OcidCacheProviderTest {
         whenever(storage.getStream("ocid-mapping/ocid-mapping-run-o-1.jsonl.gz"))
             .thenReturn(gzip(jsonl).inputStream())
 
-        val provider = OcidCacheProvider(storage, objectMapper)
+        val provider = OcidCacheProvider(storage, streamingChunkParser)
         val result = provider.loadFromRun("run-o-1")
 
         assertEquals(2, result.size)
@@ -98,7 +100,7 @@ class OcidCacheProviderTest {
         whenever(storage.getStream("ocid-mapping/ocid-mapping-missing.jsonl.gz"))
             .thenThrow(RuntimeException("object storage unavailable"))
 
-        val provider = OcidCacheProvider(storage, objectMapper)
+        val provider = OcidCacheProvider(storage, streamingChunkParser)
         val result = provider.loadFromRun("missing")
 
         assertTrue(result.isEmpty())

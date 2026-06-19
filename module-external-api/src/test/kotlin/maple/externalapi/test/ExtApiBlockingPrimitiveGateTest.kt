@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 // CI gate: fails the build if blocking primitives reappear in
-// module-external-api runstatus/ or scheduler/ main sources.
+// module-external-api runstatus/, scheduler/, or snapshot/ main sources.
 //
 // Blocking primitives checked:
 // - .join() on a CompletableFuture chain (sync coercion of async pipeline)
@@ -23,10 +23,11 @@ import java.io.File
 // - Comments and Deprecated shim bodies: not new blocking code.
 class ExtApiBlockingPrimitiveGateTest {
     @Test
-    fun `no blocking primitives in module-external-api runstatus or scheduler main sources`() {
+    fun `no blocking primitives in module-external-api runstatus scheduler or snapshot main sources`() {
         val srcRoots = listOf(
             File("src/main/kotlin/maple/externalapi/runstatus"),
             File("src/main/kotlin/maple/externalapi/scheduler"),
+            File("src/main/kotlin/maple/externalapi/snapshot"),
         )
 
         val violations = mutableListOf<String>()

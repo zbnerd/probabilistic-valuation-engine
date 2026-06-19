@@ -89,8 +89,8 @@ class RankingFetchPhase(
         val start = Instant.now()
 
         return processPages(workerExecutor, sink, rateLimiter, date, 1, fetched, failed)
+            .thenCompose { sink.closeAsync() }
             .whenComplete { _, ex ->
-                sink.close()
                 if (ex != null) {
                     log.error("[RankingFetch] failed: runId={}, fetched={}, failed={}", runId, fetched.get(), failed.get(), ex)
                 } else {

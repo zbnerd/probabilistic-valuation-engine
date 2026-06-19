@@ -1,6 +1,7 @@
 package maple.externalapi.snapshot
 
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
@@ -26,6 +27,16 @@ class ChunkedSnapshotSink(
 
     private val writerFuture: Future<*> = writerExecutor.submit {
         runWriterLoop()
+    }
+
+    /**
+     * Dedicated executor for async-orchestration waits in [closeAsync] (e.g.
+     * `awaitTermination`). Kept separate from [writerExecutor] because once
+     * `writerExecutor.shutdown()` is called it rejects new tasks, and we need
+     * a still-live executor to host the post-shutdown wait task.
+     */
+    private val closeAsyncExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread.ofPlatform().name("snapshot-close-async-$endpoint").unstarted(runnable)
     }
 
     fun submit(record: SnapshotChunkRecord) {
@@ -56,6 +67,7 @@ class ChunkedSnapshotSink(
 
     fun queueDepth(): Int = queue.size
 
+    @Deprecated("Use closeAsync() for non-blocking shutdown; this sync variant holds the calling thread for up to ~10 minutes")
     fun close() {
         accepting.set(false)
         try {
@@ -115,6 +127,99 @@ class ChunkedSnapshotSink(
                 writerExecutor.shutdownNow()
             }
         }
+    }
+
+    /**
+     * Async variant of [close]. Performs the same work — shutdown writer, close
+     * current chunk, await in-flight uploads, write manifest, publish run event —
+     * but chains via [CompletableFuture] so the calling thread is never blocked.
+     *
+     * Audit reference: docs/05_Reports/2026-06-18-blocking-audit.md line 69.
+     * Replaces the blocking `all.get(600_000L, TimeUnit.MILLISECONDS)` in the
+     * previous sync path.
+     *
+     * @return CF that completes normally on successful close, exceptionally on
+     *         any failure (writer error, upload timeout, manifest write error).
+     */
+    fun closeAsync(): CompletableFuture<Void> {
+        accepting.set(false)
+        // Enqueue CloseSignal from a non-writer thread. The writer thread is
+        // already blocked in queue.take() waiting for the signal — using the
+        // single-thread writerExecutor to enqueue it would deadlock the writer
+        // against itself. closeAsyncExecutor hosts the offer and the post-shutdown
+        // awaitTermination wait.
+        val closeSignalFuture = CompletableFuture.runAsync(
+            {
+                if (!queue.offer(SnapshotChunkRecord.CloseSignal, 30, TimeUnit.SECONDS)) {
+                    throw IllegalStateException("failed to enqueue close signal after 30s")
+                }
+            },
+            closeAsyncExecutor,
+        )
+
+        val writerDoneFuture = closeSignalFuture.thenCompose {
+            writerExecutor.shutdown()
+            CompletableFuture.runAsync(
+                {
+                    if (!writerExecutor.awaitTermination(60, TimeUnit.SECONDS)) {
+                        log.warn("[Sink] writer executor did not terminate within 60s, forcing shutdown")
+                        writerExecutor.shutdownNow()
+                    }
+                },
+                closeAsyncExecutor,
+            )
+        }
+
+        return writerDoneFuture
+            .thenCompose {
+                val err = writerError.get()
+                val manifest = fileManager.manifest()
+                if (err != null) {
+                    fileManager.cleanupOnFailure()
+                    eventPublisher.publishRunFailed(manifest, endpoint, err.message ?: "unknown")
+                    val failed: CompletableFuture<Void> = CompletableFuture()
+                    failed.completeExceptionally(RuntimeException("writer thread failed: ${err.message}", err))
+                    return@thenCompose failed
+                }
+
+                // Close current chunk and register its upload.
+                fileManager.closeCurrentChunk()?.let { stats -> publishWhenUploaded(stats) }
+
+                // Wait for all fire-and-forget chunk uploads to complete
+                // BEFORE writing the manifest (otherwise manifest references
+                // chunks not yet in MinIO — calculator/sync could read incomplete data).
+                fileManager.awaitAllUploadsAsync(ChunkFileManager.DEFAULT_AWAIT_TIMEOUT_MS).thenCompose { allUploaded ->
+                    if (!allUploaded) {
+                        val msg = "chunk uploads did not complete in time (in-flight=${fileManager.inFlightUploadCount()})"
+                        fileManager.cleanupOnFailure()
+                        eventPublisher.publishRunFailed(manifest, endpoint, msg)
+                        val failed: CompletableFuture<Void> = CompletableFuture()
+                        failed.completeExceptionally(RuntimeException(msg))
+                        return@thenCompose failed
+                    }
+
+                    fileManager.writeManifestAndSuccessMarker()
+                    fileManager.deleteRunningMarker()
+
+                    log.info(
+                        "[Sink] closed: endpoint={}, chunks={}, records={}, failed={}",
+                        endpoint,
+                        manifest.chunks.size,
+                        manifest.totalRecords,
+                        manifest.totalFailed,
+                    )
+
+                    eventPublisher.publishRunCompleted(manifest, endpoint)
+                    CompletableFuture.completedFuture<Void>(null)
+                }
+            }
+            .whenComplete { _, _ ->
+                // Ensure writerExecutor is fully terminated even if any step throws.
+                if (!writerExecutor.isTerminated) {
+                    writerExecutor.shutdownNow()
+                }
+                closeAsyncExecutor.shutdown()
+            }
     }
 
     private fun runWriterLoop() {

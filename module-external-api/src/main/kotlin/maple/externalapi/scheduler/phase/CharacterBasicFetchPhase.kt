@@ -88,21 +88,19 @@ class CharacterBasicFetchPhase(
 
         val dispatcher = workerExecutor.asCoroutineDispatcher()
         return CoroutineScope(dispatcher).future {
-            try {
-                val (successCount, failCount) = batchSupport.processBatch(
-                    rateLimiter,
-                    entries,
-                    batchSize,
-                    ctx,
-                    sink,
-                    effectiveRunId,
-                    start,
-                )
-                schedulerProgressLogger.logSummary("character-basic", entries.size, successCount, successCount, failCount, start)
-            } finally {
-                sink.close()
-                metrics.characterBasicTimer().record(Duration.between(start, Instant.now(clock)))
-            }
+            val (successCount, failCount) = batchSupport.processBatch(
+                rateLimiter,
+                entries,
+                batchSize,
+                ctx,
+                sink,
+                effectiveRunId,
+                start,
+            )
+            schedulerProgressLogger.logSummary("character-basic", entries.size, successCount, successCount, failCount, start)
+        }.thenCompose {
+            metrics.characterBasicTimer().record(Duration.between(start, Instant.now(clock)))
+            sink.closeAsync().thenApply { Unit }
         }
     }
 }

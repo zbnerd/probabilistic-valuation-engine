@@ -1103,7 +1103,15 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
-## Task 5: Phase 5 — Direct Buffer Tuning
+## Task 5: Phase 5 — Direct Buffer Tuning ⚠️ DEPRECATED
+
+> **DEPRECATED 2026-06-19.** Superseded by issue #1314 plan:
+> [`docs/superpowers/plans/2026-06-19-issue-1314-direct-buffer-tuning.md`](../plans/2026-06-19-issue-1314-direct-buffer-tuning.md)
+>
+> The plan below uses `.kts` filename and literal `4` / `-Dbuffer.memory` JVM args. The
+> new plan uses `.gradle` (Groovy DSL, this module is Groovy), `providers.gradleProperty()`
+> for `-P` override support, and YAML `properties.buffer.memory` for env-var override.
+> Do NOT execute steps below; use the new plan.
 
 **Files:**
 - Modify: `module-external-api/build.gradle.kts` — add `-Dio.netty.allocator.numDirectArenas=<N>`

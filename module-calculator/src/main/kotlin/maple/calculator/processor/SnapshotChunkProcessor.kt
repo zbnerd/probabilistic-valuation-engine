@@ -88,9 +88,12 @@ class SnapshotChunkProcessor(
             resultChannel.close()
         }
 
-        val writeResult = async(Dispatchers.IO) {
-            resultWriter.write(resultObjectKey, channelAsFlow(resultChannel))
-        }.await()
+        // Start the write CF BEFORE waiting for parse+calc to finish —
+        // the CF drains resultChannel in the background via
+        // producerScope.future, so it overlaps with the parse+calc workers
+        // (same overlap the original async { write() } provided).
+        val writeFuture = resultWriter.write(resultObjectKey, channelAsFlow(resultChannel))
+        val writeResult = writeFuture.await()  // single .await() at coroutine→CF boundary
 
         ChunkResult(
             recordCount = recordCount.get(),

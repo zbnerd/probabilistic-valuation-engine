@@ -82,17 +82,20 @@ In `module-external-api/build.gradle`, replace the existing `jvmArgs` block (lin
 tasks.named("bootRun") {
     jvmArgs = [
         "-XX:MaxDirectMemorySize=512m",
-        "-Dio.netty.allocator.numDirectArenas=${project.findProperty('netty.numDirectArenas') ?: '4'}",
+        providers.gradleProperty("netty.numDirectArenas")
+            .orElse("4")
+            .map { "-Dio.netty.allocator.numDirectArenas=$it" }
+            .get(),
     ]
 }
 ```
 
-Use the Edit tool with the exact 5-line block as `old_string` and the new 6-line block as `new_string`.
+Use `providers.gradleProperty()` (lazy Provider chain) instead of GString `${project.findProperty(...)}` (which can be eagerly evaluated at configuration time, ignoring `-P` overrides at task-execution). Use the Edit tool with the exact 5-line block as `old_string` and the 8-line block above as `new_string`.
 
 Verify:
 
 ```bash
-grep -A4 'tasks.named("bootRun")' module-external-api/build.gradle
+grep -A7 'tasks.named("bootRun")' module-external-api/build.gradle
 ```
 
 Expected:
@@ -100,7 +103,10 @@ Expected:
 tasks.named("bootRun") {
     jvmArgs = [
         "-XX:MaxDirectMemorySize=512m",
-        "-Dio.netty.allocator.numDirectArenas=${project.findProperty('netty.numDirectArenas') ?: '4'}",
+        providers.gradleProperty("netty.numDirectArenas")
+            .orElse("4")
+            .map { "-Dio.netty.allocator.numDirectArenas=$it" }
+            .get(),
     ]
 }
 ```

@@ -35,8 +35,9 @@ class StorageConfig {
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "local", matchIfMissing = true)
     fun localObjectStorage(
         @Value("\${storage.local.base-path:../data}") basePath: String,
+        uploadExecutor: java.util.concurrent.Executor,
         @Autowired(required = false) meterRegistry: MeterRegistry?,
-    ): ObjectStorage = LocalFsObjectStorage(basePath, meterRegistry)
+    ): ObjectStorage = LocalFsObjectStorage(basePath, uploadExecutor, meterRegistry)
 
     @Bean
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")

@@ -1208,7 +1208,10 @@ class ChronicleMapBackend<K : Any, V : Any>(
             .averageKeySize(256)
             .averageValueSize(64)
             .file(file)
-            .setMode(SetMode.SINGLE_THREADED) // safe under concurrent get/put; Chronicle handles locking
+            // MULTI_THREADED: 4 chunk workers write concurrently (calculator.pipeline.worker-count=4).
+            // SINGLE_THREADED would serialize writes — bottleneck. Chronicle's internal
+            // striped locks handle concurrent writers; reads remain lock-free via volatile.
+            .setMode(SetMode.MULTI_THREADED)
 
         // Wire custom serializers for the calculation cache types.
         if (keyClass.name == "maple.calculator.processor.CalculationCache\$CacheKey") {

@@ -1,10 +1,10 @@
 package maple.calculator.cache
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import org.slf4j.LoggerFactory
 
 /**
  * Off-heap cache backend using direct [ByteBuffer] for value storage.
@@ -56,7 +56,8 @@ class OffHeapSerializedBackend<K : Any, V : Any>(
     init {
         log.info(
             "OffHeapSerializedBackend initialized: maxEntries={}, chroniclePath={} (unused — in-memory only)",
-            config.maxEntries, config.chroniclePath,
+            config.maxEntries,
+            config.chroniclePath,
         )
     }
 
@@ -75,7 +76,11 @@ class OffHeapSerializedBackend<K : Any, V : Any>(
             val bytes = ByteArray(entry.value.remaining())
             entry.value.duplicate().get(bytes)
             @Suppress("UNCHECKED_CAST")
-            (@Suppress("UNCHECKED_CAST") mapper.readValue(bytes, Any::class.java) as V).also { hitsAdder.increment() }
+            (
+                @Suppress("UNCHECKED_CAST")
+                mapper.readValue(bytes, Any::class.java)
+                    as V
+                ).also { hitsAdder.increment() }
         } catch (e: Exception) {
             errorsAdder.increment()
             log.error("OffHeapSerializedBackend get failed: {}", e.message)

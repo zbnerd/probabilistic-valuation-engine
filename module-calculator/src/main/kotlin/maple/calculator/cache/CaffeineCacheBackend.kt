@@ -1,8 +1,8 @@
 package maple.calculator.cache
 
 import com.github.benmanes.caffeine.cache.Caffeine
-import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.LongAdder
+import org.slf4j.LoggerFactory
 
 /**
  * Caffeine-backed [OffHeapCacheBackend]. Heap-resident; the default and the

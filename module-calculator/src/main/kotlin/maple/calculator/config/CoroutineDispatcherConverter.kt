@@ -29,7 +29,7 @@ class CoroutineDispatcherConverter : Converter<String, CoroutineDispatcher> {
         "io" -> Dispatchers.IO
         "unconfined" -> Dispatchers.Unconfined
         else -> throw IllegalArgumentException(
-            "Unknown CoroutineDispatcher: '$source'. Supported: default, io, unconfined"
+            "Unknown CoroutineDispatcher: '$source'. Supported: default, io, unconfined",
         )
     }
 }

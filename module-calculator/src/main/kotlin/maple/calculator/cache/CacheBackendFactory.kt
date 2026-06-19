@@ -30,25 +30,23 @@ object CacheBackendFactory {
         config: CacheConfig,
         keyClass: Class<K>,
         valueClass: Class<V>,
-    ): OffHeapCacheBackend<K, V> {
-        return when (profile.lowercase()) {
-            "caffeine" -> CaffeineCacheBackend(config)
+    ): OffHeapCacheBackend<K, V> = when (profile.lowercase()) {
+        "caffeine" -> CaffeineCacheBackend(config)
 
-            "chronicle" -> try {
-                @Suppress("UNCHECKED_CAST")
-                OffHeapSerializedBackend<K, V>(config)
-            } catch (e: Exception) {
-                fallbackToCaffeine(profile, config, e)
-            } catch (e: NoClassDefFoundError) {
-                fallbackToCaffeine(profile, config, e)
-            } catch (e: LinkageError) {
-                fallbackToCaffeine(profile, config, e)
-            }
+        "chronicle" -> try {
+            @Suppress("UNCHECKED_CAST")
+            OffHeapSerializedBackend<K, V>(config)
+        } catch (e: Exception) {
+            fallbackToCaffeine(profile, config, e)
+        } catch (e: NoClassDefFoundError) {
+            fallbackToCaffeine(profile, config, e)
+        } catch (e: LinkageError) {
+            fallbackToCaffeine(profile, config, e)
+        }
 
-            else -> {
-                log.error("Unknown calculator.cache.backend='{}'; defaulting to caffeine", profile)
-                CaffeineCacheBackend(config)
-            }
+        else -> {
+            log.error("Unknown calculator.cache.backend='{}'; defaulting to caffeine", profile)
+            CaffeineCacheBackend(config)
         }
     }
 
@@ -60,7 +58,9 @@ object CacheBackendFactory {
         val msg = cause.message ?: cause.javaClass.simpleName
         log.warn(
             "OffHeapSerializedBackend init failed for profile='{}' ({}: {}); falling back to CaffeineCacheBackend",
-            profile, cause.javaClass.simpleName, msg,
+            profile,
+            cause.javaClass.simpleName,
+            msg,
         )
         return CaffeineCacheBackend(config)
     }

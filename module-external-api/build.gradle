@@ -64,6 +64,10 @@ bootJar {
 tasks.named("bootRun") {
 	jvmArgs = [
 		"-XX:MaxDirectMemorySize=512m",
+		providers.gradleProperty("netty.numDirectArenas")
+			.orElse("4")
+			.map { "-Dio.netty.allocator.numDirectArenas=$it" }
+			.get(),
 	]
 }
 

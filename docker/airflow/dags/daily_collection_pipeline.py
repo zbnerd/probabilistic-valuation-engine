@@ -120,11 +120,39 @@ def _is_run_terminal(**context):
     - False → sensor reschedules (mode='reschedule' on the operator)
     - RuntimeError(FAILED) → sensor hard-fails the DAG immediately
     - Transient HTTP/JSON errors → False (poke again, don't fail)
+
+    A daily run spans 4 phases (RANKING_FETCH, OCID_LOOKUP, CHARACTER_BASIC,
+    ITEM_EQUIPMENT) and each phase has its OWN runId (the suffix is a
+    nanos-time per phase, not a stable run-group id). The trigger response
+    only carries the first phase's runId (RANKING_FETCH), so we match by
+    the runId PREFIX (date-time portion: e.g. "20260619-152651-") which
+    identifies the run group across all 4 phases.
+
+    Phase completion order: we treat the run as terminal when the LAST
+    phase (ITEM_EQUIPMENT) reaches terminal state. Earlier phases may
+    already be terminal while later ones are still active.
+
+    Why we cannot rely on the legacy `current` field: ext-api sets
+    `current = null` when no phase is active (i.e. between runs, or after
+    a daily run fully completes and clears). The deprecated single-slot
+    `current` was used before the slots-map refactor. Verified 2026-06-19:
+    after a daily run finishes, sensor pokes for 4h before timing out
+    because `current` stays null forever.
     """
     trigger_response = context["ti"].xcom_pull(task_ids="trigger_daily_collection")
     if isinstance(trigger_response, str):
         trigger_response = json.loads(trigger_response)
     run_id = trigger_response["runId"]
+    # First two segments of the runId (e.g. "20260619-152651") form the
+    # run-group prefix shared across all 4 phases of the same daily run.
+    run_group_prefix = "-".join(run_id.split("-")[:2]) + "-"
+
+    def _belongs_to_run(phase_status):
+        """True if the phase_status's runId belongs to our run group."""
+        if not phase_status:
+            return False
+        rid = phase_status.get("runId") or ""
+        return rid.startswith(run_group_prefix)
 
     try:
         resp = requests.get(
@@ -135,16 +163,28 @@ def _is_run_terminal(**context):
     except (requests.RequestException, ValueError):
         return False  # transient — poke again
 
-    current = data.get("current")
-    if not current or current.get("runId") != run_id:
-        return False  # not yet our run, or runId mismatch
+    # Check FAILED first across all phases (active + lastCompleted) — a
+    # hard failure on ANY phase should abort the run.
+    for container in (data.get("slots") or {}, data.get("lastCompletedByPhase") or {}):
+        for phase_status in container.values():
+            if _belongs_to_run(phase_status) and phase_status.get("phase") == "FAILED":
+                raise RuntimeError(
+                    f"Run {run_group_prefix}* failed: "
+                    f"{phase_status.get('errorMessage', 'unknown')}"
+                )
 
-    if current.get("phase") == "FAILED":
-        raise RuntimeError(
-            f"Run {run_id} failed: {current.get('errorMessage', 'unknown')}"
-        )
+    # The run is terminal when ITEM_EQUIPMENT (last phase) is terminal
+    # AND belongs to our run group. Check both `slots` (active) and
+    # `lastCompletedByPhase` (cleared) to handle the case where the run
+    # fully completed and `current` is null.
+    item_equipment_status = (
+        (data.get("slots") or {}).get("ITEM_EQUIPMENT")
+        or (data.get("lastCompletedByPhase") or {}).get("ITEM_EQUIPMENT")
+    )
+    if not _belongs_to_run(item_equipment_status):
+        return False  # our run hasn't started yet, or wrong runId
 
-    return bool(current.get("terminal", False))
+    return bool(item_equipment_status.get("terminal", False))
 
 
 def wait_for_item_equipment_cycle(**context):

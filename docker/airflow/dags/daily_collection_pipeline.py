@@ -291,13 +291,17 @@ def route_scope(**ctx) -> str:
     """Branch decision (spec §5).
 
     Returns the task_id to follow after branch_on_scope:
-      - 'run_steps_task' when 'steps' field is present (ordered sequence).
+      - 'run_steps' when 'steps' field is present (ordered sequence).
       - 'trigger_daily_collection' when scope == ['FULL_DAILY'] (default).
       - 'per_phase_join' for any flat 'scope' list (existing #1292 path).
     """
     conf = ctx["dag_run"].conf or {}
     if "steps" in conf:
-        return "run_steps_task"
+        # Validate at branch time so invalid configs surface as branch_on_scope
+        # failures with actionable messages, not as masked failures deep inside
+        # run_steps. parse_steps raises AirflowException on bad input.
+        parse_steps(conf)  # noqa: parse_steps is imported at module top
+        return "run_steps"
     scope = parse_scope(conf)
     return "trigger_daily_collection" if scope == ["FULL_DAILY"] else "per_phase_join"
 

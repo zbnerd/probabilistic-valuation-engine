@@ -30,7 +30,7 @@
 | Create | `module-calculator/src/main/kotlin/maple/calculator/cache/CacheBackendFactory.kt` | Profile switch + Chronicle init fallback |
 | Create | `module-calculator/src/main/kotlin/maple/calculator/config/CacheBackendConfig.kt` | Spring `@Configuration` + `@Bean(destroyMethod = "close")` |
 | Create | `module-calculator/src/test/kotlin/maple/calculator/cache/CacheBackendTest.kt` | 11 unit tests (issue AC baseline + extensions) |
-| Create | `docker/prometheus/rules/cache-backend-alerts.yml` | `cache_backend_error_total` rate alert |
+| Create | `docker/prometheus/rules/cache-backend-alerts.yml` | `calculator_cache_errors_total` rate alert |
 
 ---
 
@@ -1456,7 +1456,7 @@ git add module-calculator/src/main/kotlin/maple/calculator/metrics/CacheMetrics.
 git commit -m "refactor(calculator): CacheMetrics reads from OffHeapCacheBackend
 
 Adds cache={caffeine,chronicle} tag for canary comparison.
-Adds cache_errors_total gauge (spec §5 fail-soft visibility)."
+Adds calculator_cache_errors_total gauge (spec §5 fail-soft visibility)."
 ```
 
 ---

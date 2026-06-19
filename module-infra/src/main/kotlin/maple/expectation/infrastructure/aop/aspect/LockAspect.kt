@@ -1,6 +1,5 @@
 package maple.expectation.infrastructure.aop.aspect
 
-import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.error.exception.InternalSystemException
 import maple.expectation.infrastructure.aop.annotation.Locked
@@ -14,6 +13,7 @@ import org.aspectj.lang.annotation.Aspect
 import org.slf4j.LoggerFactory
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
+import java.util.concurrent.CompletableFuture
 
 @Aspect
 @Order(0)
@@ -46,20 +46,24 @@ class LockAspect(
         key: String,
         waitSeconds: Long,
         leaseSeconds: Long,
-    ): Any = lockStrategy.executeWithLock(
-        key,
-        waitSeconds,
-        leaseSeconds,
-        createLockedTask(joinPoint, key),
-    )
-
-    private fun createLockedTask(joinPoint: ProceedingJoinPoint, key: String): ThrowingSupplier<Any> = ThrowingSupplier {
-        log.debug("🔑 [Locked Aspect] 락 획득 성공: {}", key)
-        joinPoint.proceed()
+    ): Any {
+        val cf = lockStrategy.executeWithLockAsync(
+            key,
+            waitSeconds,
+            leaseSeconds,
+        ) {
+            log.debug("🔑 [Locked Aspect] 락 획득 성공: {}", key)
+            CompletableFuture.completedFuture(joinPoint.proceed())
+        }
+        // AOP boundary: caller of @Locked chose sync semantics; .get() blocks only this aspect's caller.
+        // This is the documented exception to the no-join/get rule at the AOP wrapper boundary.
+        return cf.get()
     }
 
     private fun handleLockFailure(joinPoint: ProceedingJoinPoint, key: String, e: Throwable): Any? {
-        if (e is DistributedLockException) {
+        // cf.get() wraps the original cause in ExecutionException; unwrap for the type check.
+        val cause = e.cause ?: e
+        if (e is DistributedLockException || cause is DistributedLockException) {
             log.warn("⏭️ [Locked Timeout] {} - 락 획득 실패. 직접 조회를 시도합니다.", key)
             return proceedWithoutLock(joinPoint, key)
         }

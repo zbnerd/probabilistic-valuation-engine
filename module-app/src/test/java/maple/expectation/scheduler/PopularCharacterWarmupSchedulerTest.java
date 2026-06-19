@@ -7,7 +7,8 @@ import static org.mockito.Mockito.*;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
-import maple.expectation.common.function.ThrowingSupplier;
+import java.util.concurrent.CompletableFuture;
+import kotlin.jvm.functions.Function0;
 import maple.expectation.core.port.out.CacheWarmupPort;
 import maple.expectation.core.port.out.PopularCharacterTrackerPort;
 import maple.expectation.error.exception.DistributedLockException;
@@ -78,18 +79,21 @@ class PopularCharacterWarmupSchedulerTest {
   @DisplayName("dailyWarmup")
   class DailyWarmupTest {
 
+    @SuppressWarnings("unchecked")
+    private void stubLockSuccess() {
+      given(lockStrategy.executeWithLockAsync(anyString(), anyLong(), anyLong(), any(Function0.class)))
+          .willAnswer(
+              invocation -> {
+                Function0<CompletableFuture<Object>> supplier = invocation.getArgument(3);
+                return supplier.invoke();
+              });
+    }
+
     @Test
     @DisplayName("분산 락 획득 후 웜업 실행")
     void shouldExecuteWarmupWithLock() throws Throwable {
       // given
-      given(
-              lockStrategy.executeWithLock(
-                  anyString(), anyLong(), anyLong(), any(ThrowingSupplier.class)))
-          .willAnswer(
-              invocation -> {
-                ThrowingSupplier<?> supplier = invocation.getArgument(3);
-                return supplier.get();
-              });
+      stubLockSuccess();
       given(popularCharacterTracker.getYesterdayTopCharacters(50))
           .willReturn(List.of("User1", "User2"));
 
@@ -98,18 +102,18 @@ class PopularCharacterWarmupSchedulerTest {
 
       // then
       verify(lockStrategy)
-          .executeWithLock(
-              eq("popular-warmup-lock"), eq(0L), eq(300L), any(ThrowingSupplier.class));
+          .executeWithLockAsync(
+              eq("popular-warmup-lock"), eq(0L), eq(300L), any(Function0.class));
     }
 
     @Test
     @DisplayName("락 획득 실패 시 스킵")
     void whenLockFailed_shouldSkip() throws Throwable {
-      // given
-      given(
-              lockStrategy.executeWithLock(
-                  anyString(), anyLong(), anyLong(), any(ThrowingSupplier.class)))
-          .willThrow(new DistributedLockException("Lock failed"));
+      // given - 완료되었지만 DistributedLockException으로 실패하는 future 반환
+      given(lockStrategy.executeWithLockAsync(anyString(), anyLong(), anyLong(), any(Function0.class)))
+          .willAnswer(
+              invocation ->
+                  CompletableFuture.failedFuture(new DistributedLockException("Lock failed")));
 
       // when
       scheduler.dailyWarmup();
@@ -123,18 +127,21 @@ class PopularCharacterWarmupSchedulerTest {
   @DisplayName("initialWarmup")
   class InitialWarmupTest {
 
+    @SuppressWarnings("unchecked")
+    private void stubLockSuccess() {
+      given(lockStrategy.executeWithLockAsync(anyString(), anyLong(), anyLong(), any(Function0.class)))
+          .willAnswer(
+              invocation -> {
+                Function0<CompletableFuture<Object>> supplier = invocation.getArgument(3);
+                return supplier.invoke();
+              });
+    }
+
     @Test
     @DisplayName("서버 시작 후 웜업 실행")
     void shouldExecuteInitialWarmup() throws Throwable {
       // given
-      given(
-              lockStrategy.executeWithLock(
-                  anyString(), anyLong(), anyLong(), any(ThrowingSupplier.class)))
-          .willAnswer(
-              invocation -> {
-                ThrowingSupplier<?> supplier = invocation.getArgument(3);
-                return supplier.get();
-              });
+      stubLockSuccess();
       given(popularCharacterTracker.getYesterdayTopCharacters(50)).willReturn(List.of("InitUser1"));
 
       // when
@@ -142,8 +149,8 @@ class PopularCharacterWarmupSchedulerTest {
 
       // then
       verify(lockStrategy)
-          .executeWithLock(
-              eq("popular-warmup-lock"), anyLong(), anyLong(), any(ThrowingSupplier.class));
+          .executeWithLockAsync(
+              eq("popular-warmup-lock"), anyLong(), anyLong(), any(Function0.class));
     }
   }
 
@@ -151,18 +158,21 @@ class PopularCharacterWarmupSchedulerTest {
   @DisplayName("웜업 로직")
   class WarmupLogicTest {
 
+    @SuppressWarnings("unchecked")
+    private void stubLockSuccess() {
+      given(lockStrategy.executeWithLockAsync(anyString(), anyLong(), anyLong(), any(Function0.class)))
+          .willAnswer(
+              invocation -> {
+                Function0<CompletableFuture<Object>> supplier = invocation.getArgument(3);
+                return supplier.invoke();
+              });
+    }
+
     @Test
     @DisplayName("인기 캐릭터 목록 조회")
     void shouldGetTopCharacters() throws Throwable {
       // given
-      given(
-              lockStrategy.executeWithLock(
-                  anyString(), anyLong(), anyLong(), any(ThrowingSupplier.class)))
-          .willAnswer(
-              invocation -> {
-                ThrowingSupplier<?> supplier = invocation.getArgument(3);
-                return supplier.get();
-              });
+      stubLockSuccess();
       given(popularCharacterTracker.getYesterdayTopCharacters(50))
           .willReturn(List.of("Top1", "Top2", "Top3"));
 
@@ -178,14 +188,7 @@ class PopularCharacterWarmupSchedulerTest {
     void shouldWarmupEachCharacter() throws Throwable {
       // given
       List<String> topCharacters = List.of("Char1", "Char2", "Char3");
-      given(
-              lockStrategy.executeWithLock(
-                  anyString(), anyLong(), anyLong(), any(ThrowingSupplier.class)))
-          .willAnswer(
-              invocation -> {
-                ThrowingSupplier<?> supplier = invocation.getArgument(3);
-                return supplier.get();
-              });
+      stubLockSuccess();
       given(popularCharacterTracker.getYesterdayTopCharacters(50)).willReturn(topCharacters);
 
       // when
@@ -199,14 +202,7 @@ class PopularCharacterWarmupSchedulerTest {
     @DisplayName("인기 캐릭터가 없으면 웜업 스킵")
     void whenNoCharacters_shouldSkipWarmup() throws Throwable {
       // given
-      given(
-              lockStrategy.executeWithLock(
-                  anyString(), anyLong(), anyLong(), any(ThrowingSupplier.class)))
-          .willAnswer(
-              invocation -> {
-                ThrowingSupplier<?> supplier = invocation.getArgument(3);
-                return supplier.get();
-              });
+      stubLockSuccess();
       given(popularCharacterTracker.getYesterdayTopCharacters(50)).willReturn(List.of());
 
       // when
@@ -221,14 +217,7 @@ class PopularCharacterWarmupSchedulerTest {
     void whenCharacterFails_shouldContinueWithNext() throws Throwable {
       // given
       List<String> topCharacters = List.of("Fail1", "Success2", "Fail3");
-      given(
-              lockStrategy.executeWithLock(
-                  anyString(), anyLong(), anyLong(), any(ThrowingSupplier.class)))
-          .willAnswer(
-              invocation -> {
-                ThrowingSupplier<?> supplier = invocation.getArgument(3);
-                return supplier.get();
-              });
+      stubLockSuccess();
       given(popularCharacterTracker.getYesterdayTopCharacters(50)).willReturn(topCharacters);
 
       // 첫 번째와 세 번째 호출은 예외

@@ -35,6 +35,11 @@ dependencies {
 
 	// Cache
 	implementation(libs.caffeine)
+	implementation(libs.chronicle.map) {
+		// affinity:3.23ea1 references unpublished SNAPSHOT parent, unavailable from Maven Central.
+		// Chronicle Map uses affinity only for optional thread pinning; can be excluded.
+		exclude group: "net.openhft", module: "affinity"
+	}
 
 	// Metrics
 	implementation(libs.spring.boot.starter.actuator)

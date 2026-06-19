@@ -48,6 +48,12 @@ calculator:
     runs:
       keep-recent: 5                  # always keep the 5 most recent runs
       keep-within-hours: 12           # keep runs newer than 12 hours
+  cache:
+    backend: caffeine              # caffeine | chronicle; default caffeine (Chronicle stubbed on JDK 21)
+    chronicle:
+      path: /var/lib/calculator/chronicle-ocid
+      max-entries: 100000
+
   pipeline:
     worker-count: 4
     channel-capacity: 500

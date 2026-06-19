@@ -6,8 +6,13 @@ services:
     image: prom/prometheus:latest
     container_name: maple-prometheus
     restart: always
-    ports:
-      - "9090:9090"
+    # network_mode: host — prometheus reaches Spring Boot modules on the
+    # host via `localhost:PORT`. Without this, the container's localhost
+    # resolves to the container itself (no services on 8081/8082/8083/8084)
+    # and `host-gateway` resolves to the docker0 bridge IP which doesn't
+    # route host-bound ports. Same pattern as maple-airflow-* in
+    # docker-compose.airflow.yml. Verified 2026-06-19.
+    network_mode: host
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -16,10 +21,6 @@ services:
     volumes:
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    networks:
-      - maple-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   # PostgreSQL + PGMQ (Primary Database - Issue #589, #590, #591)
   # Replaced: MySQL, MongoDB, Redis Queue

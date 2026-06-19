@@ -18,6 +18,13 @@ alerting:
 scrape_configs:
   # ============================================
   # Spring Boot Modules
+  # Spring Boot modules run on the Docker host (not in containers), so we
+  # reach them via `localhost:PORT`. The corresponding
+  # `extra_hosts: localhost:host-gateway` mapping is set in
+  # docker-compose.yml so Docker Linux resolves `localhost` to
+  # the host's gateway IP. Verified 2026-06-19: bare `localhost` resolves
+  # to the prometheus container itself, not the host, so all 5 module
+  # targets were health=down until this fix.
   # ============================================
   - job_name: 'external-api'
     scrape_interval: 5s
@@ -46,17 +53,17 @@ scrape_configs:
         labels:
           application: 'synchronizer'
 
-  - job_name: 'rest-controller'
+  - job_name: 'cleanup'
     scrape_interval: 5s
     scrape_timeout: 3s
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets: ['localhost:8084']
         labels:
-          application: 'rest-controller'
+          application: 'cleanup'
 
   # ============================================
-  # Node Exporter - System Metrics
+  # Node Exporter - System Metrics (runs in Docker, resolves via maple-network)
   # ============================================
   - job_name: 'node-exporter'
     scrape_interval: 15s

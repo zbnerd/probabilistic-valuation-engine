@@ -33,6 +33,20 @@ Chronicle Map stores entries in mapped native memory (`mmap`-backed file), not J
 
 ---
 
+
+
+### Known blocker (as of 2026-06)
+
+Chronicle Map does not support JDK 21 in any stable release:
+- 3.23.5 (latest stable): uses , REMOVED in JDK 17+
+- 3.27ea0 (latest ea): requires  whose POM references unpublished SNAPSHOT
+
+**Workaround shipped:**  is a stub that logs WARN + falls back to Caffeine per spec §5.  is the only working profile. Off-heap heap-reduction goal deferred until upstream JDK 21 support ships.
+
+**Issue #1311 acceptance status:** heap reduction (< 200MB), hit rate unchanged, and full Chronicle fallback path CANNOT be verified in this environment. Re-evaluate on each Chronicle Map stable release.
+
+---
+
 ## 3. Architecture
 
 ### 3.1 Interface

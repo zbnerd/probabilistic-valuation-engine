@@ -26,7 +26,8 @@ java {
 }
 
 repositories {
-	mavenCentral()
+mavenCentral()
+	maven { url = uri("https://repo.openhft.com") }
 }
 
 // All projects: 공통 설정
@@ -41,6 +42,7 @@ allprojects {
 
 	repositories {
 		mavenCentral()
+		maven { url = uri("https://repo.openhft.com") }
 	}
 
 	dependencyManagement {

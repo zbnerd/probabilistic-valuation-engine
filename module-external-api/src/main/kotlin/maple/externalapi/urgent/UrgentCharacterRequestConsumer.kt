@@ -57,12 +57,19 @@ class UrgentCharacterRequestConsumer(
         }
 
         processUrgentCharacterAsync(request)
-            .whenComplete { _, ex ->
+            .handle { _, ex ->
+                // .handle fires on normal AND exceptional completion. Re-throw via `ex`
+                // so the outer .whenComplete below receives the failure.
                 if (ex != null) {
                     log.error("[Urgent] failed: userIgn={}", maskIgn(request.userIgn), ex)
                 } else {
                     log.info("[Urgent] completed: userIgn={}", maskIgn(request.userIgn))
                 }
+                ex
+            }
+            .whenComplete { _, _ ->
+                // .whenComplete always fires (success, failure, AND cancellation).
+                // Cancel-safe: even if the CF is cancelled, the permit is released here.
                 semaphore.release()
                 runCatching { acknowledgment.acknowledge() }
                     .onFailure { log.warn("[Urgent] ACK failed: userIgn={}", maskIgn(request.userIgn)) }

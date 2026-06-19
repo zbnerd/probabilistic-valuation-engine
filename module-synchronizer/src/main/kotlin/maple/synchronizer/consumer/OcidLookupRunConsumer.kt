@@ -1,8 +1,7 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
+import java.util.concurrent.CompletableFuture
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.synchronizer.service.OcidLookupService
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -32,19 +31,19 @@ class OcidLookupRunConsumer(
         acknowledgment: Acknowledgment,
         @Header(name = KafkaHeaders.RECEIVED_TOPIC, required = false) topic: String?,
     ) {
-        executor.execute {
-            runCatching {
-                // CPU offload: JSON parse on Dispatchers.Default.
-                val event = runBlocking(Dispatchers.Default) {
-                    objectMapper.readValue(record.value(), SnapshotRunCompletedEvent::class.java)
+        // CPU offload: JSON parse via CompletableFuture.supplyAsync on the executor —
+        // replaces the prior runBlocking(Dispatchers.Default) coroutine bridge.
+        CompletableFuture
+            .supplyAsync(
+                { objectMapper.readValue(record.value(), SnapshotRunCompletedEvent::class.java) },
+                executor,
+            ).thenAccept { event -> ocidLookupService.ingest(event) }
+            .whenComplete { _, ex ->
+                if (ex != null) {
+                    logger.error("[OcidLookupRun] consume failed", ex)
                 }
-                // IO (ingest) on caller thread.
-                ocidLookupService.ingest(event)
-            }.onFailure { ex ->
-                logger.error("[OcidLookupRun] consume failed", ex)
+                runCatching { acknowledgment.acknowledge() }
             }
-            runCatching { acknowledgment.acknowledge() }
-        }
     }
 
     companion object {

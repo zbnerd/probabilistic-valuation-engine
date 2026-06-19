@@ -22,6 +22,7 @@ postgresql = "42.7.4"
 
 # Cache
 caffeine = "3.1.8"
+chronicle-map = "3.23.5"
 
 # Resilience & Circuit Breaker
 resilience4j = "2.2.0"
@@ -116,6 +117,7 @@ postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" 
 
 # Cache
 caffeine = { module = "com.github.ben-manes.caffeine:caffeine", version.ref = "caffeine" }
+chronicle-map = { module = "net.openhft:chronicle-map", version.ref = "chronicle-map" }
 
 # Resilience4j
 resilience4j-spring-boot3 = { module = "io.github.resilience4j:resilience4j-spring-boot3", version.ref = "resilience4j" }

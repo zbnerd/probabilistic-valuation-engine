@@ -17,6 +17,8 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
       acks: all
       retries: 3
+      properties:
+        buffer.memory: ${KAFKA_BUFFER_MEMORY:67108864}  # 64MB, up from default 32MB (issue #1314)
 
 nexon:
   api:

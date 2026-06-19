@@ -17,11 +17,13 @@ Tune Netty direct buffer arena count and Kafka client buffer memory to fit withi
 - Must NOT raise the 512MB cap — tuning operates within it.
 - Per-environment override path required (different core counts).
 - Backward-compatible: local dev with default gradle properties must work without env setup.
+- Scope: hot-path pipeline only — `module-external-api` and `module-calculator`. Other Kafka-using modules (`auth`, `rest-controller`, `synchronizer`, `infra`) are excluded — they are control plane / read path, different load profile, not in the RSS pressure tier per `prometheus-metrics.md`. If a future issue identifies memory pressure there, address separately with its own spec.
 
 **Out of scope (deferred):**
 - Async S3 client migration (Phase 3).
 - Chronicle Map OCID cache (Phase 2).
 - Streaming ext-api chunk parser (Phase 4).
+- Kafka tuning for `auth`/`rest-controller`/`synchronizer`/`infra` modules.
 
 ---
 

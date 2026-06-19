@@ -65,6 +65,7 @@ class DataflowContractTest {
         // arrange: a real LocalFsObjectStorage in a temp dir.
         val objectStorage: ObjectStorage = LocalFsObjectStorage(
             basePath = tempDir.toString(),
+            uploadExecutor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
             meterRegistry = null,
         )
 

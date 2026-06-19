@@ -67,15 +67,6 @@ The issue body described a pattern (`ObjectMapper.readValue(byte[])` → `List<M
 
 **Why not full manual token loop:** `readValueAsTree()` per record trades a small allocation for code simplicity. Heap target is < 200MB (not < 100MB) — manual loop not justified.
 
-**Design revision (2026-06-19 implementation feedback):**
-The token-stream approach above failed during implementation: Jackson `JsonParser` cannot reliably resync after `nextToken()` throws on top-level garbage input — there is no robust way to advance to the next `START_OBJECT` once the parser is in an inconsistent state. The actual committed implementation (§4.1.1) uses **line-bounded JSONL parsing** (`BufferedReader.lineSequence()`) which uses NDJSON's natural line boundary as the recovery point — the canonical approach for JSONL streams. See §4.1.1 below for the implementation that was actually shipped.
-
-**Heap impact (revised, smaller than originally projected):**
-- Eliminates intermediate `JsonNode.toMap()` indirection at the call site; converts directly to `Map<String, Any>`.
-- Eliminates duplicate per-line `readTree` followed by `convertValue` round-trip at hot-path call sites.
-- Per-line `String` allocation remains (unavoidable for line-bounded JSONL).
-- Originally-projected heap reduction of ~50MB on ext-api peak should be re-measured at runtime; expected actual reduction is ~10-20MB.
-
 ---
 
 ## 4. Components

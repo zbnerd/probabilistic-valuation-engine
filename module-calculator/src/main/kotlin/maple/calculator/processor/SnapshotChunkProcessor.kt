@@ -10,6 +10,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import maple.calculator.config.CoroutineDispatcherConverter
 import maple.calculator.config.PipelineProperties
@@ -89,9 +90,12 @@ class SnapshotChunkProcessor(
             resultChannel.close()
         }
 
-        val writeResult = async(Dispatchers.IO) {
-            resultWriter.write(resultObjectKey, channelAsFlow(resultChannel))
-        }.await()
+        // Start the write CF BEFORE waiting for parse+calc to finish —
+        // the CF drains resultChannel in the background via
+        // producerScope.future, so it overlaps with the parse+calc workers
+        // (same overlap the original async { write() } provided).
+        val writeFuture = resultWriter.write(resultObjectKey, channelAsFlow(resultChannel))
+        val writeResult = writeFuture.await()  // single .await() at coroutine→CF boundary
 
         ChunkResult(
             recordCount = recordCount.get(),
@@ -100,7 +104,7 @@ class SnapshotChunkProcessor(
             calculatedCount = calculatedCount.get(),
             errorCount = errorCount.get(),
             resultObjectKey = writeResult.objectKey,
-            resultCount = writeResult.resultCount,
+            resultCount = writeResult.resultCount.toInt(),
             resultUncompressedBytes = writeResult.uncompressedBytes,
             resultCompressedBytes = writeResult.compressedBytes,
         )

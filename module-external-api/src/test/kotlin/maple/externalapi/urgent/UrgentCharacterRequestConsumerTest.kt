@@ -50,7 +50,11 @@ class UrgentCharacterRequestConsumerTest {
         clientPort = mock()
         objectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())
         kafkaTemplate = mock()
-        objectStorage = LocalFsObjectStorage(basePath = tempDir.toString(), meterRegistry = null)
+        objectStorage = LocalFsObjectStorage(
+            basePath = tempDir.toString(),
+            uploadExecutor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
+            meterRegistry = null,
+        )
 
         val ocidResponseParser = UrgentOcidResponseParser(objectMapper)
         val chunkArtifactWriter = UrgentChunkArtifactWriter(

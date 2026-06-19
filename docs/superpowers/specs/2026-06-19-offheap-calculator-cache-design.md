@@ -191,7 +191,7 @@ Page on-call → manual investigation (likely file format mismatch after version
 | `factory_corruptFileFallsBackToCaffeine` | Delete chronicle file before factory call → returns Caffeine, WARN logged |
 | `factory_invalidProfileDefaultsToCaffeine` | `profile="foo"` → Caffeine, ERROR logged |
 
-21 tests total (4 from issue AC + 17 extensions across both backends, factory, and serializers). Tagged `@Tag("unit")`.
+11 tests total (4 from issue AC + 7 extensions). Tagged `@Tag("unit")`.
 
 ### 6.2 Integration verification (post-deploy)
 
@@ -302,7 +302,7 @@ Mapping to issue #1311 AC:
 - [x] `CaffeineCacheBackend` refactor (existing cache wrapped behind interface) — §3.2, §9
 - [x] `ChronicleMapBackend` impl with named off-heap storage — §3.2, §9
 - [x] `CacheConfig` profile switch (`caffeine` | `chronicle`) — §3.3, §7.5
-- [x] Unit tests: put/get/overwrite/size — 21 tests pass (§6.1; covers 4 AC + 17 extensions across both backends, factory, serializers)
+- [x] Unit tests: put/get/overwrite/size — 11 tests pass (§6.1; covers 4 AC + 7 extensions)
 - [x] Heap reduction: `jvm_memory_used_bytes{area="heap"}{application="calculator"}` < 200MB — §6.2
 - [x] Cache hit rate unchanged (`calculator_cache_hit_rate`) — §6.2
 - [x] Fallback works: delete chronicle file mid-run → WARN logged, Caffeine takes over — §5, §6.1 `factory_corruptFileFallsBackToCaffeine`

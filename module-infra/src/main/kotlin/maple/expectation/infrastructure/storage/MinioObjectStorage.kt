@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.exception.SdkClientException
 import software.amazon.awssdk.core.sync.RequestBody
+import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest
@@ -39,6 +40,7 @@ import java.util.concurrent.CompletableFuture
 class MinioObjectStorage(
     private val props: MinioProperties,
     private val s3: S3Client,
+    private val s3Async: S3AsyncClient,
     private val transferManager: S3TransferManager,
     @Autowired(required = false)
     private val meterRegistry: MeterRegistry?,
@@ -127,6 +129,47 @@ class MinioObjectStorage(
             path,
         )
         return PutResult(key, size, resp.eTag())
+    }
+
+    override fun putStreamMultipart(
+        key: String,
+        input: java.io.InputStream,
+    ): CompletableFuture<PutResult> {
+        // Async chunked transfer: S3AsyncClient.putObject with
+        // AsyncRequestBody.fromInputStream(input, contentLength=-1L)
+        // tells the SDK to send chunks without knowing the total
+        // length. The SDK internally wraps the InputStream in
+        // SdkChunkedEncodingInputStream, sends 5MB chunks via
+        // multipart, and tracks checksums per chunk.
+        //
+        // Why not sync putObject: the sync S3Client.putObject marshals
+        // Content-Length from RequestBody.contentLength() and throws
+        // IAE("Content-length must not be negative") for unknown length
+        // (see putStream() below for the full history of this attempt).
+        //
+        // Retry: SDK built-in RetryPolicy.defaultRetryPolicy (3 retries,
+        // configured in StorageConfig.s3AsyncClient).
+        val req = PutObjectRequest.builder()
+            .bucket(props.bucket)
+            .key(key)
+            .contentType("application/octet-stream")
+            .build()
+
+        val body = AsyncRequestBody.fromInputStream { b ->
+            b.inputStream(input).contentLength(-1L)
+        }
+
+        return s3Async.putObject(req, body)
+            .handle { resp, err ->
+                if (err != null) {
+                    throw RuntimeException(
+                        "putStreamMultipart failed for key=$key",
+                        err,
+                    )
+                }
+                // Size is unknown with chunked transfer (-1L).
+                PutResult(key, -1L, resp.eTag())
+            }
     }
 
     override fun putFileAsync(key: String, path: java.nio.file.Path): CompletableFuture<PutResult> {

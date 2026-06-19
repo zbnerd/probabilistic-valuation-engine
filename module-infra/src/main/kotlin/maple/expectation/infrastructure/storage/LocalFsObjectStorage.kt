@@ -18,6 +18,7 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 import java.util.stream.Collectors
 
 /**
@@ -27,6 +28,7 @@ import java.util.stream.Collectors
 @Component
 class LocalFsObjectStorage(
     @Value("\${storage.local.base-path:../data}") private val basePath: String,
+    private val uploadExecutor: Executor,
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private val meterRegistry: MeterRegistry?,
 ) : ObjectStorage {
@@ -67,6 +69,24 @@ class LocalFsObjectStorage(
         // a single Files.move call. But we still need the future contract
         // so the writer's hot path stays symmetric across backends.
         return CompletableFuture.completedFuture(putFile(key, path))
+    }
+
+    override fun putStreamMultipart(
+        key: String,
+        input: java.io.InputStream,
+    ): CompletableFuture<PutResult> {
+        // Drain the InputStream to a temp file (bounded heap — the temp
+        // file is on disk, not in memory), then call putFile on a
+        // virtual-thread executor. The single whenComplete guarantees
+        // temp-file cleanup on both success and failure (no double-cleanup
+        // race).
+        val tempFile = Files.createTempFile("objstore-", ".tmp")
+        return CompletableFuture.supplyAsync({
+            Files.copy(input, tempFile, StandardCopyOption.REPLACE_EXISTING)
+            putFile(key, tempFile)
+        }, uploadExecutor).whenComplete { _, _ ->
+            runCatching { Files.deleteIfExists(tempFile) }
+        }
     }
 
     override fun get(key: String): ByteArray = Files.readAllBytes(resolve(key))

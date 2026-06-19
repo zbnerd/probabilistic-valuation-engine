@@ -821,31 +821,32 @@ internal class ChronicleBackendException(message: String, cause: Throwable? = nu
 /**
  * Serializes [CacheKey] to a fixed-size byte buffer for Chronicle Map storage.
  *
- * Layout (255 bytes max, sized for typical key):
- * - itemName: String (UTF-8, varint length prefix, max 64 bytes)
- * - itemPart: String (max 32 bytes)
+ * Layout (variable-size, length-prefixed, no caps):
+ * - itemName: String? (UTF-8, varint length prefix)
+ * - itemPart: String? (UTF-8, varint length prefix)
  * - itemLevel: int (4 bytes)
- * - potentialGrade: String? (max 16 bytes)
- * - potentialOptions: List<String?>? (max 96 bytes total)
- * - additionalPotentialGrade: String? (max 16 bytes)
- * - additionalPotentialOptions: List<String?>? (max 96 bytes total)
+ * - potentialGrade: String? (UTF-8, varint length prefix)
+ * - potentialOptions: List<String?>? (length-prefixed list of nullable strings)
+ * - additionalPotentialGrade: String? (UTF-8, varint length prefix)
+ * - additionalPotentialOptions: List<String?>? (length-prefixed list of nullable strings)
  * - targetStar: int (4 bytes)
  * - isNoljang: boolean (1 byte)
  *
  * Field count is FIXED. Adding/removing a field requires rebuilding the
- * Chronicle Map file (delete the file on deploy).
+ * Chronicle Map file (delete the file on deploy). Per-entry size is unbounded
+ * — Chronicle's `averageKeySize` config is a performance hint, not a cap.
  */
 internal class CacheKeySerializer {
 
     fun writeMarshallable(key: CacheKey, bytes: Bytes) {
         bytes.clear()
-        writeString(bytes, key.itemName, 64)
-        writeString(bytes, key.itemPart, 32)
+        writeString(bytes, key.itemName)
+        writeString(bytes, key.itemPart)
         bytes.writeInt(key.itemLevel)
-        writeString(bytes, key.potentialGrade, 16)
-        writeStringList(bytes, key.potentialOptions, 96)
-        writeString(bytes, key.additionalPotentialGrade, 16)
-        writeStringList(bytes, key.additionalPotentialOptions, 96)
+        writeString(bytes, key.potentialGrade)
+        writeStringList(bytes, key.potentialOptions)
+        writeString(bytes, key.additionalPotentialGrade)
+        writeStringList(bytes, key.additionalPotentialOptions)
         bytes.writeInt(key.targetStar)
         bytes.writeBoolean(key.isNoljang)
     }
@@ -864,13 +865,12 @@ internal class CacheKeySerializer {
         )
     }
 
-    private fun writeString(bytes: Bytes, s: String?, maxLen: Int) {
+    private fun writeString(bytes: Bytes, s: String?) {
         if (s == null) {
             bytes.writeInt(-1)
             return
         }
         val utf = s.toByteArray(Charsets.UTF_8)
-        require(utf.size <= maxLen) { "string exceeds maxLen=$maxLen: ${s.length} chars" }
         bytes.writeInt(utf.size)
         bytes.write(utf)
     }
@@ -878,31 +878,25 @@ internal class CacheKeySerializer {
     private fun readString(bytes: Bytes): String? {
         val len = bytes.readInt()
         if (len == -1) return null
-        require(len >= 0) { "negative string length: $len" }
+        require(len >= 0) { "negative string length: $len (corrupt data?)" }
         val buf = ByteArray(len)
         bytes.read(buf)
         return String(buf, Charsets.UTF_8)
     }
 
-    private fun writeStringList(bytes: Bytes, list: List<String?>?, maxLen: Int) {
+    private fun writeStringList(bytes: Bytes, list: List<String?>?) {
         if (list == null) {
             bytes.writeInt(-1)
             return
         }
         bytes.writeInt(list.size)
-        val startPos = bytes.writePosition()
-        for (s in list) {
-            writeString(bytes, s, maxLen / 4)
-        }
-        require(bytes.writePosition() - startPos <= maxLen) {
-            "list payload exceeds maxLen=$maxLen"
-        }
+        for (s in list) writeString(bytes, s)
     }
 
     private fun readStringList(bytes: Bytes): List<String?>? {
         val size = bytes.readInt()
         if (size == -1) return null
-        require(size >= 0) { "negative list size: $size" }
+        require(size >= 0) { "negative list size: $size (corrupt data?)" }
         return List(size) { readString(bytes) }
     }
 }

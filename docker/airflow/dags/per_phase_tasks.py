@@ -32,6 +32,13 @@ TRIGGER_PHASES = ["RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIP
 LOOP_PHASES = ["CHARACTER_BASIC", "ITEM_EQUIPMENT"]
 STOP_PHASES = ["RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"]
 
+# Phase sets for sequence-steps validation (spec §3.2).
+# Derived from TRIGGER_PHASES/LOOP_PHASES so adding a new phase only requires
+# updating the lists above.
+_TRIGGERABLE_PHASES = frozenset(TRIGGER_PHASES)
+_LOOPABLE_PHASES = frozenset(LOOP_PHASES)
+_STEP_ACTIONS = frozenset({"trigger", "loop"})
+
 
 def get_external_api_base() -> str:
     """Resolve ext-api base URL from Airflow Connection 'external_api'."""
@@ -63,12 +70,6 @@ def parse_scope(conf: dict) -> list:
             f"Allowed: {sorted(ALLOWED_SCOPES)}"
         )
     return list(scope)
-
-
-# Phase sets for sequence-steps validation (spec §3.2)
-_TRIGGERABLE_PHASES = {"RANKING_FETCH", "OCID_LOOKUP", "CHARACTER_BASIC", "ITEM_EQUIPMENT"}
-_LOOPABLE_PHASES = {"CHARACTER_BASIC", "ITEM_EQUIPMENT"}
-_STEP_ACTIONS = {"trigger", "loop"}
 
 
 def parse_steps(conf: dict) -> list:

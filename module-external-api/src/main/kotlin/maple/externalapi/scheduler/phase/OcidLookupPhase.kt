@@ -17,24 +17,26 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import maple.common.parser.StreamingChunkParser
+import maple.externalapi.metrics.ChunkParserMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
 /**
@@ -71,6 +73,8 @@ class OcidLookupPhase(
     private val objectStorage: ObjectStorage,
     private val nexonAuthClient: NexonAuthClient,
     private val stopSignal: PhaseStopSignal,
+    private val streamingChunkParser: StreamingChunkParser,
+    private val chunkParserMetrics: ChunkParserMetrics,
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
 
@@ -176,25 +180,39 @@ class OcidLookupPhase(
     }
 
     /**
-     * GZIP decompress + per-line JSON parse. CPU-bound → `Dispatchers.Default`.
+     * GZIP decompress + line-bounded JSONL parse. CPU-bound →
+     * `Dispatchers.Default`. Uses [StreamingChunkParser] for
+     * streaming parse; no manual readTree per line.
      */
-    suspend fun readCharacterNamesFromChunks(runKey: String): List<String> = withContext(Dispatchers.Default) {
-        val prefix = "$runKey/ranking-overall/chunks"
-        val names = linkedSetOf<String>()
-        for (obj in objectStorage.listByPrefix(prefix)) {
-            if (!obj.key.endsWith(".jsonl.gz")) continue
-            GZIPInputStream(BufferedInputStream(objectStorage.getStream(obj.key))).bufferedReader().use { reader ->
-                reader.lineSequence().forEach { line ->
-                    if (line.isNotBlank()) {
-                        val node = objectMapper.readTree(line)
-                        val key = node.get("key")?.asText()
-                        if (key != null) names.add(key)
-                    }
+    suspend fun readCharacterNamesFromChunks(runKey: String): List<String> =
+        withContext(Dispatchers.Default) {
+            val prefix = "$runKey/ranking-overall/chunks"
+            val names = linkedSetOf<String>()
+            val emitted = chunkParserMetrics.recordsEmitted("ranking_chunk_names")
+            // Pre-register skipped counter so it appears in /actuator/prometheus from the start.
+            chunkParserMetrics.recordsSkipped("ranking_chunk_names")
+            val timer = chunkParserMetrics.parseDuration("ranking_chunk_names")
+            val start = System.nanoTime()
+
+            for (obj in objectStorage.listByPrefix(prefix)) {
+                if (!obj.key.endsWith(".jsonl.gz")) continue
+                val records = objectStorage.getStream(obj.key).use { stream ->
+                    streamingChunkParser.parse(stream).toList()
+                }
+                for (record in records) {
+                    emitted.increment()
+                    val key = record["key"]?.toString()
+                    if (!key.isNullOrBlank()) names.add(key)
                 }
             }
+
+            timer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS)
+            log.info(
+                "[OcidLookup] readCharacterNamesFromChunks key={} distinct={}",
+                runKey, names.size,
+            )
+            names.toList()
         }
-        names.toList()
-    }
 
     /**
      * Delete old OCID mapping objects under [mappingDir], but PRESERVE the

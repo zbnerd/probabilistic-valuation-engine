@@ -8,8 +8,8 @@ Data Plane: Kafka handles chunk processing, retry, backpressure.
 """
 
 from datetime import datetime, timedelta
-
 import json
+import logging
 import os
 
 import requests
@@ -31,7 +31,11 @@ from per_phase_tasks import (
     make_stop_task,
     make_trigger_task,
     parse_scope,
+    parse_steps,
+    wait_for_phase_terminal,
 )
+
+log = logging.getLogger(__name__)
 
 
 def is_health_up(response):
@@ -187,6 +191,117 @@ def _is_run_terminal(**context):
     return bool(item_equipment_status.get("terminal", False))
 
 
+def run_steps(**ctx):
+    """Walk dag_run.conf['steps'] sequentially.
+
+    For each step:
+      - action=trigger: POST /trigger/phase/{phase}, wait for that phase
+        to reach terminal via wait_for_phase_terminal.
+      - action=loop: POST /loop/phase/{phase}, exit immediately
+        (fire-and-forget; DAG advances to trigger_cleanup_pipeline).
+
+    Raises AirflowException on:
+      - parse_steps validation failure (invalid phase, mutually exclusive
+        scope+steps, etc.)
+      - 400 INVALID_PHASE from ext-api trigger/loop
+      - 5xx trigger errors
+      - RuntimeError from wait_for_phase_terminal on FAILED phase
+      - TimeoutError from wait_for_phase_terminal on 4h timeout
+
+    The whole task has a 12h execution_timeout (3 trigger steps × 4h worst
+    case). Most runs complete well within this — the timeout is a safety net.
+    """
+    from per_phase_tasks import (
+        get_external_api_base,
+    )
+
+    conf = ctx["dag_run"].conf or {}
+    steps = parse_steps(conf)  # raises AirflowException on invalid
+    base = get_external_api_base()
+
+    for step in steps:
+        action = step["action"]
+        phase = step["phase"]
+
+        if action == "loop":
+            # Fire-and-forget. POST + return. DAG advances.
+            try:
+                resp = requests.post(
+                    f"{base}/api/internal/loop/phase/{phase}", timeout=30
+                )
+            except requests.RequestException as exc:
+                raise AirflowException(
+                    f"Loop start {phase} failed: {exc}"
+                ) from exc
+            if resp.status_code == 202:
+                log.info("[run_steps] loop started phase=%s", phase)
+            elif resp.status_code == 409:
+                log.info("[run_steps] loop already running phase=%s", phase)
+            elif resp.status_code == 400:
+                raise AirflowException(
+                    f"Loop start {phase} rejected (INVALID_PHASE): "
+                    f"{resp.text[:500]}"
+                )
+            else:
+                raise AirflowException(
+                    f"Loop start {phase} failed: HTTP {resp.status_code} "
+                    f"{resp.reason}: {resp.text[:500]}"
+                )
+            return  # loop is fire-and-forget; DAG advances
+
+        # action == "trigger"
+        try:
+            resp = requests.post(
+                f"{base}/api/internal/trigger/phase/{phase}", timeout=30
+            )
+        except requests.RequestException as exc:
+            raise AirflowException(
+                f"Trigger {phase} failed: {exc}"
+            ) from exc
+
+        if resp.status_code in (200, 202):
+            body = resp.json()
+        elif resp.status_code == 409:
+            body = {"runId": None, "status": "ALREADY_ACTIVE"}
+        elif resp.status_code == 400:
+            raise AirflowException(
+                f"Trigger {phase} rejected (INVALID_PHASE): "
+                f"{resp.text[:500]}"
+            )
+        else:
+            raise AirflowException(
+                f"Trigger {phase} failed: HTTP {resp.status_code} "
+                f"{resp.reason}: {resp.text[:500]}"
+            )
+
+        run_id = body.get("runId")
+        if not run_id:
+            log.warning(
+                "[run_steps] trigger %s returned no runId (status=%s); skipping wait",
+                phase, body.get("status"),
+            )
+            continue
+
+        log.info("[run_steps] waiting for %s runId=%s", phase, run_id)
+        wait_for_phase_terminal(phase, run_id)
+        log.info("[run_steps] %s reached terminal", phase)
+
+
+def route_scope(**ctx) -> str:
+    """Branch decision (spec §5).
+
+    Returns the task_id to follow after branch_on_scope:
+      - 'run_steps_task' when 'steps' field is present (ordered sequence).
+      - 'trigger_daily_collection' when scope == ['FULL_DAILY'] (default).
+      - 'per_phase_join' for any flat 'scope' list (existing #1292 path).
+    """
+    conf = ctx["dag_run"].conf or {}
+    if "steps" in conf:
+        return "run_steps_task"
+    scope = parse_scope(conf)
+    return "trigger_daily_collection" if scope == ["FULL_DAILY"] else "per_phase_join"
+
+
 def wait_for_item_equipment_cycle(**context):
     """Wait for item-equipment chunk consumed event from synchronizer via Kafka.
 
@@ -289,13 +404,11 @@ with DAG(
 
     # Per-phase branch (issue #1292). Activated when dag_run.conf['scope']
     # is set to a list of action values (see per_phase_tasks.ALLOWED_SCOPES).
+    # When dag_run.conf['steps'] is present, routes to run_steps_task for
+    # ordered sequential execution (spec §5).
     branch_on_scope = BranchPythonOperator(
         task_id="branch_on_scope",
-        python_callable=lambda **ctx: (
-            "trigger_daily_collection"
-            if parse_scope(ctx["dag_run"].conf or {}) == ["FULL_DAILY"]
-            else "per_phase_join"
-        ),
+        python_callable=route_scope,
     )
 
     per_phase_join = EmptyOperator(
@@ -306,6 +419,16 @@ with DAG(
     per_phase_trigger_tasks = [make_trigger_task(p) for p in TRIGGER_PHASES]
     per_phase_loop_tasks = [make_loop_task(p) for p in LOOP_PHASES]
     per_phase_stop_tasks = [make_stop_task(p) for p in STOP_PHASES]
+
+    # Sequence-steps path (spec §5). When dag_run.conf['steps'] is set,
+    # branch_on_scope routes here. The task walks steps sequentially:
+    # trigger steps block on wait_for_phase_terminal; loop steps fire-and-forget.
+    run_steps_task = PythonOperator(
+        task_id="run_steps",
+        python_callable=run_steps,
+        execution_timeout=timedelta(hours=12),
+        retries=0,
+    )
 
     per_phase_trigger_sensors = [
         PythonSensor(
@@ -321,9 +444,11 @@ with DAG(
     check_external_api >> branch_on_scope
     branch_on_scope >> trigger_daily_collection
     branch_on_scope >> per_phase_join
+    branch_on_scope >> run_steps_task
     per_phase_join >> per_phase_trigger_tasks
     per_phase_join >> per_phase_loop_tasks
     per_phase_join >> per_phase_stop_tasks
     for trig, sens in zip(per_phase_trigger_tasks, per_phase_trigger_sensors):
         trig >> sens
     trigger_daily_collection >> wait_for_completion >> wait_ie_cycle >> trigger_cleanup
+    run_steps_task >> trigger_cleanup

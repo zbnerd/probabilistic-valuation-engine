@@ -29,9 +29,11 @@ open class StubObjectStorage : ObjectStorage {
     final override fun putStreamMultipart(
         key: String,
         input: InputStream,
-    ): CompletableFuture<PutResult> = CompletableFuture.completedFuture(
-        handlePutStreamMultipart(key, input),
-    )
+    ): CompletableFuture<PutResult> = try {
+        CompletableFuture.completedFuture(handlePutStreamMultipart(key, input))
+    } catch (e: Exception) {
+        CompletableFuture.failedFuture(e)
+    }
 
     // --- Unused methods throw to surface accidental test dependencies ---
 

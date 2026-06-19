@@ -9,6 +9,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import maple.calculator.config.CoroutineDispatcherConverter
 import maple.calculator.config.PipelineProperties
@@ -102,7 +103,7 @@ class SnapshotChunkProcessor(
             calculatedCount = calculatedCount.get(),
             errorCount = errorCount.get(),
             resultObjectKey = writeResult.objectKey,
-            resultCount = writeResult.resultCount,
+            resultCount = writeResult.resultCount.toInt(),
             resultUncompressedBytes = writeResult.uncompressedBytes,
             resultCompressedBytes = writeResult.compressedBytes,
         )

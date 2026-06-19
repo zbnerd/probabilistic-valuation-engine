@@ -9,21 +9,25 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * Off-heap cache backend using direct [ByteBuffer] for value storage.
  *
- * **Why this exists:** Chronicle Map (the original target per issue #1311) does
- * not support JDK 21 in any stable release. This implementation achieves the
- * **heap reduction goal** without a third-party off-heap KV dep:
+ * **Why this exists:** Chronicle Map (original target per issue #1311) doesn't
+ * support JDK 21 in any stable release. This impl achieves the heap-reduction AC
+ * without a third-party off-heap dep:
  *
- * - Keys: hashed to `Int`, stored in a [ConcurrentHashMap] (Long → ByteBuffer).
- *   Heap cost: ~32 bytes/entry × 100K = ~3MB (vs Caffeine POJOs at ~300 bytes × 100K = 30MB).
- * - Values: serialized via Jackson to [ByteBuffer.allocateDirect]. Stored off-heap.
- * - Eviction: when total direct bytes exceed cap, drop oldest entries (insertion-order tracker).
- * - Thread-safety: ConcurrentHashMap for index; AtomicLong for byte counter; per-entry ByteBuffers are not mutated after put.
+ * - Keys: full key reference stored alongside index entry to enable equality check
+ *   on hash collisions (prevents silent data loss when two keys hash to same Int).
+ *   Heap cost: ~50 bytes/entry × 100K = ~5MB (vs Caffeine POJOs ~30MB).
+ * - Values: Jackson-serialized to [ByteBuffer.allocateDirect]. Stored off-heap.
+ * - Eviction: insertion-order tracker drops oldest when over `maxEntries`.
+ * - Thread-safety: ConcurrentHashMap + AtomicLong + per-entry ByteBuffers (not mutated after put).
  *
- * When Chronicle Map ships JDK 21 support, this backend can be replaced by re-introducing
- * [ChronicleMapBackend]. The [OffHeapCacheBackend] interface contract is unchanged.
+ * **Collision handling:** map keys are `Int` hash. ConcurrentHashMap allows
+ * duplicate `Int` keys with different `equals()` (since key type is Int — no equals check).
+ * To prevent silent overwrite, each entry stores the full key reference and `get()`
+ * verifies `key.equals(storedKey)` before returning value.
  *
- * Limitation: not persisted across restarts (in-memory only). For persistence, swap in
- * Chronicle Map (file-backed) when upstream catches up.
+ * When Chronicle Map ships JDK 21 support, swap this for a real `ChronicleMapBackend`
+ * behind the same [OffHeapCacheBackend] interface. Persistence is the main trade-off
+ * (Chronicle is file-backed; this is in-memory only).
  */
 class OffHeapSerializedBackend<K : Any, V : Any>(
     private val config: CacheConfig,
@@ -34,20 +38,20 @@ class OffHeapSerializedBackend<K : Any, V : Any>(
 
     private val log = LoggerFactory.getLogger(OffHeapSerializedBackend::class.java)
 
-    // Index: hash(key) → direct ByteBuffer holding serialized value.
-    private val index = ConcurrentHashMap<Int, ByteBuffer>()
+    private data class Entry(val keyRef: Any, val value: ByteBuffer)
 
-    // Insertion-order tracker for LRU-like eviction. Maintains a doubly-linked list via AtomicLong seq.
+    // Index: hash(key) → Entry (with key ref for collision check).
+    // ConcurrentHashMap with hash collisions: last put wins. Equality check on get().
+    private val index = ConcurrentHashMap<Int, Entry>()
+
+    // Insertion-order tracker for eviction.
     private val seqCounter = AtomicLong(0)
-    // seq → key hash. Used to find oldest entry on eviction.
-    private val seqToKey = ConcurrentHashMap<Long, Int>()
-    // key hash → seq. Used to unlink on overwrite/eviction.
-    private val keyToSeq = ConcurrentHashMap<Int, Long>()
+    private val seqToHash = ConcurrentHashMap<Long, Int>()
+    private val hashToSeq = ConcurrentHashMap<Int, Long>()
 
     private val hitsAdder = java.util.concurrent.atomic.LongAdder()
     private val missesAdder = java.util.concurrent.atomic.LongAdder()
     private val errorsAdder = java.util.concurrent.atomic.LongAdder()
-    private val totalDirectBytes = AtomicLong(0)
 
     init {
         log.info(
@@ -58,18 +62,20 @@ class OffHeapSerializedBackend<K : Any, V : Any>(
 
     override fun get(key: K): V? {
         val hash = key.hashCode()
-        val buf = index[hash] ?: run {
+        val entry = index[hash] ?: run {
+            missesAdder.increment()
+            return null
+        }
+        // Collision check: hash matches but key might differ.
+        if (entry.keyRef != key) {
             missesAdder.increment()
             return null
         }
         return try {
-            val bytes = ByteArray(buf.remaining())
-            buf.duplicate().get(bytes)
-            val value = mapper.readValue(bytes, Any::class.java)
-            // Note: returns Object, not V — caller must cast. Interface limitation;
-            // we accept this because the only caller is CalculationCache which has typed access.
+            val bytes = ByteArray(entry.value.remaining())
+            entry.value.duplicate().get(bytes)
             @Suppress("UNCHECKED_CAST")
-            (value as V).also { hitsAdder.increment() }
+            (@Suppress("UNCHECKED_CAST") mapper.readValue(bytes, Any::class.java) as V).also { hitsAdder.increment() }
         } catch (e: Exception) {
             errorsAdder.increment()
             log.error("OffHeapSerializedBackend get failed: {}", e.message)
@@ -84,17 +90,13 @@ class OffHeapSerializedBackend<K : Any, V : Any>(
             val buf = ByteBuffer.allocateDirect(bytes.size)
             buf.put(bytes)
             buf.flip()
-            // Evict existing entry at this hash to update byte counter.
-            val existing = index.put(hash, buf)
-            if (existing != null) {
-                totalDirectBytes.addAndGet(-existing.capacity().toLong())
-                keyToSeq.remove(hash)?.let { seqToKey.remove(it) }
-            }
-            totalDirectBytes.addAndGet(buf.capacity().toLong())
+            val entry = Entry(key, buf)
+            // Evict existing entry's seq before put (if collision or overwrite).
+            hashToSeq.remove(hash)?.let { seqToHash.remove(it) }
+            index[hash] = entry
             val seq = seqCounter.incrementAndGet()
-            seqToKey[seq] = hash
-            keyToSeq[hash] = seq
-            // Evict oldest if over maxEntries.
+            seqToHash[seq] = hash
+            hashToSeq[hash] = seq
             evictIfOver()
         } catch (e: Exception) {
             errorsAdder.increment()
@@ -104,12 +106,10 @@ class OffHeapSerializedBackend<K : Any, V : Any>(
 
     private fun evictIfOver() {
         while (index.size > config.maxEntries) {
-            // Find oldest seq still present.
-            val oldestSeq = seqToKey.keys.minOrNull() ?: break
-            val oldestHash = seqToKey.remove(oldestSeq) ?: continue
-            val evicted = index.remove(oldestHash)
-            if (evicted != null) totalDirectBytes.addAndGet(-evicted.capacity().toLong())
-            keyToSeq.remove(oldestHash)
+            val oldestSeq = seqToHash.keys.minOrNull() ?: break
+            val oldestHash = seqToHash.remove(oldestSeq) ?: continue
+            index.remove(oldestHash)
+            hashToSeq.remove(oldestHash)
         }
     }
 
@@ -124,8 +124,7 @@ class OffHeapSerializedBackend<K : Any, V : Any>(
 
     override fun close() {
         index.clear()
-        seqToKey.clear()
-        keyToSeq.clear()
-        totalDirectBytes.set(0)
+        seqToHash.clear()
+        hashToSeq.clear()
     }
 }

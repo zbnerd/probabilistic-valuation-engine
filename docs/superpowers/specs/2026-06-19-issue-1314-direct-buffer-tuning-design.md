@@ -38,7 +38,7 @@ Phase 1 added `-XX:MaxDirectMemorySize=512m`, bounding the off-heap pool total. 
 
 Netty arena count rationale: each arena holds a chunk pool. Default = `2*cores` (16 on 8-core) — thread-affinity cost high. `cores/2` (4 on 8-core) halves arena count, reducing metadata overhead.
 
-Kafka buffer memory rationale: producer/consumer `buffer.memory` defaults to 32MB/256MB. Cap to 64MB each (both producer+consumer) keeps combined Kafka direct footprint under 128MB, well within remaining headroom after Netty.
+Kafka buffer memory rationale: producer `buffer.memory` default is 32MB. Cap to 64MB (a small bump up, not down) keeps producer direct footprint bounded while leaving headroom for batch retries. Consumer has no `buffer.memory` config — memory is controlled by `fetch.max.bytes` (default 50MB) and OS page cache.
 
 ---
 
@@ -68,10 +68,15 @@ Kafka buffer memory rationale: producer/consumer `buffer.memory` defaults to 32M
 
 ### 3.2 Module split
 
-| Module | Netty arena | Kafka producer | Kafka consumer |
-|--------|-------------|----------------|----------------|
-| ext-api | YES (4) | YES (64MB) | (not in hot path) |
-| calculator | NO (no Netty dep) | YES (64MB) | YES (64MB) |
+| Module | Netty arena | Kafka producer `buffer.memory` | Kafka consumer `buffer.memory` |
+|--------|-------------|--------------------------------|--------------------------------|
+| ext-api | YES (4) | YES (64MB) | n/a (no producer-side config on consumer) |
+| calculator | NO (no Netty dep) | YES (64MB) | n/a |
+
+`buffer.memory` is a producer-only Kafka client config (`ProducerConfig.BUFFER_MEMORY_DOC`).
+Setting it on the consumer side is a silent no-op — Kafka client ignores unknown keys.
+Consumer memory is bounded by `fetch.max.bytes` (default 50MB, OS page cache, JVM heap) and is
+not configurable through this path.
 
 Calculator uses `spring-boot-starter-web` (servlet stack) — no Netty dependency, no arena tuning needed.
 
@@ -123,7 +128,7 @@ spring:
 
 ### 4.4 `module-calculator/src/main/resources/application.yml`
 
-Extend existing `spring.kafka.consumer` block (lines 13-20) with `properties`. Add minimal `spring.kafka.producer` block (does not exist yet — calculator produces `calculator.result.chunk-ready` events via `KafkaResultEventPublisher`'s `KafkaTemplate<String, String>`, currently auto-configured by Spring Boot):
+Add minimal `spring.kafka.producer` block (does not exist yet — calculator produces `calculator.result.chunk-ready` events via `KafkaResultEventPublisher`'s `KafkaTemplate<String, String>`, currently auto-configured by Spring Boot). Do NOT add `buffer.memory` to `spring.kafka.consumer.properties` — that key is producer-only in Kafka client (`ProducerConfig.BUFFER_MEMORY_DOC`), consumer silently ignores it:
 
 ```yaml
 spring:
@@ -135,10 +140,8 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: earliest
       enable-auto-commit: false
-      max-poll-records: 50
-      max-poll-interval-ms: 10800000
-      properties:
-        buffer.memory: ${KAFKA_BUFFER_MEMORY:67108864}  # 64MB (issue #1314)
+      max-poll-records: 50            # bound batch size; keeps poll loop responsive
+      max-poll-interval-ms: 10800000  # 3h; covers full item-equipment cycle (default 5min too tight)
     producer:
       # Minimal block: only override buffer.memory. Spring Boot auto-config
       # keeps StringSerializer (matches KafkaTemplate<String, String>), acks=1,
@@ -152,6 +155,9 @@ spring:
 ```
 
 Per `yaml-config.md`: merge into existing `spring:` block. No duplicate root key. 2-space indent. env var pattern matches existing `NEXON_HTTP_*` style.
+
+Note: `buffer.memory` is a producer-only Kafka config. Consumer `buffer.memory` settings would be
+silently ignored. Consumer memory is bounded by `fetch.max.bytes` (default 50MB) and OS page cache.
 
 ---
 
@@ -212,7 +218,7 @@ grep -E "OutOfMemoryError|Direct buffer" <module>/logs/app.log  # must be empty
 | `module-external-api/build.gradle` | Add Netty arena JVM arg |
 | `gradle.properties` | Add `netty.numDirectArenas=4` default |
 | `module-external-api/src/main/resources/application.yml` | Add `spring.kafka.producer.properties.buffer.memory` |
-| `module-calculator/src/main/resources/application.yml` | Add `spring.kafka.consumer.properties.buffer.memory` + new `spring.kafka.producer` block |
+| `module-calculator/src/main/resources/application.yml` | Add new `spring.kafka.producer` block (consumer side untouched — `buffer.memory` is producer-only) |
 
 ---
 

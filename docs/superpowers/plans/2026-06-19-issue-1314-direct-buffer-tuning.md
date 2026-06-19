@@ -21,7 +21,7 @@
 | `gradle.properties` (root) | Append 1 line | Default `netty.numDirectArenas=4` |
 | `module-external-api/build.gradle` | Edit `jvmArgs` list (lines 64-68) | Add Netty arena JVM arg with `${project.findProperty(...)}` |
 | `module-external-api/src/main/resources/application.yml` | Extend `spring.kafka.producer` (lines 15-19) | Add `properties.buffer.memory` |
-| `module-calculator/src/main/resources/application.yml` | Extend `spring.kafka.consumer` (lines 13-20) + new `spring.kafka.producer` block | Add `properties.buffer.memory` (both) |
+| `module-calculator/src/main/resources/application.yml` | Insert new `spring.kafka.producer` block before `listener:` (line 21) | Add `properties.buffer.memory` (consumer side untouched — producer-only config) |
 
 Single atomic commit at end. All 4 files together — they form one cohesive tuning change.
 
@@ -132,7 +132,7 @@ Add a `properties:` sub-key after `retries: 3`. Use Edit with the exact 5-line b
       acks: all
       retries: 3
       properties:
-        buffer.memory: ${KAFKA_BUFFER_MEMORY:67108864}  # 64MB, down from default 256MB (issue #1314)
+        buffer.memory: ${KAFKA_BUFFER_MEMORY:67108864}  # 64MB, up from default 32MB (issue #1314)
 ```
 
 Verify:
@@ -143,58 +143,19 @@ grep -A8 '    producer:' module-external-api/src/main/resources/application.yml
 
 Expected: `properties:` line followed by `buffer.memory: ${KAFKA_BUFFER_MEMORY:67108864}` with 8-space indent under `properties:`.
 
-- [ ] **Step 1.5: Add Kafka buffer.memory to calculator application.yml**
+- [ ] **Step 1.5: Add Kafka producer block to calculator application.yml**
 
-In `module-calculator/src/main/resources/application.yml`, the `spring.kafka.consumer` block currently is (lines 13-20):
+`buffer.memory` is a producer-only Kafka client config. Do NOT add it to `spring.kafka.consumer.properties` — Kafka client silently ignores unknown keys. Only add the producer block.
 
-```yaml
-    consumer:
-      group-id: calculator-snapshot-chunk-processor
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-      max-poll-records: 50            # bound batch size; keeps poll loop responsive
-      max-poll-interval-ms: 10800000  # 3h; covers full item-equipment cycle (default 5min too tight)
-```
-
-Add `properties:` sub-key after `max-poll-interval-ms`. Then add a new `spring.kafka.producer` block BEFORE the `listener:` block. The `listener:` block is at line 21 (currently). Find exact line numbers first:
+In `module-calculator/src/main/resources/application.yml`, find the line number for the `listener:` block:
 
 ```bash
-grep -n "listener:\|max-poll-interval-ms" module-calculator/src/main/resources/application.yml
+grep -n "listener:" module-calculator/src/main/resources/application.yml
 ```
 
-Then make 2 edits to `module-calculator/src/main/resources/application.yml`:
+Expected: line 21 (or close — verify before editing).
 
-**Edit A** — extend the consumer block. Replace this 7-line block:
-
-```yaml
-    consumer:
-      group-id: calculator-snapshot-chunk-processor
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-      max-poll-records: 50            # bound batch size; keeps poll loop responsive
-      max-poll-interval-ms: 10800000  # 3h; covers full item-equipment cycle (default 5min too tight)
-```
-
-with this 9-line block:
-
-```yaml
-    consumer:
-      group-id: calculator-snapshot-chunk-processor
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-      max-poll-records: 50            # bound batch size; keeps poll loop responsive
-      max-poll-interval-ms: 10800000  # 3h; covers full item-equipment cycle (default 5min too tight)
-      properties:
-        buffer.memory: ${KAFKA_BUFFER_MEMORY:67108864}  # 64MB (issue #1314)
-```
-
-**Edit B** — add new `spring.kafka.producer` block before `listener:`. Find the `listener:` line, then insert a new block above it. The new block (5-space indent for `producer:`, 7-space indent for the `properties` sub-key, 8-space indent for the actual setting):
+Make 1 edit — add a new `spring.kafka.producer` block immediately before the `listener:` block. Insert the 6-line block below, with 4-space indent for `producer:`, 6-space for the comment, 6-space for `properties:`, and 8-space for the actual setting:
 
 ```yaml
     producer:
@@ -208,10 +169,10 @@ with this 9-line block:
 Verify the full `spring.kafka:` section:
 
 ```bash
-sed -n '11,35p' module-calculator/src/main/resources/application.yml
+sed -n '11,32p' module-calculator/src/main/resources/application.yml
 ```
 
-Expected: `consumer:` block now has `properties.buffer.memory`. New `producer:` block exists with only `properties.buffer.memory`. `listener:` block follows unchanged.
+Expected: `consumer:` block is unchanged (no `properties:` sub-key). New `producer:` block exists with only `properties.buffer.memory`. `listener:` block follows unchanged.
 
 - [ ] **Step 1.6: Verify build succeeds**
 

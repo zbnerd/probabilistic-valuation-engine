@@ -131,12 +131,15 @@ Identical for both backends. Caller code unchanged.
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cache_backend_hit_total` | Counter | `cache={caffeine,chronicle}` |
-| `cache_backend_miss_total` | Counter | `cache={caffeine,chronicle}` |
-| `cache_backend_error_total` | Counter | `cache={caffeine,chronicle}`, `op={get,put}` |
-| `cache_backend_size` | Gauge | `cache={caffeine,chronicle}` |
+| `calculator_cache_hits_total` | Counter | `cache={caffeine,chronicle}` |
+| `calculator_cache_misses_total` | Counter | `cache={caffeine,chronicle}` |
+| `calculator_cache_errors_total` | Counter | `cache={caffeine,chronicle}` |
+| `calculator_cache_size` | Gauge | `cache={caffeine,chronicle}` |
+| `calculator_cache_hit_rate` | Gauge (percent) | `cache={caffeine,chronicle}` |
 
-Hit rate = `rate(cache_backend_hit_total[5m]) / (rate(cache_backend_hit_total[5m]) + rate(cache_backend_miss_total[5m]))`. Must match `calculator_cache_hit_rate` baseline within ±1%.
+Naming aligns with existing `CacheMetrics.kt` convention (`calculator_cache_*` prefix). The `cache` label distinguishes backend for canary comparison. No `op={get,put}` label — cardinality would compound Prometheus storage without operator benefit (errors are rare, log gives the op).
+
+Hit rate = `calculator_cache_hit_rate` (percent). Must match pre-Phase 2 baseline within ±1%.
 
 ### 4.3 Cold start
 
@@ -155,7 +158,7 @@ Acceptable: one chunk of degraded latency during canary deploy. Mitigated by can
 | Failure | Detection | Behavior |
 |---------|-----------|----------|
 | Chronicle init fail (corrupt file, missing lib) | `ChronicleMap.of()` throws at startup | Factory catches → `CaffeineCacheBackend` → WARN log → continue |
-| Chronicle runtime put/get throws | Per-call exception | ERROR log, `cache_backend_error_total++`, treat as miss, fall through to DB |
+| Chronicle runtime put/get throws | Per-call exception | ERROR log, `calculator_cache_errors_total++`, treat as miss, fall through to DB |
 | Disk full / I/O error on mapped file | `IOException` on put | Same as runtime error — fail-soft to DB |
 | Chronicle close() fails | Exception in `close()` | ERROR log, swallow (best-effort) |
 | Invalid profile value | At startup | Default to caffeine, ERROR log with invalid value |
@@ -164,7 +167,7 @@ Acceptable: one chunk of degraded latency during canary deploy. Mitigated by can
 
 **Alert (Grafana):**
 ```
-rate(cache_backend_error_total{cache="chronicle"}[5m]) > 1
+rate(calculator_cache_errors_total{cache="chronicle"}[5m]) > 1
 ```
 Page on-call → manual investigation (likely file format mismatch after version bump, or disk issue).
 
@@ -204,7 +207,7 @@ curl -s 'http://localhost:9090/api/v1/query?query=calculator_cache_hit_rate' | j
 Targets (per parent spec §8 Phase 2):
 - Calculator heap < 200MB sustained (from 414MB baseline).
 - `calculator_cache_hit_rate` within ±1% of pre-Phase 2 baseline.
-- 1hr pipeline run with no `cache_backend_error_total` increment.
+- 1hr pipeline run with no `calculator_cache_errors_total` increment.
 
 ---
 
@@ -222,7 +225,7 @@ Targets (per parent spec §8 Phase 2):
 1. Flip `calculator.cache.backend: chronicle` on **one** calculator instance.
 2. Chronicle file auto-created at `${calculator.cache.chronicle.path}` (default `/var/lib/calculator/chronicle-ocid`).
 3. Cold start: 100% miss for first chunk (~100K lookups).
-4. Observe 1hr: heap < 200MB, hit rate within ±1%, `cache_backend_error_total = 0`.
+4. Observe 1hr: heap < 200MB, hit rate within ±1%, `calculator_cache_errors_total = 0`.
 5. If green → proceed to Phase 3. If regression → flip back to caffeine, restart, investigate.
 
 ### 7.3 Phase 3 — Full rollout
@@ -286,7 +289,7 @@ Issue AC says "default caffeine for test envs". Verify: unit tests cover both im
 | `module-calculator/src/main/kotlin/maple/calculator/processor/SnapshotChunkProcessor.kt` | **Unchanged.** Existing caller of `CalculationCache.calculate()`. |
 | `module-calculator/src/main/resources/application.yml` | Add `calculator.cache.backend`, `calculator.cache.chronicle.path`, `calculator.cache.chronicle.maxEntries` |
 | `module-calculator/src/test/kotlin/maple/calculator/cache/CacheBackendTest.kt` | New — 11 unit tests |
-| `docker/prometheus/rules/cache-backend-alerts.yml` | New — `cache_backend_error_total` rate alert |
+| `docker/prometheus/rules/cache-backend-alerts.yml` | New — `calculator_cache_errors_total` rate alert |
 
 ---
 

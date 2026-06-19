@@ -64,9 +64,15 @@ Set `START_MODE=systemd` to switch. Default is `nohup` for backward compat. The 
 ### 1. Pre-check
 
 ```bash
-# Kill any stale processes on required ports
+# Kill any stale processes on required ports.
+# -sTCP:LISTEN filters to the listener only — bare `lsof -ti:PORT` returns
+# every PID with any TCP connection to that port (including clients on
+# other ports that happen to be connected to PORT), and `kill $pid` would
+# SIGTERM those too. Verified 2026-06-19: calc (port 8082) had an HTTP
+# connection to ext-api (port 8081), so `lsof -ti:8081` returned both
+# PIDs and `kill` took out calc alongside ext-api.
 for port in 8081 8082 8083 8084 8180; do
-  pid=$(lsof -ti:$port 2>/dev/null)
+  pid=$(lsof -ti:$port -sTCP:LISTEN 2>/dev/null)
   if [ -n "$pid" ]; then
     echo "Killing stale process on port $port: $pid"
     kill -9 $pid 2>/dev/null
@@ -120,11 +126,31 @@ if [ "${START_MODE}" = "nohup" ]; then
   # .env points at (typically the dev cloud DB for shared MinIO validation).
   # No local PostgreSQL override.
 
+  # Per-module MinIO credentials live in .env.<module> files (NOT in .env).
+  # `source .env` only loads STORAGE_BACKEND/MINIO_ENDPOINT/MINIO_BUCKET but
+  # not MINIO_ACCESS_KEY/MINIO_SECRET_KEY, so each module needs its own env
+  # file sourced before launch. Verified 2026-06-19: missing per-module env
+  # → s3Client bean fails with "Access key ID cannot be blank" at boot.
+  source .env.ext-api     # for ext-api
+  source .env.calculator  # for calculator
+  source .env.synchronizer  # for synchronizer
+  source .env.cleanup     # for cleanup
+
+  # RUN_VIA_AIRFLOW=1 disables ext-api run-on-startup so Airflow is the only
+  # trigger source. Default (unset) keeps run-on-startup=true (local profile
+  # default) — pipeline starts immediately on boot. Use the flag for explicit
+  # Airflow-driven test runs to avoid a race between bootRun and DAG trigger.
+  RUN_VIA_AIRFLOW_FLAG=""
+  if [ "${RUN_VIA_AIRFLOW:-0}" = "1" ]; then
+    RUN_VIA_AIRFLOW_FLAG="-Dexternal-api.schedule.run-on-startup=false -Dexternal-api.schedule.enabled=true"
+    echo "run-on-startup disabled — Airflow will trigger"
+  fi
+
   # 1) External API (8081) — heap budget is the tightest of the four modules.
   # char-basic + item-equipment phases run concurrently with the OCID lookup
   # cache. Heap benchmark: -Xmx1g → major GC fires every 2.4s, 22% CPU on GC,
   # 102 files/s; -Xmx2g → GC 7%, 150 files/s. Verified 2026-06-16.
-  nohup java -Xms512m -Xmx2g -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
+  nohup java -Xms512m -Xmx2g ${RUN_VIA_AIRFLOW_FLAG} -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
   until curl -sf http://localhost:8081/actuator/health > /dev/null 2>&1; do sleep 2; done
   echo "external-api ready on 8081"
 
@@ -200,6 +226,29 @@ curl -s -X POST http://localhost:8081/api/internal/trigger/daily \
 # Expected: {"status": "STARTED", "runId": "test-run-001"}
 # 409 if already running: {"status": "ALREADY_RUNNING", "runId": "..."}
 ```
+
+**Trigger header semantics — ext-api** (`InternalApiController.kt:62`):
+```kotlin
+@PostMapping("/trigger/daily")
+fun triggerDailyRefresh(
+    @RequestHeader("X-Airflow-Run-Id", required = false) airflowRunId: String?,
+): ResponseEntity<Map<String, String>> {
+    ...
+    val runId = airflowRunId ?: UUID.randomUUID().toString()
+    executor.submit { scheduler.triggerDailyRefresh(runId) }
+    return ResponseEntity.accepted().body(mapOf("status" to "STARTED", "runId" to runId))
+}
+```
+
+- `X-Airflow-Run-Id` is **optional**. If present, ext-api uses it as the runId; if absent, ext-api generates a UUID. The header is meant for **manual curl correlation** in tests like the example above.
+- The Airflow DAG itself does **not** send the header (see `trigger_daily_collection_fn` in `docker/airflow/dags/daily_collection_pipeline.py`). It calls `requests.post(f"{base}/api/internal/trigger/daily")` with no header, so ext-api generates a UUID. The DAG then captures the runId from the response body via xcom and uses it for downstream correlation (wait_for_completion sensor + wait_for_item_equipment_cycle Kafka filter).
+- Consequence: do not assume the Airflow runId (`manual__2026-06-19T...`) equals the ext-api runId (`20260619-152651-...`). They are independent IDs. To correlate, use the runId returned in the trigger response body, not the Airflow runId.
+
+**Disabling run-on-startup** (for Airflow-only trigger tests):
+- `local` profile default: `external-api.schedule.run-on-startup=true` — ext-api starts a run automatically on boot.
+- To make Airflow the only trigger source, restart ext-api with `-Dexternal-api.schedule.run-on-startup=false` and `-Dexternal-api.schedule.enabled=true` (the latter keeps the scheduler bean alive so Airflow can still trigger via `POST /api/internal/trigger/daily`).
+- The skill's `START_MODE=nohup` block sources this via `RUN_VIA_AIRFLOW=1` env var (added 2026-06-19).
+- Symptom of missing override: `trigger_daily_collection` task returns 409 ALREADY_RUNNING because the bootRun run is already active when the DAG tries to trigger. Verify by checking `curl /api/internal/run-status` right after ext-api boots — if `current` is non-null, run-on-startup fired.
 
 #### 4a. MinioHealthIndicator verification (required)
 
@@ -298,14 +347,94 @@ else
   echo "WARNING: branch_on_scope not in daily_collection_pipeline — issue #1292 branch not deployed"
 fi
 
-# Trigger DAG manually
+# Trigger DAG manually — full pipeline (default):
 docker exec maple-airflow-scheduler airflow dags trigger daily_collection_pipeline
+
+# Trigger with steps:PHASE[,PHASE,...] skill arg — ordered sequence:
+# Skill args: RANKING_FETCH, OCID_LOOKUP, CHARACTER_BASIC, ITEM_EQUIPMENT,
+#             CHARACTER_BASIC_LOOP, ITEM_EQUIPMENT_LOOP.
+# Mapping: _LOOP suffix → action=loop; bare phase → action=trigger.
+# Default (PIPELINE_STEPS unset) → full pipeline as above.
+STEPS="${PIPELINE_STEPS:-}"
+if [ -n "$STEPS" ]; then
+  DAG_CONF=$(python3 -c "
+import json, sys
+LOOP_SUFFIX = '_LOOP'
+LOOP_PHASES = {'CHARACTER_BASIC', 'ITEM_EQUIPMENT'}
+TRIGGER_PHASES = {'RANKING_FETCH', 'OCID_LOOKUP', 'CHARACTER_BASIC', 'ITEM_EQUIPMENT'}
+def to_step(p):
+    p = p.strip()
+    if p.endswith(LOOP_SUFFIX):
+        base = p[:-len(LOOP_SUFFIX)]
+        if base not in LOOP_PHASES:
+            sys.stderr.write(f'ERROR: loop not allowed on {base}. Loopable: {sorted(LOOP_PHASES)}\n')
+            sys.exit(2)
+        return {'action':'loop','phase':base}
+    if p not in TRIGGER_PHASES:
+        sys.stderr.write(f'ERROR: unknown phase {p}. Allowed: {sorted(TRIGGER_PHASES | {p+LOOP_SUFFIX for p in LOOP_PHASES})}\n')
+        sys.exit(2)
+    return {'action':'trigger','phase':p}
+steps = [s for s in (to_step(p) for p in sys.argv[1].split(',')) if s]
+print(json.dumps({'steps': steps}))
+" "$STEPS")
+  docker exec maple-airflow-scheduler airflow dags trigger daily_collection_pipeline -c "$DAG_CONF"
+fi
 
 # Monitor DAG run
 docker exec maple-airflow-scheduler airflow dags list-runs -d daily_collection_pipeline
 ```
 
+#### 5b. Skill arg `steps:PHASE[,PHASE,...]`
+
+Accept a comma-separated phase list at skill entry. The skill forwards it as `dag_run.conf['steps']` JSON to the DAG. Default (no arg): run the full daily pipeline as today.
+
+Mapping:
+
+| Skill arg | dag_run.conf step |
+|-----------|-------------------|
+| `RANKING_FETCH` | `{"action":"trigger","phase":"RANKING_FETCH"}` |
+| `OCID_LOOKUP` | `{"action":"trigger","phase":"OCID_LOOKUP"}` |
+| `CHARACTER_BASIC` | `{"action":"trigger","phase":"CHARACTER_BASIC"}` |
+| `ITEM_EQUIPMENT` | `{"action":"trigger","phase":"ITEM_EQUIPMENT"}` |
+| `CHARACTER_BASIC_LOOP` | `{"action":"loop","phase":"CHARACTER_BASIC"}` |
+| `ITEM_EQUIPMENT_LOOP` | `{"action":"loop","phase":"ITEM_EQUIPMENT"}` |
+
+Each step runs sequentially: trigger steps wait for terminal state, loop steps are fire-and-forget (DAG advances to cleanup_pipeline after the loop step). The skill fails fast (exit 2) before triggering Airflow if an invalid phase or `OCID_LOOKUP_LOOP` style is supplied.
+
 **Note:** Airflow connects to Spring Boot services via `host.docker.internal`. Services run on the host, Airflow runs in Docker. When services are containerized (Phase 3+), switch to Docker network DNS.
+
+#### 5a. Airflow trigger flow (daily_collection_pipeline)
+
+The DAG does **not** use `HttpOperator` for the trigger step. It uses a `PythonOperator` because ext-api returns 409 CONFLICT as an idempotent success, and `HttpOperator`'s `HttpHook.run()` calls `response.raise_for_status()` BEFORE the `response_check` callback is reachable. The PythonOperator uses `requests` directly so 200/202/409 can all be accepted as success. Source: `docker/airflow/dags/daily_collection_pipeline.py:61-115`.
+
+```text
+airflow dags trigger daily_collection_pipeline
+  └─► check_external_api (HttpSensor, /actuator/health)
+        └─► trigger_daily_collection (PythonOperator)
+              ├─ POST /api/internal/trigger/daily   (no X-Airflow-Run-Id header)
+              │     └─► ext-api generates UUID runId, returns {"status":"STARTED","runId":"<UUID>"}
+              ├─ xcom push: trigger response body (runId captured)
+              └─ 409 ALREADY_RUNNING?  GET /run-status, capture current.runId
+        └─► wait_for_completion (PythonSensor, mode=reschedule, 4h timeout)
+              └─► Polls /run-status every 60s. pokes True when:
+                    current.runId == xcom.runId  AND  current.terminal == true
+                    (avoids matching a stale run if ext-api rotated to a new one)
+        └─► wait_for_item_equipment_cycle (PythonOperator, 2h timeout)
+              └─► Consumes Kafka topic synchronizer.chunk.consumed
+                    Filters by event.runId == xcom.runId
+                    Returns when event.endpoint == "item-equipment"
+                    (one cycle = one full item-equipment sweep)
+        └─► trigger_cleanup_pipeline (TriggerDagRunOperator)
+              └─► Triggers daily_cleanup_pipeline (artifact GC) and unblocks
+```
+
+Key correlation rules:
+- The `xcom.runId` is the **ext-api runId** (UUID generated server-side), NOT the Airflow runId. Use the ext-api runId to query `curl /api/internal/run-status | jq .current.runId`.
+- The `wait_for_completion` sensor reads `current.runId` from `/run-status` and compares against xcom — so even if a previous run is still active, the sensor will only declare success when THIS runId hits terminal.
+- `wait_for_item_equipment_cycle` does NOT call ext-api — it consumes from the Kafka `synchronizer.chunk.consumed` topic, which is published by `module-synchronizer` after each chunk lands in the read model. The runId filter ensures we wait for the cycle that belongs to the run we just triggered, not an earlier leftover.
+- If `trigger_daily_collection` returns 409, the DAG still treats the trigger as success (idempotent) and uses the active runId from `/run-status`. This is intentional: rerunning a DAG that already triggered a run should not fail the pipeline.
+
+Per-phase branch (issue #1292) is parallel-wired via `branch_on_scope` → `per_phase_*` tasks; see step 10a for verification.
 
 ### 6. Monitor pipeline progress
 
@@ -432,7 +561,7 @@ Every 5-10 minutes during pipeline execution, report:
 **RSS monitoring (per poll):**
 ```bash
 for port in 8081 8082 8083; do
-  pid=$(lsof -ti:$port 2>/dev/null)
+  pid=$(lsof -ti:$port -sTCP:LISTEN 2>/dev/null)
   if [ -n "$pid" ]; then
     rss=$(ps -o rss= -p $pid 2>/dev/null)
     echo "port=$port pid=$pid rss=${rss}KB"
@@ -625,10 +754,12 @@ esac
 - 6: any sub-step FAILED (see error message above the exit)
 
 ```bash
-# Stop Spring Boot services
+# Stop Spring Boot services.
+# -sTCP:LISTEN: see step 1 comment. Bare `lsof -ti:PORT` would also kill
+# any client process connected to that port.
 if [ "${START_MODE:-nohup}" = "nohup" ]; then
   for port in 8081 8082 8083 8084; do
-    kill $(lsof -ti:$port) 2>/dev/null
+    kill $(lsof -ti:$port -sTCP:LISTEN) 2>/dev/null
   done
 else
   for svc in maple-external-api maple-calculator maple-synchronizer maple-cleanup; do
@@ -644,7 +775,7 @@ docker compose -f docker-compose.yml -f docker-compose.airflow.yml stop airflow-
 
 | Symptom | Check |
 |---------|-------|
-| Port already in use | `lsof -ti:PORT` and kill |
+| Port already in use | `lsof -ti:PORT -sTCP:LISTEN` and kill (bare `-ti:PORT` returns client PIDs too — see step 1 comment) |
 | Health check timeout (60s+) | Check logs for startup errors |
 | Pipeline stuck at OCID lookup | Verify NEXON_API_KEY in .env, check rate limits |
 | Calculator not processing | Check PGMQ queue depth, calculator logs |
@@ -657,6 +788,8 @@ docker compose -f docker-compose.yml -f docker-compose.airflow.yml stop airflow-
 | Airflow can't reach services | Verify `host.docker.internal` in docker-compose.airflow.yml, check services are running on host |
 | Airflow sensor false positive | Verify runId correlation — sensor checks `current.runId` matches trigger response |
 | Airflow DB connection failed | Ensure maple-network exists: `docker network create maple-network` |
+| Airflow webserver/scheduler restart-loop, logs show `connection to server at "172.20.0.X" port 5432 failed` | `docker-compose.airflow.yml` hardcodes `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN` (and `KAFKA_BOOTSTRAP_SERVERS`) at a specific bridge IP (e.g. `172.20.0.2`). When `maple-airflow-db` is recreated or the bridge subnet shifts, the IP changes. `docker compose restart` does NOT pick up the new IP — env vars are baked into the running container. Fix: edit the compose file to the current IP, then `docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d --force-recreate airflow-webserver airflow-scheduler`. Verify current IP via `docker inspect maple-airflow-db --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`. Verified 2026-06-19. |
+| `trigger_daily_collection` task returns 409 ALREADY_RUNNING but no run was just triggered | ext-api's `run-on-startup=true` (local profile default) started a run on boot. Either wait for it to finish, or restart ext-api with `-Dexternal-api.schedule.run-on-startup=false -Dexternal-api.schedule.enabled=true` (the skill's `RUN_VIA_AIRFLOW=1` env var does this automatically). Verified 2026-06-19. |
 | Step 10a loop never iterates | Verify `loopSummaries.ITEM_EQUIPMENT.loopId` set; if null, `/loop/phase/ITEM_EQUIPMENT` returned non-202 — check ext-api logs for `PhaseLoopController` errors |
 | Step 10a loop stop timeout | `/stop/phase/ITEM_EQUIPMENT` did not propagate `PhaseStoppedException`; check ext-api logs for `PhaseStopSignal.requestStop` and downstream chunk boundary halt |
 | Cleanup returns 0 / "no runs found" while MinIO has old runs | `module-cleanup` defaulted to `LocalFsObjectStorage` (reads empty `../data/runs/`). Restart with `-Dstorage.backend=minio` JVM flag. StorageConfig's `@ConditionalOnProperty` has `matchIfMissing=true` so an unset property silently picks local. |

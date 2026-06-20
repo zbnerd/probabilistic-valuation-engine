@@ -6,7 +6,10 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.times
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import maple.common.parser.StreamingChunkParser
 import maple.expectation.common.storage.ObjectInfo
@@ -104,6 +107,42 @@ class OcidCacheProviderTest {
         val result = provider.loadFromRun("missing")
 
         assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `loadFromRun short-circuits on repeat calls with same key (read-through cache)`() {
+        // First call: stream is fetched and parsed.
+        // Second call with same runId: must NOT hit storage again.
+        // Third call with different runId: stream is fetched again.
+        // See ADR-729.
+        val storage = mock<ObjectStorage>()
+        val runAJsonl = """{"userIgn":"ign1","ocid":"ocid1"}
+{"userIgn":"ign2","ocid":"ocid2"}
+"""
+        val runBJsonl = """{"userIgn":"ign3","ocid":"ocid3"}
+"""
+        val keyA = "ocid-mapping/ocid-mapping-run-A.jsonl.gz"
+        val keyB = "ocid-mapping/ocid-mapping-run-B.jsonl.gz"
+        whenever(storage.getStream(eq(keyA))).thenReturn(gzip(runAJsonl).inputStream())
+        whenever(storage.getStream(eq(keyB))).thenReturn(gzip(runBJsonl).inputStream())
+
+        val provider = OcidCacheProvider(storage, streamingChunkParser)
+
+        val first = provider.loadFromRun("run-A")
+        assertEquals(2, first.size)
+
+        // Second call with same runId: short-circuits.
+        val second = provider.loadFromRun("run-A")
+        assertEquals(first, second)
+
+        // Third call with different runId: re-fetches.
+        val third = provider.loadFromRun("run-B")
+        assertEquals(1, third.size)
+        assertEquals("ocid3", third["ign3"])
+
+        // getStream called once for run-A, once for run-B — never twice for run-A.
+        verify(storage, times(1)).getStream(keyA)
+        verify(storage, times(1)).getStream(keyB)
     }
 
     private fun gzip(input: String): ByteArray {

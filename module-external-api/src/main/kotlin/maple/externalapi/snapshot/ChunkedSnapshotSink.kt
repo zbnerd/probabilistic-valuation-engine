@@ -65,6 +65,15 @@ class ChunkedSnapshotSink(
         }
     }
 
+    /**
+     * Convenience overload for [SnapshotChunkRecord.PreSerialized]. Identical
+     * queue + deadline logic; distinct entry point so the writer-loop's
+     * `when` branch is exhaustive without a shared base type. See ADR-729.
+     */
+    fun submitPreSerialized(record: SnapshotChunkRecord.PreSerialized) {
+        submit(record)
+    }
+
     fun queueDepth(): Int = queue.size
 
     @Deprecated("Use closeAsync() for non-blocking shutdown; this sync variant holds the calling thread for up to ~10 minutes")
@@ -228,6 +237,7 @@ class ChunkedSnapshotSink(
                 val record = queue.take()
                 when (record) {
                     is SnapshotChunkRecord.Success -> handleSuccess(record)
+                    is SnapshotChunkRecord.PreSerialized -> handlePreSerialized(record)
                     is SnapshotChunkRecord.Failure -> fileManager.appendFailure(record)
                     is SnapshotChunkRecord.CloseSignal -> return
                 }
@@ -262,6 +272,33 @@ class ChunkedSnapshotSink(
                     httpStatus = record.httpStatus,
                     fetchedAt = record.fetchedAt,
                     errorMessage = "invalid body: ${ex.message}",
+                ),
+            )
+        }
+    }
+
+    /**
+     * Handle a producer-serialized record. Mirrors [handleSuccess] but
+     * skips the writer-side Jackson serialize. The producer already
+     * appended a trailing newline to `record.bodyBytes`; gzip only writes
+     * the bytes verbatim. See ADR-729.
+     */
+    private fun handlePreSerialized(record: SnapshotChunkRecord.PreSerialized) {
+        try {
+            val stats = fileManager.appendPreSerialized(record)
+            if (stats != null) {
+                publishWhenUploaded(stats)
+            }
+        } catch (ex: Exception) {
+            log.warn("[Sink] invalid pre-serialized body for key={}, treating as failure: {}", record.key, ex.message)
+            fileManager.appendFailure(
+                SnapshotChunkRecord.Failure(
+                    key = record.key,
+                    endpoint = record.endpoint,
+                    keyType = record.keyType,
+                    httpStatus = record.httpStatus,
+                    fetchedAt = record.fetchedAt,
+                    errorMessage = "invalid pre-serialized body: ${ex.message}",
                 ),
             )
         }

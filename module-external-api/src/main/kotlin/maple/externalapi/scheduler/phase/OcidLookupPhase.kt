@@ -6,6 +6,7 @@ import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.storage.ObjectStorage
+import maple.expectation.common.storage.PutResult
 import maple.expectation.infrastructure.external.NexonAuthClient
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.scheduler.PhaseStopSignal
@@ -30,10 +31,10 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.io.BufferedOutputStream
-import java.io.PipedInputStream
-import java.io.PipedOutputStream
+import java.nio.file.Files
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -113,60 +114,66 @@ class OcidLookupPhase(
         val key = "$mappingDir/ocid-mapping-$runId.jsonl.gz"
 
         // Channel + writer coroutine: producers (per-ign fetch) send strings,
-        // a single consumer coroutine gzips + puts to ObjectStorage as bytes flow.
+        // a single consumer coroutine gzips + writes to a temp file.
         // Channel.BUFFERED applies backpressure when the writer can't keep up.
         val resultsChannel = Channel<String>(Channel.BUFFERED)
 
-        // Pipe: producer writes to pipeOut (GZIPOutputStream), consumer reads
-        // from pipeIn (ObjectStorage.putStreamMultipart). Buffer of 64KB caps
-        // JVM heap use from the pipe itself.
-        val pipeOut = PipedOutputStream()
-        val pipeIn = PipedInputStream(pipeOut, 65_536)
-
-        coroutineScope {
-            // putStreamMultipart returns CompletableFuture<PutResult> — no async
-            // wrapper needed; the S3AsyncClient / LocalFs-virtual-thread
-            // implementation handles concurrency. The CF chain runs in the
-            // background while the writer coroutine pumps bytes into the pipe.
-            val uploadFuture = objectStorage.putStreamMultipart(key, pipeIn)
-
-            // Writer: CPU-bound (GZIPOutputStream.compress) on
-            // Dispatchers.Default per architecture-guardrails.md rule 9.
-            // pipeOut.write is blocking but bounded by the 64KB pipe
-            // buffer, so the natural backpressure makes the CPU work the
-            // bottleneck — Default pool is the right home.
-            val writerJob = launch(Dispatchers.Default) {
-                val gz = GZIPOutputStream(BufferedOutputStream(pipeOut))
-                try {
-                    for (entry in resultsChannel) {
-                        gz.write(entry.toByteArray())
-                        gz.write('\n'.code)
+        // Drain to temp file, then upload via putFileAsync. We previously used
+        // PipedInputStream/OutputStream + putStreamMultipart for streaming
+        // chunked transfer, but the SDK reads the InputStream on a background
+        // thread that races the writer — `PipedInputStream` throws "Read end
+        // dead" the moment the writer thread exits (checked via
+        // `readSide.isAlive()`). A temp file avoids the thread coordination
+        // entirely: writer writes to disk, upload reads from disk.
+        val tempFile = Files.createTempFile("ocid-mapping-${runId}-", ".jsonl.gz.tmp")
+        var uploadFuture: CompletableFuture<PutResult>? = null
+        try {
+            coroutineScope {
+                // Writer: CPU-bound (GZIPOutputStream.compress) on
+                // Dispatchers.Default per architecture-guardrails.md rule 9.
+                val writerJob = launch(Dispatchers.Default) {
+                    val gz = GZIPOutputStream(BufferedOutputStream(Files.newOutputStream(tempFile)))
+                    try {
+                        for (entry in resultsChannel) {
+                            gz.write(entry.toByteArray())
+                            gz.write('\n'.code)
+                        }
+                    } finally {
+                        runCatching { gz.close() }
                     }
-                } finally {
-                    runCatching { gz.close() }
-                    runCatching { pipeOut.close() }
                 }
+
+                processBatch(
+                    workerExecutor = workerExecutor,
+                    rateLimiter = rateLimiter,
+                    runKey = runKey,
+                    igns = igns,
+                    processed = 0,
+                    successCount = successCount,
+                    failCount = failCount,
+                    lastProgressLog = lastProgressLog,
+                    resultsSink = resultsChannel,
+                    start = start,
+                )
+
+                resultsChannel.close()
+                writerJob.join()
+
+                // Upload the finalized temp file via putFileAsync
+                // (S3TransferManager multipart | LocalFs temp-file). Returns a
+                // CF that resolves when the upload completes.
+                uploadFuture = objectStorage.putFileAsync(key, tempFile)
             }
-
-            processBatch(
-                workerExecutor = workerExecutor,
-                rateLimiter = rateLimiter,
-                runKey = runKey,
-                igns = igns,
-                processed = 0,
-                successCount = successCount,
-                failCount = failCount,
-                lastProgressLog = lastProgressLog,
-                resultsSink = resultsChannel,
-                start = start,
-            )
-
-            resultsChannel.close()
-            writerJob.join()
-            // Single .await() at the coroutine→CF boundary. Equivalent to the
-            // previous putJob.await() but avoids the async wrapper (the
-            // uploadFuture is already running on the S3/LocalFs executor).
-            uploadFuture.await()
+            // Wait for the upload to complete before the temp file is deleted
+            // (MinIO S3TransferManager reads from the file during upload).
+            uploadFuture?.await()
+        } finally {
+            // Clean up the temp file once the upload completes — or fails.
+            // For MinIO success path the S3TransferManager uploads from the
+            // file then the whenComplete callback in putFileAsync removes
+            // it; for LocalFs the impl already moved the file into place.
+            // The delete here is a safety net for the MinIO success path.
+            runCatching { Files.deleteIfExists(tempFile) }
         }
         log.info(
             "[Scheduler] streamed {} OCID mappings to {} (heap-bounded via pipe)",

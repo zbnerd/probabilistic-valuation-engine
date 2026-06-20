@@ -93,6 +93,19 @@ class GzipJsonlChunkWriter(
         uncompressedBytes += line.size + 1
     }
 
+    /**
+     * Append a producer-serialized JSON line. Caller has already invoked
+     * `ObjectMapper.writeValueAsBytes` on the equivalent [SnapshotChunkRecord.Success]
+     * and appended a trailing newline. The writer thread skips Jackson.
+     * See ADR-729.
+     */
+    fun appendPreSerialized(record: SnapshotChunkRecord.PreSerialized) {
+        require(record.bodyBytes.isNotEmpty()) { "bodyBytes must not be empty for key=${record.key}" }
+        gzipped.write(record.bodyBytes)
+        recordCount++
+        uncompressedBytes += record.bodyBytes.size
+    }
+
     fun shouldRotate(): Boolean =
         recordCount >= maxRecords || uncompressedBytes >= maxUncompressedBytes
 

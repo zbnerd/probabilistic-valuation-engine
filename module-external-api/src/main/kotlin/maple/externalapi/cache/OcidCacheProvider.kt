@@ -35,6 +35,12 @@ class OcidCacheProvider(
 
     private val log = LoggerFactory.getLogger(OcidCacheProvider::class.java)
     private val cacheRef = AtomicReference<Map<String, String>>(emptyMap())
+    /**
+     * Tracks the last successfully loaded key. Used by [loadFromKey] to
+     * short-circuit repeat loads with the same key (e.g. ITEM_EQUIPMENT
+     * loop calling `loadFromRun` once per iteration). See ADR-729.
+     */
+    private val loadedKey = AtomicReference<String?>(null)
 
     fun refresh(): Map<String, String> {
         val objects = objectStorage.listByPrefix("ocid-mapping/")
@@ -55,6 +61,11 @@ class OcidCacheProvider(
         loadFromKey("ocid-mapping/ocid-mapping-$runId.jsonl.gz")
 
     private fun loadFromKey(key: String): Map<String, String> {
+        // Read-through cache. If the same key was already loaded, return the
+        // existing snapshot without re-streaming the JSONL.
+        if (key == loadedKey.get()) {
+            return cacheRef.get()
+        }
         val map = HashMap<String, String>()
         var parseErrors = 0
         try {
@@ -73,6 +84,7 @@ class OcidCacheProvider(
                 map[ign] = ocid
             }
             cacheRef.set(map)
+            loadedKey.set(key)
             if (parseErrors > 0) {
                 log.warn(
                     "[OcidCache] loaded key={}: {} entries ({} parse errors)",

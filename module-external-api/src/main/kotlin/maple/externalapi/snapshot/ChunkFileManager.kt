@@ -86,6 +86,19 @@ class ChunkFileManager(
         return null
     }
 
+    /**
+     * Append a producer-serialized record. Mirrors [appendSuccess] but skips
+     * the Jackson call on the writer thread. See ADR-729.
+     */
+    fun appendPreSerialized(record: SnapshotChunkRecord.PreSerialized): ChunkStats? {
+        currentWriter.appendPreSerialized(record)
+        manifest.totalRecords++
+        if (currentWriter.shouldRotate()) {
+            return rotateChunk()
+        }
+        return null
+    }
+
     fun appendFailure(record: SnapshotChunkRecord.Failure) {
         failedWriter.append(record)
         failedCount++

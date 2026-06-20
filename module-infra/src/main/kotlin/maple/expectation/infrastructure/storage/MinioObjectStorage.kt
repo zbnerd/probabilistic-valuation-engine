@@ -28,6 +28,8 @@ import jakarta.annotation.PostConstruct
 import java.nio.file.Files
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * MinIO/S3 implementation of [ObjectStorage]. Used when `storage.backend=minio`.
@@ -47,6 +49,16 @@ class MinioObjectStorage(
 ) : ObjectStorage {
 
     private val log = LoggerFactory.getLogger(MinioObjectStorage::class.java)
+
+    /**
+     * Executor passed to [AsyncRequestBody.fromInputStream]. The SDK requires
+     * a non-null executor (`AsyncRequestBodyFromInputStreamConfiguration` ctor
+     * rejects null). One shared virtual-thread executor handles all concurrent
+     * `putStreamMultipart` stream reads — the work is blocking I/O against
+     * the caller's InputStream (pipe, socket, file).
+     */
+    private val streamReadExecutor: ExecutorService =
+        Executors.newVirtualThreadPerTaskExecutor()
 
     @PostConstruct
     fun validateBucket() {
@@ -156,7 +168,21 @@ class MinioObjectStorage(
             .build()
 
         val body = AsyncRequestBody.fromInputStream { b ->
-            b.inputStream(input).contentLength(-1L)
+            // SDK requires:
+            // - executor: AsyncRequestBodyFromInputStreamConfiguration ctor rejects null
+            //   (`Validate.paramNotNull(executor, "executor")`). The SDK reads the
+            //   InputStream on a background thread (blocking I/O against a pipe or
+            //   socket). See [streamReadExecutor].
+            // - contentLength: not -1. `isNotNegativeOrNull` throws IAE for negative
+            //   values. We pass null (i.e. unset) to signal "unknown length" — the
+            //   SDK then uses chunked transfer encoding via
+            //   AwsChunkedEncodingInputStream (5MB parts, per-chunk checksums).
+            //
+            // Verified: SDK 2.28.16 (in module-infra bootJar) throws
+            // `IllegalArgumentException: contentLength must not be negative`
+            // for `b.contentLength(-1L)`. Throws NPE for missing executor.
+            // Both throws happen at build() time, not at runtime.
+            b.inputStream(input).executor(streamReadExecutor)
         }
 
         return s3Async.putObject(req, body)

@@ -113,7 +113,12 @@ class ExternalApiScheduler(
                 }
             }
             .thenCompose {
-                triggerPhase(PipelinePhase.ITEM_EQUIPMENT, ieRunId, cbRunId)
+                // ITEM_EQUIPMENT needs the OCID_LOOKUP runId, not CHARACTER_BASIC.
+                // loadFromRun(upstreamRunId) reads `ocid-mapping-{upstreamRunId}.jsonl.gz`,
+                // which OCID_LOOKUP writes — CHARACTER_BASIC only writes character-basic
+                // chunks and does not produce an ocid-mapping file. Passing cbRunId here
+                // makes loadFromRun 404 and the phase exits with 0 records.
+                triggerPhase(PipelinePhase.ITEM_EQUIPMENT, ieRunId, oRunId)
             }
             .whenComplete { _, ex ->
                 if (ex != null) {

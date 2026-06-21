@@ -286,7 +286,7 @@ jobs:
             -e MINIO_ENDPOINT=http://localhost:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/mc:latest admin user list local 2>/dev/null)
+            minio/mc:latest admin user list local)
           echo "Users returned by MinIO:"
           echo "$SAs"
           for sa in ext-api calculator synchronizer cleanup; do

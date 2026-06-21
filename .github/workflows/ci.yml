@@ -193,19 +193,13 @@ jobs:
     needs: test
     timeout-minutes: 15
 
-    services:
-      minio:
-        image: minio/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        ports:
-          - 9000:9000
-        options: >-
-          --health-cmd "mc ready local"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
+    # Earlier version used a `services: minio:` container, but the GH
+    # Actions service-container spec doesn't support overriding the image
+    # ENTRYPOINT/CMD — and the `minio/minio:latest` image now requires an
+    # explicit `server /data` subcommand (the empty default CMD just
+    # prints help and exits, which fails the `mc ready local` health
+    # check). Run MinIO as a detached background container in a step
+    # instead, which lets us pass the server args directly.
 
     env:
       INTEGRATION_MINIO: "true"
@@ -229,6 +223,25 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
+      # Launch MinIO in the background, bound to the host network. We wait
+      # for the liveness endpoint before proceeding.
+      - name: Start MinIO
+        run: |
+          docker run -d --rm --network host \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            --name ci-minio \
+            minio/minio:latest \
+            server /data --console-address :9001
+          for i in $(seq 1 30); do
+            if wget -qO- http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+              echo "MinIO up after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://localhost:9000/minio/health/live || (echo "MinIO did not start"; docker logs ci-minio; exit 1)
+
       # Per-job random SA keys. Never stored in GitHub Secrets.
       - name: Generate ephemeral SA keys
         id: gen-keys
@@ -243,8 +256,8 @@ jobs:
           echo "SA_CLEANUP_SECRET_KEY=$SA_CLEANUP_SECRET_KEY" >> "$GITHUB_OUTPUT"
 
       # Bootstrap: create bucket, ILM, 4 SAs, 4 policies.
-      # Uses --network host so the bootstrap container can reach the service
-      # container's MinIO on localhost:9000.
+      # Uses --network host so the bootstrap container can reach the
+      # background MinIO on localhost:9000.
       - name: Run bootstrap
         env:
           SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}

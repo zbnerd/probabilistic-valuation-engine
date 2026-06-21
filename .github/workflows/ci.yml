@@ -282,15 +282,17 @@ jobs:
       - name: Verify SAs and ILM
         run: |
           set -euo pipefail
-          SAs=$(docker run --rm --network host \
-            -e MINIO_ENDPOINT=http://localhost:9000 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/mc:latest admin user list local)
-          echo "Users returned by MinIO:"
-          echo "$SAs"
+          # `mc admin user list local` returns a multi-column tabular payload
+          # (e.g. "enabled <id> <name>"), which doesn't match a `^name$` grep.
+          # Probe each expected SA via `mc admin user info` (the same call
+          # bootstrap.sh uses on its first run) — non-zero exit means the SA
+          # wasn't created.
           for sa in ext-api calculator synchronizer cleanup; do
-            if ! echo "$SAs" | grep -q "^$sa$"; then
+            if ! docker run --rm --network host \
+              -e MINIO_ENDPOINT=http://localhost:9000 \
+              -e MINIO_ROOT_USER=minioadmin \
+              -e MINIO_ROOT_PASSWORD=minioadmin \
+              minio/mc:latest admin user info local "$sa" >/dev/null 2>&1; then
               echo "ERROR: expected SA '$sa' missing from MinIO user list"
               exit 1
             fi

@@ -3,6 +3,7 @@ package maple.cleanup.controller
 import maple.cleanup.inbox.ConsumedChunkInbox
 import maple.cleanup.inbox.InboxProperties
 import maple.cleanup.service.RunCleanupService
+import maple.cleanup.service.StaleKafkaSkipService
 import maple.common.cleanup.RunCleanupResult
 import maple.expectation.common.event.ChunkConsumedEvent
 import maple.expectation.common.storage.ObjectStorage
@@ -18,6 +19,7 @@ class CleanupControllerTest {
     private val storage: ObjectStorage = mock()
     private val runCleanupService: RunCleanupService = mock()
     private val inbox: ConsumedChunkInbox = mock()
+    private val staleKafkaSkipService: StaleKafkaSkipService = mock()
     private val inboxProperties = InboxProperties()
 
     @Test
@@ -46,6 +48,7 @@ class CleanupControllerTest {
             inbox = inbox,
             inboxProperties = inboxProperties,
             objectStorage = storage,
+            staleKafkaSkipService = staleKafkaSkipService,
         )
         val response = controller.cleanupInbox().body!!
 
@@ -79,6 +82,7 @@ class CleanupControllerTest {
             inbox = inbox,
             inboxProperties = inboxProperties,
             objectStorage = storage,
+            staleKafkaSkipService = staleKafkaSkipService,
         )
         val response = controller.cleanupInbox().body!!
 
@@ -97,6 +101,7 @@ class CleanupControllerTest {
             inbox = inbox,
             inboxProperties = inboxProperties,
             objectStorage = storage,
+            staleKafkaSkipService = staleKafkaSkipService,
         )
         val response = controller.cleanupInbox().body!!
 
@@ -116,6 +121,7 @@ class CleanupControllerTest {
             inbox = inbox,
             inboxProperties = inboxProperties,
             objectStorage = storage,
+            staleKafkaSkipService = staleKafkaSkipService,
         )
         val response = controller.cleanupRuns().body!!
 
@@ -134,6 +140,7 @@ class CleanupControllerTest {
             inbox = inbox,
             inboxProperties = inboxProperties,
             objectStorage = storage,
+            staleKafkaSkipService = staleKafkaSkipService,
         )
         val response = controller.cleanupCalculatorRuns().body!!
 

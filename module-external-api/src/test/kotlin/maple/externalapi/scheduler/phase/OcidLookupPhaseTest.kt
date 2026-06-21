@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.kotlinModule
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
-import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -22,7 +21,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
-import java.io.InputStream
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
@@ -56,17 +54,19 @@ class OcidLookupPhaseTest {
             CompletableFuture.completedFuture(payload.toByteArray())
         }
 
-        // Collect streamed bytes (replaces the previous put() call). This
-        // is exactly the path MinioObjectStorage.putStreamMultipart takes: it
-        // streams the input through the S3AsyncClient chunked transfer. The
-        // mock drains it to bytes for assertion.
-        val collectedBytes = java.util.concurrent.atomic.AtomicReference<ByteArray>()
-        whenever(storage.putStreamMultipart(any(), any())).thenAnswer { invocation ->
-            val input = invocation.getArgument<InputStream>(1)
-            val bytes = input.readBytes()
-            collectedBytes.set(bytes)
+        // The phase writes the gzipped mapping to a temp file then calls
+        // putFileAsync(key, file). The mock reads the temp file's bytes
+        // and captures the key for downstream assertions.
+        val capturedBytes = java.util.concurrent.atomic.AtomicReference<ByteArray>()
+        val capturedKey = java.util.concurrent.atomic.AtomicReference<String>()
+        whenever(storage.putFileAsync(any(), any())).thenAnswer { invocation ->
+            val key = invocation.getArgument<String>(0)
+            val file = invocation.getArgument<java.nio.file.Path>(1)
+            val bytes = java.nio.file.Files.readAllBytes(file)
+            capturedKey.set(key)
+            capturedBytes.set(bytes)
             CompletableFuture.completedFuture(
-                PutResult(invocation.getArgument<String>(0), bytes.size.toLong(), null),
+                PutResult(key, bytes.size.toLong(), null),
             )
         }
 
@@ -91,13 +91,11 @@ class OcidLookupPhaseTest {
             )
         }
 
-        // Verify the streaming putStreamMultipart was called with the right key.
-        val mappingKeyCaptor = argumentCaptor<String>()
-        verify(storage).putStreamMultipart(mappingKeyCaptor.capture(), any())
-        val mappingKey = mappingKeyCaptor.firstValue
-        assertNotNull(mappingKey)
+        // Verify putFileAsync was called with the right key.
+        val mappingKey = capturedKey.get()
+        assertNotNull(mappingKey, "putFileAsync should have been called")
         assertTrue(
-            mappingKey.startsWith("ocid-mapping/ocid-mapping-"),
+            mappingKey!!.startsWith("ocid-mapping/ocid-mapping-"),
             "expected mapping key to start with 'ocid-mapping/ocid-mapping-' but was '$mappingKey'",
         )
         assertTrue(
@@ -105,10 +103,10 @@ class OcidLookupPhaseTest {
             "expected mapping key to end with '.jsonl.gz' but was '$mappingKey'",
         )
 
-        // The streamed bytes should be a non-empty valid gzip containing the
-        // expected userIgn/ocid pairs.
-        val bytes = collectedBytes.get()
-        assertNotNull(bytes, "putStreamMultipart should have been called")
+        // The temp file bytes should be a non-empty valid gzip containing
+        // the expected userIgn/ocid pairs.
+        val bytes = capturedBytes.get()
+        assertNotNull(bytes, "putFileAsync should have been called")
         assertTrue(bytes!!.isNotEmpty(), "streamed bytes should not be empty")
         val decompressed = GZIPInputStream(bytes.inputStream())
             .bufferedReader().readText()
@@ -154,11 +152,12 @@ class OcidLookupPhaseTest {
             val ign = invocation.getArgument<String>(2)
             CompletableFuture.completedFuture("{\"ocid\":\"ocid-for-$ign\"}".toByteArray())
         }
-        whenever(storage.putStreamMultipart(any(), any())).thenAnswer { invocation ->
-            val input = invocation.getArgument<InputStream>(1)
-            val bytes = input.readBytes()
+        whenever(storage.putFileAsync(any(), any())).thenAnswer { invocation ->
+            val key = invocation.getArgument<String>(0)
+            val file = invocation.getArgument<java.nio.file.Path>(1)
+            val bytes = java.nio.file.Files.readAllBytes(file)
             CompletableFuture.completedFuture(
-                PutResult(invocation.getArgument<String>(0), bytes.size.toLong(), null),
+                PutResult(key, bytes.size.toLong(), null),
             )
         }
 

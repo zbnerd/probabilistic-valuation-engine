@@ -212,11 +212,9 @@ jobs:
       MINIO_ENDPOINT: http://localhost:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-      # Per-job random SA keys (set in the gen-keys step below)
-      SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}
-      SA_CALCULATOR_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CALCULATOR_SECRET_KEY }}
-      SA_SYNCHRONIZER_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_SYNCHRONIZER_SECRET_KEY }}
-      SA_CLEANUP_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CLEANUP_SECRET_KEY }}
+      # Per-job random SA keys are set by `gen-keys` step (id) and exposed
+      # via step-level `env:` on bootstrap/Run IT — job-level env cannot
+      # reference steps.* (GH Actions context scoping rule).
 
     steps:
       - name: Checkout Repository

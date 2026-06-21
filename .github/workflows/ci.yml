@@ -267,6 +267,7 @@ jobs:
         run: |
           docker run --rm \
             --network host \
+            --entrypoint /bin/sh \
             -e MINIO_ENDPOINT=http://localhost:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
@@ -276,7 +277,7 @@ jobs:
             -e "SA_CLEANUP_SECRET_KEY=${SA_CLEANUP_SECRET_KEY}" \
             -v "${{ github.workspace }}/docker/minio:/scripts:ro" \
             minio/mc:latest \
-            /bin/sh /scripts/bootstrap.sh
+            /scripts/bootstrap.sh
 
       - name: Verify SAs and ILM
         run: |

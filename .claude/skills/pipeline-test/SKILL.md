@@ -157,6 +157,22 @@ if [ "${START_MODE}" = "docker" ]; then
     exit 7
   fi
 
+  # Ensure docker-mode infra files exist. Added by PR #1324 (commit 556017399,
+  # 2026-06-22). A working tree on an older commit (e.g. detached HEAD before
+  # 556017399) has no `docker-compose.services.yml` and `docker compose ... up`
+  # below silently fails with "no such file" instead of a clear error.
+  # Verified 2026-06-23: main worktree on 4be816e99 hit this after PR #1331
+  # merged because the local `develop` ref was stale relative to origin/develop.
+  for f in docker-compose.services.yml docker/services/build.sh; do
+    if [ ! -f "$f" ]; then
+      echo "ERROR: $f missing. PR #1324 (commit 556017399) added docker-mode infra." >&2
+      echo "Fix one of:" >&2
+      echo "  - Switch to latest develop:  git checkout origin/develop" >&2
+      echo "  - Use nohup mode instead:    START_MODE=nohup $0" >&2
+      exit 7
+    fi
+  done
+
   # Build images if missing or stale.
   ./docker/services/build.sh
 

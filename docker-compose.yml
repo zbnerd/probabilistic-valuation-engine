@@ -256,11 +256,20 @@ services:
       # Override .env.bootstrap MINIO_ENDPOINT for in-container DNS.
       # .env.bootstrap keeps localhost:9000 so host-side tooling works.
       MINIO_ENDPOINT: http://minio:9000
+      # SA key output path (ADR-732). Coolify sets this to /opt/maple/secrets;
+      # local dev leaves it unset → bootstrap defaults to /workspace/docker/services/secrets.
+      SECRETS_DIR: ${SECRETS_DIR:-/workspace/docker/services/secrets}
     volumes:
       - ./docker/minio:/scripts:ro
-      # /workspace = repo root, writable so bootstrap.sh can persist SA secrets
-      # to docker/services/secrets/ and .env.<module>. See plan task 8.
+      # /workspace = repo root (local dev). bootstrap's REPO_ROOT fallback
+      # and host-side tooling read SA keys here when SECRETS_DIR is unset.
       - ./:/workspace:rw
+      # SA secrets output dir (ADR-732). When SECRETS_DIR_HOST is set
+      # (Coolify: /opt/maple/secrets), mount that host path read-write so
+      # bootstrap writes keys there and the maple-apps resource reads them.
+      # Local dev: defaults to the repo dir under the /workspace mount above
+      # (redundant but harmless bind).
+      - ${SECRETS_DIR_HOST:-./docker/services/secrets}:${SECRETS_DIR:-/workspace/docker/services/secrets}:rw
     entrypoint: /bin/sh /scripts/bootstrap.sh
     restart: "no"
 

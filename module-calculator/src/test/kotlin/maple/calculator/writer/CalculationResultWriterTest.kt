@@ -3,7 +3,6 @@ package maple.calculator.writer
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.KotlinModule
-import java.io.InputStream
 import java.util.concurrent.ExecutionException
 import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.flow.emptyFlow
@@ -80,7 +79,7 @@ class CalculationResultWriterTest {
     @Test
     fun `write failure propagates via CompletableFuture exceptionally`() {
         val stub = object : StubObjectStorage() {
-            override fun handlePutStreamMultipart(key: String, input: InputStream): PutResult {
+            override fun handlePutFileAsync(key: String, path: java.nio.file.Path): PutResult {
                 throw RuntimeException("simulated upload failure")
             }
         }

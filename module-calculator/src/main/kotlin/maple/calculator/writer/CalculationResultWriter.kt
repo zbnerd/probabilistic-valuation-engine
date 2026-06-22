@@ -2,6 +2,8 @@ package maple.calculator.writer
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.annotation.PreDestroy
+import java.io.BufferedOutputStream
+import java.nio.file.Files
 import java.util.concurrent.CompletableFuture
 import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.CoroutineScope
@@ -48,39 +50,39 @@ class CalculationResultWriter(
     )
 
     /**
-     * Stream calculation results through gzip -> [ObjectStorage.putStreamMultipart].
+     * Drain calculation results through gzip into a temp file, then upload
+     * the file via [ObjectStorage.putFileAsync].
      *
      * Producer (on [producerScope], IO dispatcher) collects the Flow and
-     * writes to a pipe. Consumer is the S3 async client (or LocalFs
-     * virtual-thread executor). The 8MB pipe provides natural backpressure:
-     * when the consumer stalls, the pipe fills, the producer's
-     * `pipeOutput.write()` blocks, the gzip blocks, the JsonGenerator
-     * blocks, and `Flow.collect` suspends - no unbounded heap growth.
+     * writes JSONL rows through gzip into the temp file. When the producer
+     * completes (file flushed + closed), [putFileAsync] uploads it — MinIO
+     * uses S3TransferManager multipart (file-backed, no pipe), LocalFs uses
+     * an atomic rename. The temp file is deleted in a `whenComplete`
+     * safety net on both success and failure.
+     *
+     * Why not the previous `PipedInputStream`/`PipedOutputStream` +
+     * `putStreamMultipart` path: the AWS SDK reads the InputStream on a
+     * background thread that races the producer coroutine. After the
+     * producer exits, `PipedInputStream` throws "Read end dead"
+     * (`readSide.isAlive()` check) → truncated/empty gzip files (0-row
+     * result parts, data loss). This is the same bug `OcidLookupPhase`
+     * hit and fixed in commit `c7b20f4c3`; see ADR-730.
      *
      * Returns [CompletableFuture]. Callers MUST chain via
-     * `thenApply` / `thenAccept` - never `.join()` / `.get()` in
-     * production. The legacy suspend caller in `SnapshotChunkProcessor`
-     * will be migrated in Task 10 to bridge through
-     * `kotlinx.coroutines.future.await`.
+     * `thenApply` / `thenAccept` / `.await()` - never `.join()` / `.get()`
+     * in production.
      */
     fun write(
         objectKey: String,
         results: Flow<CalculationResult>,
     ): CompletableFuture<WriteResult> {
-        val pipeInput = java.io.PipedInputStream(PIPE_BUFFER_BYTES)
-        val pipeOutput = java.io.PipedOutputStream(pipeInput)
         val counters = WriteCounters()
+        val tempFile = Files.createTempFile(TEMP_FILE_PREFIX, TEMP_FILE_SUFFIX)
 
-        // Wrap pipeOutput in CountingOutputStream to track compressed bytes
-        // (gzip output -> pipe). Minio's putStreamMultipart reports
-        // size=-1L for chunked transfer, so this counter is the only
-        // source of truth for compressed bytes in the Minio path.
-        val compressedCounter = CountingOutputStream(pipeOutput)
-
-        // Producer: collect the Flow into the pipe via gzip.
+        // Producer: collect the Flow into the temp file via gzip.
         val producerFuture: CompletableFuture<Unit> = producerScope.future {
             try {
-                GZIPOutputStream(compressedCounter).use { gz ->
+                GZIPOutputStream(BufferedOutputStream(Files.newOutputStream(tempFile))).use { gz ->
                     CountingOutputStream(gz).use { cgz ->
                         objectMapper.factory.createGenerator(cgz).use { gen ->
                             results.collect { result ->
@@ -92,57 +94,59 @@ class CalculationResultWriter(
                         }
                     }
                 }
-                counters.compressedBytes.set(compressedCounter.count)
-            } finally {
-                runCatching { pipeOutput.close() }  // signal EOF to consumer
+                // Real compressed size from the finalized file. putFileAsync
+                // reports size=-1L for MinIO chunked transfer, so this is the
+                // source of truth for compressed bytes in that path.
+                counters.compressedBytes.set(Files.size(tempFile))
+            } catch (e: Throwable) {
+                // Producer failed before the file was fully written — clean up
+                // here so no stray temp file leaks. The upload stage below is
+                // skipped because producerFuture completes exceptionally and
+                // thenCompose short-circuits.
+                runCatching { Files.deleteIfExists(tempFile) }
+                throw e
             }
             Unit
         }
 
-        // Consumer: pipe -> ObjectStorage.putStreamMultipart (chunked transfer).
-        val uploadFuture = objectStorage.putStreamMultipart(objectKey, pipeInput)
-
-        // Deadlock guard: if the upload fails before draining the pipe,
-        // the producer blocks on pipeOut.write() forever. Closing
-        // pipeInput makes the next pipeOut.write() throw IOException,
-        // which unblocks the producer's coroutine. The pipe becomes
-        // effectively a one-shot channel with explicit error propagation.
-        uploadFuture.whenComplete { _, err ->
-            if (err != null) {
-                runCatching { pipeInput.close() }
+        // After the producer writes the file, upload it via putFileAsync
+        // (MinIO S3TransferManager multipart | LocalFs atomic move). No pipe
+        // — the upload reads from the file, eliminating the reader/writer
+        // thread race.
+        return producerFuture
+            .thenCompose { objectStorage.putFileAsync(objectKey, tempFile) }
+            .thenApply { putResult ->
+                WriteResult(
+                    objectKey = putResult.key,
+                    resultCount = counters.records.get(),
+                    uncompressedBytes = counters.uncompressedBytes.get(),
+                    compressedBytes = if (putResult.size >= 0) {
+                        putResult.size  // LocalFs: real size from putFile
+                    } else {
+                        counters.compressedBytes.get()  // MinIO: chunked transfer, size=-1L
+                    },
+                    etag = putResult.checksum,
+                )
             }
-        }
-
-        // Compose: producer done + upload done -> WriteResult.
-        val composed = producerFuture.thenCombine(uploadFuture) { _, putResult ->
-            WriteResult(
-                objectKey = putResult.key,
-                resultCount = counters.records.get(),
-                uncompressedBytes = counters.uncompressedBytes.get(),
-                compressedBytes = if (putResult.size >= 0) {
-                    putResult.size  // LocalFs: real size from putFile
-                } else {
-                    counters.compressedBytes.get()  // Minio: chunked transfer, size=-1L
-                },
-                etag = putResult.checksum,
-            )
-        }
-
-        // Cleanup the pipe on any path (success or failure).
-        return composed.whenComplete { _, _ ->
-            runCatching { pipeInput.close() }
-        }.exceptionally { err ->
-            log.error(
-                "[CalculationResultWriter] write failed for key={}",
-                objectKey,
-                err,
-            )
-            throw RuntimeException("streaming write failed for key=$objectKey", err)
-        }
+            .whenComplete { _, _ ->
+                // Safety net: delete the temp file after the upload resolves.
+                // MinIO's putFileAsync may already delete on success; LocalFs
+                // putFile atomically moves it into place. deleteIfExists is
+                // idempotent either way.
+                runCatching { Files.deleteIfExists(tempFile) }
+            }
+            .exceptionally { err ->
+                log.error(
+                    "[CalculationResultWriter] write failed for key={}",
+                    objectKey,
+                    err,
+                )
+                throw RuntimeException("streaming write failed for key=$objectKey", err)
+            }
     }
 
     companion object {
-        /** Pipe buffer = 8MB. Backs pressure the producer when S3 stalls. */
-        private const val PIPE_BUFFER_BYTES: Int = 8 * 1024 * 1024
+        private const val TEMP_FILE_PREFIX: String = "calc-result-"
+        private const val TEMP_FILE_SUFFIX: String = ".jsonl.gz.tmp"
     }
 }

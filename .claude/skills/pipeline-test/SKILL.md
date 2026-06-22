@@ -42,7 +42,7 @@ Airflow (Control Plane)          Spring Boot Services (Data Plane)
 
 - `.env` file exists with DB_URL, NEXON_API_KEY, STORAGE_BACKEND, MINIO_* vars
 - No existing processes on ports 8081, 8082, 8083, 8084, 8180
-- MinIO server running (default `http://localhost:9000` from `docker compose up minio`)
+- **Step 1b starts docker services automatically** (Airflow DB, webserver, scheduler, MinIO, Kafka). Manual `docker compose up` is no longer required before invoking this skill.
 - PostgreSQL accessible at the URL in `.env` `DB_URL` (uses `.env`, not hardcoded local)
 - Docker Compose v2 for MinIO + Airflow services
 - Data directory `../data` clean for fresh runs
@@ -105,6 +105,35 @@ rule_count=$(mc ilm ls "local/${MINIO_BUCKET}/" 2>&1 | grep -cE "(Enabled|Disabl
 ```
 
 **Local storage (legacy)**: Set `STORAGE_BACKEND=local` in `.env` to fall back to the local filesystem backend. The MinIO pre-check above is skipped, and module health will not show `minioHealthIndicator`. The MinIO prefix + storage-error verifications (steps 4a, 9a) are also skipped.
+
+### 1b. Start docker services (docker-first)
+
+All control-plane + storage infrastructure runs in Docker (Airflow, Kafka, MinIO, Airflow DB). Bring these up **before** Spring Boot modules boot so MinIO healthchecks pass at Spring Boot startup and Airflow is ready to trigger.
+
+```bash
+# Compose order matters: airflow-db → airflow-webserver/scheduler (healthcheck-gated);
+# minio + kafka are independent.
+docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d \
+  airflow-db airflow-webserver airflow-scheduler minio kafka
+
+# Wait for Airflow DB
+until docker inspect maple-airflow-db --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do
+  sleep 2
+done
+
+# Wait for Airflow webserver
+until curl -sf http://localhost:8180/health > /dev/null 2>&1; do sleep 3; done
+echo "Airflow ready on 8180"
+
+# Wait for MinIO (only if STORAGE_BACKEND=minio)
+if [ "${STORAGE_BACKEND:-minio}" != "local" ]; then
+  : "${MINIO_ENDPOINT:?MINIO_ENDPOINT required}"
+  until curl -sf "${MINIO_ENDPOINT}/minio/health/ready" > /dev/null 2>&1; do sleep 2; done
+  echo "MinIO ready at ${MINIO_ENDPOINT}"
+fi
+```
+
+**Why docker-first:** Spring Boot modules' `MinioHealthIndicator` (step 4a) probes MinIO at boot. If MinIO is down, modules boot but report DOWN → fail-fast loop. Booting docker first guarantees clean Spring Boot startup. Airflow is also up before step 5 DAG trigger, so trigger / sensor / cleanup_pipeline chain has no cold-start gap.
 
 ### 2. Build JARs
 
@@ -323,18 +352,11 @@ if echo "${last}" | grep -q "no runs found at prefix=runs"; then
 fi
 ```
 
-### 5. Start Airflow
+### 5. Configure Airflow + trigger DAG
 
-Airflow is the control plane for pipeline scheduling and monitoring. Always start it as part of the pipeline test.
+Airflow is the control plane for pipeline scheduling and monitoring. **Already running** from step 1b (docker-first) — this step only configures connections and triggers the DAG.
 
 ```bash
-# Start Airflow services (requires docker compose + maple-network)
-docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d airflow-webserver airflow-scheduler
-
-# Wait for Airflow webserver
-until curl -sf http://localhost:8180/health > /dev/null 2>&1; do sleep 3; done
-echo "Airflow ready on 8180"
-
 # Install Kafka Python client (needed for SNAPSHOT_RUN_COMPLETED event consumption)
 docker exec maple-airflow-scheduler python3 -m pip install kafka-python-ng --quiet
 

@@ -1,10 +1,18 @@
-"""
-Daily Nexon data collection pipeline.
+"""Daily Nexon data collection pipeline (DEPRECATED 2026-06-22).
 
-Trigger → Poll run-status with run_id correlation → Wait for synchronizer chunk consumed event → Trigger cleanup.
+DEPRECATED: Use the phase-separated DAGs instead:
+  - daily_full_pipeline              — scheduled daily chain (mode=once for all phases)
+  - ranking_ocid_lookup_pipeline     — manual RANKING + OCID chain
+  - character_basic_pipeline         — CHARACTER_BASIC with mode=once|count=N|infinite
+  - item_equipment_pipeline          — ITEM_EQUIPMENT with mode=once|count=N|infinite
+  - stop_loop_pipeline               — graceful stop for mode=infinite loops
 
-Control Plane: Airflow triggers and monitors.
-Data Plane: Kafka handles chunk processing, retry, backpressure.
+Removal target: next release cycle. See docs/21_Operations/dag-migration.md
+for operator migration guide.
+
+This DAG remains parseable for one release cycle to avoid breaking operators
+who trigger it directly. Its FULL_DAILY path duplicates daily_full_pipeline's
+behavior; its scope/run_steps paths are superseded by phase DAGs.
 """
 
 from datetime import datetime, timedelta
@@ -361,9 +369,9 @@ with DAG(
         "retries": 0,
     },
     start_date=datetime(2026, 5, 29),
-    schedule="0 18 * * *",  # UTC 18:00 = KST 03:00
+    schedule=None,  # schedule moved to daily_full_pipeline; legacy is manual-only
     catchup=False,
-    tags=["pipeline", "daily"],
+    tags=["pipeline", "daily", "deprecated"],
 ) as dag:
 
     check_external_api = HttpSensor(

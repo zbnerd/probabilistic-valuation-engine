@@ -122,7 +122,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   # Redis (Cache)
   redis:
@@ -185,7 +185,10 @@ services:
       loki:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:9080/ready || exit 1"]
+      # promtail image (Debian) ships no wget/curl/nc; bash /dev/tcp probes
+      # the readiness port directly. CMD-SHELL uses dash (no /dev/tcp), so
+      # invoke bash explicitly.
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9080' || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -228,6 +231,15 @@ services:
       AUTOHEAL_DEFAULT_STOP_TIMEOUT: 30
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      # autoheal can't restart itself (excluded from its own label), but a
+      # socket-presence probe surfaces its liveness in the Coolify UI. Crash
+      # recovery is restart: always.
+      test: ["CMD-SHELL", "ls /var/run/docker.sock >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - maple-network
 

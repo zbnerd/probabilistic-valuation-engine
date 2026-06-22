@@ -198,7 +198,8 @@ autoheal:
     AUTOHEAL_INTERVAL: 5              # unhealthy poll (seconds)
     AUTOHEAL_DEFAULT_STOP_TIMEOUT: 30
   volumes:
-    - /var/run/docker.sock:/var/run/docker.sock:ro
+    # rw required — autoheal calls the Docker restart API (:ro would break it)
+    - /var/run/docker.sock:/var/run/docker.sock
   networks: [maple-network]
 ```
 

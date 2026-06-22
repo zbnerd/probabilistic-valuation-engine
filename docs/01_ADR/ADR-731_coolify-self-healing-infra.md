@@ -44,7 +44,7 @@ L3 autoheal sidecar             → health_status=unhealthy → docker restart
 ### Sensitivity
 
 * autoheal mounts `/var/run/docker.sock` rw — host-Docker root-equivalent (same trust level Coolify already has).
-* `start_period` tuning per service (redis 10s … kafka 40s, apps 90s in Phase 2) — too short → boot-time restart loops.
+* `start_period` tuning per service (redis 10s … kafka 60s, apps 90s in Phase 2) — too short → boot-time restart loops.
 
 ### Trade-off
 
@@ -55,7 +55,9 @@ L3 autoheal sidecar             → health_status=unhealthy → docker restart
 
 ### Risk
 
-* autoheal itself dies → no L3. Mitigated by `restart: always` + Coolify UI visibility.
+* autoheal itself dies → no L3. Mitigated by `restart: always` + Coolify UI visibility (a socket-presence healthcheck surfaces autoheal's state).
+* prometheus runs `network_mode: host` (to reach host Spring Boot ports via localhost); its healthcheck probes the host's `:9090/-/healthy` (a prometheus-specific path). It is intentionally NOT a member of `maple-network`, so it does not conflict with the future `maple-apps` resource. L3 coverage for prometheus is weaker (host-namespace probe) — accepted trade-off vs re-networking prometheus out of Phase 1 scope.
+* external `maple-network` survives resource deletion — manual lifecycle (create on first deploy, `docker network rm` on full teardown). Documented in the Phase 3 ops guide.
 
 ### Non-Risk
 

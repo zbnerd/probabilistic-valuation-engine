@@ -420,7 +420,9 @@ jobs:
       # `docker compose up`, otherwise compose fails with
       # "network maple-network declared as external, but could not be found".
       - name: Create external maple-network
-        run: docker network create --subnet=172.20.0.0/16 maple-network || docker network inspect maple-network >/dev/null
+        run: |
+          docker network inspect maple-network >/dev/null 2>&1 \
+            || docker network create --subnet=172.20.0.0/16 maple-network >/dev/null
 
       - name: Bring up full stack
         run: |

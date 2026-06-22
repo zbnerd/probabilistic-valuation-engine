@@ -104,7 +104,7 @@ Restart detection: cAdvisor exposes `container_start_time_seconds` (a gauge that
 
 ### Non-Risk
 
-* cAdvisor itself — covered by `restart: always` + the autoheal label.
+* cAdvisor itself — covered by `restart: always` (no healthcheck; avoids a false restart-loop on images lacking the probe binary).
 
 ---
 
@@ -177,14 +177,11 @@ Add this as a new top-level service (place it right after `prometheus:` so the o
       - /dev/kmsg
     ports:
       - "8086:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/metrics || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+    # No healthcheck (grill-me fix B): cAdvisor is observability infra, not
+    # business-critical — crash recovery is restart: always below. A healthcheck
+    # would risk a false restart-loop on images whose busybox lacks the probe
+    # binary, and autoheal only acts on unhealthy state anyway. See ADR-733.
     labels:
-      autoheal: "true"
       logging: "promtail"
     networks:
       - maple-network

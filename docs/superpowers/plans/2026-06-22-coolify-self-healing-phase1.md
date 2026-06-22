@@ -442,19 +442,9 @@ Expected output includes a line like `AUTOHEAL_CONTAINER_LABEL=autoheal` and (af
 
 - [ ] **Step 5: Verify autoheal restarts an unhealthy container (the core guarantee)**
 
-Run a throwaway test container that always fails its healthcheck and carries the autoheal label:
+Run a throwaway test container that always fails its healthcheck and carries the autoheal label (autoheal watches host-wide via the socket, so no network membership is needed):
 ```bash
 docker run -d --name autoheal-test \
-  --network maple-network \
-  --label autoheal=true \
-  --restart=no \
-  -e AUTOHEAL_CONTAINER_LABEL=autoheal \
-  alpine:latest sh -c 'apk add --no-cache wget >/dev/null 2>&1; sleep 3600'
-# Attach a failing healthcheck to the running test container is not possible
-# post-create, so instead recreate it with the failing check baked in:
-docker rm -f autoheal-test
-docker run -d --name autoheal-test \
-  --network maple-network \
   --label autoheal=true \
   --restart=no \
   --health-cmd 'exit 1' \
@@ -545,6 +535,8 @@ These steps are NOT code; they run in the Coolify UI / on the host. They are the
 ### R-3: Take down the manual stack (preserve volumes)
 
 The existing `maple-*` containers were started by manual `docker compose up`. Coolify must take over the same container names / volumes.
+
+**Maintenance window (grill-me fix A):** taking infra down briefly disconnects the 4 apps (still running on `nohup`) from postgres/minio/kafka/redis for ~30–60s. Apps will log connection errors and retry; expect a short spike of failed requests. Perform this during a low-traffic window. The external-network conversion forces a full infra recreate, so a brief outage here is unavoidable.
 
 1. On the host, from the repo root:
    ```bash

@@ -22,6 +22,7 @@ permissions:
   contents: read
   checks: write           # Required for test report annotations
   pull-requests: write    # Required for PR comments
+  packages: write         # Required for GHCR image push (ADR-732)
 
 # Concurrency: Cancel in-progress runs for same PR (save resources)
 concurrency:
@@ -466,3 +467,52 @@ jobs:
           rm -f docker/services/secrets/sa-synchronizer.key
           rm -f docker/services/secrets/sa-cleanup.key
           rmdir docker/services/secrets 2>/dev/null || true
+
+  # ============================================
+  # Build & Push Images to GHCR (ADR-732)
+  # Runs only on pushes to develop (merges). Builds the 4 service images
+  # via build.sh (local maple/<svc>:sha-<7>), re-tags and pushes them to
+  # ghcr.io/zbnerd/maple-<svc>:{sha-<7>,latest}. PR builds are validated
+  # by the docker-smoke job (which uses local :dev images), so this job
+  # does not gate PRs.
+  # ============================================
+  build-and-push:
+    name: Build & Push Images (GHCR)
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    env:
+      GHCR_OWNER: zbnerd
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build service jars
+        run: ./gradlew :module-external-api:bootJar :module-calculator:bootJar :module-synchronizer:bootJar :module-cleanup:bootJar -x test --no-daemon
+
+      - name: Build service images (build.sh)
+        run: ./docker/services/build.sh
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Tag & push images (sha + latest)
+        run: |
+          set -euo pipefail
+          SHA7="$(git rev-parse --short=7 HEAD)"
+          echo "Publishing sha-${SHA7} + latest for GHCR_OWNER=${GHCR_OWNER}"
+          for mod in external-api calculator synchronizer cleanup; do
+            docker tag "maple/${mod}:sha-${SHA7}" "ghcr.io/${GHCR_OWNER}/maple-${mod}:sha-${SHA7}"
+            docker tag "maple/${mod}:sha-${SHA7}" "ghcr.io/${GHCR_OWNER}/maple-${mod}:latest"
+            docker push "ghcr.io/${GHCR_OWNER}/maple-${mod}:sha-${SHA7}"
+            docker push "ghcr.io/${GHCR_OWNER}/maple-${mod}:latest"
+          done

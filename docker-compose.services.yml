@@ -1,0 +1,119 @@
+# docker-compose.services.yml
+# Overlay for the 4 Spring Boot services. Use with docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
+# Per-service MinIO SA secret lives in docker/services/secrets/sa-<module>.key
+# (mounted as /run/secrets/sa-<module>; the entrypoint wrapper reads it into
+# MINIO_SECRET_KEY env var). The SA name (MINIO_ACCESS_KEY=<sa>) is a public
+# identifier, not a credential, and is set directly in environment:.
+
+services:
+  external-api:
+    image: maple/external-api:dev
+    container_name: maple-external-api
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      JAVA_OPTS: "-Xms512m -Xmx2g"
+      SERVER_PORT: 8081
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: ${MINIO_BUCKET:-maple-expectation}
+      MINIO_REGION: us-east-1
+      STORAGE_BACKEND: minio
+      MINIO_ACCESS_KEY: ext-api
+      MINIO_SECRET_KEY_FILE: /run/secrets/sa-ext-api
+    env_file:
+      - docker/services/env/external-api.env
+    secrets:
+      - sa-ext-api
+    networks: [maple-network]
+    depends_on:
+      minio:    {condition: service_healthy}
+      postgres: {condition: service_healthy}
+      kafka:    {condition: service_started}
+
+  calculator:
+    image: maple/calculator:dev
+    container_name: maple-calculator
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      JAVA_OPTS: "-Xms512m -Xmx1g"
+      SERVER_PORT: 8082
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: ${MINIO_BUCKET:-maple-expectation}
+      MINIO_REGION: us-east-1
+      STORAGE_BACKEND: minio
+      MINIO_ACCESS_KEY: calculator
+      MINIO_SECRET_KEY_FILE: /run/secrets/sa-calculator
+    env_file:
+      - docker/services/env/calculator.env
+    secrets:
+      - sa-calculator
+    networks: [maple-network]
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka:    {condition: service_started}
+      minio:    {condition: service_healthy}
+
+  synchronizer:
+    image: maple/synchronizer:dev
+    container_name: maple-synchronizer
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      JAVA_OPTS: "-Xms512m -Xmx1g"
+      SERVER_PORT: 8083
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: ${MINIO_BUCKET:-maple-expectation}
+      MINIO_REGION: us-east-1
+      STORAGE_BACKEND: minio
+      MINIO_ACCESS_KEY: synchronizer
+      MINIO_SECRET_KEY_FILE: /run/secrets/sa-synchronizer
+    env_file:
+      - docker/services/env/synchronizer.env
+    secrets:
+      - sa-synchronizer
+    networks: [maple-network]
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka:    {condition: service_started}
+      minio:    {condition: service_healthy}
+
+  cleanup:
+    image: maple/cleanup:dev
+    container_name: maple-cleanup
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      JAVA_OPTS: "-Xms512m -Xmx1g"
+      SERVER_PORT: 8084
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: ${MINIO_BUCKET:-maple-expectation}
+      MINIO_REGION: us-east-1
+      STORAGE_BACKEND: minio
+      MINIO_ACCESS_KEY: cleanup
+      MINIO_SECRET_KEY_FILE: /run/secrets/sa-cleanup
+    env_file:
+      - docker/services/env/cleanup.env
+    secrets:
+      - sa-cleanup
+    networks: [maple-network]
+    depends_on:
+      minio:       {condition: service_healthy}
+      postgres:    {condition: service_started}
+      kafka:       {condition: service_started}
+      synchronizer: {condition: service_started}
+
+secrets:
+  sa-ext-api:
+    file: docker/services/secrets/sa-ext-api.key
+  sa-calculator:
+    file: docker/services/secrets/sa-calculator.key
+  sa-synchronizer:
+    file: docker/services/secrets/sa-synchronizer.key
+  sa-cleanup:
+    file: docker/services/secrets/sa-cleanup.key

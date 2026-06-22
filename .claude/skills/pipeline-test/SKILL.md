@@ -53,11 +53,11 @@ Airflow (Control Plane)          Spring Boot Services (Data Plane)
 
 The skill supports two ways to start the Spring Boot modules:
 
-- **`nohup` (default)**: spawns `java -jar` directly via `nohup`, logs to `logs/pipeline-test-*.log`. Self-contained, no systemd. Best for local dev / disposable test environments.
-
+- **`docker` (default)**: `docker compose -f docker-compose.yml -f docker-compose.services.yml up -d`. Services run as containers on `maple-network`. Per-service MinIO SA bound via Docker secrets (file mount) + `MINIO_SECRET_KEY` env via entrypoint wrapper. Lowest foot-gun surface.
+- **`nohup`**: spawns `java -jar` directly via `nohup`. Operator runs `source .env.<module>` per port to set `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`. Used when Docker is unavailable or for ad-hoc debugging.
 - **`systemd`**: uses the pre-installed `maple-{module}.service` units. Modules run as `maple` user, log to `/var/log/maple/`. Best for persistent / production-like environments.
 
-Set `START_MODE=systemd` to switch. Default is `nohup` for backward compat. The systemd units assume a previous `scripts/install-systemd-units.sh` run; see `scripts/systemd/` for the unit files.
+Set `START_MODE=systemd` to switch. Default is `docker`. The systemd units assume a previous `scripts/install-systemd-units.sh` run; see `scripts/systemd/` for the unit files.
 
 ## Workflow
 
@@ -117,9 +117,32 @@ JAR locations: `module-{name}/build/libs/module-{name}-0.0.1-SNAPSHOT.jar`
 ### 3. Start modules (sequential, wait for health check)
 
 ```bash
-START_MODE="${START_MODE:-nohup}"
+START_MODE="${START_MODE:-docker}"
 
-if [ "${START_MODE}" = "nohup" ]; then
+if [ "${START_MODE}" = "docker" ]; then
+  set -a && source .env && set +a
+
+  # Ensure SA secrets exist (bootstrap writes them); fail early if not.
+  if ! ls docker/services/secrets/sa-*.key >/dev/null 2>&1; then
+    echo "ERROR: docker/services/secrets/ empty. Run 'docker compose -f docker-compose.yml run --rm minio-bootstrap' first." >&2
+    exit 7
+  fi
+
+  # Build images if missing or stale.
+  ./docker/services/build.sh
+
+  # Bring up only the 4 services; infra (minio, postgres, kafka, etc.)
+  # is owned by the base docker-compose.yml and starts independently.
+  docker compose -f docker-compose.yml -f docker-compose.services.yml up -d \
+    external-api calculator synchronizer cleanup
+
+  # Health check wait.
+  for port in 8081 8082 8083 8084; do
+    until curl -sf "http://localhost:${port}/actuator/health" > /dev/null 2>&1; do sleep 2; done
+    echo "${port} ready"
+  done
+
+elif [ "${START_MODE}" = "nohup" ]; then
   set -a && source .env && set +a && export SPRING_PROFILES_ACTIVE=local && export MALLOC_ARENA_MAX=1
 
   # Use .env DB_URL directly — VS3 / MinIO pipeline test runs against whichever DB
@@ -323,16 +346,16 @@ docker exec maple-airflow-scheduler airflow users create \
 # to localhost returns HTTP 200 → DAG succeeds.
 docker exec maple-airflow-scheduler airflow connections delete external_api 2>/dev/null
 docker exec maple-airflow-scheduler airflow connections add external_api \
-  --conn-type http --conn-host localhost --conn-port 8081 --conn-schema http
+  --conn-type http --conn-host external-api --conn-port 8081 --conn-schema http
 docker exec maple-airflow-scheduler airflow connections delete calculator 2>/dev/null
 docker exec maple-airflow-scheduler airflow connections add calculator \
-  --conn-type http --conn-host localhost --conn-port 8082 --conn-schema http
+  --conn-type http --conn-host calculator --conn-port 8082 --conn-schema http
 # cleanup connection — REQUIRED for daily_cleanup_pipeline's HttpSensor.
 # Without it, the sensor pokes fail and the entire DAG marks failed
 # (all 3 cleanup tasks go upstream_failed). Verified 2026-06-17.
 docker exec maple-airflow-scheduler airflow connections delete cleanup 2>/dev/null
 docker exec maple-airflow-scheduler airflow connections add cleanup \
-  --conn-type http --conn-host localhost --conn-port 8084 --conn-schema http
+  --conn-type http --conn-host cleanup --conn-port 8084 --conn-schema http
 
 # Unpause all DAGs
 docker exec maple-airflow-scheduler airflow dags unpause daily_collection_pipeline
@@ -456,35 +479,35 @@ if lc: print(f'Last completed: {lc[\"runId\"][:8]}... phase={lc[\"phase\"]}')
 
 Phase 1: Ranking fetch (~4 min)
 ```bash
-grep "RankingFetch.*progress\|RankingFetch.*complete" logs/pipeline-test-external-api.log | tail -5
+grep "RankingFetch.*progress\|RankingFetch.*complete" <(docker logs maple-external-api 2>&1) | tail -5
 ```
 
 Phase 2: OCID lookup (~25 min)
 ```bash
-grep "OCID lookup.*elapsed\|OCID lookup.*complete" logs/pipeline-test-external-api.log | tail -3
+grep "OCID lookup.*elapsed\|OCID lookup.*complete" <(docker logs maple-external-api 2>&1) | tail -3
 # Typical: rate=400files/s
 ```
 
 Phase 3: Character basic fetch (~40 min)
 ```bash
-grep "character-basic.*elapsed\|character-basic.*run-completed" logs/pipeline-test-external-api.log | tail -3
+grep "character-basic.*elapsed\|character-basic.*run-completed" <(docker logs maple-external-api 2>&1) | tail -3
 # Typical: rate=250files/s
 ```
 
 Phase 4: Item equipment fetch (~35 min)
 ```bash
-grep "item-equipment.*elapsed\|item-equipment.*run-completed" logs/pipeline-test-external-api.log | tail -3
+grep "item-equipment.*elapsed\|item-equipment.*run-completed" <(docker logs maple-external-api 2>&1) | tail -3
 # Typical: rate=150files/s
 ```
 
 Calculator processing (~5 min)
 ```bash
-grep "processed chunk" logs/pipeline-test-calculator.log | tail -5
+grep "processed chunk" <(docker logs maple-calculator 2>&1) | tail -5
 ```
 
 Synchronizer sync (concurrent with phases 3-4)
 ```bash
-grep "BasicSync.*chunk processed\|upsert done" logs/pipeline-test-synchronizer.log | tail -5
+grep "BasicSync.*chunk processed\|upsert done" <(docker logs maple-synchronizer 2>&1) | tail -5
 ```
 
 ### 7. Prometheus metrics & throughput monitoring
@@ -531,7 +554,7 @@ curl -s http://localhost:8083/actuator/prometheus | grep synchronizer_pre_upsert
 **External API throughput (from logs):**
 ```bash
 # Per-phase rate from scheduler logs
-grep "rate=" logs/pipeline-test-external-api.log | tail -5
+grep "rate=" <(docker logs maple-external-api 2>&1) | tail -5
 ```
 
 **DB row counts (local PostgreSQL):**
@@ -603,7 +626,7 @@ curl -s http://localhost:8081/api/internal/run-status | python3 -m json.tool
 **Check logs for errors:**
 ```bash
 for module in external-api calculator synchronizer; do
-  errors=$(grep "ERROR" logs/pipeline-test-${module}.log | tail -5)
+  errors=$(grep "ERROR" <(docker logs maple-${module} 2>&1) | tail -5)
   if [ -n "$errors" ]; then
     echo "=== ERRORS in ${module} ==="
     echo "$errors"
@@ -623,7 +646,7 @@ done
 
 # Storage-error scan
 for module in external-api calculator synchronizer; do
-  errs=$(grep -E "ObjectStorage|MinIO|S3" logs/pipeline-test-${module}.log 2>/dev/null | grep -i "ERROR" | tail -5)
+  errs=$(grep -E "ObjectStorage|MinIO|S3" <(docker logs maple-${module} 2>&1) 2>/dev/null | grep -i "ERROR" | tail -5)
   [ -z "${errs}" ] || { echo "ObjectStorage ERROR in ${module}: ${errs}"; exit 5; }
 done
 ```
@@ -758,6 +781,12 @@ esac
 # -sTCP:LISTEN: see step 1 comment. Bare `lsof -ti:PORT` would also kill
 # any client process connected to that port.
 if [ "${START_MODE:-nohup}" = "nohup" ]; then
+
+# Stop Spring Boot services
+if [ "${START_MODE:-docker}" = "docker" ]; then
+  docker compose -f docker-compose.yml -f docker-compose.services.yml stop \
+    external-api calculator synchronizer cleanup
+elif [ "${START_MODE:-docker}" = "nohup" ]; then
   for port in 8081 8082 8083 8084; do
     kill $(lsof -ti:$port -sTCP:LISTEN) 2>/dev/null
   done

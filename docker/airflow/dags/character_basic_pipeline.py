@@ -12,4 +12,5 @@ from phase_pipeline_factory import make_phase_dag
 character_basic_dag = make_phase_dag(
     phase="CHARACTER_BASIC",
     dag_id="character_basic_pipeline",
+    upstream_phase="OCID_LOOKUP",
 )

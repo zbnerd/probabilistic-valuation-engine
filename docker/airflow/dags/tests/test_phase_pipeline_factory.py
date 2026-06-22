@@ -7,6 +7,7 @@ from airflow.exceptions import AirflowException
 from phase_pipeline_factory import (
     _make_count_sensor_runtime,
     _PHASE_TO_ENDPOINT,
+    _wait_phase_terminal_fn,
     _wait_terminal_fn,
     get_external_api_base,
     make_branch_on_mode_for_phase,
@@ -15,6 +16,7 @@ from phase_pipeline_factory import (
     make_trigger_loop_task,
     make_trigger_once_task,
     make_wait_loop_stopped_sensor,
+    make_wait_phase_terminal_sensor,
     parse_mode,
 )
 
@@ -556,3 +558,154 @@ class TestMakePhaseDag:
         stop_loop = dag.get_task("stop_loop_item_equipment")
         assert count_sensor.task_id in trigger_loop.downstream_task_ids
         assert stop_loop.task_id in count_sensor.downstream_task_ids
+
+    def test_upstream_phase_adds_wait_sensor(self):
+        """When upstream_phase is set, wait_upstream_terminal_<phase> is wired
+        between check_external_api and branch_on_mode."""
+        dag = make_phase_dag(
+            "CHARACTER_BASIC",
+            "character_basic_pipeline",
+            upstream_phase="OCID_LOOKUP",
+        )
+        ids = {t.task_id for t in dag.tasks}
+        assert "wait_upstream_terminal_ocid_lookup" in ids
+
+        check = dag.get_task("check_external_api")
+        wait_upstream = dag.get_task("wait_upstream_terminal_ocid_lookup")
+        branch = dag.get_task("branch_on_mode")
+        assert "wait_upstream_terminal_ocid_lookup" in check.downstream_task_ids
+        assert "branch_on_mode" in wait_upstream.downstream_task_ids
+
+    def test_no_upstream_phase_no_wait_sensor(self):
+        """When upstream_phase is None (default), no upstream wait sensor."""
+        dag = make_phase_dag("CHARACTER_BASIC", "character_basic_pipeline")
+        ids = {t.task_id for t in dag.tasks}
+        assert not any(t.startswith("wait_upstream_") for t in ids)
+
+
+class TestWaitPhaseTerminalFn:
+    """Sensor that polls /run-status for upstream phase progression."""
+
+    @staticmethod
+    def _patch_api_base():
+        return patch(
+            "phase_pipeline_factory.get_external_api_base",
+            return_value="http://test:8081",
+        )
+
+    def _get_callable(self, phase):
+        return _wait_phase_terminal_fn(phase)
+
+    def test_returns_true_when_current_phase_advanced_past(self):
+        """If current.phase is past upstream, return True."""
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get, \
+             patch("phase_pipeline_factory.time") as mock_time:
+            mock_time.monotonic.return_value = 0
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "current": {
+                    "runId": "20260622-120000-x",
+                    "phase": "CHARACTER_BASIC",
+                    "terminal": False,
+                }
+            }
+            mock_get.return_value = mock_resp
+            result = self._get_callable("OCID_LOOKUP")()
+        assert result is True
+
+    def test_returns_true_when_current_completed(self):
+        """COMPLETED is past every phase."""
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get, \
+             patch("phase_pipeline_factory.time") as mock_time:
+            mock_time.monotonic.return_value = 0
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "current": {
+                    "runId": "x",
+                    "phase": "COMPLETED",
+                    "terminal": True,
+                }
+            }
+            mock_get.return_value = mock_resp
+            result = self._get_callable("ITEM_EQUIPMENT")()
+        assert result is True
+
+    def test_returns_false_when_current_at_upstream(self):
+        """current.phase == upstream → not yet terminal → reschedule (False)."""
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get, \
+             patch("phase_pipeline_factory.time") as mock_time:
+            mock_time.monotonic.return_value = 0
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "current": {
+                    "runId": "x",
+                    "phase": "OCID_LOOKUP",
+                    "terminal": False,
+                }
+            }
+            mock_get.return_value = mock_resp
+            result = self._get_callable("OCID_LOOKUP")()
+        assert result is False
+
+    def test_returns_false_when_no_active_run(self):
+        """No current run → upstream not terminal yet."""
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get, \
+             patch("phase_pipeline_factory.time") as mock_time:
+            mock_time.monotonic.return_value = 0
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {"current": None}
+            mock_get.return_value = mock_resp
+            result = self._get_callable("OCID_LOOKUP")()
+        assert result is False
+
+    def test_raises_when_current_failed(self):
+        """If active run is FAILED, raise RuntimeError."""
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get, \
+             patch("phase_pipeline_factory.time") as mock_time:
+            mock_time.monotonic.return_value = 0
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "current": {
+                    "runId": "x",
+                    "phase": "FAILED",
+                    "errorMessage": "boom",
+                }
+            }
+            mock_get.return_value = mock_resp
+            with pytest.raises(RuntimeError, match="failed before reaching"):
+                self._get_callable("OCID_LOOKUP")()
+
+    def test_raises_on_transient_timeout(self):
+        """If /run-status is unreachable for 4h, raise TimeoutError."""
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get, \
+             patch("phase_pipeline_factory.time") as mock_time:
+            mock_time.monotonic.side_effect = [0, 4 * 60 * 60 + 1]
+            mock_get.side_effect = Exception("connection refused")
+            with pytest.raises(TimeoutError):
+                self._get_callable("OCID_LOOKUP")()
+
+    def test_rejects_unknown_phase(self):
+        with pytest.raises(ValueError, match="Unknown phase"):
+            _wait_phase_terminal_fn("NOT_A_PHASE")
+
+
+class TestMakeWaitPhaseTerminalSensor:
+    """Factory for the public wait_upstream_terminal sensor."""
+
+    def test_task_id_format(self):
+        op = make_wait_phase_terminal_sensor("OCID_LOOKUP")
+        assert op.task_id == "wait_upstream_terminal_ocid_lookup"
+        assert op.mode == "reschedule"
+        assert op.timeout == 4 * 60 * 60
+        assert op.poke_interval == 60

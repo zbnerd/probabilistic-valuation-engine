@@ -449,17 +449,130 @@ def _wait_terminal_fn(phase: str):
     return _wait
 
 
-def make_phase_dag(phase: str, dag_id: str) -> DAG:
+_PHASE_ORDER = (
+    "RANKING_FETCH",
+    "OCID_LOOKUP",
+    "CHARACTER_BASIC",
+    "ITEM_EQUIPMENT",
+    "COMPLETED",
+)
+
+
+def _wait_phase_terminal_fn(phase: str):
+    """Inner: poll /run-status until ext-api has progressed PAST `phase`.
+
+    Uses phase-progression gating: waits for `current.phase` to be any
+    phase strictly after `phase` (or `COMPLETED`). When ext-api advances
+    from OCID_LOOKUP to CHARACTER_BASIC, the upstream phase OCID_LOOKUP
+    is by definition terminal — phase transitions only happen on terminal.
+
+    Raises RuntimeError if the active run's phase equals `phase` and the
+    slot is FAILED. TimeoutError after 4h.
+
+    No xcom or runId correlation needed — phase ordering is sufficient
+    because ext-api enforces strict sequential phase transitions.
+    """
+    if phase not in _PHASE_ORDER:
+        raise ValueError(f"Unknown phase {phase!r}")
+    target_idx = _PHASE_ORDER.index(phase)
+
+    def _wait(**ctx):
+        base = get_external_api_base()
+        deadline = time.monotonic() + 4 * 60 * 60  # 4h
+        while True:
+            try:
+                resp = requests.get(
+                    f"{base}/api/internal/run-status", timeout=10
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"Upstream phase {phase} status unreachable for 4h"
+                    )
+                time.sleep(30)
+                continue
+
+            current = data.get("current") or {}
+            current_phase = current.get("phase")
+            current_run_id = current.get("runId")
+
+            # No active run yet → not progressed past `phase`
+            if not current_run_id or not current_phase:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"Upstream phase {phase} did not reach terminal within 4h"
+                    )
+                time.sleep(30)
+                continue
+
+            if current_phase == "FAILED":
+                raise RuntimeError(
+                    f"Active run failed before reaching phase {phase}: "
+                    f"{current.get('errorMessage', 'unknown')}"
+                )
+
+            # current_phase strictly after `phase` in _PHASE_ORDER → upstream
+            # is terminal (phase transitions only happen on terminal).
+            current_idx = (
+                _PHASE_ORDER.index(current_phase)
+                if current_phase in _PHASE_ORDER
+                else -1
+            )
+            if current_idx > target_idx:
+                return True
+
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Upstream phase {phase} did not reach terminal within 4h "
+                    f"(current.phase={current_phase})"
+                )
+            time.sleep(30)
+
+    return _wait
+
+
+def make_wait_phase_terminal_sensor(phase: str) -> PythonSensor:
+    """Sensor that returns True when ext-api's active run has progressed
+    past `phase` (phase ordering is the gate).
+
+    Raises RuntimeError if the active run is FAILED. TimeoutError after 4h.
+    No xcom dependency.
+    """
+    return PythonSensor(
+        task_id=f"wait_upstream_terminal_{phase.lower()}",
+        python_callable=_wait_phase_terminal_fn(phase),
+        mode="reschedule",
+        poke_interval=60,
+        timeout=4 * 60 * 60,
+    )
+
+
+def make_phase_dag(
+    phase: str,
+    dag_id: str,
+    upstream_phase: str | None = None,
+) -> DAG:
     """Build a phase DAG with mode=once / mode=count / mode=infinite branches.
 
     Args:
         phase: PipelinePhase name (CHARACTER_BASIC or ITEM_EQUIPMENT).
         dag_id: Airflow DAG id.
+        upstream_phase: If set, all branches wait for this phase to reach
+            terminal in /run-status before proceeding. Required when the
+            active ext-api run enforces upstream-phase order (rejects
+            MISSING_UPSTREAM 400 otherwise). Set to None for standalone
+            triggers where the prior phase is already complete or not
+            applicable.
 
     Mode routing (via make_branch_on_mode_for_phase):
       - mode=once     → trigger_<phase> >> wait_terminal_<phase>
       - mode=count    → trigger_loop_<phase> >> count_sensor >> stop_loop
       - mode=infinite → trigger_loop_infinite_<phase> (leaf; DAG ends here)
+
+    Wiring with upstream_phase:
+      check_external_api >> wait_upstream_terminal_<phase> >> branch >> ...
     """
     default_args = {
         "owner": "maple-pipeline",
@@ -485,6 +598,15 @@ def make_phase_dag(phase: str, dag_id: str) -> DAG:
             poke_interval=30,
             timeout=120,
         )
+
+        # Optional upstream-phase gate (gates all 3 branches below).
+        # Sensor polls /run-status for the prior phase's terminal entry
+        # without requiring xcom runId correlation.
+        pre_branch_tail = check_external_api
+        if upstream_phase is not None:
+            wait_upstream = make_wait_phase_terminal_sensor(upstream_phase)
+            check_external_api >> wait_upstream
+            pre_branch_tail = wait_upstream
 
         branch = make_branch_on_mode_for_phase(phase)
 
@@ -513,7 +635,7 @@ def make_phase_dag(phase: str, dag_id: str) -> DAG:
         )
 
         # Wiring
-        check_external_api >> branch
+        pre_branch_tail >> branch
         branch >> trigger_once >> wait_terminal
         branch >> trigger_loop_count >> count_sensor >> stop_loop
         branch >> trigger_loop_infinite

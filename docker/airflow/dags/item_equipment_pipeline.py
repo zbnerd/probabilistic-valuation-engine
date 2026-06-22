@@ -12,4 +12,5 @@ from phase_pipeline_factory import make_phase_dag
 item_equipment_dag = make_phase_dag(
     phase="ITEM_EQUIPMENT",
     dag_id="item_equipment_pipeline",
+    upstream_phase="CHARACTER_BASIC",
 )

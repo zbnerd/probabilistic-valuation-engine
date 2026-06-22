@@ -12,7 +12,6 @@ class MinioHealthIndicatorTest {
     private fun props() = MinioProperties(
         endpoint = "http://minio:9000",
         accessKey = "k",
-        secretKey = "s",
         bucket = "b",
     )
 

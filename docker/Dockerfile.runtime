@@ -2,14 +2,26 @@ FROM eclipse-temurin:21-jre-alpine
 
 RUN addgroup -S maple && adduser -S maple -G maple
 
-ARG JAR_PATH=module-app/build/libs/module-app-0.0.1-SNAPSHOT.jar
-COPY ${JAR_PATH} /app.jar
+# Build-time ARGs: override per service.
+ARG MODULE_NAME=external-api
+ARG JAR_PATH=module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar
 
+LABEL module="${MODULE_NAME}"
+COPY --chown=root:root --chmod=0444 ${JAR_PATH} /app.jar
+
+# Default JVM args; compose environment: JAVA_OPTS overrides per service.
 ENV JAVA_OPTS="-Xms512m -Xmx1g"
-ENV SPRING_PROFILES_ACTIVE=prod
+ENV SPRING_PROFILES_ACTIVE=local
+ENV MODULE_NAME=${MODULE_NAME}
+
+# StorageConfig reads the SA secret key directly from this file
+# (see StorageConfig#readSecretKey). The compose overlay mounts the
+# file at /run/secrets/sa-<module> via the secrets: directive.
+ENV MINIO_SECRET_KEY_FILE=/run/secrets/sa-${MODULE_NAME}
 
 USER maple
 WORKDIR /app
 
 EXPOSE 8080
-ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar /app.jar"]
+
+ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS} -jar /app.jar"]

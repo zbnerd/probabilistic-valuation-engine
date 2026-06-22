@@ -13,7 +13,7 @@ spring:
       - org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
       - org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration
   datasource:
-    url: jdbc:postgresql://localhost:5432/maple_expectation?user=maple&password=${DB_ROOT_PASSWORD}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/maple_expectation}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 3
@@ -98,6 +98,7 @@ storage:
     endpoint: ${MINIO_ENDPOINT:http://minio:9000}
     region: ${MINIO_REGION:us-east-1}
     access-key: ${MINIO_ACCESS_KEY:}
-    secret-key: ${MINIO_SECRET_KEY:}
+    # secret-key is read directly from MINIO_SECRET_KEY_FILE by StorageConfig;
+    # do not bind via env var to keep the cleartext key out of process env.
     bucket: ${MINIO_BUCKET:maple-expectation}
     path-style-access: true

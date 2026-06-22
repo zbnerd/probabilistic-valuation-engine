@@ -81,3 +81,24 @@ This is a single-context repo using root-level domain docs and `docs/01_ADR/`. S
 | 이벤트 스키마 | [docs/12_Events/](docs/12_Events/) |
 | 가드레일 | [docs/16_Guardrails/](docs/16_Guardrails/) |
 | 운영 가이드 | [docs/21_Operations/](docs/21_Operations/) |
+
+## Local bring-up (4 Spring Boot services)
+
+신규 operator 또는 fresh clone 후 4 service 도커화 bring-up:
+
+```bash
+docker compose -f docker-compose.yml up -d minio postgres kafka redis
+docker compose -f docker-compose.yml run --rm minio-bootstrap   # SA secrets -> docker/services/secrets/ + .env files
+./docker/services/build.sh                                        # 4 images build
+docker compose -f docker-compose.yml -f docker-compose.services.yml up -d external-api calculator synchronizer cleanup
+```
+
+Airflow 추가:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d airflow-webserver airflow-scheduler
+```
+
+Pipeline-test (`START_MODE=docker` 기본): `.claude/skills/pipeline-test/SKILL.md` 참조. `START_MODE=nohup` fallback 도 가능 (operator가 `MINIO_ACCESS_KEY` + `MINIO_SECRET_KEY_FILE=$(pwd)/docker/services/secrets/sa-<module>.key` 설정 후 `nohup java -jar`).
+
+Spec: `docs/superpowers/specs/2026-06-22-dockerize-services-design.md`
+Plan: `docs/superpowers/plans/2026-06-22-dockerize-services.md`

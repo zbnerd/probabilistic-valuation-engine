@@ -38,6 +38,14 @@ from per_phase_tasks import (
 log = logging.getLogger(__name__)
 
 
+if "KAFKA_BOOTSTRAP_SERVERS" not in os.environ:
+    raise RuntimeError(
+        "KAFKA_BOOTSTRAP_SERVERS env var is required. "
+        "In docker compose mode it is set automatically to 'kafka:29092'. "
+        "In nohup mode set it to 'localhost:9092' before launching airflow."
+    )
+
+
 def is_health_up(response):
     """HttpSensor response_check: ext-api /actuator/health returns {"status": "UP"}.
 
@@ -323,7 +331,7 @@ def wait_for_item_equipment_cycle(**context):
 
     consumer = KafkaConsumer(
         "synchronizer.chunk.consumed",
-        bootstrap_servers=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+        bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
         auto_offset_reset="latest",
         enable_auto_commit=False,
         group_id=f"airflow-ie-cycle-waiter-{run_id[:8]}",

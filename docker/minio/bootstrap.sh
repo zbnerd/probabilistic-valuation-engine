@@ -64,4 +64,43 @@ for sa in "${!sa_secret_keys[@]}"; do
   mc admin policy attach local "policy-$sa" --user "$sa"
 done
 
+# Persist SA secret keys for the two startup paths:
+#   1. docker compose path: docker/services/secrets/sa-<module>.key
+#      (mounted as /run/secrets/sa-<module> via the services overlay).
+# Persist SA secret keys to docker/services/secrets/sa-<module>.key.
+# This is the single source of truth — both docker compose and the
+# nohup startup path read from the same file. StorageConfig reads the
+# file directly (MINIO_SECRET_KEY_FILE); the nohup path does the same
+# via `source secrets/sa-<module>.key` from the operator's bring-up script.
+#
+# REPO_ROOT defaults to /workspace (the bind-mount path used by the
+# minio-bootstrap compose service). For host-side runs (bash docker/minio/bootstrap.sh),
+# fall back to the script's parent's parent.
+REPO_ROOT="${REPO_ROOT:-/workspace}"
+if [ ! -d "${REPO_ROOT}/docker" ]; then
+  REPO_ROOT="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)"
+fi
+echo "[bootstrap] REPO_ROOT=${REPO_ROOT}"
+
+declare -A SA_TO_MODULE=(
+  [ext-api]=ext-api
+  [calculator]=calculator
+  [synchronizer]=synchronizer
+  [cleanup]=cleanup
+)
+
+mkdir -p "${REPO_ROOT}/docker/services/secrets"
+chmod 700 "${REPO_ROOT}/docker/services/secrets"
+
+for sa in "${!sa_secret_keys[@]}"; do
+  secret="${sa_secret_keys[$sa]}"
+  module="${SA_TO_MODULE[$sa]:-$sa}"
+
+  # Mode 0444 so the container's non-root user (maple, UID 1000) can read
+  # the secret. Compose v3.8 secret mounts preserve the source file's mode.
+  printf '%s' "${secret}" > "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
+  chmod 0444 "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
+  echo "[bootstrap] wrote ${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
+done
+
 echo "[bootstrap] complete"

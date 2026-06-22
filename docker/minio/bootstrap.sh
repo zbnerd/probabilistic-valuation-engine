@@ -64,4 +64,49 @@ for sa in "${!sa_secret_keys[@]}"; do
   mc admin policy attach local "policy-$sa" --user "$sa"
 done
 
+# Persist SA secret keys for the two startup paths:
+#   1. docker compose path: docker/services/secrets/sa-<module>.key
+#      (mounted as /run/secrets/sa-<module> via the services overlay).
+#   2. nohup path: .env.<module> (MINIO_SECRET_KEY line).
+# Both writes are idempotent.
+#
+# REPO_ROOT defaults to /workspace (the bind-mount path used by the
+# minio-bootstrap compose service). For host-side runs (bash docker/minio/bootstrap.sh),
+# fall back to the script's parent's parent.
+REPO_ROOT="${REPO_ROOT:-/workspace}"
+if [ ! -d "${REPO_ROOT}/docker" ]; then
+  REPO_ROOT="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)"
+fi
+echo "[bootstrap] REPO_ROOT=${REPO_ROOT}"
+
+declare -A SA_TO_MODULE=(
+  [ext-api]=ext-api
+  [calculator]=calculator
+  [synchronizer]=synchronizer
+  [cleanup]=cleanup
+)
+
+mkdir -p "${REPO_ROOT}/docker/services/secrets"
+chmod 700 "${REPO_ROOT}/docker/services/secrets"
+
+for sa in "${!sa_secret_keys[@]}"; do
+  secret="${sa_secret_keys[$sa]}"
+  module="${SA_TO_MODULE[$sa]:-$sa}"
+
+  # 1. docker compose secret file (used by services overlay).
+  printf '%s' "${secret}" > "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
+  chmod 600 "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
+  echo "[bootstrap] wrote ${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
+
+  # 2. legacy .env.<module> for nohup path. .env files are gitignored.
+  env_file="${REPO_ROOT}/.env.${module}"
+  if [ -f "${env_file}" ] && grep -q "^MINIO_SECRET_KEY=" "${env_file}" 2>/dev/null; then
+    sed -i.bak "s|^MINIO_SECRET_KEY=.*|MINIO_SECRET_KEY=${secret}|" "${env_file}" && rm -f "${env_file}.bak"
+  else
+    printf 'MINIO_ACCESS_KEY=%s\nMINIO_SECRET_KEY=%s\n' "${module}" "${secret}" >> "${env_file}"
+  fi
+  chmod 600 "${env_file}"
+  echo "[bootstrap] wrote ${env_file}"
+done
+
 echo "[bootstrap] complete"

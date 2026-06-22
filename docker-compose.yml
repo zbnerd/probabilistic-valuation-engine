@@ -180,6 +180,9 @@ services:
       MINIO_ENDPOINT: http://minio:9000
     volumes:
       - ./docker/minio:/scripts:ro
+      # /workspace = repo root, writable so bootstrap.sh can persist SA secrets
+      # to docker/services/secrets/ and .env.<module>. See plan task 8.
+      - ./:/workspace:rw
     entrypoint: /bin/sh /scripts/bootstrap.sh
     restart: "no"
 

@@ -203,6 +203,8 @@ services:
       - ./docker/promtail/config.yml:/etc/promtail/config.yml:ro
       - .:/var/log/app:ro
       - ./data:/var/log/data:ro
+      # Docker socket for docker_sd_configs container-stdout discovery (ADR-733).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - maple-network
     depends_on:
@@ -249,6 +251,8 @@ services:
     image: willfarrell/autoheal:latest
     container_name: maple-autoheal
     restart: always
+    labels:
+      logging: "promtail"
     environment:
       AUTOHEAL_CONTAINER_LABEL: autoheal
       AUTOHEAL_INTERVAL: 5

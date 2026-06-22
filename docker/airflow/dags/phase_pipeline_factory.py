@@ -10,13 +10,16 @@ from __future__ import annotations
 
 import json as _json
 import os
-from datetime import timedelta
+import time
+from datetime import datetime, timedelta
 from typing import Tuple
 
 import requests
+from airflow import DAG
 from airflow.exceptions import AirflowException
 from airflow.hooks.base import BaseHook
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import BranchPythonOperator, PythonOperator
+from airflow.providers.http.sensors.http import HttpSensor
 from airflow.sensors.python import PythonSensor
 from kafka import KafkaConsumer
 
@@ -348,3 +351,159 @@ def make_wait_loop_stopped_sensor(phase: str) -> PythonSensor:
         poke_interval=10,
         timeout=30 * 60,  # 30 minutes
     )
+
+
+def make_branch_on_mode_for_phase(phase: str) -> BranchPythonOperator:
+    """BranchPythonOperator that routes by mode for a specific phase.
+
+    Task_ids returned:
+      - mode=once    → 'trigger_<phase>'
+      - mode=count   → 'trigger_loop_<phase>' (continues into count_sensor + stop_loop)
+      - mode=infinite → 'trigger_loop_infinite_<phase>' (leaf; DAG ends here)
+    """
+    def _branch(**ctx):
+        mode, _ = parse_mode(ctx["dag_run"].conf or {})
+        if mode == "once":
+            return f"trigger_{phase.lower()}"
+        if mode == "infinite":
+            return f"trigger_loop_infinite_{phase.lower()}"
+        return f"trigger_loop_{phase.lower()}"  # mode=count
+
+    return BranchPythonOperator(
+        task_id="branch_on_mode",
+        python_callable=_branch,
+    )
+
+
+def _wait_terminal_fn(phase: str):
+    """Inner: poll /run-status until phase slot reaches terminal state.
+
+    Returns True once terminal. Raises RuntimeError on FAILED, TimeoutError on
+    4h deadline. Ported from per_phase_tasks.make_is_phase_terminal (legacy).
+    """
+    def _wait(**ctx):
+        ti = ctx["ti"]
+        trigger_resp = ti.xcom_pull(task_ids=f"trigger_{phase.lower()}")
+        if isinstance(trigger_resp, str):
+            trigger_resp = _json.loads(trigger_resp)
+        run_id = (trigger_resp or {}).get("runId")
+        if not run_id:
+            raise RuntimeError(
+                f"Sensor for {phase} triggered but no runId xcom'd"
+            )
+
+        run_group_prefix = "-".join(run_id.split("-")[:2]) + "-"
+        base = get_external_api_base()
+        deadline = time.monotonic() + 4 * 60 * 60  # 4h
+
+        while True:
+            try:
+                resp = requests.get(
+                    f"{base}/api/internal/run-status", timeout=10
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception:
+                time.sleep(30)
+                continue
+
+            slot = (
+                (data.get("slots") or {}).get(phase)
+                or (data.get("lastCompletedByPhase") or {}).get(phase)
+            )
+            if not slot or not (
+                slot.get("runId") or ""
+            ).startswith(run_group_prefix):
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"Phase {phase} did not acquire runId {run_id} within 4h"
+                    )
+                time.sleep(30)
+                continue
+
+            if slot.get("phase") == "FAILED":
+                raise RuntimeError(
+                    f"Run {run_group_prefix}* phase {phase} failed: "
+                    f"{slot.get('errorMessage', 'unknown')}"
+                )
+            if slot.get("terminal"):
+                return True
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Phase {phase} did not reach terminal within 4h"
+                )
+            time.sleep(30)
+
+    return _wait
+
+
+def make_phase_dag(phase: str, dag_id: str) -> DAG:
+    """Build a phase DAG with mode=once / mode=count / mode=infinite branches.
+
+    Args:
+        phase: PipelinePhase name (CHARACTER_BASIC or ITEM_EQUIPMENT).
+        dag_id: Airflow DAG id.
+
+    Mode routing (via make_branch_on_mode_for_phase):
+      - mode=once     → trigger_<phase> >> wait_terminal_<phase>
+      - mode=count    → trigger_loop_<phase> >> count_sensor >> stop_loop
+      - mode=infinite → trigger_loop_infinite_<phase> (leaf; DAG ends here)
+    """
+    default_args = {
+        "owner": "maple-pipeline",
+        "retries": 0,
+    }
+
+    dag = DAG(
+        dag_id=dag_id,
+        default_args=default_args,
+        start_date=datetime(2026, 5, 29),
+        schedule=None,
+        catchup=False,
+        tags=["pipeline", "phase", phase.lower().replace("_", "-")],
+    )
+
+    with dag:
+        check_external_api = HttpSensor(
+            task_id="check_external_api",
+            http_conn_id="external_api",
+            endpoint="actuator/health",
+            request_params={},
+            response_check=lambda r: r.status_code == 200,
+            poke_interval=30,
+            timeout=120,
+        )
+
+        branch = make_branch_on_mode_for_phase(phase)
+
+        # once branch
+        trigger_once = make_trigger_once_task(phase)
+        wait_terminal = PythonSensor(
+            task_id=f"wait_terminal_{phase.lower()}",
+            python_callable=_wait_terminal_fn(phase),
+            mode="reschedule",
+            poke_interval=60,
+            timeout=4 * 60 * 60,
+        )
+
+        # count branch: trigger_loop → count_sensor (runtime count from conf) → stop_loop
+        trigger_loop_count = make_trigger_loop_task(phase)
+        count_sensor = _make_count_sensor_runtime(phase)
+        stop_loop = make_stop_loop_task(phase)
+
+        # infinite branch: trigger_loop_infinite (leaf; DAG succeeds here)
+        trigger_loop_infinite = PythonOperator(
+            task_id=f"trigger_loop_infinite_{phase.lower()}",
+            python_callable=_trigger_loop_fn(phase),
+            retries=0,
+            execution_timeout=timedelta(seconds=60),
+            do_xcom_push=True,
+        )
+
+        # Wiring
+        check_external_api >> branch
+        branch >> trigger_once >> wait_terminal
+        branch >> trigger_loop_count >> count_sensor >> stop_loop
+        branch >> trigger_loop_infinite
+
+    return dag

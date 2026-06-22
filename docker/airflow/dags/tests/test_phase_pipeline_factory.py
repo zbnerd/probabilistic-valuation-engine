@@ -7,7 +7,10 @@ from airflow.exceptions import AirflowException
 from phase_pipeline_factory import (
     _make_count_sensor_runtime,
     _PHASE_TO_ENDPOINT,
+    _wait_terminal_fn,
     get_external_api_base,
+    make_branch_on_mode_for_phase,
+    make_phase_dag,
     make_stop_loop_task,
     make_trigger_loop_task,
     make_trigger_once_task,
@@ -376,3 +379,120 @@ class TestMakeWaitLoopStoppedSensor:
         assert op.timeout == 30 * 60
         assert op.mode == "reschedule"
         assert op.poke_interval == 10
+
+
+class TestMakeBranchOnModeForPhase:
+    def _branch_fn(self, phase):
+        op = make_branch_on_mode_for_phase(phase)
+        return op.python_callable
+
+    def test_mode_once_routes_to_trigger_character_basic(self):
+        fn = self._branch_fn("CHARACTER_BASIC")
+        ctx = {"dag_run": MagicMock(conf={"mode": "once"})}
+        assert fn(**ctx) == "trigger_character_basic"
+
+    def test_mode_count_routes_to_trigger_loop(self):
+        fn = self._branch_fn("ITEM_EQUIPMENT")
+        ctx = {"dag_run": MagicMock(conf={"mode": "count", "count": 5})}
+        assert fn(**ctx) == "trigger_loop_item_equipment"
+
+    def test_mode_infinite_routes_to_trigger_loop_infinite(self):
+        """mode=infinite must route to a separate leaf task_id so count_sensor
+        does not run when count is not specified."""
+        fn = self._branch_fn("ITEM_EQUIPMENT")
+        ctx = {"dag_run": MagicMock(conf={"mode": "infinite"})}
+        assert fn(**ctx) == "trigger_loop_infinite_item_equipment"
+
+    def test_invalid_conf_raises(self):
+        fn = self._branch_fn("CHARACTER_BASIC")
+        ctx = {"dag_run": MagicMock(conf={})}
+        with pytest.raises(AirflowException):
+            fn(**ctx)
+
+
+class TestWaitTerminalFn:
+    def test_returns_true_when_terminal(self):
+        with patch("phase_pipeline_factory.requests.get") as mock_get, \
+             patch("phase_pipeline_factory.time") as mock_time:
+            mock_time.monotonic.return_value = 0
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "slots": {
+                    "CHARACTER_BASIC": {
+                        "runId": "20260622-120000-x",
+                        "phase": "CHARACTER_BASIC",
+                        "terminal": True,
+                    }
+                },
+                "lastCompletedByPhase": {},
+            }
+            mock_get.return_value = mock_resp
+            ti = MagicMock()
+            ti.xcom_pull.return_value = {"runId": "20260622-120000-x"}
+            ctx = {"ti": ti}
+            result = _wait_terminal_fn("CHARACTER_BASIC")(**ctx)
+        assert result is True
+
+    def test_raises_when_failed(self):
+        with patch("phase_pipeline_factory.requests.get") as mock_get, \
+             patch("phase_pipeline_factory.time") as mock_time:
+            mock_time.monotonic.return_value = 0
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "slots": {
+                    "CHARACTER_BASIC": {
+                        "runId": "20260622-120000-x",
+                        "phase": "FAILED",
+                        "terminal": True,
+                        "errorMessage": "boom",
+                    }
+                },
+                "lastCompletedByPhase": {},
+            }
+            mock_get.return_value = mock_resp
+            ti = MagicMock()
+            ti.xcom_pull.return_value = {"runId": "20260622-120000-x"}
+            with pytest.raises(RuntimeError, match="failed"):
+                _wait_terminal_fn("CHARACTER_BASIC")(ti=ti)
+
+
+class TestMakePhaseDag:
+    """Test the DAG object structure."""
+
+    def test_dag_has_expected_task_ids_for_character_basic(self):
+        dag = make_phase_dag("CHARACTER_BASIC", "character_basic_pipeline")
+        ids = {t.task_id for t in dag.tasks}
+        expected = {
+            "check_external_api",
+            "branch_on_mode",
+            "trigger_character_basic",
+            "wait_terminal_character_basic",
+            "trigger_loop_character_basic",
+            "count_sensor_character_basic",
+            "stop_loop_character_basic",
+            "trigger_loop_infinite_character_basic",
+        }
+        assert expected.issubset(ids)
+
+    def test_infinite_branch_is_leaf(self):
+        """trigger_loop_infinite_<phase> must have no downstream tasks."""
+        dag = make_phase_dag(
+            "ITEM_EQUIPMENT", "item_equipment_pipeline"
+        )
+        leaf = dag.get_task("trigger_loop_infinite_item_equipment")
+        # Airflow returns downstream_task_ids as a set; assert it's empty.
+        assert not leaf.downstream_task_ids, (
+            f"infinite branch should be leaf, got downstream={leaf.downstream_task_ids}"
+        )
+
+    def test_count_branch_wires_count_sensor_then_stop_loop(self):
+        dag = make_phase_dag(
+            "ITEM_EQUIPMENT", "item_equipment_pipeline"
+        )
+        trigger_loop = dag.get_task("trigger_loop_item_equipment")
+        count_sensor = dag.get_task("count_sensor_item_equipment")
+        stop_loop = dag.get_task("stop_loop_item_equipment")
+        assert count_sensor.task_id in trigger_loop.downstream_task_ids
+        assert stop_loop.task_id in count_sensor.downstream_task_ids

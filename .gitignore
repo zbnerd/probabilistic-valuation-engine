@@ -55,6 +55,7 @@ docs/agents/
 .env.calculator
 .env.synchronizer
 .env.cleanup
+docker/services/secrets/
 mysql_data/
 /redis_data/
 /logs/

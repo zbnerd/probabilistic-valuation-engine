@@ -4,6 +4,7 @@ import maple.expectation.common.storage.ObjectInfo
 import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.storage.PutResult
 import java.io.InputStream
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
@@ -16,21 +17,21 @@ import java.util.concurrent.CompletableFuture
  */
 open class StubObjectStorage : ObjectStorage {
 
-    /** If set, [putStreamMultipart] copies the input into this buffer. */
+    /** If set, [putFileAsync] copies the uploaded file's bytes into this buffer. */
     var capturedStream: ByteArray? = null
 
-    /** Override to inject behavior into [putStreamMultipart]. */
-    open fun handlePutStreamMultipart(key: String, input: InputStream): PutResult {
-        val bytes = input.readBytes()
+    /** Override to inject behavior into [putFileAsync]. */
+    open fun handlePutFileAsync(key: String, path: Path): PutResult {
+        val bytes = Files.readAllBytes(path)
         capturedStream = bytes
         return PutResult(key, bytes.size.toLong(), "stub-etag-${UUID.randomUUID()}")
     }
 
-    final override fun putStreamMultipart(
+    final override fun putFileAsync(
         key: String,
-        input: InputStream,
+        path: Path,
     ): CompletableFuture<PutResult> = try {
-        CompletableFuture.completedFuture(handlePutStreamMultipart(key, input))
+        CompletableFuture.completedFuture(handlePutFileAsync(key, path))
     } catch (e: Exception) {
         CompletableFuture.failedFuture(e)
     }
@@ -41,7 +42,10 @@ open class StubObjectStorage : ObjectStorage {
     @Deprecated("Stub default; not exercised by tests.")
     override fun putStream(key: String, input: InputStream): PutResult = throw NotImplementedError()
     override fun putFile(key: String, path: Path): PutResult = throw NotImplementedError()
-    override fun putFileAsync(key: String, path: Path): CompletableFuture<PutResult> = throw NotImplementedError()
+    override fun putStreamMultipart(
+        key: String,
+        input: InputStream,
+    ): CompletableFuture<PutResult> = throw NotImplementedError()
     override fun get(key: String): ByteArray = throw NotImplementedError()
     override fun getStream(key: String): InputStream = throw NotImplementedError()
     override fun delete(key: String) = throw NotImplementedError()

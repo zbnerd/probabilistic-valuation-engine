@@ -4,6 +4,8 @@ services:
   # Prometheus for metrics collection
   prometheus:
     image: prom/prometheus:latest
+    labels:
+      autoheal: "true"
     container_name: maple-prometheus
     restart: always
     # network_mode: host — prometheus reaches Spring Boot modules on the
@@ -32,6 +34,8 @@ services:
   # Replaced: MySQL, MongoDB, Redis Queue
   postgres:
     image: jumski/postgres-17-pgmq:latest
+    labels:
+      autoheal: "true"
     container_name: maple-postgres
     restart: always
     ports:
@@ -56,6 +60,8 @@ services:
   # Grafana for visualization
   grafana:
     image: grafana/grafana:latest
+    labels:
+      autoheal: "true"
     container_name: maple-grafana
     restart: always
     ports:
@@ -82,6 +88,8 @@ services:
   # Kafka (Message Queue)
   kafka:
     image: confluentinc/cp-kafka:latest
+    labels:
+      autoheal: "true"
     container_name: maple-kafka
     restart: always
     ports:
@@ -119,6 +127,8 @@ services:
   # Redis (Cache)
   redis:
     image: redis:7-alpine
+    labels:
+      autoheal: "true"
     container_name: maple-redis
     restart: always
     ports:
@@ -138,6 +148,8 @@ services:
   # Loki — log storage (single-binary, filesystem backend)
   loki:
     image: grafana/loki:2.9.0
+    labels:
+      autoheal: "true"
     container_name: maple-loki
     restart: always
     ports:
@@ -158,6 +170,8 @@ services:
   # Promtail — log shipper, tail module logs → push to Loki
   promtail:
     image: grafana/promtail:2.9.0
+    labels:
+      autoheal: "true"
     container_name: maple-promtail
     restart: always
     command: -config.file=/etc/promtail/config.yml
@@ -180,6 +194,8 @@ services:
   # MinIO object storage (V1 / issue #1216)
   minio:
     image: minio/minio:latest
+    labels:
+      autoheal: "true"
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -197,6 +213,23 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # autoheal — watches Docker health_status events and restarts any
+  # container carrying the `autoheal=true` label that goes unhealthy.
+  # Closes the soft-failure gap (process alive, /health DOWN) that the
+  # restart: always policy and Coolify Sentinel cannot cover. See ADR-731.
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: maple-autoheal
+    restart: always
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 5
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - maple-network
 
   minio-bootstrap:
     image: minio/mc:latest

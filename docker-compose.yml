@@ -30,6 +30,30 @@ services:
       retries: 3
       start_period: 30s
 
+  # cAdvisor — per-container metrics for restart-rate alerting (ADR-733).
+  # Exposes container_start_time_seconds (a gauge that jumps on each restart);
+  # prometheus evaluates ContainerRestartThrashing via changes() on it.
+  # Host port 8086 (container internal 8080) to avoid app-port conflicts.
+  # No healthcheck (observability infra; crash recovery = restart:always).
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: maple-cadvisor
+    restart: always
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    ports:
+      - "8086:8080"
+    labels:
+      logging: "promtail"
+    networks:
+      - maple-network
+
   # PostgreSQL + PGMQ (Primary Database - Issue #589, #590, #591)
   # Replaced: MySQL, MongoDB, Redis Queue
   postgres:
@@ -179,6 +203,8 @@ services:
       - ./docker/promtail/config.yml:/etc/promtail/config.yml:ro
       - .:/var/log/app:ro
       - ./data:/var/log/data:ro
+      # Docker socket for docker_sd_configs container-stdout discovery (ADR-733).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - maple-network
     depends_on:
@@ -225,6 +251,8 @@ services:
     image: willfarrell/autoheal:latest
     container_name: maple-autoheal
     restart: always
+    labels:
+      logging: "promtail"
     environment:
       AUTOHEAL_CONTAINER_LABEL: autoheal
       AUTOHEAL_INTERVAL: 5

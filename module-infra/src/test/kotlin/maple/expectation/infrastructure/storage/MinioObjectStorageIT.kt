@@ -74,7 +74,6 @@ class MinioObjectStorageIT {
             endpoint = endpoint,
             region = region,
             accessKey = accessKey,
-            secretKey = secretKey,
             bucket = bucket,
             pathStyleAccess = true,
         )

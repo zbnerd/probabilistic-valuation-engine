@@ -98,7 +98,7 @@ Airflow 추가:
 docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d airflow-webserver airflow-scheduler
 ```
 
-Pipeline-test (`START_MODE=docker` 기본): `.claude/skills/pipeline-test/SKILL.md` 참조. `START_MODE=nohup` fallback 도 가능 (operator가 `source .env.<module>` 후 `nohup java -jar`).
+Pipeline-test (`START_MODE=docker` 기본): `.claude/skills/pipeline-test/SKILL.md` 참조. `START_MODE=nohup` fallback 도 가능 (operator가 `MINIO_ACCESS_KEY` + `MINIO_SECRET_KEY_FILE=$(pwd)/docker/services/secrets/sa-<module>.key` 설정 후 `nohup java -jar`).
 
 Spec: `docs/superpowers/specs/2026-06-22-dockerize-services-design.md`
 Plan: `docs/superpowers/plans/2026-06-22-dockerize-services.md`

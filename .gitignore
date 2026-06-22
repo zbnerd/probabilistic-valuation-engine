@@ -49,13 +49,14 @@ docs/agents/
 .env.production
 .env.staging
 
-# MinIO per-service-account env files
+# MinIO per-service-account secret files (written by docker/minio/bootstrap.sh).
+# Only ignore the *.key content; the secrets/ directory itself is tracked.
 .env.bootstrap
 .env.ext-api
 .env.calculator
 .env.synchronizer
 .env.cleanup
-docker/services/secrets/
+docker/services/secrets/*.key
 mysql_data/
 /redis_data/
 /logs/

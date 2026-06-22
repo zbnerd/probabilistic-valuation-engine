@@ -7,22 +7,21 @@ ARG MODULE_NAME=external-api
 ARG JAR_PATH=module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar
 
 LABEL module="${MODULE_NAME}"
-COPY ${JAR_PATH} /app.jar
-COPY docker/services/entrypoint-wrapper.sh /entrypoint-wrapper.sh
+COPY --chown=root:root --chmod=0444 ${JAR_PATH} /app.jar
 
 # Default JVM args; compose environment: JAVA_OPTS overrides per service.
 ENV JAVA_OPTS="-Xms512m -Xmx1g"
 ENV SPRING_PROFILES_ACTIVE=local
 ENV MODULE_NAME=${MODULE_NAME}
 
-# Wrapper expects file at /run/secrets/sa-<module>; defaults match if env unset.
+# StorageConfig reads the SA secret key directly from this file
+# (see StorageConfig#readSecretKey). The compose overlay mounts the
+# file at /run/secrets/sa-<module> via the secrets: directive.
 ENV MINIO_SECRET_KEY_FILE=/run/secrets/sa-${MODULE_NAME}
-
-RUN chmod 555 /entrypoint-wrapper.sh
 
 USER maple
 WORKDIR /app
 
 EXPOSE 8080
 
-ENTRYPOINT ["/entrypoint-wrapper.sh"]
+ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS} -jar /app.jar"]

@@ -322,3 +322,110 @@ jobs:
             --rerun-tasks \
             --no-daemon \
             --stacktrace
+
+
+  # ==========================================================================
+  # JOB 5: Docker Compose Smoke (Ephemeral)
+  # ==========================================================================
+  # Plan: docs/superpowers/plans/2026-06-22-dockerize-services.md (post-merge)
+  # Spins up the full docker compose stack (minio + minio-bootstrap + 4 service
+  # images), waits for each /actuator/health to return 200, then tears down.
+  # Validates that Dockerfile.runtime + the services overlay + the inline env
+  # injection in docker-compose.services.yml produce a runnable stack.
+  docker-smoke:
+    name: Docker Compose Smoke
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 20
+    if: github.event_name == 'pull_request'
+
+    env:
+      DB_ROOT_PASSWORD: ci-db-pw
+      MINIO_BUCKET: maple-expectation
+      NEXON_API_KEY: ci-dummy-nexon-key
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      # Build all 4 service jars. --continue so a single failure surfaces
+      # all errors in the same run.
+      - name: Build service jars
+        run: ./gradlew :module-external-api:bootJar :module-calculator:bootJar :module-synchronizer:bootJar :module-cleanup:bootJar -x test --no-daemon
+
+      # Build 4 docker images with :dev + :sha-<7char> tags.
+      - name: Build service images
+        run: ./docker/services/build.sh
+
+      - name: Generate ephemeral SA keys
+        id: gen-keys
+        run: |
+          echo "SA_EXT_API_SECRET_KEY=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
+          echo "SA_CALCULATOR_SECRET_KEY=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
+          echo "SA_SYNCHRONIZER_SECRET_KEY=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
+          echo "SA_CLEANUP_SECRET_KEY=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
+
+      # Write a transient .env for the minio-bootstrap service to consume.
+      # Compose reads .env automatically; this avoids committing secrets.
+      - name: Write .env.bootstrap for compose
+        env:
+          SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}
+          SA_CALCULATOR_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CALCULATOR_SECRET_KEY }}
+          SA_SYNCHRONIZER_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_SYNCHRONIZER_SECRET_KEY }}
+          SA_CLEANUP_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CLEANUP_SECRET_KEY }}
+        run: |
+          cat > .env.bootstrap <<EOF
+          MINIO_ENDPOINT=http://minio:9000
+          MINIO_ROOT_USER=minioadmin
+          MINIO_ROOT_PASSWORD=minioadmin
+          SA_EXT_API_SECRET_KEY=${SA_EXT_API_SECRET_KEY}
+          SA_CALCULATOR_SECRET_KEY=${SA_CALCULATOR_SECRET_KEY}
+          SA_SYNCHRONIZER_SECRET_KEY=${SA_SYNCHRONIZER_SECRET_KEY}
+          SA_CLEANUP_SECRET_KEY=${SA_CLEANUP_SECRET_KEY}
+          EOF
+
+      - name: Bring up full stack
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
+          echo "=== stack started, waiting for services ==="
+
+      # Probe each service's /actuator/health with a 2-minute budget per
+      # service. The first request to a Spring Boot app is slow (JIT, cache
+      # warmup) so we retry on 503 until steady-state 200.
+      - name: Wait for /actuator/health
+        run: |
+          set +e
+          for port in 8081 8082 8083 8084; do
+            echo "=== probing localhost:${port}/actuator/health ==="
+            for i in $(seq 1 60); do
+              code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${port}/actuator/health" || echo 000)
+              if [ "$code" = "200" ]; then
+                echo "  -> 200 after ${i}s"
+                break
+              fi
+              sleep 2
+            done
+            if [ "$code" != "200" ]; then
+              echo "ERROR: localhost:${port}/actuator/health did not return 200 (last code=${code})"
+              docker compose -f docker-compose.yml -f docker-compose.services.yml ps
+              docker compose -f docker-compose.yml -f docker-compose.services.yml logs --no-color --tail=100
+              exit 1
+            fi
+          done
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.services.yml down -v --remove-orphans || true
+
+      - name: Clean .env.bootstrap
+        if: always()
+        run: rm -f .env.bootstrap || true

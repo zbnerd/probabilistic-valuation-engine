@@ -1,10 +1,16 @@
 # docker-compose.services.yml
 # Overlay for the 4 Spring Boot services. Use with docker-compose.yml:
 #   docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
-# Per-service MinIO SA secret lives in docker/services/secrets/sa-<module>.key
-# (mounted as /run/secrets/sa-<module>; the entrypoint wrapper reads it into
-# MINIO_SECRET_KEY env var). The SA name (MINIO_ACCESS_KEY=<sa>) is a public
-# identifier, not a credential, and is set directly in environment:.
+#
+# Configuration sources (single source of truth):
+#   - MinIO SA secret: docker/services/secrets/sa-<module>.key, mounted at
+#     /run/secrets/sa-<module>. StorageConfig reads it directly via
+#     MINIO_SECRET_KEY_FILE — no env var, no env_file.
+#   - DB_URL: container-internal JDBC URL below. Set in environment: so the
+#     nohup path (which sources .env's DB_URL=localhost URL) stays decoupled.
+#   - NEXON_API_KEY: interpolated from operator's root .env at compose time.
+#     Required only by external-api.
+#   - KAFKA_BOOTSTRAP_SERVERS / SPRING_PROFILES_ACTIVE: compose-internal.
 
 services:
   external-api:
@@ -16,14 +22,16 @@ services:
     environment:
       JAVA_OPTS: "-Xms512m -Xmx2g"
       SERVER_PORT: 8081
+      DB_URL: "jdbc:postgresql://postgres:5432/maple_expectation?user=maple&password=${DB_ROOT_PASSWORD}"
+      NEXON_API_KEY: ${NEXON_API_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_PROFILES_ACTIVE: local
       MINIO_ENDPOINT: http://minio:9000
       MINIO_BUCKET: ${MINIO_BUCKET:-maple-expectation}
       MINIO_REGION: us-east-1
       STORAGE_BACKEND: minio
       MINIO_ACCESS_KEY: ext-api
       MINIO_SECRET_KEY_FILE: /run/secrets/sa-ext-api
-    env_file:
-      - docker/services/env/external-api.env
     secrets:
       - sa-ext-api
     networks: [maple-network]
@@ -41,14 +49,15 @@ services:
     environment:
       JAVA_OPTS: "-Xms512m -Xmx1g"
       SERVER_PORT: 8082
+      DB_URL: "jdbc:postgresql://postgres:5432/maple_expectation?user=maple&password=${DB_ROOT_PASSWORD}"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_PROFILES_ACTIVE: local
       MINIO_ENDPOINT: http://minio:9000
       MINIO_BUCKET: ${MINIO_BUCKET:-maple-expectation}
       MINIO_REGION: us-east-1
       STORAGE_BACKEND: minio
       MINIO_ACCESS_KEY: calculator
       MINIO_SECRET_KEY_FILE: /run/secrets/sa-calculator
-    env_file:
-      - docker/services/env/calculator.env
     secrets:
       - sa-calculator
     networks: [maple-network]
@@ -66,6 +75,9 @@ services:
     environment:
       JAVA_OPTS: "-Xms512m -Xmx1g"
       SERVER_PORT: 8083
+      DB_URL: "jdbc:postgresql://postgres:5432/maple_expectation?user=maple&password=${DB_ROOT_PASSWORD}"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_PROFILES_ACTIVE: local
       MINIO_ENDPOINT: http://minio:9000
       MINIO_BUCKET: ${MINIO_BUCKET:-maple-expectation}
       MINIO_REGION: us-east-1
@@ -74,8 +86,6 @@ services:
       MINIO_SECRET_KEY_FILE: /run/secrets/sa-synchronizer
       REDIS_HOST: redis
       REDIS_PORT: 6379
-    env_file:
-      - docker/services/env/synchronizer.env
     secrets:
       - sa-synchronizer
     networks: [maple-network]
@@ -94,14 +104,15 @@ services:
     environment:
       JAVA_OPTS: "-Xms512m -Xmx1g"
       SERVER_PORT: 8084
+      DB_URL: "jdbc:postgresql://postgres:5432/maple_expectation?user=maple&password=${DB_ROOT_PASSWORD}"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_PROFILES_ACTIVE: local
       MINIO_ENDPOINT: http://minio:9000
       MINIO_BUCKET: ${MINIO_BUCKET:-maple-expectation}
       MINIO_REGION: us-east-1
       STORAGE_BACKEND: minio
       MINIO_ACCESS_KEY: cleanup
       MINIO_SECRET_KEY_FILE: /run/secrets/sa-cleanup
-    env_file:
-      - docker/services/env/cleanup.env
     secrets:
       - sa-cleanup
     networks: [maple-network]

@@ -53,8 +53,8 @@ Airflow (Control Plane)          Spring Boot Services (Data Plane)
 
 The skill supports two ways to start the Spring Boot modules:
 
-- **`docker` (default)**: `docker compose -f docker-compose.yml -f docker-compose.services.yml up -d`. Services run as containers on `maple-network`. Per-service MinIO SA bound via Docker secrets (file mount) + `MINIO_SECRET_KEY` env via entrypoint wrapper. Lowest foot-gun surface.
-- **`nohup`**: spawns `java -jar` directly via `nohup`. Operator runs `source .env.<module>` per port to set `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`. Used when Docker is unavailable or for ad-hoc debugging.
+- **`docker` (default)**: `docker compose -f docker-compose.yml -f docker-compose.services.yml up -d`. Services run as containers on `maple-network`. Per-service MinIO SA is mounted as `/run/secrets/sa-<module>` and `StorageConfig` reads it directly via `MINIO_SECRET_KEY_FILE` (no env var, no `entrypoint-wrapper.sh`). Lowest foot-gun surface.
+- **`nohup`**: spawns `java -jar` directly via `nohup`. Operator sets `MINIO_ACCESS_KEY` + `MINIO_SECRET_KEY_FILE` (pointing at `docker/services/secrets/sa-<module>.key`) per launch. Used when Docker is unavailable or for ad-hoc debugging.
 - **`systemd`**: uses the pre-installed `maple-{module}.service` units. Modules run as `maple` user, log to `/var/log/maple/`. Best for persistent / production-like environments.
 
 Set `START_MODE=systemd` to switch. Default is `docker`. The systemd units assume a previous `scripts/install-systemd-units.sh` run; see `scripts/systemd/` for the unit files.
@@ -149,15 +149,19 @@ elif [ "${START_MODE}" = "nohup" ]; then
   # .env points at (typically the dev cloud DB for shared MinIO validation).
   # No local PostgreSQL override.
 
-  # Per-module MinIO credentials live in .env.<module> files (NOT in .env).
-  # `source .env` only loads STORAGE_BACKEND/MINIO_ENDPOINT/MINIO_BUCKET but
-  # not MINIO_ACCESS_KEY/MINIO_SECRET_KEY, so each module needs its own env
-  # file sourced before launch. Verified 2026-06-19: missing per-module env
-  # → s3Client bean fails with "Access key ID cannot be blank" at boot.
-  source .env.ext-api     # for ext-api
-  source .env.calculator  # for calculator
-  source .env.synchronizer  # for synchronizer
-  source .env.cleanup     # for cleanup
+  # Per-module MinIO SA secret. StorageConfig reads the file directly via
+  # MINIO_SECRET_KEY_FILE (default /run/secrets/sa-<module>, which doesn't
+  # exist on a nohup host — we override per launch below). The SA name
+  # (MINIO_ACCESS_KEY) is a public identifier. Secret files are written by
+  # docker/minio/bootstrap.sh to docker/services/secrets/sa-<module>.key.
+  SECRETS_DIR=docker/services/secrets
+  # Sanity check: bootstrap must have run.
+  for mod in ext-api calculator synchronizer cleanup; do
+    if [ ! -f "${SECRETS_DIR}/sa-${mod}.key" ]; then
+      echo "ERROR: ${SECRETS_DIR}/sa-${mod}.key missing — run docker compose run --rm minio-bootstrap first" >&2
+      exit 1
+    fi
+  done
 
   # RUN_VIA_AIRFLOW=1 disables ext-api run-on-startup so Airflow is the only
   # trigger source. Default (unset) keeps run-on-startup=true (local profile
@@ -173,17 +177,20 @@ elif [ "${START_MODE}" = "nohup" ]; then
   # char-basic + item-equipment phases run concurrently with the OCID lookup
   # cache. Heap benchmark: -Xmx1g → major GC fires every 2.4s, 22% CPU on GC,
   # 102 files/s; -Xmx2g → GC 7%, 150 files/s. Verified 2026-06-16.
-  nohup java -Xms512m -Xmx2g ${RUN_VIA_AIRFLOW_FLAG} -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
+  MINIO_ACCESS_KEY=ext-api MINIO_SECRET_KEY_FILE="${SECRETS_DIR}/sa-ext-api.key" \
+    nohup java -Xms512m -Xmx2g ${RUN_VIA_AIRFLOW_FLAG} -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
   until curl -sf http://localhost:8081/actuator/health > /dev/null 2>&1; do sleep 2; done
   echo "external-api ready on 8081"
 
   # 2) Calculator (8082)
-  nohup java -Xms512m -Xmx1g -jar module-calculator/build/libs/module-calculator-0.0.1-SNAPSHOT.jar > logs/pipeline-test-calculator.log 2>&1 &
+  MINIO_ACCESS_KEY=calculator MINIO_SECRET_KEY_FILE="${SECRETS_DIR}/sa-calculator.key" \
+    nohup java -Xms512m -Xmx1g -jar module-calculator/build/libs/module-calculator-0.0.1-SNAPSHOT.jar > logs/pipeline-test-calculator.log 2>&1 &
   until curl -sf http://localhost:8082/actuator/health > /dev/null 2>&1; do sleep 2; done
   echo "calculator ready on 8082"
 
   # 3) Synchronizer (8083)
-  nohup java -Xms512m -Xmx1g -jar module-synchronizer/build/libs/module-synchronizer-0.0.1-SNAPSHOT.jar > logs/pipeline-test-synchronizer.log 2>&1 &
+  MINIO_ACCESS_KEY=synchronizer MINIO_SECRET_KEY_FILE="${SECRETS_DIR}/sa-synchronizer.key" \
+    nohup java -Xms512m -Xmx1g -jar module-synchronizer/build/libs/module-synchronizer-0.0.1-SNAPSHOT.jar > logs/pipeline-test-synchronizer.log 2>&1 &
   until curl -sf http://localhost:8083/actuator/health > /dev/null 2>&1; do sleep 2; done
   echo "synchronizer ready on 8083"
 
@@ -194,7 +201,8 @@ elif [ "${START_MODE}" = "nohup" ]; then
   # active). Symptom: cleanup endpoint returns runsDeleted=0 / "no runs found"
   # while the MinIO bucket actually holds hundreds of old runs. The explicit
   # -D flag prevents env-var propagation failures from breaking cleanup silently.
-  nohup java -Xms512m -Xmx1g -Dstorage.backend=minio -jar module-cleanup/build/libs/module-cleanup-0.0.1-SNAPSHOT.jar > logs/pipeline-test-cleanup.log 2>&1 &
+  MINIO_ACCESS_KEY=cleanup MINIO_SECRET_KEY_FILE="${SECRETS_DIR}/sa-cleanup.key" \
+    nohup java -Xms512m -Xmx1g -Dstorage.backend=minio -jar module-cleanup/build/libs/module-cleanup-0.0.1-SNAPSHOT.jar > logs/pipeline-test-cleanup.log 2>&1 &
   until curl -sf http://localhost:8084/actuator/health > /dev/null 2>&1; do sleep 2; done
   echo "cleanup ready on 8084"
 else

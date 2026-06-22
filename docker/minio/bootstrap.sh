@@ -67,8 +67,11 @@ done
 # Persist SA secret keys for the two startup paths:
 #   1. docker compose path: docker/services/secrets/sa-<module>.key
 #      (mounted as /run/secrets/sa-<module> via the services overlay).
-#   2. nohup path: .env.<module> (MINIO_SECRET_KEY line).
-# Both writes are idempotent.
+# Persist SA secret keys to docker/services/secrets/sa-<module>.key.
+# This is the single source of truth — both docker compose and the
+# nohup startup path read from the same file. StorageConfig reads the
+# file directly (MINIO_SECRET_KEY_FILE); the nohup path does the same
+# via `source secrets/sa-<module>.key` from the operator's bring-up script.
 #
 # REPO_ROOT defaults to /workspace (the bind-mount path used by the
 # minio-bootstrap compose service). For host-side runs (bash docker/minio/bootstrap.sh),
@@ -93,22 +96,11 @@ for sa in "${!sa_secret_keys[@]}"; do
   secret="${sa_secret_keys[$sa]}"
   module="${SA_TO_MODULE[$sa]:-$sa}"
 
-  # 1. docker compose secret file (used by services overlay).
   # Mode 0444 so the container's non-root user (maple, UID 1000) can read
   # the secret. Compose v3.8 secret mounts preserve the source file's mode.
   printf '%s' "${secret}" > "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
   chmod 0444 "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
   echo "[bootstrap] wrote ${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
-
-  # 2. legacy .env.<module> for nohup path. .env files are gitignored.
-  env_file="${REPO_ROOT}/.env.${module}"
-  if [ -f "${env_file}" ] && grep -q "^MINIO_SECRET_KEY=" "${env_file}" 2>/dev/null; then
-    sed -i.bak "s|^MINIO_SECRET_KEY=.*|MINIO_SECRET_KEY=${secret}|" "${env_file}" && rm -f "${env_file}.bak"
-  else
-    printf 'MINIO_ACCESS_KEY=%s\nMINIO_SECRET_KEY=%s\n' "${module}" "${secret}" >> "${env_file}"
-  fi
-  chmod 600 "${env_file}"
-  echo "[bootstrap] wrote ${env_file}"
 done
 
 echo "[bootstrap] complete"

@@ -269,8 +269,20 @@ def _make_count_sensor_runtime(phase: str) -> PythonSensor:
 
 
 def _stop_loop_fn(phase: str):
-    """Inner: POST /stop/loop/phase/{phase}."""
+    """Inner: POST /stop/loop/phase/{phase}.
+
+    Skips (returns None) when dag_run.conf['phase'] is set but does not
+    match `phase` — single DAG handles both CHARACTER_BASIC and
+    ITEM_EQUIPMENT, gated by conf. Operators trigger with
+    ``-c '{"phase":"ITEM_EQUIPMENT"}'`` to stop only one.
+    """
     def _stop(**ctx):
+        dag_run = ctx.get("dag_run")
+        conf = (dag_run.conf if dag_run else None) or {}
+        target_phase = conf.get("phase")
+        if target_phase is not None and target_phase != phase:
+            return None  # skip; this task is for another phase
+
         base = get_external_api_base()
         try:
             resp = requests.post(

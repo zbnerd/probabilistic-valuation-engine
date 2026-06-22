@@ -285,9 +285,10 @@ class TestMakeCountSensorRuntime:
 
 
 class TestMakeStopLoopTask:
-    def _get_callable(self, phase):
+    def _call(self, phase, conf=None):
         op = make_stop_loop_task(phase)
-        return op.python_callable
+        with patch("phase_pipeline_factory.get_external_api_base", return_value="http://test"):
+            return op.python_callable(dag_run=MagicMock(conf=conf or {"phase": phase}))
 
     def test_202_stop_requested(self):
         with patch("phase_pipeline_factory.requests.post") as mock_post:
@@ -300,7 +301,7 @@ class TestMakeStopLoopTask:
                 "iterationCount": 42,
             }
             mock_post.return_value = mock_resp
-            result = self._get_callable("ITEM_EQUIPMENT")()
+            result = self._call("ITEM_EQUIPMENT")
         assert result["status"] == "STOP_REQUESTED"
 
     def test_200_not_looping_idempotent(self):
@@ -309,8 +310,23 @@ class TestMakeStopLoopTask:
             mock_resp.status_code = 200
             mock_resp.json.return_value = {"status": "NOT_LOOPING", "phase": "ITEM_EQUIPMENT"}
             mock_post.return_value = mock_resp
-            result = self._get_callable("ITEM_EQUIPMENT")()
+            result = self._call("ITEM_EQUIPMENT")
         assert result["status"] == "NOT_LOOPING"
+
+    def test_skip_when_conf_targets_other_phase(self):
+        """If conf.phase != this task's phase, return None (skip)."""
+        result = self._call("CHARACTER_BASIC", conf={"phase": "ITEM_EQUIPMENT"})
+        assert result is None
+
+    def test_no_conf_phase_runs_anyway(self):
+        """If conf.phase is unset, the task runs (legacy behavior)."""
+        with patch("phase_pipeline_factory.requests.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 202
+            mock_resp.json.return_value = {"loopId": "loop-1"}
+            mock_post.return_value = mock_resp
+            result = self._call("ITEM_EQUIPMENT", conf={})
+        assert result["status"] == "STOP_REQUESTED"
 
     def test_400_invalid_phase_raises(self):
         with patch("phase_pipeline_factory.requests.post") as mock_post:
@@ -319,7 +335,7 @@ class TestMakeStopLoopTask:
             mock_resp.text = "INVALID_PHASE"
             mock_post.return_value = mock_resp
             with pytest.raises(AirflowException):
-                self._get_callable("RANKING_FETCH")()
+                self._call("RANKING_FETCH")
 
     def test_5xx_raises(self):
         with patch("phase_pipeline_factory.requests.post") as mock_post:
@@ -329,7 +345,7 @@ class TestMakeStopLoopTask:
             mock_resp.reason = "Bad Gateway"
             mock_post.return_value = mock_resp
             with pytest.raises(AirflowException):
-                self._get_callable("ITEM_EQUIPMENT")()
+                self._call("ITEM_EQUIPMENT")
 
 
 class TestMakeWaitLoopStoppedSensor:

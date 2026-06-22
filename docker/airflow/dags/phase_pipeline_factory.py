@@ -8,6 +8,8 @@ Ref: docs/superpowers/specs/2026-06-22-dag-restructure-design.md
 """
 from __future__ import annotations
 
+import json as _json
+import os
 from datetime import timedelta
 from typing import Tuple
 
@@ -15,6 +17,8 @@ import requests
 from airflow.exceptions import AirflowException
 from airflow.hooks.base import BaseHook
 from airflow.operators.python import PythonOperator
+from airflow.sensors.python import PythonSensor
+from kafka import KafkaConsumer
 
 
 _VALID_MODES = frozenset({"once", "count", "infinite"})
@@ -196,4 +200,66 @@ def make_trigger_loop_task(phase: str) -> PythonOperator:
         retries=0,
         execution_timeout=timedelta(seconds=60),
         do_xcom_push=True,
+    )
+
+
+# Phase → endpoint mapping for Kafka chunk-ready event filtering.
+# The synchronizer publishes to synchronizer.chunk.consumed with endpoint
+# field set to one of these values. Must match module-synchronizer publish code.
+_PHASE_TO_ENDPOINT = {
+    "CHARACTER_BASIC": "character-basic",
+    "ITEM_EQUIPMENT": "item-equipment",
+}
+
+# Per-chunk processing P99 (empirically observed ~3-5min on production
+# hardware). The count sensor timeout is set to 12h, which covers up to
+# ~138 chunks at 5min/chunk — well beyond any reasonable mode=count value.
+# Operators specifying count > 100 should use mode=infinite + stop_loop_pipeline.
+_COUNT_SENSOR_MAX_TIMEOUT = timedelta(hours=12)
+
+
+def _make_count_sensor_runtime(phase: str) -> PythonSensor:
+    """Count sensor that reads count from dag_run.conf at runtime.
+
+    Single sensor handles any count value (1..N where N * 5min + 30min <= 12h).
+    The parse-time alternative (one sensor per count value) would inflate the
+    DAG graph and require DAG-serialization support we don't have.
+
+    Implementation: the _poke callable calls parse_mode(ctx.conf) to read the
+    operator-passed count, then polls Kafka synchronizer.chunk.consumed for
+    matching events.
+    """
+    endpoint = _PHASE_TO_ENDPOINT[phase]
+
+    def _poke(**ctx):
+        _, count = parse_mode(ctx["dag_run"].conf or {})
+        consumer = KafkaConsumer(
+            "synchronizer.chunk.consumed",
+            bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
+            auto_offset_reset="latest",
+            enable_auto_commit=False,
+            group_id=(
+                f"airflow-count-sensor-{phase.lower()}-"
+                f"{ctx['dag_run'].run_id[:8]}"
+            ),
+            value_deserializer=lambda m: _json.loads(m.decode("utf-8")),
+        )
+        try:
+            received = 0
+            for message in consumer:
+                event = message.value
+                if event.get("endpoint") == endpoint:
+                    received += 1
+                    if received >= count:
+                        return True
+        finally:
+            consumer.close()
+        return False  # iterator exhausted; reschedule
+
+    return PythonSensor(
+        task_id=f"count_sensor_{phase.lower()}",
+        python_callable=_poke,
+        mode="reschedule",
+        poke_interval=30,
+        timeout=_COUNT_SENSOR_MAX_TIMEOUT,
     )

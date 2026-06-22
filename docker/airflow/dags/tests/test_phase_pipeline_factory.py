@@ -5,6 +5,8 @@ import pytest
 from airflow.exceptions import AirflowException
 
 from phase_pipeline_factory import (
+    _make_count_sensor_runtime,
+    _PHASE_TO_ENDPOINT,
     get_external_api_base,
     make_trigger_loop_task,
     make_trigger_once_task,
@@ -202,3 +204,76 @@ class TestMakeTriggerLoopTask:
                 self._get_callable("ITEM_EQUIPMENT")(
                     dag_run=MagicMock(conf={})
                 )
+
+
+class TestPhaseToEndpoint:
+    def test_character_basic(self):
+        assert _PHASE_TO_ENDPOINT["CHARACTER_BASIC"] == "character-basic"
+
+    def test_item_equipment(self):
+        assert _PHASE_TO_ENDPOINT["ITEM_EQUIPMENT"] == "item-equipment"
+
+
+class TestMakeCountSensorRuntime:
+    """Tests the runtime count sensor (reads count from dag_run.conf)."""
+
+    def _get_callable_and_op(self, phase):
+        op = _make_count_sensor_runtime(phase)
+        return op.python_callable, op
+
+    def test_returns_true_after_count_events(self):
+        """Sensor returns True after `count` matching events received."""
+        from datetime import timedelta
+
+        callable_fn, op = self._get_callable_and_op("ITEM_EQUIPMENT")
+
+        fake_msg1 = MagicMock()
+        fake_msg1.value = {"endpoint": "item-equipment", "runId": "r1"}
+        fake_msg2 = MagicMock()
+        fake_msg2.value = {"endpoint": "item-equipment", "runId": "r2"}
+        fake_msg3 = MagicMock()
+        fake_msg3.value = {"endpoint": "item-equipment", "runId": "r3"}
+
+        ctx = {
+            "dag_run": MagicMock(conf={"mode": "count", "count": 2}, run_id="20260622-x"),
+        }
+        with patch("phase_pipeline_factory.KafkaConsumer") as mock_consumer_cls:
+            instance = MagicMock()
+            instance.__iter__ = MagicMock(
+                return_value=iter([fake_msg1, fake_msg2, fake_msg3])
+            )
+            mock_consumer_cls.return_value = instance
+            result = callable_fn(**ctx)
+        assert result is True
+        # Airflow stores sensor timeout as float seconds internally.
+        assert op.timeout == 12 * 60 * 60
+        assert op.mode == "reschedule"
+        assert op.poke_interval == 30
+
+    def test_filters_by_endpoint(self):
+        callable_fn, op = self._get_callable_and_op("CHARACTER_BASIC")
+
+        fake_msg_other = MagicMock()
+        fake_msg_other.value = {"endpoint": "item-equipment", "runId": "r1"}
+        fake_msg_match = MagicMock()
+        fake_msg_match.value = {"endpoint": "character-basic", "runId": "r2"}
+
+        ctx = {
+            "dag_run": MagicMock(
+                conf={"mode": "count", "count": 1}, run_id="20260622-x"
+            ),
+        }
+        with patch("phase_pipeline_factory.KafkaConsumer") as mock_consumer_cls:
+            instance = MagicMock()
+            instance.__iter__ = MagicMock(
+                return_value=iter([fake_msg_other, fake_msg_match])
+            )
+            mock_consumer_cls.return_value = instance
+            result = callable_fn(**ctx)
+        assert result is True
+
+    def test_raises_for_invalid_conf(self):
+        callable_fn, op = self._get_callable_and_op("ITEM_EQUIPMENT")
+        ctx = {"dag_run": MagicMock(conf={})}
+        with pytest.raises(AirflowException):
+            callable_fn(**ctx)

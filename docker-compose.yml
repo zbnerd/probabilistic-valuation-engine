@@ -188,10 +188,11 @@ services:
 
 networks:
   maple-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+    # External so both the maple-infra and the future maple-apps Coolify
+    # resources share it. Created once before first deploy:
+    #   docker network create --subnet=172.20.0.0/16 maple-network
+    external: true
+    name: maple-network
 
 volumes:
   prometheus_data:

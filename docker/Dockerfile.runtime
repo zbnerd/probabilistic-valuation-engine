@@ -2,14 +2,27 @@ FROM eclipse-temurin:21-jre-alpine
 
 RUN addgroup -S maple && adduser -S maple -G maple
 
-ARG JAR_PATH=module-app/build/libs/module-app-0.0.1-SNAPSHOT.jar
-COPY ${JAR_PATH} /app.jar
+# Build-time ARGs: override per service.
+ARG MODULE_NAME=external-api
+ARG JAR_PATH=module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar
 
+LABEL module="${MODULE_NAME}"
+COPY ${JAR_PATH} /app.jar
+COPY docker/services/entrypoint-wrapper.sh /entrypoint-wrapper.sh
+
+# Default JVM args; compose environment: JAVA_OPTS overrides per service.
 ENV JAVA_OPTS="-Xms512m -Xmx1g"
-ENV SPRING_PROFILES_ACTIVE=prod
+ENV SPRING_PROFILES_ACTIVE=local
+ENV MODULE_NAME=${MODULE_NAME}
+
+# Wrapper expects file at /run/secrets/sa-<module>; defaults match if env unset.
+ENV MINIO_SECRET_KEY_FILE=/run/secrets/sa-${MODULE_NAME}
+
+RUN chmod 555 /entrypoint-wrapper.sh
 
 USER maple
 WORKDIR /app
 
 EXPOSE 8080
-ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar /app.jar"]
+
+ENTRYPOINT ["/entrypoint-wrapper.sh"]

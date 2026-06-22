@@ -374,6 +374,28 @@ jobs:
           echo "SA_SYNCHRONIZER_SECRET_KEY=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
           echo "SA_CLEANUP_SECRET_KEY=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
 
+      # docker/services/secrets/*.key is gitignored, so the files do NOT
+      # exist on a fresh CI runner. We must materialize them BEFORE
+      # `docker compose up` — compose validates the bind source paths
+      # at up time, and the services overlay's `secrets:` block points
+      # at these files. minio-bootstrap will overwrite them with the
+      # same keys (idempotent re-create of SAs).
+      - name: Materialize SA secret files
+        env:
+          SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}
+          SA_CALCULATOR_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CALCULATOR_SECRET_KEY }}
+          SA_SYNCHRONIZER_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_SYNCHRONIZER_SECRET_KEY }}
+          SA_CLEANUP_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CLEANUP_SECRET_KEY }}
+        run: |
+          mkdir -p docker/services/secrets
+          chmod 700 docker/services/secrets
+          printf '%s' "${SA_EXT_API_SECRET_KEY}"     > docker/services/secrets/sa-ext-api.key
+          printf '%s' "${SA_CALCULATOR_SECRET_KEY}"  > docker/services/secrets/sa-calculator.key
+          printf '%s' "${SA_SYNCHRONIZER_SECRET_KEY}"> docker/services/secrets/sa-synchronizer.key
+          printf '%s' "${SA_CLEANUP_SECRET_KEY}"    > docker/services/secrets/sa-cleanup.key
+          chmod 0444 docker/services/secrets/*.key
+          ls -la docker/services/secrets/
+
       # Write a transient .env for the minio-bootstrap service to consume.
       # Compose reads .env automatically; this avoids committing secrets.
       - name: Write .env.bootstrap for compose
@@ -426,6 +448,12 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.yml -f docker-compose.services.yml down -v --remove-orphans || true
 
-      - name: Clean .env.bootstrap
+      - name: Clean .env.bootstrap + secret files
         if: always()
-        run: rm -f .env.bootstrap || true
+        run: |
+          rm -f .env.bootstrap
+          rm -f docker/services/secrets/sa-ext-api.key
+          rm -f docker/services/secrets/sa-calculator.key
+          rm -f docker/services/secrets/sa-synchronizer.key
+          rm -f docker/services/secrets/sa-cleanup.key
+          rmdir docker/services/secrets 2>/dev/null || true

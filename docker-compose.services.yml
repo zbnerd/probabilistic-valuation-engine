@@ -14,7 +14,15 @@
 
 services:
   external-api:
-    image: maple/external-api:dev
+    image: ${IMAGE_EXTERNAL_API:-maple/external-api:dev}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:$${SERVER_PORT}/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    labels:
+      autoheal: "true"
     container_name: maple-external-api
     restart: unless-stopped
     ports:
@@ -41,7 +49,15 @@ services:
       kafka:    {condition: service_started}
 
   calculator:
-    image: maple/calculator:dev
+    image: ${IMAGE_CALCULATOR:-maple/calculator:dev}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:$${SERVER_PORT}/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    labels:
+      autoheal: "true"
     container_name: maple-calculator
     restart: unless-stopped
     ports:
@@ -67,7 +83,15 @@ services:
       minio:    {condition: service_healthy}
 
   synchronizer:
-    image: maple/synchronizer:dev
+    image: ${IMAGE_SYNCHRONIZER:-maple/synchronizer:dev}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:$${SERVER_PORT}/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    labels:
+      autoheal: "true"
     container_name: maple-synchronizer
     restart: unless-stopped
     ports:
@@ -96,7 +120,15 @@ services:
       redis:    {condition: service_started}
 
   cleanup:
-    image: maple/cleanup:dev
+    image: ${IMAGE_CLEANUP:-maple/cleanup:dev}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:$${SERVER_PORT}/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    labels:
+      autoheal: "true"
     container_name: maple-cleanup
     restart: unless-stopped
     ports:
@@ -124,10 +156,10 @@ services:
 
 secrets:
   sa-ext-api:
-    file: docker/services/secrets/sa-ext-api.key
+    file: ${SECRETS_DIR_HOST:-docker/services/secrets}/sa-ext-api.key
   sa-calculator:
-    file: docker/services/secrets/sa-calculator.key
+    file: ${SECRETS_DIR_HOST:-docker/services/secrets}/sa-calculator.key
   sa-synchronizer:
-    file: docker/services/secrets/sa-synchronizer.key
+    file: ${SECRETS_DIR_HOST:-docker/services/secrets}/sa-synchronizer.key
   sa-cleanup:
-    file: docker/services/secrets/sa-cleanup.key
+    file: ${SECRETS_DIR_HOST:-docker/services/secrets}/sa-cleanup.key

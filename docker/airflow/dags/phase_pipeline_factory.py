@@ -263,3 +263,88 @@ def _make_count_sensor_runtime(phase: str) -> PythonSensor:
         poke_interval=30,
         timeout=_COUNT_SENSOR_MAX_TIMEOUT,
     )
+
+
+def _stop_loop_fn(phase: str):
+    """Inner: POST /stop/loop/phase/{phase}."""
+    def _stop(**ctx):
+        base = get_external_api_base()
+        try:
+            resp = requests.post(
+                f"{base}/api/internal/stop/loop/phase/{phase}", timeout=30
+            )
+        except requests.RequestException as exc:
+            raise AirflowException(f"Stop loop {phase} failed: {exc}") from exc
+
+        if resp.status_code == 202:
+            return {**resp.json(), "status": "STOP_REQUESTED"}
+
+        if resp.status_code == 200:
+            body = resp.json()
+            return {**body, "status": "NOT_LOOPING"}
+
+        if resp.status_code == 400:
+            raise AirflowException(
+                f"Stop loop {phase} rejected (INVALID_PHASE): {resp.text[:500]}"
+            )
+
+        raise AirflowException(
+            f"Stop loop {phase} failed: HTTP {resp.status_code} "
+            f"{resp.reason}: {resp.text[:500]}"
+        )
+
+    return _stop
+
+
+def make_stop_loop_task(phase: str) -> PythonOperator:
+    """Build a PythonOperator that stops the loop for `phase`."""
+    return PythonOperator(
+        task_id=f"stop_loop_{phase.lower()}",
+        python_callable=_stop_loop_fn(phase),
+        retries=0,
+        execution_timeout=timedelta(seconds=60),
+        do_xcom_push=True,
+    )
+
+
+def _wait_loop_stopped_fn(phase: str):
+    """Inner: poll /run-status until loopSummaries[phase].status == STOPPED."""
+    def _poke(**ctx):
+        try:
+            resp = requests.get(
+                f"{get_external_api_base()}/api/internal/run-status", timeout=10
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception:
+            return False  # transient → reschedule
+
+        summaries = data.get("loopSummaries") or {}
+        entry = summaries.get(phase)
+        if not entry:
+            return True  # no loop was active; idempotent success
+
+        status = entry.get("status")
+        if status == "STOPPED":
+            return True
+        if status == "FAILED":
+            raise RuntimeError(
+                f"Loop for {phase} failed: {entry.get('lastError', 'unknown')}"
+            )
+        return False
+
+    return _poke
+
+
+def make_wait_loop_stopped_sensor(phase: str) -> PythonSensor:
+    """Sensor that returns True when loopSummaries[phase].status == STOPPED.
+
+    Returns True immediately if no loop is active for `phase` (idempotent).
+    """
+    return PythonSensor(
+        task_id=f"wait_loop_stopped_{phase.lower()}",
+        python_callable=_wait_loop_stopped_fn(phase),
+        mode="reschedule",
+        poke_interval=10,
+        timeout=30 * 60,  # 30 minutes
+    )

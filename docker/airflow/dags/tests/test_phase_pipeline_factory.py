@@ -8,8 +8,10 @@ from phase_pipeline_factory import (
     _make_count_sensor_runtime,
     _PHASE_TO_ENDPOINT,
     get_external_api_base,
+    make_stop_loop_task,
     make_trigger_loop_task,
     make_trigger_once_task,
+    make_wait_loop_stopped_sensor,
     parse_mode,
 )
 
@@ -277,3 +279,100 @@ class TestMakeCountSensorRuntime:
         ctx = {"dag_run": MagicMock(conf={})}
         with pytest.raises(AirflowException):
             callable_fn(**ctx)
+
+
+class TestMakeStopLoopTask:
+    def _get_callable(self, phase):
+        op = make_stop_loop_task(phase)
+        return op.python_callable
+
+    def test_202_stop_requested(self):
+        with patch("phase_pipeline_factory.requests.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 202
+            mock_resp.json.return_value = {
+                "status": "STOP_REQUESTED",
+                "phase": "ITEM_EQUIPMENT",
+                "loopId": "loop-1",
+                "iterationCount": 42,
+            }
+            mock_post.return_value = mock_resp
+            result = self._get_callable("ITEM_EQUIPMENT")()
+        assert result["status"] == "STOP_REQUESTED"
+
+    def test_200_not_looping_idempotent(self):
+        with patch("phase_pipeline_factory.requests.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {"status": "NOT_LOOPING", "phase": "ITEM_EQUIPMENT"}
+            mock_post.return_value = mock_resp
+            result = self._get_callable("ITEM_EQUIPMENT")()
+        assert result["status"] == "NOT_LOOPING"
+
+    def test_400_invalid_phase_raises(self):
+        with patch("phase_pipeline_factory.requests.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 400
+            mock_resp.text = "INVALID_PHASE"
+            mock_post.return_value = mock_resp
+            with pytest.raises(AirflowException):
+                self._get_callable("RANKING_FETCH")()
+
+    def test_5xx_raises(self):
+        with patch("phase_pipeline_factory.requests.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 502
+            mock_resp.text = "bad gateway"
+            mock_resp.reason = "Bad Gateway"
+            mock_post.return_value = mock_resp
+            with pytest.raises(AirflowException):
+                self._get_callable("ITEM_EQUIPMENT")()
+
+
+class TestMakeWaitLoopStoppedSensor:
+    def _get_callable(self, phase):
+        op = make_wait_loop_stopped_sensor(phase)
+        return op.python_callable
+
+    def test_returns_true_when_no_loop_active(self):
+        with patch("phase_pipeline_factory.requests.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {"loopSummaries": {}}
+            mock_get.return_value = mock_resp
+            assert self._get_callable("ITEM_EQUIPMENT")() is True
+
+    def test_returns_true_when_status_stopped(self):
+        with patch("phase_pipeline_factory.requests.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "loopSummaries": {
+                    "ITEM_EQUIPMENT": {"loopId": "x", "status": "STOPPED"}
+                }
+            }
+            mock_get.return_value = mock_resp
+            assert self._get_callable("ITEM_EQUIPMENT")() is True
+
+    def test_returns_false_when_still_running(self):
+        with patch("phase_pipeline_factory.requests.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "loopSummaries": {
+                    "ITEM_EQUIPMENT": {"loopId": "x", "status": "RUNNING"}
+                }
+            }
+            mock_get.return_value = mock_resp
+            assert self._get_callable("ITEM_EQUIPMENT")() is False
+
+    def test_returns_false_on_transient_http_error(self):
+        with patch("phase_pipeline_factory.requests.get") as mock_get:
+            mock_get.side_effect = Exception("connection refused")
+            assert self._get_callable("ITEM_EQUIPMENT")() is False
+
+    def test_timeout_is_30_minutes(self):
+        op = make_wait_loop_stopped_sensor("ITEM_EQUIPMENT")
+        assert op.timeout == 30 * 60
+        assert op.mode == "reschedule"
+        assert op.poke_interval == 10

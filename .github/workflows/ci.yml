@@ -415,6 +415,15 @@ jobs:
           SA_CLEANUP_SECRET_KEY=${SA_CLEANUP_SECRET_KEY}
           EOF
 
+      # maple-network is declared external in docker-compose.yml (shared
+      # with the future maple-apps Coolify resource). Create it before
+      # `docker compose up`, otherwise compose fails with
+      # "network maple-network declared as external, but could not be found".
+      - name: Create external maple-network
+        run: |
+          docker network inspect maple-network >/dev/null 2>&1 \
+            || docker network create --subnet=172.20.0.0/16 maple-network >/dev/null
+
       - name: Bring up full stack
         run: |
           docker compose -f docker-compose.yml -f docker-compose.services.yml up -d

@@ -1,10 +1,15 @@
-"""Per-phase Airflow task factories for ext-api.
+"""Per-phase Airflow task factories (LEGACY — used by deprecated daily_collection_pipeline).
 
-Drives the per-phase endpoints from #1289/1290/1291 via Airflow's
-BranchPythonOperator in daily_collection_pipeline.py.
+This module is retained for backward compatibility with operators still
+triggering daily_collection_pipeline -c '{"scope":[...]}' directly.
+Removal target: next release cycle after operators migrate to the
+phase-separated DAGs.
 
-Spec: docs/superpowers/specs/2026-06-18-issue-1292-per-phase-dag-design.md
-ADR: docs/01_ADR/ADR-393-airflow-per-phase-dag.md
+New DAGs (ranking_ocid_lookup_pipeline, character_basic_pipeline,
+item_equipment_pipeline, daily_full_pipeline, stop_loop_pipeline) use
+phase_pipeline_factory instead.
+
+Ref: docs/superpowers/specs/2026-06-22-dag-restructure-design.md §6.6
 """
 from datetime import timedelta
 import json
@@ -47,6 +52,8 @@ def get_external_api_base() -> str:
     return f"http://{conn.host}:{conn.port}"
 
 
+# LEGACY: superseded by phase_pipeline_factory.parse_mode.
+# Kept for daily_collection_pipeline scope path.
 def parse_scope(conf: dict) -> list:
     """Validate dag_run.conf['scope']. Returns list of scope values.
 
@@ -73,6 +80,8 @@ def parse_scope(conf: dict) -> list:
     return list(scope)
 
 
+# LEGACY: superseded by phase_pipeline_factory + ordered TaskGroup in v2.
+# Kept for daily_collection_pipeline run_steps path.
 def parse_steps(conf: dict) -> list:
     """Validate dag_run.conf['steps']. Returns list of step dicts.
 
@@ -197,6 +206,7 @@ def wait_for_phase_terminal(
         time.sleep(poll_interval)
 
 
+# LEGACY: superseded by phase_pipeline_factory.make_trigger_once_task.
 def make_trigger_task(phase: str) -> PythonOperator:
     """Single-shot phase trigger via /trigger/phase/{phase}.
 
@@ -252,6 +262,7 @@ def make_trigger_task(phase: str) -> PythonOperator:
     )
 
 
+# LEGACY: superseded by phase_pipeline_factory.make_trigger_loop_task.
 def make_loop_task(phase: str) -> PythonOperator:
     """Start loop via /loop/phase/{phase}.
 
@@ -299,6 +310,7 @@ def make_loop_task(phase: str) -> PythonOperator:
     )
 
 
+# LEGACY: superseded by phase_pipeline_factory.make_stop_loop_task.
 def make_stop_task(phase: str) -> PythonOperator:
     """Stop via /stop/phase/{phase}.
 
@@ -338,6 +350,7 @@ def make_stop_task(phase: str) -> PythonOperator:
     )
 
 
+# LEGACY: superseded by phase_pipeline_factory._wait_terminal_fn (in make_phase_dag).
 def make_is_phase_terminal(phase: str):
     """PythonSensor callable: returns True when triggered runId reaches terminal.
 

@@ -82,6 +82,14 @@ if [ ! -d "${REPO_ROOT}/docker" ]; then
 fi
 echo "[bootstrap] REPO_ROOT=${REPO_ROOT}"
 
+# SECRETS_DIR: where SA key files are written. Defaults to the repo's
+# docker/services/secrets for local dev (REPO_ROOT is /workspace in the
+# minio-bootstrap container, the host repo root otherwise). Coolify sets
+# this to an absolute host path (/opt/maple/secrets) so both the
+# maple-infra and maple-apps resources read the same files — repo-relative
+# paths break under Coolify's deploy dir. See ADR-732.
+SECRETS_DIR="${SECRETS_DIR:-${REPO_ROOT}/docker/services/secrets}"
+
 declare -A SA_TO_MODULE=(
   [ext-api]=ext-api
   [calculator]=calculator
@@ -89,8 +97,8 @@ declare -A SA_TO_MODULE=(
   [cleanup]=cleanup
 )
 
-mkdir -p "${REPO_ROOT}/docker/services/secrets"
-chmod 700 "${REPO_ROOT}/docker/services/secrets"
+mkdir -p "${SECRETS_DIR}"
+chmod 700 "${SECRETS_DIR}"
 
 for sa in "${!sa_secret_keys[@]}"; do
   secret="${sa_secret_keys[$sa]}"
@@ -98,9 +106,9 @@ for sa in "${!sa_secret_keys[@]}"; do
 
   # Mode 0444 so the container's non-root user (maple, UID 1000) can read
   # the secret. Compose v3.8 secret mounts preserve the source file's mode.
-  printf '%s' "${secret}" > "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
-  chmod 0444 "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
-  echo "[bootstrap] wrote ${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
+  printf '%s' "${secret}" > "${SECRETS_DIR}/sa-${module}.key"
+  chmod 0444 "${SECRETS_DIR}/sa-${module}.key"
+  echo "[bootstrap] wrote ${SECRETS_DIR}/sa-${module}.key"
 done
 
 echo "[bootstrap] complete"

@@ -85,12 +85,21 @@ class TestGetExternalApiBase:
 class TestMakeTriggerOnceTask:
     """Tests via the underlying PythonOperator callable (callable._trigger)."""
 
+    @staticmethod
+    def _patch_api_base():
+        """Patch get_external_api_base so requests.get/post can run without Airflow Connection."""
+        return patch(
+            "phase_pipeline_factory.get_external_api_base",
+            return_value="http://test:8081",
+        )
+
     def _get_callable(self, phase):
         op = make_trigger_once_task(phase)
         return op.python_callable
 
     def test_success_returns_run_id(self):
-        with patch("phase_pipeline_factory.requests.post") as mock_post:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.post") as mock_post:
             mock_resp = MagicMock()
             mock_resp.status_code = 202
             mock_resp.json.return_value = {"runId": "abc-123", "status": "STARTED"}
@@ -101,7 +110,8 @@ class TestMakeTriggerOnceTask:
         assert result == {"runId": "abc-123", "status": "STARTED"}
 
     def test_409_already_active_returns_active_run_id(self):
-        with patch("phase_pipeline_factory.requests.post") as mock_post, \
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.post") as mock_post, \
              patch("phase_pipeline_factory.requests.get") as mock_get:
             post_resp = MagicMock()
             post_resp.status_code = 409
@@ -120,7 +130,8 @@ class TestMakeTriggerOnceTask:
         assert result["runId"] == "active-run"
 
     def test_400_raises(self):
-        with patch("phase_pipeline_factory.requests.post") as mock_post:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.post") as mock_post:
             mock_resp = MagicMock()
             mock_resp.status_code = 400
             mock_resp.text = "INVALID_PHASE"
@@ -131,7 +142,8 @@ class TestMakeTriggerOnceTask:
                 )
 
     def test_500_raises(self):
-        with patch("phase_pipeline_factory.requests.post") as mock_post:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.post") as mock_post:
             mock_resp = MagicMock()
             mock_resp.status_code = 500
             mock_resp.text = "internal error"
@@ -144,7 +156,8 @@ class TestMakeTriggerOnceTask:
 
     def test_includes_upstream_header_when_run_id_provided(self):
         """When upstream_run_id xcom is passed, send X-Upstream-Run-Id header."""
-        with patch("phase_pipeline_factory.requests.post") as mock_post:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.post") as mock_post:
             mock_resp = MagicMock()
             mock_resp.status_code = 202
             mock_resp.json.return_value = {"runId": "child"}
@@ -158,12 +171,20 @@ class TestMakeTriggerOnceTask:
 
 
 class TestMakeTriggerLoopTask:
+    @staticmethod
+    def _patch_api_base():
+        return patch(
+            "phase_pipeline_factory.get_external_api_base",
+            return_value="http://test:8081",
+        )
+
     def _get_callable(self, phase):
         op = make_trigger_loop_task(phase)
         return op.python_callable
 
     def test_success_returns_loop_id(self):
-        with patch("phase_pipeline_factory.requests.post") as mock_post:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.post") as mock_post:
             mock_resp = MagicMock()
             mock_resp.status_code = 202
             mock_resp.json.return_value = {
@@ -176,7 +197,8 @@ class TestMakeTriggerLoopTask:
         assert result["loopId"] == "loop-1"
 
     def test_409_already_looping(self):
-        with patch("phase_pipeline_factory.requests.post") as mock_post:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.post") as mock_post:
             mock_resp = MagicMock()
             mock_resp.status_code = 409
             mock_resp.json.return_value = {"loopId": "existing", "phase": "ITEM_EQUIPMENT"}
@@ -188,7 +210,8 @@ class TestMakeTriggerLoopTask:
         assert result["loopId"] == "existing"
 
     def test_400_invalid_phase_raises(self):
-        with patch("phase_pipeline_factory.requests.post") as mock_post:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.post") as mock_post:
             mock_resp = MagicMock()
             mock_resp.status_code = 400
             mock_resp.text = "INVALID_PHASE"
@@ -199,7 +222,8 @@ class TestMakeTriggerLoopTask:
                 )
 
     def test_500_raises(self):
-        with patch("phase_pipeline_factory.requests.post") as mock_post:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.post") as mock_post:
             mock_resp = MagicMock()
             mock_resp.status_code = 503
             mock_resp.text = "service unavailable"
@@ -349,12 +373,20 @@ class TestMakeStopLoopTask:
 
 
 class TestMakeWaitLoopStoppedSensor:
+    @staticmethod
+    def _patch_api_base():
+        return patch(
+            "phase_pipeline_factory.get_external_api_base",
+            return_value="http://test:8081",
+        )
+
     def _get_callable(self, phase):
         op = make_wait_loop_stopped_sensor(phase)
         return op.python_callable
 
     def test_returns_true_when_no_loop_active(self):
-        with patch("phase_pipeline_factory.requests.get") as mock_get:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get:
             mock_resp = MagicMock()
             mock_resp.status_code = 200
             mock_resp.json.return_value = {"loopSummaries": {}}
@@ -362,7 +394,8 @@ class TestMakeWaitLoopStoppedSensor:
             assert self._get_callable("ITEM_EQUIPMENT")() is True
 
     def test_returns_true_when_status_stopped(self):
-        with patch("phase_pipeline_factory.requests.get") as mock_get:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get:
             mock_resp = MagicMock()
             mock_resp.status_code = 200
             mock_resp.json.return_value = {
@@ -374,7 +407,8 @@ class TestMakeWaitLoopStoppedSensor:
             assert self._get_callable("ITEM_EQUIPMENT")() is True
 
     def test_returns_false_when_still_running(self):
-        with patch("phase_pipeline_factory.requests.get") as mock_get:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get:
             mock_resp = MagicMock()
             mock_resp.status_code = 200
             mock_resp.json.return_value = {
@@ -386,7 +420,8 @@ class TestMakeWaitLoopStoppedSensor:
             assert self._get_callable("ITEM_EQUIPMENT")() is False
 
     def test_returns_false_on_transient_http_error(self):
-        with patch("phase_pipeline_factory.requests.get") as mock_get:
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get:
             mock_get.side_effect = Exception("connection refused")
             assert self._get_callable("ITEM_EQUIPMENT")() is False
 
@@ -427,8 +462,16 @@ class TestMakeBranchOnModeForPhase:
 
 
 class TestWaitTerminalFn:
+    @staticmethod
+    def _patch_api_base():
+        return patch(
+            "phase_pipeline_factory.get_external_api_base",
+            return_value="http://test:8081",
+        )
+
     def test_returns_true_when_terminal(self):
-        with patch("phase_pipeline_factory.requests.get") as mock_get, \
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get, \
              patch("phase_pipeline_factory.time") as mock_time:
             mock_time.monotonic.return_value = 0
             mock_resp = MagicMock()
@@ -451,7 +494,8 @@ class TestWaitTerminalFn:
         assert result is True
 
     def test_raises_when_failed(self):
-        with patch("phase_pipeline_factory.requests.get") as mock_get, \
+        with self._patch_api_base(), \
+             patch("phase_pipeline_factory.requests.get") as mock_get, \
              patch("phase_pipeline_factory.time") as mock_time:
             mock_time.monotonic.return_value = 0
             mock_resp = MagicMock()

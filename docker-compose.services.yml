@@ -72,6 +72,8 @@ services:
       STORAGE_BACKEND: minio
       MINIO_ACCESS_KEY: synchronizer
       MINIO_SECRET_KEY_FILE: /run/secrets/sa-synchronizer
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     env_file:
       - docker/services/env/synchronizer.env
     secrets:
@@ -81,6 +83,7 @@ services:
       postgres: {condition: service_healthy}
       kafka:    {condition: service_started}
       minio:    {condition: service_healthy}
+      redis:    {condition: service_started}
 
   cleanup:
     image: maple/cleanup:dev

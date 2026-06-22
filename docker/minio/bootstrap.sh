@@ -94,8 +94,10 @@ for sa in "${!sa_secret_keys[@]}"; do
   module="${SA_TO_MODULE[$sa]:-$sa}"
 
   # 1. docker compose secret file (used by services overlay).
+  # Mode 0444 so the container's non-root user (maple, UID 1000) can read
+  # the secret. Compose v3.8 secret mounts preserve the source file's mode.
   printf '%s' "${secret}" > "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
-  chmod 600 "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
+  chmod 0444 "${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
   echo "[bootstrap] wrote ${REPO_ROOT}/docker/services/secrets/sa-${module}.key"
 
   # 2. legacy .env.<module> for nohup path. .env files are gitignored.

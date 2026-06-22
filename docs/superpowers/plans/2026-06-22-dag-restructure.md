@@ -405,7 +405,7 @@ def get_external_api_base() -> str:
 def _trigger_once_fn(phase: str):
     """Inner: trigger phase once via POST /trigger/phase/{phase}.
 
-    Reads upstream_run_id from xcom (task_id='upstream_run_id_pusher') if
+    Reads upstream_run_id from xcom (task_id='upstream_run_id') if
     present — OCID_LOOKUP and downstream phases require X-Upstream-Run-Id.
     RANKING_FETCH ignores the header (it IS the upstream).
     """
@@ -566,31 +566,31 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 Append to test file:
 
 ```python
-from phase_pipeline_factory import make_count_sensor, _compute_count_timeout
+from phase_pipeline_factory import (
+    _make_count_sensor_runtime,
+    _PHASE_TO_ENDPOINT,
+)
 
 
-class TestComputeCountTimeout:
-    def test_formula(self):
-        # count * 5min + 30min buffer
-        assert _compute_count_timeout(1) == timedelta(minutes=5 + 30)
-        assert _compute_count_timeout(3) == timedelta(minutes=15 + 30)
-        assert _compute_count_timeout(10) == timedelta(minutes=50 + 30)
-        assert _compute_count_timeout(0) == timedelta(minutes=30)
+class TestPhaseToEndpoint:
+    def test_character_basic(self):
+        assert _PHASE_TO_ENDPOINT["CHARACTER_BASIC"] == "character-basic"
+
+    def test_item_equipment(self):
+        assert _PHASE_TO_ENDPOINT["ITEM_EQUIPMENT"] == "item-equipment"
 
 
-class TestMakeCountSensor:
-    """Tests the inner _poke callable returned by the factory."""
+class TestMakeCountSensorRuntime:
+    """Tests the runtime count sensor (reads count from dag_run.conf)."""
 
-    def _get_callable(self, phase, count):
-        op = make_count_sensor(phase, count)
+    def _get_callable_and_op(self, phase):
+        op = _make_count_sensor_runtime(phase)
         return op.python_callable, op
 
     def test_returns_true_after_count_events(self):
         """Sensor returns True after `count` matching events received."""
-        from kafka import KafkaConsumer
-        callable_fn, op = self._get_callable("ITEM_EQUIPMENT", 2)
+        callable_fn, op = self._get_callable_and_op("ITEM_EQUIPMENT")
 
-        # Fake consumer yielding 2 matching messages
         fake_msg1 = MagicMock()
         fake_msg1.value = {"endpoint": "item-equipment", "runId": "r1"}
         fake_msg2 = MagicMock()
@@ -598,32 +598,53 @@ class TestMakeCountSensor:
         fake_msg3 = MagicMock()
         fake_msg3.value = {"endpoint": "item-equipment", "runId": "r3"}
 
-        with patch.object(KafkaConsumer, "__iter__", return_value=iter([fake_msg1, fake_msg2, fake_msg3])):
-            result = callable_fn()
+        ctx = {
+            "dag_run": MagicMock(conf={"mode": "count", "count": 2}, run_id="20260622-x"),
+        }
+        with patch("phase_pipeline_factory.KafkaConsumer") as mock_consumer_cls:
+            instance = MagicMock()
+            instance.__iter__ = MagicMock(
+                return_value=iter([fake_msg1, fake_msg2, fake_msg3])
+            )
+            mock_consumer_cls.return_value = instance
+            result = callable_fn(**ctx)
         assert result is True
 
     def test_filters_by_endpoint(self):
-        """Sensor ignores events for other endpoints."""
-        callable_fn, op = self._get_callable("CHARACTER_BASIC", 1)
+        callable_fn, op = self._get_callable_and_op("CHARACTER_BASIC")
 
         fake_msg_other = MagicMock()
         fake_msg_other.value = {"endpoint": "item-equipment", "runId": "r1"}
         fake_msg_match = MagicMock()
         fake_msg_match.value = {"endpoint": "character-basic", "runId": "r2"}
 
+        ctx = {
+            "dag_run": MagicMock(
+                conf={"mode": "count", "count": 1}, run_id="20260622-x"
+            ),
+        }
         with patch("phase_pipeline_factory.KafkaConsumer") as mock_consumer_cls:
             instance = MagicMock()
-            instance.__iter__ = MagicMock(return_value=iter([fake_msg_other, fake_msg_match]))
+            instance.__iter__ = MagicMock(
+                return_value=iter([fake_msg_other, fake_msg_match])
+            )
             mock_consumer_cls.return_value = instance
-            result = callable_fn()
+            result = callable_fn(**ctx)
         assert result is True
 
-    def test_timeout_set_correctly(self):
-        _, op = self._get_callable("ITEM_EQUIPMENT", 5)
-        # count=5 → 25 + 30 = 55min
-        assert op.timeout == timedelta(minutes=55)
+    def test_timeout_is_12_hours_upper_bound(self):
+        _, op = self._get_callable_and_op("ITEM_EQUIPMENT")
+        # Single fixed timeout regardless of count (12h covers up to ~138 chunks).
+        assert op.timeout == timedelta(hours=12)
         assert op.mode == "reschedule"
         assert op.poke_interval == 30
+
+    def test_raises_for_invalid_conf(self):
+        from airflow.exceptions import AirflowException
+        callable_fn, op = self._get_callable_and_op("ITEM_EQUIPMENT")
+        ctx = {"dag_run": MagicMock(conf={})}
+        with pytest.raises(AirflowException):
+            callable_fn(**ctx)
 ```
 
 - [ ] **Step 2: Run new tests to verify they fail**
@@ -633,7 +654,7 @@ cd /home/maple/probabilistic-valuation-engine && \
   PYTHONPATH=docker/airflow/dags python3 -m pytest docker/airflow/dags/tests/test_phase_pipeline_factory.py -v -k "Count or Timeout"
 ```
 
-Expected: ImportError on `make_count_sensor` / `_compute_count_timeout`.
+Expected: ImportError on `_make_count_sensor_runtime` / `_PHASE_TO_ENDPOINT`.
 
 - [ ] **Step 3: Implement count sensor**
 
@@ -655,24 +676,29 @@ _PHASE_TO_ENDPOINT = {
 }
 
 # Per-chunk processing P99 (empirically observed ~3-5min on production
-# hardware). Used as the basis for the count timeout formula.
-_CHUNK_PROCESSING_MINUTES = 5
-_COUNT_TIMEOUT_BUFFER_MINUTES = 30
+# hardware). The count sensor timeout is set to 12h, which covers up to
+# ~138 chunks at 5min/chunk — well beyond any reasonable mode=count value.
+# Operators specifying count > 100 should use mode=infinite + stop_loop_pipeline.
+_COUNT_SENSOR_MAX_TIMEOUT = timedelta(hours=12)
 
 
-def _compute_count_timeout(count: int) -> timedelta:
-    """count * CHUNK_PROCESSING_MINUTES + BUFFER. Bounded by count=0 = buffer."""
-    minutes = max(count, 0) * _CHUNK_PROCESSING_MINUTES + _COUNT_TIMEOUT_BUFFER_MINUTES
-    return timedelta(minutes=minutes)
+def _make_count_sensor_runtime(phase: str) -> PythonSensor:
+    """Count sensor that reads count from dag_run.conf at runtime.
 
+    Single sensor handles any count value (1..N where N * 5min + 30min <= 12h).
+    The parse-time alternative (one sensor per count value) would inflate the
+    DAG graph and require DAG-serialization support we don't have.
 
-def _count_sensor_fn(phase: str, count: int):
-    """Inner: poll Kafka synchronizer.chunk.consumed for `count` events."""
+    Implementation: the _poke callable calls parse_mode(ctx.conf) to read the
+    operator-passed count, then polls Kafka synchronizer.chunk.consumed for
+    matching events.
+    """
     from kafka import KafkaConsumer
 
     endpoint = _PHASE_TO_ENDPOINT[phase]
 
     def _poke(**ctx):
+        _, count = parse_mode(ctx["dag_run"].conf or {})
         consumer = KafkaConsumer(
             "synchronizer.chunk.consumed",
             bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
@@ -694,19 +720,14 @@ def _count_sensor_fn(phase: str, count: int):
                         return True
         finally:
             consumer.close()
-        return False  # iterator exhausted without count reached (timeout)
+        return False  # iterator exhausted; reschedule
 
-    return _poke
-
-
-def make_count_sensor(phase: str, count: int) -> PythonSensor:
-    """Sensor that returns True after `count` chunk-ready events for phase."""
     return PythonSensor(
-        task_id=f"count_{count}_{phase.lower()}",
-        python_callable=_count_sensor_fn(phase, count),
+        task_id=f"count_sensor_{phase.lower()}",
+        python_callable=_poke,
         mode="reschedule",
         poke_interval=30,
-        timeout=int(_compute_count_timeout(count).total_seconds()),
+        timeout=int(_COUNT_SENSOR_MAX_TIMEOUT.total_seconds()),
     )
 ```
 
@@ -986,7 +1007,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ---
 
-## Task 5: Factory — `make_branch_on_mode` + `make_phase_dag` + tests
+## Task 5: Factory — `make_branch_on_mode_for_phase` + `make_phase_dag` + tests
 
 **Files:**
 - Modify: `docker/airflow/dags/phase_pipeline_factory.py`
@@ -998,37 +1019,88 @@ Append to `test_phase_pipeline_factory.py`:
 
 ```python
 from phase_pipeline_factory import (
-    make_branch_on_mode,
+    make_branch_on_mode_for_phase,
     make_phase_dag,
+    _wait_terminal_fn,
 )
 
 
-class TestMakeBranchOnMode:
-    def _get_callable(self):
-        op = make_branch_on_mode()
+class TestMakeBranchOnModeForPhase:
+    def _branch_fn(self, phase):
+        op = make_branch_on_mode_for_phase(phase)
         return op.python_callable
 
-    def test_mode_once_routes_to_trigger(self):
-        fn = self._get_callable()
+    def test_mode_once_routes_to_trigger_character_basic(self):
+        fn = self._branch_fn("CHARACTER_BASIC")
         ctx = {"dag_run": MagicMock(conf={"mode": "once"})}
         assert fn(**ctx) == "trigger_character_basic"
 
     def test_mode_count_routes_to_trigger_loop(self):
-        fn = self._get_callable()
-        ctx = {"dag_run": MagicMock(conf={"mode": "count", "count": 3})}
-        assert fn(**ctx) == "trigger_loop_character_basic"
+        fn = self._branch_fn("ITEM_EQUIPMENT")
+        ctx = {"dag_run": MagicMock(conf={"mode": "count", "count": 5})}
+        assert fn(**ctx) == "trigger_loop_item_equipment"
 
-    def test_mode_infinite_routes_to_trigger_loop(self):
-        fn = self._get_callable()
+    def test_mode_infinite_routes_to_trigger_loop_infinite(self):
+        """mode=infinite must route to a separate leaf task_id so count_sensor
+        does not run when count is not specified."""
+        fn = self._branch_fn("ITEM_EQUIPMENT")
         ctx = {"dag_run": MagicMock(conf={"mode": "infinite"})}
-        assert fn(**ctx) == "trigger_loop_character_basic"
+        assert fn(**ctx) == "trigger_loop_infinite_item_equipment"
 
     def test_invalid_conf_raises(self):
         from airflow.exceptions import AirflowException
-        fn = self._get_callable()
+        fn = self._branch_fn("CHARACTER_BASIC")
         ctx = {"dag_run": MagicMock(conf={})}
         with pytest.raises(AirflowException):
             fn(**ctx)
+
+
+class TestWaitTerminalFn:
+    def test_returns_true_when_terminal(self):
+        with patch("phase_pipeline_factory.requests.get") as mock_get, \
+             patch("phase_pipeline_factory.time") as mock_time:
+            mock_time.monotonic.return_value = 0  # never exceed deadline
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "slots": {
+                    "CHARACTER_BASIC": {
+                        "runId": "20260622-120000-x",
+                        "phase": "CHARACTER_BASIC",
+                        "terminal": True,
+                    }
+                },
+                "lastCompletedByPhase": {},
+            }
+            mock_get.return_value = mock_resp
+            ti = MagicMock()
+            ti.xcom_pull.return_value = {"runId": "20260622-120000-x"}
+            ctx = {"ti": ti}
+            result = _wait_terminal_fn("CHARACTER_BASIC")(**ctx)
+        assert result is True
+
+    def test_raises_when_failed(self):
+        with patch("phase_pipeline_factory.requests.get") as mock_get, \
+             patch("phase_pipeline_factory.time") as mock_time:
+            mock_time.monotonic.return_value = 0
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "slots": {
+                    "CHARACTER_BASIC": {
+                        "runId": "20260622-120000-x",
+                        "phase": "FAILED",
+                        "terminal": True,
+                        "errorMessage": "boom",
+                    }
+                },
+                "lastCompletedByPhase": {},
+            }
+            mock_get.return_value = mock_resp
+            ti = MagicMock()
+            ti.xcom_pull.return_value = {"runId": "20260622-120000-x"}
+            with pytest.raises(RuntimeError, match="failed"):
+                _wait_terminal_fn("CHARACTER_BASIC")(ti=ti)
 
 
 class TestMakePhaseDag:
@@ -1036,49 +1108,38 @@ class TestMakePhaseDag:
 
     def test_dag_has_expected_task_ids_for_character_basic(self):
         dag = make_phase_dag("CHARACTER_BASIC", "character_basic_pipeline")
-        task_ids = {t.task_id for t in dag.tasks}
+        ids = {t.task_id for t in dag.tasks}
         expected = {
             "check_external_api",
             "branch_on_mode",
             "trigger_character_basic",
             "wait_terminal_character_basic",
-            "trigger_loop_character_basic",
-            "stop_loop_character_basic",
-            "count_3_character_basic",   # default test count
+            "trigger_loop_character_basic",       # mode=count path start
+            "count_sensor_character_basic",       # mode=count sensor
+            "stop_loop_character_basic",          # mode=count stop
+            "trigger_loop_infinite_character_basic",  # mode=infinite leaf
         }
-        # Only the mode=count sensor for the default test count
-        # is asserted; other counts are parametrized.
-        # Re-call factory with explicit counts:
-        dag2 = make_phase_dag(
-            "CHARACTER_BASIC",
-            "character_basic_pipeline",
-            default_test_count=5,
-        )
-        ids2 = {t.task_id for t in dag2.tasks}
-        assert "count_5_character_basic" in ids2
+        assert expected.issubset(ids)
 
-    def test_dag_for_item_equipment_uses_correct_phase(self):
-        dag = make_phase_dag("ITEM_EQUIPMENT", "item_equipment_pipeline")
-        trigger_task = dag.get_task("trigger_item_equipment")
-        assert "ITEM_EQUIPMENT" in trigger_task.task_id
-
-    def test_infinite_branch_does_not_have_count_sensor(self):
-        """mode=infinite branch ends at trigger_loop; no count sensor."""
+    def test_infinite_branch_is_leaf(self):
+        """trigger_loop_infinite_<phase> must have no downstream tasks."""
         dag = make_phase_dag(
-            "ITEM_EQUIPMENT", "item_equipment_pipeline", default_test_count=3
+            "ITEM_EQUIPMENT", "item_equipment_pipeline"
         )
-        ids = {t.task_id for t in dag.tasks}
-        # count sensor exists for test purposes but isn't in the once/infinite path
-        # The once branch is: trigger_item_equipment >> wait_terminal_item_equipment
-        # The infinite branch is: trigger_loop_item_equipment (terminal)
-        once_downstream = set(
-            dag.get_task("trigger_item_equipment").downstream_task_ids
+        leaf = dag.get_task("trigger_loop_infinite_item_equipment")
+        assert leaf.downstream_task_ids == [], (
+            f"infinite branch should be leaf, got downstream={leaf.downstream_task_ids}"
         )
-        assert "wait_terminal_item_equipment" in once_downstream
-        infinite_downstream = set(
-            dag.get_task("trigger_loop_item_equipment").downstream_task_ids
+
+    def test_count_branch_wires_count_sensor_then_stop_loop(self):
+        dag = make_phase_dag(
+            "ITEM_EQUIPMENT", "item_equipment_pipeline"
         )
-        assert "stop_loop_item_equipment" in infinite_downstream
+        trigger_loop = dag.get_task("trigger_loop_item_equipment")
+        count_sensor = dag.get_task("count_sensor_item_equipment")
+        stop_loop = dag.get_task("stop_loop_item_equipment")
+        assert count_sensor.task_id in trigger_loop.downstream_task_ids
+        assert stop_loop.task_id in count_sensor.downstream_task_ids
 ```
 
 Also create `test_phase_dag_structure.py` for DagBag-level checks:
@@ -1107,7 +1168,7 @@ def test_character_basic_pipeline_parses(dagbag):
     ids = {t.task_id for t in dag.tasks}
     assert "branch_on_mode" in ids
     assert "trigger_character_basic" in ids
-    assert "trigger_loop_character_basic" in ids
+    assert "trigger_loop_infinite_character_basic" in ids
 
 
 def test_item_equipment_pipeline_parses(dagbag):
@@ -1115,14 +1176,15 @@ def test_item_equipment_pipeline_parses(dagbag):
     assert dag is not None
     ids = {t.task_id for t in dag.tasks}
     assert "trigger_item_equipment" in ids
-    assert "trigger_loop_item_equipment" in ids
+    assert "trigger_loop_infinite_item_equipment" in ids
+    assert "count_sensor_item_equipment" in ids
 
 
 def test_daily_full_pipeline_parses(dagbag):
     dag = dagbag.get_dag("daily_full_pipeline")
     assert dag is not None
-    # 4 TriggerDagRunOperator tasks
-    trigger_ids = [t.task_id for t in dag.tasks if "trigger" in t.task_id]
+    # 4 TriggerDagRunOperator tasks (ranking_ocid, char_basic, item_equip, cleanup)
+    trigger_ids = [t.task_id for t in dag.tasks if t.task_id.startswith("trigger_")]
     assert len(trigger_ids) == 4
 
 
@@ -1130,8 +1192,10 @@ def test_stop_loop_pipeline_parses(dagbag):
     dag = dagbag.get_dag("stop_loop_pipeline")
     assert dag is not None
     ids = {t.task_id for t in dag.tasks}
-    assert "stop_loop" in ids
-    assert "wait_loop_stopped" in ids
+    assert "stop_loop_character_basic" in ids
+    assert "stop_loop_item_equipment" in ids
+    assert "wait_loop_stopped_character_basic" in ids
+    assert "wait_loop_stopped_item_equipment" in ids
 
 
 def test_ranking_ocid_lookup_pipeline_parses(dagbag):
@@ -1142,6 +1206,8 @@ def test_ranking_ocid_lookup_pipeline_parses(dagbag):
     assert "wait_ranking_fetch_terminal" in ids
     assert "trigger_ocid_lookup" in ids
     assert "wait_ocid_lookup_terminal" in ids
+    # The upstream_run_id task that pushes RANKING's runId for OCID's header
+    assert "upstream_run_id" in ids
 
 
 def test_legacy_dag_still_parses(dagbag):
@@ -1161,9 +1227,9 @@ cd /home/maple/probabilistic-valuation-engine && \
     -v 2>&1 | head -50
 ```
 
-Expected: ImportError on `make_branch_on_mode` / `make_phase_dag`. DAG tests will fail (no DAG files yet).
+Expected: ImportError on `make_branch_on_mode_for_phase` / `make_phase_dag` / `_wait_terminal_fn`. DAG tests will fail (no DAG files yet).
 
-- [ ] **Step 3: Implement branch + factory DAG**
+- [ ] **Step 3: Implement branch + factory DAG (with infinite-path separation)**
 
 Append to `phase_pipeline_factory.py`:
 
@@ -1172,23 +1238,31 @@ from airflow import DAG
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import BranchPythonOperator, PythonOperator
 from airflow.providers.http.sensors.http import HttpSensor
+import time as _time
 
 
-def make_branch_on_mode() -> BranchPythonOperator:
-    """BranchPythonOperator: routes to once/count/infinite branch.
+# Upper bound on mode=count sensor runtime. Generous so any operator-passed
+# count up to ~135 chunks (12h - 30min buffer = 11.5h = 690min = 138 chunks)
+# fits. Operators specifying count > 100 chunks should use mode=infinite +
+# stop_loop_pipeline instead.
+_COUNT_SENSOR_MAX_TIMEOUT = timedelta(hours=12)
 
-    Validates conf via parse_mode; raises AirflowException on invalid (the
-    branch task fails before any HTTP call).
+
+def make_branch_on_mode_for_phase(phase: str) -> BranchPythonOperator:
+    """BranchPythonOperator that routes by mode for a specific phase.
+
+    Task_ids returned:
+      - mode=once    → 'trigger_<phase>'
+      - mode=count   → 'trigger_loop_<phase>' (continues into count_sensor + stop_loop)
+      - mode=infinite → 'trigger_loop_infinite_<phase>' (leaf; DAG ends here)
     """
     def _branch(**ctx):
         mode, _ = parse_mode(ctx["dag_run"].conf or {})
-        phase = ctx["dag_run"].conf.get("__phase__", "")
-        # The factory injects __phase__ into conf at DAG construction so
-        # the branch knows which phase's task_ids to route to.
         if mode == "once":
             return f"trigger_{phase.lower()}"
-        # mode in (count, infinite) → trigger_loop_<phase>
-        return f"trigger_loop_{phase.lower()}"
+        if mode == "infinite":
+            return f"trigger_loop_infinite_{phase.lower()}"
+        return f"trigger_loop_{phase.lower()}"  # mode=count
 
     return BranchPythonOperator(
         task_id="branch_on_mode",
@@ -1197,9 +1271,11 @@ def make_branch_on_mode() -> BranchPythonOperator:
 
 
 def _wait_terminal_fn(phase: str):
-    """Inner: poll /run-status until phase slot has terminal runId."""
-    import time as _time
+    """Inner: poll /run-status until phase slot reaches terminal state.
 
+    Returns True once terminal. Raises RuntimeError on FAILED, TimeoutError on
+    4h deadline. Ported from per_phase_tasks.make_is_phase_terminal (legacy).
+    """
     def _wait(**ctx):
         ti = ctx["ti"]
         trigger_resp = ti.xcom_pull(task_ids=f"trigger_{phase.lower()}")
@@ -1256,21 +1332,62 @@ def _wait_terminal_fn(phase: str):
     return _wait
 
 
-def make_phase_dag(
-    phase: str,
-    dag_id: str,
-    default_test_count: int = 3,
-) -> DAG:
+def _make_count_sensor_runtime(phase: str) -> PythonSensor:
+    """Count sensor that reads count from dag_run.conf at runtime.
+
+    Single sensor handles all count values (1..N where N * 5min + 30min
+    <= 12h). Uses the runtime conf value, not a parse-time default.
+    """
+    from kafka import KafkaConsumer
+
+    endpoint = _PHASE_TO_ENDPOINT[phase]
+
+    def _poke(**ctx):
+        _, count = parse_mode(ctx["dag_run"].conf or {})
+        # Sanity: count >= 1 already validated by parse_mode.
+        consumer = KafkaConsumer(
+            "synchronizer.chunk.consumed",
+            bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
+            auto_offset_reset="latest",
+            enable_auto_commit=False,
+            group_id=(
+                f"airflow-count-sensor-{phase.lower()}-"
+                f"{ctx['dag_run'].run_id[:8]}"
+            ),
+            value_deserializer=lambda m: _json.loads(m.decode("utf-8")),
+        )
+        try:
+            received = 0
+            for message in consumer:
+                event = message.value
+                if event.get("endpoint") == endpoint:
+                    received += 1
+                    if received >= count:
+                        return True
+        finally:
+            consumer.close()
+        return False  # iterator exhausted; reschedule
+
+    return PythonSensor(
+        task_id=f"count_sensor_{phase.lower()}",
+        python_callable=_poke,
+        mode="reschedule",
+        poke_interval=30,
+        timeout=int(_COUNT_SENSOR_MAX_TIMEOUT.total_seconds()),
+    )
+
+
+def make_phase_dag(phase: str, dag_id: str) -> DAG:
     """Build a phase DAG with mode=once / mode=count / mode=infinite branches.
 
     Args:
         phase: PipelinePhase name (CHARACTER_BASIC or ITEM_EQUIPMENT).
         dag_id: Airflow DAG id.
-        default_test_count: The count value materialized as a sensor task for
-            testability. Operators pass count via dag_run.conf; the count_sensor
-            is created at DAG-parse time using this default. A future enhancement
-            could generate sensors per-conf-value via DAG serialization, but
-            that's out of scope for v1.
+
+    Mode routing (via make_branch_on_mode_for_phase):
+      - mode=once     → trigger_<phase> >> wait_terminal_<phase>
+      - mode=count    → trigger_loop_<phase> >> count_sensor >> stop_loop
+      - mode=infinite → trigger_loop_infinite_<phase> (leaf; DAG ends here)
     """
     default_args = {
         "owner": "maple-pipeline",
@@ -1281,7 +1398,7 @@ def make_phase_dag(
         dag_id=dag_id,
         default_args=default_args,
         start_date=datetime(2026, 5, 29),
-        schedule=None,  # manual trigger only
+        schedule=None,
         catchup=False,
         tags=["pipeline", "phase", phase.lower().replace("_", "-")],
     )
@@ -1297,7 +1414,7 @@ def make_phase_dag(
             timeout=120,
         )
 
-        branch = make_branch_on_mode()
+        branch = make_branch_on_mode_for_phase(phase)
 
         # once branch
         trigger_once = make_trigger_once_task(phase)
@@ -1309,49 +1426,25 @@ def make_phase_dag(
             timeout=4 * 60 * 60,
         )
 
-        # count + infinite branch share trigger_loop
-        trigger_loop = make_trigger_loop_task(phase)
-        count_sensor = make_count_sensor(phase, default_test_count)
+        # count branch: trigger_loop → count_sensor (runtime count from conf) → stop_loop
+        trigger_loop_count = make_trigger_loop_task(phase)
+        count_sensor = _make_count_sensor_runtime(phase)
         stop_loop = make_stop_loop_task(phase)
+
+        # infinite branch: trigger_loop_infinite (leaf; DAG succeeds here)
+        trigger_loop_infinite = PythonOperator(
+            task_id=f"trigger_loop_infinite_{phase.lower()}",
+            python_callable=_trigger_loop_fn(phase),  # same callable; fires-and-exits
+            retries=0,
+            execution_timeout=timedelta(seconds=60),
+            do_xcom_push=True,
+        )
 
         # Wiring
         check_external_api >> branch
         branch >> trigger_once >> wait_terminal
-
-        # count branch: trigger_loop → count_sensor → stop_loop
-        branch >> trigger_loop
-        trigger_loop >> count_sensor >> stop_loop
-
-        # infinite branch: trigger_loop (terminal — DAG succeeds immediately)
-        # This is implicit: branch routes to trigger_loop_<phase> for both
-        # count and infinite. For count, downstream count_sensor + stop_loop
-        # execute. For infinite, no further downstream; DAG ends at trigger_loop.
-        # However, since trigger_loop is also a downstream of count branch,
-        # we need to mark trigger_loop as a join point with trigger_rule that
-        # tolerates infinite branch terminating. Use trigger_rule='none_skipped'.
-        # Simplest: rely on Airflow's default for PythonOperator (all_success
-        # upstream) and note that infinite mode's "no further task" means the
-        # DAG's last task is trigger_loop itself. Acceptable.
-
-        # Inject __phase__ into the branch callable's runtime by patching
-        # the parse_mode path. The branch callable reads ctx['dag_run'].conf
-        # which we don't modify here — instead, branch uses a closure over
-        # `phase` via __phase__ injection. Update _branch:
-        original_branch_fn = branch.python_callable
-
-        def _branch_with_phase(**ctx):
-            ctx_copy = dict(ctx)
-            conf = dict(ctx_copy.get("dag_run").conf or {})
-            conf["__phase__"] = phase
-            ctx_copy["dag_run"] = MagicMock(conf=conf) if False else ctx["dag_run"]
-            # We can't easily mock dag_run here; instead, use a thread-local
-            # or pass phase via env. Simplest: re-implement branch inline:
-            mode, _ = parse_mode(ctx["dag_run"].conf or {})
-            if mode == "once":
-                return f"trigger_{phase.lower()}"
-            return f"trigger_loop_{phase.lower()}"
-
-        branch.python_callable = _branch_with_phase
+        branch >> trigger_loop_count >> count_sensor >> stop_loop
+        branch >> trigger_loop_infinite
 
     return dag
 ```
@@ -1364,7 +1457,7 @@ cd /home/maple/probabilistic-valuation-engine && \
     docker/airflow/dags/tests/test_phase_pipeline_factory.py -v
 ```
 
-Expected: parse_mode + trigger + count + stop + branch tests pass. `test_phase_dag_structure.py` will fail because the DAG files don't exist yet — expected. Will pass in Tasks 7-11.
+Expected: parse_mode + trigger + count + stop + branch + wait_terminal tests pass. `test_phase_dag_structure.py` will fail because the DAG files don't exist yet — expected. Will pass in Tasks 7-11.
 
 - [ ] **Step 5: Commit**
 
@@ -1373,22 +1466,20 @@ cd /home/maple/probabilistic-valuation-engine && \
   git add docker/airflow/dags/phase_pipeline_factory.py \
           docker/airflow/dags/tests/test_phase_pipeline_factory.py \
           docker/airflow/dags/tests/test_phase_dag_structure.py && \
-  git commit -m "feat(airflow): add branch_on_mode + make_phase_dag factory
+  git commit -m "feat(airflow): add branch_on_mode_for_phase + make_phase_dag factory
 
-make_branch_on_mode returns BranchPythonOperator that routes by parse_mode
-result: once→trigger_<phase>, count|infinite→trigger_loop_<phase>.
+Three-branch routing via closure over phase:
+  mode=once     → trigger_<phase> >> wait_terminal_<phase>
+  mode=count    → trigger_loop_<phase> >> count_sensor >> stop_loop
+  mode=infinite → trigger_loop_infinite_<phase> (leaf; DAG ends here)
 
-make_phase_dag(phase, dag_id, default_test_count=3) builds a DAG with:
-  check_external_api >> branch_on_mode
-    >> trigger_<phase> >> wait_terminal_<phase>           (mode=once)
-    >> trigger_loop_<phase>                                (mode=count|infinite)
-       >> count_<N>_<phase> >> stop_loop_<phase>           (mode=count)
-       >> [terminal]                                       (mode=infinite)
+count_sensor reads count from dag_run.conf at runtime (single sensor
+handles any count). Timeout fixed at 12h upper bound (covers up to
+~138 chunks). trigger_loop_infinite is a separate leaf task so count_sensor
+does not run for mode=infinite (Bug #7 fix).
 
-default_test_count materializes a count sensor at DAG-parse time for
-testability. Operators override count via dag_run.conf at trigger time;
-the sensor task is created once with default but the runtime poke filter
-honors the conf value via xcom (future enhancement: per-conf sensors).
+wait_terminal_fn ported from per_phase_tasks.make_is_phase_terminal
+(legacy module delegates in Task 13).
 
 Refs: docs/superpowers/specs/2026-06-22-dag-restructure-design.md §6.1
 
@@ -1462,10 +1553,9 @@ with DAG(
     )
 
     # OCID_LOOKUP — requires X-Upstream-Run-Id from RANKING_FETCH trigger.
-    # The X-Upstream-Run-Id header is set via the trigger_task callable
-    # reading xcom from `trigger_ranking_fetch`. make_trigger_task already
-    # handles this — it reads `upstream_run_id_pusher` xcom. Add a tiny
-    # task to push the runId into the upstream slot:
+    # The factory's _trigger_once_fn xcom_pulls from task_id="upstream_run_id"
+    # (must match exactly — Bug #4 fix). Add a tiny task to push the runId
+    # into that slot:
     def _push_upstream_run_id(**ctx):
         ti = ctx["ti"]
         trigger_resp = ti.xcom_pull(task_ids="per_phase_trigger_ranking_fetch")
@@ -1475,7 +1565,7 @@ with DAG(
         return trigger_resp.get("runId") if trigger_resp else None
 
     push_upstream = PythonOperator(
-        task_id="upstream_run_id_pusher",
+        task_id="upstream_run_id",  # must match factory's xcom_pull task_id
         python_callable=_push_upstream_run_id,
     )
 
@@ -1543,7 +1633,6 @@ from phase_pipeline_factory import make_phase_dag
 character_basic_dag = make_phase_dag(
     phase="CHARACTER_BASIC",
     dag_id="character_basic_pipeline",
-    default_test_count=3,
 )
 ```
 
@@ -1594,7 +1683,6 @@ from phase_pipeline_factory import make_phase_dag
 item_equipment_dag = make_phase_dag(
     phase="ITEM_EQUIPMENT",
     dag_id="item_equipment_pipeline",
-    default_test_count=3,
 )
 ```
 
@@ -1700,7 +1788,7 @@ with DAG(
     trigger_cleanup = TriggerDagRunOperator(
         task_id="trigger_cleanup",
         trigger_dag_id="daily_cleanup_pipeline",
-        wait_for_completion=False,  # fire-and-forget; cleanup has its own schedule
+        wait_for_completion=True,  # fail loud if cleanup errors (Bug #6 fix)
         reset_dag_run=True,
     )
 
@@ -1779,16 +1867,6 @@ default_args = {
 }
 
 
-def _validate_phase(**ctx):
-    conf = ctx["dag_run"].conf or {}
-    phase = conf.get("phase")
-    if phase not in LOOPABLE_PHASES:
-        raise AirflowException(
-            f"phase='{phase}' invalid. Allowed: {sorted(LOOPABLE_PHASES)}"
-        )
-    return phase
-
-
 with DAG(
     dag_id="stop_loop_pipeline",
     default_args=default_args,
@@ -1809,9 +1887,9 @@ with DAG(
     )
 
     # Single DAG handles both CHARACTER_BASIC and ITEM_EQUIPMENT via conf.
-    # Validate phase at trigger time, then route to the right stop task.
-    # For simplicity, always create both stop tasks; the conf determines
-    # which one runs (skip pattern).
+    # Phase validation happens in make_stop_loop_task's skip pattern (Bug #5
+    # fix: removed standalone _validate_phase; _stop_loop_fn returns None
+    # if conf.phase != this task's phase, Airflow marks as success-skipped).
     stop_character_basic = make_stop_loop_task("CHARACTER_BASIC")
     stop_item_equipment = make_stop_loop_task("ITEM_EQUIPMENT")
 
@@ -2528,7 +2606,7 @@ docker exec maple-airflow-scheduler airflow dags trigger daily_collection_pipeli
 
 Open http://localhost:8180 (admin/admin). For each DAG run, verify:
 - DAG run shows correct task graph (branch resolved per conf).
-- For mode=count, `count_3_item_equipment` sensor task runs and exits True.
+- For mode=count, `count_sensor_item_equipment` sensor task runs and exits True.
 - For mode=infinite, DAG succeeds at `trigger_loop_item_equipment` task.
 - For stop_loop, `wait_loop_stopped_item_equipment` sensor exits True after loop finalizes.
 - Legacy `daily_collection_pipeline` triggers the existing FULL_DAILY chain.

@@ -16,8 +16,8 @@ Refs: docs/superpowers/specs/2026-06-23-3am-pipeline-chain-design.md
 """
 from datetime import datetime
 
+import requests
 from airflow import DAG
-from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.http.sensors.http import HttpSensor
 from airflow.sensors.python import PythonSensor
@@ -103,7 +103,6 @@ with DAG(
     # AND status == "RUNNING" (confirms the loop accepted the start signal
     # and at least one iteration has begun).
     def _is_iteration_started(**ctx) -> bool:
-        import requests
         try:
             resp = requests.get(
                 f"{get_external_api_base()}/api/internal/run-status",

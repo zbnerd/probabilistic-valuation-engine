@@ -4,17 +4,21 @@ Validates structural invariants: dag_id, schedule, catchup, retries,
 task count, factory wiring. Does not exercise the chain end-to-end
 (manual Airflow run required for integration).
 """
+from pathlib import Path
+
 import pytest
 
 
-DAG_FOLDER = "/opt/airflow/dags"
+# Resolve dag folder relative to this test file. Works both inside the
+# Airflow scheduler container (/opt/airflow/dags/tests/) and on the host
+# as long as the dags/ sibling contains morning_chain_pipeline.py.
+DAG_FOLDER = str(Path(__file__).resolve().parent.parent)
 
 
 @pytest.fixture(scope="module")
 def dag():
     from airflow.models import DagBag
     # Airflow 2.10.5 DagBag parses all .py files in dag_folder at construction.
-    # We point it at the live dags directory the scheduler uses.
     bag = DagBag(dag_folder=DAG_FOLDER, include_examples=False)
     assert not bag.import_errors, f"import errors: {bag.import_errors}"
     assert "morning_chain_pipeline" in bag.dags, (
@@ -99,7 +103,6 @@ def test_has_wait_upstream_terminal_character_basic(dag):
 
 
 def test_exactly_9_tasks(dag):
-    """1 health + 4 trigger + 4 sensor (3 factory + 1 custom) = 9."""
     task_ids = {t.task_id for t in dag.tasks}
     assert len(task_ids) == 9, f"got {len(task_ids)}: {sorted(task_ids)}"
 
@@ -108,14 +111,14 @@ def test_all_trigger_dagrun_have_reset(dag):
     """TriggerDagRunOperators must reset_dag_run=True to avoid stale-run collisions."""
     for t in dag.tasks:
         if t.task_id.startswith("trigger_"):
-            assert getattr(t, "reset_dag_run", False) is True
+            assert t.reset_dag_run is True, f"{t.task_id} missing reset_dag_run"
 
 
 def test_all_sensors_use_reschedule(dag):
     """mode=reschedule frees worker slot between pokes."""
     for t in dag.tasks:
         if t.task_id.startswith("wait_") or t.task_id == "check_ext_api_health":
-            assert getattr(t, "mode", None) == "reschedule"
+            assert t.mode == "reschedule", f"{t.task_id} mode={t.mode}"
 
 
 def test_dependency_chain_linear(dag):

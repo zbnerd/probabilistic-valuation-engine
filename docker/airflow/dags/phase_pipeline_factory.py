@@ -500,6 +500,18 @@ def _wait_phase_terminal_fn(phase: str):
 
             # No active run yet → not progressed past `phase`
             if not current_run_id or not current_phase:
+                # No active run (current=null after daily chain finished) but
+                # a prior run reached `phase` terminal — accept as gate pass.
+                # Without this, standalone per-phase DAGs triggered after the
+                # daily chain completes can't pass the upstream sensor because
+                # `current` is null and `current_idx > target_idx` never holds.
+                # Verified 2026-06-23: item_equipment_pipeline stuck on
+                # wait_upstream_terminal_character_basic for 4h timeout because
+                # /run-status returned current=null after daily success.
+                lcbp = data.get("lastCompletedByPhase") or {}
+                slot = lcbp.get(phase) or {}
+                if slot.get("terminal"):
+                    return True
                 if time.monotonic() >= deadline:
                     raise TimeoutError(
                         f"Upstream phase {phase} did not reach terminal within 4h"

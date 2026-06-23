@@ -17,6 +17,13 @@ Refs: docs/superpowers/specs/2026-06-23-3am-pipeline-chain-design.md
 from datetime import datetime
 
 from airflow import DAG
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.providers.http.sensors.http import HttpSensor
+
+from phase_pipeline_factory import (
+    make_wait_loop_stopped_sensor,
+    make_wait_phase_terminal_sensor,
+)
 
 
 default_args = {
@@ -33,4 +40,40 @@ with DAG(
     catchup=False,
     tags=["pipeline", "chain", "morning"],
 ) as dag:
-    pass  # tasks added in subsequent tasks
+
+    check_ext_api_health = HttpSensor(
+        task_id="check_ext_api_health",
+        http_conn_id="external_api",
+        endpoint="actuator/health",
+        request_params={},
+        response_check=lambda r: r.status_code == 200,
+        poke_interval=30,
+        timeout=120,
+    )
+
+    trigger_stop_loop = TriggerDagRunOperator(
+        task_id="trigger_stop_loop",
+        trigger_dag_id="stop_loop_pipeline",
+        conf={"phase": "ITEM_EQUIPMENT"},
+        reset_dag_run=True,
+        wait_for_completion=False,
+    )
+
+    # Factory sensor — idempotent: returns True if no loop is active
+    # (sensor task_id auto-generated: wait_loop_stopped_item_equipment).
+    wait_loop_stopped = make_wait_loop_stopped_sensor("ITEM_EQUIPMENT")
+
+    trigger_ranking_ocid = TriggerDagRunOperator(
+        task_id="trigger_ranking_ocid",
+        trigger_dag_id="ranking_ocid_lookup_pipeline",
+        reset_dag_run=True,
+        wait_for_completion=False,
+    )
+
+    # Factory sensor — returns True when current.phase progresses past OCID_LOOKUP
+    # (auto-generated task_id: wait_upstream_terminal_ocid_lookup).
+    wait_ocid_lookup_terminal = make_wait_phase_terminal_sensor("OCID_LOOKUP")
+
+    check_ext_api_health >> trigger_stop_loop
+    trigger_stop_loop >> wait_loop_stopped >> trigger_ranking_ocid
+    trigger_ranking_ocid >> wait_ocid_lookup_terminal

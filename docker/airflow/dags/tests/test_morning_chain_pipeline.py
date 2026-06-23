@@ -44,3 +44,35 @@ def test_start_date_set(dag):
 
 def test_no_retries(dag):
     assert dag.default_args.get("retries") == 0
+
+
+def test_has_check_ext_api_health(dag):
+    assert "check_ext_api_health" in {t.task_id for t in dag.tasks}
+
+
+def test_has_trigger_stop_loop(dag):
+    assert "trigger_stop_loop" in {t.task_id for t in dag.tasks}
+
+
+def test_trigger_stop_loop_targets_correct_dag_with_phase_conf(dag):
+    t = next(t for t in dag.tasks if t.task_id == "trigger_stop_loop")
+    assert t.trigger_dag_id == "stop_loop_pipeline"
+    assert t.conf == {"phase": "ITEM_EQUIPMENT"}
+
+
+def test_has_wait_loop_stopped_sensor(dag):
+    """Factory's loop-stopped sensor: idempotent (True if no loop active)."""
+    assert "wait_loop_stopped_item_equipment" in {t.task_id for t in dag.tasks}
+
+
+def test_has_trigger_ranking_ocid(dag):
+    assert "trigger_ranking_ocid" in {t.task_id for t in dag.tasks}
+
+
+def test_trigger_ranking_ocid_targets_correct_dag(dag):
+    t = next(t for t in dag.tasks if t.task_id == "trigger_ranking_ocid")
+    assert t.trigger_dag_id == "ranking_ocid_lookup_pipeline"
+
+
+def test_has_wait_upstream_terminal_ocid_lookup(dag):
+    assert "wait_upstream_terminal_ocid_lookup" in {t.task_id for t in dag.tasks}

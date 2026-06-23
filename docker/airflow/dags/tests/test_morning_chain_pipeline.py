@@ -96,3 +96,32 @@ def test_has_wait_first_iteration_started(dag):
 
 def test_has_wait_upstream_terminal_character_basic(dag):
     assert "wait_upstream_terminal_character_basic" in {t.task_id for t in dag.tasks}
+
+
+def test_exactly_9_tasks(dag):
+    """1 health + 4 trigger + 1 loop-stopped + 2 phase-terminal + 1 iter-started = 9."""
+    task_ids = {t.task_id for t in dag.tasks}
+    assert len(task_ids) == 9, f"got {len(task_ids)}: {sorted(task_ids)}"
+
+
+def test_all_trigger_dagrun_have_reset(dag):
+    """TriggerDagRunOperators must reset_dag_run=True to avoid stale-run collisions."""
+    for t in dag.tasks:
+        if t.task_id.startswith("trigger_"):
+            assert getattr(t, "reset_dag_run", False) is True
+
+
+def test_all_sensors_use_reschedule(dag):
+    """mode=reschedule frees worker slot between pokes."""
+    for t in dag.tasks:
+        if t.task_id.startswith("wait_") or t.task_id == "check_ext_api_health":
+            assert getattr(t, "mode", None) == "reschedule"
+
+
+def test_dependency_chain_linear(dag):
+    """Health must be the only root; wait_first_iteration_started must be the only leaf."""
+    roots = [t for t in dag.tasks if not t.upstream_list]
+    assert [r.task_id for r in roots] == ["check_ext_api_health"]
+    leaves = [t for t in dag.tasks if not t.downstream_list]
+    assert [l.task_id for l in leaves] == ["wait_first_iteration_started"]
+

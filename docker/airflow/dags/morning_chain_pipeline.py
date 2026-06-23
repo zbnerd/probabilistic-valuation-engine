@@ -52,6 +52,7 @@ with DAG(
         response_check=lambda r: r.status_code == 200,
         poke_interval=30,
         timeout=120,
+        mode="reschedule",
     )
 
     trigger_stop_loop = TriggerDagRunOperator(

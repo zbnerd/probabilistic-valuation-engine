@@ -373,8 +373,14 @@ fi
 Airflow is the control plane for pipeline scheduling and monitoring. **Already running** from step 1b (docker-first) — this step only configures connections and triggers the DAG.
 
 ```bash
-# Install Kafka Python client (needed for SNAPSHOT_RUN_COMPLETED event consumption)
+# Install Kafka Python client (needed for SNAPSHOT_RUN_COMPLETED event consumption).
+# Both scheduler AND webserver: webserver scans DAGS_FOLDER at request time and
+# imports each .py to list DAGs; per-phase DAGs (character_basic_pipeline,
+# item_equipment_pipeline, etc.) import kafka via phase_pipeline_factory, so
+# missing kafka in webserver → 5 import errors → those DAGs invisible in web UI
+# (scheduler still shows them via serialized_dag table). Verified 2026-06-23.
 docker exec maple-airflow-scheduler python3 -m pip install kafka-python-ng --quiet
+docker exec maple-airflow-webserver python3 -m pip install kafka-python-ng --quiet
 
 # Initialize Airflow DB and connections (first run only)
 docker exec maple-airflow-scheduler airflow db migrate

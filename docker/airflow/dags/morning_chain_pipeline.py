@@ -17,16 +17,16 @@ Refs: docs/superpowers/specs/2026-06-23-3am-pipeline-chain-design.md
 from datetime import datetime
 
 from airflow import DAG
+from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.http.sensors.http import HttpSensor
+from airflow.sensors.python import PythonSensor
 
 from phase_pipeline_factory import (
+    get_external_api_base,
     make_wait_loop_stopped_sensor,
     make_wait_phase_terminal_sensor,
 )
-from airflow.operators.python import PythonOperator
-from airflow.sensors.python import PythonSensor
-from phase_pipeline_factory import get_external_api_base
 
 
 default_args = {

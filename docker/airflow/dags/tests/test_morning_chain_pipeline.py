@@ -76,3 +76,23 @@ def test_trigger_ranking_ocid_targets_correct_dag(dag):
 
 def test_has_wait_upstream_terminal_ocid_lookup(dag):
     assert "wait_upstream_terminal_ocid_lookup" in {t.task_id for t in dag.tasks}
+
+
+def test_trigger_character_basic_conf_is_once(dag):
+    t = next(t for t in dag.tasks if t.task_id == "trigger_character_basic_once")
+    assert t.trigger_dag_id == "character_basic_pipeline"
+    assert t.conf == {"mode": "once"}
+
+
+def test_trigger_item_equipment_conf_is_infinite(dag):
+    t = next(t for t in dag.tasks if t.task_id == "trigger_item_equipment_infinite")
+    assert t.trigger_dag_id == "item_equipment_pipeline"
+    assert t.conf == {"mode": "infinite"}
+
+
+def test_has_wait_first_iteration_started(dag):
+    assert "wait_first_iteration_started" in {t.task_id for t in dag.tasks}
+
+
+def test_has_wait_upstream_terminal_character_basic(dag):
+    assert "wait_upstream_terminal_character_basic" in {t.task_id for t in dag.tasks}

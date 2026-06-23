@@ -99,7 +99,7 @@ def test_has_wait_upstream_terminal_character_basic(dag):
 
 
 def test_exactly_9_tasks(dag):
-    """1 health + 4 trigger + 1 loop-stopped + 2 phase-terminal + 1 iter-started = 9."""
+    """1 health + 4 trigger + 4 sensor (3 factory + 1 custom) = 9."""
     task_ids = {t.task_id for t in dag.tasks}
     assert len(task_ids) == 9, f"got {len(task_ids)}: {sorted(task_ids)}"
 

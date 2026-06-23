@@ -35,14 +35,12 @@ A single scheduled Airflow DAG that runs the sequence above unattended. Idempote
 morning_chain_pipeline (schedule: 0 18 * * * UTC = 03:00 KST)
   │
   ├─ check_ext_api_health (HttpSensor)
-  ├─ check_loop_active (PythonOperator → /run-status)
-  ├─ branch_on_loop_active (BranchPythonOperator)
-  │    ├─ if loop active:   trigger_stop_loop → wait_stop_loop_complete
-  │    └─ if loop inactive: skip directly to trigger_ranking_ocid
+  ├─ trigger_stop_loop (TriggerDagRunOperator, conf={phase:ITEM_EQUIPMENT})
+  ├─ wait_loop_stopped_item_equipment (lastCompletedByPhase sensor, idempotent: True if no loop active)
   ├─ trigger_ranking_ocid (TriggerDagRunOperator → ranking_ocid_lookup_pipeline)
-  ├─ wait_ranking_ocid_complete (lastCompletedByPhase sensor, OCID_LOOKUP)
+  ├─ wait_upstream_terminal_ocid_lookup (lastCompletedByPhase sensor)
   ├─ trigger_character_basic_once (TriggerDagRunOperator, conf={mode:once})
-  ├─ wait_character_basic_complete (lastCompletedByPhase sensor)
+  ├─ wait_upstream_terminal_character_basic (lastCompletedByPhase sensor)
   ├─ trigger_item_equipment_infinite (TriggerDagRunOperator, conf={mode:infinite})
   └─ wait_first_iteration_started (PythonSensor, loopId present)
 ```
@@ -54,7 +52,7 @@ morning_chain_pipeline (schedule: 0 18 * * * UTC = 03:00 KST)
 - **Phase duration variance**: ranking+ocid can take 30m-2h depending on new characters. Character_basic 1-3h for 595K users. Item_equipment 2-3h per iteration.
 - **Ext-api availability**: any 5xx during a sensor poke delays the chain; sustained outage halts it.
 - **Loop stop latency**: `/stop/loop/phase/{phase}` waits for in-flight chunk boundary. Max one chunk (~5min at 154 files/s).
-- **Airflow scheduler slot**: 10 tasks, 4 TriggerDagRunOperators, 5 sensors. Fits in default pool.
+- **Airflow scheduler slot**: 9 tasks, 4 TriggerDagRunOperators, 4 sensors (3 factory + 1 custom). Fits in default pool.
 
 ### Trade-off
 
@@ -62,7 +60,7 @@ morning_chain_pipeline (schedule: 0 18 * * * UTC = 03:00 KST)
 | ------ | ---- | ---- |
 | Compose existing per-phase DAGs | Reuses 6 PRs of DAG factory work; zero Kotlin risk; each phase's sensor already battle-tested | Cross-DAG run-history navigation in UI; 1 extra `TriggerDagRunOperator` hop per phase |
 | Schedule via Airflow cron | UI visibility, retries, sensor framework | Requires Airflow scheduler running (already required for cleanup DAGs) |
-| Idempotent branch on loop-active | Safe to re-trigger manually; survives missed runs | One extra PythonOperator (~5s cost) per run |
+| Idempotent stop sensor | Safe to re-trigger manually; no-op if no loop active | Extra sensor poke on each run |
 | `retries=0` strict halt | Forces operator attention on real failures | No auto-recovery from transient blips |
 
 ### Risk

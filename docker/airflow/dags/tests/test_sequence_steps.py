@@ -88,7 +88,8 @@ def test_parse_steps_rejects_non_dict_step():
 
 def test_wait_for_phase_terminal_returns_on_terminal_true():
     """Polls once, finds terminal=True, returns."""
-    with patch("per_phase_tasks.requests.get") as mock_get:
+    with patch("per_phase_tasks.get_external_api_base", return_value="http://test:8081"), \
+         patch("per_phase_tasks.requests.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "slots": {
@@ -107,7 +108,8 @@ def test_wait_for_phase_terminal_returns_on_terminal_true():
 
 def test_wait_for_phase_terminal_uses_run_group_prefix():
     """runId's date-time prefix identifies the run across 4 phases."""
-    with patch("per_phase_tasks.requests.get") as mock_get:
+    with patch("per_phase_tasks.get_external_api_base", return_value="http://test:8081"), \
+         patch("per_phase_tasks.requests.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "slots": {
@@ -131,7 +133,8 @@ def test_wait_for_phase_terminal_uses_run_group_prefix():
 
 def test_wait_for_phase_terminal_raises_on_failed():
     """FAILED phase → RuntimeError."""
-    with patch("per_phase_tasks.requests.get") as mock_get:
+    with patch("per_phase_tasks.get_external_api_base", return_value="http://test:8081"), \
+         patch("per_phase_tasks.requests.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "slots": {
@@ -152,7 +155,8 @@ def test_wait_for_phase_terminal_raises_on_failed():
 
 def test_wait_for_phase_terminal_times_out():
     """If phase never reaches terminal within timeout, raise."""
-    with patch("per_phase_tasks.requests.get") as mock_get:
+    with patch("per_phase_tasks.get_external_api_base", return_value="http://test:8081"), \
+         patch("per_phase_tasks.requests.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "slots": {

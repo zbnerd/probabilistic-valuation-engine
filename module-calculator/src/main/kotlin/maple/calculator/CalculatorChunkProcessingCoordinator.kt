@@ -13,9 +13,9 @@ import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.runstate.CalculatorCurrentRunIdHolder
-import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.util.CompressionUtils
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -118,7 +118,9 @@ class CalculatorChunkProcessingCoordinator(
                 if (attempt > 0) {
                     log.info(
                         "[Coordinator] source chunk found after {} retries: key={} (delaysMs={})",
-                        attempt, objectKey, delays,
+                        attempt,
+                        objectKey,
+                        delays,
                     )
                 }
                 return true

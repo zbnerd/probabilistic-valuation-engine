@@ -1,6 +1,7 @@
 package maple.calculator.processor
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.Base64
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +10,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import maple.calculator.config.CoroutineDispatcherConverter
 import maple.calculator.config.PipelineProperties
@@ -16,9 +18,9 @@ import maple.calculator.model.CalculationResult
 import maple.calculator.model.ChunkResult
 import maple.calculator.parser.SnapshotEquipmentParser
 import maple.calculator.reader.GzipJsonlSnapshotRecordReader
-import maple.expectation.common.storage.ObjectStorage
 import maple.calculator.writer.CalculationResultWriter
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.core.dto.cube.CubeCalculationInput
 import maple.expectation.core.dto.v4.EquipmentItem
 import maple.expectation.core.dto.v4.EquipmentItemConverter
@@ -55,7 +57,7 @@ class SnapshotChunkProcessor(
     )
 
     suspend fun process(event: SnapshotChunkReadyEvent, resultObjectKey: String): ChunkResult = coroutineScope {
-        val lineChannel = Channel<String>(properties.channelCapacity)
+        val recordChannel = Channel<Map<String, Any>>(properties.channelCapacity)
         val itemChannel = Channel<FlatItem>(properties.channelCapacity)
         val resultChannel = Channel<CalculationResult>(properties.channelCapacity)
         val recordCount = AtomicInteger(0)
@@ -64,13 +66,13 @@ class SnapshotChunkProcessor(
         val calculatedCount = AtomicInteger(0)
         val errorCount = AtomicInteger(0)
 
-        launch(Dispatchers.IO) { readLines(event.objectKey, lineChannel) }
+        launch(Dispatchers.IO) { readLines(event.objectKey, recordChannel) }
 
         launch {
             coroutineScope {
                 repeat(parseWorkerCount) {
                     launch(this@SnapshotChunkProcessor.parseDispatcher) {
-                        parseLines(lineChannel, itemChannel, recordCount, successCount, totalItems)
+                        parseLines(recordChannel, itemChannel, recordCount, successCount, totalItems)
                     }
                 }
             }
@@ -88,9 +90,12 @@ class SnapshotChunkProcessor(
             resultChannel.close()
         }
 
-        val writeResult = async(Dispatchers.IO) {
-            resultWriter.write(resultObjectKey, channelAsFlow(resultChannel))
-        }.await()
+        // Start the write CF BEFORE waiting for parse+calc to finish —
+        // the CF drains resultChannel in the background via
+        // producerScope.future, so it overlaps with the parse+calc workers
+        // (same overlap the original async { write() } provided).
+        val writeFuture = resultWriter.write(resultObjectKey, channelAsFlow(resultChannel))
+        val writeResult = writeFuture.await()  // single .await() at coroutine→CF boundary
 
         ChunkResult(
             recordCount = recordCount.get(),
@@ -99,7 +104,7 @@ class SnapshotChunkProcessor(
             calculatedCount = calculatedCount.get(),
             errorCount = errorCount.get(),
             resultObjectKey = writeResult.objectKey,
-            resultCount = writeResult.resultCount,
+            resultCount = writeResult.resultCount.toInt(),
             resultUncompressedBytes = writeResult.uncompressedBytes,
             resultCompressedBytes = writeResult.compressedBytes,
         )
@@ -107,38 +112,37 @@ class SnapshotChunkProcessor(
 
     private suspend fun readLines(
         objectKey: String,
-        channel: Channel<String>,
+        channel: Channel<Map<String, Any>>,
     ) {
         objectStorage.getStream(objectKey).use { stream ->
-            jsonlReader.readLines(stream).collect { line ->
-                channel.send(line)
+            jsonlReader.readRecords(stream).collect { record ->
+                channel.send(record)
             }
         }
         channel.close()
     }
 
     private suspend fun parseLines(
-        lineChannel: Channel<String>,
+        recordChannel: Channel<Map<String, Any>>,
         itemChannel: Channel<FlatItem>,
         recordCount: AtomicInteger,
         successCount: AtomicInteger,
         totalItems: AtomicInteger,
     ) {
-        for (line in lineChannel) {
+        for (record in recordChannel) {
             recordCount.incrementAndGet()
-            val node = objectMapper.readTree(line)
             // Recent chunk writes carry the response body as a base64-encoded
             // ByteArray field `bodyBytes` (Jackson serializes ByteArray as
             // base64). Older writes inlined the body as a nested `body` JSON
             // object. Accept either shape; absent both, treat the record as
             // missing payload and skip.
-            val status = node.path("status").asText("")
-            val httpStatus = node.path("httpStatus").asInt(0)
+            val status = record["status"] as? String ?: ""
+            val httpStatus = (record["httpStatus"] as? Number)?.toInt() ?: 0
             val isSuccess = status == "SUCCESS" || (status.isBlank() && httpStatus == 200)
             if (!isSuccess) continue
 
-            val body = extractBody(node) ?: continue
-            val ocid = node.path("key").asText("")
+            val body = extractBody(record) ?: continue
+            val ocid = record["key"] as? String ?: ""
             successCount.incrementAndGet()
 
             for ((presetNo, items) in equipmentParser.parseAllPresets(body)) {
@@ -158,15 +162,18 @@ class SnapshotChunkProcessor(
      * Returns null if neither is present, or if the bodyBytes base64 decode /
      * JSON parse fails.
      */
-    private fun extractBody(node: com.fasterxml.jackson.databind.JsonNode): com.fasterxml.jackson.databind.JsonNode? {
-        val inline = node.path("body")
-        if (!inline.isMissingNode && !inline.isNull) return inline
-        val bodyBytesField = node.path("bodyBytes")
-        if (bodyBytesField.isMissingNode || bodyBytesField.isNull) return null
-        val b64 = bodyBytesField.asText("")
-        if (b64.isBlank()) return null
+    private fun extractBody(record: Map<String, Any>): com.fasterxml.jackson.databind.JsonNode? {
+        val inline = record["body"]
+        if (inline != null && inline !is Map<*, *>) {
+            // body should be a Map; if not, fall through
+        } else if (inline is Map<*, *>) {
+            @Suppress("UNCHECKED_CAST")
+            return objectMapper.valueToTree(inline as Map<String, Any?>)
+        }
+        val b64 = record["bodyBytes"] as? String
+        if (b64.isNullOrBlank()) return null
         return runCatching {
-            val raw = java.util.Base64.getDecoder().decode(b64)
+            val raw = Base64.getDecoder().decode(b64)
             objectMapper.readTree(raw)
         }.getOrNull()
     }

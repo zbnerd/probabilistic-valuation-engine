@@ -64,4 +64,51 @@ for sa in "${!sa_secret_keys[@]}"; do
   mc admin policy attach local "policy-$sa" --user "$sa"
 done
 
+# Persist SA secret keys for the two startup paths:
+#   1. docker compose path: docker/services/secrets/sa-<module>.key
+#      (mounted as /run/secrets/sa-<module> via the services overlay).
+# Persist SA secret keys to docker/services/secrets/sa-<module>.key.
+# This is the single source of truth — both docker compose and the
+# nohup startup path read from the same file. StorageConfig reads the
+# file directly (MINIO_SECRET_KEY_FILE); the nohup path does the same
+# via `source secrets/sa-<module>.key` from the operator's bring-up script.
+#
+# REPO_ROOT defaults to /workspace (the bind-mount path used by the
+# minio-bootstrap compose service). For host-side runs (bash docker/minio/bootstrap.sh),
+# fall back to the script's parent's parent.
+REPO_ROOT="${REPO_ROOT:-/workspace}"
+if [ ! -d "${REPO_ROOT}/docker" ]; then
+  REPO_ROOT="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)"
+fi
+echo "[bootstrap] REPO_ROOT=${REPO_ROOT}"
+
+# SECRETS_DIR: where SA key files are written. Defaults to the repo's
+# docker/services/secrets for local dev (REPO_ROOT is /workspace in the
+# minio-bootstrap container, the host repo root otherwise). Coolify sets
+# this to an absolute host path (/opt/maple/secrets) so both the
+# maple-infra and maple-apps resources read the same files — repo-relative
+# paths break under Coolify's deploy dir. See ADR-732.
+SECRETS_DIR="${SECRETS_DIR:-${REPO_ROOT}/docker/services/secrets}"
+
+declare -A SA_TO_MODULE=(
+  [ext-api]=ext-api
+  [calculator]=calculator
+  [synchronizer]=synchronizer
+  [cleanup]=cleanup
+)
+
+mkdir -p "${SECRETS_DIR}"
+chmod 700 "${SECRETS_DIR}"
+
+for sa in "${!sa_secret_keys[@]}"; do
+  secret="${sa_secret_keys[$sa]}"
+  module="${SA_TO_MODULE[$sa]:-$sa}"
+
+  # Mode 0444 so the container's non-root user (maple, UID 1000) can read
+  # the secret. Compose v3.8 secret mounts preserve the source file's mode.
+  printf '%s' "${secret}" > "${SECRETS_DIR}/sa-${module}.key"
+  chmod 0444 "${SECRETS_DIR}/sa-${module}.key"
+  echo "[bootstrap] wrote ${SECRETS_DIR}/sa-${module}.key"
+done
+
 echo "[bootstrap] complete"

@@ -1,17 +1,14 @@
 package maple.calculator.processor
 
-import com.github.benmanes.caffeine.cache.Cache
-import com.github.benmanes.caffeine.cache.Caffeine
+import maple.calculator.cache.OffHeapCacheBackend
 import maple.expectation.application.service.calculator.v4.EquipmentExpectationCalculatorFactory
 import maple.expectation.core.dto.v4.EquipmentCalculationInput
 import org.springframework.stereotype.Component
 
-/** Caffeine max size — 100k entries × ~256 B/entry ≈ 25 MB heap. Sized to keep 5 min of calc hot-set in memory. */
-private const val CACHE_MAX_SIZE: Long = 100_000L
-
 @Component
 class CalculationCache(
     private val factory: EquipmentExpectationCalculatorFactory,
+    private val backend: OffHeapCacheBackend<CacheKey, ComponentCosts>,
 ) {
     data class CacheKey(
         val itemName: String,
@@ -43,21 +40,11 @@ class CalculationCache(
         }
     }
 
-    private val cache: Cache<CacheKey, ComponentCosts> = Caffeine.newBuilder()
-        .maximumSize(CACHE_MAX_SIZE)
-        .recordStats()
-        .build()
-
-    /**
-     * Live [Cache] handle for metrics-only access. Do not call [Cache.get] from
-     * metrics paths — use [com.github.benmanes.caffeine.cache.stats.CacheStats]
-     * via [stats] to avoid mutating counters.
-     */
-    fun cache(): Cache<CacheKey, ComponentCosts> = cache
+    fun backend(): OffHeapCacheBackend<CacheKey, ComponentCosts> = backend
 
     fun stats(): String {
-        val s = cache.stats()
-        return "size=${cache.estimatedSize()} hits=${s.hitCount()} misses=${s.missCount()} hitRate=${"%.1f%%".format(s.hitRate() * 100)}"
+        val s = backend.stats()
+        return "size=${s.size} hits=${s.hits} misses=${s.misses} hitRate=${"%.1f%%".format(s.hitRatePercent)}"
     }
 
     fun calculate(input: EquipmentCalculationInput): ComponentCosts {
@@ -72,14 +59,16 @@ class CalculationCache(
             targetStar = input.targetStar,
             isNoljang = input.isNoljang,
         )
-        return cache.get(key) {
-            val calculator = factory.createFullCalculator(input)
-            val details = calculator.detailedCosts
-            ComponentCosts(
-                blackCubeCost = details.blackCubeCost,
-                additionalCubeCost = details.additionalCubeCost,
-                starforceCost = details.starforceCost,
-            )
-        }
+        val cached = backend.get(key)
+        if (cached != null) return cached
+        val calculator = factory.createFullCalculator(input)
+        val details = calculator.detailedCosts
+        val value = ComponentCosts(
+            blackCubeCost = details.blackCubeCost,
+            additionalCubeCost = details.additionalCubeCost,
+            starforceCost = details.starforceCost,
+        )
+        backend.put(key, value)
+        return value
     }
 }

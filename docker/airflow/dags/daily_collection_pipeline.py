@@ -1,10 +1,18 @@
-"""
-Daily Nexon data collection pipeline.
+"""Daily Nexon data collection pipeline (DEPRECATED 2026-06-22).
 
-Trigger → Poll run-status with run_id correlation → Wait for synchronizer chunk consumed event → Trigger cleanup.
+DEPRECATED: Use the phase-separated DAGs instead:
+  - daily_full_pipeline              — scheduled daily chain (mode=once for all phases)
+  - ranking_ocid_lookup_pipeline     — manual RANKING + OCID chain
+  - character_basic_pipeline         — CHARACTER_BASIC with mode=once|count=N|infinite
+  - item_equipment_pipeline          — ITEM_EQUIPMENT with mode=once|count=N|infinite
+  - stop_loop_pipeline               — graceful stop for mode=infinite loops
 
-Control Plane: Airflow triggers and monitors.
-Data Plane: Kafka handles chunk processing, retry, backpressure.
+Removal target: next release cycle. See docs/21_Operations/dag-migration.md
+for operator migration guide.
+
+This DAG remains parseable for one release cycle to avoid breaking operators
+who trigger it directly. Its FULL_DAILY path duplicates daily_full_pipeline's
+behavior; its scope/run_steps paths are superseded by phase DAGs.
 """
 
 from datetime import datetime, timedelta
@@ -36,6 +44,14 @@ from per_phase_tasks import (
 )
 
 log = logging.getLogger(__name__)
+
+
+if "KAFKA_BOOTSTRAP_SERVERS" not in os.environ:
+    raise RuntimeError(
+        "KAFKA_BOOTSTRAP_SERVERS env var is required. "
+        "In docker compose mode it is set automatically to 'kafka:29092'. "
+        "In nohup mode set it to 'localhost:9092' before launching airflow."
+    )
 
 
 def is_health_up(response):
@@ -323,7 +339,7 @@ def wait_for_item_equipment_cycle(**context):
 
     consumer = KafkaConsumer(
         "synchronizer.chunk.consumed",
-        bootstrap_servers=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+        bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
         auto_offset_reset="latest",
         enable_auto_commit=False,
         group_id=f"airflow-ie-cycle-waiter-{run_id[:8]}",
@@ -353,9 +369,9 @@ with DAG(
         "retries": 0,
     },
     start_date=datetime(2026, 5, 29),
-    schedule="0 18 * * *",  # UTC 18:00 = KST 03:00
+    schedule=None,  # schedule moved to daily_full_pipeline; legacy is manual-only
     catchup=False,
-    tags=["pipeline", "daily"],
+    tags=["pipeline", "daily", "deprecated"],
 ) as dag:
 
     check_external_api = HttpSensor(

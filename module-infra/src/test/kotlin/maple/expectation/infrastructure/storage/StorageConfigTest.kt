@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.TestPropertySource
 
-@SpringBootTest(classes = [StorageConfig::class])
+@SpringBootTest(classes = [StorageConfig::class, maple.expectation.infrastructure.concurrency.ConcurrencyConfiguration::class])
 @EnableConfigurationProperties(MinioProperties::class)
 @TestPropertySource(properties = [
     "storage.backend=local",

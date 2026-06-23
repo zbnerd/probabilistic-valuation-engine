@@ -42,7 +42,7 @@ Airflow (Control Plane)          Spring Boot Services (Data Plane)
 
 - `.env` file exists with DB_URL, NEXON_API_KEY, STORAGE_BACKEND, MINIO_* vars
 - No existing processes on ports 8081, 8082, 8083, 8084, 8180
-- MinIO server running (default `http://localhost:9000` from `docker compose up minio`)
+- **Step 1b starts docker services automatically** (Airflow DB, webserver, scheduler, MinIO, Kafka). Manual `docker compose up` is no longer required before invoking this skill.
 - PostgreSQL accessible at the URL in `.env` `DB_URL` (uses `.env`, not hardcoded local)
 - Docker Compose v2 for MinIO + Airflow services
 - Data directory `../data` clean for fresh runs
@@ -53,11 +53,11 @@ Airflow (Control Plane)          Spring Boot Services (Data Plane)
 
 The skill supports two ways to start the Spring Boot modules:
 
-- **`nohup` (default)**: spawns `java -jar` directly via `nohup`, logs to `logs/pipeline-test-*.log`. Self-contained, no systemd. Best for local dev / disposable test environments.
-
+- **`docker` (default)**: `docker compose -f docker-compose.yml -f docker-compose.services.yml up -d`. Services run as containers on `maple-network`. Per-service MinIO SA is mounted as `/run/secrets/sa-<module>` and `StorageConfig` reads it directly via `MINIO_SECRET_KEY_FILE` (no env var, no `entrypoint-wrapper.sh`). Lowest foot-gun surface.
+- **`nohup`**: spawns `java -jar` directly via `nohup`. Operator sets `MINIO_ACCESS_KEY` + `MINIO_SECRET_KEY_FILE` (pointing at `docker/services/secrets/sa-<module>.key`) per launch. Used when Docker is unavailable or for ad-hoc debugging.
 - **`systemd`**: uses the pre-installed `maple-{module}.service` units. Modules run as `maple` user, log to `/var/log/maple/`. Best for persistent / production-like environments.
 
-Set `START_MODE=systemd` to switch. Default is `nohup` for backward compat. The systemd units assume a previous `scripts/install-systemd-units.sh` run; see `scripts/systemd/` for the unit files.
+Set `START_MODE=systemd` to switch. Default is `docker`. The systemd units assume a previous `scripts/install-systemd-units.sh` run; see `scripts/systemd/` for the unit files.
 
 ## Workflow
 
@@ -106,6 +106,35 @@ rule_count=$(mc ilm ls "local/${MINIO_BUCKET}/" 2>&1 | grep -cE "(Enabled|Disabl
 
 **Local storage (legacy)**: Set `STORAGE_BACKEND=local` in `.env` to fall back to the local filesystem backend. The MinIO pre-check above is skipped, and module health will not show `minioHealthIndicator`. The MinIO prefix + storage-error verifications (steps 4a, 9a) are also skipped.
 
+### 1b. Start docker services (docker-first)
+
+All control-plane + storage infrastructure runs in Docker (Airflow, Kafka, MinIO, Airflow DB). Bring these up **before** Spring Boot modules boot so MinIO healthchecks pass at Spring Boot startup and Airflow is ready to trigger.
+
+```bash
+# Compose order matters: airflow-db → airflow-webserver/scheduler (healthcheck-gated);
+# minio + kafka are independent.
+docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d \
+  airflow-db airflow-webserver airflow-scheduler minio kafka
+
+# Wait for Airflow DB
+until docker inspect maple-airflow-db --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do
+  sleep 2
+done
+
+# Wait for Airflow webserver
+until curl -sf http://localhost:8180/health > /dev/null 2>&1; do sleep 3; done
+echo "Airflow ready on 8180"
+
+# Wait for MinIO (only if STORAGE_BACKEND=minio)
+if [ "${STORAGE_BACKEND:-minio}" != "local" ]; then
+  : "${MINIO_ENDPOINT:?MINIO_ENDPOINT required}"
+  until curl -sf "${MINIO_ENDPOINT}/minio/health/ready" > /dev/null 2>&1; do sleep 2; done
+  echo "MinIO ready at ${MINIO_ENDPOINT}"
+fi
+```
+
+**Why docker-first:** Spring Boot modules' `MinioHealthIndicator` (step 4a) probes MinIO at boot. If MinIO is down, modules boot but report DOWN → fail-fast loop. Booting docker first guarantees clean Spring Boot startup. Airflow is also up before step 5 DAG trigger, so trigger / sensor / cleanup_pipeline chain has no cold-start gap.
+
 ### 2. Build JARs
 
 ```bash
@@ -117,24 +146,67 @@ JAR locations: `module-{name}/build/libs/module-{name}-0.0.1-SNAPSHOT.jar`
 ### 3. Start modules (sequential, wait for health check)
 
 ```bash
-START_MODE="${START_MODE:-nohup}"
+START_MODE="${START_MODE:-docker}"
 
-if [ "${START_MODE}" = "nohup" ]; then
+if [ "${START_MODE}" = "docker" ]; then
+  set -a && source .env && set +a
+
+  # Ensure SA secrets exist (bootstrap writes them); fail early if not.
+  if ! ls docker/services/secrets/sa-*.key >/dev/null 2>&1; then
+    echo "ERROR: docker/services/secrets/ empty. Run 'docker compose -f docker-compose.yml run --rm minio-bootstrap' first." >&2
+    exit 7
+  fi
+
+  # Ensure docker-mode infra files exist. Added by PR #1324 (commit 556017399,
+  # 2026-06-22). A working tree on an older commit (e.g. detached HEAD before
+  # 556017399) has no `docker-compose.services.yml` and `docker compose ... up`
+  # below silently fails with "no such file" instead of a clear error.
+  # Verified 2026-06-23: main worktree on 4be816e99 hit this after PR #1331
+  # merged because the local `develop` ref was stale relative to origin/develop.
+  for f in docker-compose.services.yml docker/services/build.sh; do
+    if [ ! -f "$f" ]; then
+      echo "ERROR: $f missing. PR #1324 (commit 556017399) added docker-mode infra." >&2
+      echo "Fix one of:" >&2
+      echo "  - Switch to latest develop:  git checkout origin/develop" >&2
+      echo "  - Use nohup mode instead:    START_MODE=nohup $0" >&2
+      exit 7
+    fi
+  done
+
+  # Build images if missing or stale.
+  ./docker/services/build.sh
+
+  # Bring up only the 4 services; infra (minio, postgres, kafka, etc.)
+  # is owned by the base docker-compose.yml and starts independently.
+  docker compose -f docker-compose.yml -f docker-compose.services.yml up -d \
+    external-api calculator synchronizer cleanup
+
+  # Health check wait.
+  for port in 8081 8082 8083 8084; do
+    until curl -sf "http://localhost:${port}/actuator/health" > /dev/null 2>&1; do sleep 2; done
+    echo "${port} ready"
+  done
+
+elif [ "${START_MODE}" = "nohup" ]; then
   set -a && source .env && set +a && export SPRING_PROFILES_ACTIVE=local && export MALLOC_ARENA_MAX=1
 
   # Use .env DB_URL directly — VS3 / MinIO pipeline test runs against whichever DB
   # .env points at (typically the dev cloud DB for shared MinIO validation).
   # No local PostgreSQL override.
 
-  # Per-module MinIO credentials live in .env.<module> files (NOT in .env).
-  # `source .env` only loads STORAGE_BACKEND/MINIO_ENDPOINT/MINIO_BUCKET but
-  # not MINIO_ACCESS_KEY/MINIO_SECRET_KEY, so each module needs its own env
-  # file sourced before launch. Verified 2026-06-19: missing per-module env
-  # → s3Client bean fails with "Access key ID cannot be blank" at boot.
-  source .env.ext-api     # for ext-api
-  source .env.calculator  # for calculator
-  source .env.synchronizer  # for synchronizer
-  source .env.cleanup     # for cleanup
+  # Per-module MinIO SA secret. StorageConfig reads the file directly via
+  # MINIO_SECRET_KEY_FILE (default /run/secrets/sa-<module>, which doesn't
+  # exist on a nohup host — we override per launch below). The SA name
+  # (MINIO_ACCESS_KEY) is a public identifier. Secret files are written by
+  # docker/minio/bootstrap.sh to docker/services/secrets/sa-<module>.key.
+  SECRETS_DIR=docker/services/secrets
+  # Sanity check: bootstrap must have run.
+  for mod in ext-api calculator synchronizer cleanup; do
+    if [ ! -f "${SECRETS_DIR}/sa-${mod}.key" ]; then
+      echo "ERROR: ${SECRETS_DIR}/sa-${mod}.key missing — run docker compose run --rm minio-bootstrap first" >&2
+      exit 1
+    fi
+  done
 
   # RUN_VIA_AIRFLOW=1 disables ext-api run-on-startup so Airflow is the only
   # trigger source. Default (unset) keeps run-on-startup=true (local profile
@@ -150,17 +222,20 @@ if [ "${START_MODE}" = "nohup" ]; then
   # char-basic + item-equipment phases run concurrently with the OCID lookup
   # cache. Heap benchmark: -Xmx1g → major GC fires every 2.4s, 22% CPU on GC,
   # 102 files/s; -Xmx2g → GC 7%, 150 files/s. Verified 2026-06-16.
-  nohup java -Xms512m -Xmx2g ${RUN_VIA_AIRFLOW_FLAG} -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
+  MINIO_ACCESS_KEY=ext-api MINIO_SECRET_KEY_FILE="${SECRETS_DIR}/sa-ext-api.key" \
+    nohup java -Xms512m -Xmx2g ${RUN_VIA_AIRFLOW_FLAG} -jar module-external-api/build/libs/module-external-api-0.0.1-SNAPSHOT.jar > logs/pipeline-test-external-api.log 2>&1 &
   until curl -sf http://localhost:8081/actuator/health > /dev/null 2>&1; do sleep 2; done
   echo "external-api ready on 8081"
 
   # 2) Calculator (8082)
-  nohup java -Xms512m -Xmx1g -jar module-calculator/build/libs/module-calculator-0.0.1-SNAPSHOT.jar > logs/pipeline-test-calculator.log 2>&1 &
+  MINIO_ACCESS_KEY=calculator MINIO_SECRET_KEY_FILE="${SECRETS_DIR}/sa-calculator.key" \
+    nohup java -Xms512m -Xmx1g -jar module-calculator/build/libs/module-calculator-0.0.1-SNAPSHOT.jar > logs/pipeline-test-calculator.log 2>&1 &
   until curl -sf http://localhost:8082/actuator/health > /dev/null 2>&1; do sleep 2; done
   echo "calculator ready on 8082"
 
   # 3) Synchronizer (8083)
-  nohup java -Xms512m -Xmx1g -jar module-synchronizer/build/libs/module-synchronizer-0.0.1-SNAPSHOT.jar > logs/pipeline-test-synchronizer.log 2>&1 &
+  MINIO_ACCESS_KEY=synchronizer MINIO_SECRET_KEY_FILE="${SECRETS_DIR}/sa-synchronizer.key" \
+    nohup java -Xms512m -Xmx1g -jar module-synchronizer/build/libs/module-synchronizer-0.0.1-SNAPSHOT.jar > logs/pipeline-test-synchronizer.log 2>&1 &
   until curl -sf http://localhost:8083/actuator/health > /dev/null 2>&1; do sleep 2; done
   echo "synchronizer ready on 8083"
 
@@ -171,7 +246,8 @@ if [ "${START_MODE}" = "nohup" ]; then
   # active). Symptom: cleanup endpoint returns runsDeleted=0 / "no runs found"
   # while the MinIO bucket actually holds hundreds of old runs. The explicit
   # -D flag prevents env-var propagation failures from breaking cleanup silently.
-  nohup java -Xms512m -Xmx1g -Dstorage.backend=minio -jar module-cleanup/build/libs/module-cleanup-0.0.1-SNAPSHOT.jar > logs/pipeline-test-cleanup.log 2>&1 &
+  MINIO_ACCESS_KEY=cleanup MINIO_SECRET_KEY_FILE="${SECRETS_DIR}/sa-cleanup.key" \
+    nohup java -Xms512m -Xmx1g -Dstorage.backend=minio -jar module-cleanup/build/libs/module-cleanup-0.0.1-SNAPSHOT.jar > logs/pipeline-test-cleanup.log 2>&1 &
   until curl -sf http://localhost:8084/actuator/health > /dev/null 2>&1; do sleep 2; done
   echo "cleanup ready on 8084"
 else
@@ -292,20 +368,19 @@ if echo "${last}" | grep -q "no runs found at prefix=runs"; then
 fi
 ```
 
-### 5. Start Airflow
+### 5. Configure Airflow + trigger DAG
 
-Airflow is the control plane for pipeline scheduling and monitoring. Always start it as part of the pipeline test.
+Airflow is the control plane for pipeline scheduling and monitoring. **Already running** from step 1b (docker-first) — this step only configures connections and triggers the DAG.
 
 ```bash
-# Start Airflow services (requires docker compose + maple-network)
-docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d airflow-webserver airflow-scheduler
-
-# Wait for Airflow webserver
-until curl -sf http://localhost:8180/health > /dev/null 2>&1; do sleep 3; done
-echo "Airflow ready on 8180"
-
-# Install Kafka Python client (needed for SNAPSHOT_RUN_COMPLETED event consumption)
+# Install Kafka Python client (needed for SNAPSHOT_RUN_COMPLETED event consumption).
+# Both scheduler AND webserver: webserver scans DAGS_FOLDER at request time and
+# imports each .py to list DAGs; per-phase DAGs (character_basic_pipeline,
+# item_equipment_pipeline, etc.) import kafka via phase_pipeline_factory, so
+# missing kafka in webserver → 5 import errors → those DAGs invisible in web UI
+# (scheduler still shows them via serialized_dag table). Verified 2026-06-23.
 docker exec maple-airflow-scheduler python3 -m pip install kafka-python-ng --quiet
+docker exec maple-airflow-webserver python3 -m pip install kafka-python-ng --quiet
 
 # Initialize Airflow DB and connections (first run only)
 docker exec maple-airflow-scheduler airflow db migrate
@@ -323,16 +398,16 @@ docker exec maple-airflow-scheduler airflow users create \
 # to localhost returns HTTP 200 → DAG succeeds.
 docker exec maple-airflow-scheduler airflow connections delete external_api 2>/dev/null
 docker exec maple-airflow-scheduler airflow connections add external_api \
-  --conn-type http --conn-host localhost --conn-port 8081 --conn-schema http
+  --conn-type http --conn-host external-api --conn-port 8081 --conn-schema http
 docker exec maple-airflow-scheduler airflow connections delete calculator 2>/dev/null
 docker exec maple-airflow-scheduler airflow connections add calculator \
-  --conn-type http --conn-host localhost --conn-port 8082 --conn-schema http
+  --conn-type http --conn-host calculator --conn-port 8082 --conn-schema http
 # cleanup connection — REQUIRED for daily_cleanup_pipeline's HttpSensor.
 # Without it, the sensor pokes fail and the entire DAG marks failed
 # (all 3 cleanup tasks go upstream_failed). Verified 2026-06-17.
 docker exec maple-airflow-scheduler airflow connections delete cleanup 2>/dev/null
 docker exec maple-airflow-scheduler airflow connections add cleanup \
-  --conn-type http --conn-host localhost --conn-port 8084 --conn-schema http
+  --conn-type http --conn-host cleanup --conn-port 8084 --conn-schema http
 
 # Unpause all DAGs
 docker exec maple-airflow-scheduler airflow dags unpause daily_collection_pipeline
@@ -456,35 +531,35 @@ if lc: print(f'Last completed: {lc[\"runId\"][:8]}... phase={lc[\"phase\"]}')
 
 Phase 1: Ranking fetch (~4 min)
 ```bash
-grep "RankingFetch.*progress\|RankingFetch.*complete" logs/pipeline-test-external-api.log | tail -5
+grep "RankingFetch.*progress\|RankingFetch.*complete" <(docker logs maple-external-api 2>&1) | tail -5
 ```
 
 Phase 2: OCID lookup (~25 min)
 ```bash
-grep "OCID lookup.*elapsed\|OCID lookup.*complete" logs/pipeline-test-external-api.log | tail -3
+grep "OCID lookup.*elapsed\|OCID lookup.*complete" <(docker logs maple-external-api 2>&1) | tail -3
 # Typical: rate=400files/s
 ```
 
 Phase 3: Character basic fetch (~40 min)
 ```bash
-grep "character-basic.*elapsed\|character-basic.*run-completed" logs/pipeline-test-external-api.log | tail -3
+grep "character-basic.*elapsed\|character-basic.*run-completed" <(docker logs maple-external-api 2>&1) | tail -3
 # Typical: rate=250files/s
 ```
 
 Phase 4: Item equipment fetch (~35 min)
 ```bash
-grep "item-equipment.*elapsed\|item-equipment.*run-completed" logs/pipeline-test-external-api.log | tail -3
+grep "item-equipment.*elapsed\|item-equipment.*run-completed" <(docker logs maple-external-api 2>&1) | tail -3
 # Typical: rate=150files/s
 ```
 
 Calculator processing (~5 min)
 ```bash
-grep "processed chunk" logs/pipeline-test-calculator.log | tail -5
+grep "processed chunk" <(docker logs maple-calculator 2>&1) | tail -5
 ```
 
 Synchronizer sync (concurrent with phases 3-4)
 ```bash
-grep "BasicSync.*chunk processed\|upsert done" logs/pipeline-test-synchronizer.log | tail -5
+grep "BasicSync.*chunk processed\|upsert done" <(docker logs maple-synchronizer 2>&1) | tail -5
 ```
 
 ### 7. Prometheus metrics & throughput monitoring
@@ -531,7 +606,7 @@ curl -s http://localhost:8083/actuator/prometheus | grep synchronizer_pre_upsert
 **External API throughput (from logs):**
 ```bash
 # Per-phase rate from scheduler logs
-grep "rate=" logs/pipeline-test-external-api.log | tail -5
+grep "rate=" <(docker logs maple-external-api 2>&1) | tail -5
 ```
 
 **DB row counts (local PostgreSQL):**
@@ -603,7 +678,7 @@ curl -s http://localhost:8081/api/internal/run-status | python3 -m json.tool
 **Check logs for errors:**
 ```bash
 for module in external-api calculator synchronizer; do
-  errors=$(grep "ERROR" logs/pipeline-test-${module}.log | tail -5)
+  errors=$(grep "ERROR" <(docker logs maple-${module} 2>&1) | tail -5)
   if [ -n "$errors" ]; then
     echo "=== ERRORS in ${module} ==="
     echo "$errors"
@@ -623,7 +698,7 @@ done
 
 # Storage-error scan
 for module in external-api calculator synchronizer; do
-  errs=$(grep -E "ObjectStorage|MinIO|S3" logs/pipeline-test-${module}.log 2>/dev/null | grep -i "ERROR" | tail -5)
+  errs=$(grep -E "ObjectStorage|MinIO|S3" <(docker logs maple-${module} 2>&1) 2>/dev/null | grep -i "ERROR" | tail -5)
   [ -z "${errs}" ] || { echo "ObjectStorage ERROR in ${module}: ${errs}"; exit 5; }
 done
 ```
@@ -758,6 +833,12 @@ esac
 # -sTCP:LISTEN: see step 1 comment. Bare `lsof -ti:PORT` would also kill
 # any client process connected to that port.
 if [ "${START_MODE:-nohup}" = "nohup" ]; then
+
+# Stop Spring Boot services
+if [ "${START_MODE:-docker}" = "docker" ]; then
+  docker compose -f docker-compose.yml -f docker-compose.services.yml stop \
+    external-api calculator synchronizer cleanup
+elif [ "${START_MODE:-docker}" = "nohup" ]; then
   for port in 8081 8082 8083 8084; do
     kill $(lsof -ti:$port -sTCP:LISTEN) 2>/dev/null
   done

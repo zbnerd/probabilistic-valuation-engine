@@ -65,6 +65,7 @@ class DataflowContractTest {
         // arrange: a real LocalFsObjectStorage in a temp dir.
         val objectStorage: ObjectStorage = LocalFsObjectStorage(
             basePath = tempDir.toString(),
+            uploadExecutor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
             meterRegistry = null,
         )
 
@@ -157,6 +158,10 @@ class DataflowContractTest {
             objectStorage = objectStorage,
             nexonAuthClient = nexonAuthClient,
             stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
+            streamingChunkParser = maple.common.parser.StreamingChunkParser(objectMapper),
+            chunkParserMetrics = maple.externalapi.metrics.ChunkParserMetrics(
+                io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+            ),
         )
 
         // act: run ranking

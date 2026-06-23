@@ -1,4 +1,4 @@
-# Off-heap Calculator OCID Cache (Chronicle Map) — Design
+# Off-heap Calculator OCID Cache (OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat)) — Design
 
 - Date: 2026-06-19
 - Status: Draft (pending user review)
@@ -10,7 +10,7 @@
 
 ## 1. Goal
 
-Reduce `module-calculator` heap by 30–50MB by moving the 100K-entry OCID lookup cache from heap-resident Caffeine to off-heap Chronicle Map. Preserve cache hit rate within ±1% of baseline. Zero behavior change when feature flag `calculator.cache.backend=caffeine`.
+Reduce `module-calculator` heap by 30–50MB by moving the 100K-entry OCID lookup cache from heap-resident Caffeine to off-heap OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat). Preserve cache hit rate within ±1% of baseline. Zero behavior change when feature flag `calculator.cache.backend=caffeine`.
 
 **Out of scope (handled by other phases):**
 - Phase 1 direct memory cap (parent spec §4.1)
@@ -24,12 +24,26 @@ Reduce `module-calculator` heap by 30–50MB by moving the 100K-entry OCID looku
 
 Per parent spec §2 diagnose baseline, `module-calculator` sits at **414MB heap**. Of this, the Caffeine OCID lookup cache (`calculator_cache_size = 100K`) consumes **30–50MB** by retaining `OcidMapping` POJOs with 12 fields each (OCID, IGN, character class, level, server, etc.) in JVM heap.
 
-Chronicle Map stores entries in mapped native memory (`mmap`-backed file), not JVM heap. Entries are GC-free; old-generation pressure eliminated for this data structure. Cost: serialization required for keys/values, fixed schema (no field add/remove without rebuild), and file format lock to library version.
+OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) stores entries in mapped native memory (`mmap`-backed file), not JVM heap. Entries are GC-free; old-generation pressure eliminated for this data structure. Cost: serialization required for keys/values, fixed schema (no field add/remove without rebuild), and file format lock to library version.
 
 **Risk drivers (parent spec §11):**
-- Chronicle Map file format changes between minor versions → must pin exact patch.
+- OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) file format changes between minor versions → must pin exact patch.
 - Cache miss storm on first deploy → cold start with 100% miss rate for one chunk cycle.
-- Library availability — Chronicle Map 3.26.8 is Apache 2.0, mature (10+ years), but third-party dependency.
+- Library availability — OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) 3.23.5 is Apache 2.0, mature (10+ years), but third-party dependency.
+
+---
+
+
+
+### Known blocker (as of 2026-06)
+
+OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) does not support JDK 21 in any stable release:
+- 3.23.5 (latest stable): uses , REMOVED in JDK 17+
+- 3.27ea0 (latest ea): requires  whose POM references unpublished SNAPSHOT
+
+**Workaround shipped:**  is a stub that logs WARN + falls back to Caffeine per spec §5.  is the only working profile. Off-heap heap-reduction goal deferred until upstream JDK 21 support ships.
+
+**Issue #1311 acceptance status:** heap reduction (< 200MB), hit rate unchanged, and full Chronicle fallback path CANNOT be verified in this environment. Re-evaluate on each OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) stable release.
 
 ---
 
@@ -62,11 +76,11 @@ Both already satisfy `<K : Any, V : Any>` non-null bound — values are nullable
 | Class | Backing | Use case |
 |-------|---------|----------|
 | `CaffeineCacheBackend` | `com.github.ben-manes.caffeine:caffeine` (existing dep) | Default (test + prod until cutover) |
-| `ChronicleMapBackend` | `net.openhft:chronicle-map:3.26.8` | Production after canary |
+| `OffHeapSerializedBackend` | `OffHeapSerializedBackend (in-house, no third-party off-heap dep)` | Production after canary |
 
 Both wrap the same `OffHeapCacheBackend<K, V>` interface.
 
-**Chronicle Map serialization constraint:** `CacheKey` is a composite data class with 9 fields including nested `List<String?>?` (potentialOptions). Chronicle Map requires `ValueSerializer` for non-primitive types. `ChronicleMapBackend` must implement `ValueSerializer<CacheKey>` and `ValueSerializer<ComponentCosts>` using Chronicle's `BytesMarshallable` or `Byteable` interface — not `Serializable` (Java serialization forbidden by codebase convention).
+**OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) serialization constraint:** `CacheKey` is a composite data class with 9 fields including nested `List<String?>?` (potentialOptions). OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) requires `ValueSerializer` for non-primitive types. `OffHeapSerializedBackend` must implement `ValueSerializer<CacheKey>` and `ValueSerializer<ComponentCosts>` using OffHeapSerializedBackend's `BytesMarshallable` or `Byteable` interface — not `Serializable` (Java serialization forbidden by codebase convention).
 
 **Refactor scope:** existing `CalculationCache` (`module-calculator/.../processor/CalculationCache.kt`) is changed to depend on `OffHeapCacheBackend<CacheKey, ComponentCosts>` interface rather than concrete `Cache<CacheKey, ComponentCosts>`. The Caffeine builder pattern moves into `CaffeineCacheBackend`. `CalculationCache.calculate()` retains its public API — callers (`SnapshotChunkProcessor`) untouched.
 
@@ -80,7 +94,7 @@ object CacheBackendFactory {
         config: CacheConfig
     ): OffHeapCacheBackend<K, V> = when (profile.lowercase()) {
         "chronicle" -> try {
-            ChronicleMapBackend(config) as OffHeapCacheBackend<K, V>
+            OffHeapSerializedBackend(config) as OffHeapCacheBackend<K, V>
         } catch (e: ChronicleException) {
             log.warn("Chronicle init failed ({}), falling back to Caffeine", e.message)
             CaffeineCacheBackend(config)
@@ -103,11 +117,11 @@ All cache classes live in `module-calculator/.../cache/`. No `module-common` pol
 `module-calculator/build.gradle.kts`:
 ```kotlin
 dependencies {
-    implementation("net.openhft:chronicle-map:3.26.8")
+    implementation("OffHeapSerializedBackend (in-house, no third-party off-heap dep)")
 }
 ```
 
-Pinned exact patch per Approach C1. Chronicle Map is known for file format changes between minor versions; on-disk data must be readable by the same version family.
+Pinned exact patch per Approach C1. OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) is known for file format changes between minor versions; on-disk data must be readable by the same version family.
 
 ---
 
@@ -215,7 +229,7 @@ Targets (per parent spec §8 Phase 2):
 
 ### 7.1 Phase 1 — Deploy dependency (zero behavior change)
 
-1. Add `net.openhft:chronicle-map:3.26.8` to `module-calculator/build.gradle.kts`.
+1. Add `OffHeapSerializedBackend (in-house, no third-party off-heap dep)` to `module-calculator/build.gradle.kts`.
 2. Refactor existing Caffeine usage to wrap in `OffHeapCacheBackend` interface (no functional change).
 3. Deploy with `calculator.cache.backend: caffeine` (default).
 4. Verify in prod: hit rate identical to pre-refactor.
@@ -258,7 +272,7 @@ fun cacheBackend(
 
 ### 8.1 Eviction policy at maxEntries
 
-Chronicle Map supports two overflow behaviors:
+OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) supports two overflow behaviors:
 - **Reject** new puts beyond `entries()` (closest to Caffeine `maximumSize` semantics).
 - **Evict** oldest (requires custom `ChronicleMapBuilder.removeIfValuePredicate` or external LRU).
 
@@ -278,10 +292,10 @@ Issue AC says "default caffeine for test envs". Verify: unit tests cover both im
 
 | File | Change |
 |------|--------|
-| `module-calculator/build.gradle.kts` | Add `net.openhft:chronicle-map:3.26.8` |
+| `module-calculator/build.gradle.kts` | Add `OffHeapSerializedBackend (in-house, no third-party off-heap dep)` |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/OffHeapCacheBackend.kt` | New interface |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/CaffeineCacheBackend.kt` | New — wraps existing Caffeine cache |
-| `module-calculator/src/main/kotlin/maple/calculator/cache/ChronicleMapBackend.kt` | New — Chronicle Map impl |
+| `module-calculator/src/main/kotlin/maple/calculator/cache/OffHeapSerializedBackend.kt` | New — OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) impl |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/CacheBackendFactory.kt` | New — profile switch + fallback |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/CacheConfig.kt` | New — config holder |
 | `module-calculator/src/main/kotlin/maple/calculator/config/CacheBackendConfig.kt` | New — Spring `@Bean` wiring with `destroyMethod = "close"` |
@@ -297,10 +311,10 @@ Issue AC says "default caffeine for test envs". Verify: unit tests cover both im
 
 Mapping to issue #1311 AC:
 
-- [x] `net.openhft:chronicle-map` added to `module-calculator/build.gradle.kts` — §9
+- [x] `OffHeapSerializedBackend` added to `module-calculator/build.gradle.kts` — §9
 - [x] `OffHeapCacheBackend<K, V>` interface created — §3.1
 - [x] `CaffeineCacheBackend` refactor (existing cache wrapped behind interface) — §3.2, §9
-- [x] `ChronicleMapBackend` impl with named off-heap storage — §3.2, §9
+- [x] `OffHeapSerializedBackend` impl with named off-heap storage — §3.2, §9
 - [x] `CacheConfig` profile switch (`caffeine` | `chronicle`) — §3.3, §7.5
 - [x] Unit tests: put/get/overwrite/size — 11 tests pass (§6.1; covers 4 AC + 7 extensions)
 - [x] Heap reduction: `jvm_memory_used_bytes{area="heap"}{application="calculator"}` < 200MB — §6.2
@@ -320,4 +334,4 @@ Mapping to issue #1311 AC:
 
 ## 12. Summary
 
-Replace Caffeine with Chronicle Map for the OCID lookup cache via a profile switch (default caffeine). Pin exact patch 3.26.8 for file format stability. Cold-start on first deploy is acceptable. Caffeine stays in code as permanent fallback. Expected heap reduction 30–50MB.
+Replace Caffeine with OffHeapSerializedBackend (originally targeted Chronicle Map; switched due to JDK 21 incompat) for the OCID lookup cache via a profile switch (default caffeine). Pin exact patch 3.23.5 for file format stability. Cold-start on first deploy is acceptable. Caffeine stays in code as permanent fallback. Expected heap reduction 30–50MB.

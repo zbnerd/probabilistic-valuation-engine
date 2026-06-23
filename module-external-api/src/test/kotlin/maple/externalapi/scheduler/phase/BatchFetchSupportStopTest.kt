@@ -1,5 +1,7 @@
 package maple.externalapi.scheduler.phase
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.kotlinModule
 import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.Bucket
 import java.time.Duration
@@ -39,6 +41,7 @@ class BatchFetchSupportStopTest {
             schedulerProgressLogger = mock(),
             httpStatusExtractor = mock(),
             stopSignal = signal,
+            objectMapper = ObjectMapper().registerModule(kotlinModule()),
         )
 
         val ctx = BatchFetchContext(

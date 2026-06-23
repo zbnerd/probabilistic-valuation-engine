@@ -1,5 +1,6 @@
 package maple.externalapi.scheduler.phase
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.bucket4j.Bucket
 import java.time.Duration
 import java.time.Instant
@@ -63,6 +64,7 @@ class BatchFetchSupport(
     private val schedulerProgressLogger: SchedulerProgressLogger,
     private val httpStatusExtractor: HttpStatusExtractor,
     private val stopSignal: PhaseStopSignal,
+    private val objectMapper: ObjectMapper,
 ) {
     private val log = LoggerFactory.getLogger(BatchFetchSupport::class.java)
     private val semaphore = Semaphore(maxInFlight)
@@ -150,14 +152,32 @@ class BatchFetchSupport(
 
             val queueDepthBeforeSubmit = sink.queueDepth()
             val submitStart = Instant.now()
-            sink.submit(
-                SnapshotChunkRecord.Success(
+            // Producer-side serialize. We build a Success, Jackson-encode it
+            // here on the virtual thread, then submit a PreSerialized record
+            // so the sink writer skips Jackson. `+ '\n'` so the gzip writer
+            // does not need to add a delimiter (matches GzipJsonlChunkWriter
+            // semantics for the legacy Success path). See ADR-729.
+            val now = Instant.now()
+            val success = SnapshotChunkRecord.Success(
+                key = ocid,
+                endpoint = ctx.endpoint,
+                keyType = "OCID",
+                httpStatus = 200,
+                fetchedAt = now,
+                bodyBytes = bodyBytes,
+            )
+            val jsonBytes = objectMapper.writeValueAsBytes(success)
+            val lineWithNewline = ByteArray(jsonBytes.size + 1)
+            System.arraycopy(jsonBytes, 0, lineWithNewline, 0, jsonBytes.size)
+            lineWithNewline[jsonBytes.size] = '\n'.code.toByte()
+            sink.submitPreSerialized(
+                SnapshotChunkRecord.PreSerialized(
                     key = ocid,
                     endpoint = ctx.endpoint,
                     keyType = "OCID",
                     httpStatus = 200,
-                    fetchedAt = Instant.now(),
-                    bodyBytes = bodyBytes,
+                    fetchedAt = now,
+                    bodyBytes = lineWithNewline,
                 ),
             )
             val submitDuration = Duration.between(submitStart, Instant.now())

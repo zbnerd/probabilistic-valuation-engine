@@ -18,7 +18,26 @@ interface ObjectStorage {
     /** Put data. Returns PutResult with key, size, and checksum (SHA-256 hex for Local, S3 ETag for MinIO). */
     fun put(key: String, data: ByteArray): PutResult
 
-    /** Put data from a stream. Caller is responsible for closing `input`. */
+    /**
+     * Put data from a stream. Caller is responsible for closing `input`.
+     *
+     * **Deprecated** since issue #1312. Buffers the full stream in heap
+     * via `readBytes()` (see `MinioObjectStorage.putStream` and
+     * `LocalFsObjectStorage.putStream` for the heap-drain paths),
+     * defeating the purpose of streaming uploads for chunks > 1MB.
+     * Use [putStreamMultipart] instead, which uses S3 chunked transfer
+     * encoding (Minio) or temp-file + putFile (LocalFs) with bounded
+     * heap.
+     *
+     * The remaining legacy caller is
+     * `module-external-api/.../OcidLookupPhase.kt:118` which has the
+     * same heap problem and should migrate to `putStreamMultipart` in a
+     * separate follow-up issue.
+     */
+    @Deprecated(
+        message = "Buffers full stream in heap. Use putStreamMultipart for chunks > 1MB.",
+        replaceWith = ReplaceWith("putStreamMultipart"),
+    )
     fun putStream(key: String, input: InputStream): PutResult
 
     /**
@@ -52,6 +71,27 @@ interface ObjectStorage {
      * silently delete the source file.
      */
     fun putFileAsync(key: String, path: Path): CompletableFuture<PutResult>
+
+    /**
+     * Async streaming upload. Accepts an [InputStream] of arbitrary length
+     * and uploads without buffering the full content in heap. The caller is
+     * responsible for closing [input] only after the returned future
+     * completes (success or failure).
+     *
+     * Implementations:
+     * - Minio: [software.amazon.awssdk.services.s3.S3AsyncClient.putObject]
+     *   with [software.amazon.awssdk.core.async.AsyncRequestBody.fromInputStream]
+     *   and `contentLength = -1L` (chunked transfer encoding, no
+     *   intermediate ByteArray drain).
+     * - LocalFs: drain [input] to a temp file, then call [putFile] on a
+     *   virtual-thread executor; delete the temp file on completion.
+     *
+     * On failure the future completes exceptionally with the underlying
+     * cause. On success the future completes with a [PutResult] whose
+     * `size` is the byte count actually uploaded (or -1L for chunked
+     * transfer where size is unknown a priori).
+     */
+    fun putStreamMultipart(key: String, input: InputStream): CompletableFuture<PutResult>
 
     /** Get object as bytes. Throws if key not found. */
     fun get(key: String): ByteArray

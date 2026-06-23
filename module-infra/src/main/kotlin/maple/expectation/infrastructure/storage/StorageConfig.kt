@@ -19,10 +19,17 @@ import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.S3Configuration
 import software.amazon.awssdk.transfer.s3.S3TransferManager
 import java.net.URI
+import java.nio.file.Files
+import java.nio.file.Paths
 
 /**
  * Selects the active [ObjectStorage] implementation based on `storage.backend`.
  * Default is `local`. Setting `storage.backend=minio` switches to [MinioObjectStorage].
+ *
+ * The MinIO SA secret key is read directly from the docker secret file at
+ * MINIO_SECRET_KEY_FILE (default `/run/secrets/sa-<module>`) instead of an
+ * env var, so the cleartext key is not exposed in `docker inspect` output
+ * or any process environment dump.
  *
  * S3Client is exposed as a Spring bean so it can be shared by [MinioObjectStorage],
  * [MinioHealthIndicator], and any other future consumers (e.g., metrics, backups).
@@ -35,53 +42,66 @@ class StorageConfig {
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "local", matchIfMissing = true)
     fun localObjectStorage(
         @Value("\${storage.local.base-path:../data}") basePath: String,
+        uploadExecutor: java.util.concurrent.Executor,
         @Autowired(required = false) meterRegistry: MeterRegistry?,
-    ): ObjectStorage = LocalFsObjectStorage(basePath, meterRegistry)
+    ): ObjectStorage = LocalFsObjectStorage(basePath, uploadExecutor, meterRegistry)
 
     @Bean
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
-    fun s3Client(props: MinioProperties): S3Client = S3Client.builder()
-        .endpointOverride(URI.create(props.endpoint))
-        .region(Region.of(props.region))
-        .credentialsProvider(
-            StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(props.accessKey, props.secretKey)
+    fun s3Client(
+        props: MinioProperties,
+        @Value("\${MINIO_SECRET_KEY_FILE:/run/secrets/sa-\${MODULE_NAME:external-api}}") secretFile: String,
+    ): S3Client {
+        val secretKey = readSecretKey(secretFile)
+        return S3Client.builder()
+            .endpointOverride(URI.create(props.endpoint))
+            .region(Region.of(props.region))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(props.accessKey, secretKey)
+                )
             )
-        )
-        .serviceConfiguration(
-            S3Configuration.builder().pathStyleAccessEnabled(props.pathStyleAccess).build()
-        )
-        .httpClient(ApacheHttpClient.builder().build())
-        .overrideConfiguration(
-            ClientOverrideConfiguration.builder()
-                .retryPolicy(RetryPolicy.defaultRetryPolicy())
-                .build()
-        )
-        .build()
+            .serviceConfiguration(
+                S3Configuration.builder().pathStyleAccessEnabled(props.pathStyleAccess).build()
+            )
+            .httpClient(ApacheHttpClient.builder().build())
+            .overrideConfiguration(
+                ClientOverrideConfiguration.builder()
+                    .retryPolicy(RetryPolicy.defaultRetryPolicy())
+                    .build()
+            )
+            .build()
+    }
 
     @Bean
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
-    fun s3AsyncClient(props: MinioProperties): S3AsyncClient = S3AsyncClient.builder()
+    fun s3AsyncClient(
+        props: MinioProperties,
+        @Value("\${MINIO_SECRET_KEY_FILE:/run/secrets/sa-\${MODULE_NAME:external-api}}") secretFile: String,
+    ): S3AsyncClient {
+        val secretKey = readSecretKey(secretFile)
         // S3TransferManager requires an S3AsyncClient (its uploads
         // pipeline is built around the async client). We share the same
         // endpoint / credentials / path-style config as the sync S3Client
         // bean so both clients talk to the same MinIO instance.
-        .endpointOverride(URI.create(props.endpoint))
-        .region(Region.of(props.region))
-        .credentialsProvider(
-            StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(props.accessKey, props.secretKey)
+        return S3AsyncClient.builder()
+            .endpointOverride(URI.create(props.endpoint))
+            .region(Region.of(props.region))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(props.accessKey, secretKey)
+                )
             )
-        )
-        .serviceConfiguration(
-            S3Configuration.builder().pathStyleAccessEnabled(props.pathStyleAccess).build()
-        )
-        .overrideConfiguration(
-            ClientOverrideConfiguration.builder()
-                .retryPolicy(RetryPolicy.defaultRetryPolicy())
-                .build()
-        )
-        .build()
+            .serviceConfiguration(
+                S3Configuration.builder().pathStyleAccessEnabled(props.pathStyleAccess).build()
+            )
+            .overrideConfiguration(
+                ClientOverrideConfiguration.builder()
+                    .retryPolicy(RetryPolicy.defaultRetryPolicy())
+                    .build()
+            )
+            .build()
+    }
 
     @Bean
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
@@ -99,7 +119,30 @@ class StorageConfig {
     fun minioObjectStorage(
         props: MinioProperties,
         s3: S3Client,
+        s3AsyncClient: S3AsyncClient,
         transferManager: S3TransferManager,
         @Autowired(required = false) meterRegistry: MeterRegistry?,
-    ): ObjectStorage = MinioObjectStorage(props, s3, transferManager, meterRegistry)
+    ): ObjectStorage = MinioObjectStorage(props, s3, s3AsyncClient, transferManager, meterRegistry)
+
+    /**
+     * Reads the SA secret key from the docker secret file.
+     * Hard-fails (throws) if the file is missing or empty — this matches the
+     * "fail fast" pattern of the previous entrypoint-wrapper.sh and prevents
+     * silent S3 AccessDenied errors masking the real config bug.
+     */
+    private fun readSecretKey(secretFile: String): String {
+        val path = Paths.get(secretFile)
+        if (!Files.exists(path)) {
+            throw IllegalStateException(
+                "MINIO_SECRET_KEY_FILE not found at '$secretFile' — " +
+                    "is docker/services/secrets/sa-<module>.key present and " +
+                    "mounted via the secrets: overlay in docker-compose.services.yml?"
+            )
+        }
+        val key = Files.readString(path).trim()
+        if (key.isEmpty()) {
+            throw IllegalStateException("MINIO_SECRET_KEY_FILE '$secretFile' is empty")
+        }
+        return key
+    }
 }

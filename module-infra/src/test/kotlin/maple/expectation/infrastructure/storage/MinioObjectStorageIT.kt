@@ -74,11 +74,10 @@ class MinioObjectStorageIT {
             endpoint = endpoint,
             region = region,
             accessKey = accessKey,
-            secretKey = secretKey,
             bucket = bucket,
             pathStyleAccess = true,
         )
-        storage = MinioObjectStorage(props, s3, transferManager, meterRegistry = null)
+        storage = MinioObjectStorage(props, s3, s3Async, transferManager, meterRegistry = null)
     }
 
     @AfterAll

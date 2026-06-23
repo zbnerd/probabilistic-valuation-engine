@@ -6,6 +6,7 @@ import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.storage.ObjectStorage
+import maple.expectation.common.storage.PutResult
 import maple.expectation.infrastructure.external.NexonAuthClient
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.scheduler.PhaseStopSignal
@@ -17,24 +18,26 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import maple.common.parser.StreamingChunkParser
+import maple.externalapi.metrics.ChunkParserMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
-import java.io.PipedInputStream
-import java.io.PipedOutputStream
+import java.nio.file.Files
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
 /**
@@ -51,11 +54,16 @@ import java.util.zip.GZIPOutputStream
  *
  * <p>Streaming write: each successful mapping is pushed to a [Channel] and consumed by a
  * single writer coroutine that pipes bytes into a GZIPOutputStream wrapping
- * [ObjectStorage.putStream]. The previous implementation accumulated all 600K+ entries in a
- * `MutableList<String>` until the end of the phase — that held ~120MB of JSON strings in heap
- * for the entire OCID run and pushed the JVM over its 1GB ceiling when combined with other
- * in-flight state. Streaming keeps the heap footprint bounded to the pipe buffer (64KB) plus
- * the GZIPOutputStream internal buffer.
+ * [ObjectStorage.putStreamMultipart]. The previous implementation accumulated all 600K+
+ * entries in a `MutableList<String>` until the end of the phase — that held ~120MB of JSON
+ * strings in heap for the entire OCID run and pushed the JVM over its 1GB ceiling when
+ * combined with other in-flight state. Streaming keeps the heap footprint bounded to the
+ * pipe buffer (64KB) plus the GZIPOutputStream internal buffer.
+ *
+ * <p>Issue #1319: migrated from deprecated `putStream` (heap-draining `readBytes()` inside
+ * the impl) to `putStreamMultipart` (S3AsyncClient chunked transfer on Minio, temp-file +
+ * `putFile` on LocalFs virtual-thread). Heap peak: bounded to pipe (64KB) instead of the
+ * full OCID mapping chunk (~120MB).
  */
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
@@ -71,6 +79,8 @@ class OcidLookupPhase(
     private val objectStorage: ObjectStorage,
     private val nexonAuthClient: NexonAuthClient,
     private val stopSignal: PhaseStopSignal,
+    private val streamingChunkParser: StreamingChunkParser,
+    private val chunkParserMetrics: ChunkParserMetrics,
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
 
@@ -104,48 +114,66 @@ class OcidLookupPhase(
         val key = "$mappingDir/ocid-mapping-$runId.jsonl.gz"
 
         // Channel + writer coroutine: producers (per-ign fetch) send strings,
-        // a single consumer coroutine gzips + puts to ObjectStorage as bytes flow.
+        // a single consumer coroutine gzips + writes to a temp file.
         // Channel.BUFFERED applies backpressure when the writer can't keep up.
         val resultsChannel = Channel<String>(Channel.BUFFERED)
 
-        // Pipe: producer writes to pipeOut (GZIPOutputStream), consumer reads
-        // from pipeIn (ObjectStorage.putStream). Buffer of 64KB caps JVM heap
-        // use from the pipe itself.
-        val pipeOut = PipedOutputStream()
-        val pipeIn = PipedInputStream(pipeOut, 65_536)
-
-        coroutineScope {
-            val putJob = async(Dispatchers.IO) { objectStorage.putStream(key, pipeIn) }
-
-            val writerJob = launch(Dispatchers.IO) {
-                val gz = GZIPOutputStream(BufferedOutputStream(pipeOut))
-                try {
-                    for (entry in resultsChannel) {
-                        gz.write(entry.toByteArray())
-                        gz.write('\n'.code)
+        // Drain to temp file, then upload via putFileAsync. We previously used
+        // PipedInputStream/OutputStream + putStreamMultipart for streaming
+        // chunked transfer, but the SDK reads the InputStream on a background
+        // thread that races the writer — `PipedInputStream` throws "Read end
+        // dead" the moment the writer thread exits (checked via
+        // `readSide.isAlive()`). A temp file avoids the thread coordination
+        // entirely: writer writes to disk, upload reads from disk.
+        val tempFile = Files.createTempFile("ocid-mapping-${runId}-", ".jsonl.gz.tmp")
+        var uploadFuture: CompletableFuture<PutResult>? = null
+        try {
+            coroutineScope {
+                // Writer: CPU-bound (GZIPOutputStream.compress) on
+                // Dispatchers.Default per architecture-guardrails.md rule 9.
+                val writerJob = launch(Dispatchers.Default) {
+                    val gz = GZIPOutputStream(BufferedOutputStream(Files.newOutputStream(tempFile)))
+                    try {
+                        for (entry in resultsChannel) {
+                            gz.write(entry.toByteArray())
+                            gz.write('\n'.code)
+                        }
+                    } finally {
+                        runCatching { gz.close() }
                     }
-                } finally {
-                    runCatching { gz.close() }
-                    runCatching { pipeOut.close() }
                 }
+
+                processBatch(
+                    workerExecutor = workerExecutor,
+                    rateLimiter = rateLimiter,
+                    runKey = runKey,
+                    igns = igns,
+                    processed = 0,
+                    successCount = successCount,
+                    failCount = failCount,
+                    lastProgressLog = lastProgressLog,
+                    resultsSink = resultsChannel,
+                    start = start,
+                )
+
+                resultsChannel.close()
+                writerJob.join()
+
+                // Upload the finalized temp file via putFileAsync
+                // (S3TransferManager multipart | LocalFs temp-file). Returns a
+                // CF that resolves when the upload completes.
+                uploadFuture = objectStorage.putFileAsync(key, tempFile)
             }
-
-            processBatch(
-                workerExecutor = workerExecutor,
-                rateLimiter = rateLimiter,
-                runKey = runKey,
-                igns = igns,
-                processed = 0,
-                successCount = successCount,
-                failCount = failCount,
-                lastProgressLog = lastProgressLog,
-                resultsSink = resultsChannel,
-                start = start,
-            )
-
-            resultsChannel.close()
-            writerJob.join()
-            putJob.await()
+            // Wait for the upload to complete before the temp file is deleted
+            // (MinIO S3TransferManager reads from the file during upload).
+            uploadFuture?.await()
+        } finally {
+            // Clean up the temp file once the upload completes — or fails.
+            // For MinIO success path the S3TransferManager uploads from the
+            // file then the whenComplete callback in putFileAsync removes
+            // it; for LocalFs the impl already moved the file into place.
+            // The delete here is a safety net for the MinIO success path.
+            runCatching { Files.deleteIfExists(tempFile) }
         }
         log.info(
             "[Scheduler] streamed {} OCID mappings to {} (heap-bounded via pipe)",
@@ -176,25 +204,39 @@ class OcidLookupPhase(
     }
 
     /**
-     * GZIP decompress + per-line JSON parse. CPU-bound → `Dispatchers.Default`.
+     * GZIP decompress + line-bounded JSONL parse. CPU-bound →
+     * `Dispatchers.Default`. Uses [StreamingChunkParser] for
+     * streaming parse; no manual readTree per line.
      */
-    suspend fun readCharacterNamesFromChunks(runKey: String): List<String> = withContext(Dispatchers.Default) {
-        val prefix = "$runKey/ranking-overall/chunks"
-        val names = linkedSetOf<String>()
-        for (obj in objectStorage.listByPrefix(prefix)) {
-            if (!obj.key.endsWith(".jsonl.gz")) continue
-            GZIPInputStream(BufferedInputStream(objectStorage.getStream(obj.key))).bufferedReader().use { reader ->
-                reader.lineSequence().forEach { line ->
-                    if (line.isNotBlank()) {
-                        val node = objectMapper.readTree(line)
-                        val key = node.get("key")?.asText()
-                        if (key != null) names.add(key)
-                    }
+    suspend fun readCharacterNamesFromChunks(runKey: String): List<String> =
+        withContext(Dispatchers.Default) {
+            val prefix = "$runKey/ranking-overall/chunks"
+            val names = linkedSetOf<String>()
+            val emitted = chunkParserMetrics.recordsEmitted("ranking_chunk_names")
+            // Pre-register skipped counter so it appears in /actuator/prometheus from the start.
+            chunkParserMetrics.recordsSkipped("ranking_chunk_names")
+            val timer = chunkParserMetrics.parseDuration("ranking_chunk_names")
+            val start = System.nanoTime()
+
+            for (obj in objectStorage.listByPrefix(prefix)) {
+                if (!obj.key.endsWith(".jsonl.gz")) continue
+                val records = objectStorage.getStream(obj.key).use { stream ->
+                    streamingChunkParser.parse(stream).toList()
+                }
+                for (record in records) {
+                    emitted.increment()
+                    val key = record["key"]?.toString()
+                    if (!key.isNullOrBlank()) names.add(key)
                 }
             }
+
+            timer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS)
+            log.info(
+                "[OcidLookup] readCharacterNamesFromChunks key={} distinct={}",
+                runKey, names.size,
+            )
+            names.toList()
         }
-        names.toList()
-    }
 
     /**
      * Delete old OCID mapping objects under [mappingDir], but PRESERVE the

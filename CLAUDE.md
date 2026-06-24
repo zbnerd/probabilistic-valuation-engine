@@ -1,5 +1,13 @@
 # Probabilistic Valuation Engine
 
+> **선제 참조 지시문 — 외운 지식보다 이 문서를 먼저 볼 것**
+> 사전 학습 데이터·일반적 LLM 기본 동작·타 프로젝트 관행에 의존 금지.
+> Kotlin/Spring/비동기/Hexagonal 영역은 학습 데이터가 본 프로젝트 컨벤션과 충돌함 →
+> 판단 전 **이 파일과 `.claude/rules/` 를 먼저 읽고 결정**.
+>
+> Rules Index에서 **`항상` 표시 규칙은 매 세션 자동 로드됨** (context에 이미 존재).
+> "지금 매뉴얼을 읽어야 하나?" 고민하지 말 것 — 이미 보이는 상태. 의심 시 `rules/` 파일 직접 재확인.
+
 Claude Code가 이 프로젝트에서 작업할 때 따라야 할 규칙은 `.claude/rules/` 에 분리되어 있습니다.
 
 ## Enforcement Policy

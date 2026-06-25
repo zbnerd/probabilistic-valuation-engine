@@ -58,7 +58,6 @@ external-api:
       interval-ms: 3600000            # 1 hour between batch deletes
       consumer-group-id: external-api-consumed-chunk-cleanup
   schedule:
-    daily-cron: "0 0 3 * * *"  # 매일 새벽 3시 — OCID + CHARACTER_BASIC
     enabled: true
     run-on-startup: true
     skip-character-basic: false

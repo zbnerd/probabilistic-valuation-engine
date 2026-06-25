@@ -17,7 +17,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
@@ -49,11 +48,6 @@ class ExternalApiScheduler(
             log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
             triggerDailyRefresh(null)
         }
-    }
-
-    @Scheduled(cron = "\${external-api.schedule.daily-cron:0 0 3 * * *}")
-    fun scheduledDailyRefresh() {
-        triggerDailyRefresh(null)
     }
 
     /**

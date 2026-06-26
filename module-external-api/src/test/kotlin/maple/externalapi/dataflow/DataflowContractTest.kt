@@ -65,6 +65,7 @@ class DataflowContractTest {
         // arrange: a real LocalFsObjectStorage in a temp dir.
         val objectStorage: ObjectStorage = LocalFsObjectStorage(
             basePath = tempDir.toString(),
+            uploadExecutor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
             meterRegistry = null,
         )
 
@@ -145,6 +146,7 @@ class DataflowContractTest {
             permitsPerSecond = 1000,
             runMarkerWriter = runMarkerWriter,
             objectStorage = objectStorage,
+            stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
         )
 
         val ocidPhase = OcidLookupPhase(
@@ -155,6 +157,11 @@ class DataflowContractTest {
             eventPublisher = ocidPublisher,
             objectStorage = objectStorage,
             nexonAuthClient = nexonAuthClient,
+            stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
+            streamingChunkParser = maple.common.parser.StreamingChunkParser(objectMapper),
+            chunkParserMetrics = maple.externalapi.metrics.ChunkParserMetrics(
+                io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+            ),
         )
 
         // act: run ranking
@@ -170,7 +177,8 @@ class DataflowContractTest {
         assertThat(runKey).startsWith("runs/")
 
         // act: run OCID lookup — it's suspend, so wrap in runBlocking
-        runBlocking { ocidPhase.execute(executor, runKey) }
+        val ocidRunId = "20260610-xyz"
+        runBlocking { ocidPhase.execute(executor, runKey, ocidRunId) }
 
         // assert: chunk schema
         val chunkKeys = objectStorage.listByPrefix("$runKey/ranking-overall/chunks")

@@ -1,15 +1,16 @@
 package maple.expectation.infrastructure.worker
 
 import io.micrometer.core.instrument.MeterRegistry
+import java.util.concurrent.CompletableFuture
 import maple.expectation.core.port.inbound.ExpectationV4Port
 import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.pgmq.CalculationRequest
 import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.pgmq.ProcessOutcome
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.queue.pgmq.CalculationQueueProducer
 import org.slf4j.LoggerFactory
@@ -32,15 +33,9 @@ import org.springframework.stereotype.Component
  * <h3>Feature Flag</h3>
  * <p>pgmq.worker.calculation.enabled=true로 활성화
  *
- * <h3>ADR: .join() 유지 결정</h3>
- *
- * **Context:** `process()` returns Boolean for PgmqWorker ACK/NACK routing.
- * The abstract method signature cannot return CompletableFuture without changing
- * all PgmqWorker subclasses. This method runs on a dedicated worker pool thread
- * (not Tomcat), so blocking does not affect request-serving threads.
- *
- * **Decision:** Use `handle().join()` to await the async calculation result,
- * transforming success/failure into Boolean within the CF chain before joining.
+ * <h3>Async Migration</h3>
+ * <p>Async via [processAsync] (returns [CompletableFuture] of [ProcessOutcome]).
+ * Sync [process] is kept as a [Deprecated] compatibility shim.
  *
  * @see CalculationQueueProducer 프로듀서
  * @see ExpectationV4Port 계산 포트
@@ -62,35 +57,58 @@ class CalculationWorker(
     override val workerSettings: PgmqWorkerConfig.WorkerSettings = config.calculation
 
     /**
-     * Process calculation message.
+     * Async-native process — returns [ProcessOutcome] without blocking on the worker pool thread.
      *
-     * ADR: `.join()` is required because PgmqWorker.process() returns Boolean
-     * for ACK/NACK routing. Runs on dedicated worker pool thread (not Tomcat).
-     * Uses `handle()` to transform result before joining.
+     * Returns:
+     * - [ProcessOutcome.Ack] on calculation success.
+     * - [ProcessOutcome.Nack] with `retryable=true` on any failure.
      */
-    override fun process(message: PgmqMessage<CalculationRequest>): Boolean {
+    override fun processAsync(message: PgmqMessage<CalculationRequest>): CompletableFuture<ProcessOutcome> {
         val request = message.payload
-        val context = TaskContext.of("CalculationWorker", "Process", request.userIgn)
+        log.info("Processing: ign={}, ocid={}", request.userIgn, request.ocid)
 
-        return executor.executeOrDefault({
-            log.info("Processing: ign={}, ocid={}", request.userIgn, request.ocid)
-
-            expectationPort.calculateExpectationAsync(
-                request.userIgn,
-                request.forceRecalculation,
-                message.messageId.toString(),
-                request.presetNo,
-            ).handle { _, ex ->
-                if (ex != null) {
-                    log.warn("Calculation failed: ign={}, error={}", request.userIgn, ex.message)
-                    false
-                } else {
-                    log.info("Completed: ign={}", request.userIgn)
-                    true
-                }
-            }.join()
-        }, false, context)
+        return expectationPort.calculateExpectationAsync(
+            request.userIgn,
+            request.forceRecalculation,
+            message.messageId.toString(),
+            request.presetNo,
+        ).handle<ProcessOutcome> { _, ex -> classifyCalculationOutcome(request.userIgn, ex) }
     }
+
+    /**
+     * Classify the outcome of a calculation [CompletableFuture].
+     *
+     * - Failure → [ProcessOutcome.Nack] with `retryable=true` (PGMQ retry loop handles backoff).
+     * - Success → [ProcessOutcome.Ack] (PGMQ archives the message).
+     */
+    private fun classifyCalculationOutcome(userIgn: String, ex: Throwable?): ProcessOutcome =
+        if (ex != null) {
+            log.warn("Calculation failed: ign={}, error={}", userIgn, ex.message)
+            ProcessOutcome.Nack(retryable = true)
+        } else {
+            log.info("Completed: ign={}", userIgn)
+            ProcessOutcome.Ack
+        }
+
+    /**
+     * Legacy sync API. Delegates to [processAsync] for migration compatibility.
+     *
+     * @deprecated Use [processAsync] for new callers.
+     */
+    @Deprecated("Use processAsync", ReplaceWith("processAsync(message).get() == ProcessOutcome.Ack"))
+    override fun process(message: PgmqMessage<CalculationRequest>): Boolean =
+        try {
+            processAsync(message).get() == ProcessOutcome.Ack
+        } catch (e: Exception) {
+            false
+        }
+
+    /**
+     * Test bridge — exposes the [processAsync] method (protected in PgmqWorker) to unit tests.
+     * Internal visibility keeps it out of the public server API surface.
+     */
+    internal fun callProcessAsync(message: PgmqMessage<CalculationRequest>): CompletableFuture<ProcessOutcome> =
+        processAsync(message)
 
     companion object {
         private val log = LoggerFactory.getLogger(CalculationWorker::class.java)

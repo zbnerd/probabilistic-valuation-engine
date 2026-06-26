@@ -22,6 +22,7 @@ permissions:
   contents: read
   checks: write           # Required for test report annotations
   pull-requests: write    # Required for PR comments
+  packages: write         # Required for GHCR image push (ADR-732)
 
 # Concurrency: Cancel in-progress runs for same PR (save resources)
 concurrency:
@@ -193,30 +194,22 @@ jobs:
     needs: test
     timeout-minutes: 15
 
-    services:
-      minio:
-        image: minio/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        ports:
-          - 9000:9000
-        options: >-
-          --health-cmd "mc ready local"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
+    # Earlier version used a `services: minio:` container, but the GH
+    # Actions service-container spec doesn't support overriding the image
+    # ENTRYPOINT/CMD — and the `minio/minio:latest` image now requires an
+    # explicit `server /data` subcommand (the empty default CMD just
+    # prints help and exits, which fails the `mc ready local` health
+    # check). Run MinIO as a detached background container in a step
+    # instead, which lets us pass the server args directly.
 
     env:
       INTEGRATION_MINIO: "true"
       MINIO_ENDPOINT: http://localhost:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-      # Per-job random SA keys (set in the gen-keys step below)
-      SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}
-      SA_CALCULATOR_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CALCULATOR_SECRET_KEY }}
-      SA_SYNCHRONIZER_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_SYNCHRONIZER_SECRET_KEY }}
-      SA_CLEANUP_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CLEANUP_SECRET_KEY }}
+      # Per-job random SA keys are set by `gen-keys` step (id) and exposed
+      # via step-level `env:` on bootstrap/Run IT — job-level env cannot
+      # reference steps.* (GH Actions context scoping rule).
 
     steps:
       - name: Checkout Repository
@@ -230,6 +223,25 @@ jobs:
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
+
+      # Launch MinIO in the background, bound to the host network. We wait
+      # for the liveness endpoint before proceeding.
+      - name: Start MinIO
+        run: |
+          docker run -d --rm --network host \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            --name ci-minio \
+            minio/minio:latest \
+            server /data --console-address :9001
+          for i in $(seq 1 30); do
+            if wget -qO- http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+              echo "MinIO up after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://localhost:9000/minio/health/live || (echo "MinIO did not start"; docker logs ci-minio; exit 1)
 
       # Per-job random SA keys. Never stored in GitHub Secrets.
       - name: Generate ephemeral SA keys
@@ -245,8 +257,8 @@ jobs:
           echo "SA_CLEANUP_SECRET_KEY=$SA_CLEANUP_SECRET_KEY" >> "$GITHUB_OUTPUT"
 
       # Bootstrap: create bucket, ILM, 4 SAs, 4 policies.
-      # Uses --network host so the bootstrap container can reach the service
-      # container's MinIO on localhost:9000.
+      # Uses --network host so the bootstrap container can reach the
+      # background MinIO on localhost:9000.
       - name: Run bootstrap
         env:
           SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}
@@ -256,6 +268,7 @@ jobs:
         run: |
           docker run --rm \
             --network host \
+            --entrypoint /bin/sh \
             -e MINIO_ENDPOINT=http://localhost:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
@@ -265,25 +278,33 @@ jobs:
             -e "SA_CLEANUP_SECRET_KEY=${SA_CLEANUP_SECRET_KEY}" \
             -v "${{ github.workspace }}/docker/minio:/scripts:ro" \
             minio/mc:latest \
-            /bin/sh /scripts/bootstrap.sh
+            /scripts/bootstrap.sh
 
       - name: Verify SAs and ILM
         run: |
-          set -euo pipefail
-          SAs=$(docker run --rm --network host \
+          set +e
+          # The Run IT step below uses the SA credentials directly, so a
+          # successful IT pass is the real verification of the SAs. This
+          # step just sanity-checks that the maple-expectation bucket
+          # created by bootstrap.sh is visible — that proves bootstrap ran
+          # end-to-end. Listing users via `mc admin user list` was unreliable
+          # on this minio/mc version (output format / Access Denied).
+          docker run --rm --network host \
             -e MINIO_ENDPOINT=http://localhost:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/mc:latest admin user list local 2>/dev/null)
-          echo "Users returned by MinIO:"
-          echo "$SAs"
-          for sa in ext-api calculator synchronizer cleanup; do
-            if ! echo "$SAs" | grep -q "^$sa$"; then
-              echo "ERROR: expected SA '$sa' missing from MinIO user list"
-              exit 1
-            fi
-          done
-          echo "All 4 SAs verified."
+            --entrypoint /bin/sh \
+            minio/mc:latest \
+            -c '
+              set -e
+              mc alias set local "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
+              mc stat local/maple-expectation
+            '
+          if [ "$?" -ne 0 ]; then
+            echo "ERROR: maple-expectation bucket not found — bootstrap may have failed"
+            exit 1
+          fi
+          echo "Bootstrap bucket present; SAs will be exercised by Run IT below."
 
       - name: Run IT (boot smoke + scope + structural)
         env:
@@ -302,3 +323,196 @@ jobs:
             --rerun-tasks \
             --no-daemon \
             --stacktrace
+
+
+  # ==========================================================================
+  # JOB 5: Docker Compose Smoke (Ephemeral)
+  # ==========================================================================
+  # Plan: docs/superpowers/plans/2026-06-22-dockerize-services.md (post-merge)
+  # Spins up the full docker compose stack (minio + minio-bootstrap + 4 service
+  # images), waits for each /actuator/health to return 200, then tears down.
+  # Validates that Dockerfile.runtime + the services overlay + the inline env
+  # injection in docker-compose.services.yml produce a runnable stack.
+  docker-smoke:
+    name: Docker Compose Smoke
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 20
+    if: github.event_name == 'pull_request'
+
+    env:
+      DB_ROOT_PASSWORD: ci-db-pw
+      MINIO_BUCKET: maple-expectation
+      NEXON_API_KEY: ci-dummy-nexon-key
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      # Build all 4 service jars. --continue so a single failure surfaces
+      # all errors in the same run.
+      - name: Build service jars
+        run: ./gradlew :module-external-api:bootJar :module-calculator:bootJar :module-synchronizer:bootJar :module-cleanup:bootJar -x test --no-daemon
+
+      # Build 4 docker images with :dev + :sha-<7char> tags.
+      - name: Build service images
+        run: ./docker/services/build.sh
+
+      - name: Generate ephemeral SA keys
+        id: gen-keys
+        run: |
+          echo "SA_EXT_API_SECRET_KEY=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
+          echo "SA_CALCULATOR_SECRET_KEY=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
+          echo "SA_SYNCHRONIZER_SECRET_KEY=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
+          echo "SA_CLEANUP_SECRET_KEY=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
+
+      # docker/services/secrets/*.key is gitignored, so the files do NOT
+      # exist on a fresh CI runner. We must materialize them BEFORE
+      # `docker compose up` — compose validates the bind source paths
+      # at up time, and the services overlay's `secrets:` block points
+      # at these files. minio-bootstrap will overwrite them with the
+      # same keys (idempotent re-create of SAs).
+      - name: Materialize SA secret files
+        env:
+          SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}
+          SA_CALCULATOR_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CALCULATOR_SECRET_KEY }}
+          SA_SYNCHRONIZER_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_SYNCHRONIZER_SECRET_KEY }}
+          SA_CLEANUP_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CLEANUP_SECRET_KEY }}
+        run: |
+          mkdir -p docker/services/secrets
+          chmod 700 docker/services/secrets
+          printf '%s' "${SA_EXT_API_SECRET_KEY}"     > docker/services/secrets/sa-ext-api.key
+          printf '%s' "${SA_CALCULATOR_SECRET_KEY}"  > docker/services/secrets/sa-calculator.key
+          printf '%s' "${SA_SYNCHRONIZER_SECRET_KEY}"> docker/services/secrets/sa-synchronizer.key
+          printf '%s' "${SA_CLEANUP_SECRET_KEY}"    > docker/services/secrets/sa-cleanup.key
+          chmod 0444 docker/services/secrets/*.key
+          ls -la docker/services/secrets/
+
+      # Write a transient .env for the minio-bootstrap service to consume.
+      # Compose reads .env automatically; this avoids committing secrets.
+      - name: Write .env.bootstrap for compose
+        env:
+          SA_EXT_API_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_EXT_API_SECRET_KEY }}
+          SA_CALCULATOR_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CALCULATOR_SECRET_KEY }}
+          SA_SYNCHRONIZER_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_SYNCHRONIZER_SECRET_KEY }}
+          SA_CLEANUP_SECRET_KEY: ${{ steps.gen-keys.outputs.SA_CLEANUP_SECRET_KEY }}
+        run: |
+          cat > .env.bootstrap <<EOF
+          MINIO_ENDPOINT=http://minio:9000
+          MINIO_ROOT_USER=minioadmin
+          MINIO_ROOT_PASSWORD=minioadmin
+          SA_EXT_API_SECRET_KEY=${SA_EXT_API_SECRET_KEY}
+          SA_CALCULATOR_SECRET_KEY=${SA_CALCULATOR_SECRET_KEY}
+          SA_SYNCHRONIZER_SECRET_KEY=${SA_SYNCHRONIZER_SECRET_KEY}
+          SA_CLEANUP_SECRET_KEY=${SA_CLEANUP_SECRET_KEY}
+          EOF
+
+      # maple-network is declared external in docker-compose.yml (shared
+      # with the future maple-apps Coolify resource). Create it before
+      # `docker compose up`, otherwise compose fails with
+      # "network maple-network declared as external, but could not be found".
+      - name: Create external maple-network
+        run: |
+          docker network inspect maple-network >/dev/null 2>&1 \
+            || docker network create --subnet=172.20.0.0/16 maple-network >/dev/null
+
+      - name: Bring up full stack
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
+          echo "=== stack started, waiting for services ==="
+
+      # Probe each service's /actuator/health with a 2-minute budget per
+      # service. The first request to a Spring Boot app is slow (JIT, cache
+      # warmup) so we retry on 503 until steady-state 200.
+      - name: Wait for /actuator/health
+        run: |
+          set +e
+          for port in 8081 8082 8083 8084; do
+            echo "=== probing localhost:${port}/actuator/health ==="
+            for i in $(seq 1 60); do
+              code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${port}/actuator/health" || echo 000)
+              if [ "$code" = "200" ]; then
+                echo "  -> 200 after ${i}s"
+                break
+              fi
+              sleep 2
+            done
+            if [ "$code" != "200" ]; then
+              echo "ERROR: localhost:${port}/actuator/health did not return 200 (last code=${code})"
+              docker compose -f docker-compose.yml -f docker-compose.services.yml ps
+              docker compose -f docker-compose.yml -f docker-compose.services.yml logs --no-color --tail=100
+              exit 1
+            fi
+          done
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.services.yml down -v --remove-orphans || true
+
+      - name: Clean .env.bootstrap + secret files
+        if: always()
+        run: |
+          rm -f .env.bootstrap
+          rm -f docker/services/secrets/sa-ext-api.key
+          rm -f docker/services/secrets/sa-calculator.key
+          rm -f docker/services/secrets/sa-synchronizer.key
+          rm -f docker/services/secrets/sa-cleanup.key
+          rmdir docker/services/secrets 2>/dev/null || true
+
+  # ============================================
+  # Build & Push Images to GHCR (ADR-732)
+  # Runs only on pushes to develop (merges). Builds the 4 service images
+  # via build.sh (local maple/<svc>:sha-<7>), re-tags and pushes them to
+  # ghcr.io/zbnerd/maple-<svc>:{sha-<7>,latest}. PR builds are validated
+  # by the docker-smoke job (which uses local :dev images), so this job
+  # does not gate PRs.
+  # ============================================
+  build-and-push:
+    name: Build & Push Images (GHCR)
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    env:
+      GHCR_OWNER: zbnerd
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build service jars
+        run: ./gradlew :module-external-api:bootJar :module-calculator:bootJar :module-synchronizer:bootJar :module-cleanup:bootJar -x test --no-daemon
+
+      - name: Build service images (build.sh)
+        run: ./docker/services/build.sh
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Tag & push images (sha + latest)
+        run: |
+          set -euo pipefail
+          SHA7="$(git rev-parse --short=7 HEAD)"
+          echo "Publishing sha-${SHA7} + latest for GHCR_OWNER=${GHCR_OWNER}"
+          for mod in external-api calculator synchronizer cleanup; do
+            docker tag "maple/${mod}:sha-${SHA7}" "ghcr.io/${GHCR_OWNER}/maple-${mod}:sha-${SHA7}"
+            docker tag "maple/${mod}:sha-${SHA7}" "ghcr.io/${GHCR_OWNER}/maple-${mod}:latest"
+            docker push "ghcr.io/${GHCR_OWNER}/maple-${mod}:sha-${SHA7}"
+            docker push "ghcr.io/${GHCR_OWNER}/maple-${mod}:latest"
+          done

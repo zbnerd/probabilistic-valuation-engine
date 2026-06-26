@@ -2,6 +2,7 @@ package maple.expectation.infrastructure.batch.scheduler
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.concurrent.CompletableFuture
 import kotlin.math.min
 import kotlin.math.pow
 import maple.expectation.error.exception.DistributedLockException
@@ -103,13 +104,16 @@ class BatchJobRecoveryScheduler(
 
         executor.executeOrCatch(
             {
-                // Acquire distributed lock
-                lockStrategy.executeWithLock(
+                // Acquire distributed lock (async chain, no caller-side .get())
+                lockStrategy.executeWithLockAsync(
                     lockName,
                     0,
                     10, // 10 second lock timeout
-                    this::performRecovery,
-                )
+                ) {
+                    CompletableFuture.completedFuture(performRecovery())
+                }.whenComplete { _, ex ->
+                    if (ex != null) handleLockFailure(ex.cause ?: ex)
+                }
                 null
             },
             { e ->

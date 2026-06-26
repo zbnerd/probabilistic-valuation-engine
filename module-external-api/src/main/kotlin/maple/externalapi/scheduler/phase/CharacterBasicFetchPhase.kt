@@ -12,6 +12,7 @@ import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
+import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import org.slf4j.LoggerFactory
@@ -44,7 +45,7 @@ class CharacterBasicFetchPhase(
 ) {
     private val log = LoggerFactory.getLogger(CharacterBasicFetchPhase::class.java)
 
-    fun execute(workerExecutor: ExecutorService, ocidCache: Map<String, String>): CompletableFuture<Unit> {
+    fun execute(workerExecutor: ExecutorService, ocidCache: Map<String, String>, runId: String? = null): CompletableFuture<Unit> {
         val existing = objectStorage.listByPrefix("character-basic/")
         if (existing.isNotEmpty()) {
             log.info("[Scheduler] character-basic already done ({} files), skipping", existing.size)
@@ -57,9 +58,9 @@ class CharacterBasicFetchPhase(
             return CompletableFuture.completedFuture(Unit)
         }
 
-        val runId = runIdGenerator.newRunId()
+        val effectiveRunId = runId ?: runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("character-basic")
-        val runKey = "runs/$runId/character-basic"
+        val runKey = "runs/$effectiveRunId/character-basic"
         runMarkerWriter.writeRunMarker(runKey)
         val sink = sinkFactory.createForCharacterBasic(runKey)
 
@@ -73,12 +74,13 @@ class CharacterBasicFetchPhase(
             batchSize,
             chunkConfig.maxRecords,
             chunkConfig.maxUncompressedBytes,
-            runId,
+            effectiveRunId,
         )
 
         val start = Instant.now(clock)
         val ctx = BatchFetchContext(
             endpoint = "character-basic",
+            phase = PipelinePhase.CHARACTER_BASIC,
             apiEndpoint = ExternalApiEndpoint.CHARACTER_BASIC,
             onFetched = { metrics.recordCharacterBasicFetched() },
             onFailed = { metrics.recordCharacterBasicFailed() },
@@ -86,21 +88,19 @@ class CharacterBasicFetchPhase(
 
         val dispatcher = workerExecutor.asCoroutineDispatcher()
         return CoroutineScope(dispatcher).future {
-            try {
-                val (successCount, failCount) = batchSupport.processBatch(
-                    rateLimiter,
-                    entries,
-                    batchSize,
-                    ctx,
-                    sink,
-                    runId,
-                    start,
-                )
-                schedulerProgressLogger.logSummary("character-basic", entries.size, successCount, successCount, failCount, start)
-            } finally {
-                sink.close()
-                metrics.characterBasicTimer().record(Duration.between(start, Instant.now(clock)))
-            }
+            val (successCount, failCount) = batchSupport.processBatch(
+                rateLimiter,
+                entries,
+                batchSize,
+                ctx,
+                sink,
+                effectiveRunId,
+                start,
+            )
+            schedulerProgressLogger.logSummary("character-basic", entries.size, successCount, successCount, failCount, start)
+        }.thenCompose {
+            metrics.characterBasicTimer().record(Duration.between(start, Instant.now(clock)))
+            sink.closeAsync().thenApply { Unit }
         }
     }
 }

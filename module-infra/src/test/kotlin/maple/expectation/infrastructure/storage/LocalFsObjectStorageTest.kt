@@ -13,7 +13,7 @@ class LocalFsObjectStorageTest {
     lateinit var tempDir: Path
 
     private fun newStorage(basePath: String = tempDir.toString()): LocalFsObjectStorage =
-        LocalFsObjectStorage(basePath, meterRegistry = null)
+        LocalFsObjectStorage(basePath, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(), meterRegistry = null)
 
     @Test
     fun `put and get round-trip returns identical bytes`() {

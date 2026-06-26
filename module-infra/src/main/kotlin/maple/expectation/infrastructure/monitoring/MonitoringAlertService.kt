@@ -43,21 +43,25 @@ class MonitoringAlertService(
     fun checkBufferSaturation() {
         val context = TaskContext.of("Monitoring", "CheckSaturation")
 
-        val isLeader = lockStrategy.tryLockImmediately("global-monitoring-lock", 4)
+        lockStrategy.tryLockImmediatelyAsync("global-monitoring-lock", 4).whenComplete { acquired, ex ->
+            if (ex != null) {
+                log.error("❌ [Monitoring] 락 획득 시도 중 장애: {}", ex.cause ?: ex.message)
+                return@whenComplete
+            }
+            if (!acquired) {
+                log.debug("⏭️ [Monitoring] 리더 선출 실패 - 다른 인스턴스가 리더입니다. 체크 스킵.")
+                return@whenComplete
+            }
 
-        if (!isLeader) {
-            log.debug("⏭️ [Monitoring] 리더 선출 실패 - 다른 인스턴스가 리더입니다. 체크 스킵.")
-            return
+            executor.executeOrCatch(
+                {
+                    performBufferCheck()
+                    null
+                },
+                { t -> handleMonitoringFailure(t) },
+                context,
+            )
         }
-
-        executor.executeOrCatch(
-            {
-                performBufferCheck()
-                null
-            },
-            { t -> handleMonitoringFailure(t) },
-            context,
-        )
     }
 
     /** 헬퍼 1: 실제 수치 확인 및 알림 로직 (로직 응집도 향상) */

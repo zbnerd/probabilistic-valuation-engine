@@ -1,8 +1,6 @@
 package maple.synchronizer.ranking
 
 import java.nio.charset.StandardCharsets
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.synchronizer.preparer.PreppedDocument
@@ -21,23 +19,32 @@ class EquipmentRankingRedisWriter(
     fun update(documents: List<PreppedDocument>) {
         if (!properties.enabled || documents.isEmpty()) return
 
-        // Issue #1129: CPU offload — filter + groupBy on Dispatchers.Default.
-        // Redis pipelined ZADD (updatePreset) on caller executor (LogicExecutor).
-        val rankable = runBlocking(Dispatchers.Default) {
-            documents.filter { it.userIgn?.isNotBlank() == true }
-        }
+        // Issue #1129: CPU offload — filter + groupBy delegated to LogicExecutor's
+        // CPU-bound executor (replaces the prior runBlocking(Dispatchers.Default)
+        // coroutine bridge). Redis pipelined ZADD (updatePreset) on the same executor.
+        val rankable = executor.executeOrDefault(
+            {
+                documents.filter { it.userIgn?.isNotBlank() == true }
+            },
+            emptyList<PreppedDocument>(),
+            TaskContext.of("Synchronizer", "UpdateEquipmentRanking:filter"),
+        )
         if (rankable.isEmpty()) return
 
-        val grouped = runBlocking(Dispatchers.Default) {
-            rankable.groupBy { it.presetNo.toInt() }
-        }
+        val grouped = executor.executeOrDefault(
+            {
+                rankable.groupBy { it.presetNo.toInt() }
+            },
+            emptyMap<Int, List<PreppedDocument>>(),
+            TaskContext.of("Synchronizer", "UpdateEquipmentRanking:groupBy"),
+        )
 
         val updated = executor.executeOrDefault(
             {
                 grouped.values.sumOf(::updatePreset)
             },
             0,
-            TaskContext.of("Synchronizer", "UpdateEquipmentRanking"),
+            TaskContext.of("Synchronizer", "UpdateEquipmentRanking:sum"),
         )
 
         log.debug("Equipment ranking Redis update: attempted={} updated={}", rankable.size, updated)

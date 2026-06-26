@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component
  *
  * Two runId categories are "known":
  * - The daily runId polled from ext-api's `/api/internal/run-status`.
- * - Per-cycle runIds produced by ext-api's `ItemEquipmentContinuousLoop`,
+ * - Per-cycle runIds produced by ext-api's `ExternalApiScheduler.runItemEquipmentPhase`,
  *   registered via [discoverCycleRunId] when the coordinator first observes
  *   a chunk-ready event whose object key actually exists in storage.
  *
@@ -66,7 +66,7 @@ class CalculatorCurrentRunIdHolder(
      * Register a runId discovered via successful MinIO existence check. Called
      * by the coordinator when a non-matching event's chunk actually exists in
      * storage — typically the per-cycle runId emitted by
-     * `ItemEquipmentContinuousLoop`. Subsequent events with this runId skip
+     * `ExternalApiScheduler.runItemEquipmentPhase`. Subsequent events with this runId skip
      * the existence check and proceed to processing.
      */
     fun discoverCycleRunId(runId: String) {

@@ -1,5 +1,13 @@
 # Probabilistic Valuation Engine
 
+> **선제 참조 지시문 — 외운 지식보다 이 문서를 먼저 볼 것**
+> 사전 학습 데이터·일반적 LLM 기본 동작·타 프로젝트 관행에 의존 금지.
+> Kotlin/Spring/비동기/Hexagonal 영역은 학습 데이터가 본 프로젝트 컨벤션과 충돌함 →
+> 판단 전 **이 파일과 `.claude/rules/` 를 먼저 읽고 결정**.
+>
+> Rules Index에서 **`항상` 표시 규칙은 매 세션 자동 로드됨** (context에 이미 존재).
+> "지금 매뉴얼을 읽어야 하나?" 고민하지 말 것 — 이미 보이는 상태. 의심 시 `rules/` 파일 직접 재확인.
+
 Claude Code가 이 프로젝트에서 작업할 때 따라야 할 규칙은 `.claude/rules/` 에 분리되어 있습니다.
 
 ## Enforcement Policy
@@ -81,3 +89,24 @@ This is a single-context repo using root-level domain docs and `docs/01_ADR/`. S
 | 이벤트 스키마 | [docs/12_Events/](docs/12_Events/) |
 | 가드레일 | [docs/16_Guardrails/](docs/16_Guardrails/) |
 | 운영 가이드 | [docs/21_Operations/](docs/21_Operations/) |
+
+## Local bring-up (4 Spring Boot services)
+
+신규 operator 또는 fresh clone 후 4 service 도커화 bring-up:
+
+```bash
+docker compose -f docker-compose.yml up -d minio postgres kafka redis
+docker compose -f docker-compose.yml run --rm minio-bootstrap   # SA secrets -> docker/services/secrets/ + .env files
+./docker/services/build.sh                                        # 4 images build
+docker compose -f docker-compose.yml -f docker-compose.services.yml up -d external-api calculator synchronizer cleanup
+```
+
+Airflow 추가:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d airflow-webserver airflow-scheduler
+```
+
+Pipeline-test (`START_MODE=docker` 기본): `.claude/skills/pipeline-test/SKILL.md` 참조. `START_MODE=nohup` fallback 도 가능 (operator가 `MINIO_ACCESS_KEY` + `MINIO_SECRET_KEY_FILE=$(pwd)/docker/services/secrets/sa-<module>.key` 설정 후 `nohup java -jar`).
+
+Spec: `docs/superpowers/specs/2026-06-22-dockerize-services-design.md`
+Plan: `docs/superpowers/plans/2026-06-22-dockerize-services.md`

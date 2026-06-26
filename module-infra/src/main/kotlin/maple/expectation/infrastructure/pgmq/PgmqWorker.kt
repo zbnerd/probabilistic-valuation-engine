@@ -9,10 +9,6 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
 import maple.expectation.infrastructure.executor.LogicExecutor
 import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
@@ -100,6 +96,22 @@ abstract class PgmqWorker<T : Any>(
      * @return 처리 성공 여부 (true: archive, false: delete or retry)
      */
     protected abstract fun process(message: PgmqMessage<T>): Boolean
+
+    /**
+     * Async variant of [process]. Default implementation wraps [process] in [CompletableFuture.supplyAsync]
+     * via the worker pool. Override to delegate directly to an async pipeline (eliminates blocking sites).
+     *
+     * Returning [ProcessOutcome.Ack] triggers archive; [ProcessOutcome.Nack] triggers retry or DLQ;
+     * [ProcessOutcome.DeadLetter] triggers DLQ.
+     */
+    protected open fun processAsync(message: PgmqMessage<T>): CompletableFuture<ProcessOutcome> =
+        CompletableFuture.supplyAsync(
+            {
+                if (process(message)) ProcessOutcome.Ack
+                else ProcessOutcome.Nack(retryable = true)
+            },
+            workerPool,
+        )
 
     /**
      * 메시지 처리 실패 시 후처리 훅 (선택적 오버라이드)
@@ -369,54 +381,70 @@ abstract class PgmqWorker<T : Any>(
     }
 
     /**
-     * Coroutine-parallel chunk processing: all messages in a chunk processed concurrently.
-     * Replaces sequential for-loop with coroutine async/awaitAll for ~2-3x per-chunk speedup.
+     * Parallel chunk processing: all messages in a chunk processed concurrently via CF.
+     * Replaces runBlocking/awaitAll with CompletableFuture.allOf + per-message supplyAsync.
      * Multiple chunks still run in parallel across workerPoolSize threads.
      *
-     * Issue #1131: outer runBlocking + inner async on Dispatchers.Default (CPU work = calculateOnly).
-     * Old: Dispatchers.IO (64 thread limit, CPU 점유 시 IO starvation 위험).
+     * @see <a href="https://github.com/zbnerd/probabilistic-valuation-engine/issues/1131">Issue #1131</a>
      */
     private fun processSequentialBatch(messages: List<PgmqMessage<T>>) {
-        val results: List<CalculationResult> = runBlocking(Dispatchers.Default) {
-            messages.map { message ->
-                async(Dispatchers.Default) {
-                    metrics.concurrentIncrement()
+        val perMessageFutures = messages.map { message ->
+            CompletableFuture.supplyAsync(
+                {
                     val context = TaskContext.of("PgmqWorker", "CoroutineCalc", "$queueName:${message.messageId}")
-                    val result = executor.executeOrDefault(
-                        { calculateOnly(message) },
-                        null,
-                        context,
+                    executor.executeWithFinally(
+                        task = {
+                            metrics.concurrentIncrement()
+                            val result = executor.executeOrDefault(
+                                { calculateOnly(message) },
+                                null,
+                                context,
+                            )
+                            result as? CalculationResult
+                        },
+                        finallyBlock = { metrics.concurrentDecrement() },
+                        context = context,
                     )
-                    metrics.concurrentDecrement()
-                    result as? CalculationResult
-                }
-            }.awaitAll().filterNotNull()
+                },
+                workerPool,
+            )
         }
 
-        val successCount = results.size
+        CompletableFuture.allOf(*perMessageFutures.toTypedArray())
+            .thenApply {
+                perMessageFutures.mapNotNull { it.get() }
+            }
+            .thenAccept { results ->
+                val successCount = results.size
 
-        executor.executeOrCatch(
-            {
-                if (results.isNotEmpty()) {
-                    batchWrite(results)
+                executor.executeOrCatch(
+                    {
+                        if (results.isNotEmpty()) {
+                            batchWrite(results)
+                        }
+                        repeat(successCount) { metrics.success.increment() }
+                    },
+                    { e ->
+                        log.error("[{}] BatchWrite failed, {} results lost", queueName, results.size, e)
+                        repeat(successCount) { metrics.failure.increment() }
+                        null
+                    },
+                    TaskContext.of("PgmqWorker", "SequentialBatchWrite", queueName),
+                )
+
+                // Always release permits and inflight metrics — prevent resource leak
+                messages.forEach {
+                    metrics.inflightDecrement()
+                    inflightPermits.release()
                 }
-                repeat(successCount) { metrics.success.increment() }
-            },
-            { e ->
-                log.error("[{}] Coroutine batchWrite failed, {} results lost", queueName, results.size, e)
-                repeat(successCount) { metrics.failure.increment() }
-                null
-            },
-            TaskContext.of("PgmqWorker", "BatchWrite", queueName),
-        )
 
-        // Always release permits and inflight metrics — prevent resource leak
-        messages.forEach {
-            metrics.inflightDecrement()
-            inflightPermits.release()
-        }
-
-        log.debug("[{}] Coroutine chunk done: {}/{} succeeded", queueName, successCount, messages.size)
+                log.debug("[{}] Chunk done: {}/{} succeeded", queueName, successCount, messages.size)
+            }
+            .whenComplete { _, ex ->
+                if (ex != null) {
+                    log.error("[{}] processSequentialBatch failed: {}", queueName, ex.cause ?: ex)
+                }
+            }
     }
 
     /**

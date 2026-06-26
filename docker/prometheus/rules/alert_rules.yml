@@ -242,3 +242,18 @@ groups:
         annotations:
           summary: "Large sync queue size"
           description: "Sync queue size is {{ $value }} for more than 5 minutes"
+
+      # ============================================
+      # Container Restart Thrashing (ADR-733)
+      # cAdvisor's container_start_time_seconds jumps on each container
+      # restart; changes() counts those jumps over the window.
+      # ============================================
+      - alert: ContainerRestartThrashing
+        expr: changes(container_start_time_seconds{container!="",container!="POD"}[5m]) > 2
+        for: 1m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "Container {{ $labels.name }} is restarting repeatedly"
+          description: "{{ $labels.name }} restarted {{ $value }} times in the last 5m"

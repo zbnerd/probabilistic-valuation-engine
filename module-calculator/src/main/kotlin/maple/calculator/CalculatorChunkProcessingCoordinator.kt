@@ -13,9 +13,9 @@ import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.runstate.CalculatorCurrentRunIdHolder
-import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.util.CompressionUtils
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -67,7 +67,7 @@ class CalculatorChunkProcessingCoordinator(
         // runId tracking is intentionally not enforced here. Two valid runId
         // sources exist:
         //  - daily runId (polled from ext-api /api/internal/run-status)
-        //  - per-cycle runIds emitted by ext-api's `ItemEquipmentContinuousLoop`
+        //  - per-cycle runIds emitted by ext-api's `ExternalApiScheduler.runItemEquipmentPhase`
         //    (a different ID per cycle, designed as a log-correlation handle)
         // The current policy is: trust the source chunk's existence as the
         // sole ground truth. A missing chunk → source_not_found. A present
@@ -118,7 +118,9 @@ class CalculatorChunkProcessingCoordinator(
                 if (attempt > 0) {
                     log.info(
                         "[Coordinator] source chunk found after {} retries: key={} (delaysMs={})",
-                        attempt, objectKey, delays,
+                        attempt,
+                        objectKey,
+                        delays,
                     )
                 }
                 return true

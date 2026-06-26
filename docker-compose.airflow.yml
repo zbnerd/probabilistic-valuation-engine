@@ -4,7 +4,11 @@ services:
   airflow-db:
     image: postgres:17-alpine
     container_name: maple-airflow-db
+    labels:
+      autoheal: "true"
     restart: always
+    ports:
+      - "5433:5432"
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow}
@@ -22,7 +26,9 @@ services:
   airflow-webserver:
     image: apache/airflow:2.10.5-python3.12
     container_name: maple-airflow-webserver
-    restart: always
+    labels:
+      autoheal: "true"
+    restart: unless-stopped
     network_mode: host
     user: "0:0"
     environment:
@@ -30,11 +36,11 @@ services:
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@172.20.0.2:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@localhost:5433/airflow
       AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8180"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
       AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"
-      KAFKA_BOOTSTRAP_SERVERS: "172.20.0.4:9092"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
     volumes:
       - ./docker/airflow/dags:/opt/airflow/dags:ro
     command: webserver
@@ -50,7 +56,9 @@ services:
   airflow-scheduler:
     image: apache/airflow:2.10.5-python3.12
     container_name: maple-airflow-scheduler
-    restart: always
+    labels:
+      autoheal: "true"
+    restart: unless-stopped
     network_mode: host
     user: "0:0"
     environment:
@@ -58,19 +66,20 @@ services:
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@172.20.0.2:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@localhost:5433/airflow
       AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8180"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
       AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"
-      KAFKA_BOOTSTRAP_SERVERS: "172.20.0.4:9092"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
     volumes:
       - ./docker/airflow/dags:/opt/airflow/dags:ro
     command: scheduler
     healthcheck:
-      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname '$$(hostname)'"]
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $$(hostname -f)"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 120s
     depends_on:
       airflow-db:
         condition: service_healthy

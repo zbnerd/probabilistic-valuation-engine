@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.exception.SdkClientException
 import software.amazon.awssdk.core.sync.RequestBody
+import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest
@@ -27,6 +28,8 @@ import jakarta.annotation.PostConstruct
 import java.nio.file.Files
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * MinIO/S3 implementation of [ObjectStorage]. Used when `storage.backend=minio`.
@@ -39,12 +42,23 @@ import java.util.concurrent.CompletableFuture
 class MinioObjectStorage(
     private val props: MinioProperties,
     private val s3: S3Client,
+    private val s3Async: S3AsyncClient,
     private val transferManager: S3TransferManager,
     @Autowired(required = false)
     private val meterRegistry: MeterRegistry?,
 ) : ObjectStorage {
 
     private val log = LoggerFactory.getLogger(MinioObjectStorage::class.java)
+
+    /**
+     * Executor passed to [AsyncRequestBody.fromInputStream]. The SDK requires
+     * a non-null executor (`AsyncRequestBodyFromInputStreamConfiguration` ctor
+     * rejects null). One shared virtual-thread executor handles all concurrent
+     * `putStreamMultipart` stream reads — the work is blocking I/O against
+     * the caller's InputStream (pipe, socket, file).
+     */
+    private val streamReadExecutor: ExecutorService =
+        Executors.newVirtualThreadPerTaskExecutor()
 
     @PostConstruct
     fun validateBucket() {
@@ -127,6 +141,61 @@ class MinioObjectStorage(
             path,
         )
         return PutResult(key, size, resp.eTag())
+    }
+
+    override fun putStreamMultipart(
+        key: String,
+        input: java.io.InputStream,
+    ): CompletableFuture<PutResult> {
+        // Async chunked transfer: S3AsyncClient.putObject with
+        // AsyncRequestBody.fromInputStream(input, contentLength=-1L)
+        // tells the SDK to send chunks without knowing the total
+        // length. The SDK internally wraps the InputStream in
+        // SdkChunkedEncodingInputStream, sends 5MB chunks via
+        // multipart, and tracks checksums per chunk.
+        //
+        // Why not sync putObject: the sync S3Client.putObject marshals
+        // Content-Length from RequestBody.contentLength() and throws
+        // IAE("Content-length must not be negative") for unknown length
+        // (see putStream() below for the full history of this attempt).
+        //
+        // Retry: SDK built-in RetryPolicy.defaultRetryPolicy (3 retries,
+        // configured in StorageConfig.s3AsyncClient).
+        val req = PutObjectRequest.builder()
+            .bucket(props.bucket)
+            .key(key)
+            .contentType("application/octet-stream")
+            .build()
+
+        val body = AsyncRequestBody.fromInputStream { b ->
+            // SDK requires:
+            // - executor: AsyncRequestBodyFromInputStreamConfiguration ctor rejects null
+            //   (`Validate.paramNotNull(executor, "executor")`). The SDK reads the
+            //   InputStream on a background thread (blocking I/O against a pipe or
+            //   socket). See [streamReadExecutor].
+            // - contentLength: not -1. `isNotNegativeOrNull` throws IAE for negative
+            //   values. We pass null (i.e. unset) to signal "unknown length" — the
+            //   SDK then uses chunked transfer encoding via
+            //   AwsChunkedEncodingInputStream (5MB parts, per-chunk checksums).
+            //
+            // Verified: SDK 2.28.16 (in module-infra bootJar) throws
+            // `IllegalArgumentException: contentLength must not be negative`
+            // for `b.contentLength(-1L)`. Throws NPE for missing executor.
+            // Both throws happen at build() time, not at runtime.
+            b.inputStream(input).executor(streamReadExecutor)
+        }
+
+        return s3Async.putObject(req, body)
+            .handle { resp, err ->
+                if (err != null) {
+                    throw RuntimeException(
+                        "putStreamMultipart failed for key=$key",
+                        err,
+                    )
+                }
+                // Size is unknown with chunked transfer (-1L).
+                PutResult(key, -1L, resp.eTag())
+            }
     }
 
     override fun putFileAsync(key: String, path: java.nio.file.Path): CompletableFuture<PutResult> {

@@ -12,6 +12,7 @@ import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.metrics.ExternalApiMetrics
 import maple.externalapi.metrics.SnapshotFetchMetrics
+import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import org.slf4j.LoggerFactory
@@ -38,19 +39,21 @@ class ItemEquipmentFetchPhase(
     @Value("\${external-api.batch-size:1000}")
     private val batchSize: Int,
     private val clock: Clock = Clock.systemUTC(),
+    private val runIdGenerator: RunIdGenerator,
     private val runMarkerWriter: RunMarkerWriter,
     private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentFetchPhase::class.java)
 
-    fun execute(workerExecutor: ExecutorService, entries: List<Map.Entry<String, String>>, runId: String): CompletableFuture<Unit> {
+    fun execute(workerExecutor: ExecutorService, entries: List<Map.Entry<String, String>>, runId: String? = null): CompletableFuture<Unit> {
         if (entries.isEmpty()) {
             log.warn("[Scheduler] OCID cache empty, skipping item-equipment")
             return CompletableFuture.completedFuture(Unit)
         }
 
+        val effectiveRunId = runId ?: runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("item-equipment")
-        val runKey = "runs/$runId/item-equipment"
+        val runKey = "runs/$effectiveRunId/item-equipment"
         runMarkerWriter.writeRunMarker(runKey)
         val sink = sinkFactory.createForItemEquipment(runKey)
 
@@ -64,12 +67,13 @@ class ItemEquipmentFetchPhase(
             batchSize,
             chunkConfig.maxRecords,
             chunkConfig.maxUncompressedBytes,
-            runId,
+            effectiveRunId,
         )
 
         val start = Instant.now(clock)
         val ctx = BatchFetchContext(
             endpoint = "item-equipment",
+            phase = PipelinePhase.ITEM_EQUIPMENT,
             apiEndpoint = ExternalApiEndpoint.ITEM_EQUIPMENT,
             onFetched = { metrics.recordItemEquipmentFetched() },
             onFailed = { metrics.recordItemEquipmentFailed() },
@@ -77,21 +81,19 @@ class ItemEquipmentFetchPhase(
 
         val dispatcher = workerExecutor.asCoroutineDispatcher()
         return CoroutineScope(dispatcher).future {
-            try {
-                val (successCount, failCount) = batchSupport.processBatch(
-                    rateLimiter,
-                    entries,
-                    batchSize,
-                    ctx,
-                    sink,
-                    runId,
-                    start,
-                )
-                schedulerProgressLogger.logSummary("item-equipment", entries.size, successCount, successCount, failCount, start)
-            } finally {
-                sink.close()
-                metrics.itemEquipmentTimer().record(Duration.between(start, Instant.now(clock)))
-            }
+            val (successCount, failCount) = batchSupport.processBatch(
+                rateLimiter,
+                entries,
+                batchSize,
+                ctx,
+                sink,
+                effectiveRunId,
+                start,
+            )
+            schedulerProgressLogger.logSummary("item-equipment", entries.size, successCount, successCount, failCount, start)
+        }.thenCompose {
+            metrics.itemEquipmentTimer().record(Duration.between(start, Instant.now(clock)))
+            sink.closeAsync().thenApply { Unit }
         }
     }
 }

@@ -12,8 +12,14 @@ dependencies {
 	implementation(libs.kotlin.stdlib)
 	implementation(libs.kotlin.logging.jvm)
 
+	// Coroutines (Flow exposed in StreamingChunkParser public API)
+	api(libs.kotlinx.coroutines.core)
+
 	// Jackson (Spring-independent JSON serialization)
 	implementation(libs.jackson.annotations)
+
+	// SLF4J API (LoggerFactory — module-common is Spring-free, so no transitive slf4j-api)
+	implementation("org.slf4j:slf4j-api:2.0.17")
 	implementation(libs.jackson.databind)
 
 	// Lombok

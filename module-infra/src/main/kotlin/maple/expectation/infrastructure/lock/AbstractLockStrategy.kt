@@ -1,5 +1,8 @@
 package maple.expectation.infrastructure.lock
 
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.stream.Collectors
 import maple.expectation.common.function.ThrowingSupplier
 import maple.expectation.error.exception.DistributedLockException
 import maple.expectation.infrastructure.executor.LogicExecutor
@@ -8,6 +11,86 @@ import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
 
 /** 락 전략 추상 클래스 (TaskContext 및 평탄화 적용) */
 abstract class AbstractLockStrategy(protected val executor: LogicExecutor) : LockStrategy {
+
+    // === ASYNC API (template-style) ===
+    // Concrete impls (PostgresLockStrategy, GuavaLockStrategy) provide the
+    // tryAcquireSessionLockAsync / releaseSessionLockAsync hooks. The CF chain
+    // guarantees lock release on both success and failure paths via whenComplete.
+
+    override fun <T> executeWithLockAsync(
+        key: String,
+        waitTime: Long,
+        leaseTime: Long,
+        supplier: () -> CompletableFuture<T>,
+    ): CompletableFuture<T> {
+        val lockKey = buildLockKey(key)
+        val context = TaskContext.of("Lock", "ExecuteAsync", key)
+
+        return tryAcquireSessionLockAsync(lockKey, waitTime, leaseTime, context)
+            .thenCompose { lockId -> executeSuppliedTask(lockKey, lockId, supplier, context) }
+    }
+
+    private fun <T> executeSuppliedTask(
+        lockKey: String,
+        lockId: Long?,
+        supplier: () -> CompletableFuture<T>,
+        context: TaskContext,
+    ): CompletableFuture<T> =
+        if (lockId == null) {
+            onLockFailed(lockKey)
+            CompletableFuture.failedFuture(createLockFailureException(lockKey))
+        } else {
+            onLockAcquired(lockKey)
+            supplier().whenComplete { _, _ ->
+                releaseSessionLockAsync(lockKey, lockId, context)
+            }
+        }
+
+    override fun <T> executeWithLockAsync(
+        key: String,
+        supplier: () -> CompletableFuture<T>,
+    ): CompletableFuture<T> = executeWithLockAsync(key, DEFAULT_WAIT_TIME, DEFAULT_LEASE_TIME, supplier)
+
+    override fun tryLockImmediatelyAsync(key: String, leaseTime: Long): CompletableFuture<Boolean> {
+        val lockKey = buildLockKey(key)
+        val context = TaskContext.of("Lock", "TryLockAsync", key)
+        return tryAcquireSessionLockAsync(lockKey, 0, leaseTime, context).thenApply { it != null }
+    }
+
+    override fun unlockAsync(key: String): CompletableFuture<Void> {
+        val lockKey = buildLockKey(key)
+        val context = TaskContext.of("Lock", "UnlockAsync", key)
+        return releaseSessionLockAsync(lockKey, null, context)
+    }
+
+    override fun <T> executeWithOrderedLocksAsync(
+        keys: List<String>,
+        totalTimeout: Long,
+        timeUnit: TimeUnit,
+        leaseTime: Long,
+        supplier: () -> CompletableFuture<T>,
+    ): CompletableFuture<T> {
+        val compositeKey = keys.stream().sorted().collect(Collectors.joining(":"))
+        val timeoutSeconds = timeUnit.toSeconds(totalTimeout)
+        return executeWithLockAsync(compositeKey, timeoutSeconds, leaseTime, supplier)
+    }
+
+    // === Abstract async hooks (concrete impls provide these) ===
+
+    protected abstract fun tryAcquireSessionLockAsync(
+        lockKey: String,
+        waitTime: Long,
+        leaseTime: Long,
+        ctx: TaskContext,
+    ): CompletableFuture<Long?>
+
+    protected abstract fun releaseSessionLockAsync(
+        lockKey: String,
+        lockId: Long?,
+        ctx: TaskContext,
+    ): CompletableFuture<Void>
+
+    // === SYNC API (legacy, kept for module-app compat) ===
 
     override fun <T> executeWithLock(key: String, waitTime: Long, leaseTime: Long, task: ThrowingSupplier<T>): T {
         val lockKey = buildLockKey(key)
@@ -95,5 +178,7 @@ abstract class AbstractLockStrategy(protected val executor: LogicExecutor) : Loc
 
     companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(AbstractLockStrategy::class.java)
+        private const val DEFAULT_WAIT_TIME = 10L
+        private const val DEFAULT_LEASE_TIME = 20L
     }
 }

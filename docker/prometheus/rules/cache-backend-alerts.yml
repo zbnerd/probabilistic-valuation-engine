@@ -1,0 +1,18 @@
+groups:
+  - name: cache-backend
+    interval: 30s
+    rules:
+      - alert: CalculatorCacheBackendErrors
+        expr: rate(calculator_cache_errors_total{cache="chronicle"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: calculator
+        annotations:
+          summary: "Calculator Chronicle cache backend reporting errors"
+          description: >
+            calculator_cache_errors_total{cache="chronicle"} rate > 1/sec for 5 minutes.
+            Likely causes: Chronicle file corruption (fall back to caffeine via
+            calculator.cache.backend=caffeine), disk full, library version mismatch,
+            or upstream JDK 21 incompatibility (issue #1311 blocker).
+            Dashboard: grafana/dashboard-pipeline.json

@@ -7,7 +7,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionException
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import maple.expectation.core.dto.v4.CalculationInput
 import maple.expectation.core.dto.v4.EquipmentExpectationResponseV4
@@ -31,6 +31,7 @@ import maple.expectation.infrastructure.job.CalculationJobService
 import maple.expectation.infrastructure.job.OcidResolutionOrchestrator
 import maple.expectation.infrastructure.lifecycle.ScheduledTaskLifecycleWrapper
 import maple.expectation.infrastructure.lifecycle.VirtualThreadExecutorManager
+import org.springframework.beans.factory.annotation.Qualifier
 import maple.expectation.infrastructure.persistence.entity.CalculationSnapshotEntity
 import maple.expectation.infrastructure.pgmq.CalculationRequestedPayload
 import maple.expectation.infrastructure.pgmq.ExternalApiJobPayload
@@ -38,6 +39,7 @@ import maple.expectation.infrastructure.pgmq.PgmqClient
 import maple.expectation.infrastructure.pgmq.PgmqMessage
 import maple.expectation.infrastructure.pgmq.PgmqWorker
 import maple.expectation.infrastructure.pgmq.PgmqWorkerConfig
+import maple.expectation.infrastructure.pgmq.ProcessOutcome
 import maple.expectation.infrastructure.pgmq.WorkerQueueMetrics
 import maple.expectation.infrastructure.provider.EquipmentFetchProvider
 import maple.expectation.infrastructure.queue.QueueNames
@@ -48,8 +50,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import org.springframework.web.reactive.function.client.WebClientResponseException
 
 /**
@@ -83,6 +83,7 @@ class ExternalApiWorker(
     private val jobPort: CalculationJobPort,
     private val ocidPort: CharacterOcidPort,
     private val pureCalculationPort: PureCalculationPort,
+    @Qualifier("expectationComputeCpuExecutor") private val cpuExecutor: Executor,
     @Value("\${app.pipeline.consolidated.enabled:true}") private val consolidatedEnabled: Boolean,
     @Value("\${app.slow-task.step-trace.threshold-ms:500}") private val stepTraceThresholdMs: Long,
 ) : PgmqWorker<ExternalApiJobPayload>(pgmqClient, executor, workerConfig, meterRegistry, queueMetrics, lifecycleWrapper) {
@@ -100,34 +101,32 @@ class ExternalApiWorker(
     override val payloadClass: Class<ExternalApiJobPayload> = ExternalApiJobPayload::class.java
     override val workerSettings: PgmqWorkerConfig.WorkerSettings = workerConfig.externalApi
 
-    override fun process(message: PgmqMessage<ExternalApiJobPayload>): Boolean {
-        val payload = message.payload
-        val jobId = UUID.fromString(payload.jobId)
-        val context = TaskContext.of("ExternalApiWorker", "ProcessMessage", payload.userIgn)
+    /**
+     * Async-native process — eliminates the [process].join() + try/catch unwrap pattern.
+     *
+     * Returns:
+     * - [ProcessOutcome.Ack] on success or [CharacterNotFoundException] (skip retry, matches sync `true` for both).
+     * - [ProcessOutcome.Nack] with `retryable=true` on any other failure (matches sync `false` from [handleFailure]).
+     */
+    override fun processAsync(message: PgmqMessage<ExternalApiJobPayload>): CompletableFuture<ProcessOutcome> =
+        pipelineAsync(message.payload)
+            .thenApply<ProcessOutcome> { ProcessOutcome.Ack }
+            .exceptionally { ex -> classifyExternalApiFailure(message, ex.cause ?: ex) }
 
-        return executor.executeOrCatch(
-            {
-                try {
-                    pipelineAsync(payload).join()
-                } catch (ex: CompletionException) {
-                    throw ex.cause ?: ex
-                }
-                true
-            },
-            { e ->
-                if (isCharacterNotFound(e)) {
-                    val errorMsg = (ExceptionUtils.unwrapAsyncException(e)?.message ?: "Character not found").take(200)
-                    jobPort.markFailed(jobId, "CHARACTER_NOT_FOUND", errorMsg)
-                    log.warn("[jobId={}] Character not found, skipping retry: {}", jobId, errorMsg)
-                    true
-                } else {
-                    log.error("[jobId={}] External API stage failed: {}", jobId, e.message)
-                    handleFailure(jobId, e)
-                }
-            },
-            context,
-        )
-    }
+    @Deprecated("Use processAsync", ReplaceWith("processAsync(message).get() == ProcessOutcome.Ack"))
+    override fun process(message: PgmqMessage<ExternalApiJobPayload>): Boolean =
+        try {
+            processAsync(message).get() == ProcessOutcome.Ack
+        } catch (e: Exception) {
+            false
+        }
+
+    /**
+     * Test bridge — exposes the [processAsync] method (protected in PgmqWorker) to unit tests.
+     * Internal visibility keeps it out of the public server API surface.
+     */
+    internal fun callProcessAsync(message: PgmqMessage<ExternalApiJobPayload>): CompletableFuture<ProcessOutcome> =
+        processAsync(message)
 
     override fun onProcessingFailed(message: PgmqMessage<ExternalApiJobPayload>) {
         val jobId = UUID.fromString(message.payload.jobId)
@@ -140,7 +139,26 @@ class ExternalApiWorker(
         }
     }
 
-    private fun pipelineAsync(payload: ExternalApiJobPayload): CompletableFuture<Unit> {
+    /**
+     * Classify a pipeline failure as Ack (skip retry) or Nack(retryable=true).
+     * CharacterNotFound → Ack and mark job failed with CHARACTER_NOT_FOUND.
+     * Any other cause → Nack(retryable=true), log stack, route through [handleFailure].
+     */
+    private fun classifyExternalApiFailure(message: PgmqMessage<ExternalApiJobPayload>, cause: Throwable): ProcessOutcome {
+        val jobId = UUID.fromString(message.payload.jobId)
+        return if (isCharacterNotFound(cause)) {
+            val errorMsg = (ExceptionUtils.unwrapAsyncException(cause)?.message ?: "Character not found").take(200)
+            jobPort.markFailed(jobId, "CHARACTER_NOT_FOUND", errorMsg)
+            log.warn("[jobId={}] Character not found, skipping retry: {}", jobId, errorMsg)
+            ProcessOutcome.Ack
+        } else {
+            log.error("[jobId={}] External API stage failed", jobId, cause)
+            handleFailure(jobId, cause)
+            ProcessOutcome.Nack(retryable = true)
+        }
+    }
+
+    internal open fun pipelineAsync(payload: ExternalApiJobPayload): CompletableFuture<Unit> {
         val jobId = UUID.fromString(payload.jobId)
         val timer = StepTimer("ExternalApiWorker:ProcessMessage", stepTraceThresholdMs, tags = mapOf("jobId" to payload.jobId))
 
@@ -301,27 +319,31 @@ class ExternalApiWorker(
             }
             timer.mark("loadInput")
 
-            // CPU section: calculate + serialize + gzip + SHA-256 on Dispatchers.Default
+            // CPU section: calculate + serialize + gzip + SHA-256 on expectationComputeCpuExecutor.
             // Issue #1131: ItemCalculationExecutorConfig "VT rejected due to 3.5x latency regression on CPU-bound work" 원칙 적용.
-            val cpu = runBlocking(Dispatchers.Default) {
-                val calcResult = stage("PureCalculate", payload.userIgn) {
-                    pureCalculationPort.calculate(input)
-                }
-                timer.mark("pureCalculate")
-                val resultBytes = stage("SerializeResult", payload.userIgn) {
-                    objectMapper.writeValueAsString(calcResult).toByteArray()
-                }
-                timer.mark("serializeResult")
-                val gzipData = stage("GzipResult", payload.userIgn) {
-                    compress(resultBytes)
-                }
-                timer.mark("gzipResult")
-                val hash = stage("HashResult", payload.userIgn) {
-                    sha256Hex(resultBytes)
-                }
-                timer.mark("hashResult")
-                CalcCpuResult(calcResult, resultBytes, gzipData, hash)
-            }
+            // CF equivalent of runBlocking(Dispatchers.Default). The .join() here converts CF → sync for the surrounding pipeline.
+            val cpu = CompletableFuture.supplyAsync(
+                {
+                    val calcResult = stage("PureCalculate", payload.userIgn) {
+                        pureCalculationPort.calculate(input)
+                    }
+                    timer.mark("pureCalculate")
+                    val resultBytes = stage("SerializeResult", payload.userIgn) {
+                        objectMapper.writeValueAsString(calcResult).toByteArray()
+                    }
+                    timer.mark("serializeResult")
+                    val gzipData = stage("GzipResult", payload.userIgn) {
+                        compress(resultBytes)
+                    }
+                    timer.mark("gzipResult")
+                    val hash = stage("HashResult", payload.userIgn) {
+                        sha256Hex(resultBytes)
+                    }
+                    timer.mark("hashResult")
+                    CalcCpuResult(calcResult, resultBytes, gzipData, hash)
+                },
+                cpuExecutor,
+            ).join()
 
             // Result write [TX: SNAPSHOT_READY → COMPLETED + result save + outbox insert — VT]
             stage("CompleteCalculation", jobId.toString()) {

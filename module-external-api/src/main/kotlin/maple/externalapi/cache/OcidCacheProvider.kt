@@ -1,31 +1,46 @@
 package maple.externalapi.cache
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
+import maple.common.parser.StreamingChunkParser
 import maple.expectation.common.storage.ObjectStorage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.io.BufferedInputStream
 import java.util.concurrent.atomic.AtomicReference
-import java.util.zip.GZIPInputStream
 
 /**
  * In-memory cache of userIgn → ocid, loaded from the latest
  * `ocid-mapping/ocid-mapping-*.jsonl.gz` object in ObjectStorage.
  * Picked by `ObjectInfo.lastModified` (max).
  *
- * Each line of the gzipped JSONL is a `{"userIgn":"...","ocid":"..."}` object
- * (matching the writer in [OcidLookupPhase.writeMappingGzipped]). The reader
- * wraps the stream in [GZIPInputStream] because the ObjectStorage impls do
- * not auto-decompress (same as the read path in [OcidLookupPhase]).
+ * Each record of the gzipped JSONL is a `{"userIgn":"...","ocid":"..."}`
+ * object (matching the writer in [OcidLookupPhase.writeMappingGzipped]).
+ *
+ * Uses [StreamingChunkParser] for streaming parse (no intermediate
+ * full materialization of the gz payload as a `List<String>` of lines).
+ *
+ * NOTE: This is a cold path (called once per OCID mapping refresh,
+ * not in the per-record pipeline). `runBlocking` here bridges the
+ * synchronous `refresh()` / `loadFromRun()` API surface; the call
+ * sites are admin-trigger / startup-load, not request hot path.
+ * Per project rule (async-patterns.md), `runBlocking` is forbidden in
+ * request hot paths; this class is invoked only from non-VT scheduler
+ * triggers, mirroring the pattern in `ExternalApiScheduler.kt:188`.
  */
 @Component
 class OcidCacheProvider(
     private val objectStorage: ObjectStorage,
-    private val objectMapper: ObjectMapper,
+    private val streamingChunkParser: StreamingChunkParser,
 ) {
 
     private val log = LoggerFactory.getLogger(OcidCacheProvider::class.java)
     private val cacheRef = AtomicReference<Map<String, String>>(emptyMap())
+    /**
+     * Tracks the last successfully loaded key. Used by [loadFromKey] to
+     * short-circuit repeat loads with the same key (e.g. ITEM_EQUIPMENT
+     * loop calling `loadFromRun` once per iteration). See ADR-729.
+     */
+    private val loadedKey = AtomicReference<String?>(null)
 
     fun refresh(): Map<String, String> {
         val objects = objectStorage.listByPrefix("ocid-mapping/")
@@ -33,41 +48,56 @@ class OcidCacheProvider(
             log.info("[OcidCache] no ocid-mapping objects found, cache remains empty")
             return emptyMap()
         }
-        GZIPInputStream(BufferedInputStream(objectStorage.getStream(latest.key))).bufferedReader().useLines { lines ->
-            val map = HashMap<String, String>()
-            var parseErrors = 0
-            for (line in lines) {
-                if (line.isBlank()) continue
-                val entry = parseLine(line)
-                if (entry != null) {
-                    map[entry.first] = entry.second
-                } else {
-                    parseErrors++
-                }
-            }
-            cacheRef.set(map)
-            if (parseErrors > 0) {
-                log.warn(
-                    "[OcidCache] refreshed: {} entries from {} ({} parse errors ignored)",
-                    map.size, latest.key, parseErrors,
-                )
-            } else {
-                log.info("[OcidCache] refreshed: {} entries from {}", map.size, latest.key)
-            }
-            return map
-        }
+        return loadFromKey(latest.key)
     }
 
-    private fun parseLine(line: String): Pair<String, String>? {
-        val node = try {
-            objectMapper.readTree(line)
-        } catch (ex: Exception) {
-            return null
+    /**
+     * Load OCID mapping from a specific prior run. Used by standalone
+     * char-basic and item-equipment triggers to consume a known upstream's
+     * OCID file rather than the most-recent one.
+     * Key format: `ocid-mapping/ocid-mapping-{runId}.jsonl.gz`.
+     */
+    fun loadFromRun(runId: String): Map<String, String> =
+        loadFromKey("ocid-mapping/ocid-mapping-$runId.jsonl.gz")
+
+    private fun loadFromKey(key: String): Map<String, String> {
+        // Read-through cache. If the same key was already loaded, return the
+        // existing snapshot without re-streaming the JSONL.
+        if (key == loadedKey.get()) {
+            return cacheRef.get()
         }
-        val ign = node.get("userIgn")?.asText() ?: return null
-        val ocid = node.get("ocid")?.asText() ?: return null
-        if (ign.isBlank() || ocid.isBlank()) return null
-        return ign to ocid
+        val map = HashMap<String, String>()
+        var parseErrors = 0
+        try {
+            val records = runBlocking {
+                objectStorage.getStream(key).use { stream ->
+                    streamingChunkParser.parse(stream).toList()
+                }
+            }
+            for (record in records) {
+                val ign = record["userIgn"]?.toString()
+                val ocid = record["ocid"]?.toString()
+                if (ign.isNullOrBlank() || ocid.isNullOrBlank()) {
+                    parseErrors++
+                    continue
+                }
+                map[ign] = ocid
+            }
+            cacheRef.set(map)
+            loadedKey.set(key)
+            if (parseErrors > 0) {
+                log.warn(
+                    "[OcidCache] loaded key={}: {} entries ({} parse errors)",
+                    key, map.size, parseErrors,
+                )
+            } else {
+                log.info("[OcidCache] loaded key={}: {} entries", key, map.size)
+            }
+        } catch (ex: Exception) {
+            log.error("[OcidCache] load failed key={}", key, ex)
+            return emptyMap()
+        }
+        return map
     }
 
     fun current(): Map<String, String> = cacheRef.get()

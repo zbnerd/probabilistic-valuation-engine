@@ -4,17 +4,23 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.kotlinModule
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
-import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import maple.common.parser.StreamingChunkParser
 import maple.expectation.common.storage.ObjectInfo
 import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.storage.PutResult
 import maple.expectation.infrastructure.external.NexonAuthClient
+import maple.externalapi.metrics.ChunkParserMetrics
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.scheduler.PhaseStopSignal
+import maple.externalapi.scheduler.PhaseStoppedException
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
-import java.io.InputStream
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
@@ -48,15 +54,20 @@ class OcidLookupPhaseTest {
             CompletableFuture.completedFuture(payload.toByteArray())
         }
 
-        // Collect streamed bytes (replaces the previous put() call). This
-        // is exactly the path MinioObjectStorage.putStream takes: it drains
-        // the input to a temp file, then puts that file to S3.
-        val collectedBytes = java.util.concurrent.atomic.AtomicReference<ByteArray>()
-        whenever(storage.putStream(any(), any())).thenAnswer { invocation ->
-            val input = invocation.getArgument<InputStream>(1)
-            val bytes = input.readBytes()
-            collectedBytes.set(bytes)
-            PutResult(invocation.getArgument<String>(0), bytes.size.toLong(), null)
+        // The phase writes the gzipped mapping to a temp file then calls
+        // putFileAsync(key, file). The mock reads the temp file's bytes
+        // and captures the key for downstream assertions.
+        val capturedBytes = java.util.concurrent.atomic.AtomicReference<ByteArray>()
+        val capturedKey = java.util.concurrent.atomic.AtomicReference<String>()
+        whenever(storage.putFileAsync(any(), any())).thenAnswer { invocation ->
+            val key = invocation.getArgument<String>(0)
+            val file = invocation.getArgument<java.nio.file.Path>(1)
+            val bytes = java.nio.file.Files.readAllBytes(file)
+            capturedKey.set(key)
+            capturedBytes.set(bytes)
+            CompletableFuture.completedFuture(
+                PutResult(key, bytes.size.toLong(), null),
+            )
         }
 
         val phase = OcidLookupPhase(
@@ -67,22 +78,24 @@ class OcidLookupPhaseTest {
             eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
             objectStorage = storage,
             nexonAuthClient = nexonClient,
+            stopSignal = PhaseStopSignal(),
+            streamingChunkParser = StreamingChunkParser(objectMapper),
+            chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
         )
 
         kotlinx.coroutines.runBlocking {
             phase.execute(
                 workerExecutor = Executors.newSingleThreadExecutor(),
                 runKey = "runs/abc",
+                runId = "abc",
             )
         }
 
-        // Verify the streaming putStream was called with the right key.
-        val mappingKeyCaptor = argumentCaptor<String>()
-        verify(storage).putStream(mappingKeyCaptor.capture(), any())
-        val mappingKey = mappingKeyCaptor.firstValue
-        assertNotNull(mappingKey)
+        // Verify putFileAsync was called with the right key.
+        val mappingKey = capturedKey.get()
+        assertNotNull(mappingKey, "putFileAsync should have been called")
         assertTrue(
-            mappingKey.startsWith("ocid-mapping/ocid-mapping-"),
+            mappingKey!!.startsWith("ocid-mapping/ocid-mapping-"),
             "expected mapping key to start with 'ocid-mapping/ocid-mapping-' but was '$mappingKey'",
         )
         assertTrue(
@@ -90,10 +103,10 @@ class OcidLookupPhaseTest {
             "expected mapping key to end with '.jsonl.gz' but was '$mappingKey'",
         )
 
-        // The streamed bytes should be a non-empty valid gzip containing the
-        // expected userIgn/ocid pairs.
-        val bytes = collectedBytes.get()
-        assertNotNull(bytes, "putStream should have been called")
+        // The temp file bytes should be a non-empty valid gzip containing
+        // the expected userIgn/ocid pairs.
+        val bytes = capturedBytes.get()
+        assertNotNull(bytes, "putFileAsync should have been called")
         assertTrue(bytes!!.isNotEmpty(), "streamed bytes should not be empty")
         val decompressed = GZIPInputStream(bytes.inputStream())
             .bufferedReader().readText()
@@ -105,5 +118,119 @@ class OcidLookupPhaseTest {
             decompressed.contains("user2") && decompressed.contains("ocid-for-user2"),
             "expected mapping to contain user2/ocid pair, got: $decompressed",
         )
+    }
+
+    @Test
+    fun `execute preserves current runId's OCID mapping while deleting others`() {
+        val storage = mock<ObjectStorage>()
+        val nexonClient = mock<NexonAuthClient>()
+        val objectMapper = ObjectMapper().registerModule(kotlinModule())
+
+        val now = Instant.now()
+        // Pre-existing OCID mappings: one for the current runId + two for prior runs
+        whenever(storage.listByPrefix("ocid-mapping/")).thenReturn(listOf(
+            ObjectInfo("ocid-mapping/ocid-mapping-abc.jsonl.gz", 100, now),        // current runId
+            ObjectInfo("ocid-mapping/ocid-mapping-old1.jsonl.gz", 100, now),
+            ObjectInfo("ocid-mapping/ocid-mapping-old2.jsonl.gz", 100, now),
+        ))
+        // Ranking chunks from the upstream run
+        whenever(storage.listByPrefix("runs/abc/ranking-overall/chunks")).thenReturn(listOf(
+            ObjectInfo("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz", 100, now)
+        ))
+        val chunkBytes = run {
+            val out = java.io.ByteArrayOutputStream()
+            java.util.zip.GZIPOutputStream(out).use { gz ->
+                gz.write("{\"key\":\"user1\"}\n".toByteArray())
+            }
+            out.toByteArray()
+        }
+        whenever(storage.getStream("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz"))
+            .thenReturn(chunkBytes.inputStream())
+
+        val clientPort = mock<maple.externalapi.port.out.ExternalApiClientPort>()
+        whenever(clientPort.fetch(any(), any(), any())).thenAnswer { invocation ->
+            val ign = invocation.getArgument<String>(2)
+            CompletableFuture.completedFuture("{\"ocid\":\"ocid-for-$ign\"}".toByteArray())
+        }
+        whenever(storage.putFileAsync(any(), any())).thenAnswer { invocation ->
+            val key = invocation.getArgument<String>(0)
+            val file = invocation.getArgument<java.nio.file.Path>(1)
+            val bytes = java.nio.file.Files.readAllBytes(file)
+            CompletableFuture.completedFuture(
+                PutResult(key, bytes.size.toLong(), null),
+            )
+        }
+
+        val phase = OcidLookupPhase(
+            clientPort = clientPort,
+            objectMapper = objectMapper,
+            ocidLookupPermitsPerSecond = 100,
+            batchSize = 100,
+            eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
+            objectStorage = storage,
+            nexonAuthClient = nexonClient,
+            stopSignal = PhaseStopSignal(),
+            streamingChunkParser = StreamingChunkParser(objectMapper),
+            chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
+        )
+
+        kotlinx.coroutines.runBlocking {
+            phase.execute(
+                workerExecutor = Executors.newSingleThreadExecutor(),
+                runKey = "runs/abc",
+                runId = "abc",
+            )
+        }
+
+        // deleteOldMappingFiles: per-key delete for old runs, current run preserved
+        verify(storage).delete("ocid-mapping/ocid-mapping-old1.jsonl.gz")
+        verify(storage).delete("ocid-mapping/ocid-mapping-old2.jsonl.gz")
+        verify(storage, never()).delete("ocid-mapping/ocid-mapping-abc.jsonl.gz")
+    }
+
+    @Test
+    fun `execute throws PhaseStoppedException when stop requested before processBatch`() {
+        val storage = mock<ObjectStorage>()
+        val nexonClient = mock<NexonAuthClient>()
+        val objectMapper = ObjectMapper().registerModule(kotlinModule())
+        val stopSignal = PhaseStopSignal()
+        stopSignal.requestStop(PipelinePhase.OCID_LOOKUP)
+
+        val now = Instant.now()
+        whenever(storage.listByPrefix("runs/abc/ranking-overall/chunks")).thenReturn(listOf(
+            ObjectInfo("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz", 100, now)
+        ))
+        val chunkBytes = run {
+            val out = java.io.ByteArrayOutputStream()
+            java.util.zip.GZIPOutputStream(out).use { gz ->
+                gz.write("{\"key\":\"user1\"}\n".toByteArray())
+            }
+            out.toByteArray()
+        }
+        whenever(storage.getStream("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz"))
+            .thenReturn(chunkBytes.inputStream())
+        whenever(storage.listByPrefix("ocid-mapping/")).thenReturn(emptyList())
+
+        val clientPort = mock<maple.externalapi.port.out.ExternalApiClientPort>()
+        whenever(clientPort.fetch(any(), any(), any())).thenReturn(CompletableFuture.completedFuture(ByteArray(0)))
+
+        val phase = OcidLookupPhase(
+            clientPort = clientPort,
+            objectMapper = objectMapper,
+            ocidLookupPermitsPerSecond = 100,
+            batchSize = 100,
+            eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
+            objectStorage = storage,
+            nexonAuthClient = nexonClient,
+            stopSignal = stopSignal,
+            streamingChunkParser = StreamingChunkParser(objectMapper),
+            chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
+        )
+
+        assertThrows(PhaseStoppedException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                phase.execute(Executors.newSingleThreadExecutor(), "runs/abc", "abc")
+            }
+        }
     }
 }

@@ -1,123 +1,239 @@
 package maple.externalapi.runstatus
 
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+import java.util.concurrent.atomic.AtomicLong
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
 class RunStatusTrackerTest {
 
-    private val tracker = RunStatusTracker()
+    private val fixedInstant = Instant.parse("2026-06-18T05:00:00Z")
+    private val clock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
+    private val tracker = RunStatusTracker(clock)
 
-    @Test
-    fun `initial status is null`() {
-        val status = tracker.getCurrentStatus()
-        assertThat(status).isNull()
+    private fun advancingTracker(): RunStatusTracker {
+        val nanos = AtomicLong(0L)
+        val advancingClock = object : Clock() {
+            override fun getZone(): ZoneOffset = ZoneOffset.UTC
+            override fun withZone(zone: java.time.ZoneId?): Clock = this
+            override fun instant(): Instant = Instant.ofEpochMilli(1_000_000L + nanos.incrementAndGet())
+        }
+        return RunStatusTracker(advancingClock)
     }
 
     @Test
-    fun `startRun creates RUNNING status`() {
-        val runId = java.util.UUID.randomUUID().toString()
-        tracker.startRun(runId)
-
-        val status = tracker.getCurrentStatus()!!
-        assertThat(status.runId).isEqualTo(runId)
-        assertThat(status.phase).isEqualTo(PipelinePhase.RANKING_FETCH)
-        assertThat(status.isTerminal).isFalse()
+    fun `all slots empty initially`() {
+        assertThat(tracker.getCurrentStatus()).isNull()
+        assertThat(tracker.getLastCompletedRun()).isNull()
+        for (phase in listOf(PipelinePhase.RANKING_FETCH, PipelinePhase.OCID_LOOKUP, PipelinePhase.CHARACTER_BASIC, PipelinePhase.ITEM_EQUIPMENT)) {
+            assertThat(tracker.getPhaseStatus(phase)).isNull()
+        }
     }
 
     @Test
-    fun `transitionPhase updates phase`() {
-        tracker.startRun("run-1")
-        tracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
-
-        val status = tracker.getCurrentStatus()!!
-        assertThat(status.phase).isEqualTo(PipelinePhase.OCID_LOOKUP)
+    fun `acquirePhaseSlot succeeds when slot empty`() {
+        val acquired = tracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-ocid-1")
+        assertThat(acquired).isNotNull
+        assertThat(acquired!!.runId).isEqualTo("run-ocid-1")
+        assertThat(acquired.phase).isEqualTo(PipelinePhase.OCID_LOOKUP)
+        assertThat(acquired.triggeredPhase).isEqualTo(PipelinePhase.OCID_LOOKUP)
+        assertThat(tracker.getPhaseStatus(PipelinePhase.OCID_LOOKUP)?.runId).isEqualTo("run-ocid-1")
     }
 
     @Test
-    fun `completeRun sets COMPLETED`() {
-        tracker.startRun("run-1")
-        tracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
-        tracker.completeRun("run-1", 100, 600000L)
+    fun `acquirePhaseSlot returns null when slot has non-terminal run`() {
+        tracker.acquirePhaseSlot(PipelinePhase.CHARACTER_BASIC, "run-cb-1")
+        val second = tracker.acquirePhaseSlot(PipelinePhase.CHARACTER_BASIC, "run-cb-2")
+        assertThat(second).isNull()
+    }
 
-        val status = tracker.getCurrentStatus()!!
+    @Test
+    fun `acquirePhaseSlot overwrites terminal record`() {
+        // First run completes
+        tracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r-1")
+        tracker.completeRun(PipelinePhase.RANKING_FETCH, "run-r-1", 50, 100_000L)
+        // Slot now has terminal record; second acquire should succeed (overwrite)
+        val second = tracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r-2")
+        assertThat(second).isNotNull
+        assertThat(second!!.runId).isEqualTo("run-r-2")
+        assertThat(second.isTerminal).isFalse()
+    }
+
+    @Test
+    fun `completeRun sets phase to COMPLETED with chunks and records but keeps slot`() {
+        tracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r-1")
+        tracker.completeRun(PipelinePhase.RANKING_FETCH, "run-r-1", 50, 100_000L)
+        val status = tracker.getPhaseStatus(PipelinePhase.RANKING_FETCH)!!
         assertThat(status.phase).isEqualTo(PipelinePhase.COMPLETED)
         assertThat(status.isTerminal).isTrue()
-        assertThat(status.chunksProcessed).isEqualTo(100)
-        assertThat(status.recordsProcessed).isEqualTo(600000L)
-        assertThat(status.completedAt).isNotNull()
+        assertThat(status.chunksProcessed).isEqualTo(50)
+        assertThat(status.recordsProcessed).isEqualTo(100_000L)
+        assertThat(status.completedAt).isNotNull
+        // Slot NOT cleared — record persists
+        assertThat(tracker.getPhaseStatus(PipelinePhase.RANKING_FETCH)).isNotNull
     }
 
     @Test
-    fun `failRun sets FAILED with message`() {
-        tracker.startRun("run-1")
-        tracker.failRun("run-1", "Nexon API timeout")
-
-        val status = tracker.getCurrentStatus()!!
+    fun `failRun sets phase to FAILED with errorMessage`() {
+        tracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o-1")
+        tracker.failRun(PipelinePhase.OCID_LOOKUP, "run-o-1", "Nexon API timeout")
+        val status = tracker.getPhaseStatus(PipelinePhase.OCID_LOOKUP)!!
         assertThat(status.phase).isEqualTo(PipelinePhase.FAILED)
         assertThat(status.errorMessage).isEqualTo("Nexon API timeout")
     }
 
     @Test
-    fun `CHARACTER_BASIC_DONE is non-terminal`() {
-        // Regression: the new intermediate phase must NOT be reported as terminal
-        // by the run-status API; otherwise /api/internal/run-status shows
-        // terminal=true while ITEM_EQUIPMENT is still in flight.
-        tracker.startRun("run-1")
-        tracker.transitionPhase(PipelinePhase.CHARACTER_BASIC)
-        tracker.transitionPhase(PipelinePhase.CHARACTER_BASIC_DONE)
+    fun `failRun is followed by releasePhaseSlot to clear slot`() {
+        tracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o-1")
+        tracker.failRun(PipelinePhase.OCID_LOOKUP, "run-o-1", "boom")
+        tracker.releasePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o-1")
+        assertThat(tracker.getPhaseStatus(PipelinePhase.OCID_LOOKUP)).isNull()
+    }
 
-        val status = tracker.getCurrentStatus()!!
-        assertThat(status.phase).isEqualTo(PipelinePhase.CHARACTER_BASIC_DONE)
+    @Test
+    fun `transitionPhase preserves triggeredPhase and updates phase`() {
+        tracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o-1")
+        tracker.transitionPhase(PipelinePhase.OCID_LOOKUP, "run-o-1")
+        val status = tracker.getPhaseStatus(PipelinePhase.OCID_LOOKUP)!!
+        assertThat(status.phase).isEqualTo(PipelinePhase.OCID_LOOKUP)
+        assertThat(status.triggeredPhase).isEqualTo(PipelinePhase.OCID_LOOKUP)
+    }
+
+    @Test
+    fun `releasePhaseSlot is no-op when runId mismatch`() {
+        tracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r-1")
+        tracker.releasePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r-2")
+        assertThat(tracker.getPhaseStatus(PipelinePhase.RANKING_FETCH)?.runId).isEqualTo("run-r-1")
+    }
+
+    @Test
+    fun `hasNonTerminalRun returns the run when slot non-terminal`() {
+        tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-ie-1")
+        assertThat(tracker.hasNonTerminalRun(PipelinePhase.ITEM_EQUIPMENT)?.runId).isEqualTo("run-ie-1")
+    }
+
+    @Test
+    fun `hasNonTerminalRun returns null after completeRun (terminal record kept but not active)`() {
+        tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-ie-1")
+        tracker.completeRun(PipelinePhase.ITEM_EQUIPMENT, "run-ie-1", 10, 1_000L)
+        assertThat(tracker.hasNonTerminalRun(PipelinePhase.ITEM_EQUIPMENT)).isNull()
+    }
+
+    @Test
+    fun `per-phase slots are independent`() {
+        tracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r")
+        tracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o")
+        tracker.acquirePhaseSlot(PipelinePhase.CHARACTER_BASIC, "run-cb")
+        tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-ie")
+        assertThat(tracker.getPhaseStatus(PipelinePhase.RANKING_FETCH)?.runId).isEqualTo("run-r")
+        assertThat(tracker.getPhaseStatus(PipelinePhase.OCID_LOOKUP)?.runId).isEqualTo("run-o")
+        assertThat(tracker.getPhaseStatus(PipelinePhase.CHARACTER_BASIC)?.runId).isEqualTo("run-cb")
+        assertThat(tracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)?.runId).isEqualTo("run-ie")
+    }
+
+    @Test
+    fun `getCurrentStatus returns the most recently started non-terminal run across phases`() {
+        val tracker = advancingTracker()
+        tracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r")
+        tracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o")
+        val current = tracker.getCurrentStatus()
+        assertThat(current?.runId).isEqualTo("run-o")
+    }
+
+    @Test
+    fun `getLastCompletedRun returns the most recent terminal run across phases`() {
+        val tracker = advancingTracker()
+        tracker.acquirePhaseSlot(PipelinePhase.RANKING_FETCH, "run-r")
+        tracker.completeRun(PipelinePhase.RANKING_FETCH, "run-r", 10, 1_000L)
+        tracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-o")
+        tracker.completeRun(PipelinePhase.OCID_LOOKUP, "run-o", 20, 2_000L)
+        val last = tracker.getLastCompletedRun()
+        assertThat(last?.runId).isEqualTo("run-o")
+    }
+
+    @Test
+    fun `stopRun sets phase to STOPPED with terminal=true and persists slot record`() {
+        val acquired = tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-1")
+        assertThat(acquired).isNotNull
+
+        tracker.stopRun(PipelinePhase.ITEM_EQUIPMENT, "run-1", chunksProcessed = 42, recordsProcessed = 1000L)
+
+        val status = tracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)
+        assertThat(status).isNotNull
+        assertThat(status!!.phase).isEqualTo(PipelinePhase.STOPPED)
+        assertThat(status.isTerminal).isTrue()
+        assertThat(status.chunksProcessed).isEqualTo(42)
+        assertThat(status.recordsProcessed).isEqualTo(1000L)
+        assertThat(status.completedAt).isEqualTo(fixedInstant)
+    }
+
+    @Test
+    fun `stopRun with mismatched runId is a no-op`() {
+        tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-1")
+        tracker.stopRun(PipelinePhase.ITEM_EQUIPMENT, "different-run", 0, 0L)
+
+        val status = tracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)
+        assertThat(status!!.phase).isEqualTo(PipelinePhase.ITEM_EQUIPMENT)
         assertThat(status.isTerminal).isFalse()
     }
 
     @Test
-    fun `getLastCompletedRun returns most recent completed`() {
-        tracker.startRun("run-1")
-        tracker.completeRun("run-1", 10, 1000L)
+    fun `acquirePhaseSlot after stopRun succeeds (terminal-overwrite)`() {
+        tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-1")
+        tracker.stopRun(PipelinePhase.ITEM_EQUIPMENT, "run-1", 0, 0L)
+        assertThat(tracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)!!.isTerminal).isTrue()
 
-        Thread.sleep(10)
-
-        tracker.startRun("run-2")
-        tracker.transitionPhase(PipelinePhase.OCID_LOOKUP)
-
-        val last = tracker.getLastCompletedRun()!!
-        assertThat(last.runId).isEqualTo("run-1")
-        assertThat(last.phase).isEqualTo(PipelinePhase.COMPLETED)
+        val newAcquire = tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-2")
+        assertThat(newAcquire).isNotNull
+        assertThat(newAcquire!!.runId).isEqualTo("run-2")
+        assertThat(newAcquire.phase).isEqualTo(PipelinePhase.ITEM_EQUIPMENT)
     }
 
     @Test
-    fun `startItemEquipmentCycle sets initial phase to ITEM_EQUIPMENT not RANKING_FETCH`() {
-        // Regression for the bug where ItemEquipmentContinuousLoop called
-        // startRun(), which hardcoded phase=RANKING_FETCH, leaving the
-        // run-status API displaying a misleading "ranking" label for the
-        // entire item-equipment cycle.
-        val runId = "item-equip-cycle-1"
-        tracker.startItemEquipmentCycle(runId)
+    fun `hasNonTerminalRun returns null after stopRun (allows next trigger)`() {
+        tracker.acquirePhaseSlot(PipelinePhase.OCID_LOOKUP, "run-1")
+        tracker.stopRun(PipelinePhase.OCID_LOOKUP, "run-1", 0, 0L)
 
-        val status = tracker.getCurrentStatus()!!
-        assertThat(status.runId).isEqualTo(runId)
-        assertThat(status.phase).isEqualTo(PipelinePhase.ITEM_EQUIPMENT)
-        assertThat(status.isTerminal).isFalse()
+        assertThat(tracker.hasNonTerminalRun(PipelinePhase.OCID_LOOKUP)).isNull()
     }
 
     @Test
-    fun `startItemEquipmentCycle replaces a previous run-status cleanly`() {
-        // Multiple item-equipment cycles run sequentially; each new cycle
-        // must overwrite the previous run-status so /run-status reflects
-        // the in-flight cycle, not the previous one's terminal state.
-        tracker.startItemEquipmentCycle("cycle-1")
-        tracker.transitionPhase(PipelinePhase.ITEM_EQUIPMENT)
-        tracker.completeRun("cycle-1", 50, 100000L)
+    fun `stopRun on empty slot is no-op`() {
+        tracker.stopRun(PipelinePhase.RANKING_FETCH, "phantom", 0, 0L)
+        assertThat(tracker.getPhaseStatus(PipelinePhase.RANKING_FETCH)).isNull()
+    }
 
-        val last = tracker.getLastCompletedRun()!!
-        assertThat(last.runId).isEqualTo("cycle-1")
-        assertThat(last.phase).isEqualTo(PipelinePhase.COMPLETED)
+    @Test
+    fun `acquirePhaseSlot with loopId stores loopId on slot record`() {
+        val acquired = tracker.acquirePhaseSlot(
+            phase = PipelinePhase.ITEM_EQUIPMENT,
+            runId = "run-1",
+            loopId = "L-1",
+        )
+        assertThat(acquired).isNotNull
+        assertThat(acquired!!.loopId).isEqualTo("L-1")
+        assertThat(tracker.getPhaseStatus(PipelinePhase.ITEM_EQUIPMENT)?.loopId).isEqualTo("L-1")
+    }
 
-        tracker.startItemEquipmentCycle("cycle-2")
-        val current = tracker.getCurrentStatus()!!
-        assertThat(current.runId).isEqualTo("cycle-2")
-        assertThat(current.phase).isEqualTo(PipelinePhase.ITEM_EQUIPMENT)
-        assertThat(current.isTerminal).isFalse()
+    @Test
+    fun `acquirePhaseSlot without loopId leaves loopId null on slot record`() {
+        val acquired = tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-1")
+        assertThat(acquired).isNotNull
+        assertThat(acquired!!.loopId).isNull()
+    }
+
+    @Test
+    fun `acquirePhaseSlot overwrites loopId on terminal-overwrite acquire`() {
+        // First loop iteration completes; terminal record persists with loopId
+        tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-1", "L-1")
+        tracker.completeRun(PipelinePhase.ITEM_EQUIPMENT, "run-1", 0, 0L)
+
+        // Next iteration within same loop overwrites the terminal record
+        val next = tracker.acquirePhaseSlot(PipelinePhase.ITEM_EQUIPMENT, "run-2", "L-1")
+        assertThat(next).isNotNull
+        assertThat(next!!.loopId).isEqualTo("L-1")
+        assertThat(next.runId).isEqualTo("run-2")
     }
 }

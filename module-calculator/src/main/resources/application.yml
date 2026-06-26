@@ -18,6 +18,12 @@ spring:
       enable-auto-commit: false
       max-poll-records: 50            # bound batch size; keeps poll loop responsive
       max-poll-interval-ms: 10800000  # 3h; covers full item-equipment cycle (default 5min too tight)
+    producer:
+      # Minimal block: only override buffer.memory. Spring Boot auto-config
+      # keeps StringSerializer (matches KafkaTemplate<String, String>), acks=1,
+      # retries=0, etc. — preserving current producer behavior.
+      properties:
+        buffer.memory: ${KAFKA_BUFFER_MEMORY:67108864}  # 64MB (issue #1314)
     listener:
       ack-mode: manual
       concurrency: 4
@@ -48,6 +54,12 @@ calculator:
     runs:
       keep-recent: 5                  # always keep the 5 most recent runs
       keep-within-hours: 12           # keep runs newer than 12 hours
+  cache:
+    backend: caffeine              # caffeine | chronicle; default caffeine (Chronicle stubbed on JDK 21)
+    chronicle:
+      path: /var/lib/calculator/chronicle-ocid
+      max-entries: 100000
+
   pipeline:
     worker-count: 4
     channel-capacity: 500
@@ -78,6 +90,7 @@ storage:
     endpoint: ${MINIO_ENDPOINT:http://minio:9000}
     region: ${MINIO_REGION:us-east-1}
     access-key: ${MINIO_ACCESS_KEY:}
-    secret-key: ${MINIO_SECRET_KEY:}
+    # secret-key is read directly from MINIO_SECRET_KEY_FILE by StorageConfig;
+    # do not bind via env var to keep the cleartext key out of process env.
     bucket: ${MINIO_BUCKET:maple-expectation}
     path-style-access: true

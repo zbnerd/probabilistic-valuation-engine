@@ -1,39 +1,67 @@
 # Probabilistic Valuation Engine
 
-**단일 노드 환경에서 고부하 확률 계산 API를 75배 이상 성능 개선한 백엔드 시스템**
+**메이플스토리 장비의 확률적 기대비용을 대규모 비동기 ETL 파이프라인으로 산출하는 백엔드 시스템.**
 
-메이플스토리 장비의 확률적 기대비용을 계산하는 서비스.
-캐릭터 이름 하나로 스타포스·큐브 기대비용을 3개 프리셋 기준으로 산출한다.
+캐릭터 이름 하나로 스타포스·큐브 기대비용을 3개 프리셋 기준으로 계산한다.
+매일 03:00 KST 에 전체 랭킹 수십만 IGN 의 장비 데이터를 수집·계산·동기화하여
+PostgreSQL read model 에 적재하고, REST API 로 초당 수천 건의 기대치 조회를 제공한다.
 
 ---
 
 ## 한 줄 요약
 
-> 복잡한 인프라(Redis + MySQL + MongoDB)를 제거하고 PostgreSQL 단일 구조와 Micro-Batching을 적용하여  
-> **97 RPS → 7,347 RPS (약 75배 개선)** 달성하고 운영 복잡도 단순화
----
-
-## My Role
-- 전체 시스템 아키텍처 설계 및 기술 의사결정
-- 성능 테스트 및 병목 분석 (wrk 기반)
-- PostgreSQL 단일화 구조 설계 및 구현
-- Micro-Batching 처리 구조 설계 및 적용
-- 캐시 전략(L1/L2) 및 분산 정합성 설계
-- 실패한 최적화 케이스 분석 및 롤백
+> 복잡한 인프라(Redis + MySQL + MongoDB)를 제거하고 **PostgreSQL 단일 구조 + Micro-Batching** 으로  
+> **97 RPS → 7,347 RPS (약 75배 개선)** 를 달성, 운영 복잡도를 단순화했다.
 
 ---
 
-## Why This Project Matters
+## 시스템 아키텍처 — ETL 파이프라인
 
-이 프로젝트는 기능구현 보다 **성능 문제를 정의하고 → 측정하고 → 구조적으로 해결하는 능력과 의사결정의 기록**을 보여준다.
+매일 새벽 03:00 KST, Airflow 가 4단계 수집 체인을 트리거하면 4개의 서비스 모듈이 Kafka 이벤트로 연쇄 동작한다.
 
-- 인프라를 추가할수록 복잡해졌고, 제거할수록 단순해지며 불필요한 기술 스택 대신 데이터 흐름과 병목을 개선하여 성능을 향상시킨 과정
-- 실패한 최적화(LocalSingleFlight -56%)와 그 원인 분석
-- 단일 PostgreSQL로 캐시·분산락·Pub/Sub·메시지큐를 대체한 과정
-- 좋아요 도메인 하나가 123일간 어떻게 진화했는지
-- 복잡한 인프라 대신 데이터 흐름과 병목을 해결하는 것이 성능 개선의 핵심임을 검증한 프로젝트.
+```
+   ┌─────────────────────────────────────────────┐
+   │   Airflow  (control plane)                  │
+   │   morning_chain_pipeline  ·  03:00 KST      │
+   │   stop → ranking → ocid → basic → item      │
+   └──────────────────────┬──────────────────────┘
+                          │ phase trigger
+   ┌──────────────────────▼──────────────────────┐
+   │  ① external-api         :8081               │
+   │     Nexon API 4단계 fetch                   │
+   │     RANKING → OCID → CHARACTER_BASIC        │
+   │              → ITEM_EQUIPMENT               │
+   │     snapshot chunks (JSONL.gz) → MinIO      │
+   └──────────────────────┬──────────────────────┘
+                          │ chunk-ready  (Kafka)
+   ┌──────────────────────▼──────────────────────┐
+   │  ② calculator           :8082               │
+   │     기대비용 계산 (3 프리셋)                 │
+   │     result chunks (JSONL.gz) → MinIO        │
+   └──────────────────────┬──────────────────────┘
+                          │ result-ready (Kafka)
+   ┌──────────────────────▼──────────────────────┐
+   │  ③ synchronizer         :8083               │
+   │     read model upsert → PostgreSQL          │
+   └──────────────────────┬──────────────────────┘
+                          │ consumed     (Kafka)
+   ┌──────────────────────▼──────────────────────┐
+   │  ④ cleanup              :8084               │
+   │     MinIO artifact GC  (6h cycle)           │
+   └─────────────────────────────────────────────┘
 
-숫자가 아니라 그 숫자가 나온 이유를 설명할 수 있는 코드베이스다.
+   Serving     rest-controller :8080  ←  PostgreSQL read models
+   Storage     MinIO(artifacts) · PostgreSQL 17+PGMQ(state·queue) · Kafka(events) · Redis(cache)
+   Observe     Prometheus · cAdvisor · Grafana · Loki · Promtail
+```
+
+| 모듈 | 역할 | Port |
+|------|------|------|
+| `module-external-api` | Nexon API 호출 파이프라인 (snapshot 적재) | 8081 |
+| `module-calculator` | 기대치 계산 파이프라인 (result 적재) | 8082 |
+| `module-synchronizer` | result → PostgreSQL read model 동기화 | 8083 |
+| `module-cleanup` | consumed artifact 가비지 컬렉션 | 8084 |
+| `module-rest-controller` | expectation 조회 REST API | 8080 |
 
 ---
 
@@ -41,7 +69,7 @@
 
 | 지표 | 시작 | 최종 |
 |------|------|------|
-| RPS | 97 | **7,347** (실데이터 200k rows 기준) |
+| RPS | 97 | **7,347** (실데이터 200K rows 기준) |
 | p99 latency | 4,100ms | **36ms** |
 | 데이터베이스 | Redis + MySQL + MongoDB | **PostgreSQL 단일** |
 | 에러율 | 59.7% | **0%** |
@@ -49,42 +77,9 @@
 
 ---
 
-## Trade-off
-
-- 최대 성능: 10,997 RPS (단일 노드, Caffeine L1 캐시 기반) 
-- 최종 성능: 7,347 RPS (LISTEN/NOTIFY 기반 캐시 정합성 확보)
-
-→ 성능을 일부 희생하고  
-→ Scale-out 환경에서의 데이터 일관성을 선택
-
----
-## Key Insight
-
-성능 문제는 인프라의 수가 아니라 데이터 흐름과 병목에서 발생한다.
----
-
-## 성능 여정 (10주, 8단계)
-
-```
-97 → 555 → 674 → 965 → [325] → 940 → 7,347 RPS
-
-1단계  97  →  223  Chaos baseline (Redis + MySQL + MongoDB)
-2단계 223  →   97  Singleflight 도입 → -56% 회귀 → 즉시 롤백
-3단계  97  →  555  L1 Fast Path: GZIP byte[] 직접 반환, Executor 우회
-4단계 555  →  674  Write-Behind Buffer: DB 저장 150ms → 0.1ms
-5단계 674  →  965  프리셋 병렬 계산: 전용 Executor 분리로 데드락 방지
-6단계 965  →  325  V5 Stateless 전환: 정합성 확보, 속도 53% 감소 (의도된 트레이드오프)
-7단계 325  →  940  Auto Warmup: Cold Start 227% 개선
-8단계 940  → 7,347  Redis·MySQL·MongoDB 제거 → PostgreSQL 단일화 → Micro-Batching (DB 왕복 3~5회→1회)
-```
-
-각 단계의 상세 기록: [`docs/06_Performance_Journey/`](docs/06_Performance_Journey/)
-
----
-
 ## 핵심 아키텍처 결정
 
-### PostgreSQL만으로 충분하다
+### PostgreSQL 만으로 충분하다
 
 | 기능 | 이전 | 현재 |
 |------|------|------|
@@ -95,107 +90,108 @@
 | 이벤트스토어 | MongoDB | PostgreSQL JSONB |
 | 영속성 | MySQL | PostgreSQL |
 
-Redis를 쓸 때보다 빨라진 이유:
-- Caffeine 히트율 99%+ → PostgreSQL이 실제로 맞는 요청이 거의 없음
-- 이미 연결된 DB 커넥션 재활용 → 추가 네트워크 홉 없음
-- 트랜잭션 내 `pg_notify()` → 롤백 시 무효화 이벤트도 사라짐 (원자성)
+Redis 시절보다 빨라진 이유 — Caffeine 히트율 99%+ 로 DB 도달이 거의 없고, 이미 열린 커넥션 재사용으로 네트워크 홉이 사라지며, 트랜잭션 내 `pg_notify()` 는 롤백 시 무효 이벤트까지 함께 사라진다(원자성).
 
-### Micro-Batching — 940→7,347의 실제 원인
+### Micro-Batching — 940→7,347 의 실제 원인
 
-PostgreSQL 단일화는 전제조건이었고, 실제 성능 엔진은 Micro-Batching이었다.
+PostgreSQL 단일화는 전제조건, 실제 성능 엔진은 Micro-Batching.
 
 ```
-Before (개별 쿼리):
-Request 1 → SELECT WHERE id = 1  (DB 왕복 1)
-Request 2 → SELECT WHERE id = 2  (DB 왕복 2)
-Request 3 → SELECT WHERE id = 3  (DB 왕복 3)
-
-After (Micro-Batching):
-Request 1~3 → SELECT WHERE id IN (1, 2, 3)  (DB 왕복 1)
+Before   요청 1,2,3 → SELECT WHERE id = ?  (DB 왕복 3회)
+After    요청 1,2,3 → SELECT WHERE id IN (1,2,3)  (DB 왕복 1회)
 ```
 
-수 ms 시간 창 안에 들어온 요청을 모아 배치 쿼리로 처리한다.  
-캐시 미스 시 DB 왕복이 3~5회에서 1회로 줄었다. LISTEN/NOTIFY는 이 성능을 Scale-out 환경에서도 유지 가능하게 만든 보완재다.
+수 ms 시간창 안에 들어온 요청을 모아 배치 쿼리로 처리. 캐시 미스 시 DB 왕복이 3~5회 → 1회 로 축소됐다. LISTEN/NOTIFY 는 이 성능을 Scale-out 환경에서도 유지하게 만드는 보완재.
 
 ### L1 Fast Path
 
-캐시 히트 시 스레드풀·직렬화·역직렬화를 전부 우회하고 GZIP byte[]를 그대로 반환한다.
+캐시 히트 시 스레드풀·직렬화·역직렬화를 전부 우회하고 GZIP `byte[]` 를 그대로 반환한다.
 
 ```
-캐시 히트 경로 (Before): Controller → Executor → L1.get() → Deserialize → GZIP → Response (200ms)
-캐시 히트 경로 (After):  Controller → L1.getGzipDirect() → Response (4ms)
+Before   Controller → Executor → L1.get() → Deserialize → GZIP → Response  (200ms)
+After    Controller → L1.getGzipDirect() → Response                       (4ms)
 ```
 
 ### Write-Behind Buffer
 
-계산 결과를 즉시 DB에 쓰지 않는다. 메모리 버퍼에 모았다가 배치로 처리한다.
+계산 결과를 즉시 DB 에 쓰지 않고 메모리 버퍼에 모았다가 배치로 flush.
+DB 저장 지연 150ms(동기) → 0.1ms(`Buffer.offer`). CAS + Exponential Backoff(lock-free), Phaser 기반 graceful shutdown.
+
+### LISTEN/NOTIFY 기반 분산 캐시 정합성
+
+Scale-out 에서 각 노드의 Caffeine L1 이 달라지는 문제를 해결. 노드가 UPDATE + NOTIFY(동일 트랜잭션) 하면 다른 노드들이 LISTEN → evict → 재조회. 롤백 시 NOTIFY 도 발생하지 않아 Redis Pub/Sub 의 spurious invalidation 이 없다.
+
+---
+
+## 성능 여정 (10주, 8단계)
 
 ```
-DB 저장 지연: 150ms(동기) → 0.1ms(Buffer.offer)
-셧다운 안전성: Phaser 기반 graceful flush
-동시성 제어:  CAS + Exponential Backoff (lock-free)
+97 → 555 → 674 → 965 → [325] → 940 → 7,347 RPS
+
+1  97  → 223   Chaos baseline (Redis + MySQL + MongoDB)
+2 223  →  97   Singleflight 도입 → -56% 회귀 → 즉시 롤백
+3  97  → 555   L1 Fast Path: GZIP byte[] 직접 반환, Executor 우회
+4 555  → 674   Write-Behind Buffer: DB 저장 150ms → 0.1ms
+5 674  → 965   프리셋 병렬 계산: 전용 Executor 분리로 데드락 방지
+6 965  → 325   V5 Stateless 전환: 정합성 확보, 속도 53% 감소 (의도된 트레이드오프)
+7 325  → 940   Auto Warmup: Cold Start 227% 개선
+8 940  → 7,347 Redis·MySQL·MongoDB 제거 → PostgreSQL 단일화 → Micro-Batching
 ```
 
-### PostgreSQL LISTEN/NOTIFY 기반 분산 캐시 정합성
-
-Scale-out 환경에서 각 노드의 Caffeine L1 캐시가 달라지는 문제를 해결한다.
-
-```
-노드 A → UPDATE + NOTIFY (같은 트랜잭션)
-노드 B, C → LISTEN → Caffeine evict → 다음 요청에서 재조회
-```
-
-트랜잭션 롤백 시 NOTIFY도 발생하지 않는다. Redis Pub/Sub과 달리 spurious invalidation이 없다.
+상세 기록: [`docs/06_Performance_Journey/`](docs/06_Performance_Journey/)
 
 ---
 
 ## 좋아요 도메인 — 123일의 진화
 
-좋아요 기능 하나가 123일간 어떻게 변했는지 기록한 별도 문서가 있다.
-
-```
-2025.11  비관적 락 → 낙관적 락 → Write-Behind Buffer + Graceful Shutdown
-2026.01  Redis Lua Script 원자성 → 보상 트랜잭션 → Scale-out Pub/Sub
-2026.02  Java → Kotlin 마이그레이션 → 멀티모듈 분리
-2026.03  헥사고날 아키텍처 → Redis 제거 → DB Trigger 기반 정합성
-```
-
-**시작**: Controller → DB (동기, 원자성 없음)  
-**최종**: Controller → DB Transaction + Trigger → 완료
-
-인프라를 교체할 때 module-core와 module-app 코드는 한 줄도 바뀌지 않았다. 헥사고날 아키텍처(Port/Adapter)가 실제로 작동한 사례다.
+좋아요 기능 하나가 헥사고날 아키텍처(Port/Adapter) 와 함께 어떻게 진화했는지.
+비관적 락 → 낙관적 락 → Write-Behind → Lua Script → 보상 트랜잭션 → DB Trigger 기반 정합성.
+인프라를 교체하는 동안 `module-core`·`module-app` 코드는 한 줄도 바뀌지 않았다.
 
 상세 기록: [`docs/22_Like_Refactoring_Journey/`](docs/22_Like_Refactoring_Journey/)
 
 ---
 
-## 배운 것
+## 기술 스택
 
-**측정 없는 최적화는 미신이다**  
-LocalSingleFlight는 이론적으로 완벽했다. 실제로는 캐시 히트마저 blocking해서 -56%가 됐다. 측정하지 않았으면 "좋은 최적화"로 남아있었을 것이다.
-
-**복잡도가 성능의 적이다**  
-Redis, MySQL, MongoDB를 걷어낼 때 RPS가 올라갈 거라고 생각하지 못했다. 네트워크 홉과 인프라 오버헤드가 그만큼 비쌌다.
-
-**트레이드오프를 명시하라**  
-V5 Stateless에서 속도를 53% 포기하고 정합성을 선택했다. 이 포기를 문서화하지 않으면 "왜 느리지?"로만 남는다.
-
-**현실 데이터와 시스템 제약을 함께 고려해야 한다**  
-빈 DB 기준 10,997 RPS는 참고 수치일 뿐이며,  
-200k rows 환경과 LISTEN/NOTIFY 기반 캐시 정합성 비용을 포함한 7,347 RPS가 실제 운영에 가까운 지표다.  
-낙관적인 수치로 설계하면 실제 환경에서 문제를 만든다.
+**언어·프레임워크** Kotlin, Java 21 (Virtual Threads), Spring Boot 3
+**데이터 플레인** 4개 Spring Boot 모듈 (external-api / calculator / synchronizer / cleanup) + rest-controller
+**오케스트레이션** Airflow 2.10.5 (morning_chain DAG, host-network)
+**메시징** Kafka (chunk-ready / result-ready / consumed 이벤트 라우팅)
+**저장소** PostgreSQL 17 + PGMQ, MinIO (객체 저장), Redis (synchronizer cache)
+**캐시** Caffeine (L1), PostgreSQL UNLOGGED TABLE (L2)
+**관측성** Prometheus, cAdvisor, Grafana, Loki, Promtail, Micrometer
+**테스트** JUnit 5, ArchUnit (Testcontainers 금지 — Issue #207)
+**인프라** Docker Compose, Vultr Seoul KR
 
 ---
 
-## 기술 스택
+## 로컬 실행 (4 서비스 docker 기동)
 
-**언어·프레임워크**: Kotlin, Java 21 (Virtual Threads), Spring Boot 3  
-**데이터베이스**: PostgreSQL 17 (PGMQ 익스텐션 포함)  
-**캐시**: Caffeine (L1), PostgreSQL UNLOGGED TABLE (L2)  
-**모니터링**: Prometheus, Grafana, Micrometer  
-**테스트**: Testcontainers, JUnit 5, ArchUnit  
-**부하테스트**: wrk  
-**인프라**: Docker Compose, Vultr Seoul KR
+```bash
+# 1. 인프라 기동 + MinIO SA 시크릿 발급
+docker compose -f docker-compose.yml up -d minio postgres kafka redis
+docker compose -f docker-compose.yml run --rm minio-bootstrap   # → docker/services/secrets/ + .env
+
+# 2. 4 서비스 이미지 빌드
+./docker/services/build.sh
+
+# 3. 4 서비스 기동
+docker compose -f docker-compose.yml -f docker-compose.services.yml up -d \
+  external-api calculator synchronizer cleanup
+
+# 4. Airflow 추가 (선택)
+docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d airflow-webserver airflow-scheduler
+```
+
+```bash
+# expectation API 조회
+curl -s "http://localhost:8080/api/v5/characters/진격캐넌/expectation"
+```
+
+> `202` 는 접수 응답. 실제 계산 완료는 서비스 로그(`Calculation completed`) 로 확인한다.
+
+상세 배포 절차: [`docs/21_Operations/docker-deploy-runbook.md`](docs/21_Operations/docker-deploy-runbook.md)
 
 ---
 
@@ -203,33 +199,21 @@ V5 Stateless에서 속도를 53% 포기하고 정합성을 선택했다. 이 포
 
 ```
 docs/
-├── 01_ADR/                        아키텍처 결정 기록 (86개)
-├── 05_Reports/
-│   └── 05_06_Load_Tests/          부하테스트 리포트 전체
-├── 06_Performance_Journey/        97 → 7,347 RPS 여정 (11장)
-└── 22_Like_Refactoring_Journey/   좋아요 도메인 123일 기록 (7장 + 부록)
+├── 01_ADR/                        아키텍처 결정 기록
+├── 06_Performance_Journey/        97 → 7,347 RPS 여정
+├── 22_Like_Refactoring_Journey/   좋아요 도메인 123일 기록
+├── 21_Operations/                 운영·배포 runbook
+└── 11_Observability/              관측성 가이드
 ```
 
 ---
 
-## 빠른 시작
+## 배운 것
 
-```bash
-git clone https://github.com/zbnerd/probabilistic-valuation-engine
-cd probabilistic-valuation-engine
-cp .env.example .env  # NEXON_API_KEY 등 설정
-docker compose up -d
-./gradlew :module-app:bootRun --args='--spring.profiles.active=local'
-```
-
-```bash
-# 부하테스트
-./gradlew loadTest -Pscenario=patch-day
-
-# 비교 리포트
-./gradlew loadTestReport -PbeforeFile=baseline.json -PafterFile=current.json
-```
+- **측정 없는 최적화는 미신이다.** LocalSingleFlight 는 이론상 완벽했으나 캐시 히트마저 blocking 해 -56% 회귀. 측정 안 했으면 "좋은 최적화"로 남았을 것.
+- **복잡도가 성능의 적이다.** Redis·MySQL·MongoDB 를 걷어냈을 때 RPS 가 올라갔다. 네트워크 홉과 인프라 오버헤드가 그만큼 비쌌음.
+- **트레이드오프를 명시하라.** V5 Stateless 에서 속도 53% 포기하고 정합성 선택. 이 포기를 문서화하지 않으면 "왜 느리지?"로만 남는다.
 
 ---
 
-*Author: SeungJun | Stack: Spring Boot + Kotlin + PostgreSQL | 2026*
+*Author: SeungJun · Stack: Spring Boot + Kotlin + PostgreSQL · 2026*

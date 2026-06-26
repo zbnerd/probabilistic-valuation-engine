@@ -4,14 +4,9 @@
 
 캐릭터 이름 하나로 스타포스·큐브 기대비용을 3개 프리셋 기준으로 계산한다.
 매일 03:00 KST 에 전체 랭킹 수십만 IGN 의 장비 데이터를 수집·계산·동기화하여
-PostgreSQL read model 에 적재하고, REST API 로 초당 수천 건의 기대치 조회를 제공한다.
+PostgreSQL read model 에 적재하고, REST API 로 기대치 조회를 제공한다.
 
----
-
-## 한 줄 요약
-
-> 복잡한 인프라(Redis + MySQL + MongoDB)를 제거하고 **PostgreSQL 단일 구조 + Micro-Batching** 으로  
-> **97 RPS → 7,347 RPS (약 75배 개선)** 를 달성, 운영 복잡도를 단순화했다.
+Hexagonal Architecture(Port/Adapter) 기반의 멀티모듈 Kotlin/Spring 시스템이다.
 
 ---
 
@@ -55,6 +50,8 @@ PostgreSQL read model 에 적재하고, REST API 로 초당 수천 건의 기대
    Observe     Prometheus · cAdvisor · Grafana · Loki · Promtail
 ```
 
+### 모듈
+
 | 모듈 | 역할 | Port |
 |------|------|------|
 | `module-external-api` | Nexon API 호출 파이프라인 (snapshot 적재) | 8081 |
@@ -63,92 +60,32 @@ PostgreSQL read model 에 적재하고, REST API 로 초당 수천 건의 기대
 | `module-cleanup` | consumed artifact 가비지 컬렉션 | 8084 |
 | `module-rest-controller` | expectation 조회 REST API | 8080 |
 
----
-
-## 핵심 수치
-
-| 지표 | 시작 | 최종 |
-|------|------|------|
-| RPS | 97 | **7,347** (실데이터 200K rows 기준) |
-| p99 latency | 4,100ms | **36ms** |
-| 데이터베이스 | Redis + MySQL + MongoDB | **PostgreSQL 단일** |
-| 에러율 | 59.7% | **0%** |
-| Scale-out | 불가 | **선형 확장 준비 완료** |
-
----
-
-## 핵심 아키텍처 결정
-
-### PostgreSQL 만으로 충분하다
-
-| 기능 | 이전 | 현재 |
-|------|------|------|
-| 캐시 | Redis | Caffeine L1 + PostgreSQL UNLOGGED |
-| 분산락 | Redis Named Lock | `pg_advisory_lock` |
-| Pub/Sub | Redis Pub/Sub | PostgreSQL LISTEN/NOTIFY |
-| 메시지큐 | Redis Stream | PGMQ (PostgreSQL 익스텐션) |
-| 이벤트스토어 | MongoDB | PostgreSQL JSONB |
-| 영속성 | MySQL | PostgreSQL |
-
-Redis 시절보다 빨라진 이유 — Caffeine 히트율 99%+ 로 DB 도달이 거의 없고, 이미 열린 커넥션 재사용으로 네트워크 홉이 사라지며, 트랜잭션 내 `pg_notify()` 는 롤백 시 무효 이벤트까지 함께 사라진다(원자성).
-
-### Micro-Batching — 940→7,347 의 실제 원인
-
-PostgreSQL 단일화는 전제조건, 실제 성능 엔진은 Micro-Batching.
+### 외부 API 4단계 흐름 (external-api)
 
 ```
-Before   요청 1,2,3 → SELECT WHERE id = ?  (DB 왕복 3회)
-After    요청 1,2,3 → SELECT WHERE id IN (1,2,3)  (DB 왕복 1회)
+RANKING_FETCH     일일 랭킹 전체 IGN 수집
+    ↓
+OCID_LOOKUP       IGN → 내부 OCID 식별자 매핑 (배치)
+    ↓
+CHARACTER_BASIC   캐릭터 기본 정보 (직업·레벨·월드)
+    ↓
+ITEM_EQUIPMENT    장비 슬롯 상세 (스타포스·큐브·옵션)
 ```
 
-수 ms 시간창 안에 들어온 요청을 모아 배치 쿼리로 처리. 캐시 미스 시 DB 왕복이 3~5회 → 1회 로 축소됐다. LISTEN/NOTIFY 는 이 성능을 Scale-out 환경에서도 유지하게 만드는 보완재.
-
-### L1 Fast Path
-
-캐시 히트 시 스레드풀·직렬화·역직렬화를 전부 우회하고 GZIP `byte[]` 를 그대로 반환한다.
-
-```
-Before   Controller → Executor → L1.get() → Deserialize → GZIP → Response  (200ms)
-After    Controller → L1.getGzipDirect() → Response                       (4ms)
-```
-
-### Write-Behind Buffer
-
-계산 결과를 즉시 DB 에 쓰지 않고 메모리 버퍼에 모았다가 배치로 flush.
-DB 저장 지연 150ms(동기) → 0.1ms(`Buffer.offer`). CAS + Exponential Backoff(lock-free), Phaser 기반 graceful shutdown.
-
-### LISTEN/NOTIFY 기반 분산 캐시 정합성
-
-Scale-out 에서 각 노드의 Caffeine L1 이 달라지는 문제를 해결. 노드가 UPDATE + NOTIFY(동일 트랜잭션) 하면 다른 노드들이 LISTEN → evict → 재조회. 롤백 시 NOTIFY 도 발생하지 않아 Redis Pub/Sub 의 spurious invalidation 이 없다.
+각 단계는 결과를 `JSONL.gz` 청크로 MinIO 에 적재하고 chunk-ready 이벤트를 발행한다.
 
 ---
 
-## 성능 여정 (10주, 8단계)
+## 설계 원칙
 
-```
-97 → 555 → 674 → 965 → [325] → 940 → 7,347 RPS
+- **Hexagonal Architecture** — Controller → Port Interface → Adapter. 도메인(`module-core`)이 인프라에 의존하지 않는다. 모듈 의존성: `common → core → infra → web → app`.
+- **LogicExecutor 위임** — `try-catch` / `try-finally` 대신 `LogicExecutor` 로 예외 처리·로깅·복구 일원화.
+- **비동기 체이닝** — `join()`/`get()`/`runBlocking` 금지. `CompletableFuture` 체이닝(`thenApply`·`thenCompose`)과 Kotlin `suspend` 로 IO 와 CPU 바운드를 분리.
+- **Stateless** — 서버 내 mutable 상태 금지. 상태는 PostgreSQL / Redis / MinIO 에만.
+- **Tiered Cache** — `L1(Caffeine) → L2(PostgreSQL UNLOGGED) → SingleFlight → Loader`.
+- **Flat Work Queue** — 중첩 fan-out 대신 bounded flat queue + fixed workers 로 동시성 제어.
 
-1  97  → 223   Chaos baseline (Redis + MySQL + MongoDB)
-2 223  →  97   Singleflight 도입 → -56% 회귀 → 즉시 롤백
-3  97  → 555   L1 Fast Path: GZIP byte[] 직접 반환, Executor 우회
-4 555  → 674   Write-Behind Buffer: DB 저장 150ms → 0.1ms
-5 674  → 965   프리셋 병렬 계산: 전용 Executor 분리로 데드락 방지
-6 965  → 325   V5 Stateless 전환: 정합성 확보, 속도 53% 감소 (의도된 트레이드오프)
-7 325  → 940   Auto Warmup: Cold Start 227% 개선
-8 940  → 7,347 Redis·MySQL·MongoDB 제거 → PostgreSQL 단일화 → Micro-Batching
-```
-
-상세 기록: [`docs/06_Performance_Journey/`](docs/06_Performance_Journey/)
-
----
-
-## 좋아요 도메인 — 123일의 진화
-
-좋아요 기능 하나가 헥사고날 아키텍처(Port/Adapter) 와 함께 어떻게 진화했는지.
-비관적 락 → 낙관적 락 → Write-Behind → Lua Script → 보상 트랜잭션 → DB Trigger 기반 정합성.
-인프라를 교체하는 동안 `module-core`·`module-app` 코드는 한 줄도 바뀌지 않았다.
-
-상세 기록: [`docs/22_Like_Refactoring_Journey/`](docs/22_Like_Refactoring_Journey/)
+상세: [`.claude/rules/`](.claude/rules/) · [`CLAUDE.md`](CLAUDE.md)
 
 ---
 
@@ -159,7 +96,6 @@ Scale-out 에서 각 노드의 Caffeine L1 이 달라지는 문제를 해결. �
 **오케스트레이션** Airflow 2.10.5 (morning_chain DAG, host-network)
 **메시징** Kafka (chunk-ready / result-ready / consumed 이벤트 라우팅)
 **저장소** PostgreSQL 17 + PGMQ, MinIO (객체 저장), Redis (synchronizer cache)
-**캐시** Caffeine (L1), PostgreSQL UNLOGGED TABLE (L2)
 **관측성** Prometheus, cAdvisor, Grafana, Loki, Promtail, Micrometer
 **테스트** JUnit 5, ArchUnit (Testcontainers 금지 — Issue #207)
 **인프라** Docker Compose, Vultr Seoul KR
@@ -200,19 +136,14 @@ curl -s "http://localhost:8080/api/v5/characters/진격캐넌/expectation"
 ```
 docs/
 ├── 01_ADR/                        아키텍처 결정 기록
-├── 06_Performance_Journey/        97 → 7,347 RPS 여정
-├── 22_Like_Refactoring_Journey/   좋아요 도메인 123일 기록
-├── 21_Operations/                 운영·배포 runbook
-└── 11_Observability/              관측성 가이드
+├── 02_Chaos_Engineering/          카오스 엔지니어링
+├── 03_Technical_Guides/           인프라·비동기·테스트 가이드
+├── 11_Observability/              관측성 가이드
+├── 16_Guardrails/                 아키텍처 가드레일
+└── 21_Operations/                 운영·배포 runbook
 ```
 
----
-
-## 배운 것
-
-- **측정 없는 최적화는 미신이다.** LocalSingleFlight 는 이론상 완벽했으나 캐시 히트마저 blocking 해 -56% 회귀. 측정 안 했으면 "좋은 최적화"로 남았을 것.
-- **복잡도가 성능의 적이다.** Redis·MySQL·MongoDB 를 걷어냈을 때 RPS 가 올라갔다. 네트워크 홉과 인프라 오버헤드가 그만큼 비쌌음.
-- **트레이드오프를 명시하라.** V5 Stateless 에서 속도 53% 포기하고 정합성 선택. 이 포기를 문서화하지 않으면 "왜 느리지?"로만 남는다.
+전체 문서 맵: [`CLAUDE.md`](CLAUDE.md) 상세 문서 섹션 참조.
 
 ---
 

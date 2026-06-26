@@ -53,11 +53,12 @@ Expected: maple-network = `maple-redis`(only); prefixed = postgres/kafka/minio/.
 - [ ] **Step 2: infra 컨테이너를 `maple-network`에 연결** (live, non-disruptive)
 
 ```bash
-docker network connect maple-network maple-postgres
-docker network connect maple-network maple-kafka
-docker network connect maple-network probabilistic-valuation-engine-minio-1
+# --alias 필수: 컨테이너명(maple-postgres)이 아닌 service alias(postgres)로 app 가 참조
+docker network connect --alias postgres maple-network maple-postgres
+docker network connect --alias kafka maple-network maple-kafka
+docker network connect --alias minio maple-network probabilistic-valuation-engine-minio-1
 ```
-(redis는 이미 maple-network에 존재)
+(redis는 이미 maple-network에 존재, alias 보유)
 
 Expected: 각 명령 무출력(성공). 이미 연결 시 "already exists" 무해.
 
@@ -330,9 +331,10 @@ SELECT count(*) FROM calculation_jobs WHERE status IN ('API_REQUESTED','RETRYING
 infra 가 `maple-network`에 연결되어 있어야 app 컨테이너가 postgres/kafka/minio DNS 해석.
 
 ```bash
-docker network connect maple-network maple-postgres
-docker network connect maple-network maple-kafka
-docker network connect maple-network probabilistic-valuation-engine-minio-1
+# --alias 필수 (service alias 전이 안 됨)
+docker network connect --alias postgres maple-network maple-postgres
+docker network connect --alias kafka maple-network maple-kafka
+docker network connect --alias minio maple-network probabilistic-valuation-engine-minio-1
 # 검증
 docker run --rm --network maple-network alpine sh -c 'nslookup postgres; nslookup kafka; nslookup minio'
 ```

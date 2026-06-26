@@ -75,7 +75,7 @@ services:
       - ./docker/airflow/dags:/opt/airflow/dags:ro
     command: scheduler
     healthcheck:
-      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname '$$(hostname)'"]
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname '$$(hostname -f)'"]
       interval: 30s
       timeout: 10s
       retries: 3

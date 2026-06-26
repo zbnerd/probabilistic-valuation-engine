@@ -487,7 +487,7 @@ Mapping:
 
 Each step runs sequentially: trigger steps wait for terminal state, loop steps are fire-and-forget (DAG advances to cleanup_pipeline after the loop step). The skill fails fast (exit 2) before triggering Airflow if an invalid phase or `OCID_LOOKUP_LOOP` style is supplied.
 
-**Note:** Services are now containerized (`docker compose ... services.yml`, default `START_MODE=docker`). Airflow containers run `network_mode: host`, so they reach the app containers via the published host ports (`localhost:8081` etc.), not Docker bridge DNS. Step 5 sets Airflow connections to `--conn-host external-api` (Docker DNS) — that only resolves if Airflow is on `maple-network` bridge, which conflicts with its host-network mode. See issue #1435 (airflow host/bridge network reconcile) for the unresolved gap.
+**Note:** Services are now containerized (`docker compose ... services.yml`, default `START_MODE=docker`). Airflow containers run `network_mode: host`, so they reach the app containers via the published host ports (`localhost:8081` etc.), not Docker bridge DNS. Step 5 sets Airflow connections to `--conn-host localhost` (reaches published ports from host-net). The airflow metadata-DB reachability gap (#1435) is resolved via airflow-db `5433:5432` host publish + `SQL_ALCHEMY_CONN @localhost:5433` — see ADR-738.
 
 #### 5a. Airflow trigger flow (daily_collection_pipeline)
 
@@ -903,7 +903,7 @@ docker compose -f docker-compose.yml -f docker-compose.airflow.yml stop airflow-
 - Do NOT run load tests alongside this pipeline test.
 - Local profile DB: when `STORAGE_BACKEND=local`, the hardcoded `localhost:5432/maple_expectation` from `application-local.yml` is used. When `STORAGE_BACKEND=minio`, `.env` `DB_URL` is used directly (typically the dev cloud DB).
 - `run-on-startup: true` in local profile starts pipeline immediately. When Airflow controls scheduling in production, set `run-on-startup: false` and `external-api.schedule.enabled: true` to keep the bean but disable auto-trigger.
-- Services are containerized by default (`START_MODE=docker`). Airflow (`network_mode: host`) reaches them via `localhost:<published-port>`. The `host.docker.internal` / Docker-DNS path is not used in the current docker deploy; see #1435 for the airflow network reconcile gap.
+- Services are containerized by default (`START_MODE=docker`). Airflow (`network_mode: host`) reaches them via `localhost:<published-port>`. The airflow metadata-DB reachability (#1435) is resolved via airflow-db `5433:5432` host publish + `SQL_ALCHEMY_CONN @localhost:5433` (ADR-738). After any airflow recreate, re-run `docker exec maple-airflow-scheduler python3 -m pip install kafka-python-ng` (and webserver) — the base image does not bake it, so per-phase DAGs (morning_chain etc.) fail to import without it.
 - Per-phase scope verification (step 10a) only runs when the #1292 branch (`branch_on_scope` task) is present in `daily_collection_pipeline`. Pre-#1292 deployments skip the section silently — see step 10a prereq check for the gate.
 - Per-phase verification adds ~5min (steps 10a.1–10a.5) to the full pipeline test. Run after the main E2E (step 9) succeeds; isolated failures don't affect main E2E pass/fail.
 

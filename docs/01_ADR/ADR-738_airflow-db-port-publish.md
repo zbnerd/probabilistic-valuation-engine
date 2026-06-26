@@ -83,10 +83,15 @@ docker-compose.airflow.yml:
 | DAG trigger → app | 200/202 | connections localhost 불변 |
 | autoheal label | 3 컨테이너 부착 | |
 
-### Observed Result
+### Observed Result (2026-06-26 배포 후 실측)
 
-* 코드/설정 검증: `compose config` PASS(배포 후 기재).
-* 런타임: 배포 후 본 절 실측값 기재.
+* **3컨테이너 healthy**: scheduler · webserver · airflow-db 전부 `healthy`.
+* **airflow-db 5433 publish**: `5432/tcp -> 0.0.0.0:5433`.
+* **DB conn localhost:5433**: scheduler 에서 `SELECT count(*) FROM dag` = 8(이전 단절 → 해결).
+* **scheduler healthcheck**: `hostname -f` FQDN 매칭 + single-quote 제거(`$(hostname -f)` sh 확장) → 45s 내 `healthy`. 원래 `'$$(hostname)'` single-quote 가 expansion 차단으로 항상 false-unhealthy 였음(잠재 버그, 본 작업에서 fix).
+* **DAG → app**: `requests localhost:8081/actuator/health` = 200 UP(connections localhost 불변).
+* **autoheal label**: airflow-db/webserver/scheduler 3컨테이너 `autoheal=true` 부착.
+* **morning_chain + per-phase DAGs**: 전부 `is_paused=False`(03:00 schedule 유지). 단 recreate 가 runtime `pip install kafka-python-ng` 설치분을 날려 per-phase DAG import 일시 실패 → 재설치로 복구(image 에 bake 안 됨, skill 에 문서화된 운용 step).
 
 ---
 

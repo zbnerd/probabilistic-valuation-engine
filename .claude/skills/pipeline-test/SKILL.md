@@ -64,7 +64,18 @@ Set `START_MODE=systemd` to switch. Default is `docker`. The systemd units assum
 ### 1. Pre-check
 
 ```bash
-# Kill any stale processes on required ports.
+# Stop stale docker app containers first. Their published ports (8081-8084)
+# are iptables DNAT, not host bind() — lsof below won't see them, so a stale
+# container would silently hold the port and the new `compose up` would fail
+# or attach to the old one. `stop` (not `down`) preserves infra containers.
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -qE '^maple-(external-api|calculator|synchronizer|cleanup)$'; then
+  echo "Stopping stale docker app containers"
+  docker compose -f docker-compose.yml -f docker-compose.services.yml stop \
+    external-api calculator synchronizer cleanup 2>/dev/null
+fi
+
+# Kill any stale HOST processes on required ports (nohup/systemd mode; docker
+# containers handled above).
 # -sTCP:LISTEN filters to the listener only — bare `lsof -ti:PORT` returns
 # every PID with any TCP connection to that port (including clients on
 # other ports that happen to be connected to PORT), and `kill $pid` would
@@ -476,7 +487,7 @@ Mapping:
 
 Each step runs sequentially: trigger steps wait for terminal state, loop steps are fire-and-forget (DAG advances to cleanup_pipeline after the loop step). The skill fails fast (exit 2) before triggering Airflow if an invalid phase or `OCID_LOOKUP_LOOP` style is supplied.
 
-**Note:** Airflow connects to Spring Boot services via `host.docker.internal`. Services run on the host, Airflow runs in Docker. When services are containerized (Phase 3+), switch to Docker network DNS.
+**Note:** Services are now containerized (`docker compose ... services.yml`, default `START_MODE=docker`). Airflow containers run `network_mode: host`, so they reach the app containers via the published host ports (`localhost:8081` etc.), not Docker bridge DNS. Step 5 sets Airflow connections to `--conn-host external-api` (Docker DNS) — that only resolves if Airflow is on `maple-network` bridge, which conflicts with its host-network mode. See issue #1435 (airflow host/bridge network reconcile) for the unresolved gap.
 
 #### 5a. Airflow trigger flow (daily_collection_pipeline)
 
@@ -609,9 +620,17 @@ curl -s http://localhost:8083/actuator/prometheus | grep synchronizer_pre_upsert
 grep "rate=" <(docker logs maple-external-api 2>&1) | tail -5
 ```
 
-**DB row counts (local PostgreSQL):**
+**DB row counts (parse `.env` `DB_URL` — do NOT hardcode host/creds):**
 ```bash
-PGPASSWORD=maple123 psql "host=localhost port=5432 user=maple dbname=maple_expectation" -t -A -c "
+# Read DB_URL literally via grep (do NOT source .env — DB_ROOT_PASSWORD contains
+# an unquoted '$' that bash corrupts). DB_URL has no '$', safe to parse.
+DB_URL=$(grep -E '^DB_URL=' .env | head -1 | sed "s/^DB_URL=//; s/^'//; s/'$//")
+H=$(echo "$DB_URL"|sed -n 's|.*://\([^:/]*\).*|\1|p')
+P=$(echo "$DB_URL"|sed -n 's|.*://[^:/]*:\([0-9]*\).*|\1|p')
+N=$(echo "$DB_URL"|sed -n 's|.*/\([^?]*\).*|\1|p')
+U=$(echo "$DB_URL"|sed -n 's|.*user=\([^&]*\).*|\1|p')
+W=$(echo "$DB_URL"|sed -n 's|.*password=\([^&]*\).*|\1|p')
+PGPASSWORD="$W" psql "host=$H port=$P user=$U dbname=$N sslmode=disable" -t -A -c "
 SELECT
   (SELECT count(*) FROM character_basic_read_model) as basic,
   (SELECT count(*) FROM character_equipment_read_model) as equip,
@@ -863,7 +882,7 @@ docker compose -f docker-compose.yml -f docker-compose.airflow.yml stop airflow-
 | 202 but never 200 | Synchronizer may be down, check port 8083 |
 | OOM / slow startup | Check JVM heap, reduce data volume |
 | `uq_basic_read_model_ocid` error | Character rename causes same ocid under different user_ign — CharacterBasicRepository handles dedup |
-| DB count = 0 but logs show success | Check correct DB — local profile uses `localhost:5432/maple_expectation`, not .env DB_URL |
+| DB count = 0 but logs show success | Check the right DB — docker modules use `.env` `DB_URL` (services.yml interpolates it to `postgres:5432`); nohup `STORAGE_BACKEND=local` uses `localhost:5432/maple_expectation`. Parse via grep, don't hardcode. |
 | External API 401 on Prometheus | Use run-status endpoint or log-based metrics |
 | Trigger returns 409 | Pipeline already running — check run-status for current phase |
 | Airflow can't reach services | Verify `host.docker.internal` in docker-compose.airflow.yml, check services are running on host |
@@ -884,7 +903,7 @@ docker compose -f docker-compose.yml -f docker-compose.airflow.yml stop airflow-
 - Do NOT run load tests alongside this pipeline test.
 - Local profile DB: when `STORAGE_BACKEND=local`, the hardcoded `localhost:5432/maple_expectation` from `application-local.yml` is used. When `STORAGE_BACKEND=minio`, `.env` `DB_URL` is used directly (typically the dev cloud DB).
 - `run-on-startup: true` in local profile starts pipeline immediately. When Airflow controls scheduling in production, set `run-on-startup: false` and `external-api.schedule.enabled: true` to keep the bean but disable auto-trigger.
-- Airflow connects via `host.docker.internal` (Docker→host). This is transitional until services are containerized.
+- Services are containerized by default (`START_MODE=docker`). Airflow (`network_mode: host`) reaches them via `localhost:<published-port>`. The `host.docker.internal` / Docker-DNS path is not used in the current docker deploy; see #1435 for the airflow network reconcile gap.
 - Per-phase scope verification (step 10a) only runs when the #1292 branch (`branch_on_scope` task) is present in `daily_collection_pipeline`. Pre-#1292 deployments skip the section silently — see step 10a prereq check for the gate.
 - Per-phase verification adds ~5min (steps 10a.1–10a.5) to the full pipeline test. Run after the main E2E (step 9) succeeds; isolated failures don't affect main E2E pass/fail.
 

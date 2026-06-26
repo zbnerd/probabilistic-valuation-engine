@@ -82,10 +82,17 @@ airflow: 제외 (follow-up — host/bridge network reconcile 선행 필요)
 | 4 모듈 `/actuator/health` | 4/4 UP | 배포 후 |
 | cadvisor metric 수집 | `container_cpu_usage_seconds_total` series ≥ 1 | 배포 후 |
 
-### Observed Result
+### Observed Result (2026-06-26 배포 후 실측)
 
-* 설정 검증: deploy-apps.sh 구문 PASS, `compose config` PASS.
-* 런타임 검증: 배포 실행 후 본 절에 실측값 기재.
+* **배포 성공**: 4 app 컨테이너 healthy + autoheal + cadvisor Up.
+* **network reconcile 검증**: `maple-network` 에서 postgres→10.0.3.2 / kafka→10.0.3.3 / minio→10.0.3.5 / redis→10.0.3.4 해석 (이전 SERVFAIL 해소). 단 `docker network connect --alias <svc>` 필수.
+* **이미지 태그**: `:dev` 부재 → deploy-apps.sh 가 `:sha-75cb631` 자동 해석.
+* **pipeline 흐름**: ext-api run-on-startup → RankingFetch `fetched=270000 page=1350/3000 failed=0` → Kafka chunk-ready publish → calculator 소비 → synchronizer 파티션 할당.
+* **ERROR 로그**: 4 컨테이너 전부 0. **Kafka LAG**: 전 consumer group 0.
+* **cadvisor (#1430)**: prometheus 가 `container_cpu_usage_seconds_total`/`container_memory_usage_bytes` 각 76 series 스크레이프 (config reload 위해 prometheus 재시작 1회).
+* **prometheus app scrape**: external-api/calc/synchronizer `up=1`. cleanup `/actuator/prometheus` 404 (기존 미노출, health UP → 회귀 아님).
+* **재시작 영향**: postgres/kafka/minio 가 compose reconcile 로 recreate (수초, volume 보존, IDLE 허용).
+* **경고**: `.env` DB_ROOT_PASSWORD 의 `$pNDA2` 를 compose interpolation → blank. 단 postgres·app 동일 interpolation → 상호 일관.
 
 ---
 

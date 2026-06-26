@@ -97,7 +97,12 @@ done
 # (6) IDLE gate: no non-terminal calculation_jobs (distinguish parse-failure /
 # DB-down from a genuinely busy pipeline — do NOT mask DB errors as "not IDLE").
 echo "==> Pre-flight: IDLE gate (calculation_jobs non-terminal)"
-set -a; source .env; set +a
+# Read DB_URL LITERALLY from .env — do NOT `source .env`: .env contains
+# unquoted values with '$' (e.g. DB_ROOT_PASSWORD) which bash would expand
+# (corrupting them) and which `set -u` would reject as unbound. docker compose
+# reads .env with its own parser (no '$' expansion), so it is unaffected; we
+# only need DB_URL here, and DB_URL itself contains no '$'.
+DB_URL=$(grep -E '^DB_URL=' .env | head -1 | sed "s/^DB_URL=//; s/^'//; s/'$//; s/^\"//; s/\"$//")
 H=$(echo "$DB_URL" | sed -n 's|.*://\([^:/]*\).*|\1|p')
 P=$(echo "$DB_URL" | sed -n 's|.*://[^:/]*:\([0-9]*\).*|\1|p')
 N=$(echo "$DB_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')

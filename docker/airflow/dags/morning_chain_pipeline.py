@@ -98,10 +98,14 @@ with DAG(
     )
 
     # Custom sensor: the infinite loop never reaches "terminal" so the
-    # factory's make_wait_phase_terminal_sensor cannot gate it. Instead,
-    # poll /run-status for loopSummaries[ITEM_EQUIPMENT].iterationCount >= 1
-    # AND status == "RUNNING" (confirms the loop accepted the start signal
-    # and at least one iteration has begun).
+    # factory's make_wait_phase_terminal_sensor cannot gate it. Confirm the
+    # loop accepted the start signal by checking loopSummaries[ITEM_EQUIPMENT]
+    # status == "RUNNING". Per LoopStatus, RUNNING means "at least one
+    # iteration has been submitted; loop is active" — i.e. startLoop ran and
+    # submitted iteration 1. Do NOT gate on iterationCount >= 1: that counter
+    # increments only on iteration *completion* (PhaseLoopController.
+    # handleIterationEnd), and one ITEM_EQUIPMENT pass takes ~62 min, which
+    # exceeds this sensor's 10-min timeout (see ADR-739).
     def _is_iteration_started(**ctx) -> bool:
         try:
             resp = requests.get(
@@ -116,10 +120,7 @@ with DAG(
         summary = (data.get("loopSummaries") or {}).get("ITEM_EQUIPMENT")
         if not summary:
             return False
-        return (
-            summary.get("status") == "RUNNING"
-            and (summary.get("iterationCount") or 0) >= 1
-        )
+        return summary.get("status") == "RUNNING"
 
     wait_first_iteration_started = PythonSensor(
         task_id="wait_first_iteration_started",

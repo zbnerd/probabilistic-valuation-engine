@@ -25,6 +25,11 @@ services:
       autoheal: "true"
     container_name: maple-external-api
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
     ports:
       - "8081:8081"
     environment:
@@ -60,6 +65,11 @@ services:
       autoheal: "true"
     container_name: maple-calculator
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
     ports:
       - "8082:8082"
     environment:
@@ -94,6 +104,11 @@ services:
       autoheal: "true"
     container_name: maple-synchronizer
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
     ports:
       - "8083:8083"
     environment:
@@ -131,6 +146,11 @@ services:
       autoheal: "true"
     container_name: maple-cleanup
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
     ports:
       - "8084:8084"
     environment:

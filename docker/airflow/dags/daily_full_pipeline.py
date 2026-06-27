@@ -1,9 +1,15 @@
-"""Daily full-pipeline wrapper.
+"""Daily full-pipeline wrapper (DEPRECATED 2026-06-27).
+
+DEPRECATED: Use morning_chain_pipeline instead — it owns the 03:00 KST slot
+and drives ITEM_EQUIPMENT as an infinite loop (this DAG's once-mode run
+conflicted with morning_chain on the shared phase slots every morning and
+failed daily; cleanup is independently scheduled via daily_cleanup_pipeline
+at `0 */6 * * *`). Retired by setting schedule=None (manual-only); see
+ADR-740. Kept for manual finite once-mode full-chain runs if ever needed.
 
 Chains ranking_ocid_lookup_pipeline → character_basic_pipeline(mode=once) →
 item_equipment_pipeline(mode=once) → daily_cleanup_pipeline via
-TriggerDagRunOperator (wait_for_completion=True). Scheduled at 18:00 UTC
-(KST 03:00) — same cron as legacy daily_collection_pipeline.
+TriggerDagRunOperator (wait_for_completion=True).
 
 Refs: docs/superpowers/specs/2026-06-22-dag-restructure-design.md §4.3
 """
@@ -25,7 +31,7 @@ with DAG(
     dag_id="daily_full_pipeline",
     default_args=default_args,
     start_date=datetime(2026, 5, 29),
-    schedule="0 18 * * *",  # UTC 18:00 = KST 03:00
+    schedule=None,  # retired 2026-06-27; morning_chain_pipeline owns 03:00 KST (ADR-740)
     catchup=False,
     tags=["pipeline", "daily"],
 ) as dag:

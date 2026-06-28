@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "OcidMapping",
+  "namespace": "maple.common.avro",
+  "doc": "Single userIgn → ocid mapping record. Producer: OcidLookupPhase. Consumer: OcidLookupPhase.readCharacterNamesFromChunks. See issue 1425.",
+  "fields": [
+    {"name": "userIgn", "type": "string", "doc": "User in-game name. Frozen field ID: 1."},
+    {"name": "ocid", "type": ["null", "string"], "default": null, "doc": "Nexon character ID. Null until lookup completes. Frozen field ID: 2."},
+    {"name": "schema_version", "type": "int", "default": 1, "doc": "Schema version of this record. Bump on backward-incompatible change. Frozen field ID: 3."}
+  ]
+}

@@ -3,6 +3,8 @@
 > chunk key/body 불일치, 잘못된 upstream runId, result writer pipe race.
 > "에러 없이 0건 처리" — silent data loss 패턴들이 만든 장애. 로그에 에러가 없어도 데이터가 안 흐르는 가장 교활한 버그 유형.
 
+**영향(Impact):** chunk key/body schema 불일치·잘못된 upstreamRunId 로 calculator/synchronizer 가 모든 chunk silent drop → **valuation data 0건**. 에러 로그 없이 0건 처리(가장 교활한 장애 유형).
+
 ---
 
 ## 3-1. producer/consumer chunk-key layout 불일치 — `OcidLookupPhase` chunk 못 찾음

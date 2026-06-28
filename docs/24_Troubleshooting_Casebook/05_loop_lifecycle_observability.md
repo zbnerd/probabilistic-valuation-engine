@@ -3,6 +3,8 @@
 > `morning_chain` 의 ITEM_EQUIPMENT infinite loop 가 매일 사망하던 연쇄 사건.
 > 3개 사례(05-3 → 05-2 → 05-1)가 인과로 연결된 한 사가(episode). log retention(05-3) 없이는 05-1 진단 불가.
 
+**영향(Impact):** ITEM_EQUIPMENT infinite loop 가 매일 03:00 KST 273 iteration 정상 후 사망 → 장비 데이터 지속 갱신 안 됨; lifecycle 로그 rotate-out 으로 사망 stacktrace 관측 불가(정적 분석으론 원인 불가).
+
 ---
 
 ## 5-1. Loop 사망 — `ITEM_EQUIPMENT requires upstreamRunId` (OCID_LOOKUP refresh 창)

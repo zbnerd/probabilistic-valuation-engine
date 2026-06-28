@@ -3,6 +3,8 @@
 > nohup→docker 전환, MinIO 운영(network/SA/CI), Nexon HTTP pool 튜닝, orphan cleanup.
 > 배포 모델 전환 중 드러난 network duality·권한·CI 드리프트.
 
+**영향(Impact):** nohup→docker 전환 시 network duality 로 4 app 컨테이너 crash-loop; cleanup 의 `listByPrefix` truncation 으로 ~200GB silent 미삭제; 4 SA policy `DeleteObject` 누락으로 marker `AccessDenied`.
+
 ---
 
 ## 6-1. nohup→docker 전환 시 app crash-loop — infra DNS `SERVFAIL` + `:dev` 태그 부재

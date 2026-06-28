@@ -3,6 +3,8 @@
 > Airflow control plane 도입 과정의 함정: HttpOperator 4xx 계약, task timeout, connection 미등록,
 > in-process cron vs DAG slot race, legacy DAG 중복. control plane 이전 후 legacy 가 잔존하면 매일 fail 하는 패턴.
 
+**영향(Impact):** Airflow HttpOperator 가 409 CONFLICT 에 도달 불가 → 멱등 트리거 2h×3 scheduled run fail; in-process cron 과 morning_chain DAG 가 동일 03:00 KST slot 경쟁 → ITEM_EQUIPMENT loop 사망 + DAG 매일 fail.
+
 ---
 
 ## 4-1. Airflow `HttpOperator.response_check` 가 409 에 도달 불가 — 멱등 트리거 2h 재시도 fail

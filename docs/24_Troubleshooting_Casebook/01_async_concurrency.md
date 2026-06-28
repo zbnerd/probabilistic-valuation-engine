@@ -3,6 +3,8 @@
 > CompletableFuture 체이닝, virtual-thread pinning, 분산락 예외 전파, backpressure, 코루틴 의존성.
 > 비동기 계약을 깨뜨리는 패턴들이 만든 장애들.
 
+**영향(Impact):** 비동기 체인 중 동기 `.get()`/`.join()` 이 가상스레드 carrier 를 pinning → worker-pool 고갈, 부하테스트 비결정적 저하. ~15 caller 파일·24 CRITICAL call-site.
+
 ---
 
 ## 1-1. 비동기 CF 체인 중 `.get()`/`.join()` blocking → 가상스레드 carrier pinning

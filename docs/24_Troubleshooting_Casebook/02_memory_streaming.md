@@ -3,6 +3,8 @@
 > 대용량 IGN(~600K) 처리 중 heap 압박·OOM·스트리밍 writer race.
 > "buffer 전체를 heap 에 올린다" 와 "동기 put 으로 writer thread 를 막는다" 패턴이 만든 장애.
 
+**영향(Impact):** 600K IGN 처리 중 120MB buffer 가 1GB heap 점유 → 2.5h run 사망; `catch(Exception)` 이 OOM 삼켜 진짜 원인 소실; 동기 `s3.putObject` 가 writer thread 5-10s/chunk block → fetcher 기아(150→50 files/s).
+
 ---
 
 ## 2-1. OCID 매핑 writer OOM — 120MB buffered string list (600K 엔트리)

@@ -25,6 +25,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import maple.common.parser.StreamingChunkParser
 import maple.externalapi.metrics.ChunkParserMetrics
+import maple.externalapi.poc.parquet.ParquetOcidMappingWriter
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -38,6 +39,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
 /**
@@ -167,6 +169,15 @@ class OcidLookupPhase(
             // Wait for the upload to complete before the temp file is deleted
             // (MinIO S3TransferManager reads from the file during upload).
             uploadFuture?.await()
+
+            // 1423 PoC: side-by-side Parquet write. NEVER affects production JSONL.
+            // We re-parse the gzip JSONL we just wrote and re-emit as Parquet+ZSTD.
+            // Any failure here is logged at WARN and does not propagate.
+            runCatching {
+                writeParquetSideBySide(tempFile, runId)
+            }.onFailure {
+                log.warn("[Scheduler] 1423 PoC Parquet side-by-side write failed (non-fatal)", it)
+            }
         } finally {
             // Clean up the temp file once the upload completes — or fails.
             // For MinIO success path the S3TransferManager uploads from the
@@ -201,6 +212,36 @@ class OcidLookupPhase(
                 createdAt = Instant.now(),
             ),
         )
+    }
+
+    /**
+     * Issue #1423 PoC: re-read the just-written gzip JSONL OCID mapping and emit
+     * a Parquet+ZSTD copy under `ocid-mapping-parquet/`. Purely side-by-side —
+     * the production JSONL.gz path is untouched. All exceptions are propagated
+     * to the caller; the caller wraps the call in `runCatching` so failures
+     * cannot affect the production pipeline.
+     */
+    private suspend fun writeParquetSideBySide(tempFile: java.nio.file.Path, runId: String) {
+        val parquetTempFile = Files.createTempDirectory("ocid-mapping-parquet-${runId}-").resolve("ocid-mapping.parquet")
+        try {
+            ParquetOcidMappingWriter(parquetTempFile.toFile()).use { pWriter ->
+                GZIPInputStream(Files.newInputStream(tempFile)).bufferedReader().useLines { lines ->
+                    for (line in lines) {
+                        if (line.isBlank()) continue
+                        val node = objectMapper.readTree(line)
+                        val userIgn = node.path("userIgn").asText()
+                        val ocidNode = node.path("ocid")
+                        val ocid = if (ocidNode.isMissingNode || ocidNode.isNull) null else ocidNode.asText()
+                        if (userIgn.isNotBlank()) pWriter.write(userIgn, ocid)
+                    }
+                }
+            }
+            val parquetKey = "ocid-mapping-parquet/ocid-mapping-$runId.parquet"
+            objectStorage.putFileAsync(parquetKey, parquetTempFile).await()
+            log.info("[Scheduler] 1423 PoC: wrote side-by-side Parquet to {}", parquetKey)
+        } finally {
+            runCatching { Files.deleteIfExists(parquetTempFile) }
+        }
     }
 
     /**

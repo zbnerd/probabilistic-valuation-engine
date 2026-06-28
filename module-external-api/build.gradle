@@ -55,6 +55,11 @@ dependencies {
 	testImplementation(libs.mockito.kotlin)
 	testImplementation(libs.assertj.core)
 	testImplementation(libs.kotlinx.coroutines.test)
+	// #1423 PoC: hadoop-common required only for test classpath because
+	// parquet-mr 1.17.1 bytecode references org.apache.hadoop.fs.PathFilter
+	// from ParquetReader$Builder.build(). Runtime stays clean — hadoop-common
+	// does not leak into the production runtime classpath.
+	testImplementation('org.apache.hadoop:hadoop-common:3.3.6')
 }
 
 // bootJar enabled — standalone executable application

@@ -11,6 +11,7 @@ import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPOutputStream
 
 data class ChunkStats(
@@ -68,6 +69,13 @@ class GzipJsonlChunkWriter(
     private val objectMapper: ObjectMapper,
     private val objectStorage: ObjectStorage,
     private val clock: Clock = Clock.systemUTC(),
+    /**
+     * Maximum time a chunk may stay open before a forced rotation. ADR-744
+     * introduces an idle-tick flush: when no records arrive for
+     * [maxChunkAgeMs], the writer loop closes the current chunk so the
+     * chunk-ready event fires without waiting for the size threshold.
+     */
+    private val maxChunkAgeMs: Long = 1000L,
 ) {
     private val tempFile: Path = Files.createTempFile(
         "gzip-chunk-${UUID.randomUUID()}-part-${partIndex.toString().padStart(6, '0')}-",
@@ -82,6 +90,7 @@ class GzipJsonlChunkWriter(
     private var recordCount: Int = 0
     private var uncompressedBytes: Long = 0
     private val startedAt: Instant = Instant.now(clock)
+    private val openedAtNanos: Long = System.nanoTime()
     private var closed: Boolean = false
 
     fun append(record: SnapshotChunkRecord.Success) {
@@ -107,7 +116,12 @@ class GzipJsonlChunkWriter(
     }
 
     fun shouldRotate(): Boolean =
-        recordCount >= maxRecords || uncompressedBytes >= maxUncompressedBytes
+        recordCount >= maxRecords ||
+            uncompressedBytes >= maxUncompressedBytes ||
+            (
+                recordCount > 0 &&
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - openedAtNanos) >= maxChunkAgeMs
+                )
 
     fun close(): ChunkStats {
         require(!closed) { "close() already called" }

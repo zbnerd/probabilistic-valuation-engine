@@ -48,6 +48,7 @@ class EndpointSinkFactory(
             objectMapper = objectMapper,
             clock = clock,
             objectStorage = objectStorage,
+            maxChunkAgeMs = endpointConfig.maxChunkAgeMs,
         )
         return ChunkedSnapshotSink(
             endpoint = endpoint,

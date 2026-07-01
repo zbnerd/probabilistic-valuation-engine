@@ -18,4 +18,6 @@ data class MinioProperties(
     val accessKey: String,
     val bucket: String,
     val pathStyleAccess: Boolean = true,
+    val partSizeBytes: Long = 8L * 1024 * 1024, // ADR-744: 8 MB multipart parts
+    val multiPartConcurrency: Int = 10, // ADR-744: bounded concurrent part uploads
 )

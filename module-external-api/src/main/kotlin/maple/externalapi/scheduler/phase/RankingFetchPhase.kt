@@ -73,6 +73,7 @@ class RankingFetchPhase(
                 objectMapper = objectMapper,
                 clock = java.time.Clock.systemUTC(),
                 objectStorage = objectStorage,
+                maxChunkAgeMs = endpointConfig.maxChunkAgeMs,
             ),
             eventPublisher = SnapshotSinkEventPublisher(
                 eventPublisher = SinkEventPublisher(rankingPublisher),

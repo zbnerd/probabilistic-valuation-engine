@@ -40,6 +40,13 @@ class ChunkFileManager(
     private val objectMapper: ObjectMapper,
     private val clock: Clock = Clock.systemUTC(),
     private val objectStorage: ObjectStorage,
+    /**
+     * ADR-744: idle-tick flush. When the writer loop drains the queue
+     * without receiving a record for [maxChunkAgeMs], the current chunk
+     * is closed so the chunk-ready Kafka event fires without waiting for
+     * the size threshold to be reached.
+     */
+    private val maxChunkAgeMs: Long = 1000L,
 ) {
     private val log = LoggerFactory.getLogger(ChunkFileManager::class.java)
 
@@ -112,6 +119,19 @@ class ChunkFileManager(
         }
         currentWriter = newChunkWriter(nextPartIndex++)
         return stats.takeIf { it.recordCount > 0 }
+    }
+
+    /**
+     * ADR-744: idle-tick flush hook. Called by [ChunkedSnapshotSink.runWriterLoop]
+     * when the queue has been empty for [maxChunkAgeMs]. Rotates the current
+     * chunk if it has records, noop otherwise. Returns the rotated [ChunkStats]
+     * (or null if the current chunk is empty).
+     */
+    fun idleFlush(): ChunkStats? {
+        if (!currentWriter.shouldRotate()) {
+            return null
+        }
+        return rotateChunk()
     }
 
     fun closeCurrentChunk(): ChunkStats? {
@@ -228,6 +248,7 @@ class ChunkFileManager(
             objectMapper = objectMapper,
             objectStorage = objectStorage,
             clock = clock,
+            maxChunkAgeMs = maxChunkAgeMs,
         )
     }
 

@@ -84,6 +84,8 @@ class StorageConfig {
         // pipeline is built around the async client). We share the same
         // endpoint / credentials / path-style config as the sync S3Client
         // bean so both clients talk to the same MinIO instance.
+        // ADR-744: tune multipart — 8 MB part size + 10 concurrent part
+        // uploads for single-node MinIO with 128 MB gzip chunks.
         return S3AsyncClient.builder()
             .endpointOverride(URI.create(props.endpoint))
             .region(Region.of(props.region))
@@ -95,6 +97,10 @@ class StorageConfig {
             .serviceConfiguration(
                 S3Configuration.builder().pathStyleAccessEnabled(props.pathStyleAccess).build()
             )
+            .multipartConfiguration {
+                it.minimumPartSizeInBytes(props.partSizeBytes)
+                it.apiCallBufferSizeInBytes(props.partSizeBytes)
+            }
             .overrideConfiguration(
                 ClientOverrideConfiguration.builder()
                     .retryPolicy(RetryPolicy.defaultRetryPolicy())
@@ -108,8 +114,9 @@ class StorageConfig {
     fun s3TransferManager(s3AsyncClient: S3AsyncClient): S3TransferManager =
         // Default S3TransferManager uses a 50-thread executor for both
         // upload-part submissions and completions, which is plenty for our
-        // 128MB chunk size. Part size defaults to 5MB → ~26 parts per
-        // 128MB upload, parallelised by TransferManager.
+        // 128MB chunk size. ADR-744: multipart tuning happens on the
+        // S3AsyncClient (above) — S3TransferManager itself does not
+        // expose partSize / multiPartConcurrency.
         S3TransferManager.builder()
             .s3Client(s3AsyncClient)
             .build()

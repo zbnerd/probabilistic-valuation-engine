@@ -15,6 +15,13 @@ class ChunkedSnapshotSink(
     private val queueCapacity: Int,
     private val fileManager: ChunkFileManager,
     private val eventPublisher: SnapshotSinkEventPublisher,
+    /**
+     * ADR-744: idle-tick flush interval. When the writer loop drains the
+     * queue for [maxChunkPollMs] without receiving a record, the current
+     * chunk is closed so the chunk-ready event fires without waiting for
+     * the size threshold. Mirrors [ChunkFileManager.idleTickTimeoutMs].
+     */
+    private val maxChunkPollMs: Long = 1000L,
     private val writerExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread.ofPlatform().name("snapshot-writer-$endpoint").unstarted(runnable)
     },
@@ -234,7 +241,19 @@ class ChunkedSnapshotSink(
     private fun runWriterLoop() {
         try {
             while (true) {
-                val record = queue.take()
+                // ADR-744: poll with timeout enables idle-tick flush.
+                // Under load, poll returns immediately when records arrive
+                // (same effective latency as take()). On idle, the timeout
+                // fires and we rotate the open chunk so chunk-ready events
+                // do not wait for the size threshold.
+                val record = queue.poll(maxChunkPollMs, TimeUnit.MILLISECONDS)
+                if (record == null) {
+                    val stats = fileManager.idleFlush()
+                    if (stats != null) {
+                        publishWhenUploaded(stats)
+                    }
+                    continue
+                }
                 when (record) {
                     is SnapshotChunkRecord.Success -> handleSuccess(record)
                     is SnapshotChunkRecord.PreSerialized -> handlePreSerialized(record)

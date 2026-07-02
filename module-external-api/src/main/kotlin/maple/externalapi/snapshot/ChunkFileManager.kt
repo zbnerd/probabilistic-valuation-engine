@@ -8,6 +8,7 @@ import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
+import java.util.zip.Deflater
 
 /**
  * Owns every object-storage concern of a snapshot-sink run:
@@ -40,6 +41,7 @@ class ChunkFileManager(
     private val objectMapper: ObjectMapper,
     private val clock: Clock = Clock.systemUTC(),
     private val objectStorage: ObjectStorage,
+    private val compressionLevel: Int = Deflater.BEST_SPEED,
 ) {
     private val log = LoggerFactory.getLogger(ChunkFileManager::class.java)
 
@@ -228,6 +230,7 @@ class ChunkFileManager(
             objectMapper = objectMapper,
             objectStorage = objectStorage,
             clock = clock,
+            compressionLevel = compressionLevel,
         )
     }
 

@@ -179,4 +179,98 @@ class GzipJsonlChunkWriterTest {
         val lines = raw.lines().filter { it.isNotBlank() }
         assertThat(lines).hasSize(recordCount)
     }
+
+    /**
+     * Microbench: gzip level 6 vs 1 on `appendPreSerialized` (the writer hot path),
+     * on a ~218KB compressible body matching the real item-equipment payload size
+     * (avg 218KB, 98% >100KB — the ceiling cause). Measures three axes:
+     *   - rate (rec/s, MB/s deflate)
+     *   - per-record latency (mean, p50, p95, p99)
+     *   - compression ratio (uncompressed/compressed from ChunkStats)
+     *
+     * Body is SYNTHETIC (real size + real code path, synthetic repetitive content).
+     * Real item-equip ratio @ level 6 is ~11.5:1 (endurance report); synthetic is
+     * approximate. The level 6→1 RATE ratio is data-robust (~3x) regardless.
+     *
+     * Writes results to /tmp/gzip_bench_result.txt (System.out forbidden in tests).
+     * Run: ./gradlew :module-external-api:test --tests '*GzipJsonlChunkWriterTest.bench*'
+     */
+    @Test
+    fun `bench gzip level 6 vs 1 latency rate compression`() {
+        val body = synthItemEquipBody(218 * 1024)
+        val storage = mock<ObjectStorage>()
+        whenever(storage.putFileAsync(any<String>(), any<Path>()))
+            .thenReturn(java.util.concurrent.CompletableFuture.completedFuture(PutResult("k", 1L, null)))
+        val n = 400
+
+        data class Result(
+            val level: Int, val recPerSec: Double, val mbPerSec: Double,
+            val meanUs: Double, val p50Us: Double, val p95Us: Double, val p99Us: Double,
+            val ratio: Double,
+        )
+
+        fun bench(level: Int): Result {
+            // warmup (separate writer, discarded)
+            GzipJsonlChunkWriter(
+                chunkKey = "runs/warmup/item-equipment/part-1.jsonl.gz",
+                partIndex = 1, maxRecords = Int.MAX_VALUE,
+                maxUncompressedBytes = 100L * 1024 * 1024 * 1024,
+                objectMapper = objectMapper, objectStorage = storage,
+                clock = Clock.systemUTC(), compressionLevel = level,
+            ).close()
+            // measured
+            val w = GzipJsonlChunkWriter(
+                chunkKey = "runs/bench/item-equipment/part-1.jsonl.gz",
+                partIndex = 1, maxRecords = Int.MAX_VALUE,
+                maxUncompressedBytes = 100L * 1024 * 1024 * 1024,
+                objectMapper = objectMapper, objectStorage = storage,
+                clock = Clock.systemUTC(), compressionLevel = level,
+            )
+            val rec = SnapshotChunkRecord.PreSerialized(
+                key = "k", endpoint = "item-equipment", keyType = "OCID",
+                httpStatus = 200, fetchedAt = Instant.EPOCH, bodyBytes = body,
+            )
+            val lats = LongArray(n)
+            val t0 = System.nanoTime()
+            repeat(n) { i ->
+                val s = System.nanoTime()
+                w.appendPreSerialized(rec)
+                lats[i] = System.nanoTime() - s
+            }
+            val secs = (System.nanoTime() - t0) / 1e9
+            val stats = w.close()
+            lats.sort()
+            fun pct(p: Double) = lats[minOf(n - 1, (n * p).toInt())].toDouble()
+            val ratio = if (stats.compressedBytes > 0) stats.uncompressedBytes.toDouble() / stats.compressedBytes else 0.0
+            return Result(
+                level, n / secs, n * body.size / secs / 1e6,
+                lats.average() / 1000.0, pct(0.5) / 1000.0, pct(0.95) / 1000.0, pct(0.99) / 1000.0, ratio,
+            )
+        }
+
+        val r6 = bench(6)
+        val r1 = bench(1)
+        val msg = buildString {
+            appendLine("gzip level 6 vs 1 — synthetic 218KB item-equip-sized body (hot path: appendPreSerialized)")
+            appendLine("             rate(rec/s)  rate(MB/s)  lat-mean  p50   p95   p99     ratio")
+            appendLine(String.format("level 6   :  %8.0f    %7.1f    %6.0f  %5.0f %5.0f %5.0f   %5.1f:1", r6.recPerSec, r6.mbPerSec, r6.meanUs, r6.p50Us, r6.p95Us, r6.p99Us, r6.ratio))
+            appendLine(String.format("level 1   :  %8.0f    %7.1f    %6.0f  %5.0f %5.0f %5.0f   %5.1f:1", r1.recPerSec, r1.mbPerSec, r1.meanUs, r1.p50Us, r1.p95Us, r1.p99Us, r1.ratio))
+            appendLine(String.format("delta     :  %.2fx rate, %.2fx lower mean latency, ratio %.1f:1->%.1f:1", r1.recPerSec / r6.recPerSec, r6.meanUs / r1.meanUs, r6.ratio, r1.ratio))
+            appendLine("body=$body bytes (synthetic). real item-equip ratio @ level 6 ~ 11.5:1 (endurance report)")
+        }
+        java.io.File("/tmp/gzip_bench_result.txt").writeText(msg)
+        // Guard: level 1 must be materially faster than level 6 on the writer
+        // hot path. Fails (surfacing the full comparison table in `msg`) if
+        // someone reverts the default to level 6 or breaks the level wiring.
+        assertThat(r1.recPerSec).`as`(msg).isGreaterThanOrEqualTo(r6.recPerSec * 1.5)
+    }
+
+    /** Synthesize a ~[targetBytes] compressible body resembling item-equipment JSON (~10:1 ratio). */
+    private fun synthItemEquipBody(targetBytes: Int): ByteArray {
+        val baos = java.io.ByteArrayOutputStream(targetBytes + 1024)
+        val frag = ("""{"item_name":"잔혀된검","slot":"장비","ocid":"abc123","stats":{""" +
+            """"str":999,"dex":888,"int":777,"luk":666,"hp":99999,"mp":99999,"attack":1234,"potential":"LEGENDARY","sockets":3}}""").toByteArray()
+        while (baos.size() < targetBytes) baos.write(frag)
+        return baos.toByteArray()
+    }
 }

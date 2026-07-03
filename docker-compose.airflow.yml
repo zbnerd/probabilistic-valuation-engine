@@ -16,12 +16,8 @@ services:
     labels:
       autoheal: "true"
     restart: always
-    # Bind to localhost only: airflow webserver/scheduler use network_mode: host
-    # and reach the DB via 127.0.0.1:5433. Binding 0.0.0.0 exposed this postgres
-    # to the internet on a public-IP host, which was the entry vector for the
-    # 2026-07-03 cryptominer compromise (superuser + weak pw → COPY PROGRAM).
-    ports:
-      - "127.0.0.1:5433:5432"
+    # No host publish: airflow reaches airflow-db:5432 on the maple-network
+    # bridge (ADR-744). Operator via `docker exec maple-airflow-db psql ...`.
     environment:
       POSTGRES_USER: airflow
       # No weak default: if AIRFLOW_DB_PASSWORD is unset, startup fails loudly
@@ -44,14 +40,19 @@ services:
     labels:
       autoheal: "true"
     restart: unless-stopped
-    network_mode: host
+    # On the maple-network bridge: reaches airflow-db/kafka/modules by service
+    # name. UI bound to 127.0.0.1 for operator SSH-tunnel access (ADR-744).
+    networks:
+      - maple-network
+    ports:
+      - "127.0.0.1:8180:8180"
     user: "0:0"
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@localhost:5433/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/airflow
       AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8180"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
       AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"
@@ -74,14 +75,17 @@ services:
     labels:
       autoheal: "true"
     restart: unless-stopped
-    network_mode: host
+    # On the maple-network bridge: reaches airflow-db/kafka/modules by service
+    # name (ADR-744).
+    networks:
+      - maple-network
     user: "0:0"
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@localhost:5433/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/airflow
       AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8180"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
       AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"

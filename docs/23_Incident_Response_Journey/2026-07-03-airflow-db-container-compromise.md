@@ -235,11 +235,34 @@ Not definitively confirmed. Ranked by likelihood with the supporting facts.
 
 ## 7. Root Cause Analysis
 
-### Direct Cause
-Internet-exposed PostgreSQL (`5432 → 0.0.0.0` on a public-IP host) with a weak
-superuser account enabled `COPY … TO PROGRAM` — a built-in superuser facility
-that executes an arbitrary shell command. That is remote code execution by an
-external attacker, who used it to drop and run the miner.
+> **Root cause = internet exposure combined with weak/default authentication.**
+> Neither alone would have sufficed: a `0.0.0.0` bind with strong credentials, or
+> `admin`/`admin` reachable only on `localhost`, would each have resisted this
+> attack. The compromise required *both* conditions at once.
+
+**Internet-exposed administrative services (`0.0.0.0` bind) combined with
+weak/default credentials enabled unauthorized access to the Airflow environment.**
+
+### Causal chain
+
+`0.0.0.0` bind → reachable from the internet → weak/default account
+(`admin`/`admin`, `airflow:airflow`) → attacker authenticates →
+`COPY … TO PROGRAM` (superuser shell exec) → `/tmp/kunt` dropper → miner →
+CPU ~700%.
+
+### Exposure (necessary condition — not the root cause on its own)
+
+- `5432 → 0.0.0.0` on a public-IP host; Airflow UI on host-network `0.0.0.0:8180`;
+  plus many sibling services (redis, kafka, minio, grafana, app modules) bound
+  the same way.
+- Exposure enabled *reachability*; it did not itself grant access.
+
+### Authentication failure (the other half of the root cause)
+
+- Default / weak credentials: Airflow `admin`/`admin`; postgres superuser with a
+  brute-forceable default password.
+- Superuser privilege: `airflow` role `rolsuper = t` → `COPY … TO PROGRAM`
+  became remote code execution, not merely data access.
 
 ### Contributing Factors
 - **Weak / default credentials** — the pipeline-test skill provisions

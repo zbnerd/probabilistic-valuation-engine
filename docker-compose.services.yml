@@ -30,8 +30,8 @@ services:
       options:
         max-size: "50m"
         max-file: "10"
-    ports:
-      - "8081:8081"
+    # No host publish: prometheus + airflow reach external-api:8081 on the
+    # maple-network bridge (ADR-744).
     environment:
       JAVA_OPTS: "-Xms512m -Xmx2g"
       SERVER_PORT: 8081
@@ -70,8 +70,7 @@ services:
       options:
         max-size: "50m"
         max-file: "10"
-    ports:
-      - "8082:8082"
+    # No host publish: prometheus + airflow reach calculator:8082 (ADR-744).
     environment:
       JAVA_OPTS: "-Xms512m -Xmx1g"
       SERVER_PORT: 8082
@@ -109,8 +108,7 @@ services:
       options:
         max-size: "50m"
         max-file: "10"
-    ports:
-      - "8083:8083"
+    # No host publish: prometheus + airflow reach synchronizer:8083 (ADR-744).
     environment:
       JAVA_OPTS: "-Xms512m -Xmx1g"
       SERVER_PORT: 8083
@@ -151,8 +149,7 @@ services:
       options:
         max-size: "50m"
         max-file: "10"
-    ports:
-      - "8084:8084"
+    # No host publish: prometheus + airflow reach cleanup:8084 (ADR-744).
     environment:
       JAVA_OPTS: "-Xms512m -Xmx1g"
       SERVER_PORT: 8084

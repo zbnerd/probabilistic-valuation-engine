@@ -8,13 +8,13 @@ services:
       autoheal: "true"
     container_name: maple-prometheus
     restart: always
-    # network_mode: host — prometheus reaches Spring Boot modules on the
-    # host via `localhost:PORT`. Without this, the container's localhost
-    # resolves to the container itself (no services on 8081/8082/8083/8084)
-    # and `host-gateway` resolves to the docker0 bridge IP which doesn't
-    # route host-bound ports. Same pattern as maple-airflow-* in
-    # docker-compose.airflow.yml. Verified 2026-06-19.
-    network_mode: host
+    # On the maple-network bridge: scrapes modules by service name
+    # (external-api:8081, cadvisor:8080, …). UI bound to 127.0.0.1 for operator
+    # SSH-tunnel access — not internet-facing. See ADR-744.
+    networks:
+      - maple-network
+    ports:
+      - "127.0.0.1:9090:9090"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -47,8 +47,7 @@ services:
       - /dev/disk/:/dev/disk:ro
     devices:
       - /dev/kmsg
-    ports:
-      - "8086:8080"
+    # No host publish: prometheus scrapes cadvisor:8080 on the bridge (ADR-744).
     labels:
       logging: "promtail"
     networks:
@@ -62,8 +61,8 @@ services:
       autoheal: "true"
     container_name: maple-postgres
     restart: always
-    ports:
-      - "5432:5432"
+    # No host publish: app modules reach postgres:5432 on the bridge (ADR-744).
+    # Operator psql via `docker exec maple-postgres psql -U maple ...`.
     environment:
       POSTGRES_USER: maple
       POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
@@ -88,8 +87,9 @@ services:
       autoheal: "true"
     container_name: maple-grafana
     restart: always
+    # Operator UI: 127.0.0.1 only (SSH tunnel), not internet-facing (ADR-744).
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
@@ -111,13 +111,17 @@ services:
 
   # Kafka (Message Queue)
   kafka:
-    image: confluentinc/cp-kafka:latest
-    labels:
-      autoheal: "true"
+    image: confluentinc/cp-kafka:7.7.0
+    # autoheal disabled: kafka's cold boot (KRaft election + creating 50
+    # __consumer_offsets partitions) exceeds the healthcheck start_period, and
+    # autoheal's `docker restart` (SIGTERM → controlled shutdown) kept killing it
+    # before it stabilized. Re-enable once cold-boot time is bounded (ADR-744).
     container_name: maple-kafka
     restart: always
+    # HOST listener (advertised localhost:9092) bound to loopback only — not
+    # internet-facing. Bridge consumers use kafka:29092.
     ports:
-      - "9092:9092"
+      - "127.0.0.1:9092:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
@@ -126,7 +130,12 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
       KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,HOST://0.0.0.0:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CLUSTER_ID: maple-kafka-cluster
+      # CLUSTER_ID (un-prefixed) is what the confluent entrypoint reads for
+      # `kafka-storage format --cluster-id=$CLUSTER_ID`. The old KAFKA_CLUSTER_ID
+      # (prefixed) never populated it → empty cluster id on cold boot → broker
+      # self-initiated controlled shutdown ~30s after start. Pre-existing bug
+      # exposed by the ADR-744 cold restart. Valid base64 KRaft uuid.
+      CLUSTER_ID: LWHgQhf5RlGm9OYjHzHkxQ
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -142,9 +151,12 @@ services:
     depends_on:
       - postgres
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1"]
+      # TCP-port probe via bash /dev/tcp — `kafka-broker-api-versions` consistently
+      # exceeds 10s timeout on this box (verified 2026-07-03, 13 consecutive
+      # timeouts while kafka was actually serving). Port-accept = listener up.
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/localhost/9092' >/dev/null 2>&1 || exit 1"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
       start_period: 60s
 
@@ -155,8 +167,7 @@ services:
       autoheal: "true"
     container_name: maple-redis
     restart: always
-    ports:
-      - "6379:6379"
+    # No host publish: synchronizer reaches redis:6379 on the bridge (ADR-744).
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -176,8 +187,7 @@ services:
       autoheal: "true"
     container_name: maple-loki
     restart: always
-    ports:
-      - "3100:3100"
+    # No host publish: grafana reaches loki:3100 on the bridge (ADR-744).
     command: -config.file=/etc/loki/loki-config.yaml
     volumes:
       - ./docker/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
@@ -233,9 +243,10 @@ services:
       - minio_data:/data
     networks:
       - maple-network
+    # S3 API (9000) is bridge-only: app modules use minio:9000 (ADR-744).
+    # Console (9001) bound to 127.0.0.1 for operator SSH-tunnel access.
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9001:9001"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s

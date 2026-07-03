@@ -22,7 +22,9 @@
   the miner.
 - **Impact:** Confined to the Airflow metadata container (CPU theft + miner/C2
   residency). No application or customer data. Host and application database were
-  inspected and **no compromise evidence was found** (with a stated caveat).
+  inspected and **no compromise evidence was found** (with a stated caveat). The
+  realized payload was a miner, but the achieved capability was arbitrary code
+  execution — see §8 (payload vs capability).
 - **Recovery:** Container isolated, artifacts + hashes preserved, infected volume
   destroyed, service recreated with `127.0.0.1`-only port binding and a strong
   random password. C2 cut.
@@ -343,6 +345,25 @@ CPU ~700%.
 **Data sensitivity (fortunate):** personal/learning project; no PII, payment, or
 customer financial data. The blast radius of a confirmed data exfil would have
 been low. *(This does not reduce the need for credential rotation — see §9.)*
+
+### Severity: payload vs capability
+
+The observed payload was a **cryptominer** — a noisy, low-harm outcome. But the
+*capability* the attacker achieved was **arbitrary code execution as the postgres
+superuser inside the container** (`COPY … TO PROGRAM`). That capability is
+payload-agnostic: the same access could have deployed **ransomware**, exfiltrated
+the metadata DB (DAG configs, connection strings, Airflow variables — including
+any secrets stored there), planted a **persistent backdoor**, or pivoted toward
+the host.
+
+> "Able to install a miner" means "able to install ransomware, exfiltrate data,
+> or plant a backdoor." The miner was a payload choice, not a capability ceiling.
+
+The low *realized* impact was a function of the attacker's payload choice and the
+project's low data sensitivity — **not** a limit on what was possible. This is
+why the remediation treats anything the superuser process could read as
+potentially compromised (credential rotation) and recommends a host depth-check,
+even though only a miner was observed.
 
 ---
 

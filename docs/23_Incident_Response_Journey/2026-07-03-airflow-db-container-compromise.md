@@ -1,4 +1,4 @@
-# Incident Report — Airflow PostgreSQL Container Compromise
+# Security Incident Report — Airflow PostgreSQL Container Cryptominer Compromise
 
 - **Date:** 2026-07-03
 - **Severity:** High (active cryptominer with established C2)
@@ -10,6 +10,25 @@
 > **Reading convention.** Every claim below is tagged **FACT** (verified by a command
 > output captured during the investigation) or **HYPOTHESIS** (plausible but not
 > confirmed by direct evidence). Where evidence was lost, the limitation is stated.
+
+---
+
+## Executive Summary
+
+- **Cause:** A cryptominer compromised the Airflow PostgreSQL metadata container
+  through an internet-exposed postgres port (`5432 → 0.0.0.0` on a public-IP host)
+  protected by a weak superuser password. Postgres `COPY … TO PROGRAM`
+  (superuser shell execution) was abused to drop a launcher, which fetched and ran
+  the miner.
+- **Impact:** Confined to the Airflow metadata container (CPU theft + miner/C2
+  residency). No application or customer data. Host and application database were
+  inspected and **no compromise evidence was found** (with a stated caveat).
+- **Recovery:** Container isolated, artifacts + hashes preserved, infected volume
+  destroyed, service recreated with `127.0.0.1`-only port binding and a strong
+  random password. C2 cut.
+- **Lessons:** The earlier "parallel-worker leak" diagnosis was wrong; AI-generated
+  infrastructure defaults (`0.0.0.0` binds, `admin`/`admin`, host networking) need a
+  security-review pass; databases must never be exposed directly to the internet.
 
 ---
 
@@ -65,12 +84,12 @@ was found** (with the caveat that "not found by a basic check" is weaker than
 ### T3 — Host integrity check (FACT)
 - `/etc/cron.hourly/free` running as root was **briefly mis-flagged as malware**.
   Reading the file revealed `echo 1 > /proc/sys/vm/drop_caches` — a **legitimate**
-  cache-flush cron. *(Correction logged; see §7.)*
+  cache-flush cron. *(Correction logged; see §10.)*
 - Host `/tmp`, `/var/tmp`, `/dev/shm`: clean of miner artifacts.
 - `docker.sock`: `srw-rw---- root:docker` (proper, not world-writable).
 - No root crontab; cron directories contained only standard Ubuntu entries.
 - `pgrep` for miner/bot names: none.
-- **Conclusion:** no host-level compromise evidence. *(Caveat in §9.)*
+- **Conclusion:** no host-level compromise evidence. *(Caveat in §13.)*
 
 ### T4 — Application database check (FACT)
 `maple-postgres` (the operational data DB, also exposed `5432 → 0.0.0.0`):
@@ -145,7 +164,40 @@ and established pool connections.
 
 ---
 
-## 4. Entry-Vector Analysis
+## 4. Indicators of Compromise (IOC)
+
+| Type | Indicator | Context |
+|------|-----------|---------|
+| File path | `/tmp/kunt` | launcher script (sha256 `f16b6f7a…`) |
+| File path | `/tmp/postgresql` | miner binary (sha256 `77d764ce…`) |
+| File path | `/tmp/systemd` | watchdog binary (sha256 `6096e65f…`) |
+| IPv4 | `91.188.254.59` | dropper host (`/bot` download over HTTP) |
+| Endpoint | `5.255.106.100:44999` | C2 / mining pool |
+| Endpoint | `5.255.115.190:48996` | C2 / mining pool |
+| Argument | `database1` | bot campaign identifier passed to `./bot` |
+| Behavioral | `wget`/`curl http://…/bot; chmod 777` | dropper signature |
+| Behavioral | process named `postgresql`/`systemd` under `/tmp` with dangling `/proc/<pid>/exe` | masquerade + self-delete |
+
+---
+
+## 5. MITRE ATT&CK Mapping
+
+| Stage | Technique | ID | Evidence |
+|-------|-----------|----|----------|
+| Initial Access | Valid Accounts | T1078 | `airflow` superuser + weak/default password on exposed port |
+| Initial Access | Exploit Public-Facing Application | T1190 | `COPY … TO PROGRAM` via internet-exposed postgres |
+| Execution | Command and Scripting Interpreter: Unix Shell | T1059.004 | `/tmp/kunt` runs `/bin/sh`; `./bot database1` |
+| Persistence | Create/Modify System Process | T1543 | `/tmp/systemd` (Rust/tokio watchdog) respawns the miner |
+| Persistence | Boot/Logon Initialization Scripts | T1037 | `/tmp/kunt` re-drops at every container start |
+| Defense Evasion | Masquerading | T1036 | binaries named `postgresql` / `systemd` to blend in |
+| Defense Evasion | File Deletion (indicator removal) | T1070.004 | `/proc/<pid>/exe` dangles (binary self-deleted after exec) |
+| Command & Control | Application Layer Protocol | T1071 | HTTP dropper fetch + mining protocol over the pool link |
+| Command & Control | Non-Standard Port | T1571 | high ports `44999` / `48996` |
+| Resource Hijacking | Resource Hijacking (cryptomining) | T1496 | ~655–780% CPU burn + established pool connections |
+
+---
+
+## 6. Entry-Vector Analysis
 
 Not definitively confirmed. Ranked by likelihood with the supporting facts.
 
@@ -181,7 +233,38 @@ Not definitively confirmed. Ranked by likelihood with the supporting facts.
 
 ---
 
-## 5. Impact
+## 7. Root Cause Analysis
+
+### Direct Cause
+Internet-exposed PostgreSQL (`5432 → 0.0.0.0` on a public-IP host) with a weak
+superuser account enabled `COPY … TO PROGRAM` — a built-in superuser facility
+that executes an arbitrary shell command. That is remote code execution by an
+external attacker, who used it to drop and run the miner.
+
+### Contributing Factors
+- **Weak / default credentials** — the pipeline-test skill provisions
+  `admin`/`admin` for Airflow and the compose default postgres password was the
+  brute-forceable `airflow`.
+- **Host networking** — Airflow webserver/scheduler used `network_mode: host`,
+  publishing the UI port on all interfaces instead of an internal bridge.
+- **Broad public exposure** — many services (postgres, redis, kafka, minio,
+  grafana, airflow UI, app modules) were bound `0.0.0.0` on a public IP.
+- **Unreviewed AI-generated infrastructure defaults** — `0.0.0.0` binds and
+  default credentials shipped without a security review pass.
+
+### Preventive Controls (recommended)
+- **Reverse proxy / VPN-only** for management UIs (Airflow, Grafana, MinIO).
+- **Secrets manager + strong random credentials**; no default accounts.
+- **Firewall default-deny inbound** — only `22`/`80`/`443` (+ VPN) public.
+- **Least-privilege Docker networking** — databases on an internal bridge, never
+  published to the host.
+- **Reduce DB attack surface** — run app roles as non-superuser; disable
+  `COPY … PROGRAM`-class privileges where possible.
+- **Periodic exposure audit** — alert on any `0.0.0.0` bind for non-web services.
+
+---
+
+## 8. Impact
 
 **Confirmed affected:**
 - `maple-airflow-db` container: CPU theft, miner + C2 residency, planted `/tmp`
@@ -196,13 +279,13 @@ Not definitively confirmed. Ranked by likelihood with the supporting facts.
 
 **Data sensitivity (fortunate):** personal/learning project; no PII, payment, or
 customer financial data. The blast radius of a confirmed data exfil would have
-been low. *(This does not reduce the need for credential rotation — see §6.)*
+been low. *(This does not reduce the need for credential rotation — see §9.)*
 
 ---
 
-## 6. Remediation
+## 9. Remediation
 
-### 6.1 Applied (FACT — verified post-change)
+### 9.1 Applied (FACT — verified post-change)
 1. Stopped airflow-db + webserver + scheduler → cut active C2.
 2. Preserved artifacts + hashes + `strings` to `evidence/airflow-db-20260703/`.
 3. Removed infected container + nuked `…_airflow_db_data` volume (destroyed
@@ -216,7 +299,7 @@ been low. *(This does not reduce the need for credential rotation — see §6.)*
 5. `AIRFLOW_DB_PASSWORD` (strong random) appended to `.env`.
 6. Recreated clean; verified `/tmp` empty, CPU 0.04%, no C2, strong-pw TCP auth OK.
 
-### 6.2 Pending (operator action required)
+### 9.2 Pending (operator action required)
 - **Rotate credentials** — treat anything the miner could read as leaked:
   Airflow connections/variables, `NEXON_API_KEY`, DB passwords (incl. app DB),
   SSH keys, MinIO root creds. The miner ran as the `airflow` DB superuser; if it
@@ -235,7 +318,31 @@ been low. *(This does not reduce the need for credential rotation — see §6.)*
 
 ---
 
-## 7. Mistakes & Corrections
+## 10. What Was Changed Afterward
+
+### Applied during this incident (FACT)
+- Removed the infected airflow-db container and destroyed its volume (persistence
+  + planted objects gone).
+- Recreated airflow-db with **`127.0.0.1`-only** port binding — the internet
+  exposure that enabled the breach is closed.
+- Replaced the weak/default postgres password with a **strong random**
+  `AIRFLOW_DB_PASSWORD`; removed the brute-forceable default from compose.
+- Added `/evidence/` to `.gitignore` so forensic artifacts are never committed.
+- Recorded this report (FACT/HYPOTHESIS-disciplined) for future reference and
+  portfolio use.
+
+### Planned hardening (operator follow-up — not yet done)
+- Rotate all credentials that the miner could have read (API keys, DB passwords,
+  SSH keys, MinIO root).
+- Remove default accounts; bind management UIs to localhost/VPN; enable 2FA.
+- Move all databases off public binds to an internal Docker network.
+- Apply firewall default-deny + C2 egress blocks.
+- Establish a recurring security checklist (exposure audit, credential rotation,
+  container image scan) to prevent recurrence.
+
+---
+
+## 11. Mistakes & Corrections
 
 1. **Wrong initial diagnosis (parallel-worker leak).** A prior session saw
    postgres-named processes + high CPU and concluded "parallel-worker leak,"
@@ -261,7 +368,7 @@ been low. *(This does not reduce the need for credential rotation — see §6.)*
 
 ---
 
-## 8. Lessons Learned
+## 12. Lessons Learned
 
 **Technical**
 - Container ≠ host — but a superuser shell-exec in a container is a serious pivot
@@ -281,7 +388,7 @@ been low. *(This does not reduce the need for credential rotation — see §6.)*
 
 ---
 
-## 9. Confidence & Limitations
+## 13. Confidence & Limitations
 
 - **High confidence:** the airflow-db container was compromised by a cryptominer
   (binaries, hashes, dropper, live C2, anti-forensics markers — all directly

@@ -55,6 +55,46 @@ was found** (with the caveat that "not found by a basic check" is weaker than
 
 ## 2. Timeline
 
+### 2.1 Incident timeline at a glance (UTC)
+
+| Time (UTC) | Event | Basis | Confidence |
+|------------|-------|-------|------------|
+| ≤ 2026-07-02 | First compromise (estimated) | prior session already observed 655–780% CPU and **misdiagnosed** it as a parallel-worker leak (PR #1454) | ESTIMATE — DB auth logs lost, exact entry unknown |
+| 2026-07-02 23:42 | Parallel-disable "fix" committed (wrong diagnosis) | git `655c4fcc1` | FACT |
+| 2026-07-03 00:14 | `/tmp/kunt` dropper (re-infection) | file mtime `00:14:16Z` | FACT |
+| 2026-07-03 00:20–00:21 | `/tmp/postgresql` miner + `/tmp/systemd` watchdog dropped | file mtimes | FACT |
+| ~2026-07-03 00:30 | 655% re-observed **despite** `max_parallel_workers=0` → forensics begun | session record | ESTIMATE (±10 min) |
+| ~2026-07-03 00:5x | `docker stop` isolation → CPU→0, C2 cut | session record | FACT (time ±) |
+| 2026-07-03 01:25 | Volume destroyed + `127.0.0.1` bind + strong password redeploy | container `Created 01:25:10Z` | FACT |
+
+> **Timezone note.** The `/tmp/kunt` mtime `00:14 UTC` equals `09:14 KST`. A
+> superficial "00:14 → 09:00" reading is a timezone artifact, not a 9-hour gap —
+> this-session detection followed the dropper by ~16 minutes. The genuine dwell
+> time came from the prior session's misdiagnosis (see MTTD below).
+
+### 2.2 Four-phase breakdown
+
+| Phase | Time (UTC) | Basis |
+|-------|------------|-------|
+| **Occurrence** (estimated) | ≤ 2026-07-02 | compromise predated this session; exact first entry unknown |
+| **Detection** (correct identification) | ~2026-07-03 00:30 | 655% persisted with parallel disabled → forensics |
+| **Containment** | ~2026-07-03 00:5x | container stopped, C2 severed |
+| **Recovery** | 2026-07-03 01:25 | clean volume + localhost bind + strong pw |
+
+### 2.3 Detection metrics (MTTD / MTTC / MTTR)
+
+- **MTTD (this-session re-infection → detection):** ~16 min. Lucky — the box was
+  being actively benchmarked when the dropper ran, so the CPU spike was caught
+  immediately.
+- **MTTD (true: first compromise → correct identification):** ~18–24 h. Dominated
+  by the prior session's parallel-worker-leak misdiagnosis, which let the miner
+  run for a day while the "fix" (`max_parallel_workers=0`) had no effect. **This
+  is the real detection gap and the main lesson.**
+- **MTTC (detection → containment):** ~30 min (forensics → `docker stop`).
+- **MTTR (containment → recovery):** ~30 min (volume nuke → clean redeploy + verify).
+
+### 2.4 Narrative
+
 ### T0 — Symptom (FACT)
 - `maple-airflow-db` CPU steady at **655–780%** (`docker stats`).
 - `pg_stat_activity` showed only idle Airflow queries — nothing active enough to

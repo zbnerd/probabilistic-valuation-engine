@@ -5,7 +5,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.stereotype.Component
 
 @Component
-class SnapshotVolumeMetrics(registry: MeterRegistry) {
+class SnapshotVolumeMetrics(private val registry: MeterRegistry) {
 
     private val compressedBytesTotal = registry.counter("external_api_snapshot_compressed_bytes_total")
     private val uncompressedBytesTotal = registry.counter("external_api_snapshot_uncompressed_bytes_total")
@@ -32,5 +32,18 @@ class SnapshotVolumeMetrics(registry: MeterRegistry) {
         if (compressedBytes > 0) {
             compressionRatioSummary.record(uncompressedBytes.toDouble() / compressedBytes.toDouble())
         }
+    }
+
+    /**
+     * Per-endpoint user counter — increments by [count] when a chunk has been
+     * successfully converted and published (snapshotVolume log line is the
+     * success boundary). Lets ops derive per-endpoint user throughput via
+     * `irate(external_api_users_completed_total{endpoint=...}[5m])`.
+     */
+    fun recordUsersCompleted(endpoint: String, count: Long) {
+        io.micrometer.core.instrument.Counter.builder("external_api_users_completed_total")
+            .tag("endpoint", endpoint)
+            .register(registry)
+            .increment(count.toDouble())
     }
 }

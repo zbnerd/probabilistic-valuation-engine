@@ -32,6 +32,7 @@ class SnapshotSinkEventPublisher(
         val chunkId = String.format("part-%06d", stats.partIndex)
         val ratio = CompressionUtils.ratioString(stats.uncompressedBytes, stats.compressedBytes)
         volumeMetrics.recordChunk(stats.compressedBytes, stats.uncompressedBytes, stats.recordCount.toLong())
+        volumeMetrics.recordUsersCompleted(endpoint, stats.recordCount.toLong())
         log.info(
             "[snapshotVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",
             runId,

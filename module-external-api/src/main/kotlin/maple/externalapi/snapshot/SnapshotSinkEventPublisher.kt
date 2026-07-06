@@ -32,7 +32,13 @@ class SnapshotSinkEventPublisher(
         val chunkId = String.format("part-%06d", stats.partIndex)
         val ratio = CompressionUtils.ratioString(stats.uncompressedBytes, stats.compressedBytes)
         volumeMetrics.recordChunk(stats.compressedBytes, stats.uncompressedBytes, stats.recordCount.toLong())
-        volumeMetrics.recordUsersCompleted(endpoint, stats.recordCount.toLong())
+        // Endpoint factory passes lowercase ("ranking-overall"); Micrometer tags
+        // emitted by recordNexonBodyReceived use ExternalApiEndpoint.name which is
+        // uppercase ("RANKING_OVERALL"). Normalize once here so the two counters
+        // share one tag value, which makes `users_completed_total / nexon_total_ms_total`
+        // math work per endpoint.
+        val metricEndpoint = endpoint.uppercase().replace('-', '_')
+        volumeMetrics.recordUsersCompleted(metricEndpoint, stats.recordCount.toLong())
         log.info(
             "[snapshotVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",
             runId,

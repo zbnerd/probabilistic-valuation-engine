@@ -11,6 +11,7 @@ import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.zip.Deflater
 import java.util.zip.GZIPOutputStream
 
 data class ChunkStats(
@@ -68,6 +69,16 @@ class GzipJsonlChunkWriter(
     private val objectMapper: ObjectMapper,
     private val objectStorage: ObjectStorage,
     private val clock: Clock = Clock.systemUTC(),
+    /**
+     * Deflater compression level for the gzip stream. Defaults to
+     * [Deflater.BEST_SPEED] (level 1): the writer thread is a single-threaded
+     * CPU-bound gzip stage on the snapshot hot path, and large payloads
+     * (item-equipment ~218KB avg) make level-6 deflate the throughput ceiling.
+     * Level 1 is ~2-3x faster for ~15% larger output; downstream consumers
+     * (calculator/synchronizer) read gzip transparently regardless of level.
+     * See [docs/05_Reports/05_06_Load_Tests/ENDURANCE_THROUGHPUT_CEILING_20260702.md].
+     */
+    private val compressionLevel: Int = Deflater.BEST_SPEED,
 ) {
     private val tempFile: Path = Files.createTempFile(
         "gzip-chunk-${UUID.randomUUID()}-part-${partIndex.toString().padStart(6, '0')}-",
@@ -78,7 +89,14 @@ class GzipJsonlChunkWriter(
         StandardOpenOption.WRITE,
         StandardOpenOption.TRUNCATE_EXISTING,
     )
-    private val gzipped = GZIPOutputStream(fileOut)
+    // GZIPOutputStream has no level constructor; subclass to set the
+    // underlying Deflater's level (protected `def` field) after the gzip
+    // header is written. setLevel applies to all subsequent deflate calls.
+    private val gzipped: GZIPOutputStream = object : GZIPOutputStream(fileOut) {
+        init {
+            def.setLevel(compressionLevel)
+        }
+    }
     private var recordCount: Int = 0
     private var uncompressedBytes: Long = 0
     private val startedAt: Instant = Instant.now(clock)

@@ -132,3 +132,6 @@ module-*/logs/
 
 # Local copied/generated resource data
 module-calculator/src/main/resources/data/
+
+# Forensic artifacts (malware binaries) — never commit
+/evidence/

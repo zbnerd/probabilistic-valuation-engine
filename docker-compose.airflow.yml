@@ -4,14 +4,25 @@ services:
   airflow-db:
     image: postgres:17-alpine
     container_name: maple-airflow-db
+    # Disable parallel query: airflow-db is metadata-only (tiny tables) and
+    # postgres parallel workers leak here (orphaned live workers spin ~700%
+    # CPU, recur after restart, not in pg_stat_activity). max_parallel_workers=0
+    # prevents spawns → leak source removed. Survives container/volume recreate
+    # (ALTER SYSTEM in postgresql.auto.conf does not). See project_airflow_db_parallel_leak.
+    command: >
+      postgres
+      -c max_parallel_workers=0
+      -c max_parallel_workers_per_gather=0
     labels:
       autoheal: "true"
     restart: always
-    ports:
-      - "5433:5432"
+    # No host publish: airflow reaches airflow-db:5432 on the maple-network
+    # bridge (ADR-744). Operator via `docker exec maple-airflow-db psql ...`.
     environment:
       POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow}
+      # No weak default: if AIRFLOW_DB_PASSWORD is unset, startup fails loudly
+      # rather than silently using the brute-forceable "airflow" default.
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:?AIRFLOW_DB_PASSWORD required}
       POSTGRES_DB: airflow
     volumes:
       - airflow_db_data:/var/lib/postgresql/data
@@ -29,14 +40,19 @@ services:
     labels:
       autoheal: "true"
     restart: unless-stopped
-    network_mode: host
+    # On the maple-network bridge: reaches airflow-db/kafka/modules by service
+    # name. UI bound to 127.0.0.1 for operator SSH-tunnel access (ADR-744).
+    networks:
+      - maple-network
+    ports:
+      - "127.0.0.1:8180:8180"
     user: "0:0"
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@localhost:5433/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/airflow
       AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8180"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
       AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"
@@ -59,14 +75,17 @@ services:
     labels:
       autoheal: "true"
     restart: unless-stopped
-    network_mode: host
+    # On the maple-network bridge: reaches airflow-db/kafka/modules by service
+    # name (ADR-744).
+    networks:
+      - maple-network
     user: "0:0"
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@localhost:5433/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/airflow
       AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8180"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
       AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"

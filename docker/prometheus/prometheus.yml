@@ -17,21 +17,16 @@ alerting:
 
 scrape_configs:
   # ============================================
-  # Spring Boot Modules
-  # Spring Boot modules run on the Docker host (not in containers), so we
-  # reach them via `localhost:PORT`. The corresponding
-  # `extra_hosts: localhost:host-gateway` mapping is set in
-  # docker-compose.yml so Docker Linux resolves `localhost` to
-  # the host's gateway IP. Verified 2026-06-19: bare `localhost` resolves
-  # to the prometheus container itself, not the host, so all 5 module
-  # targets were health=down until this fix.
+  # Spring Boot Modules — reached by service name on the maple-network bridge
+  # (prometheus is bridge-attached; modules are containers in
+  # docker-compose.services.yml). See ADR-744.
   # ============================================
   - job_name: 'external-api'
     scrape_interval: 5s
     scrape_timeout: 3s
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['localhost:8081']
+      - targets: ['external-api:8081']
         labels:
           application: 'external-api'
 
@@ -40,7 +35,7 @@ scrape_configs:
     scrape_timeout: 3s
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['localhost:8082']
+      - targets: ['calculator:8082']
         labels:
           application: 'calculator'
 
@@ -49,7 +44,7 @@ scrape_configs:
     scrape_timeout: 3s
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['localhost:8083']
+      - targets: ['synchronizer:8083']
         labels:
           application: 'synchronizer'
 
@@ -58,7 +53,7 @@ scrape_configs:
     scrape_timeout: 3s
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['localhost:8084']
+      - targets: ['cleanup:8084']
         labels:
           application: 'cleanup'
 
@@ -74,13 +69,13 @@ scrape_configs:
 
   # ============================================
   # cAdvisor - per-container metrics (restart-rate alerting, ADR-733)
-  # Reached via the host port (prometheus uses network_mode: host).
+  # Reached by service name on the bridge (prometheus bridge-attached, ADR-744).
   # ============================================
   - job_name: 'cadvisor'
     scrape_interval: 15s
     scrape_timeout: 10s
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['localhost:8086']
+      - targets: ['cadvisor:8080']
         labels:
           component: 'containers'

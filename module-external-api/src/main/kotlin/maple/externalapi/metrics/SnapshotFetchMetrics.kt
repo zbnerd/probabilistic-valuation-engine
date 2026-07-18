@@ -1,5 +1,6 @@
 package maple.externalapi.metrics
 
+import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
@@ -14,6 +15,8 @@ class SnapshotFetchMetrics(private val registry: MeterRegistry) {
             .record(duration)
         summary("external_api_nexon_response_bytes", endpoint)
             .record(bytes.toDouble())
+        counter("external_api_nexon_total_ms_total", endpoint)
+            .increment(duration.toMillis().toDouble())
     }
 
     fun recordNexonFailure(endpoint: String, duration: Duration) {
@@ -45,6 +48,10 @@ class SnapshotFetchMetrics(private val registry: MeterRegistry) {
         .register(registry)
 
     private fun summary(name: String, endpoint: String): DistributionSummary = DistributionSummary.builder(name)
+        .tag("endpoint", endpoint)
+        .register(registry)
+
+    private fun counter(name: String, endpoint: String): Counter = Counter.builder(name)
         .tag("endpoint", endpoint)
         .register(registry)
 }

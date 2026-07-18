@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "SnapshotChunk",
+  "namespace": "maple.common.avro",
+  "doc": "External API snapshot chunk record. Producer: PhaseRunners. Consumer: Calculator.SnapshotChunkProcessor, Synchronizer. See issue 1425.",
+  "fields": [
+    {"name": "runId", "type": "string", "doc": "External API run identifier. Frozen field ID: 1."},
+    {"name": "endpoint", "type": {"type": "enum", "name": "Endpoint", "symbols": ["RANKING", "CHARACTER_BASIC", "ITEM_EQUIPMENT", "OCID_LOOKUP"]}, "doc": "Nexon endpoint. Frozen field ID: 2."},
+    {"name": "status", "type": {"type": "enum", "name": "FetchStatus", "symbols": ["SUCCESS", "FAILURE", "PRE_SERIALIZED", "CLOSE_SIGNAL"]}, "doc": "Record variant. Frozen field ID: 3."},
+    {"name": "body", "type": ["null", "string"], "default": null, "doc": "Inline JSON body when success and small. Frozen field ID: 4."},
+    {"name": "bodyBytes", "type": ["null", "bytes"], "default": null, "doc": "Base64-decoded body when large. Frozen field ID: 5."},
+    {"name": "httpStatus", "type": ["null", "int"], "default": null, "doc": "HTTP status from Nexon. Frozen field ID: 6."},
+    {"name": "errorMessage", "type": ["null", "string"], "default": null, "doc": "Failure error message. Frozen field ID: 7."},
+    {"name": "schema_version", "type": "int", "default": 1, "doc": "Schema version. Frozen field ID: 8."}
+  ]
+}

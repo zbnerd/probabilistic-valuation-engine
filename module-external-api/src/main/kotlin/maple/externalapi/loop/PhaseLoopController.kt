@@ -13,8 +13,11 @@ import maple.externalapi.scheduler.ExternalApiScheduler
 import maple.externalapi.scheduler.PhaseStopSignal
 import maple.externalapi.scheduler.phase.RunIdGenerator
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.task.AsyncTaskExecutor
 import org.springframework.stereotype.Component
+
+private const val MILLIS_PER_SECOND = 1000L
 
 /**
  * Owns per-phase infinite-loop state. One loop per phase; phases in
@@ -38,6 +41,8 @@ class PhaseLoopController(
     private val runIdGenerator: RunIdGenerator,
     private val stopSignal: PhaseStopSignal,
     private val loopExecutor: AsyncTaskExecutor,
+    @Value("\${external-api.loop.upstream-retry-interval-seconds:30}")
+    private val upstreamRetryIntervalSeconds: Int = 30,
     private val clock: Clock = Clock.systemUTC(),
 ) {
 
@@ -123,12 +128,43 @@ class PhaseLoopController(
             externalApiScheduler.triggerPhase(phase, runId, upstream, loopId)
                 .whenComplete { _, ex -> handleIterationEnd(phase, loopId, runId, ex, n) }
         } catch (ex: Throwable) {
+            // Upstream (OCID_LOOKUP) is transiently absent — the morning_chain
+            // 03:00 KST run refreshes OCID_LOOKUP, leaving its slot non-terminal
+            // so latestUpstreamRunId() returns null. runItemEquipmentPhase
+            // rejects a null upstream synchronously (require, before slot
+            // acquire), which previously killed the loop via the fatal path
+            // below. Defer instead: re-submit on the loopExecutor after a short
+            // backoff (virtual-thread sleep, no carrier pinning). The loop stays
+            // RUNNING and resumes once OCID_LOOKUP reaches a terminal state.
+            // See ADR-742.
+            val state = loops[phase]?.get()
+            if (upstream == null && state != null && state.loopId == loopId && state.status == LoopStatus.RUNNING) {
+                log.info(
+                    "[Loop] upstream not ready phase={} loopId={} iter={} deferring retry in {}s",
+                    phase, loopId, n, upstreamRetryIntervalSeconds,
+                )
+                val delayMillis = upstreamRetryIntervalSeconds.toLong() * MILLIS_PER_SECOND
+                loopExecutor.execute {
+                    sleepInterruptibly(delayMillis)
+                    submitIteration(phase, loopId, runId, n)
+                }
+                return
+            }
             log.error("[Loop] iteration submit failed phase={} loopId={} iter={}", phase, loopId, n, ex)
-            val state = loops[phase]?.get() ?: return
-            if (state.loopId != loopId) return
-            state.lastError = ex.message
-            state.status = LoopStatus.STOPPING
+            val current = state ?: return
+            if (current.loopId != loopId) return
+            current.lastError = ex.message
+            current.status = LoopStatus.STOPPING
             finalize(phase, loopId)
+        }
+    }
+
+    private fun sleepInterruptibly(millis: Long) {
+        if (millis <= 0) return
+        try {
+            Thread.sleep(millis)
+        } catch (ie: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 

@@ -6,6 +6,8 @@ spring:
     name: cleanup
   profiles:
     active: local
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 cleanup:
   dry-run: false

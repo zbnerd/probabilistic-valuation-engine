@@ -5,6 +5,8 @@
 
 plugins {
 	alias(libs.plugins.kotlin.jvm)
+	// #1425: Avro plugin generates Java POJOs from .avsc schema files (default: src/main/avro)
+	id("com.github.davidmc24.gradle.plugin.avro") version "1.9.1"
 }
 
 dependencies {
@@ -21,6 +23,12 @@ dependencies {
 	// SLF4J API (LoggerFactory — module-common is Spring-free, so no transitive slf4j-api)
 	implementation("org.slf4j:slf4j-api:2.0.17")
 	implementation(libs.jackson.databind)
+
+	// #1425: Avro + Parquet-avro dependencies for schema-driven artifact evolution PoC
+	// — pure data-binding + columnar reader; no Hadoop transitive deps used at runtime in module-common
+	implementation("org.apache.avro:avro:1.11.4")
+	implementation("org.apache.parquet:parquet-avro:1.17.1")
+	implementation("org.apache.parquet:parquet-common:1.17.1")
 
 	// Lombok
 	compileOnly(libs.lombok)

@@ -19,7 +19,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.atLeast
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.isNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -36,12 +38,16 @@ class PhaseLoopControllerTest {
     // Runs the first submission inline, drops the rest.
     private val oneShotInlineExecutor = OneShotInlineExecutor()
 
-    private fun controller(executor: AsyncTaskExecutor = noopExecutor) = PhaseLoopController(
+    private fun controller(
+        executor: AsyncTaskExecutor = noopExecutor,
+        upstreamRetryIntervalSeconds: Int = 30,
+    ) = PhaseLoopController(
         externalApiScheduler = scheduler,
         runStatusTracker = runStatusTracker,
         runIdGenerator = runIdGenerator,
         stopSignal = stopSignal,
         loopExecutor = executor,
+        upstreamRetryIntervalSeconds = upstreamRetryIntervalSeconds,
     )
 
     @Test
@@ -250,6 +256,28 @@ class PhaseLoopControllerTest {
         assertEquals(1, state.iterationCount)
         assertNotNull(state.lastError)
         assertTrue(state.lastError!!.contains("slot occupied"))
+    }
+
+    @Test
+    fun `loop defers iteration when upstream OCID_LOOKUP is not ready instead of dying`() {
+        // No OCID_LOOKUP completed run → latestUpstreamRunId() returns null. The
+        // real scheduler's runItemEquipmentPhase rejects null upstream
+        // synchronously (require, before slot acquire); mirror that throw here.
+        whenever(scheduler.triggerPhase(eq(PipelinePhase.ITEM_EQUIPMENT), any(), isNull(), anyOrNull()))
+            .thenThrow(IllegalArgumentException("ITEM_EQUIPMENT requires upstreamRunId"))
+
+        // interval 0 → defer retry is instant; OneShotInlineExecutor runs the
+        // first deferred resubmit inline then drops the next (bounded, no spin).
+        val state = controller(OneShotInlineExecutor(), upstreamRetryIntervalSeconds = 0)
+            .startLoop(PipelinePhase.ITEM_EQUIPMENT)
+
+        // Loop stays RUNNING (deferred) — never finalized/dies.
+        assertEquals(LoopStatus.RUNNING, state.status)
+        assertNull(state.lastError)
+        assertEquals(0, state.iterationCount)
+        // triggerPhase was attempted (defer path still submits), loop survived.
+        verify(scheduler, atLeast(1))
+            .triggerPhase(eq(PipelinePhase.ITEM_EQUIPMENT), any(), isNull(), anyOrNull())
     }
 
     private class OneShotInlineExecutor : AsyncTaskExecutor {

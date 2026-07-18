@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "CalculationResult",
+  "namespace": "maple.common.avro",
+  "doc": "Calculator output. Producer: Calculator. Consumer: Synchronizer. See issue 1425.",
+  "fields": [
+    {"name": "runId", "type": "string", "doc": "Calculator run identifier. Frozen field ID: 1."},
+    {"name": "ocid", "type": "string", "doc": "Character ID. Frozen field ID: 2."},
+    {"name": "expectedMin", "type": ["null", "long"], "default": null, "doc": "Expected cost min in mesos. Frozen field ID: 3."},
+    {"name": "expectedMax", "type": ["null", "long"], "default": null, "doc": "Expected cost max in mesos. Frozen field ID: 4."},
+    {"name": "expectedCost", "type": ["null", "double"], "default": null, "doc": "Expected cost (point estimate). NOTE: consider Decimal in future migration. Frozen field ID: 5."},
+    {"name": "potentialOptions", "type": ["null", {"type": "array", "items": ["null", "string"], "default": null}], "default": null, "doc": "Potential upgrade options (nullable elements). Frozen field ID: 6."},
+    {"name": "schema_version", "type": "int", "default": 1, "doc": "Schema version. Frozen field ID: 7."}
+  ]
+}

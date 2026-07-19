@@ -12,7 +12,7 @@
 
 module-calculator가 사용하는 equipment valuation의 순수 계산 규칙을 `module-core`로 이동한다. CSV resource loading, cache, metrics, Spring wiring, parser/result serialization은 `module-calculator`에 남긴다. module-app/web가 사용하는 기존 type/bean은 `module-infra` compatibility facade로 유지한다.
 
-대상에는 V4 equipment factory/decorators, cube trial computation의 pure subset, cube cost policy의 pure representation, starforce lookup, Noljang 규칙, canonical input/output가 포함된다.
+대상에는 V4 equipment factory/decorators, cube trial computation의 pure subset, 기존 core cube-cost/starforce policy 재사용, current Noljang target-cap 입력 규칙, canonical input/output가 포함된다.
 
 ## 2. Non-goals
 
@@ -28,7 +28,7 @@ module-calculator가 사용하는 equipment valuation의 순수 계산 규칙을
 
 `module-calculator`는 현재 `CalculatorEngineAutoConfiguration`과 `CoreExecutorConfig`를 통해 module-infra의 계산 엔진을 가져온다. pure calculation, Spring component, `LogicExecutor`, classpath CSV repository, cache가 한 graph에 있어 계산 테스트가 Spring wiring을 요구하고 calculator가 module-infra 전체 runtime classpath를 받는다.
 
-`CubeProbabilityRepositoryImpl`은 이름과 package는 persistence지만 실제로는 시작 시 CSV 413,802개 row를 메모리에 적재하는 resource adapter다. Noljang 확률은 module-core와 module-infra에 중복돼 drift 가능성이 있다.
+`CubeProbabilityRepositoryImpl`은 이름과 package는 persistence지만 실제로는 시작 시 CSV 413,802개 row를 메모리에 적재하는 resource adapter다. 현재 V4 calculator의 `isNoljang` 처리는 목표 별을 15로 제한하지만 비용은 일반 스타포스 lookup을 사용하므로, 추출 중 core Noljang 비용 계산으로 바꾸면 behavior change가 된다.
 
 ## 4. Decision
 
@@ -40,8 +40,7 @@ module-core
        ├─ ValuationKernel
        ├─ ValuationInput / ComponentCosts / ValuationResult
        ├─ ProbabilityTableSnapshot / ProbabilityKey / ProbabilityRow
-       ├─ cube policies and decorators as pure objects
-       └─ canonical NoljangProbabilityCalculator
+       └─ cube policies and decorators as pure objects
 
 module-calculator
   ├─ probability/CsvProbabilityTableLoader
@@ -65,11 +64,11 @@ Core production code may not import Spring, Jackson/CSV, `LogicExecutor`, cache 
 
 - item identity needed by formulas
 - normalized part/equipment part
-- item level and preset
+- item level
 - current/target star and Noljang flag
 - potential/additional grade and ordered option values
 
-`ValuationResult` contains `ComponentCosts(blackCubeCost, additionalCubeCost, starforceCost)` plus internal metadata `tableVersion` and `logicVersion`. module-calculator maps this to the existing wire `CalculationResult` without adding or renaming serialized fields during this migration.
+`ValuationResult` contains `ComponentCosts`, per-cube unrounded trials, the legacy enhance path, and internal metadata `tableVersion`/`logicVersion`. module-calculator maps only existing fields to the wire `CalculationResult`; module-infra uses trials/path for its legacy calculator interface without adding or renaming serialized fields during this migration.
 
 The kernel does not:
 
@@ -107,11 +106,13 @@ base
   → starforce when star information exists
 ```
 
-The new kernel may implement this as direct composition rather than Spring components, but golden results and cost breakdown must remain identical. Red cube behavior remains available where existing callers use it; calculator's full path continues using its current black/additional/starforce composition.
+The new kernel may implement this as direct composition rather than Spring components, but golden results and cost breakdown must remain identical. The pure cube-trials utility can evaluate `CubeType.RED`, but no current factory path adds a red component; calculator's full path remains black/additional/starforce and the legacy breakdown's unused red fields remain `0.0`.
 
-`CubeCostPolicy` becomes a pure policy/value lookup consumed by the kernel. Environment-backed `PolicyPort` adaptation stays outside core and materializes the policy before calculation.
+Cube trial mode selection also remains explicit: already-populated DP fields require the existing DP-enabled rule; otherwise the pure inferrer expands ALLSTAT, rejects compound categories, and uses DP for a valid inference with confidence at least `0.5`. Compound or uninferable option sets use the current unique-permutation V1 algorithm, including blank/unknown option rate `1.0`, exact option-name matching, and positive infinity for zero success probability. Shadow comparison remains adapter observability and cannot change the selected result.
 
-`NoljangProbabilityCalculator` in module-core is canonical. The module-infra `NoljangProbabilityTable` becomes a compatibility delegate with no independent probability constants/table. calculator input conversion imports only the core canonical API.
+The kernel consumes the existing core `CostCalculationStrategy`; production wiring uses the existing `TableBasedCostStrategy`. `CubeRateCalculator` gains a `ProbabilityRow` overload so the permutation kernel also reuses its blank/unknown/exact-first/missing semantics instead of creating a second rate implementation. Environment-backed `PolicyPort` adaptation stays outside the active calculator path.
+
+Noljang remains deliberately behavior-preserving: calculator input normalization imports `NoljangProbabilityCalculator.MAX_NOLJANG_STAR` directly and caps the target, while `ValuationKernel` uses the current regular `StarforceCalculationEngine` default path for cost. A named golden case freezes this observed behavior. Changing Noljang cost formulas or the app/web-only module-infra `NoljangProbabilityTable` is outside this program.
 
 ### 4.5 Cache boundary
 
@@ -127,7 +128,7 @@ OCID and preset are excluded unless they affect formula output. Current star, ta
 
 Behavior:
 
-- hit returns the same `ComponentCosts` as direct kernel calculation
+- hit returns the same `ValuationResult` as direct kernel calculation
 - miss computes once and stores
 - cache read/write/serialization failure increments a metric and falls back to direct computation
 - kernel failure is never converted into a cache miss or empty/default result
@@ -161,13 +162,12 @@ No duplicate Spring bean definition is active in the same application context. B
 1. Build representative golden-master fixtures from the current `EquipmentExpectationCalculatorFactory`.
 2. Add boundary/property tests for cube, additional, starforce, Noljang, absent components, and invalid inputs.
 3. Introduce immutable core table types and adapt current repository data into them without changing calculations.
-4. Move the canonical Noljang implementation and turn old table into a delegate.
-5. Move factory/decorator pure logic into `ValuationKernel` in behavior-preserving slices.
-6. Add calculator CSV loader and boot validation.
-7. Wrap existing calculator cache behind `ValuationCache` and add table/logic version to key.
-8. Switch calculator processor to core kernel and local Spring wiring.
-9. Convert module-infra public calculation classes/configuration to app/web compatibility delegates.
-10. Remove calculator imports of old V4/module-infra types and add dependency guard.
+4. Reuse existing core cost/rate/starforce policies and move factory/decorator pure logic into `ValuationKernel` in behavior-preserving slices.
+5. Add calculator CSV loader and boot validation.
+6. Wrap existing calculator cache behind `ValuationCache` and add table/logic version to key.
+7. Switch calculator processor to core kernel and local Spring wiring.
+8. Convert module-infra public calculation classes/configuration to app/web compatibility delegates.
+9. Remove calculator imports of old V4/module-infra types and add dependency guard.
 
 Move-only and behavior-change commits stay separate. Golden-master comparison runs after each calculation slice.
 
@@ -176,7 +176,7 @@ Move-only and behavior-change commits stay separate. Golden-master comparison ru
 - golden master: old factory vs new kernel for a representative fixture matrix
 - every combination of potential/additional/starforce presence
 - black/red/additional cube types and grade/level/part boundaries
-- regular and Noljang star boundaries, including max Noljang star
+- regular star boundaries plus observed Noljang target-cap/regular-cost behavior at max Noljang star
 - option order/normalization and secondary weapon category
 - empty/missing/invalid CSV boot failure
 - probability mass parity, duplicate identity, supported missing-key, valid zero-contribution cases
@@ -206,7 +206,7 @@ item name, OCID, option text, exception message, full table version checksum are
 - module-core calculation package has no Spring, Jackson/CSV, LogicExecutor, cache, filesystem, or module-infra dependency.
 - module-calculator imports neither `maple.expectation.application.service.calculator.v4` nor infra Noljang/config/repository types.
 - `CubeProbabilityRepositoryImpl` is no longer calculator's generic persistence dependency.
-- one canonical Noljang probability implementation exists.
+- the named Noljang fixture preserves target capping and the current regular-starforce cost path; app/web-only Noljang code is unchanged.
 - old and new engines match the approved golden fixture matrix with zero unexplained drift.
 - missing/empty table fails boot; classified internal errors are not collapsed into default costs.
 - extraction does not silently change current probability-mass normalization behavior.

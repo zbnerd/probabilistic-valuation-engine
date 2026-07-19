@@ -147,12 +147,13 @@ P0 artifact가 cleanup inbox identity/storage를 제공하므로 cleanup의 Kafk
 | backend checksum을 idempotency hash로 쓸 수 있는가 | LocalFS는 SHA-256, MinIO는 multipart ETag | writer의 content SHA-256과 backend tag를 분리 |
 | temp-file ownership이 backend 간 같은가 | LocalFS는 move, MinIO는 upload 후 source 유지 | storage는 immutable path를 borrow하고 writer가 future 완료 후 항상 정리 |
 | source Kafka send failure가 복구되는가 | `SinkEventPublisher`가 send failure를 swallow | manifest를 replay source로 사용하고 required publish 완료까지 running marker 유지 |
-| async ACK가 안전한가 | Spring Kafka 3.3.8에서 suspend/future listener는 async ACK를 요구 | migrated 전용 factory에 `asyncAcks=true`, backpressure는 pause/resume만 사용 |
+| async ACK가 affected-partition isolation을 보장하는가 | Spring Kafka 3.3.8 구현은 incomplete async ACK 동안 child consumer의 모든 assigned partition을 pause | async reply listener를 쓰지 않고 `MANUAL_IMMEDIATE` + partition별 serial lane + rebalance generation fencing 사용 |
 | DLT 성공 전 commit을 증명할 수 있는가 | recoverer 기본값은 send failure를 반드시 전파하지 않음 | DLT send-result failure를 fatal로 설정하고 DLT partition topology를 검증 |
 | synchronizer publish 실패를 replay할 수 있는가 | 현재 succeeded state가 outbound send보다 먼저 기록 | DB work → send completion → succeeded state → ACK 순서로 변경 |
 | cleanup inbox identity는 무엇인가 | `ChunkConsumedEvent.eventId`가 기존 wire identity | `cleanup/inbox/{eventId}.json`, Kafka 좌표는 envelope metadata |
 | cube mass validation을 extraction에서 바꿔도 되는가 | 현재 STRICT 구현도 normalization하며 golden output에 영향 가능 | extraction은 observed behavior를 보존하고 정책 수정은 별도 behavior change로 격리 |
 | Nexon DTO를 어디에 둘 것인가 | external-api가 infra의 `CharacterListResponse`를 import | nexon module에 neutral character-list model, infra facade가 legacy DTO로 mapping |
+| infra executor bean 목록이 실제 runtime 의미인가 | local auth bean이 conditional VT bean보다 우선하고 scheduler bean은 주입점이 없음 | 활성 주입점과 effective thread semantics만 로컬로 옮기고 미사용 bean은 복제하지 않음 |
 
 ## 9. Compatibility and Rollback
 

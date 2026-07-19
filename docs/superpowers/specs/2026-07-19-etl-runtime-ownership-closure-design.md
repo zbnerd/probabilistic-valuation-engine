@@ -33,20 +33,20 @@ storage, messaging, calculation, Nexon seams를 옮긴 뒤에도 활성 ETL에 �
 | module-synchronizer | executor package scan, `CoreExecutorConfig`, `VtExecutorConfig`, `LogicExecutor`/`TaskContext` in consumer/ranking, empty `ManagedLifecycleCoordinator` import |
 | module-cleanup | none after artifact/messaging extraction |
 
-`VtExecutorConfig` itself contains bean names for unrelated executable modules. `ManagedLifecycleCoordinator` in synchronizer has no synchronizer `ManagedLifecycle` implementation and therefore coordinates an empty list.
+`VtExecutorConfig` itself contains bean names for unrelated executable modules. 실제 Spring wiring에서는 external-api의 로컬 `AuthExecutorConfig`가 conditional infra bean보다 우선하므로 `authCharacterFetchExecutor`는 virtual-thread executor가 아니라 core 2/max 4/queue 100의 platform `ThreadPoolTaskExecutor`다. `externalApiSchedulerExecutor`는 주입점이 없고 scheduler가 내부 virtual-thread-per-task executor를 직접 소유한다. `ManagedLifecycleCoordinator` in synchronizer has no synchronizer `ManagedLifecycle` implementation and therefore coordinates an empty list.
 
 ## 4. Decision
 
 ### 4.1 External API ownership
 
-`module-external-api/config/ExternalApiExecutorConfiguration` owns the existing bean names used in that application:
+`module-external-api/config/ExternalApiExecutorConfiguration` owns only the active executor injection points used in that application:
 
-- `externalApiSchedulerExecutor`
-- `authCharacterFetchExecutor`
-- `internalApiExecutor`
-- `urgentCharacterRequestExecutor`
+- `internalApiExecutor`: virtual-thread-per-task, local five-second graceful shutdown
+- `urgentCharacterRequestExecutor`: virtual-thread-per-task, local five-second graceful shutdown
 
-The initial implementation preserves virtual-thread-per-task behavior and existing bean names. It tracks every created `ExecutorService` and performs graceful shutdown with the existing five-second wait before `shutdownNow`. Pool/concurrency tuning is outside this migration.
+Kafka delivery migration removes the old auth consumer's executor injection, so the already-local `AuthExecutorConfig` and its `authCharacterFetchExecutor` bean are deleted once the last caller is gone. If that caller still exists at the runtime-closure checkpoint, the migration stops rather than silently changing the effective core 2/max 4/queue 100 platform-thread behavior. The unused `externalApiSchedulerExecutor` bean is not recreated; `ExternalApiScheduler` remains the sole owner of its internal virtual-thread-per-task executor.
+
+The initial implementation preserves active thread semantics and existing active bean names. It tracks every created `ExecutorService` and performs graceful shutdown with the existing five-second wait before `shutdownNow`. Pool/concurrency tuning is outside this migration.
 
 `OrphanTempFileCleanupHook` replaces `LogicExecutor.executeVoid` with explicit `runCatching`, structured logging, and the same best-effort startup behavior. Cleanup failure must not prevent boot unless the current behavior already does.
 
@@ -58,8 +58,9 @@ The initial implementation preserves virtual-thread-per-task behavior and existi
 
 - `kafkaResultChunkExecutor`
 - `basicSnapshotChunkExecutor`
+- `synchronizerOcidLookupExecutor`
 
-It preserves virtual-thread-per-task behavior, bean names, and shutdown wait. The unused `ManagedLifecycleCoordinator` import is deleted rather than copied.
+The result/basic executors preserve virtual-thread-per-task behavior, bean names, and five-second shutdown wait. The OCID subscription uses the new local named platform `ThreadPoolTaskExecutor` with the effective old `defaultAsyncExecutor` defaults: core 8/max 16/queue 200, `async-` thread prefix, 30-second graceful shutdown, and abort-on-rejection semantics. It is renamed at the injection point so the worker no longer imports the broad default executor configuration. The unused `ManagedLifecycleCoordinator` import is deleted rather than copied.
 
 `ChunkConsumerTemplate` removes `LogicExecutor` wrappers. Its explicit control flow is:
 
@@ -112,7 +113,7 @@ Changes that alter exception outcome are made in the owning Kafka/calculation sp
 
 ## 6. Tests
 
-- executor bean-name compatibility and virtual-thread execution
+- active executor bean-name compatibility and preserved per-bean thread semantics
 - graceful shutdown waits then forces only unfinished owned tasks
 - external scheduler start/stop order and callback completion
 - orphan cleanup best-effort failure metric/log
@@ -131,7 +132,7 @@ The transitive check allows module-infra only in test fixtures that explicitly v
 - active ETL production source contains no `maple.expectation.infrastructure.*` import or fully-qualified reference.
 - active ETL Gradle files contain no direct `project(':module-infra')`.
 - active ETL production runtime classpaths do not include module-infra.
-- existing named executor injection points resolve with the same bean names.
+- existing active named executor injection points resolve with the same bean names; the OCID injection is deliberately renamed to `synchronizerOcidLookupExecutor` while preserving effective pool semantics.
 - every created executor/client/transfer manager has one owner and deterministic shutdown.
 - synchronizer no longer hides original failures behind `LogicExecutor` translation.
 - external scheduler lifecycle behavior and shutdown completion remain equivalent.

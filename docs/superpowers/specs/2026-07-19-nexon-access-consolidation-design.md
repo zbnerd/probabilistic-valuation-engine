@@ -83,7 +83,7 @@ base URL, builder, timeout application, body-limit application, error classifica
 
 두 profile은 connect 3s, response 5s의 current default를 유지한다. system profile은 current 10s call ceiling과 2 MiB body cap을 유지한다. BYOK profile은 10s call ceiling과 256 KiB body cap을 사용한다. 모든 값은 profile-specific configuration으로 override 가능하고 boot validation에서 양수/bounds를 확인한다.
 
-system configuration은 기존 `nexon.http-client.*`와 `NEXON_HTTP_*` 환경 변수 이름을 그대로 binding한다. BYOK는 `nexon.byok-http-client.*`를 사용하고 legacy app facade는 기존 `nexon.api.connect-timeout`/`response-timeout`을 mapping한다. 두 pool name이 같으면 boot를 실패시킨다.
+system configuration은 기존 `nexon.http-client.*`와 `NEXON_HTTP_*` 환경 변수 이름 및 기존 `*-timeout-ms`/`response-timeout-seconds` suffix를 그대로 binding한다. BYOK는 `nexon.byok-http-client.*`를 사용하고 nullable legacy property bridge가 기존 `nexon.api.connect-timeout`/`response-timeout`을 mapping한다. legacy와 새 timeout key가 함께 명시되면 새 profile-specific key가 우선한다. 두 pool name이 같으면 boot를 실패시킨다.
 
 pool name과 metrics tag에 profile만 사용한다. system bulk saturation이 BYOK acquire queue나 connections를 소비할 수 없다. module auto-configuration이 두 `ConnectionProvider`를 소유하고 shutdown 때 pending acquisition을 중단한 뒤 bounded timeout으로 dispose한다.
 
@@ -112,7 +112,7 @@ module-infra의 기존 `NexonAuthClient` FQN이 app/web compatibility에 필요�
 | `ResponseTooLarge` | configured body cap 초과 | explicit failure; system alert |
 | `DecodeFailure` | successful HTTP body가 expected DTO를 만족하지 않음 | explicit failure; retry/DLT policy에 전달 |
 
-error code는 endpoint-aware fixture로 분류한다. 같은 HTTP status만으로 credential/not-found 의미를 추측하지 않는다. 분류되지 않은 4xx를 invalid credential로 취급하지 않는다. raw `WebClientResponseException`은 module 밖으로 노출하지 않고 typed failure에 status와 sanitized Nexon code만 포함한다.
+error code는 endpoint-aware fixture로 분류한다. 같은 HTTP status만으로 credential/not-found 의미를 추측하지 않는다. 분류되지 않은 4xx를 invalid credential로 취급하지 않는다. raw `WebClientResponseException`과 URI/body를 포함할 수 있는 transport/decode cause는 typed failure의 cause chain에도 보존하지 않고, typed failure에는 status, sanitized Nexon code, timeout kind, endpoint purpose/template만 포함한다.
 
 ### 4.6 Security and redaction
 

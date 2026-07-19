@@ -77,9 +77,9 @@ layout은 다음 기존 문자열을 그대로 생성한다.
 | source endpoint success marker | `runs/{runId}/{endpoint}/_SUCCESS` |
 | calculator run root | `calculator/runs/{runId}` |
 | calculator result chunk | `calculator/runs/{runId}/{endpoint}/chunks/result-{chunkId}.jsonl.gz` |
-| calculator marker/manifest | 현재 caller가 사용하는 calculator run/endpoint root 아래의 기존 filename |
 | OCID mapping | `ocid-mapping/ocid-mapping-{runId}.jsonl.gz` |
-| failed records | `runs/{runId}/failed.jsonl` |
+| failed records | `runs/{runId}/{endpoint}/failed.jsonl` |
+| cleanup inbox | `cleanup/inbox/{eventId}.json` |
 
 `chunkFileName`은 기존 producer가 생성하는 `part-NNNNNN`을 그대로 받는다. layout은 numbering 정책을 새로 만들지 않는다. source event의 `objectKey`와 synchronizer의 `sourceObjectKey`는 동일한 layout method 결과여야 한다.
 
@@ -99,6 +99,8 @@ layout은 다음 기존 문자열을 그대로 생성한다.
 `contentSha256`는 backend-independent content identity이고 `backendTag`는 LocalFS diagnostic 또는 MinIO ETag다. multipart ETag를 content hash로 비교하지 않는다.
 
 `putFileAsync`는 future가 완료될 때까지 immutable source path를 borrow한다. storage implementation은 caller file을 move/delete하지 않으며 `ArtifactWriter`가 완료 후 정리한다. LocalFS는 destination과 같은 filesystem의 sibling temp로 copy한 뒤 atomic move해 cross-filesystem source path에도 atomic visibility를 보장한다.
+
+LocalFS conditional create는 sibling temp를 완전히 write/force한 뒤 final path에 atomic hard link를 만들고 parent directory까지 force한 다음 완료하며, 이미 존재할 때만 기존 bytes를 읽는다. replacement atomic move도 parent directory force 전에는 future를 완료하지 않는다. MinIO는 `If-None-Match: *`를 사용한다. 어느 backend도 read-before-write로 inbox uniqueness를 구현하거나 부분 JSON object를 publish하지 않는다.
 
 event publisher는 `ArtifactReceipt`를 입력으로만 받을 수 있다. 따라서 upload가 완료되지 않은 artifact에 대한 event를 만들 수 없다. retry는 동일 deterministic key에 overwrite하며 동일 `contentSha256`이면 같은 content로 취급한다.
 
@@ -127,10 +129,13 @@ PUBLISHED
 - manifest는 모든 chunk receipt가 확보된 뒤 작성한다.
 - source sink는 chunk-ready send futures를 추적하고 run-completed send까지 성공해야 published 상태가 된다. `SinkEventPublisher`가 send failure를 성공으로 변환하는 fire-and-forget 동작은 제거한다.
 - event publish는 관련 artifact receipt 또는 finalized manifest를 입력으로 받는다.
+- 초기 chunk/run-completed event ID 생성은 그대로 유지한다. publication recovery만 고정 DNS namespace의 UUIDv5를 사용해 반복 replay identity를 안정화하며 manifest schema에 event ID field를 추가하지 않는다. recovery event의 `createdAt`도 현재 시간이 아니라 manifest의 chunk/run `finishedAt`을 사용해 같은 recovery eventId의 전체 payload가 반복 시 semantic-equal이어야 한다.
+- ranking은 기존 root `_RUNNING`만 생성/삭제하며 migration이 새 endpoint marker를 추가하지 않는다.
+- explicit recovery는 lifecycle 전환과 event 재구성만 소유한다. startup discovery는 다음 retention/catalog slice에서 `ArtifactRunCatalog`의 완전한 paginated listing을 재사용해 연결하며 external-api가 raw prefix scanner를 중복 구현하지 않는다.
 
 ### 4.5 Typed retention
 
-`ArtifactRunCatalog`가 raw prefix listing을 `RunState`와 `RunInfo`로 변환한다. `ArtifactRetentionService`는 기존 `RunRetentionPolicy`와 per-cycle safeguards를 재사용한다.
+`ArtifactRunCatalog`가 raw prefix listing을 aggregate `RunState`/`RunInfo`와 endpoint별 manifest/state로 변환한다. legacy root `_RUNNING`은 `ranking-overall`에만 대응시키고 endpoint marker는 해당 endpoint에만 대응시킨다. startup publication recovery는 source run의 endpoint별 publication-pending 항목만 재생하며 calculator run은 재생하지 않는다. `ArtifactRetentionService`는 기존 `RunRetentionPolicy`와 per-cycle safeguards를 재사용한다.
 
 - active: run root 또는 어느 endpoint descendant에든 `_RUNNING`이 존재하며 보호 대상
 - artifact-succeeded-publication-pending: `_SUCCESS`와 `_RUNNING`이 함께 존재하며 보호 및 republish 대상
@@ -148,7 +153,9 @@ PUBLISHED
 cleanup/inbox/{eventId}.json
 ```
 
-envelope는 `eventId`, `topic`, `partition`, `offset`, `receivedAt`, 원본 `ChunkConsumedEvent`를 포함한다. `CleanupInboxStore.putIfAbsent`는 LocalFS atomic create와 MinIO conditional put을 사용한다. 이미 존재하면 저장된 canonical event payload를 비교한다. 같은 payload의 replay는 성공이고, 같은 eventId의 다른 payload는 integrity conflict로 분류해 기존 object를 보존하고 source record를 DLT 처리한다. read-before-write만으로 uniqueness를 구현하지 않는다.
+envelope는 `eventId`, `topic`, `partition`, `offset`, `receivedAt`, 원본 `ChunkConsumedEvent`를 포함한다. `CleanupInboxStore.putIfAbsent`는 completion stage를 반환하며 LocalFS atomic create와 MinIO conditional put을 비동기로 수행한다. 이미 존재하면 delivery metadata/received time이 아니라 저장된 canonical event payload만 비교한다. 따라서 같은 event의 후속 redelivery는 첫 envelope를 보존한 replay success이고, 같은 eventId의 다른 event content는 integrity conflict로 분류해 기존 object를 보존하고 source record를 DLT 처리한다. read-before-write만으로 uniqueness를 구현하지 않으며 Kafka caller thread에서 storage 완료를 block하지 않는다.
+
+inbox listing은 eager `listByPrefix`를 page처럼 감싸지 않는다. artifact storage contract가 typed prefix, exclusive `startAfter`, 최대 1,000개 limit을 받는 실제 page API를 제공하고 MinIO `isTruncated`/LocalFS lexical cursor로 다음 key를 결정한다.
 
 처리 순서는 다음과 같다.
 
@@ -175,7 +182,7 @@ target delete 하나라도 실패하면 inbox object를 남겨 다음 drain에�
 | retention list page failure | 해당 cycle 삭제 중단 |
 | cleanup inbox put failure | Kafka ACK 금지 |
 | cleanup target delete failure | inbox entry 유지 |
-| duplicate inbox event | 같은 payload는 deterministic overwrite, 충돌 payload는 DLT |
+| duplicate inbox event | 같은 payload는 existing entry를 유지한 replay success, 충돌 payload는 DLT |
 
 ## 6. Migration
 
@@ -185,7 +192,7 @@ target delete 하나라도 실패하면 inbox object를 남겨 다음 drain에�
 4. external-api writer와 run finalization을 `ArtifactWriter`/`RunLifecycle`로 전환하고 publish futures를 추적한다.
 5. calculator result writer와 synchronizer source path builder를 전환한다.
 6. cleanup run catalog/retention을 typed API로 전환한다.
-7. durable cleanup inbox를 도입하고 기존 in-memory queue를 제거한다.
+7. durable cleanup inbox store를 먼저 도입한다. 기존 in-memory queue 제거, partition-lane ACK ownership, HTTP drain activation은 messaging adapter 전환과 같은 commit에서 수행한다.
 8. compatibility facade와 dependency guard를 추가한 뒤 활성 ETL의 infra 의존을 제거한다.
 
 각 단계에서 key와 body가 기존 fixture와 같아야 한다. 기존 object는 rename이나 copy 없이 새 reader가 그대로 읽는다.
@@ -197,7 +204,7 @@ target delete 하나라도 실패하면 inbox object를 남겨 다음 drain에�
 - 1,001개 이상 object listing과 page boundary
 - upload failure 시 event publisher 미호출
 - gzip/serialization failure 시 temp file 부재
-- LocalFS cross-filesystem spool과 MinIO success/failure 모두 caller temp file 부재
+- storage contract에서 LocalFS cross-filesystem와 MinIO success/failure 모두 borrowed caller file 보존; `ArtifactWriter` contract에서 success/failure 후 writer-owned temp file 부재
 - backend ETag 차이와 무관한 content SHA-256 equivalence
 - finalize replay, publication-pending replay, success+orphan marker, partial manifest cases
 - root/endpoint/descendant marker의 active/protected run retention exclusion

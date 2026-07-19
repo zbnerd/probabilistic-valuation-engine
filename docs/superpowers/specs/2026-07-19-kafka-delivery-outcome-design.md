@@ -17,7 +17,7 @@
 
 ## 2. Non-goals
 
-- Kafka topic, consumer group, partition 수, event JSON 변경
+- source Kafka topic 이름/partition 수, 기존 consumer group ID, event JSON 변경. 누락 DLT 생성과 source 수까지의 DLT partition 확장만 명시적 예외다.
 - Kafka exactly-once 또는 storage/DB와 Kafka의 distributed transaction 도입
 - synchronizer DB lease/`nextRetryAt` state machine 제거
 - workload concurrency pool을 하나로 합침
@@ -38,7 +38,7 @@
 module-pipeline-messaging
   ├─ contract   DeliveryContext, DeliveryOutcome
   ├─ policy     DeliveryRetryPolicy, DeliveryFailureClassifier
-  ├─ adapter    KafkaDeliveryAdapter, KafkaDltPublisher
+  ├─ adapter    PartitionLaneRegistry, KafkaDeliveryAdapter, KafkaDltPublisher
   ├─ config     PipelineKafkaConsumerConfiguration
   └─ metrics    DeliveryMetrics
 
@@ -50,7 +50,7 @@ workload module
 
 기존 `KafkaConsumerConfig`는 container-only configuration으로 축소해 새 모듈로 이동한다. workload bean, serializer, business retry 정책은 각 실행 모듈에 남는다.
 
-Migration 동안 기존 default factory와 새 `pipelineKafkaListenerContainerFactory`를 동시에 제공하되 listener마다 `containerFactory`를 명시한다. 새 factory는 Spring Kafka 3.3.8의 suspend/future listener 요구사항에 맞춰 manual ACK와 `asyncAcks=true`를 사용한다. migrated listener는 `CompletableFuture<Void>`를 반환하고 delivery adapter만 `Acknowledgment`에 접근한다. 모든 현재 handler는 record 간 ordering 의존이 없음을 characterization test로 증명한다. ordering이 필요한 새 listener는 이 async factory를 사용할 수 없다.
+Migration 동안 기존 default factory와 새 `pipelineKafkaListenerContainerFactory`를 동시에 제공하되 listener마다 transport owner를 명시한다. Spring Kafka 3.3.8 구현에서 `asyncAcks=true`는 incomplete poll ACK가 있는 동안 해당 child consumer에 assigned된 모든 partition을 pause하므로 “affected partition only” backpressure를 보장하지 못한다. 따라서 새 factory는 `MANUAL_IMMEDIATE`, `asyncAcks=false`를 사용하고, transport listener는 `Future`를 반환하지 않는 synchronous void listener다. Listener는 record를 generation-scoped `PartitionLane`에 넘긴 뒤 반환하며 workload의 `CompletionStage`는 consumer thread 밖에서 실행한다. 같은 partition은 offset 순서로 하나씩 처리하고 다른 partition lane은 독립 진행한다. `PartitionLane`만 `Acknowledgment`에 접근한다.
 
 ### 4.2 Delivery contract
 
@@ -68,6 +68,10 @@ Migration 동안 기존 default factory와 새 `pipelineKafkaListenerContainerFa
 
 `RetryExhausted`는 handler가 반환하지 않는다. adapter가 retry budget을 소진했을 때 생성하는 terminal delivery state이며 원본 record와 마지막 error를 DLT에 publish한 뒤에만 commit한다. DLT publish 실패 시 commit하지 않는다.
 
+`TerminalDrop`/`InvalidMessage` reason은 `[A-Z0-9_]{1,64}`의 bounded code만 허용한다. DLT exception은 원본 throwable의 message/cause/suppressed stack을 복사하지 않는 sanitized exception이며 retry exhaustion은 `RETRY_EXHAUSTED`로 기록한다.
+
+messaging adapter는 `Retryable.cause`의 message, cause chain, stack trace, payload, key를 log/metric/trace에 기록하지 않는다. `DeliveryMetrics`는 bounded failure category와 allowlist된 exception class bucket만 사용한다. 원인별 안전한 업무 log가 필요하면 workload가 secret을 제거한 정규화 code로 남긴다.
+
 ### 4.3 One retry owner
 
 - calculator의 listener/processor 내부 sleep-and-retry를 제거한다.
@@ -75,6 +79,7 @@ Migration 동안 기존 default factory와 새 `pipelineKafkaListenerContainerFa
 - synchronizer의 DB lease, attempt, `nextRetryAt`은 business state이므로 유지한다. state machine은 결과를 반환하고 adapter가 Kafka action을 수행한다.
 - HTTP client의 connection-level retry가 존재하면 idempotent request와 짧은 transport retry로 한정하고 delivery retry count와 metric을 분리한다.
 - technical delivery budget은 initial attempt + 3 retries, fixed 1s backoff로 현재 `DefaultErrorHandler` 값을 보존한다. calculator 내부 3회/500ms loop는 제거하므로 기존 중첩 최대 16 attempts를 보존하지 않는다.
+- `Retryable` 동안 해당 partition lane만 pause 상태를 유지하고 fixed delay 뒤 같은 handler를 재호출한다. ACK/DLT success와 lane queue drain 전에는 resume하지 않는다.
 - synchronizer `nextRetryAt` 대기와 capacity backpressure는 technical retry budget을 소비하지 않고 partition pause/resume으로 처리한다.
 
 ### 4.4 Completion boundary
@@ -130,13 +135,15 @@ Kafka producer의 send 호출 반환만으로 성공하지 않는다. returned f
 - non-secret event는 원본 payload를 보존한다. auth/BYOK처럼 secret-bearing event는 workload-provided sanitizer가 API key와 raw body를 제거한 diagnostic envelope(eventId, safe identifiers, payload SHA-256, length)만 DLT에 쓴다. parse 실패로 secret 위치를 신뢰할 수 없으면 raw payload 전체를 폐기하고 hash/length만 기록한다.
 - `InvalidMessage`와 `RetryExhausted`를 구분하는 reason을 기록한다.
 - DLT publish completion 전 source offset commit을 금지한다.
-- `DeadLetterPublishingRecoverer`는 send result error를 예외로 전파하도록 설정하고 timeout을 명시한다. DLT topic은 source와 같거나 더 많은 partition을 가져야 하며 application readiness/운영 검증에서 확인한다.
+- `DeadLetterPublishingRecoverer`는 send result error를 예외로 전파하도록 설정하고 timeout을 명시한다. DLT topic은 source와 같거나 더 많은 partition을 가져야 한다. topology owner는 source topic을 생성·삭제·축소·재설정하지 않고, 누락 DLT 생성과 부족한 DLT partition 확장만 broker-default replication factor로 멱등 수행한 뒤 다시 describe한다. 권한/timeout/missing-source 또는 재검증 불일치는 readiness/metric/error로 노출한다.
+- DLT publish failure는 sanitized record만 보관한 채 해당 partition을 pause하고 fixed 1s 뒤 DLT-only publish를 재시도한다. workload handler를 다시 실행하거나 handler retry budget을 늘리지 않으며, DLT success 또는 owned executor shutdown까지 source offset은 미commit이다.
 
 ### 4.7 Backpressure
 
 `Backpressure`는 오류 log flood를 만들지 않는 정상 제어 상태다.
 
-- `asyncAcks=true`와 양립하지 않는 `nack()`은 사용하지 않는다. 해당 partition만 container pause/resume하고 다른 partition은 진행할 수 있게 한다.
+- `nack()`은 사용하지 않는다. 최초 record offer에서 해당 partition을 container pause하고, 이미 poll된 동일 partition 후속 record는 lane에 offset 순으로 보관한다. 다른 partition lane은 계속 진행한다.
+- rebalance revoke는 lane generation을 폐기하고 queued record를 ACK 없이 버린다. 진행 중 stage가 나중에 완료돼도 stale generation은 ACK/resume하지 않으며 새 owner가 committed offset부터 replay한다.
 - delay는 listener poll interval과 `max.poll.interval.ms`보다 안전하게 작아야 한다.
 - adapter가 pause duration, resumes, repeated backpressure를 계측한다.
 - semaphore/thread-pool queue capacity는 workload module이 결정하고 adapter는 제시된 delay를 실행한다.
@@ -160,7 +167,7 @@ Kafka producer의 send 호출 반환만으로 성공하지 않는다. returned f
 ## 6. Migration
 
 1. listener별 ACK 시점, retry 수, DLT, async completion을 characterization test로 고정한다.
-2. `DeliveryOutcome`, migrated 전용 async-ACK factory, adapter를 추가하되 기존 listener에는 연결하지 않는다.
+2. `DeliveryOutcome`, migrated 전용 partition-lane factory/adapter를 추가하되 기존 listener에는 연결하지 않는다.
 3. calculator 내부 retry를 제거하고 단일 listener를 전환한다.
 4. synchronizer consumer를 한 종류씩 전환한다.
 5. external auth, urgent, OCID 경로를 순서대로 전환한다.
@@ -179,7 +186,8 @@ Kafka producer의 send 호출 반환만으로 성공하지 않는다. returned f
 - async producer future가 끝나기 전 no-ACK
 - retry budget exhaustion 후 DLT와 commit 순서
 - backpressure 후 resume 및 다른 partition 진행
-- async ACK offset gap 동안 premature commit이 없고 완료 후 연속 commit
+- 같은 partition의 N+1 handler가 N의 safe terminal/ACK queueing 전에 실행되지 않음
+- 다른 partition lane의 독립 진행과 rebalance stale-completion no-ACK
 - calculator의 이중 retry 제거
 - synchronizer lease/`nextRetryAt` 결과 mapping
 - stale run terminal drop
@@ -201,12 +209,12 @@ repository rule Issue #207에 따라 새 Testcontainers integration test class�
 - duplicate/replay counters where identity is observable
 - consumer lag and DLT rate before/after
 
-topic은 bounded tag로 허용하되 partition, offset, runId, key, exception message는 metric tag로 쓰지 않는다. exception class와 normalized reason만 사용한다.
+topic은 bounded tag로 허용하되 partition, offset, runId, key, exception message는 metric tag로 쓰지 않는다. exception은 allowlist된 class bucket(`TIMEOUT`, `IO`, `DB`, `KAFKA`, `OTHER`)으로만 정규화하고 normalized reason만 함께 사용한다.
 
 ## 9. Acceptance Criteria
 
 - workload production 코드의 direct `Acknowledgment`, `acknowledge()`, `nack()` 사용이 0이다.
-- migrated listener factory는 manual ACK + `asyncAcks=true`이며 adapter 밖의 off-thread ACK가 없다.
+- migrated listener factory는 `MANUAL_IMMEDIATE` + `asyncAcks=false`이고 synchronous void listener를 사용하며 `PartitionLane` 밖의 ACK가 없다.
 - 모든 필수 async send가 완료되기 전 offset commit이 발생하지 않는다.
 - calculator record당 retry owner가 하나다.
 - urgent capacity 부족과 cleanup storage 장애가 silent ACK/drop을 만들지 않는다.

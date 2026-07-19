@@ -4,6 +4,7 @@
 - **Date**: 2026-07-19
 - **Scope**: module-external-api, module-calculator, module-synchronizer, module-cleanup
 - **Excluded consumers**: module-app, module-web 전용 module-infra 기능
+- **Review**: grill-me decision-tree review incorporated
 
 ---
 
@@ -23,12 +24,13 @@
 | 범용 ETL runtime 하나 | 공통 실행 표면을 한곳에 모음 | 서로 다른 실패·일관성 모델을 거대한 프레임워크로 결합하므로 거절 |
 | **계약 우선 수직 심화** | 저장, 전달, 계산, 외부 접근의 변경 축을 독립화 | **선택** |
 
-프로그램은 다음 네 하위 프로젝트로 분리한다.
+프로그램은 다음 다섯 하위 프로젝트로 분리한다.
 
 1. P0: [Pipeline Artifact Identity and Lifecycle](2026-07-19-pipeline-artifact-lifecycle-design.md)
 2. P0: [Kafka Delivery Outcome](2026-07-19-kafka-delivery-outcome-design.md)
 3. P1: [Valuation Calculation Kernel Extraction](2026-07-19-valuation-kernel-extraction-design.md)
 4. P1: [Nexon Access Consolidation](2026-07-19-nexon-access-consolidation-design.md)
+5. P1: [ETL Runtime Ownership Closure](2026-07-19-etl-runtime-ownership-closure-design.md)
 
 각 하위 프로젝트는 별도 구현 계획, 테스트 가능한 완료 조건, 독립 rollback 지점을 가진다.
 
@@ -79,6 +81,11 @@ module-calculator   ── pipeline-messaging → module-core → pipeline-artif
 module-synchronizer ─ pipeline-messaging → DB → pipeline-messaging
 module-cleanup      ── pipeline-messaging → durable inbox → pipeline-artifact
 
+worker-owned runtime
+  ├─ external-api executors + scheduler lifecycle adapter
+  ├─ synchronizer executors + explicit error flow
+  └─ artifact upload executor lifecycle
+
 module-infra
   └─ compatibility facade → extracted modules
        ↑
@@ -106,9 +113,10 @@ module-infra
 5. LocalFS와 MinIO는 같은 `ObjectStorage` contract suite를 통과해야 한다.
 6. 새 모듈은 workload 정책을 가져가지 않는다. 공통 mechanism과 명시적 contract만 소유한다.
 7. 기존 caller를 먼저 characterization test로 고정하고, 최소 contract를 추출한 뒤 caller를 한 개씩 전환한다.
-8. 각 전환은 별도 commit/PR로 되돌릴 수 있어야 한다.
+8. named executor와 lifecycle은 workload owner가 소유한다. 새 범용 runtime-support module은 만들지 않는다.
 9. module-infra facade는 app/web 호환을 위한 임시 경계이며 새 ETL 코드는 facade를 참조할 수 없다.
 10. 기존 공개 wire contract를 바꿔야 하는 발견은 이 프로그램에 흡수하지 않고 별도 ADR 승인을 요구한다.
+11. 각 전환은 별도 commit/PR로 되돌릴 수 있어야 한다.
 
 ## 7. Delivery Order
 
@@ -122,12 +130,31 @@ module-infra
 | 6 | Cleanup durable inbox | Kafka offset 전에 inbox object가 durable하게 기록됨 |
 | 7 | Valuation kernel | golden master를 유지한 pure kernel과 adapter가 동작 |
 | 8 | Nexon consolidation | transport/error policy가 단일 모듈에서 동작하고 두 pool은 격리 |
-| 9 | Gradle extraction completion | 활성 네 모듈의 module-infra 직접 의존 0 |
-| 10 | Dependency guard | 금지 dependency/import가 architecture test에서 차단 |
+| 9 | Runtime ownership closure | LogicExecutor/named executor/lifecycle의 활성 ETL infra import 제거 |
+| 10 | Gradle extraction completion | 활성 네 모듈의 module-infra 직접 의존 0 |
+| 11 | Dependency guard | 금지 dependency/import가 architecture test에서 차단 |
 
-P0 artifact가 cleanup inbox identity/storage를 제공하므로 cleanup의 Kafka 전환보다 먼저 완료한다. P1 둘은 P0 안정화 후 서로 독립적으로 진행할 수 있다. 물리적 Gradle 이동은 각 seam이 테스트로 고정된 뒤 수행해 package move와 behavior change가 한 commit에 섞이지 않게 한다.
+P0 artifact가 cleanup inbox identity/storage를 제공하므로 cleanup의 Kafka 전환보다 먼저 완료한다. 세 P1은 P0 안정화 후 서로 독립적으로 진행할 수 있다. 물리적 Gradle 이동은 각 seam이 테스트로 고정된 뒤 수행해 package move와 behavior change가 한 commit에 섞이지 않게 한다.
 
-## 8. Compatibility and Rollback
+## 8. Grill Review Resolutions
+
+코드에서 답할 수 있는 설계 질문은 사용자에게 되묻지 않고 다음 권장안으로 확정했다.
+
+| Challenge | Evidence | Resolution |
+| --- | --- | --- |
+| 기존 네 하위 spec만으로 infra dependency 0이 가능한가 | external-api/synchronizer가 `LogicExecutor`, named executor, lifecycle을 직접 import | 다섯 번째 runtime ownership closure 추가 |
+| source run marker가 한 계층인가 | ranking은 run-root `_RUNNING`, 다른 phase와 `_SUCCESS`는 endpoint-root | legacy root marker를 호환하고 descendant marker까지 active로 판정 |
+| backend checksum을 idempotency hash로 쓸 수 있는가 | LocalFS는 SHA-256, MinIO는 multipart ETag | writer의 content SHA-256과 backend tag를 분리 |
+| temp-file ownership이 backend 간 같은가 | LocalFS는 move, MinIO는 upload 후 source 유지 | storage는 immutable path를 borrow하고 writer가 future 완료 후 항상 정리 |
+| source Kafka send failure가 복구되는가 | `SinkEventPublisher`가 send failure를 swallow | manifest를 replay source로 사용하고 required publish 완료까지 running marker 유지 |
+| async ACK가 안전한가 | Spring Kafka 3.3.8에서 suspend/future listener는 async ACK를 요구 | migrated 전용 factory에 `asyncAcks=true`, backpressure는 pause/resume만 사용 |
+| DLT 성공 전 commit을 증명할 수 있는가 | recoverer 기본값은 send failure를 반드시 전파하지 않음 | DLT send-result failure를 fatal로 설정하고 DLT partition topology를 검증 |
+| synchronizer publish 실패를 replay할 수 있는가 | 현재 succeeded state가 outbound send보다 먼저 기록 | DB work → send completion → succeeded state → ACK 순서로 변경 |
+| cleanup inbox identity는 무엇인가 | `ChunkConsumedEvent.eventId`가 기존 wire identity | `cleanup/inbox/{eventId}.json`, Kafka 좌표는 envelope metadata |
+| cube mass validation을 extraction에서 바꿔도 되는가 | 현재 STRICT 구현도 normalization하며 golden output에 영향 가능 | extraction은 observed behavior를 보존하고 정책 수정은 별도 behavior change로 격리 |
+| Nexon DTO를 어디에 둘 것인가 | external-api가 infra의 `CharacterListResponse`를 import | nexon module에 neutral character-list model, infra facade가 legacy DTO로 mapping |
+
+## 9. Compatibility and Rollback
 
 - 새 구현은 기존 bean 이름과 public type을 module-infra facade에서 위임해 app/web wiring을 보존한다.
 - workload별 전환 동안 기존 adapter와 새 adapter를 동시에 등록하지 않는다. feature flag 대신 한 consumer씩 wiring을 교체하고 commit revert를 rollback 수단으로 쓴다.
@@ -136,7 +163,7 @@ P0 artifact가 cleanup inbox identity/storage를 제공하므로 cleanup의 Kafk
 - Kafka lag, DLT, duplicate count가 기준을 넘으면 해당 consumer 전환만 revert할 수 있어야 한다.
 - storage backend 전환은 요구하지 않는다. 두 backend 모두 동일한 contract를 제공한다.
 
-## 9. Verification and Metrics
+## 10. Verification and Metrics
 
 구현 전후 같은 환경과 workload에서 다음을 기록한다.
 
@@ -153,7 +180,7 @@ P0 artifact가 cleanup inbox identity/storage를 제공하므로 cleanup의 Kafk
 
 성능 작업 규칙에 따라 module별 `runtimeClasspath`, bootJar 크기, compile invalidation 범위, startup time, artifact throughput, calculation throughput의 before/after 값을 보존한다.
 
-## 10. ADR Alignment
+## 11. ADR Alignment
 
 - ADR-050, ADR-352: pure calculation subset을 core로 이동하고 module-infra를 분해한다.
 - ADR-350, ADR-351: cube 전체 wholesale migration은 보류하고 pure subset만 이동한다.
@@ -164,11 +191,11 @@ P0 artifact가 cleanup inbox identity/storage를 제공하므로 cleanup의 Kafk
 - ADR-722: 새 package root는 Gradle module 책임과 일치시킨다.
 - ADR-727: stale run은 오류 재시도가 아니라 관측 가능한 terminal drop이다.
 
-## 11. Program Acceptance
+## 12. Program Acceptance
 
 프로그램은 다음 조건을 모두 만족할 때 완료된다.
 
-- 네 하위 spec의 acceptance criteria가 모두 통과한다.
+- 다섯 하위 spec의 acceptance criteria가 모두 통과한다.
 - 활성 ETL 네 모듈에서 module-infra Gradle/import 의존이 사라진다.
 - app/web compatibility test가 기존 facade로 통과한다.
 - dependency graph와 architecture tests가 역방향·순환 의존을 막는다.

@@ -4,6 +4,7 @@
 - **Priority**: P1
 - **Date**: 2026-07-19
 - **Program**: [ETL module-infra Deepening Program](2026-07-19-etl-infra-deepening-program-design.md)
+- **Review**: grill-me findings incorporated
 
 ---
 
@@ -85,13 +86,15 @@ The kernel does not:
 
 - index key: cube type, level, normalized part, grade, slot
 - values: immutable ordered probability rows
-- version: configured logical version plus content checksum captured during load
-- duplicate/conflicting keys and invalid mass are rejected during construction
+- version: `ProbabilityTableVersion(logical="csv-v1.0", contentSha256=...)` captured during load; legacy facade returns the logical component
+- exact duplicate rows are characterized, conflicting duplicate identities and non-finite/negative/out-of-range rows are rejected during construction
 - lookup for a supported key with no rows is an explicit `MissingProbabilityException`
 
-`CsvProbabilityTableLoader` lives in module-calculator and converts `data/cube_probability.csv` into the snapshot. It owns Jackson CSV and `ClassPathResource`. Missing resource, parse error, empty dataset, invalid row, or inconsistent probability mass fails application startup. It does not use `LogicExecutor` because boot initialization must surface the original cause directly.
+`CsvProbabilityTableLoader` lives in module-calculator and converts `data/cube_probability.csv` into the snapshot. It owns Jackson CSV and `ClassPathResource`. Missing resource, parse error, empty dataset, or invalid row fails application startup. It does not use `LogicExecutor` because boot initialization must surface the original cause directly.
 
-The legacy module-infra loader used by app/web builds the same core snapshot contract while its old public repository facade remains callable. Its compatibility surface is not imported by module-calculator.
+Probability mass behavior is extraction-sensitive. The current `TableMassConfig.STRICT` implementation also normalizes values outside tolerance despite its documentation. The extraction first preserves observed normalization and `1e-5` tolerance under golden tests; correcting STRICT semantics is a separate behavior change. A supported table slice with no rows is an invariant failure, while a populated slice with no contribution for the requested target stat remains the valid zero-contribution distribution.
+
+The legacy module-infra loader used by app/web builds the same core snapshot contract while its old public repository facade remains callable. Its compatibility surface is not imported by module-calculator. During coexistence, a build/test guard verifies that module-calculator and module-infra copies of `data/cube_probability.csv` have the same SHA-256 so resource drift cannot produce different calculations.
 
 ### 4.4 Pure calculation composition
 
@@ -120,7 +123,7 @@ Cache key includes:
 - probability table version/checksum
 - logic version
 
-OCID and preset are excluded unless they affect formula output. Option list normalization is performed once by the input mapper and both kernel/cache use the canonical representation.
+OCID and preset are excluded unless they affect formula output. Current star, target star, Noljang, both part fields, grades, ordered options, item level, and every other output-affecting field are included. Option list normalization is performed once by the input mapper and both kernel/cache use the canonical representation.
 
 Behavior:
 
@@ -138,7 +141,8 @@ Behavior:
 | unsupported part/grade/star range | explicit domain input error; mapper decides item-level error |
 | missing probability for supported input | kernel invariant failure; abort chunk and return Kafka `Retryable` |
 | arithmetic/non-finite result | kernel invariant failure; abort chunk |
-| CSV missing/empty/invalid | boot failure |
+| CSV missing/empty/invalid row | boot failure |
+| probability mass outside current tolerance | preserve observed normalization; metric and separate correction path |
 | cache failure | direct compute + metric |
 | serialization/storage failure | calculation result is not altered; pipeline delivery handles retry |
 
@@ -175,7 +179,8 @@ Move-only and behavior-change commits stay separate. Golden-master comparison ru
 - regular and Noljang star boundaries, including max Noljang star
 - option order/normalization and secondary weapon category
 - empty/missing/invalid CSV boot failure
-- probability mass, duplicate key, missing-key invariant
+- probability mass parity, duplicate identity, supported missing-key, valid zero-contribution cases
+- calculator/infra CSV resource SHA-256 parity during compatibility period
 - direct calculation vs cache hit equivalence
 - cache get/put failure fallback with metrics
 - domain input error vs kernel invariant propagation
@@ -204,6 +209,7 @@ item name, OCID, option text, exception message, full table version checksum are
 - one canonical Noljang probability implementation exists.
 - old and new engines match the approved golden fixture matrix with zero unexplained drift.
 - missing/empty table fails boot; classified internal errors are not collapsed into default costs.
+- extraction does not silently change current probability-mass normalization behavior.
 - cache failure returns the direct kernel result and records a metric.
 - table/logic version participates in cache identity and internal result metadata.
 - calculator's direct module-infra Gradle dependency is removed.

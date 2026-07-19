@@ -5,6 +5,7 @@
 - **Date**: 2026-07-19
 - **Program**: [ETL module-infra Deepening Program](2026-07-19-etl-infra-deepening-program-design.md)
 - **Integrates with**: [Kafka Delivery Outcome](2026-07-19-kafka-delivery-outcome-design.md)
+- **Review**: grill-me findings incorporated
 
 ---
 
@@ -41,7 +42,7 @@ module-nexon-client
   ├─ transport  NexonTransportFactory, NexonTransport
   ├─ failure    NexonFailure, NexonFailureClassifier
   ├─ system     SystemKeyNexonClient
-  ├─ byok       ByokNexonClient
+  ├─ byok       ByokNexonClient, NexonCharacterList
   └─ metrics    NexonClientMetrics
 
 module-external-api
@@ -53,7 +54,7 @@ module-infra
        delegate to module-nexon-client for app/web callers
 ```
 
-새 module은 module-external-api의 outbound port나 workload domain을 import하지 않는다. external-api가 thin adapter로 endpoint/key types를 transport request로 변환한다.
+새 module은 module-external-api의 outbound port나 workload domain을 import하지 않는다. external-api가 thin adapter로 endpoint/key types를 transport request로 변환한다. BYOK decode 결과는 새 module의 neutral `NexonCharacterList`이며 external-api는 이를 auth response event로, module-infra facade는 기존 `CharacterListResponse`로 mapping한다. 새 module이 legacy infra DTO를 import하지 않는다.
 
 ### 4.2 Shared transport policy
 
@@ -82,7 +83,9 @@ base URL, builder, timeout application, body-limit application, error classifica
 
 두 profile은 connect 3s, response 5s의 current default를 유지한다. system profile은 current 10s call ceiling과 2 MiB body cap을 유지한다. BYOK profile은 10s call ceiling과 256 KiB body cap을 사용한다. 모든 값은 profile-specific configuration으로 override 가능하고 boot validation에서 양수/bounds를 확인한다.
 
-pool name과 metrics tag에 profile만 사용한다. system bulk saturation이 BYOK acquire queue나 connections를 소비할 수 없다.
+system configuration은 기존 `nexon.http-client.*`와 `NEXON_HTTP_*` 환경 변수 이름을 그대로 binding한다. BYOK는 `nexon.byok-http-client.*`를 사용하고 legacy app facade는 기존 `nexon.api.connect-timeout`/`response-timeout`을 mapping한다. 두 pool name이 같으면 boot를 실패시킨다.
+
+pool name과 metrics tag에 profile만 사용한다. system bulk saturation이 BYOK acquire queue나 connections를 소비할 수 없다. module auto-configuration이 두 `ConnectionProvider`를 소유하고 shutdown 때 pending acquisition을 중단한 뒤 bounded timeout으로 dispose한다.
 
 ### 4.4 Client contracts
 
@@ -90,16 +93,18 @@ pool name과 metrics tag에 profile만 사용한다. system bulk saturation이 B
 
 `ByokNexonClient.getCharacterList(apiKey)`는 character list를 비동기로 반환한다. `Optional.empty`나 boolean `validateApiKey`를 제공하지 않는다. 성공적으로 받은 빈 account/character list는 valid empty response이며 invalid credential과 구별한다.
 
+BYOK value는 request header를 만드는 lexical scope를 벗어나 field/cache/context에 저장하지 않는다. future completion 후 client object graph가 key를 참조하지 않아야 한다.
+
 module-infra의 기존 `NexonAuthClient` FQN이 app/web compatibility에 필요하면 adapter가 새 client를 호출해 기존 return type으로 변환한다. unused `validateApiKey` method는 제거하고 caller compile test로 무사용을 증명한다.
 
 ### 4.5 Failure taxonomy
 
-`NexonFailureClassifier`는 status, known Nexon error code, transport cause를 다음 sealed failure로 변환한다.
+`NexonFailureClassifier`는 endpoint purpose, status, known Nexon error code, transport cause를 다음 sealed failure로 변환한다.
 
 | Failure | Examples | Delivery meaning |
 | --- | --- | --- |
 | `InvalidCredential` | 401/403 또는 검증된 credential error code | BYOK terminal user error |
-| `NotFound` | known character/OCID-not-found response such as current OPENAPI00004 context | workload-specific terminal absence |
+| `NotFound` | current fixture의 `OPENAPI00004 Data not found` 등 | workload-specific terminal absence; credential failure 아님 |
 | `InvalidRequest` | 다른 non-credential 4xx | programming/data error; no transient masking |
 | `RateLimited` | 429 | retryable, retry-after 존중 |
 | `Timeout` | connect/response/call timeout | retryable |
@@ -107,7 +112,7 @@ module-infra의 기존 `NexonAuthClient` FQN이 app/web compatibility에 필요�
 | `ResponseTooLarge` | configured body cap 초과 | explicit failure; system alert |
 | `DecodeFailure` | successful HTTP body가 expected DTO를 만족하지 않음 | explicit failure; retry/DLT policy에 전달 |
 
-분류되지 않은 4xx를 invalid credential로 취급하지 않는다. raw `WebClientResponseException`은 module 밖으로 노출하지 않고 typed failure에 status와 sanitized Nexon code만 포함한다.
+error code는 endpoint-aware fixture로 분류한다. 같은 HTTP status만으로 credential/not-found 의미를 추측하지 않는다. 분류되지 않은 4xx를 invalid credential로 취급하지 않는다. raw `WebClientResponseException`은 module 밖으로 노출하지 않고 typed failure에 status와 sanitized Nexon code만 포함한다.
 
 ### 4.6 Security and redaction
 
@@ -123,6 +128,7 @@ module-infra의 기존 `NexonAuthClient` FQN이 app/web compatibility에 필요�
 
 - character-list success: response event send completion 후 `Success`
 - `InvalidCredential`: 기존 실패 response를 publish 완료한 뒤 `Success`
+- character-list `NotFound`: credential error가 아닌 no-accessible-character 실패 response를 publish 완료한 뒤 `Success`
 - `RateLimited`, `Timeout`, `UpstreamUnavailable`: `Retryable`
 - response serialization/send failure: `Retryable`
 - invalid source request: `InvalidMessage`
@@ -146,12 +152,15 @@ system과 BYOK는 한 단계에서 동시에 전환하지 않는다. 각 client 
 
 - VALUES_ONLY encoding과 endpoint/query golden tests, 특히 한글 character name
 - system/BYOK credential header가 정확히 한 번 설정되고 log/exception에 노출되지 않음
+- BYOK completion 후 client field/cache/context에 key reference가 남지 않음
 - status + Nexon code failure taxonomy
+- `OPENAPI00004` not-found가 invalid credential로 오분류되지 않음
 - unknown 4xx가 invalid credential로 축소되지 않음
 - connect, response, call timeout mapping
 - 429 retry-after propagation
 - system 2 MiB와 BYOK 256 KiB response cap
 - pool name/capacity 격리와 한 profile saturation이 다른 profile acquisition을 막지 않음
+- legacy property/env binding, distinct pool-name validation, provider shutdown
 - URI metrics가 raw identifier를 tag로 만들지 않음
 - auth invalid credential response publish completion 전 no-ACK
 - auth timeout/429/5xx가 Kafka retry outcome으로 전파
@@ -174,7 +183,9 @@ metric tag 집합은 profile, bounded endpoint name, status class, normalized fa
 
 - Nexon base URL, WebClient/HttpClient construction, timeout/body limit, error classification이 module-nexon-client에 한 번만 존재한다.
 - system-key와 BYOK가 서로 다른 `ConnectionProvider`와 bounded queue를 사용한다.
+- 기존 system property/env 이름은 유지되고 두 provider가 deterministic하게 dispose된다.
 - timeout, 429, 5xx가 invalid credential/empty response로 축소되지 않는다.
+- neutral character-list model과 legacy DTO mapping이 module 경계를 역전시키지 않는다.
 - auth response Kafka send completion 전 ACK가 없다.
 - API key와 raw response body가 log, metric, trace, exception, DLT에 노출되지 않는다.
 - external-api가 `MaplestoryApiConfig`, `RealNexonAuthClient`, module-infra Nexon types를 import하지 않는다.

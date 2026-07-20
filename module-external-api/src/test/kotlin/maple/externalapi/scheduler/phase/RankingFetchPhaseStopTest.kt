@@ -20,19 +20,16 @@ class RankingFetchPhaseStopTest {
             clientPort = mock(),
             objectMapper = com.fasterxml.jackson.databind.ObjectMapper(),
             chunkingProperties = mock(),
-            volumeMetrics = mock(),
             metrics = mock(),
-            rankingPublisher = mock(),
             maxPages = 5,
             permitsPerSecond = 100,
-            runMarkerWriter = mock(),
-            objectStorage = mock(),
-            artifactWriter = mock(),
+            runLifecycle = mock(),
+            sinkFactory = mock(),
             stopSignal = signal,
         )
 
         val ex = assertThrows(PhaseStoppedException::class.java) {
-            phase.execute(Executors.newSingleThreadExecutor(), "test-run").join()
+            phase.execute(Executors.newSingleThreadExecutor(), "test-run")
         }
         assertEquals(PipelinePhase.RANKING_FETCH, ex.phase)
     }

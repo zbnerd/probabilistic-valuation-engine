@@ -9,26 +9,21 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
-import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.domain.KeyType
 import maple.externalapi.metrics.ExternalApiMetrics
-import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.scheduler.PhaseStopSignal
 import maple.externalapi.scheduler.PhaseStoppedException
-import maple.externalapi.snapshot.ChunkFileManager
 import maple.externalapi.snapshot.ChunkedSnapshotSink
-import maple.externalapi.snapshot.SinkEventPublisher
+import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkRecord
 import maple.externalapi.snapshot.SnapshotChunkingProperties
-import maple.externalapi.snapshot.SnapshotSinkEventPublisher
-import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
-import maple.pipeline.artifact.write.ArtifactWriter
+import maple.pipeline.artifact.identity.SourceArtifactLayout
+import maple.pipeline.artifact.lifecycle.RunLifecycle
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
@@ -39,17 +34,13 @@ class RankingFetchPhase(
     private val clientPort: ExternalApiClientPort,
     private val objectMapper: ObjectMapper,
     private val chunkingProperties: SnapshotChunkingProperties,
-    private val volumeMetrics: SnapshotVolumeMetrics,
     private val metrics: ExternalApiMetrics,
-    @Qualifier("rankingSnapshotPublisher")
-    private val rankingPublisher: SnapshotChunkEventPublisher,
     @Value("\${external-api.ranking.max-pages:300}")
     private val maxPages: Int,
     @Value("\${external-api.ranking.permits-per-second:50}")
     private val permitsPerSecond: Int,
-    private val runMarkerWriter: RunMarkerWriter,
-    private val objectStorage: ObjectStorage,
-    private val artifactWriter: ArtifactWriter,
+    private val runLifecycle: RunLifecycle,
+    private val sinkFactory: EndpointSinkFactory,
     private val stopSignal: PhaseStopSignal,
 ) {
     private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
@@ -59,48 +50,48 @@ class RankingFetchPhase(
             throw PhaseStoppedException(PipelinePhase.RANKING_FETCH)
         }
         val date = LocalDate.now().minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val runKey = "runs/$runId"
         val endpointConfig = chunkingProperties.configFor("ranking-overall")
+        return runLifecycle.startEndpoint(runId, RANKING_ENDPOINT).thenCompose {
+            val sink = sinkFactory.createForRanking(runId)
+            val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
+            val fetched = AtomicInteger(0)
+            val failed = AtomicInteger(0)
 
-        runMarkerWriter.writeRunMarker(runKey)
+            log.info(
+                "[RankingFetch] starting: runId={}, date={}, maxPages={}, permitsPerSecond={}, chunk={}records/{}bytes",
+                runId,
+                date,
+                maxPages,
+                permitsPerSecond,
+                endpointConfig.maxRecords,
+                endpointConfig.maxUncompressedBytes,
+            )
+            val start = Instant.now()
 
-        val sink = ChunkedSnapshotSink(
-            endpoint = "ranking-overall",
-            queueCapacity = chunkingProperties.queueCapacity,
-            fileManager = ChunkFileManager(
-                runId = runId,
-                endpoint = "ranking-overall",
-                maxRecords = endpointConfig.maxRecords,
-                maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
-                objectMapper = objectMapper,
-                clock = java.time.Clock.systemUTC(),
-                objectStorage = objectStorage,
-                artifactWriter = artifactWriter,
-            ),
-            eventPublisher = SnapshotSinkEventPublisher(
-                eventPublisher = SinkEventPublisher(rankingPublisher),
-                volumeMetrics = volumeMetrics,
-                clock = java.time.Clock.systemUTC(),
-            ),
-        )
-
-        val rateLimiter = SchedulerPhaseUtils.newRateLimiter(permitsPerSecond)
-        val fetched = AtomicInteger(0)
-        val failed = AtomicInteger(0)
-
-        log.info("[RankingFetch] starting: runId={}, date={}, maxPages={}, permitsPerSecond={}", runId, date, maxPages, permitsPerSecond)
-        val start = Instant.now()
-
-        return processPages(workerExecutor, sink, rateLimiter, date, 1, fetched, failed)
-            .thenCompose { sink.closeAsync() }
-            .whenComplete { _, ex ->
-                if (ex != null) {
-                    log.error("[RankingFetch] failed: runId={}, fetched={}, failed={}", runId, fetched.get(), failed.get(), ex)
-                } else {
-                    SchedulerPhaseUtils.logSummary("RankingFetch", fetched.get(), fetched.get(), fetched.get(), failed.get(), start)
+            processPages(workerExecutor, sink, rateLimiter, date, 1, fetched, failed)
+                .thenCompose { sink.closeAsync() }
+                .whenComplete { _, ex ->
+                    if (ex != null) {
+                        log.error(
+                            "[RankingFetch] failed: runId={}, fetched={}, failed={}",
+                            runId,
+                            fetched.get(),
+                            failed.get(),
+                            ex,
+                        )
+                    } else {
+                        SchedulerPhaseUtils.logSummary(
+                            "RankingFetch",
+                            fetched.get(),
+                            fetched.get(),
+                            fetched.get(),
+                            failed.get(),
+                            start,
+                        )
+                    }
                 }
-            }
-            .thenApply { runKey }
+                .thenApply { SourceArtifactLayout.runRoot(runId).value }
+        }
     }
 
     private fun processPages(
@@ -200,4 +191,8 @@ class RankingFetchPhase(
     ): CompletableFuture<Int> = CompletableFuture.supplyAsync({
         submitRankingEntries(sink, bodyBytes, page)
     }, Dispatchers.Default.asExecutor())
+
+    private companion object {
+        const val RANKING_ENDPOINT: String = "ranking-overall"
+    }
 }

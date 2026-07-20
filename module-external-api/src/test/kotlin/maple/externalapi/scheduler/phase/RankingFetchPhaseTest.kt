@@ -1,105 +1,122 @@
 package maple.externalapi.scheduler.phase
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
-import com.fasterxml.jackson.module.kotlin.kotlinModule
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import maple.expectation.common.event.SnapshotChunkReadyEvent
-import maple.expectation.common.event.SnapshotRunCompletedEvent
-import maple.expectation.common.event.SnapshotRunFailedEvent
+import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.common.storage.PutResult
 import maple.externalapi.metrics.ExternalApiMetrics
-import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.scheduler.PhaseStopSignal
+import maple.externalapi.snapshot.ChunkedSnapshotSink
+import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
-import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.pipeline.artifact.identity.SourceArtifactLayout
+import maple.pipeline.artifact.lifecycle.RunLifecycle
 import maple.pipeline.artifact.storage.ConditionalObjectStorage
-import maple.pipeline.artifact.write.DefaultArtifactWriter
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
-/**
- * Migration Task 8: `execute(workerExecutor, runId)` must return `CompletableFuture<String>`
- * whose value is the runKey (e.g. `runs/20260610-...`) — not a Path.
- */
 class RankingFetchPhaseTest {
-
     @Test
-    fun `execute returns runKey as String starting with runs slash`() {
-        val storage = mock<ConditionalObjectStorage>()
-        // RankingFetchPhase writes a single empty chunk (empty ranking array) at
-        // close via GzipJsonlChunkWriter → putFile. Mock it so close() returns
-        // a non-null PutResult.
-        whenever(storage.putFileAsync(any<String>(), any<Path>()))
-            .thenAnswer { invocation ->
-                val key: String = invocation.getArgument(0)
-                val path: Path = invocation.getArgument(1)
-                java.util.concurrent.CompletableFuture.completedFuture(
-                    PutResult(key, Files.size(path), null),
-                )
-            }
-        whenever(storage.put(any<String>(), any<ByteArray>()))
-            .thenAnswer { invocation ->
-                val key: String = invocation.getArgument(0)
-                val bytes: ByteArray = invocation.getArgument(1)
-                PutResult(key, bytes.size.toLong(), null)
-            }
-
-        val objectMapper = ObjectMapper()
-            .registerModule(kotlinModule())
-            .registerModule(JavaTimeModule())
-
-        // Ranking API returns an empty ranking array — phase finishes after one page.
+    fun `execute starts legacy ranking marker before sink creation and returns typed run root`() {
+        val storage = markerStorage()
         val clientPort = mock<ExternalApiClientPort>()
         whenever(clientPort.fetch(any(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture("{}".toByteArray()))
+        val sink = mock<ChunkedSnapshotSink>()
+        whenever(sink.closeAsync()).thenReturn(CompletableFuture.completedFuture(null))
+        val sinkFactory = mock<EndpointSinkFactory>()
+        whenever(sinkFactory.createForRanking(RUN_ID)).thenReturn(sink)
+        val phase = phase(storage, clientPort, sinkFactory)
+        val workerExecutor = Executors.newSingleThreadExecutor()
 
-        // Mock event publisher — we only care about the runKey return value.
-        val eventPublisher = mock<SnapshotChunkEventPublisher>()
-        whenever(eventPublisher.publishChunkReady(any<SnapshotChunkReadyEvent>()))
-            .thenReturn(CompletableFuture.completedFuture(null))
-        whenever(eventPublisher.publishRunCompleted(any<SnapshotRunCompletedEvent>()))
-            .thenReturn(CompletableFuture.completedFuture(null))
-        whenever(eventPublisher.publishRunFailed(any<SnapshotRunFailedEvent>()))
-            .thenReturn(CompletableFuture.completedFuture(null))
+        val outcome = try {
+            awaitFuture(phase.execute(workerExecutor, RUN_ID))
+        } finally {
+            workerExecutor.shutdownNow()
+        }
 
-        val volumeMetrics = mock<SnapshotVolumeMetrics>()
-        val externalApiMetrics = mock<ExternalApiMetrics>()
-
-        val chunkingProperties = SnapshotChunkingProperties()
-
-        val phase = RankingFetchPhase(
-            clientPort = clientPort,
-            objectMapper = objectMapper,
-            chunkingProperties = chunkingProperties,
-            volumeMetrics = volumeMetrics,
-            metrics = externalApiMetrics,
-            rankingPublisher = eventPublisher,
-            maxPages = 1,
-            permitsPerSecond = 1000,
-            runMarkerWriter = RunMarkerWriter(Clock.systemUTC(), storage),
-            objectStorage = storage,
-            artifactWriter = DefaultArtifactWriter(
-                storage,
-                java.util.concurrent.Executor { command -> command.run() },
-            ),
-            stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
+        assertThat(outcome.failure).isNull()
+        assertThat(outcome.value).isEqualTo(SourceArtifactLayout.runRoot(RUN_ID).value)
+        inOrder(storage, sinkFactory, clientPort).run {
+            verify(storage).put(
+                org.mockito.kotlin.eq("runs/20260610-xyz/_RUNNING"),
+                any<ByteArray>(),
+            )
+            verify(sinkFactory).createForRanking(RUN_ID)
+            verify(clientPort).fetch(any(), any(), any())
+        }
+        verify(storage, never()).put(
+            org.mockito.kotlin.eq("runs/20260610-xyz/ranking-overall/_RUNNING"),
+            any<ByteArray>(),
         )
+    }
 
-        val result: CompletableFuture<String> = phase.execute(Executors.newSingleThreadExecutor(), "20260610-xyz")
-        val runKey = result.get(15, TimeUnit.SECONDS)
+    @Test
+    fun `marker write failure prevents ranking sink creation and fetch submission`() {
+        val storage = markerStorage(failure = IllegalStateException("marker unavailable"))
+        val clientPort = mock<ExternalApiClientPort>()
+        val sinkFactory = mock<EndpointSinkFactory>()
+        val phase = phase(storage, clientPort, sinkFactory)
+        val workerExecutor = Executors.newSingleThreadExecutor()
 
-        assertTrue(
-            runKey.startsWith("runs/"),
-            "expected runKey to start with 'runs/' but was '$runKey'",
-        )
+        val outcome = try {
+            awaitFuture(phase.execute(workerExecutor, RUN_ID))
+        } finally {
+            workerExecutor.shutdownNow()
+        }
+
+        assertThat(outcome.failure).hasRootCauseMessage("marker unavailable")
+        verify(sinkFactory, never()).createForRanking(any())
+        verify(clientPort, never()).fetch(any(), any(), any())
+    }
+
+    private fun phase(
+        storage: ConditionalObjectStorage,
+        clientPort: ExternalApiClientPort,
+        sinkFactory: EndpointSinkFactory,
+    ): RankingFetchPhase = RankingFetchPhase(
+        clientPort = clientPort,
+        objectMapper = com.fasterxml.jackson.databind.ObjectMapper(),
+        chunkingProperties = SnapshotChunkingProperties(),
+        metrics = mock<ExternalApiMetrics>(),
+        maxPages = 1,
+        permitsPerSecond = 1000,
+        runLifecycle = RunLifecycle(storage, java.util.concurrent.Executor(Runnable::run)),
+        sinkFactory = sinkFactory,
+        stopSignal = PhaseStopSignal(),
+    )
+
+    private fun markerStorage(failure: Throwable? = null): ConditionalObjectStorage {
+        val storage = mock<ConditionalObjectStorage>()
+        whenever(storage.put(any(), any<ByteArray>())).thenAnswer { invocation ->
+            if (failure != null) throw failure
+            val key = invocation.getArgument<String>(0)
+            val bytes = invocation.getArgument<ByteArray>(1)
+            PutResult(key, bytes.size.toLong(), null)
+        }
+        return storage
+    }
+
+    private fun <T> awaitFuture(future: CompletableFuture<T>): FutureOutcome<T> {
+        val captured = AtomicReference<FutureOutcome<T>>()
+        future.whenComplete { value, failure -> captured.set(FutureOutcome(value, failure)) }
+        await().atMost(Duration.ofSeconds(5)).until { captured.get() != null }
+        return requireNotNull(captured.get())
+    }
+
+    private data class FutureOutcome<T>(val value: T?, val failure: Throwable?)
+
+    private companion object {
+        const val RUN_ID: String = "20260610-xyz"
     }
 }

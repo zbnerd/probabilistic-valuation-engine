@@ -10,7 +10,9 @@ import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
 import maple.externalapi.scheduler.phase.RunIdGenerator
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.future.future
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Value
@@ -152,7 +154,7 @@ class ExternalApiScheduler(
             rankingPhase.execute(executor, runId)
         } catch (ex: Throwable) {
             log.error("[Scheduler] runRankingPhase sync failure runId={}", runId, ex)
-            CompletableFuture.failedFuture<Void>(ex)
+            CompletableFuture.failedFuture<String>(ex)
         }
         return future
             .whenComplete { _, ex ->
@@ -182,13 +184,13 @@ class ExternalApiScheduler(
             )
         }
 
-        val runKey = "runs/$upstreamRunId"
-        val future = runCatching {
-            runBlocking { ocidLookupPhase.execute(executor, runKey, runId) }
-                .let { CompletableFuture.completedFuture(it) }
+        val future: CompletableFuture<Unit> = runCatching {
+            CoroutineScope(executor.asCoroutineDispatcher()).future {
+                ocidLookupPhase.execute(executor, upstreamRunId, runId)
+            }
         }.getOrElse { ex ->
             log.error("[Scheduler] runOcidPhase sync failure runId={} upstreamRunId={}", runId, upstreamRunId, ex)
-            CompletableFuture.failedFuture<Void>(ex)
+            CompletableFuture.failedFuture<Unit>(ex)
         }
         return future
             .whenComplete { _, ex ->

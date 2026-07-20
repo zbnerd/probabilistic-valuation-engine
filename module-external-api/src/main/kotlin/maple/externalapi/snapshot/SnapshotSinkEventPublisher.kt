@@ -2,6 +2,7 @@ package maple.externalapi.snapshot
 
 import java.time.Clock
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
@@ -34,7 +35,7 @@ class SnapshotSinkEventPublisher(
         receipt: ArtifactReceipt,
         runId: String,
         endpoint: String,
-    ) {
+    ): CompletableFuture<Void> {
         val chunkId = receipt.key.value.substringAfterLast('/').removeSuffix(".jsonl.gz")
         val ratio = CompressionUtils.ratioString(receipt.uncompressedBytes, receipt.compressedBytes)
         volumeMetrics.recordChunk(receipt.compressedBytes, receipt.uncompressedBytes, stats.recordCount.toLong())
@@ -67,19 +68,19 @@ class SnapshotSinkEventPublisher(
             sha256 = null,
             createdAt = java.time.Instant.now(clock),
         )
-        eventPublisher.publishChunkReady(event)
+        return eventPublisher.publishChunkReady(event)
     }
 
     /**
      * Build [SnapshotRunCompletedEvent] from a finalized manifest and dispatch.
      * Caller must have set `manifest.finishedAt` before invoking.
      */
-    fun publishRunCompleted(manifest: SnapshotChunkManifest, endpoint: String) {
+    fun publishRunCompleted(manifest: SnapshotChunkManifest, endpoint: String): CompletableFuture<Void> {
         val event = SnapshotRunCompletedEvent(
             eventId = UUID.randomUUID().toString(),
             runId = manifest.runId,
             endpoint = endpoint,
-            manifestPath = "runs/${manifest.runId}/$endpoint/manifest.json",
+            manifestPath = maple.pipeline.artifact.identity.SourceArtifactLayout.manifest(manifest.runId, endpoint).value,
             totalRecords = manifest.totalRecords,
             totalFailed = manifest.totalFailed,
             chunkCount = manifest.chunks.size,
@@ -87,13 +88,17 @@ class SnapshotSinkEventPublisher(
             finishedAt = requireNotNull(manifest.finishedAt),
             createdAt = java.time.Instant.now(clock),
         )
-        eventPublisher.publishRunCompleted(event)
+        return eventPublisher.publishRunCompleted(event)
     }
 
     /**
      * Build [SnapshotRunFailedEvent] carrying the writer-thread error message and dispatch.
      */
-    fun publishRunFailed(manifest: SnapshotChunkManifest, endpoint: String, errorMessage: String) {
+    fun publishRunFailed(
+        manifest: SnapshotChunkManifest,
+        endpoint: String,
+        errorMessage: String,
+    ): CompletableFuture<Void> {
         val event = SnapshotRunFailedEvent(
             eventId = UUID.randomUUID().toString(),
             runId = manifest.runId,
@@ -101,6 +106,6 @@ class SnapshotSinkEventPublisher(
             errorMessage = errorMessage,
             createdAt = java.time.Instant.now(clock),
         )
-        eventPublisher.publishRunFailed(event)
+        return eventPublisher.publishRunFailed(event)
     }
 }

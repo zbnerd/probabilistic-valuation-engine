@@ -1,9 +1,11 @@
 package maple.externalapi.snapshot
 
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
@@ -11,6 +13,7 @@ import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.pipeline.artifact.identity.ArtifactKey
 import maple.pipeline.artifact.write.ArtifactReceipt
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
@@ -152,6 +155,77 @@ class SnapshotSinkEventPublisherTest {
         assertThat(event.createdAt).isEqualTo(Instant.parse("2026-06-07T10:00:00Z"))
         assertThat(event.eventId).isNotBlank()
         verifyNoInteractions(volumeMetrics)
+    }
+
+    @Test
+    fun `sink publisher preserves synchronous send failure`() {
+        val delegate = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>()
+        whenever(delegate.publishRunCompleted(any())).thenThrow(IllegalStateException("sync broker failure"))
+        val safePublisher = SinkEventPublisher(delegate)
+
+        val failure = awaitFailure(
+            safePublisher.publishRunCompleted(
+                SnapshotRunCompletedEvent(
+                    eventId = "event-1",
+                    runId = "run-1",
+                    endpoint = "item-equipment",
+                    manifestPath = "runs/run-1/item-equipment/manifest.json",
+                    totalRecords = 0,
+                    totalFailed = 0,
+                    chunkCount = 0,
+                    startedAt = Instant.parse("2026-06-07T09:00:00Z"),
+                    finishedAt = Instant.parse("2026-06-07T10:00:00Z"),
+                    createdAt = Instant.parse("2026-06-07T10:00:00Z"),
+                ),
+            ),
+        )
+
+        assertThat(failure).hasMessage("sync broker failure")
+    }
+
+    @Test
+    fun `sink publisher preserves asynchronous send failure`() {
+        val delegate = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>()
+        whenever(delegate.publishRunFailed(any()))
+            .thenReturn(CompletableFuture.failedFuture(IllegalStateException("async broker failure")))
+        val safePublisher = SinkEventPublisher(delegate)
+
+        val failure = awaitFailure(
+            safePublisher.publishRunFailed(
+                SnapshotRunFailedEvent(
+                    eventId = "event-2",
+                    runId = "run-1",
+                    endpoint = "item-equipment",
+                    errorMessage = "source failure",
+                    createdAt = Instant.parse("2026-06-07T10:00:00Z"),
+                ),
+            ),
+        )
+
+        assertThat(failure).hasRootCauseMessage("async broker failure")
+    }
+
+    @Test
+    fun `snapshot publisher returns required publication future`() {
+        val requiredSend = CompletableFuture<Void>()
+        whenever(sinkEventPublisher.publishRunCompleted(any())).thenReturn(requiredSend)
+        val manifest = SnapshotChunkManifest(
+            runId = "run-required",
+            endpoint = "item-equipment",
+            startedAt = Instant.parse("2026-06-07T08:00:00Z"),
+            finishedAt = Instant.parse("2026-06-07T09:00:00Z"),
+        )
+
+        val returned = publisher.publishRunCompleted(manifest, "item-equipment")
+
+        assertThat(returned).isSameAs(requiredSend)
+    }
+
+    private fun awaitFailure(future: CompletableFuture<Void>): Throwable {
+        val captured = AtomicReference<Throwable>()
+        future.whenComplete { _, failure -> captured.set(failure) }
+        await().atMost(Duration.ofSeconds(5)).until { captured.get() != null }
+        return requireNotNull(captured.get())
     }
 
     private fun receipt(

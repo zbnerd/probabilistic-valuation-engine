@@ -110,7 +110,7 @@ class OcidLookupPhaseTest {
         kotlinx.coroutines.runBlocking {
             phase.execute(
                 workerExecutor = Executors.newSingleThreadExecutor(),
-                runKey = "runs/abc",
+                rankingRunId = "abc",
                 runId = "abc",
             )
         }
@@ -208,7 +208,7 @@ class OcidLookupPhaseTest {
         kotlinx.coroutines.runBlocking {
             phase.execute(
                 workerExecutor = Executors.newSingleThreadExecutor(),
-                runKey = "runs/abc",
+                rankingRunId = "abc",
                 runId = "abc",
             )
         }
@@ -263,7 +263,7 @@ class OcidLookupPhaseTest {
 
         assertThrows(PhaseStoppedException::class.java) {
             kotlinx.coroutines.runBlocking {
-                phase.execute(Executors.newSingleThreadExecutor(), "runs/abc", "abc")
+                phase.execute(Executors.newSingleThreadExecutor(), "abc", "abc")
             }
         }
     }
@@ -323,7 +323,7 @@ class OcidLookupPhaseTest {
         kotlinx.coroutines.runBlocking {
             phase.execute(
                 workerExecutor = Executors.newSingleThreadExecutor(),
-                runKey = "runs/abc",
+                rankingRunId = "abc",
                 runId = "abc",
             )
         }
@@ -393,7 +393,7 @@ class OcidLookupPhaseTest {
         try {
             runBlocking {
                 val execution = async(Dispatchers.Default) {
-                    phase.execute(workerExecutor, "runs/abc", "abc")
+                    phase.execute(workerExecutor, "abc", "abc")
                 }
                 await().atMost(Duration.ofSeconds(10)).until { borrowedParquet.get() != null }
                 val path = requireNotNull(borrowedParquet.get())
@@ -473,7 +473,7 @@ class OcidLookupPhaseTest {
         val dispatcher = QueueingDispatcher()
         val executionScope = CoroutineScope(SupervisorJob() + dispatcher)
         val execution = executionScope.async {
-            phase.execute(workerExecutor, "runs/handoff", runId)
+            phase.execute(workerExecutor, "handoff", runId)
         }
 
         try {

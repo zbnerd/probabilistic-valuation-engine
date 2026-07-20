@@ -9,6 +9,7 @@ import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
@@ -24,10 +25,12 @@ import maple.pipeline.artifact.write.DefaultArtifactWriter
 import maple.pipeline.artifact.write.GzipArtifactSession
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -39,10 +42,14 @@ class ChunkFileManagerTest {
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 
     @Test
-    fun `cleanupOnFailure deletes all objects under runKey prefix and the running marker`() {
+    fun `cleanup deletes only incomplete artifacts and retains lifecycle markers`() {
         val storage = mock<ConditionalObjectStorage>()
-        val prefixCaptor = argumentCaptor<String>()
-        whenever(storage.deleteByPrefix(prefixCaptor.capture())).thenReturn(5L)
+        whenever(storage.putFileAsync(any<String>(), any<Path>()))
+            .thenAnswer { invocation ->
+                val key = invocation.getArgument<String>(0)
+                val path = invocation.getArgument<Path>(1)
+                CompletableFuture.completedFuture(PutResult(key, Files.size(path), null))
+            }
 
         val manager = ChunkFileManager(
             runId = "abc",
@@ -55,32 +62,27 @@ class ChunkFileManagerTest {
             artifactWriter = artifactWriter(storage),
         )
 
-        manager.cleanupOnFailure()
-
-        assertThat(prefixCaptor.firstValue).isEqualTo("runs/abc/ranking-overall")
-        verify(storage).delete("runs/abc/ranking-overall/_RUNNING")
-    }
-
-    @Test
-    fun `deleteRunningMarker removes the running marker under runKey`() {
-        val storage = mock<ConditionalObjectStorage>()
-        val keyCaptor = argumentCaptor<String>()
-
-        val manager = ChunkFileManager(
-            runId = "abc",
-            endpoint = "ranking-overall",
-            maxRecords = 100,
-            maxUncompressedBytes = 1_000_000,
-            objectMapper = objectMapper,
-            clock = Clock.systemUTC(),
-            objectStorage = storage,
-            artifactWriter = artifactWriter(storage),
+        manager.appendSuccess(
+            SnapshotChunkRecord.Success(
+                bodyBytes = objectMapper.writeValueAsBytes(mapOf("k" to "v")),
+                key = "k",
+                endpoint = "ranking-overall",
+                keyType = KeyType.DATE_PAGE.name,
+                httpStatus = 200,
+                fetchedAt = Instant.parse("2026-06-10T00:00:00Z"),
+            ),
         )
+        manager.closeCurrentChunk()
 
-        manager.deleteRunningMarker()
+        manager.cleanupIncompleteArtifacts()
 
-        verify(storage).delete(keyCaptor.capture())
-        assertThat(keyCaptor.firstValue).isEqualTo("runs/abc/ranking-overall/_RUNNING")
+        verify(storage).delete("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz")
+        verify(storage).delete("runs/abc/ranking-overall/manifest.json")
+        verify(storage).delete("runs/abc/ranking-overall/failed.jsonl")
+        verify(storage, never()).delete("runs/abc/_RUNNING")
+        verify(storage, never()).delete("runs/abc/ranking-overall/_RUNNING")
+        verify(storage, never()).delete("runs/abc/ranking-overall/_SUCCESS")
+        verify(storage, never()).deleteByPrefix(any())
     }
 
     @Test
@@ -170,7 +172,12 @@ class ChunkFileManagerTest {
         manager.appendSuccess(successRecord("second"))
         manager.closeCurrentChunk()
 
-        assertThat(manager.awaitAllUploads()).isTrue()
+        val uploadsComplete = AtomicReference<Boolean>()
+        manager.awaitAllUploadsAsync().whenComplete { completed, failure ->
+            if (failure == null) uploadsComplete.set(completed)
+        }
+        await().atMost(Duration.ofSeconds(5)).until { uploadsComplete.get() != null }
+        assertThat(uploadsComplete.get()).isTrue()
         assertThat(requireNotNull(borrowedPath.get())).doesNotExist()
         val records = GZIPInputStream(ByteArrayInputStream(requireNotNull(uploadedBytes.get())))
             .bufferedReader()

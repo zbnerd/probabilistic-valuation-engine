@@ -15,6 +15,7 @@ import maple.externalapi.metrics.SnapshotFetchMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
+import maple.pipeline.artifact.lifecycle.RunLifecycle
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -40,7 +41,7 @@ class CharacterBasicFetchPhase(
     private val batchSize: Int,
     private val clock: Clock = Clock.systemUTC(),
     private val runIdGenerator: RunIdGenerator,
-    private val runMarkerWriter: RunMarkerWriter,
+    private val runLifecycle: RunLifecycle,
     private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(CharacterBasicFetchPhase::class.java)
@@ -60,47 +61,57 @@ class CharacterBasicFetchPhase(
 
         val effectiveRunId = runId ?: runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("character-basic")
-        val runKey = "runs/$effectiveRunId/character-basic"
-        runMarkerWriter.writeRunMarker(runKey)
-        val sink = sinkFactory.createForCharacterBasic(effectiveRunId)
+        return runLifecycle.startEndpoint(effectiveRunId, CHARACTER_BASIC_ENDPOINT).thenCompose {
+            val sink = sinkFactory.createForCharacterBasic(effectiveRunId)
+            val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
 
-        val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
-
-        log.info("[Scheduler] ========== character-basic lookup start ==========")
-        log.info(
-            "[Scheduler] config: total={}, rate={}/s, batchSize={}, chunk={}records/{}bytes, runId={}",
-            entries.size,
-            permitsPerSecond,
-            batchSize,
-            chunkConfig.maxRecords,
-            chunkConfig.maxUncompressedBytes,
-            effectiveRunId,
-        )
-
-        val start = Instant.now(clock)
-        val ctx = BatchFetchContext(
-            endpoint = "character-basic",
-            phase = PipelinePhase.CHARACTER_BASIC,
-            apiEndpoint = ExternalApiEndpoint.CHARACTER_BASIC,
-            onFetched = { metrics.recordCharacterBasicFetched() },
-            onFailed = { metrics.recordCharacterBasicFailed() },
-        )
-
-        val dispatcher = workerExecutor.asCoroutineDispatcher()
-        return CoroutineScope(dispatcher).future {
-            val (successCount, failCount) = batchSupport.processBatch(
-                rateLimiter,
-                entries,
+            log.info("[Scheduler] ========== character-basic lookup start ==========")
+            log.info(
+                "[Scheduler] config: total={}, rate={}/s, batchSize={}, chunk={}records/{}bytes, runId={}",
+                entries.size,
+                permitsPerSecond,
                 batchSize,
-                ctx,
-                sink,
+                chunkConfig.maxRecords,
+                chunkConfig.maxUncompressedBytes,
                 effectiveRunId,
-                start,
             )
-            schedulerProgressLogger.logSummary("character-basic", entries.size, successCount, successCount, failCount, start)
-        }.thenCompose {
-            metrics.characterBasicTimer().record(Duration.between(start, Instant.now(clock)))
-            sink.closeAsync().thenApply { Unit }
+
+            val start = Instant.now(clock)
+            val ctx = BatchFetchContext(
+                endpoint = CHARACTER_BASIC_ENDPOINT,
+                phase = PipelinePhase.CHARACTER_BASIC,
+                apiEndpoint = ExternalApiEndpoint.CHARACTER_BASIC,
+                onFetched = { metrics.recordCharacterBasicFetched() },
+                onFailed = { metrics.recordCharacterBasicFailed() },
+            )
+
+            val dispatcher = workerExecutor.asCoroutineDispatcher()
+            CoroutineScope(dispatcher).future {
+                val (successCount, failCount) = batchSupport.processBatch(
+                    rateLimiter,
+                    entries,
+                    batchSize,
+                    ctx,
+                    sink,
+                    effectiveRunId,
+                    start,
+                )
+                schedulerProgressLogger.logSummary(
+                    CHARACTER_BASIC_ENDPOINT,
+                    entries.size,
+                    successCount,
+                    successCount,
+                    failCount,
+                    start,
+                )
+            }.thenCompose {
+                metrics.characterBasicTimer().record(Duration.between(start, Instant.now(clock)))
+                sink.closeAsync().thenApply { Unit }
+            }
         }
+    }
+
+    private companion object {
+        const val CHARACTER_BASIC_ENDPOINT: String = "character-basic"
     }
 }

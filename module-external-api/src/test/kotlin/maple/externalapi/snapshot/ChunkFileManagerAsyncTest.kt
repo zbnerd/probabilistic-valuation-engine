@@ -24,9 +24,8 @@ import org.mockito.kotlin.whenever
  * Async contract tests for [ChunkFileManager.awaitAllUploadsAsync].
  *
  * Sub-PR 4 (audit reference: docs/05_Reports/2026-06-18-blocking-audit.md line 69)
- * replaces the blocking `.get(600_000L, TimeUnit.MILLISECONDS)` in
- * [ChunkFileManager.awaitAllUploads] with a CF-returning variant so callers can
- * chain via `thenCompose` without holding a thread hostage on a 10-minute timeout.
+ * keeps a CF-returning boundary so callers can chain via `thenCompose`
+ * without holding a thread hostage on a 10-minute timeout.
  *
  * Two guarantees under test:
  *  - Empty in-flight list returns a CF that is already completed with `true`

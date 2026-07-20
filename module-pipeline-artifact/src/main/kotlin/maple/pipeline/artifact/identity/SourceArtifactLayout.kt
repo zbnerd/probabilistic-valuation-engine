@@ -14,12 +14,20 @@ object SourceArtifactLayout {
         return ArtifactKey.require("$SOURCE_ROOT/${validatedRunId.value}/${validatedEndpoint.value}")
     }
 
+    fun chunksRoot(runId: String, endpoint: String): ArtifactKey {
+        val validatedRunId = ArtifactSegment.require(runId)
+        val validatedEndpoint = ArtifactSegment.require(endpoint)
+        return ArtifactKey.require(
+            "$SOURCE_ROOT/${validatedRunId.value}/${validatedEndpoint.value}/chunks",
+        )
+    }
+
     fun chunk(runId: String, endpoint: String, chunkId: String): ArtifactKey {
         val validatedRunId = ArtifactSegment.require(runId)
         val validatedEndpoint = ArtifactSegment.require(endpoint)
         val validatedChunkId = ArtifactSegment.require(chunkId)
         return ArtifactKey.require(
-            "$SOURCE_ROOT/${validatedRunId.value}/${validatedEndpoint.value}/chunks/${validatedChunkId.value}.jsonl.gz",
+            "${chunksRoot(validatedRunId.value, validatedEndpoint.value).value}/${validatedChunkId.value}.jsonl.gz",
         )
     }
 

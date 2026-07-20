@@ -35,8 +35,8 @@ import org.springframework.beans.factory.ObjectProvider
  * Migration Task 10: [ExternalApiScheduler] must pre-generate the runId
  * (via [RunIdGenerator]) and pass it to [RankingFetchPhase.execute] so the
  * run-status tracker transitions to RANKING_FETCH for the new run BEFORE
- * any async phase begins. The returned runKey is then forwarded unchanged
- * (with the `runs/` prefix) downstream to [OcidLookupPhase.execute].
+ * any async phase begins. That ranking runId is then forwarded unchanged
+ * downstream to [OcidLookupPhase.execute].
  *
  * Run-status wiring: when char-basic ends, ExternalApiScheduler must transition
  * to [PipelinePhase.CHARACTER_BASIC_DONE] — NOT [PipelinePhase.COMPLETED] — because
@@ -46,7 +46,7 @@ import org.springframework.beans.factory.ObjectProvider
 class ExternalApiSchedulerTest {
 
     @Test
-    fun `triggerDailyRefresh generates 4 distinct runIds and forwards runKey to OCID lookup`() {
+    fun `triggerDailyRefresh generates 4 distinct runIds and forwards ranking runId to OCID lookup`() {
         val rankingPhase = mock<RankingFetchPhase>()
         // Ranking echoes the runId it was given back as the runKey.
         // This matches the production contract: RankingFetchPhase.execute
@@ -109,16 +109,13 @@ class ExternalApiSchedulerTest {
 
         scheduler.triggerDailyRefresh(null).get()
 
-        // The OCID lookup phase is invoked from a runBlocking on the virtual-thread executor.
-        // The runKey argument is `runs/<rRunId>` — the RANKING runId, prefixed.
-        val runKeyCaptor = argumentCaptor<String>()
+        val rankingRunIdCaptor = argumentCaptor<String>()
         runBlocking {
-            verify(ocidLookupPhase, timeout(5_000)).execute(any<ExecutorService>(), runKeyCaptor.capture(), any())
+            verify(ocidLookupPhase, timeout(5_000)).execute(any<ExecutorService>(), rankingRunIdCaptor.capture(), any())
         }
-        // The runId passed to ranking.execute is the suffix of the runKey forwarded to OCID.
         val runIdPassedToRanking = argumentCaptor<String>()
         verify(rankingPhase, timeout(5_000)).execute(any<ExecutorService>(), runIdPassedToRanking.capture())
-        assertThat(runKeyCaptor.firstValue).isEqualTo("runs/${runIdPassedToRanking.firstValue}")
+        assertThat(rankingRunIdCaptor.firstValue).isEqualTo(runIdPassedToRanking.firstValue)
     }
 
     @Test
@@ -359,7 +356,7 @@ class ExternalApiSchedulerTest {
 
         verify(runStatusTracker).acquirePhaseSlot(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"), anyOrNull())
         runBlocking {
-            verify(ocidLookupPhase).execute(any<ExecutorService>(), eq("runs/run-r-1"), eq("run-o-1"))
+            verify(ocidLookupPhase).execute(any<ExecutorService>(), eq("run-r-1"), eq("run-o-1"))
         }
         verify(runStatusTracker).completeRun(eq(PipelinePhase.OCID_LOOKUP), eq("run-o-1"), any(), any())
     }

@@ -5,6 +5,7 @@ import java.time.Clock
 import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.pipeline.artifact.lifecycle.RunLifecycle
 import maple.pipeline.artifact.write.ArtifactWriter
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
@@ -28,6 +29,7 @@ class EndpointSinkFactory(
     private val rankingPublisher: SnapshotChunkEventPublisher,
     private val objectStorage: ObjectStorage,
     private val artifactWriter: ArtifactWriter,
+    private val runLifecycle: RunLifecycle,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     fun createForCharacterBasic(runId: String): ChunkedSnapshotSink = build(runId, "character-basic", characterBasicPublisher)
@@ -56,6 +58,7 @@ class EndpointSinkFactory(
             endpoint = endpoint,
             queueCapacity = chunkingProperties.queueCapacity,
             fileManager = fileManager,
+            runLifecycle = runLifecycle,
             eventPublisher = SnapshotSinkEventPublisher(
                 eventPublisher = SinkEventPublisher(publisher),
                 volumeMetrics = volumeMetrics,

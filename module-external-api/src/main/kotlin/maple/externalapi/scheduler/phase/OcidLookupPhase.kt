@@ -35,6 +35,7 @@ import maple.externalapi.scheduler.PhaseStopSignal
 import maple.externalapi.scheduler.PhaseStoppedException
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.pipeline.artifact.identity.OcidMappingArtifactLayout
+import maple.pipeline.artifact.identity.SourceArtifactLayout
 import maple.pipeline.artifact.write.ArtifactReceipt
 import maple.pipeline.artifact.write.GzipArtifactSession
 import org.slf4j.LoggerFactory
@@ -84,17 +85,18 @@ class OcidLookupPhase(
 
     /**
      * External entry point. Caller (ExternalApiScheduler) uses:
-     * `runBlocking { ocidLookupPhase.execute(workerExecutor, runKey, runId) }`
+     * `ocidLookupPhase.execute(workerExecutor, rankingRunId, runId)`
      */
-    suspend fun execute(workerExecutor: ExecutorService, runKey: String, runId: String) {
+    suspend fun execute(workerExecutor: ExecutorService, rankingRunId: String, runId: String) {
         deleteOldMappingFiles(runId)
 
-        val igns = readCharacterNamesFromChunks(runKey)
+        val rankingRoot = SourceArtifactLayout.runRoot(rankingRunId)
+        val igns = readCharacterNamesFromChunks(rankingRunId)
         if (igns.isEmpty()) {
-            log.warn("[Scheduler] no character names from chunks: {}", runKey)
+            log.warn("[Scheduler] no character names from chunks: {}", rankingRoot.value)
             return
         }
-        log.info("[Scheduler] read {} character names from chunks: {}", igns.size, runKey)
+        log.info("[Scheduler] read {} character names from chunks: {}", igns.size, rankingRoot.value)
 
         val rateLimiter = SchedulerPhaseUtils.newRateLimiter(ocidLookupPermitsPerSecond)
 
@@ -116,7 +118,6 @@ class OcidLookupPhase(
             processBatch(
                 workerExecutor = workerExecutor,
                 rateLimiter = rateLimiter,
-                runKey = runKey,
                 igns = igns,
                 processed = 0,
                 successCount = successCount,
@@ -331,8 +332,8 @@ class OcidLookupPhase(
      * `Dispatchers.Default`. Uses [StreamingChunkParser] for
      * streaming parse; no manual readTree per line.
      */
-    suspend fun readCharacterNamesFromChunks(runKey: String): List<String> = withContext(Dispatchers.Default) {
-        val prefix = "$runKey/ranking-overall/chunks"
+    suspend fun readCharacterNamesFromChunks(rankingRunId: String): List<String> = withContext(Dispatchers.Default) {
+        val prefix = SourceArtifactLayout.chunksRoot(rankingRunId, RANKING_ENDPOINT).value
         val names = linkedSetOf<String>()
         val emitted = chunkParserMetrics.recordsEmitted("ranking_chunk_names")
         // Pre-register skipped counter so it appears in /actuator/prometheus from the start.
@@ -355,7 +356,7 @@ class OcidLookupPhase(
         timer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS)
         log.info(
             "[OcidLookup] readCharacterNamesFromChunks key={} distinct={}",
-            runKey,
+            SourceArtifactLayout.runRoot(rankingRunId).value,
             names.size,
         )
         names.toList()
@@ -404,7 +405,6 @@ class OcidLookupPhase(
     private suspend fun processBatch(
         workerExecutor: ExecutorService,
         rateLimiter: io.github.bucket4j.Bucket,
-        runKey: String,
         igns: List<String>,
         processed: Int,
         successCount: AtomicInteger,
@@ -491,5 +491,9 @@ class OcidLookupPhase(
         } catch (ex: Exception) {
             failCount.incrementAndGet()
         }
+    }
+
+    private companion object {
+        const val RANKING_ENDPOINT: String = "ranking-overall"
     }
 }

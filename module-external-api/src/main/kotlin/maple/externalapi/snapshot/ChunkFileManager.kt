@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import maple.expectation.common.storage.ObjectStorage
 import maple.pipeline.artifact.identity.ArtifactKey
@@ -46,11 +47,8 @@ class ChunkFileManager(
 ) {
     private val log = LoggerFactory.getLogger(ChunkFileManager::class.java)
 
-    private val endpointRoot: ArtifactKey = SourceArtifactLayout.endpointRoot(runId, endpoint)
     private val failedKey: ArtifactKey = SourceArtifactLayout.failedRecords(runId, endpoint)
     private val manifestKey: ArtifactKey = SourceArtifactLayout.manifest(runId, endpoint)
-    private val successKey: ArtifactKey = SourceArtifactLayout.endpointSuccess(runId, endpoint)
-    private val runningKey: ArtifactKey = SourceArtifactLayout.endpointRunning(runId, endpoint)
 
     private val failedWriter = SnapshotFailedRecordWriter(
         failedKey = failedKey,
@@ -76,6 +74,8 @@ class ChunkFileManager(
      */
     private val inFlightUploads: MutableList<CompletableFuture<ArtifactReceipt>> = mutableListOf()
     private val pendingChunks: MutableList<ChunkStats> = mutableListOf()
+    private val registeredChunks: MutableList<ChunkStats> = mutableListOf()
+    private val completedReceipts = ConcurrentHashMap<Int, ArtifactReceipt>()
 
     fun appendSuccess(record: SnapshotChunkRecord.Success): ChunkStats? = appendToCurrent { writer ->
         writer.append(record)
@@ -101,12 +101,9 @@ class ChunkFileManager(
             writer.abort(failure)
             throw failure
         }
-        registerUpload(stats)
-        if (stats.recordCount > 0) {
-            pendingChunks.add(stats)
-        }
+        val trackedStats = registerUpload(stats)
         currentWriter = newChunkWriter(nextPartIndex++)
-        return stats.takeIf { it.recordCount > 0 }
+        return trackedStats.takeIf { it.recordCount > 0 }
     }
 
     fun closeCurrentChunk(): ChunkStats? {
@@ -116,11 +113,8 @@ class ChunkFileManager(
             writer.abort(failure)
             throw failure
         }
-        registerUpload(stats)
-        if (stats.recordCount > 0) {
-            pendingChunks.add(stats)
-        }
-        return stats.takeIf { it.recordCount > 0 }
+        val trackedStats = registerUpload(stats)
+        return trackedStats.takeIf { it.recordCount > 0 }
     }
 
     /** Abort and evict the active chunk exactly once before failed-run storage cleanup. */
@@ -131,37 +125,17 @@ class ChunkFileManager(
         return true
     }
 
-    private fun registerUpload(stats: ChunkStats) {
-        inFlightUploads.add(stats.uploadFuture)
-    }
-
-    /**
-     * Block until all in-flight chunk uploads complete, with a hard timeout
-     * to avoid hanging the sink close forever on a stuck MinIO. Returns
-     * `true` on success, `false` on timeout. Errors raised by individual
-     * uploads are logged but not rethrown — the sink's run-completed event
-     * is the place to surface them.
-     */
-    fun awaitAllUploads(timeoutMs: Long = DEFAULT_AWAIT_TIMEOUT_MS): Boolean {
-        if (inFlightUploads.isEmpty()) return true
-        val all = CompletableFuture.allOf(*inFlightUploads.toTypedArray())
-        return try {
-            all.get(timeoutMs, TimeUnit.MILLISECONDS)
-            true
-        } catch (ex: java.util.concurrent.TimeoutException) {
-            log.error(
-                "[ChunkFileManager] awaitAllUploads timed out after {}ms (in-flight: {})",
-                timeoutMs,
-                inFlightUploads.size,
-            )
-            false
-        } catch (ex: Exception) {
-            // At least one upload failed. The first failing future's
-            // exception is wrapped in ExecutionException; we just want
-            // a non-zero return so the sink can decide whether to fail-fast.
-            log.error("[ChunkFileManager] awaitAllUploads failed: {}", ex.message, ex)
-            false
+    private fun registerUpload(stats: ChunkStats): ChunkStats {
+        val receiptFuture = stats.uploadFuture.thenApply { receipt ->
+            validateReceipt(stats, receipt)
+            completedReceipts[stats.partIndex] = receipt
+            receipt
         }
+        val trackedStats = stats.copy(uploadFuture = receiptFuture)
+        registeredChunks.add(trackedStats)
+        inFlightUploads.add(receiptFuture)
+        if (stats.recordCount > 0) pendingChunks.add(trackedStats)
+        return trackedStats
     }
 
     /**
@@ -198,35 +172,40 @@ class ChunkFileManager(
 
     fun inFlightUploadCount(): Int = inFlightUploads.size
 
-    fun writeManifestAndSuccessMarker() {
+    fun finalizeManifestBytes(): ByteArray {
         manifest.totalFailed = failedCount
         manifest.finishedAt = Instant.now(clock)
         manifest.chunks.clear()
         manifest.chunks.addAll(completedChunkEntries())
-        val manifestJson = objectMapper.writeValueAsBytes(manifest)
-        objectStorage.put(manifestKey.value, manifestJson)
-        objectStorage.put(successKey.value, ByteArray(0))
+        return objectMapper.writeValueAsBytes(manifest)
     }
 
     fun manifest(): SnapshotChunkManifest = manifest
 
     /**
-     * Best-effort cleanup after a failed run. Removes all chunk / manifest / failed-record
-     * objects under the typed endpoint root and the `_RUNNING` marker. Called from the sink's failure path.
+     * Best-effort cleanup after a failed artifact build. Removes only this
+     * manager's chunk objects plus its manifest and failed-record object. The
+     * topology-specific `_RUNNING` marker remains for retry/stale-run
+     * classification, and `_SUCCESS` remains untouched for publication replay.
      */
-    fun cleanupOnFailure() {
-        objectStorage.deleteByPrefix(endpointRoot.value)
-        objectStorage.delete(runningKey.value)
-    }
-
-    /** Remove the `_RUNNING` marker after a successful run finalizes. */
-    fun deleteRunningMarker() {
-        objectStorage.delete(runningKey.value)
+    fun cleanupIncompleteArtifacts() {
+        val chunkKeys = registeredChunks
+            .sortedBy(ChunkStats::partIndex)
+            .map { stats -> SourceArtifactLayout.chunk(runId, endpoint, chunkId(stats.partIndex)) }
+        val failures = (chunkKeys + manifestKey + failedKey)
+            .distinct()
+            .mapNotNull { key -> runCatching { objectStorage.delete(key.value) }.exceptionOrNull() }
+        if (failures.isNotEmpty()) {
+            val primary = failures.first()
+            failures.drop(1)
+                .filter { failure -> failure !== primary }
+                .forEach(primary::addSuppressed)
+            throw primary
+        }
     }
 
     private fun newChunkWriter(partIndex: Int): GzipJsonlChunkWriter {
-        val chunkId = "part-${String.format("%06d", partIndex)}"
-        val chunkKey = SourceArtifactLayout.chunk(runId, endpoint, chunkId)
+        val chunkKey = SourceArtifactLayout.chunk(runId, endpoint, chunkId(partIndex))
         return GzipJsonlChunkWriter(
             chunkKey = chunkKey,
             partIndex = partIndex,
@@ -258,7 +237,16 @@ class ChunkFileManager(
 
     private fun completedChunkEntries(): List<ChunkEntry> = pendingChunks
         .sortedBy(ChunkStats::partIndex)
-        .map { stats -> toEntry(stats, stats.uploadFuture.resultNow()) }
+        .map { stats -> toEntry(stats, requireNotNull(completedReceipts[stats.partIndex])) }
+
+    private fun validateReceipt(stats: ChunkStats, receipt: ArtifactReceipt) {
+        val expectedKey = SourceArtifactLayout.chunk(runId, endpoint, chunkId(stats.partIndex))
+        require(receipt.key == expectedKey) {
+            "chunk receipt key ${receipt.key.value} does not match expected ${expectedKey.value}"
+        }
+    }
+
+    private fun chunkId(partIndex: Int): String = "part-${String.format("%06d", partIndex)}"
 
     private fun toEntry(stats: ChunkStats, receipt: ArtifactReceipt): ChunkEntry = ChunkEntry(
         path = receipt.key.value.substringAfterLast('/'),
@@ -271,7 +259,7 @@ class ChunkFileManager(
 
     companion object {
         /**
-         * Default hard timeout for [awaitAllUploads] / [awaitAllUploadsAsync].
+         * Default hard timeout for [awaitAllUploadsAsync].
          * 10 minutes is generous for 128MB × N chunks on a healthy MinIO.
          */
         const val DEFAULT_AWAIT_TIMEOUT_MS: Long = 600_000L

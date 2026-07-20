@@ -2,6 +2,7 @@ package maple.externalapi.metrics
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 
 class SchedulerMetricsTest {
@@ -36,5 +37,33 @@ class SchedulerMetricsTest {
         // drain resets — second drain returns 0
         assertThat(metrics.drainRunChunks()).isEqualTo(0L)
         assertThat(metrics.drainRunRecords()).isEqualTo(0L)
+    }
+
+    @Test
+    fun `lifecycle counters use only closed start and stop operations`() {
+        val registry = SimpleMeterRegistry()
+        val metrics = SchedulerMetrics(registry)
+
+        metrics.recordLifecycleFailure("start")
+        metrics.recordLifecycleFailure("stop")
+        metrics.recordForcedShutdown()
+
+        assertThat(
+            registry.find("external_api_scheduler_lifecycle_failures_total")
+                .tag("operation", "start")
+                .counter()
+                ?.count(),
+        ).isEqualTo(1.0)
+        assertThat(
+            registry.find("external_api_scheduler_lifecycle_failures_total")
+                .tag("operation", "stop")
+                .counter()
+                ?.count(),
+        ).isEqualTo(1.0)
+        assertThat(
+            registry.find("external_api_scheduler_forced_shutdown_total").counter()?.count(),
+        ).isEqualTo(1.0)
+        assertThatThrownBy { metrics.recordLifecycleFailure("dynamic-operation") }
+            .isInstanceOf(IllegalArgumentException::class.java)
     }
 }

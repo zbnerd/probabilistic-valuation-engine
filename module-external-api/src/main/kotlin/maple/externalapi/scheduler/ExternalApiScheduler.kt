@@ -9,7 +9,6 @@ import maple.externalapi.scheduler.phase.ItemEquipmentFetchPhase
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
 import maple.externalapi.scheduler.phase.RunIdGenerator
-import maple.expectation.infrastructure.lifecycle.ManagedLifecycle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.future
@@ -17,11 +16,11 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.boot.context.event.ApplicationReadyEvent
-import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
@@ -39,16 +38,40 @@ class ExternalApiScheduler(
     @Value("\${external-api.schedule.skip-character-basic:false}")
     private val skipCharacterBasic: Boolean,
     private val stopSignal: PhaseStopSignal,
-	) : ManagedLifecycle {
+) {
     private val log = LoggerFactory.getLogger(ExternalApiScheduler::class.java)
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
 
-    @EventListener(ApplicationReadyEvent::class)
-    fun onStartup() {
-        ocidCacheProvider.refresh()
-        if (runOnStartup) {
-            log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
-            triggerDailyRefresh(null)
+    internal fun startAfterReady() {
+        runCatching {
+            ocidCacheProvider.refresh()
+            if (runOnStartup) {
+                log.info("[Scheduler] run-on-startup enabled, triggering daily refresh")
+                triggerDailyRefresh(null)
+            }
+        }.onFailure { failure ->
+            schedulerMetrics.recordLifecycleFailure("start")
+            log.warn("[Scheduler] lifecycle start failed", failure)
+        }.getOrThrow()
+    }
+
+    internal fun stopAndAwait(timeout: Duration) {
+        log.info("[Scheduler] shutdown requested")
+        executor.shutdown()
+        val terminated = runCatching {
+            executor.awaitTermination(timeout.toNanos(), TimeUnit.NANOSECONDS)
+        }.getOrElse { failure ->
+            if (failure is InterruptedException) Thread.currentThread().interrupt()
+            schedulerMetrics.recordLifecycleFailure("stop")
+            schedulerMetrics.recordForcedShutdown()
+            executor.shutdownNow()
+            log.warn("[Scheduler] shutdown wait failed; forced shutdown timeout={}", timeout, failure)
+            throw failure
+        }
+        if (!terminated) {
+            schedulerMetrics.recordForcedShutdown()
+            executor.shutdownNow()
+            log.warn("[Scheduler] shutdown timed out; forced shutdown timeout={}", timeout)
         }
     }
 
@@ -404,10 +427,4 @@ class ExternalApiScheduler(
         }
     }
 
-    override val lifecyclePhase: Int = 100
-
-    override fun stopLifecycle() {
-        log.info("[Scheduler] shutdown requested")
-        executor.close()
-    }
 }

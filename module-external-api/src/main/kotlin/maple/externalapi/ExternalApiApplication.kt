@@ -1,6 +1,5 @@
 package maple.externalapi
 
-import maple.expectation.infrastructure.lifecycle.ManagedLifecycleCoordinator
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotEventProperties
 import maple.nexon.client.config.NexonClientAutoConfiguration
@@ -15,10 +14,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.scheduling.annotation.EnableScheduling
 
 @SpringBootApplication(
-    scanBasePackages = [
-        "maple.externalapi",
-        "maple.expectation.infrastructure.executor",
-    ],
+    scanBasePackages = ["maple.externalapi"],
     exclude = [
         SecurityAutoConfiguration::class,
         SecurityFilterAutoConfiguration::class,
@@ -26,12 +22,9 @@ import org.springframework.scheduling.annotation.EnableScheduling
     ],
 )
 @Import(
-    maple.expectation.infrastructure.config.CoreExecutorConfig::class,
-    maple.expectation.infrastructure.config.VtExecutorConfig::class,
     ArtifactStorageAutoConfiguration::class,
     PipelineKafkaConsumerConfiguration::class,
     NexonClientAutoConfiguration::class,
-    ManagedLifecycleCoordinator::class,
 )
 @EnableScheduling
 @EnableConfigurationProperties(

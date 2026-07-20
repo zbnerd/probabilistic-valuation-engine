@@ -1,6 +1,13 @@
-package maple.expectation.infrastructure.storage
+package maple.pipeline.artifact.storage
 
+import java.net.URI
+import java.nio.file.Files
+import java.time.Duration
+import java.util.UUID
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -12,11 +19,7 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
 import software.amazon.awssdk.transfer.s3.S3TransferManager
-import java.net.URI
-import java.util.UUID
 
 /**
  * Integration test for MinioObjectStorage. Runs only when INTEGRATION_MINIO=true.
@@ -25,20 +28,23 @@ import java.util.UUID
  */
 @EnabledIfEnvironmentVariable(named = "INTEGRATION_MINIO", matches = "true")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class MinioObjectStorageIT {
+class MinioObjectStorageIT : ObjectStorageContract() {
 
     private lateinit var s3: S3Client
     private lateinit var s3Async: S3AsyncClient
     private lateinit var transferManager: S3TransferManager
+    private lateinit var endpoint: String
+    private lateinit var accessKey: String
     private lateinit var bucket: String
     private lateinit var testPrefix: String
     private lateinit var storage: MinioObjectStorage
+    private lateinit var streamReaderExecutor: ExecutorService
 
     @BeforeAll
     fun setUp() {
-        val endpoint = System.getenv("MINIO_ENDPOINT") ?: "http://localhost:9000"
-        val accessKey = System.getenv("MINIO_ACCESS_KEY") ?: "maple"
-        val secretKey = System.getenv("MINIO_SECRET_KEY") ?: "changeme"
+        endpoint = System.getenv("MINIO_ENDPOINT") ?: "http://localhost:9000"
+        accessKey = requiredEnvironment("MINIO_ACCESS_KEY")
+        val secretKey = requiredEnvironment("MINIO_SECRET_KEY")
         val region = System.getenv("MINIO_REGION") ?: "us-east-1"
         bucket = System.getenv("MINIO_BUCKET") ?: "maple-expectation"
         testPrefix = "minio-it-${UUID.randomUUID()}/"
@@ -49,7 +55,7 @@ class MinioObjectStorageIT {
             .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
             .serviceConfiguration(
                 software.amazon.awssdk.services.s3.S3Configuration.builder()
-                    .pathStyleAccessEnabled(true).build()
+                    .pathStyleAccessEnabled(true).build(),
             )
             .build()
         s3Async = S3AsyncClient.builder()
@@ -58,12 +64,14 @@ class MinioObjectStorageIT {
             .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
             .serviceConfiguration(
                 software.amazon.awssdk.services.s3.S3Configuration.builder()
-                    .pathStyleAccessEnabled(true).build()
+                    .pathStyleAccessEnabled(true).build(),
             )
+            .multipartEnabled(true)
             .build()
         transferManager = S3TransferManager.builder()
             .s3Client(s3Async)
             .build()
+        streamReaderExecutor = Executors.newVirtualThreadPerTaskExecutor()
 
         // Ensure bucket exists (idempotent)
         runCatching {
@@ -77,22 +85,61 @@ class MinioObjectStorageIT {
             bucket = bucket,
             pathStyleAccess = true,
         )
-        storage = MinioObjectStorage(props, s3, s3Async, transferManager, meterRegistry = null)
+        storage = MinioObjectStorage(
+            props,
+            s3,
+            s3Async,
+            transferManager,
+            streamReaderExecutor,
+            meterRegistry = null,
+        )
     }
 
     @AfterAll
     fun tearDown() {
-        if (::s3.isInitialized && ::testPrefix.isInitialized) {
-            val list = s3.listObjectsV2(
-                ListObjectsV2Request.builder().bucket(bucket).prefix(testPrefix).build()
-            )
-            list.contents().forEach { obj ->
-                s3.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(obj.key()).build())
-            }
+        if (::storage.isInitialized && ::testPrefix.isInitialized) {
+            val cleanup = runCatching { storage.deleteByPrefix(testPrefix) }
+            if (::transferManager.isInitialized) transferManager.close()
+            if (::s3Async.isInitialized) s3Async.close()
+            if (::s3.isInitialized) s3.close()
+            if (::streamReaderExecutor.isInitialized) streamReaderExecutor.close()
+            cleanup.getOrThrow()
         }
     }
 
     private fun testKey(name: String): String = "$testPrefix$name"
+
+    override fun contractStorage(): ConditionalObjectStorage = storage
+
+    override fun contractKey(relative: String): String = testKey("contract/$relative")
+
+    @Test
+    fun `failed async upload leaves caller file untouched`() {
+        val source = Files.createTempFile("caller-owned-minio-failure-", ".bin")
+        Files.writeString(source, "survives")
+        source.toFile().deleteOnExit()
+        val missingBucketStorage = MinioObjectStorage(
+            MinioProperties(
+                endpoint = endpoint,
+                region = System.getenv("MINIO_REGION") ?: "us-east-1",
+                accessKey = accessKey,
+                bucket = "missing-${UUID.randomUUID()}",
+                pathStyleAccess = true,
+            ),
+            s3,
+            s3Async,
+            transferManager,
+            streamReaderExecutor,
+            meterRegistry = null,
+        )
+
+        val upload = missingBucketStorage.putFileAsync(testKey("failed/file.bin"), source)
+
+        await().atMost(Duration.ofMinutes(1)).until(upload::isDone)
+        assertThat(upload).isCompletedExceptionally
+        assertThat(Files.readString(source)).isEqualTo("survives")
+        Files.delete(source)
+    }
 
     @Test
     fun `put and get round-trip returns identical bytes`() {
@@ -150,8 +197,8 @@ class MinioObjectStorageIT {
 
     @Test
     fun `deleteByPrefix removes all matches and returns byte count`() {
-        storage.put(testKey("cleanup/a.txt"), "12345".toByteArray())  // 5 bytes
-        storage.put(testKey("cleanup/b.txt"), "678".toByteArray())    // 3 bytes
+        storage.put(testKey("cleanup/a.txt"), "12345".toByteArray()) // 5 bytes
+        storage.put(testKey("cleanup/b.txt"), "678".toByteArray()) // 3 bytes
         val deleted = storage.deleteByPrefix(testKey("cleanup/"))
         assertThat(deleted).isEqualTo(8L)
         assertThat(storage.exists(testKey("cleanup/a.txt"))).isFalse
@@ -176,4 +223,8 @@ class MinioObjectStorageIT {
         storage.put(testKey("size/b.txt"), "678".toByteArray())
         assertThat(storage.calculatePrefixSize(testKey("size/"))).isEqualTo(8L)
     }
+
+    private fun requiredEnvironment(name: String): String = requireNotNull(System.getenv(name)) {
+        "$name is required when INTEGRATION_MINIO=true"
+    }.also { value -> require(value.isNotBlank()) { "$name must not be blank" } }
 }

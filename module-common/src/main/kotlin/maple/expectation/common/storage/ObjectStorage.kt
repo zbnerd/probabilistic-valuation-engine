@@ -11,7 +11,7 @@ import java.util.concurrent.CompletableFuture
  * and the calculator's local ObjectStorage, plus direct Paths.get() access
  * in synchronizer readers.
  *
- * Implementations: LocalFsObjectStorage (module-infra), MinioObjectStorage (module-infra).
+ * Implementations: LocalFsObjectStorage and MinioObjectStorage (module-pipeline-artifact).
  * Selected at boot via storage.backend=local|minio property.
  */
 interface ObjectStorage {
@@ -19,7 +19,7 @@ interface ObjectStorage {
     fun put(key: String, data: ByteArray): PutResult
 
     /**
-     * Put data from a stream. Caller is responsible for closing `input`.
+     * Put data from a stream. Implementations never close [input]; the caller owns it.
      *
      * **Deprecated** since issue #1312. Buffers the full stream in heap
      * via `readBytes()` (see `MinioObjectStorage.putStream` and
@@ -41,24 +41,16 @@ interface ObjectStorage {
     fun putStream(key: String, input: InputStream): PutResult
 
     /**
-     * Put a pre-existing file at [path] under [key]. Avoids the double-spool
-     * of [putStream] for callers that already have the bytes on disk (e.g.
-     * [maple.externalapi.snapshot.GzipJsonlChunkWriter] which writes each
-     * chunk to a temp file before upload). The caller relinquishes the file —
-     * implementations move or upload it, and the caller MUST NOT delete the
-     * file or write to it again after this call returns.
+     * Borrows an immutable caller-owned file until this call or returned future completes.
+     * Implementations never move, rewrite, or delete [path]. The caller owns cleanup.
      *
      * Throws if [path] does not exist.
      */
     fun putFile(key: String, path: Path): PutResult
 
     /**
-     * Async variant of [putFile] — returns immediately with a future that
-     * completes when the upload finishes. Used by the writer hot path to
-     * overlap multiple 128MB chunk uploads (each takes 5-10s on MinIO)
-     * with subsequent record ingestion. The caller MUST treat [path] as
-     * transferred to the storage backend (no delete, no rewrite) once
-     * this method returns.
+     * Borrows an immutable caller-owned file until this call or returned future completes.
+     * Implementations never move, rewrite, or delete [path]. The caller owns cleanup.
      *
      * Implementations:
      * - Minio: backed by [software.amazon.awssdk.transfer.s3.S3TransferManager]
@@ -74,17 +66,16 @@ interface ObjectStorage {
 
     /**
      * Async streaming upload. Accepts an [InputStream] of arbitrary length
-     * and uploads without buffering the full content in heap. The caller is
-     * responsible for closing [input] only after the returned future
+     * and uploads without buffering the full content in heap. Implementations
+     * never close [input]; the caller closes it only after the returned future
      * completes (success or failure).
      *
      * Implementations:
-     * - Minio: [software.amazon.awssdk.services.s3.S3AsyncClient.putObject]
+     * - Minio: a multipart-enabled [software.amazon.awssdk.services.s3.S3AsyncClient]
      *   with [software.amazon.awssdk.core.async.AsyncRequestBody.fromInputStream]
-     *   and `contentLength = -1L` (chunked transfer encoding, no
-     *   intermediate ByteArray drain).
-     * - LocalFs: drain [input] to a temp file, then call [putFile] on a
-     *   virtual-thread executor; delete the temp file on completion.
+     *   and unknown content length (no intermediate ByteArray drain).
+     * - LocalFs: drain [input] to a destination-sibling temporary file on
+     *   the upload executor, then atomically publish it.
      *
      * On failure the future completes exceptionally with the underlying
      * cause. On success the future completes with a [PutResult] whose

@@ -1,12 +1,9 @@
-package maple.expectation.infrastructure.storage
+package maple.pipeline.artifact.storage
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.assertj.core.api.Assertions.assertThat
-import org.awaitility.Awaitility.await
-import org.junit.jupiter.api.Assumptions.assumeTrue
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.io.TempDir
-import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.lang.management.ManagementFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -16,19 +13,38 @@ import java.time.Instant
 import java.util.Random
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 
-class LocalFsObjectStorageTest {
+class LocalFsObjectStorageTest : ObjectStorageContract() {
 
     @TempDir
     lateinit var tempDir: Path
 
-    private val objectMapper: ObjectMapper = Jackson2ObjectMapperBuilder().build()
+    private val objectMapper: ObjectMapper = jacksonObjectMapper()
+    private val ownedExecutors = mutableListOf<ExecutorService>()
 
-    private fun newStorage(basePath: String = tempDir.toString()): LocalFsObjectStorage =
-        LocalFsObjectStorage(basePath, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(), meterRegistry = null)
+    private fun newStorage(basePath: String = tempDir.toString()): LocalFsObjectStorage = LocalFsObjectStorage(basePath, newUploadExecutor(), meterRegistry = null)
+
+    override fun contractStorage(): ConditionalObjectStorage = newStorage()
+
+    override fun contractKey(relative: String): String = "contract/$relative"
+
+    private fun newUploadExecutor(): ExecutorService = Executors.newVirtualThreadPerTaskExecutor().also(ownedExecutors::add)
+
+    @AfterEach
+    fun closeOwnedExecutors() {
+        ownedExecutors.forEach(ExecutorService::close)
+        ownedExecutors.clear()
+    }
 
     @Test
     fun `artifact evidence report is produced when enabled`() {
@@ -120,8 +136,7 @@ class LocalFsObjectStorageTest {
         return elapsedNanos
     }
 
-    private fun measuredMib(): Double =
-        FIXTURE_BYTES.toDouble() * MEASURED_OBJECTS / BYTES_PER_MIB
+    private fun measuredMib(): Double = FIXTURE_BYTES.toDouble() * MEASURED_OBJECTS / BYTES_PER_MIB
 
     private fun captureEvidenceJvm(): EvidenceJvm {
         val heap = ManagementFactory.getMemoryMXBean().heapMemoryUsage
@@ -153,18 +168,17 @@ class LocalFsObjectStorageTest {
 
     private fun evidenceReportPath(): Path {
         val workingDirectory = Path.of(System.getProperty("user.dir"))
-        val moduleDirectory = if (workingDirectory.fileName.toString() == "module-infra") {
+        val moduleDirectory = if (workingDirectory.fileName.toString() == "module-pipeline-artifact") {
             workingDirectory
         } else {
-            workingDirectory.resolve("module-infra")
+            workingDirectory.resolve("module-pipeline-artifact")
         }
         return moduleDirectory.resolve("build/reports/artifact-evidence/local-fs-object-storage.json")
     }
 
-    private fun sha256Hex(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256")
-            .digest(bytes)
-            .joinToString("") { byte -> "%02x".format(byte) }
+    private fun sha256Hex(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
+        .digest(bytes)
+        .joinToString("") { byte -> "%02x".format(byte) }
 
     @Test
     fun `put and get round-trip returns identical bytes`() {
@@ -173,6 +187,194 @@ class LocalFsObjectStorageTest {
         storage.put("test/file.txt", data)
         val read = storage.get("test/file.txt")
         assertThat(read).isEqualTo(data)
+    }
+
+    @Test
+    fun `putFileAsync borrows caller file until completion`() {
+        val storage = newStorage()
+        val source = Files.createTempFile("caller-owned-", ".bin")
+        Files.writeString(source, "payload")
+
+        val upload = storage.putFileAsync("a/b.bin", source).toCompletableFuture()
+
+        await().until(upload::isDone)
+        assertThat(upload).isCompleted
+        assertThat(upload).isNotCompletedExceptionally
+        assertThat(Files.readString(source)).isEqualTo("payload")
+        assertThat(storage.get("a/b.bin")).isEqualTo("payload".toByteArray())
+        Files.delete(source)
+    }
+
+    @Test
+    fun `putFile borrows caller file from another filesystem`() {
+        val sharedMemory = Path.of("/dev/shm")
+        assumeTrue(Files.isDirectory(sharedMemory))
+        val storage = newStorage()
+        val source = Files.createTempFile(sharedMemory, "caller-owned-", ".bin")
+        Files.writeString(source, "cross-filesystem")
+
+        val result = runCatching {
+            storage.putFile("cross-fs/value.bin", source)
+            assertThat(Files.readString(source)).isEqualTo("cross-filesystem")
+            assertThat(storage.get("cross-fs/value.bin")).isEqualTo("cross-filesystem".toByteArray())
+        }
+        Files.deleteIfExists(source)
+
+        assertThat(result.exceptionOrNull()).isNull()
+    }
+
+    @Suppress("DEPRECATION")
+    @Test
+    fun `putStream leaves caller stream open`() {
+        val storage = newStorage()
+        val input = CloseTrackingInputStream("stream".toByteArray())
+
+        storage.putStream("streams/sync.bin", input)
+
+        assertThat(input.wasClosed).isFalse
+        assertThat(storage.get("streams/sync.bin")).isEqualTo("stream".toByteArray())
+        input.close()
+    }
+
+    @Test
+    fun `putStreamMultipart leaves caller stream open`() {
+        val storage = newStorage()
+        val input = CloseTrackingInputStream("multipart".toByteArray())
+        val upload = storage.putStreamMultipart("streams/async.bin", input)
+
+        await().until(upload::isDone)
+        assertThat(upload).isCompleted
+        assertThat(upload).isNotCompletedExceptionally
+        assertThat(input.wasClosed).isFalse
+        assertThat(storage.get("streams/async.bin")).isEqualTo("multipart".toByteArray())
+        input.close()
+    }
+
+    @Test
+    fun `putIfAbsent preserves same existing bytes on replay`() {
+        val storage = newStorage()
+        val created = AtomicReference<PutIfAbsentResult?>()
+        val replayed = AtomicReference<PutIfAbsentResult?>()
+        val first = storage.putIfAbsent("inbox/event.json", "canonical".toByteArray()).toCompletableFuture()
+            .thenAccept(created::set)
+        await().until(first::isDone)
+        val replay = storage.putIfAbsent("inbox/event.json", "canonical".toByteArray()).toCompletableFuture()
+            .thenAccept(replayed::set)
+
+        await().until(replay::isDone)
+
+        assertThat(first).isCompleted
+        assertThat(replay).isCompleted
+        assertThat(created.get()).isInstanceOf(PutIfAbsentResult.Created::class.java)
+        val existing = replayed.get()
+        assertThat(existing).isInstanceOf(PutIfAbsentResult.Existing::class.java)
+        if (existing is PutIfAbsentResult.Existing) {
+            assertThat(existing.bytes).isEqualTo("canonical".toByteArray())
+        }
+    }
+
+    @Test
+    fun `putIfAbsent preserves original bytes on conflicting replay`() {
+        val storage = newStorage()
+        val first = storage.putIfAbsent("inbox/conflict.json", "original".toByteArray()).toCompletableFuture()
+        await().until(first::isDone)
+        val replayed = AtomicReference<PutIfAbsentResult?>()
+        val replay = storage.putIfAbsent("inbox/conflict.json", "different".toByteArray()).toCompletableFuture()
+            .thenAccept(replayed::set)
+
+        await().until(replay::isDone)
+
+        assertThat(replay).isCompleted
+        val existing = replayed.get()
+        assertThat(existing).isInstanceOf(PutIfAbsentResult.Existing::class.java)
+        if (existing is PutIfAbsentResult.Existing) {
+            assertThat(existing.bytes).isEqualTo("original".toByteArray())
+        }
+        assertThat(storage.get("inbox/conflict.json")).isEqualTo("original".toByteArray())
+    }
+
+    @Test
+    fun `putIfAbsent creates exactly one object under a race`() {
+        val storage = newStorage()
+        val outcomes = java.util.concurrent.CopyOnWriteArrayList<PutIfAbsentResult>()
+        val first = storage.putIfAbsent("inbox/race.json", "first".toByteArray()).toCompletableFuture()
+            .thenAccept(outcomes::add)
+        val second = storage.putIfAbsent("inbox/race.json", "second".toByteArray()).toCompletableFuture()
+            .thenAccept(outcomes::add)
+
+        await().until { first.isDone && second.isDone }
+
+        assertThat(first).isCompleted
+        assertThat(second).isCompleted
+        assertThat(outcomes.filterIsInstance<PutIfAbsentResult.Created>()).hasSize(1)
+        assertThat(outcomes.filterIsInstance<PutIfAbsentResult.Existing>()).hasSize(1)
+        assertThat(storage.get("inbox/race.json"))
+            .isIn("first".toByteArray(), "second".toByteArray())
+    }
+
+    @Test
+    fun `listPage traverses 1001 objects without gaps or duplicates`() {
+        val storage = newStorage()
+        val pageDirectory = Files.createDirectories(tempDir.resolve("paged"))
+        repeat(1_001) { index ->
+            Files.writeString(pageDirectory.resolve("object-${index.toString().padStart(4, '0')}.json"), index.toString())
+        }
+        val prefix = maple.pipeline.artifact.identity.ArtifactPrefix.require("paged/")
+
+        val first = storage.listPage(prefix, afterKey = null, limit = 1_000)
+        val second = storage.listPage(prefix, afterKey = first.nextAfterKey, limit = 1_000)
+        val keys = (first.objects + second.objects).map { it.key }
+
+        assertThat(first.objects).hasSize(1_000)
+        assertThat(first.nextAfterKey?.value).isEqualTo("paged/object-0999.json")
+        assertThat(second.objects).hasSize(1)
+        assertThat(second.nextAfterKey).isNull()
+        assertThat(keys).hasSize(1_001).doesNotHaveDuplicates()
+        assertThat(keys).containsExactlyElementsOf(
+            (0..1_000).map { index -> "paged/object-${index.toString().padStart(4, '0')}.json" },
+        )
+    }
+
+    @Test
+    fun `listPage rejects invalid limits and foreign cursors`() {
+        val storage = newStorage()
+        val prefix = maple.pipeline.artifact.identity.ArtifactPrefix.require("paged/")
+        val foreignCursor = maple.pipeline.artifact.identity.ArtifactKey.require("other/object.json")
+
+        org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+            storage.listPage(prefix, afterKey = null, limit = 0)
+        }
+        org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+            storage.listPage(prefix, afterKey = null, limit = 1_001)
+        }
+        org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+            storage.listPage(prefix, afterKey = foreignCursor, limit = 10)
+        }
+    }
+
+    @Test
+    fun `putFileAsync completes exceptionally and removes sibling temp when directory force fails`() {
+        val executor = newUploadExecutor()
+        val storage = LocalFsObjectStorage(
+            basePath = tempDir,
+            uploadExecutor = executor,
+            meterRegistry = null,
+            directoryForce = { throw IOException("simulated directory force failure") },
+        )
+        val source = Files.createTempFile("caller-owned-", ".bin")
+        Files.writeString(source, "payload")
+
+        val upload = storage.putFileAsync("failure/value.bin", source)
+
+        await().until(upload::isDone)
+        assertThat(upload).isCompletedExceptionally
+        assertThat(Files.readString(source)).isEqualTo("payload")
+        assertThat(siblingTemps(tempDir)).isEmpty()
+        Files.delete(source)
+    }
+
+    private fun siblingTemps(root: Path): List<Path> = Files.walk(root).use { paths ->
+        paths.filter { path -> path.fileName.toString().endsWith(".tmp") }.toList()
     }
 
     @Test
@@ -228,9 +430,9 @@ class LocalFsObjectStorageTest {
     @Test
     fun `deleteByPrefix removes nested files and returns byte count`() {
         val storage = newStorage()
-        storage.put("runs/run-1/chunk-1.gz", "12345".toByteArray())  // 5 bytes
-        storage.put("runs/run-1/chunk-2.gz", "678".toByteArray())     // 3 bytes
-        storage.put("runs/run-2/chunk-1.gz", "abc".toByteArray())     // 3 bytes
+        storage.put("runs/run-1/chunk-1.gz", "12345".toByteArray()) // 5 bytes
+        storage.put("runs/run-1/chunk-2.gz", "678".toByteArray()) // 3 bytes
+        storage.put("runs/run-2/chunk-1.gz", "abc".toByteArray()) // 3 bytes
         val deleted = storage.deleteByPrefix("runs/run-1/")
         assertThat(deleted).isEqualTo(8L)
         assertThat(storage.exists("runs/run-1/chunk-1.gz")).isFalse
@@ -277,8 +479,8 @@ class LocalFsObjectStorageTest {
     @Test
     fun `calculatePrefixSize matches sum of file sizes`() {
         val storage = newStorage()
-        storage.put("p/a.txt", "12345".toByteArray())  // 5
-        storage.put("p/b.txt", "678".toByteArray())     // 3
+        storage.put("p/a.txt", "12345".toByteArray()) // 5
+        storage.put("p/b.txt", "678".toByteArray()) // 3
         assertThat(storage.calculatePrefixSize("p/")).isEqualTo(8L)
     }
 
@@ -308,4 +510,14 @@ class LocalFsObjectStorageTest {
         val heapInitialMemoryBytes: Long,
         val heapMaxMemoryBytes: Long,
     )
+
+    private class CloseTrackingInputStream(data: ByteArray) : ByteArrayInputStream(data) {
+        var wasClosed: Boolean = false
+            private set
+
+        override fun close() {
+            wasClosed = true
+            super.close()
+        }
+    }
 }

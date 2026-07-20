@@ -20,7 +20,6 @@ import org.springframework.context.annotation.Import
     maple.expectation.infrastructure.config.CoreExecutorConfig::class,
     maple.expectation.infrastructure.config.VtExecutorConfig::class,
     maple.expectation.infrastructure.storage.StorageConfig::class,
-    maple.expectation.infrastructure.storage.MinioHealthIndicator::class,
     KafkaConsumerConfig::class,
     ManagedLifecycleCoordinator::class,
 )

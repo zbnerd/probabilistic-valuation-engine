@@ -4,13 +4,9 @@ import maple.pipeline.artifact.storage.MinioProperties
 import org.slf4j.LoggerFactory
 import org.springframework.boot.actuate.health.Health
 import org.springframework.boot.actuate.health.HealthIndicator
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.stereotype.Component
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest
 
-@Component
-@ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
 class ArtifactStorageHealthIndicator(
     private val properties: MinioProperties,
     private val s3Client: S3Client,

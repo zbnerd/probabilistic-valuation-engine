@@ -1,17 +1,16 @@
 package maple.externalapi.scheduler.phase
 
-import maple.externalapi.domain.ExternalApiEndpoint
-import maple.externalapi.domain.ExternalApiProvider
-import maple.externalapi.port.out.ExternalApiClientPort
-import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
-import maple.expectation.common.event.SnapshotRunCompletedEvent
-import maple.expectation.common.storage.ObjectStorage
-import maple.expectation.common.storage.PutResult
-import maple.expectation.infrastructure.external.NexonAuthClient
-import maple.externalapi.runstatus.PipelinePhase
-import maple.externalapi.scheduler.PhaseStopSignal
-import maple.externalapi.scheduler.PhaseStoppedException
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.io.BufferedOutputStream
+import java.nio.file.Files
+import java.time.Instant
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -24,23 +23,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import maple.common.parser.StreamingChunkParser
+import maple.expectation.common.event.SnapshotRunCompletedEvent
+import maple.expectation.common.storage.ObjectStorage
+import maple.expectation.common.storage.PutResult
+import maple.expectation.infrastructure.external.NexonAuthClient
+import maple.externalapi.domain.ExternalApiEndpoint
+import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.metrics.ChunkParserMetrics
 import maple.externalapi.poc.parquet.ParquetOcidMappingWriter
+import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.runstatus.PipelinePhase
+import maple.externalapi.scheduler.PhaseStopSignal
+import maple.externalapi.scheduler.PhaseStoppedException
+import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.io.BufferedOutputStream
-import java.nio.file.Files
-import java.time.Instant
-import java.util.UUID
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
 
 /**
  * OCID lookup phase scheduler (Issue #1128).
@@ -106,7 +106,9 @@ class OcidLookupPhase(
         log.info("[Scheduler] ========== OCID lookup start ==========")
         log.info(
             "[Scheduler] config: total={}, rate={}/s, batchSize={}, store=ObjectStorage (streaming)",
-            igns.size, ocidLookupPermitsPerSecond, batchSize,
+            igns.size,
+            ocidLookupPermitsPerSecond,
+            batchSize,
         )
 
         val start = Instant.now()
@@ -127,7 +129,7 @@ class OcidLookupPhase(
         // dead" the moment the writer thread exits (checked via
         // `readSide.isAlive()`). A temp file avoids the thread coordination
         // entirely: writer writes to disk, upload reads from disk.
-        val tempFile = Files.createTempFile("ocid-mapping-${runId}-", ".jsonl.gz.tmp")
+        val tempFile = Files.createTempFile("ocid-mapping-$runId-", ".jsonl.gz.tmp")
         var uploadFuture: CompletableFuture<PutResult>? = null
         try {
             coroutineScope {
@@ -161,9 +163,8 @@ class OcidLookupPhase(
                 resultsChannel.close()
                 writerJob.join()
 
-                // Upload the finalized temp file via putFileAsync
-                // (S3TransferManager multipart | LocalFs temp-file). Returns a
-                // CF that resolves when the upload completes.
+                // Upload the finalized caller-owned temp file via putFileAsync.
+                // Storage borrows it until the returned future completes.
                 uploadFuture = objectStorage.putFileAsync(key, tempFile)
             }
             // Wait for the upload to complete before the temp file is deleted
@@ -179,16 +180,15 @@ class OcidLookupPhase(
                 log.warn("[Scheduler] 1423 PoC Parquet side-by-side write failed (non-fatal)", it)
             }
         } finally {
-            // Clean up the temp file once the upload completes — or fails.
-            // For MinIO success path the S3TransferManager uploads from the
-            // file then the whenComplete callback in putFileAsync removes
-            // it; for LocalFs the impl already moved the file into place.
-            // The delete here is a safety net for the MinIO success path.
+            // The caller retains ownership and deletes the temp file after
+            // storage finishes borrowing it, whether the upload succeeds or
+            // fails. Storage never moves or deletes this source.
             runCatching { Files.deleteIfExists(tempFile) }
         }
         log.info(
             "[Scheduler] streamed {} OCID mappings to {} (heap-bounded via pipe)",
-            successCount.get(), key,
+            successCount.get(),
+            key,
         )
         SchedulerPhaseUtils.logSummary(
             "OCID lookup",
@@ -222,7 +222,7 @@ class OcidLookupPhase(
      * cannot affect the production pipeline.
      */
     private suspend fun writeParquetSideBySide(tempFile: java.nio.file.Path, runId: String) {
-        val parquetTempFile = Files.createTempDirectory("ocid-mapping-parquet-${runId}-").resolve("ocid-mapping.parquet")
+        val parquetTempFile = Files.createTempDirectory("ocid-mapping-parquet-$runId-").resolve("ocid-mapping.parquet")
         try {
             ParquetOcidMappingWriter(parquetTempFile.toFile()).use { pWriter ->
                 GZIPInputStream(Files.newInputStream(tempFile)).bufferedReader().useLines { lines ->
@@ -249,35 +249,35 @@ class OcidLookupPhase(
      * `Dispatchers.Default`. Uses [StreamingChunkParser] for
      * streaming parse; no manual readTree per line.
      */
-    suspend fun readCharacterNamesFromChunks(runKey: String): List<String> =
-        withContext(Dispatchers.Default) {
-            val prefix = "$runKey/ranking-overall/chunks"
-            val names = linkedSetOf<String>()
-            val emitted = chunkParserMetrics.recordsEmitted("ranking_chunk_names")
-            // Pre-register skipped counter so it appears in /actuator/prometheus from the start.
-            chunkParserMetrics.recordsSkipped("ranking_chunk_names")
-            val timer = chunkParserMetrics.parseDuration("ranking_chunk_names")
-            val start = System.nanoTime()
+    suspend fun readCharacterNamesFromChunks(runKey: String): List<String> = withContext(Dispatchers.Default) {
+        val prefix = "$runKey/ranking-overall/chunks"
+        val names = linkedSetOf<String>()
+        val emitted = chunkParserMetrics.recordsEmitted("ranking_chunk_names")
+        // Pre-register skipped counter so it appears in /actuator/prometheus from the start.
+        chunkParserMetrics.recordsSkipped("ranking_chunk_names")
+        val timer = chunkParserMetrics.parseDuration("ranking_chunk_names")
+        val start = System.nanoTime()
 
-            for (obj in objectStorage.listByPrefix(prefix)) {
-                if (!obj.key.endsWith(".jsonl.gz")) continue
-                val records = objectStorage.getStream(obj.key).use { stream ->
-                    streamingChunkParser.parse(stream).toList()
-                }
-                for (record in records) {
-                    emitted.increment()
-                    val key = record["key"]?.toString()
-                    if (!key.isNullOrBlank()) names.add(key)
-                }
+        for (obj in objectStorage.listByPrefix(prefix)) {
+            if (!obj.key.endsWith(".jsonl.gz")) continue
+            val records = objectStorage.getStream(obj.key).use { stream ->
+                streamingChunkParser.parse(stream).toList()
             }
-
-            timer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS)
-            log.info(
-                "[OcidLookup] readCharacterNamesFromChunks key={} distinct={}",
-                runKey, names.size,
-            )
-            names.toList()
+            for (record in records) {
+                emitted.increment()
+                val key = record["key"]?.toString()
+                if (!key.isNullOrBlank()) names.add(key)
+            }
         }
+
+        timer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS)
+        log.info(
+            "[OcidLookup] readCharacterNamesFromChunks key={} distinct={}",
+            runKey,
+            names.size,
+        )
+        names.toList()
+    }
 
     /**
      * Delete old OCID mapping objects under [mappingDir], but PRESERVE the
@@ -302,8 +302,12 @@ class OcidLookupPhase(
             objectStorage.delete(obj.key)
             deleted++
         }
-        log.info("[Scheduler] deleted {} old OCID mapping objects in {}/ (preserved current runId={})",
-            deleted, mappingDir, currentRunId)
+        log.info(
+            "[Scheduler] deleted {} old OCID mapping objects in {}/ (preserved current runId={})",
+            deleted,
+            mappingDir,
+            currentRunId,
+        )
     }
 
     /**
@@ -353,8 +357,12 @@ class OcidLookupPhase(
             if (progress - lastProgressLog.get() >= 5000) {
                 lastProgressLog.set(progress)
                 SchedulerPhaseUtils.logProgress(
-                    "OCID lookup", progress, igns.size,
-                    successCount.get(), failCount.get(), start,
+                    "OCID lookup",
+                    progress,
+                    igns.size,
+                    successCount.get(),
+                    failCount.get(),
+                    start,
                 )
             }
         }

@@ -32,7 +32,6 @@ import org.springframework.scheduling.annotation.EnableScheduling
     maple.expectation.infrastructure.config.CoreExecutorConfig::class,
     maple.expectation.infrastructure.config.VtExecutorConfig::class,
     maple.expectation.infrastructure.storage.StorageConfig::class,
-    maple.expectation.infrastructure.storage.MinioHealthIndicator::class,
     KafkaConsumerConfig::class,
     MaplestoryApiConfig::class,
     ExternalApiMetricsFilter::class,

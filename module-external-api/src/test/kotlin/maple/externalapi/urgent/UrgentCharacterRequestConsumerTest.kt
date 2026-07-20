@@ -7,13 +7,13 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
-import maple.expectation.infrastructure.storage.LocalFsObjectStorage
 import maple.externalapi.artifact.UrgentChunkArtifactWriter
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.event.UrgentEventPublisher
 import maple.externalapi.parser.UrgentOcidResponseParser
 import maple.externalapi.port.out.ExternalApiClientPort
+import maple.pipeline.artifact.storage.LocalFsObjectStorage
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition

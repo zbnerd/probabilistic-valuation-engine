@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.common.storage.ObjectInfo
 import maple.pipeline.artifact.identity.ArtifactPrefix
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.Test
 
@@ -126,13 +127,23 @@ abstract class ObjectStorageContract {
     }
 
     @Test
-    fun `contract page snapshots caller lists defensively`() {
-        val mutable = mutableListOf(ObjectInfo("page/value", 1L, Instant.EPOCH))
+    fun `contract page snapshot stays immutable for equality hash and callers`() {
+        val objectInfo = ObjectInfo("page/value", 1L, Instant.EPOCH)
+        val mutable = mutableListOf(objectInfo)
 
         val page = StorageObjectPage(mutable, null)
+        val equivalent = StorageObjectPage(listOf(objectInfo), null)
+        val initialHash = page.hashCode()
         mutable.clear()
 
         assertThat(page.objects.map(ObjectInfo::key)).containsExactly("page/value")
+        assertThat(page).isEqualTo(equivalent)
+        assertThat(page.hashCode()).isEqualTo(initialHash)
+        assertThatThrownBy {
+            (page.objects as MutableList<ObjectInfo>).add(
+                ObjectInfo("page/other", 2L, Instant.EPOCH),
+            )
+        }.isInstanceOf(UnsupportedOperationException::class.java)
     }
 
     @Test

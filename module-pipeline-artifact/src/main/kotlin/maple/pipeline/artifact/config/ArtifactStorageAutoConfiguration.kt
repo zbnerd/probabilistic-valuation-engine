@@ -6,13 +6,14 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 import maple.pipeline.artifact.storage.ArtifactUploadResources
 import maple.pipeline.artifact.storage.ConditionalObjectStorage
 import maple.pipeline.artifact.storage.LocalFsObjectStorage
+import maple.pipeline.artifact.storage.MinioClientConfiguration
 import maple.pipeline.artifact.storage.MinioObjectStorage
 import maple.pipeline.artifact.storage.MinioProperties
 import maple.pipeline.artifact.storage.MinioStorageResources
+import maple.pipeline.artifact.storage.MinioStorageResourcesFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -22,12 +23,9 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
-import software.amazon.awssdk.http.apache.ApacheHttpClient
 import software.amazon.awssdk.regions.Region
-import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.S3Configuration
-import software.amazon.awssdk.transfer.s3.S3TransferManager
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(MinioProperties::class)
@@ -60,37 +58,26 @@ class ArtifactStorageAutoConfiguration {
         val serviceConfiguration = S3Configuration.builder()
             .pathStyleAccessEnabled(properties.pathStyleAccess)
             .build()
-        val syncClient = S3Client.builder()
-            .endpointOverride(URI.create(properties.endpoint))
-            .region(Region.of(properties.region))
-            .credentialsProvider(credentials)
-            .serviceConfiguration(serviceConfiguration)
-            .httpClient(ApacheHttpClient.builder().build())
-            .build()
-        val asyncClient = S3AsyncClient.builder()
-            .endpointOverride(URI.create(properties.endpoint))
-            .region(Region.of(properties.region))
-            .credentialsProvider(credentials)
-            .serviceConfiguration(serviceConfiguration)
-            .multipartEnabled(true)
-            .build()
-        val transferManager = S3TransferManager.builder()
-            .s3Client(asyncClient)
-            .build()
-        val streamReaderExecutor = Executors.newThreadPerTaskExecutor(
-            Thread.ofVirtual().name("artifact-minio-stream-", 0).factory(),
-        )
-        return MinioStorageResources(
-            transferManager,
-            asyncClient,
-            syncClient,
-            streamReaderExecutor,
+        return MinioStorageResourcesFactory().create(
+            MinioClientConfiguration(
+                endpoint = URI.create(properties.endpoint),
+                region = Region.of(properties.region),
+                credentialsProvider = credentials,
+                serviceConfiguration = serviceConfiguration,
+            ),
         )
     }
 
     @Bean(name = ["artifactStorageS3Client"], destroyMethod = "")
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
     fun artifactStorageS3Client(resources: MinioStorageResources): S3Client = resources.syncClient
+
+    @Bean
+    @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")
+    fun artifactStorageHealthIndicator(
+        properties: MinioProperties,
+        @Qualifier("artifactStorageS3Client") s3Client: S3Client,
+    ): ArtifactStorageHealthIndicator = ArtifactStorageHealthIndicator(properties, s3Client)
 
     @Bean
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "minio")

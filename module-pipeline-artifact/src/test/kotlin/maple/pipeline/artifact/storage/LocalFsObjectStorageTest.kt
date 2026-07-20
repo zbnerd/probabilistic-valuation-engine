@@ -266,10 +266,14 @@ class LocalFsObjectStorageTest : ObjectStorageContract() {
         assertThat(first).isCompleted
         assertThat(replay).isCompleted
         assertThat(created.get()).isInstanceOf(PutIfAbsentResult.Created::class.java)
+        assertThat((created.get() as PutIfAbsentResult.Created).backendTag)
+            .isEqualTo("0deeb8fa1dbbee4c0dbe7f5e3c9183940139f26d22797ee8ab07c00557a4c2ff")
         val existing = replayed.get()
         assertThat(existing).isInstanceOf(PutIfAbsentResult.Existing::class.java)
         if (existing is PutIfAbsentResult.Existing) {
             assertThat(existing.bytes).isEqualTo("canonical".toByteArray())
+            assertThat(existing.backendTag)
+                .isEqualTo("0deeb8fa1dbbee4c0dbe7f5e3c9183940139f26d22797ee8ab07c00557a4c2ff")
         }
     }
 
@@ -289,6 +293,8 @@ class LocalFsObjectStorageTest : ObjectStorageContract() {
         assertThat(existing).isInstanceOf(PutIfAbsentResult.Existing::class.java)
         if (existing is PutIfAbsentResult.Existing) {
             assertThat(existing.bytes).isEqualTo("original".toByteArray())
+            assertThat(existing.backendTag)
+                .isEqualTo("0682c5f2076f099c34cfdd15a9e063849ed437a49677e6fcc5b4198c76575be5")
         }
         assertThat(storage.get("inbox/conflict.json")).isEqualTo("original".toByteArray())
     }

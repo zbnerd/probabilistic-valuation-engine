@@ -20,11 +20,25 @@ sealed interface PutIfAbsentResult {
     data class Existing(val bytes: ByteArray, val backendTag: String?) : PutIfAbsentResult
 }
 
-data class StorageObjectPage(
-    private val objectSnapshot: List<ObjectInfo>,
+class StorageObjectPage(
+    objects: List<ObjectInfo>,
     val nextAfterKey: ArtifactKey?,
 ) {
-    val objects: List<ObjectInfo> = Collections.unmodifiableList(ArrayList(objectSnapshot))
+    private val objectSnapshot: List<ObjectInfo> = Collections.unmodifiableList(ArrayList(objects))
+
+    val objects: List<ObjectInfo>
+        get() = objectSnapshot
+
+    override fun equals(other: Any?): Boolean = this === other ||
+        (
+            other is StorageObjectPage &&
+                objectSnapshot == other.objectSnapshot &&
+                nextAfterKey == other.nextAfterKey
+            )
+
+    override fun hashCode(): Int = 31 * objectSnapshot.hashCode() + (nextAfterKey?.hashCode() ?: 0)
+
+    override fun toString(): String = "StorageObjectPage(objects=$objectSnapshot, nextAfterKey=$nextAfterKey)"
 }
 
 internal fun validatePageRequest(prefix: ArtifactPrefix, afterKey: ArtifactKey?, limit: Int) {

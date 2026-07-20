@@ -3,19 +3,6 @@ package maple.externalapi.snapshot
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.kotlinModule
-import maple.expectation.common.storage.ObjectStorage
-import maple.expectation.common.storage.PutResult
-import maple.expectation.infrastructure.storage.LocalFsObjectStorage
-import org.assertj.core.api.Assertions.assertThat
-import org.awaitility.Awaitility.await
-import org.junit.jupiter.api.Assumptions.assumeTrue
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.io.TempDir
-import org.mockito.kotlin.any
-import org.mockito.kotlin.argumentCaptor
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
 import java.io.ByteArrayInputStream
 import java.lang.management.ManagementFactory
 import java.nio.file.Files
@@ -31,6 +18,19 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.Deflater
 import java.util.zip.GZIPInputStream
+import maple.expectation.common.storage.ObjectStorage
+import maple.expectation.common.storage.PutResult
+import maple.pipeline.artifact.storage.LocalFsObjectStorage
+import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
+import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 
 class GzipJsonlChunkWriterTest {
 
@@ -189,21 +189,20 @@ class GzipJsonlChunkWriterTest {
         return completedAtNanos.getAcquire()
     }
 
-    private fun deterministicJsonLines(): Array<ByteArray> =
-        Array(EVIDENCE_RECORDS) { index ->
-            val prefix = "{\"record\":$index,\"payload\":\""
-            val suffix = "\"}\n"
-            val payloadLength = JSON_LINE_BYTES - prefix.length - suffix.length
-            require(payloadLength > 0) { "JSON evidence line metadata exceeds the fixed line size" }
-            val payload = CharArray(payloadLength) { offset ->
-                ('a'.code + ((index + offset) % 26)).toChar()
-            }.concatToString()
-            "$prefix$payload$suffix".toByteArray().also { line ->
-                require(line.size == JSON_LINE_BYTES) {
-                    "JSON evidence line must be exactly $JSON_LINE_BYTES bytes, got ${line.size}"
-                }
+    private fun deterministicJsonLines(): Array<ByteArray> = Array(EVIDENCE_RECORDS) { index ->
+        val prefix = "{\"record\":$index,\"payload\":\""
+        val suffix = "\"}\n"
+        val payloadLength = JSON_LINE_BYTES - prefix.length - suffix.length
+        require(payloadLength > 0) { "JSON evidence line metadata exceeds the fixed line size" }
+        val payload = CharArray(payloadLength) { offset ->
+            ('a'.code + ((index + offset) % 26)).toChar()
+        }.concatToString()
+        "$prefix$payload$suffix".toByteArray().also { line ->
+            require(line.size == JSON_LINE_BYTES) {
+                "JSON evidence line must be exactly $JSON_LINE_BYTES bytes, got ${line.size}"
             }
         }
+    }
 
     private fun sha256Hex(lines: Array<ByteArray>): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -473,8 +472,13 @@ class GzipJsonlChunkWriterTest {
         val n = 400
 
         data class Result(
-            val level: Int, val recPerSec: Double, val mbPerSec: Double,
-            val meanUs: Double, val p50Us: Double, val p95Us: Double, val p99Us: Double,
+            val level: Int,
+            val recPerSec: Double,
+            val mbPerSec: Double,
+            val meanUs: Double,
+            val p50Us: Double,
+            val p95Us: Double,
+            val p99Us: Double,
             val ratio: Double,
         )
 
@@ -482,22 +486,32 @@ class GzipJsonlChunkWriterTest {
             // warmup (separate writer, discarded)
             GzipJsonlChunkWriter(
                 chunkKey = "runs/warmup/item-equipment/part-1.jsonl.gz",
-                partIndex = 1, maxRecords = Int.MAX_VALUE,
+                partIndex = 1,
+                maxRecords = Int.MAX_VALUE,
                 maxUncompressedBytes = 100L * 1024 * 1024 * 1024,
-                objectMapper = objectMapper, objectStorage = storage,
-                clock = Clock.systemUTC(), compressionLevel = level,
+                objectMapper = objectMapper,
+                objectStorage = storage,
+                clock = Clock.systemUTC(),
+                compressionLevel = level,
             ).close()
             // measured
             val w = GzipJsonlChunkWriter(
                 chunkKey = "runs/bench/item-equipment/part-1.jsonl.gz",
-                partIndex = 1, maxRecords = Int.MAX_VALUE,
+                partIndex = 1,
+                maxRecords = Int.MAX_VALUE,
                 maxUncompressedBytes = 100L * 1024 * 1024 * 1024,
-                objectMapper = objectMapper, objectStorage = storage,
-                clock = Clock.systemUTC(), compressionLevel = level,
+                objectMapper = objectMapper,
+                objectStorage = storage,
+                clock = Clock.systemUTC(),
+                compressionLevel = level,
             )
             val rec = SnapshotChunkRecord.PreSerialized(
-                key = "k", endpoint = "item-equipment", keyType = "OCID",
-                httpStatus = 200, fetchedAt = Instant.EPOCH, bodyBytes = body,
+                key = "k",
+                endpoint = "item-equipment",
+                keyType = "OCID",
+                httpStatus = 200,
+                fetchedAt = Instant.EPOCH,
+                bodyBytes = body,
             )
             val lats = LongArray(n)
             val t0 = System.nanoTime()
@@ -512,8 +526,14 @@ class GzipJsonlChunkWriterTest {
             fun pct(p: Double) = lats[minOf(n - 1, (n * p).toInt())].toDouble()
             val ratio = if (stats.compressedBytes > 0) stats.uncompressedBytes.toDouble() / stats.compressedBytes else 0.0
             return Result(
-                level, n / secs, n * body.size / secs / 1e6,
-                lats.average() / 1000.0, pct(0.5) / 1000.0, pct(0.95) / 1000.0, pct(0.99) / 1000.0, ratio,
+                level,
+                n / secs,
+                n * body.size / secs / 1e6,
+                lats.average() / 1000.0,
+                pct(0.5) / 1000.0,
+                pct(0.95) / 1000.0,
+                pct(0.99) / 1000.0,
+                ratio,
             )
         }
 
@@ -537,8 +557,10 @@ class GzipJsonlChunkWriterTest {
     /** Synthesize a ~[targetBytes] compressible body resembling item-equipment JSON (~10:1 ratio). */
     private fun synthItemEquipBody(targetBytes: Int): ByteArray {
         val baos = java.io.ByteArrayOutputStream(targetBytes + 1024)
-        val frag = ("""{"item_name":"잔혀된검","slot":"장비","ocid":"abc123","stats":{""" +
-            """"str":999,"dex":888,"int":777,"luk":666,"hp":99999,"mp":99999,"attack":1234,"potential":"LEGENDARY","sockets":3}}""").toByteArray()
+        val frag = (
+            """{"item_name":"잔혀된검","slot":"장비","ocid":"abc123","stats":{""" +
+                """"str":999,"dex":888,"int":777,"luk":666,"hp":99999,"mp":99999,"attack":1234,"potential":"LEGENDARY","sockets":3}}"""
+            ).toByteArray()
         while (baos.size() < targetBytes) baos.write(frag)
         return baos.toByteArray()
     }

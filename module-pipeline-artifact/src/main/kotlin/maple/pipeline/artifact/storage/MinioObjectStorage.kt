@@ -87,19 +87,19 @@ class MinioObjectStorage(
         return PutResult(key, size, response.eTag())
     }
 
-    override fun putFileAsync(key: String, path: Path): CompletableFuture<PutResult> {
+    override fun putFileAsync(key: String, path: Path): CompletableFuture<PutResult> = asyncInvocation {
         require(Files.exists(path)) { "putFileAsync source does not exist: $path" }
         val size = Files.size(path)
         val request = UploadRequest.builder()
             .putObjectRequest(putRequest(key, size))
             .requestBody(AsyncRequestBody.fromFile(path))
             .build()
-        return transferManager.upload(request).completionFuture().thenApply { completed ->
+        transferManager.upload(request).completionFuture().thenApply { completed ->
             PutResult(key, size, completed.response().eTag())
         }
     }
 
-    override fun putStreamMultipart(key: String, input: InputStream): CompletableFuture<PutResult> {
+    override fun putStreamMultipart(key: String, input: InputStream): CompletableFuture<PutResult> = asyncInvocation {
         val request = PutObjectRequest.builder()
             .bucket(properties.bucket)
             .key(key)
@@ -110,12 +110,12 @@ class MinioObjectStorage(
                 .inputStream(NonClosingInputStream(input))
                 .executor(streamReaderExecutor)
         }
-        return s3AsyncClient.putObject(request, body).thenApply { response ->
+        s3AsyncClient.putObject(request, body).thenApply { response ->
             PutResult(key, UNKNOWN_CONTENT_LENGTH, response.eTag())
         }
     }
 
-    override fun putIfAbsent(key: String, data: ByteArray): CompletionStage<PutIfAbsentResult> {
+    override fun putIfAbsent(key: String, data: ByteArray): CompletionStage<PutIfAbsentResult> = asyncInvocation {
         val snapshot = data.copyOf()
         val request = PutObjectRequest.builder()
             .bucket(properties.bucket)
@@ -124,7 +124,7 @@ class MinioObjectStorage(
             .contentType(CONTENT_TYPE)
             .ifNoneMatch("*")
             .build()
-        return s3AsyncClient.putObject(request, AsyncRequestBody.fromBytes(snapshot))
+        s3AsyncClient.putObject(request, AsyncRequestBody.fromBytes(snapshot))
             .handle { response, failure ->
                 when {
                     failure == null -> CompletableFuture.completedFuture<PutIfAbsentResult>(
@@ -258,13 +258,17 @@ class MinioObjectStorage(
             if (isNotFound(failure)) null else throw unwrapCompletion(failure)
         }
 
-    private fun readExisting(key: String): CompletableFuture<PutIfAbsentResult> = s3AsyncClient.getObject(getRequest(key), AsyncResponseTransformer.toBytes())
-        .thenApply { response ->
-            PutIfAbsentResult.Existing(
-                response.asByteArray(),
-                response.response().eTag(),
-            )
-        }
+    private fun readExisting(key: String): CompletableFuture<PutIfAbsentResult> = asyncInvocation {
+        s3AsyncClient.getObject(getRequest(key), AsyncResponseTransformer.toBytes())
+            .thenApply { response ->
+                PutIfAbsentResult.Existing(
+                    response.asByteArray(),
+                    response.response().eTag(),
+                )
+            }
+    }
+
+    private fun <T> asyncInvocation(invocation: () -> CompletableFuture<T>): CompletableFuture<T> = runCatching(invocation).getOrElse { failure -> CompletableFuture.failedFuture(failure) }
 
     private fun putRequest(key: String, contentLength: Long): PutObjectRequest = PutObjectRequest.builder()
         .bucket(properties.bucket)

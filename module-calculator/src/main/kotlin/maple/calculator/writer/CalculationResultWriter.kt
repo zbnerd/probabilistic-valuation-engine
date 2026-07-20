@@ -56,9 +56,10 @@ class CalculationResultWriter(
      * Producer (on [producerScope], IO dispatcher) collects the Flow and
      * writes JSONL rows through gzip into the temp file. When the producer
      * completes (file flushed + closed), [putFileAsync] uploads it — MinIO
-     * uses S3TransferManager multipart (file-backed, no pipe), LocalFs uses
-     * an atomic rename. The temp file is deleted in a `whenComplete`
-     * safety net on both success and failure.
+     * uses S3TransferManager multipart (file-backed, no pipe), while LocalFs
+     * atomically publishes a destination-side copy. Storage borrows the
+     * caller-owned temp file until completion; this writer deletes it in a
+     * `whenComplete` callback on both success and failure.
      *
      * Why not the previous `PipedInputStream`/`PipedOutputStream` +
      * `putStreamMultipart` path: the AWS SDK reads the InputStream on a
@@ -110,9 +111,9 @@ class CalculationResultWriter(
         }
 
         // After the producer writes the file, upload it via putFileAsync
-        // (MinIO S3TransferManager multipart | LocalFs atomic move). No pipe
-        // — the upload reads from the file, eliminating the reader/writer
-        // thread race.
+        // (MinIO S3TransferManager multipart | LocalFs atomic destination
+        // publication). Storage borrows this file; the upload reads from it
+        // without moving or deleting it, eliminating the reader/writer race.
         return producerFuture
             .thenCompose { objectStorage.putFileAsync(objectKey, tempFile) }
             .thenApply { putResult ->
@@ -121,18 +122,16 @@ class CalculationResultWriter(
                     resultCount = counters.records.get(),
                     uncompressedBytes = counters.uncompressedBytes.get(),
                     compressedBytes = if (putResult.size >= 0) {
-                        putResult.size  // LocalFs: real size from putFile
+                        putResult.size // LocalFs: real size from putFile
                     } else {
-                        counters.compressedBytes.get()  // MinIO: chunked transfer, size=-1L
+                        counters.compressedBytes.get() // MinIO: chunked transfer, size=-1L
                     },
                     etag = putResult.checksum,
                 )
             }
             .whenComplete { _, _ ->
-                // Safety net: delete the temp file after the upload resolves.
-                // MinIO's putFileAsync may already delete on success; LocalFs
-                // putFile atomically moves it into place. deleteIfExists is
-                // idempotent either way.
+                // The caller owns the temp file and deletes it after storage
+                // finishes borrowing it, regardless of upload outcome.
                 runCatching { Files.deleteIfExists(tempFile) }
             }
             .exceptionally { err ->

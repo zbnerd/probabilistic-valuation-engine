@@ -15,7 +15,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication(exclude = [SecurityAutoConfiguration::class, ManagementWebSecurityAutoConfiguration::class])
 @EnableScheduling
 @EnableConfigurationProperties(PipelineProperties::class, ExternalApiRunStatusProperties::class)
-@Import(CalculatorEngineConfiguration::class, KafkaConsumerConfig::class, maple.expectation.infrastructure.storage.StorageConfig::class, maple.expectation.infrastructure.storage.MinioHealthIndicator::class)
+@Import(CalculatorEngineConfiguration::class, KafkaConsumerConfig::class, maple.expectation.infrastructure.storage.StorageConfig::class)
 class CalculatorApplication
 
 fun main(args: Array<String>) {

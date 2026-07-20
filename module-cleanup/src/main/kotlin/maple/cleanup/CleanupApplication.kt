@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Import
         ManagementWebSecurityAutoConfiguration::class,
     ],
 )
-@Import(KafkaConsumerConfig::class, maple.expectation.infrastructure.storage.StorageConfig::class, maple.expectation.infrastructure.storage.MinioHealthIndicator::class)
+@Import(KafkaConsumerConfig::class, maple.expectation.infrastructure.storage.StorageConfig::class)
 @EnableConfigurationProperties(CleanupProperties::class, InboxProperties::class)
 class CleanupApplication
 

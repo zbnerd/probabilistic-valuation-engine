@@ -8,8 +8,6 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.ComponentScan
-import org.springframework.context.annotation.FilterType
 import org.springframework.test.context.TestPropertySource
 
 @EnabledIfEnvironmentVariable(named = "INTEGRATION_MINIO", matches = "true")
@@ -24,11 +22,6 @@ import org.springframework.test.context.TestPropertySource
         "storage.minio.access-key=cleanup",
         "storage.minio.secret-key=\${SA_CLEANUP_SECRET_KEY}",
     ],
-)
-@ComponentScan(
-    basePackages = ["maple.pipeline.artifact.config"],
-    useDefaultFilters = false,
-    includeFilters = [ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = [ArtifactStorageHealthIndicator::class])],
 )
 class CleanupBootSmokeIT {
 

@@ -1,9 +1,6 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.common.storage.ObjectStorage
-import maple.expectation.common.storage.PutResult
-import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -13,6 +10,9 @@ import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.zip.Deflater
 import java.util.zip.GZIPOutputStream
+import maple.expectation.common.storage.ObjectStorage
+import maple.expectation.common.storage.PutResult
+import org.slf4j.LoggerFactory
 
 data class ChunkStats(
     val partIndex: Int,
@@ -24,10 +24,9 @@ data class ChunkStats(
     val finishedAt: Instant,
     /**
      * Fire-and-forget upload future. `null` for the legacy sync `putFile`
-     * path. When set, the caller MUST treat [path] as transferred to the
-     * storage backend (no delete, no rewrite) and must eventually
-     * `await()` the future to surface upload errors before considering
-     * the run complete.
+     * path. The storage backend borrows the writer-owned source file until
+     * this future completes. The caller must eventually `await()` it to
+     * surface upload errors before considering the run complete.
      */
     val uploadFuture: CompletableFuture<PutResult>? = null,
 )
@@ -57,9 +56,10 @@ data class ChunkStats(
  * temp file at close time (post-gzip) so manifest and event payloads
  * have accurate byte counts without waiting for the upload to finish.
  *
- * File ownership: the writer deletes the temp file only on the failure
- * path. On success, [ObjectStorage.putFileAsync] takes ownership and the
- * file is moved/atomically-renamed (Local) or uploaded (MinIO).
+ * File ownership: this writer owns the temp file while
+ * [ObjectStorage.putFileAsync] borrows it. The completion callback deletes
+ * it after success and retains it after failure for inspection; storage
+ * never moves or deletes the caller-owned source.
  */
 class GzipJsonlChunkWriter(
     private val chunkKey: String,
@@ -89,6 +89,7 @@ class GzipJsonlChunkWriter(
         StandardOpenOption.WRITE,
         StandardOpenOption.TRUNCATE_EXISTING,
     )
+
     // GZIPOutputStream has no level constructor; subclass to set the
     // underlying Deflater's level (protected `def` field) after the gzip
     // header is written. setLevel applies to all subsequent deflate calls.
@@ -124,8 +125,7 @@ class GzipJsonlChunkWriter(
         uncompressedBytes += record.bodyBytes.size
     }
 
-    fun shouldRotate(): Boolean =
-        recordCount >= maxRecords || uncompressedBytes >= maxUncompressedBytes
+    fun shouldRotate(): Boolean = recordCount >= maxRecords || uncompressedBytes >= maxUncompressedBytes
 
     fun close(): ChunkStats {
         require(!closed) { "close() already called" }
@@ -146,13 +146,9 @@ class GzipJsonlChunkWriter(
             Files.deleteIfExists(tempFile)
             throw t
         }
-        // Storage owns the temp file from this point on (Minio: will
-        // upload + delete source implicitly; Local: moves it in place).
-        // For the LocalFs path where the impl is a completedFuture that
-        // already moved the file, this delete is a no-op. For the Minio
-        // path we attach whenComplete to delete the source after upload
-        // finishes — but only on success; on failure we want the file
-        // to remain on disk for inspection.
+        // Storage borrows the immutable temp file until this future
+        // completes. The writer then deletes its source after success; on
+        // failure it remains on disk for inspection.
         uploadFuture.whenComplete { result, ex ->
             if (ex == null) {
                 Files.deleteIfExists(tempFile)

@@ -3,6 +3,8 @@ package maple.nexon.client.config
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.time.Duration
+import maple.nexon.client.byok.ByokNexonClient
+import maple.nexon.client.byok.CharacterListDecoder
 import maple.nexon.client.failure.NexonFailureClassifier
 import maple.nexon.client.metrics.NexonClientMetrics
 import maple.nexon.client.system.SystemKeyNexonClient
@@ -73,6 +75,15 @@ class NexonClientAutoConfiguration {
     fun systemKeyNexonClient(
         @Qualifier("nexonSystemTransport") transport: NexonTransport,
     ): SystemKeyNexonClient = SystemKeyNexonClient(transport)
+
+    @Bean
+    fun characterListDecoder(objectMapper: ObjectMapper): CharacterListDecoder = CharacterListDecoder(objectMapper)
+
+    @Bean
+    fun byokNexonClient(
+        @Qualifier("nexonByokTransport") transport: NexonTransport,
+        decoder: CharacterListDecoder,
+    ): ByokNexonClient = ByokNexonClient(transport, decoder)
 
     @Bean
     fun nexonTransportResources(

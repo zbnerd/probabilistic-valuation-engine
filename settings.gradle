@@ -37,3 +37,6 @@ include 'module-cleanup'
 
 // Typed object-storage artifacts, lifecycle, retention, and cleanup inbox
 include 'module-pipeline-artifact'
+
+// Shared Kafka delivery outcome, retry, DLT, and partition-lane ownership
+include 'module-pipeline-messaging'

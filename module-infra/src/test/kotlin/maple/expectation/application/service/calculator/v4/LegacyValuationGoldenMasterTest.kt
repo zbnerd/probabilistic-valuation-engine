@@ -8,27 +8,11 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import kotlin.system.measureNanoTime
-import maple.expectation.application.service.cube.CubeServiceImpl
-import maple.expectation.application.service.cube.component.CubeComputeBuffer
-import maple.expectation.application.service.cube.component.CubeDpCalculator
-import maple.expectation.application.service.cube.component.CubeSlotCountResolver
-import maple.expectation.application.service.cube.component.DpModeInferrer
-import maple.expectation.application.service.cube.component.SlotDistributionBuilder
-import maple.expectation.application.service.cube.component.StatValueExtractor
-import maple.expectation.application.service.cube.policy.CubeCostPolicy
-import maple.expectation.application.service.starforce.StarforceLookupAdapter
-import maple.expectation.config.CubeEngineFeatureFlag
-import maple.expectation.config.TableMassConfig
-import maple.expectation.core.calculator.CubeRateCalculator
-import maple.expectation.core.domain.stat.StatParser
+import maple.expectation.core.calculation.ValuationKernel
 import maple.expectation.core.dto.cube.CubeCalculationInput
 import maple.expectation.core.dto.v4.EquipmentCalculationInput
-import maple.expectation.core.probability.ProbabilityConvolver
-import maple.expectation.core.probability.TailProbabilityCalculator
-import maple.expectation.infrastructure.adapter.policy.PolicyAdapter
-import maple.expectation.infrastructure.executor.DefaultLogicExecutor
-import maple.expectation.infrastructure.executor.policy.ExecutionPipeline
-import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
+import maple.expectation.core.policy.TableBasedCostStrategy
+import maple.expectation.infrastructure.calculation.LegacyProbabilityTableLoader
 import maple.expectation.infrastructure.persistence.repository.CubeProbabilityRepositoryImpl
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
@@ -211,26 +195,18 @@ class LegacyValuationGoldenMasterTest {
     }
 
     private fun legacyEngine(): LegacyEngine {
-        val executor = DefaultLogicExecutor(ExecutionPipeline(emptyList()), ExceptionTranslator.defaultTranslator())
-        val repository = CubeProbabilityRepositoryImpl(executor)
-        val loadDurationNanos = measureNanoTime { repository.init() }
-        val extractor = StatValueExtractor(StatParser(), executor)
-        val distributionBuilder = SlotDistributionBuilder(repository, extractor, executor, TableMassConfig())
-        val cubeService = CubeServiceImpl(
-            CubeRateCalculator(),
-            CubeDpCalculator(distributionBuilder, ProbabilityConvolver(), TailProbabilityCalculator(), CubeSlotCountResolver()),
-            repository,
-            CubeEngineFeatureFlag(),
-            executor,
-            DpModeInferrer(extractor, executor),
-            CubeComputeBuffer(),
-        )
-        return LegacyEngine(
+        lateinit var repository: CubeProbabilityRepositoryImpl
+        lateinit var factory: EquipmentExpectationCalculatorFactory
+        val loadDurationNanos = measureNanoTime {
+            val snapshot = LegacyProbabilityTableLoader().load()
+            repository = CubeProbabilityRepositoryImpl(snapshot).also { it.init() }
             factory = EquipmentExpectationCalculatorFactory(
-                cubeService,
-                CubeCostPolicy(PolicyAdapter()),
-                StarforceLookupAdapter(executor),
-            ),
+                ValuationKernel(TableBasedCostStrategy()),
+                snapshot,
+            )
+        }
+        return LegacyEngine(
+            factory = factory,
             repository = repository,
             loadDurationNanos = loadDurationNanos,
             rowCount = repository.findAll().size,

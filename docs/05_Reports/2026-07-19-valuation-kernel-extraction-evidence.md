@@ -40,4 +40,23 @@ The evidence-only test is committed and remains opt-in through `VALUATION_EVIDEN
 
 ## After extraction
 
-To be completed from the focused parity/source guards allowed at Task 8. Runtime and performance matrices remain skipped unless the verification ceiling changes.
+### Frozen compatibility and direct-core parity
+
+- The infra and calculator CSV resources remain byte-identical at SHA-256 `9a329fe4b861c9f21b69d766e1847e59982c2a02ea4f30c6e5b332a7f2e955c0`, with 413,802 data rows.
+- `CoreLegacyValuationParityTest` runs every one of the 26 frozen cases through both the stable V4 factory facade and the direct core kernel. Costs, rounded public trials, totals, enhance paths, table logical version, and error types agree with the frozen corpus outside the two explicit V1 permutation-compatibility cases below.
+- `full-all-stat-contribution`: the stable facade retains the frozen V1 zero cost/trials; the corrected slot-specific core result has `136755000000` black-cube cost and 3,039 rounded trials.
+- `full-compound-option-permutation-fallback`: the stable facade retains the frozen V1 zero cost/trials; the direct core result exposes positive-infinity raw trials (projecting to `Long.MAX_VALUE` rounded trials and `4.150517416584649E26` cost). This difference is isolated in the compatibility facade and does not weaken the standalone core permutation contract.
+- Unsupported potential grades retain `InvalidPotentialGradeException`: the core valuation path validates cost policy before probability lookup, avoiding an accidental `MissingProbabilityException` drift.
+- The V4 factory FQN and four public methods, repository FQN and `cubeProbabilityRepositoryV1` bean name, and `CalculatorEngineAutoConfiguration` bean remain present. The compatibility auto-configuration no longer creates `CoreExecutorConfig`.
+
+Focused verification:
+
+- `./gradlew :module-infra:test --tests '*CoreLegacyValuationParityTest' --tests '*LegacyValuationGoldenMasterTest'` — exit `0`; three assertion tests passed and the opt-in evidence method skipped as designed.
+- `./gradlew :module-app:test --tests '*CubeServiceTest'` — exit `0`; 8/8 focused V1/V2 cube-service compatibility tests passed.
+- `./gradlew :module-core:test --tests '*ValuationKernelTest' --tests '*ValuationKernelPropertyTest'` — exit `0`; 8/8 focused full-kernel tests passed.
+- `./gradlew :module-calculator:dependencyInsight --dependency module-infra --configuration runtimeClasspath` — exit `0`; no matching dependency.
+- The single final ordered core → infra → calculator → app Kotlin/Java compile exited `0` with no compilation errors.
+
+### Performance/runtime evidence ceiling
+
+The calculator evidence harness now records both direct-kernel and preloaded zero-miss cache-hit 25/250/five-repetition phases, but it was not executed. bootJar sizing, runtimeClasspath capture beyond the dependency guard, calculator startup/health, live chunk execution, allocation/throughput comparison, and application startup timing remain intentionally unmeasured under the approved speed override. No benchmark or runtime number is fabricated.

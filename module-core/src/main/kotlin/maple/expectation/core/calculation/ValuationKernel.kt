@@ -71,6 +71,7 @@ class ValuationKernel(
             return null
         }
 
+        val costPerTrial = costStrategy.calculateCost(cubeType, input.itemLevel, grade)
         val result = cubeTrialsKernel.calculate(
             CubeTrialInput(
                 cubeType = cubeType,
@@ -81,7 +82,6 @@ class ValuationKernel(
             ),
             table,
         )
-        val costPerTrial = costStrategy.calculateCost(cubeType, input.itemLevel, grade)
         val cost = Math.round(result.expectedTrials).toDouble() * costPerTrial.toDouble()
         return CubeComponent(cost = cost, trials = result.expectedTrials)
     }

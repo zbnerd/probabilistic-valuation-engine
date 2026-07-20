@@ -12,7 +12,6 @@ plugins {
 dependencies {
 	implementation project(':module-common')
 	implementation project(':module-core')
-	implementation project(':module-infra')
 	implementation project(':module-pipeline-artifact')
 	implementation project(':module-pipeline-messaging')
 

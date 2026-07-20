@@ -1,8 +1,8 @@
 package maple.pipeline.messaging.contract
 
 class SafeDeliveryException(
-    reason: String,
-    attempt: Int,
+    val reason: String,
+    val attempt: Int,
 ) : RuntimeException(
     "pipeline delivery ${requireNormalizedReason(reason)} attempt=${requirePositiveAttempt(attempt)}",
     null,

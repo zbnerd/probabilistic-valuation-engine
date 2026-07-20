@@ -5,12 +5,15 @@ import maple.pipeline.artifact.storage.MinioProperties
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import org.springframework.test.context.TestPropertySource
 
 @SpringBootTest(classes = [StorageConfig::class])
 @EnableConfigurationProperties(MinioProperties::class)
+@Import(JacksonAutoConfiguration::class)
 @TestPropertySource(
     properties = [
         "storage.backend=local",

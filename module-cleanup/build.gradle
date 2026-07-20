@@ -1,6 +1,6 @@
 // ========================================
 // Module-Cleanup: Airflow-triggered disk GC
-// Standalone Spring Boot app (port 8084). module-infra 변경 0.
+// Standalone Spring Boot app (port 8084) with narrow worker dependencies.
 // Kafka consumer (inbox) + whole-run GC for runs/ + calculator/runs/.
 // ========================================
 
@@ -12,7 +12,6 @@ plugins {
 
 dependencies {
     implementation(project(":module-common"))
-    implementation(project(":module-infra"))
     implementation(project(":module-pipeline-artifact"))
     implementation(project(":module-pipeline-messaging"))
     implementation("org.springframework.boot:spring-boot-starter-web")

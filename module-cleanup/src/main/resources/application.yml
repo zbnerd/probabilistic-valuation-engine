@@ -31,7 +31,6 @@ cleanup-inbox:
 logging:
   level:
     maple.cleanup: INFO
-    maple.expectation.infrastructure: INFO
 
 management:
   endpoints:

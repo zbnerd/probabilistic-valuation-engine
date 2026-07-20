@@ -1,6 +1,5 @@
 package maple.externalapi
 
-import maple.expectation.infrastructure.config.KafkaConsumerConfig
 import maple.expectation.infrastructure.config.MaplestoryApiConfig
 import maple.expectation.infrastructure.config.TimeoutProperties
 import maple.expectation.infrastructure.external.config.ExternalApiMetricsFilter
@@ -10,6 +9,7 @@ import maple.externalapi.config.NexonHttpClientProperties
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotEventProperties
 import maple.pipeline.artifact.config.ArtifactStorageAutoConfiguration
+import maple.pipeline.messaging.config.PipelineKafkaConsumerConfiguration
 import org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
@@ -33,7 +33,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
     maple.expectation.infrastructure.config.CoreExecutorConfig::class,
     maple.expectation.infrastructure.config.VtExecutorConfig::class,
     ArtifactStorageAutoConfiguration::class,
-    KafkaConsumerConfig::class,
+    PipelineKafkaConsumerConfiguration::class,
     MaplestoryApiConfig::class,
     ExternalApiMetricsFilter::class,
     RealNexonAuthClient::class,

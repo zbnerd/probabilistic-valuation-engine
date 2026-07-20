@@ -43,4 +43,31 @@ No corpus was generated and no runtime counters, offsets, lags, payloads, or bro
 
 ## After: implementation evidence
 
-To be filled from focused task tests and source guards. Runtime metrics remain explicitly unmeasured unless a later authorized runtime session follows the exact protocol above.
+The shared delivery boundary now owns manual-immediate ACK, one initial attempt plus three technical retries, partition-local serial lanes, pause/resume, DLT-before-commit, rebalance fencing, and bounded delivery metrics. Workload code returns `DeliveryOutcome` and has no Kafka acknowledgment access.
+
+| Listener ID | Source topic | Group ID | DLT sanitizer | Success boundary |
+| -- | -- | -- | -- | -- |
+| `calculator-snapshot-normal` | `external-api.snapshot.chunk-ready` | `calculator-snapshot-chunk-processor` | pass-through | one coordinator attempt and its required publication complete |
+| `calculator-snapshot-urgent` | `external-api.urgent.snapshot.chunk-ready` | `calculator-urgent-chunk-processor` | pass-through | one coordinator attempt and its required publication complete |
+| `synchronizer-basic` | `external-api.snapshot.chunk-ready` | `synchronizer-basic-chunk-consumer` | pass-through | DB work, consumed-event send, and success CAS complete |
+| `synchronizer-urgent-basic` | `external-api.urgent.snapshot.chunk-ready` | `synchronizer-urgent-basic-chunk-consumer` | pass-through | DB work, consumed-event send, and success CAS complete |
+| `synchronizer-result` | `calculator.result.chunk-ready` | `synchronizer-result-chunk-consumer` | pass-through | DB work, consumed-event send, and success CAS complete |
+| `synchronizer-ocid-lookup` | `external-api.ocid.lookup-ready` | `synchronizer-ocid-lookup-consumer` | pass-through | OCID ingestion completes |
+| `external-api-urgent` | `urgent-character-request` | `external-api-urgent-processor` | pass-through | artifact receipt and all required downstream sends complete |
+| `external-api-auth-character-fetch` | `auth-character-fetch-request` | `module-external-api-auth-consumer` | credential-eliding diagnostic envelope | response serialization and Kafka send complete |
+| `cleanup-inbox` | `synchronizer.chunk.consumed` | `cleanup-inbox` | pass-through | atomic durable inbox `putIfAbsent` completes |
+
+Deterministic evidence:
+
+- Delivery contracts: 10 focused tests passed.
+- ACK/retry/DLT, partition lane, rebalance, and executor ownership: 18 focused tests passed.
+- Calculator migration: 11 focused tests passed.
+- Synchronizer publish-before-success migration: 14 non-container focused tests passed. The repository Testcontainers/TRUNCATE test was not run under the explicit no-container/no-destructive-DB constraint.
+- External API and durable cleanup migration: 21 focused tests passed.
+- DLT topology evaluation/resources: 11 focused tests passed, including missing-source no-mutation, create/expand-only behavior, authorization failure propagation, concurrent create-race convergence, cached health, and idempotent bounded close.
+- The final workload source guard returned zero matches for `@KafkaListener`, `Acknowledgment`, `acknowledge(`, and `nack(` across calculator, synchronizer, external API, and cleanup production sources.
+- The legacy infra configuration is an import facade only; the four ETL applications import `PipelineKafkaConsumerConfiguration` directly.
+
+DLT topology convergence is metadata-only and create/expand-only. It describes all source topics first, treats only an individually described unknown DLT as missing, creates with broker-default replication, expands undersized DLTs, tolerates only verified convergence races, and never deletes, shrinks, or reconfigures topics. Health is `OUT_OF_SERVICE` until the first verified result for an application with subscriptions, then cached `UP`/`DOWN`; applications with zero subscriptions report `UP` with `subscriptions=0`.
+
+Docker Kafka provisioning, service boot, malformed-record broker probes, five-minute load windows, and before/after runtime metrics were intentionally not run under the approved focused-verification ceiling. No broker partition counts, throughput, lag, retry, pause, duplicate, DLT-send, JVM, or pool values are inferred. A future authorized runtime session must use the unchanged protocol above before making a numeric comparison.

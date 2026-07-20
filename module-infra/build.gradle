@@ -37,6 +37,7 @@ dependencies {
 	implementation project(':module-core')
 	implementation project(':module-common')
 	implementation project(':module-pipeline-artifact')
+	implementation project(':module-pipeline-messaging')
 
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
 	implementation(libs.kotlin.stdlib)

@@ -3,7 +3,6 @@ package maple.externalapi.auth
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
-import java.util.concurrent.Executor
 import maple.expectation.core.auth.event.CharacterFetchRequest
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.nexon.client.byok.ByokNexonClient
@@ -18,7 +17,6 @@ import maple.nexon.client.failure.Timeout
 import maple.nexon.client.failure.UpstreamUnavailable
 import maple.pipeline.messaging.contract.CompletionFailures
 import maple.pipeline.messaging.contract.DeliveryOutcome
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Component
@@ -29,7 +27,6 @@ class AuthCharacterFetchHandler(
     private val kafkaTemplate: KafkaTemplate<String, String>,
     private val objectMapper: ObjectMapper,
     @Value("\${auth.kafka.character-fetch-response-topic}") private val responseTopic: String,
-    @Qualifier("authCharacterFetchExecutor") private val executor: Executor,
 ) {
     fun handle(
         message: String,
@@ -98,12 +95,8 @@ class AuthCharacterFetchHandler(
 
     private fun publishResponse(response: CharacterFetchResponse): CompletionStage<DeliveryOutcome> {
         val publish = runCatching {
-            CompletableFuture.supplyAsync(
-                { objectMapper.writeValueAsString(response) },
-                executor,
-            ).thenCompose { json ->
-                kafkaTemplate.send(responseTopic, response.kafkaKey(), json).thenApply { null }
-            }
+            val json = objectMapper.writeValueAsString(response)
+            kafkaTemplate.send(responseTopic, response.kafkaKey(), json).thenApply { null }
         }.getOrElse(CompletableFuture<Void>::failedFuture)
 
         return publish.handle { _, failure ->

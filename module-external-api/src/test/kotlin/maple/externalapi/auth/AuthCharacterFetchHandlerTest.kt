@@ -43,7 +43,6 @@ class AuthCharacterFetchHandlerTest {
         kafkaTemplate = kafkaTemplate,
         objectMapper = objectMapper,
         responseTopic = RESPONSE_TOPIC,
-        executor = java.util.concurrent.Executor(Runnable::run),
     )
 
     @Test

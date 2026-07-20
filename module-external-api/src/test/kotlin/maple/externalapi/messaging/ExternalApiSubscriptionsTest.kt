@@ -114,7 +114,6 @@ class ExternalApiSubscriptionsTest {
             kafkaTemplate = kafkaTemplate,
             objectMapper = objectMapper,
             responseTopic = "auth-response",
-            executor = java.util.concurrent.Executor(Runnable::run),
         )
         whenever(client.getCharacterList(SECRET)).thenReturn(
             CompletableFuture.completedFuture(NexonCharacterList(emptyList())),

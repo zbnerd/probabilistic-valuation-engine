@@ -1,61 +1,101 @@
 package maple.externalapi.infra.nexon
 
-import java.nio.file.Files
-import java.nio.file.Path
-import maple.externalapi.config.NexonHttpClientProperties
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+import java.util.concurrent.CompletableFuture
 import maple.externalapi.domain.ExternalApiEndpoint
-import maple.externalapi.domain.KeyType
+import maple.externalapi.domain.ExternalApiProvider
+import maple.externalapi.metrics.SnapshotFetchMetrics
+import maple.nexon.client.failure.RateLimited
+import maple.nexon.client.model.NexonEndpointPurpose
+import maple.nexon.client.model.NexonRequest
+import maple.nexon.client.system.SystemKeyNexonClient
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 
-/** Static golden characterization of the pre-consolidation system-key HTTP contract. */
 class NexonExternalApiClientCharacterizationTest {
+    private val systemClient = mock<SystemKeyNexonClient>()
+    private val metrics = mock<SnapshotFetchMetrics>()
+    private val adapter = NexonExternalApiClientAdapter(
+        apiKey = SYSTEM_KEY,
+        systemClient = systemClient,
+        fetchMetrics = metrics,
+        clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
+    )
+
     @Test
-    fun `current endpoint and query contract is frozen`() {
-        assertThat(ExternalApiEndpoint.entries.map { Triple(it.name, it.path, it.keyType) }).containsExactly(
-            Triple("OCID_LOOKUP", "/maplestory/v1/id", KeyType.USER_IGN),
-            Triple("CHARACTER_BASIC", "/maplestory/v1/character/basic", KeyType.OCID),
-            Triple("ITEM_EQUIPMENT", "/maplestory/v1/character/item-equipment", KeyType.OCID),
-            Triple("RANKING_OVERALL", "/maplestory/v1/ranking/overall", KeyType.DATE_PAGE),
+    fun `maps every system endpoint and query without changing raw bytes`() {
+        val completion = CompletableFuture.completedFuture(RESPONSE)
+        whenever(systemClient.fetch(any(), eq(SYSTEM_KEY))).thenReturn(completion)
+
+        val ocid = adapter.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.OCID_LOOKUP, "진격캐넌")
+        val basic = adapter.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.CHARACTER_BASIC, "ocid-1")
+        val equipment = adapter.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.ITEM_EQUIPMENT, "ocid-2")
+        val ranking = adapter.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.RANKING_OVERALL, "2026-07-20:17")
+
+        assertThat(listOf(ocid, basic, equipment, ranking)).allMatch { it === completion }
+        assertThat(completion.resultNow()).containsExactly(*RESPONSE)
+        val requests = argumentCaptor<NexonRequest>()
+        verify(systemClient, org.mockito.kotlin.times(4)).fetch(requests.capture(), eq(SYSTEM_KEY))
+        assertThat(requests.allValues).containsExactly(
+            NexonRequest(
+                NexonEndpointPurpose.OCID_LOOKUP,
+                "/maplestory/v1/id",
+                mapOf("character_name" to "진격캐넌"),
+                "/maplestory/v1/id",
+            ),
+            NexonRequest(
+                NexonEndpointPurpose.CHARACTER_BASIC,
+                "/maplestory/v1/character/basic",
+                mapOf("ocid" to "ocid-1"),
+                "/maplestory/v1/character/basic",
+            ),
+            NexonRequest(
+                NexonEndpointPurpose.ITEM_EQUIPMENT,
+                "/maplestory/v1/character/item-equipment",
+                mapOf("ocid" to "ocid-2"),
+                "/maplestory/v1/character/item-equipment",
+            ),
+            NexonRequest(
+                NexonEndpointPurpose.RANKING_OVERALL,
+                "/maplestory/v1/ranking/overall",
+                linkedMapOf("date" to "2026-07-20", "page" to "17"),
+                "/maplestory/v1/ranking/overall",
+            ),
         )
-
-        val source = productionSource("infra/nexon/NexonExternalApiClientAdapter.kt")
-        assertThat(source).contains("EncodingMode.VALUES_ONLY")
-        assertThat(source).contains("queryParam(\"character_name\", requestKey)")
-        assertThat(source).contains("queryParam(\"ocid\", requestKey)")
-        assertThat(source).contains("queryParam(\"date\", parts[0])")
-        assertThat(source).contains("queryParam(\"page\", parts.getOrElse(1) { \"1\" })")
+        ExternalApiEndpoint.entries.forEach { endpoint ->
+            verify(metrics).recordNexonBodyReceived(eq(endpoint.name), any(), eq(RESPONSE.size))
+        }
     }
 
     @Test
-    fun `current headers limits pool and raw-byte behavior are frozen`() {
-        val properties = NexonHttpClientProperties()
-        assertThat(properties.poolName).isEqualTo("nexon-pool")
-        assertThat(properties.maxConnections).isEqualTo(250)
-        assertThat(properties.pendingAcquireMaxCount).isEqualTo(1_000)
-        assertThat(properties.pendingAcquireTimeoutMs).isEqualTo(5_000)
-        assertThat(properties.connectTimeoutMs).isEqualTo(3_000)
-        assertThat(properties.responseTimeoutSeconds).isEqualTo(5)
-        assertThat(properties.maxInMemorySizeBytes).isEqualTo(2 * 1024 * 1024)
+    fun `typed failure future is propagated unchanged and observed without raw data`() {
+        val request = NexonRequest(
+            NexonEndpointPurpose.OCID_LOOKUP,
+            "/maplestory/v1/id",
+            mapOf("character_name" to "SensitiveName"),
+            "/maplestory/v1/id",
+        )
+        val failure = RateLimited(request, 429, "OPENAPI00007", null)
+        val completion = CompletableFuture.failedFuture<ByteArray>(failure)
+        whenever(systemClient.fetch(any(), eq(SYSTEM_KEY))).thenReturn(completion)
 
-        val source = productionSource("infra/nexon/NexonExternalApiClientAdapter.kt")
-        assertThat(source.split(".header(\"x-nxopen-api-key\", apiKey)")).hasSize(2)
-        assertThat(source).contains("defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)")
-        assertThat(source).contains("bodyToMono(ByteArray::class.java)")
-        assertThat(source).contains(".timeout(HTTP_CALL_TIMEOUT)")
+        val returned = adapter.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.OCID_LOOKUP, "SensitiveName")
+
+        assertThat(returned).isSameAs(completion)
+        assertThat(returned.exceptionNow()).isSameAs(failure)
+        verify(metrics).recordNexonFailure(eq("OCID_LOOKUP"), any())
     }
 
-    @Test
-    fun `unsafe legacy observability and status behavior remain named migration targets`() {
-        val source = productionSource("infra/nexon/NexonExternalApiClientAdapter.kt")
-        assertThat(source).contains(".metrics(properties.metricsEnabled) { uri -> uri }")
-        assertThat(source).contains("ex.responseBodyAsString")
-        assertThat(source).contains("throw ex")
-    }
-
-    private fun productionSource(relative: String): String {
-        val local = Path.of("src/main/kotlin/maple/externalapi").resolve(relative)
-        val root = Path.of("module-external-api/src/main/kotlin/maple/externalapi").resolve(relative)
-        return Files.readString(if (Files.exists(local)) local else root)
+    private companion object {
+        private const val SYSTEM_KEY = "synthetic-system-key"
+        private val RESPONSE = "{\"ocid\":\"raw-value\"}".toByteArray()
     }
 }

@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import java.time.Duration
 import maple.nexon.client.failure.NexonFailureClassifier
 import maple.nexon.client.metrics.NexonClientMetrics
+import maple.nexon.client.system.SystemKeyNexonClient
 import maple.nexon.client.transport.NexonTransport
 import maple.nexon.client.transport.NexonTransportFactory
 import maple.nexon.client.transport.NexonTransportResources
@@ -67,6 +68,11 @@ class NexonClientAutoConfiguration {
     fun nexonSystemWebClient(
         @Qualifier("nexonSystemTransport") transport: NexonTransport,
     ): WebClient = transport.webClient
+
+    @Bean
+    fun systemKeyNexonClient(
+        @Qualifier("nexonSystemTransport") transport: NexonTransport,
+    ): SystemKeyNexonClient = SystemKeyNexonClient(transport)
 
     @Bean
     fun nexonTransportResources(

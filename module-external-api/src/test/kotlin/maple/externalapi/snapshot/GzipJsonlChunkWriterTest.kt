@@ -5,8 +5,12 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.kotlinModule
 import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.storage.PutResult
+import maple.expectation.infrastructure.storage.LocalFsObjectStorage
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
@@ -15,9 +19,14 @@ import org.mockito.kotlin.whenever
 import java.io.ByteArrayInputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.zip.Deflater
 import java.util.zip.GZIPInputStream
 
 class GzipJsonlChunkWriterTest {
@@ -26,6 +35,185 @@ class GzipJsonlChunkWriterTest {
         .registerModule(kotlinModule())
         .registerModule(JavaTimeModule())
     private val fixedClock = Clock.fixed(Instant.parse("2026-06-10T00:00:00Z"), ZoneOffset.UTC)
+
+    @TempDir
+    lateinit var tempDir: Path
+
+    @Test
+    fun `artifact evidence report is produced when enabled`() {
+        assumeTrue(System.getenv("ARTIFACT_EVIDENCE_ENABLED") == "1")
+
+        val lines = deterministicJsonLines()
+        val records = lines.mapIndexed { index, line ->
+            SnapshotChunkRecord.PreSerialized(
+                key = "artifact-$index",
+                endpoint = "artifact-evidence",
+                keyType = "INDEX",
+                httpStatus = 200,
+                fetchedAt = Instant.EPOCH,
+                bodyBytes = line,
+            )
+        }
+        val fixtureSha256 = sha256Hex(lines)
+        val directExecutor = Executor { command -> command.run() }
+        val evidenceRoot = Files.createDirectories(tempDir.resolve("artifact-evidence"))
+
+        val warmupDirectory = Files.createDirectory(evidenceRoot.resolve("warmup"))
+        val warmupStorage = LocalFsObjectStorage(warmupDirectory.toString(), directExecutor, meterRegistry = null)
+        val warmupTempFilesBefore = countChunkTempFiles()
+        val warmupChunks = (0 until WARMUP_CHUNKS).map { chunkIndex ->
+            writeEvidenceChunk(warmupStorage, "warmup/chunk-$chunkIndex.jsonl.gz", chunkIndex, records)
+        }
+        awaitUploads(warmupChunks)
+        val warmupTempFilesAfter = countChunkTempFiles()
+
+        val measurements = (1..REPETITIONS).map { repetition ->
+            val repetitionDirectory = Files.createDirectory(evidenceRoot.resolve("repetition-$repetition"))
+            val storage = LocalFsObjectStorage(repetitionDirectory.toString(), directExecutor, meterRegistry = null)
+            val tempFilesBefore = countChunkTempFiles()
+            val startedAt = System.nanoTime()
+            val chunks = (0 until MEASURED_CHUNKS).map { chunkIndex ->
+                writeEvidenceChunk(
+                    storage,
+                    "measured/chunk-${chunkIndex.toString().padStart(2, '0')}.jsonl.gz",
+                    chunkIndex,
+                    records,
+                )
+            }
+            awaitUploads(chunks)
+            val elapsedNanos = System.nanoTime() - startedAt
+            val tempFilesAfter = countChunkTempFiles()
+            val compressedBytes = chunks.sumOf { chunk -> chunk.compressedBytes }
+            val recordCount = chunks.sumOf { chunk -> chunk.recordCount.toLong() }
+            val elapsedSeconds = elapsedNanos.toDouble() / NANOS_PER_SECOND
+
+            GzipEvidenceMeasurement(
+                repetition = repetition,
+                elapsedNanos = elapsedNanos,
+                recordCount = recordCount,
+                recordsPerSecond = recordCount / elapsedSeconds,
+                compressedBytes = compressedBytes,
+                compressedMibPerSecond = compressedBytes / BYTES_PER_MIB / elapsedSeconds,
+                tempFileCountBefore = tempFilesBefore,
+                tempFileCountAfter = tempFilesAfter,
+            )
+        }
+        val repetitions = measurements.map { measurement ->
+            linkedMapOf<String, Any>(
+                "repetition" to measurement.repetition,
+                "elapsedNanos" to measurement.elapsedNanos,
+                "recordCount" to measurement.recordCount,
+                "recordsPerSecond" to measurement.recordsPerSecond,
+                "compressedBytes" to measurement.compressedBytes,
+                "compressedMibPerSecond" to measurement.compressedMibPerSecond,
+                "tempFileCountBefore" to measurement.tempFileCountBefore,
+                "tempFileCountAfter" to measurement.tempFileCountAfter,
+            )
+        }
+        val report = evidenceReportPath()
+        Files.createDirectories(report.parent)
+        objectMapper.writerWithDefaultPrettyPrinter().writeValue(
+            report.toFile(),
+            linkedMapOf(
+                "schemaVersion" to 1,
+                "benchmark" to "gzip-jsonl-chunk-writer-local-fs",
+                "fixture" to linkedMapOf(
+                    "lineCount" to lines.size,
+                    "bytesPerLine" to JSON_LINE_BYTES,
+                    "totalBytes" to lines.sumOf { line -> line.size.toLong() },
+                    "sha256" to fixtureSha256,
+                ),
+                "compressionLevel" to Deflater.BEST_SPEED,
+                "warmupChunks" to WARMUP_CHUNKS,
+                "warmupTempFileCountBefore" to warmupTempFilesBefore,
+                "warmupTempFileCountAfter" to warmupTempFilesAfter,
+                "measuredChunksPerRepetition" to MEASURED_CHUNKS,
+                "repetitionCount" to REPETITIONS,
+                "repetitions" to repetitions,
+                "medianRecordsPerSecond" to median(measurements.map { it.recordsPerSecond }),
+                "medianCompressedMibPerSecond" to median(measurements.map { it.compressedMibPerSecond }),
+            ),
+        )
+
+        assertThat(report).exists()
+    }
+
+    private fun writeEvidenceChunk(
+        storage: LocalFsObjectStorage,
+        chunkKey: String,
+        partIndex: Int,
+        records: List<SnapshotChunkRecord.PreSerialized>,
+    ): ChunkStats {
+        val writer = GzipJsonlChunkWriter(
+            chunkKey = chunkKey,
+            partIndex = partIndex,
+            maxRecords = EVIDENCE_RECORDS,
+            maxUncompressedBytes = EVIDENCE_RECORDS.toLong() * JSON_LINE_BYTES,
+            objectMapper = objectMapper,
+            objectStorage = storage,
+            clock = fixedClock,
+            compressionLevel = Deflater.BEST_SPEED,
+        )
+        records.forEach(writer::appendPreSerialized)
+        return writer.close().also { stats ->
+            assertThat(stats.recordCount).isEqualTo(EVIDENCE_RECORDS)
+            assertThat(stats.uncompressedBytes).isEqualTo(EVIDENCE_RECORDS.toLong() * JSON_LINE_BYTES)
+        }
+    }
+
+    private fun awaitUploads(chunks: List<ChunkStats>) {
+        val uploads = chunks.mapNotNull { chunk -> chunk.uploadFuture }
+        assertThat(uploads).hasSameSizeAs(chunks)
+        val allUploads = CompletableFuture.allOf(*uploads.toTypedArray())
+        await().atMost(EVIDENCE_TIMEOUT).until { allUploads.isDone }
+        assertThat(allUploads.isCompletedExceptionally)
+            .describedAs("all gzip evidence uploads complete successfully")
+            .isFalse()
+    }
+
+    private fun deterministicJsonLines(): Array<ByteArray> =
+        Array(EVIDENCE_RECORDS) { index ->
+            val prefix = "{\"record\":$index,\"payload\":\""
+            val suffix = "\"}\n"
+            val payloadLength = JSON_LINE_BYTES - prefix.length - suffix.length
+            require(payloadLength > 0) { "JSON evidence line metadata exceeds the fixed line size" }
+            val payload = CharArray(payloadLength) { offset ->
+                ('a'.code + ((index + offset) % 26)).toChar()
+            }.concatToString()
+            "$prefix$payload$suffix".toByteArray().also { line ->
+                require(line.size == JSON_LINE_BYTES) {
+                    "JSON evidence line must be exactly $JSON_LINE_BYTES bytes, got ${line.size}"
+                }
+            }
+        }
+
+    private fun sha256Hex(lines: Array<ByteArray>): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        lines.forEach(digest::update)
+        return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+    }
+
+    private fun countChunkTempFiles(): Long {
+        val systemTempDirectory = Path.of(System.getProperty("java.io.tmpdir"))
+        return Files.list(systemTempDirectory).use { paths ->
+            paths.filter { path ->
+                val name = path.fileName.toString()
+                name.startsWith("gzip-chunk-") && name.endsWith(".jsonl.gz.tmp")
+            }.count()
+        }
+    }
+
+    private fun evidenceReportPath(): Path {
+        val workingDirectory = Path.of(System.getProperty("user.dir"))
+        val moduleDirectory = if (workingDirectory.fileName.toString() == "module-external-api") {
+            workingDirectory
+        } else {
+            workingDirectory.resolve("module-external-api")
+        }
+        return moduleDirectory.resolve("build/reports/artifact-evidence/gzip-jsonl-chunk-writer.json")
+    }
+
+    private fun median(values: List<Double>): Double = values.sorted()[values.size / 2]
 
     @Test
     fun `close uploads gzipped JSONL via putFileAsync and returns stats`() {
@@ -272,5 +460,27 @@ class GzipJsonlChunkWriterTest {
             """"str":999,"dex":888,"int":777,"luk":666,"hp":99999,"mp":99999,"attack":1234,"potential":"LEGENDARY","sockets":3}}""").toByteArray()
         while (baos.size() < targetBytes) baos.write(frag)
         return baos.toByteArray()
+    }
+
+    private data class GzipEvidenceMeasurement(
+        val repetition: Int,
+        val elapsedNanos: Long,
+        val recordCount: Long,
+        val recordsPerSecond: Double,
+        val compressedBytes: Long,
+        val compressedMibPerSecond: Double,
+        val tempFileCountBefore: Long,
+        val tempFileCountAfter: Long,
+    )
+
+    private companion object {
+        const val EVIDENCE_RECORDS = 10_000
+        const val JSON_LINE_BYTES = 1024
+        const val WARMUP_CHUNKS = 3
+        const val MEASURED_CHUNKS = 20
+        const val REPETITIONS = 5
+        const val BYTES_PER_MIB = 1024.0 * 1024.0
+        const val NANOS_PER_SECOND = 1_000_000_000.0
+        val EVIDENCE_TIMEOUT: Duration = Duration.ofMinutes(10)
     }
 }

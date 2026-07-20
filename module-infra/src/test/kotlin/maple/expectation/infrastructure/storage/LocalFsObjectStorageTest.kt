@@ -1,11 +1,20 @@
 package maple.expectation.infrastructure.storage
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
+import java.time.Duration
 import java.time.Instant
+import java.util.Random
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 class LocalFsObjectStorageTest {
 
@@ -14,6 +23,105 @@ class LocalFsObjectStorageTest {
 
     private fun newStorage(basePath: String = tempDir.toString()): LocalFsObjectStorage =
         LocalFsObjectStorage(basePath, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(), meterRegistry = null)
+
+    @Test
+    fun `artifact evidence report is produced when enabled`() {
+        assumeTrue(System.getenv("ARTIFACT_EVIDENCE_ENABLED") == "1")
+
+        val fixture = ByteArray(FIXTURE_BYTES).also { bytes ->
+            Random(FIXTURE_SEED).nextBytes(bytes)
+        }
+        val fixtureSha256 = sha256Hex(fixture)
+        val evidenceRoot = Files.createDirectories(tempDir.resolve("artifact-evidence"))
+        val measurements = Executors.newFixedThreadPool(CONCURRENCY).use { executor ->
+            val warmupDirectory = Files.createDirectory(evidenceRoot.resolve("warmup"))
+            val warmupStorage = LocalFsObjectStorage(warmupDirectory.toString(), executor, meterRegistry = null)
+            runConcurrentPuts(warmupStorage, fixture, WARMUP_OBJECTS, executor)
+
+            (1..REPETITIONS).map { repetition ->
+                val repetitionDirectory = Files.createDirectory(evidenceRoot.resolve("repetition-$repetition"))
+                val storage = LocalFsObjectStorage(repetitionDirectory.toString(), executor, meterRegistry = null)
+                val elapsedNanos = runConcurrentPuts(storage, fixture, MEASURED_OBJECTS, executor)
+                val mibPerSecond = measuredMib() / (elapsedNanos.toDouble() / NANOS_PER_SECOND)
+                Triple(repetition, elapsedNanos, mibPerSecond)
+            }
+        }
+        val medianMibPerSecond = measurements
+            .map { measurement -> measurement.third }
+            .sorted()[REPETITIONS / 2]
+        val repetitions = measurements.map { measurement ->
+            linkedMapOf<String, Any>(
+                "repetition" to measurement.first,
+                "elapsedNanos" to measurement.second,
+                "mibPerSecond" to measurement.third,
+            )
+        }
+        val report = evidenceReportPath()
+        Files.createDirectories(report.parent)
+        ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(
+            report.toFile(),
+            linkedMapOf(
+                "schemaVersion" to 1,
+                "benchmark" to "local-fs-object-storage-put",
+                "fixture" to linkedMapOf(
+                    "seed" to FIXTURE_SEED,
+                    "bytes" to fixture.size,
+                    "sha256" to fixtureSha256,
+                ),
+                "warmupObjects" to WARMUP_OBJECTS,
+                "measuredObjectsPerRepetition" to MEASURED_OBJECTS,
+                "concurrency" to CONCURRENCY,
+                "repetitionCount" to REPETITIONS,
+                "measuredMibPerRepetition" to measuredMib(),
+                "repetitions" to repetitions,
+                "medianMibPerSecond" to medianMibPerSecond,
+            ),
+        )
+
+        assertThat(report).exists()
+    }
+
+    private fun runConcurrentPuts(
+        storage: LocalFsObjectStorage,
+        fixture: ByteArray,
+        objectCount: Int,
+        executor: Executor,
+    ): Long {
+        val startedAt = System.nanoTime()
+        val writes = Array(objectCount) { index ->
+            CompletableFuture.runAsync(
+                { storage.put("objects/object-${index.toString().padStart(4, '0')}.bin", fixture) },
+                executor,
+            )
+        }
+        val allWrites = CompletableFuture.allOf(*writes)
+        await().atMost(EVIDENCE_TIMEOUT).until { allWrites.isDone }
+        val elapsedNanos = System.nanoTime() - startedAt
+
+        assertThat(allWrites.isCompletedExceptionally)
+            .describedAs("all LocalFS evidence writes complete successfully")
+            .isFalse()
+        assertThat(storage.listByPrefix("objects/")).hasSize(objectCount)
+        return elapsedNanos
+    }
+
+    private fun measuredMib(): Double =
+        FIXTURE_BYTES.toDouble() * MEASURED_OBJECTS / BYTES_PER_MIB
+
+    private fun evidenceReportPath(): Path {
+        val workingDirectory = Path.of(System.getProperty("user.dir"))
+        val moduleDirectory = if (workingDirectory.fileName.toString() == "module-infra") {
+            workingDirectory
+        } else {
+            workingDirectory.resolve("module-infra")
+        }
+        return moduleDirectory.resolve("build/reports/artifact-evidence/local-fs-object-storage.json")
+    }
+
+    private fun sha256Hex(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { byte -> "%02x".format(byte) }
 
     @Test
     fun `put and get round-trip returns identical bytes`() {
@@ -135,5 +243,17 @@ class LocalFsObjectStorageTest {
     fun `calculatePrefixSize returns 0 for non-existent prefix`() {
         val storage = newStorage()
         assertThat(storage.calculatePrefixSize("nonexistent/")).isEqualTo(0L)
+    }
+
+    private companion object {
+        const val FIXTURE_SEED = 745L
+        const val FIXTURE_BYTES = 1024 * 1024
+        const val WARMUP_OBJECTS = 32
+        const val MEASURED_OBJECTS = 256
+        const val CONCURRENCY = 8
+        const val REPETITIONS = 5
+        const val BYTES_PER_MIB = 1024.0 * 1024.0
+        const val NANOS_PER_SECOND = 1_000_000_000.0
+        val EVIDENCE_TIMEOUT: Duration = Duration.ofMinutes(10)
     }
 }

@@ -34,3 +34,6 @@ include 'module-auth'
 
 // Cleanup module (Airflow-triggered disk GC, hosted as standalone Spring Boot app)
 include 'module-cleanup'
+
+// Typed object-storage artifacts, lifecycle, retention, and cleanup inbox
+include 'module-pipeline-artifact'

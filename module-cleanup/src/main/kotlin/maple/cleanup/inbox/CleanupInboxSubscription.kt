@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 class CleanupInboxSubscription(
     private val properties: InboxProperties,
-    @Value("\${spring.kafka.listener.concurrency:1}") private val concurrency: Int = 1,
+    @Value("\${spring.kafka.listener.concurrency:1}") private val concurrency: Int,
 ) {
     @Bean
     @ConditionalOnProperty(name = ["cleanup-inbox.auto-start"], havingValue = "true", matchIfMissing = true)

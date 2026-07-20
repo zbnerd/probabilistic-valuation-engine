@@ -27,6 +27,7 @@ class CalculatorSnapshotSubscriptionTest {
         normalGroupId = "calculator-snapshot-chunk-processor",
         urgentTopic = "external-api.urgent.snapshot.chunk-ready",
         urgentGroupId = "calculator-urgent-chunk-processor",
+        concurrency = 1,
     )
     private val event = SnapshotChunkReadyEvent(
         eventId = "evt-1",

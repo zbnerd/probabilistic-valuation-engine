@@ -14,7 +14,7 @@ class CalculatorSnapshotSubscription(
     @Value("\${calculator.kafka.consumer-group-id}") private val normalGroupId: String,
     @Value("\${calculator.kafka.urgent-snapshot-chunk-ready-topic}") private val urgentTopic: String,
     @Value("\${calculator.kafka.urgent-consumer-group-id}") private val urgentGroupId: String,
-    @Value("\${spring.kafka.listener.concurrency:1}") private val concurrency: Int = 1,
+    @Value("\${spring.kafka.listener.concurrency:1}") private val concurrency: Int,
 ) {
     @Bean
     fun normalSubscription(): PipelineSubscription = PipelineSubscription(

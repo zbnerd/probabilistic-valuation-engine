@@ -20,7 +20,7 @@ class ExternalApiSubscriptions(
     @Value("\${external-api.urgent.consumer-group-id}") private val urgentGroupId: String,
     @Value("\${auth.kafka.character-fetch-request-topic}") private val authTopic: String,
     @Value("\${auth.kafka.request-consumer-group-id}") private val authGroupId: String,
-    @Value("\${spring.kafka.listener.concurrency:1}") private val concurrency: Int = 1,
+    @Value("\${spring.kafka.listener.concurrency:1}") private val concurrency: Int,
 ) {
     @Bean
     @ConditionalOnProperty(name = ["external-api.urgent.enabled"], havingValue = "true")

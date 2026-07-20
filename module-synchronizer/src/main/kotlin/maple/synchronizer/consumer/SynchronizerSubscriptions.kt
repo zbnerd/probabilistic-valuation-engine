@@ -21,7 +21,7 @@ class SynchronizerSubscriptions(
     @Value("\${synchronizer.kafka.consumer-group-id}") private val resultGroupId: String,
     @Value("\${synchronizer.kafka.ocid-lookup-topic}") private val ocidTopic: String,
     @Value("\${synchronizer.kafka.ocid-lookup-consumer-group-id}") private val ocidGroupId: String,
-    @Value("\${spring.kafka.listener.concurrency:1}") private val concurrency: Int = 1,
+    @Value("\${spring.kafka.listener.concurrency:1}") private val concurrency: Int,
 ) {
     @Bean
     fun basicSubscription(): PipelineSubscription = PipelineSubscription(

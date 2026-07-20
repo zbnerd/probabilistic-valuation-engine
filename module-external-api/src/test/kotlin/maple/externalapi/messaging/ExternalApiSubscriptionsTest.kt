@@ -19,6 +19,8 @@ import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import org.springframework.context.annotation.AnnotationConfigApplicationContext
+import org.springframework.core.env.MapPropertySource
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.SendResult
 
@@ -36,6 +38,31 @@ class ExternalApiSubscriptionsTest {
         authGroupId = "module-external-api-auth-consumer",
         concurrency = 2,
     )
+
+    @Test
+    fun `configuration is constructible by Spring`() {
+        AnnotationConfigApplicationContext().use { context ->
+            context.environment.propertySources.addFirst(
+                MapPropertySource(
+                    "test",
+                    mapOf(
+                        "external-api.urgent.request-topic" to "urgent-character-request",
+                        "external-api.urgent.consumer-group-id" to "external-api-urgent-processor",
+                        "auth.kafka.character-fetch-request-topic" to "auth-character-fetch-request",
+                        "auth.kafka.request-consumer-group-id" to "module-external-api-auth-consumer",
+                    ),
+                ),
+            )
+            context.beanFactory.registerSingleton("urgentConsumer", urgentConsumer)
+            context.beanFactory.registerSingleton("authHandler", authHandler)
+            context.beanFactory.registerSingleton("authSanitizer", authSanitizer)
+            context.register(ExternalApiSubscriptions::class.java)
+
+            context.refresh()
+
+            assertThat(context.getBean(ExternalApiSubscriptions::class.java)).isNotNull()
+        }
+    }
 
     @Test
     fun `urgent subscription preserves topology and waits for handler outcome`() {
@@ -126,6 +153,7 @@ class ExternalApiSubscriptionsTest {
             urgentGroupId = "external-api-urgent-processor",
             authTopic = "auth-character-fetch-request",
             authGroupId = "module-external-api-auth-consumer",
+            concurrency = 1,
         )
         val payload = objectMapper.writeValueAsString(
             CharacterFetchRequest(

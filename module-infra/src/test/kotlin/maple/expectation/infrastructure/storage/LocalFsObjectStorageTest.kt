@@ -6,6 +6,7 @@ import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder
 import java.lang.management.ManagementFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -23,6 +24,8 @@ class LocalFsObjectStorageTest {
 
     @TempDir
     lateinit var tempDir: Path
+
+    private val objectMapper: ObjectMapper = Jackson2ObjectMapperBuilder().build()
 
     private fun newStorage(basePath: String = tempDir.toString()): LocalFsObjectStorage =
         LocalFsObjectStorage(basePath, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(), meterRegistry = null)
@@ -63,7 +66,7 @@ class LocalFsObjectStorageTest {
         }
         val report = evidenceReportPath()
         Files.createDirectories(report.parent)
-        ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(
+        objectMapper.writerWithDefaultPrettyPrinter().writeValue(
             report.toFile(),
             linkedMapOf(
                 "schemaVersion" to 1,

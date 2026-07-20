@@ -1,8 +1,10 @@
 # Pipeline Artifact Extraction Baseline Evidence
 
 - Captured: 2026-07-20 (Europe/Berlin)
-- Detached baseline commit: `a35809235de1f92cd7a7c546bd3bed060f62abab`
-- Evidence implementation parent: `008c79bc5638f3cab3950341ed5c117b992d4004`
+- Detached base/runtime subject: `a35809235de1f92cd7a7c546bd3bed060f62abab`
+- Initial scaffold commit: `008c79bc5638f3cab3950341ed5c117b992d4004`
+- Review-corrected measurement/harness capture revision: `b9b8810d1`
+- Representation/style follow-up: the later commit containing this metadata only sanitizes committed endpoint text and adopts the approved Jackson builder; it does not rerun or alter the recorded raw measurements.
 - Branch: `refactor/etl-infra-deepening`
 - Purpose: preserve numeric dependency, executable-size, startup, LocalFS, and gzip baselines before artifact ownership moves out of `module-infra`.
 
@@ -127,16 +129,18 @@ The helper checked that ports 8081-8084 were free, launched each JAR directly, c
 | synchronizer | `UP` | 34 s | 5 s | 39 s | `/tmp/artifact-base-runtime-boot-check-module-synchronizer-minio.txt` |
 | cleanup | `UP` | 33 s | 6 s | 39 s | `/tmp/artifact-base-runtime-boot-check-module-cleanup-minio.txt` |
 
-Exact health JSON:
+Sanitized committed health representation (the raw endpoint value is replaced by the environment placeholder `${MINIO_ENDPOINT}`):
 
 ```json
-{"module-external-api":{"status":"UP","components":{"db":{"status":"UP","details":{"database":"H2","validationQuery":"isValid()"}},"diskSpace":{"status":"UP","details":{"total":414921494528,"free":148658278400,"threshold":10485760,"path":"/tmp/artifact-base-worktree.jLjmmj/.","exists":true}},"maple.expectation.infrastructure.storage.Minio":{"status":"UP","details":{"bucket":"maple-expectation","endpoint":"http://10.0.3.4:9000"}},"ping":{"status":"UP"},"ssl":{"status":"UP","details":{"validChains":[],"invalidChains":[]}}}}}
-{"module-calculator":{"status":"UP","components":{"db":{"status":"UP","details":{"database":"H2","validationQuery":"isValid()"}},"diskSpace":{"status":"UP","details":{"total":414921494528,"free":148658036736,"threshold":10485760,"path":"/tmp/artifact-base-worktree.jLjmmj/.","exists":true}},"maple.expectation.infrastructure.storage.Minio":{"status":"UP","details":{"bucket":"maple-expectation","endpoint":"http://10.0.3.4:9000"}},"ping":{"status":"UP"},"ssl":{"status":"UP","details":{"validChains":[],"invalidChains":[]}}}}}
-{"module-synchronizer":{"status":"UP","components":{"db":{"status":"UP","details":{"database":"PostgreSQL","validationQuery":"SELECT 1","result":1}},"diskSpace":{"status":"UP","details":{"total":414921494528,"free":148655898624,"threshold":10485760,"path":"/tmp/artifact-base-worktree.jLjmmj/.","exists":true}},"maple.expectation.infrastructure.storage.Minio":{"status":"UP","details":{"bucket":"maple-expectation","endpoint":"http://10.0.3.4:9000"}},"ping":{"status":"UP"},"redis":{"status":"UP","details":{"version":"7.4.9"}},"ssl":{"status":"UP","details":{"validChains":[],"invalidChains":[]}}}}}
-{"module-cleanup":{"status":"UP","components":{"db":{"status":"UP","details":{"database":"H2","validationQuery":"isValid()"}},"diskSpace":{"status":"UP","details":{"total":414921494528,"free":148658008064,"threshold":10485760,"path":"/tmp/artifact-base-worktree.jLjmmj/.","exists":true}},"maple.expectation.infrastructure.storage.Minio":{"status":"UP","details":{"bucket":"maple-expectation","endpoint":"http://10.0.3.4:9000"}},"ping":{"status":"UP"},"ssl":{"status":"UP","details":{"validChains":[],"invalidChains":[]}}}}}
+{"module-external-api":{"status":"UP","components":{"db":{"status":"UP","details":{"database":"H2","validationQuery":"isValid()"}},"diskSpace":{"status":"UP","details":{"total":414921494528,"free":148658278400,"threshold":10485760,"path":"/tmp/artifact-base-worktree.jLjmmj/.","exists":true}},"maple.expectation.infrastructure.storage.Minio":{"status":"UP","details":{"bucket":"maple-expectation","endpoint":"${MINIO_ENDPOINT}"}},"ping":{"status":"UP"},"ssl":{"status":"UP","details":{"validChains":[],"invalidChains":[]}}}}}
+{"module-calculator":{"status":"UP","components":{"db":{"status":"UP","details":{"database":"H2","validationQuery":"isValid()"}},"diskSpace":{"status":"UP","details":{"total":414921494528,"free":148658036736,"threshold":10485760,"path":"/tmp/artifact-base-worktree.jLjmmj/.","exists":true}},"maple.expectation.infrastructure.storage.Minio":{"status":"UP","details":{"bucket":"maple-expectation","endpoint":"${MINIO_ENDPOINT}"}},"ping":{"status":"UP"},"ssl":{"status":"UP","details":{"validChains":[],"invalidChains":[]}}}}}
+{"module-synchronizer":{"status":"UP","components":{"db":{"status":"UP","details":{"database":"PostgreSQL","validationQuery":"SELECT 1","result":1}},"diskSpace":{"status":"UP","details":{"total":414921494528,"free":148655898624,"threshold":10485760,"path":"/tmp/artifact-base-worktree.jLjmmj/.","exists":true}},"maple.expectation.infrastructure.storage.Minio":{"status":"UP","details":{"bucket":"maple-expectation","endpoint":"${MINIO_ENDPOINT}"}},"ping":{"status":"UP"},"redis":{"status":"UP","details":{"version":"7.4.9"}},"ssl":{"status":"UP","details":{"validChains":[],"invalidChains":[]}}}}}
+{"module-cleanup":{"status":"UP","components":{"db":{"status":"UP","details":{"database":"H2","validationQuery":"isValid()"}},"diskSpace":{"status":"UP","details":{"total":414921494528,"free":148658008064,"threshold":10485760,"path":"/tmp/artifact-base-worktree.jLjmmj/.","exists":true}},"maple.expectation.infrastructure.storage.Minio":{"status":"UP","details":{"bucket":"maple-expectation","endpoint":"${MINIO_ENDPOINT}"}},"ping":{"status":"UP"},"ssl":{"status":"UP","details":{"validChains":[],"invalidChains":[]}}}}}
 ```
 
-| Executable | App log SHA-256 | Health JSON SHA-256 | Command output SHA-256 |
+The health hashes below refer to the uncommitted raw capture files, not to the sanitized representation above.
+
+| Executable | App log SHA-256 | Raw health JSON SHA-256 | Command output SHA-256 |
 | --- | --- | --- | --- |
 | external-api | `f33322df7fea07d66ba0a9614fd0764ef742ca099a884b87e481dccc06edfdab` | `ee446767783f14ecd0a65215cd8e0c9f79fb0934da0c02a4f1a7cf518a642312` | `de8c58fa0b7547bdd722155b6875ecc44d090d38fde231e0b4ead0815b4497a7` |
 | calculator | `a35688d048cbbf25ffb6e81a42dcc1fa975508af0489ef5b8fb95406d468cf75` | `1a0df6418e2356162582843d5c7946ab7177a30c96078b78f5e804dcc8f5b9f6` | `2b2a0f9e4d282dfa1521064a27640114a88967b4f2ced3fee9d506701a22aa63` |

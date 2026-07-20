@@ -1,8 +1,12 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import java.time.Instant
+import java.util.concurrent.CompletableFuture
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.pipeline.messaging.contract.DeliveryContext
+import maple.pipeline.messaging.contract.DeliveryOutcome
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.event.ResultChunkEventPathBuilder
 import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
@@ -16,7 +20,6 @@ import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import org.springframework.kafka.support.Acknowledgment
 
 class ChunkConsumerMappingTest {
 
@@ -25,19 +28,19 @@ class ChunkConsumerMappingTest {
     @Test
     fun `basic consumer delegates parsed event to ingestion service`() {
         val ingestionService = mock<BasicChunkIngestionService>()
-        whenever(ingestionService.process(any(), any(), any(), any(), any(), any())).thenReturn(true)
+        whenever(ingestionService.process(any(), any(), any(), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(DeliveryOutcome.Success))
         val consumer = BasicSnapshotChunkConsumer(
             objectMapper = objectMapper,
             ingestionService = ingestionService,
         )
 
-        consumer.consume(basicMessage, mock<Acknowledgment>(), "basic-topic", null)
+        consumer.consume(basicMessage, context("basic-topic", null))
 
         val eventCaptor = argumentCaptor<SnapshotChunkReadyEvent>()
         verify(ingestionService).process(
             eventCaptor.capture(),
             eq(basicMessage),
-            any(),
             eq("basic-topic"),
             eq(null),
             eq(false),
@@ -51,6 +54,7 @@ class ChunkConsumerMappingTest {
     @Test
     fun `result consumer maps event metadata to result chunk execution request`() {
         val template = mock<ChunkConsumerTemplate>()
+        whenever(template.submit(any())).thenReturn(CompletableFuture.completedFuture(DeliveryOutcome.Success))
         val consumer = KafkaResultChunkConsumer(
             objectMapper = objectMapper,
             chunkProcessor = mock<ChunkProcessor>(),
@@ -58,10 +62,10 @@ class ChunkConsumerMappingTest {
             chunkConsumerTemplate = template,
             consumedEventPublisher = mock<KafkaChunkConsumedEventPublisher>(),
             eventPathBuilder = mock<ResultChunkEventPathBuilder>(),
-            executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
+            executor = mock(),
         )
 
-        consumer.consume(resultMessage, mock<Acknowledgment>(), "result-topic", "result-key")
+        consumer.consume(resultMessage, context("result-topic", "result-key"))
 
         val captor = argumentCaptor<ChunkConsumerRequest>()
         verify(template).submit(captor.capture())
@@ -76,6 +80,16 @@ class ChunkConsumerMappingTest {
         assertThat(request.schemaVersion).isEqualTo(1)
         assertThat(request.eventPayloadJson).isEqualTo(resultMessage)
     }
+
+    private fun context(topic: String, key: String?): DeliveryContext = DeliveryContext(
+        listenerId = "test-listener",
+        topic = topic,
+        partition = 0,
+        offset = 1,
+        timestamp = Instant.EPOCH,
+        key = key,
+        deliveryAttempt = 1,
+    )
 
     private companion object {
         private val basicMessage = """

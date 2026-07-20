@@ -1,8 +1,9 @@
 package maple.synchronizer.event
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.concurrent.CompletableFuture
 import maple.expectation.common.event.ChunkConsumedEvent
-import org.slf4j.LoggerFactory
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.kafka.core.KafkaTemplate
@@ -16,17 +17,9 @@ class KafkaChunkConsumedEventPublisher(
     @Value("\${synchronizer.kafka.chunk-consumed-topic}")
     private val topic: String,
 ) {
-    private val log = LoggerFactory.getLogger(javaClass)
-
-    fun publish(event: ChunkConsumedEvent) {
+    fun publish(event: ChunkConsumedEvent): CompletableFuture<Void> {
         val payload = objectMapper.writeValueAsString(event)
-        kafkaTemplate.send(topic, event.kafkaKey(), payload)
-            .whenComplete { _, ex ->
-                if (ex != null) {
-                    log.warn("[ConsumedEvent] publish failed: runId={} chunkId={} - {}", event.runId, event.chunkId, ex.message)
-                } else {
-                    log.debug("[ConsumedEvent] published: runId={} chunkId={}", event.runId, event.chunkId)
-                }
-            }
+        return kafkaTemplate.send(ProducerRecord(topic, event.kafkaKey(), payload))
+            .thenApply { null }
     }
 }

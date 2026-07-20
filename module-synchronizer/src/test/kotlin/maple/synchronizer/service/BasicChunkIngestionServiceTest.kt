@@ -1,21 +1,22 @@
 package maple.synchronizer.service
 
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.core.port.out.ChunkFileReaderPort
+import maple.pipeline.messaging.contract.DeliveryOutcome
 import maple.synchronizer.consumer.ChunkConsumerTemplate
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.repository.OcidMappingRepository
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
-import org.springframework.kafka.support.Acknowledgment
+import org.mockito.kotlin.whenever
 
 class BasicChunkIngestionServiceTest {
     private val chunkFileReader = mock<ChunkFileReaderPort>()
@@ -35,36 +36,35 @@ class BasicChunkIngestionServiceTest {
     )
 
     @Test
-    fun `process returns false and skips template for non-character-basic endpoint`() {
+    fun `process returns terminal drop and skips template for non-character-basic endpoint`() {
         val event = makeEvent(endpoint = "ocid-lookup")
 
-        val handled = service.process(
+        val outcome = service.process(
             event = event,
             eventPayloadJson = "{}",
-            acknowledgment = mock<Acknowledgment>(),
             topic = "t",
             messageKey = "k",
             urgent = false,
-        )
+        ).toCompletableFuture().resultNow()
 
-        assertFalse(handled)
+        assertThat(outcome).isEqualTo(DeliveryOutcome.TerminalDrop("ENDPOINT_MISMATCH"))
         verify(template, never()).submit(any())
     }
 
     @Test
-    fun `process returns true and submits template for character-basic endpoint`() {
+    fun `process returns template outcome for character-basic endpoint`() {
         val event = makeEvent(endpoint = "character-basic")
+        whenever(template.submit(any())).thenReturn(CompletableFuture.completedFuture(DeliveryOutcome.Success))
 
-        val handled = service.process(
+        val outcome = service.process(
             event = event,
             eventPayloadJson = "{}",
-            acknowledgment = mock<Acknowledgment>(),
             topic = "t",
             messageKey = "k",
             urgent = false,
-        )
+        ).toCompletableFuture().resultNow()
 
-        assertTrue(handled)
+        assertThat(outcome).isEqualTo(DeliveryOutcome.Success)
         verify(template).submit(any())
     }
 

@@ -1,7 +1,8 @@
 package maple.cleanup.controller
 
 data class InboxCleanupResponse(
-    val drained: Int,
-    val deleted: Int,
-    val failed: Int,
+    val scanned: Int,
+    val completed: Int,
+    val retainedForRetry: Int,
+    val deletedTargets: Int,
 )

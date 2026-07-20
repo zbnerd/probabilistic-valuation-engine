@@ -1,6 +1,8 @@
 package maple.synchronizer.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Semaphore
 import maple.core.domain.chunk.ChunkProcessInput
@@ -8,18 +10,15 @@ import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.ChunkConsumedEvent
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
-import maple.expectation.infrastructure.executor.TaskContext
 import maple.expectation.util.CompressionUtils
+import maple.pipeline.messaging.contract.DeliveryContext
+import maple.pipeline.messaging.contract.DeliveryOutcome
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.event.ResultChunkEventPathBuilder
 import maple.synchronizer.metrics.SynchronizerChunkMetricsListener
 import maple.synchronizer.processor.ChunkProcessor
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.kafka.annotation.KafkaListener
-import org.springframework.kafka.support.Acknowledgment
-import org.springframework.kafka.support.KafkaHeaders
-import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
 
 @Component
@@ -35,17 +34,15 @@ class KafkaResultChunkConsumer(
     private val log = LoggerFactory.getLogger(KafkaResultChunkConsumer::class.java)
     private val processingPermit = Semaphore(2)
 
-    @KafkaListener(
-        topics = ["\${synchronizer.kafka.result-chunk-ready-topic}"],
-        groupId = "\${synchronizer.kafka.consumer-group-id}",
-    )
     fun consume(
         message: String,
-        acknowledgment: Acknowledgment,
-        @Header(name = KafkaHeaders.RECEIVED_TOPIC, required = false) topic: String?,
-        @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) messageKey: String?,
-    ) {
-        val event = objectMapper.readValue(message, CalculatorResultChunkReadyEvent::class.java)
+        context: DeliveryContext,
+    ): CompletionStage<DeliveryOutcome> {
+        val event = runCatching {
+            objectMapper.readValue(message, CalculatorResultChunkReadyEvent::class.java)
+        }.getOrElse {
+            return CompletableFuture.completedFuture(DeliveryOutcome.InvalidMessage(INVALID_MESSAGE))
+        }
         val runId = event.sourceRunId
         val chunkId = event.sourceChunkId
         val identity = ChunkExecutionIdentity(
@@ -63,24 +60,18 @@ class KafkaResultChunkConsumer(
             event.resultCount,
         )
 
-        var startNanos: Long = 0
-        chunkConsumerTemplate.submit(
+        val startNanos = System.nanoTime()
+        chunkMetricsListener.onEvent(ChunkLifecycleEvent.Accepted(runId, chunkId))
+        return chunkConsumerTemplate.submit(
             ChunkConsumerRequest(
-                logPrefix = "Synchronizer",
-                log = log,
                 identity = identity,
-                topic = topic ?: event.eventType,
-                messageKey = messageKey ?: event.kafkaKey(),
+                topic = context.topic,
+                messageKey = context.key ?: event.kafkaKey(),
                 eventType = event.eventType,
                 schemaVersion = event.schemaVersion,
                 eventPayloadJson = message,
-                objectKey = event.objectKey,
-                acknowledgment = acknowledgment,
                 processingPermit = processingPermit,
                 executor = executor,
-                processContext = TaskContext.of("Synchronizer", "ChunkProcess", chunkId),
-                lifecycleContext = TaskContext.of("Synchronizer", "ChunkLifecycle", chunkId),
-                mdcValues = mapOf("kafkaTopic" to (topic ?: event.eventType)),
                 process = {
                     chunkProcessor.process(
                         ChunkProcessInput(
@@ -91,22 +82,7 @@ class KafkaResultChunkConsumer(
                         ),
                     )
                 },
-                onAccepted = {
-                    startNanos = System.nanoTime()
-                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Accepted(runId, chunkId))
-                },
-                onSuccess = {
-                    chunkMetricsListener.onEvent(
-                        ChunkLifecycleEvent.Succeeded(
-                            runId = runId,
-                            chunkId = chunkId,
-                            compressedBytes = event.compressedBytes,
-                            uncompressedBytes = event.uncompressedBytes,
-                            resultCount = event.resultCount.toLong(),
-                            durationNanos = System.nanoTime() - startNanos,
-                        ),
-                    )
-                    logPreUpsertVolume(event)
+                publishRequired = {
                     consumedEventPublisher.publish(
                         ChunkConsumedEvent(
                             runId = runId,
@@ -121,15 +97,27 @@ class KafkaResultChunkConsumer(
                         ),
                     )
                 },
-                onFailure = { ex ->
+                onObservedSuccess = {
+                    chunkMetricsListener.onEvent(
+                        ChunkLifecycleEvent.Succeeded(
+                            runId = runId,
+                            chunkId = chunkId,
+                            compressedBytes = event.compressedBytes,
+                            uncompressedBytes = event.uncompressedBytes,
+                            resultCount = event.resultCount.toLong(),
+                            durationNanos = System.nanoTime() - startNanos,
+                        ),
+                    )
+                    logPreUpsertVolume(event)
+                },
+                onObservedFailure = { ex ->
                     chunkMetricsListener.onEvent(ChunkLifecycleEvent.Failed(runId, chunkId))
                     log.error("[Synchronizer] chunk processing failed: runId={} chunkId={}", runId, chunkId, ex)
                 },
-                onFinally = {
-                    chunkMetricsListener.onEvent(ChunkLifecycleEvent.Finally(runId, chunkId))
-                },
             ),
-        )
+        ).whenComplete { _, _ ->
+            chunkMetricsListener.onEvent(ChunkLifecycleEvent.Finally(runId, chunkId))
+        }
     }
 
     private fun logPreUpsertVolume(event: CalculatorResultChunkReadyEvent) {
@@ -143,5 +131,9 @@ class KafkaResultChunkConsumer(
             event.resultCount,
             ratio,
         )
+    }
+
+    private companion object {
+        private const val INVALID_MESSAGE = "INVALID_MESSAGE"
     }
 }

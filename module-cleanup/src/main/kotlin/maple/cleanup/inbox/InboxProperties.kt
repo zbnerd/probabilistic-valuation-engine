@@ -9,4 +9,6 @@ data class InboxProperties(
     val basePath: String = "../data",
     val maxPending: Int = 10_000,
     val autoStart: Boolean = true,
+    val drainPageSize: Int = 100,
+    val maxDrainEntriesPerRequest: Int = 10_000,
 )

@@ -1,166 +1,140 @@
 package maple.synchronizer.consumer
 
+import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 import java.util.concurrent.Executor
 import java.util.concurrent.Semaphore
 import maple.expectation.common.event.ChunkExecutionIdentity
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
+import maple.pipeline.messaging.contract.CompletionFailures
+import maple.pipeline.messaging.contract.DeliveryOutcome
 import maple.synchronizer.metrics.ChunkExecutionMetrics
 import maple.synchronizer.repository.ChunkExecutionClaim
 import maple.synchronizer.repository.ChunkExecutionRepository
+import maple.synchronizer.repository.ChunkExecutionState
 import maple.synchronizer.repository.InsertChunkExecutionCommand
 import maple.synchronizer.state.ChunkExecutionStateMachine
 import maple.synchronizer.state.ChunkExecutionStatus
 import maple.synchronizer.state.FailureDecision
-import org.slf4j.Logger
-import org.slf4j.MDC
-import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
 
 @Component
 class ChunkConsumerTemplate(
-    private val logicExecutor: LogicExecutor,
     private val chunkExecutionRepository: ChunkExecutionRepository,
     private val executionMetrics: ChunkExecutionMetrics,
     private val properties: ChunkExecutionProperties,
     private val stateMachine: ChunkExecutionStateMachine,
 ) {
-    fun submit(request: ChunkConsumerRequest) {
+    fun submit(request: ChunkConsumerRequest): CompletionStage<DeliveryOutcome> {
+        if (!request.processingPermit.tryAcquire()) {
+            return CompletableFuture.completedFuture(DeliveryOutcome.Backpressure(CAPACITY_BACKPRESSURE))
+        }
+
+        val preparation = runCatching {
+            CompletableFuture.supplyAsync({ prepare(request) }, request.executor)
+        }.getOrElse {
+            request.processingPermit.release()
+            return CompletableFuture.completedFuture(DeliveryOutcome.Backpressure(CAPACITY_BACKPRESSURE))
+        }
+
+        val pipeline = preparation.thenComposeAsync(
+            { prepared ->
+                when (prepared) {
+                    is Preparation.Completed -> CompletableFuture.completedFuture(prepared.outcome)
+                    is Preparation.Claimed -> processClaimed(request, prepared.claim)
+                }
+            },
+            request.executor,
+        ).handle { outcome, failure ->
+            failure?.let { DeliveryOutcome.Retryable(CompletionFailures.unwrap(it)) } ?: outcome
+        }
+
+        pipeline.whenComplete { _, _ -> request.processingPermit.release() }
+        return pipeline
+    }
+
+    private fun prepare(request: ChunkConsumerRequest): Preparation {
         if (chunkExecutionRepository.insertPendingIfAbsent(request.toInsertCommand())) {
             executionMetrics.recordChunkExecutionInserted(request.identity.executionType)
         }
 
         val state = chunkExecutionRepository.findExecutionState(request.identity)
         if (state == null) {
-            request.log.warn(
-                "[{}] chunk execution row missing after insert: runId={} chunkId={}",
-                request.logPrefix,
-                request.runId,
-                request.chunkId,
+            return Preparation.Completed(
+                DeliveryOutcome.Retryable(
+                    IllegalStateException("chunk execution row missing after insert"),
+                ),
             )
-            return
         }
 
-        if (stateMachine.shouldAcknowledge(state)) {
-            request.log.info(
-                "[{}] skip chunk in terminal/current state: runId={} chunkId={} status={}",
-                request.logPrefix,
-                request.runId,
-                request.chunkId,
-                state.status,
-            )
+        completedOutcome(state)?.let { outcome ->
             executionMetrics.recordChunkExecutionSkipped(request.identity.executionType, state.status)
-            request.acknowledgment.acknowledge()
-            return
+            return Preparation.Completed(outcome)
         }
 
-        if (!request.processingPermit.tryAcquire()) {
-            request.log.info(
-                "[{}] processing permit busy, will retry: runId={} chunkId={}",
-                request.logPrefix,
-                request.runId,
-                request.chunkId,
-            )
-            return
+        futureRetryBackpressure(state)?.let { outcome ->
+            return Preparation.Completed(outcome)
         }
 
         val claim = chunkExecutionRepository.claimProcessing(request.identity, properties.processingTimeout)
         if (claim == null) {
-            request.processingPermit.release()
-            if (stateMachine.shouldPreserveKafkaRedelivery(state)) {
-                request.log.info(
-                    "[{}] retryable chunk not due, leaving unacked for Kafka redelivery: runId={} chunkId={} nextRetryAt={}",
-                    request.logPrefix,
-                    request.runId,
-                    request.chunkId,
-                    state.nextRetryAt,
-                )
-                return
-            }
-            request.log.info(
-                "[{}] skip - chunk not eligible for claim: runId={} chunkId={} status={}",
-                request.logPrefix,
-                request.runId,
-                request.chunkId,
-                state.status,
-            )
-            executionMetrics.recordChunkExecutionSkipped(request.identity.executionType, state.status)
-            request.acknowledgment.acknowledge()
-            return
+            return Preparation.Completed(DeliveryOutcome.Backpressure(CAPACITY_BACKPRESSURE))
         }
         executionMetrics.recordChunkExecutionClaimed(request.identity.executionType)
         if (stateMachine.isReclaimedExpired(state, Instant.now())) {
             executionMetrics.recordChunkExecutionReclaimedExpired(request.identity.executionType)
         }
-
-        request.onAccepted()
-
-        request.executor.execute {
-            logicExecutor.executeWithFinally(
-                task = {
-                    MDC.put("runId", request.runId)
-                    MDC.put("chunkId", request.chunkId)
-                    request.mdcValues.forEach { (key, value) -> MDC.put(key, value) }
-                    processClaimed(request, claim)
-                },
-                finallyBlock = {
-                    request.onFinally()
-                    request.processingPermit.release()
-                    MDC.clear()
-                },
-                context = request.lifecycleContext,
-            )
-        }
+        return Preparation.Claimed(claim)
     }
 
     private fun processClaimed(
         request: ChunkConsumerRequest,
         claim: ChunkExecutionClaim,
-    ) {
+    ): CompletionStage<DeliveryOutcome> {
         if (request.schemaVersion != SUPPORTED_SCHEMA_VERSION) {
-            markUnsupportedSchema(request, claim)
-            return
+            return CompletableFuture.completedFuture(markUnsupportedSchema(request, claim))
         }
 
-        logicExecutor.executeOrCatch(
-            task = {
-                request.process()
-                markSucceededAndAck(request, claim)
+        runCatching(request.process).exceptionOrNull()?.let { failure ->
+            return CompletableFuture.completedFuture(markFailure(request, claim, failure))
+        }
+
+        val publication = runCatching(request.publishRequired).getOrElse { failure ->
+            return CompletableFuture.completedFuture(markFailure(request, claim, failure))
+        }
+
+        return publication.handleAsync(
+            { _, failure ->
+                if (failure == null) {
+                    markSucceeded(request, claim)
+                } else {
+                    markFailure(request, claim, CompletionFailures.unwrap(failure))
+                }
             },
-            recovery = { ex ->
-                markFailureAndAck(request, claim, ex)
-                null
-            },
-            context = request.processContext,
+            request.executor,
         )
     }
 
-    private fun markSucceededAndAck(
+    private fun markSucceeded(
         request: ChunkConsumerRequest,
         claim: ChunkExecutionClaim,
-    ) {
+    ): DeliveryOutcome {
         val marked = chunkExecutionRepository.markSucceeded(request.identity, claim.attemptCount)
         if (marked) {
             executionMetrics.recordChunkExecutionSucceeded(request.identity.executionType)
-            request.onSuccess()
-            request.acknowledgment.acknowledge()
-            return
+            request.onObservedSuccess()
+            return DeliveryOutcome.Success
         }
-
-        request.log.warn(
-            "[{}] success state write lost race, leaving unacked: runId={} chunkId={} attempt={}",
-            request.logPrefix,
-            request.runId,
-            request.chunkId,
-            claim.attemptCount,
+        return DeliveryOutcome.Retryable(
+            IllegalStateException("success state write lost race"),
         )
     }
 
     private fun markUnsupportedSchema(
         request: ChunkConsumerRequest,
         claim: ChunkExecutionClaim,
-    ) {
+    ): DeliveryOutcome {
         val message = "Unsupported schemaVersion=${request.schemaVersion}"
         val marked = chunkExecutionRepository.markFailedTerminal(
             request.identity,
@@ -174,25 +148,16 @@ class ChunkConsumerTemplate(
                 ChunkExecutionStatus.FailedTerminal(UNSUPPORTED_SCHEMA_VERSION),
                 UNSUPPORTED_SCHEMA_VERSION,
             )
-            request.log.warn(
-                "[{}] terminal chunk failure: runId={} chunkId={} reason={}",
-                request.logPrefix,
-                request.runId,
-                request.chunkId,
-                UNSUPPORTED_SCHEMA_VERSION,
-            )
-            request.acknowledgment.acknowledge()
-            return
+            return DeliveryOutcome.InvalidMessage(UNSUPPORTED_SCHEMA_VERSION)
         }
-
-        logFailedStateWrite(request, claim)
+        return DeliveryOutcome.Retryable(IllegalStateException("failure state write lost race"))
     }
 
-    private fun markFailureAndAck(
+    private fun markFailure(
         request: ChunkConsumerRequest,
         claim: ChunkExecutionClaim,
         ex: Throwable,
-    ) {
+    ): DeliveryOutcome {
         val decision = stateMachine.classifyFailure(ex, claim)
         val error = ex.message ?: ex.javaClass.simpleName
 
@@ -212,8 +177,7 @@ class ChunkConsumerTemplate(
         }
 
         if (!marked) {
-            logFailedStateWrite(request, claim)
-            return
+            return DeliveryOutcome.Retryable(IllegalStateException("failure state write lost race", ex))
         }
 
         val status: ChunkExecutionStatus = when (decision) {
@@ -225,35 +189,35 @@ class ChunkConsumerTemplate(
             status,
             decision.reason,
         )
-        request.onFailure(ex)
+        request.onObservedFailure(ex)
 
-        when (decision) {
-            is FailureDecision.Retryable -> {
-                request.log.warn(
-                    "[{}] retryable chunk failure recorded, leaving unacked for Kafka redelivery: runId={} chunkId={} attempt={}",
-                    request.logPrefix,
-                    request.runId,
-                    request.chunkId,
-                    claim.attemptCount,
-                )
-            }
-            is FailureDecision.Terminal -> {
-                request.acknowledgment.acknowledge()
-            }
+        return when (decision) {
+            is FailureDecision.Retryable -> DeliveryOutcome.Retryable(ex)
+            is FailureDecision.Terminal -> DeliveryOutcome.TerminalDrop(decision.terminalReason)
         }
     }
 
-    private fun logFailedStateWrite(
-        request: ChunkConsumerRequest,
-        claim: ChunkExecutionClaim,
-    ) {
-        request.log.warn(
-            "[{}] failure state write lost race, leaving unacked: runId={} chunkId={} attempt={}",
-            request.logPrefix,
-            request.runId,
-            request.chunkId,
-            claim.attemptCount,
+    private fun completedOutcome(state: ChunkExecutionState): DeliveryOutcome? = when (val status = state.status) {
+        ChunkExecutionStatus.Succeeded -> DeliveryOutcome.Success
+        is ChunkExecutionStatus.FailedTerminal -> DeliveryOutcome.TerminalDrop(
+            status.reason ?: FAILED_TERMINAL,
         )
+        ChunkExecutionStatus.Processing -> if (state.leaseUntil?.isAfter(Instant.now()) == true) {
+            DeliveryOutcome.Success
+        } else {
+            null
+        }
+        is ChunkExecutionStatus.FailedRetryable,
+        ChunkExecutionStatus.Pending,
+        -> null
+    }
+
+    private fun futureRetryBackpressure(state: ChunkExecutionState): DeliveryOutcome.Backpressure? {
+        val retryAt = state.nextRetryAt ?: return null
+        val remaining = Duration.between(Instant.now(), retryAt)
+        if (remaining.isNegative || remaining.isZero) return null
+        val bounded = if (remaining > MAX_RETRY_BACKPRESSURE) MAX_RETRY_BACKPRESSURE else remaining
+        return DeliveryOutcome.Backpressure(bounded)
     }
 
     private fun ChunkConsumerRequest.toInsertCommand(): InsertChunkExecutionCommand = InsertChunkExecutionCommand(
@@ -268,31 +232,28 @@ class ChunkConsumerTemplate(
     private companion object {
         private const val SUPPORTED_SCHEMA_VERSION = 1
         private const val UNSUPPORTED_SCHEMA_VERSION = "UNSUPPORTED_SCHEMA_VERSION"
+        private const val FAILED_TERMINAL = "FAILED_TERMINAL"
+        private val CAPACITY_BACKPRESSURE: Duration = Duration.ofSeconds(1)
+        private val MAX_RETRY_BACKPRESSURE: Duration = Duration.ofSeconds(30)
+    }
+
+    private sealed interface Preparation {
+        data class Completed(val outcome: DeliveryOutcome) : Preparation
+        data class Claimed(val claim: ChunkExecutionClaim) : Preparation
     }
 }
 
 data class ChunkConsumerRequest(
-    val logPrefix: String,
-    val log: Logger,
     val identity: ChunkExecutionIdentity,
     val topic: String,
     val messageKey: String,
     val eventType: String,
     val schemaVersion: Int,
     val eventPayloadJson: String,
-    val objectKey: String,
-    val acknowledgment: Acknowledgment,
     val processingPermit: Semaphore,
     val executor: Executor,
-    val processContext: TaskContext,
-    val lifecycleContext: TaskContext,
-    val mdcValues: Map<String, String> = emptyMap(),
     val process: () -> Unit,
-    val onAccepted: () -> Unit = {},
-    val onSuccess: () -> Unit = {},
-    val onFailure: (Throwable) -> Unit = {},
-    val onFinally: () -> Unit = {},
-) {
-    val runId: String = identity.runId
-    val chunkId: String = identity.chunkId
-}
+    val publishRequired: () -> CompletionStage<Void>,
+    val onObservedSuccess: () -> Unit = {},
+    val onObservedFailure: (Throwable) -> Unit = {},
+)

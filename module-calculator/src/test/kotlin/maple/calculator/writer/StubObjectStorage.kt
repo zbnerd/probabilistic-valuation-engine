@@ -1,21 +1,26 @@
 package maple.calculator.writer
 
-import maple.expectation.common.storage.ObjectInfo
-import maple.expectation.common.storage.ObjectStorage
-import maple.expectation.common.storage.PutResult
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
+import maple.expectation.common.storage.ObjectInfo
+import maple.expectation.common.storage.PutResult
+import maple.pipeline.artifact.identity.ArtifactKey
+import maple.pipeline.artifact.identity.ArtifactPrefix
+import maple.pipeline.artifact.storage.ConditionalObjectStorage
+import maple.pipeline.artifact.storage.PutIfAbsentResult
+import maple.pipeline.artifact.storage.StorageObjectPage
 
 /**
  * Stub [ObjectStorage] for unit tests. All methods throw
  * [NotImplementedError] by default. Tests override only the methods they
  * exercise. Avoids a mocking-framework dependency.
  */
-open class StubObjectStorage : ObjectStorage {
+open class StubObjectStorage : ConditionalObjectStorage {
 
     /** If set, [putFileAsync] copies the uploaded file's bytes into this buffer. */
     var capturedStream: ByteArray? = null
@@ -39,6 +44,7 @@ open class StubObjectStorage : ObjectStorage {
     // --- Unused methods throw to surface accidental test dependencies ---
 
     override fun put(key: String, data: ByteArray): PutResult = throw NotImplementedError()
+
     @Deprecated("Stub default; not exercised by tests.")
     override fun putStream(key: String, input: InputStream): PutResult = throw NotImplementedError()
     override fun putFile(key: String, path: Path): PutResult = throw NotImplementedError()
@@ -54,4 +60,6 @@ open class StubObjectStorage : ObjectStorage {
     override fun deleteByPrefix(prefix: String): Long = throw NotImplementedError()
     override fun calculatePrefixSize(prefix: String): Long = throw NotImplementedError()
     override fun getLastModified(key: String): Instant? = throw NotImplementedError()
+    override fun putIfAbsent(key: String, data: ByteArray): CompletionStage<PutIfAbsentResult> = throw NotImplementedError()
+    override fun listPage(prefix: ArtifactPrefix, afterKey: ArtifactKey?, limit: Int): StorageObjectPage = throw NotImplementedError()
 }

@@ -1,13 +1,15 @@
 package maple.expectation.application.service.calculator.v4;
 
+import java.util.List;
 import lombok.RequiredArgsConstructor;
-import maple.expectation.application.service.calculator.v4.impl.AdditionalCubeDecoratorV4;
-import maple.expectation.application.service.calculator.v4.impl.BaseEquipmentItem;
-import maple.expectation.application.service.calculator.v4.impl.BlackCubeDecoratorV4;
-import maple.expectation.application.service.calculator.v4.impl.StarforceDecoratorV4;
-import maple.expectation.application.service.cube.CubeTrialsProvider;
-import maple.expectation.application.service.cube.policy.CubeCostPolicy;
-import maple.expectation.core.calculator.port.StarforceLookupPort;
+import maple.expectation.core.calculation.ComponentCosts;
+import maple.expectation.core.calculation.ComponentTrials;
+import maple.expectation.core.calculation.ValuationInput;
+import maple.expectation.core.calculation.ValuationKernel;
+import maple.expectation.core.calculation.ValuationResult;
+import maple.expectation.core.calculation.cube.DpInference;
+import maple.expectation.core.calculation.cube.DpModeInferrer;
+import maple.expectation.core.calculation.probability.ProbabilityTableSnapshot;
 import maple.expectation.core.dto.cube.CubeCalculationInput;
 import maple.expectation.core.dto.v4.EquipmentCalculationInput;
 import org.springframework.stereotype.Component;
@@ -15,19 +17,8 @@ import org.springframework.stereotype.Component;
 /**
  * V4 장비 기대값 계산기 팩토리 (#240)
  *
- * <h3>역할</h3>
- *
- * <p>장비 입력을 기반으로 적절한 Decorator 체인을 구성합니다.
- *
- * <h3>Decorator 체인 예시</h3>
- *
- * <pre>
- * BaseEquipmentItem
- *   └→ BlackCubeDecoratorV4 (윗잠재)
- *       └→ RedCubeDecoratorV4 (윗잠재 보조) [선택적]
- *           └→ AdditionalCubeDecoratorV4 (아랫잠재)
- *               └→ StarforceDecoratorV4 (스타포스)
- * </pre>
+ * <p>Preserves the legacy public factory and calculator interface while delegating every entry
+ * point to the immutable core valuation kernel.
  *
  * @see EquipmentExpectationCalculator 대상 인터페이스
  */
@@ -35,9 +26,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class EquipmentExpectationCalculatorFactory {
 
-  private final CubeTrialsProvider trialsProvider;
-  private final CubeCostPolicy costPolicy;
-  private final StarforceLookupPort starforceLookupPort;
+  private final ValuationKernel kernel;
+  private final ProbabilityTableSnapshot table;
+  private final DpModeInferrer modeInferrer = new DpModeInferrer();
 
   /**
    * 전체 강화 계산기 생성 (블랙큐브 + 에디셔널 + 스타포스)
@@ -46,35 +37,19 @@ public class EquipmentExpectationCalculatorFactory {
    * @return 전체 강화 계산기
    */
   public EquipmentExpectationCalculator createFullCalculator(EquipmentCalculationInput input) {
-    // 1. 기본 아이템
-    EquipmentExpectationCalculator calculator =
-        new BaseEquipmentItem(input.getItemName(), input.getItemLevel(), input.getCurrentStar());
-
-    // 2. 윗잠재 (블랙큐브) - 잠재능력이 있는 경우에만
-    if (input.hasPotential()) {
-      CubeCalculationInput potentialInput = input.toPotentialCubeInput();
-      calculator = new BlackCubeDecoratorV4(calculator, trialsProvider, costPolicy, potentialInput);
-    }
-
-    // 3. 아랫잠재 (에디셔널큐브) - 에디셔널 잠재능력이 있는 경우에만
-    if (input.hasAdditionalPotential()) {
-      CubeCalculationInput additionalInput = input.toAdditionalCubeInput();
-      calculator =
-          new AdditionalCubeDecoratorV4(calculator, trialsProvider, costPolicy, additionalInput);
-    }
-
-    // 4. 스타포스 - 스타포스 정보가 있는 경우에만
-    if (input.hasStarforce()) {
-      calculator =
-          new StarforceDecoratorV4(
-              calculator,
-              starforceLookupPort,
-              input.getCurrentStar(),
-              input.getTargetStar(),
-              input.getItemLevel());
-    }
-
-    return calculator;
+    return calculate(
+        new ValuationInput(
+            input.getItemName(),
+            input.getItemPart(),
+            input.getItemEquipmentPart(),
+            input.getItemLevel(),
+            input.getCurrentStar(),
+            input.getTargetStar(),
+            input.isNoljang(),
+            input.getPotentialGrade(),
+            immutableOptions(input.getPotentialOptions()),
+            input.getAdditionalPotentialGrade(),
+            immutableOptions(input.getAdditionalPotentialOptions())));
   }
 
   /**
@@ -84,11 +59,19 @@ public class EquipmentExpectationCalculatorFactory {
    * @return 블랙큐브 계산기
    */
   public EquipmentExpectationCalculator createBlackCubeCalculator(CubeCalculationInput input) {
-    EquipmentExpectationCalculator calculator =
-        new BaseEquipmentItem(
-            input.getItemName(), input.getLevel(), 0 // 스타포스 정보 없음
-            );
-    return new BlackCubeDecoratorV4(calculator, trialsProvider, costPolicy, input);
+    return calculate(
+        new ValuationInput(
+            valueOrEmpty(input.getItemName()),
+            valueOrEmpty(input.getPart()),
+            valueOrEmpty(input.getItemEquipmentPart()),
+            input.getLevel(),
+            0,
+            0,
+            false,
+            input.getGrade(),
+            immutableOptions(input.getOptions()),
+            null,
+            List.of()));
   }
 
   /**
@@ -98,9 +81,19 @@ public class EquipmentExpectationCalculatorFactory {
    * @return 에디셔널큐브 계산기
    */
   public EquipmentExpectationCalculator createAdditionalCubeCalculator(CubeCalculationInput input) {
-    EquipmentExpectationCalculator calculator =
-        new BaseEquipmentItem(input.getItemName(), input.getLevel(), 0);
-    return new AdditionalCubeDecoratorV4(calculator, trialsProvider, costPolicy, input);
+    return calculate(
+        new ValuationInput(
+            valueOrEmpty(input.getItemName()),
+            valueOrEmpty(input.getPart()),
+            valueOrEmpty(input.getItemEquipmentPart()),
+            input.getLevel(),
+            0,
+            0,
+            false,
+            null,
+            List.of(),
+            input.getGrade(),
+            immutableOptions(input.getOptions())));
   }
 
   /**
@@ -114,9 +107,84 @@ public class EquipmentExpectationCalculatorFactory {
    */
   public EquipmentExpectationCalculator createStarforceCalculator(
       String itemName, int itemLevel, int currentStar, int targetStar) {
-    EquipmentExpectationCalculator calculator =
-        new BaseEquipmentItem(itemName, itemLevel, currentStar);
-    return new StarforceDecoratorV4(
-        calculator, starforceLookupPort, currentStar, targetStar, itemLevel);
+    return calculate(
+        new ValuationInput(
+            itemName,
+            "",
+            "",
+            itemLevel,
+            currentStar,
+            targetStar,
+            false,
+            null,
+            List.of(),
+            null,
+            List.of()));
+  }
+
+  private EquipmentExpectationCalculator calculate(ValuationInput input) {
+    ValuationResult result = kernel.calculate(input, table);
+    return new CoreValuationCalculatorAdapter(preserveLegacyPermutationFallback(input, result));
+  }
+
+  /**
+   * The retired V1 permutation facade queried repository slot zero and therefore exposed zero
+   * cost/trials for inferred permutation mode. Preserve that frozen public behavior here while the
+   * standalone core kernel keeps its slot-specific permutation result.
+   */
+  private ValuationResult preserveLegacyPermutationFallback(
+      ValuationInput input, ValuationResult result) {
+    boolean suppressBlack =
+        hasGrade(input.getPotentialGrade())
+            && (usesInferredPermutation(input.getPotentialOptions())
+                || isNonFinite(result.getTrials().getBlackCubeTrials()));
+    boolean suppressAdditional =
+        hasGrade(input.getAdditionalGrade())
+            && (usesInferredPermutation(input.getAdditionalOptions())
+                || isNonFinite(result.getTrials().getAdditionalCubeTrials()));
+    if (!suppressBlack && !suppressAdditional) {
+      return result;
+    }
+
+    ComponentCosts costs =
+        new ComponentCosts(
+            suppressIfNeeded(suppressBlack, result.getCosts().getBlackCubeCost()),
+            suppressIfNeeded(suppressAdditional, result.getCosts().getAdditionalCubeCost()),
+            result.getCosts().getStarforceCost());
+    ComponentTrials trials =
+        new ComponentTrials(
+            suppressIfNeeded(suppressBlack, result.getTrials().getBlackCubeTrials()),
+            suppressIfNeeded(suppressAdditional, result.getTrials().getAdditionalCubeTrials()));
+    return new ValuationResult(
+        costs,
+        trials,
+        result.getEnhancePath(),
+        result.getTableVersion(),
+        result.getLogicVersion());
+  }
+
+  private boolean usesInferredPermutation(List<String> options) {
+    DpInference inference = modeInferrer.infer(options);
+    return !inference.isValid() || inference.getConfidence() < 0.5;
+  }
+
+  private static boolean hasGrade(String grade) {
+    return grade != null && !grade.isEmpty();
+  }
+
+  private static boolean isNonFinite(Double value) {
+    return value != null && !Double.isFinite(value);
+  }
+
+  private static Double suppressIfNeeded(boolean suppress, Double value) {
+    return suppress ? Double.valueOf(0.0) : value;
+  }
+
+  private static List<String> immutableOptions(List<String> options) {
+    return options == null ? List.of() : List.copyOf(options);
+  }
+
+  private static String valueOrEmpty(String value) {
+    return value == null ? "" : value;
   }
 }

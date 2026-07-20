@@ -1,5 +1,7 @@
 package maple.synchronizer.service
 
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Semaphore
 import maple.expectation.common.event.ChunkConsumedEvent
@@ -7,17 +9,16 @@ import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.core.port.out.ChunkFileReaderPort
-import maple.expectation.infrastructure.executor.TaskContext
+import maple.pipeline.messaging.contract.DeliveryOutcome
 import maple.synchronizer.consumer.ChunkConsumerRequest
 import maple.synchronizer.consumer.ChunkConsumerTemplate
+import maple.synchronizer.domain.BasicRecord
+import maple.synchronizer.domain.OcidMapping
 import maple.synchronizer.event.KafkaChunkConsumedEventPublisher
 import maple.synchronizer.repository.CharacterBasicRepository
 import maple.synchronizer.repository.OcidMappingRepository
-import maple.synchronizer.domain.BasicRecord
-import maple.synchronizer.domain.OcidMapping
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Service
 
 @Service
@@ -35,18 +36,16 @@ class BasicChunkIngestionService(
     fun process(
         event: SnapshotChunkReadyEvent,
         eventPayloadJson: String,
-        acknowledgment: Acknowledgment,
         topic: String?,
         messageKey: String?,
         urgent: Boolean,
-    ): Boolean {
+    ): CompletionStage<DeliveryOutcome> {
         if (event.endpoint != "character-basic") {
-            return false
+            return CompletableFuture.completedFuture(DeliveryOutcome.TerminalDrop(ENDPOINT_MISMATCH))
         }
 
         val runId = event.runId
         val chunkId = event.chunkId
-        val operation = if (urgent) "UrgentChunk" else "Chunk"
         val identity = ChunkExecutionIdentity(
             executionType = ChunkExecutionType.SYNCHRONIZER_BASIC_CHUNK,
             runId = runId,
@@ -54,22 +53,16 @@ class BasicChunkIngestionService(
             chunkId = chunkId,
         )
 
-        chunkConsumerTemplate.submit(
+        return chunkConsumerTemplate.submit(
             ChunkConsumerRequest(
-                logPrefix = "BasicSync",
-                log = log,
                 identity = identity,
                 topic = topic ?: event.eventType,
                 messageKey = messageKey ?: event.kafkaKey(),
                 eventType = event.eventType,
                 schemaVersion = event.schemaVersion,
                 eventPayloadJson = eventPayloadJson,
-                objectKey = event.objectKey,
-                acknowledgment = acknowledgment,
                 processingPermit = processingPermit,
                 executor = executor,
-                processContext = TaskContext.of("BasicSync", "${operation}Process", chunkId),
-                lifecycleContext = TaskContext.of("BasicSync", "${operation}Lifecycle", chunkId),
                 process = {
                     var totalRecords = 0
                     chunkFileReader.readBasicChunk(event.objectKey)
@@ -89,7 +82,7 @@ class BasicChunkIngestionService(
                         totalRecords,
                     )
                 },
-                onSuccess = {
+                publishRequired = {
                     consumedEventPublisher.publish(
                         ChunkConsumedEvent(
                             runId = runId,
@@ -99,7 +92,7 @@ class BasicChunkIngestionService(
                         ),
                     )
                 },
-                onFailure = { ex ->
+                onObservedFailure = { ex ->
                     log.error(
                         "[BasicSync] {}chunk processing failed: runId={} chunkId={}",
                         if (urgent) "urgent " else "",
@@ -110,7 +103,6 @@ class BasicChunkIngestionService(
                 },
             ),
         )
-        return true
     }
 
     private fun upsertOcidFromBasicRecords(records: List<BasicRecord>) {
@@ -121,5 +113,6 @@ class BasicChunkIngestionService(
 
     companion object {
         private const val BATCH_SIZE = 1000
+        private const val ENDPOINT_MISMATCH = "ENDPOINT_MISMATCH"
     }
 }

@@ -1,17 +1,13 @@
 package maple.synchronizer.consumer
 
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.Semaphore
 import maple.expectation.common.event.ChunkExecutionIdentity
 import maple.expectation.common.event.ChunkExecutionType
-import maple.expectation.common.function.ThrowingSupplier
-import maple.expectation.error.CommonErrorCode
-import maple.expectation.error.exception.ArtifactNotFoundException
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
-import maple.expectation.infrastructure.executor.function.ThrowingRunnable
-import maple.expectation.infrastructure.executor.strategy.ExceptionTranslator
+import maple.pipeline.messaging.contract.DeliveryOutcome
 import maple.synchronizer.metrics.ChunkExecutionMetrics
 import maple.synchronizer.repository.ChunkExecutionClaim
 import maple.synchronizer.repository.ChunkExecutionRepository
@@ -22,24 +18,18 @@ import maple.synchronizer.state.ChunkExecutionStatus
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
-import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.eq
-import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import org.slf4j.LoggerFactory
-import org.springframework.kafka.support.Acknowledgment
 
 class ChunkConsumerTemplateTest {
-
     private val repository = mock<ChunkExecutionRepository>()
     private val executionMetrics = mock<ChunkExecutionMetrics>()
-    private val acknowledgment = mock<Acknowledgment>()
-    private val executor = Executor { command -> command.run() }
+    private val directExecutor = Executor(Runnable::run)
     private val template = ChunkConsumerTemplate(
-        logicExecutor = ImmediateLogicExecutor(),
         chunkExecutionRepository = repository,
         executionMetrics = executionMetrics,
         properties = ChunkExecutionProperties(),
@@ -47,231 +37,233 @@ class ChunkConsumerTemplateTest {
     )
 
     @Test
-    fun `first consume inserts pending claims processes marks success then acks`() {
-        val events = mutableListOf<String>()
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
-        whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 1))
-        whenever(repository.markSucceeded(identity, 1)).thenReturn(true)
+    fun `process publish completion mark success and Success are strictly ordered`() {
+        val calls = mutableListOf<String>()
+        val publish = CompletableFuture<Void>()
+        givenClaimable()
+        whenever(repository.markSucceeded(identity, 1)) doAnswer {
+            calls += "markSucceeded"
+            true
+        }
+        val delivery = template.submit(
+            request(
+                process = { calls += "process" },
+                publishRequired = {
+                    calls += "publish invoked"
+                    publish
+                },
+                onObservedSuccess = { calls += "observed success" },
+            ),
+        ).toCompletableFuture()
 
-        template.submit(request(process = { events.add("process") }))
+        assertThat(calls).containsExactly("process", "publish invoked")
+        assertThat(delivery).isNotDone()
 
-        val order = inOrder(repository, acknowledgment)
-        order.verify(repository).insertPendingIfAbsent(any())
-        order.verify(repository).findExecutionState(identity)
-        order.verify(repository).claimProcessing(eq(identity), any())
-        order.verify(repository).markSucceeded(identity, 1)
-        order.verify(acknowledgment).acknowledge()
-        assertThat(events).containsExactly("process")
-    }
+        calls += "publish completed"
+        publish.complete(null)
 
-    @Test
-    fun `succeeded chunk skips processing and acks`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Succeeded))
-
-        template.submit(request(process = { error("must not process") }))
-
-        verify(repository).insertPendingIfAbsent(any())
-        verify(repository, never()).claimProcessing(any(), any())
-        verify(acknowledgment).acknowledge()
-    }
-
-    @Test
-    fun `processing with active lease acks without permit or claim`() {
-        val permit = Semaphore(0)
-        whenever(repository.findExecutionState(identity)).thenReturn(
-            state(ChunkExecutionStatus.Processing, leaseUntil = Instant.now().plusSeconds(60)),
+        assertThat(delivery).isCompletedWithValue(DeliveryOutcome.Success)
+        assertThat(calls).containsExactly(
+            "process",
+            "publish invoked",
+            "publish completed",
+            "markSucceeded",
+            "observed success",
         )
-
-        template.submit(request(processingPermit = permit, process = { error("must not process") }))
-
-        verify(repository, never()).claimProcessing(any(), any())
-        verify(acknowledgment).acknowledge()
     }
 
     @Test
-    fun `retryable failure not due does not ack without permit or claim`() {
-        val permit = Semaphore(0)
-        whenever(repository.findExecutionState(identity)).thenReturn(
-            state(ChunkExecutionStatus.FailedRetryable(nextRetryAt = Instant.now().plusSeconds(60)), nextRetryAt = Instant.now().plusSeconds(60)),
-        )
-
-        template.submit(request(processingPermit = permit, process = { error("must not process") }))
-
-        verify(repository, never()).claimProcessing(any(), any())
-        verify(acknowledgment, never()).acknowledge()
-    }
-
-    @Test
-    fun `pending chunk with busy permit does not ack or claim`() {
-        val permit = Semaphore(0)
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
-
-        template.submit(request(processingPermit = permit, process = { error("must not process") }))
-
-        verify(repository, never()).claimProcessing(any(), any())
-        verify(acknowledgment, never()).acknowledge()
-    }
-
-    @Test
-    fun `due retryable failure with busy permit ack-skips (no waiting)`() {
-        val permit = Semaphore(0)
-        whenever(repository.findExecutionState(identity)).thenReturn(
-            state(ChunkExecutionStatus.FailedRetryable(nextRetryAt = Instant.now().minusSeconds(60)), nextRetryAt = Instant.now().minusSeconds(60)),
-        )
-
-        template.submit(request(processingPermit = permit, process = { error("must not process") }))
-
-        verify(repository, never()).claimProcessing(any(), any())
-        verify(acknowledgment).acknowledge()
-    }
-
-    @Test
-    fun `business failure writes retryable failure and preserves Kafka redelivery`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
-        whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 1))
+    fun `publish failure records business retry state skips success and returns Retryable`() {
+        val failure = IllegalStateException("publish failed")
+        givenClaimable()
         whenever(repository.markFailedRetryable(eq(identity), eq(1), any(), any())).thenReturn(true)
 
-        template.submit(request(process = { error("boom") }))
+        val outcome = template.submit(
+            request(publishRequired = { CompletableFuture.failedFuture(failure) }),
+        ).toCompletableFuture().resultNow()
 
-        verify(repository).markFailedRetryable(eq(identity), eq(1), any(), any())
-        verify(acknowledgment, never()).acknowledge()
+        assertThat(outcome).isEqualTo(DeliveryOutcome.Retryable(failure))
         verify(repository, never()).markSucceeded(any(), any())
+        verify(repository).markFailedRetryable(eq(identity), eq(1), any(), any())
     }
 
     @Test
-    fun `failed state write does not ack`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
-        whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 1))
+    fun `lost mark success race is Retryable rather than Success`() {
+        givenClaimable()
         whenever(repository.markSucceeded(identity, 1)).thenReturn(false)
 
-        template.submit(request())
+        val outcome = template.submit(request()).toCompletableFuture().resultNow()
 
-        verify(acknowledgment, never()).acknowledge()
+        assertThat(outcome).isInstanceOf(DeliveryOutcome.Retryable::class.java)
     }
 
     @Test
-    fun `unsupported schema marks terminal before business process`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
-        whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 1))
-        whenever(repository.markFailedTerminal(eq(identity), eq(1), any(), eq("UNSUPPORTED_SCHEMA_VERSION"))).thenReturn(true)
-
-        template.submit(request(schemaVersion = 2, process = { error("must not process") }))
-
-        val order = inOrder(repository, acknowledgment)
-        order.verify(repository).markFailedTerminal(eq(identity), eq(1), any(), eq("UNSUPPORTED_SCHEMA_VERSION"))
-        order.verify(acknowledgment).acknowledge()
+    fun `permit is released for success process failure publish failure cancellation and state failure`() {
+        assertPermitReleased(
+            configure = {
+                givenClaimable()
+                whenever(repository.markSucceeded(identity, 1)).thenReturn(true)
+            },
+            requestFactory = { permit -> request(processingPermit = permit) },
+        )
+        assertPermitReleased(
+            configure = {
+                givenClaimable()
+                whenever(repository.markFailedRetryable(eq(identity), eq(1), any(), any())).thenReturn(true)
+            },
+            requestFactory = { permit -> request(processingPermit = permit, process = { error("process") }) },
+        )
+        assertPermitReleased(
+            configure = {
+                givenClaimable()
+                whenever(repository.markFailedRetryable(eq(identity), eq(1), any(), any())).thenReturn(true)
+            },
+            requestFactory = { permit ->
+                request(
+                    processingPermit = permit,
+                    publishRequired = { CompletableFuture.failedFuture(IllegalStateException("publish")) },
+                )
+            },
+        )
+        assertPermitReleased(
+            configure = {
+                givenClaimable()
+                whenever(repository.markFailedRetryable(eq(identity), eq(1), any(), any())).thenReturn(true)
+            },
+            requestFactory = { permit ->
+                val cancelled = CompletableFuture<Void>()
+                cancelled.cancel(false)
+                request(processingPermit = permit, publishRequired = { cancelled })
+            },
+        )
+        assertPermitReleased(
+            configure = {
+                givenClaimable()
+                whenever(repository.markSucceeded(identity, 1)).thenThrow(IllegalStateException("state"))
+            },
+            requestFactory = { permit -> request(processingPermit = permit) },
+        )
     }
 
     @Test
-    fun `artifact missing becomes terminal after artifact missing max attempts`() {
-        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
-        whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(attemptCount = 2))
-        whenever(repository.markFailedTerminal(eq(identity), eq(2), any(), eq("ARTIFACT_MISSING_MAX_ATTEMPTS"))).thenReturn(true)
+    fun `future next retry and unavailable permit are Backpressure`() {
+        val futureRetry = Instant.now().plusSeconds(60)
+        whenever(repository.findExecutionState(identity)).thenReturn(
+            state(ChunkExecutionStatus.FailedRetryable(futureRetry), nextRetryAt = futureRetry),
+        )
+        val dueLater = template.submit(request()).toCompletableFuture().resultNow()
 
-        template.submit(request(process = { throw ArtifactNotFoundException(CommonErrorCode.ARTIFACT_NOT_FOUND, "ResultFileReader", "/tmp/missing") }))
+        val noCapacity = template.submit(request(processingPermit = Semaphore(0))).toCompletableFuture().resultNow()
 
-        verify(repository).markFailedTerminal(eq(identity), eq(2), any(), eq("ARTIFACT_MISSING_MAX_ATTEMPTS"))
-        verify(acknowledgment).acknowledge()
+        assertThat(dueLater).isInstanceOf(DeliveryOutcome.Backpressure::class.java)
+        assertThat(noCapacity).isInstanceOf(DeliveryOutcome.Backpressure::class.java)
+        verify(repository, never()).claimProcessing(any(), any())
     }
 
     @Test
-    fun `request insert command carries kafka and event metadata`() {
+    fun `executor rejection releases acquired permit and returns Backpressure`() {
+        val permit = Semaphore(1)
+        val rejecting = Executor { throw RejectedExecutionException("full") }
+
+        val outcome = template.submit(
+            request(processingPermit = permit, executor = rejecting),
+        ).toCompletableFuture().resultNow()
+
+        assertThat(outcome).isInstanceOf(DeliveryOutcome.Backpressure::class.java)
+        assertThat(permit.availablePermits()).isEqualTo(1)
+    }
+
+    @Test
+    fun `unsupported schema persists terminal state then returns InvalidMessage`() {
+        givenClaimable()
+        whenever(repository.markFailedTerminal(eq(identity), eq(1), any(), eq("UNSUPPORTED_SCHEMA_VERSION")))
+            .thenReturn(true)
+
+        val outcome = template.submit(request(schemaVersion = 2)).toCompletableFuture().resultNow()
+
+        assertThat(outcome).isEqualTo(DeliveryOutcome.InvalidMessage("UNSUPPORTED_SCHEMA_VERSION"))
+        verify(repository).markFailedTerminal(eq(identity), eq(1), any(), eq("UNSUPPORTED_SCHEMA_VERSION"))
+    }
+
+    @Test
+    fun `succeeded duplicate is Success without processing`() {
         whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Succeeded))
 
-        template.submit(request())
+        val outcome = template.submit(request(process = { error("must not process") }))
+            .toCompletableFuture()
+            .resultNow()
 
-        val captor = argumentCaptor<InsertChunkExecutionCommand>()
+        assertThat(outcome).isEqualTo(DeliveryOutcome.Success)
+        verify(repository, never()).claimProcessing(any(), any())
+    }
+
+    @Test
+    fun `insert command keeps Kafka event identity metadata`() {
+        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Succeeded))
+
+        template.submit(request()).toCompletableFuture().resultNow()
+
+        val captor = org.mockito.kotlin.argumentCaptor<InsertChunkExecutionCommand>()
         verify(repository).insertPendingIfAbsent(captor.capture())
-        assertThat(captor.firstValue.identity).isEqualTo(identity)
-        assertThat(captor.firstValue.topic).isEqualTo("topic-a")
-        assertThat(captor.firstValue.messageKey).isEqualTo("key-a")
-        assertThat(captor.firstValue.eventType).isEqualTo("EVENT_A")
-        assertThat(captor.firstValue.schemaVersion).isEqualTo(1)
-        assertThat(captor.firstValue.eventPayloadJson).isEqualTo("""{"eventId":"event-1"}""")
+        assertThat(captor.firstValue).isEqualTo(
+            InsertChunkExecutionCommand(
+                identity = identity,
+                topic = "topic-a",
+                messageKey = "key-a",
+                eventType = "EVENT_A",
+                schemaVersion = 1,
+                eventPayloadJson = """{"eventId":"event-1"}""",
+            ),
+        )
+    }
+
+    private fun assertPermitReleased(
+        configure: () -> Unit,
+        requestFactory: (Semaphore) -> ChunkConsumerRequest,
+    ) {
+        org.mockito.kotlin.reset(repository)
+        configure()
+        val permit = Semaphore(1)
+
+        template.submit(requestFactory(permit)).toCompletableFuture().resultNow()
+
+        assertThat(permit.availablePermits()).isEqualTo(1)
+    }
+
+    private fun givenClaimable() {
+        whenever(repository.findExecutionState(identity)).thenReturn(state(ChunkExecutionStatus.Pending))
+        whenever(repository.claimProcessing(eq(identity), any())).thenReturn(ChunkExecutionClaim(1))
     }
 
     private fun request(
         schemaVersion: Int = 1,
         processingPermit: Semaphore = Semaphore(1),
+        executor: Executor = directExecutor,
         process: () -> Unit = {},
+        publishRequired: () -> java.util.concurrent.CompletionStage<Void> = {
+            CompletableFuture.completedFuture(null)
+        },
+        onObservedSuccess: () -> Unit = {},
     ) = ChunkConsumerRequest(
-        logPrefix = "Test",
-        log = LoggerFactory.getLogger(ChunkConsumerTemplateTest::class.java),
         identity = identity,
         topic = "topic-a",
         messageKey = "key-a",
         eventType = "EVENT_A",
         schemaVersion = schemaVersion,
         eventPayloadJson = """{"eventId":"event-1"}""",
-        objectKey = "object-key",
-        acknowledgment = acknowledgment,
         processingPermit = processingPermit,
         executor = executor,
-        processContext = TaskContext.of("Test", "Process", "chunk-1"),
-        lifecycleContext = TaskContext.of("Test", "Lifecycle", "chunk-1"),
         process = process,
+        publishRequired = publishRequired,
+        onObservedSuccess = onObservedSuccess,
+        onObservedFailure = {},
     )
 
     private fun state(
         status: ChunkExecutionStatus,
         nextRetryAt: Instant? = null,
         leaseUntil: Instant? = null,
-    ) = ChunkExecutionState(
-        status = status,
-        nextRetryAt = nextRetryAt,
-        leaseUntil = leaseUntil,
-        attemptCount = 0,
-    )
-
-    private class ImmediateLogicExecutor : LogicExecutor {
-        override fun <T> execute(task: ThrowingSupplier<T>, context: TaskContext): T = task.get()
-
-        override fun executeVoid(task: ThrowingRunnable, context: TaskContext) = task.run()
-
-        override fun executeVoidJava(task: Runnable, context: TaskContext) = task.run()
-
-        override fun <T> executeWithFinally(
-            task: ThrowingSupplier<T>,
-            finallyBlock: Runnable,
-            context: TaskContext,
-        ): T {
-            val result = task.get()
-            finallyBlock.run()
-            return result
-        }
-
-        override fun <T> executeOrDefault(task: ThrowingSupplier<T>, defaultValue: T, context: TaskContext): T = runCatching { task.get() }.getOrDefault(defaultValue)
-
-        override fun <T> executeWithTranslation(
-            task: ThrowingSupplier<T>,
-            customTranslator: ExceptionTranslator,
-            context: TaskContext,
-        ): T = task.get()
-
-        override fun <T> executeWithFallback(
-            task: ThrowingSupplier<T>,
-            fallback: (Throwable) -> T,
-            context: TaskContext,
-        ): T = runCatching { task.get() }.getOrElse(fallback)
-
-        override fun <T> executeWithFallback(
-            task: ThrowingSupplier<T>,
-            fallback: ExceptionTranslator,
-            context: TaskContext,
-        ): T = task.get()
-
-        override fun <T> executeOrCatch(
-            task: ThrowingSupplier<T>,
-            recovery: (Throwable) -> T,
-            context: TaskContext,
-        ): T = runCatching { task.get() }.getOrElse(recovery)
-
-        override fun <T> executeOrCatch(
-            task: ThrowingSupplier<T>,
-            recovery: ExceptionTranslator,
-            context: TaskContext,
-        ): T = task.get()
-    }
+    ) = ChunkExecutionState(status, nextRetryAt, leaseUntil, attemptCount = 0)
 
     private companion object {
         private val identity = ChunkExecutionIdentity(

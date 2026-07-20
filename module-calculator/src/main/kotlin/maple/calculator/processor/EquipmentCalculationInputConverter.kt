@@ -1,45 +1,40 @@
 package maple.calculator.processor
 
 import maple.calculator.model.CalculationResult
-import maple.expectation.application.service.starforce.NoljangProbabilityTable
+import maple.expectation.core.calculation.ValuationInput
+import maple.expectation.core.calculation.ValuationResult
 import maple.expectation.core.domain.equipment.SecondaryWeaponCategory
 import maple.expectation.core.dto.cube.CubeCalculationInput
-import maple.expectation.core.dto.v4.EquipmentCalculationInput
+import maple.expectation.core.starforce.domain.NoljangProbabilityCalculator
 
 object EquipmentCalculationInputConverter {
 
-    fun toCalculationInput(
-        cubeInput: CubeCalculationInput,
-        presetNo: Int,
-    ): EquipmentCalculationInput {
+    fun toValuationInput(cubeInput: CubeCalculationInput): ValuationInput {
         val potentialPart = SecondaryWeaponCategory.resolvePotentialPart(
             cubeInput.part,
             cubeInput.itemEquipmentPart,
         )
-        return EquipmentCalculationInput.builder()
-            .itemName(cubeInput.itemName ?: "")
-            .itemPart(potentialPart)
-            .itemEquipmentPart(cubeInput.itemEquipmentPart ?: "")
-            .itemIcon(cubeInput.itemIcon ?: "")
-            .itemLevel(cubeInput.level)
-            .presetNo(presetNo)
-            .isNoljang(cubeInput.isNoljangEquipment())
-            .potentialGrade(cubeInput.grade)
-            .potentialOptions(cubeInput.options?.filterNotNull())
-            .additionalPotentialGrade(cubeInput.additionalGrade)
-            .additionalPotentialOptions(cubeInput.additionalOptions?.filterNotNull())
-            .currentStar(0)
-            .targetStar(targetStar(cubeInput))
-            .build()
+        return ValuationInput(
+            itemName = cubeInput.itemName ?: "",
+            part = potentialPart,
+            equipmentPart = cubeInput.itemEquipmentPart ?: "",
+            itemLevel = cubeInput.level,
+            currentStar = 0,
+            targetStar = targetStar(cubeInput),
+            noljang = cubeInput.isNoljangEquipment(),
+            potentialGrade = cubeInput.grade,
+            potentialOptions = cubeInput.options.orEmpty().filterNotNull().toList(),
+            additionalGrade = cubeInput.additionalGrade,
+            additionalOptions = cubeInput.additionalOptions.orEmpty().filterNotNull().toList(),
+        )
     }
 
     fun toCalculationResult(
         ocid: String,
         presetNo: Int,
         cubeInput: CubeCalculationInput,
-        componentCosts: CalculationCache.ComponentCosts,
+        valuationResult: ValuationResult,
         status: String,
-        errorMessage: String?,
     ): CalculationResult = CalculationResult(
         ocid = ocid,
         presetNo = presetNo,
@@ -54,17 +49,43 @@ object EquipmentCalculationInputConverter {
         currentStar = 0,
         targetStar = targetStar(cubeInput),
         status = status,
-        totalCost = componentCosts.totalCost,
-        blackCubeCost = componentCosts.blackCubeCost,
-        additionalCubeCost = componentCosts.additionalCubeCost,
-        starforceCost = componentCosts.starforceCost,
+        totalCost = valuationResult.costs.totalCost,
+        blackCubeCost = valuationResult.costs.blackCubeCost,
+        additionalCubeCost = valuationResult.costs.additionalCubeCost,
+        starforceCost = valuationResult.costs.starforceCost,
+        errorMessage = null,
+    )
+
+    fun toErrorResult(
+        ocid: String,
+        presetNo: Int,
+        cubeInput: CubeCalculationInput,
+        errorMessage: String,
+    ): CalculationResult = CalculationResult(
+        ocid = ocid,
+        presetNo = presetNo,
+        itemName = cubeInput.itemName ?: "",
+        itemLevel = cubeInput.level,
+        itemPart = cubeInput.part,
+        itemEquipmentPart = cubeInput.itemEquipmentPart,
+        potentialGrade = cubeInput.grade,
+        potentialOptions = cubeInput.options,
+        additionalGrade = cubeInput.additionalGrade,
+        additionalOptions = cubeInput.additionalOptions,
+        currentStar = 0,
+        targetStar = targetStar(cubeInput),
+        status = "ERROR",
+        totalCost = null,
+        blackCubeCost = null,
+        additionalCubeCost = null,
+        starforceCost = null,
         errorMessage = errorMessage,
     )
 
     fun targetStar(cubeInput: CubeCalculationInput): Int {
         if (cubeInput.starforce <= 0 || cubeInput.itemName.isNullOrBlank() || cubeInput.level <= 0) return 0
         return if (cubeInput.isNoljangEquipment()) {
-            minOf(cubeInput.starforce, NoljangProbabilityTable.MAX_NOLJANG_STAR)
+            minOf(cubeInput.starforce, NoljangProbabilityCalculator.MAX_NOLJANG_STAR)
         } else {
             cubeInput.starforce
         }

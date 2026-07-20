@@ -52,6 +52,26 @@ public class CoreDependencyRuleTest {
           .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
           .importPackages("maple.expectation.core");
 
+  @Test
+  @DisplayName("Core calculation kernel should have no framework or adapter dependencies")
+  void calculationKernelShouldRemainPure() {
+    noClasses()
+        .that()
+        .resideInAPackage("..core.calculation..")
+        .should()
+        .dependOnClassesThat()
+        .resideInAnyPackage(
+            "org.springframework..",
+            "com.fasterxml.jackson..",
+            "java.nio.file..",
+            "org.springframework.cache..",
+            "maple.expectation.infrastructure..",
+            "maple.calculator..")
+        .because("the valuation calculation kernel is a pure deterministic core boundary")
+        .allowEmptyShould(true)
+        .check(classes);
+  }
+
   // ========================================
   // Rule 1: Spring-Free Core Module
   // ========================================

@@ -21,7 +21,6 @@ import maple.calculator.reader.GzipJsonlSnapshotRecordReader
 import maple.calculator.writer.CalculationResultWriter
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.storage.ObjectStorage
-import maple.expectation.core.dto.cube.CubeCalculationInput
 import maple.expectation.core.dto.v4.EquipmentItem
 import maple.expectation.core.dto.v4.EquipmentItemConverter
 import maple.expectation.util.StringMaskingUtils
@@ -33,7 +32,8 @@ class SnapshotChunkProcessor(
     private val objectStorage: ObjectStorage,
     private val jsonlReader: GzipJsonlSnapshotRecordReader,
     private val equipmentParser: SnapshotEquipmentParser,
-    private val calculationCache: CalculationCache,
+    private val valuationCache: ValuationCache,
+    private val failurePolicy: ValuationFailurePolicy,
     private val objectMapper: ObjectMapper,
     private val properties: PipelineProperties,
     private val resultWriter: CalculationResultWriter,
@@ -195,22 +195,50 @@ class SnapshotChunkProcessor(
         }
     }
 
-    private fun calculateItem(flatItem: FlatItem): CalculationResult = runCatching {
+    internal fun calculateItem(flatItem: FlatItem): CalculationResult {
         val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
-        val componentCosts = calculateComponentCosts(cubeInput, flatItem.presetNo)
-        val status = if (componentCosts.hasAnyCost) "SUCCESS" else "SKIPPED"
-        val result = EquipmentCalculationInputConverter.toCalculationResult(flatItem.ocid, flatItem.presetNo, cubeInput, componentCosts, status, null)
-        logSample(result)
-        result
-    }.getOrElse { ex ->
-        val cubeInput = EquipmentItemConverter.toCubeInput(flatItem.item)
-        log.warn("Calculation error: ocid={} preset={}: {}", StringMaskingUtils.maskOcid(flatItem.ocid), flatItem.presetNo, ex.message)
-        EquipmentCalculationInputConverter.toCalculationResult(flatItem.ocid, flatItem.presetNo, cubeInput, CalculationCache.ComponentCosts.empty(), "ERROR", ex.message)
-    }
+        val input = EquipmentCalculationInputConverter.toValuationInput(cubeInput)
+        return runCatching { valuationCache.getOrCalculate(input) }
+            .fold(
+                onSuccess = { valuationResult ->
+                    val status = if (valuationResult.costs.totalCost != null) "SUCCESS" else "SKIPPED"
+                    EquipmentCalculationInputConverter.toCalculationResult(
+                        flatItem.ocid,
+                        flatItem.presetNo,
+                        cubeInput,
+                        valuationResult,
+                        status,
+                    ).also(::logSample)
+                },
+                onFailure = { failure ->
+                    when (val decision = failurePolicy.classify(failure)) {
+                        is ItemFailureDecision.SourceError -> {
+                            log.warn(
+                                "Calculation source error: ocid={} preset={}: {}",
+                                StringMaskingUtils.maskOcid(flatItem.ocid),
+                                flatItem.presetNo,
+                                decision.message,
+                            )
+                            EquipmentCalculationInputConverter.toErrorResult(
+                                flatItem.ocid,
+                                flatItem.presetNo,
+                                cubeInput,
+                                decision.message,
+                            )
+                        }
 
-    private fun calculateComponentCosts(cubeInput: CubeCalculationInput, presetNo: Int): CalculationCache.ComponentCosts {
-        val input = EquipmentCalculationInputConverter.toCalculationInput(cubeInput, presetNo)
-        return calculationCache.calculate(input)
+                        is ItemFailureDecision.AbortChunk -> {
+                            log.error(
+                                "Calculation stage abort: ocid={} preset={}",
+                                StringMaskingUtils.maskOcid(flatItem.ocid),
+                                flatItem.presetNo,
+                                decision.cause,
+                            )
+                            throw decision.cause
+                        }
+                    }
+                },
+            )
     }
 
     private fun logSample(result: CalculationResult) {

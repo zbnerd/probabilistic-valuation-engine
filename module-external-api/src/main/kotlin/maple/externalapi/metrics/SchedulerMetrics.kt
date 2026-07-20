@@ -44,4 +44,19 @@ class SchedulerMetrics(private val registry: MeterRegistry) {
     fun drainRunChunks(): Long = runChunks.getAndSet(0L)
 
     fun drainRunRecords(): Long = runRecords.getAndSet(0L)
+
+    fun recordLifecycleFailure(operation: String) {
+        require(operation == "start" || operation == "stop") {
+            "Unsupported scheduler lifecycle operation: $operation"
+        }
+        registry.counter(
+            "external_api_scheduler_lifecycle_failures_total",
+            "operation",
+            operation,
+        ).increment()
+    }
+
+    fun recordForcedShutdown() {
+        registry.counter("external_api_scheduler_forced_shutdown_total").increment()
+    }
 }

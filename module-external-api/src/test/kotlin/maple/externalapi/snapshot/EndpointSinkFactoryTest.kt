@@ -4,22 +4,23 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.kotlinModule
-import maple.expectation.common.storage.ObjectStorage
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
 import maple.expectation.common.storage.PutResult
 import maple.externalapi.domain.KeyType
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.pipeline.artifact.storage.ConditionalObjectStorage
+import maple.pipeline.artifact.lifecycle.RunLifecycle
+import maple.pipeline.artifact.write.DefaultArtifactWriter
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.util.concurrent.TimeUnit
 
 /**
  * Migration Task 9: `createForXxx(runKey)` must propagate the runKey down to
@@ -34,7 +35,7 @@ class EndpointSinkFactoryTest {
 
     @Test
     fun `createForCharacterBasic produces a sink whose chunk keys live under the supplied runKey`() {
-        val storage = mock<ObjectStorage>()
+        val storage = mock<ConditionalObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
         whenever(storage.putFileAsync(keyCaptor.capture(), any<Path>()))
             .thenAnswer { invocation ->
@@ -47,6 +48,12 @@ class EndpointSinkFactoryTest {
 
         val characterBasicPublisher = mock<SnapshotChunkEventPublisher>()
         val rankingPublisher = mock<SnapshotChunkEventPublisher>()
+        whenever(characterBasicPublisher.publishChunkReady(any()))
+            .thenReturn(java.util.concurrent.CompletableFuture.completedFuture(null))
+        whenever(characterBasicPublisher.publishRunCompleted(any()))
+            .thenReturn(java.util.concurrent.CompletableFuture.completedFuture(null))
+        whenever(characterBasicPublisher.publishRunFailed(any()))
+            .thenReturn(java.util.concurrent.CompletableFuture.completedFuture(null))
         val chunkingProperties = SnapshotChunkingProperties()
         val volumeMetrics = mock<SnapshotVolumeMetrics>()
 
@@ -57,31 +64,40 @@ class EndpointSinkFactoryTest {
             characterBasicPublisher = characterBasicPublisher,
             rankingPublisher = rankingPublisher,
             objectStorage = storage,
+            artifactWriter = DefaultArtifactWriter(
+                storage,
+                java.util.concurrent.Executor { command -> command.run() },
+            ),
+            runLifecycle = RunLifecycle(storage, java.util.concurrent.Executor(Runnable::run)),
             clock = Clock.systemUTC(),
         )
 
-        val runKey = "runs/test-run/character-basic"
-        val sink = factory.createForCharacterBasic(runKey)
+        val runId = "test-run"
+        val sink = factory.createForCharacterBasic(runId)
 
-        try {
-            sink.submit(
-                SnapshotChunkRecord.Success(
-                    bodyBytes = objectMapper.writeValueAsBytes(mapOf("k" to "v0")),
-                    key = "k0",
-                    endpoint = "character-basic",
-                    keyType = KeyType.OCID.name,
-                    httpStatus = 200,
-                    fetchedAt = Instant.parse("2026-06-10T00:00:00Z"),
-                ),
-            )
-            sink.close()
-        } catch (ex: Exception) {
-            // close() may throw a RuntimeException if no publisher is wired;
-            // we only care that the chunk key was put under runKey.
+        sink.submit(
+            SnapshotChunkRecord.Success(
+                bodyBytes = objectMapper.writeValueAsBytes(mapOf("k" to "v0")),
+                key = "k0",
+                endpoint = "character-basic",
+                keyType = KeyType.OCID.name,
+                httpStatus = 200,
+                fetchedAt = Instant.parse("2026-06-10T00:00:00Z"),
+            ),
+        )
+        val closeCompleted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val closeFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        sink.closeAsync().whenComplete { _, failure ->
+            closeFailure.set(failure)
+            closeCompleted.set(true)
         }
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(5)).until {
+            closeCompleted.get()
+        }
+        assertThat(closeFailure.get()).isNull()
 
         val capturedKeys = keyCaptor.allValues
         assertThat(capturedKeys).isNotEmpty
-        assertThat(capturedKeys).allMatch { it.startsWith("$runKey/") }
+        assertThat(capturedKeys).allMatch { it.startsWith("runs/$runId/character-basic/") }
     }
 }

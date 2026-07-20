@@ -3,7 +3,7 @@ package maple.calculator.metrics
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import maple.calculator.cache.OffHeapCacheBackend
-import maple.calculator.processor.CalculationCache
+import maple.calculator.processor.ValuationCache
 import org.springframework.stereotype.Component
 
 /**
@@ -19,9 +19,9 @@ import org.springframework.stereotype.Component
 @Component
 class CacheMetrics(
     registry: MeterRegistry,
-    calculationCache: CalculationCache,
+    valuationCache: ValuationCache,
 ) {
-    private val backend: OffHeapCacheBackend<*, *> = calculationCache.backend()
+    private val backend: OffHeapCacheBackend<*, *> = valuationCache.backend()
 
     init {
         val cacheName = backend.name

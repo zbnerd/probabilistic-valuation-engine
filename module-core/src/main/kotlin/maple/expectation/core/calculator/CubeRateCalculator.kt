@@ -1,5 +1,6 @@
 package maple.expectation.core.calculator
 
+import maple.expectation.core.calculation.probability.ProbabilityRow
 import maple.expectation.core.domain.model.CubeRate
 import maple.expectation.core.domain.model.CubeType
 import maple.expectation.core.domain.stat.StatType
@@ -10,6 +11,18 @@ import maple.expectation.core.domain.stat.StatType
  * <p>특정 큐브 종류와 슬롯에 해당 옵션이 뜰 확률을 반환합니다.
  */
 class CubeRateCalculator {
+
+    fun getOptionRate(optionName: String, rows: List<ProbabilityRow>): Double {
+        if (optionName.isBlank()) {
+            return 1.0
+        }
+
+        if (StatType.findTypeWithUnit(optionName) == StatType.UNKNOWN) {
+            return 1.0
+        }
+
+        return rows.firstOrNull { row -> row.optionName == optionName }?.rate ?: 0.0
+    }
 
     /**
      * 특정 큐브 종류와 슬롯에 해당 옵션이 뜰 확률을 반환합니다.

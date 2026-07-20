@@ -1,8 +1,6 @@
 package maple.synchronizer.ranking
 
 import java.nio.charset.StandardCharsets
-import maple.expectation.infrastructure.executor.LogicExecutor
-import maple.expectation.infrastructure.executor.TaskContext
 import maple.synchronizer.preparer.PreppedDocument
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -12,40 +10,38 @@ import org.springframework.stereotype.Component
 class EquipmentRankingRedisWriter(
     private val redisTemplate: StringRedisTemplate,
     private val properties: EquipmentRankingProperties,
-    private val executor: LogicExecutor,
+    private val metrics: EquipmentRankingMetrics,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun update(documents: List<PreppedDocument>) {
         if (!properties.enabled || documents.isEmpty()) return
 
-        // Issue #1129: CPU offload — filter + groupBy delegated to LogicExecutor's
-        // CPU-bound executor (replaces the prior runBlocking(Dispatchers.Default)
-        // coroutine bridge). Redis pipelined ZADD (updatePreset) on the same executor.
-        val rankable = executor.executeOrDefault(
-            {
-                documents.filter { it.userIgn?.isNotBlank() == true }
-            },
-            emptyList<PreppedDocument>(),
-            TaskContext.of("Synchronizer", "UpdateEquipmentRanking:filter"),
-        )
+        val rankable = runCatching {
+            documents.filter { it.userIgn?.isNotBlank() == true }
+        }.getOrElse { failure ->
+            metrics.recordFailure("filter")
+            log.warn("Equipment ranking write failed: stage=filter", failure)
+            emptyList()
+        }
         if (rankable.isEmpty()) return
 
-        val grouped = executor.executeOrDefault(
-            {
-                rankable.groupBy { it.presetNo.toInt() }
-            },
-            emptyMap<Int, List<PreppedDocument>>(),
-            TaskContext.of("Synchronizer", "UpdateEquipmentRanking:groupBy"),
-        )
+        val grouped = runCatching {
+            rankable.groupBy { it.presetNo.toInt() }
+        }.getOrElse { failure ->
+            metrics.recordFailure("group")
+            log.warn("Equipment ranking write failed: stage=group", failure)
+            emptyMap()
+        }
+        if (grouped.isEmpty()) return
 
-        val updated = executor.executeOrDefault(
-            {
-                grouped.values.sumOf(::updatePreset)
-            },
-            0,
-            TaskContext.of("Synchronizer", "UpdateEquipmentRanking:sum"),
-        )
+        val updated = runCatching {
+            grouped.values.sumOf(::updatePreset)
+        }.getOrElse { failure ->
+            metrics.recordFailure("redis")
+            log.warn("Equipment ranking write failed: stage=redis", failure)
+            0
+        }
 
         log.debug("Equipment ranking Redis update: attempted={} updated={}", rankable.size, updated)
     }

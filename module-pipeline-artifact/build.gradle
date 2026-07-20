@@ -1,0 +1,32 @@
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.spring)
+}
+
+dependencies {
+    implementation project(':module-common')
+
+    implementation(libs.kotlin.stdlib)
+    implementation(libs.kotlin.reflect)
+    implementation(libs.kotlin.logging.jvm)
+
+    implementation(libs.spring.boot)
+    implementation(libs.spring.boot.starter.actuator)
+    implementation(libs.jackson.databind)
+    implementation(libs.jackson.module.kotlin)
+
+    implementation(libs.aws.sdk.s3)
+    implementation(libs.aws.sdk.s3.transfer.manager)
+    implementation(libs.aws.sdk.auth)
+    implementation(libs.aws.sdk.regions)
+    implementation(libs.aws.sdk.apache.client)
+
+    testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.mockito.kotlin)
+    testImplementation(libs.assertj.core)
+}
+
+tasks.named('jar') {
+    enabled = true
+    archiveClassifier = 'plain'
+}

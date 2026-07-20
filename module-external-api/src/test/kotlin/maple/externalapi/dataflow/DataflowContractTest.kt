@@ -5,13 +5,21 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.kotlinModule
-import kotlinx.coroutines.runBlocking
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+import java.util.zip.GZIPInputStream
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.future.future
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
-import maple.expectation.common.storage.ObjectStorage
-import maple.expectation.infrastructure.external.NexonAuthClient
-import maple.expectation.infrastructure.storage.LocalFsObjectStorage
+import maple.externalapi.artifact.OcidMappingArtifactWriter
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.metrics.ExternalApiMetrics
@@ -19,22 +27,20 @@ import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.scheduler.phase.OcidLookupPhase
 import maple.externalapi.scheduler.phase.RankingFetchPhase
-import maple.externalapi.scheduler.phase.RunMarkerWriter
+import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.pipeline.artifact.storage.LocalFsObjectStorage
+import maple.pipeline.artifact.lifecycle.RunLifecycle
+import maple.pipeline.artifact.write.DefaultArtifactWriter
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
-import java.nio.file.Path
-import java.time.Clock
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.zip.GZIPInputStream
 
 /**
  * Layer 3 contract test for the raw-path → MinIO migration (Tasks 1-9).
@@ -63,7 +69,7 @@ class DataflowContractTest {
     @Test
     fun `ranking fetch writes chunks and manifest, ocid lookup reads chunks and writes ocid mapping`() {
         // arrange: a real LocalFsObjectStorage in a temp dir.
-        val objectStorage: ObjectStorage = LocalFsObjectStorage(
+        val objectStorage = LocalFsObjectStorage(
             basePath = tempDir.toString(),
             uploadExecutor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
             meterRegistry = null,
@@ -132,20 +138,36 @@ class DataflowContractTest {
         val volumeMetrics = mock<SnapshotVolumeMetrics>()
         val externalApiMetrics = mock<ExternalApiMetrics>()
         val chunkingProperties = SnapshotChunkingProperties()
-        val runMarkerWriter = RunMarkerWriter(Clock.systemUTC(), objectStorage)
-        val nexonAuthClient = mock<NexonAuthClient>()
+        val artifactWriter = DefaultArtifactWriter(
+            objectStorage,
+            java.util.concurrent.Executor { command -> command.run() },
+        )
 
+        val runLifecycle = RunLifecycle(
+            objectStorage,
+            java.util.concurrent.Executor { command -> command.run() },
+            Clock.systemUTC(),
+        )
+        val sinkFactory = EndpointSinkFactory(
+            objectMapper = objectMapper,
+            chunkingProperties = chunkingProperties,
+            volumeMetrics = volumeMetrics,
+            characterBasicPublisher = rankingPublisher,
+            rankingPublisher = rankingPublisher,
+            objectStorage = objectStorage,
+            artifactWriter = artifactWriter,
+            runLifecycle = runLifecycle,
+            clock = Clock.systemUTC(),
+        )
         val rankingPhase = RankingFetchPhase(
             clientPort = clientPort,
             objectMapper = objectMapper,
             chunkingProperties = chunkingProperties,
-            volumeMetrics = volumeMetrics,
             metrics = externalApiMetrics,
-            rankingPublisher = rankingPublisher,
             maxPages = 2,
             permitsPerSecond = 1000,
-            runMarkerWriter = runMarkerWriter,
-            objectStorage = objectStorage,
+            runLifecycle = runLifecycle,
+            sinkFactory = sinkFactory,
             stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
         )
 
@@ -156,12 +178,12 @@ class DataflowContractTest {
             batchSize = 10,
             eventPublisher = ocidPublisher,
             objectStorage = objectStorage,
-            nexonAuthClient = nexonAuthClient,
             stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
             streamingChunkParser = maple.common.parser.StreamingChunkParser(objectMapper),
             chunkParserMetrics = maple.externalapi.metrics.ChunkParserMetrics(
                 io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
             ),
+            ocidMappingArtifactWriter = OcidMappingArtifactWriter(artifactWriter),
         )
 
         // act: run ranking
@@ -173,12 +195,18 @@ class DataflowContractTest {
         val executor = Executors.newSingleThreadExecutor { runnable ->
             Thread.ofPlatform().name("ranking-worker").unstarted(runnable)
         }
-        val runKey: String = rankingPhase.execute(executor, "20260610-xyz").get(30, TimeUnit.SECONDS)
+        val rankingRunId = "20260610-xyz"
+        val rankingOutcome = awaitFuture(rankingPhase.execute(executor, rankingRunId))
+        assertThat(rankingOutcome.failure).isNull()
+        val runKey = requireNotNull(rankingOutcome.value)
         assertThat(runKey).startsWith("runs/")
 
-        // act: run OCID lookup — it's suspend, so wrap in runBlocking
+        // act: run OCID lookup without blocking the test thread on its future.
         val ocidRunId = "20260610-xyz"
-        runBlocking { ocidPhase.execute(executor, runKey, ocidRunId) }
+        val ocidFuture = CoroutineScope(executor.asCoroutineDispatcher()).future {
+            ocidPhase.execute(executor, rankingRunId, ocidRunId)
+        }
+        assertThat(awaitFuture(ocidFuture).failure).isNull()
 
         // assert: chunk schema
         val chunkKeys = objectStorage.listByPrefix("$runKey/ranking-overall/chunks")
@@ -275,4 +303,13 @@ class DataflowContractTest {
                 .isTrue
         }
     }
+
+    private fun <T> awaitFuture(future: CompletableFuture<T>): FutureOutcome<T> {
+        val captured = AtomicReference<FutureOutcome<T>>()
+        future.whenComplete { value, failure -> captured.set(FutureOutcome(value, failure)) }
+        await().atMost(Duration.ofSeconds(30)).until { captured.get() != null }
+        return requireNotNull(captured.get())
+    }
+
+    private data class FutureOutcome<T>(val value: T?, val failure: Throwable?)
 }

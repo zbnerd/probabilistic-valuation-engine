@@ -9,6 +9,7 @@ import maple.expectation.infrastructure.lifecycle.ManagedLifecycleCoordinator
 import maple.externalapi.config.NexonHttpClientProperties
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotEventProperties
+import maple.pipeline.artifact.config.ArtifactStorageAutoConfiguration
 import org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
@@ -31,7 +32,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @Import(
     maple.expectation.infrastructure.config.CoreExecutorConfig::class,
     maple.expectation.infrastructure.config.VtExecutorConfig::class,
-    maple.expectation.infrastructure.storage.StorageConfig::class,
+    ArtifactStorageAutoConfiguration::class,
     KafkaConsumerConfig::class,
     MaplestoryApiConfig::class,
     ExternalApiMetricsFilter::class,

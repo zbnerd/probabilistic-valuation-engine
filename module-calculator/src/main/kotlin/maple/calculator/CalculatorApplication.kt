@@ -4,6 +4,7 @@ import maple.calculator.config.CalculatorEngineConfiguration
 import maple.calculator.config.ExternalApiRunStatusProperties
 import maple.calculator.config.PipelineProperties
 import maple.expectation.infrastructure.config.KafkaConsumerConfig
+import maple.pipeline.artifact.config.ArtifactStorageAutoConfiguration
 import org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
@@ -15,7 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication(exclude = [SecurityAutoConfiguration::class, ManagementWebSecurityAutoConfiguration::class])
 @EnableScheduling
 @EnableConfigurationProperties(PipelineProperties::class, ExternalApiRunStatusProperties::class)
-@Import(CalculatorEngineConfiguration::class, KafkaConsumerConfig::class, maple.expectation.infrastructure.storage.StorageConfig::class)
+@Import(CalculatorEngineConfiguration::class, KafkaConsumerConfig::class, ArtifactStorageAutoConfiguration::class)
 class CalculatorApplication
 
 fun main(args: Array<String>) {

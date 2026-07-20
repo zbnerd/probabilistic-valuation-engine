@@ -243,3 +243,37 @@ rg -q "project :module-common" /tmp/artifact-module-runtime-after-final.txt && !
 - Compile: exit `0`, `BUILD SUCCESSFUL in 26s`; both module compile tasks correctly reported `NO-SOURCE`. Captured output SHA-256: `8c69aebeabb4814c3312cfd3e9e23c03249f2c5f2cd956d380eb61f9e37bc4b3`.
 - Dependency output: `/tmp/artifact-module-runtime-after-final.txt`, 353 lines, `BUILD SUCCESSFUL in 21s`, SHA-256 `8d1e7eda179cc840d29b823eda7bedccb22424d67a9efe843e6840c8ebd167c0`.
 - Boundary assertion: exit `0`; line 13 contains `project :module-common` and `module-infra` is absent.
+
+## Task 8 direct active-service wiring
+
+- Captured: 2026-07-20 (Europe/Berlin).
+- Task base: `96fb655953cec2a3b211e08a8384ee0e65826241`.
+- The four active executable modules already had direct `module-pipeline-artifact` dependencies at the task base. Task 8 retained those dependencies and each unrelated `module-infra` dependency.
+- `ExternalApiApplication`, `CalculatorApplication`, `SynchronizerApplication`, and `CleanupApplication` now import `ArtifactStorageAutoConfiguration` directly. Their storage wiring no longer imports `maple.expectation.infrastructure.storage`; unrelated executor, Kafka, Nexon, and lifecycle infra imports remain.
+- `ArtifactIdentitySourceGuardTest` scans the four active `src/main` trees. It rejects the legacy storage package anywhere in supported production text sources and rejects quoted raw artifact key/prefix/marker fragments while excluding production comments from the literal scan.
+
+### Focused verification performed
+
+```bash
+./gradlew :module-pipeline-artifact:test --tests '*ArtifactIdentitySourceGuardTest'
+
+./gradlew --continue \
+  :module-external-api:compileKotlin :module-external-api:bootJar \
+  :module-calculator:compileKotlin :module-calculator:bootJar \
+  :module-synchronizer:compileKotlin :module-synchronizer:bootJar \
+  :module-cleanup:compileKotlin :module-cleanup:bootJar
+```
+
+- Focused source guard: exit `0`; 1/1 test passed; `BUILD SUCCESSFUL in 16s`.
+- Four-module compile/packaging: exit `0`; all four `compileKotlin` and `bootJar` tasks completed; `BUILD SUCCESSFUL in 23s`.
+- `module-common:generateAvroJava` ran as an up-to-date dependency in both invocations, so no separate generation command was needed.
+- The final scoped `rg` found all four direct artifact dependencies/imports and no legacy storage-package match in the active production trees; `git diff --check` exited `0`.
+- The compile emitted two pre-existing `SnapshotChunkPipeline.workerCount` deprecation warnings and the repository's existing Java installation-discovery warning; neither affected the successful build.
+
+### Verification intentionally skipped by user speed override
+
+- The Task 8 full affected-module test matrix and the repository-wide compile/test matrix were not run.
+- Runtime boot/health checks on ports 8081-8084 were not run; the successful `bootJar` build is not represented as runtime-health evidence.
+- After-migration runtime-classpath sizes, executable JAR sizes/hashes, and startup timing were not recaptured.
+- LocalFS/gzip and real-MinIO throughput, injected-upload-failure temp-file measurements, and before/after evidence JSON hashes were not recaptured.
+- No broad edge-discovery or additional reviewer pass was performed.

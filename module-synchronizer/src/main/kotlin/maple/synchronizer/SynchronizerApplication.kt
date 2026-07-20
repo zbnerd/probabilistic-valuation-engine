@@ -2,6 +2,7 @@ package maple.synchronizer
 
 import maple.expectation.infrastructure.config.KafkaConsumerConfig
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycleCoordinator
+import maple.pipeline.artifact.config.ArtifactStorageAutoConfiguration
 import maple.synchronizer.consumer.ChunkExecutionProperties
 import maple.synchronizer.ranking.EquipmentRankingProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -19,7 +20,7 @@ import org.springframework.context.annotation.Import
 @Import(
     maple.expectation.infrastructure.config.CoreExecutorConfig::class,
     maple.expectation.infrastructure.config.VtExecutorConfig::class,
-    maple.expectation.infrastructure.storage.StorageConfig::class,
+    ArtifactStorageAutoConfiguration::class,
     KafkaConsumerConfig::class,
     ManagedLifecycleCoordinator::class,
 )

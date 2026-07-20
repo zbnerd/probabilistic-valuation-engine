@@ -40,3 +40,6 @@ include 'module-pipeline-artifact'
 
 // Shared Kafka delivery outcome, retry, DLT, and partition-lane ownership
 include 'module-pipeline-messaging'
+
+// Shared Nexon transport, failure taxonomy, and credential-safe clients
+include 'module-nexon-client'

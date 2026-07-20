@@ -1,6 +1,5 @@
 package maple.synchronizer
 
-import maple.expectation.infrastructure.lifecycle.ManagedLifecycleCoordinator
 import maple.pipeline.artifact.config.ArtifactStorageAutoConfiguration
 import maple.pipeline.messaging.config.PipelineKafkaConsumerConfiguration
 import maple.synchronizer.consumer.ChunkExecutionProperties
@@ -10,19 +9,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Import
 
-@SpringBootApplication(
-    scanBasePackages = [
-        "maple.synchronizer",
-        "maple.expectation.infrastructure.executor",
-    ],
-)
+@SpringBootApplication(scanBasePackages = ["maple.synchronizer"])
 @EnableConfigurationProperties(EquipmentRankingProperties::class, ChunkExecutionProperties::class)
 @Import(
-    maple.expectation.infrastructure.config.CoreExecutorConfig::class,
-    maple.expectation.infrastructure.config.VtExecutorConfig::class,
     ArtifactStorageAutoConfiguration::class,
     PipelineKafkaConsumerConfiguration::class,
-    ManagedLifecycleCoordinator::class,
 )
 class SynchronizerApplication
 

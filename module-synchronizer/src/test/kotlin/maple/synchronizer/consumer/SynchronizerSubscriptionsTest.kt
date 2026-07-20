@@ -1,11 +1,18 @@
 package maple.synchronizer.consumer
 
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.pipeline.messaging.contract.DeliveryContext
 import maple.pipeline.messaging.contract.DeliveryOutcome
+import maple.synchronizer.service.OcidLookupService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -88,6 +95,36 @@ class SynchronizerSubscriptionsTest {
         verify(ocidConsumer).consume("ocid", context)
     }
 
+    @Test
+    fun `OCID parse and ingest failures retain their original cause as Retryable`() {
+        val service = mock<OcidLookupService>()
+        val objectMapper = jacksonObjectMapper().findAndRegisterModules()
+        val consumer = OcidLookupRunConsumer(
+            ocidLookupService = service,
+            objectMapper = objectMapper,
+            executor = Executor(Runnable::run),
+        )
+        val deliveryContext = context("synchronizer-ocid-lookup", "external-api.ocid.lookup-ready")
+
+        val parseOutcome = consumer.consume("not-json", deliveryContext).toCompletableFuture()
+
+        assertThat(parseOutcome).isCompletedWithValueMatching { outcome ->
+            outcome is DeliveryOutcome.Retryable &&
+                outcome.cause is JsonProcessingException &&
+                outcome.cause !is java.util.concurrent.CompletionException
+        }
+
+        val ingestFailure = IllegalStateException("db unavailable")
+        doThrow(ingestFailure).whenever(service).ingest(any())
+        val ingestOutcome = consumer.consume(
+            objectMapper.writeValueAsString(ocidEvent()),
+            deliveryContext,
+        ).toCompletableFuture()
+
+        assertThat(ingestOutcome)
+            .isCompletedWithValue(DeliveryOutcome.Retryable(ingestFailure))
+    }
+
     private fun context(listenerId: String, topic: String): DeliveryContext = DeliveryContext(
         listenerId = listenerId,
         topic = topic,
@@ -96,5 +133,18 @@ class SynchronizerSubscriptionsTest {
         timestamp = Instant.EPOCH,
         key = "key",
         deliveryAttempt = 1,
+    )
+
+    private fun ocidEvent(): SnapshotRunCompletedEvent = SnapshotRunCompletedEvent(
+        eventId = "event-1",
+        runId = "run-1",
+        endpoint = "ocid-lookup",
+        manifestPath = "runs/run-1/manifest.jsonl",
+        totalRecords = 1,
+        totalFailed = 0,
+        chunkCount = 1,
+        startedAt = Instant.EPOCH,
+        finishedAt = Instant.EPOCH,
+        createdAt = Instant.EPOCH,
     )
 }

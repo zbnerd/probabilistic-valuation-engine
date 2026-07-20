@@ -12,6 +12,7 @@ dependencies {
 	implementation project(':module-common')
 	implementation project(':module-core')
 	implementation project(':module-infra')
+	implementation project(':module-pipeline-artifact')
 
 	implementation(libs.kotlin.stdlib)
 	implementation(libs.kotlin.reflect)

@@ -8,13 +8,16 @@ import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import maple.calculator.model.CalculationResult
 import maple.expectation.common.storage.PutResult
@@ -120,6 +123,45 @@ class CalculationResultWriterTest {
             assertThat(outcome.failure).isNotNull()
             assertThat(resultTempFiles()).isEqualTo(before)
         } finally {
+            (resultTempFiles() - before).forEach(Files::deleteIfExists)
+        }
+    }
+
+    @Test
+    fun `cancelling returned future cancels suspended producer and deletes temp artifact`() {
+        val stub = StubObjectStorage()
+        val producerScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        val writer = CalculationResultWriter(
+            DefaultArtifactWriter(stub, java.util.concurrent.Executor { command -> command.run() }),
+            objectMapper,
+            producerScope,
+        )
+        val producerSuspended = AtomicBoolean()
+        val producerTerminated = AtomicBoolean()
+        val results = flow {
+            emit(sampleResult(ocid = "ocid-1"))
+            try {
+                producerSuspended.set(true)
+                awaitCancellation()
+            } finally {
+                producerTerminated.set(true)
+            }
+        }
+        val before = resultTempFiles()
+
+        try {
+            val returnedFuture = writer.write("cancelled-mid-write.jsonl.gz", results)
+            await().atMost(Duration.ofSeconds(5)).until {
+                producerSuspended.get() && (resultTempFiles() - before).isNotEmpty()
+            }
+
+            assertThat(returnedFuture.cancel(true)).isTrue()
+
+            await().atMost(Duration.ofSeconds(2)).untilTrue(producerTerminated)
+            await().atMost(Duration.ofSeconds(2)).until { resultTempFiles() == before }
+        } finally {
+            producerScope.cancel()
+            await().atMost(Duration.ofSeconds(5)).until { resultTempFiles() == before }
             (resultTempFiles() - before).forEach(Files::deleteIfExists)
         }
     }

@@ -11,14 +11,17 @@ import maple.pipeline.artifact.write.GzipArtifactSession
 
 data class ChunkStats(
     val partIndex: Int,
-    val path: String,
     val recordCount: Int,
     val uncompressedBytes: Long,
-    val compressedBytes: Long,
     val startedAt: Instant,
     val finishedAt: Instant,
     val uploadFuture: CompletableFuture<ArtifactReceipt>,
 )
+
+class ChunkArtifactWriteException(
+    chunkKey: ArtifactKey,
+    cause: Throwable,
+) : RuntimeException("fatal artifact write failure for ${chunkKey.value}: ${cause.message}", cause)
 
 /**
  * Streams SnapshotChunkRecord.Success entries into a gzipped JSONL object
@@ -57,8 +60,10 @@ class GzipJsonlChunkWriter(
     private var uncompressedBytes: Long = 0
     private val startedAt: Instant = Instant.now(clock)
     private var closed: Boolean = false
+    private var terminalFailure: ChunkArtifactWriteException? = null
 
     fun append(record: SnapshotChunkRecord.Success) {
+        requireWritable()
         require(record.bodyBytes.isNotEmpty()) { "bodyBytes must not be empty for key=${record.key}" }
         // Serialization happens before the session output is touched. Let a
         // rejected record propagate without aborting the otherwise-valid
@@ -76,6 +81,7 @@ class GzipJsonlChunkWriter(
      * See ADR-729.
      */
     fun appendPreSerialized(record: SnapshotChunkRecord.PreSerialized) {
+        requireWritable()
         require(record.bodyBytes.isNotEmpty()) { "bodyBytes must not be empty for key=${record.key}" }
         writeLine(record.bodyBytes, trailingNewline = false)
         recordCount++
@@ -85,19 +91,30 @@ class GzipJsonlChunkWriter(
     fun shouldRotate(): Boolean = recordCount >= maxRecords || uncompressedBytes >= maxUncompressedBytes
 
     fun close(): ChunkStats {
-        require(!closed) { "close() already called" }
+        requireWritable()
         closed = true
-        val uploadFuture = activeSession().complete(uncompressedBytes)
+        val openSession = activeSession()
+        session = null
+        val uploadFuture = openSession.complete(uncompressedBytes)
         return ChunkStats(
             partIndex = partIndex,
-            path = chunkKey.value.substringAfterLast('/'),
             recordCount = recordCount,
             uncompressedBytes = uncompressedBytes,
-            compressedBytes = UNKNOWN_COMPRESSED_BYTES,
             startedAt = startedAt,
             finishedAt = Instant.now(clock),
             uploadFuture = uploadFuture,
         )
+    }
+
+    fun abort(cause: Throwable) {
+        if (closed) return
+        closed = true
+        val openSession = session
+        session = null
+        runCatching { openSession?.abort(cause) }
+            .exceptionOrNull()
+            ?.takeIf { abortFailure -> abortFailure !== cause }
+            ?.let(cause::addSuppressed)
     }
 
     private fun writeLine(bytes: ByteArray, trailingNewline: Boolean) {
@@ -112,15 +129,24 @@ class GzipJsonlChunkWriter(
         .getOrElse(::abortAndThrow)
 
     private fun abortAndThrow(failure: Throwable): Nothing {
-        session?.abort(failure)
-        throw failure
+        val fatal = ChunkArtifactWriteException(chunkKey, failure)
+        terminalFailure = fatal
+        val openSession = session
+        session = null
+        closed = true
+        runCatching { openSession?.abort(fatal) }
+            .exceptionOrNull()
+            ?.takeIf { abortFailure -> abortFailure !== fatal }
+            ?.let(fatal::addSuppressed)
+        throw fatal
+    }
+
+    private fun requireWritable() {
+        terminalFailure?.let { failure -> throw failure }
+        require(!closed) { "chunk writer already completed or aborted" }
     }
 
     private fun activeSession(): GzipArtifactSession = session ?: artifactWriter.openGzip(chunkKey).also { opened ->
         session = opened
-    }
-
-    private companion object {
-        const val UNKNOWN_COMPRESSED_BYTES: Long = -1L
     }
 }

@@ -77,28 +77,16 @@ class ChunkFileManager(
     private val inFlightUploads: MutableList<CompletableFuture<ArtifactReceipt>> = mutableListOf()
     private val pendingChunks: MutableList<ChunkStats> = mutableListOf()
 
-    fun appendSuccess(record: SnapshotChunkRecord.Success): ChunkStats? {
-        val writer = activeWriter()
+    fun appendSuccess(record: SnapshotChunkRecord.Success): ChunkStats? = appendToCurrent { writer ->
         writer.append(record)
-        manifest.totalRecords++
-        if (writer.shouldRotate()) {
-            return rotateChunk()
-        }
-        return null
     }
 
     /**
      * Append a producer-serialized record. Mirrors [appendSuccess] but skips
      * the Jackson call on the writer thread. See ADR-729.
      */
-    fun appendPreSerialized(record: SnapshotChunkRecord.PreSerialized): ChunkStats? {
-        val writer = activeWriter()
+    fun appendPreSerialized(record: SnapshotChunkRecord.PreSerialized): ChunkStats? = appendToCurrent { writer ->
         writer.appendPreSerialized(record)
-        manifest.totalRecords++
-        if (writer.shouldRotate()) {
-            return rotateChunk()
-        }
-        return null
     }
 
     fun appendFailure(record: SnapshotChunkRecord.Failure) {
@@ -108,7 +96,11 @@ class ChunkFileManager(
 
     fun rotateChunk(): ChunkStats? {
         val writer = currentWriter ?: return null
-        val stats = writer.close()
+        currentWriter = null
+        val stats = runCatching { writer.close() }.getOrElse { failure ->
+            writer.abort(failure)
+            throw failure
+        }
         registerUpload(stats)
         if (stats.recordCount > 0) {
             pendingChunks.add(stats)
@@ -119,13 +111,24 @@ class ChunkFileManager(
 
     fun closeCurrentChunk(): ChunkStats? {
         val writer = currentWriter ?: return null
-        val stats = writer.close()
         currentWriter = null
+        val stats = runCatching { writer.close() }.getOrElse { failure ->
+            writer.abort(failure)
+            throw failure
+        }
         registerUpload(stats)
         if (stats.recordCount > 0) {
             pendingChunks.add(stats)
         }
         return stats.takeIf { it.recordCount > 0 }
+    }
+
+    /** Abort and evict the active chunk exactly once before failed-run storage cleanup. */
+    fun abortCurrentChunk(cause: Throwable): Boolean {
+        val writer = currentWriter ?: return false
+        currentWriter = null
+        writer.abort(cause)
+        return true
     }
 
     private fun registerUpload(stats: ChunkStats) {
@@ -239,14 +242,28 @@ class ChunkFileManager(
         currentWriter = writer
     }
 
+    private fun appendToCurrent(append: (GzipJsonlChunkWriter) -> Unit): ChunkStats? {
+        val writer = activeWriter()
+        return runCatching {
+            append(writer)
+            manifest.totalRecords++
+            if (writer.shouldRotate()) rotateChunk() else null
+        }.getOrElse { failure ->
+            if (failure is ChunkArtifactWriteException && currentWriter === writer) {
+                currentWriter = null
+            }
+            throw failure
+        }
+    }
+
     private fun completedChunkEntries(): List<ChunkEntry> = pendingChunks
         .sortedBy(ChunkStats::partIndex)
         .map { stats -> toEntry(stats, stats.uploadFuture.resultNow()) }
 
     private fun toEntry(stats: ChunkStats, receipt: ArtifactReceipt): ChunkEntry = ChunkEntry(
-        path = stats.path,
+        path = receipt.key.value.substringAfterLast('/'),
         recordCount = stats.recordCount,
-        uncompressedBytes = stats.uncompressedBytes,
+        uncompressedBytes = receipt.uncompressedBytes,
         compressedBytes = receipt.compressedBytes,
         startedAt = stats.startedAt,
         finishedAt = stats.finishedAt,

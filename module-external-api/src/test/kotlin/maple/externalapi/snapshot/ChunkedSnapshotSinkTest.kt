@@ -1,21 +1,36 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.kotlinModule
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Assertions.assertThrows
-import org.mockito.kotlin.any
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import maple.expectation.common.storage.PutResult
+import maple.pipeline.artifact.storage.ConditionalObjectStorage
+import maple.pipeline.artifact.write.DefaultArtifactWriter
+import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 
 class ChunkedSnapshotSinkTest {
 
-    private val objectMapper = ObjectMapper().registerModule(kotlinModule())
+    private val objectMapper = ObjectMapper()
+        .registerModule(kotlinModule())
+        .registerModule(JavaTimeModule())
 
     @Test
     fun `submit throws after writer thread dies from Error, not Exception`() {
@@ -53,7 +68,7 @@ class ChunkedSnapshotSinkTest {
 
         // First submit succeeds (queue.offer, writer picks it up).
         val body = objectMapper.writeValueAsBytes(
-            mapOf("userIgn" to "user-1", "ocid" to "ocid-1")
+            mapOf("userIgn" to "user-1", "ocid" to "ocid-1"),
         )
         sink.submit(
             SnapshotChunkRecord.Success(
@@ -63,7 +78,7 @@ class ChunkedSnapshotSinkTest {
                 httpStatus = 200,
                 fetchedAt = Instant.parse("2026-06-11T00:00:00Z"),
                 bodyBytes = body,
-            )
+            ),
         )
 
         // Wait for writer to start processing the first record (it will then
@@ -98,9 +113,9 @@ class ChunkedSnapshotSinkTest {
                     httpStatus = 200,
                     fetchedAt = Instant.parse("2026-06-11T00:00:00Z"),
                     bodyBytes = objectMapper.writeValueAsBytes(
-                        mapOf("userIgn" to "user-2", "ocid" to "ocid-2")
+                        mapOf("userIgn" to "user-2", "ocid" to "ocid-2"),
                     ),
-                )
+                ),
             )
         }
         val message = ex.message ?: ""
@@ -112,4 +127,159 @@ class ChunkedSnapshotSinkTest {
             "expected submit() to surface the underlying OOMError, got: $message",
         )
     }
+
+    @Test
+    fun `sync close aborts active chunk after writer failure and removes temp artifact`() {
+        val fixture = failureFixture("sync")
+
+        try {
+            fixture.sink.submitPreSerialized(successRecord("accepted-sync"))
+            awaitActiveChunk(fixture)
+            fixture.sink.submit(failureRecord("fatal-sync"))
+
+            assertThrows(RuntimeException::class.java) { fixture.sink.close() }
+
+            await().atMost(Duration.ofSeconds(2)).until { artifactTempFiles() == fixture.tempFilesBefore }
+            assertThat(artifactTempFiles()).isEqualTo(fixture.tempFilesBefore)
+        } finally {
+            runCatching { fixture.fileManager.closeCurrentChunk() }
+            await().atMost(Duration.ofSeconds(5)).until { artifactTempFiles() == fixture.tempFilesBefore }
+        }
+    }
+
+    @Test
+    fun `async close aborts active chunk after writer failure and removes temp artifact`() {
+        val fixture = failureFixture("async")
+
+        try {
+            fixture.sink.submitPreSerialized(successRecord("accepted-async"))
+            awaitActiveChunk(fixture)
+            fixture.sink.submit(failureRecord("fatal-async"))
+            val completion = AtomicReference<Throwable?>()
+
+            fixture.sink.closeAsync().whenComplete { _, failure -> completion.set(failure) }
+
+            await().atMost(Duration.ofSeconds(5)).until { completion.get() != null }
+            assertThat(completion.get()).hasRootCauseMessage("simulated async writer failure")
+            await().atMost(Duration.ofSeconds(2)).until { artifactTempFiles() == fixture.tempFilesBefore }
+            assertThat(artifactTempFiles()).isEqualTo(fixture.tempFilesBefore)
+        } finally {
+            runCatching { fixture.fileManager.closeCurrentChunk() }
+            await().atMost(Duration.ofSeconds(5)).until { artifactTempFiles() == fixture.tempFilesBefore }
+        }
+    }
+
+    @Test
+    fun `cancelling returned async close future does not suppress later failure cleanup`() {
+        val uploadsCompleted = CompletableFuture<Boolean>()
+        val fileManager = mock<ChunkFileManager>()
+        val eventPublisher = mock<SnapshotSinkEventPublisher>()
+        val manifest = SnapshotChunkManifest(
+            runId = "cancelled-close",
+            endpoint = "ranking-overall",
+            startedAt = Instant.EPOCH,
+        )
+        whenever(fileManager.manifest()).thenReturn(manifest)
+        whenever(fileManager.awaitAllUploadsAsync(any())).thenReturn(uploadsCompleted)
+        val sink = ChunkedSnapshotSink(
+            endpoint = "ranking-overall",
+            queueCapacity = 10,
+            fileManager = fileManager,
+            eventPublisher = eventPublisher,
+        )
+
+        try {
+            val callerFuture = sink.closeAsync()
+            await().atMost(Duration.ofSeconds(2)).untilAsserted {
+                verify(fileManager).awaitAllUploadsAsync(any())
+            }
+
+            assertThat(callerFuture.cancel(true)).isTrue()
+            uploadsCompleted.complete(false)
+
+            await().atMost(Duration.ofSeconds(2)).untilAsserted {
+                verify(fileManager).abortCurrentChunk(any())
+                verify(fileManager).cleanupOnFailure()
+                verify(eventPublisher).publishRunFailed(
+                    eq(manifest),
+                    eq("ranking-overall"),
+                    eq("chunk uploads did not complete in time (in-flight=0)"),
+                )
+            }
+        } finally {
+            val executorField = ChunkedSnapshotSink::class.java.getDeclaredField("closeAsyncExecutor")
+                .apply { isAccessible = true }
+            (executorField.get(sink) as java.util.concurrent.ExecutorService).shutdownNow()
+        }
+    }
+
+    private fun failureFixture(label: String): FailureFixture {
+        val storage = mock<ConditionalObjectStorage>()
+        whenever(storage.get(any())).thenReturn(ByteArray(0))
+        whenever(storage.put(any(), any())).thenThrow(IllegalStateException("simulated $label writer failure"))
+        whenever(storage.putFileAsync(any(), any())).thenAnswer { invocation ->
+            val key = invocation.getArgument<String>(0)
+            val path = invocation.getArgument<Path>(1)
+            CompletableFuture.completedFuture(PutResult(key, Files.size(path), null))
+        }
+        val fileManager = ChunkFileManager(
+            runId = "failure-$label",
+            endpoint = "ranking-overall",
+            maxRecords = 100,
+            maxUncompressedBytes = 1_000_000,
+            objectMapper = objectMapper,
+            clock = Clock.systemUTC(),
+            objectStorage = storage,
+            artifactWriter = DefaultArtifactWriter(storage, java.util.concurrent.Executor(Runnable::run)),
+        )
+        return FailureFixture(
+            sink = ChunkedSnapshotSink(
+                endpoint = "ranking-overall",
+                queueCapacity = 10,
+                fileManager = fileManager,
+                eventPublisher = mock(),
+            ),
+            fileManager = fileManager,
+            tempFilesBefore = artifactTempFiles(),
+        )
+    }
+
+    private fun awaitActiveChunk(fixture: FailureFixture) {
+        await().atMost(Duration.ofSeconds(5)).until {
+            fixture.fileManager.manifest().totalRecords == 1 &&
+                (artifactTempFiles() - fixture.tempFilesBefore).isNotEmpty()
+        }
+    }
+
+    private fun successRecord(key: String): SnapshotChunkRecord.PreSerialized = SnapshotChunkRecord.PreSerialized(
+        key = key,
+        endpoint = "ranking-overall",
+        keyType = "DATE_PAGE",
+        httpStatus = 200,
+        fetchedAt = Instant.EPOCH,
+        bodyBytes = "{\"key\":\"$key\"}\n".toByteArray(),
+    )
+
+    private fun failureRecord(key: String): SnapshotChunkRecord.Failure = SnapshotChunkRecord.Failure(
+        key = key,
+        endpoint = "ranking-overall",
+        keyType = "DATE_PAGE",
+        httpStatus = 500,
+        fetchedAt = Instant.EPOCH,
+        errorMessage = "fatal",
+    )
+
+    private fun artifactTempFiles(): Set<Path> = Files.list(Path.of(System.getProperty("java.io.tmpdir"))).use { paths ->
+        paths.filter { path -> path.fileName.toString().startsWith("artifact-gzip-") }
+            .map(Path::toAbsolutePath)
+            .map(Path::normalize)
+            .toList()
+            .toSet()
+    }
+
+    private data class FailureFixture(
+        val sink: ChunkedSnapshotSink,
+        val fileManager: ChunkFileManager,
+        val tempFilesBefore: Set<Path>,
+    )
 }

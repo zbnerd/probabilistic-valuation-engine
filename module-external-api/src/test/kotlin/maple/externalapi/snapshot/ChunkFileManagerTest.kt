@@ -5,17 +5,23 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.kotlinModule
 import java.io.ByteArrayInputStream
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.GZIPInputStream
 import maple.expectation.common.storage.PutResult
 import maple.externalapi.domain.KeyType
+import maple.pipeline.artifact.identity.ArtifactKey
 import maple.pipeline.artifact.storage.ConditionalObjectStorage
+import maple.pipeline.artifact.write.ArtifactReceipt
+import maple.pipeline.artifact.write.ArtifactWriter
 import maple.pipeline.artifact.write.DefaultArtifactWriter
+import maple.pipeline.artifact.write.GzipArtifactSession
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
@@ -174,6 +180,41 @@ class ChunkFileManagerTest {
         assertThat(records).anySatisfy { line -> assertThat(line).contains("second") }
     }
 
+    @Test
+    fun `abortCurrentChunk evicts writer and aborts its session exactly once`() {
+        val storage = mock<ConditionalObjectStorage>()
+        val session = RecordingArtifactSession()
+        val manager = ChunkFileManager(
+            runId = "abort-once",
+            endpoint = "ranking-overall",
+            maxRecords = 100,
+            maxUncompressedBytes = 1_000_000,
+            objectMapper = objectMapper,
+            clock = Clock.systemUTC(),
+            objectStorage = storage,
+            artifactWriter = object : ArtifactWriter {
+                override fun openGzip(key: ArtifactKey): GzipArtifactSession = session
+            },
+        )
+        val cause = IllegalStateException("writer failed")
+        manager.appendPreSerialized(
+            SnapshotChunkRecord.PreSerialized(
+                key = "accepted",
+                endpoint = "ranking-overall",
+                keyType = KeyType.DATE_PAGE.name,
+                httpStatus = 200,
+                fetchedAt = Instant.EPOCH,
+                bodyBytes = "{\"key\":\"accepted\"}\n".toByteArray(),
+            ),
+        )
+
+        assertThat(manager.abortCurrentChunk(cause)).isTrue()
+        assertThat(manager.abortCurrentChunk(cause)).isFalse()
+        assertThat(session.abortCount.get()).isEqualTo(1)
+        assertThat(session.abortCause.get()).isSameAs(cause)
+        assertThat(session.completeCount.get()).isZero()
+    }
+
     private fun successRecord(key: String): SnapshotChunkRecord.Success = SnapshotChunkRecord.Success(
         bodyBytes = objectMapper.writeValueAsBytes(mapOf("key" to key)),
         key = key,
@@ -187,4 +228,25 @@ class ChunkFileManagerTest {
         storage,
         java.util.concurrent.Executor { command -> command.run() },
     )
+
+    private class RecordingArtifactSession : GzipArtifactSession {
+        val abortCount = AtomicInteger()
+        val completeCount = AtomicInteger()
+        val abortCause = AtomicReference<Throwable?>()
+
+        override val output: OutputStream = OutputStream.nullOutputStream()
+
+        override fun complete(uncompressedBytes: Long): CompletableFuture<ArtifactReceipt> {
+            completeCount.incrementAndGet()
+            return CompletableFuture.failedFuture(IllegalStateException("complete must not run"))
+        }
+
+        override fun abort(cause: Throwable): CompletableFuture<ArtifactReceipt> {
+            abortCount.incrementAndGet()
+            abortCause.set(cause)
+            return CompletableFuture.failedFuture(cause)
+        }
+
+        override fun close() = Unit
+    }
 }

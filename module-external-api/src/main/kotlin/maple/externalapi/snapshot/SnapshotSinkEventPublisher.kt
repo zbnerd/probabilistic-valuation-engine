@@ -7,6 +7,7 @@ import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
 import maple.expectation.util.CompressionUtils
 import maple.externalapi.metrics.SnapshotVolumeMetrics
+import maple.pipeline.artifact.write.ArtifactReceipt
 import org.slf4j.LoggerFactory
 
 /**
@@ -28,10 +29,15 @@ class SnapshotSinkEventPublisher(
      * Build [SnapshotChunkReadyEvent] for a finished chunk, record its size in
      * [volumeMetrics], emit the `snapshotVolume` log line, and dispatch.
      */
-    fun publishChunkReady(stats: ChunkStats, runId: String, endpoint: String) {
-        val chunkId = String.format("part-%06d", stats.partIndex)
-        val ratio = CompressionUtils.ratioString(stats.uncompressedBytes, stats.compressedBytes)
-        volumeMetrics.recordChunk(stats.compressedBytes, stats.uncompressedBytes, stats.recordCount.toLong())
+    fun publishChunkReady(
+        stats: ChunkStats,
+        receipt: ArtifactReceipt,
+        runId: String,
+        endpoint: String,
+    ) {
+        val chunkId = receipt.key.value.substringAfterLast('/').removeSuffix(".jsonl.gz")
+        val ratio = CompressionUtils.ratioString(receipt.uncompressedBytes, receipt.compressedBytes)
+        volumeMetrics.recordChunk(receipt.compressedBytes, receipt.uncompressedBytes, stats.recordCount.toLong())
         // Endpoint factory passes lowercase ("ranking-overall"); Micrometer tags
         // emitted by recordNexonBodyReceived use ExternalApiEndpoint.name which is
         // uppercase ("RANKING_OVERALL"). Normalize once here so the two counters
@@ -43,8 +49,8 @@ class SnapshotSinkEventPublisher(
             "[snapshotVolume] runId={} chunkId={} compressedBytes={} uncompressedBytes={} jsonRows={} compressionRatio={}",
             runId,
             chunkId,
-            stats.compressedBytes,
-            stats.uncompressedBytes,
+            receipt.compressedBytes,
+            receipt.uncompressedBytes,
             stats.recordCount,
             ratio,
         )
@@ -54,16 +60,11 @@ class SnapshotSinkEventPublisher(
             runId = runId,
             endpoint = endpoint,
             chunkId = chunkId,
-            // Writer (ChunkFileManager.newChunkWriter) puts chunks under
-            // `$runKey/chunks/...`. event.objectKey must match that path so
-            // the calculator/sync consumers can resolve the chunk via
-            // objectStorage.exists(event.objectKey). Without the /chunks/
-            // segment the consumers see "source chunk not found" even
-            // though the object exists.
-            objectKey = "runs/$runId/$endpoint/chunks/${stats.path}",
+            objectKey = receipt.key.value,
             recordCount = stats.recordCount,
-            uncompressedBytes = stats.uncompressedBytes,
-            compressedBytes = stats.compressedBytes,
+            uncompressedBytes = receipt.uncompressedBytes,
+            compressedBytes = receipt.compressedBytes,
+            sha256 = null,
             createdAt = java.time.Instant.now(clock),
         )
         eventPublisher.publishChunkReady(event)

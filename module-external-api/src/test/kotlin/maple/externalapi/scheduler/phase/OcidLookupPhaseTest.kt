@@ -10,10 +10,18 @@ import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.GZIPInputStream
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import maple.common.parser.StreamingChunkParser
@@ -406,6 +414,131 @@ class OcidLookupPhaseTest {
                 Files.deleteIfExists(path.parent)
             }
         }
+    }
+
+    @Test
+    fun `cancellation at JSON receipt handoff leaves no Parquet orphan and publishes no event`() {
+        val storage = mock<ConditionalObjectStorage>()
+        val objectMapper = ObjectMapper().registerModule(kotlinModule())
+        val eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>()
+        val jsonUploadRequested = AtomicBoolean()
+        val parquetUploadRequested = AtomicBoolean()
+        val jsonUpload = CompletableFuture<PutResult>()
+        val borrowedJson = AtomicReference<Path?>()
+        val parquetUpload = CompletableFuture<PutResult>()
+        val rankingKey = "runs/handoff/ranking-overall/chunks/part-000001.jsonl.gz"
+        val runId = "handoff"
+        val parquetDirsBefore = parquetTempDirectories(runId)
+
+        whenever(storage.listByPrefix("ocid-mapping/")).thenReturn(emptyList())
+        whenever(storage.listByPrefix("runs/handoff/ranking-overall/chunks")).thenReturn(
+            listOf(ObjectInfo(rankingKey, 100, Instant.now())),
+        )
+        val chunkBytes = java.io.ByteArrayOutputStream().use { out ->
+            java.util.zip.GZIPOutputStream(out).use { gzip -> gzip.write("{\"key\":\"user1\"}\n".toByteArray()) }
+            out.toByteArray()
+        }
+        whenever(storage.getStream(rankingKey)).thenReturn(chunkBytes.inputStream())
+
+        val clientPort = mock<maple.externalapi.port.out.ExternalApiClientPort>()
+        whenever(clientPort.fetch(any(), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture("{\"ocid\":\"ocid-for-user1\"}".toByteArray()))
+        whenever(storage.putFileAsync(any(), any())).thenAnswer { invocation ->
+            val key = invocation.getArgument<String>(0)
+            val path = invocation.getArgument<Path>(1)
+            if (key.endsWith(".parquet")) {
+                parquetUploadRequested.set(true)
+                parquetUpload
+            } else {
+                borrowedJson.set(path)
+                jsonUploadRequested.set(true)
+                jsonUpload
+            }
+        }
+
+        val phase = OcidLookupPhase(
+            clientPort = clientPort,
+            objectMapper = objectMapper,
+            ocidLookupPermitsPerSecond = 100,
+            batchSize = 100,
+            eventPublisher = eventPublisher,
+            objectStorage = storage,
+            nexonAuthClient = mock(),
+            stopSignal = PhaseStopSignal(),
+            streamingChunkParser = StreamingChunkParser(objectMapper),
+            chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
+            ocidMappingArtifactWriter = mappingWriter(storage),
+        )
+        val workerExecutor = Executors.newSingleThreadExecutor()
+        val dispatcher = QueueingDispatcher()
+        val executionScope = CoroutineScope(SupervisorJob() + dispatcher)
+        val execution = executionScope.async {
+            phase.execute(workerExecutor, "runs/handoff", runId)
+        }
+
+        try {
+            await().atMost(Duration.ofSeconds(10)).until {
+                if (jsonUploadRequested.get()) {
+                    true
+                } else {
+                    dispatcher.runNext()
+                    jsonUploadRequested.get()
+                }
+            }
+            assertThat(parquetTempDirectories(runId) - parquetDirsBefore).isNotEmpty()
+            val jsonPath = requireNotNull(borrowedJson.get())
+            jsonUpload.complete(PutResult("ocid-mapping/ocid-mapping-handoff.jsonl.gz", Files.size(jsonPath), null))
+            await().atMost(Duration.ofSeconds(5)).until {
+                dispatcher.hasTasks() || parquetUploadRequested.get()
+            }
+
+            execution.cancel()
+            parquetUpload.complete(PutResult("ocid-mapping-parquet/ocid-mapping-handoff.parquet", 0L, null))
+            await().atMost(Duration.ofSeconds(5)).until {
+                if (execution.isCompleted) true else dispatcher.runNext() && execution.isCompleted
+            }
+
+            assertThat(parquetTempDirectories(runId)).isEqualTo(parquetDirsBefore)
+            verify(eventPublisher, never()).publishRunCompleted(any())
+        } finally {
+            executionScope.cancel()
+            workerExecutor.shutdownNow()
+            cleanupParquetDirectories(parquetTempDirectories(runId) - parquetDirsBefore)
+        }
+    }
+
+    private fun parquetTempDirectories(runId: String): Set<Path> = Files.list(Path.of(System.getProperty("java.io.tmpdir"))).use { paths ->
+        paths.filter { path -> path.fileName.toString().startsWith("ocid-mapping-parquet-$runId-") }
+            .map(Path::toAbsolutePath)
+            .map(Path::normalize)
+            .toList()
+            .toSet()
+    }
+
+    private fun cleanupParquetDirectories(directories: Set<Path>) {
+        directories.forEach { directory ->
+            if (Files.exists(directory)) {
+                Files.walk(directory).use { paths ->
+                    paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+                }
+            }
+        }
+    }
+
+    private class QueueingDispatcher : CoroutineDispatcher() {
+        private val tasks = LinkedBlockingQueue<Runnable>()
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            tasks.add(block)
+        }
+
+        fun runNext(): Boolean {
+            val next = tasks.poll(100, TimeUnit.MILLISECONDS) ?: return false
+            next.run()
+            return true
+        }
+
+        fun hasTasks(): Boolean = tasks.isNotEmpty()
     }
 
     private fun mappingWriter(storage: ConditionalObjectStorage): OcidMappingArtifactWriter = OcidMappingArtifactWriter(

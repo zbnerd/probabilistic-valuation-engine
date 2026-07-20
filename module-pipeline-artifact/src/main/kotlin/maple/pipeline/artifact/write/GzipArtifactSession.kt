@@ -29,12 +29,12 @@ internal class DefaultGzipArtifactSession(
     private val objectStorage: ConditionalObjectStorage,
     private val uploadExecutor: Executor,
     compressionLevel: Int,
+    streamFactory: GzipArtifactStreamFactory = DefaultGzipArtifactStreamFactory,
 ) : GzipArtifactSession {
     private val state = AtomicReference(SessionState.OPEN)
-    private val digest = MessageDigest.getInstance("SHA-256")
-    private val digestOutput = DigestOutputStream(Files.newOutputStream(tempFile), digest)
-    private val gzipOutput = runCatching { LevelGzipOutputStream(digestOutput, compressionLevel) }
-        .getOrElse { failure -> closeDigestAfterConstructionFailure(failure) }
+    private val streams = streamFactory.open(tempFile, compressionLevel)
+    private val digest = streams.digest
+    private val gzipOutput = streams.gzipOutput
 
     override val output: OutputStream
         get() = gzipOutput
@@ -43,12 +43,10 @@ internal class DefaultGzipArtifactSession(
         if (!state.compareAndSet(SessionState.OPEN, SessionState.COMPLETING)) {
             return terminalFailure()
         }
-        val finalized = runCatching {
-            gzipOutput.close()
-            FinalizedArtifact(
-                compressedBytes = Files.size(tempFile),
-                contentSha256 = HexFormat.of().formatHex(digest.digest()),
-            )
+        val finalized = closeStreams()?.let { closeFailure ->
+            Result.failure(closeFailure)
+        } ?: runCatching {
+            FinalizedArtifact(Files.size(tempFile), HexFormat.of().formatHex(digest.digest()))
         }
         val receiptFuture = finalized.fold(
             onSuccess = { artifact -> upload(artifact, uncompressedBytes) },
@@ -101,8 +99,22 @@ internal class DefaultGzipArtifactSession(
 
     private fun cleanupResources(): Throwable? {
         val failures = sequenceOf(
-            runCatching { gzipOutput.close() }.exceptionOrNull(),
+            closeStreams(),
             runCatching { Files.deleteIfExists(tempFile) }.exceptionOrNull(),
+        ).filterNotNull()
+            .toList()
+        val primary = failures.firstOrNull() ?: return null
+        failures.drop(1)
+            .filter { failure -> failure !== primary }
+            .forEach(primary::addSuppressed)
+        return primary
+    }
+
+    private fun closeStreams(): Throwable? {
+        val failures = sequenceOf(
+            runCatching { gzipOutput.close() }.exceptionOrNull(),
+            runCatching { streams.digestOutput.close() }.exceptionOrNull(),
+            runCatching { streams.fileOutput.close() }.exceptionOrNull(),
         ).filterNotNull()
             .toList()
         val primary = failures.firstOrNull() ?: return null
@@ -118,13 +130,6 @@ internal class DefaultGzipArtifactSession(
         if (cleanupFailure !== lifetimeFailure) lifetimeFailure.addSuppressed(cleanupFailure)
     }
 
-    private fun closeDigestAfterConstructionFailure(failure: Throwable): Nothing {
-        runCatching { digestOutput.close() }
-            .exceptionOrNull()
-            ?.let(failure::addSuppressed)
-        throw failure
-    }
-
     private fun terminalFailure(): CompletableFuture<ArtifactReceipt> = CompletableFuture.failedFuture(
         IllegalStateException("artifact gzip session already completed or aborted"),
     )
@@ -138,6 +143,41 @@ internal class DefaultGzipArtifactSession(
         OPEN,
         COMPLETING,
         ABORTED,
+    }
+}
+
+internal fun interface GzipArtifactStreamFactory {
+    fun open(tempFile: Path, compressionLevel: Int): GzipArtifactStreams
+}
+
+internal data class GzipArtifactStreams(
+    val digest: MessageDigest,
+    val fileOutput: OutputStream,
+    val digestOutput: OutputStream,
+    val gzipOutput: OutputStream,
+)
+
+private object DefaultGzipArtifactStreamFactory : GzipArtifactStreamFactory {
+    override fun open(tempFile: Path, compressionLevel: Int): GzipArtifactStreams {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val fileOutput = Files.newOutputStream(tempFile)
+        val digestOutput = DigestOutputStream(fileOutput, digest)
+        val gzipOutput = runCatching { LevelGzipOutputStream(digestOutput, compressionLevel) }
+            .getOrElse { failure -> closeAfterConstructionFailure(failure, digestOutput, fileOutput) }
+        return GzipArtifactStreams(digest, fileOutput, digestOutput, gzipOutput)
+    }
+
+    private fun closeAfterConstructionFailure(
+        failure: Throwable,
+        vararg outputs: OutputStream,
+    ): Nothing {
+        outputs.forEach { output ->
+            runCatching { output.close() }
+                .exceptionOrNull()
+                ?.takeIf { closeFailure -> closeFailure !== failure }
+                ?.let(failure::addSuppressed)
+        }
+        throw failure
     }
 }
 

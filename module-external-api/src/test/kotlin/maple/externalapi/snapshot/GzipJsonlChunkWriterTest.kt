@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.kotlinModule
 import java.io.ByteArrayInputStream
+import java.io.IOException
+import java.io.OutputStream
 import java.lang.management.ManagementFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -14,6 +16,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.Deflater
@@ -23,7 +26,9 @@ import maple.pipeline.artifact.identity.ArtifactKey
 import maple.pipeline.artifact.storage.ConditionalObjectStorage
 import maple.pipeline.artifact.storage.LocalFsObjectStorage
 import maple.pipeline.artifact.write.ArtifactReceipt
+import maple.pipeline.artifact.write.ArtifactWriter
 import maple.pipeline.artifact.write.DefaultArtifactWriter
+import maple.pipeline.artifact.write.GzipArtifactSession
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.awaitility.Awaitility.await
@@ -357,7 +362,7 @@ class GzipJsonlChunkWriterTest {
         // here. The path is verified by the captured bytes being
         // successfully decompressed (below).
         assertThat(stats.partIndex).isEqualTo(1)
-        assertThat(stats.path).isEqualTo("part-000001.jsonl.gz")
+        assertThat(receipt.key.value).isEqualTo("runs/abc/ranking-overall/part-000001.jsonl.gz")
         assertThat(stats.recordCount).isEqualTo(3)
         assertThat(stats.uncompressedBytes).isGreaterThan(0)
         assertThat(receipt.compressedBytes).isGreaterThan(0)
@@ -421,6 +426,38 @@ class GzipJsonlChunkWriterTest {
         } finally {
             awaitReceipt(writer.close())
         }
+    }
+
+    @Test
+    fun `output failure aborts once and leaves writer permanently fatal`() {
+        val writeFailure = IOException("disk write failed")
+        val session = FailingOnSecondWriteSession(writeFailure)
+        val writer = GzipJsonlChunkWriter(
+            chunkKey = ArtifactKey.require("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz"),
+            partIndex = 1,
+            maxRecords = 100,
+            maxUncompressedBytes = 1_000_000,
+            objectMapper = objectMapper,
+            artifactWriter = object : ArtifactWriter {
+                override fun openGzip(key: ArtifactKey): GzipArtifactSession = session
+            },
+            clock = fixedClock,
+        )
+        val accepted = preSerializedRecord("accepted")
+        val rejected = preSerializedRecord("rejected")
+
+        writer.appendPreSerialized(accepted)
+        val fatal = runCatching { writer.appendPreSerialized(rejected) }.exceptionOrNull()
+
+        assertThat(fatal).isNotNull()
+        assertThat(fatal).isNotSameAs(writeFailure)
+        assertThat(fatal).hasCause(writeFailure)
+        assertThat(session.abortCount.get()).isEqualTo(1)
+        assertThat(session.completeCount.get()).isZero()
+        assertThatThrownBy { writer.appendPreSerialized(rejected) }.isSameAs(fatal)
+        assertThatThrownBy { writer.close() }.isSameAs(fatal)
+        assertThat(session.abortCount.get()).isEqualTo(1)
+        assertThat(session.completeCount.get()).isZero()
     }
 
     /**
@@ -623,6 +660,15 @@ class GzipJsonlChunkWriterTest {
         return baos.toByteArray()
     }
 
+    private fun preSerializedRecord(key: String): SnapshotChunkRecord.PreSerialized = SnapshotChunkRecord.PreSerialized(
+        key = key,
+        endpoint = "ranking-overall",
+        keyType = "DATE_PAGE",
+        httpStatus = 200,
+        fetchedAt = Instant.EPOCH,
+        bodyBytes = "{\"key\":\"$key\"}\n".toByteArray(),
+    )
+
     private data class GzipEvidenceMeasurement(
         val repetition: Int,
         val elapsedNanos: Long,
@@ -637,6 +683,34 @@ class GzipJsonlChunkWriterTest {
         val completedAtNanos: Long,
         val receipts: List<ArtifactReceipt>,
     )
+
+    private class FailingOnSecondWriteSession(
+        private val writeFailure: IOException,
+    ) : GzipArtifactSession {
+        private val writeCount = AtomicInteger()
+        val abortCount = AtomicInteger()
+        val completeCount = AtomicInteger()
+
+        override val output: OutputStream = object : OutputStream() {
+            override fun write(value: Int) = Unit
+
+            override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                if (writeCount.incrementAndGet() == 2) throw writeFailure
+            }
+        }
+
+        override fun complete(uncompressedBytes: Long): CompletableFuture<ArtifactReceipt> {
+            completeCount.incrementAndGet()
+            return CompletableFuture.failedFuture(IllegalStateException("complete must not run"))
+        }
+
+        override fun abort(cause: Throwable): CompletableFuture<ArtifactReceipt> {
+            abortCount.incrementAndGet()
+            return CompletableFuture.failedFuture(cause)
+        }
+
+        override fun close() = Unit
+    }
 
     private data class TempFileDelta(
         val beforeCount: Int,

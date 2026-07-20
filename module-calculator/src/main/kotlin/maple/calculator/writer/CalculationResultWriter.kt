@@ -77,7 +77,8 @@ class CalculationResultWriter(
         }.getOrElse { failure ->
             CompletableFuture.failedFuture(failure)
         }
-        return writeFuture.whenComplete { _, failure -> logFailure(objectKey, failure) }
+        writeFuture.whenComplete { _, failure -> logFailure(objectKey, failure) }
+        return writeFuture
     }
 
     private suspend fun writeResults(

@@ -35,21 +35,21 @@ class SnapshotSinkEventPublisherTest {
     fun `publishChunkReady builds event with chunkId objectKey and createdAt`() {
         whenever(sinkEventPublisher.publishChunkReady(any())).thenReturn(CompletableFuture.completedFuture(null))
 
+        val receipt = receipt(
+            key = "runs/run-1/result/chunks/part-000001.jsonl.gz",
+            compressedBytes = 250L,
+            uncompressedBytes = 1000L,
+        )
         val stats = ChunkStats(
-            // GzipJsonlChunkWriter.close() stores `chunkKey.substringAfterLast('/')`
-            // in stats.path — i.e. the filename only. The publisher prepends the
-            // `runs/{runId}/{endpoint}/chunks/` segment.
-            path = "part-000001.jsonl.gz",
             partIndex = 1,
             recordCount = 42,
-            uncompressedBytes = 1000L,
-            compressedBytes = 250L,
+            uncompressedBytes = 999L,
             startedAt = Instant.parse("2026-06-07T09:50:00Z"),
             finishedAt = Instant.parse("2026-06-07T09:55:00Z"),
-            uploadFuture = completedReceipt("runs/run-1/result/chunks/part-000001.jsonl.gz", 250L),
+            uploadFuture = CompletableFuture.completedFuture(receipt),
         )
 
-        publisher.publishChunkReady(stats, runId = "run-1", endpoint = "result")
+        publisher.publishChunkReady(stats, receipt, runId = "run-1", endpoint = "result")
 
         val captor = argumentCaptor<SnapshotChunkReadyEvent>()
         verify(sinkEventPublisher).publishChunkReady(captor.capture())
@@ -61,6 +61,7 @@ class SnapshotSinkEventPublisherTest {
         assertThat(event.recordCount).isEqualTo(42)
         assertThat(event.uncompressedBytes).isEqualTo(1000L)
         assertThat(event.compressedBytes).isEqualTo(250L)
+        assertThat(event.sha256).isNull()
         assertThat(event.createdAt).isEqualTo(Instant.parse("2026-06-07T10:00:00Z"))
         assertThat(event.eventId).isNotBlank()
     }
@@ -69,18 +70,21 @@ class SnapshotSinkEventPublisherTest {
     fun `publishChunkReady records volume metrics with compressed uncompressed and count`() {
         whenever(sinkEventPublisher.publishChunkReady(any())).thenReturn(CompletableFuture.completedFuture(null))
 
+        val receipt = receipt(
+            key = "runs/run-2/item/chunks/part-000007.jsonl.gz",
+            compressedBytes = 1024L,
+            uncompressedBytes = 4096L,
+        )
         val stats = ChunkStats(
-            path = "chunks/part-000007.jsonl.gz",
             partIndex = 7,
             recordCount = 99,
-            uncompressedBytes = 4096L,
-            compressedBytes = 1024L,
+            uncompressedBytes = 4000L,
             startedAt = Instant.parse("2026-06-07T09:00:00Z"),
             finishedAt = Instant.parse("2026-06-07T09:10:00Z"),
-            uploadFuture = completedReceipt("runs/run-2/item/chunks/part-000007.jsonl.gz", 1024L),
+            uploadFuture = CompletableFuture.completedFuture(receipt),
         )
 
-        publisher.publishChunkReady(stats, "run-2", "item")
+        publisher.publishChunkReady(stats, receipt, "run-2", "item")
 
         verify(volumeMetrics).recordChunk(1024L, 4096L, 99L)
     }
@@ -150,13 +154,15 @@ class SnapshotSinkEventPublisherTest {
         verifyNoInteractions(volumeMetrics)
     }
 
-    private fun completedReceipt(key: String, compressedBytes: Long): CompletableFuture<ArtifactReceipt> = CompletableFuture.completedFuture(
-        ArtifactReceipt(
-            key = ArtifactKey.require(key),
-            compressedBytes = compressedBytes,
-            uncompressedBytes = 0L,
-            contentSha256 = "fixture-sha256",
-            backendTag = null,
-        ),
+    private fun receipt(
+        key: String,
+        compressedBytes: Long,
+        uncompressedBytes: Long = 0L,
+    ): ArtifactReceipt = ArtifactReceipt(
+        key = ArtifactKey.require(key),
+        compressedBytes = compressedBytes,
+        uncompressedBytes = uncompressedBytes,
+        contentSha256 = "fixture-sha256",
+        backendTag = null,
     )
 }

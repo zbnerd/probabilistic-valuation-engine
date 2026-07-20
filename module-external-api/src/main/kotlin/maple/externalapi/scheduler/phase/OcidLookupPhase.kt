@@ -111,7 +111,7 @@ class OcidLookupPhase(
         val failCount = AtomicInteger(0)
         val lastProgressLog = AtomicInteger(0)
         val resultsChannel = Channel<String>(Channel.BUFFERED)
-        val mappingWrite = coroutineScope {
+        val mappingReceipt = coroutineScope {
             val writer = async(Dispatchers.Default) { writeMapping(resultsChannel, runId) }
             processBatch(
                 workerExecutor = workerExecutor,
@@ -128,11 +128,10 @@ class OcidLookupPhase(
             resultsChannel.close()
             writer.await()
         }
-        uploadParquetSidecar(mappingWrite.parquetArtifact, runId)
         log.info(
             "[Scheduler] streamed {} OCID mappings to {} (heap-bounded writer session)",
             successCount.get(),
-            mappingWrite.receipt.key.value,
+            mappingReceipt.key.value,
         )
         SchedulerPhaseUtils.logSummary(
             "OCID lookup",
@@ -147,7 +146,7 @@ class OcidLookupPhase(
                 eventId = UUID.randomUUID().toString(),
                 runId = runId,
                 endpoint = "ocid-lookup",
-                manifestPath = mappingWrite.receipt.key.value,
+                manifestPath = mappingReceipt.key.value,
                 totalRecords = successCount.get(),
                 totalFailed = failCount.get(),
                 chunkCount = 1,
@@ -161,13 +160,13 @@ class OcidLookupPhase(
     private suspend fun writeMapping(
         resultsChannel: Channel<String>,
         runId: String,
-    ): MappingWriteResult {
+    ): ArtifactReceipt {
         val session = ocidMappingArtifactWriter.open(runId)
         val parquetSidecar = openParquetSidecar(runId)
         return runCatching { drainMappingLines(resultsChannel, session, parquetSidecar) }
             .fold(
                 onSuccess = { uncompressedBytes ->
-                    completeMapping(session, parquetSidecar, uncompressedBytes)
+                    completeMapping(session, parquetSidecar, uncompressedBytes, runId)
                 },
                 onFailure = { failure -> abortMapping(session, parquetSidecar, failure) },
             )
@@ -195,14 +194,16 @@ class OcidLookupPhase(
         session: GzipArtifactSession,
         parquetSidecar: BestEffortParquetSidecar?,
         uncompressedBytes: Long,
-    ): MappingWriteResult {
+        runId: String,
+    ): ArtifactReceipt {
         val parquetArtifact = parquetSidecar?.complete()
         val receipt = runCatching { session.complete(uncompressedBytes).await() }
             .getOrElse { failure ->
                 parquetArtifact?.delete(failure)
                 throw failure
             }
-        return MappingWriteResult(receipt, parquetArtifact)
+        uploadParquetSidecar(parquetArtifact, runId)
+        return receipt
     }
 
     private fun abortMapping(
@@ -324,11 +325,6 @@ class OcidLookupPhase(
             throw primary
         }
     }
-
-    private data class MappingWriteResult(
-        val receipt: ArtifactReceipt,
-        val parquetArtifact: ParquetArtifact?,
-    )
 
     /**
      * GZIP decompress + line-bounded JSONL parse. CPU-bound →

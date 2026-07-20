@@ -1,5 +1,6 @@
 package maple.pipeline.artifact.write
 
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -8,6 +9,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.zip.Deflater
 import maple.expectation.common.storage.PutResult
 import maple.pipeline.artifact.config.ArtifactStorageAutoConfiguration
 import maple.pipeline.artifact.identity.ArtifactKey
@@ -197,6 +199,57 @@ class ArtifactWriterTest {
     }
 
     @Test
+    fun `complete closes every stream and suppresses later close failures under the first`() {
+        val storage = mock<ConditionalObjectStorage>()
+        val tempFile = Files.createTempFile("artifact-gzip-close-test-", ".tmp")
+        val gzipClose = CloseProbe("gzip close failed")
+        val digestClose = CloseProbe("digest close failed")
+        val fileClose = CloseProbe("file close failed")
+        val session = closeFailureSession(tempFile, storage, gzipClose, digestClose, fileClose)
+
+        try {
+            val outcome = awaitCompletion(session.complete(uncompressedBytes = 0L))
+            val primary = rootCause(requireNotNull(outcome.failure))
+
+            assertThat(primary).isSameAs(gzipClose.failure)
+            assertThat(primary.suppressed).containsExactly(digestClose.failure, fileClose.failure)
+            assertThat(gzipClose.closeCount.get()).isEqualTo(1)
+            assertThat(digestClose.closeCount.get()).isEqualTo(1)
+            assertThat(fileClose.closeCount.get()).isEqualTo(1)
+            assertThat(tempFile).doesNotExist()
+            verify(storage, never()).putFileAsync(any(), any())
+        } finally {
+            Files.deleteIfExists(tempFile)
+        }
+    }
+
+    @Test
+    fun `abort retains cause and closes every stream with cleanup failures suppressed`() {
+        val storage = mock<ConditionalObjectStorage>()
+        val tempFile = Files.createTempFile("artifact-gzip-close-test-", ".tmp")
+        val gzipClose = CloseProbe("gzip close failed")
+        val digestClose = CloseProbe("digest close failed")
+        val fileClose = CloseProbe("file close failed")
+        val session = closeFailureSession(tempFile, storage, gzipClose, digestClose, fileClose)
+        val abortCause = IllegalStateException("abort requested")
+
+        try {
+            val outcome = awaitCompletion(session.abort(abortCause))
+
+            assertThat(outcome.failure).isSameAs(abortCause)
+            assertThat(abortCause.suppressed).containsExactly(gzipClose.failure)
+            assertThat(gzipClose.failure.suppressed).containsExactly(digestClose.failure, fileClose.failure)
+            assertThat(gzipClose.closeCount.get()).isEqualTo(1)
+            assertThat(digestClose.closeCount.get()).isEqualTo(1)
+            assertThat(fileClose.closeCount.get()).isEqualTo(1)
+            assertThat(tempFile).doesNotExist()
+            verify(storage, never()).putFileAsync(any(), any())
+        } finally {
+            Files.deleteIfExists(tempFile)
+        }
+    }
+
+    @Test
     fun `auto configuration declares exactly one ArtifactWriter bean`() {
         val writerBeans = ArtifactStorageAutoConfiguration::class.java.declaredMethods.filter { method ->
             method.returnType == ArtifactWriter::class.java && method.getAnnotation(Bean::class.java) != null
@@ -213,6 +266,28 @@ class ArtifactWriterTest {
         assertThat(outcome.failure).isNull()
         return requireNotNull(outcome.value)
     }
+
+    private fun closeFailureSession(
+        tempFile: Path,
+        storage: ConditionalObjectStorage,
+        gzipClose: CloseProbe,
+        digestClose: CloseProbe,
+        fileClose: CloseProbe,
+    ): GzipArtifactSession = DefaultGzipArtifactSession(
+        key = key,
+        tempFile = tempFile,
+        objectStorage = storage,
+        uploadExecutor = directExecutor,
+        compressionLevel = Deflater.BEST_SPEED,
+        streamFactory = GzipArtifactStreamFactory { _, _ ->
+            GzipArtifactStreams(
+                digest = MessageDigest.getInstance("SHA-256"),
+                fileOutput = fileClose,
+                digestOutput = digestClose,
+                gzipOutput = gzipClose,
+            )
+        },
+    )
 
     private fun <T> awaitCompletion(future: CompletableFuture<T>): Completion<T> {
         val observed = AtomicReference<Completion<T>?>()
@@ -242,4 +317,16 @@ class ArtifactWriterTest {
         val value: T?,
         val failure: Throwable?,
     )
+
+    private class CloseProbe(message: String) : OutputStream() {
+        val failure = IllegalStateException(message)
+        val closeCount = AtomicInteger()
+
+        override fun write(value: Int) = Unit
+
+        override fun close() {
+            closeCount.incrementAndGet()
+            throw failure
+        }
+    }
 }

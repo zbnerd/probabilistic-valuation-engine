@@ -6,7 +6,7 @@ import maple.expectation.common.storage.ObjectStorage
 import maple.pipeline.artifact.identity.ArtifactKey
 
 /**
- * Read-modify-write of `runs/$runKey/failed.jsonl`. S3 has no native append,
+ * Read-modify-write of the typed [failedKey]. S3 has no native append,
  * so we read the existing object, append a line, and put it back. Acceptable
  * for low volume (failures are rare in healthy runs).
  */

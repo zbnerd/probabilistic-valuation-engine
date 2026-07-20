@@ -3,6 +3,8 @@ package maple.externalapi.snapshot
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicBoolean
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
@@ -11,7 +13,12 @@ import maple.pipeline.artifact.identity.ArtifactSegment
 import maple.pipeline.artifact.identity.SourceArtifactLayout
 import maple.pipeline.artifact.lifecycle.RunLifecycle
 import maple.pipeline.artifact.lifecycle.RunState
+import maple.pipeline.artifact.retention.ArtifactRunCatalog
+import maple.pipeline.artifact.retention.ArtifactRunInfo
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
 
 @Component
@@ -22,9 +29,23 @@ class PendingPublicationRecovery(
     characterBasicPublisher: SnapshotChunkEventPublisher,
     @Qualifier("rankingSnapshotPublisher")
     rankingPublisher: SnapshotChunkEventPublisher,
+    private val artifactRunCatalog: ArtifactRunCatalog,
+    @Qualifier("artifactUploadExecutor")
+    private val artifactUploadExecutor: Executor,
+    private val metrics: PendingPublicationRecoveryMetrics,
 ) {
+    private val log = LoggerFactory.getLogger(PendingPublicationRecovery::class.java)
     private val characterBasicPublisher = SinkEventPublisher(characterBasicPublisher)
     private val rankingPublisher = SinkEventPublisher(rankingPublisher)
+    private val startupRecoveryStarted = AtomicBoolean(false)
+
+    @EventListener(ApplicationReadyEvent::class)
+    fun onApplicationReady() {
+        if (!startupRecoveryStarted.compareAndSet(false, true)) return
+        CompletableFuture.supplyAsync(::listSourceRuns, artifactUploadExecutor)
+            .handle(::handleSourceListing)
+            .thenCompose { completion -> completion }
+    }
 
     fun recover(runId: String, endpoint: String): CompletableFuture<RunState> {
         val replay = runLifecycle.replayPublicationPending(runId, endpoint) { manifestBytes ->
@@ -32,6 +53,64 @@ class PendingPublicationRecovery(
         }
         return replay.handle { state, failure -> classifyReplayResult(state, failure) }
             .thenCompose { result -> result }
+    }
+
+    private fun listSourceRuns(): List<ArtifactRunInfo> = artifactRunCatalog.list(SourceArtifactLayout.runPrefix)
+
+    private fun handleSourceListing(
+        runs: List<ArtifactRunInfo>?,
+        failure: Throwable?,
+    ): CompletableFuture<Void> {
+        if (failure == null) return recoverPendingEndpoints(requireNotNull(runs))
+        val cause = unwrapCompletionFailure(failure)
+        metrics.recordListFailure()
+        log.error("[ArtifactRecovery] source artifact listing failed", cause)
+        return CompletableFuture.completedFuture(null)
+    }
+
+    private fun recoverPendingEndpoints(runs: List<ArtifactRunInfo>): CompletableFuture<Void> {
+        val recoveries = runs.flatMap(::recoverPendingEndpoints)
+        return CompletableFuture.allOf(*recoveries.toTypedArray())
+    }
+
+    private fun recoverPendingEndpoints(run: ArtifactRunInfo): List<CompletableFuture<Void>> =
+        run.endpoints
+            .filter { endpoint -> endpoint.state == RunState.ArtifactSucceededPublicationPending }
+            .map { endpoint -> recoverPendingEndpoint(run.runId, endpoint.endpoint) }
+
+    private fun recoverPendingEndpoint(runId: String, endpoint: String): CompletableFuture<Void> {
+        val observed = recover(runId, endpoint).handle { state, failure ->
+            observeReplay(runId, endpoint, state, failure)
+        }
+        return observed.thenApply<Void> { null }
+    }
+
+    private fun observeReplay(
+        runId: String,
+        endpoint: String,
+        state: RunState?,
+        failure: Throwable?,
+    ) {
+        if (failure != null) {
+            metrics.recordReplayFailure()
+            log.error(
+                "[ArtifactRecovery] publication replay failed runId={} endpoint={}",
+                runId,
+                endpoint,
+                failure,
+            )
+        } else if (state == RunState.Published) {
+            metrics.recordRecoveredEndpoint()
+            log.info("[ArtifactRecovery] publication replay completed runId={} endpoint={}", runId, endpoint)
+        } else {
+            metrics.recordReplayFailure()
+            log.warn(
+                "[ArtifactRecovery] publication replay retained marker runId={} endpoint={} state={}",
+                runId,
+                endpoint,
+                state,
+            )
+        }
     }
 
     private fun publishValidatedManifest(

@@ -7,6 +7,8 @@ import java.nio.file.Paths
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import maple.pipeline.artifact.lifecycle.RunLifecycle
+import maple.pipeline.artifact.retention.ArtifactRetentionService
+import maple.pipeline.artifact.retention.ArtifactRunCatalog
 import maple.pipeline.artifact.storage.ArtifactUploadResources
 import maple.pipeline.artifact.storage.ConditionalObjectStorage
 import maple.pipeline.artifact.storage.LocalFsObjectStorage
@@ -52,6 +54,14 @@ class ArtifactStorageAutoConfiguration {
         objectStorage: ConditionalObjectStorage,
         @Qualifier("artifactUploadExecutor") uploadExecutor: Executor,
     ): RunLifecycle = RunLifecycle(objectStorage, uploadExecutor)
+
+    @Bean
+    fun artifactRunCatalog(objectStorage: ConditionalObjectStorage): ArtifactRunCatalog =
+        ArtifactRunCatalog(objectStorage)
+
+    @Bean
+    fun artifactRetentionService(objectStorage: ConditionalObjectStorage): ArtifactRetentionService =
+        ArtifactRetentionService(objectStorage)
 
     @Bean
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "local", matchIfMissing = true)

@@ -23,7 +23,6 @@ import kotlinx.coroutines.yield
 import maple.common.parser.StreamingChunkParser
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.storage.ObjectStorage
-import maple.expectation.infrastructure.external.NexonAuthClient
 import maple.externalapi.artifact.OcidMappingArtifactWriter
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
@@ -53,9 +52,8 @@ import org.springframework.stereotype.Component
  *
  * <p>Input chunks remain on [ObjectStorage]. Output mapping identity comes from
  * [OcidMappingArtifactLayout], while [OcidMappingArtifactWriter] owns gzip,
- * digest, upload, and cleanup lifetime. The `nexonAuthClient` is held for future
- * callers (per-key authentication); the current per-IGN lookup path goes through
- * [ExternalApiClientPort].
+ * digest, upload, and cleanup lifetime. The current per-IGN lookup path goes
+ * through [ExternalApiClientPort].
  *
  * <p>Each successful mapping is pushed to a [Channel] and consumed by one
  * writer coroutine. The previous implementation accumulated all 600K+
@@ -75,7 +73,6 @@ class OcidLookupPhase(
     @Qualifier("ocidLookupSnapshotPublisher")
     private val eventPublisher: SnapshotChunkEventPublisher,
     private val objectStorage: ObjectStorage,
-    private val nexonAuthClient: NexonAuthClient,
     private val stopSignal: PhaseStopSignal,
     private val streamingChunkParser: StreamingChunkParser,
     private val chunkParserMetrics: ChunkParserMetrics,

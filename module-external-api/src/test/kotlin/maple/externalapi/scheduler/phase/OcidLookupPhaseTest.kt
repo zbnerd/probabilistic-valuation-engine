@@ -27,7 +27,6 @@ import kotlinx.coroutines.runBlocking
 import maple.common.parser.StreamingChunkParser
 import maple.expectation.common.storage.ObjectInfo
 import maple.expectation.common.storage.PutResult
-import maple.expectation.infrastructure.external.NexonAuthClient
 import maple.externalapi.artifact.OcidMappingArtifactWriter
 import maple.externalapi.metrics.ChunkParserMetrics
 import maple.externalapi.runstatus.PipelinePhase
@@ -51,7 +50,6 @@ class OcidLookupPhaseTest {
     @Test
     fun `execute streams OCID mapping gzipped to ObjectStorage under ocid-mapping key`() {
         val storage = mock<ConditionalObjectStorage>()
-        val nexonClient = mock<NexonAuthClient>()
         val objectMapper = ObjectMapper().registerModule(kotlinModule())
 
         whenever(storage.listByPrefix(any())).thenReturn(
@@ -100,7 +98,6 @@ class OcidLookupPhaseTest {
             batchSize = 100,
             eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
             objectStorage = storage,
-            nexonAuthClient = nexonClient,
             stopSignal = PhaseStopSignal(),
             streamingChunkParser = StreamingChunkParser(objectMapper),
             chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
@@ -149,7 +146,6 @@ class OcidLookupPhaseTest {
     @Test
     fun `execute preserves current runId's OCID mapping while deleting others`() {
         val storage = mock<ConditionalObjectStorage>()
-        val nexonClient = mock<NexonAuthClient>()
         val objectMapper = ObjectMapper().registerModule(kotlinModule())
 
         val now = Instant.now()
@@ -198,7 +194,6 @@ class OcidLookupPhaseTest {
             batchSize = 100,
             eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
             objectStorage = storage,
-            nexonAuthClient = nexonClient,
             stopSignal = PhaseStopSignal(),
             streamingChunkParser = StreamingChunkParser(objectMapper),
             chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
@@ -222,7 +217,6 @@ class OcidLookupPhaseTest {
     @Test
     fun `execute throws PhaseStoppedException when stop requested before processBatch`() {
         val storage = mock<ConditionalObjectStorage>()
-        val nexonClient = mock<NexonAuthClient>()
         val objectMapper = ObjectMapper().registerModule(kotlinModule())
         val stopSignal = PhaseStopSignal()
         stopSignal.requestStop(PipelinePhase.OCID_LOOKUP)
@@ -254,7 +248,6 @@ class OcidLookupPhaseTest {
             batchSize = 100,
             eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
             objectStorage = storage,
-            nexonAuthClient = nexonClient,
             stopSignal = stopSignal,
             streamingChunkParser = StreamingChunkParser(objectMapper),
             chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
@@ -271,7 +264,6 @@ class OcidLookupPhaseTest {
     @Test
     fun `execute writes side-by-side Parquet output alongside gzip JSONL (1423 PoC)`() {
         val storage = mock<ConditionalObjectStorage>()
-        val nexonClient = mock<NexonAuthClient>()
         val objectMapper = ObjectMapper().registerModule(kotlinModule())
 
         whenever(storage.listByPrefix(any())).thenReturn(
@@ -313,7 +305,6 @@ class OcidLookupPhaseTest {
             batchSize = 100,
             eventPublisher = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>(),
             objectStorage = storage,
-            nexonAuthClient = nexonClient,
             stopSignal = PhaseStopSignal(),
             streamingChunkParser = StreamingChunkParser(objectMapper),
             chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
@@ -382,7 +373,6 @@ class OcidLookupPhaseTest {
             batchSize = 100,
             eventPublisher = eventPublisher,
             objectStorage = storage,
-            nexonAuthClient = mock(),
             stopSignal = PhaseStopSignal(),
             streamingChunkParser = StreamingChunkParser(objectMapper),
             chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),
@@ -463,7 +453,6 @@ class OcidLookupPhaseTest {
             batchSize = 100,
             eventPublisher = eventPublisher,
             objectStorage = storage,
-            nexonAuthClient = mock(),
             stopSignal = PhaseStopSignal(),
             streamingChunkParser = StreamingChunkParser(objectMapper),
             chunkParserMetrics = ChunkParserMetrics(SimpleMeterRegistry()),

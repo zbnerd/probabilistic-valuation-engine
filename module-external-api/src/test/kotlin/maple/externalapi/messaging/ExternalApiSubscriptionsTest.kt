@@ -2,13 +2,13 @@ package maple.externalapi.messaging
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import java.time.Instant
-import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import maple.expectation.core.auth.event.CharacterFetchRequest
-import maple.expectation.infrastructure.external.NexonAuthClient
-import maple.externalapi.auth.AuthCharacterFetchConsumer
+import maple.externalapi.auth.AuthCharacterFetchHandler
 import maple.externalapi.auth.AuthRequestDltSanitizer
 import maple.externalapi.urgent.UrgentCharacterRequestConsumer
+import maple.nexon.client.byok.ByokNexonClient
+import maple.nexon.client.byok.NexonCharacterList
 import maple.pipeline.messaging.contract.DeliveryContext
 import maple.pipeline.messaging.contract.DeliveryOutcome
 import maple.pipeline.messaging.dlt.DltRecordSanitizer
@@ -24,11 +24,11 @@ import org.springframework.kafka.support.SendResult
 
 class ExternalApiSubscriptionsTest {
     private val urgentConsumer = mock<UrgentCharacterRequestConsumer>()
-    private val authConsumer = mock<AuthCharacterFetchConsumer>()
+    private val authHandler = mock<AuthCharacterFetchHandler>()
     private val authSanitizer = mock<AuthRequestDltSanitizer>()
     private val subscriptions = ExternalApiSubscriptions(
         urgentConsumer = urgentConsumer,
-        authConsumer = authConsumer,
+        authHandler = authHandler,
         authSanitizer = authSanitizer,
         urgentTopic = "urgent-character-request",
         urgentGroupId = "external-api-urgent-processor",
@@ -61,7 +61,7 @@ class ExternalApiSubscriptionsTest {
     fun `auth subscription preserves topology key and secret sanitizer`() {
         val context = context(key = "event-1")
         val failure = IllegalStateException("send failed")
-        whenever(authConsumer.consume("auth", "event-1"))
+        whenever(authHandler.handle("auth", "event-1"))
             .thenReturn(CompletableFuture.completedFuture(DeliveryOutcome.Retryable(failure)))
         val subscription = subscriptions.authSubscription()
 
@@ -72,7 +72,7 @@ class ExternalApiSubscriptionsTest {
         assertThat(subscription.groupId).isEqualTo("module-external-api-auth-consumer")
         assertThat(subscription.dltSanitizer).isSameAs(authSanitizer)
         assertThat(outcome).isEqualTo(DeliveryOutcome.Retryable(failure))
-        verify(authConsumer).consume("auth", "event-1")
+        verify(authHandler).handle("auth", "event-1")
     }
 
     @Test
@@ -107,19 +107,21 @@ class ExternalApiSubscriptionsTest {
 
     private fun authFixture(): AuthFixture {
         val objectMapper = jacksonObjectMapper().findAndRegisterModules()
-        val client = mock<NexonAuthClient>()
+        val client = mock<ByokNexonClient>()
         val kafkaTemplate = mock<KafkaTemplate<String, String>>()
-        val consumer = AuthCharacterFetchConsumer(
-            nexonAuthClient = client,
+        val handler = AuthCharacterFetchHandler(
+            byokNexonClient = client,
             kafkaTemplate = kafkaTemplate,
             objectMapper = objectMapper,
             responseTopic = "auth-response",
             executor = java.util.concurrent.Executor(Runnable::run),
         )
-        whenever(client.getCharacterList(SECRET)).thenReturn(Optional.empty())
+        whenever(client.getCharacterList(SECRET)).thenReturn(
+            CompletableFuture.completedFuture(NexonCharacterList(emptyList())),
+        )
         val configured = ExternalApiSubscriptions(
             urgentConsumer = urgentConsumer,
-            authConsumer = consumer,
+            authHandler = handler,
             authSanitizer = AuthRequestDltSanitizer(objectMapper),
             urgentTopic = "urgent-character-request",
             urgentGroupId = "external-api-urgent-processor",

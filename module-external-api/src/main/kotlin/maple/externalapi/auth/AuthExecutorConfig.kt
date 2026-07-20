@@ -1,15 +1,15 @@
 package maple.externalapi.auth
 
+import java.util.concurrent.Executor
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
-import java.util.concurrent.Executor
 
 /**
  * Auth executor configuration (Issue #1206).
  *
- * <p>AuthCharacterFetchConsumer 의 `@Qualifier("authCharacterFetchExecutor")` 인자 wired.
+ * <p>AuthCharacterFetchHandler 의 `@Qualifier("authCharacterFetchExecutor")` 인자 wired.
  * 별도 platform thread pool — Kafka listener 의 dispatch 와 분리.
  *
  * <p>Thread type: <b>platform thread</b> (not VT). RunBlocking(Dispatchers.Default) 으로 VT carrier

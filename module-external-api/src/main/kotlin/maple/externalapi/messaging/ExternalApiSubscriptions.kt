@@ -1,6 +1,6 @@
 package maple.externalapi.messaging
 
-import maple.externalapi.auth.AuthCharacterFetchConsumer
+import maple.externalapi.auth.AuthCharacterFetchHandler
 import maple.externalapi.auth.AuthRequestDltSanitizer
 import maple.externalapi.urgent.UrgentCharacterRequestConsumer
 import maple.pipeline.messaging.contract.DeliveryHandler
@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 class ExternalApiSubscriptions(
     private val urgentConsumer: UrgentCharacterRequestConsumer,
-    private val authConsumer: AuthCharacterFetchConsumer,
+    private val authHandler: AuthCharacterFetchHandler,
     private val authSanitizer: AuthRequestDltSanitizer,
     @Value("\${external-api.urgent.request-topic}") private val urgentTopic: String,
     @Value("\${external-api.urgent.consumer-group-id}") private val urgentGroupId: String,
@@ -39,7 +39,7 @@ class ExternalApiSubscriptions(
         topics = listOf(authTopic),
         groupId = authGroupId,
         concurrency = concurrency,
-        handler = DeliveryHandler { payload, context -> authConsumer.consume(payload, context.key) },
+        handler = DeliveryHandler { payload, context -> authHandler.handle(payload, context.key) },
         dltSanitizer = authSanitizer,
     )
 }

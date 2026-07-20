@@ -1,9 +1,5 @@
 package maple.externalapi
 
-import maple.expectation.infrastructure.config.MaplestoryApiConfig
-import maple.expectation.infrastructure.config.TimeoutProperties
-import maple.expectation.infrastructure.external.config.ExternalApiMetricsFilter
-import maple.expectation.infrastructure.external.impl.RealNexonAuthClient
 import maple.expectation.infrastructure.lifecycle.ManagedLifecycleCoordinator
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotEventProperties
@@ -35,16 +31,12 @@ import org.springframework.scheduling.annotation.EnableScheduling
     ArtifactStorageAutoConfiguration::class,
     PipelineKafkaConsumerConfiguration::class,
     NexonClientAutoConfiguration::class,
-    MaplestoryApiConfig::class,
-    ExternalApiMetricsFilter::class,
-    RealNexonAuthClient::class,
     ManagedLifecycleCoordinator::class,
 )
 @EnableScheduling
 @EnableConfigurationProperties(
     SnapshotChunkingProperties::class,
     SnapshotEventProperties::class,
-    TimeoutProperties::class,
 )
 class ExternalApiApplication
 

@@ -38,6 +38,7 @@ dependencies {
 	implementation project(':module-common')
 	implementation project(':module-pipeline-artifact')
 	implementation project(':module-pipeline-messaging')
+	implementation project(':module-nexon-client')
 
 	// Kotlin stdlib (required for Kotlin + Java mixed compilation)
 	implementation(libs.kotlin.stdlib)

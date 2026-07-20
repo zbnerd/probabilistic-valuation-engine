@@ -7,33 +7,45 @@ import maple.expectation.infrastructure.config.NexonApiProperties
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
-/** Static golden characterization of the pre-consolidation BYOK HTTP contract and defects. */
+/** Static characterization of the retained app/web BYOK compatibility surface. */
 class RealNexonAuthClientCharacterizationTest {
     @Test
-    fun `current BYOK endpoint headers encoding and timeouts are frozen`() {
+    fun `legacy properties and bean names delegate to the shared clients`() {
         val properties = NexonApiProperties()
         assertThat(properties.connectTimeout).isEqualTo(Duration.ofSeconds(3))
         assertThat(properties.responseTimeout).isEqualTo(Duration.ofSeconds(5))
 
         val config = source("config/MaplestoryApiConfig.kt")
         val client = source("external/impl/RealNexonAuthClient.kt")
-        assertThat(config).contains("EncodingMode.VALUES_ONLY")
-        assertThat(config).contains("HttpClient.create()")
-        assertThat(config).contains("defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)")
+        assertThat(config).contains("NexonClientAutoConfiguration")
+        assertThat(config).contains("@Bean(\"mapleWebClient\")")
+        assertThat(config).contains("@Qualifier(\"nexonSystemWebClient\")")
+        assertThat(client).contains("ByokNexonClient")
         assertThat(client).contains("/maplestory/v1/character/list")
-        assertThat(client.split(".header(\"x-nxopen-api-key\", apiKey)")).hasSize(2)
-        assertThat(client).contains(".block(java.time.Duration.ofSeconds(5))")
+        assertThat(client).contains("Mono.fromFuture")
+        assertThat(client).contains("plusMillis(FACADE_COMPLETION_MARGIN_MS)")
     }
 
     @Test
-    fun `current transient collapse raw-body logging and empty-list collapse are migration targets`() {
+    fun `compatibility auth no longer owns transport logs bodies or defaults transient failures`() {
+        val config = source("config/MaplestoryApiConfig.kt")
         val client = source("external/impl/RealNexonAuthClient.kt")
-        assertThat(client).contains("executeOrDefault")
-        assertThat(client).contains("ex.responseBodyAsString")
-        assertThat(client).contains("ex.statusCode.is4xxClientError")
-        assertThat(client).contains("Mono.empty()")
-        assertThat(client).contains("r.accountList != null")
-        assertThat(client).contains("requireNotNull(r.accountList).isNotEmpty()")
+        assertThat(config).doesNotContain(
+            "https://open.api.nexon.com",
+            "HttpClient",
+            "DefaultUriBuilderFactory",
+            "WebClient.builder",
+        )
+        assertThat(client).doesNotContain(
+            "LogicExecutor",
+            "executeOrDefault",
+            "responseBodyAsString",
+            "Mono.empty()",
+            "WebClient",
+            ".join(",
+            ".get(",
+        )
+        assertThat(client).contains("throw cause")
     }
 
     private fun source(relative: String): String {

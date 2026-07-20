@@ -10,6 +10,7 @@ import maple.expectation.core.calculation.ComponentTrials
 import maple.expectation.core.calculation.ValuationInput
 import maple.expectation.core.calculation.ValuationKernel
 import maple.expectation.core.calculation.ValuationResult
+import maple.expectation.core.calculation.error.ValuationInvariantException
 import maple.expectation.core.calculation.probability.ProbabilityTableSnapshot
 import maple.expectation.core.calculation.probability.ProbabilityTableVersion
 import org.assertj.core.api.Assertions.assertThat
@@ -47,9 +48,9 @@ class ValuationCacheTest {
             base.copy(additionalOptions = replace(base.additionalOptions, 2, "STR +13")),
         )
 
-        val first = cache.calculate(base)
-        val hit = cache.calculate(base.copy())
-        changes.forEach { changed -> cache.calculate(changed) }
+        val first = cache.getOrCalculate(base)
+        val hit = cache.getOrCalculate(base.copy())
+        changes.forEach { changed -> cache.getOrCalculate(changed) }
 
         assertThat(hit).isSameAs(first)
         assertThat(backend.putCalls).isEqualTo(1 + changes.size)
@@ -68,11 +69,11 @@ class ValuationCacheTest {
         val changedChecksum = table(sha = SHA_B)
         val input = input()
 
-        ValuationCache(kernel, baseTable, backend, metrics).calculate(input)
-        ValuationCache(kernel, sameIdentity, backend, metrics).calculate(input.copy())
-        ValuationCache(kernel, changedLogical, backend, metrics).calculate(input)
-        ValuationCache(kernel, changedChecksum, backend, metrics).calculate(input)
-        ValuationCache(kernel, baseTable, backend, metrics, logicVersion = "valuation-v2").calculate(input)
+        ValuationCache(kernel, baseTable, backend, metrics).getOrCalculate(input)
+        ValuationCache(kernel, sameIdentity, backend, metrics).getOrCalculate(input.copy())
+        ValuationCache(kernel, changedLogical, backend, metrics).getOrCalculate(input)
+        ValuationCache(kernel, changedChecksum, backend, metrics).getOrCalculate(input)
+        ValuationCache(kernel, baseTable, backend, metrics, logicVersion = "valuation-v2").getOrCalculate(input)
 
         assertThat(backend.putCalls).isEqualTo(4)
         verify(kernel, times(4)).calculate(any(), any())
@@ -85,7 +86,7 @@ class ValuationCacheTest {
         val registry = SimpleMeterRegistry()
         val cache = cache(kernel, table(), backend, registry)
 
-        val result = cache.calculate(input())
+        val result = cache.getOrCalculate(input())
 
         assertThat(result.logicVersion).isEqualTo(ValuationKernel.LOGIC_VERSION)
         assertThat(failureCount(registry, "get")).isEqualTo(1.0)
@@ -101,7 +102,7 @@ class ValuationCacheTest {
         val expectedTable = table()
         val cache = cache(kernel, expectedTable, backend, registry)
 
-        val result = cache.calculate(input())
+        val result = cache.getOrCalculate(input())
 
         assertThat(result.tableVersion).isEqualTo(expectedTable.version)
         assertThat(result.logicVersion).isEqualTo(ValuationKernel.LOGIC_VERSION)
@@ -115,7 +116,7 @@ class ValuationCacheTest {
         val backend = RecordingBackend(reportGetSerializationFailure = true)
         val cache = cache(deterministicKernel(), table(), backend, registry)
 
-        cache.calculate(input())
+        cache.getOrCalculate(input())
 
         assertThat(failureCount(registry, "get")).isEqualTo(1.0)
         assertThat(failureCount(registry, "put")).isZero()
@@ -127,7 +128,7 @@ class ValuationCacheTest {
         val backend = RecordingBackend(reportPutSerializationFailure = true)
         val cache = cache(deterministicKernel(), table(), backend, registry)
 
-        cache.calculate(input())
+        cache.getOrCalculate(input())
 
         assertThat(failureCount(registry, "get")).isZero()
         assertThat(failureCount(registry, "put")).isEqualTo(1.0)
@@ -142,11 +143,28 @@ class ValuationCacheTest {
         val registry = SimpleMeterRegistry()
         val cache = cache(kernel, table(), backend, registry)
 
-        val failure = catchThrowable { cache.calculate(input()) }
+        val failure = catchThrowable { cache.getOrCalculate(input()) }
 
         assertThat(failure).isSameAs(original)
         assertThat(backend.putCalls).isZero()
         assertThat(failureCount(registry, "get")).isZero()
+        assertThat(failureCount(registry, "put")).isZero()
+    }
+
+    @Test
+    fun `kernel invariant after cache get failure propagates unchanged`() {
+        val kernel = mock<ValuationKernel>()
+        val original = ValuationInvariantException("kernel invariant")
+        whenever(kernel.calculate(any(), any())).thenThrow(original)
+        val backend = RecordingBackend(getFailure = IllegalStateException("get failed"))
+        val registry = SimpleMeterRegistry()
+        val cache = cache(kernel, table(), backend, registry)
+
+        val failure = catchThrowable { cache.getOrCalculate(input()) }
+
+        assertThat(failure).isSameAs(original)
+        assertThat(backend.putCalls).isZero()
+        assertThat(failureCount(registry, "get")).isEqualTo(1.0)
         assertThat(failureCount(registry, "put")).isZero()
     }
 

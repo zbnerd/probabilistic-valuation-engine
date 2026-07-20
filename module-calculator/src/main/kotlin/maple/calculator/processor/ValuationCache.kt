@@ -21,7 +21,7 @@ class ValuationCache(
     private val metrics: ValuationCacheMetrics,
     private val logicVersion: String = ValuationKernel.LOGIC_VERSION,
 ) {
-    fun calculate(input: ValuationInput): ValuationResult {
+    fun getOrCalculate(input: ValuationInput): ValuationResult {
         val key = ValuationCacheKey(
             input = input,
             tableLogicalVersion = table.version.logical,

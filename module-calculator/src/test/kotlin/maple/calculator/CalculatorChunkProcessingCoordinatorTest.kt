@@ -10,6 +10,7 @@ import maple.calculator.metrics.CalculatorMetricsListener
 import maple.calculator.model.ChunkResult
 import maple.calculator.processor.SnapshotChunkProcessor
 import maple.calculator.runstate.CalculatorCurrentRunIdHolder
+import maple.expectation.core.calculation.error.ValuationInvariantException
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.storage.ObjectStorage
 import org.assertj.core.api.Assertions.assertThat
@@ -185,16 +186,16 @@ class CalculatorChunkProcessingCoordinatorTest {
     }
 
     @Test
-    fun `records failure event when processor throws`() = runBlocking {
+    fun `records retryable failure event when processor propagates valuation invariant`() = runBlocking {
         val event = testEvent()
         whenever(objectStorage.exists(event.objectKey)).thenReturn(true)
         whenever(objectStorage.exists(coordinator.resultObjectKeyFor(event))).thenReturn(false)
-        whenever(chunkProcessor.process(any(), any())).thenThrow(RuntimeException("boom"))
+        whenever(chunkProcessor.process(any(), any())).thenThrow(ValuationInvariantException("boom"))
 
         assertThatThrownBy {
             runBlocking { coordinator.handle(event) }
-        }.isInstanceOf(RuntimeException::class.java)
-            .hasMessage("boom")
+        }.isInstanceOf(ValuationInvariantException::class.java)
+            .hasMessageContaining("boom")
 
         val captor = argumentCaptor<ChunkProcessingEvent>()
         verify(metricsListener).onEvent(captor.capture())

@@ -1,5 +1,6 @@
 package maple.calculator.cache
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 
 /**
@@ -28,6 +29,7 @@ object CacheBackendFactory {
     fun <K : Any, V : Any> create(
         profile: String,
         config: CacheConfig,
+        objectMapper: ObjectMapper,
         keyClass: Class<K>,
         valueClass: Class<V>,
     ): OffHeapCacheBackend<K, V> = when (profile.lowercase()) {
@@ -35,7 +37,7 @@ object CacheBackendFactory {
 
         "chronicle" -> try {
             @Suppress("UNCHECKED_CAST")
-            OffHeapSerializedBackend<K, V>(config)
+            OffHeapSerializedBackend(config, objectMapper, keyClass, valueClass)
         } catch (e: Exception) {
             fallbackToCaffeine(profile, config, e)
         } catch (e: NoClassDefFoundError) {

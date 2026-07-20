@@ -1,5 +1,6 @@
 package maple.calculator.cache
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Tag
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test
 @Tag("unit")
 class CacheBackendFactoryTest {
 
+    private val mapper = jacksonObjectMapper()
     private val created = mutableListOf<OffHeapCacheBackend<*, *>>()
 
     @AfterEach
@@ -24,13 +26,13 @@ class CacheBackendFactoryTest {
 
     @Test
     fun `caffeine profile returns CaffeineCacheBackend`() {
-        val b = track(CacheBackendFactory.create("caffeine", CacheConfig(), String::class.java, String::class.java))
+        val b = track(CacheBackendFactory.create("caffeine", CacheConfig(), mapper, String::class.java, String::class.java))
         assertThat(b.name).isEqualTo("caffeine")
     }
 
     @Test
     fun `invalid profile falls back to caffeine`() {
-        val b = track(CacheBackendFactory.create("redis", CacheConfig(), String::class.java, String::class.java))
+        val b = track(CacheBackendFactory.create("redis", CacheConfig(), mapper, String::class.java, String::class.java))
         assertThat(b.name).isEqualTo("caffeine")
     }
 
@@ -39,7 +41,7 @@ class CacheBackendFactoryTest {
         // With Chronicle Map JDK 21-blocked (issue #1311 blocker), the stub is returned.
         // When upstream supports JDK 21, this test should still pass — name is always "chronicle"
         // (real impl or stub) when factory's chronicle branch executes.
-        val b = track(CacheBackendFactory.create("chronicle", CacheConfig(), String::class.java, String::class.java))
+        val b = track(CacheBackendFactory.create("chronicle", CacheConfig(), mapper, String::class.java, String::class.java))
         assertThat(b.name).isEqualTo("chronicle")
     }
 }

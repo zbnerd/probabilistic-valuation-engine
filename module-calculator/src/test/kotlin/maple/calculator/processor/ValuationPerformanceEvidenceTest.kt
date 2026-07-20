@@ -9,7 +9,11 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import kotlin.system.measureNanoTime
+import maple.calculator.cache.CacheConfig
+import maple.calculator.cache.CaffeineCacheBackend
+import maple.calculator.metrics.ValuationCacheMetrics
 import maple.calculator.probability.CsvProbabilityTableLoader
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import maple.expectation.core.calculation.ValuationInput
 import maple.expectation.core.calculation.ValuationKernel
 import maple.expectation.core.calculation.probability.ProbabilityTableSnapshot
@@ -63,6 +67,40 @@ class ValuationPerformanceEvidenceTest {
             )
         }
 
+        val cacheBackend = CaffeineCacheBackend<ValuationCacheKey, maple.expectation.core.calculation.ValuationResult>(
+            CacheConfig(maxEntries = validFixtures.size.toLong() + 1L),
+        )
+        val valuationCache = ValuationCache(
+            kernel,
+            table,
+            cacheBackend,
+            ValuationCacheMetrics(SimpleMeterRegistry()),
+        )
+        validFixtures.forEach { fixture -> evaluate(valuationCache, fixture) }
+        val missesAfterPreload = cacheBackend.stats().misses
+
+        val cacheHitRepetitions = (1..REPETITION_COUNT).map { repetition ->
+            repeat(WARMUP_PASSES) { validFixtures.forEach { fixture -> evaluate(valuationCache, fixture) } }
+
+            val threadId = Thread.currentThread().id
+            val allocationBefore = threadBean.getThreadAllocatedBytes(threadId)
+            val startedAt = System.nanoTime()
+            repeat(MEASURED_PASSES) { validFixtures.forEach { fixture -> evaluate(valuationCache, fixture) } }
+            val elapsedNanos = System.nanoTime() - startedAt
+            val allocatedBytes = threadBean.getThreadAllocatedBytes(threadId) - allocationBefore
+            val itemCount = validFixtures.size * MEASURED_PASSES
+            KernelEvidenceRepetition(
+                repetition = repetition,
+                items = itemCount,
+                elapsedNanos = elapsedNanos,
+                itemsPerSecond = itemCount * NANOS_PER_SECOND / elapsedNanos,
+                allocatedBytes = allocatedBytes,
+                allocatedBytesPerItem = allocatedBytes.toDouble() / itemCount,
+            )
+        }
+        val cacheMissesDuringHitPhase = cacheBackend.stats().misses - missesAfterPreload
+        assertThat(cacheMissesDuringHitPhase).isZero()
+
         val report = KernelEvidence(
             fixtureSha256 = FIXTURE_SHA,
             fixtureCount = fixtures.size,
@@ -78,10 +116,19 @@ class ValuationPerformanceEvidenceTest {
             repetitions = repetitions,
             medianItemsPerSecond = repetitions.map { it.itemsPerSecond }.sorted()[repetitions.size / 2],
             medianAllocatedBytesPerItem = repetitions.map { it.allocatedBytesPerItem }.sorted()[repetitions.size / 2],
+            cacheHitRepetitions = cacheHitRepetitions,
+            medianCacheHitItemsPerSecond = cacheHitRepetitions
+                .map { it.itemsPerSecond }
+                .sorted()[cacheHitRepetitions.size / 2],
+            medianCacheHitAllocatedBytesPerItem = cacheHitRepetitions
+                .map { it.allocatedBytesPerItem }
+                .sorted()[cacheHitRepetitions.size / 2],
+            cacheMissesDuringHitPhase = cacheMissesDuringHitPhase,
         )
         val output = root.resolve("module-calculator/build/reports/valuation-evidence/kernel.json")
         Files.createDirectories(output.parent)
         mapper.writerWithDefaultPrettyPrinter().writeValue(output.toFile(), report)
+        cacheBackend.close()
     }
 
     private fun evaluate(
@@ -90,6 +137,10 @@ class ValuationPerformanceEvidenceTest {
         fixture: GoldenCase,
     ) {
         kernel.calculate(fixture.input.toValuationInput(), table)
+    }
+
+    private fun evaluate(cache: ValuationCache, fixture: GoldenCase) {
+        cache.getOrCalculate(fixture.input.toValuationInput())
     }
 
     private fun allocationBean(): ThreadMXBean {
@@ -168,6 +219,10 @@ class ValuationPerformanceEvidenceTest {
         val repetitions: List<KernelEvidenceRepetition>,
         val medianItemsPerSecond: Double,
         val medianAllocatedBytesPerItem: Double,
+        val cacheHitRepetitions: List<KernelEvidenceRepetition>,
+        val medianCacheHitItemsPerSecond: Double,
+        val medianCacheHitAllocatedBytesPerItem: Double,
+        val cacheMissesDuringHitPhase: Long,
     )
 
     private data class KernelEvidenceRepetition(

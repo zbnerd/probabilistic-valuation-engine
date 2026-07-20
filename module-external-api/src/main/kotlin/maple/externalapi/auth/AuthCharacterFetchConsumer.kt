@@ -2,20 +2,17 @@ package maple.externalapi.auth
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 import java.util.concurrent.Executor
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asExecutor
 import maple.expectation.core.auth.event.CharacterFetchRequest
 import maple.expectation.core.auth.event.CharacterFetchResponse
 import maple.expectation.infrastructure.external.NexonAuthClient
+import maple.pipeline.messaging.contract.CompletionFailures
+import maple.pipeline.messaging.contract.DeliveryOutcome
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.core.KafkaTemplate
-import org.springframework.kafka.support.Acknowledgment
-import org.springframework.kafka.support.KafkaHeaders
-import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
 
 @Component
@@ -26,91 +23,84 @@ class AuthCharacterFetchConsumer(
     @Value("\${auth.kafka.character-fetch-response-topic}") private val responseTopic: String,
     @Qualifier("authCharacterFetchExecutor") private val executor: Executor,
 ) {
-
-    @KafkaListener(
-        topics = ["\${auth.kafka.character-fetch-request-topic}"],
-        groupId = "\${auth.kafka.request-consumer-group-id}",
-    )
     fun consume(
         message: String,
-        acknowledgment: Acknowledgment,
-        @Header(KafkaHeaders.RECEIVED_KEY) messageKey: String?,
-    ) {
-        val request = objectMapper.readValue(message, CharacterFetchRequest::class.java)
+        messageKey: String?,
+    ): CompletionStage<DeliveryOutcome> {
+        val request = runCatching {
+            objectMapper.readValue(message, CharacterFetchRequest::class.java)
+        }.getOrElse {
+            return CompletableFuture.completedFuture(DeliveryOutcome.InvalidMessage(INVALID_MESSAGE))
+        }
         log.info("[AuthFetch] processing: eventId={}, userIgn={}", request.eventId, request.userIgn)
 
-        executor.execute {
-            runCatching {
-                val characterListOpt = nexonAuthClient.getCharacterList(request.apiKey)
-
-                if (characterListOpt.isEmpty) {
-                    publishError(request, "Invalid API key or Nexon API error (OPENAPI00004)")
-                    return@execute
-                }
-
-                val resp = characterListOpt.get()
-                val accountId = resp.accountList?.firstOrNull()?.accountId
-                val allCharacters = resp.getAllCharacters()
-
-                val characterOcidMap = mutableMapOf<String, String>()
-                for (char in allCharacters) {
-                    val name = char.characterName
-                    val ocid = char.ocid
-                    if (!name.isNullOrBlank() && !ocid.isNullOrBlank()) {
-                        characterOcidMap[name] = ocid
-                    }
-                }
-
-                publishSuccess(request, accountId, characterOcidMap)
-                log.info("[AuthFetch] completed: eventId={}, accountId={}, resolved={}", request.eventId, accountId, characterOcidMap.size)
-            }.onFailure { ex ->
-                log.error("[AuthFetch] failed: eventId={}", request.eventId, ex)
-                publishError(request, "Internal error: ${ex.message}")
+        val response = runCatching {
+            CompletableFuture.supplyAsync({ responseFor(request) }, executor)
+        }.getOrElse { failure ->
+            return CompletableFuture.completedFuture(DeliveryOutcome.Retryable(failure))
+        }
+        return response.thenCompose(::publishResponse).handle { _, failure ->
+            if (failure == null) {
+                DeliveryOutcome.Success
+            } else {
+                DeliveryOutcome.Retryable(CompletionFailures.unwrap(failure))
             }
-
-            runCatching { acknowledgment.acknowledge() }
-                .onFailure { log.warn("[AuthFetch] ACK failed: eventId={}", request.eventId) }
         }
     }
 
-    private fun publishSuccess(request: CharacterFetchRequest, accountId: String?, characterOcidMap: Map<String, String>) {
-        val response = CharacterFetchResponse(
+    private fun responseFor(request: CharacterFetchRequest): CharacterFetchResponse = runCatching {
+        val characterList = nexonAuthClient.getCharacterList(request.apiKey)
+        if (characterList.isEmpty) {
+            return@runCatching errorResponse(request, INVALID_API_KEY)
+        }
+        val response = characterList.orElseThrow()
+        val accountId = response.accountList?.firstOrNull()?.accountId
+        val characterOcidMap = response.getAllCharacters().mapNotNull { character ->
+            val name = character.characterName
+            val ocid = character.ocid
+            if (name.isNullOrBlank() || ocid.isNullOrBlank()) null else name to ocid
+        }.toMap()
+        log.info(
+            "[AuthFetch] completed: eventId={}, accountId={}, resolved={}",
+            request.eventId,
+            accountId,
+            characterOcidMap.size,
+        )
+        CharacterFetchResponse(
             eventId = request.eventId,
             accountId = accountId,
             success = true,
             characterOcidMap = characterOcidMap,
         )
-        publishResponse(response)
+    }.getOrElse { failure ->
+        log.error(
+            "[AuthFetch] failed: eventId={}, failureType={}",
+            request.eventId,
+            failure.javaClass.simpleName,
+        )
+        errorResponse(request, INTERNAL_ERROR)
     }
 
-    private fun publishError(request: CharacterFetchRequest, errorMessage: String) {
+    private fun errorResponse(request: CharacterFetchRequest, errorMessage: String): CharacterFetchResponse {
         log.warn("[AuthFetch] error: eventId={}, error={}", request.eventId, errorMessage)
-        val response = CharacterFetchResponse(
+        return CharacterFetchResponse(
             eventId = request.eventId,
             success = false,
             errorMessage = errorMessage,
         )
-        publishResponse(response)
     }
 
-    private fun publishResponse(response: CharacterFetchResponse) {
-        // Issue #1128: CPU offload — JSON serialize on Dispatchers.Default.
-        CompletableFuture.supplyAsync({
-            objectMapper.writeValueAsString(response)
-        }, Dispatchers.Default.asExecutor()).whenComplete { json, ex ->
-            if (ex != null) {
-                log.error("[AuthFetch] failed to serialize response: eventId={}", response.eventId, ex)
-            } else if (json != null) {
-                kafkaTemplate.send(responseTopic, response.kafkaKey(), json).whenComplete { _, sendEx ->
-                    if (sendEx != null) {
-                        log.error("[AuthFetch] failed to publish response: eventId={}", response.eventId, sendEx)
-                    }
-                }
-            }
-        }
+    private fun publishResponse(response: CharacterFetchResponse): CompletableFuture<Void> = CompletableFuture.supplyAsync(
+        { objectMapper.writeValueAsString(response) },
+        executor,
+    ).thenCompose { json ->
+        kafkaTemplate.send(responseTopic, response.kafkaKey(), json).thenApply { null }
     }
 
     companion object {
+        private const val INVALID_MESSAGE = "INVALID_MESSAGE"
+        private const val INVALID_API_KEY = "Invalid API key or Nexon API error (OPENAPI00004)"
+        private const val INTERNAL_ERROR = "Internal error"
         private val log = LoggerFactory.getLogger(AuthCharacterFetchConsumer::class.java)
     }
 }

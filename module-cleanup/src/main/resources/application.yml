@@ -25,6 +25,8 @@ cleanup-inbox:
   base-path: ../data
   max-pending: 10000
   auto-start: true
+  drain-page-size: 100
+  max-drain-entries-per-request: 10000
 
 logging:
   level:

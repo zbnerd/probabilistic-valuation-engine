@@ -14,6 +14,7 @@ dependencies {
     implementation(project(":module-common"))
     implementation(project(":module-infra"))
     implementation(project(":module-pipeline-artifact"))
+    implementation(project(":module-pipeline-messaging"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-validation")

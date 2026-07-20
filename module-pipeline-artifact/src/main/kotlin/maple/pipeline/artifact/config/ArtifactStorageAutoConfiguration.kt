@@ -1,11 +1,14 @@
 package maple.pipeline.artifact.config
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.micrometer.core.instrument.MeterRegistry
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
+import maple.pipeline.artifact.inbox.CleanupInboxStore
+import maple.pipeline.artifact.inbox.ObjectStorageCleanupInboxStore
 import maple.pipeline.artifact.lifecycle.RunLifecycle
 import maple.pipeline.artifact.retention.ArtifactRetentionService
 import maple.pipeline.artifact.retention.ArtifactRunCatalog
@@ -62,6 +65,12 @@ class ArtifactStorageAutoConfiguration {
     @Bean
     fun artifactRetentionService(objectStorage: ConditionalObjectStorage): ArtifactRetentionService =
         ArtifactRetentionService(objectStorage)
+
+    @Bean
+    fun cleanupInboxStore(
+        objectStorage: ConditionalObjectStorage,
+        objectMapper: ObjectMapper,
+    ): CleanupInboxStore = ObjectStorageCleanupInboxStore(objectStorage, objectMapper)
 
     @Bean
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "local", matchIfMissing = true)

@@ -1,31 +1,32 @@
 package maple.externalapi.snapshot
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import maple.expectation.common.storage.ObjectStorage
-import maple.expectation.common.storage.PutResult
-import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
-import java.util.zip.Deflater
+import maple.expectation.common.storage.ObjectStorage
+import maple.pipeline.artifact.identity.ArtifactKey
+import maple.pipeline.artifact.identity.SourceArtifactLayout
+import maple.pipeline.artifact.write.ArtifactReceipt
+import maple.pipeline.artifact.write.ArtifactWriter
+import org.slf4j.LoggerFactory
 
 /**
  * Owns every object-storage concern of a snapshot-sink run:
- *  - chunk object keys (`{runKey}/part-NNNNNN.jsonl.gz`)
- *  - failed record key (`{runKey}/failed.jsonl`)
- *  - manifest key (`{runKey}/manifest.json`)
+ *  - chunk object keys (`runs/{runId}/{endpoint}/chunks/part-NNNNNN.jsonl.gz`)
+ *  - failed record key (`runs/{runId}/{endpoint}/failed.jsonl`)
+ *  - manifest key (`runs/{runId}/{endpoint}/manifest.json`)
  *  - the [SnapshotChunkManifest] for the run
  *  - the active [GzipJsonlChunkWriter] and rotation
  *
- * Failure records are appended as JSONL lines to the failed-key object
- * using [ObjectStorage] directly. [SnapshotFailedRecordWriter] migration to
- * ObjectStorage is handled in a later task.
+ * Failure records are appended as JSONL lines to the typed failed-key object
+ * using [ObjectStorage] directly.
  *
  * **Thread-affinity:** NOT thread-safe. All methods must be called from the
  * sink's single writer thread. The class does not perform its own locking.
  *
- * @param runKey  the run key prefix in object storage (e.g. `runs/<runId>/<endpoint>`)
+ * @param runId the source run identifier
  * @param endpoint the API endpoint name (used for log lines and manifest)
  * @param maxRecords max records per chunk before rotation
  * @param maxUncompressedBytes hard cap per uncompressed chunk
@@ -34,55 +35,53 @@ import java.util.zip.Deflater
  * @param objectStorage backend for chunk / manifest / failed-record writes
  */
 class ChunkFileManager(
-    private val runKey: String,
+    private val runId: String,
     private val endpoint: String,
     private val maxRecords: Int,
     private val maxUncompressedBytes: Long,
     private val objectMapper: ObjectMapper,
     private val clock: Clock = Clock.systemUTC(),
     private val objectStorage: ObjectStorage,
-    private val compressionLevel: Int = Deflater.BEST_SPEED,
+    private val artifactWriter: ArtifactWriter,
 ) {
     private val log = LoggerFactory.getLogger(ChunkFileManager::class.java)
 
-    private val failedKey: String = "$runKey/failed.jsonl"
-    private val manifestKey: String = "$runKey/manifest.json"
-    private val successKey: String = "$runKey/_SUCCESS"
+    private val endpointRoot: ArtifactKey = SourceArtifactLayout.endpointRoot(runId, endpoint)
+    private val failedKey: ArtifactKey = SourceArtifactLayout.failedRecords(runId, endpoint)
+    private val manifestKey: ArtifactKey = SourceArtifactLayout.manifest(runId, endpoint)
+    private val successKey: ArtifactKey = SourceArtifactLayout.endpointSuccess(runId, endpoint)
+    private val runningKey: ArtifactKey = SourceArtifactLayout.endpointRunning(runId, endpoint)
 
     private val failedWriter = SnapshotFailedRecordWriter(
-        runKey = runKey,
+        failedKey = failedKey,
         objectMapper = objectMapper,
         objectStorage = objectStorage,
     )
 
     private val manifest = SnapshotChunkManifest(
-        runId = runKey.substringAfter("runs/").substringBefore('/'),
+        runId = runId,
         endpoint = endpoint,
         startedAt = Instant.now(clock),
     )
 
     private var failedCount: Int = 0
-    private var currentWriter: GzipJsonlChunkWriter
+    private var currentWriter: GzipJsonlChunkWriter? = null
     private var nextPartIndex = 2
 
     /**
      * In-flight chunk uploads fired by [rotateChunk] and [closeCurrentChunk].
-     * Each entry is a fire-and-forget future returned by
-     * [ObjectStorage.putFileAsync]. The sink awaits ALL of these before
-     * writing the manifest, to guarantee that every chunk the manifest
-     * references is actually present in storage when the manifest is
-     * published.
+     * Each entry completes with an [ArtifactReceipt]. The sink awaits ALL of
+     * these before writing the manifest, to guarantee that every referenced
+     * chunk is present and its final byte count is known.
      */
-    private val inFlightUploads: MutableList<CompletableFuture<PutResult>> = mutableListOf()
-
-    init {
-        currentWriter = newChunkWriter(1)
-    }
+    private val inFlightUploads: MutableList<CompletableFuture<ArtifactReceipt>> = mutableListOf()
+    private val pendingChunks: MutableList<ChunkStats> = mutableListOf()
 
     fun appendSuccess(record: SnapshotChunkRecord.Success): ChunkStats? {
-        currentWriter.append(record)
+        val writer = activeWriter()
+        writer.append(record)
         manifest.totalRecords++
-        if (currentWriter.shouldRotate()) {
+        if (writer.shouldRotate()) {
             return rotateChunk()
         }
         return null
@@ -93,9 +92,10 @@ class ChunkFileManager(
      * the Jackson call on the writer thread. See ADR-729.
      */
     fun appendPreSerialized(record: SnapshotChunkRecord.PreSerialized): ChunkStats? {
-        currentWriter.appendPreSerialized(record)
+        val writer = activeWriter()
+        writer.appendPreSerialized(record)
         manifest.totalRecords++
-        if (currentWriter.shouldRotate()) {
+        if (writer.shouldRotate()) {
             return rotateChunk()
         }
         return null
@@ -107,30 +107,29 @@ class ChunkFileManager(
     }
 
     fun rotateChunk(): ChunkStats? {
-        val stats = currentWriter.close()
+        val writer = currentWriter ?: return null
+        val stats = writer.close()
         registerUpload(stats)
         if (stats.recordCount > 0) {
-            manifest.chunks.add(toEntry(stats))
+            pendingChunks.add(stats)
         }
         currentWriter = newChunkWriter(nextPartIndex++)
         return stats.takeIf { it.recordCount > 0 }
     }
 
     fun closeCurrentChunk(): ChunkStats? {
-        val stats = currentWriter.close()
+        val writer = currentWriter ?: return null
+        val stats = writer.close()
+        currentWriter = null
         registerUpload(stats)
         if (stats.recordCount > 0) {
-            manifest.chunks.add(toEntry(stats))
+            pendingChunks.add(stats)
         }
         return stats.takeIf { it.recordCount > 0 }
     }
 
     private fun registerUpload(stats: ChunkStats) {
-        // [ChunkStats.uploadFuture] is non-null when the writer used the
-        // async path. Sync writers (legacy tests, LocalFs when running
-        // on the host) may have a completed-future instead. Either way we
-        // track and await it before writing the manifest.
-        stats.uploadFuture?.let { inFlightUploads.add(it) }
+        inFlightUploads.add(stats.uploadFuture)
     }
 
     /**
@@ -199,46 +198,56 @@ class ChunkFileManager(
     fun writeManifestAndSuccessMarker() {
         manifest.totalFailed = failedCount
         manifest.finishedAt = Instant.now(clock)
+        manifest.chunks.clear()
+        manifest.chunks.addAll(completedChunkEntries())
         val manifestJson = objectMapper.writeValueAsBytes(manifest)
-        objectStorage.put(manifestKey, manifestJson)
-        objectStorage.put(successKey, ByteArray(0))
+        objectStorage.put(manifestKey.value, manifestJson)
+        objectStorage.put(successKey.value, ByteArray(0))
     }
 
     fun manifest(): SnapshotChunkManifest = manifest
 
     /**
      * Best-effort cleanup after a failed run. Removes all chunk / manifest / failed-record
-     * objects under [runKey] and the `_RUNNING` marker. Called from the sink's failure path.
+     * objects under the typed endpoint root and the `_RUNNING` marker. Called from the sink's failure path.
      */
     fun cleanupOnFailure() {
-        objectStorage.deleteByPrefix(runKey)
-        objectStorage.delete("$runKey/_RUNNING")
+        objectStorage.deleteByPrefix(endpointRoot.value)
+        objectStorage.delete(runningKey.value)
     }
 
     /** Remove the `_RUNNING` marker after a successful run finalizes. */
     fun deleteRunningMarker() {
-        objectStorage.delete("$runKey/_RUNNING")
+        objectStorage.delete(runningKey.value)
     }
 
     private fun newChunkWriter(partIndex: Int): GzipJsonlChunkWriter {
-        val chunkKey = "$runKey/chunks/part-${String.format("%06d", partIndex)}.jsonl.gz"
+        val chunkId = "part-${String.format("%06d", partIndex)}"
+        val chunkKey = SourceArtifactLayout.chunk(runId, endpoint, chunkId)
         return GzipJsonlChunkWriter(
             chunkKey = chunkKey,
             partIndex = partIndex,
             maxRecords = maxRecords,
             maxUncompressedBytes = maxUncompressedBytes,
             objectMapper = objectMapper,
-            objectStorage = objectStorage,
+            artifactWriter = artifactWriter,
             clock = clock,
-            compressionLevel = compressionLevel,
         )
     }
 
-    private fun toEntry(stats: ChunkStats): ChunkEntry = ChunkEntry(
+    private fun activeWriter(): GzipJsonlChunkWriter = currentWriter ?: newChunkWriter(1).also { writer ->
+        currentWriter = writer
+    }
+
+    private fun completedChunkEntries(): List<ChunkEntry> = pendingChunks
+        .sortedBy(ChunkStats::partIndex)
+        .map { stats -> toEntry(stats, stats.uploadFuture.resultNow()) }
+
+    private fun toEntry(stats: ChunkStats, receipt: ArtifactReceipt): ChunkEntry = ChunkEntry(
         path = stats.path,
         recordCount = stats.recordCount,
         uncompressedBytes = stats.uncompressedBytes,
-        compressedBytes = stats.compressedBytes,
+        compressedBytes = receipt.compressedBytes,
         startedAt = stats.startedAt,
         finishedAt = stats.finishedAt,
     )

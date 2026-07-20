@@ -14,6 +14,8 @@ import maple.pipeline.artifact.storage.MinioObjectStorage
 import maple.pipeline.artifact.storage.MinioProperties
 import maple.pipeline.artifact.storage.MinioStorageResources
 import maple.pipeline.artifact.storage.MinioStorageResourcesFactory
+import maple.pipeline.artifact.write.ArtifactWriter
+import maple.pipeline.artifact.write.DefaultArtifactWriter
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -37,6 +39,12 @@ class ArtifactStorageAutoConfiguration {
 
     @Bean(name = ["artifactUploadExecutor"], destroyMethod = "")
     fun artifactUploadExecutor(resources: ArtifactUploadResources): ExecutorService = resources.executor
+
+    @Bean
+    fun artifactWriter(
+        objectStorage: ConditionalObjectStorage,
+        @Qualifier("artifactUploadExecutor") uploadExecutor: Executor,
+    ): ArtifactWriter = DefaultArtifactWriter(objectStorage, uploadExecutor)
 
     @Bean
     @ConditionalOnProperty(name = ["storage.backend"], havingValue = "local", matchIfMissing = true)

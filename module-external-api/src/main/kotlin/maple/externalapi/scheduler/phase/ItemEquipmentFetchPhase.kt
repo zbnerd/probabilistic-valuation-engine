@@ -55,7 +55,7 @@ class ItemEquipmentFetchPhase(
         val chunkConfig = chunkingProperties.configFor("item-equipment")
         val runKey = "runs/$effectiveRunId/item-equipment"
         runMarkerWriter.writeRunMarker(runKey)
-        val sink = sinkFactory.createForItemEquipment(runKey)
+        val sink = sinkFactory.createForItemEquipment(effectiveRunId)
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
 

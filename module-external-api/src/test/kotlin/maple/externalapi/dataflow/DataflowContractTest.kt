@@ -15,8 +15,8 @@ import kotlinx.coroutines.runBlocking
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
-import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.infrastructure.external.NexonAuthClient
+import maple.externalapi.artifact.OcidMappingArtifactWriter
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.metrics.ExternalApiMetrics
@@ -28,6 +28,7 @@ import maple.externalapi.scheduler.phase.RunMarkerWriter
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
 import maple.pipeline.artifact.storage.LocalFsObjectStorage
+import maple.pipeline.artifact.write.DefaultArtifactWriter
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -63,7 +64,7 @@ class DataflowContractTest {
     @Test
     fun `ranking fetch writes chunks and manifest, ocid lookup reads chunks and writes ocid mapping`() {
         // arrange: a real LocalFsObjectStorage in a temp dir.
-        val objectStorage: ObjectStorage = LocalFsObjectStorage(
+        val objectStorage = LocalFsObjectStorage(
             basePath = tempDir.toString(),
             uploadExecutor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
             meterRegistry = null,
@@ -134,6 +135,10 @@ class DataflowContractTest {
         val chunkingProperties = SnapshotChunkingProperties()
         val runMarkerWriter = RunMarkerWriter(Clock.systemUTC(), objectStorage)
         val nexonAuthClient = mock<NexonAuthClient>()
+        val artifactWriter = DefaultArtifactWriter(
+            objectStorage,
+            java.util.concurrent.Executor { command -> command.run() },
+        )
 
         val rankingPhase = RankingFetchPhase(
             clientPort = clientPort,
@@ -146,6 +151,7 @@ class DataflowContractTest {
             permitsPerSecond = 1000,
             runMarkerWriter = runMarkerWriter,
             objectStorage = objectStorage,
+            artifactWriter = artifactWriter,
             stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
         )
 
@@ -162,6 +168,7 @@ class DataflowContractTest {
             chunkParserMetrics = maple.externalapi.metrics.ChunkParserMetrics(
                 io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
             ),
+            ocidMappingArtifactWriter = OcidMappingArtifactWriter(artifactWriter),
         )
 
         // act: run ranking

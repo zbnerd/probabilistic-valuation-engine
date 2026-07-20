@@ -3,31 +3,28 @@ package maple.externalapi.scheduler.phase
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.kotlinModule
-import maple.expectation.common.event.SnapshotChunkReadyEvent
-import maple.expectation.common.event.SnapshotRunCompletedEvent
-import maple.expectation.common.event.SnapshotRunFailedEvent
-import maple.expectation.common.storage.ObjectStorage
-import maple.externalapi.domain.ExternalApiEndpoint
-import maple.externalapi.domain.ExternalApiProvider
-import maple.externalapi.metrics.ExternalApiMetrics
-import maple.externalapi.metrics.SnapshotVolumeMetrics
-import maple.externalapi.port.out.ExternalApiClientPort
-import maple.externalapi.snapshot.SinkEventPublisher
-import maple.externalapi.snapshot.SnapshotChunkingProperties
-import maple.externalapi.snapshot.SnapshotSinkEventPublisher
-import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
-import maple.expectation.common.storage.PutResult
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
-import org.mockito.kotlin.any
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import maple.expectation.common.event.SnapshotChunkReadyEvent
+import maple.expectation.common.event.SnapshotRunCompletedEvent
+import maple.expectation.common.event.SnapshotRunFailedEvent
+import maple.expectation.common.storage.PutResult
+import maple.externalapi.metrics.ExternalApiMetrics
+import maple.externalapi.metrics.SnapshotVolumeMetrics
+import maple.externalapi.port.out.ExternalApiClientPort
+import maple.externalapi.snapshot.SnapshotChunkingProperties
+import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.pipeline.artifact.storage.ConditionalObjectStorage
+import maple.pipeline.artifact.write.DefaultArtifactWriter
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 
 /**
  * Migration Task 8: `execute(workerExecutor, runId)` must return `CompletableFuture<String>`
@@ -37,7 +34,7 @@ class RankingFetchPhaseTest {
 
     @Test
     fun `execute returns runKey as String starting with runs slash`() {
-        val storage = mock<ObjectStorage>()
+        val storage = mock<ConditionalObjectStorage>()
         // RankingFetchPhase writes a single empty chunk (empty ranking array) at
         // close via GzipJsonlChunkWriter → putFile. Mock it so close() returns
         // a non-null PutResult.
@@ -90,6 +87,10 @@ class RankingFetchPhaseTest {
             permitsPerSecond = 1000,
             runMarkerWriter = RunMarkerWriter(Clock.systemUTC(), storage),
             objectStorage = storage,
+            artifactWriter = DefaultArtifactWriter(
+                storage,
+                java.util.concurrent.Executor { command -> command.run() },
+            ),
             stopSignal = maple.externalapi.scheduler.PhaseStopSignal(),
         )
 

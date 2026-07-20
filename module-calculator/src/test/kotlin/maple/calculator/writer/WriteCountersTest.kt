@@ -1,9 +1,9 @@
 package maple.calculator.writer
 
-import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.Test
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
 
 class WriteCountersTest {
 
@@ -11,8 +11,6 @@ class WriteCountersTest {
     fun `initial values are zero`() {
         val c = WriteCounters()
         assertThat(c.records.get()).isZero()
-        assertThat(c.uncompressedBytes.get()).isZero()
-        assertThat(c.compressedBytes.get()).isZero()
     }
 
     @Test

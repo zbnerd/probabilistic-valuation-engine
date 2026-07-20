@@ -62,7 +62,7 @@ class CharacterBasicFetchPhase(
         val chunkConfig = chunkingProperties.configFor("character-basic")
         val runKey = "runs/$effectiveRunId/character-basic"
         runMarkerWriter.writeRunMarker(runKey)
-        val sink = sinkFactory.createForCharacterBasic(runKey)
+        val sink = sinkFactory.createForCharacterBasic(effectiveRunId)
 
         val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
 

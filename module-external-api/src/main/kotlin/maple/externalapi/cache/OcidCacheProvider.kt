@@ -1,12 +1,14 @@
 package maple.externalapi.cache
 
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import maple.common.parser.StreamingChunkParser
 import maple.expectation.common.storage.ObjectStorage
+import maple.externalapi.artifact.OcidMappingArtifactWriter
+import maple.pipeline.artifact.identity.OcidMappingArtifactLayout
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * In-memory cache of userIgn → ocid, loaded from the latest
@@ -14,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference
  * Picked by `ObjectInfo.lastModified` (max).
  *
  * Each record of the gzipped JSONL is a `{"userIgn":"...","ocid":"..."}`
- * object (matching the writer in [OcidLookupPhase.writeMappingGzipped]).
+ * object produced through [OcidMappingArtifactWriter].
  *
  * Uses [StreamingChunkParser] for streaming parse (no intermediate
  * full materialization of the gz payload as a `List<String>` of lines).
@@ -35,6 +37,7 @@ class OcidCacheProvider(
 
     private val log = LoggerFactory.getLogger(OcidCacheProvider::class.java)
     private val cacheRef = AtomicReference<Map<String, String>>(emptyMap())
+
     /**
      * Tracks the last successfully loaded key. Used by [loadFromKey] to
      * short-circuit repeat loads with the same key (e.g. ITEM_EQUIPMENT
@@ -43,7 +46,7 @@ class OcidCacheProvider(
     private val loadedKey = AtomicReference<String?>(null)
 
     fun refresh(): Map<String, String> {
-        val objects = objectStorage.listByPrefix("ocid-mapping/")
+        val objects = objectStorage.listByPrefix(OcidMappingArtifactLayout.mappingPrefix.value)
         val latest = objects.maxByOrNull { it.lastModified } ?: run {
             log.info("[OcidCache] no ocid-mapping objects found, cache remains empty")
             return emptyMap()
@@ -57,8 +60,7 @@ class OcidCacheProvider(
      * OCID file rather than the most-recent one.
      * Key format: `ocid-mapping/ocid-mapping-{runId}.jsonl.gz`.
      */
-    fun loadFromRun(runId: String): Map<String, String> =
-        loadFromKey("ocid-mapping/ocid-mapping-$runId.jsonl.gz")
+    fun loadFromRun(runId: String): Map<String, String> = loadFromKey(OcidMappingArtifactLayout.mapping(runId).value)
 
     private fun loadFromKey(key: String): Map<String, String> {
         // Read-through cache. If the same key was already loaded, return the
@@ -88,7 +90,9 @@ class OcidCacheProvider(
             if (parseErrors > 0) {
                 log.warn(
                     "[OcidCache] loaded key={}: {} entries ({} parse errors)",
-                    key, map.size, parseErrors,
+                    key,
+                    map.size,
+                    parseErrors,
                 )
             } else {
                 log.info("[OcidCache] loaded key={}: {} entries", key, map.size)

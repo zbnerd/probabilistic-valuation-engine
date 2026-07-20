@@ -1,16 +1,15 @@
 package maple.externalapi.scheduler.phase
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.io.BufferedOutputStream
 import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -19,14 +18,13 @@ import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.future.await
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import maple.common.parser.StreamingChunkParser
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.storage.ObjectStorage
-import maple.expectation.common.storage.PutResult
 import maple.expectation.infrastructure.external.NexonAuthClient
+import maple.externalapi.artifact.OcidMappingArtifactWriter
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.metrics.ChunkParserMetrics
@@ -36,6 +34,9 @@ import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.scheduler.PhaseStopSignal
 import maple.externalapi.scheduler.PhaseStoppedException
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.pipeline.artifact.identity.OcidMappingArtifactLayout
+import maple.pipeline.artifact.write.ArtifactReceipt
+import maple.pipeline.artifact.write.GzipArtifactSession
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -49,23 +50,17 @@ import org.springframework.stereotype.Component
  * `readCharacterNamesFromChunks()` + `processBatch()` + `fetchAndCollectOcidAsync()` 는 `suspend fun` 으로 refactor.
  * Caller (ExternalApiScheduler) 는 `runBlocking { ocidLookupPhase.execute(workerExecutor, runKey) }` (multi-threaded VT, short-lived).
  *
- * <p>VS2 migration (Task 7): input chunks and output OCID mapping are read/written via
- * [ObjectStorage] using string keys. `runKey: String` replaces the prior `runDir: Path` argumento.
- * The `nexonAuthClient` is held for future callers (per-key authentication); the current
- * per-IGN lookup path goes through [ExternalApiClientPort].
+ * <p>Input chunks remain on [ObjectStorage]. Output mapping identity comes from
+ * [OcidMappingArtifactLayout], while [OcidMappingArtifactWriter] owns gzip,
+ * digest, upload, and cleanup lifetime. The `nexonAuthClient` is held for future
+ * callers (per-key authentication); the current per-IGN lookup path goes through
+ * [ExternalApiClientPort].
  *
- * <p>Streaming write: each successful mapping is pushed to a [Channel] and consumed by a
- * single writer coroutine that pipes bytes into a GZIPOutputStream wrapping
- * [ObjectStorage.putStreamMultipart]. The previous implementation accumulated all 600K+
- * entries in a `MutableList<String>` until the end of the phase — that held ~120MB of JSON
- * strings in heap for the entire OCID run and pushed the JVM over its 1GB ceiling when
- * combined with other in-flight state. Streaming keeps the heap footprint bounded to the
- * pipe buffer (64KB) plus the GZIPOutputStream internal buffer.
- *
- * <p>Issue #1319: migrated from deprecated `putStream` (heap-draining `readBytes()` inside
- * the impl) to `putStreamMultipart` (S3AsyncClient chunked transfer on Minio, temp-file +
- * `putFile` on LocalFs virtual-thread). Heap peak: bounded to pipe (64KB) instead of the
- * full OCID mapping chunk (~120MB).
+ * <p>Each successful mapping is pushed to a [Channel] and consumed by one
+ * writer coroutine. The previous implementation accumulated all 600K+
+ * entries in a `MutableList<String>` until phase end. Streaming keeps the
+ * heap footprint bounded while also teeing each line to the optional
+ * best-effort Parquet sidecar.
  */
 @Component
 @ConditionalOnProperty(name = ["external-api.schedule.enabled"], havingValue = "true")
@@ -83,6 +78,7 @@ class OcidLookupPhase(
     private val stopSignal: PhaseStopSignal,
     private val streamingChunkParser: StreamingChunkParser,
     private val chunkParserMetrics: ChunkParserMetrics,
+    private val ocidMappingArtifactWriter: OcidMappingArtifactWriter,
 ) {
     private val log = LoggerFactory.getLogger(OcidLookupPhase::class.java)
 
@@ -91,8 +87,7 @@ class OcidLookupPhase(
      * `runBlocking { ocidLookupPhase.execute(workerExecutor, runKey, runId) }`
      */
     suspend fun execute(workerExecutor: ExecutorService, runKey: String, runId: String) {
-        val mappingDir = "ocid-mapping"
-        deleteOldMappingFiles(mappingDir, runId)
+        deleteOldMappingFiles(runId)
 
         val igns = readCharacterNamesFromChunks(runKey)
         if (igns.isEmpty()) {
@@ -115,80 +110,29 @@ class OcidLookupPhase(
         val successCount = AtomicInteger(0)
         val failCount = AtomicInteger(0)
         val lastProgressLog = AtomicInteger(0)
-        val key = "$mappingDir/ocid-mapping-$runId.jsonl.gz"
-
-        // Channel + writer coroutine: producers (per-ign fetch) send strings,
-        // a single consumer coroutine gzips + writes to a temp file.
-        // Channel.BUFFERED applies backpressure when the writer can't keep up.
         val resultsChannel = Channel<String>(Channel.BUFFERED)
-
-        // Drain to temp file, then upload via putFileAsync. We previously used
-        // PipedInputStream/OutputStream + putStreamMultipart for streaming
-        // chunked transfer, but the SDK reads the InputStream on a background
-        // thread that races the writer — `PipedInputStream` throws "Read end
-        // dead" the moment the writer thread exits (checked via
-        // `readSide.isAlive()`). A temp file avoids the thread coordination
-        // entirely: writer writes to disk, upload reads from disk.
-        val tempFile = Files.createTempFile("ocid-mapping-$runId-", ".jsonl.gz.tmp")
-        var uploadFuture: CompletableFuture<PutResult>? = null
-        try {
-            coroutineScope {
-                // Writer: CPU-bound (GZIPOutputStream.compress) on
-                // Dispatchers.Default per architecture-guardrails.md rule 9.
-                val writerJob = launch(Dispatchers.Default) {
-                    val gz = GZIPOutputStream(BufferedOutputStream(Files.newOutputStream(tempFile)))
-                    try {
-                        for (entry in resultsChannel) {
-                            gz.write(entry.toByteArray())
-                            gz.write('\n'.code)
-                        }
-                    } finally {
-                        runCatching { gz.close() }
-                    }
-                }
-
-                processBatch(
-                    workerExecutor = workerExecutor,
-                    rateLimiter = rateLimiter,
-                    runKey = runKey,
-                    igns = igns,
-                    processed = 0,
-                    successCount = successCount,
-                    failCount = failCount,
-                    lastProgressLog = lastProgressLog,
-                    resultsSink = resultsChannel,
-                    start = start,
-                )
-
-                resultsChannel.close()
-                writerJob.join()
-
-                // Upload the finalized caller-owned temp file via putFileAsync.
-                // Storage borrows it until the returned future completes.
-                uploadFuture = objectStorage.putFileAsync(key, tempFile)
-            }
-            // Wait for the upload to complete before the temp file is deleted
-            // (MinIO S3TransferManager reads from the file during upload).
-            uploadFuture?.await()
-
-            // 1423 PoC: side-by-side Parquet write. NEVER affects production JSONL.
-            // We re-parse the gzip JSONL we just wrote and re-emit as Parquet+ZSTD.
-            // Any failure here is logged at WARN and does not propagate.
-            runCatching {
-                writeParquetSideBySide(tempFile, runId)
-            }.onFailure {
-                log.warn("[Scheduler] 1423 PoC Parquet side-by-side write failed (non-fatal)", it)
-            }
-        } finally {
-            // The caller retains ownership and deletes the temp file after
-            // storage finishes borrowing it, whether the upload succeeds or
-            // fails. Storage never moves or deletes this source.
-            runCatching { Files.deleteIfExists(tempFile) }
+        val mappingWrite = coroutineScope {
+            val writer = async(Dispatchers.Default) { writeMapping(resultsChannel, runId) }
+            processBatch(
+                workerExecutor = workerExecutor,
+                rateLimiter = rateLimiter,
+                runKey = runKey,
+                igns = igns,
+                processed = 0,
+                successCount = successCount,
+                failCount = failCount,
+                lastProgressLog = lastProgressLog,
+                resultsSink = resultsChannel,
+                start = start,
+            )
+            resultsChannel.close()
+            writer.await()
         }
+        uploadParquetSidecar(mappingWrite.parquetArtifact, runId)
         log.info(
-            "[Scheduler] streamed {} OCID mappings to {} (heap-bounded via pipe)",
+            "[Scheduler] streamed {} OCID mappings to {} (heap-bounded writer session)",
             successCount.get(),
-            key,
+            mappingWrite.receipt.key.value,
         )
         SchedulerPhaseUtils.logSummary(
             "OCID lookup",
@@ -203,7 +147,7 @@ class OcidLookupPhase(
                 eventId = UUID.randomUUID().toString(),
                 runId = runId,
                 endpoint = "ocid-lookup",
-                manifestPath = key,
+                manifestPath = mappingWrite.receipt.key.value,
                 totalRecords = successCount.get(),
                 totalFailed = failCount.get(),
                 chunkCount = 1,
@@ -214,35 +158,177 @@ class OcidLookupPhase(
         )
     }
 
-    /**
-     * Issue #1423 PoC: re-read the just-written gzip JSONL OCID mapping and emit
-     * a Parquet+ZSTD copy under `ocid-mapping-parquet/`. Purely side-by-side —
-     * the production JSONL.gz path is untouched. All exceptions are propagated
-     * to the caller; the caller wraps the call in `runCatching` so failures
-     * cannot affect the production pipeline.
-     */
-    private suspend fun writeParquetSideBySide(tempFile: java.nio.file.Path, runId: String) {
-        val parquetTempFile = Files.createTempDirectory("ocid-mapping-parquet-$runId-").resolve("ocid-mapping.parquet")
-        try {
-            ParquetOcidMappingWriter(parquetTempFile.toFile()).use { pWriter ->
-                GZIPInputStream(Files.newInputStream(tempFile)).bufferedReader().useLines { lines ->
-                    for (line in lines) {
-                        if (line.isBlank()) continue
-                        val node = objectMapper.readTree(line)
-                        val userIgn = node.path("userIgn").asText()
-                        val ocidNode = node.path("ocid")
-                        val ocid = if (ocidNode.isMissingNode || ocidNode.isNull) null else ocidNode.asText()
-                        if (userIgn.isNotBlank()) pWriter.write(userIgn, ocid)
-                    }
-                }
+    private suspend fun writeMapping(
+        resultsChannel: Channel<String>,
+        runId: String,
+    ): MappingWriteResult {
+        val session = ocidMappingArtifactWriter.open(runId)
+        val parquetSidecar = openParquetSidecar(runId)
+        return runCatching { drainMappingLines(resultsChannel, session, parquetSidecar) }
+            .fold(
+                onSuccess = { uncompressedBytes ->
+                    completeMapping(session, parquetSidecar, uncompressedBytes)
+                },
+                onFailure = { failure -> abortMapping(session, parquetSidecar, failure) },
+            )
+    }
+
+    private suspend fun drainMappingLines(
+        resultsChannel: Channel<String>,
+        session: GzipArtifactSession,
+        parquetSidecar: BestEffortParquetSidecar?,
+    ): Long {
+        var uncompressedBytes = 0L
+        for (entry in resultsChannel) {
+            val line = entry.toByteArray(Charsets.UTF_8)
+            session.output.write(line)
+            session.output.write('\n'.code)
+            uncompressedBytes += line.size + 1L
+            parquetSidecar?.write(entry)?.let { failure ->
+                log.warn("[Scheduler] 1423 PoC Parquet tee failed (non-fatal)", failure)
             }
-            val parquetKey = "ocid-mapping-parquet/ocid-mapping-$runId.parquet"
-            objectStorage.putFileAsync(parquetKey, parquetTempFile).await()
-            log.info("[Scheduler] 1423 PoC: wrote side-by-side Parquet to {}", parquetKey)
-        } finally {
-            runCatching { Files.deleteIfExists(parquetTempFile) }
+        }
+        return uncompressedBytes
+    }
+
+    private suspend fun completeMapping(
+        session: GzipArtifactSession,
+        parquetSidecar: BestEffortParquetSidecar?,
+        uncompressedBytes: Long,
+    ): MappingWriteResult {
+        val parquetArtifact = parquetSidecar?.complete()
+        val receipt = runCatching { session.complete(uncompressedBytes).await() }
+            .getOrElse { failure ->
+                parquetArtifact?.delete(failure)
+                throw failure
+            }
+        return MappingWriteResult(receipt, parquetArtifact)
+    }
+
+    private fun abortMapping(
+        session: GzipArtifactSession,
+        parquetSidecar: BestEffortParquetSidecar?,
+        failure: Throwable,
+    ): Nothing {
+        session.abort(failure)
+        parquetSidecar?.abort(failure)
+        throw failure
+    }
+
+    private fun openParquetSidecar(runId: String): BestEffortParquetSidecar? {
+        val directory = runCatching { Files.createTempDirectory("ocid-mapping-parquet-$runId-") }
+            .getOrElse { failure ->
+                log.warn("[Scheduler] 1423 PoC Parquet temp creation failed (non-fatal)", failure)
+                return null
+            }
+        val file = directory.resolve("ocid-mapping.parquet")
+        return runCatching {
+            BestEffortParquetSidecar(directory, file, ParquetOcidMappingWriter(file.toFile()))
+        }.onFailure { failure ->
+            deleteParquetPaths(file, directory, failure)
+            log.warn("[Scheduler] 1423 PoC Parquet writer creation failed (non-fatal)", failure)
+        }.getOrNull()
+    }
+
+    private suspend fun uploadParquetSidecar(artifact: ParquetArtifact?, runId: String) {
+        if (artifact == null) return
+        val key = OcidMappingArtifactLayout.parquetSidecar(runId)
+        val storageUpload = runCatching { objectStorage.putFileAsync(key.value, artifact.file) }
+            .getOrElse { failure -> CompletableFuture.failedFuture(failure) }
+        val lifetimeUpload = storageUpload.whenComplete { _, failure -> artifact.delete(failure) }
+        val uploadObserver = lifetimeUpload.thenApply { result -> result }
+        runCatching { uploadObserver.await() }
+            .onSuccess { log.info("[Scheduler] 1423 PoC: wrote side-by-side Parquet to {}", key.value) }
+            .onFailure { failure ->
+                if (failure is CancellationException) throw failure
+                log.warn("[Scheduler] 1423 PoC Parquet side-by-side write failed (non-fatal)", failure)
+            }
+    }
+
+    private fun deleteParquetPaths(file: Path, directory: Path, cause: Throwable) {
+        sequenceOf(
+            runCatching { Files.deleteIfExists(file) }.exceptionOrNull(),
+            runCatching { Files.deleteIfExists(directory) }.exceptionOrNull(),
+        ).filterNotNull()
+            .filter { failure -> failure !== cause }
+            .forEach(cause::addSuppressed)
+    }
+
+    private fun writeParquetLine(writer: ParquetOcidMappingWriter, line: String) {
+        val node = objectMapper.readTree(line)
+        val userIgn = node.path("userIgn").asText()
+        val ocidNode = node.path("ocid")
+        val ocid = if (ocidNode.isMissingNode || ocidNode.isNull) null else ocidNode.asText()
+        if (userIgn.isNotBlank()) writer.write(userIgn, ocid)
+    }
+
+    private inner class BestEffortParquetSidecar(
+        private val directory: Path,
+        private val file: Path,
+        private var writer: ParquetOcidMappingWriter?,
+    ) {
+        fun write(line: String): Throwable? {
+            val activeWriter = writer ?: return null
+            val failure = runCatching { writeParquetLine(activeWriter, line) }.exceptionOrNull()
+            if (failure != null) {
+                writer = null
+                runCatching { activeWriter.close() }.exceptionOrNull()?.let(failure::addSuppressed)
+                deleteParquetPaths(file, directory, failure)
+            }
+            return failure
+        }
+
+        fun complete(): ParquetArtifact? {
+            val activeWriter = writer ?: return null
+            writer = null
+            return runCatching {
+                activeWriter.close()
+                ParquetArtifact(file, directory)
+            }.getOrElse { failure ->
+                deleteParquetPaths(file, directory, failure)
+                log.warn("[Scheduler] 1423 PoC Parquet close failed (non-fatal)", failure)
+                null
+            }
+        }
+
+        fun abort(cause: Throwable) {
+            val activeWriter = writer
+            writer = null
+            if (activeWriter != null) {
+                runCatching { activeWriter.close() }.exceptionOrNull()?.let(cause::addSuppressed)
+            }
+            deleteParquetPaths(file, directory, cause)
         }
     }
+
+    private inner class ParquetArtifact(
+        val file: Path,
+        private val directory: Path,
+    ) {
+        fun delete(lifetimeFailure: Throwable? = null) {
+            val cleanupFailures = sequenceOf(
+                runCatching { Files.deleteIfExists(file) }.exceptionOrNull(),
+                runCatching { Files.deleteIfExists(directory) }.exceptionOrNull(),
+            ).filterNotNull().toList()
+            if (cleanupFailures.isEmpty()) return
+            if (lifetimeFailure != null) {
+                cleanupFailures
+                    .filter { failure -> failure !== lifetimeFailure }
+                    .forEach(lifetimeFailure::addSuppressed)
+                return
+            }
+            val primary = cleanupFailures.first()
+            cleanupFailures.drop(1)
+                .filter { failure -> failure !== primary }
+                .forEach(primary::addSuppressed)
+            throw primary
+        }
+    }
+
+    private data class MappingWriteResult(
+        val receipt: ArtifactReceipt,
+        val parquetArtifact: ParquetArtifact?,
+    )
 
     /**
      * GZIP decompress + line-bounded JSONL parse. CPU-bound →
@@ -280,8 +366,8 @@ class OcidLookupPhase(
     }
 
     /**
-     * Delete old OCID mapping objects under [mappingDir], but PRESERVE the
-     * current run's mapping file (Revision 5 of phase-trigger-endpoint plan).
+     * Delete old objects under [OcidMappingArtifactLayout.mappingPrefix], but
+     * preserve the current run's mapping file.
      *
      * Previously this called `deleteByPrefix("$mappingDir/")` which deleted ALL
      * objects including the file we were about to write, causing a race where
@@ -289,9 +375,9 @@ class OcidLookupPhase(
      * list-then-delete-per-key, skipping the key that ends with
      * `ocid-mapping-$currentRunId.jsonl.gz`.
      */
-    private fun deleteOldMappingFiles(mappingDir: String, currentRunId: String) {
-        val prefix = "$mappingDir/"
-        val preserveKey = "$mappingDir/ocid-mapping-$currentRunId.jsonl.gz"
+    private fun deleteOldMappingFiles(currentRunId: String) {
+        val prefix = OcidMappingArtifactLayout.mappingPrefix.value
+        val preserveKey = OcidMappingArtifactLayout.mapping(currentRunId).value
         val objects = objectStorage.listByPrefix(prefix)
         var deleted = 0
         for (obj in objects) {
@@ -303,9 +389,9 @@ class OcidLookupPhase(
             deleted++
         }
         log.info(
-            "[Scheduler] deleted {} old OCID mapping objects in {}/ (preserved current runId={})",
+            "[Scheduler] deleted {} old OCID mapping objects in {} (preserved current runId={})",
             deleted,
-            mappingDir,
+            OcidMappingArtifactLayout.mappingPrefix.value,
             currentRunId,
         )
     }
@@ -394,6 +480,7 @@ class OcidLookupPhase(
                 if (ocidVal != null) {
                     val jsonVal = String(
                         objectMapper.writeValueAsBytes(mapOf("userIgn" to ign, "ocid" to ocidVal)),
+                        Charsets.UTF_8,
                     )
                     ocidVal to jsonVal
                 } else {

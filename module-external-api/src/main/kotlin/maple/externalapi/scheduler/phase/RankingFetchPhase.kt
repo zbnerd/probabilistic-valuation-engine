@@ -1,6 +1,12 @@
 package maple.externalapi.scheduler.phase
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.time.Instant
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import maple.expectation.common.storage.ObjectStorage
@@ -20,17 +26,12 @@ import maple.externalapi.snapshot.SnapshotChunkRecord
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.SnapshotSinkEventPublisher
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.pipeline.artifact.write.ArtifactWriter
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.time.Instant
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.atomic.AtomicInteger
 
 @Component
 @ConditionalOnProperty(name = ["external-api.ranking.enabled"], havingValue = "true", matchIfMissing = false)
@@ -48,6 +49,7 @@ class RankingFetchPhase(
     private val permitsPerSecond: Int,
     private val runMarkerWriter: RunMarkerWriter,
     private val objectStorage: ObjectStorage,
+    private val artifactWriter: ArtifactWriter,
     private val stopSignal: PhaseStopSignal,
 ) {
     private val log = LoggerFactory.getLogger(RankingFetchPhase::class.java)
@@ -66,13 +68,14 @@ class RankingFetchPhase(
             endpoint = "ranking-overall",
             queueCapacity = chunkingProperties.queueCapacity,
             fileManager = ChunkFileManager(
-                runKey = "$runKey/ranking-overall",
+                runId = runId,
                 endpoint = "ranking-overall",
                 maxRecords = endpointConfig.maxRecords,
                 maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
                 objectMapper = objectMapper,
                 clock = java.time.Clock.systemUTC(),
                 objectStorage = objectStorage,
+                artifactWriter = artifactWriter,
             ),
             eventPublisher = SnapshotSinkEventPublisher(
                 eventPublisher = SinkEventPublisher(rankingPublisher),
@@ -139,14 +142,16 @@ class RankingFetchPhase(
                     failed.incrementAndGet()
                     metrics.recordRankingFailed()
                     val status = SchedulerPhaseUtils.extractHttpStatus(ex)
-                    sink.submit(SnapshotChunkRecord.Failure(
-                        key = requestKey,
-                        endpoint = "ranking-overall",
-                        keyType = KeyType.DATE_PAGE.name,
-                        httpStatus = status,
-                        fetchedAt = Instant.now(),
-                        errorMessage = ex.message ?: "unknown",
-                    ))
+                    sink.submit(
+                        SnapshotChunkRecord.Failure(
+                            key = requestKey,
+                            endpoint = "ranking-overall",
+                            keyType = KeyType.DATE_PAGE.name,
+                            httpStatus = status,
+                            fetchedAt = Instant.now(),
+                            errorMessage = ex.message ?: "unknown",
+                        ),
+                    )
                     log.warn("[RankingFetch] page failed: page={}, status={}, error={}", currentPage, status, ex.message)
                 }
                 null
@@ -170,14 +175,16 @@ class RankingFetchPhase(
         for (node in rankingArray) {
             val name = node.get("character_name")?.asText() ?: continue
             val entryBytes = objectMapper.writeValueAsBytes(node)
-            sink.submit(SnapshotChunkRecord.Success(
-                bodyBytes = entryBytes,
-                key = name,
-                endpoint = "ranking-overall",
-                keyType = KeyType.DATE_PAGE.name,
-                httpStatus = 200,
-                fetchedAt = Instant.now(),
-            ))
+            sink.submit(
+                SnapshotChunkRecord.Success(
+                    bodyBytes = entryBytes,
+                    key = name,
+                    endpoint = "ranking-overall",
+                    keyType = KeyType.DATE_PAGE.name,
+                    httpStatus = 200,
+                    fetchedAt = Instant.now(),
+                ),
+            )
             count++
         }
         return count

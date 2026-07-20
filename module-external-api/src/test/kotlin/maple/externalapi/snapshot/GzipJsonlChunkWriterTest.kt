@@ -18,10 +18,14 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.Deflater
 import java.util.zip.GZIPInputStream
-import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.common.storage.PutResult
+import maple.pipeline.artifact.identity.ArtifactKey
+import maple.pipeline.artifact.storage.ConditionalObjectStorage
 import maple.pipeline.artifact.storage.LocalFsObjectStorage
+import maple.pipeline.artifact.write.ArtifactReceipt
+import maple.pipeline.artifact.write.DefaultArtifactWriter
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -29,6 +33,7 @@ import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -38,6 +43,7 @@ class GzipJsonlChunkWriterTest {
         .registerModule(kotlinModule())
         .registerModule(JavaTimeModule())
     private val fixedClock = Clock.fixed(Instant.parse("2026-06-10T00:00:00Z"), ZoneOffset.UTC)
+    private val directExecutor = Executor { command -> command.run() }
 
     @TempDir
     lateinit var tempDir: Path
@@ -60,7 +66,6 @@ class GzipJsonlChunkWriterTest {
             )
         }
         val fixtureSha256 = sha256Hex(lines)
-        val directExecutor = Executor { command -> command.run() }
         val evidenceRoot = Files.createDirectories(tempDir.resolve("artifact-evidence"))
 
         val warmupDirectory = Files.createDirectory(evidenceRoot.resolve("warmup"))
@@ -89,14 +94,14 @@ class GzipJsonlChunkWriterTest {
                     records,
                 )
             }
-            val completedAtNanos = awaitUploads(chunks)
-            val elapsedNanos = completedAtNanos - startedAt
+            val uploadCompletion = awaitUploads(chunks)
+            val elapsedNanos = uploadCompletion.completedAtNanos - startedAt
             val tempFileDelta = assertNoChunkTempFileDelta(
                 before = tempFilesBefore,
                 after = chunkTempFiles(),
                 phase = "repetition-$repetition",
             )
-            val compressedBytes = chunks.sumOf { chunk -> chunk.compressedBytes }
+            val compressedBytes = uploadCompletion.receipts.sumOf { receipt -> receipt.compressedBytes }
             val recordCount = chunks.sumOf { chunk -> chunk.recordCount.toLong() }
             val elapsedSeconds = elapsedNanos.toDouble() / NANOS_PER_SECOND
 
@@ -156,14 +161,13 @@ class GzipJsonlChunkWriterTest {
         records: List<SnapshotChunkRecord.PreSerialized>,
     ): ChunkStats {
         val writer = GzipJsonlChunkWriter(
-            chunkKey = chunkKey,
+            chunkKey = ArtifactKey.require(chunkKey),
             partIndex = partIndex,
             maxRecords = EVIDENCE_RECORDS,
             maxUncompressedBytes = EVIDENCE_RECORDS.toLong() * JSON_LINE_BYTES,
             objectMapper = objectMapper,
-            objectStorage = storage,
+            artifactWriter = artifactWriter(storage),
             clock = fixedClock,
-            compressionLevel = Deflater.BEST_SPEED,
         )
         records.forEach(writer::appendPreSerialized)
         return writer.close().also { stats ->
@@ -172,8 +176,11 @@ class GzipJsonlChunkWriterTest {
         }
     }
 
-    private fun awaitUploads(chunks: List<ChunkStats>): Long {
-        val uploads = chunks.mapNotNull { chunk -> chunk.uploadFuture }
+    private fun awaitUploads(chunks: List<ChunkStats>): UploadCompletion {
+        val receipts = java.util.Collections.synchronizedList(mutableListOf<ArtifactReceipt>())
+        val uploads = chunks.map { chunk ->
+            chunk.uploadFuture.thenAccept { receipt -> receipts.add(receipt) }
+        }
         assertThat(uploads).hasSameSizeAs(chunks)
         val allUploads = CompletableFuture.allOf(*uploads.toTypedArray())
         val completedAtNanos = AtomicLong()
@@ -186,7 +193,10 @@ class GzipJsonlChunkWriterTest {
         assertThat(completionFailure.getAcquire())
             .describedAs("all gzip evidence uploads complete successfully")
             .isNull()
-        return completedAtNanos.getAcquire()
+        return UploadCompletion(
+            completedAtNanos = completedAtNanos.getAcquire(),
+            receipts = receipts.toList(),
+        )
     }
 
     private fun deterministicJsonLines(): Array<ByteArray> = Array(EVIDENCE_RECORDS) { index ->
@@ -215,7 +225,7 @@ class GzipJsonlChunkWriterTest {
         return Files.list(systemTempDirectory).use { paths ->
             paths.filter { path ->
                 val name = path.fileName.toString()
-                name.startsWith("gzip-chunk-") && name.endsWith(".jsonl.gz.tmp")
+                name.startsWith("artifact-gzip-") && name.endsWith(".jsonl.gz.tmp")
             }.map(Path::toAbsolutePath)
                 .map(Path::normalize)
                 .toList()
@@ -297,7 +307,7 @@ class GzipJsonlChunkWriterTest {
 
     @Test
     fun `close uploads gzipped JSONL via putFileAsync and returns stats`() {
-        val storage = mock<ObjectStorage>()
+        val storage = mock<ConditionalObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
         val pathCaptor = argumentCaptor<Path>()
         var captured: ByteArray = ByteArray(0)
@@ -315,12 +325,12 @@ class GzipJsonlChunkWriterTest {
             }
 
         val writer = GzipJsonlChunkWriter(
-            chunkKey = "runs/abc/ranking-overall/part-000001.jsonl.gz",
+            chunkKey = ArtifactKey.require("runs/abc/ranking-overall/part-000001.jsonl.gz"),
             partIndex = 1,
             maxRecords = 100,
             maxUncompressedBytes = 1_000_000,
             objectMapper = objectMapper,
-            objectStorage = storage,
+            artifactWriter = artifactWriter(storage),
             clock = fixedClock,
         )
 
@@ -338,6 +348,7 @@ class GzipJsonlChunkWriterTest {
         }
 
         val stats = writer.close()
+        val receipt = awaitReceipt(stats)
 
         verify(storage).putFileAsync(any<String>(), any<Path>())
         assertThat(keyCaptor.firstValue).isEqualTo("runs/abc/ranking-overall/part-000001.jsonl.gz")
@@ -349,7 +360,7 @@ class GzipJsonlChunkWriterTest {
         assertThat(stats.path).isEqualTo("part-000001.jsonl.gz")
         assertThat(stats.recordCount).isEqualTo(3)
         assertThat(stats.uncompressedBytes).isGreaterThan(0)
-        assertThat(stats.compressedBytes).isGreaterThan(0)
+        assertThat(receipt.compressedBytes).isGreaterThan(0)
         assertThat(stats.startedAt).isEqualTo(Instant.parse("2026-06-10T00:00:00Z"))
         assertThat(stats.finishedAt).isEqualTo(Instant.parse("2026-06-10T00:00:00Z"))
 
@@ -366,6 +377,49 @@ class GzipJsonlChunkWriterTest {
             assertThat(node.has("bodyBytes")).isTrue()
             val decoded = String(java.util.Base64.getDecoder().decode(node.get("bodyBytes").asText()))
             assertThat(decoded).contains("\"character_name\"")
+        }
+    }
+
+    @Test
+    fun `serialization failure before first write creates no artifact temp file`() {
+        val storage = mock<ConditionalObjectStorage>()
+        whenever(storage.putFileAsync(any<String>(), any<Path>())).thenAnswer { invocation ->
+            val key = invocation.getArgument<String>(0)
+            val path = invocation.getArgument<Path>(1)
+            CompletableFuture.completedFuture(PutResult(key, Files.size(path), null))
+        }
+        val serializationFailure = IllegalArgumentException("serialization failed")
+        val failingMapper = object : ObjectMapper() {
+            override fun writeValueAsBytes(value: Any?): ByteArray = throw serializationFailure
+        }
+        val before = chunkTempFiles()
+        val writer = GzipJsonlChunkWriter(
+            chunkKey = ArtifactKey.require("runs/abc/ranking-overall/chunks/part-000001.jsonl.gz"),
+            partIndex = 1,
+            maxRecords = 100,
+            maxUncompressedBytes = 1_000_000,
+            objectMapper = failingMapper,
+            artifactWriter = artifactWriter(storage),
+            clock = fixedClock,
+        )
+
+        try {
+            assertThatThrownBy {
+                writer.append(
+                    SnapshotChunkRecord.Success(
+                        bodyBytes = byteArrayOf(1),
+                        key = "broken",
+                        endpoint = "ranking-overall",
+                        keyType = "DATE_PAGE",
+                        httpStatus = 200,
+                        fetchedAt = Instant.EPOCH,
+                    ),
+                )
+            }.isSameAs(serializationFailure)
+            assertThat(chunkTempFiles()).isEqualTo(before)
+            verify(storage, never()).putFileAsync(any<String>(), any<Path>())
+        } finally {
+            awaitReceipt(writer.close())
         }
     }
 
@@ -388,7 +442,7 @@ class GzipJsonlChunkWriterTest {
      */
     @Test
     fun `close uploads 32MB chunk via putFileAsync without loading it all into heap`() {
-        val storage = mock<ObjectStorage>()
+        val storage = mock<ConditionalObjectStorage>()
         var captured: ByteArray = ByteArray(0)
         whenever(storage.putFileAsync(any<String>(), any<Path>()))
             .thenAnswer { invocation ->
@@ -400,14 +454,14 @@ class GzipJsonlChunkWriterTest {
             }
 
         val writer = GzipJsonlChunkWriter(
-            chunkKey = "runs/big/item-equipment/part-000001.jsonl.gz",
+            chunkKey = ArtifactKey.require("runs/big/item-equipment/part-000001.jsonl.gz"),
             partIndex = 1,
             maxRecords = Int.MAX_VALUE,
             // Production knob is 128MB; 32MB here keeps the test fast and
             // still well above the heap budget the old code blew through.
             maxUncompressedBytes = 32L * 1024 * 1024,
             objectMapper = objectMapper,
-            objectStorage = storage,
+            artifactWriter = artifactWriter(storage),
             clock = fixedClock,
         )
 
@@ -435,10 +489,11 @@ class GzipJsonlChunkWriterTest {
         }
 
         val stats = writer.close()
+        val receipt = awaitReceipt(stats)
 
         assertThat(stats.recordCount).isEqualTo(recordCount)
         assertThat(stats.uncompressedBytes).isGreaterThan(32L * 1024 * 1024)
-        assertThat(stats.compressedBytes).isGreaterThan(0)
+        assertThat(receipt.compressedBytes).isGreaterThan(0)
         verify(storage).putFileAsync(any<String>(), any<Path>())
 
         val raw = GZIPInputStream(ByteArrayInputStream(captured))
@@ -466,7 +521,7 @@ class GzipJsonlChunkWriterTest {
     @Test
     fun `bench gzip level 6 vs 1 latency rate compression`() {
         val body = synthItemEquipBody(218 * 1024)
-        val storage = mock<ObjectStorage>()
+        val storage = mock<ConditionalObjectStorage>()
         whenever(storage.putFileAsync(any<String>(), any<Path>()))
             .thenReturn(java.util.concurrent.CompletableFuture.completedFuture(PutResult("k", 1L, null)))
         val n = 400
@@ -485,25 +540,23 @@ class GzipJsonlChunkWriterTest {
         fun bench(level: Int): Result {
             // warmup (separate writer, discarded)
             GzipJsonlChunkWriter(
-                chunkKey = "runs/warmup/item-equipment/part-1.jsonl.gz",
+                chunkKey = ArtifactKey.require("runs/warmup/item-equipment/part-1.jsonl.gz"),
                 partIndex = 1,
                 maxRecords = Int.MAX_VALUE,
                 maxUncompressedBytes = 100L * 1024 * 1024 * 1024,
                 objectMapper = objectMapper,
-                objectStorage = storage,
+                artifactWriter = artifactWriter(storage, level),
                 clock = Clock.systemUTC(),
-                compressionLevel = level,
             ).close()
             // measured
             val w = GzipJsonlChunkWriter(
-                chunkKey = "runs/bench/item-equipment/part-1.jsonl.gz",
+                chunkKey = ArtifactKey.require("runs/bench/item-equipment/part-1.jsonl.gz"),
                 partIndex = 1,
                 maxRecords = Int.MAX_VALUE,
                 maxUncompressedBytes = 100L * 1024 * 1024 * 1024,
                 objectMapper = objectMapper,
-                objectStorage = storage,
+                artifactWriter = artifactWriter(storage, level),
                 clock = Clock.systemUTC(),
-                compressionLevel = level,
             )
             val rec = SnapshotChunkRecord.PreSerialized(
                 key = "k",
@@ -522,9 +575,14 @@ class GzipJsonlChunkWriterTest {
             }
             val secs = (System.nanoTime() - t0) / 1e9
             val stats = w.close()
+            val receipt = awaitReceipt(stats)
             lats.sort()
             fun pct(p: Double) = lats[minOf(n - 1, (n * p).toInt())].toDouble()
-            val ratio = if (stats.compressedBytes > 0) stats.uncompressedBytes.toDouble() / stats.compressedBytes else 0.0
+            val ratio = if (receipt.compressedBytes > 0) {
+                stats.uncompressedBytes.toDouble() / receipt.compressedBytes
+            } else {
+                0.0
+            }
             return Result(
                 level,
                 n / secs,
@@ -575,6 +633,11 @@ class GzipJsonlChunkWriterTest {
         val tempFileDelta: TempFileDelta,
     )
 
+    private data class UploadCompletion(
+        val completedAtNanos: Long,
+        val receipts: List<ArtifactReceipt>,
+    )
+
     private data class TempFileDelta(
         val beforeCount: Int,
         val afterCount: Int,
@@ -589,6 +652,23 @@ class GzipJsonlChunkWriterTest {
         val heapInitialMemoryBytes: Long,
         val heapMaxMemoryBytes: Long,
     )
+
+    private fun artifactWriter(
+        storage: ConditionalObjectStorage,
+        compressionLevel: Int = Deflater.BEST_SPEED,
+    ): DefaultArtifactWriter = DefaultArtifactWriter(storage, directExecutor, compressionLevel)
+
+    private fun awaitReceipt(stats: ChunkStats): ArtifactReceipt {
+        val receipt = AtomicReference<ArtifactReceipt?>()
+        val failure = AtomicReference<Throwable?>()
+        stats.uploadFuture.whenComplete { value, error ->
+            receipt.set(value)
+            failure.set(error)
+        }
+        await().atMost(EVIDENCE_TIMEOUT).until { receipt.get() != null || failure.get() != null }
+        assertThat(failure.get()).isNull()
+        return requireNotNull(receipt.get())
+    }
 
     private companion object {
         const val ONE_GIB = 1024L * 1024L * 1024L

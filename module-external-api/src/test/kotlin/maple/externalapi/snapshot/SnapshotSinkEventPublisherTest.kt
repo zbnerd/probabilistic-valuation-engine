@@ -8,6 +8,8 @@ import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
 import maple.externalapi.metrics.SnapshotVolumeMetrics
+import maple.pipeline.artifact.identity.ArtifactKey
+import maple.pipeline.artifact.write.ArtifactReceipt
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -44,6 +46,7 @@ class SnapshotSinkEventPublisherTest {
             compressedBytes = 250L,
             startedAt = Instant.parse("2026-06-07T09:50:00Z"),
             finishedAt = Instant.parse("2026-06-07T09:55:00Z"),
+            uploadFuture = completedReceipt("runs/run-1/result/chunks/part-000001.jsonl.gz", 250L),
         )
 
         publisher.publishChunkReady(stats, runId = "run-1", endpoint = "result")
@@ -74,6 +77,7 @@ class SnapshotSinkEventPublisherTest {
             compressedBytes = 1024L,
             startedAt = Instant.parse("2026-06-07T09:00:00Z"),
             finishedAt = Instant.parse("2026-06-07T09:10:00Z"),
+            uploadFuture = completedReceipt("runs/run-2/item/chunks/part-000007.jsonl.gz", 1024L),
         )
 
         publisher.publishChunkReady(stats, "run-2", "item")
@@ -145,4 +149,14 @@ class SnapshotSinkEventPublisherTest {
         assertThat(event.eventId).isNotBlank()
         verifyNoInteractions(volumeMetrics)
     }
+
+    private fun completedReceipt(key: String, compressedBytes: Long): CompletableFuture<ArtifactReceipt> = CompletableFuture.completedFuture(
+        ArtifactReceipt(
+            key = ArtifactKey.require(key),
+            compressedBytes = compressedBytes,
+            uncompressedBytes = 0L,
+            contentSha256 = "fixture-sha256",
+            backendTag = null,
+        ),
+    )
 }

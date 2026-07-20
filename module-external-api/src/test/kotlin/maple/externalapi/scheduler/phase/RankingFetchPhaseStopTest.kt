@@ -1,13 +1,13 @@
 package maple.externalapi.scheduler.phase
 
+import java.util.concurrent.Executors
+import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.scheduler.PhaseStopSignal
 import maple.externalapi.scheduler.PhaseStoppedException
-import maple.externalapi.runstatus.PipelinePhase
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
-import java.util.concurrent.Executors
 
 class RankingFetchPhaseStopTest {
 
@@ -27,6 +27,7 @@ class RankingFetchPhaseStopTest {
             permitsPerSecond = 100,
             runMarkerWriter = mock(),
             objectStorage = mock(),
+            artifactWriter = mock(),
             stopSignal = signal,
         )
 

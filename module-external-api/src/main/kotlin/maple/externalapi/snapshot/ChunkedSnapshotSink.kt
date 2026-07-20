@@ -327,11 +327,7 @@ class ChunkedSnapshotSink(
      */
     private fun publishWhenUploaded(stats: ChunkStats) {
         val future = stats.uploadFuture
-        if (future == null) {
-            eventPublisher.publishChunkReady(stats, fileManager.manifest().runId, endpoint)
-            return
-        }
-        future.whenComplete { _, ex ->
+        future.whenComplete { receipt, ex ->
             if (ex != null) {
                 log.warn(
                     "[Sink] chunk upload failed, skipping chunk-ready publish: chunk={} error={}",
@@ -340,7 +336,12 @@ class ChunkedSnapshotSink(
                 )
                 return@whenComplete
             }
-            eventPublisher.publishChunkReady(stats, fileManager.manifest().runId, endpoint)
+            val completedReceipt = receipt ?: return@whenComplete
+            eventPublisher.publishChunkReady(
+                stats.copy(compressedBytes = completedReceipt.compressedBytes),
+                fileManager.manifest().runId,
+                endpoint,
+            )
         }
     }
 }

@@ -139,9 +139,9 @@ class UrgentCharacterRequestConsumer(
         key: String,
         data: ByteArray,
         keyType: String,
-    ): CompletableFuture<Void> = CompletableFuture.supplyAsync({
+    ): CompletableFuture<Void> {
         val endpointDir = endpoint.storageSubDir()
-        val objectKey = chunkArtifactWriter.writeChunk(
+        val receiptStage = chunkArtifactWriter.writeChunk(
             runId = runId,
             endpointDir = endpointDir,
             record = SnapshotChunkRecord.Success(
@@ -153,19 +153,21 @@ class UrgentCharacterRequestConsumer(
                 bodyBytes = data,
             ),
         )
-        SnapshotChunkReadyEvent(
-            eventId = UUID.randomUUID().toString(),
-            runId = runId,
-            endpoint = endpointDir,
-            chunkId = "$endpointDir-part-000001",
-            objectKey = objectKey,
-            recordCount = 1,
-            uncompressedBytes = data.size.toLong(),
-            compressedBytes = -1L,
-            createdAt = Instant.now(clock),
-        )
-    }, executor).thenCompose { event ->
-        eventPublisher.publishChunkReady(event)
+        return receiptStage.thenCompose { receipt ->
+            eventPublisher.publishChunkReady(
+                SnapshotChunkReadyEvent(
+                    eventId = UUID.randomUUID().toString(),
+                    runId = runId,
+                    endpoint = endpointDir,
+                    chunkId = "$endpointDir-part-000001",
+                    objectKey = receipt.key.value,
+                    recordCount = 1,
+                    uncompressedBytes = data.size.toLong(),
+                    compressedBytes = -1L,
+                    createdAt = Instant.now(clock),
+                ),
+            )
+        }.toCompletableFuture()
     }
 
     private fun publishNotFoundAsync(userIgn: String): CompletableFuture<Void> = eventPublisher.publishNotFound(

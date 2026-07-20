@@ -4,22 +4,22 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.kotlinModule
-import maple.expectation.common.storage.ObjectStorage
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
 import maple.expectation.common.storage.PutResult
 import maple.externalapi.domain.KeyType
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.pipeline.artifact.storage.ConditionalObjectStorage
+import maple.pipeline.artifact.write.DefaultArtifactWriter
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.util.concurrent.TimeUnit
 
 /**
  * Migration Task 9: `createForXxx(runKey)` must propagate the runKey down to
@@ -34,7 +34,7 @@ class EndpointSinkFactoryTest {
 
     @Test
     fun `createForCharacterBasic produces a sink whose chunk keys live under the supplied runKey`() {
-        val storage = mock<ObjectStorage>()
+        val storage = mock<ConditionalObjectStorage>()
         val keyCaptor = argumentCaptor<String>()
         whenever(storage.putFileAsync(keyCaptor.capture(), any<Path>()))
             .thenAnswer { invocation ->
@@ -57,11 +57,15 @@ class EndpointSinkFactoryTest {
             characterBasicPublisher = characterBasicPublisher,
             rankingPublisher = rankingPublisher,
             objectStorage = storage,
+            artifactWriter = DefaultArtifactWriter(
+                storage,
+                java.util.concurrent.Executor { command -> command.run() },
+            ),
             clock = Clock.systemUTC(),
         )
 
-        val runKey = "runs/test-run/character-basic"
-        val sink = factory.createForCharacterBasic(runKey)
+        val runId = "test-run"
+        val sink = factory.createForCharacterBasic(runId)
 
         try {
             sink.submit(
@@ -82,6 +86,6 @@ class EndpointSinkFactoryTest {
 
         val capturedKeys = keyCaptor.allValues
         assertThat(capturedKeys).isNotEmpty
-        assertThat(capturedKeys).allMatch { it.startsWith("$runKey/") }
+        assertThat(capturedKeys).allMatch { it.startsWith("runs/$runId/character-basic/") }
     }
 }

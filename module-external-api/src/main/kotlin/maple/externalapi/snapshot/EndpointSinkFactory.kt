@@ -5,6 +5,7 @@ import java.time.Clock
 import maple.expectation.common.storage.ObjectStorage
 import maple.externalapi.metrics.SnapshotVolumeMetrics
 import maple.externalapi.snapshot.event.SnapshotChunkEventPublisher
+import maple.pipeline.artifact.write.ArtifactWriter
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
 
@@ -26,28 +27,30 @@ class EndpointSinkFactory(
     @Qualifier("rankingSnapshotPublisher")
     private val rankingPublisher: SnapshotChunkEventPublisher,
     private val objectStorage: ObjectStorage,
+    private val artifactWriter: ArtifactWriter,
     private val clock: Clock = Clock.systemUTC(),
 ) {
-    fun createForCharacterBasic(runKey: String): ChunkedSnapshotSink = build(runKey, "character-basic", characterBasicPublisher)
+    fun createForCharacterBasic(runId: String): ChunkedSnapshotSink = build(runId, "character-basic", characterBasicPublisher)
 
-    fun createForItemEquipment(runKey: String): ChunkedSnapshotSink = build(runKey, "item-equipment", characterBasicPublisher)
+    fun createForItemEquipment(runId: String): ChunkedSnapshotSink = build(runId, "item-equipment", characterBasicPublisher)
 
-    fun createForRanking(runKey: String): ChunkedSnapshotSink = build(runKey, "ranking-overall", rankingPublisher)
+    fun createForRanking(runId: String): ChunkedSnapshotSink = build(runId, "ranking-overall", rankingPublisher)
 
     private fun build(
-        runKey: String,
+        runId: String,
         endpoint: String,
         publisher: SnapshotChunkEventPublisher,
     ): ChunkedSnapshotSink {
         val endpointConfig = chunkingProperties.configFor(endpoint)
         val fileManager = ChunkFileManager(
-            runKey = runKey,
+            runId = runId,
             endpoint = endpoint,
             maxRecords = endpointConfig.maxRecords,
             maxUncompressedBytes = endpointConfig.maxUncompressedBytes,
             objectMapper = objectMapper,
             clock = clock,
             objectStorage = objectStorage,
+            artifactWriter = artifactWriter,
         )
         return ChunkedSnapshotSink(
             endpoint = endpoint,

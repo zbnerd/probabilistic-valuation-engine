@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.nio.file.Path
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -14,10 +15,12 @@ import maple.externalapi.event.UrgentEventPublisher
 import maple.externalapi.parser.UrgentOcidResponseParser
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.pipeline.artifact.storage.LocalFsObjectStorage
+import maple.pipeline.artifact.write.DefaultArtifactWriter
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -59,7 +62,10 @@ class UrgentCharacterRequestConsumerTest {
         val ocidResponseParser = UrgentOcidResponseParser(objectMapper)
         val chunkArtifactWriter = UrgentChunkArtifactWriter(
             objectMapper = objectMapper,
-            objectStorage = objectStorage,
+            artifactWriter = DefaultArtifactWriter(
+                objectStorage,
+                java.util.concurrent.Executor { command -> command.run() },
+            ),
         )
         val eventPublisher = UrgentEventPublisher(
             kafkaTemplate = kafkaTemplate,
@@ -144,18 +150,15 @@ class UrgentCharacterRequestConsumerTest {
     }
 
     private fun awaitKeys(prefix: String, mustContain: String, suffix: String, expected: Int, timeoutMs: Long): List<String> {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            val keys = objectStorage.listByPrefix(prefix)
-                .map { it.key }
-                .filter { it.contains(mustContain) && it.endsWith(suffix) }
-            if (keys.size >= expected) return keys
-            Thread.sleep(50)
+        await().atMost(Duration.ofMillis(timeoutMs)).untilAsserted {
+            assertThat(matchingKeys(prefix, mustContain, suffix)).hasSizeGreaterThanOrEqualTo(expected)
         }
-        return objectStorage.listByPrefix(prefix)
-            .map { it.key }
-            .filter { it.contains(mustContain) && it.endsWith(suffix) }
+        return matchingKeys(prefix, mustContain, suffix)
     }
+
+    private fun matchingKeys(prefix: String, mustContain: String, suffix: String): List<String> = objectStorage.listByPrefix(prefix)
+        .map { it.key }
+        .filter { it.contains(mustContain) && it.endsWith(suffix) }
 
     @Test
     fun `not-found path - OCID response missing ocid field publishes not-found event`() {

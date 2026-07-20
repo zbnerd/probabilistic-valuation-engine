@@ -17,6 +17,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.io.ByteArrayInputStream
+import java.lang.management.ManagementFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -26,6 +27,8 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.Deflater
 import java.util.zip.GZIPInputStream
 
@@ -42,6 +45,8 @@ class GzipJsonlChunkWriterTest {
     @Test
     fun `artifact evidence report is produced when enabled`() {
         assumeTrue(System.getenv("ARTIFACT_EVIDENCE_ENABLED") == "1")
+        val jvm = captureEvidenceJvm()
+        assertEvidenceJvm(jvm)
 
         val lines = deterministicJsonLines()
         val records = lines.mapIndexed { index, line ->
@@ -60,17 +65,21 @@ class GzipJsonlChunkWriterTest {
 
         val warmupDirectory = Files.createDirectory(evidenceRoot.resolve("warmup"))
         val warmupStorage = LocalFsObjectStorage(warmupDirectory.toString(), directExecutor, meterRegistry = null)
-        val warmupTempFilesBefore = countChunkTempFiles()
+        val warmupTempFilesBefore = chunkTempFiles()
         val warmupChunks = (0 until WARMUP_CHUNKS).map { chunkIndex ->
             writeEvidenceChunk(warmupStorage, "warmup/chunk-$chunkIndex.jsonl.gz", chunkIndex, records)
         }
         awaitUploads(warmupChunks)
-        val warmupTempFilesAfter = countChunkTempFiles()
+        val warmupTempFileDelta = assertNoChunkTempFileDelta(
+            before = warmupTempFilesBefore,
+            after = chunkTempFiles(),
+            phase = "warmup",
+        )
 
         val measurements = (1..REPETITIONS).map { repetition ->
             val repetitionDirectory = Files.createDirectory(evidenceRoot.resolve("repetition-$repetition"))
             val storage = LocalFsObjectStorage(repetitionDirectory.toString(), directExecutor, meterRegistry = null)
-            val tempFilesBefore = countChunkTempFiles()
+            val tempFilesBefore = chunkTempFiles()
             val startedAt = System.nanoTime()
             val chunks = (0 until MEASURED_CHUNKS).map { chunkIndex ->
                 writeEvidenceChunk(
@@ -80,9 +89,13 @@ class GzipJsonlChunkWriterTest {
                     records,
                 )
             }
-            awaitUploads(chunks)
-            val elapsedNanos = System.nanoTime() - startedAt
-            val tempFilesAfter = countChunkTempFiles()
+            val completedAtNanos = awaitUploads(chunks)
+            val elapsedNanos = completedAtNanos - startedAt
+            val tempFileDelta = assertNoChunkTempFileDelta(
+                before = tempFilesBefore,
+                after = chunkTempFiles(),
+                phase = "repetition-$repetition",
+            )
             val compressedBytes = chunks.sumOf { chunk -> chunk.compressedBytes }
             val recordCount = chunks.sumOf { chunk -> chunk.recordCount.toLong() }
             val elapsedSeconds = elapsedNanos.toDouble() / NANOS_PER_SECOND
@@ -94,8 +107,7 @@ class GzipJsonlChunkWriterTest {
                 recordsPerSecond = recordCount / elapsedSeconds,
                 compressedBytes = compressedBytes,
                 compressedMibPerSecond = compressedBytes / BYTES_PER_MIB / elapsedSeconds,
-                tempFileCountBefore = tempFilesBefore,
-                tempFileCountAfter = tempFilesAfter,
+                tempFileDelta = tempFileDelta,
             )
         }
         val repetitions = measurements.map { measurement ->
@@ -106,8 +118,7 @@ class GzipJsonlChunkWriterTest {
                 "recordsPerSecond" to measurement.recordsPerSecond,
                 "compressedBytes" to measurement.compressedBytes,
                 "compressedMibPerSecond" to measurement.compressedMibPerSecond,
-                "tempFileCountBefore" to measurement.tempFileCountBefore,
-                "tempFileCountAfter" to measurement.tempFileCountAfter,
+                "tempFiles" to measurement.tempFileDelta.toJson(),
             )
         }
         val report = evidenceReportPath()
@@ -117,6 +128,7 @@ class GzipJsonlChunkWriterTest {
             linkedMapOf(
                 "schemaVersion" to 1,
                 "benchmark" to "gzip-jsonl-chunk-writer-local-fs",
+                "jvm" to jvm.toJson(),
                 "fixture" to linkedMapOf(
                     "lineCount" to lines.size,
                     "bytesPerLine" to JSON_LINE_BYTES,
@@ -125,8 +137,7 @@ class GzipJsonlChunkWriterTest {
                 ),
                 "compressionLevel" to Deflater.BEST_SPEED,
                 "warmupChunks" to WARMUP_CHUNKS,
-                "warmupTempFileCountBefore" to warmupTempFilesBefore,
-                "warmupTempFileCountAfter" to warmupTempFilesAfter,
+                "warmupTempFiles" to warmupTempFileDelta.toJson(),
                 "measuredChunksPerRepetition" to MEASURED_CHUNKS,
                 "repetitionCount" to REPETITIONS,
                 "repetitions" to repetitions,
@@ -161,14 +172,21 @@ class GzipJsonlChunkWriterTest {
         }
     }
 
-    private fun awaitUploads(chunks: List<ChunkStats>) {
+    private fun awaitUploads(chunks: List<ChunkStats>): Long {
         val uploads = chunks.mapNotNull { chunk -> chunk.uploadFuture }
         assertThat(uploads).hasSameSizeAs(chunks)
         val allUploads = CompletableFuture.allOf(*uploads.toTypedArray())
-        await().atMost(EVIDENCE_TIMEOUT).until { allUploads.isDone }
-        assertThat(allUploads.isCompletedExceptionally)
+        val completedAtNanos = AtomicLong()
+        val completionFailure = AtomicReference<Throwable?>()
+        allUploads.whenComplete { _, failure ->
+            completionFailure.set(failure)
+            completedAtNanos.set(System.nanoTime())
+        }
+        await().atMost(EVIDENCE_TIMEOUT).until { completedAtNanos.getAcquire() != 0L }
+        assertThat(completionFailure.getAcquire())
             .describedAs("all gzip evidence uploads complete successfully")
-            .isFalse()
+            .isNull()
+        return completedAtNanos.getAcquire()
     }
 
     private fun deterministicJsonLines(): Array<ByteArray> =
@@ -193,15 +211,50 @@ class GzipJsonlChunkWriterTest {
         return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
     }
 
-    private fun countChunkTempFiles(): Long {
+    private fun chunkTempFiles(): Set<Path> {
         val systemTempDirectory = Path.of(System.getProperty("java.io.tmpdir"))
         return Files.list(systemTempDirectory).use { paths ->
             paths.filter { path ->
                 val name = path.fileName.toString()
                 name.startsWith("gzip-chunk-") && name.endsWith(".jsonl.gz.tmp")
-            }.count()
+            }.map(Path::toAbsolutePath)
+                .map(Path::normalize)
+                .toList()
+                .toSet()
         }
     }
+
+    private fun assertNoChunkTempFileDelta(
+        before: Set<Path>,
+        after: Set<Path>,
+        phase: String,
+    ): TempFileDelta {
+        val added = after - before
+        val removed = before - after
+        assertThat(added)
+            .describedAs("$phase must not add gzip chunk temp paths")
+            .isEmpty()
+        assertThat(removed)
+            .describedAs("$phase must not remove unrelated gzip chunk temp paths")
+            .isEmpty()
+        return TempFileDelta(
+            beforeCount = before.size,
+            afterCount = after.size,
+            addedPaths = added.map { it.fileName.toString() }.sorted(),
+            removedPaths = removed.map { it.fileName.toString() }.sorted(),
+        )
+    }
+
+    private fun TempFileDelta.toJson(): Map<String, Any> = linkedMapOf(
+        "beforeCount" to beforeCount,
+        "afterCount" to afterCount,
+        "addedCount" to addedPaths.size,
+        "removedCount" to removedPaths.size,
+        "delta" to afterCount - beforeCount,
+        // Assertions above guarantee these stable empty sets; full ambient snapshots are intentionally omitted.
+        "addedPaths" to addedPaths,
+        "removedPaths" to removedPaths,
+    )
 
     private fun evidenceReportPath(): Path {
         val workingDirectory = Path.of(System.getProperty("user.dir"))
@@ -212,6 +265,34 @@ class GzipJsonlChunkWriterTest {
         }
         return moduleDirectory.resolve("build/reports/artifact-evidence/gzip-jsonl-chunk-writer.json")
     }
+
+    private fun captureEvidenceJvm(): EvidenceJvm {
+        val heap = ManagementFactory.getMemoryMXBean().heapMemoryUsage
+        return EvidenceJvm(
+            inputArguments = ManagementFactory.getRuntimeMXBean().inputArguments,
+            runtimeInitialMemoryBytes = Runtime.getRuntime().totalMemory(),
+            runtimeMaxMemoryBytes = Runtime.getRuntime().maxMemory(),
+            heapInitialMemoryBytes = heap.init,
+            heapMaxMemoryBytes = heap.max,
+        )
+    }
+
+    private fun assertEvidenceJvm(jvm: EvidenceJvm) {
+        assertThat(jvm.inputArguments).contains("-Xms1g", "-Xmx1g", "-XX:+UseG1GC")
+        assertThat(jvm.inputArguments).doesNotContain("-Xms512m", "-Xmx2048m")
+        assertThat(jvm.runtimeInitialMemoryBytes).isEqualTo(ONE_GIB)
+        assertThat(jvm.runtimeMaxMemoryBytes).isEqualTo(ONE_GIB)
+        assertThat(jvm.heapInitialMemoryBytes).isEqualTo(ONE_GIB)
+        assertThat(jvm.heapMaxMemoryBytes).isEqualTo(ONE_GIB)
+    }
+
+    private fun EvidenceJvm.toJson(): Map<String, Any> = linkedMapOf(
+        "inputArguments" to inputArguments,
+        "runtimeInitialMemoryBytes" to runtimeInitialMemoryBytes,
+        "runtimeMaxMemoryBytes" to runtimeMaxMemoryBytes,
+        "heapInitialMemoryBytes" to heapInitialMemoryBytes,
+        "heapMaxMemoryBytes" to heapMaxMemoryBytes,
+    )
 
     private fun median(values: List<Double>): Double = values.sorted()[values.size / 2]
 
@@ -469,11 +550,26 @@ class GzipJsonlChunkWriterTest {
         val recordsPerSecond: Double,
         val compressedBytes: Long,
         val compressedMibPerSecond: Double,
-        val tempFileCountBefore: Long,
-        val tempFileCountAfter: Long,
+        val tempFileDelta: TempFileDelta,
+    )
+
+    private data class TempFileDelta(
+        val beforeCount: Int,
+        val afterCount: Int,
+        val addedPaths: List<String>,
+        val removedPaths: List<String>,
+    )
+
+    private data class EvidenceJvm(
+        val inputArguments: List<String>,
+        val runtimeInitialMemoryBytes: Long,
+        val runtimeMaxMemoryBytes: Long,
+        val heapInitialMemoryBytes: Long,
+        val heapMaxMemoryBytes: Long,
     )
 
     private companion object {
+        const val ONE_GIB = 1024L * 1024L * 1024L
         const val EVIDENCE_RECORDS = 10_000
         const val JSON_LINE_BYTES = 1024
         const val WARMUP_CHUNKS = 3

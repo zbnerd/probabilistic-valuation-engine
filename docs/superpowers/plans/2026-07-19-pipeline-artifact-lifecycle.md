@@ -30,8 +30,10 @@
 
 **Files:**
 
-- Create: `docs/01_ADR/ADR-745-pipeline-artifact-ownership.md`
+- Create: `docs/01_ADR/ADR-745_pipeline-artifact-ownership.md`
 - Create: `docs/05_Reports/2026-07-19-pipeline-artifact-extraction-evidence.md`
+- Modify: `build.gradle`
+- Create: `gradle/artifact-runtime-classpath-metrics.init.gradle`
 - Modify: `settings.gradle`
 - Create: `module-pipeline-artifact/build.gradle`
 - Modify: `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorageTest.kt`
@@ -44,69 +46,65 @@
 
 - [ ] **Step 1: Capture the clean baseline before changing dependencies**
 
-Run:
+Measure from a detached worktree at the exact base commit. Keep the measurement script in the task worktree so the same implementation can be reused for the final comparison:
 
 ```bash
-./gradlew :module-external-api:dependencies --configuration runtimeClasspath > /tmp/artifact-ext-runtime-before.txt
-./gradlew :module-calculator:dependencies --configuration runtimeClasspath > /tmp/artifact-calc-runtime-before.txt
-./gradlew :module-synchronizer:dependencies --configuration runtimeClasspath > /tmp/artifact-sync-runtime-before.txt
-./gradlew :module-cleanup:dependencies --configuration runtimeClasspath > /tmp/artifact-cleanup-runtime-before.txt
-./gradlew :module-external-api:bootJar :module-calculator:bootJar :module-synchronizer:bootJar :module-cleanup:bootJar
-stat -c '%n %s' module-external-api/build/libs/*.jar module-calculator/build/libs/*.jar module-synchronizer/build/libs/*.jar module-cleanup/build/libs/*.jar
+artifact_task_worktree=$(pwd)
+artifact_base_dir=$(mktemp -d /tmp/artifact-base-worktree.XXXXXX)
+rmdir "$artifact_base_dir"
+git worktree add --detach "$artifact_base_dir" a35809235de1f92cd7a7c546bd3bed060f62abab
+(
+  cd "$artifact_base_dir"
+  ./gradlew --no-daemon \
+    :module-external-api:bootJar :module-calculator:bootJar \
+    :module-synchronizer:bootJar :module-cleanup:bootJar
+  ./gradlew --no-daemon \
+    --init-script "$artifact_task_worktree/gradle/artifact-runtime-classpath-metrics.init.gradle" \
+    :module-external-api:artifactRuntimeClasspathMetrics \
+    :module-calculator:artifactRuntimeClasspathMetrics \
+    :module-synchronizer:artifactRuntimeClasspathMetrics \
+    :module-cleanup:artifactRuntimeClasspathMetrics \
+    > /tmp/artifact-base-runtime-classpath.txt
+  stat -c '%n %s' \
+    module-external-api/build/libs/*.jar module-calculator/build/libs/*.jar \
+    module-synchronizer/build/libs/*.jar module-cleanup/build/libs/*.jar
+)
 ```
 
-Expected: all commands exit `0`; the report records the exact dependency-tree paths and JAR byte sizes rather than an estimated value.
+The init script must fail on a non-regular resolved entry and print every sorted entry plus numeric `entryCount` and `totalBytes`. Also capture the four dependency trees used by the original protocol. Record exact commands, output paths, hashes, exit codes, and JAR byte sizes rather than estimates.
 
-Add evidence-only methods, enabled by `ARTIFACT_EVIDENCE_ENABLED=1`, to the two listed existing tests. `LocalFsObjectStorageTest` uses a seeded 1-MiB byte fixture (record its SHA-256), writes 32 warmup objects then 256 measured objects at concurrency 8, repeats the measured phase five times into a fresh test-owned directory, and reports every repetition plus median MiB/s. `GzipJsonlChunkWriterTest` uses a real test-owned LocalFS adapter rather than a mock, 10,000 deterministic 1-KiB JSON lines, the current compression level, 3 warmup chunks, 20 measured chunks, and five repetitions; report records/sec, compressed MiB/sec, compressed byte count, and temp-file count before/after. Await futures with Awaitility and never call blocking future retrieval. Write machine-readable JSON to each module's `build/reports/artifact-evidence/` and keep timing thresholds out of JUnit assertions.
+In that detached worktree, source the repository `.env` without printing values, start only the existing `postgres`, `redis`, `kafka`, `minio`, and `minio-bootstrap` dependencies when needed, and run the unchanged `runtime_closure_boot_check` from `2026-07-19-etl-runtime-ownership-closure.md` independently for ports 8081-8084. Use the configured MinIO profile and service-account secret files through short-lived mode-0600 copies; record variable names and credential source but never secret values. Preserve each command output, application log path/hash, complete health JSON/hash, startup/shutdown seconds, and any failed profile honestly. Kill only the helper's captured application PID. Remove the exact credential copies and detached worktree after evidence is copied outside it.
+
+Add evidence-only methods, enabled by `ARTIFACT_EVIDENCE_ENABLED=1`, to the two listed existing tests. `LocalFsObjectStorageTest` uses a seeded 1-MiB byte fixture (record its SHA-256), writes 32 warmup objects then 256 measured objects at concurrency 8, repeats the measured phase five times into a fresh test-owned directory, and reports every repetition plus median MiB/s. The exact fixed pool of 8 is a narrow test-only measurement exception: the production registry pools have different sizing/queue semantics, the existing bounded semaphore is suspend-only, and `ExecutorService.use` must guarantee shutdown. `GzipJsonlChunkWriterTest` uses a real test-owned LocalFS adapter rather than a mock, 10,000 deterministic 1-KiB JSON lines, the current compression level, 3 warmup chunks, 20 measured chunks, and five repetitions; report records/sec, compressed MiB/sec, compressed byte count, and matching temp-path sets before/after warmup and every repetition. Assert/report empty added and removed sets (and counts/delta), but do not serialize unrelated ambient paths.
+
+Attach a completion continuation to each aggregate future and capture `System.nanoTime()` plus failure in that continuation. Awaitility may only observe the captured completion state; elapsed time ends at the captured completion timestamp and excludes polling delay. Never call blocking future retrieval. Write machine-readable JSON to each module's `build/reports/artifact-evidence/`, including the effective worker input arguments and both `Runtime` and `MemoryMXBean` heap values, and keep timing thresholds out of JUnit assertions.
 
 Run the fixed baseline with a fresh JVM:
 
 ```bash
-JAVA_TOOL_OPTIONS='-Xms1g -Xmx1g -XX:+UseG1GC' \
 ARTIFACT_EVIDENCE_ENABLED=1 \
-./gradlew --no-daemon :module-infra:test \
+./gradlew --no-daemon -PartifactEvidence :module-infra:test \
   --tests '*LocalFsObjectStorageTest' --rerun-tasks
-JAVA_TOOL_OPTIONS='-Xms1g -Xmx1g -XX:+UseG1GC' \
 ARTIFACT_EVIDENCE_ENABLED=1 \
-./gradlew --no-daemon :module-external-api:test \
+./gradlew --no-daemon -PartifactEvidence :module-external-api:test \
   --tests '*GzipJsonlChunkWriterTest' --rerun-tasks
 sha256sum \
   module-infra/build/reports/artifact-evidence/*.json \
   module-external-api/build/reports/artifact-evidence/*.json
 ```
 
-Record fixture hashes, commit/JDK/CPU/JVM flags, filesystem type/free space, all repetitions/medians, commands/exit codes, and output hashes in the evidence report. The optional real-MinIO baseline uses the same 1-MiB fixture/count/concurrency when its existing environment gate is enabled; otherwise record it as not measured rather than estimating it.
+`-PartifactEvidence` is the only switch that replaces the normal worker defaults with effective `-Xms1g -Xmx1g -XX:+UseG1GC`; the tests must reject any other heap. Record fixture hashes, commit/JDK/CPU/effective worker flags and heap bytes, filesystem type/free space, all repetitions/medians, commands/exit codes, and output hashes in the evidence report. The optional real-MinIO throughput baseline uses the same 1-MiB fixture/count/concurrency when its existing environment gate is enabled; otherwise record it as not measured rather than estimating it.
 
 - [ ] **Step 2: Create ADR-745 with the five required sections**
 
-Write `docs/01_ADR/ADR-745-pipeline-artifact-ownership.md` with:
+Write `docs/01_ADR/ADR-745_pipeline-artifact-ownership.md` using the repository convention:
 
-```markdown
-# ADR-745: Pipeline artifact identity and lifecycle ownership
-
-- Status: Accepted
-- Date: 2026-07-19
-
-## 1. Context
-
-Artifact keys, LocalFS/MinIO semantics, source finalization, retention, and cleanup inbox durability are split across module-infra and four executable modules. Backend checksums and caller-file ownership are inconsistent.
-
-## 2. Decision
-
-Create module-pipeline-artifact. Keep ObjectStorage in module-common, move its implementations and configuration to the new module, introduce typed layouts and ArtifactReceipt, retain existing object keys, keep required publication failures replayable with _SUCCESS + _RUNNING, and persist cleanup inbox records at cleanup/inbox/{eventId}.json using conditional create.
-
-## 3. Trade-offs
-
-The extraction adds one library module and temporary compatibility facades. It avoids a generic ETL runtime, prevents backend-specific ETag assumptions, makes cleanup restart-safe, and permits each active service to remove storage-related module-infra coupling independently.
-
-## 4. Result and Evidence
-
-Implementation evidence is recorded in docs/05_Reports/2026-07-19-pipeline-artifact-extraction-evidence.md. Existing object keys and event fixtures must remain byte-for-byte compatible.
-
-## 5. Consequences
-
-New ETL code must use typed artifact layouts. module-infra remains the compatibility boundary for app/web callers; it is not a permitted dependency for active ETL storage access.
-```
+- metadata includes `Status`, `Date`, and `Owner`;
+- `1. Background / Problem` contains explicit Background, Problem, and Goal;
+- `2. Decision` records the accepted module/port/compatibility decision;
+- `3. Trade-offs` contains Sensitivity, Trade-off, Risk, and Non-Risk;
+- `4. Result / Evidence` contains numeric classpath/JAR/runtime/throughput evidence and honest exceptions;
+- `5. Summary` states the durable decision.
 
 - [ ] **Step 3: Add the module to `settings.gradle`**
 
@@ -163,7 +161,7 @@ Expected: `BUILD SUCCESSFUL`; the dependency report for this module contains `mo
 - [ ] **Step 6: Commit the scaffold and decision**
 
 ```bash
-git add settings.gradle module-pipeline-artifact/build.gradle docs/01_ADR/ADR-745-pipeline-artifact-ownership.md docs/05_Reports/2026-07-19-pipeline-artifact-extraction-evidence.md module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorageTest.kt module-external-api/src/test/kotlin/maple/externalapi/snapshot/GzipJsonlChunkWriterTest.kt
+git add build.gradle settings.gradle gradle/artifact-runtime-classpath-metrics.init.gradle module-pipeline-artifact/build.gradle docs/01_ADR/ADR-745_pipeline-artifact-ownership.md docs/05_Reports/2026-07-19-pipeline-artifact-extraction-evidence.md module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorageTest.kt module-external-api/src/test/kotlin/maple/externalapi/snapshot/GzipJsonlChunkWriterTest.kt
 git commit -m "build: add pipeline artifact module"
 ```
 

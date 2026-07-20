@@ -6,6 +6,7 @@ import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.lang.management.ManagementFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -15,6 +16,8 @@ import java.util.Random
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 class LocalFsObjectStorageTest {
 
@@ -27,6 +30,8 @@ class LocalFsObjectStorageTest {
     @Test
     fun `artifact evidence report is produced when enabled`() {
         assumeTrue(System.getenv("ARTIFACT_EVIDENCE_ENABLED") == "1")
+        val jvm = captureEvidenceJvm()
+        assertEvidenceJvm(jvm)
 
         val fixture = ByteArray(FIXTURE_BYTES).also { bytes ->
             Random(FIXTURE_SEED).nextBytes(bytes)
@@ -63,6 +68,7 @@ class LocalFsObjectStorageTest {
             linkedMapOf(
                 "schemaVersion" to 1,
                 "benchmark" to "local-fs-object-storage-put",
+                "jvm" to jvm.toJson(),
                 "fixture" to linkedMapOf(
                     "seed" to FIXTURE_SEED,
                     "bytes" to fixture.size,
@@ -95,18 +101,52 @@ class LocalFsObjectStorageTest {
             )
         }
         val allWrites = CompletableFuture.allOf(*writes)
-        await().atMost(EVIDENCE_TIMEOUT).until { allWrites.isDone }
-        val elapsedNanos = System.nanoTime() - startedAt
+        val completedAtNanos = AtomicLong()
+        val completionFailure = AtomicReference<Throwable?>()
+        allWrites.whenComplete { _, failure ->
+            completionFailure.set(failure)
+            completedAtNanos.set(System.nanoTime())
+        }
+        await().atMost(EVIDENCE_TIMEOUT).until { completedAtNanos.getAcquire() != 0L }
+        val elapsedNanos = completedAtNanos.getAcquire() - startedAt
 
-        assertThat(allWrites.isCompletedExceptionally)
+        assertThat(completionFailure.getAcquire())
             .describedAs("all LocalFS evidence writes complete successfully")
-            .isFalse()
+            .isNull()
         assertThat(storage.listByPrefix("objects/")).hasSize(objectCount)
         return elapsedNanos
     }
 
     private fun measuredMib(): Double =
         FIXTURE_BYTES.toDouble() * MEASURED_OBJECTS / BYTES_PER_MIB
+
+    private fun captureEvidenceJvm(): EvidenceJvm {
+        val heap = ManagementFactory.getMemoryMXBean().heapMemoryUsage
+        return EvidenceJvm(
+            inputArguments = ManagementFactory.getRuntimeMXBean().inputArguments,
+            runtimeInitialMemoryBytes = Runtime.getRuntime().totalMemory(),
+            runtimeMaxMemoryBytes = Runtime.getRuntime().maxMemory(),
+            heapInitialMemoryBytes = heap.init,
+            heapMaxMemoryBytes = heap.max,
+        )
+    }
+
+    private fun assertEvidenceJvm(jvm: EvidenceJvm) {
+        assertThat(jvm.inputArguments).contains("-Xms1g", "-Xmx1g", "-XX:+UseG1GC")
+        assertThat(jvm.inputArguments).doesNotContain("-Xms512m", "-Xmx2048m")
+        assertThat(jvm.runtimeInitialMemoryBytes).isEqualTo(ONE_GIB)
+        assertThat(jvm.runtimeMaxMemoryBytes).isEqualTo(ONE_GIB)
+        assertThat(jvm.heapInitialMemoryBytes).isEqualTo(ONE_GIB)
+        assertThat(jvm.heapMaxMemoryBytes).isEqualTo(ONE_GIB)
+    }
+
+    private fun EvidenceJvm.toJson(): Map<String, Any> = linkedMapOf(
+        "inputArguments" to inputArguments,
+        "runtimeInitialMemoryBytes" to runtimeInitialMemoryBytes,
+        "runtimeMaxMemoryBytes" to runtimeMaxMemoryBytes,
+        "heapInitialMemoryBytes" to heapInitialMemoryBytes,
+        "heapMaxMemoryBytes" to heapMaxMemoryBytes,
+    )
 
     private fun evidenceReportPath(): Path {
         val workingDirectory = Path.of(System.getProperty("user.dir"))
@@ -246,6 +286,7 @@ class LocalFsObjectStorageTest {
     }
 
     private companion object {
+        const val ONE_GIB = 1024L * 1024L * 1024L
         const val FIXTURE_SEED = 745L
         const val FIXTURE_BYTES = 1024 * 1024
         const val WARMUP_OBJECTS = 32
@@ -256,4 +297,12 @@ class LocalFsObjectStorageTest {
         const val NANOS_PER_SECOND = 1_000_000_000.0
         val EVIDENCE_TIMEOUT: Duration = Duration.ofMinutes(10)
     }
+
+    private data class EvidenceJvm(
+        val inputArguments: List<String>,
+        val runtimeInitialMemoryBytes: Long,
+        val runtimeMaxMemoryBytes: Long,
+        val heapInitialMemoryBytes: Long,
+        val heapMaxMemoryBytes: Long,
+    )
 }

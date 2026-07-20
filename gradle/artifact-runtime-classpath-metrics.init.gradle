@@ -1,0 +1,37 @@
+/**
+ * Read-only runtimeClasspath measurement used by the artifact extraction evidence.
+ *
+ * Usage:
+ *   ./gradlew --init-script gradle/artifact-runtime-classpath-metrics.init.gradle \
+ *     :module-external-api:artifactRuntimeClasspathMetrics
+ */
+gradle.afterProject { measuredProject ->
+    def runtimeClasspath = measuredProject.configurations.findByName('runtimeClasspath')
+    if (runtimeClasspath != null && measuredProject.tasks.findByName('artifactRuntimeClasspathMetrics') == null) {
+        measuredProject.tasks.register('artifactRuntimeClasspathMetrics') {
+            group = 'verification'
+            description = 'Print exact runtimeClasspath entries, count, and total regular-file bytes.'
+
+            doLast {
+                def entries = runtimeClasspath.files
+                    .collect { it.canonicalFile }
+                    .sort { left, right -> left.path <=> right.path }
+                def nonFiles = entries.findAll { !it.isFile() }
+                if (!nonFiles.empty) {
+                    throw new GradleException(
+                        "${measuredProject.path} runtimeClasspath contains non-files: " +
+                            nonFiles.collect { it.path }.join(', ')
+                    )
+                }
+
+                long totalBytes = entries.inject(0L) { total, entry -> total + entry.length() }
+                entries.each { entry ->
+                    println "ARTIFACT_RUNTIME_CLASSPATH_ENTRY " +
+                        "module=${measuredProject.path} bytes=${entry.length()} path=${entry.path}"
+                }
+                println "ARTIFACT_RUNTIME_CLASSPATH_TOTAL " +
+                    "module=${measuredProject.path} entryCount=${entries.size()} totalBytes=${totalBytes}"
+            }
+        }
+    }
+}

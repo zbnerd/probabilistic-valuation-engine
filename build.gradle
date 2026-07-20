@@ -151,9 +151,15 @@ subprojects {
 
 	// 테스트 설정
 	boolean isCiServer = System.getenv().containsKey("CI")
+	boolean isArtifactEvidence = project.hasProperty('artifactEvidence')
 
 	test {
-		jvmArgs = [
+		jvmArgs = isArtifactEvidence ? [
+			'-Xms1g',
+			'-Xmx1g',
+			'-XX:+UseG1GC',
+			'-XX:MaxMetaspaceSize=512m'
+		] : [
 			'-Xms512m',
 			'-Xmx2048m',
 			'-XX:+UseG1GC',

@@ -77,8 +77,7 @@ class NexonFailureClassifierTest {
         endpointTemplate = template,
     )
 
-    private fun error(code: String, message: String): ByteArray =
-        """{"error":{"name":"$code","message":"$message"}}""".toByteArray()
+    private fun error(code: String, message: String): ByteArray = """{"error":{"name":"$code","message":"$message"}}""".toByteArray()
 
     private companion object {
         private const val SECRET = "synthetic-byok-secret-should-never-escape"

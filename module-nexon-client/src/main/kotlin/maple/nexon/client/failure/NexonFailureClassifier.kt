@@ -83,9 +83,8 @@ class NexonFailureClassifier(
         return current
     }
 
-    private fun isPoolAcquireTimeout(failure: Throwable): Boolean =
-        failure.javaClass.simpleName.contains("PoolAcquireTimeout", ignoreCase = true) ||
-            failure.javaClass.simpleName.contains("PoolAcquirePendingLimit", ignoreCase = true)
+    private fun isPoolAcquireTimeout(failure: Throwable): Boolean = failure.javaClass.simpleName.contains("PoolAcquireTimeout", ignoreCase = true) ||
+        failure.javaClass.simpleName.contains("PoolAcquirePendingLimit", ignoreCase = true)
 
     private companion object {
         private const val NOT_FOUND_CODE = "OPENAPI00004"

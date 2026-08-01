@@ -200,12 +200,7 @@ def _fingerprint(
     availability = "confirmed-unavailable" if unavailable else "available"
     identities = set(child_ids)
     if unavailable:
-        identities.update(
-            {
-                f"status-code:{pages[0].status_code}",
-                f"confirmed-at:{pages[0].fetched_at}",
-            }
-        )
+        identities.add(f"status-code:{pages[0].status_code}")
     return GitHubEndpointFingerprint(
         item_key=item_key,
         endpoint_key=endpoint,

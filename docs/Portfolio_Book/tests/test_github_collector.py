@@ -474,3 +474,73 @@ def test_full_page_without_available_sentinel_cannot_finalize(tmp_path):
 
     with pytest.raises(GitHubClientError, match="availability pagination"):
         collect_issues(StaticClient({endpoint: capped}), "zbnerd/probabilistic-valuation-engine", "snap", tmp_path)
+
+
+class TimestampChangingUnavailableClient:
+    def __init__(self):
+        self.timeline_calls = 0
+
+    def get_pages(self, path, params=None, accept="application/vnd.github+json"):
+        base = "/repos/zbnerd/probabilistic-valuation-engine"
+        if path == f"{base}/pulls":
+            return (_page(path, []),)
+        if path == f"{base}/issues":
+            return (_page(path, [{"number": 9, "updated_at": "u"}]),)
+        if path == f"{base}/issues/9":
+            return (
+                _page(
+                    path,
+                    {
+                        "id": 2009,
+                        "number": 9,
+                        "title": "Issue 9",
+                        "state": "closed",
+                        "updated_at": "u",
+                        "comments": 0,
+                    },
+                ),
+            )
+        if path in (f"{base}/issues/9/comments", f"{base}/issues/9/reactions"):
+            return (_page(path, []),)
+        if path == f"{base}/issues/9/timeline":
+            self.timeline_calls += 1
+            changed = self.timeline_calls >= 2
+            body = b'{"message":"gone"}' if changed else b'{"message":"missing"}'
+            return (
+                GitHubPage(
+                    endpoint=path,
+                    params=dict(params or {}),
+                    page_number=1,
+                    body=body,
+                    json=None,
+                    response_hash=hashlib.sha256(body).hexdigest(),
+                    availability_status="confirmed-unavailable",
+                    status_code=410 if changed else 404,
+                    fetched_at=f"2026-01-02T03:04:{self.timeline_calls:02d}Z",
+                ),
+            )
+        raise AssertionError(path)
+
+
+def test_unavailable_fingerprint_ignores_observation_time_but_detects_status_and_body(tmp_path):
+    client = TimestampChangingUnavailableClient()
+    ticks = iter(f"2026-01-01T00:00:{value:02d}Z" for value in range(20))
+
+    result = reconcile_github(
+        client=client,
+        repository="zbnerd/probabilistic-valuation-engine",
+        snapshot_id="snap",
+        archive_dir=tmp_path,
+        now=lambda: next(ticks),
+        max_passes=4,
+    )
+
+    assert client.timeline_calls == 3
+    assert any("timeline" in key for key in result.passes[1].changed_endpoint_keys)
+    assert result.passes[2].changed_items == ()
+    unavailable = next(record for record in result.records if record.source_type == "github-availability")
+    assert unavailable.payload["status_code"] == 410
+    assert unavailable.payload["confirmed_at"] == "2026-01-02T03:04:03Z"
+    fingerprint = next(value for value in result.window.endpoint_fingerprints if value.endpoint_key.endswith("timeline"))
+    assert "status-code:410" in fingerprint.stable_child_ids
+    assert all(not identity.startswith("confirmed-at:") for identity in fingerprint.stable_child_ids)

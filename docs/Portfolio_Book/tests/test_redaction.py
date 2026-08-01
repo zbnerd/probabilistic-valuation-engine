@@ -1,0 +1,134 @@
+import hashlib
+
+import pytest
+
+from portfolio_builder.redaction import redact_binary_patch, redact_text
+
+
+OWNER_EMAIL = "mps756@gmail.com"
+
+
+@pytest.mark.parametrize(
+    ("source", "kind"),
+    [
+        (b"token=ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD", "github-token"),
+        (b"AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE", "aws-access-key"),
+        (
+            b"-----BEGIN PRIVATE KEY-----\nvery-secret-material\n-----END PRIVATE KEY-----",
+            "pem-private-key",
+        ),
+        (b"Authorization: Bearer access-token_1234567890", "bearer-token"),
+        (b"Cookie: session=private-session-value; theme=dark", "cookie"),
+        (b"https://alice:private-password@example.test/path", "url-credentials"),
+    ],
+)
+def test_redact_text_replaces_each_secret_kind_without_retaining_value(source, kind):
+    result = redact_text(source, allowed_contacts=(OWNER_EMAIL,))
+
+    assert result.value == b"[REDACTED:" + kind.encode() + b"]" or (
+        b"[REDACTED:" + kind.encode() + b"]" in result.value
+    )
+    assert source not in result.value
+    assert result.kinds == (kind,)
+    assert result.raw_hash == hashlib.sha256(source).hexdigest()
+    assert result.stored_hash == hashlib.sha256(result.value).hexdigest()
+    assert result.raw_hash != result.stored_hash
+
+
+def test_redact_text_preserves_owner_email_and_redacts_third_party_contact():
+    source = b"owner=mps756@gmail.com reviewer=third.party@example.org"
+
+    result = redact_text(source, allowed_contacts=(OWNER_EMAIL,))
+
+    assert b"mps756@gmail.com" in result.value
+    assert b"third.party@example.org" not in result.value
+    assert result.value.endswith(b"[REDACTED:third-party-email]")
+    assert result.kinds == ("third-party-email",)
+
+
+def test_default_owner_allowlist_and_multiple_contact_matches_are_deterministic():
+    source = b"mps756@gmail.com a@example.org b@example.org"
+
+    result = redact_text(source)
+
+    assert result.value.startswith(b"mps756@gmail.com ")
+    assert result.value.count(b"[REDACTED:third-party-email]") == 2
+    assert result.kinds == ("third-party-email",)
+
+
+def test_rules_are_ordered_and_kinds_are_sorted_unique_for_overlapping_content():
+    source = (
+        b"Bearer ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD "
+        b"email=other@example.org token=ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD"
+    )
+
+    result = redact_text(source, allowed_contacts=(OWNER_EMAIL,))
+
+    assert result.value.count(b"[REDACTED:github-token]") == 1
+    assert b"[REDACTED:bearer-token]" in result.value
+    assert b"[REDACTED:third-party-email]" in result.value
+    assert result.kinds == tuple(sorted(set(result.kinds)))
+    assert result.kinds == ("bearer-token", "github-token", "third-party-email")
+
+
+def test_redaction_is_byte_idempotent_and_handles_non_utf8_bytes():
+    source = b"\xff before ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD after \xfe"
+
+    first = redact_text(source, allowed_contacts=(OWNER_EMAIL,))
+    second = redact_text(first.value, allowed_contacts=(OWNER_EMAIL,))
+
+    assert first.value == second.value
+    assert first.stored_hash == second.stored_hash
+    assert first.value.startswith(b"\xff before ")
+    assert first.value.endswith(b" after \xfe")
+
+
+def test_binary_patch_only_retains_validated_fixed_metadata_and_marker():
+    source = (
+        b"diff --git a/private.bin b/private.bin\n"
+        b"GIT binary patch\nliteral 99\nsecret-binary-payload\n"
+    )
+    metadata = {
+        "old_blob": "0123456789abcdef0123456789abcdef01234567",
+        "new_blob": "fedcba9876543210fedcba9876543210fedcba98",
+        "old_size": 12,
+        "new_size": 99,
+        "attacker\nheader": "ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD",
+        "note": "third.party@example.org",
+    }
+
+    result = redact_binary_patch(source, metadata)
+
+    assert result.value == (
+        b"old_blob: 0123456789abcdef0123456789abcdef01234567\n"
+        b"new_blob: fedcba9876543210fedcba9876543210fedcba98\n"
+        b"old_size: 12\n"
+        b"new_size: 99\n"
+        b"[REDACTED BINARY PAYLOAD]\n"
+    )
+    assert b"secret-binary-payload" not in result.value
+    assert b"attacker" not in result.value
+    assert b"third.party" not in result.value
+    assert result.kinds == ("binary-patch",)
+    assert result.raw_hash == hashlib.sha256(source).hexdigest()
+    assert result.stored_hash == hashlib.sha256(result.value).hexdigest()
+    assert result.raw_hash != result.stored_hash
+
+
+def test_binary_patch_is_byte_idempotent_and_metadata_validation_is_deny_by_default():
+    metadata = {
+        "old_blob": "0123456789abcdef0123456789abcdef01234567",
+        "old_size": True,
+        "new_size": -1,
+        "new_blob": "not a blob id",
+    }
+
+    first = redact_binary_patch(b"untrusted binary data", metadata)
+    second = redact_binary_patch(first.value, metadata)
+
+    assert first.value == (
+        b"old_blob: 0123456789abcdef0123456789abcdef01234567\n"
+        b"[REDACTED BINARY PAYLOAD]\n"
+    )
+    assert first.value == second.value
+    assert first.stored_hash == second.stored_hash

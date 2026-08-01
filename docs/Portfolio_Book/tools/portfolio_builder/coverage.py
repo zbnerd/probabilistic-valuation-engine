@@ -849,8 +849,26 @@ def _fingerprint_child(
                 f"GitHub availability body hash mismatch: {record.source_id}"
             )
         return (f"{fingerprint.item_key}|{token}",)
+    gap_tokens = tuple(
+        value
+        for value in fingerprint.stable_child_ids
+        if value.startswith("count-gap:")
+    )
+    if len(gap_tokens) > 1:
+        raise CoverageError(
+            f"GitHub count gap fingerprint mismatch: {fingerprint.item_key}|{fingerprint.endpoint_key}"
+        )
+    gap_captured: tuple[str, ...] = ()
+    if gap_tokens:
+        gap_captured = _verify_count_gap(
+            fingerprint,
+            sources,
+            gap_tokens[0],
+        )
     captured: list[str] = []
     for stable_id in fingerprint.stable_child_ids:
+        if stable_id.startswith("count-gap:"):
+            continue
         expected_locator = f"github:{fingerprint.endpoint_key}#{stable_id}"
         matches = [source for source in sources if source.source_locator == expected_locator]
         if len(matches) != 1:
@@ -862,7 +880,188 @@ def _fingerprint_child(
                 f"GitHub child hash reconciliation mismatch: {matches[0].source_id}"
             )
         captured.append(f"{fingerprint.item_key}|{stable_id}")
-    return tuple(captured)
+    return tuple(captured) + gap_captured
+
+
+def _verify_count_gap(
+    fingerprint: GitHubEndpointFingerprint,
+    sources: tuple[SourceRecord, ...],
+    token: str,
+) -> tuple[str, ...]:
+    locator = f"github:{fingerprint.endpoint_key}#{token}"
+    matches = [
+        source
+        for source in sources
+        if source.source_type == "github-count-gap"
+        and source.source_locator == locator
+    ]
+    if len(matches) != 1:
+        raise CoverageError(
+            f"GitHub count gap record missing stable ID: {fingerprint.item_key}|{token}"
+        )
+    record = matches[0]
+    expected_source_id = "GH-COUNT-GAP-" + _sha256(
+        f"{fingerprint.item_key}:{fingerprint.endpoint_key}".encode()
+    )[:24]
+    if record.source_id != expected_source_id:
+        raise CoverageError(
+            f"GitHub count gap record stable ID mismatch: {record.source_id}"
+        )
+    reason = "parent-reported count exceeds accessible endpoint enumeration"
+    if (
+        record.classification != "record-only"
+        or record.availability_status != "confirmed-unavailable"
+        or record.record_only_reason != reason
+    ):
+        raise CoverageError(f"GitHub count gap record-only mismatch: {record.source_id}")
+    payload = record.payload
+    allowed_keys = {
+        "contract",
+        "item_key",
+        "endpoint",
+        "endpoint_kind",
+        "expected_count",
+        "observed_count",
+        "missing_count",
+        "parent_detail_response_sha256",
+        "parent_updated_at",
+        "child_accept",
+        "child_request_params",
+        "child_request_params_sha256",
+        "child_page_numbers",
+        "child_page_response_sha256",
+        "child_stable_ids",
+        "parent_detail_fetched_at",
+        "child_page_fetched_at",
+        "evidence_chain_sha256",
+        "gap_token",
+        "reason",
+        "fetched_at",
+        "captured_updated_at",
+        "response_raw_sha256",
+    }
+    if set(payload) != allowed_keys:
+        raise CoverageError(f"GitHub count gap safe metadata mismatch: {record.source_id}")
+    actual_child_ids = tuple(
+        sorted(
+            value
+            for value in fingerprint.stable_child_ids
+            if not value.startswith("count-gap:")
+        )
+    )
+    expected_count = payload.get("expected_count")
+    observed_count = payload.get("observed_count")
+    missing_count = payload.get("missing_count")
+    valid_counts = all(
+        isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        for value in (expected_count, observed_count, missing_count)
+    )
+    if (
+        not valid_counts
+        or observed_count != len(actual_child_ids)
+        or expected_count <= observed_count
+        or observed_count + missing_count != expected_count
+    ):
+        raise CoverageError(f"GitHub count gap arithmetic mismatch: {record.source_id}")
+    params = payload.get("child_request_params")
+    page_numbers = payload.get("child_page_numbers")
+    page_hashes = payload.get("child_page_response_sha256")
+    child_ids = payload.get("child_stable_ids")
+    child_fetched = payload.get("child_page_fetched_at")
+    if (
+        payload.get("contract") != "github-count-gap-v1"
+        or payload.get("item_key") != fingerprint.item_key
+        or payload.get("endpoint") != fingerprint.endpoint_key
+        or payload.get("child_accept") != fingerprint.accept
+        or not isinstance(params, Mapping)
+        or _sha256(_canonical_json(dict(params))) != fingerprint.request_params_sha256
+        or payload.get("child_request_params_sha256") != fingerprint.request_params_sha256
+        or page_numbers != list(fingerprint.page_numbers)
+        or page_hashes != list(fingerprint.page_response_hashes)
+        or child_ids != list(actual_child_ids)
+        or not isinstance(child_fetched, list)
+        or not child_fetched
+        or len(child_fetched) != len(fingerprint.page_numbers)
+        or not all(isinstance(value, str) for value in child_fetched)
+    ):
+        raise CoverageError(f"GitHub count gap endpoint fingerprint mismatch: {record.source_id}")
+    endpoint_kind = payload.get("endpoint_kind")
+    count_field = {
+        "commits": "commits",
+        "files": "changed_files",
+        "review-comments": "review_comments",
+        "conversation-comments": "comments",
+    }.get(endpoint_kind)
+    item_kind, separator, raw_number = fingerprint.item_key.partition(":")
+    if count_field is None or not separator or item_kind not in {"pull", "pr", "issue"} or not raw_number.isdigit():
+        raise CoverageError(f"GitHub count gap parent locator mismatch: {record.source_id}")
+    prefix = "GH-PR" if item_kind in {"pull", "pr"} else "GH-ISSUE"
+    parent_matches = [source for source in sources if source.source_id == f"{prefix}-{raw_number}"]
+    if len(parent_matches) != 1:
+        raise CoverageError(f"GitHub count gap parent missing stable ID: {record.source_id}")
+    parent = parent_matches[0]
+    parent_value = parent.payload.get("value")
+    parent_hash = payload.get("parent_detail_response_sha256")
+    parent_updated_at = payload.get("parent_updated_at")
+    if (
+        not isinstance(parent_value, Mapping)
+        or parent_value.get(count_field) != expected_count
+        or parent_value.get("updated_at") != parent_updated_at
+        or parent.payload.get("captured_updated_at") != parent_updated_at
+    ):
+        raise CoverageError(f"GitHub count gap parent count mismatch: {record.source_id}")
+    if (
+        parent.raw_hash != parent_hash
+        or parent.payload.get("endpoint_response_raw_sha256") != parent_hash
+        or parent.payload.get("response_raw_sha256") != parent_hash
+    ):
+        raise CoverageError(f"GitHub count gap parent detail hash mismatch: {record.source_id}")
+    stable_evidence = {
+        "contract": "github-count-gap-v1",
+        "item_key": fingerprint.item_key,
+        "endpoint": fingerprint.endpoint_key,
+        "endpoint_kind": endpoint_kind,
+        "expected_count": expected_count,
+        "observed_count": observed_count,
+        "missing_count": missing_count,
+        "parent_detail_response_sha256": parent_hash,
+        "parent_updated_at": parent_updated_at,
+        "child_accept": fingerprint.accept,
+        "child_request_params": dict(sorted(params.items())),
+        "child_request_params_sha256": fingerprint.request_params_sha256,
+        "child_page_numbers": list(fingerprint.page_numbers),
+        "child_page_response_sha256": list(fingerprint.page_response_hashes),
+        "child_stable_ids": list(actual_child_ids),
+    }
+    expected_token = "count-gap:" + _sha256(_canonical_json(stable_evidence))
+    if token != expected_token or payload.get("gap_token") != expected_token:
+        raise CoverageError(f"GitHub count gap token mismatch: {record.source_id}")
+    parent_fetched = payload.get("parent_detail_fetched_at")
+    if not isinstance(parent_fetched, str):
+        raise CoverageError(f"GitHub count gap observation time mismatch: {record.source_id}")
+    evidence_chain = {
+        **stable_evidence,
+        "parent_detail_fetched_at": parent_fetched,
+        "child_page_fetched_at": child_fetched,
+    }
+    evidence_hash = _sha256(_canonical_json(evidence_chain))
+    safe_payload = {
+        **evidence_chain,
+        "evidence_chain_sha256": evidence_hash,
+        "gap_token": expected_token,
+        "reason": reason,
+    }
+    if (
+        payload.get("evidence_chain_sha256") != evidence_hash
+        or payload.get("response_raw_sha256") != evidence_hash
+        or record.raw_hash != evidence_hash
+        or record.stored_hash != _sha256(_canonical_json(safe_payload))
+        or payload.get("reason") != reason
+        or payload.get("fetched_at") != child_fetched[-1]
+        or payload.get("captured_updated_at") != parent_updated_at
+    ):
+        raise CoverageError(f"GitHub count gap evidence hash mismatch: {record.source_id}")
+    return (f"{fingerprint.item_key}|{token}",)
 
 
 def _verify_github(
@@ -886,7 +1085,7 @@ def _verify_github(
     terminal_detail_items: set[str] = set()
     for item_key, number, suffix in (
         *(
-            (f"pr:{number}", number, f"/pulls/{number}")
+            (f"pull:{number}", number, f"/pulls/{number}")
             for number in window.pull_request_numbers
         ),
         *(
@@ -903,12 +1102,12 @@ def _verify_github(
         ]
         if len(terminal) == 1:
             terminal_detail_items.add(item_key)
-            prefix = "GH-PR" if item_key.startswith("pr:") else "GH-ISSUE"
+            prefix = "GH-PR" if item_key.startswith("pull:") else "GH-ISSUE"
             captured_parent_ids.append(f"{prefix}-{number}")
     captured_parents = tuple(captured_parent_ids)
     _stable_set("GitHub parents", expected_parents, captured_parents)
     expected_updates = tuple(
-        [f"pr:{number}" for number in window.pull_request_numbers]
+        [f"pull:{number}" for number in window.pull_request_numbers]
         + [f"issue:{number}" for number in window.issue_numbers]
     )
     _stable_set("GitHub updated-at items", expected_updates, window.updated_at_by_item)
@@ -939,23 +1138,23 @@ def _verify_github(
             ("issue:enumeration", "/issues"),
         ]
         for number in window.pull_request_numbers:
-            item_key = f"pr:{number}"
+            item_key = f"pull:{number}"
             expected_endpoint_suffixes.append((item_key, f"/pulls/{number}"))
             if item_key not in terminal_detail_items:
                 expected_endpoint_suffixes.extend(
                     (
-                        (f"pr:{number}", f"/pulls/{number}/commits"),
-                        (f"pr:{number}", f"/pulls/{number}/files"),
-                        (f"pr:{number}", f"/pulls/{number}/reviews"),
-                        (f"pr:{number}", f"/pulls/{number}/comments"),
-                        (f"pr:{number}", f"/issues/{number}/comments"),
-                        (f"pr:{number}", f"/issues/{number}/timeline"),
-                        (f"pr:{number}", f"/issues/{number}/reactions"),
+                        (f"pull:{number}", f"/pulls/{number}/commits"),
+                        (f"pull:{number}", f"/pulls/{number}/files"),
+                        (f"pull:{number}", f"/pulls/{number}/reviews"),
+                        (f"pull:{number}", f"/pulls/{number}/comments"),
+                        (f"pull:{number}", f"/issues/{number}/comments"),
+                        (f"pull:{number}", f"/issues/{number}/timeline"),
+                        (f"pull:{number}", f"/issues/{number}/reactions"),
                         (
-                            f"pr:{number}",
+                            f"pull:{number}",
                             f"/pulls/{number}/requested_reviewers",
                         ),
-                        (f"pr:{number}", f"/pulls/{number}.patch"),
+                        (f"pull:{number}", f"/pulls/{number}.patch"),
                     )
                 )
         for number in window.issue_numbers:
@@ -993,6 +1192,7 @@ def _verify_github(
             "github-timeline-event",
             "github-reaction",
             "github-requested-reviewer",
+            "github-count-gap",
         }
         matching = [
             fingerprint

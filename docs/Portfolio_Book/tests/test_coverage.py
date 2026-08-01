@@ -182,7 +182,7 @@ def _snapshot(tmp_path: Path) -> tuple[SnapshotManifest, Path]:
     external_path.parent.mkdir()
     external_path.write_bytes(b"locked-pdf")
     endpoint = GitHubEndpointFingerprint(
-        item_key="pr:7",
+        item_key="pull:7",
         endpoint_key="/repos/o/r/pulls/7/commits",
         request_params_sha256="3" * 64,
         accept="application/vnd.github+json",
@@ -197,7 +197,7 @@ def _snapshot(tmp_path: Path) -> tuple[SnapshotManifest, Path]:
         reconciled_at="2026-08-01T00:00:02Z",
         pull_request_numbers=(7,),
         issue_numbers=(),
-        updated_at_by_item={"pr:7": "2026-08-01T00:00:01Z"},
+        updated_at_by_item={"pull:7": "2026-08-01T00:00:01Z"},
         endpoint_fingerprints=(endpoint,),
     )
     return (
@@ -635,6 +635,117 @@ def test_confirmed_unavailable_fingerprint_rejects_coherently_reidentified_archi
         coverage_module._fingerprint_child(fingerprint, records)
 
 
+def test_count_gap_coverage_binds_parent_count_endpoint_fingerprint_and_identity(tmp_path: Path):
+    endpoint = "/repos/zbnerd/probabilistic-valuation-engine/pulls/7/comments"
+    detail_endpoint = "/repos/zbnerd/probabilistic-valuation-engine/pulls/7"
+    detail = {
+        "id": 1007,
+        "number": 7,
+        "updated_at": "2026-01-01T00:00:00Z",
+        "review_comments": 6,
+    }
+    detail_body = json.dumps(detail, sort_keys=True, separators=(",", ":")).encode()
+    detail_page = GitHubPage(
+        detail_endpoint,
+        {},
+        1,
+        detail_body,
+        detail,
+        _hash(detail_body),
+        "available",
+        200,
+        "2026-01-02T03:04:05Z",
+    )
+    child_body = b"[]"
+    child_page = GitHubPage(
+        endpoint,
+        {"per_page": 100},
+        1,
+        child_body,
+        [],
+        _hash(child_body),
+        "available",
+        200,
+        "2026-01-02T03:04:06Z",
+    )
+    gap, token = github_collector._count_gap_record(
+        item_key="pull:7",
+        endpoint=endpoint,
+        endpoint_kind="review-comments",
+        snapshot_id="SNAP-test",
+        pages=(child_page,),
+        params={"per_page": 100},
+        accept="application/vnd.github+json",
+        child_ids=(),
+        expected_count=6,
+        parent_detail_page=detail_page,
+        parent_updated_at=detail["updated_at"],
+    )
+    fingerprint = github_collector._fingerprint(
+        item_key="pull:7",
+        endpoint=endpoint,
+        params={"per_page": 100},
+        accept="application/vnd.github+json",
+        pages=(child_page,),
+        child_ids=(token,),
+    )
+    parent = _source(
+        "GH-PR-7",
+        "github-pull-request",
+        locator="github:zbnerd/probabilistic-valuation-engine/pull/7",
+        raw_hash=detail_page.response_hash,
+        payload={
+            "captured_updated_at": detail["updated_at"],
+            "endpoint_response_raw_sha256": detail_page.response_hash,
+            "response_raw_sha256": detail_page.response_hash,
+            "value": detail,
+        },
+    )
+    sources = (parent, gap.record)
+
+    assert coverage_module._fingerprint_child(fingerprint, sources) == (
+        f"pull:7|{token}",
+    )
+    snapshot, _ = _snapshot(tmp_path)
+    window = replace(
+        snapshot.github_window,
+        updated_at_by_item={"pull:7": detail["updated_at"]},
+        endpoint_fingerprints=(fingerprint,),
+    )
+    expected, captured, covered = coverage_module._verify_github(
+        replace(snapshot, github_window=window),
+        sources,
+        strict_endpoints=False,
+    )
+    assert expected == captured == ("GH-PR-7",)
+    assert f"pull:7|{token}" in covered
+    with pytest.raises(CoverageError, match="count gap record missing stable ID"):
+        coverage_module._fingerprint_child(fingerprint, (parent,))
+    with pytest.raises(CoverageError, match="count gap record stable ID mismatch"):
+        coverage_module._fingerprint_child(
+            fingerprint,
+            (parent, replace(gap.record, source_id="GH-COUNT-GAP-" + "f" * 24)),
+        )
+    changed_count = replace(
+        gap.record,
+        payload={**gap.record.payload, "missing_count": 5},
+    )
+    with pytest.raises(CoverageError, match="count gap arithmetic mismatch"):
+        coverage_module._fingerprint_child(fingerprint, (parent, changed_count))
+    changed_parent = replace(parent, raw_hash="0" * 64)
+    with pytest.raises(CoverageError, match="count gap parent detail hash mismatch"):
+        coverage_module._fingerprint_child(fingerprint, (changed_parent, gap.record))
+    changed_status = replace(gap.record, availability_status="available")
+    with pytest.raises(CoverageError, match="count gap record-only mismatch"):
+        coverage_module._fingerprint_child(fingerprint, (parent, changed_status))
+    changed_fingerprint = replace(
+        fingerprint,
+        page_response_hashes=("0" * 64,),
+    )
+    with pytest.raises(CoverageError, match="count gap endpoint fingerprint mismatch"):
+        coverage_module._fingerprint_child(changed_fingerprint, sources)
+
+
 def test_terminal_unavailable_detail_and_enumeration_metadata_count_complete(
     tmp_path: Path,
 ):
@@ -694,7 +805,7 @@ def test_terminal_unavailable_detail_and_enumeration_metadata_count_complete(
             child_ids=(),
         ),
         github_collector._fingerprint(
-            item_key="pr:7",
+            item_key="pull:7",
             endpoint=detail_endpoint,
             params={},
             accept="application/vnd.github+json",
@@ -702,7 +813,7 @@ def test_terminal_unavailable_detail_and_enumeration_metadata_count_complete(
         ),
     )
     availability = github_collector._availability_record(
-        item_key="pr:7",
+        item_key="pull:7",
         endpoint=detail_endpoint,
         snapshot_id="SNAP-test",
         page=detail_page,
@@ -716,7 +827,7 @@ def test_terminal_unavailable_detail_and_enumeration_metadata_count_complete(
         "r",
         (7,),
         (),
-        {"pr:7": "2026-08-01T00:00:00Z"},
+        {"pull:7": "2026-08-01T00:00:00Z"},
         fingerprints,
     )
     expected, captured, detail = coverage_module._verify_github(
@@ -957,7 +1068,7 @@ def test_capture_coverage_names_missing_stable_ids_and_treats_only_terminal_unav
         fetched_at="2026-08-01T00:00:00Z",
     )
     terminal = github_collector._availability_record(
-        item_key="pr:7",
+        item_key="pull:7",
         endpoint=terminal_page.endpoint,
         snapshot_id=snapshot.snapshot_id,
         page=terminal_page,
@@ -965,7 +1076,7 @@ def test_capture_coverage_names_missing_stable_ids_and_treats_only_terminal_unav
         accept="application/vnd.github+json",
     ).record
     terminal_fingerprint = github_collector._fingerprint(
-        item_key="pr:7",
+        item_key="pull:7",
         endpoint=terminal_page.endpoint,
         params={"per_page": 100},
         accept="application/vnd.github+json",

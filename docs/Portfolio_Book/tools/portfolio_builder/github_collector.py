@@ -25,6 +25,7 @@ from .redaction import redact_text
 PATCH_ACCEPT = "application/vnd.github.patch"
 PER_PAGE = 100
 REPOSITORY = "zbnerd/probabilistic-valuation-engine"
+COUNT_GAP_REASON = "parent-reported count exceeds accessible endpoint enumeration"
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,14 +192,13 @@ def _complete_pages(
     accept: str = DEFAULT_ACCEPT,
     allow_unavailable: bool = False,
     endpoint_kind: str,
-    independent_count: int | None = None,
 ) -> tuple[GitHubPage, ...]:
     pages = _require_pages(
         client.get_pages(endpoint, params),
         endpoint,
         allow_unavailable=allow_unavailable,
     )
-    if _is_unavailable(pages) or independent_count is not None:
+    if _is_unavailable(pages):
         return pages
     while _page_item_count(pages[-1], endpoint, endpoint_kind) == PER_PAGE:
         next_page = pages[-1].page_number + 1
@@ -450,6 +450,83 @@ def _availability_record(
     )
 
 
+def _count_gap_record(
+    *,
+    item_key: str,
+    endpoint: str,
+    endpoint_kind: str,
+    snapshot_id: str,
+    pages: tuple[GitHubPage, ...],
+    params: Mapping[str, object],
+    accept: str,
+    child_ids: tuple[str, ...],
+    expected_count: int,
+    parent_detail_page: GitHubPage,
+    parent_updated_at: str,
+) -> tuple[_SafeRecord, str]:
+    observed_count = len(child_ids)
+    if expected_count <= observed_count:
+        raise ValueError("count gap requires expected_count > observed_count")
+    stable_evidence = {
+        "contract": "github-count-gap-v1",
+        "item_key": item_key,
+        "endpoint": endpoint,
+        "endpoint_kind": endpoint_kind,
+        "expected_count": expected_count,
+        "observed_count": observed_count,
+        "missing_count": expected_count - observed_count,
+        "parent_detail_response_sha256": parent_detail_page.response_hash,
+        "parent_updated_at": parent_updated_at,
+        "child_accept": accept,
+        "child_request_params": dict(sorted(params.items())),
+        "child_request_params_sha256": _params_hash(params),
+        "child_page_numbers": [page.page_number for page in pages],
+        "child_page_response_sha256": [page.response_hash for page in pages],
+        "child_stable_ids": list(sorted(child_ids)),
+    }
+    token = "count-gap:" + _sha256(_canonical_json(stable_evidence))
+    evidence_chain = {
+        **stable_evidence,
+        "parent_detail_fetched_at": parent_detail_page.fetched_at,
+        "child_page_fetched_at": [page.fetched_at for page in pages],
+    }
+    raw = _canonical_json(evidence_chain)
+    raw_hash = _sha256(raw)
+    safe_payload = {
+        **evidence_chain,
+        "evidence_chain_sha256": raw_hash,
+        "gap_token": token,
+        "reason": COUNT_GAP_REASON,
+    }
+    safe = _canonical_json(safe_payload)
+    source_id = "GH-COUNT-GAP-" + _sha256(f"{item_key}:{endpoint}".encode())[:24]
+    record = _record(
+        source_id=source_id,
+        source_type="github-count-gap",
+        locator=f"github:{endpoint}#{token}",
+        snapshot_id=snapshot_id,
+        title=f"Count gap {item_key} {endpoint_kind}",
+        raw=raw,
+        safe=safe,
+        fetched_at=pages[-1].fetched_at,
+        captured_updated_at=parent_updated_at,
+        availability="confirmed-unavailable",
+        payload=safe_payload,
+    )
+    return (
+        _SafeRecord(
+            replace(
+                record,
+                classification="record-only",
+                record_only_reason=COUNT_GAP_REASON,
+            ),
+            safe,
+            "json",
+        ),
+        token,
+    )
+
+
 def _requested_rows(value: object, endpoint: str) -> tuple[dict[str, object], ...]:
     if not isinstance(value, dict):
         raise GitHubClientError(f"malformed requested reviewers: endpoint={endpoint}")
@@ -486,6 +563,7 @@ def _capture_endpoint(
     fetched_at: str,
     captured_updated_at: str | None,
     independent_count: int | None,
+    parent_detail_page: GitHubPage,
 ) -> tuple[tuple[_SafeRecord, ...], GitHubEndpointFingerprint]:
     params = {"per_page": PER_PAGE}
     pages = _complete_pages(
@@ -494,7 +572,6 @@ def _capture_endpoint(
         params,
         allow_unavailable=True,
         endpoint_kind=endpoint_kind,
-        independent_count=independent_count,
     )
     if _is_unavailable(pages):
         return (
@@ -535,13 +612,40 @@ def _capture_endpoint(
         )
         for (row, page), stable_id in zip(rows_with_pages, ids, strict=True)
     )
+    fingerprint_ids = ids
+    if independent_count is not None:
+        observed_count = len(ids)
+        if independent_count < observed_count:
+            raise GitHubClientError(
+                f"count mismatch: endpoint={endpoint_kind} expected={independent_count} actual={observed_count}"
+            )
+        if independent_count > observed_count:
+            if captured_updated_at is None:
+                raise GitHubClientError(
+                    f"count gap missing parent updated_at: endpoint={endpoint_kind}"
+                )
+            gap, gap_token = _count_gap_record(
+                item_key=item_key,
+                endpoint=endpoint,
+                endpoint_kind=endpoint_kind,
+                snapshot_id=snapshot_id,
+                pages=pages,
+                params=params,
+                accept=DEFAULT_ACCEPT,
+                child_ids=ids,
+                expected_count=independent_count,
+                parent_detail_page=parent_detail_page,
+                parent_updated_at=captured_updated_at,
+            )
+            safe_records = (*safe_records, gap)
+            fingerprint_ids = (*ids, gap_token)
     return safe_records, _fingerprint(
         item_key=item_key,
         endpoint=endpoint,
         params=params,
         accept=DEFAULT_ACCEPT,
         pages=pages,
-        child_ids=ids,
+        child_ids=fingerprint_ids,
     )
 
 
@@ -563,16 +667,6 @@ def _expected_counts(detail: Mapping[str, object], kind: str) -> dict[str, int]:
             }
         )
     return expected
-
-
-def _validate_counts(
-    expected: Mapping[str, int], counts: Mapping[str, int], unavailable: set[str]
-) -> None:
-    for endpoint_kind, value in expected.items():
-        if endpoint_kind in counts and endpoint_kind not in unavailable and value != counts[endpoint_kind]:
-            raise GitHubClientError(
-                f"count mismatch: endpoint={endpoint_kind} expected={value} actual={counts[endpoint_kind]}"
-            )
 
 
 def _hydrate_item(
@@ -644,8 +738,6 @@ def _hydrate_item(
             *endpoints,
             (f"{base}/pulls/{number}/requested_reviewers", "requested-reviewers"),
         ]
-    counts: dict[str, int] = {}
-    unavailable: set[str] = set()
     for endpoint, endpoint_kind in endpoints:
         records, fingerprint = _capture_endpoint(
             client=client,
@@ -656,14 +748,10 @@ def _hydrate_item(
             fetched_at=fetched_at,
             captured_updated_at=captured_updated_at,
             independent_count=expected_counts.get(endpoint_kind),
+            parent_detail_page=detail_pages[0],
         )
         safe.extend(records)
         fingerprints.append(fingerprint)
-        if fingerprint.availability_status == "confirmed-unavailable":
-            unavailable.add(endpoint_kind)
-        else:
-            counts[endpoint_kind] = len(fingerprint.stable_child_ids)
-    _validate_counts(expected_counts, counts, unavailable)
     if kind == "pull":
         patch_endpoint = f"{base}/pulls/{number}.patch"
         patch_page = client.get_bytes_page(patch_endpoint, accept=PATCH_ACCEPT)

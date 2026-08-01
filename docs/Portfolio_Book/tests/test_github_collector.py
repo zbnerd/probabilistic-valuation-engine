@@ -447,6 +447,172 @@ def test_available_pr_requires_valid_nonnegative_detail_counts(tmp_path, field, 
         collect_pull_requests(StaticClient(pages, {f"{base}/pulls/1.patch": b"patch"}), "zbnerd/probabilistic-valuation-engine", "snap", tmp_path)
 
 
+def test_parent_count_gap_is_one_record_only_fact_without_guessed_children(tmp_path):
+    base = "/repos/zbnerd/probabilistic-valuation-engine"
+    pages = {
+        f"{base}/pulls": (_page(f"{base}/pulls", [{"number": 7, "updated_at": "u"}]),),
+        **_pr_pages(7),
+    }
+    detail = {**pages[f"{base}/pulls/7"][0].json, "review_comments": 6}
+    detail_page = _page(f"{base}/pulls/7", detail, fetched_at="2026-01-02T03:04:05Z")
+    child_page = _page(
+        f"{base}/pulls/7/comments",
+        [],
+        fetched_at="2026-01-02T03:04:06Z",
+    )
+    pages[f"{base}/pulls/7"] = (detail_page,)
+    pages[f"{base}/pulls/7/comments"] = (child_page,)
+
+    result = collect_pull_requests(
+        StaticClient(pages, {f"{base}/pulls/7.patch": b"patch"}),
+        "zbnerd/probabilistic-valuation-engine",
+        "snap",
+        tmp_path,
+    )
+
+    gaps = [record for record in result.records if record.source_type == "github-count-gap"]
+    assert len(gaps) == 1
+    gap = gaps[0]
+    assert gap.classification == "record-only"
+    assert gap.availability_status == "confirmed-unavailable"
+    assert gap.record_only_reason == "parent-reported count exceeds accessible endpoint enumeration"
+    assert gap.payload["item_key"] == "pull:7"
+    assert gap.payload["endpoint_kind"] == "review-comments"
+    assert gap.payload["expected_count"] == 6
+    assert gap.payload["observed_count"] == 0
+    assert gap.payload["missing_count"] == 6
+    assert gap.payload["parent_detail_response_sha256"] == detail_page.response_hash
+    assert gap.payload["parent_updated_at"] == detail["updated_at"]
+    assert gap.payload["child_page_numbers"] == [1]
+    assert gap.payload["child_page_response_sha256"] == [child_page.response_hash]
+    assert gap.payload["child_stable_ids"] == []
+    assert gap.payload["child_page_fetched_at"] == [child_page.fetched_at]
+    assert "deleted" not in json.dumps(gap.payload).lower()
+    assert "content" not in gap.payload
+    fingerprint = next(
+        value
+        for value in result.endpoint_fingerprints
+        if value.endpoint_key == f"{base}/pulls/7/comments"
+    )
+    gap_tokens = [value for value in fingerprint.stable_child_ids if value.startswith("count-gap:")]
+    assert len(gap_tokens) == 1
+    assert gap.source_locator == f"github:{fingerprint.endpoint_key}#{gap_tokens[0]}"
+    assert len([record for record in result.records if record.source_type == "github-review-comment"]) == 0
+
+
+class ChangingCountGapClient:
+    def __init__(self):
+        self.detail_calls = 0
+
+    def get_pages(self, path, params=None, accept="application/vnd.github+json"):
+        base = "/repos/zbnerd/probabilistic-valuation-engine"
+        if path == f"{base}/pulls":
+            return (_page(path, [{"number": 7, "updated_at": "u"}]),)
+        if path == f"{base}/issues":
+            return (_page(path, []),)
+        pages = _pr_pages(7)
+        if path == f"{base}/pulls/7":
+            self.detail_calls += 1
+            expected = 5 if self.detail_calls == 1 else 6
+            detail = {**pages[path][0].json, "review_comments": expected}
+            return (_page(path, detail),)
+        if path == f"{base}/pulls/7/comments":
+            return (_page(path, []),)
+        return pages[path]
+
+    def get_bytes_page(self, path, params=None, accept="application/vnd.github+json"):
+        body = b"patch"
+        return GitHubPage(
+            endpoint=path,
+            params=dict(params or {}),
+            page_number=1,
+            body=body,
+            json=None,
+            response_hash=hashlib.sha256(body).hexdigest(),
+            availability_status="available",
+            status_code=200,
+            fetched_at="2026-01-01T00:00:00Z",
+        )
+
+
+def test_changed_count_gap_requires_then_reaches_a_following_zero_delta_pass(tmp_path):
+    client = ChangingCountGapClient()
+    ticks = iter(f"2026-01-01T00:00:{value:02d}Z" for value in range(30))
+
+    result = reconcile_github(
+        client=client,
+        repository="zbnerd/probabilistic-valuation-engine",
+        snapshot_id="snap",
+        archive_dir=tmp_path,
+        now=lambda: next(ticks),
+        max_passes=4,
+    )
+
+    assert client.detail_calls == 3
+    assert any("/pulls/7/comments" in key for key in result.passes[1].changed_endpoint_keys)
+    assert result.passes[2].changed_items == ()
+    assert result.passes[2].changed_endpoint_keys == ()
+    gap = next(record for record in result.records if record.source_type == "github-count-gap")
+    assert gap.payload["expected_count"] == 6
+    assert gap.payload["missing_count"] == 6
+
+
+def test_count_gap_requires_complete_available_pagination_proof(tmp_path):
+    base = "/repos/zbnerd/probabilistic-valuation-engine"
+    pages = {
+        f"{base}/pulls": (_page(f"{base}/pulls", [{"number": 7, "updated_at": "u"}]),),
+        **_pr_pages(7),
+    }
+    detail = {**pages[f"{base}/pulls/7"][0].json, "review_comments": 101}
+    pages[f"{base}/pulls/7"] = (_page(f"{base}/pulls/7", detail),)
+    endpoint = f"{base}/pulls/7/comments"
+
+    def comments(params):
+        if params.get("page", 1) == 1:
+            return (_page(endpoint, [{"id": value} for value in range(100)]),)
+        unavailable = _unavailable(endpoint)
+        return (
+            GitHubPage(
+                endpoint=endpoint,
+                params={"page": 2, "per_page": 100},
+                page_number=2,
+                body=unavailable.body,
+                json=None,
+                response_hash=unavailable.response_hash,
+                availability_status=unavailable.availability_status,
+                status_code=unavailable.status_code,
+                fetched_at=unavailable.fetched_at,
+            ),
+        )
+
+    pages[endpoint] = comments
+    with pytest.raises(GitHubClientError, match="availability pagination"):
+        collect_pull_requests(
+            StaticClient(pages, {f"{base}/pulls/7.patch": b"patch"}),
+            "zbnerd/probabilistic-valuation-engine",
+            "snap",
+            tmp_path,
+        )
+
+
+def test_parent_count_lower_than_observed_children_remains_blocking(tmp_path):
+    base = "/repos/zbnerd/probabilistic-valuation-engine"
+    pages = {
+        f"{base}/pulls": (_page(f"{base}/pulls", [{"number": 7, "updated_at": "u"}]),),
+        **_pr_pages(7),
+    }
+    detail = {**pages[f"{base}/pulls/7"][0].json, "review_comments": 0}
+    pages[f"{base}/pulls/7"] = (_page(f"{base}/pulls/7", detail),)
+
+    with pytest.raises(GitHubClientError, match="expected=0 actual=2"):
+        collect_pull_requests(
+            StaticClient(pages, {f"{base}/pulls/7.patch": b"patch"}),
+            "zbnerd/probabilistic-valuation-engine",
+            "snap",
+            tmp_path,
+        )
+
+
 def test_full_enumeration_page_uses_nonempty_then_empty_sentinel_pages(tmp_path):
     base = "/repos/zbnerd/probabilistic-valuation-engine"
     endpoint = f"{base}/issues"

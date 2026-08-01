@@ -402,3 +402,216 @@ def test_binary_patch_rejects_non_ascii_blob_metadata_without_normalizing_it():
     assert b"old_blob" not in result.value
     assert b"new_blob: fedcba9876543210fedcba9876543210fedcba98" in result.value
     assert result.value.endswith(b"[REDACTED BINARY PAYLOAD]\n")
+
+
+def _assert_adversarial_text_redaction(source, kind, secrets):
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    for secret in secrets:
+        assert secret not in first.value
+    assert kind in first.kinds
+    assert first.raw_hash == hashlib.sha256(source).hexdigest()
+    assert first.stored_hash == hashlib.sha256(first.value).hexdigest()
+    assert first.raw_hash != first.stored_hash
+    assert first.value == second.value
+    assert first.stored_hash == second.stored_hash
+
+
+@pytest.mark.parametrize(
+    ("source", "kind", "secret"),
+    [
+        (
+            b'AWS_SECRET_ACCESS_KEY="[REDACTED:aws-secret-access-key]"raw-aws-secret',
+            "aws-secret-access-key",
+            b"raw-aws-secret",
+        ),
+        (
+            b'password="[REDACTED:credential-value]\\"raw-secret"',
+            "credential-value",
+            b"raw-secret",
+        ),
+        (
+            b"password='[REDACTED:credential-value]''raw-secret'",
+            "credential-value",
+            b"raw-secret",
+        ),
+        (
+            b'password="[REDACTED:credential-value]""raw-double-secret"',
+            "credential-value",
+            b"raw-double-secret",
+        ),
+        (
+            b"password='[REDACTED:credential-value]\\'raw-single-secret'",
+            "credential-value",
+            b"raw-single-secret",
+        ),
+        (
+            b'password="[REDACTED:credential-value]"\'raw-adjacent-secret\'',
+            "credential-value",
+            b"raw-adjacent-secret",
+        ),
+        (
+            b"password='[REDACTED:credential-value]'raw-post-close-secret",
+            "credential-value",
+            b"raw-post-close-secret",
+        ),
+        (
+            b'password="[REDACTED:credential-value]\\"raw-unbalanced-secret',
+            "credential-value",
+            b"raw-unbalanced-secret",
+        ),
+        (
+            b"password='[REDACTED:credential-value]''raw-unbalanced-secret",
+            "credential-value",
+            b"raw-unbalanced-secret",
+        ),
+    ],
+)
+def test_quoted_scalar_parser_consumes_escapes_doubled_quotes_and_suffixes(
+    source, kind, secret
+):
+    _assert_adversarial_text_redaction(source, kind, (secret,))
+
+
+def test_quoted_scalar_parser_stops_at_the_next_independent_record():
+    source = (
+        b'password="[REDACTED:credential-value]\\"raw-first-secret\n'
+        b'next_record="must-remain-byte-for-byte"\n'
+    )
+
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    assert b"raw-first-secret" not in first.value
+    assert first.value.endswith(b'next_record="must-remain-byte-for-byte"\n')
+    assert first.kinds == ("credential-value",)
+    assert first.value == second.value
+
+
+@pytest.mark.parametrize("separator", [b"\r", b"\r\n"])
+def test_quoted_scalar_parser_honours_cr_based_record_boundaries(separator):
+    source = (
+        b'password="[REDACTED:credential-value]\\"raw-first-secret'
+        + separator
+        + b'next_record="must-remain-byte-for-byte"'
+    )
+
+    result = redact_text(source)
+
+    assert b"raw-first-secret" not in result.value
+    assert result.value.endswith(
+        separator + b'next_record="must-remain-byte-for-byte"'
+    )
+
+
+def test_aws_candidate_does_not_take_an_unquoted_value_from_the_next_record():
+    source = b"AWS_SECRET_ACCESS_KEY=\nNEXT_RECORD=must-remain-byte-for-byte\n"
+
+    result = redact_text(source)
+
+    assert result.value == source
+    assert result.kinds == ()
+
+
+def test_camel_case_aws_key_uses_the_same_bounded_scalar_parser():
+    source = b'AwsSecretAccessKey="raw-camel-aws-secret"'
+
+    _assert_adversarial_text_redaction(
+        source, "aws-secret-access-key", (b"raw-camel-aws-secret",)
+    )
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        b"password=[REDACTED:credential-value],raw-comma-secret",
+        b'password="[REDACTED:credential-value]";raw-semicolon-secret',
+        b'password="[REDACTED:credential-value]"}raw-brace-secret',
+        b'password="[REDACTED:credential-value]",}raw-comma-brace-secret',
+    ],
+)
+def test_unproven_delimiters_and_their_suffixes_remain_inside_sensitive_span(source):
+    _assert_adversarial_text_redaction(source, "credential-value", (b"raw-",))
+
+
+@pytest.mark.parametrize(
+    ("source", "secret", "preserved"),
+    [
+        (
+            b'{"password":"raw-password-secret","safe":"kept"}',
+            b"raw-password-secret",
+            b',"safe":"kept"}',
+        ),
+        (
+            b"'token' = 'raw-token-secret'\nnext = 'kept'",
+            b"raw-token-secret",
+            b"\nnext = 'kept'",
+        ),
+        (
+            b'"api_key" = "raw-api-key-secret"; safe = "kept"',
+            b"raw-api-key-secret",
+            b'; safe = "kept"',
+        ),
+    ],
+)
+def test_balanced_quoted_generic_keys_preserve_only_safe_structure(
+    source, secret, preserved
+):
+    _assert_adversarial_text_redaction(source, "credential-value", (secret,))
+    assert preserved in redact_text(source).value
+
+
+@pytest.mark.parametrize(
+    ("source", "secret"),
+    [
+        (b"postgresql://alice:db-secret@db.example.test/app", b"db-secret"),
+        (b"FTP://alice:ftp-secret@example.test/file", b"ftp-secret"),
+        (b"custom+ssh.v1://:empty-user-secret@host.test/path", b"empty-user-secret"),
+    ],
+)
+def test_scheme_neutral_url_userinfo_redacts_complete_credential_uri(source, secret):
+    _assert_adversarial_text_redaction(source, "url-credentials", (secret,))
+    assert redact_text(source).value == b"[REDACTED:url-credentials]"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        b"ordinary:value@host",
+        b"path/to:user@host",
+        b"custom://username-only@host/path",
+        b"1invalid://user:password@host/path",
+    ],
+)
+def test_url_userinfo_rule_avoids_non_credential_colon_at_forms(source):
+    result = redact_text(source)
+
+    assert result.value == source
+    assert "url-credentials" not in result.kinds
+
+
+@pytest.mark.parametrize(
+    ("source", "secret"),
+    [
+        (b'contact="quoted.local"@example.org', b'"quoted.local"@example.org'),
+        (
+            b'contact="escaped\\"name"@example.org',
+            b'"escaped\\"name"@example.org',
+        ),
+        (b'contact="mps756"@gmail.com', b'"mps756"@gmail.com'),
+    ],
+)
+def test_quoted_ascii_email_local_parts_are_bounded_and_not_owner_aliases(
+    source, secret
+):
+    _assert_adversarial_text_redaction(source, "third-party-email", (secret,))
+
+
+def test_quoted_email_does_not_cross_a_record_boundary():
+    source = b'contact="unterminated\nnext=mps756@gmail.com\n'
+
+    result = redact_text(source)
+
+    assert result.value == source
+    assert result.kinds == ()

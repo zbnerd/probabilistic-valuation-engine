@@ -19,6 +19,49 @@ _REDACTION_PREFIX = b"[REDACTED:"
 _BINARY_MARKER = b"[REDACTED BINARY PAYLOAD]\n"
 _BLOB_ID = re.compile(rb"[0-9A-Fa-f]{7,64}\Z")
 _CANONICAL_MARKER = re.compile(rb"\[REDACTED:[a-z0-9-]+\]\Z")
+_CANONICAL_MARKER_PREFIX = re.compile(rb"\[REDACTED:[a-z0-9-]+\]")
+_STRUCTURAL_NEXT_FIELD = re.compile(
+    rb"[ \t]*(?:"
+    rb'"(?:[^"\\\r\n]|\\[^\r\n])*"'
+    rb"|'(?:[^'\\\r\n]|\\[^\r\n])*'"
+    rb"|[A-Za-z_][A-Za-z0-9_.-]*"
+    rb")[ \t]*[:=]"
+)
+
+_AWS_SECRET_KEY_NAME = rb"(?:aws_?)?secret(?:_?access)?_?key"
+_GENERIC_CREDENTIAL_KEY_NAME = rb"(?:password|passwd|secret|api[_-]?key|token)"
+
+# These expressions only locate an assignment and its safe prefix.  A bounded
+# byte parser below owns value boundaries, quoting, escapes, and delimiters.
+_AWS_SECRET_ASSIGNMENT_START = re.compile(
+    rb"(?im)(?P<prefix>(?<![A-Za-z0-9_-])(?:"
+    + rb'"'
+    + _AWS_SECRET_KEY_NAME
+    + rb'"'
+    + rb"|'"
+    + _AWS_SECRET_KEY_NAME
+    + rb"'|"
+    + _AWS_SECRET_KEY_NAME
+    + rb")[ \t]*(?:\r?\n[ \t]*)?[:=][ \t]*"
+    + rb"(?:\r?\n[ \t]*(?=[\"']))?)"
+)
+_GENERIC_CREDENTIAL_ASSIGNMENT_START = re.compile(
+    rb"(?im)(?P<prefix>(?<![A-Za-z0-9_-])(?:"
+    + rb'"'
+    + _GENERIC_CREDENTIAL_KEY_NAME
+    + rb'"'
+    + rb"|'"
+    + _GENERIC_CREDENTIAL_KEY_NAME
+    + rb"'|"
+    + _GENERIC_CREDENTIAL_KEY_NAME
+    + rb")[ \t]*[:=][ \t]*)"
+)
+_URL_CREDENTIALS = re.compile(
+    rb"(?i)(?<![A-Za-z0-9+.-])"
+    rb"[A-Za-z][A-Za-z0-9+.-]*://"
+    rb"[^\s/@:]*:[^\s/@]+@"
+    rb"[^\s/?#\"'<>]+(?:[/?#][^\s\"'<>]*)?"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,33 +96,6 @@ def _replace_header_value(kind: str) -> Replacement:
 
     def replacement(match: re.Match[bytes]) -> bytes:
         return match.group("prefix") + marker
-
-    return replacement
-
-
-def _replace_bare_sensitive_value(kind: str) -> Replacement:
-    marker = _marker(kind)
-
-    def replacement(match: re.Match[bytes]) -> bytes:
-        value = match.group("value")
-        if _CANONICAL_MARKER.fullmatch(value):
-            return match.group(0)
-        return match.group("prefix") + marker
-
-    return replacement
-
-
-def _replace_quoted_sensitive_value(kind: str) -> Replacement:
-    marker = _marker(kind)
-
-    def replacement(match: re.Match[bytes]) -> bytes:
-        semantic_value = match.group("value").strip(b" \t")
-        quote = match.group("quote") or b""
-        closing = match.group("closing") or b""
-        if _CANONICAL_MARKER.fullmatch(semantic_value) and closing == quote:
-            return match.group(0)
-        wrapper = quote if quote and closing == quote else b""
-        return match.group("prefix") + wrapper + marker + wrapper
 
     return replacement
 
@@ -120,26 +136,6 @@ _TEXT_RULES: tuple[Rule, ...] = (
         _replace_with("aws-access-key"),
     ),
     (
-        "aws-secret-access-key",
-        re.compile(
-            rb"(?im)(?P<prefix>\b(?:aws_)?secret(?:_?access)?_?key\b[\"']?"
-            rb"(?:[ \t]*\r?\n)?[ \t]*[:=](?:[ \t]*\r?\n)?[ \t]*)"
-            rb"(?P<quote>[\"'])(?P<value>[^\r\n]*?)"
-            rb"(?P<closing>(?P=quote)|(?=\r?$))"
-        ),
-        _replace_quoted_sensitive_value("aws-secret-access-key"),
-    ),
-    (
-        "aws-secret-access-key",
-        re.compile(
-            rb"(?im)(?P<prefix>\b(?:aws_)?secret(?:_?access)?_?key\b[\"']?"
-            rb"(?:[ \t]*\r?\n)?[ \t]*[:=](?:[ \t]*\r?\n)?[ \t]*)"
-            rb"(?P<value>\[REDACTED:aws-secret-access-key\][^\s\r\n]*"
-            rb"|[A-Za-z0-9/+=]{32,})"
-        ),
-        _replace_bare_sensitive_value("aws-secret-access-key"),
-    ),
-    (
         "cookie",
         re.compile(
             rb"(?im)^(?![+\- ]*[ \t]*(?:set-)?cookie[ \t]*:[ \t]*"
@@ -150,35 +146,176 @@ _TEXT_RULES: tuple[Rule, ...] = (
     ),
     (
         "url-credentials",
-        re.compile(
-            rb"\b(?i:https?|ssh)://[^\s/@:]+(?::[^\s/@]*)?@[^\s/]+(?:/[^\s]*)?"
-        ),
+        _URL_CREDENTIALS,
         _replace_with("url-credentials"),
-    ),
-    (
-        "credential-value",
-        re.compile(
-            rb"(?im)(?P<prefix>\b(?:password|passwd|secret|api[_-]?key|token)\b"
-            rb"[ \t]*[:=][ \t]*)(?P<quote>[\"'])(?P<value>[^\r\n]*?)"
-            rb"(?P<closing>(?P=quote)|(?=\r?$))"
-        ),
-        _replace_quoted_sensitive_value("credential-value"),
-    ),
-    (
-        "credential-value",
-        re.compile(
-            rb"(?im)(?P<prefix>\b(?:password|passwd|secret|api[_-]?key|token)\b"
-            rb"[ \t]*[:=][ \t]*)(?P<value>"
-            rb"\[REDACTED:[a-z0-9-]+\][^\s\r\n]*|[^\s\"'`,;]+)"
-        ),
-        _replace_bare_sensitive_value("credential-value"),
     ),
 )
 _EMAIL = re.compile(
-    rb"(?i)\b[A-Z0-9.!#$%&'*+/?^_`{|}~-]+@"
+    rb"(?i)(?<![A-Z0-9.!#$%&'*+/?^_`{|}~-])(?:"
+    rb'"(?:[\x20-\x21\x23-\x5b\x5d-\x7e]|\\[\x20-\x7e])*"'
+    rb"|[A-Z0-9.!#$%&'*+/?^_`{|}~-]+"
+    rb")@"
     rb"[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?"
-    rb"(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+\b"
+    rb"(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+(?![A-Z0-9-])"
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _ScalarSpan:
+    end: int
+    opening_quote: int | None
+    balanced: bool
+
+
+def _record_content_end(data: bytes, start: int) -> int:
+    """Return the CR/LF-exclusive end of the record containing ``start``."""
+
+    carriage_return = data.find(b"\r", start)
+    line_feed = data.find(b"\n", start)
+    boundaries = tuple(
+        boundary for boundary in (carriage_return, line_feed) if boundary >= 0
+    )
+    return min(boundaries, default=len(data))
+
+
+def _closing_chain_is_safe(tail: bytes) -> bool:
+    """Accept only complete closing-delimiter chains and safe continuations."""
+
+    offset = len(tail) - len(tail.lstrip(b" \t"))
+    saw_closer = False
+    while offset < len(tail) and tail[offset] in (0x7D, 0x5D):
+        saw_closer = True
+        offset += 1
+        while offset < len(tail) and tail[offset] in (0x20, 0x09):
+            offset += 1
+    if not saw_closer:
+        return False
+    if offset == len(tail):
+        return True
+    if tail[offset] not in (0x2C, 0x3B):
+        return False
+    continuation = tail[offset + 1 :]
+    return _STRUCTURAL_NEXT_FIELD.match(continuation) is not None
+
+
+def _has_structural_tail(data: bytes, delimiter: int, record_end: int) -> bool:
+    """Accept separators only before another field or a complete closer chain."""
+
+    tail = data[delimiter + 1 : record_end]
+    if not tail.strip(b" \t"):
+        return True
+    return (
+        _STRUCTURAL_NEXT_FIELD.match(tail) is not None
+        or _closing_chain_is_safe(tail)
+    )
+
+
+def _bounded_scalar_span(data: bytes, start: int) -> _ScalarSpan:
+    """Parse one scalar without crossing its CR/LF-delimited source record.
+
+    Backslash escapes and doubled quote characters remain inside a quoted
+    scalar.  Commas and semicolons terminate it only when the following bytes
+    are recognisable as a new field; closing braces/brackets always terminate
+    it.  This makes an arbitrary suffix part of the sensitive span instead of
+    letting a token-oriented regular expression leave it behind.
+    """
+
+    record_end = _record_content_end(data, start)
+    if start >= record_end:
+        return _ScalarSpan(start, None, True)
+
+    opening_quote = data[start] if data[start] in (0x22, 0x27) else None
+    active_quote = opening_quote
+    index = start + 1 if opening_quote is not None else start
+    if opening_quote is None:
+        existing_marker = _CANONICAL_MARKER_PREFIX.match(data, start, record_end)
+        if existing_marker is not None:
+            index = existing_marker.end()
+
+    while index < record_end:
+        current = data[index]
+        if active_quote is not None:
+            if current == 0x5C:
+                index = min(index + 2, record_end)
+                continue
+            if current == active_quote:
+                if index + 1 < record_end and data[index + 1] == active_quote:
+                    index += 2
+                    continue
+                active_quote = None
+            index += 1
+            continue
+
+        if current in (0x22, 0x27):
+            active_quote = current
+            index += 1
+            continue
+        if current in (0x7D, 0x5D) and _closing_chain_is_safe(
+            data[index:record_end]
+        ):
+            break
+        if current in (0x2C, 0x3B) and _has_structural_tail(
+            data, index, record_end
+        ):
+            break
+        index += 1
+
+    semantic_end = index
+    while semantic_end > start and data[semantic_end - 1] in (0x20, 0x09):
+        semantic_end -= 1
+    return _ScalarSpan(semantic_end, opening_quote, active_quote is None)
+
+
+def _is_canonical_scalar(value: bytes) -> bool:
+    candidate = value.strip(b" \t")
+    if _CANONICAL_MARKER.fullmatch(candidate):
+        return True
+    if (
+        len(candidate) >= 2
+        and candidate[0] in (0x22, 0x27)
+        and candidate[-1] == candidate[0]
+    ):
+        return _CANONICAL_MARKER.fullmatch(candidate[1:-1]) is not None
+    return False
+
+
+def _redact_assignment_values(
+    data: bytes, candidate_rule: re.Pattern[bytes], kind: str
+) -> tuple[bytes, bool]:
+    """Redact candidate assignment values using complete bounded spans."""
+
+    chunks: list[bytes] = []
+    copied_through = 0
+    search_from = 0
+    changed = False
+    marker = _marker(kind)
+
+    while match := candidate_rule.search(data, search_from):
+        value_start = match.end("prefix")
+        span = _bounded_scalar_span(data, value_start)
+        if span.end <= value_start:
+            search_from = max(match.end(), value_start + 1)
+            continue
+
+        scalar = data[value_start : span.end]
+        if _is_canonical_scalar(scalar):
+            search_from = span.end
+            continue
+
+        replacement = marker
+        if span.opening_quote is not None and span.balanced:
+            quote = bytes((span.opening_quote,))
+            replacement = quote + marker + quote
+
+        chunks.extend((data[copied_through:value_start], replacement))
+        copied_through = span.end
+        search_from = span.end
+        changed = True
+
+    if not changed:
+        return data, False
+    chunks.append(data[copied_through:])
+    return b"".join(chunks), True
 
 
 def _as_bytes(data: bytes | bytearray | memoryview) -> bytes:
@@ -231,6 +368,17 @@ def redact_text(
         if redacted != value:
             kinds.add(kind)
         value = redacted
+
+    value, changed = _redact_assignment_values(
+        value, _AWS_SECRET_ASSIGNMENT_START, "aws-secret-access-key"
+    )
+    if changed:
+        kinds.add("aws-secret-access-key")
+    value, changed = _redact_assignment_values(
+        value, _GENERIC_CREDENTIAL_ASSIGNMENT_START, "credential-value"
+    )
+    if changed:
+        kinds.add("credential-value")
 
     allowed = _allowed_contact_set(allowed_contacts)
 

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 import tempfile
 from pathlib import Path
@@ -47,19 +48,59 @@ def _environment(root: Path) -> dict[str, str]:
 
 
 def _tree_fingerprint(path: Path) -> str | None:
-    if not path.exists():
+    try:
+        root_metadata = path.lstat()
+    except FileNotFoundError:
         return None
     digest = hashlib.sha256()
-    for member in sorted(path.rglob("*")):
-        digest.update(member.relative_to(path).as_posix().encode("utf-8"))
-        if member.is_file():
-            digest.update(member.read_bytes())
+
+    def update_entry(relative_path: bytes, metadata: os.stat_result) -> None:
+        digest.update(len(relative_path).to_bytes(8, "big"))
+        digest.update(relative_path)
+        digest.update(stat.S_IFMT(metadata.st_mode).to_bytes(4, "big"))
+        digest.update(stat.S_IMODE(metadata.st_mode).to_bytes(4, "big"))
+
+    def update_regular_file(member: Path) -> None:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(member, flags)
+        content_digest = hashlib.sha256()
+        with os.fdopen(descriptor, "rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                content_digest.update(chunk)
+        digest.update(content_digest.digest())
+
+    def walk(directory: Path) -> None:
+        with os.scandir(directory) as iterator:
+            entries = sorted(iterator, key=lambda entry: os.fsencode(entry.name))
+        for entry in entries:
+            member = Path(entry.path)
+            metadata = entry.stat(follow_symlinks=False)
+            relative_path = os.fsencode(member.relative_to(path).as_posix())
+            update_entry(relative_path, metadata)
+            if stat.S_ISLNK(metadata.st_mode):
+                link_target = os.readlink(os.fsencode(member))
+                digest.update(len(link_target).to_bytes(8, "big"))
+                digest.update(link_target)
+            elif stat.S_ISREG(metadata.st_mode):
+                update_regular_file(member)
+            elif stat.S_ISDIR(metadata.st_mode):
+                walk(member)
+
+    update_entry(b".", root_metadata)
+    if stat.S_ISLNK(root_metadata.st_mode):
+        link_target = os.readlink(os.fsencode(path))
+        digest.update(len(link_target).to_bytes(8, "big"))
+        digest.update(link_target)
+    elif stat.S_ISREG(root_metadata.st_mode):
+        update_regular_file(path)
+    elif stat.S_ISDIR(root_metadata.st_mode):
+        walk(path)
     return digest.hexdigest()
 
 
 def _node_state() -> tuple[bool, str | None]:
     node_modules = BOOK_ROOT / "node_modules"
-    return node_modules.exists(), _tree_fingerprint(node_modules)
+    return os.path.lexists(node_modules), _tree_fingerprint(node_modules)
 
 
 def _assert_node_state_unchanged(before: tuple[bool, str | None]) -> None:

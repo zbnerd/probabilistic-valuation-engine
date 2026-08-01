@@ -161,3 +161,67 @@ def test_node_modules_mutation_fails_and_still_removes_temp(monkeypatch, tmp_pat
     with pytest.raises(RuntimeError, match="created or changed"):
         runner.main(["--", "python3", "-c", "pass"])
     assert not temporary_root.exists()
+
+
+def test_existing_node_modules_executable_mode_mutation_is_detected(
+    monkeypatch, tmp_path
+):
+    runner, book_root, temporary_root = prepare_mocked_runner(monkeypatch, tmp_path)
+    executable = book_root / "node_modules" / ".bin" / "tool"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("#!/bin/sh\n", encoding="utf-8")
+    executable.chmod(0o644)
+
+    def fake_run(command, **kwargs):
+        if command != ["uv", "sync", "--frozen"]:
+            executable.chmod(0o755)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="created or changed"):
+        runner.main(["--", "python3", "-c", "pass"])
+    assert executable.stat().st_mode & 0o777 == 0o755
+    assert not temporary_root.exists()
+
+
+def test_existing_node_modules_symlink_retarget_is_detected(monkeypatch, tmp_path):
+    runner, book_root, temporary_root = prepare_mocked_runner(monkeypatch, tmp_path)
+    node_modules = book_root / "node_modules"
+    node_modules.mkdir()
+    (node_modules / "target-a").write_text("same bytes", encoding="utf-8")
+    (node_modules / "target-b").write_text("same bytes", encoding="utf-8")
+    current = node_modules / "current"
+    current.symlink_to("target-a")
+
+    def fake_run(command, **kwargs):
+        if command != ["uv", "sync", "--frozen"]:
+            current.unlink()
+            current.symlink_to("target-b")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="created or changed"):
+        runner.main(["--", "python3", "-c", "pass"])
+    assert current.readlink() == Path("target-b")
+    assert not temporary_root.exists()
+
+
+def test_existing_node_modules_entry_type_replacement_is_detected(
+    monkeypatch, tmp_path
+):
+    runner, book_root, temporary_root = prepare_mocked_runner(monkeypatch, tmp_path)
+    entry = book_root / "node_modules" / "entry"
+    entry.parent.mkdir()
+    entry.touch()
+
+    def fake_run(command, **kwargs):
+        if command != ["uv", "sync", "--frozen"]:
+            entry.unlink()
+            entry.mkdir()
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="created or changed"):
+        runner.main(["--", "python3", "-c", "pass"])
+    assert entry.is_dir()
+    assert not temporary_root.exists()

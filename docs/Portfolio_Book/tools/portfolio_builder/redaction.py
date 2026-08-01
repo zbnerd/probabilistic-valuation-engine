@@ -57,15 +57,27 @@ def _replace_header_value(kind: str) -> Replacement:
     return replacement
 
 
-def _replace_sensitive_value(kind: str) -> Replacement:
+def _replace_bare_sensitive_value(kind: str) -> Replacement:
     marker = _marker(kind)
 
     def replacement(match: re.Match[bytes]) -> bytes:
         value = match.group("value")
         if _CANONICAL_MARKER.fullmatch(value):
             return match.group(0)
+        return match.group("prefix") + marker
+
+    return replacement
+
+
+def _replace_quoted_sensitive_value(kind: str) -> Replacement:
+    marker = _marker(kind)
+
+    def replacement(match: re.Match[bytes]) -> bytes:
+        semantic_value = match.group("value").strip(b" \t")
         quote = match.group("quote") or b""
         closing = match.group("closing") or b""
+        if _CANONICAL_MARKER.fullmatch(semantic_value) and closing == quote:
+            return match.group(0)
         wrapper = quote if quote and closing == quote else b""
         return match.group("prefix") + wrapper + marker + wrapper
 
@@ -112,11 +124,20 @@ _TEXT_RULES: tuple[Rule, ...] = (
         re.compile(
             rb"(?im)(?P<prefix>\b(?:aws_)?secret(?:_?access)?_?key\b[\"']?"
             rb"(?:[ \t]*\r?\n)?[ \t]*[:=](?:[ \t]*\r?\n)?[ \t]*)"
-            rb"(?P<quote>[\"'])?(?P<value>"
-            rb"\[REDACTED:aws-secret-access-key\][^\s\"'\r\n,}]*"
-            rb"|[A-Za-z0-9/+=]{32,})(?P<closing>[\"'])?"
+            rb"(?P<quote>[\"'])(?P<value>[^\r\n]*?)"
+            rb"(?P<closing>(?P=quote)|(?=\r?$))"
         ),
-        _replace_sensitive_value("aws-secret-access-key"),
+        _replace_quoted_sensitive_value("aws-secret-access-key"),
+    ),
+    (
+        "aws-secret-access-key",
+        re.compile(
+            rb"(?im)(?P<prefix>\b(?:aws_)?secret(?:_?access)?_?key\b[\"']?"
+            rb"(?:[ \t]*\r?\n)?[ \t]*[:=](?:[ \t]*\r?\n)?[ \t]*)"
+            rb"(?P<value>\[REDACTED:aws-secret-access-key\][^\s\r\n]*"
+            rb"|[A-Za-z0-9/+=]{32,})"
+        ),
+        _replace_bare_sensitive_value("aws-secret-access-key"),
     ),
     (
         "cookie",
@@ -138,11 +159,19 @@ _TEXT_RULES: tuple[Rule, ...] = (
         "credential-value",
         re.compile(
             rb"(?im)(?P<prefix>\b(?:password|passwd|secret|api[_-]?key|token)\b"
-            rb"[ \t]*[:=][ \t]*)(?P<quote>[\"'])?(?P<value>"
-            rb"\[REDACTED:[a-z0-9-]+\][^\s\"'\r\n,}]*"
-            rb"|[^\s\"'`,;]+)(?P<closing>[\"'])?"
+            rb"[ \t]*[:=][ \t]*)(?P<quote>[\"'])(?P<value>[^\r\n]*?)"
+            rb"(?P<closing>(?P=quote)|(?=\r?$))"
         ),
-        _replace_sensitive_value("credential-value"),
+        _replace_quoted_sensitive_value("credential-value"),
+    ),
+    (
+        "credential-value",
+        re.compile(
+            rb"(?im)(?P<prefix>\b(?:password|passwd|secret|api[_-]?key|token)\b"
+            rb"[ \t]*[:=][ \t]*)(?P<value>"
+            rb"\[REDACTED:[a-z0-9-]+\][^\s\r\n]*|[^\s\"'`,;]+)"
+        ),
+        _replace_bare_sensitive_value("credential-value"),
     ),
 )
 _EMAIL = re.compile(

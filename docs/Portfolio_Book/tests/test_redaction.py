@@ -181,6 +181,89 @@ def test_generic_credential_marker_prefix_cannot_smuggle_a_secret_suffix(source)
 
 
 @pytest.mark.parametrize(
+    ("source", "kind", "suffix"),
+    [
+        (
+            b'password="[REDACTED:credential-value] raw-password-secret"',
+            "credential-value",
+            b"raw-password-secret",
+        ),
+        (
+            b"password='[REDACTED:credential-value],raw-password-secret'",
+            "credential-value",
+            b"raw-password-secret",
+        ),
+        (
+            b'password="[REDACTED:credential-value];raw-password-secret"',
+            "credential-value",
+            b"raw-password-secret",
+        ),
+        (
+            b'password="[REDACTED:credential-value] raw-unbalanced-password-secret',
+            "credential-value",
+            b"raw-unbalanced-password-secret",
+        ),
+        (
+            b'AWS_SECRET_ACCESS_KEY="[REDACTED:aws-secret-access-key] raw-aws-secret"',
+            "aws-secret-access-key",
+            b"raw-aws-secret",
+        ),
+        (
+            b"SecretAccessKey='[REDACTED:aws-secret-access-key],raw-aws-secret'",
+            "aws-secret-access-key",
+            b"raw-aws-secret",
+        ),
+        (
+            b'AWS_SECRET_ACCESS_KEY="[REDACTED:aws-secret-access-key];raw-unbalanced-aws-secret',
+            "aws-secret-access-key",
+            b"raw-unbalanced-aws-secret",
+        ),
+    ],
+)
+def test_quoted_marker_suffixes_are_parsed_as_one_sensitive_value(source, kind, suffix):
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    assert suffix not in first.value
+    assert first.kinds == (kind,)
+    assert first.raw_hash != first.stored_hash
+    assert first.value == second.value
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        (
+            b'password="[REDACTED:credential-value]"',
+            b'password="[REDACTED:credential-value]"',
+        ),
+        (
+            b"password='[REDACTED:credential-value]'",
+            b"password='[REDACTED:credential-value]'",
+        ),
+        (
+            b'password="[REDACTED:credential-value]',
+            b"password=[REDACTED:credential-value]",
+        ),
+        (
+            b'AWS_SECRET_ACCESS_KEY="[REDACTED:aws-secret-access-key]"',
+            b'AWS_SECRET_ACCESS_KEY="[REDACTED:aws-secret-access-key]"',
+        ),
+        (
+            b'AWS_SECRET_ACCESS_KEY="[REDACTED:aws-secret-access-key]',
+            b"AWS_SECRET_ACCESS_KEY=[REDACTED:aws-secret-access-key]",
+        ),
+    ],
+)
+def test_exact_quoted_marker_values_are_stable_or_safely_normalized(source, expected):
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    assert first.value == expected
+    assert first.value == second.value
+
+
+@pytest.mark.parametrize(
     "source",
     [
         b"-----BEGIN RSA PRIVATE KEY-----\nrsa-secret\n",

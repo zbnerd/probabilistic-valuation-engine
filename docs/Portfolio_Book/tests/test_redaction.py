@@ -101,6 +101,22 @@ def test_cookie_redacts_git_patch_context_and_indented_header_forms(source, expe
 @pytest.mark.parametrize(
     "source",
     [
+        b"Cookie: [REDACTED:cookie]; session=raw-cookie-secret\n",
+        b"Set-Cookie: [REDACTED:cookie]raw-set-cookie-secret\n",
+    ],
+)
+def test_cookie_marker_prefix_cannot_smuggle_a_secret_suffix(source):
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    assert b"raw-" not in first.value
+    assert first.value.endswith(b"[REDACTED:cookie]\n")
+    assert first.value == second.value
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
         b'AWS_SECRET_ACCESS_KEY="abcdEFGHijklMNOPqrstUVWXyz0123456789+/="',
         b'{"AWS_SECRET_ACCESS_KEY": "abcdEFGHijklMNOPqrstUVWXyz0123456789+/="}',
     ],
@@ -113,6 +129,55 @@ def test_aws_secret_access_key_redacts_quoted_env_and_json_values(source):
     assert secret not in result.value
     assert b"[REDACTED:aws-secret-access-key]" in result.value
     assert result.kinds == ("aws-secret-access-key",)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        b'AWS_SECRET_ACCESS_KEY="abcdEFGHijklMNOPqrstUVWXyz0123456789+/=',
+        b'{"SecretAccessKey":"abcdEFGHijklMNOPqrstUVWXyz0123456789+/="}',
+        b'{\n  "SecretAccessKey"\n  :\n  "abcdEFGHijklMNOPqrstUVWXyz0123456789+/="\n}',
+        b'AWS_SECRET_ACCESS_KEY="[REDACTED:aws-secret-access-key]raw-aws-secret',
+    ],
+)
+def test_aws_secret_access_key_handles_truncated_camel_multiline_and_smuggling(source):
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    assert b"abcdEFGHijklMNOPqrstUVWXyz0123456789+/=" not in first.value
+    assert b"raw-aws-secret" not in first.value
+    assert b"[REDACTED:aws-secret-access-key]" in first.value
+    assert first.value == second.value
+    assert first.kinds == ("aws-secret-access-key",)
+
+
+def test_multiline_aws_json_does_not_consume_the_next_record():
+    source = (
+        b'{\n  "SecretAccessKey"\n  :\n  "abcdEFGHijklMNOPqrstUVWXyz0123456789+/="\n}\n'
+        b'{"next_record":"must-remain"}'
+    )
+
+    result = redact_text(source)
+
+    assert b"abcdEFGHijklMNOPqrstUVWXyz0123456789+/=" not in result.value
+    assert result.value.endswith(b'{"next_record":"must-remain"}')
+    assert result.kinds == ("aws-secret-access-key",)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        b"password=[REDACTED:credential-value]raw-password-secret",
+        b'password="[REDACTED:credential-value]raw-quoted-password-secret"',
+    ],
+)
+def test_generic_credential_marker_prefix_cannot_smuggle_a_secret_suffix(source):
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    assert b"raw-" not in first.value
+    assert b"[REDACTED:credential-value]" in first.value
+    assert first.value == second.value
 
 
 @pytest.mark.parametrize(

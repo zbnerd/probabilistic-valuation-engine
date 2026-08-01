@@ -18,6 +18,7 @@ OWNER_PUBLIC_EMAIL = "mps756@gmail.com"
 _REDACTION_PREFIX = b"[REDACTED:"
 _BINARY_MARKER = b"[REDACTED BINARY PAYLOAD]\n"
 _BLOB_ID = re.compile(rb"[0-9A-Fa-f]{7,64}\Z")
+_CANONICAL_MARKER = re.compile(rb"\[REDACTED:[a-z0-9-]+\]\Z")
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,12 +57,17 @@ def _replace_header_value(kind: str) -> Replacement:
     return replacement
 
 
-def _replace_quoted_header_value(kind: str) -> Replacement:
+def _replace_sensitive_value(kind: str) -> Replacement:
     marker = _marker(kind)
 
     def replacement(match: re.Match[bytes]) -> bytes:
+        value = match.group("value")
+        if _CANONICAL_MARKER.fullmatch(value):
+            return match.group(0)
         quote = match.group("quote") or b""
-        return match.group("prefix") + quote + marker + quote
+        closing = match.group("closing") or b""
+        wrapper = quote if quote and closing == quote else b""
+        return match.group("prefix") + wrapper + marker + wrapper
 
     return replacement
 
@@ -104,17 +110,20 @@ _TEXT_RULES: tuple[Rule, ...] = (
     (
         "aws-secret-access-key",
         re.compile(
-            rb"(?im)(?P<prefix>\b(?:aws_)?secret(?:_access)?_?key\b"
-            rb"[\"']?[ \t]*[:=][ \t]*)(?P<quote>[\"'])?(?!\[)[A-Za-z0-9/+=]{32,}"
-            rb"(?(quote)(?P=quote))"
+            rb"(?im)(?P<prefix>\b(?:aws_)?secret(?:_?access)?_?key\b[\"']?"
+            rb"(?:[ \t]*\r?\n)?[ \t]*[:=](?:[ \t]*\r?\n)?[ \t]*)"
+            rb"(?P<quote>[\"'])?(?P<value>"
+            rb"\[REDACTED:aws-secret-access-key\][^\s\"'\r\n,}]*"
+            rb"|[A-Za-z0-9/+=]{32,})(?P<closing>[\"'])?"
         ),
-        _replace_quoted_header_value("aws-secret-access-key"),
+        _replace_sensitive_value("aws-secret-access-key"),
     ),
     (
         "cookie",
         re.compile(
-            rb"(?im)^(?P<prefix>[+\- ]*[ \t]*(?:set-)?cookie[ \t]*:[ \t]*)"
-            rb"(?!\[REDACTED:)[^\r\n]*"
+            rb"(?im)^(?![+\- ]*[ \t]*(?:set-)?cookie[ \t]*:[ \t]*"
+            rb"\[REDACTED:cookie\][ \t]*\r?$)"
+            rb"(?P<prefix>[+\- ]*[ \t]*(?:set-)?cookie[ \t]*:[ \t]*)[^\r\n]*"
         ),
         _replace_header_value("cookie"),
     ),
@@ -129,9 +138,11 @@ _TEXT_RULES: tuple[Rule, ...] = (
         "credential-value",
         re.compile(
             rb"(?im)(?P<prefix>\b(?:password|passwd|secret|api[_-]?key|token)\b"
-            rb"[ \t]*[:=][ \t]*)(?!\[)[^\s\"'`,;]+"
+            rb"[ \t]*[:=][ \t]*)(?P<quote>[\"'])?(?P<value>"
+            rb"\[REDACTED:[a-z0-9-]+\][^\s\"'\r\n,}]*"
+            rb"|[^\s\"'`,;]+)(?P<closing>[\"'])?"
         ),
-        _replace_header_value("credential-value"),
+        _replace_sensitive_value("credential-value"),
     ),
 )
 _EMAIL = re.compile(
@@ -187,9 +198,10 @@ def redact_text(
     value = raw
     kinds: set[str] = set()
     for kind, pattern, replacement in _TEXT_RULES:
-        value, replacements = pattern.subn(replacement, value)
-        if replacements:
+        redacted = pattern.sub(replacement, value)
+        if redacted != value:
             kinds.add(kind)
+        value = redacted
 
     allowed = _allowed_contact_set(allowed_contacts)
 

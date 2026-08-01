@@ -501,6 +501,49 @@ def test_confirmed_unavailable_fingerprint_validates_metadata_record_contract():
         coverage_module._fingerprint_child(fingerprint, (bad_hash,))
 
 
+def test_confirmed_unavailable_fingerprint_rejects_coherently_reidentified_archive(
+    tmp_path: Path,
+):
+    endpoint = "/repos/zbnerd/probabilistic-valuation-engine/issues/7/comments"
+    body = b'{"message":"gone"}'
+    page = GitHubPage(
+        endpoint=endpoint,
+        params={"per_page": 100},
+        page_number=1,
+        body=body,
+        json=None,
+        response_hash=_hash(body),
+        availability_status="confirmed-unavailable",
+        status_code=451,
+        fetched_at="2026-08-01T00:00:00Z",
+    )
+    safe = github_collector._availability_record(
+        item_key="issue:7",
+        endpoint=endpoint,
+        snapshot_id="SNAP-test",
+        page=page,
+        params={"per_page": 100},
+        accept="application/vnd.github+json",
+    )
+    fingerprint = github_collector._fingerprint(
+        item_key="issue:7",
+        endpoint=endpoint,
+        params={"per_page": 100},
+        accept="application/vnd.github+json",
+        pages=(page,),
+    )
+    reidentified = replace(
+        safe,
+        record=replace(safe.record, source_id="GH-AVAIL-" + "f" * 24),
+    )
+    records, archive = github_collector._write_archive(
+        tmp_path, "reidentified", (reidentified,)
+    )
+    verify_archive_members(records, (archive,))
+    with pytest.raises(CoverageError, match="availability record stable ID mismatch"):
+        coverage_module._fingerprint_child(fingerprint, records)
+
+
 def test_terminal_unavailable_detail_and_enumeration_metadata_count_complete(
     tmp_path: Path,
 ):

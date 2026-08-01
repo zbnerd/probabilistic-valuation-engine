@@ -814,6 +814,13 @@ def _fingerprint_child(
                 f"GitHub availability record missing stable ID: {fingerprint.item_key}|{token}"
             )
         record = matches[0]
+        expected_source_id = "GH-AVAIL-" + _sha256(
+            f"{fingerprint.item_key}:{fingerprint.endpoint_key}".encode()
+        )[:24]
+        if record.source_id != expected_source_id:
+            raise CoverageError(
+                f"GitHub availability record stable ID mismatch: {record.source_id}"
+            )
         payload = record.payload
         params = payload.get("request_params")
         params_hash = (

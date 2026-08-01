@@ -64,8 +64,7 @@ def _validate(
     local_claims = [item for item in items if isinstance(item, DocumentClaim)]
     frozen_sources = list(source_universe) if source_universe is not None else local_sources
     frozen_claims = list(claim_universe) if claim_universe is not None else local_claims
-    if any(source.explicit_relations for source in frozen_sources):
-        validate_relation_ledger(frozen_sources, frozen_claims)
+    validate_relation_ledger(frozen_sources, frozen_claims)
 
     frozen_by_id: dict[str, object] = {
         **{source.source_id: source for source in frozen_sources},
@@ -127,6 +126,10 @@ def write_jsonl(
     """Atomically write canonical UTF-8 JSONL to *path*."""
     target = Path(path)
     items = list(records)
+    model_types = {type(item) for item in items}
+    if len(model_types) > 1:
+        names = ", ".join(sorted(model_type.__name__ for model_type in model_types))
+        raise ValueError(f"JSONL records must have one homogeneous model type; got: {names}")
     _validate(items, source_universe, claim_universe)
     target.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(

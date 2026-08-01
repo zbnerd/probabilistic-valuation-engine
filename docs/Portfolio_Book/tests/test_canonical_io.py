@@ -172,7 +172,7 @@ def test_relation_ledger_rejects_absent_target_and_downstream_field_change():
         validate_relation_ledger([source, target], downstream_relations=[changed])
 
 
-def test_write_accepts_relation_to_claim_in_same_frozen_universe(tmp_path):
+def test_write_accepts_relation_to_claim_in_explicit_frozen_universe(tmp_path):
     relation = ExplicitRelation.create(
         owner_source_id="source-a",
         relation_type="supports",
@@ -181,10 +181,21 @@ def test_write_accepts_relation_to_claim_in_same_frozen_universe(tmp_path):
         evidence_hash="3" * 64,
     )
 
+    source = make_record(source_id="source-a", explicit_relations=(relation,))
+    claim = make_claim()
+    target = tmp_path / "source-ledger.jsonl"
     write_jsonl(
-        tmp_path / "mixed-ledger.jsonl",
-        [make_record(source_id="source-a", explicit_relations=(relation,)), make_claim()],
+        target,
+        [source],
+        source_universe=[source],
+        claim_universe=[claim],
     )
+    assert read_jsonl(
+        target,
+        SourceRecord,
+        source_universe=[source],
+        claim_universe=[claim],
+    ) == [source]
 
 
 def test_sharded_relation_validation_accepts_separate_claim_universe(tmp_path):
@@ -232,8 +243,67 @@ def test_write_rejects_conflicting_nested_member_fields(tmp_path):
     conflict = StoredArtifactMember("member-1", "archive#b", 1, 1, 11, "2" * 64)
     records = [
         make_record(source_id="source-a", stored_members=(original,)),
-        make_claim(claim_id="claim-b", stored_members=(conflict,)),
+        make_record(source_id="source-b", stored_members=(conflict,)),
     ]
 
     with pytest.raises(ValueError, match="duplicate member_id.*different fields"):
         write_jsonl(tmp_path / "records.jsonl", records)
+
+
+@pytest.mark.parametrize("conflicting", [False, True])
+def test_relation_free_cross_shard_rejects_duplicate_top_level_ids(
+    tmp_path, conflicting
+):
+    original = make_record(source_id="source-a", stored_members=())
+    duplicate = make_record(
+        source_id="source-a",
+        stored_members=(),
+        title="changed" if conflicting else original.title,
+    )
+    expected = "duplicate source_id.*different fields" if conflicting else "duplicate source_id"
+
+    with pytest.raises(ValueError, match=expected):
+        write_jsonl(
+            tmp_path / "source-shard.jsonl",
+            [duplicate],
+            source_universe=[original, duplicate],
+            claim_universe=[],
+        )
+
+
+@pytest.mark.parametrize("conflicting", [False, True])
+def test_relation_free_cross_shard_rejects_duplicate_nested_member_ids(
+    tmp_path, conflicting
+):
+    original_member = StoredArtifactMember(
+        "member-1", "archive#a", 1, 1, 10, "1" * 64
+    )
+    duplicate_member = StoredArtifactMember(
+        "member-1",
+        "archive#b" if conflicting else original_member.locator,
+        1,
+        1,
+        11 if conflicting else original_member.byte_count,
+        "2" * 64 if conflicting else original_member.sha256,
+    )
+    source = make_record(
+        source_id="source-a", stored_members=(original_member,), explicit_relations=()
+    )
+    claim = make_claim(stored_members=(duplicate_member,))
+    expected = "duplicate member_id.*different fields" if conflicting else "duplicate member_id"
+
+    with pytest.raises(ValueError, match=expected):
+        write_jsonl(
+            tmp_path / "source-shard.jsonl",
+            [source],
+            source_universe=[source],
+            claim_universe=[claim],
+        )
+
+
+def test_write_rejects_heterogeneous_model_types(tmp_path):
+    with pytest.raises(ValueError, match="homogeneous model type"):
+        write_jsonl(
+            tmp_path / "mixed.jsonl",
+            [make_record(source_id="source-a"), make_claim()],
+        )

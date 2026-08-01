@@ -1043,15 +1043,76 @@ def _render_bounded_volumes(
         ]
 
 
-def _remove_stale_category_archives(
-    archive_dir: Path, name: str, expected: set[str]
-) -> None:
+def _category_archive_paths(archive_dir: Path, name: str) -> tuple[Path, ...]:
     filename = re.compile(
         rf"github-records-{re.escape(name)}(?:-[0-9]+)?\.tar\.gz\Z"
     )
-    for stale in archive_dir.glob(f"github-records-{name}*.tar.gz"):
-        if filename.fullmatch(stale.name) and stale.name not in expected:
-            stale.unlink()
+    return tuple(
+        sorted(
+            (
+                path
+                for path in archive_dir.glob(f"github-records-{name}*.tar.gz")
+                if filename.fullmatch(path.name)
+            ),
+            key=lambda path: path.name.encode("utf-8"),
+        )
+    )
+
+
+def _publication_replace(source: Path, target: Path) -> None:
+    source.replace(target)
+
+
+def _publication_unlink(path: Path) -> None:
+    path.unlink()
+
+
+def _remove_backup_directory(backup_dir: Path) -> None:
+    for path in backup_dir.iterdir():
+        path.unlink(missing_ok=True)
+    backup_dir.rmdir()
+
+
+def _publish_category_volumes(
+    archive_dir: Path,
+    name: str,
+    rendered: tuple[_RenderedVolume, ...],
+) -> tuple[Path, ...]:
+    existing = _category_archive_paths(archive_dir, name)
+    expected = {volume.filename for volume in rendered}
+    affected = sorted(
+        expected.union(path.name for path in existing),
+        key=lambda value: value.encode("utf-8"),
+    )
+    backup_dir = Path(
+        tempfile.mkdtemp(prefix=f".github-records-{name}-publish-", dir=archive_dir)
+    )
+    try:
+        for path in existing:
+            os.link(path, backup_dir / path.name)
+        paths: list[Path] = []
+        try:
+            for volume in rendered:
+                path = archive_dir / volume.filename
+                _publication_replace(volume.temporary_path, path)
+                paths.append(path)
+            for stale in existing:
+                if stale.name not in expected:
+                    _publication_unlink(stale)
+        except BaseException:
+            try:
+                for filename in affected:
+                    (archive_dir / filename).unlink(missing_ok=True)
+                for path in existing:
+                    (backup_dir / path.name).replace(path)
+            except BaseException as rollback_error:
+                raise RuntimeError(
+                    f"GitHub {name} archive publication rollback failed"
+                ) from rollback_error
+            raise
+        return tuple(paths)
+    finally:
+        _remove_backup_directory(backup_dir)
 
 
 def _write_archive(
@@ -1077,14 +1138,8 @@ def _write_archive(
         _initial_archive_groups(parts),
         max_volume_bytes,
     )
-    paths: list[Path] = []
     try:
-        for volume in rendered:
-            path = archive_dir / volume.filename
-            volume.temporary_path.replace(path)
-            paths.append(path)
-        expected = {path.name for path in paths}
-        _remove_stale_category_archives(archive_dir, name, expected)
+        paths = _publish_category_volumes(archive_dir, name, rendered)
     finally:
         for volume in rendered:
             volume.temporary_path.unlink(missing_ok=True)
@@ -1108,7 +1163,7 @@ def _write_archive(
         )
         for item in ordered
     )
-    return records, tuple(paths)
+    return records, paths
 
 
 def _collect_enumeration(

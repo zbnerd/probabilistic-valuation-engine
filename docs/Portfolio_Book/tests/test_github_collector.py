@@ -1037,6 +1037,66 @@ def test_github_archive_failure_keeps_existing_category_files_byte_identical(tmp
     assert not tuple(tmp_path.glob(".github-records-pulls-*.tmp"))
 
 
+@pytest.mark.parametrize("failure_point", ["rename", "cleanup"])
+def test_github_archive_publish_failure_rolls_back_exact_old_category(
+    tmp_path, monkeypatch, failure_point
+):
+    old_category = {
+        "github-records-pulls.tar.gz": b"old-unnumbered",
+        "github-records-pulls-001.tar.gz": b"old-one",
+        "github-records-pulls-002.tar.gz": b"old-two",
+        "github-records-pulls-099.tar.gz": b"old-stale",
+    }
+    for name, value in old_category.items():
+        (tmp_path / name).write_bytes(value)
+    other_family = tmp_path / "github-records-issues-001.tar.gz"
+    other_family.write_bytes(b"other-family")
+    records = tuple(
+        _stored_record(
+            f"GH-ROLLBACK-{index}",
+            hashlib.shake_256(f"rollback-{index}".encode()).digest(200_000),
+            "bin",
+        )
+        for index in range(3)
+    )
+    replace_calls = 0
+    cleanup_calls = 0
+
+    def injected_replace(source, target):
+        nonlocal replace_calls
+        replace_calls += 1
+        if failure_point == "rename" and replace_calls == 2:
+            raise OSError("injected mid-publication rename failure")
+        source.replace(target)
+
+    def injected_unlink(path):
+        nonlocal cleanup_calls
+        cleanup_calls += 1
+        if failure_point == "cleanup" and cleanup_calls == 1:
+            raise OSError("injected stale cleanup failure")
+        path.unlink()
+
+    monkeypatch.setattr(github_collector, "_publication_replace", injected_replace)
+    monkeypatch.setattr(github_collector, "_publication_unlink", injected_unlink)
+
+    with pytest.raises(OSError, match="injected"):
+        github_collector._write_archive(
+            tmp_path,
+            "pulls",
+            records,
+            max_volume_bytes=350_000,
+        )
+
+    actual = {
+        path.name: path.read_bytes()
+        for path in tmp_path.glob("github-records-pulls*.tar.gz")
+    }
+    assert actual == old_category
+    assert other_family.read_bytes() == b"other-family"
+    assert not tuple(tmp_path.glob(".github-records-pulls-*.tmp"))
+    assert not tuple(tmp_path.glob(".github-records-pulls-publish-*"))
+
+
 def test_reconciliation_returns_every_numbered_pull_and_issue_archive_path(tmp_path):
     client = ScenarioClient()
     ticks = iter(f"2026-01-01T00:00:{value:02d}Z" for value in range(60))

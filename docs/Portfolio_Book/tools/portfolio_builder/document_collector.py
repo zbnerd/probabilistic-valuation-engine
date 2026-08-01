@@ -648,6 +648,51 @@ def _verified_external_bytes(repo: Path, item: ExternalInputFile) -> bytes:
     return b"".join(chunks)
 
 
+def _reject_unlisted_external_pdf_candidates(
+    repo: Path, items: tuple[ExternalInputFile, ...]
+) -> None:
+    """Reject extra PDFs beside a boundary-listed external input.
+
+    The approved candidate scope is deliberately narrow: only direct children
+    of the distinct parent directories named by ``external_input_files`` are
+    enumerated.  The scan is non-recursive, so generated publication/output
+    subdirectories are outside this source-input check.  Candidate names are
+    compared before any candidate file is opened or read.
+    """
+
+    root = repo.resolve(strict=True)
+    allowed = {Path(item.path).as_posix() for item in items}
+    parents: set[Path] = set()
+    for item in items:
+        relative = Path(item.path)
+        if relative.is_absolute():
+            raise ValueError(f"external input is outside repository: {item.path}")
+        lexical_parent = repo / relative.parent
+        try:
+            parent = lexical_parent.resolve(strict=True)
+        except OSError:
+            # Preserve the existing missing-input error from the identity check.
+            continue
+        if root != parent and root not in parent.parents:
+            raise ValueError(f"external input is outside repository: {item.path}")
+        if parent.is_dir():
+            parents.add(parent)
+
+    candidates: set[str] = set()
+    for parent in sorted(parents, key=lambda value: os.fsencode(value.as_posix())):
+        parent_relative = parent.relative_to(root)
+        with os.scandir(parent) as entries:
+            names = sorted(
+                (entry.name for entry in entries), key=lambda value: os.fsencode(value)
+            )
+        for name in names:
+            if Path(name).suffix.lower() == ".pdf":
+                candidates.add((parent_relative / name).as_posix())
+    extras = sorted(candidates - allowed, key=_utf8_key)
+    if extras:
+        raise ValueError(f"unlisted external PDF candidate: {extras[0]}")
+
+
 def _pdf_claims(
     source_id: str,
     item: ExternalInputFile,
@@ -1037,6 +1082,7 @@ def collect_documents(
         raise ValueError("external role set is incomplete or duplicated")
     if len({item.path for item in external}) != len(external):
         raise ValueError("duplicate external input path in snapshot")
+    _reject_unlisted_external_pdf_candidates(repository, external)
 
     redaction_cache: dict[str, RedactionResult] = {}
     drafts = [

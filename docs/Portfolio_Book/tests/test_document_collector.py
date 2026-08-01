@@ -257,14 +257,32 @@ def test_rejects_tree_metadata_role_and_external_byte_mismatches(document_repo, 
     assert not (tmp_path / "changed").exists()
 
 
-def test_unlisted_ignored_pdf_is_never_collected(document_repo, tmp_path: Path):
+def test_unlisted_ignored_pdf_is_rejected_before_open(
+    document_repo,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     repo, snapshot, _ = document_repo
     unlisted = repo / "private/unlisted.pdf"
     unlisted.write_bytes(_pdf(1))
+    original_open = Path.open
+    opened_unlisted: list[Path] = []
 
-    sources, _ = collect_documents(repo, snapshot, tmp_path / "archives")
+    def guarded_open(path: Path, *args, **kwargs):
+        if path.resolve() == unlisted.resolve():
+            opened_unlisted.append(path)
+            raise AssertionError("unlisted PDF bytes must not be opened")
+        return original_open(path, *args, **kwargs)
 
-    assert all(source.source_locator != "external:private/unlisted.pdf" for source in sources)
+    monkeypatch.setattr(Path, "open", guarded_open)
+
+    with pytest.raises(
+        ValueError, match=r"unlisted external PDF candidate: private/unlisted\.pdf"
+    ):
+        collect_documents(repo, snapshot, tmp_path / "archives")
+
+    assert opened_unlisted == []
+    assert not (tmp_path / "archives").exists()
 
 
 def test_large_structured_text_uses_complete_line_bounded_batches(

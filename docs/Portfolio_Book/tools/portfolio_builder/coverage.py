@@ -261,6 +261,39 @@ def enumerate_frozen_semantic_commits(
     return tuple(commits)
 
 
+def frozen_commit_parents(
+    repo: str | Path, commit_shas: Iterable[str]
+) -> dict[str, tuple[str, ...]]:
+    """Read ordered parent truth directly from each frozen commit object."""
+    parents_by_sha: dict[str, tuple[str, ...]] = {}
+    for sha in commit_shas:
+        try:
+            raw = subprocess.run(
+                ("git", "cat-file", "commit", sha),
+                cwd=Path(repo),
+                check=True,
+                capture_output=True,
+            ).stdout
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise CoverageError(f"frozen commit object is unavailable: {sha}") from error
+        header, separator, _ = raw.partition(b"\n\n")
+        if not separator:
+            raise CoverageError(f"frozen commit object has no header boundary: {sha}")
+        parents: list[str] = []
+        for line in header.splitlines():
+            if not line.startswith(b"parent "):
+                continue
+            try:
+                parent = line.removeprefix(b"parent ").decode("ascii")
+            except UnicodeDecodeError as error:
+                raise CoverageError(f"frozen commit parent is not ASCII: {sha}") from error
+            if len(parent) != 40 or any(value not in "0123456789abcdef" for value in parent):
+                raise CoverageError(f"invalid frozen commit parent ID: {sha}|{parent}")
+            parents.append(parent)
+        parents_by_sha[sha] = tuple(parents)
+    return parents_by_sha
+
+
 def _reject_external_originals(
     repo: Path,
     snapshot: SnapshotManifest,
@@ -340,7 +373,7 @@ def _archive_entries(path: Path) -> tuple[dict[str, bytes], dict[str, object] | 
 
 def verify_archive_members(
     sources: Iterable[SourceRecord], archive_paths: Iterable[str | Path]
-) -> None:
+) -> dict[str, bytes]:
     """Verify exact stored-member union, order, hashes, and reassembly."""
     frozen_sources = tuple(sources)
     paths = tuple(Path(path) for path in archive_paths)
@@ -439,6 +472,83 @@ def verify_archive_members(
             member = declared[locator]
             if member.to_dict() != row:
                 raise CoverageError(f"reassembly manifest member mismatch: {member.member_id}")
+    return reconstructed
+
+
+def verify_document_claim_archive_binding(
+    sources: Iterable[SourceRecord],
+    claims: Iterable[DocumentClaim],
+    reconstructed: Mapping[str, bytes],
+) -> None:
+    """Bind every document claim to its exact archived safe representation."""
+    frozen_claims = tuple(claims)
+    for source in sources:
+        if source.source_type not in {
+            "tracked-document",
+            "external-pdf-derived-record",
+        }:
+            continue
+        stored = reconstructed.get(source.source_id)
+        if stored is None:
+            raise CoverageError(
+                f"archived document representation missing stable ID: {source.source_id}"
+            )
+        try:
+            representation = json.loads(stored)
+        except json.JSONDecodeError as error:
+            raise CoverageError(
+                f"archived document representation is invalid: {source.source_id}"
+            ) from error
+        if not isinstance(representation, dict):
+            raise CoverageError(
+                f"archived document representation is invalid: {source.source_id}"
+            )
+        archived_source = representation.get("source")
+        archived_claims = representation.get("claims")
+        if (
+            not isinstance(archived_source, dict)
+            or archived_source.get("source_id") != source.source_id
+            or not isinstance(archived_claims, list)
+            or not all(isinstance(claim, dict) for claim in archived_claims)
+        ):
+            raise CoverageError(
+                f"archived document representation is invalid: {source.source_id}"
+            )
+        archived_by_id = {
+            claim.get("claim_id"): claim for claim in archived_claims
+        }
+        if (
+            None in archived_by_id
+            or len(archived_by_id) != len(archived_claims)
+        ):
+            raise CoverageError(
+                f"archived document claim IDs are invalid: {source.source_id}"
+            )
+        captured = tuple(
+            claim
+            for claim in frozen_claims
+            if claim.document_source_id == source.source_id
+        )
+        captured_by_id = {claim.claim_id: claim.to_dict() for claim in captured}
+        if len(captured_by_id) != len(captured):
+            raise CoverageError(
+                f"captured document claim IDs are duplicated: {source.source_id}"
+            )
+        missing = sorted(set(archived_by_id) - set(captured_by_id), key=_utf8)
+        extra = sorted(set(captured_by_id) - set(archived_by_id), key=_utf8)
+        if missing:
+            raise CoverageError(
+                f"archived document claim union missing stable ID: {missing[0]}"
+            )
+        if extra:
+            raise CoverageError(
+                f"archived document claim union has unexpected stable ID: {extra[0]}"
+            )
+        for claim_id in sorted(archived_by_id, key=_utf8):
+            if archived_by_id[claim_id] != captured_by_id[claim_id]:
+                raise CoverageError(
+                    f"archived document claim identity mismatch: {claim_id}"
+                )
 
 
 def _verify_external_inputs(
@@ -578,7 +688,9 @@ def _verify_ai(
 
 
 def _verify_git(
-    sources: tuple[SourceRecord, ...], semantic_commit_shas: tuple[str, ...]
+    sources: tuple[SourceRecord, ...],
+    semantic_commit_shas: tuple[str, ...],
+    expected_parent_shas: Mapping[str, tuple[str, ...]],
 ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
     expected_commits = tuple(f"GIT-{sha}" for sha in semantic_commit_shas)
     captured_commits = tuple(
@@ -586,13 +698,19 @@ def _verify_git(
     )
     _stable_set("Git commits", expected_commits, captured_commits)
     expected_diffs: list[str] = []
-    for source in sources:
-        if source.source_type != "git-commit":
-            continue
-        sha = source.payload.get("commit_sha")
-        parents = source.payload.get("parent_shas")
-        if not isinstance(sha, str) or not isinstance(parents, list):
-            raise CoverageError(f"Git commit parent metadata missing: {source.source_id}")
+    by_id = {source.source_id: source for source in sources}
+    for sha in semantic_commit_shas:
+        source = by_id[f"GIT-{sha}"]
+        parents = expected_parent_shas.get(sha)
+        if parents is None:
+            raise CoverageError(f"frozen commit parent truth is absent: GIT-{sha}")
+        recorded_parents = source.payload.get("parent_shas")
+        if (
+            source.payload.get("commit_sha") != sha
+            or not isinstance(recorded_parents, list)
+            or tuple(recorded_parents) != parents
+        ):
+            raise CoverageError(f"frozen commit parent metadata mismatch: GIT-{sha}")
         if not parents:
             expected_diffs.append(f"GIT-{sha}-ROOT")
         else:
@@ -604,12 +722,10 @@ def _verify_git(
         source.source_id for source in sources if source.source_type == "git-diff"
     )
     _stable_set("Git parent diffs", expected_diffs, captured_diffs)
-    by_id = {source.source_id: source for source in sources}
     for diff_id in expected_diffs:
         diff = by_id[diff_id]
-        child = str(diff.payload.get("child_sha"))
-        commit = by_id[f"GIT-{child}"]
-        parents = commit.payload["parent_shas"]
+        child = diff_id.removeprefix("GIT-").rsplit("-", 1)[0]
+        parents = expected_parent_shas[child]
         expected_total = len(parents)
         if diff.payload.get("parent_total") != expected_total:
             raise CoverageError(f"Git diff parent count mismatch: {diff_id}")
@@ -623,11 +739,17 @@ def _verify_git(
             expected_parent = parents[expected_ordinal - 1]
             expected_base = expected_parent
         identity = (
+            diff.payload.get("child_sha"),
             diff.payload.get("parent_ordinal"),
             diff.payload.get("parent_sha"),
             diff.payload.get("comparison_base_sha"),
         )
-        expected_identity = (expected_ordinal, expected_parent, expected_base)
+        expected_identity = (
+            child,
+            expected_ordinal,
+            expected_parent,
+            expected_base,
+        )
         if identity != expected_identity:
             raise CoverageError(f"Git diff parent identity mismatch: {diff_id}")
     return (
@@ -641,6 +763,7 @@ def _verify_git(
 def _fingerprint_child(
     fingerprint: GitHubEndpointFingerprint,
     sources: tuple[SourceRecord, ...],
+    metadata_tokens: tuple[str, ...] | None = None,
 ) -> tuple[str, ...]:
     if fingerprint.availability_status == "transient-failure":
         raise CoverageError(
@@ -659,6 +782,66 @@ def _fingerprint_child(
         raise CoverageError(
             f"GitHub page/hash reconciliation mismatch: {fingerprint.item_key}|{fingerprint.endpoint_key}"
         )
+    if metadata_tokens is not None:
+        _stable_set(
+            f"GitHub fingerprint metadata {fingerprint.item_key}",
+            metadata_tokens,
+            fingerprint.stable_child_ids,
+        )
+        return tuple(
+            f"{fingerprint.item_key}|{token}" for token in metadata_tokens
+        )
+    if fingerprint.availability_status == "confirmed-unavailable":
+        if pages != (1,) or len(fingerprint.stable_child_ids) != 1:
+            raise CoverageError(
+                f"GitHub unavailable fingerprint metadata mismatch: {fingerprint.item_key}|{fingerprint.endpoint_key}"
+            )
+        token = fingerprint.stable_child_ids[0]
+        prefix, separator, raw_status = token.partition(":")
+        if prefix != "status-code" or not separator or not raw_status.isdigit():
+            raise CoverageError(
+                f"GitHub unavailable fingerprint metadata mismatch: {fingerprint.item_key}|{token}"
+            )
+        locator = f"github:{fingerprint.endpoint_key}"
+        matches = [
+            source
+            for source in sources
+            if source.source_type == "github-availability"
+            and source.source_locator == locator
+        ]
+        if len(matches) != 1:
+            raise CoverageError(
+                f"GitHub availability record missing stable ID: {fingerprint.item_key}|{token}"
+            )
+        record = matches[0]
+        payload = record.payload
+        params = payload.get("request_params")
+        params_hash = (
+            _sha256(_canonical_json(dict(params)))
+            if isinstance(params, Mapping)
+            else None
+        )
+        expected_hash = fingerprint.page_response_hashes[0]
+        if (
+            record.availability_status != "confirmed-unavailable"
+            or payload.get("availability_status") != "confirmed-unavailable"
+            or payload.get("endpoint") != fingerprint.endpoint_key
+            or payload.get("accept") != fingerprint.accept
+            or payload.get("status_code") != int(raw_status)
+            or params_hash != fingerprint.request_params_sha256
+        ):
+            raise CoverageError(
+                f"GitHub availability metadata mismatch: {record.source_id}"
+            )
+        if (
+            record.raw_hash != expected_hash
+            or payload.get("observed_body_sha256") != expected_hash
+            or payload.get("response_raw_sha256") != expected_hash
+        ):
+            raise CoverageError(
+                f"GitHub availability body hash mismatch: {record.source_id}"
+            )
+        return (f"{fingerprint.item_key}|{token}",)
     captured: list[str] = []
     for stable_id in fingerprint.stable_child_ids:
         expected_locator = f"github:{fingerprint.endpoint_key}#{stable_id}"
@@ -688,12 +871,34 @@ def _verify_github(
         [f"GH-PR-{number}" for number in window.pull_request_numbers]
         + [f"GH-ISSUE-{number}" for number in window.issue_numbers]
     )
-    source_ids = {source.source_id for source in sources}
-    captured_parents = tuple(
+    captured_parent_ids = [
         source.source_id
         for source in sources
         if source.source_type in {"github-pull-request", "github-issue"}
-    )
+    ]
+    terminal_detail_items: set[str] = set()
+    for item_key, number, suffix in (
+        *(
+            (f"pr:{number}", number, f"/pulls/{number}")
+            for number in window.pull_request_numbers
+        ),
+        *(
+            (f"issue:{number}", number, f"/issues/{number}")
+            for number in window.issue_numbers
+        ),
+    ):
+        terminal = [
+            fingerprint
+            for fingerprint in window.endpoint_fingerprints
+            if fingerprint.item_key == item_key
+            and fingerprint.endpoint_key.endswith(suffix)
+            and fingerprint.availability_status == "confirmed-unavailable"
+        ]
+        if len(terminal) == 1:
+            terminal_detail_items.add(item_key)
+            prefix = "GH-PR" if item_key.startswith("pr:") else "GH-ISSUE"
+            captured_parent_ids.append(f"{prefix}-{number}")
+    captured_parents = tuple(captured_parent_ids)
     _stable_set("GitHub parents", expected_parents, captured_parents)
     expected_updates = tuple(
         [f"pr:{number}" for number in window.pull_request_numbers]
@@ -709,36 +914,54 @@ def _verify_github(
             raise CoverageError(f"GitHub duplicate endpoint fingerprint: {key[0]}|{key[1]}")
         seen.add(key)
         fingerprint_keys.append(f"{key[0]}|{key[1]}")
-        children.extend(_fingerprint_child(fingerprint, sources))
+        metadata_tokens: tuple[str, ...] | None = None
+        if fingerprint.item_key == "pull:enumeration":
+            metadata_tokens = tuple(
+                f"pull:{number}" for number in window.pull_request_numbers
+            )
+        elif fingerprint.item_key == "issue:enumeration":
+            metadata_tokens = tuple(
+                f"issue:{number}" for number in window.issue_numbers
+            )
+        children.extend(
+            _fingerprint_child(fingerprint, sources, metadata_tokens)
+        )
     if strict_endpoints:
         expected_endpoint_suffixes: list[tuple[str, str]] = [
             ("pull:enumeration", "/pulls"),
             ("issue:enumeration", "/issues"),
         ]
         for number in window.pull_request_numbers:
-            expected_endpoint_suffixes.extend(
-                (
-                    (f"pr:{number}", f"/pulls/{number}"),
-                    (f"pr:{number}", f"/pulls/{number}/commits"),
-                    (f"pr:{number}", f"/pulls/{number}/files"),
-                    (f"pr:{number}", f"/pulls/{number}/reviews"),
-                    (f"pr:{number}", f"/pulls/{number}/comments"),
-                    (f"pr:{number}", f"/issues/{number}/comments"),
-                    (f"pr:{number}", f"/issues/{number}/timeline"),
-                    (f"pr:{number}", f"/issues/{number}/reactions"),
-                    (f"pr:{number}", f"/pulls/{number}/requested_reviewers"),
-                    (f"pr:{number}", f"/pulls/{number}.patch"),
+            item_key = f"pr:{number}"
+            expected_endpoint_suffixes.append((item_key, f"/pulls/{number}"))
+            if item_key not in terminal_detail_items:
+                expected_endpoint_suffixes.extend(
+                    (
+                        (f"pr:{number}", f"/pulls/{number}/commits"),
+                        (f"pr:{number}", f"/pulls/{number}/files"),
+                        (f"pr:{number}", f"/pulls/{number}/reviews"),
+                        (f"pr:{number}", f"/pulls/{number}/comments"),
+                        (f"pr:{number}", f"/issues/{number}/comments"),
+                        (f"pr:{number}", f"/issues/{number}/timeline"),
+                        (f"pr:{number}", f"/issues/{number}/reactions"),
+                        (
+                            f"pr:{number}",
+                            f"/pulls/{number}/requested_reviewers",
+                        ),
+                        (f"pr:{number}", f"/pulls/{number}.patch"),
+                    )
                 )
-            )
         for number in window.issue_numbers:
-            expected_endpoint_suffixes.extend(
-                (
-                    (f"issue:{number}", f"/issues/{number}"),
-                    (f"issue:{number}", f"/issues/{number}/comments"),
-                    (f"issue:{number}", f"/issues/{number}/timeline"),
-                    (f"issue:{number}", f"/issues/{number}/reactions"),
+            item_key = f"issue:{number}"
+            expected_endpoint_suffixes.append((item_key, f"/issues/{number}"))
+            if item_key not in terminal_detail_items:
+                expected_endpoint_suffixes.extend(
+                    (
+                        (f"issue:{number}", f"/issues/{number}/comments"),
+                        (f"issue:{number}", f"/issues/{number}/timeline"),
+                        (f"issue:{number}", f"/issues/{number}/reactions"),
+                    )
                 )
-            )
         for item_key, suffix in expected_endpoint_suffixes:
             matches = [
                 endpoint
@@ -821,8 +1044,19 @@ def verify_source_capture(
         if expected_semantic_commit_shas is not None
         else enumerate_frozen_semantic_commits(repository, snapshot)
     )
+    if expected_semantic_commit_shas is None:
+        parent_truth = frozen_commit_parents(repository, semantic)
+    else:
+        parent_truth = {
+            str(source.payload.get("commit_sha")): tuple(
+                source.payload.get("parent_shas", ())
+            )
+            for source in frozen_sources
+            if source.source_type == "git-commit"
+            and isinstance(source.payload.get("parent_shas"), list)
+        }
     git_expected, git_captured, diff_expected, diff_captured = _verify_git(
-        frozen_sources, semantic
+        frozen_sources, semantic, parent_truth
     )
     external_expected, external_captured = _verify_external_inputs(
         repository, snapshot, frozen_sources, frozen_claims
@@ -863,7 +1097,10 @@ def verify_source_capture(
         )
         if required:
             raise CoverageError(f"stored archive member missing stable ID: {required[0]}")
-        verify_archive_members(frozen_sources, paths)
+        reconstructed = verify_archive_members(frozen_sources, paths)
+        verify_document_claim_archive_binding(
+            frozen_sources, frozen_claims, reconstructed
+        )
     relation_ledger = validate_downstream_relation_references(
         frozen_sources, claims=frozen_claims
     )

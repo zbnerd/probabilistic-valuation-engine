@@ -18,12 +18,15 @@ from .models import DocumentClaim, ExplicitRelation, SourceRecord
 
 
 _FULL_SHA = re.compile(r"(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])", re.IGNORECASE)
-_PR_REFERENCE = re.compile(
-    r"(?:\bPR\s*#|https://github\.com/[^/\s]+/[^/\s]+/pull/)(\d+)\b",
+_CAPTURED_REPOSITORY = "zbnerd/probabilistic-valuation-engine"
+_LOCAL_PR_REFERENCE = re.compile(r"\bPR\s*#(\d+)\b", re.IGNORECASE)
+_LOCAL_ISSUE_REFERENCE = re.compile(r"\bissue\s*#(\d+)\b", re.IGNORECASE)
+_GITHUB_REFERENCE = re.compile(
+    r"https://github\.com/([^/\s]+)/([^/\s]+)/(pull|issues)/(\d+)\b",
     re.IGNORECASE,
 )
-_ISSUE_REFERENCE = re.compile(
-    r"(?:\bissue\s*#|https://github\.com/[^/\s]+/[^/\s]+/issues/)(\d+)\b",
+_GITHUB_API_REPOSITORY = re.compile(
+    r"https://api\.github\.com/repos/([^/\s]+)/([^/\s]+)\Z",
     re.IGNORECASE,
 )
 _MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)")
@@ -190,7 +193,43 @@ def _github_event_relations(
         ):
             linked = nested_source.get(key)
             number = linked.get("number") if isinstance(linked, Mapping) else None
-            if isinstance(number, int) and not isinstance(number, bool):
+            repository = linked.get("repository") if isinstance(linked, Mapping) else None
+            full_name = (
+                repository.get("full_name")
+                if isinstance(repository, Mapping)
+                else None
+            )
+            repository_url = (
+                linked.get("repository_url")
+                if isinstance(linked, Mapping)
+                else None
+            )
+            url_match = (
+                _GITHUB_API_REPOSITORY.fullmatch(repository_url)
+                if isinstance(repository_url, str)
+                else None
+            )
+            url_full_name = (
+                f"{url_match.group(1)}/{url_match.group(2)}"
+                if url_match is not None
+                else None
+            )
+            repository_matches = (
+                (
+                    isinstance(full_name, str)
+                    and full_name.casefold() == _CAPTURED_REPOSITORY.casefold()
+                )
+                or (
+                    isinstance(url_full_name, str)
+                    and url_full_name.casefold()
+                    == _CAPTURED_REPOSITORY.casefold()
+                )
+            )
+            if (
+                repository_matches
+                and isinstance(number, int)
+                and not isinstance(number, bool)
+            ):
                 target = targets.get(number)
                 if target is not None and target != source.source_id:
                     candidates.append(
@@ -230,8 +269,8 @@ def _text_relations(
                     )
                 )
         for pattern, targets, relation_type in (
-            (_PR_REFERENCE, pulls, "explicit-pr-reference"),
-            (_ISSUE_REFERENCE, issues, "explicit-issue-reference"),
+            (_LOCAL_PR_REFERENCE, pulls, "explicit-pr-reference"),
+            (_LOCAL_ISSUE_REFERENCE, issues, "explicit-issue-reference"),
         ):
             for match in pattern.finditer(value):
                 target = targets.get(int(match.group(1)))
@@ -245,6 +284,29 @@ def _text_relations(
                             match.group(0),
                         )
                     )
+        for match in _GITHUB_REFERENCE.finditer(value):
+            repository = f"{match.group(1)}/{match.group(2)}"
+            if repository.casefold() != _CAPTURED_REPOSITORY.casefold():
+                continue
+            kind = match.group(3).casefold()
+            number = int(match.group(4))
+            targets = pulls if kind == "pull" else issues
+            relation_type = (
+                "explicit-pr-reference"
+                if kind == "pull"
+                else "explicit-issue-reference"
+            )
+            target = targets.get(number)
+            if target is not None and target != source.source_id:
+                candidates.append(
+                    _candidate(
+                        source.source_id,
+                        relation_type,
+                        target,
+                        f"{locator}#chars={match.start()}-{match.end()}",
+                        match.group(0),
+                    )
+                )
         for match in _MARKDOWN_LINK.finditer(value):
             destination = match.group(1).split("#", 1)[0]
             if destination.startswith("./"):

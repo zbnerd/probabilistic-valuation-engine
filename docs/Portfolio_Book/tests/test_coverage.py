@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 import portfolio_builder.coverage as coverage_module
+import portfolio_builder.github_collector as github_collector
 from portfolio_builder.coverage import (
     CaptureCoverageManifest,
     CoverageSection,
@@ -23,6 +24,7 @@ from portfolio_builder.coverage import (
 )
 from portfolio_builder.git_collector import GitCapture
 from portfolio_builder.github_collector import ReconciliationPass, ReconciliationResult
+from portfolio_builder.github_client import GitHubPage
 from portfolio_builder.models import (
     DocumentClaim,
     ExplicitRelation,
@@ -187,6 +189,58 @@ def test_relation_derivation_accepts_only_exact_evidence_and_is_deterministic():
             payload={"source_reference": "AI-1"},
         ),
         _source(
+            "FOREIGN-URL",
+            "tracked-document",
+            payload={"safe_text": "https://github.com/other/repository/pull/7"},
+        ),
+        _source(
+            "LOCAL-REF",
+            "tracked-document",
+            payload={"safe_text": "PR #7"},
+        ),
+        _source(
+            "LOCAL-URL",
+            "tracked-document",
+            payload={
+                "safe_text": (
+                    "https://github.com/ZBNERD/Probabilistic-Valuation-Engine/issues/9"
+                )
+            },
+        ),
+        _source(
+            "FOREIGN-NESTED",
+            "github-timeline-event",
+            payload={
+                "value": {
+                    "event": "cross-referenced",
+                    "source": {
+                        "issue": {
+                            "number": 9,
+                            "repository": {"full_name": "other/repository"},
+                        }
+                    },
+                }
+            },
+        ),
+        _source(
+            "LOCAL-NESTED",
+            "github-timeline-event",
+            payload={
+                "value": {
+                    "event": "cross-referenced",
+                    "source": {
+                        "issue": {
+                            "number": 9,
+                            "repository_url": (
+                                "https://api.github.com/repos/"
+                                "ZBNERD/Probabilistic-Valuation-Engine"
+                            ),
+                        }
+                    },
+                }
+            },
+        ),
+        _source(
             "NO-GUESS",
             "ai-trace-entry",
             payload={
@@ -237,6 +291,23 @@ def test_relation_derivation_accepts_only_exact_evidence_and_is_deterministic():
         item.owner_source_id == "DIRECT-REF"
         and item.relation.target_source_id == "AI-1"
         and item.relation.relation_type == "same-execution"
+        for item in first
+    )
+    assert all(item.owner_source_id != "FOREIGN-URL" for item in first)
+    assert all(item.owner_source_id != "FOREIGN-NESTED" for item in first)
+    assert any(
+        item.owner_source_id == "LOCAL-REF"
+        and item.relation.target_source_id == "GH-PR-7"
+        for item in first
+    )
+    assert any(
+        item.owner_source_id == "LOCAL-NESTED"
+        and item.relation.target_source_id == "GH-ISSUE-9"
+        for item in first
+    )
+    assert any(
+        item.owner_source_id == "LOCAL-URL"
+        and item.relation.target_source_id == "GH-ISSUE-9"
         for item in first
     )
 
@@ -313,6 +384,214 @@ def test_archive_verification_rejects_missing_reordered_corrupt_and_external_ori
     broken = replace(members[0], sha256="0" * 64)
     with pytest.raises(CoverageError, match="member hash.*S-part-001"):
         verify_archive_members((replace(source, stored_members=(broken, members[1])),), (tmp_path / filename,))
+
+
+def test_document_claims_are_bound_byte_for_byte_to_archived_safe_representation(
+    tmp_path: Path,
+):
+    claim = DocumentClaim(
+        "DOC-C1",
+        "DOC",
+        "docs/a.md",
+        "project-evidence",
+        "primary-record",
+        "sentence",
+        3,
+        3,
+        None,
+        1,
+        "1" * 64,
+        "2" * 64,
+        (),
+        "safe claim",
+        "unreviewed",
+        "parsed",
+    )
+    representation = (
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source": {"source_id": "DOC"},
+                "claims": [claim.to_dict()],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode()
+    archive = tmp_path / "document-records-001.tar.gz"
+    member_name = "records/DOC-part-001.json.part"
+    with tarfile.open(archive, "w:gz") as stream:
+        info = tarfile.TarInfo(member_name)
+        info.size = len(representation)
+        stream.addfile(info, io.BytesIO(representation))
+    member = StoredArtifactMember(
+        "DOC-part-001",
+        f"{archive.name}#{member_name}",
+        1,
+        1,
+        len(representation),
+        _hash(representation),
+    )
+    source = _source(
+        "DOC",
+        "tracked-document",
+        locator="git:docs/a.md",
+        payload={"unit_count": 1},
+        stored_hash=_hash(representation),
+        members=(member,),
+    )
+    reconstructed = verify_archive_members((source,), (archive,))
+    coverage_module.verify_document_claim_archive_binding(
+        (source,), (claim,), reconstructed
+    )
+    with pytest.raises(CoverageError, match="archived document claim union.*DOC-C1"):
+        coverage_module.verify_document_claim_archive_binding(
+            (source,), (), reconstructed
+        )
+    changed = replace(claim, claim_id="DOC-CHANGED", stored_hash="3" * 64)
+    with pytest.raises(CoverageError, match="archived document claim union"):
+        coverage_module.verify_document_claim_archive_binding(
+            (source,), (changed,), reconstructed
+        )
+
+
+def test_confirmed_unavailable_fingerprint_validates_metadata_record_contract():
+    endpoint = "/repos/zbnerd/probabilistic-valuation-engine/issues/7/comments"
+    body = b'{"message":"gone"}'
+    page = GitHubPage(
+        endpoint=endpoint,
+        params={"per_page": 100},
+        page_number=1,
+        body=body,
+        json=None,
+        response_hash=_hash(body),
+        availability_status="confirmed-unavailable",
+        status_code=451,
+        fetched_at="2026-08-01T00:00:00Z",
+    )
+    safe = github_collector._availability_record(
+        item_key="issue:7",
+        endpoint=endpoint,
+        snapshot_id="SNAP-test",
+        page=page,
+        params={"per_page": 100},
+        accept="application/vnd.github+json",
+    )
+    fingerprint = github_collector._fingerprint(
+        item_key="issue:7",
+        endpoint=endpoint,
+        params={"per_page": 100},
+        accept="application/vnd.github+json",
+        pages=(page,),
+    )
+    assert fingerprint.stable_child_ids == ("status-code:451",)
+    assert coverage_module._fingerprint_child(fingerprint, (safe.record,)) == (
+        "issue:7|status-code:451",
+    )
+    bad_status = replace(
+        safe.record,
+        payload={**safe.record.payload, "status_code": 410},
+    )
+    with pytest.raises(CoverageError, match="availability metadata mismatch"):
+        coverage_module._fingerprint_child(fingerprint, (bad_status,))
+    bad_hash = replace(safe.record, raw_hash="0" * 64)
+    with pytest.raises(CoverageError, match="availability body hash mismatch"):
+        coverage_module._fingerprint_child(fingerprint, (bad_hash,))
+
+
+def test_terminal_unavailable_detail_and_enumeration_metadata_count_complete(
+    tmp_path: Path,
+):
+    base = "/repos/zbnerd/probabilistic-valuation-engine"
+    pull_body = b'[{"number":7}]'
+    issue_body = b"[]"
+    pull_page = GitHubPage(
+        f"{base}/pulls",
+        {"state": "all", "per_page": 100},
+        1,
+        pull_body,
+        [{"number": 7}],
+        _hash(pull_body),
+        "available",
+        200,
+        "2026-08-01T00:00:00Z",
+    )
+    issue_page = GitHubPage(
+        f"{base}/issues",
+        {"state": "all", "per_page": 100},
+        1,
+        issue_body,
+        [],
+        _hash(issue_body),
+        "available",
+        200,
+        "2026-08-01T00:00:00Z",
+    )
+    detail_endpoint = f"{base}/pulls/7"
+    detail_body = b'{"message":"unavailable"}'
+    detail_page = GitHubPage(
+        detail_endpoint,
+        {},
+        1,
+        detail_body,
+        None,
+        _hash(detail_body),
+        "confirmed-unavailable",
+        451,
+        "2026-08-01T00:00:01Z",
+    )
+    fingerprints = (
+        github_collector._fingerprint(
+            item_key="pull:enumeration",
+            endpoint=f"{base}/pulls",
+            params={"state": "all", "per_page": 100},
+            accept="application/vnd.github+json",
+            pages=(pull_page,),
+            child_ids=("pull:7",),
+        ),
+        github_collector._fingerprint(
+            item_key="issue:enumeration",
+            endpoint=f"{base}/issues",
+            params={"state": "all", "per_page": 100},
+            accept="application/vnd.github+json",
+            pages=(issue_page,),
+            child_ids=(),
+        ),
+        github_collector._fingerprint(
+            item_key="pr:7",
+            endpoint=detail_endpoint,
+            params={},
+            accept="application/vnd.github+json",
+            pages=(detail_page,),
+        ),
+    )
+    availability = github_collector._availability_record(
+        item_key="pr:7",
+        endpoint=detail_endpoint,
+        snapshot_id="SNAP-test",
+        page=detail_page,
+        params={},
+        accept="application/vnd.github+json",
+    ).record
+    snapshot, _ = _snapshot(tmp_path)
+    window = GitHubSnapshotWindow(
+        "s",
+        "e",
+        "r",
+        (7,),
+        (),
+        {"pr:7": "2026-08-01T00:00:00Z"},
+        fingerprints,
+    )
+    expected, captured, detail = coverage_module._verify_github(
+        replace(snapshot, github_window=window),
+        (availability,),
+        strict_endpoints=True,
+    )
+    assert expected == captured == ("GH-PR-7",)
+    assert "pull:enumeration|pull:7" in detail
 
 
 def test_external_original_is_rejected_by_full_member_name_basename_and_identity(tmp_path: Path):
@@ -531,28 +810,44 @@ def test_capture_coverage_names_missing_stable_ids_and_treats_only_terminal_unav
                 for item in sources
             )
         )
-    terminal = replace(
-        github_child,
-        source_type="github-availability",
-        source_locator="github:/repos/o/r/pulls/7/commits",
+    terminal_body = b'{"message":"gone"}'
+    terminal_page = GitHubPage(
+        endpoint="/repos/o/r/pulls/7/commits",
+        params={"per_page": 100},
+        page_number=1,
+        body=terminal_body,
+        json=None,
+        response_hash=_hash(terminal_body),
         availability_status="confirmed-unavailable",
+        status_code=410,
+        fetched_at="2026-08-01T00:00:00Z",
+    )
+    terminal = github_collector._availability_record(
+        item_key="pr:7",
+        endpoint=terminal_page.endpoint,
+        snapshot_id=snapshot.snapshot_id,
+        page=terminal_page,
+        params={"per_page": 100},
+        accept="application/vnd.github+json",
+    ).record
+    terminal_fingerprint = github_collector._fingerprint(
+        item_key="pr:7",
+        endpoint=terminal_page.endpoint,
+        params={"per_page": 100},
+        accept="application/vnd.github+json",
+        pages=(terminal_page,),
     )
     terminal_snapshot = replace(
         snapshot,
         github_window=replace(
             snapshot.github_window,
             endpoint_fingerprints=(
-                replace(
-                    snapshot.github_window.endpoint_fingerprints[0],
-                    stable_child_ids=(),
-                    page_response_hashes=(terminal.raw_hash,),
-                    availability_status="confirmed-unavailable",
-                ),
+                terminal_fingerprint,
             ),
         ),
     )
     verify_mutation(
-        tuple(terminal if item.source_id == "GH-CHILD" else item for item in sources),
+        tuple(item for item in sources if item.source_id != "GH-CHILD") + (terminal,),
         mutated_snapshot=terminal_snapshot,
         refs=capture_ref_ids(terminal_snapshot),
     )
@@ -606,13 +901,18 @@ def test_parent_diff_identity_is_exact_for_two_parent_commit(tmp_path: Path):
     )
     sources = commits + root_diffs + merge_diffs
     # Exercise only the Git verifier through the public gate's internal helper.
-    coverage_module._verify_git(sources, (*parents, child))
+    parent_truth = {parents[0]: (), parents[1]: (), child: tuple(parents)}
+    coverage_module._verify_git(sources, (*parents, child), parent_truth)
     wrong = replace(
         merge_diffs[1],
         payload={**merge_diffs[1].payload, "parent_sha": parents[0]},
     )
     with pytest.raises(CoverageError, match="parent identity mismatch.*P02"):
-        coverage_module._verify_git(commits + root_diffs + (merge_diffs[0], wrong), (*parents, child))
+        coverage_module._verify_git(
+            commits + root_diffs + (merge_diffs[0], wrong),
+            (*parents, child),
+            parent_truth,
+        )
 
 
 def test_independent_frozen_git_universe_detects_missing_commit_and_ref_corruption(
@@ -705,6 +1005,36 @@ def test_independent_frozen_git_universe_detects_missing_commit_and_ref_corrupti
             repo=repo,
             snapshot=snapshot,
             sources=sources[:2],
+            claims=(),
+            captured_ref_ids=capture_ref_ids(snapshot),
+            archive_paths=(),
+            staged_output_paths=(),
+            require_archive_members=False,
+            strict_github_endpoints=False,
+        )
+    coordinated_corruption = (
+        *sources[:2],
+        replace(
+            sources[2],
+            payload={**sources[2].payload, "parent_shas": []},
+        ),
+        replace(
+            sources[3],
+            source_id=f"GIT-{head}-ROOT",
+            payload={
+                **sources[3].payload,
+                "parent_sha": None,
+                "comparison_base_sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+                "parent_total": 0,
+                "parent_ordinal": 1,
+            },
+        ),
+    )
+    with pytest.raises(CoverageError, match=f"frozen commit parent metadata mismatch.*GIT-{head}"):
+        verify_source_capture(
+            repo=repo,
+            snapshot=snapshot,
+            sources=coordinated_corruption,
             claims=(),
             captured_ref_ids=capture_ref_ids(snapshot),
             archive_paths=(),

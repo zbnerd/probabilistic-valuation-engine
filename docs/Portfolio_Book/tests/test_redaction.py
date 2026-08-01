@@ -9,26 +9,49 @@ OWNER_EMAIL = "mps756@gmail.com"
 
 
 @pytest.mark.parametrize(
-    ("source", "kind"),
+    ("source", "kind", "secret"),
     [
-        (b"token=ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD", "github-token"),
-        (b"AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE", "aws-access-key"),
+        (
+            b"token=ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD",
+            "github-token",
+            b"ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD",
+        ),
+        (
+            b"AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE",
+            "aws-access-key",
+            b"AKIAIOSFODNN7EXAMPLE",
+        ),
         (
             b"-----BEGIN PRIVATE KEY-----\nvery-secret-material\n-----END PRIVATE KEY-----",
             "pem-private-key",
+            b"very-secret-material",
         ),
-        (b"Authorization: Bearer access-token_1234567890", "bearer-token"),
-        (b"Cookie: session=private-session-value; theme=dark", "cookie"),
-        (b"https://alice:private-password@example.test/path", "url-credentials"),
+        (
+            b"Authorization: Bearer access-token_1234567890",
+            "bearer-token",
+            b"access-token_1234567890",
+        ),
+        (
+            b"Cookie: session=private-session-value; theme=dark",
+            "cookie",
+            b"session=private-session-value",
+        ),
+        (
+            b"https://alice:private-password@example.test/path",
+            "url-credentials",
+            b"alice:private-password",
+        ),
     ],
 )
-def test_redact_text_replaces_each_secret_kind_without_retaining_value(source, kind):
+def test_redact_text_replaces_each_secret_kind_without_retaining_value(
+    source, kind, secret
+):
     result = redact_text(source, allowed_contacts=(OWNER_EMAIL,))
 
     assert result.value == b"[REDACTED:" + kind.encode() + b"]" or (
         b"[REDACTED:" + kind.encode() + b"]" in result.value
     )
-    assert source not in result.value
+    assert secret not in result.value
     assert result.kinds == (kind,)
     assert result.raw_hash == hashlib.sha256(source).hexdigest()
     assert result.stored_hash == hashlib.sha256(result.value).hexdigest()
@@ -44,6 +67,92 @@ def test_redact_text_preserves_owner_email_and_redacts_third_party_contact():
     assert b"third.party@example.org" not in result.value
     assert result.value.endswith(b"[REDACTED:third-party-email]")
     assert result.kinds == ("third-party-email",)
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        (
+            b"+Cookie: session=added-secret\n",
+            b"+Cookie: [REDACTED:cookie]\n",
+        ),
+        (
+            b"- Cookie: session=removed-secret\n",
+            b"- Cookie: [REDACTED:cookie]\n",
+        ),
+        (
+            b" Cookie: session=context-secret\n",
+            b" Cookie: [REDACTED:cookie]\n",
+        ),
+        (
+            b"    Set-Cookie:\tindented-secret\n",
+            b"    Set-Cookie:\t[REDACTED:cookie]\n",
+        ),
+    ],
+)
+def test_cookie_redacts_git_patch_context_and_indented_header_forms(source, expected):
+    result = redact_text(source)
+
+    assert result.value == expected
+    assert b"secret" not in result.value
+    assert result.kinds == ("cookie",)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        b'AWS_SECRET_ACCESS_KEY="abcdEFGHijklMNOPqrstUVWXyz0123456789+/="',
+        b'{"AWS_SECRET_ACCESS_KEY": "abcdEFGHijklMNOPqrstUVWXyz0123456789+/="}',
+    ],
+)
+def test_aws_secret_access_key_redacts_quoted_env_and_json_values(source):
+    secret = b"abcdEFGHijklMNOPqrstUVWXyz0123456789+/="
+
+    result = redact_text(source)
+
+    assert secret not in result.value
+    assert b"[REDACTED:aws-secret-access-key]" in result.value
+    assert result.kinds == ("aws-secret-access-key",)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        b"-----BEGIN RSA PRIVATE KEY-----\nrsa-secret\n",
+        b"-----BEGIN EC PRIVATE KEY-----\nec-secret\n-----END EC PRIVATE KEY-----",
+        b"-----BEGIN OPENSSH PRIVATE KEY-----\nssh-secret\n-----END OPENSSH PRIVATE KEY-----",
+    ],
+)
+def test_pem_private_key_variants_and_truncated_blocks_are_redacted(source):
+    result = redact_text(source)
+
+    assert b"secret" not in result.value
+    assert result.value == b"[REDACTED:pem-private-key]"
+    assert result.kinds == ("pem-private-key",)
+
+
+def test_truncated_pem_stops_before_a_following_pem_document():
+    source = (
+        b"-----BEGIN RSA PRIVATE KEY-----\nrsa-secret\n"
+        b"-----BEGIN EC PRIVATE KEY-----\nec-secret\n-----END EC PRIVATE KEY-----"
+    )
+
+    result = redact_text(source)
+
+    assert b"rsa-secret" not in result.value
+    assert b"ec-secret" not in result.value
+    assert result.value.count(b"[REDACTED:pem-private-key]") == 2
+    assert result.kinds == ("pem-private-key",)
+
+
+def test_mixed_case_http_credentials_are_redacted():
+    source = b"HTTPS://Alice:private-password@example.test/path"
+
+    result = redact_text(source)
+
+    assert b"Alice:private-password" not in result.value
+    assert result.value == b"[REDACTED:url-credentials]"
+    assert result.kinds == ("url-credentials",)
 
 
 def test_default_owner_allowlist_and_multiple_contact_matches_are_deterministic():
@@ -132,3 +241,16 @@ def test_binary_patch_is_byte_idempotent_and_metadata_validation_is_deny_by_defa
     )
     assert first.value == second.value
     assert first.stored_hash == second.stored_hash
+
+
+def test_binary_patch_rejects_non_ascii_blob_metadata_without_normalizing_it():
+    metadata = {
+        "old_blob": "0123456789abcdef0123456789abcdef01234567é",
+        "new_blob": "fedcba9876543210fedcba9876543210fedcba98",
+    }
+
+    result = redact_binary_patch(b"untrusted binary data", metadata)
+
+    assert b"old_blob" not in result.value
+    assert b"new_blob: fedcba9876543210fedcba9876543210fedcba98" in result.value
+    assert result.value.endswith(b"[REDACTED BINARY PAYLOAD]\n")

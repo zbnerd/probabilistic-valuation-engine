@@ -56,6 +56,16 @@ def _replace_header_value(kind: str) -> Replacement:
     return replacement
 
 
+def _replace_quoted_header_value(kind: str) -> Replacement:
+    marker = _marker(kind)
+
+    def replacement(match: re.Match[bytes]) -> bytes:
+        quote = match.group("quote") or b""
+        return match.group("prefix") + quote + marker + quote
+
+    return replacement
+
+
 # Rules are intentionally compiled once and ordered from structurally specific
 # credential forms to broad contact matching.  Markers do not match their own
 # rules, keeping a safe representation byte-idempotent.
@@ -64,7 +74,12 @@ _TEXT_RULES: tuple[Rule, ...] = (
         "pem-private-key",
         re.compile(
             rb"-----BEGIN (?P<label>[A-Z0-9 ]*PRIVATE KEY)-----"
-            rb"[\s\S]*?-----END (?P=label)-----"
+            rb"(?:"
+            rb"(?:(?!-----BEGIN [A-Z0-9 ]+-----)[\s\S])*?"
+            rb"-----END (?P=label)-----"
+            rb"|(?:(?!-----BEGIN [A-Z0-9 ]+-----)[\s\S])*"
+            rb"(?=-----BEGIN [A-Z0-9 ]+-----|\Z)"
+            rb")"
         ),
         _replace_with("pem-private-key"),
     ),
@@ -90,20 +105,24 @@ _TEXT_RULES: tuple[Rule, ...] = (
         "aws-secret-access-key",
         re.compile(
             rb"(?im)(?P<prefix>\b(?:aws_)?secret(?:_access)?_?key\b"
-            rb"[ \t]*[:=][ \t]*)(?!\[)[A-Za-z0-9/+=]{32,}"
+            rb"[\"']?[ \t]*[:=][ \t]*)(?P<quote>[\"'])?(?!\[)[A-Za-z0-9/+=]{32,}"
+            rb"(?(quote)(?P=quote))"
         ),
-        _replace_header_value("aws-secret-access-key"),
+        _replace_quoted_header_value("aws-secret-access-key"),
     ),
     (
         "cookie",
         re.compile(
-            rb"(?im)^(?P<prefix>(?:set-)?cookie[ \t]*:[ \t]*)(?!\[REDACTED:)[^\r\n]*"
+            rb"(?im)^(?P<prefix>[+\- ]*[ \t]*(?:set-)?cookie[ \t]*:[ \t]*)"
+            rb"(?!\[REDACTED:)[^\r\n]*"
         ),
         _replace_header_value("cookie"),
     ),
     (
         "url-credentials",
-        re.compile(rb"\b(?:https?|ssh)://[^\s/@:]+(?::[^\s/@]*)?@[^\s/]+(?:/[^\s]*)?"),
+        re.compile(
+            rb"\b(?i:https?|ssh)://[^\s/@:]+(?::[^\s/@]*)?@[^\s/]+(?:/[^\s]*)?"
+        ),
         _replace_with("url-credentials"),
     ),
     (
@@ -193,7 +212,10 @@ def _safe_blob_metadata(blob_metadata: Mapping[object, object]) -> bytes:
     for key in ("old_blob", "new_blob"):
         value = blob_metadata.get(key)
         if isinstance(value, str):
-            encoded = value.encode("ascii", errors="ignore")
+            try:
+                encoded = value.encode("ascii")
+            except UnicodeEncodeError:
+                continue
             if _BLOB_ID.fullmatch(encoded):
                 lines.append(key.encode("ascii") + b": " + encoded + b"\n")
     for key in ("old_size", "new_size"):

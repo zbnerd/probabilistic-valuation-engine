@@ -7,7 +7,12 @@ from portfolio_builder.canonical_io import (
     validate_relation_ledger,
     write_jsonl,
 )
-from portfolio_builder.models import ExplicitRelation, SourceRecord, StoredArtifactMember
+from portfolio_builder.models import (
+    DocumentClaim,
+    ExplicitRelation,
+    SourceRecord,
+    StoredArtifactMember,
+)
 
 
 def make_record(**overrides):
@@ -45,6 +50,29 @@ def make_record(**overrides):
     }
     values.update(overrides)
     return SourceRecord(**values)
+
+
+def make_claim(**overrides):
+    values = {
+        "claim_id": "claim-b",
+        "document_source_id": "document-a",
+        "source_path": "docs/evidence.md",
+        "evidence_scope": "project-evidence",
+        "claim_authority": "primary-record",
+        "unit_kind": "paragraph",
+        "line_start": 1,
+        "line_end": 2,
+        "page_index": None,
+        "block_index": 1,
+        "raw_hash": "3" * 64,
+        "stored_hash": "4" * 64,
+        "stored_members": (),
+        "text": "captured evidence",
+        "classification": "unreviewed",
+        "parse_status": "parsed",
+    }
+    values.update(overrides)
+    return DocumentClaim(**values)
 
 
 def test_source_record_round_trip_and_canonical_order(tmp_path):
@@ -132,7 +160,7 @@ def test_relation_ledger_rejects_absent_target_and_downstream_field_change():
     with pytest.raises(ValueError, match="target absent"):
         validate_relation_ledger([source])
 
-    target = make_record(source_id="source-b")
+    target = make_record(source_id="source-b", stored_members=())
     changed = ExplicitRelation(
         relation_id=relation.relation_id,
         relation_type=relation.relation_type,
@@ -142,3 +170,70 @@ def test_relation_ledger_rejects_absent_target_and_downstream_field_change():
     )
     with pytest.raises(ValueError, match="byte-for-byte"):
         validate_relation_ledger([source, target], downstream_relations=[changed])
+
+
+def test_write_accepts_relation_to_claim_in_same_frozen_universe(tmp_path):
+    relation = ExplicitRelation.create(
+        owner_source_id="source-a",
+        relation_type="supports",
+        target_source_id="claim-b",
+        evidence_locator="docs/evidence.md#L1-L2",
+        evidence_hash="3" * 64,
+    )
+
+    write_jsonl(
+        tmp_path / "mixed-ledger.jsonl",
+        [make_record(source_id="source-a", explicit_relations=(relation,)), make_claim()],
+    )
+
+
+def test_sharded_relation_validation_accepts_separate_claim_universe(tmp_path):
+    relation = ExplicitRelation.create(
+        owner_source_id="source-a",
+        relation_type="supports",
+        target_source_id="claim-b",
+        evidence_locator="docs/evidence.md#L1-L2",
+        evidence_hash="3" * 64,
+    )
+    source_shard = [make_record(source_id="source-a", explicit_relations=(relation,))]
+    claim_shard = [make_claim()]
+
+    assert validate_relation_ledger(source_shard, claim_shard) == {
+        relation.relation_id: relation
+    }
+    source_path = tmp_path / "source-shard.jsonl"
+    write_jsonl(
+        source_path,
+        source_shard,
+        source_universe=source_shard,
+        claim_universe=claim_shard,
+    )
+    assert read_jsonl(
+        source_path,
+        SourceRecord,
+        source_universe=source_shard,
+        claim_universe=claim_shard,
+    ) == source_shard
+
+
+def test_write_rejects_exact_duplicate_nested_member_ids(tmp_path):
+    member = StoredArtifactMember("member-1", "archive#a", 1, 1, 10, "1" * 64)
+    records = [
+        make_record(source_id="source-a", stored_members=(member,)),
+        make_record(source_id="source-b", stored_members=(member,)),
+    ]
+
+    with pytest.raises(ValueError, match="duplicate member_id"):
+        write_jsonl(tmp_path / "records.jsonl", records)
+
+
+def test_write_rejects_conflicting_nested_member_fields(tmp_path):
+    original = StoredArtifactMember("member-1", "archive#a", 1, 1, 10, "1" * 64)
+    conflict = StoredArtifactMember("member-1", "archive#b", 1, 1, 11, "2" * 64)
+    records = [
+        make_record(source_id="source-a", stored_members=(original,)),
+        make_claim(claim_id="claim-b", stored_members=(conflict,)),
+    ]
+
+    with pytest.raises(ValueError, match="duplicate member_id.*different fields"):
+        write_jsonl(tmp_path / "records.jsonl", records)

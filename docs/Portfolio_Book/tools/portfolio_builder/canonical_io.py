@@ -26,28 +26,55 @@ def _identity(item: object) -> tuple[str, str] | None:
     return None
 
 
-def _validate(items: list[CanonicalModel]) -> None:
-    seen: dict[tuple[str, str], object] = {}
-    relation_ids: dict[str, object] = {}
+def _register_identity(
+    seen: dict[str, tuple[str, object]], field: str, identity: str, item: object
+) -> None:
+    previous = seen.get(identity)
+    if previous is None:
+        seen[identity] = (field, item)
+        return
+    qualifier = " with different fields" if previous[1] != item else ""
+    raise ValueError(f"duplicate {field}: {identity}{qualifier}")
+
+
+def _validate_identity_ledger(items: list[CanonicalModel]) -> None:
+    seen: dict[str, tuple[str, object]] = {}
     for item in items:
         identity = _identity(item)
         if identity is not None:
-            if identity in seen:
-                raise ValueError(f"duplicate {identity[0]}: {identity[1]}")
-            seen[identity] = item
+            _register_identity(seen, identity[0], identity[1], item)
+        if isinstance(item, SourceRecord | DocumentClaim):
+            for member in item.stored_members:
+                _register_identity(seen, "member_id", member.member_id, member)
         if isinstance(item, SourceRecord):
             for relation in item.explicit_relations:
+                _register_identity(seen, "relation_id", relation.relation_id, relation)
                 if not relation.is_valid_for(item.source_id):
                     raise ValueError(f"invalid relation_id: {relation.relation_id}")
-                previous = relation_ids.get(relation.relation_id)
-                if previous is not None:
-                    qualifier = "with different fields" if previous != relation else ""
-                    raise ValueError(f"duplicate relation_id {relation.relation_id} {qualifier}".rstrip())
-                relation_ids[relation.relation_id] = relation
 
-    sources = [item for item in items if isinstance(item, SourceRecord)]
-    if sources and any(source.explicit_relations for source in sources):
-        validate_relation_ledger(sources)
+
+def _validate(
+    items: list[CanonicalModel],
+    source_universe: list[SourceRecord] | tuple[SourceRecord, ...] | None = None,
+    claim_universe: list[DocumentClaim] | tuple[DocumentClaim, ...] | None = None,
+) -> None:
+    _validate_identity_ledger(items)
+
+    local_sources = [item for item in items if isinstance(item, SourceRecord)]
+    local_claims = [item for item in items if isinstance(item, DocumentClaim)]
+    frozen_sources = list(source_universe) if source_universe is not None else local_sources
+    frozen_claims = list(claim_universe) if claim_universe is not None else local_claims
+    if any(source.explicit_relations for source in frozen_sources):
+        validate_relation_ledger(frozen_sources, frozen_claims)
+
+    frozen_by_id: dict[str, object] = {
+        **{source.source_id: source for source in frozen_sources},
+        **{claim.claim_id: claim for claim in frozen_claims},
+    }
+    for item in [*local_sources, *local_claims]:
+        identity = item.source_id if isinstance(item, SourceRecord) else item.claim_id
+        if frozen_by_id.get(identity) != item:
+            raise ValueError(f"record absent or changed in frozen universe: {identity}")
 
 
 def validate_relation_ledger(
@@ -56,6 +83,7 @@ def validate_relation_ledger(
     downstream_relations: list[ExplicitRelation] | tuple[ExplicitRelation, ...] = (),
 ) -> dict[str, ExplicitRelation]:
     """Validate globally resolvable relations against a frozen source/claim universe."""
+    _validate_identity_ledger([*sources, *claims])
     universe: set[str] = set()
     for identity in [source.source_id for source in sources] + [claim.claim_id for claim in claims]:
         if identity in universe:
@@ -89,11 +117,17 @@ def validate_relation_ledger(
     return ledger
 
 
-def write_jsonl(path: str | Path, records) -> None:
+def write_jsonl(
+    path: str | Path,
+    records,
+    *,
+    source_universe: list[SourceRecord] | tuple[SourceRecord, ...] | None = None,
+    claim_universe: list[DocumentClaim] | tuple[DocumentClaim, ...] | None = None,
+) -> None:
     """Atomically write canonical UTF-8 JSONL to *path*."""
     target = Path(path)
     items = list(records)
-    _validate(items)
+    _validate(items, source_universe, claim_universe)
     target.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{target.name}.", suffix=".tmp", dir=target.parent
@@ -117,7 +151,13 @@ def write_jsonl(path: str | Path, records) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def read_jsonl(path: str | Path, model_type: type[ModelT]) -> list[ModelT]:
+def read_jsonl(
+    path: str | Path,
+    model_type: type[ModelT],
+    *,
+    source_universe: list[SourceRecord] | tuple[SourceRecord, ...] | None = None,
+    claim_universe: list[DocumentClaim] | tuple[DocumentClaim, ...] | None = None,
+) -> list[ModelT]:
     """Read canonical model records, identifying malformed input by path and line."""
     source = Path(path)
     records: list[ModelT] = []
@@ -130,5 +170,5 @@ def read_jsonl(path: str | Path, model_type: type[ModelT]) -> list[ModelT]:
                 records.append(model_type.from_dict(payload))
             except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
                 raise ValueError(f"{source}:{line_number}: {error}") from error
-    _validate(records)  # type: ignore[arg-type]
+    _validate(records, source_universe, claim_universe)  # type: ignore[arg-type]
     return records

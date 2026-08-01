@@ -635,7 +635,7 @@ def test_confirmed_unavailable_fingerprint_rejects_coherently_reidentified_archi
         coverage_module._fingerprint_child(fingerprint, records)
 
 
-def test_count_gap_coverage_binds_parent_count_endpoint_fingerprint_and_identity(tmp_path: Path):
+def test_count_gap_coverage_binds_parent_count_detail_fingerprint_and_identity(tmp_path: Path):
     endpoint = "/repos/zbnerd/probabilistic-valuation-engine/pulls/7/comments"
     detail_endpoint = "/repos/zbnerd/probabilistic-valuation-engine/pulls/7"
     detail = {
@@ -689,6 +689,14 @@ def test_count_gap_coverage_binds_parent_count_endpoint_fingerprint_and_identity
         pages=(child_page,),
         child_ids=(token,),
     )
+    detail_fingerprint = github_collector._fingerprint(
+        item_key="pull:7",
+        endpoint=detail_endpoint,
+        params={},
+        accept="application/vnd.github+json",
+        pages=(detail_page,),
+    )
+    fingerprints = (detail_fingerprint, fingerprint)
     parent = _source(
         "GH-PR-7",
         "github-pull-request",
@@ -703,14 +711,18 @@ def test_count_gap_coverage_binds_parent_count_endpoint_fingerprint_and_identity
     )
     sources = (parent, gap.record)
 
-    assert coverage_module._fingerprint_child(fingerprint, sources) == (
+    assert coverage_module._fingerprint_child(
+        fingerprint,
+        sources,
+        endpoint_fingerprints=fingerprints,
+    ) == (
         f"pull:7|{token}",
     )
     snapshot, _ = _snapshot(tmp_path)
     window = replace(
         snapshot.github_window,
         updated_at_by_item={"pull:7": detail["updated_at"]},
-        endpoint_fingerprints=(fingerprint,),
+        endpoint_fingerprints=fingerprints,
     )
     expected, captured, covered = coverage_module._verify_github(
         replace(snapshot, github_window=window),
@@ -720,30 +732,104 @@ def test_count_gap_coverage_binds_parent_count_endpoint_fingerprint_and_identity
     assert expected == captured == ("GH-PR-7",)
     assert f"pull:7|{token}" in covered
     with pytest.raises(CoverageError, match="count gap record missing stable ID"):
-        coverage_module._fingerprint_child(fingerprint, (parent,))
+        coverage_module._fingerprint_child(
+            fingerprint,
+            (parent,),
+            endpoint_fingerprints=fingerprints,
+        )
     with pytest.raises(CoverageError, match="count gap record stable ID mismatch"):
         coverage_module._fingerprint_child(
             fingerprint,
             (parent, replace(gap.record, source_id="GH-COUNT-GAP-" + "f" * 24)),
+            endpoint_fingerprints=fingerprints,
         )
     changed_count = replace(
         gap.record,
         payload={**gap.record.payload, "missing_count": 5},
     )
     with pytest.raises(CoverageError, match="count gap arithmetic mismatch"):
-        coverage_module._fingerprint_child(fingerprint, (parent, changed_count))
+        coverage_module._fingerprint_child(
+            fingerprint,
+            (parent, changed_count),
+            endpoint_fingerprints=fingerprints,
+        )
     changed_parent = replace(parent, raw_hash="0" * 64)
     with pytest.raises(CoverageError, match="count gap parent detail hash mismatch"):
-        coverage_module._fingerprint_child(fingerprint, (changed_parent, gap.record))
+        coverage_module._fingerprint_child(
+            fingerprint,
+            (changed_parent, gap.record),
+            endpoint_fingerprints=fingerprints,
+        )
     changed_status = replace(gap.record, availability_status="available")
     with pytest.raises(CoverageError, match="count gap record-only mismatch"):
-        coverage_module._fingerprint_child(fingerprint, (parent, changed_status))
+        coverage_module._fingerprint_child(
+            fingerprint,
+            (parent, changed_status),
+            endpoint_fingerprints=fingerprints,
+        )
     changed_fingerprint = replace(
         fingerprint,
         page_response_hashes=("0" * 64,),
     )
     with pytest.raises(CoverageError, match="count gap endpoint fingerprint mismatch"):
-        coverage_module._fingerprint_child(changed_fingerprint, sources)
+        coverage_module._fingerprint_child(
+            changed_fingerprint,
+            sources,
+            endpoint_fingerprints=fingerprints,
+        )
+    rewritten_detail = {**detail, "coherent_rewrite": True}
+    rewritten_body = json.dumps(
+        rewritten_detail, sort_keys=True, separators=(",", ":")
+    ).encode()
+    rewritten_page = replace(
+        detail_page,
+        body=rewritten_body,
+        json=rewritten_detail,
+        response_hash=_hash(rewritten_body),
+    )
+    rewritten_gap, rewritten_token = github_collector._count_gap_record(
+        item_key="pull:7",
+        endpoint=endpoint,
+        endpoint_kind="review-comments",
+        snapshot_id="SNAP-test",
+        pages=(child_page,),
+        params={"per_page": 100},
+        accept="application/vnd.github+json",
+        child_ids=(),
+        expected_count=6,
+        parent_detail_page=rewritten_page,
+        parent_updated_at=rewritten_detail["updated_at"],
+    )
+    rewritten_child_fingerprint = github_collector._fingerprint(
+        item_key="pull:7",
+        endpoint=endpoint,
+        params={"per_page": 100},
+        accept="application/vnd.github+json",
+        pages=(child_page,),
+        child_ids=(rewritten_token,),
+    )
+    rewritten_parent = _source(
+        "GH-PR-7",
+        "github-pull-request",
+        locator="github:zbnerd/probabilistic-valuation-engine/pull/7",
+        raw_hash=rewritten_page.response_hash,
+        payload={
+            "captured_updated_at": rewritten_detail["updated_at"],
+            "endpoint_response_raw_sha256": rewritten_page.response_hash,
+            "response_raw_sha256": rewritten_page.response_hash,
+            "value": rewritten_detail,
+        },
+    )
+
+    with pytest.raises(CoverageError, match="count gap detail fingerprint mismatch"):
+        coverage_module._fingerprint_child(
+            rewritten_child_fingerprint,
+            (rewritten_parent, rewritten_gap.record),
+            endpoint_fingerprints=(
+                detail_fingerprint,
+                rewritten_child_fingerprint,
+            ),
+        )
 
 
 def test_terminal_unavailable_detail_and_enumeration_metadata_count_complete(

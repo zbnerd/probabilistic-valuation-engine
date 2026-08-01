@@ -764,6 +764,8 @@ def _fingerprint_child(
     fingerprint: GitHubEndpointFingerprint,
     sources: tuple[SourceRecord, ...],
     metadata_tokens: tuple[str, ...] | None = None,
+    *,
+    endpoint_fingerprints: tuple[GitHubEndpointFingerprint, ...] = (),
 ) -> tuple[str, ...]:
     if fingerprint.availability_status == "transient-failure":
         raise CoverageError(
@@ -864,6 +866,7 @@ def _fingerprint_child(
             fingerprint,
             sources,
             gap_tokens[0],
+            endpoint_fingerprints,
         )
     captured: list[str] = []
     for stable_id in fingerprint.stable_child_ids:
@@ -887,6 +890,7 @@ def _verify_count_gap(
     fingerprint: GitHubEndpointFingerprint,
     sources: tuple[SourceRecord, ...],
     token: str,
+    endpoint_fingerprints: tuple[GitHubEndpointFingerprint, ...],
 ) -> tuple[str, ...]:
     locator = f"github:{fingerprint.endpoint_key}#{token}"
     matches = [
@@ -1016,6 +1020,31 @@ def _verify_count_gap(
         or parent.payload.get("response_raw_sha256") != parent_hash
     ):
         raise CoverageError(f"GitHub count gap parent detail hash mismatch: {record.source_id}")
+    endpoint_parts = fingerprint.endpoint_key.split("/")
+    if len(endpoint_parts) < 5 or endpoint_parts[1] != "repos":
+        raise CoverageError(f"GitHub count gap detail fingerprint mismatch: {record.source_id}")
+    repository_base = "/".join(endpoint_parts[:4])
+    detail_kind = "pulls" if item_kind in {"pull", "pr"} else "issues"
+    detail_endpoint = f"{repository_base}/{detail_kind}/{raw_number}"
+    detail_matches = [
+        candidate
+        for candidate in endpoint_fingerprints
+        if candidate.item_key == fingerprint.item_key
+        and candidate.endpoint_key == detail_endpoint
+    ]
+    empty_params_hash = _sha256(_canonical_json({}))
+    if len(detail_matches) != 1:
+        raise CoverageError(f"GitHub count gap detail fingerprint mismatch: {record.source_id}")
+    detail_fingerprint = detail_matches[0]
+    if (
+        detail_fingerprint.availability_status != "available"
+        or detail_fingerprint.request_params_sha256 != empty_params_hash
+        or detail_fingerprint.accept != "application/vnd.github+json"
+        or detail_fingerprint.page_numbers != (1,)
+        or detail_fingerprint.page_response_hashes != (parent_hash,)
+        or detail_fingerprint.stable_child_ids
+    ):
+        raise CoverageError(f"GitHub count gap detail fingerprint mismatch: {record.source_id}")
     stable_evidence = {
         "contract": "github-count-gap-v1",
         "item_key": fingerprint.item_key,
@@ -1130,7 +1159,12 @@ def _verify_github(
                 f"issue:{number}" for number in window.issue_numbers
             )
         children.extend(
-            _fingerprint_child(fingerprint, sources, metadata_tokens)
+            _fingerprint_child(
+                fingerprint,
+                sources,
+                metadata_tokens,
+                endpoint_fingerprints=window.endpoint_fingerprints,
+            )
         )
     if strict_endpoints:
         expected_endpoint_suffixes: list[tuple[str, str]] = [

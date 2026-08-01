@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+import portfolio_builder.ai_trace_collector as ai_trace_collector
 from portfolio_builder.ai_trace_collector import collect_ai_traces
 from portfolio_builder.models import FileSnapshot, SnapshotManifest
 
@@ -104,6 +105,24 @@ def test_collects_plain_and_gzip_json_with_authority_and_safe_complete_storage(
             "error": "command failed",
             "exit_code": 1,
         },
+        {
+            "timestamp": "2026-06-09T00:00:05Z",
+            "role": "assistant",
+            "content": "I saw output.",
+            "output": "verified output",
+        },
+        {
+            "timestamp": "2026-06-09T00:00:06Z",
+            "role": "assistant",
+            "content": "I saw an exit.",
+            "exit_code": 0,
+        },
+        {
+            "timestamp": "2026-06-09T00:00:07Z",
+            "role": "assistant",
+            "content": "I saw an error.",
+            "error": "exact failure",
+        },
     )
     pretty = b"\n".join(
         json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8") for value in values
@@ -138,8 +157,17 @@ def test_collects_plain_and_gzip_json_with_authority_and_safe_complete_storage(
     containers = [record for record in records if record.source_type == "ai-trace-file"]
     children = [record for record in records if record.source_type == "ai-trace-entry"]
     assert len(containers) == 3
-    assert len(children) == 12
-    assert {record.payload["entry_ordinal"] for record in children} == {1, 2, 3, 4, 5}
+    assert len(children) == 18
+    assert {record.payload["entry_ordinal"] for record in children} == {
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+    }
     assert all(record.parse_status == "parsed" for record in records)
     gzip_container = next(
         record for record in containers if record.source_locator.endswith(".gz")
@@ -164,6 +192,12 @@ def test_collects_plain_and_gzip_json_with_authority_and_safe_complete_storage(
     assert by_ordinal[5].claim_authority == "trace-observation"
     assert by_ordinal[5].payload["has_error"] is True
     assert by_ordinal[5].payload["exit_code"] == 1
+    assert by_ordinal[6].claim_authority == "trace-observation"
+    assert by_ordinal[6].recorded_status == "captured"
+    assert by_ordinal[7].claim_authority == "trace-observation"
+    assert by_ordinal[7].payload["exit_code"] == 0
+    assert by_ordinal[8].claim_authority == "trace-observation"
+    assert by_ordinal[8].payload["has_error"] is True
 
     archived = b"\n".join(_archived_members(first_archive).values())
     assert b"Completed 999 RPS" in archived
@@ -192,8 +226,8 @@ def test_preserves_valid_objects_around_two_malformed_spans_with_byte_offsets(
     first = json.dumps({"event": "session_start", "value": "한글"}, indent=2).encode()
     second = json.dumps({"event": "tool_result", "result": "ok"}, indent=2).encode()
     third = json.dumps({"role": "assistant", "content": "done"}, indent=2).encode()
-    malformed_one = b"\nBROKEN one\n"
-    malformed_two = b"\n{broken two]\n"
+    malformed_one = b'\n[broken {"apparent": "nested-json"}] tail\n'
+    malformed_two = b'\n{"broken": "quoted [1, 2] content" invalid}\n'
     content = first + malformed_one + second + malformed_two + third
     path = "docs/ai-traces/session/session.jsonl"
     _write(repo, path, content)
@@ -228,6 +262,69 @@ def test_preserves_valid_objects_around_two_malformed_spans_with_byte_offsets(
         "tool_result",
         "assistant-message",
     ]
+
+
+def test_unterminated_quoted_content_does_not_create_apparent_json_children(
+    tmp_path: Path,
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    valid = b'{"event":"session_start"}'
+    malformed = b'\nBROKEN "unterminated [1, 2] and {apparent: true}'
+    content = valid + malformed
+    path = "docs/ai-traces/session/unterminated.jsonl"
+    _write(repo, path, content)
+    snapshot = _snapshot((_manifest_file(path, content),))
+
+    records = list(collect_ai_traces(repo, snapshot, tmp_path / "archives"))
+
+    children = [record for record in records if record.source_type == "ai-trace-entry"]
+    assert len(children) == 2
+    assert children[0].parse_status == "parsed"
+    assert children[1].parse_status == "partial"
+    assert (children[1].payload["byte_start"], children[1].payload["byte_end"]) == (
+        len(valid),
+        len(content),
+    )
+
+
+def test_spools_complete_representations_and_streams_archive_parts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    files = []
+    for index in range(6):
+        path = f"docs/ai-traces/session-{index}/tool-use.jsonl"
+        value = json.dumps(
+            {
+                "tool": "Bash",
+                "input": {"command": f"command-{index}"},
+                "result": "x" * 2048,
+            }
+        ).encode()
+        _write(repo, path, value)
+        files.append(_manifest_file(path, value))
+    observed_spool_roots: set[Path] = set()
+    original = ai_trace_collector._render_volume
+
+    def observe_spooled_parts(filename, parts, output_path):
+        assert parts
+        assert all(part.spool_path.is_file() for part in parts)
+        assert all(not hasattr(part, "value") for part in parts)
+        observed_spool_roots.update(part.spool_path.parent for part in parts)
+        return original(filename, parts, output_path)
+
+    monkeypatch.setattr(ai_trace_collector, "_render_volume", observe_spooled_parts)
+
+    records = list(
+        collect_ai_traces(repo, _snapshot(tuple(files)), tmp_path / "archives")
+    )
+
+    assert len(records) == 12
+    assert observed_spool_roots
+    assert all(not root.exists() for root in observed_spool_roots)
+    assert not list((tmp_path / "archives").glob(".*.tmp"))
 
 
 def test_records_markdown_patch_log_binary_and_rejects_manifest_drift(tmp_path: Path):

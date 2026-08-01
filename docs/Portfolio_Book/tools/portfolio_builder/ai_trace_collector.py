@@ -28,6 +28,7 @@ _TRACE_ROOT = "docs/ai-traces/"
 _PART_BYTES = 8_000_000
 _VOLUME_BYTES = 50_000_000
 _READ_CHUNK = 1024 * 1024
+_MAX_RAW_FILE_BYTES = 64_000_000
 _MAX_DECOMPRESSED_FILE_BYTES = 64_000_000
 _JSON_STARTS = frozenset('{[')
 
@@ -71,6 +72,8 @@ def _safe_path(repo: Path, relative_path: str) -> Path:
 
 
 def _read_frozen(path: Path, expected_size: int, expected_hash: str) -> bytes:
+    if expected_size > _MAX_RAW_FILE_BYTES:
+        raise ValueError(f"AI trace exceeds per-file limit: {path.name}")
     value = bytearray()
     digest = hashlib.sha256()
     descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -78,6 +81,8 @@ def _read_frozen(path: Path, expected_size: int, expected_hash: str) -> bytes:
         for chunk in iter(lambda: stream.read(_READ_CHUNK), b""):
             digest.update(chunk)
             value.extend(chunk)
+            if len(value) > _MAX_RAW_FILE_BYTES:
+                raise ValueError(f"AI trace exceeds per-file limit: {path.name}")
     if len(value) != expected_size or digest.hexdigest() != expected_hash:
         raise ValueError(f"AI trace identity mismatch: {path.name}")
     return bytes(value)
@@ -143,6 +148,7 @@ def _next_valid_top_level(
     """
     in_string = False
     escaped = False
+    depth = 0
     for cursor in range(start, len(text)):
         current = text[cursor]
         if in_string:
@@ -156,13 +162,19 @@ def _next_valid_top_level(
         if current == '"':
             in_string = True
             continue
-        if current not in _JSON_STARTS:
+        if current in _JSON_STARTS:
+            if depth == 0:
+                try:
+                    decoder.raw_decode(text, cursor)
+                except json.JSONDecodeError:
+                    pass
+                else:
+                    return cursor
+            depth += 1
             continue
-        try:
-            decoder.raw_decode(text, cursor)
-        except json.JSONDecodeError:
+        if current in "}]" and depth > 0:
+            depth -= 1
             continue
-        return cursor
     return None
 
 
@@ -181,7 +193,7 @@ def _parse_json_spans(value: bytes) -> tuple[_Span, ...] | None:
         try:
             parsed, end = decoder.raw_decode(text, semantic_start)
         except json.JSONDecodeError:
-            recovered = _next_valid_top_level(text, decoder, semantic_start + 1)
+            recovered = _next_valid_top_level(text, decoder, semantic_start)
             malformed_end = len(text) if recovered is None else recovered
             spans.append(
                 _Span(
@@ -288,14 +300,14 @@ def _entry_metadata(
     limitations: list[str] = []
     if truncated:
         limitations.append("result-truncated")
-    if role == "assistant":
-        authority, status, event_type = "ai-assertion", "asserted", "assistant-message"
-    elif tool and not observed:
-        authority, status, event_type = "ai-assertion", "attempted", "tool-input"
-        limitations.append("result-missing")
-    elif observed:
+    if observed:
         authority, status = "trace-observation", "captured"
         event_type = event or (f"{tool}-result" if tool else "recorded-event")
+    elif role == "assistant":
+        authority, status, event_type = "ai-assertion", "asserted", "assistant-message"
+    elif tool:
+        authority, status, event_type = "ai-assertion", "attempted", "tool-input"
+        limitations.append("result-missing")
     else:
         authority, status = "ai-assertion", "input-only"
         event_type = event or (f"{role}-message" if role else "json-record")
@@ -325,7 +337,9 @@ class _Draft:
     privacy_redactions: tuple[str, ...]
     parse_status: str
     payload: dict[str, object]
-    representation: bytes
+    spool_path: Path
+    stored_hash: str
+    stored_byte_count: int
 
 
 def _representation(
@@ -336,8 +350,9 @@ def _representation(
     end: int,
     raw_value: bytes,
     metadata: dict[str, object],
+    spool_dir: Path,
     binary: bool = False,
-) -> tuple[bytes, RedactionResult]:
+) -> tuple[Path, str, int, RedactionResult]:
     if binary:
         safe = RedactionResult(
             value=b"[BINARY CONTENT RECORDED BY HASH ONLY]",
@@ -358,7 +373,10 @@ def _representation(
             "stored_text": safe.value.decode("utf-8", errors="strict"),
         }
     )
-    return result, safe
+    spool_path = spool_dir / f"{source_id}.json"
+    with spool_path.open("xb") as stream:
+        stream.write(result)
+    return spool_path, _sha256(result), len(result), safe
 
 
 def _logical_draft(
@@ -368,6 +386,7 @@ def _logical_draft(
     span: _Span,
     ordinal: int,
     file_kind: str,
+    spool_dir: Path,
 ) -> _Draft:
     raw_value = content[span.start : span.end]
     authority, status, event_type, limitations, safe_fields = _entry_metadata(
@@ -383,13 +402,14 @@ def _logical_draft(
         "parse_status": span.parse_status,
         **safe_fields,
     }
-    representation, redaction = _representation(
+    spool_path, stored_hash, stored_byte_count, redaction = _representation(
         source_id=source_id,
         path=path,
         start=span.start,
         end=span.end,
         raw_value=raw_value,
         metadata=metadata,
+        spool_dir=spool_dir,
         binary=span.parse_status == "binary-recorded",
     )
     classification = "record-only" if span.parse_status != "parsed" else "unreviewed"
@@ -417,11 +437,15 @@ def _logical_draft(
             "limitations": limitations,
             **safe_fields,
         },
-        representation=representation,
+        spool_path=spool_path,
+        stored_hash=stored_hash,
+        stored_byte_count=stored_byte_count,
     )
 
 
-def _file_drafts(path: str, raw: bytes) -> tuple[_Draft, tuple[_Draft, ...]]:
+def _file_drafts(
+    path: str, raw: bytes, spool_dir: Path
+) -> tuple[_Draft, tuple[_Draft, ...]]:
     compressed = path.endswith(".gz")
     content, gzip_valid = _decompress(raw, compressed)
     effective = raw if content is None else content
@@ -443,7 +467,14 @@ def _file_drafts(path: str, raw: bytes) -> tuple[_Draft, tuple[_Draft, ...]]:
         kind = _file_kind(path, False, is_binary=parse_status == "binary-recorded")
 
     children = tuple(
-        _logical_draft(path=path, content=effective, span=span, ordinal=index, file_kind=kind)
+        _logical_draft(
+            path=path,
+            content=effective,
+            span=span,
+            ordinal=index,
+            file_kind=kind,
+            spool_dir=spool_dir,
+        )
         for index, span in enumerate(spans, start=1)
     )
     container_id = _source_id(path, "file")
@@ -456,13 +487,14 @@ def _file_drafts(path: str, raw: bytes) -> tuple[_Draft, tuple[_Draft, ...]]:
         "parse_status": parse_status,
         "raw_byte_count": len(raw),
     }
-    container_representation, redaction = _representation(
+    container_spool, container_hash, container_byte_count, redaction = _representation(
         source_id=container_id,
         path=path,
         start=0,
         end=len(effective),
         raw_value=effective,
         metadata=metadata,
+        spool_dir=spool_dir,
         binary=parse_status == "binary-recorded",
     )
     container = _Draft(
@@ -478,7 +510,9 @@ def _file_drafts(path: str, raw: bytes) -> tuple[_Draft, tuple[_Draft, ...]]:
         privacy_redactions=redaction.kinds,
         parse_status=parse_status,
         payload={"source_path": path, **metadata},
-        representation=container_representation,
+        spool_path=container_spool,
+        stored_hash=container_hash,
+        stored_byte_count=container_byte_count,
     )
     return container, children
 
@@ -490,7 +524,10 @@ class _Part:
     total: int
     whole_byte_count: int
     whole_hash: str
-    value: bytes
+    spool_path: Path
+    offset: int
+    byte_count: int
+    sha256: str
 
     @property
     def name(self) -> str:
@@ -500,21 +537,29 @@ class _Part:
 def _parts(drafts: tuple[_Draft, ...]) -> tuple[_Part, ...]:
     parts: list[_Part] = []
     for draft in sorted(drafts, key=lambda item: item.source_id.encode("utf-8")):
-        chunks = tuple(
-            draft.representation[offset : offset + _PART_BYTES]
-            for offset in range(0, len(draft.representation), _PART_BYTES)
-        ) or (b"",)
-        for ordinal, chunk in enumerate(chunks, start=1):
-            parts.append(
-                _Part(
-                    draft.source_id,
-                    ordinal,
-                    len(chunks),
-                    len(draft.representation),
-                    _sha256(draft.representation),
-                    chunk,
+        offsets = tuple(range(0, draft.stored_byte_count, _PART_BYTES)) or (0,)
+        with draft.spool_path.open("rb") as stream:
+            for ordinal, offset in enumerate(offsets, start=1):
+                byte_count = min(
+                    _PART_BYTES, max(0, draft.stored_byte_count - offset)
                 )
-            )
+                stream.seek(offset)
+                chunk = stream.read(byte_count)
+                if len(chunk) != byte_count:
+                    raise ValueError(f"short AI trace spool read: {draft.source_id}")
+                parts.append(
+                    _Part(
+                        source_id=draft.source_id,
+                        ordinal=ordinal,
+                        total=len(offsets),
+                        whole_byte_count=draft.stored_byte_count,
+                        whole_hash=draft.stored_hash,
+                        spool_path=draft.spool_path,
+                        offset=offset,
+                        byte_count=byte_count,
+                        sha256=_sha256(chunk),
+                    )
+                )
     return tuple(parts)
 
 
@@ -523,12 +568,12 @@ def _groups(parts: tuple[_Part, ...]) -> tuple[tuple[_Part, ...], ...]:
     current: list[_Part] = []
     byte_count = 0
     for part in parts:
-        if current and byte_count + len(part.value) > _VOLUME_BYTES:
+        if current and byte_count + part.byte_count > _VOLUME_BYTES:
             groups.append(tuple(current))
             current = []
             byte_count = 0
         current.append(part)
-        byte_count += len(part.value)
+        byte_count += part.byte_count
     if current:
         groups.append(tuple(current))
     return tuple(groups)
@@ -544,21 +589,38 @@ def _tar_info(name: str, size: int) -> tarfile.TarInfo:
     return info
 
 
+class _BoundedReader:
+    def __init__(self, stream, byte_count: int):
+        self._stream = stream
+        self._remaining = byte_count
+
+    def read(self, size: int = -1) -> bytes:
+        if self._remaining == 0:
+            return b""
+        requested = self._remaining if size < 0 else min(size, self._remaining)
+        value = self._stream.read(requested)
+        self._remaining -= len(value)
+        return value
+
+
 def _render_volume(
-    filename: str, parts: tuple[_Part, ...]
-) -> tuple[bytes, dict[str, tuple[StoredArtifactMember, ...]]]:
+    filename: str, parts: tuple[_Part, ...], output_path: Path
+) -> dict[str, tuple[StoredArtifactMember, ...]]:
     members: dict[str, list[StoredArtifactMember]] = {}
     manifest_entries: list[dict[str, object]] = []
-    for source_id in sorted({part.source_id for part in parts}, key=lambda value: value.encode("utf-8")):
-        source_parts = [part for part in parts if part.source_id == source_id]
+    parts_by_source: dict[str, list[_Part]] = {}
+    for part in parts:
+        parts_by_source.setdefault(part.source_id, []).append(part)
+    for source_id in sorted(parts_by_source, key=lambda value: value.encode("utf-8")):
+        source_parts = parts_by_source[source_id]
         source_members = [
             StoredArtifactMember(
                 member_id=f"{source_id}-part-{part.ordinal:03d}",
                 locator=f"{filename}#{part.name}",
                 ordinal=part.ordinal,
                 total=part.total,
-                byte_count=len(part.value),
-                sha256=_sha256(part.value),
+                byte_count=part.byte_count,
+                sha256=part.sha256,
             )
             for part in source_parts
         ]
@@ -572,38 +634,50 @@ def _render_volume(
             }
         )
     manifest = {"schema_version": 1, "volume": filename, "entries": manifest_entries}
-    tar_buffer = io.BytesIO()
-    with tarfile.open(fileobj=tar_buffer, mode="w", format=tarfile.USTAR_FORMAT) as archive:
-        for part in parts:
-            archive.addfile(_tar_info(part.name, len(part.value)), io.BytesIO(part.value))
-        manifest_bytes = _canonical_json(manifest)
-        archive.addfile(_tar_info("reassembly-manifest.json", len(manifest_bytes)), io.BytesIO(manifest_bytes))
-    output = io.BytesIO()
-    with gzip.GzipFile(fileobj=output, mode="wb", compresslevel=9, mtime=0) as stream:
-        stream.write(tar_buffer.getvalue())
-    return output.getvalue(), {key: tuple(value) for key, value in members.items()}
+    with output_path.open("wb") as output:
+        with gzip.GzipFile(
+            filename="", fileobj=output, mode="wb", compresslevel=9, mtime=0
+        ) as compressed:
+            with tarfile.open(
+                fileobj=compressed, mode="w|", format=tarfile.USTAR_FORMAT
+            ) as archive:
+                for part in parts:
+                    with part.spool_path.open("rb") as source:
+                        source.seek(part.offset)
+                        archive.addfile(
+                            _tar_info(part.name, part.byte_count),
+                            _BoundedReader(source, part.byte_count),
+                        )
+                manifest_bytes = _canonical_json(manifest)
+                archive.addfile(
+                    _tar_info("reassembly-manifest.json", len(manifest_bytes)),
+                    io.BytesIO(manifest_bytes),
+                )
+        output.flush()
+        os.fsync(output.fileno())
+    return {key: tuple(value) for key, value in members.items()}
 
 
 def _write_archives(
     archive_dir: Path, drafts: tuple[_Draft, ...]
 ) -> dict[str, tuple[StoredArtifactMember, ...]]:
-    rendered = []
-    for index, group in enumerate(_groups(_parts(drafts)), start=1):
-        filename = f"ai-trace-records-{index:03d}.tar.gz"
-        data, members = _render_volume(filename, group)
-        rendered.append((filename, data, members))
     archive_dir.mkdir(parents=True, exist_ok=True)
+    rendered: list[
+        tuple[str, Path, dict[str, tuple[StoredArtifactMember, ...]]]
+    ] = []
     temporary_paths: list[Path] = []
     try:
-        for filename, data, _ in rendered:
-            descriptor, name = tempfile.mkstemp(prefix=f".{filename}.", suffix=".tmp", dir=archive_dir)
+        for index, group in enumerate(_groups(_parts(drafts)), start=1):
+            filename = f"ai-trace-records-{index:03d}.tar.gz"
+            descriptor, name = tempfile.mkstemp(
+                prefix=f".{filename}.", suffix=".tmp", dir=archive_dir
+            )
+            os.close(descriptor)
             temporary = Path(name)
             temporary_paths.append(temporary)
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(data)
-                stream.flush()
-                os.fsync(stream.fileno())
-        for temporary, (filename, _, _) in zip(temporary_paths, rendered, strict=True):
+            members = _render_volume(filename, group, temporary)
+            rendered.append((filename, temporary, members))
+        for filename, temporary, _ in rendered:
             temporary.replace(archive_dir / filename)
         expected = {filename for filename, _, _ in rendered}
         for stale in archive_dir.glob("ai-trace-records-*.tar.gz"):
@@ -635,7 +709,7 @@ def _record(
         recorded_status=draft.recorded_status,
         recorded_at=None,
         raw_hash=draft.raw_hash,
-        stored_hash=_sha256(draft.representation),
+        stored_hash=draft.stored_hash,
         raw_archive_locator=None,
         stored_members=members,
         explicit_relations=(),
@@ -661,14 +735,17 @@ def collect_ai_traces(
     if len(paths) != len(set(paths)):
         raise ValueError("duplicate AI trace path in snapshot")
 
-    drafts: list[_Draft] = []
-    for item in manifest:
-        path = _safe_path(repository, item.path)
-        raw = _read_frozen(path, item.byte_count, item.sha256)
-        container, children = _file_drafts(item.path, raw)
-        drafts.append(container)
-        drafts.extend(children)
-    frozen = tuple(drafts)
-    members = _write_archives(Path(archive_dir), frozen)
-    for draft in frozen:
-        yield _record(snapshot, draft, members[draft.source_id])
+    with tempfile.TemporaryDirectory(prefix="portfolio-ai-trace-spool-") as temporary:
+        spool_dir = Path(temporary)
+        drafts: list[_Draft] = []
+        for item in manifest:
+            path = _safe_path(repository, item.path)
+            raw = _read_frozen(path, item.byte_count, item.sha256)
+            container, children = _file_drafts(item.path, raw, spool_dir)
+            drafts.append(container)
+            drafts.extend(children)
+            del raw, container, children
+        frozen = tuple(drafts)
+        members = _write_archives(Path(archive_dir), frozen)
+        for draft in frozen:
+            yield _record(snapshot, draft, members[draft.source_id])

@@ -84,6 +84,54 @@ def _canonical_json(value: object) -> bytes:
     ).encode("utf-8")
 
 
+def _credential_key_kind(key: str | None) -> str | None:
+    if key is None:
+        return None
+    normalized = key.lower().replace("_", "").replace("-", "")
+    if normalized in {"awsaccesskeyid", "accesskeyid"}:
+        return "aws-access-key"
+    if normalized in {"awssecretaccesskey", "secretaccesskey"}:
+        return "aws-secret-access-key"
+    if normalized in {"githubtoken", "githubpat", "ghtoken"}:
+        return "github-token"
+    if normalized in {"password", "passwd", "secret", "apikey", "token"}:
+        return "credential-value"
+    return None
+
+
+def _redact_json_value(value: object, key: str | None = None) -> tuple[object, set[str]]:
+    if isinstance(value, str):
+        redacted = redact_text(value.encode("utf-8"))
+        safe = redacted.value.decode("utf-8")
+        kinds = set(redacted.kinds)
+        key_kind = _credential_key_kind(key)
+        if key_kind is not None and safe != f"[REDACTED:{key_kind}]":
+            marker = f"[REDACTED:{key_kind}]"
+            safe = marker
+            kinds.add(key_kind)
+        return safe, kinds
+    if isinstance(value, Mapping):
+        safe_mapping: dict[object, object] = {}
+        kinds: set[str] = set()
+        for child_key, child_value in value.items():
+            safe_child, child_kinds = _redact_json_value(
+                child_value,
+                child_key if isinstance(child_key, str) else None,
+            )
+            safe_mapping[child_key] = safe_child
+            kinds.update(child_kinds)
+        return safe_mapping, kinds
+    if isinstance(value, list):
+        safe_items: list[object] = []
+        kinds = set()
+        for child in value:
+            safe_child, child_kinds = _redact_json_value(child)
+            safe_items.append(safe_child)
+            kinds.update(child_kinds)
+        return safe_items, kinds
+    return value, set()
+
+
 def _params_hash(params: Mapping[str, object]) -> str:
     return _sha256(_canonical_json(dict(sorted(params.items()))))
 
@@ -342,7 +390,8 @@ def _safe_record(
     response_hash: str,
 ) -> _SafeRecord:
     raw = _canonical_json(value)
-    redacted = redact_text(raw)
+    safe_value, value_redactions = _redact_json_value(value)
+    safe = _canonical_json(safe_value)
     redacted_title = redact_text(title.encode("utf-8"))
     record = _record(
         source_id=source_id,
@@ -351,14 +400,14 @@ def _safe_record(
         snapshot_id=snapshot_id,
         title=redacted_title.value.decode("utf-8", errors="replace"),
         raw=raw,
-        safe=redacted.value,
+        safe=safe,
         observed_raw_hash=response_hash,
         fetched_at=fetched_at,
         captured_updated_at=captured_updated_at,
-        privacy=tuple(sorted(set(redacted.kinds) | set(redacted_title.kinds))),
-        payload={"endpoint_response_raw_sha256": response_hash, "value": json.loads(redacted.value)},
+        privacy=tuple(sorted(value_redactions | set(redacted_title.kinds))),
+        payload={"endpoint_response_raw_sha256": response_hash, "value": safe_value},
     )
-    return _SafeRecord(record, redacted.value, "json")
+    return _SafeRecord(record, safe, "json")
 
 
 def _availability_record(

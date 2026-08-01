@@ -243,6 +243,57 @@ def test_collectors_walk_all_pages_filter_pr_rows_and_link_every_child(tmp_path)
     assert b"SECRET" not in stored
 
 
+def test_github_json_redaction_preserves_nested_structure_and_control_escapes(tmp_path):
+    base = "/repos/zbnerd/probabilistic-valuation-engine"
+    pages = {
+        f"{base}/issues": (_page(f"{base}/issues", [{"number": 9, "updated_at": "u"}]),),
+        **_issue_pages(9),
+    }
+    detail = dict(pages[f"{base}/issues/9"][0].json)
+    detail["evidence"] = {
+        "control_sensitive": 'context token: "abc\\ndef" after',
+        "contact": "reviewer@example.org",
+        "token": "short-secret",
+        "already_safe": "[REDACTED:third-party-email]",
+        "values": [None, True, 17, 2.5],
+    }
+    detail_page = _page(f"{base}/issues/9", detail)
+    pages[f"{base}/issues/9"] = (detail_page,)
+
+    result = collect_issues(
+        StaticClient(pages),
+        "zbnerd/probabilistic-valuation-engine",
+        "snap",
+        tmp_path,
+    )
+
+    record = next(value for value in result.records if value.source_type == "github-issue")
+    safe = record.payload["value"]
+    evidence = safe["evidence"]
+    assert tuple(evidence) == (
+        "control_sensitive",
+        "contact",
+        "token",
+        "already_safe",
+        "values",
+    )
+    assert evidence["control_sensitive"] == "context token: [REDACTED:credential-value]"
+    assert evidence["contact"] == "[REDACTED:third-party-email]"
+    assert evidence["token"] == "[REDACTED:credential-value]"
+    assert evidence["already_safe"] == "[REDACTED:third-party-email]"
+    assert evidence["values"] == [None, True, 17, 2.5]
+    assert set(record.privacy_redactions) >= {
+        "credential-value",
+        "third-party-email",
+    }
+    assert record.raw_hash == detail_page.response_hash
+    canonical_safe = (
+        json.dumps(safe, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        + "\n"
+    ).encode()
+    assert record.stored_hash == hashlib.sha256(canonical_safe).hexdigest()
+
+
 @dataclass
 class ScenarioClient:
     enumeration: int = 0

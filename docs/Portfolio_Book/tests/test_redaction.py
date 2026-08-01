@@ -551,7 +551,7 @@ def test_unproven_delimiters_and_their_suffixes_remain_inside_sensitive_span(sou
         (
             b'"api_key" = "raw-api-key-secret"; safe = "kept"',
             b"raw-api-key-secret",
-            b'; safe = "kept"',
+            b'"api_key" = [REDACTED:credential-value]',
         ),
     ],
 )
@@ -615,3 +615,204 @@ def test_quoted_email_does_not_cross_a_record_boundary():
 
     assert result.value == source
     assert result.kinds == ()
+
+
+@pytest.mark.parametrize(
+    ("prefix", "kind", "marker"),
+    [
+        (
+            b"password=",
+            "credential-value",
+            b"[REDACTED:credential-value]",
+        ),
+        (
+            b"AWS_SECRET_ACCESS_KEY=",
+            "aws-secret-access-key",
+            b"[REDACTED:aws-secret-access-key]",
+        ),
+    ],
+)
+@pytest.mark.parametrize("leading", [b"", b"first"])
+@pytest.mark.parametrize(
+    "spoof_delimiter",
+    [b",", b";", b"=", b"}", b"]", b"{", b"["],
+)
+def test_unstructured_assignment_delimiters_cannot_expose_a_suffix_field(
+    prefix, kind, marker, leading, spoof_delimiter
+):
+    source = prefix + leading + spoof_delimiter + b"x=actual-secret"
+
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    assert first.value == prefix + marker
+    assert b"actual-secret" not in first.value
+    assert first.kinds == (kind,)
+    assert first.raw_hash == hashlib.sha256(source).hexdigest()
+    assert first.stored_hash == hashlib.sha256(first.value).hexdigest()
+    assert first.raw_hash != first.stored_hash
+    assert first.value == second.value
+    assert first.stored_hash == second.stored_hash
+
+
+@pytest.mark.parametrize(
+    ("key", "kind", "marker"),
+    [
+        (
+            b'"password"',
+            "credential-value",
+            b"[REDACTED:credential-value]",
+        ),
+        (
+            b'"SecretAccessKey"',
+            "aws-secret-access-key",
+            b"[REDACTED:aws-secret-access-key]",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "json_whitespace",
+    [b" ", b"\t", b"\r", b"\n", b"\r\n", b" \t\r\n\r\n\t "],
+)
+def test_proven_json_members_accept_arbitrary_bounded_json_whitespace(
+    key, kind, marker, json_whitespace
+):
+    source = (
+        b"{"
+        + json_whitespace
+        + key
+        + json_whitespace
+        + b":"
+        + json_whitespace
+        + b'"actual-secret"'
+        + json_whitespace
+        + b"}"
+    )
+
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    assert b"actual-secret" not in first.value
+    assert first.value == source.replace(b"actual-secret", marker)
+    assert first.kinds == (kind,)
+    assert first.raw_hash != first.stored_hash
+    assert first.value == second.value
+    assert first.stored_hash == second.stored_hash
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        b'AWS_SECRET_ACCESS_KEY=\n"independent-record"',
+        b'AWS_SECRET_ACCESS_KEY=\r\n"independent-record"',
+        b'password=\n"independent-record"',
+        b'token=\r\n"independent-record"',
+    ],
+)
+def test_empty_line_bound_assignment_does_not_consume_an_independent_record(source):
+    result = redact_text(source)
+
+    assert result.value == source
+    assert result.kinds == ()
+
+
+@pytest.mark.parametrize(
+    ("key", "kind"),
+    [
+        (b'"password"', "credential-value"),
+        (b'"SecretAccessKey"', "aws-secret-access-key"),
+    ],
+)
+def test_multiline_proven_json_member_preserves_the_next_independent_object(
+    key, kind
+):
+    source = (
+        b"{\r\n\t"
+        + key
+        + b" \r\n\t:\r\n\t\"actual-secret\"\r\n}\r\n"
+        + b'{"next_record":"must-remain-byte-for-byte"}'
+    )
+
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    assert b"actual-secret" not in first.value
+    assert first.value.endswith(b'{"next_record":"must-remain-byte-for-byte"}')
+    assert first.kinds == (kind,)
+    assert first.raw_hash != first.stored_hash
+    assert first.value == second.value
+    assert first.stored_hash == second.stored_hash
+
+
+def test_quoted_toml_key_with_equals_remains_conservatively_line_bound():
+    source = b'"api_key" = "first", safe = "actual-secret"\nnext = "kept"'
+
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    assert first.value == (
+        b'"api_key" = [REDACTED:credential-value]\nnext = "kept"'
+    )
+    assert b"actual-secret" not in first.value
+    assert first.kinds == ("credential-value",)
+    assert first.raw_hash != first.stored_hash
+    assert first.value == second.value
+    assert first.stored_hash == second.stored_hash
+
+
+@pytest.mark.parametrize(
+    ("source", "kind", "marker", "secret_fragments"),
+    [
+        (
+            b"Authorization: Bearer [REDACTED:bearer-token] raw-token-secret",
+            "bearer-token",
+            b"[REDACTED:bearer-token]",
+            (b"raw-token-secret",),
+        ),
+        (
+            b'+ authorization:\tBEARER\t"[REDACTED:bearer-token] quoted-secret"',
+            "bearer-token",
+            b"[REDACTED:bearer-token]",
+            (b"quoted-secret",),
+        ),
+        (
+            b"token=ghp_short[REDACTED:github-token]abcdefghijklmnopqrstuv",
+            "github-token",
+            b"[REDACTED:github-token]",
+            (b"ghp_short", b"abcdefghijklmnopqrstuv"),
+        ),
+        (
+            b'- GITHUB_TOKEN="github_pat_short[REDACTED:github-token]raw-secret"',
+            "github-token",
+            b"[REDACTED:github-token]",
+            (b"github_pat_short", b"raw-secret"),
+        ),
+        (
+            b"AWS_ACCESS_KEY_ID=AKIA12345678[REDACTED:aws-access-key]90123456",
+            "aws-access-key",
+            b"[REDACTED:aws-access-key]",
+            (b"AKIA12345678", b"90123456"),
+        ),
+        (
+            b'+ AwsAccessKeyId="ASIA1234[REDACTED:aws-access-key]56789012"',
+            "aws-access-key",
+            b"[REDACTED:aws-access-key]",
+            (b"ASIA1234", b"56789012"),
+        ),
+    ],
+)
+def test_recognized_fields_reject_fixed_marker_smuggling(
+    source, kind, marker, secret_fragments
+):
+    first = redact_text(source)
+    second = redact_text(first.value)
+
+    for secret in secret_fragments:
+        assert secret not in first.value
+    assert marker in first.value
+    assert first.kinds == (kind,)
+    assert first.raw_hash == hashlib.sha256(source).hexdigest()
+    assert first.stored_hash == hashlib.sha256(first.value).hexdigest()
+    assert first.raw_hash != first.stored_hash
+    assert first.value == second.value
+    assert first.stored_hash == second.stored_hash

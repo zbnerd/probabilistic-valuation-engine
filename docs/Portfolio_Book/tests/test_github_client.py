@@ -1,3 +1,4 @@
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,6 +86,7 @@ def test_link_pagination_uses_exact_api_headers_and_persists_checkpoints(tmp_pat
         "page_number",
         "params",
         "response_hash",
+        "status_code",
     }
     assert saved["availability_status"] == "available"
     assert b"top-secret-token" not in b"".join(
@@ -198,6 +200,33 @@ def test_404_records_confirmed_unavailable_without_guessing(tmp_path):
     checkpoint = json.loads(saved.read_text(encoding="utf-8"))
     assert checkpoint["availability_status"] == "confirmed-unavailable"
     assert checkpoint["response_hash"]
+
+
+def test_terminal_unavailable_page_retains_status_hash_and_observed_time(tmp_path):
+    body = b'{"message":"private diagnostic"}'
+    client, _ = make_client(tmp_path, [response(451, body)])
+
+    pages = client.get_pages("/repos/o/r/restricted", {"per_page": 100})
+
+    assert len(pages) == 1
+    assert pages[0].availability_status == "confirmed-unavailable"
+    assert pages[0].status_code == 451
+    assert pages[0].response_hash == hashlib.sha256(body).hexdigest()
+    assert pages[0].fetched_at == "2023-11-14T22:13:20Z"
+    assert pages[0].body == body
+    checkpoint = json.loads(next((tmp_path / "checkpoints").glob("*.json")).read_text())
+    assert checkpoint["status_code"] == 451
+
+
+def test_terminal_unavailable_bytes_observation_is_not_collapsed(tmp_path):
+    body = b"do-not-publish"
+    client, _ = make_client(tmp_path, [response(410, body)])
+
+    page = client.get_bytes_page("/repos/o/r/pulls/1.patch", accept="application/patch")
+
+    assert page.status_code == 410
+    assert page.response_hash == hashlib.sha256(body).hexdigest()
+    assert page.fetched_at == "2023-11-14T22:13:20Z"
 
 
 def test_environment_token_precedes_gh_fallback_and_neither_is_exposed(

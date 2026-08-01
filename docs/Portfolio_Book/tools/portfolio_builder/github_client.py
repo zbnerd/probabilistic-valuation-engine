@@ -93,6 +93,7 @@ class Checkpoint:
     response_hash: str
     page_number: int
     availability_status: str
+    status_code: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +105,8 @@ class GitHubPage:
     json: object
     response_hash: str
     availability_status: str
+    status_code: int
+    fetched_at: str
 
 
 def _canonical_params(params: Mapping[str, object] | None) -> dict[str, object]:
@@ -163,6 +166,12 @@ class CheckpointStore:
         if not path.is_file():
             return None
         payload = json.loads(path.read_text(encoding="utf-8"))
+        if "status_code" not in payload:
+            if payload.get("availability_status") != "available":
+                raise GitHubClientError(
+                    f"checkpoint lacks terminal status: endpoint={endpoint}"
+                )
+            payload["status_code"] = 200
         return Checkpoint(**payload)
 
     def load_body(
@@ -277,7 +286,7 @@ class GitHubClient:
                 url, endpoint, current_params, page_number, accept, parse_json=True
             )
             if page.availability_status == "confirmed-unavailable":
-                return tuple(pages)
+                return tuple((*pages, page))
             pages.append(page)
             url = next_url
             if url is not None:
@@ -307,6 +316,16 @@ class GitHubClient:
         params: Mapping[str, object] | None = None,
         accept: str = DEFAULT_ACCEPT,
     ) -> bytes | None:
+        page = self.get_bytes_page(path, params, accept)
+        return None if page.availability_status == "confirmed-unavailable" else page.body
+
+    def get_bytes_page(
+        self,
+        path: str,
+        params: Mapping[str, object] | None = None,
+        accept: str = DEFAULT_ACCEPT,
+    ) -> GitHubPage:
+        """Return byte-response provenance, including terminal availability."""
         page, _ = self._fetch_page(
             self._url(path, params),
             path,
@@ -315,7 +334,7 @@ class GitHubClient:
             accept,
             parse_json=False,
         )
-        return None if page.availability_status == "confirmed-unavailable" else page.body
+        return page
 
     def _fetch_page(
         self,
@@ -406,6 +425,7 @@ class GitHubClient:
             response_hash=hashlib.sha256(response.body).hexdigest(),
             page_number=page_number,
             availability_status=availability_status,
+            status_code=response.status,
         )
 
     def _page(
@@ -427,6 +447,8 @@ class GitHubClient:
             json=parsed,
             response_hash=checkpoint.response_hash,
             availability_status=checkpoint.availability_status,
+            status_code=checkpoint.status_code,
+            fetched_at=checkpoint.fetched_at,
         )
 
     def _url(

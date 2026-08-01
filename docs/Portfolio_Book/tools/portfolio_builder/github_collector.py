@@ -99,19 +99,70 @@ def _base(repository: str) -> str:
 
 
 def _require_pages(
-    pages: Iterable[GitHubPage], endpoint: str, *, allow_unavailable: bool
+    pages: Iterable[GitHubPage],
+    endpoint: str,
+    *,
+    allow_unavailable: bool,
+    expected_start: int = 1,
 ) -> tuple[GitHubPage, ...]:
     values = tuple(pages)
     if not values:
-        if allow_unavailable:
-            return ()
-        raise GitHubClientError(f"confirmed unavailable required endpoint: {endpoint}")
+        raise GitHubClientError(f"missing pagination proof: endpoint={endpoint}")
+    unavailable = tuple(
+        page for page in values if page.availability_status == "confirmed-unavailable"
+    )
+    if unavailable:
+        if allow_unavailable and len(values) == 1:
+            return values
+        raise GitHubClientError(f"mixed availability pagination: endpoint={endpoint}")
     numbers = tuple(page.page_number for page in values)
-    if numbers != tuple(range(1, len(values) + 1)):
+    if numbers != tuple(range(expected_start, expected_start + len(values))):
         raise GitHubClientError(f"incomplete pagination: endpoint={endpoint}")
     if any(page.availability_status != "available" for page in values):
         raise GitHubClientError(f"mixed availability pagination: endpoint={endpoint}")
     return values
+
+
+def _is_unavailable(pages: tuple[GitHubPage, ...]) -> bool:
+    return len(pages) == 1 and pages[0].availability_status == "confirmed-unavailable"
+
+
+def _page_item_count(page: GitHubPage, endpoint: str, endpoint_kind: str) -> int:
+    if endpoint_kind == "requested-reviewers":
+        return len(_requested_rows(page.json, endpoint))
+    if not isinstance(page.json, list):
+        raise GitHubClientError(f"malformed paginated payload: endpoint={endpoint}")
+    return len(page.json)
+
+
+def _complete_pages(
+    client: GitHubClient,
+    endpoint: str,
+    params: Mapping[str, object],
+    *,
+    accept: str = DEFAULT_ACCEPT,
+    allow_unavailable: bool = False,
+    endpoint_kind: str,
+    independent_count: int | None = None,
+) -> tuple[GitHubPage, ...]:
+    pages = _require_pages(
+        client.get_pages(endpoint, params),
+        endpoint,
+        allow_unavailable=allow_unavailable,
+    )
+    if _is_unavailable(pages) or independent_count is not None:
+        return pages
+    while _page_item_count(pages[-1], endpoint, endpoint_kind) == PER_PAGE:
+        next_page = pages[-1].page_number + 1
+        sentinel_params = {**params, "page": next_page}
+        sentinel = _require_pages(
+            client.get_pages(endpoint, sentinel_params, accept),
+            endpoint,
+            allow_unavailable=False,
+            expected_start=next_page,
+        )
+        pages = (*pages, *sentinel)
+    return pages
 
 
 def _items(pages: tuple[GitHubPage, ...], endpoint: str) -> tuple[dict[str, object], ...]:
@@ -127,7 +178,7 @@ def _items(pages: tuple[GitHubPage, ...], endpoint: str) -> tuple[dict[str, obje
 
 
 def _object(pages: tuple[GitHubPage, ...], endpoint: str) -> dict[str, object] | None:
-    if not pages:
+    if _is_unavailable(pages):
         return None
     if len(pages) != 1 or not isinstance(pages[0].json, dict):
         raise GitHubClientError(f"malformed detail payload: endpoint={endpoint}")
@@ -142,21 +193,19 @@ def _fingerprint(
     accept: str,
     pages: tuple[GitHubPage, ...],
     child_ids: Iterable[str] = (),
-    body: bytes | None | object = ...,
 ) -> GitHubEndpointFingerprint:
-    if body is ...:
-        page_numbers = tuple(page.page_number for page in pages)
-        hashes = tuple(page.response_hash for page in pages)
-        availability = "available" if pages else "confirmed-unavailable"
-    elif body is None:
-        page_numbers = ()
-        hashes = ()
-        availability = "confirmed-unavailable"
-    else:
-        assert isinstance(body, bytes)
-        page_numbers = (1,)
-        hashes = (_sha256(body),)
-        availability = "available"
+    page_numbers = tuple(page.page_number for page in pages)
+    hashes = tuple(page.response_hash for page in pages)
+    unavailable = _is_unavailable(pages)
+    availability = "confirmed-unavailable" if unavailable else "available"
+    identities = set(child_ids)
+    if unavailable:
+        identities.update(
+            {
+                f"status-code:{pages[0].status_code}",
+                f"confirmed-at:{pages[0].fetched_at}",
+            }
+        )
     return GitHubEndpointFingerprint(
         item_key=item_key,
         endpoint_key=endpoint,
@@ -164,7 +213,7 @@ def _fingerprint(
         accept=accept,
         page_numbers=page_numbers,
         page_response_hashes=hashes,
-        stable_child_ids=tuple(sorted(set(child_ids))),
+        stable_child_ids=tuple(sorted(identities)),
         availability_status=availability,
     )
 
@@ -172,7 +221,12 @@ def _fingerprint(
 def _enumerate(client: GitHubClient, repository: str, kind: str) -> _Enumeration:
     endpoint = f"{_base(repository)}/{'pulls' if kind == 'pull' else 'issues'}"
     params = {"state": "all", "per_page": PER_PAGE}
-    pages = _require_pages(client.get_pages(endpoint, params), endpoint, allow_unavailable=False)
+    pages = _complete_pages(
+        client,
+        endpoint,
+        params,
+        endpoint_kind="enumeration",
+    )
     rows = _items(pages, endpoint)
     if kind == "issue":
         rows = tuple(row for row in rows if "pull_request" not in row)
@@ -239,18 +293,20 @@ def _record(
     title: str,
     raw: bytes,
     safe: bytes,
+    observed_raw_hash: str | None = None,
     fetched_at: str,
     captured_updated_at: str | None,
     availability: str = "available",
     privacy: tuple[str, ...] = (),
     payload: Mapping[str, object] | None = None,
 ) -> SourceRecord:
+    raw_hash = observed_raw_hash or _sha256(raw)
     values = dict(payload or {})
     values.update(
         {
             "fetched_at": fetched_at,
             "captured_updated_at": captured_updated_at,
-            "response_raw_sha256": _sha256(raw),
+            "response_raw_sha256": raw_hash,
         }
     )
     return SourceRecord(
@@ -263,7 +319,7 @@ def _record(
         claim_authority="primary-record",
         recorded_status="captured" if availability == "available" else "unavailable",
         recorded_at=captured_updated_at,
-        raw_hash=_sha256(raw),
+        raw_hash=raw_hash,
         stored_hash=_sha256(safe),
         raw_archive_locator=None,
         stored_members=(),
@@ -301,6 +357,7 @@ def _safe_record(
         title=redacted_title.value.decode("utf-8", errors="replace"),
         raw=raw,
         safe=redacted.value,
+        observed_raw_hash=response_hash,
         fetched_at=fetched_at,
         captured_updated_at=captured_updated_at,
         privacy=tuple(sorted(set(redacted.kinds) | set(redacted_title.kinds))),
@@ -310,9 +367,24 @@ def _safe_record(
 
 
 def _availability_record(
-    *, item_key: str, endpoint: str, snapshot_id: str, fetched_at: str
+    *,
+    item_key: str,
+    endpoint: str,
+    snapshot_id: str,
+    page: GitHubPage,
+    params: Mapping[str, object],
+    accept: str,
 ) -> _SafeRecord:
-    safe = _canonical_json({"availability_status": "confirmed-unavailable", "endpoint": endpoint})
+    safe_payload = {
+        "accept": accept,
+        "availability_status": "confirmed-unavailable",
+        "confirmed_at": page.fetched_at,
+        "endpoint": endpoint,
+        "observed_body_sha256": page.response_hash,
+        "request_params": dict(sorted(params.items())),
+        "status_code": page.status_code,
+    }
+    safe = _canonical_json(safe_payload)
     source_id = "GH-AVAIL-" + _sha256(f"{item_key}:{endpoint}".encode())[:24]
     return _SafeRecord(
         _record(
@@ -323,10 +395,11 @@ def _availability_record(
             title=f"Unavailable {endpoint}",
             raw=safe,
             safe=safe,
-            fetched_at=fetched_at,
+            observed_raw_hash=page.response_hash,
+            fetched_at=page.fetched_at,
             captured_updated_at=None,
             availability="confirmed-unavailable",
-            payload={"endpoint": endpoint},
+            payload=safe_payload,
         ),
         safe,
         "json",
@@ -345,6 +418,20 @@ def _requested_rows(value: object, endpoint: str) -> tuple[dict[str, object], ..
     return tuple(rows)
 
 
+def _rows_with_pages(
+    pages: tuple[GitHubPage, ...], endpoint: str, endpoint_kind: str
+) -> tuple[tuple[dict[str, object], GitHubPage], ...]:
+    rows: list[tuple[dict[str, object], GitHubPage]] = []
+    for page in pages:
+        values = (
+            _requested_rows(page.json, endpoint)
+            if endpoint_kind == "requested-reviewers"
+            else _items((page,), endpoint)
+        )
+        rows.extend((value, page) for value in values)
+    return tuple(rows)
+
+
 def _capture_endpoint(
     *,
     client: GitHubClient,
@@ -354,22 +441,42 @@ def _capture_endpoint(
     snapshot_id: str,
     fetched_at: str,
     captured_updated_at: str | None,
+    independent_count: int | None,
 ) -> tuple[tuple[_SafeRecord, ...], GitHubEndpointFingerprint]:
     params = {"per_page": PER_PAGE}
-    pages = _require_pages(client.get_pages(endpoint, params), endpoint, allow_unavailable=True)
-    if not pages:
+    pages = _complete_pages(
+        client,
+        endpoint,
+        params,
+        allow_unavailable=True,
+        endpoint_kind=endpoint_kind,
+        independent_count=independent_count,
+    )
+    if _is_unavailable(pages):
         return (
-            (_availability_record(item_key=item_key, endpoint=endpoint, snapshot_id=snapshot_id, fetched_at=fetched_at),),
-            _fingerprint(item_key=item_key, endpoint=endpoint, params=params, accept=DEFAULT_ACCEPT, pages=()),
+            (
+                _availability_record(
+                    item_key=item_key,
+                    endpoint=endpoint,
+                    snapshot_id=snapshot_id,
+                    page=pages[0],
+                    params=params,
+                    accept=DEFAULT_ACCEPT,
+                ),
+            ),
+            _fingerprint(
+                item_key=item_key,
+                endpoint=endpoint,
+                params=params,
+                accept=DEFAULT_ACCEPT,
+                pages=pages,
+            ),
         )
-    if endpoint_kind == "requested-reviewers":
-        rows = tuple(row for page in pages for row in _requested_rows(page.json, endpoint))
-    else:
-        rows = _items(pages, endpoint)
+    rows_with_pages = _rows_with_pages(pages, endpoint, endpoint_kind)
+    rows = tuple(row for row, _ in rows_with_pages)
     ids = tuple(_stable_id(endpoint_kind, row) for row in rows)
     if len(ids) != len(set(ids)):
         raise GitHubClientError(f"duplicate child IDs: endpoint={endpoint}")
-    by_page_hash: dict[int, str] = {page.page_number: page.response_hash for page in pages}
     safe_records = tuple(
         _safe_record(
             source_id="GH-" + _sha256(f"{item_key}:{endpoint}:{stable_id}".encode())[:32],
@@ -380,13 +487,9 @@ def _capture_endpoint(
             value=row,
             fetched_at=fetched_at,
             captured_updated_at=captured_updated_at,
-            response_hash=next(
-                by_page_hash[page.page_number]
-                for page in pages
-                if row in (page.json if isinstance(page.json, list) else _requested_rows(page.json, endpoint))
-            ),
+            response_hash=page.response_hash,
         )
-        for row, stable_id in zip(rows, ids, strict=True)
+        for (row, page), stable_id in zip(rows_with_pages, ids, strict=True)
     )
     return safe_records, _fingerprint(
         item_key=item_key,
@@ -398,16 +501,31 @@ def _capture_endpoint(
     )
 
 
-def _validate_counts(detail: Mapping[str, object], counts: Mapping[str, int], unavailable: set[str]) -> None:
-    expected = {
-        "commits": "commits",
-        "files": "changed_files",
-        "review-comments": "review_comments",
-        "conversation-comments": "comments",
-    }
-    for endpoint_kind, field in expected.items():
-        value = detail.get(field)
-        if endpoint_kind in counts and endpoint_kind not in unavailable and isinstance(value, int) and value != counts[endpoint_kind]:
+def _detail_count(detail: Mapping[str, object], field: str) -> int:
+    value = detail.get(field)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise GitHubClientError(f"invalid detail count: {field}")
+    return value
+
+
+def _expected_counts(detail: Mapping[str, object], kind: str) -> dict[str, int]:
+    expected = {"conversation-comments": _detail_count(detail, "comments")}
+    if kind == "pull":
+        expected.update(
+            {
+                "commits": _detail_count(detail, "commits"),
+                "files": _detail_count(detail, "changed_files"),
+                "review-comments": _detail_count(detail, "review_comments"),
+            }
+        )
+    return expected
+
+
+def _validate_counts(
+    expected: Mapping[str, int], counts: Mapping[str, int], unavailable: set[str]
+) -> None:
+    for endpoint_kind, value in expected.items():
+        if endpoint_kind in counts and endpoint_kind not in unavailable and value != counts[endpoint_kind]:
             raise GitHubClientError(
                 f"count mismatch: endpoint={endpoint_kind} expected={value} actual={counts[endpoint_kind]}"
             )
@@ -425,13 +543,26 @@ def _hydrate_item(
     item_key = f"{kind}:{number}"
     fetched_at = now()
     detail_endpoint = f"{base}/{'pulls' if kind == 'pull' else 'issues'}/{number}"
-    detail_pages = _require_pages(client.get_pages(detail_endpoint), detail_endpoint, allow_unavailable=True)
+    detail_pages = _require_pages(
+        client.get_pages(detail_endpoint),
+        detail_endpoint,
+        allow_unavailable=True,
+    )
     detail_fingerprint = _fingerprint(
         item_key=item_key, endpoint=detail_endpoint, params={}, accept=DEFAULT_ACCEPT, pages=detail_pages
     )
-    if not detail_pages:
+    if _is_unavailable(detail_pages):
         return _Hydration(
-            (_availability_record(item_key=item_key, endpoint=detail_endpoint, snapshot_id=snapshot_id, fetched_at=fetched_at),),
+            (
+                _availability_record(
+                    item_key=item_key,
+                    endpoint=detail_endpoint,
+                    snapshot_id=snapshot_id,
+                    page=detail_pages[0],
+                    params={},
+                    accept=DEFAULT_ACCEPT,
+                ),
+            ),
             (detail_fingerprint,),
         )
     detail = _object(detail_pages, detail_endpoint)
@@ -439,6 +570,7 @@ def _hydrate_item(
     captured_updated_at = detail.get("updated_at")
     if not isinstance(captured_updated_at, str):
         raise GitHubClientError(f"detail missing updated_at: endpoint={detail_endpoint}")
+    expected_counts = _expected_counts(detail, kind)
     parent_type = "github-pull-request" if kind == "pull" else "github-issue"
     safe: list[_SafeRecord] = [
         _safe_record(
@@ -479,6 +611,7 @@ def _hydrate_item(
             snapshot_id=snapshot_id,
             fetched_at=fetched_at,
             captured_updated_at=captured_updated_at,
+            independent_count=expected_counts.get(endpoint_kind),
         )
         safe.extend(records)
         fingerprints.append(fingerprint)
@@ -486,22 +619,31 @@ def _hydrate_item(
             unavailable.add(endpoint_kind)
         else:
             counts[endpoint_kind] = len(fingerprint.stable_child_ids)
-    _validate_counts(detail, counts, unavailable)
+    _validate_counts(expected_counts, counts, unavailable)
     if kind == "pull":
         patch_endpoint = f"{base}/pulls/{number}.patch"
-        patch = client.get_bytes(patch_endpoint, accept=PATCH_ACCEPT)
+        patch_page = client.get_bytes_page(patch_endpoint, accept=PATCH_ACCEPT)
         patch_fingerprint = _fingerprint(
             item_key=item_key,
             endpoint=patch_endpoint,
             params={},
             accept=PATCH_ACCEPT,
-            pages=(),
-            body=patch,
+            pages=(patch_page,),
         )
         fingerprints.append(patch_fingerprint)
-        if patch is None:
-            safe.append(_availability_record(item_key=item_key, endpoint=patch_endpoint, snapshot_id=snapshot_id, fetched_at=fetched_at))
+        if patch_page.availability_status == "confirmed-unavailable":
+            safe.append(
+                _availability_record(
+                    item_key=item_key,
+                    endpoint=patch_endpoint,
+                    snapshot_id=snapshot_id,
+                    page=patch_page,
+                    params={},
+                    accept=PATCH_ACCEPT,
+                )
+            )
         else:
+            patch = patch_page.body
             redacted = redact_text(patch)
             safe.append(
                 _SafeRecord(

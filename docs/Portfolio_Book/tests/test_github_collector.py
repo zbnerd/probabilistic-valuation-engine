@@ -17,7 +17,15 @@ def _body(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
 
-def _page(path, value, page=1, *, status="available"):
+def _page(
+    path,
+    value,
+    page=1,
+    *,
+    status="available",
+    status_code=200,
+    fetched_at="2026-01-01T00:00:00Z",
+):
     body = _body(value)
     return GitHubPage(
         endpoint=path,
@@ -27,6 +35,22 @@ def _page(path, value, page=1, *, status="available"):
         json=value,
         response_hash=hashlib.sha256(body).hexdigest(),
         availability_status=status,
+        status_code=status_code,
+        fetched_at=fetched_at,
+    )
+
+
+def _unavailable(path, status_code=404, body=b'{"message":"unsafe detail"}'):
+    return GitHubPage(
+        endpoint=path,
+        params={},
+        page_number=1,
+        body=body,
+        json=None,
+        response_hash=hashlib.sha256(body).hexdigest(),
+        availability_status="confirmed-unavailable",
+        status_code=status_code,
+        fetched_at="2026-01-02T03:04:05Z",
     )
 
 
@@ -39,6 +63,8 @@ class StaticClient:
     def get_pages(self, path, params=None, accept="application/vnd.github+json"):
         self.calls.append(("pages", path, dict(params or {}), accept))
         value = self.pages.get(path, ())
+        if callable(value):
+            value = value(dict(params or {}))
         if isinstance(value, Exception):
             raise value
         return tuple(value)
@@ -46,6 +72,26 @@ class StaticClient:
     def get_bytes(self, path, params=None, accept="application/vnd.github+json"):
         self.calls.append(("bytes", path, dict(params or {}), accept))
         return self.bytes_by_path.get(path)
+
+    def get_bytes_page(self, path, params=None, accept="application/vnd.github+json"):
+        self.calls.append(("bytes-page", path, dict(params or {}), accept))
+        value = self.bytes_by_path.get(path)
+        if isinstance(value, GitHubPage):
+            return value
+        body = value
+        if body is None:
+            return _unavailable(path)
+        return GitHubPage(
+            endpoint=path,
+            params=dict(params or {}),
+            page_number=1,
+            body=body,
+            json=None,
+            response_hash=hashlib.sha256(body).hexdigest(),
+            availability_status="available",
+            status_code=200,
+            fetched_at="2026-01-01T00:00:00Z",
+        )
 
 
 def _pr_pages(number, *, updated_at="2026-01-01T00:00:00Z", review_version=1):
@@ -159,6 +205,29 @@ def test_collectors_walk_all_pages_filter_pr_rows_and_link_every_child(tmp_path)
     assert patch.raw_hash == hashlib.sha256(patches[f"{base}/pulls/2.patch"]).hexdigest()
     assert patch.stored_hash != patch.raw_hash
     assert patch.stored_members
+    endpoint_predicates = {
+        "github-pull-request": lambda path: "/pulls/" in path and path.rsplit("/", 1)[-1].isdigit(),
+        "github-issue": lambda path: "/issues/" in path and path.rsplit("/", 1)[-1].isdigit(),
+        "github-pr-commit": lambda path: path.endswith("/commits"),
+        "github-pr-file": lambda path: path.endswith("/files"),
+        "github-review": lambda path: path.endswith("/reviews"),
+        "github-review-comment": lambda path: "/pulls/" in path and path.endswith("/comments"),
+        "github-conversation-comment": lambda path: "/issues/" in path and path.endswith("/comments"),
+        "github-timeline-event": lambda path: path.endswith("/timeline"),
+        "github-reaction": lambda path: path.endswith("/reactions"),
+        "github-requested-reviewer": lambda path: path.endswith("/requested_reviewers"),
+    }
+    for source_type, predicate in endpoint_predicates.items():
+        typed = [record for record in pulls.records + issues.records if record.source_type == source_type]
+        expected_hashes = {
+            page.response_hash
+            for path, value in pages.items()
+            if predicate(path) and isinstance(value, tuple)
+            for page in value
+        }
+        assert typed, source_type
+        assert {record.raw_hash for record in typed} == expected_hashes, source_type
+        assert all(record.payload["endpoint_response_raw_sha256"] == record.raw_hash for record in typed)
     for record in pulls.records + issues.records:
         assert record.raw_hash
         assert record.stored_hash
@@ -218,6 +287,20 @@ class ScenarioClient:
         self.calls.append((path, dict(params or {}), accept))
         return f"patch:{path}".encode()
 
+    def get_bytes_page(self, path, params=None, accept="application/vnd.github+json"):
+        body = self.get_bytes(path, params, accept)
+        return GitHubPage(
+            endpoint=path,
+            params=dict(params or {}),
+            page_number=1,
+            body=body,
+            json=None,
+            response_hash=hashlib.sha256(body).hexdigest(),
+            availability_status="available",
+            status_code=200,
+            fetched_at="2026-01-01T00:00:00Z",
+        )
+
 
 def test_reconciliation_rehydrates_parent_and_child_deltas_then_requires_zero_delta(tmp_path):
     client = ScenarioClient()
@@ -263,11 +346,131 @@ def test_final_unavailable_child_is_a_separate_availability_record(tmp_path):
         f"{base}/issues": (_page(f"{base}/issues", [{"number": 9, "updated_at": "u"}]),),
         **_issue_pages(9),
     }
-    pages[f"{base}/issues/9/timeline"] = ()
+    unavailable_page = _unavailable(f"{base}/issues/9/timeline", 451)
+    pages[f"{base}/issues/9/timeline"] = (unavailable_page,)
     result = collect_issues(StaticClient(pages), "zbnerd/probabilistic-valuation-engine", "snap", tmp_path)
 
     unavailable = [record for record in result.records if record.source_type == "github-availability"]
     assert len(unavailable) == 1
     assert unavailable[0].availability_status == "confirmed-unavailable"
+    assert unavailable[0].raw_hash == unavailable_page.response_hash
+    assert unavailable[0].payload["status_code"] == 451
+    assert unavailable[0].payload["confirmed_at"] == unavailable_page.fetched_at
+    assert unavailable[0].payload["request_params"] == {"per_page": 100}
+    assert unavailable[0].payload["accept"] == "application/vnd.github+json"
     fingerprint = next(value for value in result.endpoint_fingerprints if value.endpoint_key.endswith("timeline"))
     assert fingerprint.availability_status == "confirmed-unavailable"
+    assert fingerprint.page_response_hashes == (unavailable_page.response_hash,)
+    assert "status-code:451" in fingerprint.stable_child_ids
+    with tarfile.open(result.archive_paths[0], "r:gz") as archive:
+        assert unavailable_page.body not in b"".join(
+            archive.extractfile(member).read()
+            for member in archive.getmembers()
+            if member.isfile()
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value"),
+    [
+        ("commits", None),
+        ("changed_files", "1"),
+        ("review_comments", True),
+        ("comments", -1),
+    ],
+)
+def test_available_pr_requires_valid_nonnegative_detail_counts(tmp_path, field, bad_value):
+    base = "/repos/zbnerd/probabilistic-valuation-engine"
+    pages = {
+        f"{base}/pulls": (_page(f"{base}/pulls", [{"number": 1, "updated_at": "u"}]),),
+        **_pr_pages(1),
+    }
+    detail = dict(pages[f"{base}/pulls/1"][0].json)
+    if bad_value is None:
+        detail.pop(field)
+    else:
+        detail[field] = bad_value
+    pages[f"{base}/pulls/1"] = (_page(f"{base}/pulls/1", detail),)
+
+    with pytest.raises(GitHubClientError, match=f"invalid detail count: {field}"):
+        collect_pull_requests(StaticClient(pages, {f"{base}/pulls/1.patch": b"patch"}), "zbnerd/probabilistic-valuation-engine", "snap", tmp_path)
+
+
+def test_full_enumeration_page_uses_nonempty_then_empty_sentinel_pages(tmp_path):
+    base = "/repos/zbnerd/probabilistic-valuation-engine"
+    endpoint = f"{base}/issues"
+    first = [
+        {"number": number, "updated_at": "u", "pull_request": {}}
+        for number in range(1, 101)
+    ]
+
+    def enumeration(params):
+        page = params.get("page", 1)
+        if page == 1:
+            return (_page(endpoint, first),)
+        if page == 2:
+            second = [
+                {"number": number, "updated_at": "u", "pull_request": {}}
+                for number in range(101, 201)
+            ]
+            return (_page(endpoint, second, 2),)
+        return (_page(endpoint, [], 3),)
+
+    client = StaticClient({endpoint: enumeration})
+    result = collect_issues(client, "zbnerd/probabilistic-valuation-engine", "snap", tmp_path)
+
+    assert result.numbers == ()
+    assert result.endpoint_fingerprints[0].page_numbers == (1, 2, 3)
+    assert [call[2].get("page", 1) for call in client.calls] == [1, 2, 3]
+
+
+def test_full_unbounded_child_page_requires_empty_sentinel_proof(tmp_path):
+    base = "/repos/zbnerd/probabilistic-valuation-engine"
+    pages = {
+        f"{base}/issues": (_page(f"{base}/issues", [{"number": 9, "updated_at": "u"}]),),
+        **_issue_pages(9),
+    }
+    endpoint = f"{base}/issues/9/reactions"
+
+    def reactions(params):
+        if params.get("page", 1) == 1:
+            return (_page(endpoint, [{"id": number} for number in range(100)]),)
+        return (_page(endpoint, [], 2),)
+
+    pages[endpoint] = reactions
+    client = StaticClient(pages)
+    result = collect_issues(client, "zbnerd/probabilistic-valuation-engine", "snap", tmp_path)
+
+    fingerprint = next(value for value in result.endpoint_fingerprints if value.endpoint_key == endpoint)
+    assert fingerprint.page_numbers == (1, 2)
+    assert any(call[2].get("page") == 2 for call in client.calls if call[1] == endpoint)
+
+
+def test_full_page_without_available_sentinel_cannot_finalize(tmp_path):
+    base = "/repos/zbnerd/probabilistic-valuation-engine"
+    endpoint = f"{base}/issues"
+    full_page = [
+        {"number": number, "updated_at": "u", "pull_request": {}}
+        for number in range(1, 101)
+    ]
+
+    def capped(params):
+        if params.get("page", 1) == 1:
+            return (_page(endpoint, full_page),)
+        unavailable = _unavailable(endpoint)
+        return (
+            GitHubPage(
+                endpoint=unavailable.endpoint,
+                params={"page": 2, "per_page": 100, "state": "all"},
+                page_number=2,
+                body=unavailable.body,
+                json=None,
+                response_hash=unavailable.response_hash,
+                availability_status=unavailable.availability_status,
+                status_code=unavailable.status_code,
+                fetched_at=unavailable.fetched_at,
+            ),
+        )
+
+    with pytest.raises(GitHubClientError, match="availability pagination"):
+        collect_issues(StaticClient({endpoint: capped}), "zbnerd/probabilistic-valuation-engine", "snap", tmp_path)

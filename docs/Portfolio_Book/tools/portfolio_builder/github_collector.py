@@ -6,7 +6,10 @@ import gzip
 import hashlib
 import io
 import json
+import os
+import re
 import tarfile
+import tempfile
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,6 +34,9 @@ from .redaction import redact_text
 PER_PAGE = 100
 REPOSITORY = "zbnerd/probabilistic-valuation-engine"
 COUNT_GAP_REASON = "parent-reported count exceeds accessible endpoint enumeration"
+GITHUB_RECORD_PART_BYTES = 8_000_000
+GITHUB_VOLUME_PAYLOAD_BYTES = 50_000_000
+DEFAULT_MAX_GITHUB_VOLUME_BYTES = 90_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +83,38 @@ class _SafeRecord:
 class _Hydration:
     safe_records: tuple[_SafeRecord, ...]
     fingerprints: tuple[GitHubEndpointFingerprint, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _StoredPart:
+    source_id: str
+    suffix: str
+    whole_byte_count: int
+    whole_sha256: str
+    ordinal: int
+    total: int
+    value: memoryview
+
+    @property
+    def member_id(self) -> str:
+        source_hash = hashlib.sha256(self.source_id.encode("utf-8")).hexdigest()
+        return f"github-stored-{source_hash}-part-{self.ordinal:06d}"
+
+    @property
+    def member_name(self) -> str:
+        return f"records/{self.member_id}.{self.suffix}"
+
+    @property
+    def sha256(self) -> str:
+        return hashlib.sha256(self.value).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class _RenderedVolume:
+    filename: str
+    temporary_path: Path
+    byte_count: int
+    members: tuple[StoredArtifactMember, ...]
 
 
 def _sha256(value: bytes) -> str:
@@ -814,33 +852,263 @@ def _tar_info(name: str, size: int) -> tarfile.TarInfo:
     return info
 
 
-def _write_archive(
-    archive_dir: Path, name: str, safe_records: tuple[_SafeRecord, ...]
-) -> tuple[tuple[SourceRecord, ...], Path]:
-    archive_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"github-records-{name}.tar.gz"
-    path = archive_dir / filename
-    ordered = tuple(sorted(safe_records, key=lambda value: value.record.source_id))
-    members: dict[str, StoredArtifactMember] = {}
-    tar_buffer = io.BytesIO()
-    with tarfile.open(fileobj=tar_buffer, mode="w", format=tarfile.USTAR_FORMAT) as archive:
-        for item in ordered:
-            member_name = f"records/{item.record.source_id}.{item.suffix}"
-            archive.addfile(_tar_info(member_name, len(item.stored_bytes)), io.BytesIO(item.stored_bytes))
-            members[item.record.source_id] = StoredArtifactMember(
-                member_id=item.record.source_id,
-                locator=f"{filename}#{member_name}",
-                ordinal=1,
-                total=1,
-                byte_count=len(item.stored_bytes),
-                sha256=_sha256(item.stored_bytes),
+def _split_stored_records(
+    safe_records: tuple[_SafeRecord, ...],
+) -> tuple[tuple[_SafeRecord, ...], tuple[_StoredPart, ...]]:
+    ordered = tuple(
+        sorted(safe_records, key=lambda value: value.record.source_id.encode("utf-8"))
+    )
+    source_ids = tuple(item.record.source_id for item in ordered)
+    if len(source_ids) != len(set(source_ids)):
+        raise ValueError("duplicate GitHub source_id")
+    parts: list[_StoredPart] = []
+    for item in ordered:
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", item.suffix):
+            raise ValueError(f"unsafe GitHub archive suffix: {item.suffix!r}")
+        whole_hash = _sha256(item.stored_bytes)
+        if item.record.stored_hash != whole_hash:
+            raise ValueError(f"stored hash mismatch for {item.record.source_id}")
+        total = max(
+            1,
+            (len(item.stored_bytes) + GITHUB_RECORD_PART_BYTES - 1)
+            // GITHUB_RECORD_PART_BYTES,
+        )
+        value = memoryview(item.stored_bytes)
+        for index in range(total):
+            start = index * GITHUB_RECORD_PART_BYTES
+            parts.append(
+                _StoredPart(
+                    source_id=item.record.source_id,
+                    suffix=item.suffix,
+                    whole_byte_count=len(item.stored_bytes),
+                    whole_sha256=whole_hash,
+                    ordinal=index + 1,
+                    total=total,
+                    value=value[start : start + GITHUB_RECORD_PART_BYTES],
+                )
             )
-    compressed = io.BytesIO()
-    with gzip.GzipFile(fileobj=compressed, mode="wb", compresslevel=9, mtime=0) as stream:
-        stream.write(tar_buffer.getvalue())
-    path.write_bytes(compressed.getvalue())
-    records = tuple(replace(item.record, stored_members=(members[item.record.source_id],)) for item in ordered)
-    return records, path
+    member_ids = tuple(part.member_id for part in parts)
+    if len(member_ids) != len(set(member_ids)):
+        raise ValueError("duplicate GitHub archive member ID")
+    collision = set(member_ids).intersection(source_ids)
+    if collision:
+        raise ValueError(f"GitHub member/source ID collision: {sorted(collision)[0]}")
+    return ordered, tuple(parts)
+
+
+def _initial_archive_groups(
+    parts: tuple[_StoredPart, ...],
+) -> list[tuple[_StoredPart, ...]]:
+    groups: list[tuple[_StoredPart, ...]] = []
+    current: list[_StoredPart] = []
+    current_bytes = 0
+    for part in parts:
+        if (
+            current
+            and current_bytes + len(part.value) > GITHUB_VOLUME_PAYLOAD_BYTES
+        ):
+            groups.append(tuple(current))
+            current = []
+            current_bytes = 0
+        current.append(part)
+        current_bytes += len(part.value)
+    if current:
+        groups.append(tuple(current))
+    return groups or [()]
+
+
+def _volume_manifest(
+    filename: str, parts: tuple[_StoredPart, ...]
+) -> tuple[dict[str, object], tuple[StoredArtifactMember, ...]]:
+    members = tuple(
+        StoredArtifactMember(
+            member_id=part.member_id,
+            locator=f"{filename}#{part.member_name}",
+            ordinal=part.ordinal,
+            total=part.total,
+            byte_count=len(part.value),
+            sha256=part.sha256,
+        )
+        for part in parts
+    )
+    by_source: dict[str, list[StoredArtifactMember]] = {}
+    identities: dict[str, tuple[int, str]] = {}
+    for part, member in zip(parts, members, strict=True):
+        by_source.setdefault(part.source_id, []).append(member)
+        identities[part.source_id] = (part.whole_byte_count, part.whole_sha256)
+    entries = []
+    for source_id in sorted(by_source, key=lambda value: value.encode("utf-8")):
+        whole_byte_count, whole_sha256 = identities[source_id]
+        entries.append(
+            {
+                "source_id": source_id,
+                "whole_byte_count": whole_byte_count,
+                "whole_sha256": whole_sha256,
+                "parts": [
+                    member.to_dict()
+                    for member in sorted(
+                        by_source[source_id], key=lambda value: value.ordinal
+                    )
+                ],
+            }
+        )
+    return (
+        {"schema_version": 1, "volume": filename, "entries": entries},
+        members,
+    )
+
+
+def _render_volume(
+    archive_dir: Path, filename: str, parts: tuple[_StoredPart, ...]
+) -> _RenderedVolume:
+    manifest, members = _volume_manifest(filename, parts)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{filename}.", suffix=".tmp", dir=archive_dir
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as raw_stream:
+            with gzip.GzipFile(
+                filename="",
+                fileobj=raw_stream,
+                mode="wb",
+                compresslevel=9,
+                mtime=0,
+            ) as compressed:
+                with tarfile.open(
+                    fileobj=compressed, mode="w|", format=tarfile.USTAR_FORMAT
+                ) as archive:
+                    for part in parts:
+                        archive.addfile(
+                            _tar_info(part.member_name, len(part.value)),
+                            io.BytesIO(part.value),
+                        )
+                    manifest_bytes = _canonical_json(manifest)
+                    archive.addfile(
+                        _tar_info("reassembly-manifest.json", len(manifest_bytes)),
+                        io.BytesIO(manifest_bytes),
+                    )
+            raw_stream.flush()
+            os.fsync(raw_stream.fileno())
+        return _RenderedVolume(filename, temporary, temporary.stat().st_size, members)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def _render_bounded_volumes(
+    archive_dir: Path,
+    name: str,
+    groups: list[tuple[_StoredPart, ...]],
+    max_volume_bytes: int,
+) -> tuple[_RenderedVolume, ...]:
+    while True:
+        rendered: list[_RenderedVolume] = []
+        try:
+            for index, group in enumerate(groups, start=1):
+                rendered.append(
+                    _render_volume(
+                        archive_dir,
+                        f"github-records-{name}-{index:03d}.tar.gz",
+                        group,
+                    )
+                )
+        except BaseException:
+            for volume in rendered:
+                volume.temporary_path.unlink(missing_ok=True)
+            raise
+        oversized = next(
+            (
+                index
+                for index, volume in enumerate(rendered)
+                if volume.byte_count > max_volume_bytes
+            ),
+            None,
+        )
+        if oversized is None:
+            return tuple(rendered)
+        for volume in rendered:
+            volume.temporary_path.unlink(missing_ok=True)
+        group = groups[oversized]
+        if len(group) <= 1:
+            member = group[0].member_id if group else "empty-category-manifest"
+            raise ValueError(
+                "single GitHub archive member exceeds compressed volume limit: "
+                f"{member}"
+            )
+        midpoint = len(group) // 2
+        groups[oversized : oversized + 1] = [
+            group[:midpoint],
+            group[midpoint:],
+        ]
+
+
+def _remove_stale_category_archives(
+    archive_dir: Path, name: str, expected: set[str]
+) -> None:
+    filename = re.compile(
+        rf"github-records-{re.escape(name)}(?:-[0-9]+)?\.tar\.gz\Z"
+    )
+    for stale in archive_dir.glob(f"github-records-{name}*.tar.gz"):
+        if filename.fullmatch(stale.name) and stale.name not in expected:
+            stale.unlink()
+
+
+def _write_archive(
+    archive_dir: Path,
+    name: str,
+    safe_records: tuple[_SafeRecord, ...],
+    *,
+    max_volume_bytes: int = DEFAULT_MAX_GITHUB_VOLUME_BYTES,
+) -> tuple[tuple[SourceRecord, ...], tuple[Path, ...]]:
+    if name not in {"pulls", "issues"}:
+        raise ValueError(f"unsupported GitHub archive category: {name}")
+    if (
+        not isinstance(max_volume_bytes, int)
+        or isinstance(max_volume_bytes, bool)
+        or max_volume_bytes <= 0
+    ):
+        raise ValueError("max_volume_bytes must be a positive integer")
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    ordered, parts = _split_stored_records(safe_records)
+    rendered = _render_bounded_volumes(
+        archive_dir,
+        name,
+        _initial_archive_groups(parts),
+        max_volume_bytes,
+    )
+    paths: list[Path] = []
+    try:
+        for volume in rendered:
+            path = archive_dir / volume.filename
+            volume.temporary_path.replace(path)
+            paths.append(path)
+        expected = {path.name for path in paths}
+        _remove_stale_category_archives(archive_dir, name, expected)
+    finally:
+        for volume in rendered:
+            volume.temporary_path.unlink(missing_ok=True)
+
+    source_by_member = {part.member_id: part.source_id for part in parts}
+    members_by_source: dict[str, list[StoredArtifactMember]] = {}
+    for volume in rendered:
+        for member in volume.members:
+            members_by_source.setdefault(source_by_member[member.member_id], []).append(
+                member
+            )
+    records = tuple(
+        replace(
+            item.record,
+            stored_members=tuple(
+                sorted(
+                    members_by_source.get(item.record.source_id, ()),
+                    key=lambda member: member.ordinal,
+                )
+            ),
+        )
+        for item in ordered
+    )
+    return records, tuple(paths)
 
 
 def _collect_enumeration(
@@ -860,14 +1128,16 @@ def _collect_enumeration(
     fingerprints = (enumeration.fingerprint,) + tuple(
         fingerprint for hydration in hydrations for fingerprint in hydration.fingerprints
     )
-    records, archive = _write_archive(Path(archive_dir), f"{enumeration.kind}s", safe_records)
+    records, archives = _write_archive(
+        Path(archive_dir), f"{enumeration.kind}s", safe_records
+    )
     return GitHubCollection(
         kind=enumeration.kind,
         numbers=enumeration.numbers,
         updated_at_by_item=enumeration.updated_at_by_item,
         records=records,
         endpoint_fingerprints=tuple(sorted(fingerprints, key=lambda value: (value.item_key, value.endpoint_key))),
-        archive_paths=(archive,),
+        archive_paths=archives,
     )
 
 
@@ -999,5 +1269,10 @@ def reconcile_github(
             endpoint_fingerprints=fingerprints,
         ),
         passes=tuple(passes),
-        archive_paths=(*pulls.archive_paths, *issues.archive_paths),
+        archive_paths=tuple(
+            sorted(
+                (*pulls.archive_paths, *issues.archive_paths),
+                key=lambda path: path.name.encode("utf-8"),
+            )
+        ),
     )

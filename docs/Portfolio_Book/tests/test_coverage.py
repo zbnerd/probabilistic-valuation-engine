@@ -670,10 +670,10 @@ def test_confirmed_unavailable_fingerprint_rejects_coherently_reidentified_archi
         safe,
         record=replace(safe.record, source_id="GH-AVAIL-" + "f" * 24),
     )
-    records, archive = github_collector._write_archive(
-        tmp_path, "reidentified", (reidentified,)
+    records, archives = github_collector._write_archive(
+        tmp_path, "issues", (reidentified,)
     )
-    verify_archive_members(records, (archive,))
+    verify_archive_members(records, archives)
     with pytest.raises(CoverageError, match="availability record stable ID mismatch"):
         coverage_module._fingerprint_child(fingerprint, records)
 

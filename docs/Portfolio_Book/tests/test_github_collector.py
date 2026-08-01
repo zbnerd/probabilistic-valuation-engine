@@ -5,6 +5,9 @@ from dataclasses import dataclass
 
 import pytest
 
+from portfolio_builder import github_collector
+from portfolio_builder.canonical_io import read_jsonl, write_jsonl
+from portfolio_builder.coverage import verify_archive_members
 from portfolio_builder.github_client import GitHubClientError, GitHubPage
 from portfolio_builder.github_collector import (
     PATCH_ACCEPT,
@@ -53,6 +56,32 @@ def _unavailable(path, status_code=404, body=b'{"message":"unsafe detail"}'):
         status_code=status_code,
         fetched_at="2026-01-02T03:04:05Z",
     )
+
+
+def _stored_record(source_id, stored_bytes, suffix="json"):
+    record = github_collector._record(
+        source_id=source_id,
+        source_type="github-test-record",
+        locator=f"github:test/{source_id}",
+        snapshot_id="snap",
+        title=source_id,
+        raw=stored_bytes,
+        safe=stored_bytes,
+        fetched_at="2026-01-01T00:00:00Z",
+        captured_updated_at=None,
+    )
+    return github_collector._SafeRecord(record, stored_bytes, suffix)
+
+
+def _archive_payloads(paths):
+    values = {}
+    for path in paths:
+        with tarfile.open(path, "r:gz") as archive:
+            for member in archive.getmembers():
+                extracted = archive.extractfile(member)
+                assert extracted is not None
+                values[f"{path.name}#{member.name}"] = (member, extracted.read())
+    return values
 
 
 class StaticClient:
@@ -814,3 +843,222 @@ def test_unavailable_fingerprint_ignores_observation_time_but_detects_status_and
     fingerprint = next(value for value in result.window.endpoint_fingerprints if value.endpoint_key.endswith("timeline"))
     assert "status-code:410" in fingerprint.stable_child_ids
     assert all(not identity.startswith("confirmed-at:") for identity in fingerprint.stable_child_ids)
+
+
+def test_github_archive_volumes_are_byte_deterministic_for_reversed_input(tmp_path):
+    records = (
+        _stored_record("GH-Z", b'{"value":"z"}\n'),
+        _stored_record("GH-A", b'{"value":"a"}\n'),
+        _stored_record("GH-한글", '{"value":"한글"}\n'.encode()),
+    )
+
+    first_records, first_paths = github_collector._write_archive(
+        tmp_path / "first", "pulls", records
+    )
+    second_records, second_paths = github_collector._write_archive(
+        tmp_path / "second", "pulls", tuple(reversed(records))
+    )
+
+    assert [record.source_id for record in first_records] == [
+        record.source_id for record in second_records
+    ]
+    assert [record.source_id for record in first_records] == sorted(
+        (record.record.source_id for record in records),
+        key=lambda source_id: source_id.encode("utf-8"),
+    )
+    assert [path.name for path in first_paths] == [path.name for path in second_paths]
+    assert [path.read_bytes() for path in first_paths] == [
+        path.read_bytes() for path in second_paths
+    ]
+    ledger = tmp_path / "github-records.jsonl"
+    write_jsonl(ledger, first_records)
+    assert read_jsonl(ledger, type(first_records[0])) == list(first_records)
+    assert all(
+        line
+        == json.dumps(
+            json.loads(line),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for line in ledger.read_text().splitlines()
+    )
+
+
+def test_github_archive_splits_large_record_and_emits_canonical_reassembly_manifest(
+    tmp_path,
+):
+    payload = ('{"body":"' + ("x" * 8_100_000) + '"}\n').encode()
+    source = _stored_record("GH-LARGE", payload)
+
+    records, paths = github_collector._write_archive(tmp_path, "pulls", (source,))
+
+    assert [path.name for path in paths] == ["github-records-pulls-001.tar.gz"]
+    assert len(records[0].stored_members) == 2
+    assert [member.ordinal for member in records[0].stored_members] == [1, 2]
+    assert all(member.total == 2 for member in records[0].stored_members)
+    assert all(member.member_id != records[0].source_id for member in records[0].stored_members)
+    assert len({member.member_id for member in records[0].stored_members}) == 2
+    assert verify_archive_members(records, paths)["GH-LARGE"] == payload
+
+    archived = _archive_payloads(paths)
+    manifest_locator = f"{paths[0].name}#reassembly-manifest.json"
+    manifest_info, manifest_bytes = archived[manifest_locator]
+    manifest = json.loads(manifest_bytes)
+    canonical = (
+        json.dumps(
+            manifest,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode()
+    assert manifest_bytes == canonical
+    assert manifest["entries"][0]["whole_sha256"] == records[0].stored_hash
+    assert manifest["entries"][0]["whole_byte_count"] == len(payload)
+    assert json.loads(verify_archive_members(records, paths)["GH-LARGE"])["body"] == "x" * 8_100_000
+    for info, _ in archived.values():
+        assert (info.mtime, info.uid, info.gid, info.uname, info.gname, info.mode) == (
+            0,
+            0,
+            0,
+            "",
+            "",
+            0o644,
+        )
+    assert manifest_info.name == "reassembly-manifest.json"
+
+
+def test_github_archive_stores_empty_record_as_one_reassemblable_part(tmp_path):
+    stored, paths = github_collector._write_archive(
+        tmp_path,
+        "issues",
+        (_stored_record("GH-EMPTY", b"", "txt"),),
+    )
+
+    assert len(stored[0].stored_members) == 1
+    member = stored[0].stored_members[0]
+    assert (member.ordinal, member.total, member.byte_count) == (1, 1, 0)
+    assert verify_archive_members(stored, paths) == {"GH-EMPTY": b""}
+
+
+def test_github_archive_initial_groups_have_at_most_fifty_million_payload_bytes(
+    tmp_path,
+):
+    records = tuple(
+        _stored_record(f"GH-GROUP-{index}", b"x" * 8_000_000, "txt")
+        for index in range(7)
+    )
+
+    stored, paths = github_collector._write_archive(tmp_path, "issues", records)
+
+    assert [path.name for path in paths] == [
+        "github-records-issues-001.tar.gz",
+        "github-records-issues-002.tar.gz",
+    ]
+    assert verify_archive_members(stored, paths) == {
+        record.record.source_id: record.stored_bytes for record in records
+    }
+    for path in paths:
+        manifest = json.loads(_archive_payloads((path,))[f"{path.name}#reassembly-manifest.json"][1])
+        assert sum(
+            part["byte_count"]
+            for entry in manifest["entries"]
+            for part in entry["parts"]
+        ) <= 50_000_000
+
+
+def test_github_archive_recursively_bisects_compressed_oversize_groups_and_replaces_stale(
+    tmp_path,
+):
+    records = tuple(
+        _stored_record(
+            f"GH-RANDOM-{index}",
+            hashlib.shake_256(f"seed-{index}".encode()).digest(200_000),
+            "bin",
+        )
+        for index in range(3)
+    )
+    stale_unnumbered = tmp_path / "github-records-pulls.tar.gz"
+    stale_numbered = tmp_path / "github-records-pulls-099.tar.gz"
+    other_family = tmp_path / "github-records-issues.tar.gz"
+    stale_unnumbered.write_bytes(b"old")
+    stale_numbered.write_bytes(b"old")
+    other_family.write_bytes(b"keep")
+
+    stored, paths = github_collector._write_archive(
+        tmp_path,
+        "pulls",
+        records,
+        max_volume_bytes=350_000,
+    )
+
+    assert [path.name for path in paths] == [
+        "github-records-pulls-001.tar.gz",
+        "github-records-pulls-002.tar.gz",
+        "github-records-pulls-003.tar.gz",
+    ]
+    assert all(path.stat().st_size <= 350_000 for path in paths)
+    assert not stale_unnumbered.exists()
+    assert not stale_numbered.exists()
+    assert other_family.read_bytes() == b"keep"
+    assert verify_archive_members(stored, paths) == {
+        record.record.source_id: record.stored_bytes for record in records
+    }
+    member_ids = [
+        member.member_id for record in stored for member in record.stored_members
+    ]
+    assert len(member_ids) == len(set(member_ids))
+    assert set(member_ids).isdisjoint(record.source_id for record in stored)
+
+
+def test_github_archive_failure_keeps_existing_category_files_byte_identical(tmp_path):
+    existing = tmp_path / "github-records-pulls.tar.gz"
+    stale = tmp_path / "github-records-pulls-099.tar.gz"
+    existing.write_bytes(b"existing")
+    stale.write_bytes(b"stale")
+    record = _stored_record(
+        "GH-IMPOSSIBLE",
+        hashlib.shake_256(b"impossible").digest(200_000),
+        "bin",
+    )
+
+    with pytest.raises(ValueError, match="single GitHub archive member"):
+        github_collector._write_archive(
+            tmp_path,
+            "pulls",
+            (record,),
+            max_volume_bytes=1_000,
+        )
+
+    assert existing.read_bytes() == b"existing"
+    assert stale.read_bytes() == b"stale"
+    assert not tuple(tmp_path.glob(".github-records-pulls-*.tmp"))
+
+
+def test_reconciliation_returns_every_numbered_pull_and_issue_archive_path(tmp_path):
+    client = ScenarioClient()
+    ticks = iter(f"2026-01-01T00:00:{value:02d}Z" for value in range(60))
+
+    result = reconcile_github(
+        client=client,
+        repository="zbnerd/probabilistic-valuation-engine",
+        snapshot_id="snap",
+        archive_dir=tmp_path,
+        now=lambda: next(ticks),
+        max_passes=8,
+    )
+
+    expected = tuple(
+        sorted(
+            (
+                *tmp_path.glob("github-records-pulls-*.tar.gz"),
+                *tmp_path.glob("github-records-issues-*.tar.gz"),
+            ),
+            key=lambda path: path.name.encode("utf-8"),
+        )
+    )
+    assert result.archive_paths == expected
+    assert any(path.name.startswith("github-records-pulls-") for path in expected)
+    assert any(path.name.startswith("github-records-issues-") for path in expected)
